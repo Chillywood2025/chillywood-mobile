@@ -880,11 +880,11 @@ const STUDIO_TABS: readonly { id: StudioTabId; label: string }[] = [
   { id: "home", label: "Home" },
   { id: "content", label: "Content" },
   { id: "clip", label: "Clip" },
-  { id: "monetization", label: "Monetization" },
   { id: "live", label: "Live" },
   { id: "audience", label: "Audience" },
   { id: "moderation", label: "Moderation" },
   { id: "insights", label: "Insights" },
+  { id: "monetization", label: "Monetization" },
   { id: "brand", label: "Brand" },
 ];
 
@@ -1324,7 +1324,7 @@ export function ChannelStudioScreen() {
     () => Array.from(createInitialBrandSections(routeParams.tab, routeParams.focus))[0] ?? null,
   );
   const [expandedClipSections, setExpandedClipSections] = useState<ReadonlySet<ClipStudioSectionId>>(
-    () => new Set<ClipStudioSectionId>(["media", "title", "templates", "save"]),
+    () => new Set<ClipStudioSectionId>(["media", "title", "save"]),
   );
   const [contentStatusFilter, setContentStatusFilter] = useState<ContentStatusFilter>("all");
   const [contentSearchQuery, setContentSearchQuery] = useState("");
@@ -5749,32 +5749,6 @@ export function ChannelStudioScreen() {
           </View>
         ) : null}
 
-        <View style={styles.summaryGrid}>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Source</Text>
-            <Text style={styles.summaryValue}>{selectedClipVideoFile ? "Selected" : hasSavedVideo ? "Saved" : "Needed"}</Text>
-            <Text style={styles.summaryBody}>{selectedClipVideoFile?.name || (hasSavedVideo ? "Using existing creator video." : "Choose a video to begin.")}</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Save State</Text>
-            <Text style={styles.summaryValue}>{clipStatus}</Text>
-            <Text style={styles.summaryBody}>
-              {clipSaveState === "saved"
-                ? "Confirmed in your Content Library."
-                : clipSaveDraftRequirement || "Ready for a confirmed draft save."}
-            </Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Cover</Text>
-            <Text style={styles.summaryValue}>{coverPreviewUri ? "Ready" : "Optional"}</Text>
-            <Text style={styles.summaryBody}>{coverPreviewUri ? "Cover preview is staged." : "Upload a cover image when ready."}</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Public display</Text>
-            <Text style={styles.summaryValue}>Editor preview only</Text>
-            <Text style={styles.summaryBody}>Title cards and templates reopen here after Save Draft.</Text>
-          </View>
-        </View>
 
         <View style={styles.studioAccordionStack}>
           {renderClipAccordion({
@@ -9529,18 +9503,8 @@ export function ChannelStudioScreen() {
         <View style={styles.panelHeader}>
           <View style={styles.panelHeaderCopy}>
             <Text style={styles.panelTitle}>Moderation and Safety</Text>
-            <Text style={styles.panelSubtitle}>Reports, blocks, comments, and platform safety.</Text>
+            <Text style={styles.panelSubtitle}>What needs attention, plus the controls that resolve it.</Text>
           </View>
-          <Text style={styles.panelStatusMuted}>CREATOR SAFE</Text>
-        </View>
-        <Text style={styles.permissionCopy}>
-          Platform Studio shows creator-safe safety controls here. Admin-only queues and enforcement tools stay in Admin unless this account has review access.
-        </Text>
-      </View>
-
-      <View style={styles.panel}>
-        <View style={styles.panelHeader}>
-          <Text style={styles.panelTitle}>Safety status</Text>
           <Text style={styles.panelStatusMuted}>
             {recentSafetyReportCount == null ? "Protected" : recentSafetyReportCount ? "Needs review" : "Clear"}
           </Text>
@@ -10155,15 +10119,6 @@ export function ChannelStudioScreen() {
                   </View>
                 ))}
               </View>
-              <View style={styles.summaryGrid}>
-                {audienceVisibilityCards.map((card) => (
-                  <View key={card.label} style={styles.summaryCard}>
-                    <Text style={styles.summaryLabel}>{card.label}</Text>
-                    <Text style={styles.summaryValue}>{card.value}</Text>
-                    <Text style={styles.summaryBody}>{card.body}</Text>
-                  </View>
-                ))}
-              </View>
               <View style={styles.eventSnapshotCard}>
                 <Text style={styles.accessSummaryKicker}>AUDIENCE ACTIONS</Text>
                 <Text style={styles.accessSummaryTitle}>Manage people from their profile row</Text>
@@ -10249,7 +10204,7 @@ export function ChannelStudioScreen() {
                   </View>
                 ))}
               </View>
-              <Text style={styles.sectionLabel}>Room And Audience Signals</Text>
+              <Text style={styles.sectionLabel}>Audience and Rooms</Text>
               <View style={styles.summaryGrid}>
                 {analyticsSummaryCards.map((card) => (
                   <View key={card.label} style={styles.summaryCard}>
@@ -10259,7 +10214,7 @@ export function ChannelStudioScreen() {
                   </View>
                 ))}
               </View>
-              <Text style={styles.sectionLabel}>Live / Event Signals</Text>
+              <Text style={styles.sectionLabel}>Live and Events</Text>
               <View style={styles.summaryGrid}>
                 {analyticsEventSignalCards.map((card) => (
                   <View key={card.label} style={styles.summaryCard}>
