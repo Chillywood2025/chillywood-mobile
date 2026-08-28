@@ -1,4 +1,4 @@
-import React, { type ReactNode } from "react";
+import React, { type ReactNode, useEffect } from "react";
 import { Alert } from "react-native";
 
 import { ChannelStudioScreen } from "../channel-settings";
@@ -53,24 +53,26 @@ const rewritePlatformStudioNode = (node: ReactNode): ReactNode => {
  * Channel product term back into Platform Studio.
  */
 export default function PlatformStudioRoute() {
-  const originalAlert = Alert.alert;
-  Alert.alert = ((title: string, message?: string, buttons?: Parameters<typeof Alert.alert>[2], options?: Parameters<typeof Alert.alert>[3]) => (
-    originalAlert(
-      replacePlatformStudioTerminology(title),
-      typeof message === "string" ? replacePlatformStudioTerminology(message) : message,
-      buttons?.map((button) => ({
-        ...button,
-        text: typeof button.text === "string" ? replacePlatformStudioTerminology(button.text) : button.text,
-      })),
-      options,
-    )
-  )) as typeof Alert.alert;
+  useEffect(() => {
+    const originalAlert = Alert.alert;
+    Alert.alert = ((title: string, message?: string, buttons?: Parameters<typeof Alert.alert>[2], options?: Parameters<typeof Alert.alert>[3]) => (
+      originalAlert(
+        replacePlatformStudioTerminology(title),
+        typeof message === "string" ? replacePlatformStudioTerminology(message) : message,
+        buttons?.map((button) => ({
+          ...button,
+          text: typeof button.text === "string" ? replacePlatformStudioTerminology(button.text) : button.text,
+        })),
+        options,
+      )
+    )) as typeof Alert.alert;
 
-  try {
-    // Deliberately execute the compatibility implementation inside this route so
-    // its rendered tree can be normalized without renaming internal contracts.
-    return rewritePlatformStudioNode(ChannelStudioScreen()) as React.ReactElement;
-  } finally {
-    Alert.alert = originalAlert;
-  }
+    return () => {
+      Alert.alert = originalAlert;
+    };
+  }, []);
+
+  // Deliberately execute the compatibility implementation inside this route so
+  // its rendered tree can be normalized without renaming internal contracts.
+  return rewritePlatformStudioNode(ChannelStudioScreen()) as React.ReactElement;
 }
