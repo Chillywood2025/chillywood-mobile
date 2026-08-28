@@ -1,0 +1,31 @@
+name: ChatGPT profile polish runner
+
+on:
+  push:
+    branches:
+      - chatgpt/profile-home-polish-20260828
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/profile-home-polish-20260828
+          fetch-depth: 0
+      - name: Apply exact patch
+        run: python scripts/chatgpt-profile-polish.py
+      - name: Clean temporary helpers and commit
+        run: |
+          rm .github/workflows/chatgpt-profile-polish.yml
+          rm .github/workflows/chatgpt-profile-polish-run.yml
+          rm scripts/chatgpt-profile-polish.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "feat: polish Circle profile and app resume UX"
+          git push origin HEAD:chatgpt/profile-home-polish-20260828
