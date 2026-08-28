@@ -117,7 +117,8 @@ assertIncludes(title, 'pathname: "/watch-party"', "Title to Watch-Party Waiting 
 assertIncludes(title, "requireWatchPartyLivePremium", "Title Watch-Party Premium preflight");
 
 assertIncludes(channelStudio, 'import { ChannelStudioScreen } from "../channel-settings";', "Platform Studio wrapper import");
-assertIncludes(channelStudio, "export default ChannelStudioScreen;", "Platform Studio wrapper export");
+assertIncludes(channelStudio, "export default function PlatformStudioRoute()", "Platform Studio terminology-safe wrapper export");
+assertIncludes(channelStudio, "replacePlatformStudioTerminology", "Platform Studio terminology normalization");
 assertIncludes(channelSettings, "export function ChannelStudioScreen()", "Platform Studio implementation owner");
 assertIncludes(routeDoc, "/channel-studio` | Platform Studio", "Platform Studio preferred route doc");
 assertIncludes(routeDoc, "/channel-settings` | Platform Studio compatibility", "Platform Studio compatibility route doc");
