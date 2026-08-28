@@ -25,6 +25,7 @@ const RESUME_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 const MIN_BACKGROUND_BEFORE_RESUME_CHECK_MS = 10 * 60 * 1000;
 const STARTUP_CHECK_DELAY_MS = 1800;
 const RELOAD_DELAY_MS = 250;
+const NAVIGATION_RESUME_LEGAL_PATHS = [...APPLICATION_LEGAL_PATHS];
 
 type RuntimeUpdateReason = "startup" | "resume";
 
@@ -198,7 +199,7 @@ export function RuntimeUpdateGate() {
       AsyncStorage.getItem(storageKey).catch(() => null),
     ]).then(([initialUrl, rawRecord]) => {
       if (!active || initialUrl) return;
-      const record = parseNavigationResumeRecord(rawRecord, APPLICATION_LEGAL_PATHS);
+      const record = parseNavigationResumeRecord(rawRecord, NAVIGATION_RESUME_LEGAL_PATHS);
       if (!record || record.pathname === "/") return;
       router.replace(record.pathname as Parameters<typeof router.replace>[0]);
       debugLog("navigation-resume", "Restored durable route after app relaunch", {
@@ -227,7 +228,7 @@ export function RuntimeUpdateGate() {
       return;
     }
 
-    const normalizedPath = normalizeNavigationResumePath(pathname, APPLICATION_LEGAL_PATHS);
+    const normalizedPath = normalizeNavigationResumePath(pathname, NAVIGATION_RESUME_LEGAL_PATHS);
     if (!normalizedPath) {
       void AsyncStorage.removeItem(storageKey).catch(() => null);
       return;
