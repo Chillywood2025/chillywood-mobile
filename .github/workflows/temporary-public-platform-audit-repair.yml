@@ -1,0 +1,39 @@
+name: temporary-public-platform-audit-repair
+
+on:
+  push:
+    branches:
+      - chatgpt/public-platform-end-to-end-audit-20260828
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/public-platform-end-to-end-audit-20260828
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Apply audited public Platform repairs
+        run: node scripts/temporary-public-platform-audit-repair.mjs
+      - name: Verify focused contracts
+        run: |
+          npm ci
+          npm run guard:route-contracts
+          npx tsc --noEmit
+      - name: Remove temporary mutation helpers
+        run: |
+          rm scripts/temporary-public-platform-audit-repair.mjs
+          rm .github/workflows/temporary-public-platform-audit-repair.yml
+      - name: Commit audited source only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/channel/'[userId].tsx' scripts/guard-route-contracts.mjs scripts/temporary-public-platform-audit-repair.mjs .github/workflows/temporary-public-platform-audit-repair.yml
+          git commit -m "Audit public Platform end to end"
+          git push origin HEAD:chatgpt/public-platform-end-to-end-audit-20260828
