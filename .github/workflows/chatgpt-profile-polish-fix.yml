@@ -1,0 +1,40 @@
+name: ChatGPT profile polish syntax fix
+
+on:
+  push:
+    branches:
+      - chatgpt/profile-home-polish-20260828
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/profile-home-polish-20260828
+          fetch-depth: 0
+      - name: Remove malformed duplicate conditional
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('app/profile/[userId].tsx')
+          text = path.read_text()
+          bad = '          {activeTab === "content" ? (          ) : null}\n'
+          if text.count(bad) != 1:
+              raise SystemExit(f'expected one malformed conditional, found {text.count(bad)}')
+          path.write_text(text.replace(bad, '', 1))
+          PY
+      - name: Validate and commit
+        run: |
+          npm ci
+          npx tsc --noEmit
+          rm .github/workflows/chatgpt-profile-polish-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix: close profile polish syntax"
+          git push origin HEAD:chatgpt/profile-home-polish-20260828
