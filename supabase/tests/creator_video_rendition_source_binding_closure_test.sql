@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 set search_path=public,extensions;
-select plan(37);
+select plan(40);
 
 select ok(
   pg_get_functiondef(
@@ -607,6 +607,82 @@ select lives_ok($sql$
     'origin_signed_direct','cloudflare_r2','private_origin','proof/shared/index.m3u8'
   )
 $sql$,'21. deleting a rendition releases its path for a legitimate successor');
+
+insert into public.videos (
+  id,owner_id,title,visibility,moderation_status,
+  storage_provider,storage_bucket,storage_object_key,storage_path,
+  mime_type,file_size_bytes
+) values (
+  'eb000000-0000-4000-8000-000000000009',
+  'ea000000-0000-4000-8000-000000000002',
+  'Legacy shared manifest fixture','public','clean','cloudflare_r2',
+  'chillywood-media-origin',
+  'ea000000-0000-4000-8000-000000000002/eb000000-0000-4000-8000-000000000009/source.mp4',
+  'ea000000-0000-4000-8000-000000000002/eb000000-0000-4000-8000-000000000009/source.mp4',
+  'video/mp4',1024
+);
+
+insert into public.media_renditions (
+  media_id,video_id,source_type,source_id,creator_id,rendition_label,
+  delivery_format,delivery_provider,storage_provider,bucket_role,
+  public_playback_path,manifest_path
+) values (
+  'legacy-shared-canonical','eb000000-0000-4000-8000-000000000009',
+  'creator_video','eb000000-0000-4000-8000-000000000009',
+  'ea000000-0000-4000-8000-000000000002','360p','hls',
+  'origin_signed_direct','cloudflare_r2','private_origin',
+  'legacy/shared/master.m3u8','legacy/shared/master.m3u8'
+);
+set local session_replication_role=replica;
+insert into public.media_renditions (
+  media_id,video_id,source_type,source_id,creator_id,rendition_label,
+  delivery_format,delivery_provider,storage_provider,bucket_role,
+  public_playback_path,manifest_path
+) values (
+  'legacy-shared-alias','eb000000-0000-4000-8000-000000000009',
+  'creator_video','eb000000-0000-4000-8000-000000000009',
+  'ea000000-0000-4000-8000-000000000002','480p','hls',
+  'origin_signed_direct','cloudflare_r2','private_origin',
+  'legacy/shared/master.m3u8','legacy/shared/master.m3u8'
+);
+set local session_replication_role=origin;
+
+select is(
+  public.media_rendition_output_paths_valid(
+    (select id from public.media_renditions where media_id='legacy-shared-alias'),
+    'legacy/shared/master.m3u8','legacy/shared/master.m3u8',null
+  ),
+  false,
+  'a non-canonical legacy shared-manifest row remains fail-closed'
+);
+
+delete from public.media_renditions where media_id='legacy-shared-canonical';
+select ok(
+  exists (
+    select 1 from public.media_rendition_output_path_claims claim
+    where claim.output_path='legacy/shared/master.m3u8'
+  )
+  and not public.media_rendition_output_paths_valid(
+    (select id from public.media_renditions where media_id='legacy-shared-alias'),
+    'legacy/shared/master.m3u8','legacy/shared/master.m3u8',null
+  ),
+  'deleting the canonical legacy row preserves a fail-closed stale claim while an alias remains'
+);
+
+select throws_ok($sql$
+  insert into public.media_renditions (
+    media_id,video_id,source_type,source_id,creator_id,rendition_label,
+    delivery_format,delivery_provider,storage_provider,bucket_role,manifest_path
+  ) values (
+    'legacy-shared-cross-authority','eb000000-0000-4000-8000-000000000002',
+    'creator_video','eb000000-0000-4000-8000-000000000002',
+    'ea000000-0000-4000-8000-000000000002','480p','hls',
+    'origin_signed_direct','cloudflare_r2','private_origin',
+    'legacy/shared/master.m3u8'
+  )
+$sql$,'P0001','media_rendition_output_path_reused',
+  'a preserved legacy shared manifest remains unavailable to another video authority'
+);
 
 select * from finish();
 rollback;
