@@ -1,0 +1,98 @@
+from pathlib import Path
+import re
+
+p = Path('app/channel-settings.tsx')
+s = p.read_text()
+original = s
+
+old_tabs = '''const STUDIO_TABS: readonly { id: StudioTabId; label: string }[] = [
+  { id: "home", label: "Home" },
+  { id: "content", label: "Content" },
+  { id: "clip", label: "Clip" },
+  { id: "monetization", label: "Monetization" },
+  { id: "live", label: "Live" },
+  { id: "audience", label: "Audience" },
+  { id: "moderation", label: "Moderation" },
+  { id: "insights", label: "Insights" },
+  { id: "brand", label: "Brand" },
+];'''
+new_tabs = '''const STUDIO_TABS: readonly { id: StudioTabId; label: string }[] = [
+  { id: "home", label: "Home" },
+  { id: "content", label: "Content" },
+  { id: "clip", label: "Clip" },
+  { id: "live", label: "Live" },
+  { id: "audience", label: "Audience" },
+  { id: "moderation", label: "Moderation" },
+  { id: "insights", label: "Insights" },
+  { id: "monetization", label: "Monetization" },
+  { id: "brand", label: "Brand" },
+];'''
+assert old_tabs in s, 'STUDIO_TABS anchor not found'
+s = s.replace(old_tabs, new_tabs, 1)
+
+old_expand = '() => new Set<ClipStudioSectionId>(["media", "title", "templates", "save"]),'
+assert old_expand in s, 'Clip expansion anchor not found'
+s = s.replace(old_expand, '() => new Set<ClipStudioSectionId>(["media", "title", "save"]),', 1)
+
+clip_start = s.index('  const renderClipStudioTab = () => {')
+clip_end = s.index('  const renderBrandStudioTab = () => {', clip_start)
+clip = s[clip_start:clip_end]
+summary_pattern = re.compile(r'''\n        <View style=\{styles\.summaryGrid\}>\n          <View style=\{styles\.summaryCard\}>\n            <Text style=\{styles\.summaryLabel\}>Source</Text>.*?\n        </View>\n\n        <View style=\{styles\.studioAccordionStack\}>''', re.S)
+clip2, count = summary_pattern.subn('\n\n        <View style={styles.studioAccordionStack}>', clip, count=1)
+assert count == 1, f'Clip summary block replacement count={count}'
+s = s[:clip_start] + clip2 + s[clip_end:]
+
+intro = '''      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <View style={styles.panelHeaderCopy}>
+            <Text style={styles.panelTitle}>Moderation and Safety</Text>
+            <Text style={styles.panelSubtitle}>Reports, blocks, comments, and platform safety.</Text>
+          </View>
+          <Text style={styles.panelStatusMuted}>CREATOR SAFE</Text>
+        </View>
+        <Text style={styles.permissionCopy}>
+          Platform Studio shows creator-safe safety controls here. Admin-only queues and enforcement tools stay in Admin unless this account has review access.
+        </Text>
+      </View>
+
+'''
+assert intro in s, 'Moderation intro anchor not found'
+s = s.replace(intro, '', 1)
+old_safety = '''        <View style={styles.panelHeader}>
+          <Text style={styles.panelTitle}>Safety status</Text>
+          <Text style={styles.panelStatusMuted}>
+            {recentSafetyReportCount == null ? "Protected" : recentSafetyReportCount ? "Needs review" : "Clear"}
+          </Text>
+        </View>'''
+new_safety = '''        <View style={styles.panelHeader}>
+          <View style={styles.panelHeaderCopy}>
+            <Text style={styles.panelTitle}>Moderation and Safety</Text>
+            <Text style={styles.panelSubtitle}>What needs attention, plus the controls that resolve it.</Text>
+          </View>
+          <Text style={styles.panelStatusMuted}>
+            {recentSafetyReportCount == null ? "Protected" : recentSafetyReportCount ? "Needs review" : "Clear"}
+          </Text>
+        </View>'''
+assert old_safety in s, 'Moderation status anchor not found'
+s = s.replace(old_safety, new_safety, 1)
+
+visibility_grid = '''              <View style={styles.summaryGrid}>
+                {audienceVisibilityCards.map((card) => (
+                  <View key={card.label} style={styles.summaryCard}>
+                    <Text style={styles.summaryLabel}>{card.label}</Text>
+                    <Text style={styles.summaryValue}>{card.value}</Text>
+                    <Text style={styles.summaryBody}>{card.body}</Text>
+                  </View>
+                ))}
+              </View>
+'''
+assert visibility_grid in s, 'Audience visibility grid anchor not found'
+s = s.replace(visibility_grid, '', 1)
+
+assert '<Text style={styles.sectionLabel}>Room And Audience Signals</Text>' in s
+assert '<Text style={styles.sectionLabel}>Live / Event Signals</Text>' in s
+s = s.replace('<Text style={styles.sectionLabel}>Room And Audience Signals</Text>', '<Text style={styles.sectionLabel}>Audience and Rooms</Text>', 1)
+s = s.replace('<Text style={styles.sectionLabel}>Live / Event Signals</Text>', '<Text style={styles.sectionLabel}>Live and Events</Text>', 1)
+
+assert s != original, 'No source changes produced'
+p.write_text(s)
