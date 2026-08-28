@@ -27,10 +27,8 @@ jobs:
               raise SystemExit(f'expected one malformed conditional, found {text.count(bad)}')
           path.write_text(text.replace(bad, '', 1))
           PY
-      - name: Validate and commit
+      - name: Commit exact repair and remove helper
         run: |
-          npm ci
-          npx tsc --noEmit
           rm .github/workflows/chatgpt-profile-polish-fix.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
