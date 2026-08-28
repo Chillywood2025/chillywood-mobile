@@ -13,7 +13,7 @@ type AuthenticatedUser = {
   email: string | null;
   id: string;
   permissions: Set<string>;
-  role: "owner" | "operator" | "moderator";
+  role: "owner" | "super_admin" | "operator" | "moderator";
 };
 
 const CORS_HEADERS = {
@@ -30,6 +30,7 @@ const JSON_HEADERS = {
 const toText = (value: unknown) => String(value ?? "").trim();
 const isRecord = (value: unknown): value is JsonObject =>
   !!value && typeof value === "object" && !Array.isArray(value);
+const isOwnerClassRole = (role: AuthenticatedUser["role"]) => role === "owner" || role === "super_admin";
 
 const json = (status: number, payload: JsonObject) =>
   new Response(JSON.stringify(payload), { headers: JSON_HEADERS, status });
@@ -85,17 +86,17 @@ const shouldWriteAppAudit = (user: AuthenticatedUser) =>
   user.role !== "owner" || !!user.activeBreakGlassSessionId;
 
 const resolveLegalReason = (user: AuthenticatedUser, value: unknown, fallback: string) => {
-  if (user.role === "owner" && !user.activeBreakGlassSessionId) {
+  if (isOwnerClassRole(user.role) && !user.activeBreakGlassSessionId) {
     return sanitizeText(value, 500) || fallback;
   }
   return requireReason(value);
 };
 
 const hasPermission = (user: AuthenticatedUser, key: string) =>
-  user.role === "owner" || user.permissions.has(normalizePermission(key));
+  isOwnerClassRole(user.role) || user.permissions.has(normalizePermission(key));
 
 const hasAnyPermission = (user: AuthenticatedUser, keys: string[]) =>
-  user.role === "owner" || keys.some((key) => user.permissions.has(normalizePermission(key)));
+  isOwnerClassRole(user.role) || keys.some((key) => user.permissions.has(normalizePermission(key)));
 
 const readActivePermissions = async (
   adminClient: SupabaseClientLike,
@@ -138,14 +139,14 @@ const authenticate = async (
   const role = await readExactPlatformRole(
     adminClient,
     userId,
-    ["owner", "operator", "moderator"],
+    ["owner", "super_admin", "operator", "moderator"],
   );
 
-  if (role !== "owner" && role !== "operator" && role !== "moderator") {
+  if (role !== "owner" && role !== "super_admin" && role !== "operator" && role !== "moderator") {
     return { error: json(403, { error: "staff_role_required" }) };
   }
   if (role === "moderator") {
-    return { error: json(403, { error: "owner_or_approved_operator_required" }) };
+    return { error: json(403, { error: "owner_super_admin_or_approved_operator_required" }) };
   }
 
   const permissions = await readActivePermissions(adminClient, userId);
@@ -392,7 +393,7 @@ Deno.serve(async (req) => {
 
     const payload = sanitizeObject(await req.json().catch(() => ({})));
     const action = toText(payload.action).toLowerCase() || "preview";
-    const reason = resolveLegalReason(auth.user, payload.reason, "Owner normal legal evidence action.");
+    const reason = resolveLegalReason(auth.user, payload.reason, "Owner or Super Admin legal evidence action.");
     const legalRequestId = toText(payload.legalRequestId ?? payload.legal_request_id) || null;
     const targetType = toText(payload.targetType).toLowerCase();
     const targetId = sanitizeText(payload.targetId, 180) || null;
@@ -548,7 +549,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "release_hold") {
-      if (auth.user.role !== "owner") return json(403, { error: "owner_required" });
+      if (!isOwnerClassRole(auth.user.role)) return json(403, { error: "owner_or_super_admin_required" });
       const holdId = sanitizeText(payload.holdId, 180);
       if (!holdId) throw new Error("legal_hold_id_required");
       const { data, error } = await adminClient.from("legal_holds")
