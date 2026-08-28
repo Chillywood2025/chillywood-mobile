@@ -994,8 +994,6 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {renderHomeHero()}
-
           {renderHomeEventRail({
             title: "Live Now",
             subtitle: "Public rooms and events that are live now.",
@@ -1197,7 +1195,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "700",
   },
-
   homeHeroWrap: {
     marginHorizontal: 16,
     marginTop: 12,
