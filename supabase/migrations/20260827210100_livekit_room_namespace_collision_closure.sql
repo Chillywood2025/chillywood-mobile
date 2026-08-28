@@ -3,6 +3,8 @@
 -- required here: a trigger that only checks the neighboring table remains
 -- vulnerable when two INSERT statements begin with the same MVCC snapshot.
 
+begin;
+
 create table public."livekit_room_namespace_reservations" (
   "room_name" text primary key,
   "room_kind" text not null check ("room_kind" in ('communication','watch_party')),
@@ -284,3 +286,5 @@ comment on function public."reserve_livekit_room_namespace"() is
   'Atomically reserves a normalized LiveKit room name through a unique index; concurrent cross-table claims cannot share a stale MVCC snapshot.';
 comment on function public."release_livekit_room_namespace"() is
   'Releases the exact internal LiveKit namespace reservation after its owning room is deleted.';
+
+commit;
