@@ -140,8 +140,8 @@ export async function userHasLiveCostGuardRole(
   adminClient: SupabaseClientLike,
   user: { email: string | null; id: string },
 ) {
-  const role = await readExactPlatformRole(adminClient, user.id, ["owner", "operator"]);
-  if (role === "owner") return true;
+  const role = await readExactPlatformRole(adminClient, user.id, ["owner", "super_admin", "operator"]);
+  if (role === "owner" || role === "super_admin") return true;
   if (role !== "operator") return false;
   return (await readExactPermissionKeys(adminClient, user.id, ["live_ops"]))
     .has("live_ops");
