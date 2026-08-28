@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 set search_path=public,extensions;
-select plan(12);
+select plan(14);
 
 select ok(
   (select relrowsecurity from pg_class where oid='public.livekit_room_namespace_reservations'::regclass)
@@ -98,6 +98,26 @@ select is(
    )),
   2,
   '12. failed collision attempts preserve both original ownership reservations'
+);
+
+alter table public.watch_party_rooms
+  disable trigger enforce_livekit_room_namespace_unique_trigger;
+insert into public.watch_party_rooms(party_id,host_user_id,room_type)
+values ('namespace-a','fa300000-0000-4000-8000-000000000001','live');
+alter table public.watch_party_rooms
+  enable trigger enforce_livekit_room_namespace_unique_trigger;
+
+delete from public.watch_party_rooms where party_id='NAMESPACE-A';
+select is(
+  (select room_id from public.livekit_room_namespace_reservations where room_name='NAMESPACE-A'),
+  'namespace-a',
+  '13. deleting a canonical legacy casing alias rebinds its reservation to the preserved alias'
+);
+select throws_ok(
+  $$insert into public.communication_rooms(room_id,room_code,host_user_id,status)
+    values ('NAMESPACE-A','NAMESPACE-A-3','fa300000-0000-4000-8000-000000000001','active')$$,
+  'P0001','livekit_room_namespace_collision',
+  '14. a preserved same-authority alias still blocks a cross-authority namespace claim'
 );
 
 select * from finish();
