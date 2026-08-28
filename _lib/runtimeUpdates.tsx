@@ -12,7 +12,8 @@ import {
 } from "./runtimeUpdateActivationPolicy.mjs";
 
 const LAST_CHECK_AT_KEY = "chillywood.runtimeUpdate.lastCheckAt";
-const RESUME_CHECK_INTERVAL_MS = 2 * 60 * 1000;
+const RESUME_CHECK_INTERVAL_MS = 15 * 60 * 1000;
+const MIN_BACKGROUND_BEFORE_RESUME_CHECK_MS = 10 * 60 * 1000;
 const STARTUP_CHECK_DELAY_MS = 1800;
 const RELOAD_DELAY_MS = 250;
 
@@ -149,6 +150,8 @@ const checkForRuntimeUpdate = async (
 export function RuntimeUpdateGate() {
   const checkInFlightRef = useRef(false);
   const reloadRequestedRef = useRef<string | null>(null);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const backgroundedAtRef = useRef<number | null>(null);
   const updatesState = Updates.useUpdates();
   const downloadedUpdateId = updatesState.downloadedUpdate?.updateId;
   const isRollbackToEmbedded = Boolean(
@@ -194,7 +197,33 @@ export function RuntimeUpdateGate() {
 
     const startupTimer = setTimeout(() => runCheck("startup", true), STARTUP_CHECK_DELAY_MS);
     const subscription = AppState.addEventListener("change", (nextState: AppStateStatus) => {
-      if (nextState === "active") runCheck("resume");
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (nextState !== "active") {
+        if (previousState === "active" && backgroundedAtRef.current === null) {
+          backgroundedAtRef.current = Date.now();
+        }
+        return;
+      }
+
+      if (previousState === "active") return;
+
+      const backgroundedAt = backgroundedAtRef.current;
+      backgroundedAtRef.current = null;
+      if (backgroundedAt === null) return;
+
+      const backgroundDurationMs = Date.now() - backgroundedAt;
+      if (backgroundDurationMs < MIN_BACKGROUND_BEFORE_RESUME_CHECK_MS) {
+        debugLog("runtime-updates", "Skipped resume update check after short background", {
+          backgroundDurationMs,
+          channel: Updates.channel,
+          runtimeVersion: Updates.runtimeVersion,
+        });
+        return;
+      }
+
+      runCheck("resume");
     });
 
     return () => {
