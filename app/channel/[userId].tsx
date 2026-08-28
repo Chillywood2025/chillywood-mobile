@@ -607,7 +607,7 @@ export default function PublicChannelScreen() {
         "Subscribe",
         error instanceof Error && error.message
           ? error.message
-          : "Channel Subscription checkout is not available right now.",
+          : "Platform Subscription checkout is not available right now.",
       );
       await refreshSubscriptionAccess();
     } finally {
@@ -1050,14 +1050,23 @@ export default function PublicChannelScreen() {
   );
 
   const renderEventCard = (event: CreatorEventSummary) => (
-    <View key={event.id} style={styles.programmingCard}>
+    <TouchableOpacity
+      key={event.id}
+      style={styles.programmingCard}
+      activeOpacity={0.86}
+      onPress={() => router.push(`/event/${event.id}` as Parameters<typeof router.push>[0])}
+      testID={event.isLiveNow ? "platform-live-event-open-button" : "platform-upcoming-event-open-button"}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${event.eventTitle}`}
+    >
       <Text style={styles.cardKicker}>{formatEventStatus(event)}</Text>
       <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
       <Text style={styles.cardBody}>{formatEventDate(event.startsAt)}</Text>
       {event.reminder.canSetReminder ? (
         <Text style={styles.metaText}>Reminder ready</Text>
       ) : null}
-    </View>
+      <Text style={styles.metaText}>{event.isLiveNow ? "Open live event" : "View event details"}</Text>
+    </TouchableOpacity>
   );
 
   const renderVipVideos = () => (
@@ -1190,7 +1199,7 @@ export default function PublicChannelScreen() {
         available: !!firstEvent,
       },
       {
-        title: "Channel Subscription",
+        title: "Platform Subscription",
         scopeKey: "channel_subscription" as MoneyScopeKey,
         body: "Creator Platform subscription test. This is not Chi'llywood Premium.",
         button: subscriptionAccess?.allowed ? "Open Subscriber Area" : "Subscribe in test mode",
@@ -1253,10 +1262,10 @@ export default function PublicChannelScreen() {
     if (!offer || (!sandboxTesterActive && !isOwnerPlatformMode(platformMode))) return null;
     const subscribed = subscriptionAccess?.allowed === true;
     const unavailable = !subscribed && !subscriptionAccess?.requiresPurchase;
-    const unavailableCopy = "Channel Subscription is not available for this creator Platform in sandbox right now. Premium, VIP, paid videos, Watch-Party Seat Passes, and paid events stay separate.";
+    const unavailableCopy = "Platform Subscription is not available for this creator Platform in sandbox right now. Premium, VIP, paid videos, Watch-Party Seat Passes, and paid events stay separate.";
     if (isOwnerPlatformMode(platformMode)) {
       return (
-        <AppSection title="Channel Subscription" statusLabel={offer ? "Manage" : "Not set"} statusTone={offer ? "success" : "muted"}>
+        <AppSection title="Platform Subscription" statusLabel={offer ? "Manage" : "Not set"} statusTone={offer ? "success" : "muted"}>
           <View style={styles.programmingCard}>
             <Text style={styles.cardKicker}>Owner tools</Text>
             <Text style={styles.cardTitle}>{offer?.title ?? "Subscription offer"}</Text>
@@ -1282,7 +1291,7 @@ export default function PublicChannelScreen() {
     }
     return (
       <AppSection
-        title="Channel Subscription"
+        title="Platform Subscription"
         statusLabel={subscribed ? "Subscribed" : unavailable ? "Unavailable" : "Sandbox"}
         statusTone={subscribed ? "success" : unavailable ? "muted" : "warning"}
       >
@@ -1301,7 +1310,7 @@ export default function PublicChannelScreen() {
             disabled={subscriptionBusy}
             onPress={subscribed || unavailable ? openSubscriberArea : handleSubscribe}
             testID="tester-channel-subscribe-button"
-            accessibilityLabel="Sandbox Test Subscribe to Creator Channel"
+            accessibilityLabel="Sandbox Test Subscribe to Creator Platform"
           >
             {subscriptionBusy ? (
               <ActivityIndicator color="#fff" />
