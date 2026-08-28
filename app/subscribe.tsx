@@ -31,6 +31,21 @@ const PREMIUM_SANDBOX_NOTICE =
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../assets/images/chillywood-branded-background.png");
 const STORE_PROVIDER_NAME = Platform.OS === "ios" ? "App Store" : "Google Play";
 const STORE_PROVIDER_PAIR = `${STORE_PROVIDER_NAME} / RevenueCat`;
+const IOS_PREMIUM_PRODUCT_IDS = new Set([
+  "com.chillywood.premium.monthly",
+  "com.chillywood.premium.yearly",
+]);
+const ANDROID_PREMIUM_PRODUCT_IDS = new Set(["premium_subscription"]);
+
+const hasCurrentStorePremiumSubscription = (snapshot: MonetizationSnapshot) => {
+  const allowed = Platform.OS === "ios" ? IOS_PREMIUM_PRODUCT_IDS : ANDROID_PREMIUM_PRODUCT_IDS;
+  return snapshot.activeProductIds.some((rawProductId) => {
+    const productId = String(rawProductId ?? "").trim();
+    if (!productId) return false;
+    if (allowed.has(productId)) return true;
+    return Platform.OS === "android" && allowed.has(productId.split(":")[0] ?? "");
+  });
+};
 
 const buildPurchaseReadiness = (
   snapshot: MonetizationSnapshot,
@@ -239,29 +254,37 @@ export default function SubscribeScreen() {
 
   const premiumTarget = snapshot.targets.premium_subscription;
   const hasPremium = !!premiumTarget.hasEntitlement;
+  const currentStorePremiumActive = hasPremium && hasCurrentStorePremiumSubscription(snapshot);
+  const premiumActiveOutsideCurrentStore = hasPremium && !currentStorePremiumActive;
   const purchaseReadiness = buildPurchaseReadiness(snapshot, activePurchaseMode, sandboxMode, isSignedIn);
   const purchaseReady = purchaseReadiness.ready;
   const sandboxPurchaseAvailable = sandboxMode.enabled && purchaseReady && !hasPremium;
   const sandboxBlockedReason = purchaseReadiness.message;
   const canPurchase = isSignedIn && purchaseReady && !hasPremium;
   const canRestore = isSignedIn && snapshot.configuration.shouldConfigure;
-  const canManage = isSignedIn && snapshot.configuration.shouldConfigure;
+  const canManage = isSignedIn && snapshot.configuration.shouldConfigure && currentStorePremiumActive;
   const busy = loading || purchaseBusy || restoreBusy || manageBusy;
-  const purchaseStatusLabel = sandboxMode.enabled && !hasPremium
-    ? purchaseReady ? "Sandbox test available" : "Sandbox setup unavailable"
-    : purchaseReady || hasPremium ? "Available" : "Temporarily unavailable";
+  const purchaseStatusLabel = hasPremium
+    ? "Entitled"
+    : sandboxMode.enabled
+      ? purchaseReady ? "Sandbox test available" : "Sandbox setup unavailable"
+      : purchaseReady ? "Available" : "Temporarily unavailable";
   const purchaseStatusTone = purchaseReady || hasPremium ? "default" : "warning";
-  const availabilitySummary = purchaseReady
-    ? sandboxMode.enabled
-      ? `${STORE_PROVIDER_PAIR} sandbox purchase can open when billing and the Premium offering are available.`
-      : "A verified store subscription is ready for this account."
-    : FRIENDLY_UNAVAILABLE_MESSAGE;
+  const availabilitySummary = hasPremium
+    ? currentStorePremiumActive
+      ? `An active Premium subscription is present on ${STORE_PROVIDER_NAME}.`
+      : `Premium is active for this account, but there is no active ${STORE_PROVIDER_NAME} Premium subscription to manage on this device.`
+    : purchaseReady
+      ? sandboxMode.enabled
+        ? `${STORE_PROVIDER_PAIR} sandbox purchase can open when billing and the Premium offering are available.`
+        : "A verified store subscription is ready for this account."
+      : FRIENDLY_UNAVAILABLE_MESSAGE;
   const primaryActionLabel = hasPremium
-    ? "Manage subscription"
+    ? currentStorePremiumActive ? "Manage subscription" : "Done"
     : purchaseReady
       ? sandboxMode.enabled ? "Start Sandbox Premium Test" : "Start Premium"
       : "Check Sandbox Purchase Setup";
-  const primaryActionBusy = hasPremium ? manageBusy : purchaseBusy;
+  const primaryActionBusy = hasPremium && currentStorePremiumActive ? manageBusy : purchaseBusy;
 
   const onSignIn = useCallback(() => {
     router.push({ pathname: "/(auth)/login", params: { redirectTo: "/subscribe" } });
@@ -395,14 +418,14 @@ export default function SubscribeScreen() {
     }
 
     if (!canManage) {
-      setNotice("Subscription management is temporarily unavailable while setup is being finalized.");
+      setNotice(`There is no active ${STORE_PROVIDER_NAME} Premium subscription to manage on this device.`);
       return;
     }
 
     setManageBusy(true);
     try {
       const opened = await openManageSubscriptionFlow();
-      setNotice(opened ? "Opened the platform subscription manager." : "Unable to open subscription management on this device.");
+      setNotice(opened ? `Opened the ${STORE_PROVIDER_NAME} subscription manager.` : `Unable to open ${STORE_PROVIDER_NAME} subscription management on this device.`);
     } finally {
       setManageBusy(false);
     }
@@ -462,7 +485,9 @@ export default function SubscribeScreen() {
               <Text style={styles.cardTitle}>{hasPremium ? "Premium is active." : "Premium is not active."}</Text>
               <Text style={styles.body}>
                 {hasPremium
-                  ? "Your Premium access is active on this account."
+                  ? currentStorePremiumActive
+                    ? `Your Premium access is active and managed through ${STORE_PROVIDER_NAME}.`
+                    : `Your Premium access is active on this account. There is no active ${STORE_PROVIDER_NAME} Premium subscription on this device to manage.`
                   : purchaseReady ? "Choose Premium to continue." : FRIENDLY_UNAVAILABLE_MESSAGE}
               </Text>
             </View>
@@ -476,10 +501,14 @@ export default function SubscribeScreen() {
               style={[styles.primaryButton, busy && styles.primaryButtonDisabled]}
               activeOpacity={0.88}
               disabled={busy}
-              onPress={hasPremium ? onManage : onPurchase}
+              onPress={hasPremium ? (currentStorePremiumActive ? onManage : onSecondaryClose) : onPurchase}
               testID="premium-purchase-button"
               accessibilityRole="button"
-              accessibilityLabel={hasPremium ? "Manage Chi'llywood Premium subscription" : "Start Chi'llywood Premium purchase"}
+              accessibilityLabel={hasPremium
+                ? currentStorePremiumActive
+                  ? `Manage Chi'llywood Premium subscription in ${STORE_PROVIDER_NAME}`
+                  : "Done with Chi'llywood Premium"
+                : "Start Chi'llywood Premium purchase"}
               accessibilityHint={!hasPremium && !purchaseReady
                 ? "Checks purchase availability and explains any remaining setup issue."
                 : undefined}
@@ -552,6 +581,16 @@ export default function SubscribeScreen() {
               body={hasPremium ? "Entitlement readback shows Premium active." : "Premium remains locked until an entitlement is confirmed."}
               tone={hasPremium ? "default" : "muted"}
             />
+            {hasPremium ? (
+              <StatusLine
+                label={`${STORE_PROVIDER_NAME} Premium subscription`}
+                value={currentStorePremiumActive ? "Active here" : "Not on this store"}
+                body={currentStorePremiumActive
+                  ? `This device can open ${STORE_PROVIDER_NAME} subscription management for the active Premium product.`
+                  : `Premium authority is active for the account, but ${STORE_PROVIDER_NAME} has no active Premium product to manage here.`}
+                tone={currentStorePremiumActive ? "default" : "muted"}
+              />
+            ) : null}
             <StatusLine
               label="Purchase readiness"
               value={purchaseStatusLabel}
