@@ -31,6 +31,27 @@
         "buildType": "app-bundle"
       }
     },
+    "android-internal-v2": {
+      "autoIncrement": true,
+      "channel": "android-internal-v2",
+      "distribution": "store",
+      "environment": "production",
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "ios-internal-v2": {
+      "autoIncrement": true,
+      "channel": "ios-internal-v2",
+      "distribution": "store",
+      "environment": "production",
+      "env": {
+        "IOS_NATIVE_CALLS_ENABLED": "true",
+        "EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED": "true",
+        "EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED": "true",
+        "EXPO_PUBLIC_REVENUECAT_APP_STORE_ENABLED": "true"
+      }
+    },
     "android-production-local-recovery": {
       "extends": "production",
       "android": {
@@ -74,6 +95,19 @@
     }
   },
   "submit": {
+    "android-internal-v2": {
+      "android": {
+        "track": "internal"
+      }
+    },
+    "ios-internal-v2": {
+      "ios": {
+        "ascAppId": "6791217176",
+        "groups": [
+          "Chillywood Internal"
+        ]
+      }
+    },
     "production": {
       "android": {
         "track": "internal"
