@@ -207,6 +207,13 @@ export function AccessSheet({
   ), [appDisplayName, premiumUpsellBody, premiumUpsellTitle, reason, sheetState?.presentation]);
   const isPremiumGateSheet = reason === "premium_required";
   const renderDeferredUnavailable = deferredMonetization && !isPremiumGateSheet;
+  const freshGateEntitledTargetId = useMemo(() => (
+    gate?.monetization?.qualifyingTargetIds.find((targetId) => (
+      sheetState?.snapshot.targets[targetId]?.entitlementAuthoritative === true
+      && sheetState.snapshot.targets[targetId].hasEntitlement === true
+    ))
+  ), [gate?.monetization?.qualifyingTargetIds, sheetState?.snapshot.targets]);
+  const freshGateEntitled = !!freshGateEntitledTargetId;
 
   const copy = {
     kicker: renderDeferredUnavailable
@@ -282,15 +289,23 @@ export function AccessSheet({
     ? styles.helperTextNeutral
     : sheetState?.helperTone === "warning" ? styles.helperTextWarning : styles.helperTextNeutral;
   const displayedCopy = isPremiumGateSheet
-    ? {
-        kicker: "PREMIUM",
-        title: "Premium required",
-        body: "Watch-Party Live is included with Premium.",
-        helper: "Premium unlocks Watch-Party Live, Live Watch-Party, and ad-free viewing.",
-        actionLabel: sheetState?.primaryAction === "purchase" || sheetState?.primaryAction === "retry"
-          ? sheetState.primaryLabel
-          : "View Premium",
-      }
+    ? freshGateEntitled
+      ? {
+          kicker: "PREMIUM",
+          title: "Premium is active",
+          body: "Premium access is active on this account.",
+          helper: "Continue to recheck this Live entry against current server authority.",
+          actionLabel: "Continue",
+        }
+      : {
+          kicker: "PREMIUM",
+          title: "Premium required",
+          body: "Watch-Party Live is included with Premium.",
+          helper: "Premium unlocks Watch-Party Live, Live Watch-Party, and ad-free viewing.",
+          actionLabel: sheetState?.primaryAction === "purchase" || sheetState?.primaryAction === "retry"
+            ? sheetState.primaryLabel
+            : "View Premium",
+        }
     : {
         kicker: copy.kicker,
         title: copy.title,
@@ -305,13 +320,45 @@ export function AccessSheet({
       return;
     }
 
+    setStatusMessage("");
+    setStatusTone("neutral");
+
+    if (isPremiumGateSheet && freshGateEntitled && sheetState) {
+      setLoadingState(true);
+      try {
+        let feedback: AccessSheetActionFeedback = {
+          message: "Premium is active. Rechecking access…",
+          tone: "success",
+        };
+        if (onPurchaseResult) {
+          const nextFeedback = await onPurchaseResult({
+            ok: true,
+            targetId: freshGateEntitledTargetId,
+            snapshot: sheetState.snapshot,
+            customerInfo: null,
+            message: "Premium is already active for this account.",
+          });
+          if (nextFeedback?.message || nextFeedback?.tone) {
+            feedback = { ...feedback, ...nextFeedback };
+          }
+        } else {
+          onClose();
+        }
+        setStatusTone(feedback.tone ?? "neutral");
+        setStatusMessage(feedback.message ?? "");
+      } catch {
+        setStatusTone("error");
+        setStatusMessage("Premium is active, but this access path could not be rechecked right now.");
+      } finally {
+        setLoadingState(false);
+      }
+      return;
+    }
+
     if (isPremiumGateSheet && sheetState?.primaryAction !== "purchase") {
       openPremiumManagement("primary");
       return;
     }
-
-    setStatusMessage("");
-    setStatusTone("neutral");
 
     if (sheetState?.primaryDisabled) {
       setStatusTone("error");
@@ -384,29 +431,31 @@ export function AccessSheet({
     }
   }, [
     analyticsPayload,
-    deferredMonetization,
+    freshGateEntitled,
+    freshGateEntitledTargetId,
     gate,
+    isPremiumGateSheet,
     loadSheetState,
+    onClose,
     onCloseTracked,
     onPurchaseResult,
     openPremiumManagement,
     opensPremiumManagement,
-    resolvePurchaseMode,
-    isPremiumGateSheet,
-    sandboxMode.enabled,
-    sheetState?.primaryLabel,
-    sheetState?.primaryAction,
-    sheetState?.primaryDisabled,
-    user?.id,
     renderDeferredUnavailable,
+    resolvePurchaseMode,
+    sandboxMode.enabled,
+    sheetState,
+    user?.id,
   ]);
-  const primaryButtonTestID = isPremiumGateSheet && sheetState?.primaryAction === "purchase"
-    ? primaryActionTestID
-    : isPremiumGateSheet
-      && sheetState?.primaryAction === "retry"
-      && sheetState.primaryLabel.toLowerCase().includes("recheck")
-        ? recheckActionTestID
-        : undefined;
+  const primaryButtonTestID = isPremiumGateSheet && freshGateEntitled
+    ? recheckActionTestID
+    : isPremiumGateSheet && sheetState?.primaryAction === "purchase"
+      ? primaryActionTestID
+      : isPremiumGateSheet
+        && sheetState?.primaryAction === "retry"
+        && sheetState.primaryLabel.toLowerCase().includes("recheck")
+          ? recheckActionTestID
+          : undefined;
 
   const onRestorePress = useCallback(async () => {
     setRestoreBusy(true);

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database, Json } from "../supabase/database.types";
 import { isCurrentAccountSessionAuthority, readCurrentAccountSessionAuthority, sameAccountSessionAuthority, type AccountSessionAuthorityBinding } from "./accountSessionAuthority";
+import { withAuthorityReadDeadline } from "./entitlementAuthority";
 import { ACCOUNT_LEGAL_DOCUMENT_KEYS, LEGAL_DOCUMENTS, LEGAL_DOCUMENT_KEYS, type LegalDocumentKey } from "./legalPolicies";
 
 export const WAVE1_LEGAL_MARKET = "UNITED_STATES" as const;
@@ -19,7 +20,8 @@ export type LegalRequirementsReadback = AccountSessionAuthorityBinding & {
   capability: LegalCapability; requirements: LegalRequirement[];
 };
 
-type LegalRpc = PromiseLike<{ data: unknown; error: { message?: string; code?: string } | null }>;
+type LegalRpcResult = { data: unknown; error: { message?: string; code?: string } | null };
+type LegalRpc = PromiseLike<LegalRpcResult>;
 const legalKeys = new Set<string>(LEGAL_DOCUMENT_KEYS);
 const capabilities = new Set<LegalCapability>(["account", "creator", "creator_money", "payout"]);
 const requiredKeys: Record<LegalCapability, readonly LegalDocumentKey[]> = {
@@ -28,6 +30,44 @@ const requiredKeys: Record<LegalCapability, readonly LegalDocumentKey[]> = {
   payout: [...ACCOUNT_LEGAL_DOCUMENT_KEYS, "creator_terms", "money_terms"],
 };
 const text = (value: unknown) => typeof value === "string" ? value.trim() : "";
+
+export function accountLegalVerificationKey(authority?: AccountSessionAuthorityBinding | null) {
+  if (!authority || authority.state !== "ACTIVE" || authority.restoreOnly) return "";
+  const userId = text(authority.userId);
+  const accountId = text(authority.accountId);
+  const sessionGeneration = text(authority.sessionGeneration);
+  return userId && accountId === userId && sessionGeneration
+    ? JSON.stringify([userId, accountId, sessionGeneration, false])
+    : "";
+}
+
+export function shouldRefreshAccountLegalRequirements(previousState: string | null | undefined, nextState: string) {
+  return previousState !== "active" && nextState === "active";
+}
+
+export function accountLegalCheckIsPending(options: {
+  settledRetry: number;
+  currentRetry: number;
+  settledVerificationKey: string;
+  currentVerificationKey: string;
+}) {
+  return !options.currentVerificationKey
+    || options.settledRetry !== options.currentRetry
+    || options.settledVerificationKey !== options.currentVerificationKey;
+}
+
+export function isCurrentAccountLegalRequest(options: {
+  requestGeneration: number;
+  currentGeneration: number;
+  requestVerificationKey: string;
+  currentVerificationKey: string;
+}) {
+  return Number.isSafeInteger(options.requestGeneration)
+    && options.requestGeneration > 0
+    && options.requestGeneration === options.currentGeneration
+    && !!options.requestVerificationKey
+    && options.requestVerificationKey === options.currentVerificationKey;
+}
 
 export function parseLegalRequirementsReadback(value: unknown): LegalRequirementsReadback | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -86,13 +126,36 @@ export function buildLegalAcceptancePayload(readback: LegalRequirementsReadback)
   return payload;
 }
 
-export async function readAccountLegalRequirements(client: SupabaseClient<Database>, capability: LegalCapability = "account") {
+export async function readAccountLegalRequirements(
+  client: SupabaseClient<Database>,
+  capability: LegalCapability = "account",
+  timeoutMs?: number,
+) {
   const rpc = (client.rpc as unknown as (fn: "wave1_legal_requirements_readback", args: {
     p_capability: LegalCapability;
   }) => LegalRpc)("wave1_legal_requirements_readback", { p_capability: capability });
-  const { data, error } = await rpc;
+  const result = await withAuthorityReadDeadline<LegalRpcResult | null>(rpc, null, timeoutMs);
+  if (!result) return null;
+  const { data, error } = result;
   const readback = error ? null : parseLegalRequirementsReadback(data);
   return readback?.capability === capability ? readback : null;
+}
+
+export type AccountLegalGateResolution =
+  | { status: "accepted" | "required"; readback: LegalRequirementsReadback }
+  | { status: "error"; readback: null };
+
+export async function resolveAccountLegalRequirements(
+  client: SupabaseClient<Database>,
+  authority: AccountSessionAuthorityBinding,
+  timeoutMs?: number,
+): Promise<AccountLegalGateResolution> {
+  const readback = await readAccountLegalRequirements(client, "account", timeoutMs);
+  if (!sameLegalAuthorityBinding(readback, authority)) return { status: "error", readback: null };
+  return {
+    status: legalRequirementsAreCurrent(readback, authority) ? "accepted" : "required",
+    readback: readback!,
+  };
 }
 
 export type AccountLegalAcceptanceWriteResult =

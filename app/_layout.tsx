@@ -1,15 +1,17 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, AppState, Linking, Platform, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
 import { restoreScheduledAccountDeletion } from "../_lib/accountDeletionRequests";
 import {
-  legalRequirementsAreCurrent,
-  readAccountLegalRequirements,
+  accountLegalCheckIsPending,
+  accountLegalVerificationKey,
+  isCurrentAccountLegalRequest,
   recordAccountLegalAcceptance,
-  sameLegalAuthorityBinding,
+  resolveAccountLegalRequirements,
+  shouldRefreshAccountLegalRequirements,
   type LegalRequirementsReadback,
 } from "../_lib/accountLegalAcceptance";
 import {
@@ -1461,7 +1463,11 @@ function AuthRouteGate() {
   const [legalStatus, setLegalStatus] = useState<"idle" | "checking" | "accepted" | "required" | "error">("idle");
   const [acceptedLegalVerificationKey, setAcceptedLegalVerificationKey] = useState("");
   const [legalRetry, setLegalRetry] = useState(0);
+  const [settledLegalRetry, setSettledLegalRetry] = useState(-1);
+  const [settledLegalVerificationKey, setSettledLegalVerificationKey] = useState("");
   const authNavigationStartedRef = useRef(false);
+  const legalAppStateRef = useRef(AppState.currentState);
+  const legalRequestGenerationRef = useRef(0);
 
   const redirectTo = serializeRedirectTarget(pathname, params as Record<string, unknown>);
   const authRedirectId = String(params.redirectId ?? "").trim();
@@ -1474,39 +1480,86 @@ function AuthRouteGate() {
     && !isPasswordRecoverySession && !isPublicLegalPath(pathname)
     && !["/auth-callback", "/callback", "/confirm", "/verify", "/reset-password"].includes(pathname)
     && !pathname.startsWith("/auth/");
-  const legalVerificationKey = authority && legalGateApplicable
-    ? `${authority.userId}:${authority.accountId}:${authority.sessionGeneration}:${pathname}` : "";
+  const authorityUserId = authority?.userId ?? "";
+  const authorityAccountId = authority?.accountId ?? "";
+  const authoritySessionGeneration = authority?.sessionGeneration ?? "";
+  const authorityState = authority?.state;
+  const authorityRestoreOnly = authority?.restoreOnly;
+  const legalAuthority = useMemo(() => (
+    legalGateApplicable
+    && authorityUserId
+    && authorityAccountId === authorityUserId
+    && authoritySessionGeneration
+    && authorityState === "ACTIVE"
+    && authorityRestoreOnly === false
+      ? {
+          userId: authorityUserId,
+          accountId: authorityAccountId,
+          sessionGeneration: authoritySessionGeneration,
+          state: "ACTIVE" as const,
+          restoreOnly: false,
+        }
+      : null
+  ), [authorityAccountId, authorityRestoreOnly, authoritySessionGeneration, authorityState, authorityUserId, legalGateApplicable]);
+  const legalVerificationKey = accountLegalVerificationKey(legalAuthority);
+  const legalVerificationKeyRef = useRef(legalVerificationKey);
+  legalVerificationKeyRef.current = legalVerificationKey;
+  const legalCheckPending = legalGateApplicable && accountLegalCheckIsPending({
+    settledRetry: settledLegalRetry,
+    currentRetry: legalRetry,
+    settledVerificationKey: settledLegalVerificationKey,
+    currentVerificationKey: legalVerificationKey,
+  });
   const legalGateBlocking = legalGateApplicable
-    && (legalStatus !== "accepted" || acceptedLegalVerificationKey !== legalVerificationKey);
+    && (legalCheckPending || legalStatus !== "accepted" || acceptedLegalVerificationKey !== legalVerificationKey);
 
   useEffect(() => {
-    if (!legalGateApplicable || !authority) {
+    if (!legalGateApplicable || !legalAuthority || !legalVerificationKey) {
+      legalRequestGenerationRef.current += 1;
       setLegalReadback(null); setLegalStatus("idle"); setAcceptedLegalVerificationKey("");
+      setSettledLegalRetry(-1); setSettledLegalVerificationKey("");
       return;
     }
-    let active = true;
-    setLegalStatus("checking");
-    void readAccountLegalRequirements(supabase)
-      .then((readback) => {
-        if (!active) return;
-        if (!sameLegalAuthorityBinding(readback, authority)) {
-          setLegalReadback(null); setLegalStatus("error"); setAcceptedLegalVerificationKey(""); return;
-        }
-        const accepted = legalRequirementsAreCurrent(readback, authority);
-        setLegalReadback(readback); setLegalStatus(accepted ? "accepted" : "required");
-        setAcceptedLegalVerificationKey(accepted ? legalVerificationKey : "");
+    const requestGeneration = legalRequestGenerationRef.current + 1;
+    legalRequestGenerationRef.current = requestGeneration;
+    const requestVerificationKey = legalVerificationKey;
+    const requestRetry = legalRetry;
+    setLegalReadback(null); setLegalStatus("checking"); setAcceptedLegalVerificationKey("");
+    void resolveAccountLegalRequirements(supabase, legalAuthority)
+      .then((resolution) => {
+        if (!isCurrentAccountLegalRequest({
+          requestGeneration,
+          currentGeneration: legalRequestGenerationRef.current,
+          requestVerificationKey,
+          currentVerificationKey: legalVerificationKeyRef.current,
+        })) return;
+        setLegalReadback(resolution.readback); setLegalStatus(resolution.status);
+        setSettledLegalRetry(requestRetry); setSettledLegalVerificationKey(requestVerificationKey);
+        setAcceptedLegalVerificationKey(resolution.status === "accepted" ? requestVerificationKey : "");
       })
       .catch(() => {
-        if (active) { setLegalReadback(null); setLegalStatus("error"); setAcceptedLegalVerificationKey(""); }
+        if (isCurrentAccountLegalRequest({
+          requestGeneration,
+          currentGeneration: legalRequestGenerationRef.current,
+          requestVerificationKey,
+          currentVerificationKey: legalVerificationKeyRef.current,
+        })) {
+          setLegalReadback(null); setLegalStatus("error"); setAcceptedLegalVerificationKey("");
+          setSettledLegalRetry(requestRetry); setSettledLegalVerificationKey(requestVerificationKey);
+        }
       });
-    return () => { active = false; };
-  }, [authority, legalGateApplicable, legalRetry, legalVerificationKey]);
+    return () => {
+      if (legalRequestGenerationRef.current === requestGeneration) legalRequestGenerationRef.current += 1;
+    };
+  }, [legalAuthority, legalGateApplicable, legalRetry, legalVerificationKey]);
 
   useEffect(() => {
     if (!legalGateApplicable) return;
+    legalAppStateRef.current = AppState.currentState;
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") {
-        setLegalStatus("checking"); setAcceptedLegalVerificationKey("");
+      const previousState = legalAppStateRef.current;
+      legalAppStateRef.current = state;
+      if (shouldRefreshAccountLegalRequirements(previousState, state)) {
         setLegalRetry((value) => value + 1);
       }
     });
@@ -1574,7 +1627,7 @@ function AuthRouteGate() {
   if (authorityStatus === "restricted") return <AuthBootScreen message="This session is restricted and is being signed out safely." />;
   if (authorityStatus === "recovery_only" && !insideResetPassword) return <AuthBootScreen message="Password recovery must finish before protected access resumes." />;
   if (legalGateBlocking) {
-    if (legalStatus === "checking" || legalStatus === "idle") return <AuthBootScreen message="Checking current policy requirements…" />;
+    if (legalCheckPending || legalStatus === "checking" || legalStatus === "idle") return <AuthBootScreen message="Checking current policy requirements…" />;
     return (
       <LegalAcceptanceScreen
         readback={legalStatus === "required" ? legalReadback : null}
