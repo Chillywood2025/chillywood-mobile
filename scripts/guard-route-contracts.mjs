@@ -150,6 +150,11 @@ assertIncludes(publicPlatform, "CREATOR_MONEY_ROUTE_TARGETS.vipPass.ownerTarget"
 assertIncludes(publicPlatform, "Creator Offers", "Public Platform owner creator-offers surface");
 assertIncludes(publicPlatform, "Manage offers. Do not buy your own.", "Public Platform owner self-purchase copy");
 assertIncludes(publicPlatform, "Support this Platform", "Public Platform viewer support surface");
+assertIncludes(publicPlatform, 'router.push(\`/event/\${event.id}\` as Parameters<typeof router.push>[0])', "Public Platform event card navigation");
+assertIncludes(publicPlatform, 'testID={event.isLiveNow ? "platform-live-event-open-button" : "platform-upcoming-event-open-button"}', "Public Platform event navigation selectors");
+assertNotIncludes(publicPlatform, 'title="Channel Subscription"', "Public Platform user-facing subscription terminology");
+assertNotIncludes(publicPlatform, '"Channel Subscription checkout is not available right now."', "Public Platform subscription fallback terminology");
+assertNotIncludes(publicPlatform, 'accessibilityLabel="Sandbox Test Subscribe to Creator Channel"', "Public Platform accessibility terminology");
 [
   "platform-support-tip-button",
   "platform-support-subscribe-button",
