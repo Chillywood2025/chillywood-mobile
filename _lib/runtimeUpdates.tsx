@@ -1,11 +1,17 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { usePathname, useRouter } from "expo-router";
+import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import * as Updates from "expo-updates";
 import React, { useEffect, useRef } from "react";
 import { AppState, Linking, Platform, type AppStateStatus } from "react-native";
 
 import { trackEvent } from "./analytics";
+import { APPLICATION_LEGAL_PATHS } from "./appLinks";
 import { debugLog, reportRuntimeError } from "./logger";
+import {
+  hasCallSensitiveNavigationParams,
+  normalizeNavigationResumePath,
+  parseNavigationResumeRecord,
+} from "./navigationResumePolicy.mjs";
 import { recordReleaseUpdateCheckResult } from "./releaseDiagnostics";
 import {
   resolveFetchedRuntimeUpdateActivationKey,
@@ -15,27 +21,10 @@ import { useSession } from "./session";
 
 const LAST_CHECK_AT_KEY = "chillywood.runtimeUpdate.lastCheckAt";
 const NAVIGATION_RESUME_KEY_PREFIX = "chillywood.navigation.lastPath.v1";
-const NAVIGATION_RESUME_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const RESUME_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 const MIN_BACKGROUND_BEFORE_RESUME_CHECK_MS = 10 * 60 * 1000;
 const STARTUP_CHECK_DELAY_MS = 1800;
 const RELOAD_DELAY_MS = 250;
-
-const BLOCKED_NAVIGATION_RESUME_PATH_PREFIXES = [
-  "/login",
-  "/signup",
-  "/reset-password",
-  "/auth-callback",
-  "/callback",
-  "/terms",
-  "/privacy",
-  "/community-guidelines",
-  "/copyright",
-  "/dmca",
-  "/account-deletion",
-  "/communication",
-  "/watch-party/live-stage",
-] as const;
 
 type RuntimeUpdateReason = "startup" | "resume";
 
@@ -47,34 +36,6 @@ type NavigationResumeRecord = {
 const shouldUseRuntimeUpdates = () => !__DEV__ && Platform.OS !== "web" && Updates.isEnabled;
 
 const getNavigationResumeKey = (userId: string) => `${NAVIGATION_RESUME_KEY_PREFIX}:${userId}`;
-
-const normalizeNavigationResumePath = (pathname: string | null | undefined) => {
-  const normalized = String(pathname ?? "").trim();
-  if (!normalized.startsWith("/") || normalized.startsWith("//")) return null;
-  if (normalized.includes("?") || normalized.includes("#") || normalized.includes("\\")) return null;
-  if (normalized.length > 512) return null;
-
-  const lowerPath = normalized.toLowerCase();
-  if (BLOCKED_NAVIGATION_RESUME_PATH_PREFIXES.some((prefix) => (
-    lowerPath === prefix || lowerPath.startsWith(`${prefix}/`)
-  ))) return null;
-
-  return normalized;
-};
-
-const parseNavigationResumeRecord = (raw: string | null, now = Date.now()) => {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as Partial<NavigationResumeRecord>;
-    const pathname = normalizeNavigationResumePath(parsed.pathname);
-    const savedAt = Number(parsed.savedAt);
-    if (!pathname || !Number.isFinite(savedAt)) return null;
-    if (savedAt > now || now - savedAt > NAVIGATION_RESUME_MAX_AGE_MS) return null;
-    return { pathname, savedAt } satisfies NavigationResumeRecord;
-  } catch {
-    return null;
-  }
-};
 
 const getManifestUpdateId = (manifest: unknown) => {
   if (!manifest || typeof manifest !== "object") return null;
@@ -204,6 +165,7 @@ const checkForRuntimeUpdate = async (
 
 export function RuntimeUpdateGate() {
   const pathname = usePathname();
+  const params = useGlobalSearchParams();
   const router = useRouter();
   const { isLoading, isSignedIn, user } = useSession();
   const authenticatedUserId = String(user?.id ?? "").trim();
@@ -236,7 +198,7 @@ export function RuntimeUpdateGate() {
       AsyncStorage.getItem(storageKey).catch(() => null),
     ]).then(([initialUrl, rawRecord]) => {
       if (!active || initialUrl) return;
-      const record = parseNavigationResumeRecord(rawRecord);
+      const record = parseNavigationResumeRecord(rawRecord, APPLICATION_LEGAL_PATHS);
       if (!record || record.pathname === "/") return;
       router.replace(record.pathname as Parameters<typeof router.replace>[0]);
       debugLog("navigation-resume", "Restored durable route after app relaunch", {
@@ -259,9 +221,13 @@ export function RuntimeUpdateGate() {
     if (!isSignedIn || !authenticatedUserId) return;
     if (pathname === "/" && restoreSettledUserRef.current !== authenticatedUserId) return;
 
-    const normalizedPath = normalizeNavigationResumePath(pathname);
     const storageKey = getNavigationResumeKey(authenticatedUserId);
+    if (hasCallSensitiveNavigationParams(pathname, params)) {
+      void AsyncStorage.removeItem(storageKey).catch(() => null);
+      return;
+    }
 
+    const normalizedPath = normalizeNavigationResumePath(pathname, APPLICATION_LEGAL_PATHS);
     if (!normalizedPath) {
       void AsyncStorage.removeItem(storageKey).catch(() => null);
       return;
@@ -272,7 +238,7 @@ export function RuntimeUpdateGate() {
       savedAt: Date.now(),
     };
     void AsyncStorage.setItem(storageKey, JSON.stringify(record)).catch(() => null);
-  }, [authenticatedUserId, isSignedIn, pathname]);
+  }, [authenticatedUserId, isSignedIn, params, pathname]);
 
   useEffect(() => {
     if (!shouldUseRuntimeUpdates()) return;
