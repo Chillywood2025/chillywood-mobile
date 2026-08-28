@@ -4350,7 +4350,6 @@ export default function ProfileScreen() {
               ) : null}
             </>
           ) : null}
-          {activeTab === "content" ? (          ) : null}
           {activeTab === "content" ? (
             <View style={styles.quickActionsCard}>
               <AppText scale="subhead" style={styles.quickActionsTitle}>
