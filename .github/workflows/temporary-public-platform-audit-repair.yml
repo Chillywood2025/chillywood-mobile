@@ -24,6 +24,7 @@ jobs:
       - name: Verify focused contracts
         run: |
           npm ci
+          npm ci --prefix ops/alert-automation
           npm run guard:route-contracts
           npx tsc --noEmit
       - name: Remove temporary mutation helpers
