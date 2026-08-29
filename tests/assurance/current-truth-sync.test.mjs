@@ -384,6 +384,11 @@ const checkpointObservation = { changedPaths: ["config/assurance/current-truth-v
 assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: checkpointObservation, gitCommand }), true);
 assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: { ...checkpointObservation, changedPaths: [...checkpointObservation.changedPaths, "app/index.tsx"] }, gitCommand }), false);
 assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: checkpointObservation, gitCommand: (argv) => argv[0] === "rev-parse" ? "0".repeat(40) : gitCommand(argv) }), false);
+const fixedPointHead = gitCommand(["rev-parse", "HEAD"]);
+const fixedPointPaths = gitCommand(["diff", "--name-only", `${truthRecord.mainSha}...${fixedPointHead}`]).split("\n").filter(Boolean).sort();
+const fixedPointObservation = { changedPaths: fixedPointPaths, parents: [truthRecord.mainSha, fixedPointHead] };
+assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: fixedPointObservation, gitCommand }), true);
+assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: { ...fixedPointObservation, changedPaths: [...fixedPointPaths, "app/index.tsx"].sort() }, gitCommand }), false);
 const rolling = evaluateProtectedMainAdvancement({ record: truthRecord, contract: truthContract, observedProtectedMainSha: gitCommand(["rev-parse", "origin/main"]), gitCommand });
 assert.equal(rolling.findings.includes("CURRENT_TRUTH_TERMINAL_SYNCHRONIZATION_INCOMPLETE"), false, stableJson(rolling.findings));
 assert.equal(rolling.pendingTransitionCount, 0);

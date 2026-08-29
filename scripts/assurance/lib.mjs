@@ -2063,7 +2063,12 @@ export function verifyDerivedProtectedMainTruthSynchronization({ observation, gi
   try {
     const changedPaths = [...(observation?.changedPaths ?? [])].sort();
     const parents = observation?.parents ?? [];
-    if (stableJson(changedPaths) !== stableJson([DERIVED_PROTECTED_MAIN_TRUTH_PATH]) || parents.length !== 2) return false;
+    const fixedPointProfile = ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES.find(({ profileId }) => profileId === "ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1");
+    const exactDerivedTruthScope = stableJson(changedPaths) === stableJson([DERIVED_PROTECTED_MAIN_TRUTH_PATH]);
+    const boundedFixedPointScope = changedPaths.includes(DERIVED_PROTECTED_MAIN_TRUTH_PATH)
+      && changedPaths.length <= fixedPointProfile.maximumFiles
+      && changedPaths.every((file) => fixedPointProfile.paths.includes(file));
+    if ((!exactDerivedTruthScope && !boundedFixedPointScope) || parents.length !== 2) return false;
     const sourceHead = parents[1];
     const priorMain = parents[0];
     const priorTree = gitCommand(["rev-parse", `${priorMain}^{tree}`]);
