@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { finiteTaskEffectiveReservationAuthorityValid, resolveFiniteTaskEffectiveReservation, stableJson, validateEngineeringDoctrineTruth, validateFiniteTaskLeaseRegistry, validateOwnerJurisdictionPolicyTruth, verifyCurrentTruthSynchronization } from "../../scripts/assurance/lib.mjs";
+import { evaluateProtectedMainAdvancement, finiteTaskEffectiveReservationAuthorityValid, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, stableJson, validateEngineeringDoctrineTruth, validateFiniteTaskLeaseRegistry, validateOwnerJurisdictionPolicyTruth, verifyCurrentTruthSynchronization, verifyDerivedProtectedMainTruthSynchronization } from "../../scripts/assurance/lib.mjs";
 import { architectureDependencyBaselinePolicyV1 } from "../../scripts/assurance/engineering-closure.mjs";
 import { STANDING_POLICY_INHERITANCE_ALLOWLIST, STANDING_POLICY_INHERITANCE_DENYLIST } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
@@ -376,4 +376,29 @@ assert.match(currentTruthSource, /ASSURANCE_FINITE_TASK_PR_RISK_AUTHORITY_INVALI
 assert.match(currentTruthSource, /stableJson\(currentTruthContract\.architectureDependencyBaselineAmendmentPolicy\) === stableJson\(architectureDependencyBaselinePolicyV1\)/u);
 assert.match(currentTruthSource, /ASSURANCE_ARCHITECTURE_DEPENDENCY_BASELINE_POLICY_INVALID/u);
 
-process.stdout.write("current-truth synchronization contract: PASS (generic overlay, dependency baseline policy, and historical compatibility)\n");
+const { execFileSync } = await import("node:child_process");
+const gitCommand = (argv) => execFileSync("git", argv, { encoding: "utf8" }).trim();
+const checkpointMerge = "862abf008168eb47eb9d3c9cd11fc9c9258034fb";
+const checkpointParents = gitCommand(["show", "-s", "--format=%P", checkpointMerge]).split(" ");
+const checkpointObservation = { changedPaths: ["config/assurance/current-truth-v1.json"], parents: checkpointParents };
+assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: checkpointObservation, gitCommand }), true);
+assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: { ...checkpointObservation, changedPaths: [...checkpointObservation.changedPaths, "app/index.tsx"] }, gitCommand }), false);
+assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: checkpointObservation, gitCommand: (argv) => argv[0] === "rev-parse" ? "0".repeat(40) : gitCommand(argv) }), false);
+const fixedPointHead = gitCommand(["rev-parse", "HEAD"]);
+const fixedPointPaths = gitCommand(["diff", "--name-only", `${truthRecord.mainSha}...${fixedPointHead}`]).split("\n").filter(Boolean).sort();
+const fixedPointObservation = { changedPaths: fixedPointPaths, parents: [truthRecord.mainSha, fixedPointHead] };
+assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: fixedPointObservation, gitCommand }), true);
+assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: { ...fixedPointObservation, changedPaths: [...fixedPointPaths, "app/index.tsx"].sort() }, gitCommand }), false);
+const rolling = evaluateProtectedMainAdvancement({ record: truthRecord, contract: truthContract, observedProtectedMainSha: gitCommand(["rev-parse", "origin/main"]), gitCommand });
+assert.equal(rolling.findings.includes("CURRENT_TRUTH_TERMINAL_SYNCHRONIZATION_INCOMPLETE"), false, stableJson(rolling.findings));
+assert.equal(rolling.pendingTransitionCount, 0);
+assert.equal(rolling.advancementClassifications.length === 0
+  ? rolling.mainRelation === "EXACT_CHECKPOINT"
+  : rolling.advancementClassifications.find(({ mergeSha }) => mergeSha === checkpointMerge)?.derivedTruthSynchronization, true);
+assert.equal(renderCurrentState(truthRecord), (await import("node:fs")).readFileSync("CURRENT_STATE.md", "utf8"));
+assert.equal(renderNextTask(truthRecord), (await import("node:fs")).readFileSync("NEXT_TASK.md", "utf8"));
+const semanticMutation = structuredClone(truthRecord);
+semanticMutation.latestMergedImplementationPr.number += 1;
+assert.notEqual(renderCurrentState(semanticMutation), renderCurrentState(truthRecord));
+
+process.stdout.write("current-truth synchronization contract: PASS (derived fixed point, generic overlay, dependency baseline policy, and historical compatibility)\n");
