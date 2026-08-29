@@ -30,6 +30,7 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
+    useWindowDimensions,
     View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -207,6 +208,8 @@ const formatCreatorEventMode = (event: CreatorEventSummary) => {
 
 export default function HomeScreen() {
   const safeAreaInsets = useSafeAreaInsets();
+  const { height: viewportHeight } = useWindowDimensions();
+  const brandRevealHeight = Math.max(156, Math.min(216, viewportHeight * 0.22));
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
@@ -994,6 +997,11 @@ export default function HomeScreen() {
             </View>
           </View>
 
+          <View
+            testID="home-brand-reveal"
+            style={[styles.brandRevealSpacer, { height: brandRevealHeight }]}
+          />
+
           {renderHomeEventRail({
             title: "Live Now",
             subtitle: "Public rooms and events that are live now.",
@@ -1100,6 +1108,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginTop: 8,
     marginBottom: 6,
+  },
+  brandRevealSpacer: {
+    backgroundColor: "transparent",
   },
   utilityKicker: {
     color: "#8D98AE",
