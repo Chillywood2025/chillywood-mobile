@@ -209,7 +209,7 @@ const formatCreatorEventMode = (event: CreatorEventSummary) => {
 export default function HomeScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const { height: viewportHeight } = useWindowDimensions();
-  const brandRevealHeight = Math.max(156, Math.min(216, viewportHeight * 0.22));
+  const brandRevealHeight = Math.max(120, Math.min(160, viewportHeight * 0.16));
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
