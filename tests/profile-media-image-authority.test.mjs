@@ -115,3 +115,46 @@ test("multi-source images bind only exact profile-media candidates", () => {
   assert.equal(sourceContainsExactProjectProfileMediaUrl([other], PROJECT_URL), false);
   assert.equal(sourceContainsExactProjectProfileMediaUrl(42, PROJECT_URL), false);
 });
+
+test("same-user token refresh replaces the protected image bearer binding", () => {
+  const before = bindProfileMediaImageSource({ uri: PRIVATE_IMAGE }, {
+    accessToken: "same-user-token-before-refresh",
+    authorityStatus: "active",
+    projectUrl: PROJECT_URL,
+  });
+  const after = bindProfileMediaImageSource({ uri: PRIVATE_IMAGE }, {
+    accessToken: "same-user-token-after-refresh",
+    authorityStatus: "active",
+    projectUrl: PROJECT_URL,
+  });
+
+  assert.deepEqual(before.headers, { Authorization: "Bearer same-user-token-before-refresh" });
+  assert.deepEqual(after.headers, { Authorization: "Bearer same-user-token-after-refresh" });
+  assert.equal(after.uri, before.uri);
+});
+
+test("the shared component rebinds when a same-user access token refreshes", () => {
+  const component = readFileSync("components/ui/ProfileMediaImage.tsx", "utf8");
+  assert.match(component, /const accessToken = hasExactActiveAuthority/);
+  assert.match(component, /\[accessToken, authorityStatus, source\]/);
+  assert.match(component, /authority\.restoreOnly === false/);
+  assert.match(component, /authority\.userId === sessionContext\.session\?\.user\.id/);
+  assert.match(component, /authority\.accountId === sessionContext\.session\?\.user\.id/);
+});
+
+test("Settings previews use saved active URLs and replacement/removal refreshes local profile state", () => {
+  const settings = readFileSync("app/settings.tsx", "utf8");
+  assert.match(settings, /const activeProfilePhotoUrl = isProfileMediaActive\(myProfile\?\.profileAvatarMediaStatus\)[\s\S]*?myProfile\?\.avatarUrl/);
+  assert.match(settings, /const activeProfileBackgroundUrl = isProfileMediaActive\(myProfile\?\.profileBackgroundMediaStatus\)[\s\S]*?myProfile\?\.profileBackgroundUrl/);
+  assert.match(settings, /source=\{\{ uri: activeProfilePhotoUrl \}\}/);
+  assert.match(settings, /source=\{\{ uri: activeProfileBackgroundUrl \}\}/);
+  assert.match(settings, /const nextProfile = await uploadProfileMedia[\s\S]*?setMyProfile\(nextProfile\)/);
+  assert.match(settings, /const nextProfile = await removeProfileMedia\(kind\);[\s\S]*?setMyProfile\(nextProfile\)/);
+});
+
+test("persisted profile-media URLs never contain bearer credentials", () => {
+  const profileMedia = readFileSync("_lib/profileMedia.ts", "utf8");
+  assert.equal(PRIVATE_IMAGE.includes("access_token"), false);
+  assert.doesNotMatch(profileMedia, /[?&](?:access_token|token)=/i);
+  assert.match(profileMedia, /buildProfileMediaReadUrl[\s\S]*?ownerUserId=.*?objectKey=/);
+});
