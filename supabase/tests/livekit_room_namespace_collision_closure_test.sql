@@ -4,6 +4,11 @@ create extension if not exists pgtap with schema extensions;
 set search_path=public,extensions;
 select plan(14);
 
+-- This test exercises namespace reservation triggers, not authenticated room
+-- creation. Keep fixture inserts outside the exact-session bootstrap lane.
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
 select ok(
   (select relrowsecurity from pg_class where oid='public.livekit_room_namespace_reservations'::regclass)
   and not has_table_privilege('anon','public.livekit_room_namespace_reservations','SELECT')

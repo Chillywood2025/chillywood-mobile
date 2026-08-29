@@ -309,6 +309,11 @@ select ok(
   'no unsupported Premium-family or global paid-content alias remains active'
 );
 
+-- The room is a fixture for entitlement alias closure. Its creation is not an
+-- authenticated Live-room operation and must not invoke caller authority.
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
 insert into public.watch_party_rooms (
   party_id, title_id, host_user_id, room_type, join_policy,
   content_access_rule, is_active
