@@ -2,7 +2,7 @@
 import { args, emit, featureRequired, proofTierApplicabilityPolicies, proofTierCompletionFactAuthorities, proofTierCompletionFeatureApplicability, readJson, requiredKeys, tierIds, validateProofTierStatuses } from "./lib.mjs";
 import { validateStructuredBinding } from "./active-task.mjs";
 import { readBootstrapMergeIdentity, validateGithubMainRulesetReadback } from "./github-main-ruleset-readback.mjs";
-import { resolveLocalJsonPointer } from "./json-schema-ref.mjs";
+import { jsonSchemaConstEqual, resolveLocalJsonPointer } from "./json-schema-ref.mjs";
 
 const options = args();
 const schemas = readJson("config/assurance/schemas-v1.json");
@@ -57,7 +57,7 @@ function validate(value, schema, at, errors, resolving = new Set()) {
     return validate(value, resolved, at, errors, nextResolving);
   }
   for (const member of schema.allOf ?? []) validate(value, member, at, errors, resolving);
-  if (schema.const !== undefined && JSON.stringify(value) !== JSON.stringify(schema.const)) errors.push(`${at} must equal ${JSON.stringify(schema.const)}`);
+  if (schema.const !== undefined && !jsonSchemaConstEqual(value, schema.const)) errors.push(`${at} must equal ${JSON.stringify(schema.const)}`);
   if (schema.enum && !schema.enum.includes(value)) errors.push(`${at} must be one of ${schema.enum.join(",")}`);
   if (schema.type === "object" && (!value || typeof value !== "object" || Array.isArray(value))) errors.push(`${at} must be object`);
   if (schema.type === "array" && !Array.isArray(value)) errors.push(`${at} must be array`);
