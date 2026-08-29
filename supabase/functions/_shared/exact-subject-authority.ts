@@ -47,6 +47,23 @@ const isUnexpired = (value: unknown, nowMs: number): boolean => {
   return Number.isFinite(expiresAtMs) && expiresAtMs > nowMs;
 };
 
+const hasExactActiveRole = (
+  value: unknown,
+  expectedUserId: unknown,
+  role: string,
+  nowMs = Date.now(),
+): boolean => {
+  const subjectId = normalizeExactSubjectId(expectedUserId);
+  const normalizedRole = toText(role).toLowerCase();
+  if (!subjectId || !normalizedRole) return false;
+  return asRows(value).some((row) =>
+    normalizeExactSubjectId(row.user_id) === subjectId &&
+    toText(row.status).toLowerCase() === "active" &&
+    toText(row.role).toLowerCase() === normalizedRole &&
+    isUnexpired(row.expires_at, nowMs)
+  );
+};
+
 export const resolveExactTargetStaffSubject = (
   membershipValue: unknown,
   authUserValue: unknown,
@@ -207,14 +224,15 @@ export const resolveExactPlatformRole = (
 
   const rows = asRows(value);
   for (const role of roles) {
-    if (rows.some((row) =>
-      normalizeExactSubjectId(row.user_id) === subjectId &&
-      toText(row.status).toLowerCase() === "active" &&
-      toText(row.role).toLowerCase() === role &&
-      isUnexpired(row.expires_at, nowMs)
-    )) {
-      return role;
-    }
+    if (hasExactActiveRole(rows, subjectId, role, nowMs)) return role;
+  }
+
+  // Super Admin is owner-equivalent for permission-scoped operator work, but not
+  // for true-owner-only boundaries. Mapping it to operator only when a caller
+  // explicitly allows operator preserves first-owner/break-glass separation.
+  if (!roles.includes("super_admin") && roles.includes("operator") &&
+      hasExactActiveRole(rows, subjectId, "super_admin", nowMs)) {
+    return "operator";
   }
   return null;
 };
@@ -229,12 +247,16 @@ export const readExactPlatformRole = async (
   const roles = allowedRoles.map((role) => toText(role).toLowerCase()).filter(Boolean);
   if (!subjectId || roles.length === 0) return null;
 
+  const queryRoles = Array.from(new Set([
+    ...roles,
+    ...(!roles.includes("super_admin") && roles.includes("operator") ? ["super_admin"] : []),
+  ]));
   const result = await adminClient
     .from("platform_role_memberships")
     .select("user_id,role,status,expires_at")
     .eq("user_id", subjectId)
     .eq("status", "active")
-    .in("role", roles)
+    .in("role", queryRoles)
     .limit(50);
   if (result.error) throw new Error(`Exact platform role lookup failed: ${toText(result.error.message)}`);
   return resolveExactPlatformRole(result.data, subjectId, roles, nowMs);
@@ -276,6 +298,20 @@ export const readExactPermissionKeys = async (
     allowedPermissionKeys.map((key) => toText(key).toLowerCase()).filter(Boolean),
   ));
   if (!subjectId || keys.length === 0) return new Set();
+
+  // Super Admin receives the same permission-scoped authority as Owner, while
+  // true-owner-only call sites continue to require an exact owner role.
+  const roleResult = await adminClient
+    .from("platform_role_memberships")
+    .select("user_id,role,status,expires_at")
+    .eq("user_id", subjectId)
+    .eq("status", "active")
+    .eq("role", "super_admin")
+    .limit(10);
+  if (roleResult.error) throw new Error(`Exact Super Admin lookup failed: ${toText(roleResult.error.message)}`);
+  if (hasExactActiveRole(roleResult.data, subjectId, "super_admin", nowMs)) {
+    return new Set(keys);
+  }
 
   const result = await adminClient
     .from("platform_staff_permission_grants")

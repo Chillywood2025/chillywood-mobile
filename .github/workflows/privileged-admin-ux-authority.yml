@@ -1,0 +1,34 @@
+name: Privileged Admin UX Authority
+
+on:
+  pull_request:
+    paths:
+      - "app/admin.tsx"
+      - "_lib/moderation.ts"
+      - "_lib/platformRoleActionMatrix.ts"
+      - "_lib/platformOwnerAuthority.ts"
+      - "_lib/adminOwnerControls.ts"
+      - "supabase/functions/admin-owner-controls/**"
+      - "supabase/functions/admin-legal-evidence/**"
+      - "supabase/functions/admin-live-ops-fix-center/**"
+      - "supabase/functions/admin-live-cost-guard-action/**"
+      - "supabase/functions/_shared/exact-subject-authority.ts"
+      - "supabase/functions/_shared/live-cost-guard.ts"
+      - "scripts/guard-privileged-admin-ux-authority.mjs"
+      - ".github/workflows/privileged-admin-ux-authority.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  privileged-admin-ux-authority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify privileged Admin UX and authority contracts
+        run: node scripts/guard-privileged-admin-ux-authority.mjs

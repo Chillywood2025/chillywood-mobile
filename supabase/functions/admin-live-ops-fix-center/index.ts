@@ -17,7 +17,7 @@ type AuthenticatedUser = {
   activeBreakGlassSessionId: string | null;
   email: string | null;
   id: string;
-  role: "owner" | "operator";
+  role: "owner" | "super_admin" | "operator";
   securityContext?: SecurityRequestContextResult | null;
 };
 
@@ -121,8 +121,8 @@ const authenticate = async (
     return { error: json(401, { error: "invalid_session" }) };
   }
 
-  const userRole = await readExactPlatformRole(adminClient, userId, ["owner", "operator"]);
-  if (userRole === "owner" || userRole === "operator") {
+  const userRole = await readExactPlatformRole(adminClient, userId, ["owner", "super_admin", "operator"]);
+  if (userRole === "owner" || userRole === "super_admin" || userRole === "operator") {
     if (userRole === "operator" && !(await hasActiveStaffPermission(adminClient, userId, "live_ops"))) {
       return { error: json(403, { error: "live_ops_permission_required" }) };
     }
@@ -130,7 +130,7 @@ const authenticate = async (
     return { user: { activeBreakGlassSessionId, email: data.user?.email ?? null, id: userId, role: userRole } };
   }
 
-  return { error: json(403, { error: "owner_operator_required" }) };
+  return { error: json(403, { error: "owner_super_admin_operator_required" }) };
 };
 
 const listIncidents = async (adminClient: SupabaseClientLike, payload: JsonObject) => {
