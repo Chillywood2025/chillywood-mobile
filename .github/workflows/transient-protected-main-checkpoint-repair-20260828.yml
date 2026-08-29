@@ -1,0 +1,47 @@
+name: Transient protected-main checkpoint repair 20260828
+
+on:
+  push:
+    branches:
+      - chatgpt/protected-main-checkpoint-repair-20260828
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Advance exact protected-main checkpoint and self-remove
+        env:
+          CHECKPOINT_SHA: a1546d961e45888d5e8a54c86a53bba3ffe7d332
+          CHECKPOINT_TREE: cbfb589edeacd403bd00d658509d2addfb1967e8
+          WORKFLOW_PATH: .github/workflows/transient-protected-main-checkpoint-repair-20260828.yml
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$CHECKPOINT_SHA"
+          test "$(git rev-parse "$CHECKPOINT_SHA^{tree}")" = "$CHECKPOINT_TREE"
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'config/assurance/current-truth-v1.json';
+          const record = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const checkpointSha = process.env.CHECKPOINT_SHA;
+          const checkpointTree = process.env.CHECKPOINT_TREE;
+          if (!record.protectedMainAuthority || typeof record.protectedMainAuthority !== 'object') throw new Error('protectedMainAuthority missing');
+          record.mainSha = checkpointSha;
+          record.protectedMainAuthority.checkpointSha = checkpointSha;
+          record.protectedMainAuthority.checkpointTree = checkpointTree;
+          fs.writeFileSync(path, JSON.stringify(record) + '\n');
+          NODE
+          rm "$WORKFLOW_PATH"
+          test "$(git diff --name-only | sort)" = "$(printf '%s\n' "$WORKFLOW_PATH" config/assurance/current-truth-v1.json | sort)"
+          git diff --check
+          git config user.name "chatgpt-codex-connector[bot]"
+          git config user.email "chatgpt-codex-connector[bot]@users.noreply.github.com"
+          git add config/assurance/current-truth-v1.json "$WORKFLOW_PATH"
+          git commit -m "fix: advance protected-main checkpoint"
+          git push origin HEAD:chatgpt/protected-main-checkpoint-repair-20260828
