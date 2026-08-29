@@ -108,7 +108,6 @@ export const DOCTRINE_SCOPE_AMENDMENT_PATHS = Object.freeze([
 ]);
 export const DOCTRINE_VERIFICATION_DEPENDENCY_PATHS = Object.freeze([
   "tests/assurance/codex-security-reliability-s0.test.mjs",
-  "tests/assurance/phase1-risk-based-closure-gate.test.mjs",
 ]);
 export const DOCTRINE_AMENDED_PATHS = Object.freeze([...DOCTRINE_ORIGINAL_PATHS, ...DOCTRINE_SCOPE_AMENDMENT_PATHS].sort());
 export const DOCTRINE_PATHS = Object.freeze([...DOCTRINE_AMENDED_PATHS, ...DOCTRINE_VERIFICATION_DEPENDENCY_PATHS].sort());
