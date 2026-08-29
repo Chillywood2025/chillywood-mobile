@@ -96,7 +96,7 @@ begin
     'system',
     v_subject_id::text,
     v_target_email,
-    'recover_exact_subject',
+    'bootstrap',
     'owner',
     'Bind the quarantined historical bootstrap Owner to its unique confirmed immutable auth subject.',
     jsonb_build_object(
