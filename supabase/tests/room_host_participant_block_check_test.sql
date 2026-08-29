@@ -141,6 +141,11 @@ values
     'room-host-block-check-test', 'room-host-block-check-host-b'
   );
 
+-- These rooms are fixture state for the participant block-check contract.
+-- Bypass authenticated creation while preserving the production bootstrap.
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
 insert into public.watch_party_rooms (
   party_id,
   host_user_id,

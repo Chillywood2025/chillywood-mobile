@@ -24,6 +24,11 @@ values (
   'watch-party-host-block-check-test', 'watch-party-host-block-check-host'
 );
 
+-- The room is fixture state for the host block-check function, not an
+-- authenticated room-creation exercise.
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
 insert into public.watch_party_rooms (
   party_id,
   host_user_id,
