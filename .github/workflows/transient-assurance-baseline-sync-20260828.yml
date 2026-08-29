@@ -1,0 +1,68 @@
+name: Transient assurance baseline sync 20260828
+
+on:
+  push:
+    branches:
+      - chatgpt/assurance-baseline-sync-20260828
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Sync inherited assurance expectations and self-remove
+        env:
+          BRANCH: chatgpt/assurance-baseline-sync-20260828
+          WORKFLOW_PATH: .github/workflows/transient-assurance-baseline-sync-20260828.yml
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const replaceExact = (path, oldText, newText) => {
+            let text = fs.readFileSync(path, 'utf8');
+            if (!text.includes(oldText)) throw new Error(`${path}: exact old text not found`);
+            text = text.replace(oldText, newText);
+            fs.writeFileSync(path, text);
+          };
+
+          replaceExact(
+            'scripts/proof-owner-command-operator.mjs',
+            '  \' .in("role", roles)\','.replace("' ", "'"),
+            '  "const queryRoles = Array.from(new Set([",\n  \'!roles.includes("super_admin") && roles.includes("operator") ? ["super_admin"] : []\',\n  \' .in("role", queryRoles)\','.replace("' ", "'"),
+          );
+          let proof = fs.readFileSync('scripts/proof-owner-command-operator.mjs', 'utf8');
+          const anchor = '  "normalizeExactSubjectId(row.user_id) === subjectId",';
+          if (!proof.includes(anchor)) throw new Error('proof role anchor missing');
+          proof = proof.replace(anchor, `${anchor}\n  'hasExactActiveRole(rows, subjectId, "super_admin", nowMs)',\n  'return "operator"',`);
+          fs.writeFileSync('scripts/proof-owner-command-operator.mjs', proof);
+
+          replaceExact(
+            'scripts/assurance/engineering-closure.mjs',
+            'export const DOCTRINE_VERIFICATION_DEPENDENCY_PATHS = Object.freeze([\n  "tests/assurance/codex-security-reliability-s0.test.mjs",\n]);',
+            'export const DOCTRINE_VERIFICATION_DEPENDENCY_PATHS = Object.freeze([\n  "tests/assurance/codex-security-reliability-s0.test.mjs",\n  "tests/assurance/phase1-risk-based-closure-gate.test.mjs",\n]);',
+          );
+
+          replaceExact(
+            'tests/assurance/engineering-doctrine.test.mjs',
+            'assert.equal(graph.nodes.length, 22); assert.equal(inventory.totals.routeModules, 70);',
+            'assert.equal(graph.nodes.length, 22); assert.equal(inventory.totals.routeModules, 72);',
+          );
+          replaceExact(
+            'tests/assurance/engineering-doctrine.test.mjs',
+            'assert.deepEqual(closure.includedPaths, ["tests/assurance/codex-security-reliability-s0.test.mjs", "tests/assurance/current-truth-sync.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]);',
+            'assert.deepEqual(closure.includedPaths, ["tests/assurance/codex-security-reliability-s0.test.mjs", "tests/assurance/current-truth-sync.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/phase1-risk-based-closure-gate.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]);',
+          );
+          NODE
+          rm "$WORKFLOW_PATH"
+          git diff --check
+          test "$(git diff --name-only | sort)" = "$(printf '%s\n' "$WORKFLOW_PATH" scripts/assurance/engineering-closure.mjs scripts/proof-owner-command-operator.mjs tests/assurance/engineering-doctrine.test.mjs | sort)"
+          git config user.name "chatgpt-codex-connector[bot]"
+          git config user.email "chatgpt-codex-connector[bot]@users.noreply.github.com"
+          git add scripts/assurance/engineering-closure.mjs scripts/proof-owner-command-operator.mjs tests/assurance/engineering-doctrine.test.mjs "$WORKFLOW_PATH"
+          git commit -m "test: synchronize assurance baselines after admin authority merge"
+          git push origin HEAD:"$BRANCH"
