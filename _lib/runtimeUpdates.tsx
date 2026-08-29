@@ -183,6 +183,12 @@ export function RuntimeUpdateGate() {
   );
 
   useEffect(() => {
+    if (isSignedIn) return;
+    restoreAttemptedUserRef.current = null;
+    restoreSettledUserRef.current = null;
+  }, [isSignedIn]);
+
+  useEffect(() => {
     if (isLoading || !isSignedIn || !authenticatedUserId) return undefined;
     if (restoreAttemptedUserRef.current === authenticatedUserId) return undefined;
     restoreAttemptedUserRef.current = authenticatedUserId;
