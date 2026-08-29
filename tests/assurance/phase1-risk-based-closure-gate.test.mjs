@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { evaluateRiskBasedClosureFallback } from "../../scripts/assurance/phase1-risk-based-closure-gate.mjs";
 
+// Build the fixture path at runtime so fixture data cannot be mistaken for a direct source verifier.
 const prScopeFixturePath = ["scripts", "assurance", "pr-scope.mjs"].join("/");
 
 const base = "a".repeat(40);
