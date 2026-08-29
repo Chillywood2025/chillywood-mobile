@@ -26,14 +26,25 @@ begin
     return;
   end if;
 
-  select count(*), min(subject.id)
-  into v_subject_count, v_subject_id
+  select count(*)
+  into v_subject_count
   from auth.users subject
   where lower(trim(subject.email)) = v_target_email
     and subject.email_confirmed_at is not null
     and subject.deleted_at is null;
 
-  if v_subject_count <> 1 or v_subject_id is null then
+  if v_subject_count <> 1 then
+    raise exception 'bootstrap_owner_exact_subject_recovery_requires_one_confirmed_subject';
+  end if;
+
+  select subject.id
+  into v_subject_id
+  from auth.users subject
+  where lower(trim(subject.email)) = v_target_email
+    and subject.email_confirmed_at is not null
+    and subject.deleted_at is null;
+
+  if v_subject_id is null then
     raise exception 'bootstrap_owner_exact_subject_recovery_requires_one_confirmed_subject';
   end if;
 
