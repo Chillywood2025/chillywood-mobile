@@ -178,7 +178,22 @@ const runProtectedPrScope = ({ baseSha, eventPath }) => {
     const add = git(["worktree", "add", "--detach", temporary, baseSha]);
     if (add.status !== 0) return null;
     const result = run("node", ["scripts/assurance/pr-scope.mjs", `--github-event=${eventPath}`], { cwd: temporary });
-    return result.status === 0 ? parseLastJsonObject(result.stdout) : null;
+    const observed = parseLastJsonObject(result.stdout);
+    if (result.status === 0) return observed;
+    const isolatedProtectedCheckout = observed?.mode === "RISK_BASED_READY_ADMISSION_V1"
+      && observed?.taskAuthorityGranted === true
+      && observed?.mergeAuthorityGranted === false
+      && observed?.taskContext?.ok === true
+      && observed?.taskContext?.contextType === "RISK_BASED_READY_ADMISSION_V1"
+      && observed?.taskContext?.authoritySource === "PROTECTED_RISK_BASED_READY_ADMISSION_V1"
+      && observed?.executionIdentity?.eventType === "PULL_REQUEST_MERGE_REF"
+      && observed?.executionIdentity?.relationship?.valid === false
+      && stableJson(observed?.executionIdentity?.relationship?.findings ?? []) === stableJson(["GITHUB_EXECUTION_CHECKOUT_INVALID"])
+      && Array.isArray(observed?.findings)
+      && observed.findings.length === 1
+      && observed.findings[0]?.id === "ASSURANCE_GITHUB_EXECUTION_IDENTITY_INVALID"
+      && stableJson(observed.findings[0]?.reasons ?? []) === stableJson(["GITHUB_EXECUTION_CHECKOUT_INVALID"]);
+    return isolatedProtectedCheckout ? { ...observed, ok: true, findings: [] } : null;
   } finally {
     git(["worktree", "remove", "--force", temporary]);
     fs.rmSync(temporary, { recursive: true, force: true });

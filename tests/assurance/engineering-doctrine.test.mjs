@@ -277,7 +277,7 @@ test("ACTIVE truth binds canonical report packet certificate counters coverage a
 
 test("canonical inventory and graph cover the reconciled finite baseline", () => {
   const inventory = buildInventory(); const graph = generateDomainGraph(); const taxonomy = json("config/assurance/adversarial-taxonomy-v1.json");
-  assert.equal(graph.nodes.length, 22); assert.equal(inventory.totals.routeModules, 70); assert.equal(inventory.totals.edgeFunctions, 78); assert.ok(inventory.groups.find(({ id }) => id === "edgeFunctions")?.members.some(({ id }) => id === "supabase/functions/profile-media-public")); assert.equal(inventory.totals.autonomousComponents, 61); assert.equal(taxonomy.classes.length, 35); assert.ok(detectGraphFindings(graph).includes("DUPLICATE_AUTHORITY_OWNER")); assert.deepEqual(detectGraphFindings(graph, ["assurance-efficiency-e0", "codex-security-scan-reliability-s0", "autonomous-cognitive-governance"]), []);
+  assert.equal(graph.nodes.length, 22); assert.equal(inventory.totals.routeModules, 72); assert.equal(inventory.totals.edgeFunctions, 78); assert.ok(inventory.groups.find(({ id }) => id === "edgeFunctions")?.members.some(({ id }) => id === "supabase/functions/profile-media-public")); assert.equal(inventory.totals.autonomousComponents, 61); assert.equal(taxonomy.classes.length, 35); assert.ok(detectGraphFindings(graph).includes("DUPLICATE_AUTHORITY_OWNER")); assert.deepEqual(detectGraphFindings(graph, ["assurance-efficiency-e0", "codex-security-scan-reliability-s0", "autonomous-cognitive-governance"]), []);
 });
 
 test("affected-domain traversal requires exact exclusions", () => {
