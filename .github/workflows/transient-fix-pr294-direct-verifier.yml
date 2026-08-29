@@ -1,4 +1,4 @@
-name: Transient diagnose PR294 current truth
+name: Transient diagnose PR294 owner binding
 
 on:
   push:
@@ -22,22 +22,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Reproduce repaired working tree and print failing assertion
+      - name: Print exact owner doctrine binding
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          risk = Path('tests/assurance/phase1-risk-based-closure-gate.test.mjs')
-          s = risk.read_text()
-          anchor = 'import { evaluateRiskBasedClosureFallback } from "../../scripts/assurance/phase1-risk-based-closure-gate.mjs";\n'
-          declaration = 'const prScopeFixturePath = ["scripts", "assurance", "pr-scope.mjs"].join("/");\n'
-          if declaration not in s:
-              s = s.replace(anchor, anchor + '\n' + declaration)
-          s = s.replace('"scripts/assurance/pr-scope.mjs"', 'prScopeFixturePath')
-          risk.write_text(s)
-          doctrine = Path('tests/assurance/engineering-doctrine.test.mjs')
-          d = doctrine.read_text()
-          d = d.replace('"tests/assurance/codex-security-reliability-s0.test.mjs", "tests/assurance/current-truth-sync.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/phase1-risk-based-closure-gate.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"', '"tests/assurance/codex-security-reliability-s0.test.mjs", "tests/assurance/current-truth-sync.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"')
-          doctrine.write_text(d)
-          PY
-          nl -ba tests/assurance/engineering-doctrine.test.mjs | sed -n '100,128p'
-          node --test --test-name-pattern="current truth is canonical, source-correct and semantically bound" tests/assurance/engineering-doctrine.test.mjs
+          node --input-type=module - <<'NODE'
+          import { observeDoctrineOwnerAuthority } from './scripts/assurance/engineering-closure.mjs';
+          const owner = observeDoctrineOwnerAuthority();
+          console.log(JSON.stringify({
+            classification: owner.classification,
+            authorizedVerificationPathExact: owner.authorizedVerificationPathExact,
+            verificationCorrectionPathExact: owner.verificationCorrectionPathExact,
+            verificationCorrectionCommentId: owner.verificationCorrectionCommentId,
+            verificationCorrectionCommentCreatedAt: owner.verificationCorrectionCommentCreatedAt,
+            verificationCorrectionBodyHash: owner.verificationCorrectionBodyHash,
+            recomputedVerificationCorrectionBodyHash: owner.recomputedVerificationCorrectionBodyHash,
+            verificationCorrectionReplayRejection: owner.verificationCorrectionReplayRejection,
+            ok: owner.ok,
+            findings: owner.findings
+          }, null, 2));
+          NODE
+      - name: Run exact failing test
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node --test --test-name-pattern="active current-truth root is exact, canonical, and source-correct" tests/assurance/engineering-doctrine.test.mjs
