@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(55);
+select plan(57);
 
 select is(public.media_scan_public_safe('clean'), true,
   'only an explicit clean result is public-safe');
@@ -130,13 +130,22 @@ insert into public.media_upload_reservations (
 );
 
 insert into storage.objects (bucket_id, name, owner, owner_id, metadata)
-values (
-  'profile-media',
-  '11111111-1111-4111-8111-111111111111/avatar/fresh.jpg',
-  '11111111-1111-4111-8111-111111111111',
-  '11111111-1111-4111-8111-111111111111',
-  '{"mimetype":"image/jpeg","size":1024}'::jsonb
-) on conflict (bucket_id, name) do nothing;
+values
+  (
+    'profile-media',
+    '11111111-1111-4111-8111-111111111111/avatar/fresh.jpg',
+    '11111111-1111-4111-8111-111111111111',
+    '11111111-1111-4111-8111-111111111111',
+    '{"mimetype":"image/jpeg","size":1024}'::jsonb
+  ),
+  (
+    'profile-media',
+    '11111111-1111-4111-8111-111111111111/background/fresh.jpg',
+    '11111111-1111-4111-8111-111111111111',
+    '11111111-1111-4111-8111-111111111111',
+    '{"mimetype":"image/jpeg","size":2048}'::jsonb
+  )
+on conflict (bucket_id, name) do nothing;
 
 set local request.jwt.claims =
   '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","email":"wholeapp-media-owner@example.test","session_id":"11111111-1111-4111-8111-111111111101"}';
@@ -296,8 +305,58 @@ set profile_avatar_scan_status = 'clean',
     profile_avatar_scan_provider = 'clamav',
     profile_avatar_scan_result = 'clean',
     profile_avatar_scanned_at = transaction_timestamp(),
-    profile_avatar_scan_error = null
+    profile_avatar_scan_error = null,
+    profile_background_url = 'https://bmkkhihfbmsnnmcqkoly.supabase.co/functions/v1/profile-media-public?ownerUserId=11111111-1111-4111-8111-111111111111&objectKey=11111111-1111-4111-8111-111111111111/background/fresh.jpg',
+    profile_background_media_status = 'active',
+    profile_background_scan_status = 'pending_scan',
+    profile_background_scan_provider = 'clamav',
+    profile_background_scan_result = null,
+    profile_background_scanned_at = null,
+    profile_background_scan_error = null
 where user_id = '11111111-1111-4111-8111-111111111111';
+
+update public.user_profiles
+set profile_background_scan_status = 'clean',
+    profile_background_scan_provider = 'clamav',
+    profile_background_scan_result = 'clean',
+    profile_background_scanned_at = transaction_timestamp(),
+    profile_background_scan_error = null
+where user_id = '11111111-1111-4111-8111-111111111111';
+
+insert into public.platform_role_memberships (
+  role, user_id, email, status, notes, granted_by
+) values (
+  'owner', '11111111-1111-4111-8111-111111111111',
+  'wholeapp-media-owner@example.test', 'active',
+  'pgTAP personal Profile media regression fixture', 'pgtap'
+);
+
+set local request.jwt.claims =
+  '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","email":"wholeapp-media-owner@example.test","session_id":"11111111-1111-4111-8111-111111111101"}';
+set local role authenticated;
+select is(
+  public.resolve_profile_media_delivery(
+    '11111111-1111-4111-8111-111111111111',
+    '11111111-1111-4111-8111-111111111111/avatar/fresh.jpg'
+  )->>'reason',
+  'profile_media_exact_clean',
+  'platform Owner receives exact clean personal Profile photo under the same Profile authority'
+);
+select is(
+  public.resolve_profile_media_delivery(
+    '11111111-1111-4111-8111-111111111111',
+    '11111111-1111-4111-8111-111111111111/background/fresh.jpg'
+  )->>'reason',
+  'profile_media_exact_clean',
+  'platform Owner receives exact clean personal Profile background under the same Profile authority'
+);
+
+reset role;
+update public.platform_role_memberships
+set status = 'revoked', revoked_at = transaction_timestamp(), revoked_by = 'pgtap'
+where role = 'owner'
+  and user_id = '11111111-1111-4111-8111-111111111111'
+  and status = 'active';
 
 reset role;
 set local request.jwt.claims =
@@ -322,7 +381,7 @@ select is(
 select is(
   (public.resolve_profile_media_delivery(
     '11111111-1111-4111-8111-111111111111',
-    '11111111-1111-4111-8111-111111111111/background/fresh.jpg'
+    '11111111-1111-4111-8111-111111111111/background/not-current.jpg'
   )->>'allowed')::boolean,
   false,
   'clean avatar evidence cannot authorize a different background object'
