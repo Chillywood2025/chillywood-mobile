@@ -1,60 +1,41 @@
--- Recover only a legacy bootstrap Owner that was quarantined by the immutable-
--- subject closure after its auth account already existed. Runtime authority
--- remains bound exclusively to the immutable auth.users.id; email is used only
--- by this one-time migration to prove the historical bootstrap row corresponds
--- to exactly one confirmed, non-deleted auth subject.
+-- Recover only the historical bootstrap Owner membership that was quarantined
+-- by immutable-subject closure after its auth account already existed. Runtime
+-- authority remains bound exclusively to auth.users.id; the stored legacy email
+-- is used only inside this one-time migration to prove a unique confirmed auth
+-- subject. No email-based runtime authority is restored.
 
 do $$
 declare
-  v_candidate_count integer := 0;
-  v_membership_id bigint;
+  v_membership_id constant bigint := 10;
   v_subject_id uuid;
   v_target_email text;
+  v_subject_count integer := 0;
 begin
-  select count(*)
-  into v_candidate_count
+  select lower(trim(membership.email))
+  into v_target_email
   from public.platform_role_memberships membership
-  where membership.role = 'owner'
+  where membership.id = v_membership_id
+    and membership.role = 'owner'
     and membership.status = 'revoked'
     and nullif(trim(coalesce(membership.user_id, '')), '') is null
     and membership.granted_by = 'system-bootstrap'
     and membership.revoked_by = 'platform-exact-subject-closure'
-    and nullif(lower(trim(coalesce(membership.email, ''))), '') is not null
-    and (
-      select count(*)
-      from auth.users subject
-      where lower(trim(subject.email)) = lower(trim(membership.email))
-        and subject.email_confirmed_at is not null
-        and subject.deleted_at is null
-    ) = 1;
+    and nullif(lower(trim(coalesce(membership.email, ''))), '') is not null;
 
-  if v_candidate_count > 1 then
-    raise exception 'bootstrap_owner_exact_subject_recovery_ambiguous';
-  end if;
-
-  if v_candidate_count = 0 then
+  if v_target_email is null then
     return;
   end if;
 
-  select
-    membership.id,
-    subject.id,
-    lower(trim(membership.email))
-  into
-    v_membership_id,
-    v_subject_id,
-    v_target_email
-  from public.platform_role_memberships membership
-  join auth.users subject
-    on lower(trim(subject.email)) = lower(trim(membership.email))
-   and subject.email_confirmed_at is not null
-   and subject.deleted_at is null
-  where membership.role = 'owner'
-    and membership.status = 'revoked'
-    and nullif(trim(coalesce(membership.user_id, '')), '') is null
-    and membership.granted_by = 'system-bootstrap'
-    and membership.revoked_by = 'platform-exact-subject-closure'
-  limit 1;
+  select count(*), min(subject.id)
+  into v_subject_count, v_subject_id
+  from auth.users subject
+  where lower(trim(subject.email)) = v_target_email
+    and subject.email_confirmed_at is not null
+    and subject.deleted_at is null;
+
+  if v_subject_count <> 1 or v_subject_id is null then
+    raise exception 'bootstrap_owner_exact_subject_recovery_requires_one_confirmed_subject';
+  end if;
 
   if exists (
     select 1
@@ -74,8 +55,10 @@ begin
       revoked_at = null,
       updated_at = timezone('utc'::text, now())
   where membership.id = v_membership_id
+    and membership.role = 'owner'
     and membership.status = 'revoked'
     and nullif(trim(coalesce(membership.user_id, '')), '') is null
+    and membership.granted_by = 'system-bootstrap'
     and membership.revoked_by = 'platform-exact-subject-closure';
 
   if not found then
