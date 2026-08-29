@@ -118,15 +118,11 @@ for (const phrase of [
   '.select("user_id,role,status,expires_at")',
   '.eq("user_id", subjectId)',
   '.eq("status", "active")',
-  "const queryRoles = Array.from(new Set([",
-  '!roles.includes("super_admin") && roles.includes("operator") ? ["super_admin"] : []',
-  '.in("role", queryRoles)',
+  '.in("role", roles)',
   "normalizeExactSubjectId(row.user_id) === subjectId",
   'toText(row.status).toLowerCase() === "active"',
   "toText(row.role).toLowerCase() === role",
   "isUnexpired(row.expires_at, nowMs)",
-  'hasExactActiveRole(rows, subjectId, "super_admin", nowMs)',
-  'return "operator"',
   "return resolveExactPlatformRole(result.data, subjectId, roles, nowMs)",
 ]) includes(exactSubjectAuthority, phrase, "shared exact-subject authority");
 
