@@ -122,8 +122,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       const priorUserId = String(lastSession?.user?.id ?? priorAuthority?.userId ?? "").trim();
       const candidateUserId = String(candidate?.user?.id ?? "").trim();
       const knownReplacement = !!priorAuthority && !!candidateUserId && priorUserId !== candidateUserId;
-      clearRenderedAuthority(candidate ? "loading" : "signed_out");
-      lastSession = candidate;
+      const sameUserRevalidation = !!candidate
+        && !!priorAuthority
+        && priorUserId === candidateUserId
+        && priorAuthority.userId === candidateUserId
+        && event !== "PASSWORD_RECOVERY"
+        && event !== "SIGNED_OUT";
+      if (sameUserRevalidation) {
+        lastSession = candidate;
+        setSession(candidate);
+        setUser(candidate.user);
+      } else {
+        clearRenderedAuthority(candidate ? "loading" : "signed_out");
+        lastSession = candidate;
+      }
 
       if (knownReplacement && priorAuthority) {
         detachOperationalOwnership(priorAuthority, "account_switch");
@@ -150,22 +162,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           const candidateStillCurrent = currentSession?.access_token === candidate.access_token
             && currentSession?.user?.id === candidateUserId;
           const exactAuthority = !!nextAuthority && nextAuthority.userId === candidateUserId;
-          if (!candidateStillCurrent || !access) { setAuthorityStatus("unknown"); return; }
+          if (!candidateStillCurrent || !access) { clearRenderedAuthority("unknown"); return; }
           if (access.authSuspended || (access.restricted && !access.scheduledDeletion)) {
             const cleanupAuthority = exactAuthority ? nextAuthority : priorAuthority;
             if (cleanupAuthority) detachOperationalOwnership(cleanupAuthority, "auth_invalidation");
             lastAuthority = null;
-            setAuthorityStatus("restricted");
+            clearRenderedAuthority("restricted");
             void clearRecoveryBinding();
             void supabase.auth.signOut().catch(() => null);
             return;
           }
           if (!exactAuthority) {
             if (priorAuthority) detachOperationalOwnership(priorAuthority, "auth_invalidation");
-            lastAuthority = null; setAuthorityStatus("unknown"); return;
+            lastAuthority = null; clearRenderedAuthority("unknown"); return;
           }
           if (access.scheduledDeletion) {
-            if (nextAuthority?.restoreOnly !== true) { setAuthorityStatus("unknown"); return; }
+            if (nextAuthority?.restoreOnly !== true) { clearRenderedAuthority("unknown"); return; }
             detachOperationalOwnership(nextAuthority, "account_deletion");
             lastAuthority = nextAuthority;
             lastSession = currentSession;
@@ -174,7 +186,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             void clearRecoveryBinding();
             return;
           }
-          if (nextAuthority?.restoreOnly === true) { setAuthorityStatus("unknown"); return; }
+          if (nextAuthority?.restoreOnly === true) { clearRenderedAuthority("unknown"); return; }
           const recovery = recoverySessionIsQuarantined(event, nextAuthority,
             verifiedRecoveryBinding, storedRecoveryBinding, recoveryIntent ? PENDING_RECOVERY : null);
           if (priorAuthority && (recovery || !sameAccountSessionAuthority(priorAuthority, nextAuthority))) {
@@ -193,7 +205,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           setIsPasswordRecoverySession(false); void clearRecoveryBinding();
           if (event === "SIGNED_IN") trackEvent("auth_sign_in_success", { source: "session_authority" });
         })().catch(() => {
-          if (mounted && operation === sequence) setAuthorityStatus("unknown");
+          if (mounted && operation === sequence) clearRenderedAuthority("unknown");
         });
       }, 0);
     };

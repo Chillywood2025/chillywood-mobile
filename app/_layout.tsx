@@ -1623,33 +1623,45 @@ function AuthRouteGate() {
   }, [allowInitialReplayDeepLink, authRedirectId, authority, authorityStatus, insideAuthGroup, insideResetPassword, insideTabsGroup, isLoading, isPasswordRecoverySession, isSignedIn, legalGateBlocking, redirectTo, router, waitingForInitialReplayDeepLink]);
 
   if (authorityStatus === "restore_only") return <AccountRestoreOnlyScreen />;
-  if (authorityStatus === "unknown") return <AuthBootScreen message="Protected access remains locked because session authority is unavailable." />;
   if (authorityStatus === "restricted") return <AuthBootScreen message="This session is restricted and is being signed out safely." />;
   if (authorityStatus === "recovery_only" && !insideResetPassword) return <AuthBootScreen message="Password recovery must finish before protected access resumes." />;
-  if (legalGateBlocking) {
-    if (legalCheckPending || legalStatus === "checking" || legalStatus === "idle") return <AuthBootScreen message="Checking current policy requirements…" />;
-    return (
-      <LegalAcceptanceScreen
-        readback={legalStatus === "required" ? legalReadback : null}
-        onAccepted={(next) => {
-          setLegalReadback(next); setLegalStatus("accepted"); setAcceptedLegalVerificationKey(legalVerificationKey);
-        }}
-        onRetry={() => setLegalRetry((value) => value + 1)}
-      />
-    );
-  }
-  if (isLoading) return <AuthBootScreen />;
-  if (
-    waitingForInitialReplayDeepLink
+
+  let navigationBlocker: React.ReactNode = null;
+  if (authorityStatus === "unknown") {
+    navigationBlocker = <AuthBootScreen message="Protected access remains locked because session authority is unavailable." />;
+  } else if (legalGateBlocking) {
+    navigationBlocker = legalCheckPending || legalStatus === "checking" || legalStatus === "idle"
+      ? <AuthBootScreen message="Checking current policy requirements…" />
+      : (
+        <LegalAcceptanceScreen
+          readback={legalStatus === "required" ? legalReadback : null}
+          onAccepted={(next) => {
+            setLegalReadback(next); setLegalStatus("accepted"); setAcceptedLegalVerificationKey(legalVerificationKey);
+          }}
+          onRetry={() => setLegalRetry((value) => value + 1)}
+        />
+      );
+  } else if (
+    isLoading
+    || waitingForInitialReplayDeepLink
     || (!allowInitialReplayDeepLink && !isSignedIn && insideTabsGroup)
     || (isSignedIn && insideAuthGroup)
   ) {
-    return <AuthBootScreen />;
+    navigationBlocker = <AuthBootScreen />;
   }
 
   return (
     <View style={styles.appRootReady} testID="app-root-ready">
       <RootNavigator />
+      {navigationBlocker ? (
+        <View
+          pointerEvents="auto"
+          style={styles.navigationBlockingOverlay}
+          testID="navigation-blocking-overlay"
+        >
+          {navigationBlocker}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1758,6 +1770,12 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   appRootReady: {
     flex: 1,
+  },
+  navigationBlockingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#05060A",
+    elevation: 100,
+    zIndex: 100,
   },
   authBootScreen: {
     flex: 1,
