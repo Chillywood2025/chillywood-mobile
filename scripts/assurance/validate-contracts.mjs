@@ -2,6 +2,7 @@
 import { args, emit, featureRequired, proofTierApplicabilityPolicies, proofTierCompletionFactAuthorities, proofTierCompletionFeatureApplicability, readJson, requiredKeys, tierIds, validateProofTierStatuses } from "./lib.mjs";
 import { validateStructuredBinding } from "./active-task.mjs";
 import { readBootstrapMergeIdentity, validateGithubMainRulesetReadback } from "./github-main-ruleset-readback.mjs";
+import { resolveLocalJsonPointer } from "./json-schema-ref.mjs";
 
 const options = args();
 const schemas = readJson("config/assurance/schemas-v1.json");
@@ -36,9 +37,26 @@ const contracts = [
   , ["config/assurance/codex-security-scan-incidents-v1.json", "codexSecurityIncidentLedger"]
 ];
 
-function validate(value, schema, at, errors) {
-  if (schema.$ref) return validate(value, schemas.$defs[schema.$ref.split("/").at(-1)], at, errors);
-  for (const member of schema.allOf ?? []) validate(value, member, at, errors);
+function validate(value, schema, at, errors, resolving = new Set()) {
+  if (!schema || typeof schema !== "object") {
+    errors.push(`${at} schema unavailable`);
+    return;
+  }
+  if (schema.$ref) {
+    if (resolving.has(schema.$ref)) {
+      errors.push(`${at} cyclic schema ref ${schema.$ref}`);
+      return;
+    }
+    const resolved = resolveLocalJsonPointer(schemas, schema.$ref);
+    if (!resolved) {
+      errors.push(`${at} unresolved schema ref ${schema.$ref}`);
+      return;
+    }
+    const nextResolving = new Set(resolving);
+    nextResolving.add(schema.$ref);
+    return validate(value, resolved, at, errors, nextResolving);
+  }
+  for (const member of schema.allOf ?? []) validate(value, member, at, errors, resolving);
   if (schema.const !== undefined && JSON.stringify(value) !== JSON.stringify(schema.const)) errors.push(`${at} must equal ${JSON.stringify(schema.const)}`);
   if (schema.enum && !schema.enum.includes(value)) errors.push(`${at} must be one of ${schema.enum.join(",")}`);
   if (schema.type === "object" && (!value || typeof value !== "object" || Array.isArray(value))) errors.push(`${at} must be object`);
@@ -50,7 +68,7 @@ function validate(value, schema, at, errors) {
   if (schema.maximum !== undefined && value > schema.maximum) errors.push(`${at} exceeds ${schema.maximum}`);
   if (schema.required && value && typeof value === "object") errors.push(...requiredKeys(value, schema.required, at));
   if (schema.properties && value && typeof value === "object") {
-    for (const [key, child] of Object.entries(schema.properties)) if (Object.hasOwn(value, key)) validate(value[key], child, `${at}.${key}`, errors);
+    for (const [key, child] of Object.entries(schema.properties)) if (Object.hasOwn(value, key)) validate(value[key], child, `${at}.${key}`, errors, resolving);
   }
   if (Array.isArray(value)) {
     if (schema.minItems !== undefined && value.length < schema.minItems) errors.push(`${at} needs at least ${schema.minItems} items`);
@@ -59,12 +77,12 @@ function validate(value, schema, at, errors) {
     if (schema.contains) {
       const found = value.some((entry, index) => {
         const candidateErrors = [];
-        validate(entry, schema.contains, `${at}[${index}]`, candidateErrors);
+        validate(entry, schema.contains, `${at}[${index}]`, candidateErrors, resolving);
         return candidateErrors.length === 0;
       });
       if (!found) errors.push(`${at} does not contain required value`);
     }
-    if (schema.items) value.forEach((entry, index) => validate(entry, schema.items, `${at}[${index}]`, errors));
+    if (schema.items) value.forEach((entry, index) => validate(entry, schema.items, `${at}[${index}]`, errors, resolving));
   }
 }
 
