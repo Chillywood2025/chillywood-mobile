@@ -1,0 +1,213 @@
+name: Transient foreground navigation preservation repair
+
+on:
+  push:
+    branches:
+      - chatgpt/foreground-navigation-preservation-20260829
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/foreground-navigation-preservation-20260829
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply exact lifecycle/navigation repair
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          layout_path = Path('app/_layout.tsx')
+          layout = layout_path.read_text()
+          old = '''  if (authorityStatus === "restore_only") return <AccountRestoreOnlyScreen />;
+  if (authorityStatus === "unknown") return <AuthBootScreen message="Protected access remains locked because session authority is unavailable." />;
+  if (authorityStatus === "restricted") return <AuthBootScreen message="This session is restricted and is being signed out safely." />;
+  if (authorityStatus === "recovery_only" && !insideResetPassword) return <AuthBootScreen message="Password recovery must finish before protected access resumes." />;
+  if (legalGateBlocking) {
+    if (legalCheckPending || legalStatus === "checking" || legalStatus === "idle") return <AuthBootScreen message="Checking current policy requirements…" />;
+    return (
+      <LegalAcceptanceScreen
+        readback={legalStatus === "required" ? legalReadback : null}
+        onAccepted={(next) => {
+          setLegalReadback(next); setLegalStatus("accepted"); setAcceptedLegalVerificationKey(legalVerificationKey);
+        }}
+        onRetry={() => setLegalRetry((value) => value + 1)}
+      />
+    );
+  }
+  if (isLoading) return <AuthBootScreen />;
+  if (
+    waitingForInitialReplayDeepLink
+    || (!allowInitialReplayDeepLink && !isSignedIn && insideTabsGroup)
+    || (isSignedIn && insideAuthGroup)
+  ) {
+    return <AuthBootScreen />;
+  }
+
+  return (
+    <View style={styles.appRootReady} testID="app-root-ready">
+      <RootNavigator />
+    </View>
+  );
+'''
+          new = '''  if (authorityStatus === "restore_only") return <AccountRestoreOnlyScreen />;
+  if (authorityStatus === "restricted") return <AuthBootScreen message="This session is restricted and is being signed out safely." />;
+  if (authorityStatus === "recovery_only" && !insideResetPassword) return <AuthBootScreen message="Password recovery must finish before protected access resumes." />;
+
+  let navigationBlocker: React.ReactNode = null;
+  if (authorityStatus === "unknown") {
+    navigationBlocker = <AuthBootScreen message="Protected access remains locked because session authority is unavailable." />;
+  } else if (legalGateBlocking) {
+    navigationBlocker = legalCheckPending || legalStatus === "checking" || legalStatus === "idle"
+      ? <AuthBootScreen message="Checking current policy requirements…" />
+      : (
+        <LegalAcceptanceScreen
+          readback={legalStatus === "required" ? legalReadback : null}
+          onAccepted={(next) => {
+            setLegalReadback(next); setLegalStatus("accepted"); setAcceptedLegalVerificationKey(legalVerificationKey);
+          }}
+          onRetry={() => setLegalRetry((value) => value + 1)}
+        />
+      );
+  } else if (
+    isLoading
+    || waitingForInitialReplayDeepLink
+    || (!allowInitialReplayDeepLink && !isSignedIn && insideTabsGroup)
+    || (isSignedIn && insideAuthGroup)
+  ) {
+    navigationBlocker = <AuthBootScreen />;
+  }
+
+  return (
+    <View style={styles.appRootReady} testID="app-root-ready">
+      <RootNavigator />
+      {navigationBlocker ? (
+        <View
+          pointerEvents="auto"
+          style={styles.navigationBlockingOverlay}
+          testID="navigation-blocking-overlay"
+        >
+          {navigationBlocker}
+        </View>
+      ) : null}
+    </View>
+  );
+'''
+          if old not in layout:
+              raise SystemExit('AuthRouteGate terminal block did not match expected source')
+          layout = layout.replace(old, new, 1)
+          style_old = '''  appRootReady: {
+    flex: 1,
+  },
+  authBootScreen: {
+'''
+          style_new = '''  appRootReady: {
+    flex: 1,
+  },
+  navigationBlockingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#05060A",
+    elevation: 100,
+    zIndex: 100,
+  },
+  authBootScreen: {
+'''
+          if style_old not in layout:
+              raise SystemExit('appRootReady style block did not match expected source')
+          layout = layout.replace(style_old, style_new, 1)
+          layout_path.write_text(layout)
+
+          session_path = Path('_lib/session.tsx')
+          session = session_path.read_text()
+          old = '''      const knownReplacement = !!priorAuthority && !!candidateUserId && priorUserId !== candidateUserId;
+      clearRenderedAuthority(candidate ? "loading" : "signed_out");
+      lastSession = candidate;
+'''
+          new = '''      const knownReplacement = !!priorAuthority && !!candidateUserId && priorUserId !== candidateUserId;
+      const sameUserRevalidation = !!candidate
+        && !!priorAuthority
+        && priorUserId === candidateUserId
+        && priorAuthority.userId === candidateUserId
+        && event !== "PASSWORD_RECOVERY"
+        && event !== "SIGNED_OUT";
+      if (sameUserRevalidation) {
+        lastSession = candidate;
+        setSession(candidate);
+        setUser(candidate.user);
+      } else {
+        clearRenderedAuthority(candidate ? "loading" : "signed_out");
+        lastSession = candidate;
+      }
+'''
+          if old not in session:
+              raise SystemExit('session reconcile preamble did not match expected source')
+          session = session.replace(old, new, 1)
+          replacements = {
+            'if (!candidateStillCurrent || !access) { setAuthorityStatus("unknown"); return; }': 'if (!candidateStillCurrent || !access) { clearRenderedAuthority("unknown"); return; }',
+            'lastAuthority = null;\n            setAuthorityStatus("restricted");': 'lastAuthority = null;\n            clearRenderedAuthority("restricted");',
+            'lastAuthority = null; setAuthorityStatus("unknown"); return;': 'lastAuthority = null; clearRenderedAuthority("unknown"); return;',
+            'if (nextAuthority?.restoreOnly !== true) { setAuthorityStatus("unknown"); return; }': 'if (nextAuthority?.restoreOnly !== true) { clearRenderedAuthority("unknown"); return; }',
+            'if (nextAuthority?.restoreOnly === true) { setAuthorityStatus("unknown"); return; }': 'if (nextAuthority?.restoreOnly === true) { clearRenderedAuthority("unknown"); return; }',
+            'if (mounted && operation === sequence) setAuthorityStatus("unknown");': 'if (mounted && operation === sequence) clearRenderedAuthority("unknown");',
+          }
+          for source, target in replacements.items():
+              if source not in session:
+                  raise SystemExit(f'session expected source missing: {source}')
+              session = session.replace(source, target, 1)
+          session_path.write_text(session)
+
+          updates_path = Path('_lib/runtimeUpdates.tsx')
+          updates = updates_path.read_text()
+          anchor = '''  const isRollbackToEmbedded = Boolean(
+    updatesState.downloadedUpdate && !downloadedUpdateId,
+  );
+
+  useEffect(() => {
+    if (isLoading || !isSignedIn || !authenticatedUserId) return undefined;
+'''
+          replacement = '''  const isRollbackToEmbedded = Boolean(
+    updatesState.downloadedUpdate && !downloadedUpdateId,
+  );
+
+  useEffect(() => {
+    if (isSignedIn) return;
+    restoreAttemptedUserRef.current = null;
+    restoreSettledUserRef.current = null;
+  }, [isSignedIn]);
+
+  useEffect(() => {
+    if (isLoading || !isSignedIn || !authenticatedUserId) return undefined;
+'''
+          if anchor not in updates:
+              raise SystemExit('runtime update restore anchor did not match expected source')
+          updates = updates.replace(anchor, replacement, 1)
+          updates_path.write_text(updates)
+
+          test_path = Path('tests/foreground-navigation-preservation.test.mjs')
+          test_path.write_text('''import assert from "node:assert/strict";\nimport { readFileSync } from "node:fs";\nimport test from "node:test";\n\nconst read = (path) => readFileSync(path, "utf8");\n\ntest("same-session foreground checks preserve the mounted navigator", () => {\n  const layout = read("app/_layout.tsx");\n  assert.match(layout, /let navigationBlocker: React\\.ReactNode = null/u);\n  assert.match(layout, /<RootNavigator \\/>[\\s\\S]{0,500}navigation-blocking-overlay/u);\n  assert.doesNotMatch(layout, /if \\(legalGateBlocking\\)[\\s\\S]{0,300}return <AuthBootScreen/u);\n  assert.match(layout, /StyleSheet\\.absoluteFillObject[\\s\\S]{0,160}zIndex: 100/u);\n});\n\ntest("same-user auth revalidation does not blank rendered identity before verification", () => {\n  const session = read("_lib/session.tsx");\n  assert.match(session, /const sameUserRevalidation = !!candidate/u);\n  assert.match(session, /if \\(sameUserRevalidation\\) \\{[\\s\\S]{0,180}setSession\\(candidate\\);[\\s\\S]{0,120}setUser\\(candidate\\.user\\);/u);\n  assert.match(session, /!candidateStillCurrent \\|\\| !access\\) \\{ clearRenderedAuthority\\("unknown"\\)/u);\n  assert.match(session, /clearRenderedAuthority\\("restricted"\\)/u);\n});\n\ntest("resume restoration can re-arm after a real rendered sign-in loss", () => {\n  const updates = read("_lib/runtimeUpdates.tsx");\n  assert.match(updates, /if \\(isSignedIn\\) return;[\\s\\S]{0,160}restoreAttemptedUserRef\\.current = null;[\\s\\S]{0,120}restoreSettledUserRef\\.current = null;/u);\n});\n''')
+          PY
+      - name: Install dependencies
+        run: npm ci
+      - name: Run focused regression tests
+        run: node --test tests/navigation-resume-policy.test.mjs tests/foreground-navigation-preservation.test.mjs tests/wave1/legal-requirements-gate-lifecycle.test.mjs
+      - name: TypeScript validation
+        run: npx tsc --noEmit --pretty false
+      - name: Commit validated repair and remove transient workflow
+        shell: bash
+        run: |
+          rm .github/workflows/transient-foreground-navigation-preservation.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/_layout.tsx _lib/session.tsx _lib/runtimeUpdates.tsx tests/foreground-navigation-preservation.test.mjs .github/workflows/transient-foreground-navigation-preservation.yml
+          git commit -m "fix: preserve navigation across foreground revalidation"
+          git push origin HEAD:chatgpt/foreground-navigation-preservation-20260829
