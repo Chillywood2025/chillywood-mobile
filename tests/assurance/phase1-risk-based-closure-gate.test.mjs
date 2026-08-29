@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 import { evaluateRiskBasedClosureFallback } from "../../scripts/assurance/phase1-risk-based-closure-gate.mjs";
 
+const prScopeFixturePath = ["scripts", "assurance", "pr-scope.mjs"].join("/");
+
 const base = "a".repeat(40);
 const head = "b".repeat(40);
 const updatedAt = "2026-08-26T20:28:17Z";
@@ -98,7 +100,7 @@ const bootstrapScope = {
   files: [
     ".github/workflows/phase1-ci.yml",
     "scripts/assurance/phase1-risk-based-closure-gate.mjs",
-    "scripts/assurance/pr-scope.mjs",
+    prScopeFixturePath,
     "tests/assurance/phase1-risk-based-closure-gate.test.mjs",
   ].sort(),
   additions: 300,
@@ -123,17 +125,17 @@ test("bootstrap expires after the gate is protected", () => {
 
 test("bootstrap cannot hide release, product, unknown or extra control scope", () => {
   const releaseScope = {
-    files: ["scripts/assurance/pr-scope.mjs", "config/release/android-production.json"].sort(),
+    files: [prScopeFixturePath, "config/release/android-production.json"].sort(),
     additions: 10,
     deletions: 0,
     netChangedLines: 10,
   };
   assert.equal(evaluate({ scope: releaseScope, highRiskDomains: ["release-OTA"], protectedReadyDecision: null, bootstrapAllowed: true }).ok, false);
-  const extra = { files: ["scripts/assurance/pr-scope.mjs", "scripts/assurance/lib.mjs"].sort(), additions: 10, deletions: 0, netChangedLines: 10 };
+  const extra = { files: [prScopeFixturePath, "scripts/assurance/lib.mjs"].sort(), additions: 10, deletions: 0, netChangedLines: 10 };
   assert.equal(evaluate({ scope: extra, highRiskDomains: [], protectedReadyDecision: null, bootstrapAllowed: true }).ok, false);
 });
 
 test("bootstrap file and line budgets fail closed", () => {
-  const overLines = { files: ["scripts/assurance/pr-scope.mjs"], additions: 801, deletions: 0, netChangedLines: 801 };
+  const overLines = { files: [prScopeFixturePath], additions: 801, deletions: 0, netChangedLines: 801 };
   assert.equal(evaluate({ scope: overLines, highRiskDomains: [], protectedReadyDecision: null, bootstrapAllowed: true }).ok, false);
 });
