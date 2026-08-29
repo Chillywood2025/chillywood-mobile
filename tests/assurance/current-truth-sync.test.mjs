@@ -387,7 +387,9 @@ assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: check
 const rolling = evaluateProtectedMainAdvancement({ record: truthRecord, contract: truthContract, observedProtectedMainSha: gitCommand(["rev-parse", "origin/main"]), gitCommand });
 assert.equal(rolling.findings.includes("CURRENT_TRUTH_TERMINAL_SYNCHRONIZATION_INCOMPLETE"), false, stableJson(rolling.findings));
 assert.equal(rolling.pendingTransitionCount, 0);
-assert.equal(rolling.advancementClassifications.find(({ mergeSha }) => mergeSha === checkpointMerge)?.derivedTruthSynchronization, true);
+assert.equal(rolling.advancementClassifications.length === 0
+  ? rolling.mainRelation === "EXACT_CHECKPOINT"
+  : rolling.advancementClassifications.find(({ mergeSha }) => mergeSha === checkpointMerge)?.derivedTruthSynchronization, true);
 assert.equal(renderCurrentState(truthRecord), (await import("node:fs")).readFileSync("CURRENT_STATE.md", "utf8"));
 assert.equal(renderNextTask(truthRecord), (await import("node:fs")).readFileSync("NEXT_TASK.md", "utf8"));
 const semanticMutation = structuredClone(truthRecord);

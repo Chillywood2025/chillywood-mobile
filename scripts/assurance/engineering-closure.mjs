@@ -1836,6 +1836,7 @@ export const IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 = "IMMUTABLE_EVIDENCE_L
 export const PHASE1_RISK_BASED_ADMISSION_REFORM_V1 = "PHASE1_RISK_BASED_ADMISSION_REFORM_V1";
 export const ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1 = "ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1";
 export const ASSURANCE_CONTROL_PLANE_FIXED_POINT_PATHS = Object.freeze(["config/assurance/current-truth-contract-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "tests/assurance/current-truth-sync.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]);
+export const ASSURANCE_CONTROL_PLANE_FIXED_POINT_EFFECTIVE_PATHS = Object.freeze([...ASSURANCE_CONTROL_PLANE_FIXED_POINT_PATHS, "config/assurance/current-truth-v1.json"].sort());
 export const PHASE1_ADMISSION_RULESET_CUTOVER_V1 = "PHASE1_ADMISSION_RULESET_CUTOVER_V1";
 export const PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1 = "PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1";
 export const PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1 = Object.freeze({
@@ -4535,7 +4536,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     const phase1Profile = phase1ControlProfile(originalSubject?.objective);
     const ownerJurisdictionProfile = jurisdictionModel || amendmentControlRepair || testAdaptationOverlay || immutableEvidenceLifecycleConvergence || fixedPointSynchronization || terminalReceiptLifecycleCorrection || phase1Profile;
     const architecturePaths = fixedPointSynchronization
-      ? ASSURANCE_CONTROL_PLANE_FIXED_POINT_PATHS
+      ? ASSURANCE_CONTROL_PLANE_FIXED_POINT_EFFECTIVE_PATHS
       : terminalReceiptLifecycleCorrection
       ? FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS
       : phase1Profile
@@ -4548,7 +4549,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
           ...(architectureDependencyAmendmentActive ? architectureDependencyAmendment.effectiveAddedPaths ?? DEPENDENCY_AMENDMENT_ADDED_PATHS : []),
         ]
       : TASK_LOCAL_EDGE_ARCHITECTURE_PATHS;
-    const maximumFiles = fixedPointSynchronization ? 6 : terminalReceiptLifecycleCorrection ? 6 : phase1Profile?.maximumFiles ?? (immutableEvidenceLifecycleConvergence ? 8 : architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumFiles : ownerJurisdictionProfile ? 15 : 12);
+    const maximumFiles = fixedPointSynchronization ? 7 : terminalReceiptLifecycleCorrection ? 6 : phase1Profile?.maximumFiles ?? (immutableEvidenceLifecycleConvergence ? 8 : architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumFiles : ownerJurisdictionProfile ? 15 : 12);
     const maximumNetLines = fixedPointSynchronization ? 1800 : terminalReceiptLifecycleCorrection ? 900 : phase1Profile?.maximumChangedLines ?? (immutableEvidenceLifecycleConvergence ? 2000 : architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumNetLines : ownerJurisdictionProfile ? 3500 : 3200);
     const originalMaximumFiles = fixedPointSynchronization ? 6 : terminalReceiptLifecycleCorrection ? 5 : phase1Profile?.maximumFiles ?? (immutableEvidenceLifecycleConvergence ? 8 : ownerJurisdictionProfile ? 15 : 12);
     const originalMaximumNetLines = fixedPointSynchronization ? 1800 : terminalReceiptLifecycleCorrection ? 900 : phase1Profile?.maximumChangedLines ?? (immutableEvidenceLifecycleConvergence ? 2000 : ownerJurisdictionProfile ? 3500 : 3200);

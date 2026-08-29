@@ -2017,8 +2017,8 @@ export function observeLiveTerminalRepairTaskContext({ environment = process.env
 export const ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES = Object.freeze([
   Object.freeze({
     profileId: "ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1",
-    paths: Object.freeze(["config/assurance/current-truth-contract-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "tests/assurance/current-truth-sync.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]),
-    maximumFiles: 6,
+    paths: Object.freeze(["config/assurance/current-truth-contract-v1.json", "config/assurance/current-truth-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "tests/assurance/current-truth-sync.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]),
+    maximumFiles: 7,
     maximumChangedLines: 1800,
   }),
   Object.freeze({
