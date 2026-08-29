@@ -1834,6 +1834,9 @@ export const FINITE_TASK_TERMINAL_TRUTH_V1 = "FINITE_TASK_TERMINAL_TRUTH_V1";
 export const FINITE_TASK_TERMINAL_TRUTH_FINAL_SOURCE_V1 = "FINITE_TASK_TERMINAL_TRUTH_FINAL_SOURCE_V1";
 export const IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 = "IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1";
 export const PHASE1_RISK_BASED_ADMISSION_REFORM_V1 = "PHASE1_RISK_BASED_ADMISSION_REFORM_V1";
+export const ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1 = "ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1";
+export const ASSURANCE_CONTROL_PLANE_FIXED_POINT_PATHS = Object.freeze(["config/assurance/current-truth-contract-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "tests/assurance/current-truth-sync.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]);
+export const ASSURANCE_CONTROL_PLANE_FIXED_POINT_EFFECTIVE_PATHS = Object.freeze([...ASSURANCE_CONTROL_PLANE_FIXED_POINT_PATHS, "config/assurance/current-truth-v1.json"].sort());
 export const PHASE1_ADMISSION_RULESET_CUTOVER_V1 = "PHASE1_ADMISSION_RULESET_CUTOVER_V1";
 export const PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1 = "PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1";
 export const PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1 = Object.freeze({
@@ -2774,6 +2777,7 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
   const finiteTaskTerminalReview = profile === FINITE_TASK_TERMINAL_TRUTH_V1;
   const immutableEvidenceLifecycleReview = profile === IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1;
   const phase1RiskBasedAdmissionReview = profile === PHASE1_RISK_BASED_ADMISSION_REFORM_V1;
+  const fixedPointSynchronizationReview = profile === ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1;
   const phase1AdmissionControlReview = Boolean(phase1ControlProfile(profile));
   const dependencyAmendment = dependencyAmendmentProjection(dependencyAmendmentResolution);
   const finiteTaskPrRiskAuthority = finiteTaskImplementationReview
@@ -2800,10 +2804,15 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
     deletions: Number(scope?.deletions ?? 0),
     netChangedLines: observed.netChangedLines,
     disposition: { P0: 0, P1: 0, launchImpactingP2: 0 },
-    ...((jurisdictionAdmissionReview || amendmentControlRepairReview || testAdaptationOverlayReview || finiteTaskImplementationReview || finiteTaskTerminalReview || immutableEvidenceLifecycleReview || phase1AdmissionControlReview) ? { reviewProfile: profile } : {}),
+    ...((jurisdictionAdmissionReview || amendmentControlRepairReview || testAdaptationOverlayReview || finiteTaskImplementationReview || finiteTaskTerminalReview || immutableEvidenceLifecycleReview || phase1AdmissionControlReview || fixedPointSynchronizationReview) ? { reviewProfile: profile } : {}),
     ...(finiteTaskImplementationReview ? { finiteTaskEffectiveReservation: finiteTaskImplementationReviewBinding(effectiveReservationResolution, finiteTaskPrRiskAuthority) } : {}),
     ...(dependencyAmendment ? { dependencyAmendment } : {}),
-    lanes: phase1AdmissionControlReview ? [
+    lanes: fixedPointSynchronizationReview ? [
+      "rolling protected-main derived truth binds exact prior SHA/tree, source head, and normal merge identity",
+      "checkpoint-only synchronization is idempotent and cannot recursively require a successor",
+      "exact-head Phase 1, draft/ready separation, P0/P1, scope, and immutable receipt gates remain fail-closed",
+      "unrelated source mutation and release, OTA, provider, database, build, submission, product, native, Owner/Admin, and money authority remain denied",
+    ] : phase1AdmissionControlReview ? [
       "all thirteen Phase 1 lanes execute with canonical protected aggregate admission",
       "blocking safety, authority, product, database, money, auth, RLS, and security findings remain fail-closed",
       "maintenance-only classification requires canonical proof and every unknown finding defaults blocking",
@@ -3355,6 +3364,22 @@ export function projectPhase1AdmissionFinalSourceEvidence({ phase1Evidence, iden
 
 export function architectureMaintenanceSubject({ identity, tree, scope, profile = "TYPED_TASK_CONTEXT_AND_TERMINAL_TRUTH_SUCCESSOR_V1", objective = null, root = REPOSITORY_ROOT } = {}) {
   const observed = exactScope(scope);
+  if (objective === ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1) {
+    if (stableJson(observed.changedPaths) !== stableJson(ASSURANCE_CONTROL_PLANE_FIXED_POINT_PATHS)) throw new Error("OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SCOPE_INVALID");
+    return {
+      type: "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch,
+      protectedBase: identity?.baseSha, currentHead: identity?.headSha, currentTree: tree,
+      changedPaths: observed.changedPaths, changedPathHash: observed.changedPathHash,
+      budget: { maximumFiles: 6, maximumHandAuthoredNetLines: 1800, maximumNetLines: 1800 },
+      featureId: "assurance-efficiency-e0", objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], objective,
+      capabilities: ["ROLLING_PROTECTED_MAIN_DERIVED_TRUTH_V1", "IDEMPOTENT_TERMINAL_SYNCHRONIZATION_V1", "GENERIC_OWNER_AUTHORIZED_ASSURANCE_MAINTENANCE_V1"],
+      authorizationStage: "PRE_DEVELOPMENT_PLANNED_SCOPE", terminalTruthRequired: false,
+      authorityLevel: "LEVEL_0_1_REPOSITORY_ARCHITECTURE_MAINTENANCE",
+      authority: { build: false, database: false, eas: false, money: false, nativeProduct: false, ota: false, ownerAdminSuperAdmin: false, product: false, provider: false, publicRelease: false, release: false, submission: false },
+      ownerIdentity: { login: "Chillywood2025", association: "OWNER" }, immutableCommentRequired: true,
+      createdAtEqualsUpdatedAtRequired: true, expiresOn: `PR_${identity?.pr}_MERGE`, reusableByAnotherPr: false,
+    };
+  }
   const phase1Profile = profile === "OWNER_JURISDICTION_CANONICAL_MODEL_V2" ? phase1ControlProfile(objective) : null;
   const terminalReceiptLifecycleCorrection = profile === "OWNER_JURISDICTION_CANONICAL_MODEL_V2" && objective === FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION;
   if (profile === "OWNER_JURISDICTION_CANONICAL_MODEL_V2" && objective === IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1
@@ -3625,6 +3650,7 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
   const amendmentControlRepair = originalSubject.objective === FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1;
   const testAdaptationOverlay = originalSubject.objective === FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1;
   const immutableEvidenceLifecycleConvergence = originalSubject.objective === IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1;
+  const fixedPointSynchronization = originalSubject.objective === ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1;
   const phase1RiskBasedAdmissionReform = originalSubject.objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1;
   const phase1AdmissionRulesetCutover = originalSubject.objective === PHASE1_ADMISSION_RULESET_CUTOVER_V1;
   const phase1PublisherMetadataCompatibilityRepair = originalSubject.objective === PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1;
@@ -3638,13 +3664,14 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
     FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1,
     FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1,
     IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1,
+    ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1,
     PHASE1_RISK_BASED_ADMISSION_REFORM_V1,
     PHASE1_ADMISSION_RULESET_CUTOVER_V1,
     PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1,
     FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION,
   ].includes(originalSubject.objective)) {
     const observed = exactScope(scope);
-    const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : terminalReceiptLifecycleCorrection || phase1RiskBasedAdmissionReform || phase1AdmissionRulesetCutover || phase1PublisherMetadataCompatibilityRepair ? originalSubject.objective : null;
+    const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : fixedPointSynchronization || terminalReceiptLifecycleCorrection || phase1RiskBasedAdmissionReform || phase1AdmissionRulesetCutover || phase1PublisherMetadataCompatibilityRepair ? originalSubject.objective : null;
     const dependencyAmendment = dependencyAmendmentProjection(dependencyAmendmentResolution);
     const historicalRepositoryReviews = dependencyAmendment ? historicalArchitectureReviewProjection(historicalRepositoryReviewRaws, identity) : [];
     const review = verifyArchitectureRepositoryReview({ raw: repositoryReviewRaw, identity, tree, scope, profile: reviewProfile, dependencyAmendmentResolution });
@@ -3697,7 +3724,7 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
       phase1: phase1Evidence ? projectPhase1AdmissionFinalSourceEvidence({ phase1Evidence, identity, tree, root }) : null,
       ...(phase1RiskBasedAdmissionReform ? { admissionPublisherProvisioningReadback: structuredClone(admissionPublisherProvisioningReadback) } : {}),
       historicalAttestations,
-      currentTruthCompanionIncluded: !(phase1RiskBasedAdmissionReform || phase1AdmissionRulesetCutover || phase1PublisherMetadataCompatibilityRepair),
+      currentTruthCompanionIncluded: !(fixedPointSynchronization || phase1RiskBasedAdmissionReform || phase1AdmissionRulesetCutover || phase1PublisherMetadataCompatibilityRepair),
       ...(originalSubject.currentTruthCompanion ? { currentTruthCompanion: originalSubject.currentTruthCompanion } : {}),
       terminalTruthRequired: false,
       authority: originalSubject.authority,
@@ -4448,8 +4475,9 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     : null;
   const architectureDependencyAmendmentActive = architectureDependencyAmendment?.valid === true;
   const architectureDependencyProjection = dependencyAmendmentProjection(architectureDependencyAmendment);
+  const fixedPointSynchronization = originalSubject?.objective === ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1;
   const phase1ControlAuthority = phase1ControlProfile(originalSubject?.objective);
-  const companionRequired = (!phase1ControlAuthority || terminalReceiptLifecycleCorrection) && authorityControlCurrentTruthCompanionV2Required({ identity, root });
+  const companionRequired = !fixedPointSynchronization && (!phase1ControlAuthority || terminalReceiptLifecycleCorrection) && authorityControlCurrentTruthCompanionV2Required({ identity, root });
   let expectedCompanion = null;
   try { expectedCompanion = authorityControlCurrentTruthCompanionV2({ identity, root, terminalBaseAdvancement: terminalReceiptLifecycleCorrection }); } catch { expectedCompanion = null; }
   let originalCompanion = null;
@@ -4494,6 +4522,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1,
     FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1,
     IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1,
+    ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1,
     PHASE1_RISK_BASED_ADMISSION_REFORM_V1,
     PHASE1_ADMISSION_RULESET_CUTOVER_V1,
     PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1,
@@ -4505,8 +4534,10 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     const immutableEvidenceLifecycleConvergence = originalSubject?.objective === IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1;
     const phase1RiskBasedAdmissionReform = originalSubject?.objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1;
     const phase1Profile = phase1ControlProfile(originalSubject?.objective);
-    const ownerJurisdictionProfile = jurisdictionModel || amendmentControlRepair || testAdaptationOverlay || immutableEvidenceLifecycleConvergence || terminalReceiptLifecycleCorrection || phase1Profile;
-    const architecturePaths = terminalReceiptLifecycleCorrection
+    const ownerJurisdictionProfile = jurisdictionModel || amendmentControlRepair || testAdaptationOverlay || immutableEvidenceLifecycleConvergence || fixedPointSynchronization || terminalReceiptLifecycleCorrection || phase1Profile;
+    const architecturePaths = fixedPointSynchronization
+      ? ASSURANCE_CONTROL_PLANE_FIXED_POINT_EFFECTIVE_PATHS
+      : terminalReceiptLifecycleCorrection
       ? FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS
       : phase1Profile
       ? phase1Profile.paths
@@ -4518,11 +4549,13 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
           ...(architectureDependencyAmendmentActive ? architectureDependencyAmendment.effectiveAddedPaths ?? DEPENDENCY_AMENDMENT_ADDED_PATHS : []),
         ]
       : TASK_LOCAL_EDGE_ARCHITECTURE_PATHS;
-    const maximumFiles = terminalReceiptLifecycleCorrection ? 6 : phase1Profile?.maximumFiles ?? (immutableEvidenceLifecycleConvergence ? 8 : architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumFiles : ownerJurisdictionProfile ? 15 : 12);
-    const maximumNetLines = terminalReceiptLifecycleCorrection ? 900 : phase1Profile?.maximumChangedLines ?? (immutableEvidenceLifecycleConvergence ? 2000 : architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumNetLines : ownerJurisdictionProfile ? 3500 : 3200);
-    const originalMaximumFiles = terminalReceiptLifecycleCorrection ? 5 : phase1Profile?.maximumFiles ?? (immutableEvidenceLifecycleConvergence ? 8 : ownerJurisdictionProfile ? 15 : 12);
-    const originalMaximumNetLines = terminalReceiptLifecycleCorrection ? 900 : phase1Profile?.maximumChangedLines ?? (immutableEvidenceLifecycleConvergence ? 2000 : ownerJurisdictionProfile ? 3500 : 3200);
-    const expectedCapabilities = amendmentControlRepair
+    const maximumFiles = fixedPointSynchronization ? 7 : terminalReceiptLifecycleCorrection ? 6 : phase1Profile?.maximumFiles ?? (immutableEvidenceLifecycleConvergence ? 8 : architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumFiles : ownerJurisdictionProfile ? 15 : 12);
+    const maximumNetLines = fixedPointSynchronization ? 1800 : terminalReceiptLifecycleCorrection ? 900 : phase1Profile?.maximumChangedLines ?? (immutableEvidenceLifecycleConvergence ? 2000 : architectureDependencyAmendmentActive ? architectureDependencyProjection.finalBudget.maximumNetLines : ownerJurisdictionProfile ? 3500 : 3200);
+    const originalMaximumFiles = fixedPointSynchronization ? 6 : terminalReceiptLifecycleCorrection ? 5 : phase1Profile?.maximumFiles ?? (immutableEvidenceLifecycleConvergence ? 8 : ownerJurisdictionProfile ? 15 : 12);
+    const originalMaximumNetLines = fixedPointSynchronization ? 1800 : terminalReceiptLifecycleCorrection ? 900 : phase1Profile?.maximumChangedLines ?? (immutableEvidenceLifecycleConvergence ? 2000 : ownerJurisdictionProfile ? 3500 : 3200);
+    const expectedCapabilities = fixedPointSynchronization
+      ? ["ROLLING_PROTECTED_MAIN_DERIVED_TRUTH_V1", "IDEMPOTENT_TERMINAL_SYNCHRONIZATION_V1", "GENERIC_OWNER_AUTHORIZED_ASSURANCE_MAINTENANCE_V1"]
+      : amendmentControlRepair
       ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1]
       : testAdaptationOverlay
       ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1]
@@ -4536,7 +4569,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       ? ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", "FINITE_TASK_ADMISSION_CHAIN_V2"]
       : [TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1];
     const payloadWithoutHash = Object.fromEntries(Object.entries(originalPayload ?? {}).filter(([key]) => key !== "bodyHash"));
-    const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : terminalReceiptLifecycleCorrection ? FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION : phase1Profile ? originalSubject.objective : null;
+    const reviewProfile = fixedPointSynchronization ? ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1 : amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : terminalReceiptLifecycleCorrection ? FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION : phase1Profile ? originalSubject.objective : null;
     const reviewSelection = selectCurrentArchitectureRepositoryReview({ comments: allComments, identity, tree, scope, profile: reviewProfile, dependencyAmendmentResolution: architectureDependencyAmendmentActive ? architectureDependencyAmendment : null, root });
     const currentAuthorityCommentId = terminalReceiptLifecycleCorrection && terminalSuccessorValid ? normalizedTerminalSuccessor.id : normalizedOriginal?.id ?? null;
     const requiredFinalKey = { repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, finalHead: identity?.headSha, finalTree: tree, objective: originalSubject?.objective, originalCommentId: currentAuthorityCommentId };
@@ -4640,7 +4673,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       tree: originalSubject?.currentTree,
       scope: { files: originalSubject?.changedPaths, additions: originalSubject?.additions, deletions: originalSubject?.deletions, netChangedLines: originalSubject?.netChangedLines, diffHash: originalSubject?.diffHash },
       profile: ownerJurisdictionProfile ? "OWNER_JURISDICTION_CANONICAL_MODEL_V2" : "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_V1",
-      objective: amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : terminalReceiptLifecycleCorrection ? FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION : phase1Profile ? originalSubject.objective : null,
+      objective: fixedPointSynchronization ? ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1 : amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : terminalReceiptLifecycleCorrection ? FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION : phase1Profile ? originalSubject.objective : null,
       root,
     });
     const canonicalProfile = stableJson(originalSubject) === stableJson(canonicalOriginalSubject) && (!terminalReceiptLifecycleCorrection || terminalSuccessorValid);
@@ -4657,6 +4690,8 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       hashes: originalPayload?.subjectHash === hashValue(originalSubject) && originalPayload?.bodyHash === hashValue(payloadWithoutHash),
       binding: originalSubject?.repository === identity?.repository && originalSubject?.pr === identity?.pr && originalSubject?.branch === identity?.branch && (originalSubject?.protectedBase === identity?.baseSha || terminalReceiptLifecycleCorrection && terminalAuthorityBaseAdvancement.ok || architectureDependencyAmendmentActive && typedGit(root, ["merge-base", "--is-ancestor", originalSubject?.protectedBase, identity?.baseSha]).status === 0) && originalSubject?.budget?.maximumFiles === originalMaximumFiles && (terminalReceiptLifecycleCorrection
         ? terminalSuccessorValid && effectiveTerminalAuthority.subject?.budget?.maximumFiles === maximumFiles && effectiveTerminalAuthority.subject?.budget?.maximumChangedLines === 900
+        : fixedPointSynchronization
+        ? originalSubject?.budget?.maximumNetLines === originalMaximumNetLines && originalSubject?.budget?.maximumHandAuthoredNetLines === originalMaximumNetLines
         : phase1Profile
         ? originalSubject?.budget?.maximumChangedLines === originalMaximumNetLines && originalSubject?.budget?.maximumHandAuthoredNetLines === originalMaximumNetLines
         : originalSubject?.budget?.maximumNetLines === originalMaximumNetLines),
@@ -4667,13 +4702,13 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
         : architectureDependencyAmendmentMatches.length === 0
         ? architectureDependencyWitnessAmendmentMatches.length === 0
         : architectureDependencyAmendmentActive,
-      exactPaths: ((immutableEvidenceLifecycleConvergence || terminalReceiptLifecycleCorrection || phase1Profile) ? stableJson(observed.changedPaths) === stableJson(architecturePaths) : observed.changedPaths.every((file) => architecturePaths.includes(file))) && (terminalReceiptLifecycleCorrection ? terminalSuccessorValid : architectureDependencyAmendmentActive || observed.changedPaths.length === originalSubject?.changedPaths?.length && stableJson(originalSubject?.changedPaths) === stableJson(observed.changedPaths)),
-      budget: observed.changedPaths.length <= maximumFiles && (terminalReceiptLifecycleCorrection || phase1Profile ? Number(scope?.additions ?? 0) + Number(scope?.deletions ?? 0) : observed.netChangedLines) <= maximumNetLines,
+      exactPaths: (fixedPointSynchronization ? observed.changedPaths.length > 0 && observed.changedPaths.every((file) => architecturePaths.includes(file)) : (immutableEvidenceLifecycleConvergence || terminalReceiptLifecycleCorrection || phase1Profile) ? stableJson(observed.changedPaths) === stableJson(architecturePaths) : observed.changedPaths.every((file) => architecturePaths.includes(file))) && (fixedPointSynchronization || terminalReceiptLifecycleCorrection ? fixedPointSynchronization || terminalSuccessorValid : architectureDependencyAmendmentActive || observed.changedPaths.length === originalSubject?.changedPaths?.length && stableJson(originalSubject?.changedPaths) === stableJson(observed.changedPaths)),
+      budget: observed.changedPaths.length <= maximumFiles && (fixedPointSynchronization || terminalReceiptLifecycleCorrection || phase1Profile ? Number(scope?.additions ?? 0) + Number(scope?.deletions ?? 0) : observed.netChangedLines) <= maximumNetLines,
       authority: Object.values(originalSubject?.authority ?? {}).every((value) => value === false) && (noCompetingDomainOwner || assuranceOnlyNonDomainMaintenance),
       capability: canonicalProfile
         && stableJson(originalSubject?.capabilities) === stableJson(expectedCapabilities)
         && originalSubject?.terminalTruthRequired === false
-        && originalSubject?.reusableByAnotherPr === (amendmentControlRepair || testAdaptationOverlay || immutableEvidenceLifecycleConvergence || terminalReceiptLifecycleCorrection || phase1Profile ? false : true),
+        && originalSubject?.reusableByAnotherPr === (fixedPointSynchronization || amendmentControlRepair || testAdaptationOverlay || immutableEvidenceLifecycleConvergence || terminalReceiptLifecycleCorrection || phase1Profile ? false : true),
     };
     const authorizationOk = Object.values(authorizationChecks).every(Boolean);
     const attestationChecks = {
@@ -4703,7 +4738,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       bindingId: `owner-architecture-maintenance-pr-${identity?.pr}`,
       budget: terminalReceiptLifecycleCorrection
         ? { maximumFiles, maximumChangedLines: 900, maximumHandAuthoredNetLines: 900 }
-        : phase1Profile
+        : fixedPointSynchronization || phase1Profile
         ? { maximumFiles, maximumChangedLines: maximumNetLines, maximumHandAuthoredNetLines: maximumNetLines }
         : { maximumFiles, maximumHandAuthoredNetLines: maximumNetLines },
       commentId: effectiveTerminalAuthority.normalized?.id ?? null,
