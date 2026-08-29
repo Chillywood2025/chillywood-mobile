@@ -1,0 +1,29 @@
+name: Diagnose PR294 protected pr-scope
+on:
+  push:
+    branches: [chatgpt/diag-pr294-protected-prscope]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run protected-base pr-scope with live PR event
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/Chillywood2025/chillywood-mobile/pulls/294 > /tmp/pull.json
+          jq -n --argjson p "$(cat /tmp/pull.json)" '{action:"synchronize",number:294,repository:{full_name:"Chillywood2025/chillywood-mobile"},pull_request:$p}' > /tmp/event.json
+          git worktree add --detach /tmp/base 753f41d00052b4e3cd291790cc60c3ad44a6786e
+          set +e
+          (cd /tmp/base && node scripts/assurance/pr-scope.mjs --github-event=/tmp/event.json)
+          status=$?
+          echo "PR_SCOPE_EXIT=$status"
+          exit 0
