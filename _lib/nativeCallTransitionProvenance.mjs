@@ -1,3 +1,5 @@
+import { normalizeCommunicationRoomIdentifier } from "./communicationRoomIdentifier.mjs";
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const ANDROID_REQUEST_KEY_PATTERN = /^[0-9a-f]{64}$/u;
 const CLAIM_ID_PATTERN = /^[0-9a-f]{64}$/u;
@@ -498,7 +500,7 @@ export function createForegroundAuthenticatedUiCallIntentRegistry({
       const action = normalizeText(input?.action);
       const threadId = normalizeUuid(input?.threadId);
       const inviteId = normalizeUuid(input?.inviteId);
-      const roomId = normalizeUuid(input?.roomId);
+      const roomId = normalizeCommunicationRoomIdentifier(input?.roomId);
       if (
         !authenticatedUserId
         || !FOREGROUND_UI_ACTIONS.has(action)
@@ -544,10 +546,17 @@ export function createForegroundAuthenticatedUiCallIntentRegistry({
       if (!purge()) return null;
       const claimId = normalizeText(expected?.claimId);
       const intent = CLAIM_ID_PATTERN.test(claimId) ? activeIntents.get(claimId) : null;
+      const expectedInviteId = normalizeUuid(expected?.inviteId);
+      const expectedRoomId = normalizeCommunicationRoomIdentifier(expected?.roomId);
       if (
         !intent
         || normalizeAuthenticatedUserId(expected?.authenticatedUserId) !== intent.authenticatedUserId
         || normalizeUuid(expected?.threadId) !== intent.threadId
+        || (intent.action === "open_call" && (
+          expectedInviteId !== intent.inviteId
+          || expectedRoomId !== intent.roomId
+        ))
+        || (intent.action !== "open_call" && (expectedInviteId || expectedRoomId))
       ) {
         return null;
       }
@@ -583,6 +592,8 @@ export const consumeMountedForegroundAuthenticatedUiCallRoute = (input) => {
   return foregroundAuthenticatedUiCallIntentRegistry.consume({
     authenticatedUserId: input?.authenticatedUserId,
     claimId: input?.claimId,
+    inviteId: input?.inviteId,
+    roomId: input?.roomId,
     threadId: input?.threadId,
   });
 };

@@ -267,13 +267,20 @@ const validateD2BSource = (source) => {
 };
 
 assert.deepEqual(validateD2BSource(baseSources), []);
-const importMutatedModule = async (source, tag) => import(
-  `data:text/javascript;base64,${Buffer.from(source).toString("base64")}#${tag}`
-);
 const provenanceModuleUrl = new URL("../_lib/nativeCallTransitionProvenance.mjs", import.meta.url).href;
+const roomIdentifierModuleUrl = new URL("../_lib/communicationRoomIdentifier.mjs", import.meta.url).href;
+const importMutatedModule = async (source, tag) => import(
+  `data:text/javascript;base64,${Buffer.from(source.replace(
+    'from "./communicationRoomIdentifier.mjs";',
+    `from "${roomIdentifierModuleUrl}";`,
+  )).toString("base64")}#${tag}`
+);
 const policyForMutation = baseSources.policy.replace(
   'from "./nativeCallTransitionProvenance.mjs";',
   `from "${provenanceModuleUrl}";`,
+).replace(
+  'from "./communicationRoomIdentifier.mjs";',
+  `from "${roomIdentifierModuleUrl}";`,
 );
 const routeOnlyPolicy = await importMutatedModule(policyForMutation.replace(
   'if (input?.authority !== "trusted_native_claim") return false;\n  const claim = input?.trustedNativeClaim;\n  if (!claim || claim.consumed !== true) return false;',
