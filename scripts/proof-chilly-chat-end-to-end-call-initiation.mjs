@@ -72,7 +72,7 @@ const callDeliveryCopy = read("_lib/chillyChatCallDeliveryCopy.ts");
 
 [
   "Unable to start Chi'lly Chat call. The receiver invite could not be saved.",
-  "await endCommunicationRoom(roomId).catch(() => null);",
+  "await endCommunicationRoom(roomId, currentUserId).catch(() => null);",
   "beginChillyChatCall",
   "dispatchChillyChatCallPush",
 ].forEach((needle) => requireText("chat call source", chatLib, needle));

@@ -135,8 +135,8 @@ if (!chatLib.includes("beginChillyChatCall") || !chatLib.includes("dispatchChill
 if (!chatLib.includes("throw new Error(\"Unable to start Chi'lly Chat call. The receiver invite could not be saved.\")")) {
   fail("chat source must fail when receiver invite state is not saved");
 }
-if (!chatLib.includes("await endCommunicationRoom(roomId).catch(() => null);")) {
-  fail("invite failure must end only the unclaimed candidate room");
+if (!chatLib.includes("await endCommunicationRoom(roomId, currentUserId).catch(() => null);")) {
+  fail("invite failure must end only the unclaimed candidate room as the exact mounted user");
 }
 if (/catch \(inviteError\)[\s\S]{0,400}clearEndedChatThreadCall/u.test(chatLib)) {
   fail("a losing simultaneous start must not clear the winning thread call state");
