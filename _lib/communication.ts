@@ -370,7 +370,7 @@ export async function broadcastCommunicationRoomSignal(options: {
   const roomId = formatCommunicationRoomCode(options.roomId);
   if (!roomId) return false;
 
-  const rpc = supabase.rpc as unknown as (
+  const rpc = supabase.rpc.bind(supabase) as unknown as (
     fn: "broadcast_communication_room_signal",
     args: {
       p_room_id: string;
@@ -738,7 +738,7 @@ export async function joinCommunicationRoomSession(options: {
   );
   if (!roomId || !requestedUserId) return null;
 
-  const rpc = supabase.rpc as unknown as (
+  const rpc = supabase.rpc.bind(supabase) as unknown as (
     fn: "join_communication_room_session",
     args: {
       p_room_id: string;

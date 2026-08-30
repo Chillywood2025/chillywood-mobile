@@ -908,6 +908,30 @@ const communicationJoinBlock = communicationLibSource.slice(
   communicationLibSource.indexOf("export async function joinCommunicationRoomSession"),
   communicationLibSource.indexOf("export async function touchCommunicationRoomSession"),
 );
+const communicationSignalBlock = communicationLibSource.slice(
+  communicationLibSource.indexOf("export async function broadcastCommunicationRoomSignal"),
+  communicationLibSource.indexOf("const isMissingColumnError"),
+);
+const clearEndedCallBlock = chatLibSource.slice(
+  chatLibSource.indexOf("export async function clearEndedChatThreadCall"),
+  chatLibSource.indexOf("export async function startChatThreadCall"),
+);
+for (const [sourceBlock, label] of [
+  [communicationJoinBlock, "accepted room membership"],
+  [communicationSignalBlock, "legacy WebRTC signaling"],
+  [clearEndedCallBlock, "stale call cleanup"],
+]) {
+  assert.match(
+    sourceBlock,
+    /supabase\.rpc\.bind\(supabase\)/u,
+    `${label} must preserve the SupabaseClient receiver when narrowing the RPC type`,
+  );
+  assert.doesNotMatch(
+    sourceBlock,
+    /const rpc = supabase\.rpc as unknown/u,
+    `${label} cannot detach SupabaseClient.rpc because the SDK implementation reads this.rest`,
+  );
+}
 assert.match(
   communicationJoinBlock,
   /options\.userId \?\? await getWritablePartyUserId\(\)/u,

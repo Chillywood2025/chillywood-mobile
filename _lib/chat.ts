@@ -774,7 +774,7 @@ export async function clearEndedChatThreadCall(threadId: string, expectedRoomId?
   const normalizedThreadId = toText(threadId);
   if (!normalizedThreadId) return;
   const normalizedRoomId = formatCommunicationRoomCode(expectedRoomId);
-  const rpc = supabase.rpc as unknown as (
+  const rpc = supabase.rpc.bind(supabase) as unknown as (
     fn: "clear_stale_chilly_chat_thread_call",
     args: { p_thread_id: string; p_expected_room_id: string | null },
   ) => PromiseLike<{ data: unknown; error: { message?: string } | null }>;

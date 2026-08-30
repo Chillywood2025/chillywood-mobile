@@ -194,7 +194,7 @@ forbidSentence("Google Play internal call proof doc", doc, (sentence) => (
 
 [
   "throw new Error(\"Unable to start Chi'lly Chat call. The receiver invite could not be saved.\")",
-  "await endCommunicationRoom(roomId).catch(() => null);",
+  "await endCommunicationRoom(roomId, currentUserId).catch(() => null);",
   "beginChillyChatCall",
   "dispatchChillyChatCallPush",
 ].forEach((needle) => requireText("chat source failure handling", chatLib, needle));
