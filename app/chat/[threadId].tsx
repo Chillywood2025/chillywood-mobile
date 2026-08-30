@@ -60,6 +60,7 @@ import {
   resolveIncomingCallRoomJoinAction,
   resolveIosChatCallAudioRoute,
   settleIosAcceptedCallKitMediaFailure,
+  shouldApplyAuthoritativeChatCallCleanup,
   shouldActivateAcceptedChatCallMedia,
   shouldKeepAcceptedChatCallPanelOpen,
   terminateIosAcceptedNativeAnswer,
@@ -650,7 +651,16 @@ export default function ChillyChatThreadScreen() {
     });
     if (!nextThread?.activeCommunicationRoomId) return nextThread;
 
-    const snapshot = await getCommunicationRoomSnapshot(nextThread.activeCommunicationRoomId).catch(() => null);
+    let snapshot;
+    try {
+      snapshot = await getCommunicationRoomSnapshot(nextThread.activeCommunicationRoomId);
+    } catch (error) {
+      reportRuntimeError("chat-thread-call-reconciliation-read", error, {
+        roomId: nextThread.activeCommunicationRoomId,
+        threadId: nextThread.threadId,
+      });
+      return nextThread;
+    }
     if (snapshot?.room.status === "active") {
       logChatCall("reconcile_keep_active", {
         threadId: nextThread.threadId,
@@ -660,7 +670,27 @@ export default function ChillyChatThreadScreen() {
       return nextThread;
     }
 
-    await clearEndedChatThreadCall(nextThread.threadId).catch(() => null);
+    let cleanup;
+    try {
+      cleanup = await clearEndedChatThreadCall(
+        nextThread.threadId,
+        nextThread.activeCommunicationRoomId,
+      );
+    } catch (error) {
+      reportRuntimeError("chat-thread-call-reconciliation-cleanup", error, {
+        roomId: nextThread.activeCommunicationRoomId,
+        threadId: nextThread.threadId,
+      });
+      return nextThread;
+    }
+    if (!shouldApplyAuthoritativeChatCallCleanup(cleanup)) {
+      logChatCall("reconcile_preserved_authoritative", {
+        threadId: nextThread.threadId,
+        roomId: nextThread.activeCommunicationRoomId,
+        reason: cleanup.reason,
+      });
+      return nextThread;
+    }
     setCallPanelOpen(false);
     logChatCall("reconcile_cleared_stale", {
       threadId: nextThread.threadId,

@@ -61,6 +61,35 @@ export function resolveIncomingCallRoomJoinAction(input) {
   return "blocked";
 }
 
+export function resolveChatThreadCallReconciliation(input) {
+  const inviteStatus = String(input?.inviteStatus ?? "").trim().toLowerCase();
+  const roomState = String(input?.roomState ?? "").trim().toLowerCase();
+  const nowMs = Number(input?.nowMs);
+  const expiresAtMs = Date.parse(String(input?.inviteExpiresAt ?? ""));
+
+  if (inviteStatus === "accepted") {
+    if (roomState === "active") return "preserve";
+    if (roomState === "inactive") return "authoritative_cleanup";
+    return "defer";
+  }
+  if (inviteStatus === "ringing") {
+    if (Number.isFinite(nowMs) && Number.isFinite(expiresAtMs) && expiresAtMs > nowMs) {
+      return "preserve";
+    }
+    return "authoritative_cleanup";
+  }
+  if (inviteStatus) return "authoritative_cleanup";
+  if (roomState === "active") return "preserve";
+  if (roomState === "inactive") return "authoritative_cleanup";
+  return "defer";
+}
+
+export function shouldApplyAuthoritativeChatCallCleanup(input) {
+  const reason = String(input?.reason ?? "").trim().toLowerCase();
+  if (input?.cleared === true) return true;
+  return reason === "already_clear" || reason === "identity_changed";
+}
+
 export function doesNativeCallActionOwnTransition(input) {
   if (input?.authority !== "trusted_native_claim") return false;
   const claim = input?.trustedNativeClaim;

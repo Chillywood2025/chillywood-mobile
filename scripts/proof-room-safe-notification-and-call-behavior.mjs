@@ -128,12 +128,14 @@ add(
 add(
   "inbox/thread reads clear stale active call state after terminal invite status",
   includes(chatLib, "reconcileActiveChatThreadCallState")
-    && includes(chatLib, "shouldClearStaleActiveThreadCall")
+    && includes(chatLib, "shouldRequestStaleActiveThreadCallCleanup")
     && includes(clearEndedCallBody, 'rpc("clear_stale_chilly_chat_thread_call"')
     && includes(chatRoomAuthorityClosure, 'if not public."can_access_chat_thread"(p_thread_id)')
     && includes(chatRoomAuthorityClosure, "chat_call_room_identity_mismatch")
     && includes(chatLib, "CHAT_CALL_INVITES_TABLE")
-    && includes(chatLib, "inviteStatus === \"ringing\"")
+    && includes(chatLib, "resolveChatThreadCallReconciliation")
+    && includes(chatLib, "shouldApplyAuthoritativeChatCallCleanup(cleanup)")
+    && includes(chatLib, "clearEndedChatThreadCall(thread.threadId, thread.activeCommunicationRoomId)")
     && includes(chatLib, "activeCommunicationRoomId: undefined"),
   "inbox live-call badges must not survive declined/missed/expired call invites",
 );

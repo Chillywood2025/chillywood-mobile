@@ -43,6 +43,16 @@ export function resolveIncomingCallRoomJoinAction(input: {
   inviteBelongsToCurrentCallee: boolean;
   inviteStatus?: string | null;
 }): "host" | "accept" | "resume" | "blocked";
+export function resolveChatThreadCallReconciliation(input: {
+  inviteExpiresAt?: string | null;
+  inviteStatus?: string | null;
+  nowMs?: number | null;
+  roomState?: "active" | "inactive" | "unavailable" | null;
+}): "preserve" | "authoritative_cleanup" | "defer";
+export function shouldApplyAuthoritativeChatCallCleanup(input: {
+  cleared?: boolean;
+  reason?: string | null;
+}): boolean;
 export function doesNativeCallActionOwnTransition(input: {
   authority?: "foreground_authenticated_ui" | "none" | "trusted_native_claim";
   callInviteId?: string | null;

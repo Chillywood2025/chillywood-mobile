@@ -19,17 +19,71 @@ import {
   canAttemptNativeCallBackgroundAudio,
   doesNativeCallActionOwnTransition,
   resolveLegacyChatSessionRecovery,
+  resolveChatThreadCallReconciliation,
   resolveAcceptedChatCallRoomId,
   resolveChillyChatCallParticipantRole,
   resolveIncomingCallPresentation,
   resolveIncomingCallRoomJoinAction,
   resolveIosChatCallAudioRoute,
   setActiveCommunicationTracksEnabled,
+  shouldApplyAuthoritativeChatCallCleanup,
   shouldActivateAcceptedChatCallMedia,
   shouldKeepAcceptedChatCallPanelOpen,
   shouldPreserveNativeCallBackgroundAudio,
   shouldShowOutgoingRingingPanel,
 } from "../_lib/communicationCallMediaPolicy.mjs";
+
+const acceptedAfterRingingDeadline = {
+  inviteExpiresAt: "2026-08-30T07:47:20.422579Z",
+  inviteStatus: "accepted",
+  nowMs: Date.parse("2026-08-30T07:50:00.000Z"),
+  roomState: "active",
+};
+assert.equal(
+  resolveChatThreadCallReconciliation(acceptedAfterRingingDeadline),
+  "preserve",
+  "an accepted call remains live after its ringing deadline while the room is active",
+);
+assert.equal(
+  resolveChatThreadCallReconciliation({...acceptedAfterRingingDeadline, roomState: "inactive"}),
+  "authoritative_cleanup",
+  "an accepted call with an inactive room is sent to authoritative cleanup",
+);
+assert.equal(
+  resolveChatThreadCallReconciliation({...acceptedAfterRingingDeadline, roomState: "unavailable"}),
+  "defer",
+  "a transient room read failure cannot erase accepted-call state",
+);
+assert.equal(
+  resolveChatThreadCallReconciliation({
+    inviteExpiresAt: "2026-08-30T07:47:20.422579Z",
+    inviteStatus: "ringing",
+    nowMs: Date.parse("2026-08-30T07:47:21.000Z"),
+    roomState: "active",
+  }),
+  "authoritative_cleanup",
+  "ringing expiry remains authoritative only before acceptance",
+);
+assert.equal(
+  shouldApplyAuthoritativeChatCallCleanup({cleared: false, reason: "active_invite"}),
+  false,
+  "an authoritative active-invite result preserves the local call projection",
+);
+assert.equal(
+  shouldApplyAuthoritativeChatCallCleanup({cleared: false, reason: "room_still_active"}),
+  false,
+  "an authoritative fresh-room result preserves the local call projection",
+);
+assert.equal(
+  shouldApplyAuthoritativeChatCallCleanup({cleared: true, reason: "terminal_or_inactive"}),
+  true,
+  "a confirmed authoritative cleanup clears the local call projection",
+);
+assert.equal(
+  shouldApplyAuthoritativeChatCallCleanup({cleared: false, reason: "already_clear"}),
+  true,
+  "an already-cleared authoritative projection clears the stale local copy",
+);
 
 for (const [trigger, delayMs] of [
   ["app_foreground", 0],
