@@ -1579,27 +1579,36 @@ export function useCommunicationRoomSession({
       setError(null);
       setChannelState("connecting");
 
-      const resolvedIdentity = await readCommunicationIdentity();
+      let resolvedIdentity = await readCommunicationIdentity();
+      let joinedMembership: CommunicationRoomMembership | null = null;
+      for (let attempt = 0; attempt < 3 && !joinedMembership; attempt += 1) {
+        if (!isActiveGeneration()) return;
+        if (resolvedIdentity.userId) {
+          joinedMembership = await joinCommunicationRoomSession({
+            roomId,
+            userId: resolvedIdentity.userId,
+            displayName: resolvedIdentity.displayName,
+            avatarUrl: resolvedIdentity.avatarUrl,
+            cameraEnabled: cameraEnabledRef.current,
+            micEnabled: micEnabledRef.current,
+          }).catch((error) => {
+            logChatRtc("join_room_failed", {
+              roomId,
+              message: error instanceof Error ? error.message : "unknown_error",
+            });
+            return null;
+          });
+        }
+        if (!joinedMembership && attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          resolvedIdentity = await readCommunicationIdentity();
+        }
+      }
       if (!isActiveGeneration()) return;
 
       identityRef.current = resolvedIdentity;
       setIdentity(resolvedIdentity);
       localJoinedAtRef.current = new Date().toISOString();
-
-      const joinedMembership = await joinCommunicationRoomSession({
-        roomId,
-        userId: resolvedIdentity.userId,
-        displayName: resolvedIdentity.displayName,
-        avatarUrl: resolvedIdentity.avatarUrl,
-        cameraEnabled: cameraEnabledRef.current,
-        micEnabled: micEnabledRef.current,
-      }).catch((error) => {
-        logChatRtc("join_room_failed", {
-          roomId,
-          message: error instanceof Error ? error.message : "unknown_error",
-        });
-        return null;
-      });
       logChatRtc("join_room_result", {
         roomId,
         joined: !!joinedMembership,
@@ -1611,10 +1620,27 @@ export function useCommunicationRoomSession({
       const snapshot = await refreshSnapshot(roomId);
       if (!isActiveGeneration()) return;
 
-      if (!snapshot || snapshot.room.status === "ended") {
+      if (!snapshot) {
         logChatRtc("init_room_unavailable", {
           roomId,
-          roomStatus: snapshot?.room.status ?? "missing",
+          roomStatus: "unreadable",
+        });
+        setError("This communication room is unavailable.");
+        setChannelState("error");
+        setLoading(false);
+        trackEvent("room_join_failure", {
+          surface: analyticsSurface,
+          role: analyticsRole,
+          reason: joinedMembership ? "snapshot_unreadable" : "join_unavailable",
+          roomId,
+        });
+        return;
+      }
+
+      if (snapshot.room.status === "ended") {
+        logChatRtc("init_room_unavailable", {
+          roomId,
+          roomStatus: snapshot.room.status,
         });
         setError("This communication room is unavailable.");
         setLoading(false);

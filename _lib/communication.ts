@@ -23,7 +23,7 @@ import {
 } from "./performancePolicy";
 import { supabase } from "./supabase";
 import { buildUserChannelProfile, readUserProfile } from "./userData";
-import { createPartyIdentifier, getSafePartyUserId, getWritablePartyUserId } from "./watchParty";
+import { createPartyIdentifier, getWritablePartyUserId } from "./watchParty";
 
 export const COMMUNICATION_ROOMS_TABLE = "communication_rooms";
 export const COMMUNICATION_ROOM_MEMBERSHIPS_TABLE = "communication_room_memberships";
@@ -720,7 +720,7 @@ export async function joinCommunicationRoomSession(options: {
   micEnabled?: boolean;
 }): Promise<CommunicationRoomMembership | null> {
   const roomId = formatCommunicationRoomCode(options.roomId);
-  const writableUserId = String(await getWritablePartyUserId()).trim();
+  const writableUserId = String((await getWritablePartyUserId()) ?? "").trim();
   const requestedUserId = String(options.userId ?? writableUserId).trim();
   if (!roomId || !writableUserId || requestedUserId !== writableUserId) return null;
 
@@ -886,7 +886,11 @@ export async function endCommunicationRoom(roomId: string): Promise<void> {
 }
 
 export async function readCommunicationIdentity(): Promise<CommunicationIdentity> {
-  const userId = await getSafePartyUserId();
+  // Communication membership is an authenticated write path. A generated
+  // Watch Party guest identity must never become the expected call subject:
+  // the join RPC binds membership to auth.uid() and exact current-session
+  // authority instead.
+  const userId = String((await getWritablePartyUserId()) ?? "").trim();
   const profile = await readUserProfile().catch(() => ({ username: "", avatarIndex: 0 }));
 
   let avatarUrl = "";

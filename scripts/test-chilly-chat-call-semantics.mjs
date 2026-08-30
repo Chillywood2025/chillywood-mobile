@@ -738,6 +738,7 @@ const nativeCoordinatorSource = await readFile(
 const chatThreadSource = await readFile(new URL("app/chat/[threadId].tsx", root), "utf8");
 const rootLayoutSource = await readFile(new URL("app/_layout.tsx", root), "utf8");
 const chatLibSource = await readFile(new URL("_lib/chat.ts", root), "utf8");
+const communicationLibSource = await readFile(new URL("_lib/communication.ts", root), "utf8");
 const authoritativeBusyBeginSource = await readFile(
   new URL("supabase/migrations/20260730040727_chilly_chat_busy_active_thread_guard.sql", root),
   "utf8",
@@ -870,6 +871,34 @@ assert.match(
   chatThreadSource,
   /incomingCallInvite[\s\S]{0,160}!callPanelOpen[\s\S]{0,160}!iosNativeCallPresentationOwned[\s\S]{0,160}!waitingForIosNativePresentation/u,
   "the same-thread React banner is hidden when CallKit owns iOS presentation",
+);
+assert.match(
+  communicationLibSource,
+  /readCommunicationIdentity[\s\S]{0,420}getWritablePartyUserId/u,
+  "legacy call identity is authenticated-only and cannot fall back to a Watch Party guest subject",
+);
+assert.doesNotMatch(
+  communicationLibSource.slice(
+    communicationLibSource.indexOf("export async function readCommunicationIdentity"),
+    communicationLibSource.indexOf("export async function listCommunicationIceServers"),
+  ),
+  /getSafePartyUserId/u,
+  "communication identity must not use guest identity fallback",
+);
+assert.match(
+  communicationSessionSource,
+  /for \(let attempt = 0; attempt < 3 && !joinedMembership; attempt \+= 1\)[\s\S]{0,900}resolvedIdentity = await readCommunicationIdentity\(\)/u,
+  "legacy accepted media retries the authenticated identity-to-membership handoff within a strict bound",
+);
+const legacyMissingSnapshotBranch = communicationSessionSource.slice(
+  communicationSessionSource.indexOf("if (!snapshot)", communicationSessionSource.indexOf("let joinedMembership")),
+  communicationSessionSource.indexOf("if (snapshot.room.status === \"ended\")", communicationSessionSource.indexOf("let joinedMembership")),
+);
+assert.match(legacyMissingSnapshotBranch, /setChannelState\("error"\)/u);
+assert.doesNotMatch(
+  legacyMissingSnapshotBranch,
+  /onRoomEndedRef/u,
+  "an unreadable snapshot after a failed join is not authority to terminate an accepted call",
 );
 assert.match(
   chatThreadSource,
