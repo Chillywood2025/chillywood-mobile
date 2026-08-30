@@ -38,8 +38,14 @@ import { resolveAlternativeEntitlementAuthority, withAuthorityReadDeadline, type
 import { hasPlatformRoleMembership, readMyPlatformRoleMemberships } from "./moderation";
 import { getRuntimeConfig, isBetaOperatorIdentity } from "./runtimeConfig";
 import { supabase } from "./supabase";
+import {
+  isRevenueCatUserCancellation,
+  pollProviderAuthority,
+} from "./revenuecatPurchaseClosure";
 
 export type PlanTier = "free" | "premium";
+export const PREMIUM_PURCHASE_AUTHORITY_POLL_ATTEMPTS = 12;
+export const PREMIUM_PURCHASE_AUTHORITY_POLL_DELAY_MS = 1250;
 export type MonetizationAccessRule = "open" | "party_pass" | "premium";
 export type TitleAccessRule = "open" | "premium";
 export type SponsorPlacement = "none" | "detail_banner" | "player_banner";
@@ -1272,17 +1278,40 @@ export async function purchaseMonetizationTarget(
       message: "Account changed before billing could start. Recheck the current account." };
   }
 
+  const waitForPremiumAuthority = () => pollProviderAuthority({
+    attempts: PREMIUM_PURCHASE_AUTHORITY_POLL_ATTEMPTS,
+    delayMs: PREMIUM_PURCHASE_AUTHORITY_POLL_DELAY_MS,
+    authorityCurrent: async () => sameAccountSessionAuthority(
+      operationAuthority,
+      await readCurrentAccountSessionAuthority(),
+    ),
+    read: () => readMonetizationSnapshot({
+      forceRefresh: true,
+      purchaseMode,
+      userId: options?.userId,
+    }),
+    accepts: (candidate) => candidate.targets[targetId].entitlementAuthoritative
+      && candidate.targets[targetId].hasEntitlement,
+  });
+
   try {
     const result = await purchaseRevenueCatPackage(selectedPackage, { authority: operationAuthority });
     if (!sameAccountSessionAuthority(operationAuthority, await readCurrentAccountSessionAuthority())) {
       return { ok: false, target: targetId, snapshot: getCachedMonetizationSnapshot(), customerInfo: null,
         message: "Account changed before the purchase result returned. Recheck the current account." };
     }
-    const refreshedSnapshot = await readMonetizationSnapshot({
-      forceRefresh: true,
-      purchaseMode,
-      userId: options?.userId,
-    });
+    const refreshedSnapshot = await waitForPremiumAuthority();
+    if (!refreshedSnapshot) {
+      return {
+        ok: false,
+        target: targetId,
+        snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId }),
+        customerInfo: result.customerInfo,
+        message: `${target.label} purchase was received. Waiting for verified access to finish.`,
+        packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
+        productId: String(result.productIdentifier ?? "").trim() || undefined,
+      };
+    }
 
     return {
       ok: true,
@@ -1293,17 +1322,33 @@ export async function purchaseMonetizationTarget(
       packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
       productId: String(result.productIdentifier ?? "").trim() || undefined,
     };
-  } catch {
+  } catch (error) {
     reportRuntimeError("monetization-purchase", new Error("Monetization purchase failed."), {
       target: targetId,
     });
+
+    if (!isRevenueCatUserCancellation(error)) {
+      const reconciledSnapshot = await waitForPremiumAuthority();
+      if (reconciledSnapshot) {
+        return {
+          ok: true,
+          target: targetId,
+          snapshot: reconciledSnapshot,
+          customerInfo: await readRevenueCatCustomerInfo({ refresh: true }),
+          message: `${target.label} purchase completed.`,
+          packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
+        };
+      }
+    }
 
     return {
       ok: false,
       target: targetId,
       snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId }),
       customerInfo: null,
-      message: `${target.label} purchase could not be completed.`,
+      message: isRevenueCatUserCancellation(error)
+        ? `${target.label} purchase was canceled. Nothing changed.`
+        : `${target.label} purchase result is not verified yet. Restore or recheck before trying again.`,
       packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
     };
   }
@@ -1342,11 +1387,33 @@ export async function restoreMonetizationAccess(options?: {
       return { ok: false, snapshot: getCachedMonetizationSnapshot(), customerInfo: null,
         message: "Account changed before the restore result returned. Recheck the current account." };
     }
-    const refreshedSnapshot = await readMonetizationSnapshot({
+    const providerPremiumActive = !!customerInfo.entitlements.active.premium;
+    const readRefreshedSnapshot = () => readMonetizationSnapshot({
       forceRefresh: true,
       purchaseMode,
       userId: options?.userId,
     });
+    const refreshedSnapshot = providerPremiumActive
+      ? await pollProviderAuthority({
+          attempts: PREMIUM_PURCHASE_AUTHORITY_POLL_ATTEMPTS,
+          delayMs: PREMIUM_PURCHASE_AUTHORITY_POLL_DELAY_MS,
+          authorityCurrent: async () => sameAccountSessionAuthority(
+            operationAuthority,
+            await readCurrentAccountSessionAuthority(),
+          ),
+          read: readRefreshedSnapshot,
+          accepts: (candidate) => candidate.targets.premium_subscription.entitlementAuthoritative
+            && candidate.targets.premium_subscription.hasEntitlement,
+        })
+      : await readRefreshedSnapshot();
+    if (!refreshedSnapshot) {
+      return {
+        ok: false,
+        snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId }),
+        customerInfo,
+        message: "The store restored Premium, but verified app access is still reconciling. Recheck shortly.",
+      };
+    }
     if (!refreshedSnapshot.targets.premium_subscription.entitlementAuthoritative) {
       return { ok: false, snapshot: refreshedSnapshot, customerInfo: null,
         message: "Purchases were restored, but Premium status is unavailable and unverified. Recheck before continuing." };

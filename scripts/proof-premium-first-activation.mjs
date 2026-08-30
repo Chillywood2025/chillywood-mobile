@@ -148,7 +148,8 @@ const checks = [
       && revenueCatText.includes("Purchases.restorePurchases()")
       && accessSheetText.includes("monetization_manage_subscription_opened")
       && accessSheetText.includes("Manage subscription")
-      && premiumEntitlementsText.includes('.eq("entitlement_key", normalizedKey)')
+      && premiumEntitlementsText.includes('ENTITLEMENT_AUTHORITY_READBACK_RPC = "wave1_entitlement_authority_readback"')
+      && premiumEntitlementsText.includes('{ p_entitlement_key: key }')
       && premiumEntitlementsText.includes('normalized === "premium"'),
     detail: "Restore, manage/cancel, and backend Premium entitlement readback paths remain present.",
   },

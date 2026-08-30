@@ -69,7 +69,7 @@ const checks = [
       && accessSheet.includes("if (isPremiumGateSheet && freshGateEntitled && sheetState)")
       && accessSheet.includes("message: \"Premium is already active for this account.\"")
       && accessSheet.includes("const nextFeedback = await onPurchaseResult")
-      && liveTab.includes("return recheckLiveAccessAfterPremiumAction();"),
+      && liveTab.includes("result.ok ? recheckLiveAccessAfterPremiumAction()"),
     detail: "A stale Premium denial that refreshes to active rechecks the original strict Live gate instead of detouring through Subscribe.",
   },
   {
@@ -112,7 +112,7 @@ const checks = [
     id: "entitlement_readback_required_before_live",
     ok: liveTab.includes("recheckLiveAccessAfterPremiumAction")
       && liveTab.includes("if (access?.allowed)")
-      && liveTab.includes("Supabase entitlement readback is not active yet"),
+      && liveTab.includes("entitlement readback is not active yet"),
     detail: "Live opens only after a fresh strict RevenueCat/Supabase entitlement readback allows access.",
   },
   {
