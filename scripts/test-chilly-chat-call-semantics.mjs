@@ -738,6 +738,7 @@ const nativeCoordinatorSource = await readFile(
 const chatThreadSource = await readFile(new URL("app/chat/[threadId].tsx", root), "utf8");
 const rootLayoutSource = await readFile(new URL("app/_layout.tsx", root), "utf8");
 const chatLibSource = await readFile(new URL("_lib/chat.ts", root), "utf8");
+const communicationLibSource = await readFile(new URL("_lib/communication.ts", root), "utf8");
 const authoritativeBusyBeginSource = await readFile(
   new URL("supabase/migrations/20260730040727_chilly_chat_busy_active_thread_guard.sql", root),
   "utf8",
@@ -870,6 +871,34 @@ assert.match(
   chatThreadSource,
   /incomingCallInvite[\s\S]{0,160}!callPanelOpen[\s\S]{0,160}!iosNativeCallPresentationOwned[\s\S]{0,160}!waitingForIosNativePresentation/u,
   "the same-thread React banner is hidden when CallKit owns iOS presentation",
+);
+assert.match(
+  communicationLibSource,
+  /readCommunicationIdentity[\s\S]{0,420}getWritablePartyUserId/u,
+  "legacy call identity is authenticated-only and cannot fall back to a Watch Party guest subject",
+);
+assert.doesNotMatch(
+  communicationLibSource.slice(
+    communicationLibSource.indexOf("export async function readCommunicationIdentity"),
+    communicationLibSource.indexOf("export async function listCommunicationIceServers"),
+  ),
+  /getSafePartyUserId/u,
+  "communication identity must not use guest identity fallback",
+);
+assert.match(
+  communicationSessionSource,
+  /for \(let attempt = 0; attempt < 3 && !joinedMembership; attempt \+= 1\)[\s\S]{0,900}resolvedIdentity = await readCommunicationIdentity\(\)/u,
+  "legacy accepted media retries the authenticated identity-to-membership handoff within a strict bound",
+);
+const legacyMissingSnapshotBranch = communicationSessionSource.slice(
+  communicationSessionSource.indexOf("if (!snapshot)", communicationSessionSource.indexOf("let joinedMembership")),
+  communicationSessionSource.indexOf("if (snapshot.room.status === \"ended\")", communicationSessionSource.indexOf("let joinedMembership")),
+);
+assert.match(legacyMissingSnapshotBranch, /setChannelState\("error"\)/u);
+assert.doesNotMatch(
+  legacyMissingSnapshotBranch,
+  /onRoomEndedRef/u,
+  "an unreadable snapshot after a failed join is not authority to terminate an accepted call",
 );
 assert.match(
   chatThreadSource,
@@ -1047,10 +1076,66 @@ assert.match(
   "a server-accepted CallKit answer completes the trusted native orchestrator before accepted media state can publish",
 );
 assert.match(chatThreadSource, /completeIosAcceptedNativeAnswer\([\s\S]{0,520}completeNative: completeIosNativeCallAnswer/u, "the trusted completion helper delegates to the executable provenance-bound CallKit orchestrator");
+const acceptedResumeBlock = chatThreadSource.slice(
+  chatThreadSource.indexOf("const resumeAcceptedIncomingInvite = useCallback"),
+  chatThreadSource.indexOf("const acceptIncomingInvite = useCallback"),
+);
 assert.match(
-  chatThreadSource,
-  /const resumeAcceptedIncomingInvite = useCallback[\s\S]{0,2200}latestInvite\?\.status === "accepted"[\s\S]{0,700}latestThread\?\.activeCommunicationRoomId === roomId[\s\S]{0,320}snapshot\?\.room\.status === "active"/u,
-  "an activity-remounted native Answer resumes only an authoritative accepted invite in its still-active room",
+  acceptedResumeBlock,
+  /latestInvite\?\.status === "accepted"[\s\S]{0,700}latestThread\?\.activeCommunicationRoomId === roomId/u,
+  "an activity-remounted native Answer resumes only an exact accepted invite bound to the thread's active room projection",
+);
+assert.doesNotMatch(
+  acceptedResumeBlock,
+  /getCommunicationRoomSnapshot/u,
+  "an accepted callee must not require an RLS-hidden room snapshot before its first membership join",
+);
+const openExistingCallBlock = chatThreadSource.slice(
+  chatThreadSource.indexOf("const handleJoinOrCloseCall = useCallback"),
+  chatThreadSource.indexOf("useEffect(() => {", chatThreadSource.indexOf("const handleJoinOrCloseCall = useCallback")),
+);
+assert.doesNotMatch(
+  openExistingCallBlock,
+  /getCommunicationRoomSnapshot/u,
+  "opening an accepted call from its thread must defer room liveness to the membership authority RPC",
+);
+assert.match(
+  openExistingCallBlock,
+  /inviteBelongsToCurrentParticipant[\s\S]{0,500}joinInvite\.callerUserId === currentUserId \|\| joinInvite\.calleeUserId === currentUserId/u,
+  "opening an existing call remains bound to an exact invite participant",
+);
+const liveKitInitializeBlock = liveKitChatCallSessionSource.slice(
+  liveKitChatCallSessionSource.indexOf("const initialize = async () =>"),
+  liveKitChatCallSessionSource.indexOf("const nextMemberships", liveKitChatCallSessionSource.indexOf("const initialize = async () =>")),
+);
+assert.match(
+  liveKitInitializeBlock,
+  /for \(let attempt = 0; attempt < 3 && !membership; attempt \+= 1\)/u,
+  "LiveKit first membership uses the same bounded authenticated-session retry as the legacy provider",
+);
+assert.ok(
+  liveKitInitializeBlock.includes("joinCommunicationRoomSession")
+    && liveKitInitializeBlock.includes("getCommunicationRoomSnapshot"),
+  "LiveKit initialization must retain both server membership authority and its post-join room readback",
+);
+assert.ok(
+  liveKitInitializeBlock.indexOf("joinCommunicationRoomSession")
+    < liveKitInitializeBlock.indexOf("getCommunicationRoomSnapshot"),
+  "LiveKit joins membership before reading its newly authorized room snapshot",
+);
+const liveKitHeartbeatBlock = liveKitChatCallSessionSource.slice(
+  liveKitChatCallSessionSource.indexOf("heartbeat = setInterval"),
+  liveKitChatCallSessionSource.indexOf("}, ROOM_HEARTBEAT_MS)", liveKitChatCallSessionSource.indexOf("heartbeat = setInterval")),
+);
+assert.match(
+  liveKitHeartbeatBlock,
+  /if \(!latestSnapshot\) \{[\s\S]{0,220}setCommittedRoomState\(heartbeatBinding, "reconnecting"\)[\s\S]{0,160}return;/u,
+  "a transient LiveKit snapshot miss is reconnecting rather than terminal",
+);
+assert.doesNotMatch(
+  liveKitHeartbeatBlock,
+  /if \(!latestSnapshot\)[\s\S]{0,240}onRoomEndedRef/u,
+  "a transient LiveKit snapshot miss cannot end an accepted invite",
 );
 assert.match(
   chatThreadSource,

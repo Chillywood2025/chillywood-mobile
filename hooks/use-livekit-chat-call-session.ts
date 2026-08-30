@@ -1372,14 +1372,7 @@ export function useLiveKitChatCallSession({
     setChannelState("connecting");
 
     const initialize = async () => {
-      const [snapshot, currentIdentity] = await Promise.all([
-        getCommunicationRoomSnapshot(normalizedRoomId),
-        readCommunicationIdentity(),
-      ]);
-      if (!active) return;
-      if (!snapshot || snapshot.room.status !== "active") {
-        throw new Error("accepted_chat_call_room_unavailable");
-      }
+      let currentIdentity = await readCommunicationIdentity();
       if (
         !currentIdentity.userId
         || (currentIdentity.userId !== inviteCallerUserId && currentIdentity.userId !== inviteCalleeUserId)
@@ -1389,19 +1382,37 @@ export function useLiveKitChatCallSession({
         throw new Error("accepted_chat_call_identity_mismatch");
       }
 
-      const membership = await joinCommunicationRoomSession({
-        roomId: normalizedRoomId,
-        userId: currentIdentity.userId,
-        displayName: currentIdentity.displayName,
-        avatarUrl: currentIdentity.avatarUrl,
-        cameraEnabled: initialCameraEnabled,
-        micEnabled: initialMicEnabled,
-      });
+      let membership: CommunicationRoomMembership | null = null;
+      for (let attempt = 0; attempt < 3 && !membership; attempt += 1) {
+        if (!active) return;
+        membership = await joinCommunicationRoomSession({
+          roomId: normalizedRoomId,
+          userId: currentIdentity.userId,
+          displayName: currentIdentity.displayName,
+          avatarUrl: currentIdentity.avatarUrl,
+          cameraEnabled: initialCameraEnabled,
+          micEnabled: initialMicEnabled,
+        });
+        if (!membership && attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          currentIdentity = await readCommunicationIdentity();
+          if (
+            !currentIdentity.userId
+            || (currentIdentity.userId !== inviteCallerUserId && currentIdentity.userId !== inviteCalleeUserId)
+          ) {
+            throw new Error("accepted_chat_call_identity_mismatch");
+          }
+        }
+      }
       if (!active) return;
       if (!membership) {
-        const roomFull = getActiveCommunicationMemberships(snapshot.memberships).length >= 4;
-        if (roomFull) await onRoomEndedRef.current?.("room-full");
-        throw new Error(roomFull ? "accepted_chat_call_room_full" : "accepted_chat_call_membership_denied");
+        throw new Error("accepted_chat_call_membership_denied");
+      }
+
+      const snapshot = await getCommunicationRoomSnapshot(normalizedRoomId);
+      if (!active) return;
+      if (!snapshot || snapshot.room.status !== "active") {
+        throw new Error("accepted_chat_call_room_unavailable");
       }
 
       const nextMemberships = [
@@ -1679,9 +1690,13 @@ export function useLiveKitChatCallSession({
               !active
               || !sameCommittedAuthority(committedSessionRef.current, heartbeatBinding)
             ) return;
+            if (!latestSnapshot) {
+              setCommittedRoomState(heartbeatBinding, "reconnecting");
+              setChannelState("reconnecting");
+              return;
+            }
             if (
-              !latestSnapshot
-              || normalizeRoomId(latestSnapshot.room.roomId) !== heartbeatBinding.normalizedRoomId
+              normalizeRoomId(latestSnapshot.room.roomId) !== heartbeatBinding.normalizedRoomId
               || latestSnapshot.room.status !== "active"
             ) {
               setCommittedRoomState(heartbeatBinding, "terminal");
