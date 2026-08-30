@@ -427,6 +427,17 @@ export default function ChillyChatThreadScreen() {
 
   useEffect(() => {
     if (authLoading || !isSignedIn || !currentUserId || !routeForegroundCallClaim) return;
+    const mountedActiveCallRoomId = resolveAcceptedChatCallRoomId({
+      inviteRoomId: activeCallInvite?.communicationRoomId,
+      inviteStatus: activeCallInvite?.status,
+      threadRoomId: thread?.activeCommunicationRoomId,
+    });
+    const acceptedOpenCallInvite = routeCallInviteId && activeCallInvite?.id === routeCallInviteId
+      && activeCallInvite.status === "accepted"
+      && activeCallInvite.communicationRoomId === mountedActiveCallRoomId
+        ? activeCallInvite
+        : null;
+    if (routeCallInviteId && !acceptedOpenCallInvite) return;
     const consumptionKey = `${currentUserId}:${threadId}:${routeForegroundCallClaim}`;
     if (foregroundCallClaimConsumptionRef.current === consumptionKey) return;
     foregroundCallClaimConsumptionRef.current = consumptionKey;
@@ -434,7 +445,9 @@ export default function ChillyChatThreadScreen() {
       authenticatedUserId: currentUserId,
       authLoading,
       claimId: routeForegroundCallClaim,
+      inviteId: acceptedOpenCallInvite?.id,
       isSignedIn,
+      roomId: acceptedOpenCallInvite?.communicationRoomId,
       threadId,
     });
     setTrustedForegroundUiIntent(intent);
@@ -443,7 +456,7 @@ export default function ChillyChatThreadScreen() {
       openCall: undefined,
       startCall: undefined,
     });
-  }, [authLoading, currentUserId, isSignedIn, routeForegroundCallClaim, router, threadId]);
+  }, [activeCallInvite, authLoading, currentUserId, isSignedIn, routeCallInviteId, routeForegroundCallClaim, router, thread?.activeCommunicationRoomId, threadId]);
 
   useEffect(() => {
     if (

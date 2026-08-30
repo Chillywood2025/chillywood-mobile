@@ -184,6 +184,8 @@ export function createForegroundAuthenticatedUiCallIntentRegistry(input?: {
   consume(input?: {
     authenticatedUserId?: string;
     claimId?: string;
+    inviteId?: string;
+    roomId?: string;
     threadId?: string;
   } | null): ForegroundAuthenticatedUiCallIntent | null;
 };
@@ -206,7 +208,9 @@ export function consumeMountedForegroundAuthenticatedUiCallRoute(input?: {
   authenticatedUserId?: string;
   authLoading?: boolean;
   claimId?: string;
+  inviteId?: string;
   isSignedIn?: boolean;
+  roomId?: string;
   threadId?: string;
 } | null): ForegroundAuthenticatedUiCallIntent | null;
 export function isAttestedForegroundAuthenticatedUiCallIntent(value?: unknown): value is ForegroundAuthenticatedUiCallIntent;

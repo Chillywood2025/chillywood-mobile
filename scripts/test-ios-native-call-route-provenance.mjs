@@ -6,6 +6,7 @@ import {fileURLToPath} from "node:url";
 
 import {clearNativeCallTransitionClaims, containsSensitiveNativeCallClaimRouteParams, consumeMountedForegroundAuthenticatedUiCallRoute, consumeMountedIosNativeCallRoute, createForegroundAuthenticatedUiCallIntent, createForegroundAuthenticatedUiCallIntentRegistry, createIosCallKitAnswerRouteHandler, createNativeCallTransitionProvenanceRegistry, sanitizeExternalIosNativeCallPath} from "../_lib/nativeCallTransitionProvenance.mjs";
 import {completeIosAcceptedNativeAnswer, doesForegroundAuthenticatedUiCallIntentOwnAction, doesNativeCallActionOwnTransition, settleIosAcceptedCallKitMediaFailure, terminateIosAcceptedNativeAnswer} from "../_lib/communicationCallMediaPolicy.mjs";
+import {normalizeCommunicationRoomIdentifier} from "../_lib/communicationRoomIdentifier.mjs";
 
 const THREAD = "11111111-1111-4111-8111-111111111111";
 const INVITE = "22222222-2222-4222-8222-222222222222";
@@ -15,7 +16,8 @@ const OTHER_INVITE = "55555555-5555-4555-8555-555555555555";
 const OTHER_CALL = "66666666-6666-4666-8666-666666666666";
 const CLAIM_ID = "a".repeat(64);
 const USER = "77777777-7777-4777-8777-777777777777";
-const ROOM = "88888888-8888-4888-8888-888888888888";
+const ROOM = "9CAYUZ";
+const OTHER_ROOM = "CALLPUSH-C41D7E9F";
 
 let monotonicNow = 100;
 let claimSerial = 9;
@@ -212,13 +214,25 @@ pass(doesForegroundAuthenticatedUiCallIntentOwnAction({action: "start_voice", au
 pass(doesForegroundAuthenticatedUiCallIntentOwnAction({action: "start_voice", authority: "foreground_authenticated_ui", currentUserId: USER, foregroundUiIntent: Object.freeze({...consumedForeground}), monotonicNowMs: consumedForeground.consumedAtMonotonicMs, threadId: THREAD}) === false, "a frozen structural copy cannot forge foreground UI authority");
 
 const productionForegroundIntent = createForegroundAuthenticatedUiCallIntent({action: "open_call", authenticated: true, authenticatedUserId: USER, inviteId: INVITE, roomId: ROOM, threadId: THREAD});
-const mountedForegroundIntent = consumeMountedForegroundAuthenticatedUiCallRoute({authenticatedUserId: USER, authLoading: false, claimId: productionForegroundIntent.claimId, isSignedIn: true, threadId: THREAD});
+pass(productionForegroundIntent.status === "created" && productionForegroundIntent.roomId === ROOM, "a production text communication-room code creates foreground open-call authority");
+pass(consumeMountedForegroundAuthenticatedUiCallRoute({authenticatedUserId: OTHER_CALL, authLoading: false, claimId: productionForegroundIntent.claimId, inviteId: INVITE, isSignedIn: true, roomId: ROOM, threadId: THREAD}) === null, "another user cannot consume foreground open-call authority");
+pass(consumeMountedForegroundAuthenticatedUiCallRoute({authenticatedUserId: USER, authLoading: false, claimId: productionForegroundIntent.claimId, inviteId: INVITE, isSignedIn: true, roomId: ROOM, threadId: OTHER_THREAD}) === null, "another thread cannot consume foreground open-call authority");
+pass(consumeMountedForegroundAuthenticatedUiCallRoute({authenticatedUserId: USER, authLoading: false, claimId: productionForegroundIntent.claimId, inviteId: OTHER_INVITE, isSignedIn: true, roomId: ROOM, threadId: THREAD}) === null, "another invite cannot consume foreground open-call authority");
+pass(consumeMountedForegroundAuthenticatedUiCallRoute({authenticatedUserId: USER, authLoading: false, claimId: productionForegroundIntent.claimId, inviteId: INVITE, isSignedIn: true, roomId: OTHER_ROOM, threadId: THREAD}) === null, "another communication room cannot consume foreground open-call authority");
+const mountedForegroundIntent = consumeMountedForegroundAuthenticatedUiCallRoute({authenticatedUserId: USER, authLoading: false, claimId: productionForegroundIntent.claimId, inviteId: INVITE, isSignedIn: true, roomId: ROOM, threadId: THREAD});
 pass(mountedForegroundIntent?.action === "open_call", "the production foreground creator and mounted consumer preserve explicit UI authority");
 const mountedForegroundInput = {action: "open_call", activeInviteId: INVITE, activeRoomId: ROOM, authority: "foreground_authenticated_ui", currentUserId: USER, foregroundUiIntent: mountedForegroundIntent, monotonicNowMs: mountedForegroundIntent?.consumedAtMonotonicMs, threadId: THREAD};
 pass(doesForegroundAuthenticatedUiCallIntentOwnAction(mountedForegroundInput), "the exact active invite and room bind app-wide open-call intent");
 pass(!doesForegroundAuthenticatedUiCallIntentOwnAction({...mountedForegroundInput, activeInviteId: OTHER_INVITE}), "another invite cannot consume app-wide intent");
-pass(!doesForegroundAuthenticatedUiCallIntentOwnAction({...mountedForegroundInput, activeRoomId: OTHER_CALL}), "another room cannot consume app-wide intent");
-pass(consumeMountedForegroundAuthenticatedUiCallRoute({authenticatedUserId: USER, authLoading: false, claimId: productionForegroundIntent.claimId, isSignedIn: true, threadId: THREAD}) === null, "a copied foreground route handle cannot be consumed twice");
+pass(!doesForegroundAuthenticatedUiCallIntentOwnAction({...mountedForegroundInput, activeRoomId: OTHER_ROOM}), "another room cannot own app-wide intent");
+pass(consumeMountedForegroundAuthenticatedUiCallRoute({authenticatedUserId: USER, authLoading: false, claimId: productionForegroundIntent.claimId, inviteId: INVITE, isSignedIn: true, roomId: ROOM, threadId: THREAD}) === null, "a copied foreground route handle cannot be consumed twice");
+for (const malformedRoomId of ["", "   ", " ROOM1", "ROOM1 ", "../ROOM1", "ROOM/ONE", "ROOM\\ONE", "ROOM?ONE", "ROOM#ONE", "ROOM\u0000ONE", "A".repeat(65), "short", "room.name"]) {
+  assert.equal(normalizeCommunicationRoomIdentifier(malformedRoomId), "", `malformed communication room identifier is denied: ${JSON.stringify(malformedRoomId)}`);
+  assert.equal(createForegroundAuthenticatedUiCallIntent({action: "open_call", authenticated: true, authenticatedUserId: USER, inviteId: INVITE, roomId: malformedRoomId, threadId: THREAD}).status, "denied");
+}
+for (const historicalRoomId of [ROOM, OTHER_ROOM, "TCL034DEC", "RT25CALL3B53800F", "proof-video-fg-5ad74fb3", "A".repeat(64)]) {
+  assert.equal(normalizeCommunicationRoomIdentifier(historicalRoomId), historicalRoomId, "the live bounded production room-name grammar remains supported");
+}
 const validProducerEvent = {callInviteId: INVITE, callType: "voice", callUuid: CALL, nativeEventGeneration: 9, platform: "ios", threadId: THREAD, type: "answerRequested"};
 const producerDenials = [
   {...validProducerEvent, callInviteId: ""},
@@ -388,10 +402,14 @@ assert.equal((sources["_lib/iosNativeCalls.ts"].match(/clearNativeCallTransition
 
 let mutantImportSerial = 0;
 const provenanceModuleHref = new URL("../_lib/nativeCallTransitionProvenance.mjs", import.meta.url).href;
+const roomIdentifierModuleHref = new URL("../_lib/communicationRoomIdentifier.mjs", import.meta.url).href;
 const importSourceModule = async (source, label) => {
   const executableSource = source.replace(
     '"./nativeCallTransitionProvenance.mjs"',
     JSON.stringify(provenanceModuleHref),
+  ).replace(
+    '"./communicationRoomIdentifier.mjs"',
+    JSON.stringify(roomIdentifierModuleHref),
   );
   return import(`data:text/javascript;base64,${Buffer.from(executableSource, "utf8").toString("base64")}#${label}-${mutantImportSerial++}`);
 };
@@ -419,7 +437,7 @@ const policyInputFixture = async (overrides = {}) => {
 };
 const consumedForegroundFixture = () => {
   const createdIntent = createForegroundAuthenticatedUiCallIntent({action: "open_call", authenticated: true, authenticatedUserId: USER, inviteId: INVITE, roomId: ROOM, threadId: THREAD});
-  return consumeMountedForegroundAuthenticatedUiCallRoute({authenticatedUserId: USER, authLoading: false, claimId: createdIntent.claimId, isSignedIn: true, threadId: THREAD});
+  return consumeMountedForegroundAuthenticatedUiCallRoute({authenticatedUserId: USER, authLoading: false, claimId: createdIntent.claimId, inviteId: INVITE, isSignedIn: true, roomId: ROOM, threadId: THREAD});
 };
 const mediaFailureInput = (descriptor, overrides = {}) => ({authenticatedUserId: USER, callUuid: CALL, channelState: "error", descriptor, inviteId: INVITE, inviteStatus: "accepted", mediaProvider: descriptor?.mediaProvider, platform: "ios", roomId: ROOM, threadId: THREAD, ...overrides});
 const acceptedInvite = (mediaProvider = "livekit", overrides = {}) => ({calleeUserId: USER, callerUserId: OTHER_CALL, communicationRoomId: ROOM, id: INVITE, mediaProvider, status: "accepted", threadId: THREAD, ...overrides});
@@ -434,6 +452,8 @@ pass(!nativeEndDenied && nativeEndAttempts === 3, "server terminal readback cann
 const terminalReadClaim = await consumedClaimFixture(); pass(await terminateIosAcceptedNativeAnswer({authenticatedUserId: USER, callUuid: CALL, invite: acceptedInvite(), reason: "synthetic", threadId: THREAD, trustedNativeClaim: terminalReadClaim}, {delay: () => {}, endNative: () => true, readInvite: () => acceptedInvite("livekit", {status: "ended"}), updateInvite: () => null}), "an exact authoritative already-terminal readback settles idempotently");
 let mismatchEffects = 0; const mismatchClaim = await consumedClaimFixture(); const mismatchCompletion = await completeIosAcceptedNativeAnswer({authenticatedUserId: OTHER_CALL, callUuid: CALL, invite: acceptedInvite(), serverAccepted: true, threadId: THREAD, trustedNativeClaim: mismatchClaim}, {completeNative: () => { mismatchEffects += 1; return true; }, monotonicNow: () => mismatchClaim.consumedAtMonotonicMs, terminal: {}});
 pass(mismatchCompletion.status === "denied" && mismatchEffects === 0, "mismatched completion identity performs no native or server side effect");
+let malformedRoomEffects = 0; const malformedRoomClaim = await consumedClaimFixture(); const malformedRoomCompletion = await completeIosAcceptedNativeAnswer({authenticatedUserId: USER, callUuid: CALL, invite: acceptedInvite("livekit", {communicationRoomId: "../ROOM1"}), serverAccepted: true, threadId: THREAD, trustedNativeClaim: malformedRoomClaim}, {completeNative: () => { malformedRoomEffects += 1; return true; }, monotonicNow: () => malformedRoomClaim.consumedAtMonotonicMs, terminal: {}});
+pass(malformedRoomCompletion.status === "denied" && malformedRoomEffects === 0, "malformed communication-room identity cannot enter accepted CallKit media completion");
 let completionFailureServer = acceptedInvite(); const completionFailureClaim = await consumedClaimFixture();
 const completionFailure = await completeIosAcceptedNativeAnswer({authenticatedUserId: USER, callUuid: CALL, invite: completionFailureServer, serverAccepted: true, threadId: THREAD, trustedNativeClaim: completionFailureClaim}, {completeNative: () => false, monotonicNow: () => completionFailureClaim.consumedAtMonotonicMs, terminal: {delay: () => {}, endNative: () => true, readInvite: () => completionFailureServer, updateInvite: () => { completionFailureServer = acceptedInvite("livekit", {status: "ended"}); }}});
 pass(completionFailure.status === "terminal_confirmed", "native completion failure executes bounded exact server terminal cleanup");
@@ -446,7 +466,7 @@ for (const mediaProvider of ["livekit", "legacy_webrtc"]) {
   pass(descriptor?.mediaProvider === mediaProvider, `${mediaProvider} records exact accepted CallKit media identity`);
   let duplicateCompletionCalls = 0; const duplicateCompletion = await completeIosAcceptedNativeAnswer({authenticatedUserId: USER, callUuid: CALL, invite: acceptedInvite(mediaProvider), serverAccepted: true, threadId: THREAD, trustedNativeClaim: claim}, {completeNative: () => { duplicateCompletionCalls += 1; return true; }, monotonicNow: () => claim.consumedAtMonotonicMs, terminal: {}});
   pass(duplicateCompletion.status === "denied" && duplicateCompletionCalls === 0, `${mediaProvider} consumed claim can mint only one accepted-media descriptor`);
-  for (const mismatch of [{channelState: "live"}, {authenticatedUserId: OTHER_CALL}, {threadId: OTHER_THREAD}, {inviteId: OTHER_INVITE}, {roomId: OTHER_CALL}, {callUuid: OTHER_CALL}, {inviteStatus: "ended"}, {mediaProvider: mediaProvider === "livekit" ? "legacy_webrtc" : "livekit"}]) assert.equal((await settleIosAcceptedCallKitMediaFailure(mediaFailureInput(descriptor, mismatch), {clearLocal: () => true, leaveRoom: () => true, terminateAccepted: () => true})).status, "denied", `${mediaProvider} mismatch cannot settle`);
+  for (const mismatch of [{channelState: "live"}, {authenticatedUserId: OTHER_CALL}, {threadId: OTHER_THREAD}, {inviteId: OTHER_INVITE}, {roomId: OTHER_ROOM}, {callUuid: OTHER_CALL}, {inviteStatus: "ended"}, {mediaProvider: mediaProvider === "livekit" ? "legacy_webrtc" : "livekit"}]) assert.equal((await settleIosAcceptedCallKitMediaFailure(mediaFailureInput(descriptor, mismatch), {clearLocal: () => true, leaveRoom: () => true, terminateAccepted: () => true})).status, "denied", `${mediaProvider} mismatch cannot settle`);
   let leaveCount = 0; let clearCount = 0; let settlementTerminalCount = 0;
   const retryable = await settleIosAcceptedCallKitMediaFailure(mediaFailureInput(descriptor), {clearLocal: () => { clearCount += 1; return true; }, leaveRoom: () => { leaveCount += 1; return true; }, terminateAccepted: () => false});
   pass(retryable.status === "retryable" && leaveCount === 0 && clearCount === 0, `${mediaProvider} failed terminal settlement retains authority and does not leave or clear`);
@@ -587,7 +607,7 @@ const validateProductionGate = async ({code, productionSources}) => {
     const mutated = await importSourceModule(registrySource, code);
     const externalRegistry = mutated.createForegroundAuthenticatedUiCallIntentRegistry({claimIdFactory: () => CLAIM_ID, now: () => 100});
     const createdIntent = externalRegistry.create({action: "open_call", authenticated: true, authenticatedUserId: USER, inviteId: INVITE, roomId: ROOM, threadId: THREAD});
-    report(mutated.isAttestedForegroundAuthenticatedUiCallIntent(externalRegistry.consume({authenticatedUserId: USER, claimId: createdIntent.claimId, threadId: THREAD})));
+    report(mutated.isAttestedForegroundAuthenticatedUiCallIntent(externalRegistry.consume({authenticatedUserId: USER, claimId: createdIntent.claimId, inviteId: INVITE, roomId: ROOM, threadId: THREAD})));
   } else if (code === "IOS_NATIVE_CLAIM_PERSISTENCE_INVALID") {
     report(/AsyncStorage|UserDefaults|SecureStore/u.test(registrySource));
   } else if (code === "IOS_NATIVE_EVENT_DUPLICATE_EXTENDS_AUTHORITY") {
@@ -696,7 +716,7 @@ const negativeControls = [
   control("IOS_NATIVE_CLAIM_MOUNTED_CONSUMER_COMPUTED_ACCESS", "components/UnsafeMountedConsumer.mjs", "import * as provenance from '../_lib/nativeCallTransitionProvenance.mjs';\nprovenance['consumeMountedIos'+'NativeCallRoute']({});\n"),
   control("IOS_NATIVE_CLAIM_MOUNTED_CONSUMER_CANONICAL_IMPORT_SUBSTITUTED", "app/chat/[threadId].tsx", `import {unsafeConsume as consumeMountedIosNativeCallRoute} from '../../_lib/unsafe.mjs';\n${replaceRequired(sources["app/chat/[threadId].tsx"], "  consumeMountedIosNativeCallRoute,\n", "", "mounted consumer canonical import")}`),
   replaceControl("IOS_ACCEPTED_CALLKIT_MEDIA_NONERROR_SETTLEMENT", "_lib/communicationCallMediaPolicy.mjs", 'input?.channelState === "error"', "true", "non-error settlement"),
-  replaceControl("IOS_ACCEPTED_CALLKIT_MEDIA_PROVIDER_MISMATCH", "_lib/communicationCallMediaPolicy.mjs", 'value === [descriptor?.authenticatedUserId, descriptor?.threadId, descriptor?.inviteId, descriptor?.roomId, descriptor?.callUuid, descriptor?.mediaProvider][index]', 'index === 5 || value === [descriptor?.authenticatedUserId, descriptor?.threadId, descriptor?.inviteId, descriptor?.roomId, descriptor?.callUuid, descriptor?.mediaProvider][index]', "provider binding"),
+  replaceControl("IOS_ACCEPTED_CALLKIT_MEDIA_PROVIDER_MISMATCH", "_lib/communicationCallMediaPolicy.mjs", 'value === [descriptor?.authenticatedUserId, descriptor?.threadId, descriptor?.inviteId, descriptor?.callUuid, descriptor?.mediaProvider][index]', 'index === 4 || value === [descriptor?.authenticatedUserId, descriptor?.threadId, descriptor?.inviteId, descriptor?.callUuid, descriptor?.mediaProvider][index]', "provider binding"),
   replaceControl("IOS_ACCEPTED_CALLKIT_MEDIA_REPLAY", "_lib/communicationCallMediaPolicy.mjs", '  iosAcceptedMediaDescriptorStates.delete(descriptor); return {descriptor, status: "settled"};', '  iosAcceptedMediaDescriptorStates.set(descriptor, "active"); return {descriptor, status: "settled"};', "one-time media settlement"),
   replaceControl("IOS_ACCEPTED_CALLKIT_MEDIA_FAILED_TERMINAL_SETTLEMENT", "_lib/communicationCallMediaPolicy.mjs", 'if (!await Promise.resolve(operations.terminateAccepted(descriptor, "accepted_media_failed")).catch(() => false))', "if (false)", "terminal settlement gate"),
   replaceControl("IOS_ACCEPTED_CALLKIT_MEDIA_LOCAL_CLEAR_BEFORE_CONFIRMATION", "_lib/communicationCallMediaPolicy.mjs", 'if (!await Promise.resolve(operations.terminateAccepted(descriptor, "accepted_media_failed")).catch(() => false))', 'await operations.clearLocal(descriptor); if (!await Promise.resolve(operations.terminateAccepted(descriptor, "accepted_media_failed")).catch(() => false))', "confirmed local clearing"),
