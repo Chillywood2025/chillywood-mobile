@@ -32,6 +32,14 @@ export const COMMUNICATION_CHANNEL_PREFIX = "comm-room-";
 export const COMMUNICATION_ACTIVE_MEMBER_WINDOW_MILLIS = ROOM_MEMBERSHIP_ACTIVE_WINDOW_MILLIS;
 export const COMMUNICATION_ROOM_ACTIVE_WINDOW_MILLIS = ROOM_ACTIVITY_ACTIVE_WINDOW_MS;
 
+const AUTHENTICATED_USER_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const normalizeAuthenticatedUserId = (value: unknown) => {
+  const userId = String(value ?? "").trim();
+  return AUTHENTICATED_USER_ID_PATTERN.test(userId) ? userId.toLowerCase() : "";
+};
+
 type CommunicationIceServer = {
   urls: string | string[];
   username?: string;
@@ -720,9 +728,15 @@ export async function joinCommunicationRoomSession(options: {
   micEnabled?: boolean;
 }): Promise<CommunicationRoomMembership | null> {
   const roomId = formatCommunicationRoomCode(options.roomId);
-  const writableUserId = String((await getWritablePartyUserId()) ?? "").trim();
-  const requestedUserId = String(options.userId ?? writableUserId).trim();
-  if (!roomId || !writableUserId || requestedUserId !== writableUserId) return null;
+  // Chat surfaces already hold an exact, current SessionProvider subject. Do
+  // not gate the authoritative RPC on a second async auth read: on installed
+  // clients that lookup can transiently return empty during accepted-call
+  // mounting and suppress the request entirely. The RPC derives auth.uid(),
+  // verifies the exact current session, and binds accepted invite membership.
+  const requestedUserId = normalizeAuthenticatedUserId(
+    options.userId ?? await getWritablePartyUserId(),
+  );
+  if (!roomId || !requestedUserId) return null;
 
   const rpc = supabase.rpc as unknown as (
     fn: "join_communication_room_session",
@@ -746,7 +760,8 @@ export async function joinCommunicationRoomSession(options: {
   });
   const row = Array.isArray(data) ? data[0] ?? null : data;
   if (error || !row) return null;
-  return parseCommunicationMembershipPayload(row);
+  const membership = parseCommunicationMembershipPayload(row);
+  return membership?.userId === requestedUserId ? membership : null;
 }
 
 export async function touchCommunicationRoomSession(options: {
@@ -867,9 +882,11 @@ export async function getOrCreateLinkedCommunicationRoom(options: {
   });
 }
 
-export async function endCommunicationRoom(roomId: string): Promise<void> {
+export async function endCommunicationRoom(roomId: string, authenticatedUserId?: string): Promise<void> {
   const normalizedRoomId = formatCommunicationRoomCode(roomId);
-  const writableUserId = await getWritablePartyUserId();
+  const writableUserId = normalizeAuthenticatedUserId(
+    authenticatedUserId ?? await getWritablePartyUserId(),
+  );
   if (!normalizedRoomId || !writableUserId) return;
 
   const updates: CommunicationRoomUpdate = {
@@ -885,12 +902,14 @@ export async function endCommunicationRoom(roomId: string): Promise<void> {
     .eq("host_user_id", writableUserId);
 }
 
-export async function readCommunicationIdentity(): Promise<CommunicationIdentity> {
+export async function readCommunicationIdentity(authenticatedUserId?: string): Promise<CommunicationIdentity> {
   // Communication membership is an authenticated write path. A generated
   // Watch Party guest identity must never become the expected call subject:
   // the join RPC binds membership to auth.uid() and exact current-session
   // authority instead.
-  const userId = String((await getWritablePartyUserId()) ?? "").trim();
+  const userId = normalizeAuthenticatedUserId(
+    authenticatedUserId ?? await getWritablePartyUserId(),
+  );
   const profile = await readUserProfile().catch(() => ({ username: "", avatarIndex: 0 }));
 
   let avatarUrl = "";

@@ -746,6 +746,10 @@ const authoritativeBusyBeginSource = await readFile(
 const iosNativeCallsSource = await readFile(new URL("_lib/iosNativeCalls.ts", root), "utf8");
 const liveKitBootstrapSource = await readFile(new URL("_lib/livekit/bootstrap.ts", root), "utf8");
 const communicationSessionSource = await readFile(new URL("hooks/use-communication-room-session.ts", root), "utf8");
+const chatCallMediaProviderSource = await readFile(
+  new URL("hooks/use-chat-call-media-session.ts", root),
+  "utf8",
+);
 const liveKitChatCallSessionSource = await readFile(
   new URL("hooks/use-livekit-chat-call-session.ts", root),
   "utf8",
@@ -887,8 +891,42 @@ assert.doesNotMatch(
 );
 assert.match(
   communicationSessionSource,
-  /for \(let attempt = 0; attempt < 3 && !joinedMembership; attempt \+= 1\)[\s\S]{0,900}resolvedIdentity = await readCommunicationIdentity\(\)/u,
+  /for \(let attempt = 0; attempt < 3 && !joinedMembership; attempt \+= 1\)[\s\S]{0,900}resolvedIdentity = await readCommunicationIdentity\(authenticatedUserId\)/u,
   "legacy accepted media retries the authenticated identity-to-membership handoff within a strict bound",
+);
+assert.match(
+  chatThreadSource,
+  /useChatCallMediaSession\(\{[\s\S]{0,160}authenticatedUserId: currentUserId/u,
+  "accepted chat media receives the exact mounted SessionProvider subject",
+);
+assert.match(
+  chatCallMediaProviderSource,
+  /useCommunicationRoomSession\(\{[\s\S]{0,160}authenticatedUserId: options\.authenticatedUserId[\s\S]{0,700}useLiveKitChatCallSession\(\{[\s\S]{0,160}authenticatedUserId: options\.authenticatedUserId/u,
+  "the exact mounted subject reaches both legacy and LiveKit transports",
+);
+const communicationJoinBlock = communicationLibSource.slice(
+  communicationLibSource.indexOf("export async function joinCommunicationRoomSession"),
+  communicationLibSource.indexOf("export async function touchCommunicationRoomSession"),
+);
+assert.match(
+  communicationJoinBlock,
+  /options\.userId \?\? await getWritablePartyUserId\(\)/u,
+  "non-chat communication surfaces retain authenticated identity fallback",
+);
+assert.doesNotMatch(
+  communicationJoinBlock,
+  /requestedUserId !== writableUserId/u,
+  "an accepted call is not suppressed by a redundant second auth lookup",
+);
+assert.match(
+  communicationJoinBlock,
+  /membership\?\.userId === requestedUserId \? membership : null/u,
+  "the RPC result must bind back to the exact mounted subject",
+);
+assert.match(
+  communicationLibSource,
+  /AUTHENTICATED_USER_ID_PATTERN[\s\S]{0,240}return AUTHENTICATED_USER_ID_PATTERN\.test\(userId\) \? userId\.toLowerCase\(\) : ""/u,
+  "mounted identity inputs remain strictly UUID-bound",
 );
 const legacyMissingSnapshotBranch = communicationSessionSource.slice(
   communicationSessionSource.indexOf("if (!snapshot)", communicationSessionSource.indexOf("let joinedMembership")),
@@ -1112,6 +1150,11 @@ assert.match(
   liveKitInitializeBlock,
   /for \(let attempt = 0; attempt < 3 && !membership; attempt \+= 1\)/u,
   "LiveKit first membership uses the same bounded authenticated-session retry as the legacy provider",
+);
+assert.match(
+  liveKitInitializeBlock,
+  /readCommunicationIdentity\(authenticatedUserId\)/u,
+  "LiveKit initialization uses the same exact mounted subject as legacy media",
 );
 assert.ok(
   liveKitInitializeBlock.includes("joinCommunicationRoomSession")

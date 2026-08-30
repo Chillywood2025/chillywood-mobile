@@ -861,6 +861,7 @@ export default function ChillyChatThreadScreen() {
     markInstalledUiConnected,
     markParticipantVideoRendered,
   } = useChatCallMediaSession({
+    authenticatedUserId: currentUserId,
     roomId: activeCallRoomId,
     invite: activeCallInvite,
     threadId,
