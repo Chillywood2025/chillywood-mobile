@@ -20,6 +20,13 @@ const allowedFields = [
   "createdAt",
   "isEmbeddedLaunch",
   "isEmergencyLaunch",
+  "internalV2OtaPlatform",
+  "iosNativeCallsAvailable",
+  "iosNativeCallsBuildEnabled",
+  "iosNativeCallsDisabledReason",
+  "iosNativeCallsRuntimeEnabled",
+  "iosVoipApnsEnvironment",
+  "iosVoipRegistrationStatus",
   "latestKnownUpdateCheckResult",
   "nativeApplicationVersion",
   "nativeBuildVersion",
@@ -75,6 +82,10 @@ for (const testId of [
   "release-diagnostics-channel",
   "release-diagnostics-embedded-launch",
   "release-diagnostics-emergency-launch",
+  "release-diagnostics-internal-v2-ota-platform",
+  "release-diagnostics-ios-native-calls-available",
+  "release-diagnostics-ios-native-calls-runtime-enabled",
+  "release-diagnostics-ios-voip-registration",
   "release-diagnostics-copy-button",
 ]) {
   assert.ok(settings.includes(testId), `settings UI missing ${testId}`);
@@ -112,5 +123,5 @@ for (const behaviorFile of [
 console.log(JSON.stringify({
   allowedFieldCount: allowedFields.length,
   status: "passed",
-  testIds: 7,
+  testIds: 11,
 }, null, 2));

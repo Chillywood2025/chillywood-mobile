@@ -203,6 +203,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     "./GoogleService-Info.plist",
   );
   const iosQaRuntimeVersion = normalizeText(process.env.IOS_QA_RUNTIME_VERSION);
+  const internalV2OtaPlatform = normalizeText(
+    process.env.CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM,
+  ).toLowerCase();
+  if (internalV2OtaPlatform && !["android", "ios"].includes(internalV2OtaPlatform)) {
+    throw new Error("CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM must be android or ios.");
+  }
   const productionOtaGeneration = JSON.parse(
     fs.readFileSync(PRODUCTION_OTA_GENERATION_PATH, "utf8"),
   ) as {
@@ -343,6 +349,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...existingExtra,
       runtime: {
         ...existingRuntime,
+        ...(internalV2OtaPlatform ? { internalV2OtaPlatform } : {}),
         otaGeneration: {
           generation: productionOtaGenerationName,
           channel: productionOtaChannel,
@@ -390,11 +397,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         },
         communication: {
           ...existingCommunication,
-          // `eas update --environment production` can supply the public
-          // production value after command-local values are evaluated. The
-          // isolated ios-qa runtime is itself an explicit native-call
-          // boundary, so keep its manifest aligned with the build profile.
-          iosNativeCallsEnabled: iosQaRuntimeVersion
+          // EAS Update does not apply build-profile env overrides. The
+          // internal-v2 publisher supplies an explicit, platform-scoped
+          // command-local target after verifying protected main and the
+          // destination branch. The native build gate still fails closed.
+          iosNativeCallsEnabled: iosQaRuntimeVersion || internalV2OtaPlatform === "ios"
             ? true
             : normalizeBoolean(
               process.env.EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED || existingCommunication.iosNativeCallsEnabled,

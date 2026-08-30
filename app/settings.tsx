@@ -54,7 +54,11 @@ import {
   type AccessVisibility,
 } from "../_lib/accessVisibility";
 import { getRuntimeLegalConfig } from "../_lib/runtimeConfig";
-import { revokeIosVoipRegistration } from "../_lib/iosNativeCalls";
+import {
+  readIosNativeCallsReadiness,
+  readIosVoipRegistrationStatus,
+  revokeIosVoipRegistration,
+} from "../_lib/iosNativeCalls";
 import {
   formatReleaseDiagnosticsSummary,
   readReleaseDiagnostics,
@@ -551,8 +555,41 @@ export default function SettingsScreen() {
   }, [params.section]);
 
   useEffect(() => {
-    setReleaseDiagnostics(sanitizeReleaseDiagnosticsForDisplay(readReleaseDiagnostics()));
-  }, []);
+    let active = true;
+    const base = readReleaseDiagnostics();
+    setReleaseDiagnostics(sanitizeReleaseDiagnosticsForDisplay(base));
+
+    if (Platform.OS !== "ios") return () => {
+      active = false;
+    };
+
+    void Promise.all([
+      readIosNativeCallsReadiness(),
+      isSignedIn ? readIosVoipRegistrationStatus() : Promise.resolve(null),
+    ]).then(([readiness, registration]) => {
+      if (!active) return;
+      setReleaseDiagnostics(sanitizeReleaseDiagnosticsForDisplay({
+        ...readReleaseDiagnostics(),
+        iosNativeCallsAvailable: readiness.available,
+        iosNativeCallsBuildEnabled: readiness.buildEnabled,
+        iosNativeCallsDisabledReason: readiness.disabledReason,
+        iosNativeCallsRuntimeEnabled: readiness.runtimeEnabled,
+        iosVoipApnsEnvironment: registration?.apnsEnvironment ?? null,
+        iosVoipRegistrationStatus: registration?.status ?? null,
+      }));
+    }).catch(() => {
+      if (!active) return;
+      setReleaseDiagnostics(sanitizeReleaseDiagnosticsForDisplay({
+        ...readReleaseDiagnostics(),
+        iosNativeCallsDisabledReason: "diagnostics_read_failed",
+        iosVoipRegistrationStatus: "error",
+      }));
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [isSignedIn]);
 
   useEffect(() => {
     if (isLoading || isSignedIn) return;
@@ -2353,6 +2390,13 @@ export default function SettingsScreen() {
               value={releaseDiagnostics.imageManipulatorNativeModuleAvailable ? "Available" : "Missing"}
               testID="release-diagnostics-image-manipulator-module"
             />
+            <ReleaseDiagnosticItem label="Internal-v2 OTA target" value={releaseDiagnostics.internalV2OtaPlatform} testID="release-diagnostics-internal-v2-ota-platform" />
+            <ReleaseDiagnosticItem label="iOS native calls" value={releaseDiagnostics.iosNativeCallsAvailable} testID="release-diagnostics-ios-native-calls-available" />
+            <ReleaseDiagnosticItem label="iOS native build gate" value={releaseDiagnostics.iosNativeCallsBuildEnabled} />
+            <ReleaseDiagnosticItem label="iOS native runtime gate" value={releaseDiagnostics.iosNativeCallsRuntimeEnabled} testID="release-diagnostics-ios-native-calls-runtime-enabled" />
+            <ReleaseDiagnosticItem label="iOS native disabled reason" value={releaseDiagnostics.iosNativeCallsDisabledReason} />
+            <ReleaseDiagnosticItem label="iOS VoIP APNs" value={releaseDiagnostics.iosVoipApnsEnvironment} />
+            <ReleaseDiagnosticItem label="iOS VoIP registration" value={releaseDiagnostics.iosVoipRegistrationStatus} testID="release-diagnostics-ios-voip-registration" />
             <ReleaseDiagnosticItem label="Auto check" value={releaseDiagnostics.checkAutomatically} />
             <ReleaseDiagnosticItem
               label="Last update check"

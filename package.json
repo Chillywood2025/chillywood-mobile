@@ -107,6 +107,8 @@
     "owner-command:report": "node ./scripts/owner-command-cli.mjs report",
     "proof:watch-party-live-fallback-smoothing": "node ./scripts/proof-watch-party-live-fallback-smoothing.mjs",
     "proof:release-diagnostics": "node ./scripts/proof-release-diagnostics.mjs",
+    "proof:internal-v2-ota-config": "node ./scripts/proof-internal-v2-ota-config.mjs",
+    "ota:internal-v2": "node ./scripts/publish-internal-v2-ota.mjs",
     "test:runtime-update-activation": "node ./scripts/test-runtime-update-activation.mjs",
     "guard:ota-native-boundary": "node ./scripts/guard-ota-native-boundary.mjs",
     "test:image-upload-native-boundary": "node ./scripts/test-image-upload-native-boundary.mjs",
