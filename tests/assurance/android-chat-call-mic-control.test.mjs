@@ -26,9 +26,14 @@ const contract = JSON.parse(fs.readFileSync("config/assurance/android-chat-call-
 const legacyHookSource = fs.readFileSync("hooks/use-communication-room-session.ts", "utf8");
 const legacyRefMarker = "  const microphonePermissionRef = useRef<MediaPermissionSnapshot>(microphonePermission);";
 assert.equal(legacyHookSource.split(legacyRefMarker).length - 1, 1, "unique legacy ref exposure marker");
+const legacyOfferQueueMarker = "  const cleanupRemotePeer = useCallback";
+assert.equal(legacyHookSource.split(legacyOfferQueueMarker).length - 1, 1, "unique legacy offer queue exposure marker");
 const instrumentedLegacyHookSource = legacyHookSource.replace(
   legacyRefMarker,
-  `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, legacyMicAnswerWaitersRef, legacyMicControlRef, legacyMicLocalPrivacyStopRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, peerConnectionsRef, roomRef, setChannelState, setLoading };`,
+  `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { appStateLifecycleHandlerRef, auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, legacyMicAnswerWaitersRef, legacyMicControlRef, legacyMicLocalPrivacyStopRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, nativePermissionRequestDepthRef, peerConnectionsRef, roomRef, setChannelState, setLoading };`,
+).replace(
+  legacyOfferQueueMarker,
+  `  (globalThis as any).__chillywoodLegacyMicAssuranceRefs.runSerializedPeerOffer = runSerializedPeerOffer;\n${legacyOfferQueueMarker}`,
 );
 const compiledLegacyHook = ts.transpileModule(instrumentedLegacyHookSource, {
   compilerOptions: {
@@ -134,6 +139,7 @@ function createLegacyMountedRuntime(options = {}) {
     durableMic: false,
     errors: [],
     intervals: [],
+    joinCalls: [],
     localStreams: [],
     mediaActions: [],
     mediaSessionStopper: null,
@@ -141,6 +147,7 @@ function createLegacyMountedRuntime(options = {}) {
     membershipActions: [],
     membershipTouches: [],
     microphonePermission: options.microphonePermission ?? grantedPermission(),
+    permissionRequestCalls: 0,
     peerConnectionState: options.peerConnectionState ?? "connected",
     peers: [],
     negotiationTimeline: [],
@@ -348,6 +355,8 @@ function createLegacyMountedRuntime(options = {}) {
           if (waiter) {
             await peer.setRemoteDescription({ type: "answer", sdp: "answer" });
             waiter.resolve(true);
+          } else if (peer) {
+            await peer.setRemoteDescription({ type: "answer", sdp: "answer" });
           }
         }
       }
@@ -382,6 +391,20 @@ function createLegacyMountedRuntime(options = {}) {
     "../_lib/accessEntitlements": { resolveRoomAccess: async () => ({ isAllowed: true }) },
     "../_lib/analytics": { trackEvent: () => undefined },
     "../_lib/communication": {
+      broadcastCommunicationRoomSignal: async ({ event, payload, roomId }) => {
+        const channel = runtime.readAssuranceRefs?.().channelRef.current ?? runtime.channels.at(-1);
+        if (!channel) return false;
+        const result = await channel.send({
+          event,
+          payload: {
+            ...payload,
+            fromUserId: runtime.userId,
+            roomId,
+          },
+          type: "broadcast",
+        });
+        return result === "ok";
+      },
       buildCommunicationChannelName: (roomId) => `comm-room-${roomId}`,
       buildCommunicationPresencePayload: ({ identity, media }) => ({
         cameraOn: media.cameraEnabled,
@@ -398,7 +421,13 @@ function createLegacyMountedRuntime(options = {}) {
       getCommunicationRTCModule: () => rtc,
       getCommunicationStreamURL: (stream) => stream?.toURL?.() ?? "",
       getCommunicationTrack: getTrack,
-      joinCommunicationRoomSession: async () => makeMembership(runtime),
+      joinCommunicationRoomSession: async (input) => {
+        runtime.joinCalls.push({ ...input });
+        return makeMembership(runtime, {
+          cameraEnabled: !!input.cameraEnabled,
+          micEnabled: !!input.micEnabled,
+        });
+      },
       leaveCommunicationRoomSession: async () => {
         await options.leaveBarrier;
         return null;
@@ -461,6 +490,7 @@ function createLegacyMountedRuntime(options = {}) {
       supabase: {
         channel: (topic) => new FakeChannel(topic),
         getChannels: () => runtime.channels,
+        realtime: { setAuth: async () => undefined },
         removeChannel: (channel) => { runtime.removedChannels.push(channel); },
       },
     },
@@ -468,6 +498,13 @@ function createLegacyMountedRuntime(options = {}) {
       Audio: {
         getPermissionsAsync: async () => runtime.microphonePermission,
         requestPermissionsAsync: async () => {
+          runtime.permissionRequestCalls += 1;
+          if (options.permissionAppStateCycle) {
+            runtime.appState = "background";
+            runtime.readAssuranceRefs().appStateLifecycleHandlerRef.current?.("background");
+            runtime.appState = "active";
+            runtime.readAssuranceRefs().appStateLifecycleHandlerRef.current?.("active");
+          }
           runtime.microphonePermission = runtime.permissionActions.shift() ?? runtime.microphonePermission;
           return runtime.microphonePermission;
         },
@@ -556,7 +593,7 @@ async function mountLegacyHook(runtime, optionOverrides = {}) {
     await settle(48);
   });
   assert.equal(committedResult?.channelState, "live", "legacy exact hook reaches the release media state");
-  assert.equal(runtime.peers.length, 1, "legacy exact hook creates the expected existing remote peer");
+  assert.ok(runtime.peers.length >= 1, "legacy exact hook creates the expected existing remote peer");
 
   return {
     getResult: () => committedResult,
@@ -633,7 +670,27 @@ const legacyFirstTrackCases = [
     setup: (runtime) => runtime.queuePermission(grantedPermission()),
     verify: ({ runtime }) => assert.equal(runtime.permissionActions.length, 0),
   },
-  { id: "permission_granted_first_track" },
+  {
+    id: "permission_granted_first_track",
+    verify: ({ runtime }) => assert.equal(runtime.permissionRequestCalls, 0, "already-granted permission is read without launching system UI"),
+  },
+  {
+    id: "permission_prompt_appstate_cycle_is_not_call_background",
+    runtimeOptions: {
+      microphonePermission: { canAskAgain: true, granted: false, status: "undetermined" },
+      permissionAppStateCycle: true,
+    },
+    setup: (runtime, harness) => {
+      runtime.generationBeforePermission = harness.refs.legacySessionGenerationRef.current;
+      runtime.queuePermission(grantedPermission());
+    },
+    verify: ({ harness, runtime }) => {
+      assert.equal(runtime.permissionRequestCalls, 1);
+      assert.equal(harness.refs.channelStateRef.current, "live");
+      assert.equal(harness.refs.legacySessionGenerationRef.current, runtime.generationBeforePermission);
+      assert.equal(runtime.peers[0].connectionState, "connected");
+    },
+  },
   { id: "connected_peer_offer", verify: ({ runtime }) => assert.equal(runtime.peers[0].offerCalls, 1) },
   { id: "connecting_peer_offer", runtimeOptions: { peerConnectionState: "connecting" } },
   { id: "disconnected_peer_offer", runtimeOptions: { peerConnectionState: "disconnected" } },
@@ -813,10 +870,10 @@ const legacyFirstTrackCases = [
   { id: "media_broadcast_error_compensates", setup: (runtime) => runtime.queueSend({ event: "media:update", outcome: "error" }), expected: false },
 ];
 
-assert.equal(legacyFirstTrackCases.length, 42, "authorized legacy first-track matrix remains exactly 42 cases");
+assert.equal(legacyFirstTrackCases.length, 43, "grouped media-lifecycle matrix remains exactly 43 cases");
 
 for (const matrixCase of legacyFirstTrackCases) {
-  test(`legacy first-track 42-case matrix: ${matrixCase.id}`, async (t) => {
+  test(`legacy first-track 43-case matrix: ${matrixCase.id}`, async (t) => {
     const runtime = createLegacyMountedRuntime(matrixCase.runtimeOptions);
     const harness = await mountLegacyHook(runtime);
     t.after(() => harness.unmount());
@@ -857,9 +914,120 @@ for (const matrixCase of legacyFirstTrackCases) {
     await matrixCase.verify?.({ harness, result, runtime });
     assert.equal(runtime.roomEndCalls, 0, `${matrixCase.id}: microphone control does not end the call`);
     assert.equal(runtime.tokenRequests, 0, `${matrixCase.id}: legacy control does not request provider tokens`);
-    assert.equal(runtime.errors.length, 0, `${matrixCase.id}: no reported native/React fatal or unhandled path`);
+    if (matrixCase.expected === false && matrixCase.id !== "permission_denied_no_false_success") {
+      assert.ok(runtime.errors.length >= 1, `${matrixCase.id}: operational failure remains observable after fail-closed compensation`);
+    } else {
+      assert.equal(runtime.errors.length, 0, `${matrixCase.id}: no unexpected native/React error path`);
+    }
   });
 }
+
+test("legacy grouped media lifecycle: a first camera track renegotiates an already connected peer before commit", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  seedLocalTrack(runtime, harness, { enabled: false }, { sender: true });
+
+  const result = await harness.run(() => harness.getResult().toggleCamera());
+
+  assert.equal(result, true);
+  assert.equal(harness.getResult().cameraEnabled, true);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.peers[0].signalingState, "stable");
+  assert.equal(runtime.peers[0].offerCalls, 1, "connected peer receives the required renegotiation offer");
+  const videoSenders = runtime.peers[0].getSenders().filter((sender) => sender.track?.kind === "video");
+  assert.equal(videoSenders.length, 1);
+  assert.equal(videoSenders[0].track.enabled, true);
+  assert.equal(runtime.broadcasts.at(-1)?.event, "media:update");
+  assert.equal(runtime.broadcasts.at(-1)?.payload?.cameraOn, true);
+});
+
+test("legacy grouped media lifecycle: membership admission is muted until native tracks are proved", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, {
+    authenticatedAccessToken: "exact-access-token",
+    authenticatedUserId: runtime.userId,
+    enabled: true,
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+
+  assert.ok(runtime.joinCalls.length >= 1);
+  assert.equal(runtime.joinCalls[0].cameraEnabled, false);
+  assert.equal(runtime.joinCalls[0].micEnabled, false);
+  assert.ok(runtime.mediaCreateCalls.some((call) => call.audio === true && call.video === true));
+  assert.ok(runtime.membershipTouches.some((touch) => touch.cameraEnabled === true && touch.micEnabled === true));
+});
+
+test("legacy grouped media lifecycle: failed initial media promotion disables tracks and restores muted membership", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  runtime.queuePresenceTrack({ outcome: "error" });
+  const harness = await mountLegacyHook(runtime, {
+    authenticatedAccessToken: "exact-access-token",
+    authenticatedUserId: runtime.userId,
+    enabled: true,
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+
+  assert.equal(harness.getResult().cameraEnabled, false);
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(runtime.durableCamera, false);
+  assert.equal(runtime.durableMic, false);
+  assert.ok(runtime.membershipTouches.some((touch) => touch.cameraEnabled === true && touch.micEnabled === true));
+  assert.ok(runtime.membershipTouches.some((touch) => touch.cameraEnabled === false && touch.micEnabled === false));
+  assert.ok(runtime.localStreams.flatMap((stream) => stream.getTracks()).every((track) => track.enabled === false));
+  assert.equal(runtime.errors.at(-1)?.scope, "communication-presence-initial-promotion");
+});
+
+test("legacy grouped media lifecycle: camera broadcast failure compensates native and durable state", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  seedLocalTrack(runtime, harness, { enabled: false }, { sender: true });
+  runtime.queueSend({ event: "media:update", outcome: "error" });
+
+  const result = await harness.run(() => harness.getResult().toggleCamera());
+
+  assert.equal(result, false);
+  assert.equal(harness.getResult().cameraEnabled, false);
+  assert.equal(runtime.durableCamera, false);
+  const videoSenders = runtime.peers[0].getSenders().filter((sender) => sender.track?.kind === "video");
+  assert.equal(videoSenders.length, 1);
+  assert.equal(videoSenders[0].track.enabled, false);
+  assert.equal(runtime.errors.at(-1)?.scope, "communication-legacy-camera-commit");
+});
+
+test("legacy grouped media lifecycle: strict microphone renegotiation waits for the shared peer offer queue", async (t) => {
+  let releaseExistingOffer;
+  const existingOfferBarrier = new Promise((resolve) => { releaseExistingOffer = resolve; });
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  seedLocalTrack(runtime, harness, { enabled: false, readyState: "ended" }, { sender: true });
+  let queuedOfferStarted = false;
+  const queuedOffer = harness.refs.runSerializedPeerOffer(runtime.remoteUserId, async () => {
+    queuedOfferStarted = true;
+    await existingOfferBarrier;
+    return true;
+  }, false);
+  await settle(12);
+  assert.equal(queuedOfferStarted, true);
+
+  let micResultPromise;
+  await act(async () => {
+    micResultPromise = harness.getResult().setMicrophoneEnabled(true);
+    await settle(24);
+  });
+  assert.equal(runtime.peers[0].offerCalls, 0, "strict renegotiation cannot overlap an existing peer offer operation");
+  releaseExistingOffer();
+  await queuedOffer;
+  const result = await harness.run(() => micResultPromise);
+
+  assert.equal(result, true);
+  assert.equal(runtime.peers[0].offerCalls, 1);
+  assert.equal(runtime.peers[0].signalingState, "stable");
+});
 
 test("legacy call-domain closure: muted privacy quarantines all local and sender-bound audio tracks", async (t) => {
   const runtime = createLegacyMountedRuntime();

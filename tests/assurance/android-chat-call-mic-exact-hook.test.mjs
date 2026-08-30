@@ -285,8 +285,8 @@ const mutants = [
     "false\n              || !active",
   )],
   ["ALLOW_BACKGROUND_AUDIO_RESTARTS_SESSION", (value) => value.replace(
-    "    activateCommittedSession,\n    clearReconciliationWarning,",
-    "    activateCommittedSession,\n    allowBackgroundAudio,\n    clearReconciliationWarning,",
+    "    activateCommittedSession,\n    authenticatedUserId,",
+    "    activateCommittedSession,\n    allowBackgroundAudio,\n    authenticatedUserId,",
   )],
   ["STALE_CLEANUP_REUSES_DURABLE_SNAPSHOT", (value) => value.replace(
     "const leaveContext = currentDurableContext();",

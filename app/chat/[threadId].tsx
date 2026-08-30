@@ -971,7 +971,9 @@ export default function ChillyChatThreadScreen() {
     try {
       const updated = await setMicrophoneEnabled(nextEnabled);
       if (!updated) {
-        setError("Microphone access is unavailable. The call remains connected.");
+        setError(canOpenMediaSettings
+          ? "Microphone permission is unavailable. The call remains connected."
+          : "Microphone state could not be synchronized. The call remains connected.");
         return;
       }
       setError(null);
@@ -982,7 +984,7 @@ export default function ChillyChatThreadScreen() {
       setError("The microphone could not be changed. The call remains connected.");
       reportRuntimeError("chat-call-toggle-microphone", mediaError, { threadId });
     }
-  }, [micEnabled, requestedNativeCallUuid, setMicrophoneEnabled, threadId]);
+  }, [canOpenMediaSettings, micEnabled, requestedNativeCallUuid, setMicrophoneEnabled, threadId]);
 
   const handleToggleCallCamera = useCallback(async () => {
     try {
