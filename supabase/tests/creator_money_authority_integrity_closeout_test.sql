@@ -2502,8 +2502,8 @@ select throws_ok(
   $$select public.mark_creator_payout_provider_result(
     'a6000000-0000-4000-8000-000000000001', 'po_closeout_unique', 'failed'
   )$$,
-  'P0001', 'paid_payout_terminal',
-  'paid payout state cannot regress to failed'
+  'P0001', 'verified_provider_payout_receipt_required',
+  'payout state cannot move without an immutable verified provider receipt'
 );
 select ok(
   has_function_privilege('service_role', 'public.mark_creator_payout_provider_result(uuid,text,text)', 'EXECUTE')
@@ -2524,14 +2524,14 @@ select ok(
 );
 select ok(
   pg_get_functiondef('public.mark_creator_payout_provider_result(uuid,text,text)'::regprocedure)
-    ilike '%provider_payout_id_already_bound%'
+    ilike '%verified_provider_payout_receipt_required%'
   and pg_get_functiondef('public.mark_creator_payout_provider_result(uuid,text,text)'::regprocedure)
-    ilike '%payout_allocation_currency_mismatch%'
+    ilike '%provider_payout_receipt_binding_mismatch%'
   and pg_get_functiondef('public.mark_creator_payout_provider_result(uuid,text,text)'::regprocedure)
-    ilike '%payout_allocation_mismatch%'
-  and pg_get_functiondef('public.mark_creator_payout_provider_result(uuid,text,text)'::regprocedure)
+    ilike '%provider_payout_destination_mismatch%'
+  and pg_get_functiondef('public.mark_creator_payout_provider_result_pre_verified_receipt(uuid,text,text)'::regprocedure)
     ilike '%creator-payout-result:%',
-  'payout result projector binds unique proof, exact currency, allocations and serialization'
+  'payout result projector requires verified exact receipt binding before the serialized lifecycle projector'
 );
 
 set local role authenticated;
