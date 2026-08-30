@@ -65,6 +65,7 @@ import {
   terminateIosAcceptedNativeAnswer,
   shouldShowOutgoingRingingPanel,
 } from "../../_lib/communicationCallMediaPolicy.mjs";
+import { normalizeCommunicationRoomIdentifier } from "../../_lib/communicationRoomIdentifier.mjs";
 import { decodeVisiblePercentEscapes } from "../../_lib/displayText";
 import {
   acceptChillyCircleRequest,
@@ -1660,17 +1661,15 @@ export default function ChillyChatThreadScreen() {
     const latestInvite = await readChillyChatCallInvite(invite.id).catch(() => null);
     const expiresAt = Date.parse(String(latestInvite?.expiresAt ?? ""));
     const expired = Number.isFinite(expiresAt) && expiresAt <= Date.now();
-    const roomId = String(latestInvite?.communicationRoomId ?? "").trim();
-    const snapshot = roomId ? await getCommunicationRoomSnapshot(roomId).catch(() => null) : null;
-    const roomActive = snapshot?.room.status === "active";
+    const roomId = normalizeCommunicationRoomIdentifier(latestInvite?.communicationRoomId);
     const valid =
       !!latestInvite
       && latestInvite.status === "ringing"
       && !expired
+      && !!roomId
       && latestInvite.threadId === threadId
       && latestInvite.calleeUserId === currentUserId
-      && latestInvite.callerUserId !== currentUserId
-      && roomActive;
+      && latestInvite.callerUserId !== currentUserId;
 
     if (valid) return latestInvite;
 
