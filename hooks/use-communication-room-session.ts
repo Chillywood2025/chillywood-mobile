@@ -53,6 +53,7 @@ import { normalizeRoomMembershipState } from "../_lib/roomRules";
 import { supabase } from "../_lib/supabase";
 
 type UseCommunicationRoomSessionOptions = {
+  authenticatedUserId?: string;
   roomId: string;
   initialMediaPreferences?: Partial<CommunicationMediaPreferences>;
   onRoomEnded?: (reason: "host-left" | "ended" | "room-full") => void;
@@ -346,6 +347,7 @@ const waitForRealtimeOperation = async <T,>(operation: Promise<T>, timeoutMillis
 };
 
 export function useCommunicationRoomSession({
+  authenticatedUserId,
   roomId,
   initialMediaPreferences,
   onRoomEnded,
@@ -1513,7 +1515,7 @@ export function useCommunicationRoomSession({
             },
           }).catch(() => false);
         }
-        await endCommunicationRoom(resolvedRoom.roomId).catch(() => {});
+        await endCommunicationRoom(resolvedRoom.roomId, resolvedIdentity.userId).catch(() => {});
       }
 
       await leaveCommunicationRoomSession({
@@ -1579,7 +1581,7 @@ export function useCommunicationRoomSession({
       setError(null);
       setChannelState("connecting");
 
-      let resolvedIdentity = await readCommunicationIdentity();
+      let resolvedIdentity = await readCommunicationIdentity(authenticatedUserId);
       let joinedMembership: CommunicationRoomMembership | null = null;
       for (let attempt = 0; attempt < 3 && !joinedMembership; attempt += 1) {
         if (!isActiveGeneration()) return;
@@ -1601,7 +1603,7 @@ export function useCommunicationRoomSession({
         }
         if (!joinedMembership && attempt < 2) {
           await new Promise((resolve) => setTimeout(resolve, 250));
-          resolvedIdentity = await readCommunicationIdentity();
+          resolvedIdentity = await readCommunicationIdentity(authenticatedUserId);
         }
       }
       if (!isActiveGeneration()) return;
@@ -2107,6 +2109,7 @@ export function useCommunicationRoomSession({
     enabled,
     analyticsRole,
     analyticsSurface,
+    authenticatedUserId,
     clearOfferRetry,
   ]);
 

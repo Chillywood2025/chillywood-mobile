@@ -85,6 +85,7 @@ const MEDIA_WRITE_PREDECESSOR_DRAIN_TIMEOUT_MS = 2_000;
 const MEDIA_WRITE_OPERATION_TIMEOUT_MS = 4_000;
 
 type UseLiveKitChatCallSessionOptions = {
+  authenticatedUserId: string;
   allowBackgroundAudio?: boolean;
   enabled: boolean;
   initialMediaPreferences?: Partial<CommunicationMediaPreferences>;
@@ -156,6 +157,7 @@ const sameCommittedAuthority = (left: CommittedSession | null, right: CommittedS
 );
 
 export function useLiveKitChatCallSession({
+  authenticatedUserId,
   allowBackgroundAudio = false,
   enabled,
   initialMediaPreferences,
@@ -1277,7 +1279,10 @@ export function useLiveKitChatCallSession({
         && options.endRoomIfHost
         && endContext.productRoom.hostUserId === endContext.currentIdentity.userId
       ) {
-        await endCommunicationRoom(endContext.productRoom.roomId).catch(() => undefined);
+        await endCommunicationRoom(
+          endContext.productRoom.roomId,
+          endContext.currentIdentity.userId,
+        ).catch(() => undefined);
       }
       const leaveContext = currentDurableContext();
       if (leaveContext && options.leaveMembership !== false) {
@@ -1372,7 +1377,7 @@ export function useLiveKitChatCallSession({
     setChannelState("connecting");
 
     const initialize = async () => {
-      let currentIdentity = await readCommunicationIdentity();
+      let currentIdentity = await readCommunicationIdentity(authenticatedUserId);
       if (
         !currentIdentity.userId
         || (currentIdentity.userId !== inviteCallerUserId && currentIdentity.userId !== inviteCalleeUserId)
@@ -1395,7 +1400,7 @@ export function useLiveKitChatCallSession({
         });
         if (!membership && attempt < 2) {
           await new Promise((resolve) => setTimeout(resolve, 250));
-          currentIdentity = await readCommunicationIdentity();
+          currentIdentity = await readCommunicationIdentity(authenticatedUserId);
           if (
             !currentIdentity.userId
             || (currentIdentity.userId !== inviteCallerUserId && currentIdentity.userId !== inviteCalleeUserId)
@@ -1729,6 +1734,7 @@ export function useLiveKitChatCallSession({
     };
   }, [
     activateCommittedSession,
+    authenticatedUserId,
     clearReconciliationWarning,
     cleanupSession,
     emitStage,

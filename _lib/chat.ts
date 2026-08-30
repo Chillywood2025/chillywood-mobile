@@ -858,7 +858,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
 
   const roomId = toText(created.roomId);
   if (!toText(thread.otherMember?.userId)) {
-    await endCommunicationRoom(roomId).catch(() => null);
+    await endCommunicationRoom(roomId, currentUserId).catch(() => null);
     logChatCall("thread_call_missing_callee", {
       currentUserId,
       threadId: thread.threadId,
@@ -877,7 +877,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       threadId: thread.threadId,
     });
   } catch (inviteError) {
-    await endCommunicationRoom(roomId).catch(() => null);
+    await endCommunicationRoom(roomId, currentUserId).catch(() => null);
     logChatCall("thread_call_invite_failed", {
       currentUserId,
       threadId: thread.threadId,
@@ -904,7 +904,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       status: delivery.status,
     });
   } else if (begunCall.invite.status === "busy") {
-    await endCommunicationRoom(roomId).catch(() => null);
+    await endCommunicationRoom(roomId, currentUserId).catch(() => null);
     logChatCall("thread_call_receiver_busy", {
       currentUserId,
       threadId: thread.threadId,
@@ -912,7 +912,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       mode: begunCall.invite.callType,
     });
   } else {
-    await endCommunicationRoom(roomId).catch(() => null);
+    await endCommunicationRoom(roomId, currentUserId).catch(() => null);
     logChatCall("thread_call_collision_reused", {
       currentUserId,
       threadId: thread.threadId,
