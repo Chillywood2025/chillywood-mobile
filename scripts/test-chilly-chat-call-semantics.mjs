@@ -983,6 +983,16 @@ assert.match(rootLayoutSource, /createIosCallKitAnswerRouteHandler/u, "CallKit A
 assert.match(rootLayoutSource, /await updateChillyChatCallInviteStatus[\s\S]{0,500}status:\s*"accepted"/u, "foreground Answer requests the server-authoritative transition directly");
 assert.match(
   chatThreadSource,
+  /const readAcceptableIncomingInvite[\s\S]{0,520}normalizeCommunicationRoomIdentifier\(latestInvite\?\.communicationRoomId\)[\s\S]{0,520}latestInvite\.calleeUserId === currentUserId/u,
+  "callee pre-accept validation binds the exact invite and canonical text room identifier",
+);
+assert.doesNotMatch(
+  chatThreadSource,
+  /const readAcceptableIncomingInvite[\s\S]{0,900}getCommunicationRoomSnapshot/u,
+  "callee pre-accept validation does not require an RLS-denied communication-room read",
+);
+assert.match(
+  chatThreadSource,
   /const requestedNativeCallOwnsTransition = doesNativeCallActionOwnTransition\(\{[\s\S]{0,220}authority: trustedNativeCallClaim[\s\S]{0,400}trustedNativeClaim: trustedNativeCallClaim/u,
   "the chat thread must use the tested native-transition ownership policy",
 );
