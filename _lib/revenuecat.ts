@@ -17,6 +17,7 @@ import {
 import { withAuthorityReadDeadline } from "./entitlementAuthority";
 import { debugLog, reportRuntimeError } from "./logger";
 import { getRuntimeConfig } from "./runtimeConfig";
+import { isRevenueCatPurchaseResultForProduct as validatesPurchaseResultForProduct } from "./revenuecatPurchaseClosure";
 
 export type { PurchasesPackage } from "react-native-purchases";
 
@@ -109,27 +110,13 @@ const isOffering = (value: unknown) => record(value) && !!normalizeIdentityText(
 const isOfferings = (value: unknown): value is PurchasesOfferings => record(value) && record(value.all)
   && Object.entries(value.all).every(([key, offering]) => !!normalizeIdentityText(key) && isOffering(offering))
   && (value.current === null || isOffering(value.current));
-const isPurchaseResult = (value: unknown): value is MakePurchaseResult => {
-  if (!record(value) || !isCustomerInfo(value.customerInfo) || !record(value.transaction)) return false;
-  const productIdentifier = exactIdentityText(value.productIdentifier);
-  const transactionProductIdentifier = exactIdentityText(value.transaction.productIdentifier);
-  const transactionIdentifier = exactIdentityText(value.transaction.transactionIdentifier);
-  const purchaseDate = exactIdentityText(value.transaction.purchaseDate);
-  const purchaseToken = value.transaction.purchaseToken;
-  return !!productIdentifier
-    && transactionProductIdentifier === productIdentifier
-    && !!transactionIdentifier
-    && !!purchaseDate
-    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/.test(purchaseDate)
-    && Number.isFinite(Date.parse(purchaseDate))
-    && (purchaseToken === null || !!exactIdentityText(purchaseToken));
-};
-
 const isPurchaseResultForProduct = (
   value: unknown,
   expectedProductIdentifier: string,
-): value is MakePurchaseResult => isPurchaseResult(value)
-  && normalizeIdentityText(value.productIdentifier) === expectedProductIdentifier;
+): value is MakePurchaseResult => validatesPurchaseResultForProduct(value, {
+  expectedProductIdentifier,
+  isCustomerInfo,
+});
 
 const serializeRevenueCatIdentityOperation = <T>(operation: () => Promise<T>) => {
   const result = revenueCatIdentityQueue.then(operation, operation);

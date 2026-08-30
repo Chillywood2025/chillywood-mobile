@@ -507,12 +507,29 @@ export async function purchasePaidVideoAccess(input: {
   try {
     await purchaseRevenueCatStoreProduct(product, { authority: purchaseSubject.authority });
   } catch (error) {
+    if (isRevenueCatUserCancellation(error)) {
+      return {
+        ok: false,
+        message: "Paid Video unlock was canceled. Nothing changed.",
+        access,
+        intentId: intent.id,
+        productId,
+      };
+    }
+    const verifiedAccess = await waitForPaidVideoAccess(input.videoId);
+    if (verifiedAccess.allowed) {
+      return {
+        ok: true,
+        message: "Video unlocked.",
+        access: verifiedAccess,
+        intentId: intent.id,
+        productId,
+      };
+    }
     return {
       ok: false,
-      message: isRevenueCatUserCancellation(error)
-        ? "Paid Video unlock was canceled. Nothing changed."
-        : "Paid Video checkout could not be completed. Try again later.",
-      access,
+      message: "Paid Video checkout could not be completed. Try again later.",
+      access: verifiedAccess,
       intentId: intent.id,
       productId,
     };

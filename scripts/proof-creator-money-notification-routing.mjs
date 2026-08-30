@@ -52,7 +52,10 @@ const routeTargets = read("_lib/creatorMonetizationRouteTargets.ts");
 ].forEach((deepLink) => add(`backend emits ${deepLink}`, includes(revenuecatWebhook, deepLink), deepLink));
 
 add("notification response handler routes push tap paths", includes(layout, "subscribeToNotificationResponses"), "subscribeToNotificationResponses");
-add("notification response handler uses router.push", includes(layout, "router.push(path as Parameters<typeof router.push>[0])"), "router.push notification path");
+add("notification response handler sanitizes then uses router.push",
+  includes(layout, "const safePath = sanitizeExternalIosNativeCallPath(path)")
+    && includes(layout, "router.push(safePath as Parameters<typeof router.push>[0])"),
+  "sanitized router.push notification path");
 add("Watch-Party money notification targets Party Room", includes(revenuecatWebhook, 'route: "/watch-party/[partyId]"'), "/watch-party/[partyId]");
 add("Watch-Party route target stays Party Room in route truth", includes(routeTargets, 'viewerTarget: "/watch-party/[partyId]"'), "Party Room viewer target");
 add("Watch-Party money notification does not deep-link to Live Stage", !includes(revenuecatWebhook, "chillywoodmobile://watch-party/live-stage"), "no money Live Stage deep link");

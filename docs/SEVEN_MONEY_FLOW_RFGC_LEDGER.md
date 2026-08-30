@@ -30,33 +30,62 @@ This ledger is cumulative. A merge alone does not close a defect. Production mon
 - Test blind spot: prior tests proved service-role ACLs and serialized lifecycle transitions but did not require provider-origin evidence at the seam. New pgTAP proves immutable receipt ACLs, absent-receipt rejection, exact provider/user/creator/economics/environment/destination bindings, server-owned settlement holds, and non-executable predecessor functions.
 - Disposition: `PROVIDER_PROVEN`. Exact head `3ac5dc4fc109a1f7db92d07c3273331fc2fff1a1` was merged by normal two-parent merge `027c6558b125dce7474bed07fa927bd57cda75b1`; exact migration `20260830203952` was the only migration deployed. Remote migration history, schema dump, RLS/ACL/function source, switch state, and the final complete applicable matrix were read back successfully.
 
-## RFGC-002 — Premium proof script stale source-string assertion
+## RFGC-002 — Shared money-path proof drift
 
 - Defect ID: `RFGC-002`
-- Flow(s): Premium.
+- Flow(s): Premium plus the shared creator-money notification route proof.
 - User role: Premium subscriber.
 - Creator role: none; Premium remains separate from creator earnings.
 - Platform: Android and iOS.
 - Provider: RevenueCat, Google Play, App Store.
-- Discovery evidence: `proof:premium-first-activation` expects a historical source string for the manage-subscription analytics event, while the implemented restore/manage paths exist in `_lib/revenuecat.ts`, `_lib/monetization.ts`, and `app/subscribe.tsx` and the executable Premium readiness and iOS commerce proofs pass.
+- Discovery evidence: three proofs expected historical source shapes: a direct Premium entitlement table filter that was replaced by the fail-closed authority RPC, an older Live recheck callback/string, and an unsanitized notification `router.push(path)` call that was replaced by the iOS native-call path sanitizer followed by `router.push(safePath)`.
 - First failed boundary: assurance source-string projection, after substantive implementation.
 - Visible symptom: proof-script false negative; no application failure established.
 - Upstream producer: stale proof assertion.
 - Downstream consequence: assurance noise only.
 - Root cause: the proof couples to historical source text instead of behavior.
 - Root-cause group: assurance-only drift.
-- Same-class siblings: searched applicable money guards; none failed substantively.
+- Same-class siblings: all applicable money/provider proofs and guards were run; no substantive sibling failure was established.
 - Adjacent different-class risks: restore, refresh, cancel, failure, entitlement identity, and Premium/creator separation were separately inspected.
 - Shared integration seams: RevenueCat restore/manage subscription UI.
 - Security impact: none established.
 - Financial impact: none established.
-- Changed files: none.
+- Changed files: `scripts/proof-premium-first-activation.mjs`, `scripts/proof-premium-sandbox-live-tab-flow.mjs`, `scripts/proof-creator-money-notification-routing.mjs`.
 - Migration requirement: none.
 - Provider mutation requirement: none.
 - OTA requirement: none.
 - Physical/provider proof requirement: provider sandbox/StoreKit proof when an authenticated provider test surface is available.
-- Test blind spot: source-string assertions can drift independently from executable behavior.
-- Disposition: `NONBLOCKING_DEBT`.
+- Test blind spot: source-string assertions can drift independently from executable behavior and can accidentally reject a newer, stricter integration seam.
+- Disposition: `REPAIRED_UNPROVEN` until the exact grouped candidate is merged; all three corrected executable proofs pass locally.
+
+## RFGC-003 — RevenueCat native success rejected before server projection
+
+- Defect ID: `RFGC-003`
+- Flow(s): Premium and all six creator-money flows share the native RevenueCat result validator; Premium and Paid Video exposed distinct downstream reconciliation gaps.
+- User role: exact authenticated buyer/subscriber.
+- Creator role: exact creator and exact target for creator-money flows; none for Premium.
+- Platform: Android directly observed; iOS inspected and retained.
+- Provider: Google Play, App Store, RevenueCat.
+- Discovery evidence: physical Android sandbox Premium checkout completed in Google Play and produced an active RevenueCat subscription, active RevenueCat entitlement, processed webhook, active `user_entitlements` row, and active provider/access authority. The app still reported Premium inactive after returning from checkout.
+- First failed boundary: RevenueCat native result validation. RevenueCat Hybrid Common maps Android `transactionIdentifier` from Google order ID, which may be absent at immediate purchase return, while `purchaseToken` is present. The app required a non-empty transaction ID and rejected the legitimate token-correlated result before post-purchase refresh.
+- Visible symptom: Google Play accepted the sandbox purchase, but the app displayed an unavailable/inactive result until a later refresh.
+- Upstream producer: platform-native RevenueCat bridge result with exact product, exact customer info, valid purchase date, null order ID, and non-empty Google purchase token.
+- Downstream consequence: Premium did only one immediate server read before an asynchronous webhook projection could settle. Paid Video returned failure from an ambiguous native result without first checking whether exact video authority had already arrived.
+- Root cause: the shared validator demanded a provider field not guaranteed by Android at immediate return, and adjacent purchase/restore consumers did not consistently reconcile asynchronous server authority.
+- Root-cause group: native provider-result compatibility plus bounded authoritative-projection reconciliation.
+- Same-class siblings: every RevenueCat package/store-product purchase uses the shared validator. Tips grants no digital access; Seat Pass, Channel Subscription, VIP, and Event Pass already use exact server reconciliation after ambiguous returns. Premium purchase/restore and Paid Video required grouped adjacent repair.
+- Adjacent different-class risks: wrong product, wrong account, stale session generation, client-authorized access, cancellation delay, unbounded polling, restore/store mismatch, duplicate webhook, delayed webhook, and provider failure.
+- Shared integration seams: auth/session -> RevenueCat identity -> exact store product -> native transaction -> RevenueCat webhook -> immutable receipt -> server entitlement/access -> UI readback. Shared notification routing was separately re-proven.
+- Security impact: no access or money authority was weakened. A purchase result must retain exact selected/top-level/transaction product identity, valid customer info and timestamp, and at least one exact provider correlation signal. Durable success still requires exact server authority.
+- Financial impact: prevents a successful sandbox/provider purchase from being misreported and discourages duplicate retry; creates no client-authorized ledger, payout, or entitlement.
+- Changed files: `_lib/revenuecatPurchaseClosure.ts`, `_lib/revenuecat.ts`, `_lib/monetization.ts`, `_lib/creatorPaidVideos.ts`, `scripts/test-revenuecat-purchase-closure.mjs`, `package.json`.
+- Migration requirement: none.
+- Provider mutation requirement: none.
+- OTA requirement: one grouped `internal-v2` OTA after protected merge because JavaScript application source changed.
+- Native-build requirement: none established. Build 91 contains the current production public configuration and passed clear-state sign-in from the embedded runtime; native fingerprint/runtime remain compatible with this JavaScript repair.
+- Physical/provider proof requirement: exact OTA consumption followed by Premium sandbox purchase, authoritative UI convergence, restore, expiry/revocation readback where the sandbox permits, and available exact creator-flow checks on both attached platforms.
+- Test blind spot: the prior validator test double always supplied a transaction ID and did not reproduce Android's valid token-only return. The new executable proof covers token-only Android, transaction-ID-only Apple, absent correlation, product mismatch, malformed date, cancellation, bounded projection settlement, stale authority, Premium purchase/restore wiring, and Paid Video ambiguous-result reconciliation.
+- Disposition: `REPAIRED_UNPROVEN` pending exact-head merge, OTA, and physical provider proof.
 
 ## RFGC-EXT-001 — Production provider activation/readback unavailable
 
@@ -94,35 +123,37 @@ This ledger is cumulative. A merge alone does not close a defect. Production mon
 - Creator role: exact proof creator targeted by sandbox offers.
 - Platform: Android internal-v2.
 - Provider: EAS Update, Supabase Auth, RevenueCat, Google Play.
-- Discovery evidence: the installed version-91 tester artifact embeds a retired Supabase public key and declares update-check-on-launch `NEVER`; its source runtime gate subsequently fetches the current internal-v2 OTA, after which authenticated login succeeds. Clearing app state causes pre-update login to fail. The repository's monetization Maestro flows clear state, use a stale creator fixture ID, omit per-session legal acceptance, and use a custom-scheme channel link that did not route on the attached device. The canonical proof owner has sandbox offers for all six creator flows, and an authenticated HTTPS app link reaches that exact creator. Android physical proof reached the Premium surface and the exact sandbox creator-support surface; the Tip flow remained fail-closed before a Google Play sheet because current provider readiness did not authorize checkout.
-- First failed boundary: stale native/test artifact and external sandbox checkout availability, after current OTA source and database fixture readback.
-- Visible symptom: cold-state automation cannot complete login; creator-flow provider sheets cannot be claimed physically proven from this artifact/session.
-- Upstream producer: EAS native build environment, test fixture configuration, Google Play licensed-test state, and current provider catalog/readiness.
-- Downstream consequence: physical provider proof is partial; no entitlement, ledger, or payout authority was granted.
-- Root cause: stale external/native proof artifacts and unavailable provider-test checkout, not a validated current-source authority defect.
+- Discovery evidence: exact build/AAB inspection found version 91 build `cad83e2e-6413-4dc1-ba4f-ce2887c211ac`, profile/channel `android-internal-v2`, runtime `1.0.0-android-production-v2`, with the current production Supabase public configuration embedded. After `pm clear`, the base binary launched, connected to production Supabase, completed sign-in and policy acceptance, and reached authenticated Home without OTA warm-cache dependence. A physical Google Play Premium sandbox sheet later displayed the licensed test card and completed a sandbox purchase.
+- First failed boundary: no current-key native failure survived independent cold/clear-state proof. The remaining physical Premium symptom was isolated to `RFGC-003`, after Google Play/RevenueCat/backend success.
+- Visible symptom: none at native authentication/configuration startup; provider-flow UI remains subject to the grouped post-purchase repair and external catalog availability.
+- Upstream producer: EAS production environment, embedded Expo runtime configuration, Google Play licensed tester state, and provider catalog/readiness.
+- Downstream consequence: a replacement Android native build is not required for the JavaScript-compatible grouped repair. Provider proof remains partial only where store/provider state is unavailable.
+- Root cause: the earlier native-key conclusion relied on incomplete embedded-artifact evidence and warm-session behavior; exact AAB plus destructive clear-state proof resolved it.
 - Root-cause group: physical/provider proof prerequisites.
-- Same-class siblings: all six creator-flow Maestro fixtures share the cold-state login and stale creator/link assumptions.
-- Adjacent different-class risks: false provider-ready UI, wrong creator target, legal-version drift, accidental real purchase, stale entitlement, and mistaken physical-green reporting.
+- Same-class siblings: Android embedded URL/key/runtime/channel/fingerprint and iOS runtime compatibility were inspected; no same-class current-key blocker was established.
+- Adjacent different-class risks: false provider-ready UI, wrong creator target, legal-version drift, accidental real purchase, stale entitlement, and mistaken physical-green reporting remain covered by provider/UI proof rather than a new native build.
 - Shared integration seams: EAS Update, Auth, legal acceptance, app links, sandbox tester resolver, RevenueCat/Play purchase surface.
-- Security impact: fail-closed behavior preserved; no cross-user or cross-creator access observed.
-- Financial impact: no charge, creator credit, payable balance, or payout occurred.
-- Changed files: none; these are external/native/test-fixture prerequisites and assurance plumbing.
+- Security impact: fail-closed behavior preserved; no cross-user or cross-creator access observed. Only provider-sandbox records were created.
+- Financial impact: no real charge, creator credit, payable balance, or payout occurred.
+- Changed files: none for the native conclusion.
 - Migration requirement: none.
-- Provider mutation requirement: separately authorize/complete provider sandbox and, if desired, issue a new internal native tester build with the current public key. No store submission is required for engineering source closure.
-- OTA requirement: none; the current internal-v2 OTA already contains the valid public client configuration.
-- Physical/provider proof requirement: new current-key native tester artifact or a warmed OTA session plus authenticated Google Play sandbox checkout availability.
-- Test blind spot: clear-state flows validated neither embedded-runtime credential currency nor the mandatory legal/app-link path before attempting purchase UI.
-- Disposition: `EXTERNAL_BLOCKED`; substantive current source remains fail-closed.
+- Provider mutation requirement: none for current-key native readiness; external catalog gaps remain under `RFGC-EXT-001`.
+- OTA requirement: the grouped JavaScript repair in `RFGC-003` requires one compatible internal-v2 OTA after merge.
+- Physical/provider proof requirement: require the attached Android to consume the exact grouped OTA, then restart the complete available sandbox matrix.
+- Test blind spot: the earlier assessment did not combine exact AAB inspection with destructive clear-state authentication and therefore over-attributed a warm-session observation to the native artifact.
+- Disposition: `PHYSICALLY_PROVEN` for current-key cold/clear-state native readiness; post-repair provider behavior remains `REPAIRED_UNPROVEN` under `RFGC-003`.
 
 ## Closure counts
 
 - `BLOCKING_OPEN`: 0
-- `REPAIRED_UNPROVEN`: 0
-- `PHYSICALLY_PROVEN`: 0
+- `REPAIRED_UNPROVEN`: 2
+- `PHYSICALLY_PROVEN`: 1
 - `PROVIDER_PROVEN`: 1
-- `NONBLOCKING_DEBT`: 1
-- `EXTERNAL_BLOCKED`: 2
+- `NONBLOCKING_DEBT`: 0
+- `EXTERNAL_BLOCKED`: 1
 - `NOT_A_DEFECT`: 0
+
+These are pre-merge activation-continuation counts. `RFGC-002` and `RFGC-003` may move out of `REPAIRED_UNPROVEN` only after exact-head merge and the required post-OTA/provider proof.
 
 ## Final closure evidence
 
@@ -137,3 +168,13 @@ This ledger is cumulative. A merge alone does not close a defect. Production mon
 - Deployment: no OTA was required because the grouped repair changed database authority, pgTAP, and documentation only.
 
 Final engineering counts are zero `BLOCKING_OPEN` and zero `REPAIRED_UNPROVEN`. External provider activation remains separate and fail-closed.
+
+## Provider/production-activation continuation
+
+- Starting protected main/tree: `76af7c9aef344bd22d0c79c7341d43cf156756a1` / `de76b07b16442e3c1aa420f9acadd509e2f83d0c`.
+- Current-key Android: version 91 build `cad83e2e-6413-4dc1-ba4f-ce2887c211ac`; `android-internal-v2`; runtime `1.0.0-android-production-v2`; destructive clear-state authentication and production Supabase connectivity passed from the embedded runtime.
+- RevenueCat project: Android exposes the seven sandbox concepts; iOS exposes Premium, Tips, and Seat Pass but not the canonical Paid Video, Channel Subscription, VIP, or Event Pass group.
+- Google Play: Premium monthly sandbox checkout is physically available. The production Channel Subscription base plan remains externally blocked; no identifier was invented and no public product was activated.
+- App Store: direct authenticated catalog authority is unavailable, so missing iOS catalog records were not created speculatively.
+- Stripe Connect: authenticated readback still requires interactive provider reauthentication; no payout was sent and production payout remains off.
+- Live activation: `live_money`, creator production money, payouts, cash-out, Premium public purchase, public rollout, and `production-v2` remain off.
