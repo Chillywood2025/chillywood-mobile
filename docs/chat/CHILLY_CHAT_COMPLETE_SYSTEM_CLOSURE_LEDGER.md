@@ -251,3 +251,31 @@ Every recursive failure-graph pass includes shared or cross-feature code when it
 ## Remaining physical closure matrix
 
 Post-#315 messaging, unread/read, and Android keyboard are physically proved for the interrupted pass but must be rerun from the beginning after the next grouped OTA. Required call proof remains: legacy voice usable two-way audio and controls; second clean voice; legacy video usable two-way render and controls; reverse direction; background/reconnect/cleanup/next call; Android foreground/warm/cold/decline/replay/stale entry; available iOS foreground/CallKit/termination/duplicate/stale entry; LiveKit canary path if dedicated accounts/devices are available; Watch Party namespace isolation. Any new blocker reopens the complete grouped and materially connected cross-feature failure graph.
+
+## Final cumulative disposition — supersedes checkpoint statuses
+
+The exact PR #318 internal-v2 updates were consumed by both attached devices,
+and the complete physical matrix was restarted from the beginning and passed.
+Messaging in both directions, Realtime, preview/unread/read clearing, Android
+multiline keyboard/background-resume, ordinary and repeat voice, reverse
+direction, warm iOS CallKit answer, Android cold answer, video in both local and
+remote render directions, camera and microphone controls, recovery,
+background/resume, decline, stale replay denial, termination, cleanup, and a
+fresh final call all passed. Production ended with zero active blocking invites,
+rooms, or memberships and a null thread active-room projection.
+
+Accordingly, every cumulative required-flow defect in this ledger repaired by
+PRs #306 through #318 is now `PHYSICALLY_PROVEN`, including entries whose
+historical checkpoint text says `REPAIRED_UNPROVEN`. That historical wording is
+retained as time-ordered evidence, but it is not current disposition. Current
+required-flow totals are:
+
+- `BLOCKING_OPEN`: 0
+- `REPAIRED_UNPROVEN`: 0
+- `PHYSICALLY_PROVEN`: all repaired required-flow entries
+- `NONBLOCKING_DEBT`: the bounded Diagnostics initialization presentation race
+  and one recovered external `livekit-registry` ingress 503
+
+Exact final identifiers, source/merge/ruleset/OTA provenance, the complete
+device matrix, and provider/database terminal readback are recorded in
+`docs/release/CHILLY_CHAT_RECURSIVE_GROUPED_CLOSURE_LEDGER_2026-08-30.md`.
