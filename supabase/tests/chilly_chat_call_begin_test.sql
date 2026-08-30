@@ -1,5 +1,5 @@
 begin;
-select plan(33);
+select plan(36);
 
 insert into auth.users (id, is_sso_user, is_anonymous)
 values
@@ -219,6 +219,12 @@ values
   ('SAMESTALEACTIVE', 'SAMESTALEACTIVE', '4aaaaaaa-1111-4aaa-8aaa-111111111111', 'active'),
   ('SAMESTALECANDIDATE', 'SAMESTALECANDIDATE', '4aaaaaaa-1111-4aaa-8aaa-111111111111', 'active');
 
+update public.communication_rooms
+set
+  updated_at = now() - interval '16 minutes',
+  last_activity_at = now() - interval '16 minutes'
+where room_id in ('STALEACTIVE', 'SAMESTALEACTIVE');
+
 alter table public.chat_call_invites disable trigger enforce_chat_call_invites_abuse_guard;
 insert into public.chat_call_invites (
   id, thread_id, communication_room_id, caller_user_id, callee_user_id,
@@ -249,6 +255,18 @@ values
   );
 alter table public.chat_call_invites enable trigger enforce_chat_call_invites_abuse_guard;
 
+update public.chat_threads
+set
+  active_communication_room_id = 'STALEACTIVE',
+  active_call_type = 'voice'
+where id = '4ddddddd-dddd-4ddd-8ddd-dddddddddddd';
+
+update public.chat_threads
+set
+  active_communication_room_id = 'SAMESTALEACTIVE',
+  active_call_type = 'video'
+where id = '4fffffff-ffff-4fff-8fff-ffffffffffff';
+
 select set_config(
   'request.jwt.claims',
   '{"role":"authenticated","sub":"47777777-7777-4777-8777-777777777777","session_id":"47777777-7777-4777-8777-777777777701"}',
@@ -260,7 +278,7 @@ values (
   public.begin_chilly_chat_call('4eeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', 'STALECANDIDATE', 'voice')
 );
 
-select ok((select (payload ->> 'created')::boolean from call_begin_results where label = 'stale-cross-thread'), 'unlinked historical accepted room cannot create a false cross-thread busy result');
+select ok((select (payload ->> 'created')::boolean from call_begin_results where label = 'stale-cross-thread'), 'linked accepted room outside the activity window cannot create a false cross-thread busy result');
 select is((select payload #>> '{invite,status}' from call_begin_results where label = 'stale-cross-thread'), 'ringing', 'cross-thread attempt remains a normal ringing invite');
 select is((select status from public.communication_rooms where room_id = 'STALEACTIVE'), 'active', 'false-busy guard does not mutate historical room state');
 select is((select active_communication_room_id from public.chat_threads where id = '4eeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'), 'STALECANDIDATE', 'cross-thread candidate becomes the authoritative room');
@@ -276,10 +294,68 @@ values (
   public.begin_chilly_chat_call('4fffffff-ffff-4fff-8fff-ffffffffffff', 'SAMESTALECANDIDATE', 'video')
 );
 
-select ok((select (payload ->> 'created')::boolean from call_begin_results where label = 'stale-same-thread'), 'unlinked historical accepted room cannot be reused as the same-thread winner');
+select ok((select (payload ->> 'created')::boolean from call_begin_results where label = 'stale-same-thread'), 'linked accepted room outside the activity window cannot be reused as the same-thread winner');
 select is((select payload #>> '{invite,status}' from call_begin_results where label = 'stale-same-thread'), 'ringing', 'same-thread stale-room replacement is a normal ringing invite');
-select is((select status from public.communication_rooms where room_id = 'SAMESTALEACTIVE'), 'active', 'same-thread guard leaves historical room state unchanged');
+select is((select status from public.communication_rooms where room_id = 'SAMESTALEACTIVE'), 'ended', 'same-thread stale accepted room is durably settled before replacement');
 select is((select active_communication_room_id from public.chat_threads where id = '4fffffff-ffff-4fff-8fff-ffffffffffff'), 'SAMESTALECANDIDATE', 'same-thread candidate replaces stale linkage authority');
+
+insert into public.chat_threads (id, thread_kind, participant_pair_key, created_by, active_communication_room_id, active_call_type)
+values (
+  '4abababa-baba-4aba-8aba-babababababa',
+  'direct',
+  '47777777-7777-4777-8777-777777777777::49999999-9999-4999-8999-999999999999',
+  '47777777-7777-4777-8777-777777777777',
+  null,
+  null
+);
+insert into public.chat_thread_members (thread_id, user_id)
+values
+  ('4abababa-baba-4aba-8aba-babababababa', '47777777-7777-4777-8777-777777777777'),
+  ('4abababa-baba-4aba-8aba-babababababa', '49999999-9999-4999-8999-999999999999');
+insert into public.communication_rooms (
+  room_id, room_code, host_user_id, status, updated_at, last_activity_at
+) values (
+  'CLEARSTALE', 'CLEARSTALE', '47777777-7777-4777-8777-777777777777', 'active',
+  now() - interval '16 minutes', now() - interval '16 minutes'
+);
+alter table public.chat_call_invites disable trigger enforce_chat_call_invites_abuse_guard;
+insert into public.chat_call_invites (
+  id, thread_id, communication_room_id, caller_user_id, callee_user_id,
+  call_type, status, expires_at, accepted_at
+) values (
+  '4c333333-3333-4c33-8c33-333333333333',
+  '4abababa-baba-4aba-8aba-babababababa',
+  'CLEARSTALE',
+  '47777777-7777-4777-8777-777777777777',
+  '49999999-9999-4999-8999-999999999999',
+  'voice', 'accepted', now() - interval '15 minutes', now() - interval '16 minutes'
+);
+alter table public.chat_call_invites enable trigger enforce_chat_call_invites_abuse_guard;
+update public.chat_threads
+set active_communication_room_id = 'CLEARSTALE', active_call_type = 'voice'
+where id = '4abababa-baba-4aba-8aba-babababababa';
+
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"47777777-7777-4777-8777-777777777777","session_id":"47777777-7777-4777-8777-777777777701"}',
+  true
+);
+insert into call_begin_results
+values (
+  'clear-stale-accepted',
+  public.clear_stale_chilly_chat_thread_call(
+    '4abababa-baba-4aba-8aba-babababababa',
+    'CLEARSTALE'
+  )
+);
+
+select ok((select (payload ->> 'cleared')::boolean from call_begin_results where label = 'clear-stale-accepted'), 'explicit stale cleanup settles a linked accepted room outside the activity window');
+select is((select status from public.chat_call_invites where id = '4c333333-3333-4c33-8c33-333333333333'), 'ended', 'explicit stale cleanup preserves terminal invite evidence');
+select ok(
+  (select active_communication_room_id is null and active_call_type is null from public.chat_threads where id = '4abababa-baba-4aba-8aba-babababababa')
+  and (select status = 'ended' from public.communication_rooms where room_id = 'CLEARSTALE'),
+  'explicit stale cleanup clears the thread projection and ends the exact room'
+);
 
 select throws_ok(
   $$insert into public.chat_call_invites (
