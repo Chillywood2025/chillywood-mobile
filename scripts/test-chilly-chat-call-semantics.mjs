@@ -973,8 +973,13 @@ assert.doesNotMatch(
 );
 assert.match(
   communicationSessionSource,
-  /for \(let attempt = 0; attempt < 3 && !joinedMembership; attempt \+= 1\)[\s\S]{0,900}resolvedIdentity = await readCommunicationIdentity\(authenticatedUserId\)/u,
+  /for \(let attempt = 0; attempt < 3 && !joinedMembership; attempt \+= 1\)[\s\S]{0,1200}resolvedIdentity = await readCommunicationIdentity\(authenticatedUserId\)/u,
   "legacy accepted media retries the authenticated identity-to-membership handoff within a strict bound",
+);
+assert.match(
+  communicationSessionSource,
+  /joinCommunicationRoomSession\(\{[\s\S]{0,360}cameraEnabled: false,[\s\S]{0,80}micEnabled: false/u,
+  "legacy membership admission remains muted until native media tracks are proved",
 );
 assert.match(
   chatThreadSource,
@@ -1380,6 +1385,16 @@ assert.doesNotMatch(
 );
 assert.match(communicationSessionSource, /setLocalMediaKindEnabled\("audio", false\)/u, "mute must preserve the negotiated audio sender");
 assert.match(communicationSessionSource, /setLocalMediaKindEnabled\("video", false\)/u, "camera off must preserve the negotiated video sender");
+assert.match(
+  communicationSessionSource,
+  /const createAndSendOffer[\s\S]{0,240}runSerializedPeerOffer/u,
+  "generic legacy offers use the shared per-peer serialization boundary",
+);
+assert.match(
+  communicationSessionSource,
+  /const strictlyRenegotiateLegacyMicPeer[\s\S]{0,420}runSerializedPeerOffer/u,
+  "strict microphone renegotiation uses the same per-peer serialization boundary",
+);
 const cameraControlSource = communicationSessionSource.slice(
   communicationSessionSource.indexOf("const setCameraCaptureEnabled"),
   communicationSessionSource.indexOf("const toggleCamera"),
@@ -1391,9 +1406,12 @@ const microphoneControlSource = communicationSessionSource.slice(
 assert.doesNotMatch(cameraControlSource, /stopLocalMediaKind/u, "camera controls must not stop a negotiated sender");
 assert.equal(
   (cameraControlSource.match(/updatePresence\(/gu) ?? []).length,
-  2,
-  "camera control has one mutually exclusive presence write for success and permission failure",
+  1,
+  "camera permission failure has one bounded fallback presence write",
 );
+assert.match(cameraControlSource, /strictlyCommitLegacyMicPresence/u, "camera success requires exact durable membership readback");
+assert.match(cameraControlSource, /strictlyBroadcastLegacyMicState/u, "camera success requires exact server-relayed media broadcast");
+assert.match(cameraControlSource, /presenceCommit\.ok && broadcastCommit\.ok/u, "camera success is atomic across durable and Realtime state");
 assert.equal(
   (microphoneControlSource.match(/updatePresence\(/gu) ?? []).length,
   2,
@@ -1532,8 +1550,13 @@ assert.match(
   "foreground recovery restores capture and the last selected audio output",
 );
 const legacyAppStateBlock = communicationSessionSource.slice(
-  communicationSessionSource.indexOf('AppState.addEventListener("change"'),
-  communicationSessionSource.indexOf('const ensureTrackKind', communicationSessionSource.indexOf('AppState.addEventListener("change"')),
+  communicationSessionSource.indexOf("const handleAppStateLifecycleChange"),
+  communicationSessionSource.indexOf("const ensureTrackKind", communicationSessionSource.indexOf("const handleAppStateLifecycleChange")),
+);
+assert.match(
+  legacyAppStateBlock,
+  /nativePermissionRequestDepthRef\.current > 0[\s\S]{0,160}return;/u,
+  "app-owned media permission UI cannot masquerade as a real call background transition",
 );
 assert.match(
   legacyAppStateBlock,

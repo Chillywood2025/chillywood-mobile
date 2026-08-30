@@ -5,11 +5,12 @@ Closure method: recursive grouped closure; a merge is not physical proof.
 
 ## Durable recovery checkpoint
 
-- Protected `main`: `39920e38b4074a4d9a83a335391647fe168e7ed6`; tree `e40b5354ca17bde3e6d46715996eebeab9e59b3e`; parents `5d7fa933b1d49a90884319d3dbcd0e5122f033a8` and `a1b9aab563e103fc8325e87e82dd1a0479dcea99`.
-- Latest repair: PR #312, head `a1b9aab563e103fc8325e87e82dd1a0479dcea99`, normal two-parent merge `39920e38b4074a4d9a83a335391647fe168e7ed6`, merged `2026-08-30T07:33:43Z`.
-- Exact #312 OTA was published to Android group `7675fed3-9d76-416a-af28-e41dc1736b5c` and iOS group `a08236fb-93cf-4471-af82-c1e9d46e77d8` at about `2026-08-30T07:36:10Z`.
-- Attached iPhone build 13 durably consumed iOS update `01a05198-e825-78a4-88ad-96b8bab25edd`: two successful launches, zero failed launches. Android consumption is not yet durably proven because no Android device is attached and no post-merge installed-update diagnostic identifies it.
-- Post-OTA production evidence: two persisted messages at `07:43:05Z` and `07:45:21Z`; legacy voice invite `f21d8c95-94f8-4759-8004-4087cd7e79fd`, room `ZYBGGS`, created `07:46:35Z`, accepted `07:46:56Z`, ended `07:50:08Z`; both exact memberships joined and later left. This proves physical testing began and reached accepted membership/terminal cleanup. It does not prove usable two-device audio/video, keyboard, warm/cold entry, or reconnect.
+- Protected `main`: `2650e56b64d56051271cdbf6a545bb330676b35a`; tree `e98268c31d64744eee88cb62c3330fa1d80fbb13`; parents `39920e38b4074a4d9a83a335391647fe168e7ed6` and `2e261a8d4e3f9845d4ebe9801ba2931e71f989e7`.
+- Latest merged repair: PR #313, head `2e261a8d4e3f9845d4ebe9801ba2931e71f989e7`, normal two-parent merge `2650e56b64d56051271cdbf6a545bb330676b35a`, merged `2026-08-30T10:30:40Z`.
+- PR #313 used the Owner-authorized assurance-only temporary PR bypass on active ruleset `18940814`. Writable ruleset hash was `8edf290e70141cfe0b3a371f958e8add21f997de1c87e99cbe2c927b9a90904a` before and after; the temporary Owner User PR-only actor was removed immediately after the exact-head merge.
+- Exact #313 internal-v2 OTAs: Android group `020d4dc9-5c0d-43f6-a675-f88fee3d228e`, update `01a05248-c2c1-700d-a601-807acc0c6b48`; iOS group `1e855671-efcb-4811-9298-602527e1f0a3`, update `01a0524d-1b00-71da-b968-8fe4392fa2d1`. Attached Android build 91 and iPhone build 13 both consumed their exact update.
+- Post-#313 physical messaging is complete: A→B and B→A Realtime, preview, unread increment, read clearing, thread selection, and Android keyboard visibility/multiline/send/scroll/background-resume were all proved on the attached devices.
+- First post-#313 voice run: invite `c51c4fb9-e2d9-4b80-a73b-266287ced455`, room `P2Y7HN`, accepted `2026-08-30T11:08:51.853915Z`, legacy WebRTC. Both devices reached two-participant `Connected`; Android initialized remote audio playout. Both remained muted, and Android unmute exposed a permission-activity pause/resume followed by replacement peer creation and failure to retain the new microphone track. Normal termination at `11:13:33.04986Z` ended invite/room and left both memberships. This blocker reopened the grouped media-lifecycle graph.
 
 ## Cumulative defects
 
@@ -119,8 +120,56 @@ Closure method: recursive grouped closure; a merge is not physical proof.
 - Affected files: `_lib/chat.ts`, communication call policy/declarations, chat screen reconciliation, call semantics/room guards, room-authority pgTAP.
 - Repair/regression proof: accepted liveness now follows room activity regardless of ringing deadline; read failures defer; local projection changes only after authoritative confirmation; exact room is passed at both reconciliation seams; executable after-deadline/active-result cases and pgTAP fixture parity.
 - Database/OTA/native requirement: no new migration or native build; OTA required after merge.
-- Physical state/disposition: grouped source repair complete locally and focused proofs pass; pre-merge/full physical proof pending; `REPAIRED_UNPROVEN`.
+- Physical state/disposition: PR #313 merged and both devices consumed its exact OTA. Messaging/keyboard and accepted-room reconciliation were physically exercised; the first complete voice pass exposed the separate media-lifecycle group below. Accepted liveness reconciliation is `PHYSICALLY_PROVEN`; full call closure remains open under the later entries.
+
+### CC-314-PERMISSION-LIFECYCLE — native permission UI was treated as call background/reconnect
+
+- Discovery source: post-#313 Android physical voice/unmute, invite `c51c4fb9-e2d9-4b80-a73b-266287ced455`, room `P2Y7HN`; Android device log at `2026-08-30T11:10:30Z`.
+- Exact failure/layer/severity: `Audio.requestPermissionsAsync()` launched a system activity even with granted `RECORD_AUDIO`; React Native emitted pause/resume, the hook marked the live room reconnecting, queued a fail-closed mute, and foreground recovery replaced the peer while unmute still owned the old generation. Media lifecycle blocker.
+- Upstream dependencies: accepted exact room, mounted identity/token, live Realtime channel, OS permission state. Downstream consequences: fresh track attached to stale peer authority, both UI/durable membership remained muted, no two-way microphone capture.
+- Root cause/group: redundant permission request plus failure to distinguish app-owned permission UI from genuine call background; `MEDIA_PERMISSION_LIFECYCLE_ATOMICITY`.
+- Platforms/providers: Android-observed and cross-platform legacy WebRTC; same-class LiveKit audit proved its serialized committed-session reconciliation does not use this legacy permission path.
+- Affected files: `hooks/use-communication-room-session.ts`, mounted exact-hook regression.
+- Repair/regression proof: re-read current permission before requesting; suppress only app-state transitions while an app-owned media permission request is in flight; reconcile the actual state afterward; executable prompt background/active case preserves generation/channel/peer and completes one exact mic transaction.
+- Database/OTA/native requirement: no migration/native build; one grouped OTA required after merge.
+- Physical state/disposition: grouped repair implemented and executable regression green; exact post-OTA two-device proof pending; `REPAIRED_UNPROVEN`.
+
+### CC-314-MEDIA-TRUTH — membership advertised requested media before native track proof
+
+- Discovery source: upstream producer→consumer audit after the physical mute failure.
+- Exact failure/layer/severity: first membership join wrote requested camera/microphone flags before permission and `getUserMedia` proved usable tracks; a non-null stream could also retain requested UI state when the requested track was absent; initial promotion discarded the durable membership/Realtime result and could leave capture/UI enabled after an unproved commit. Media truth/integration blocker.
+- Upstream dependencies: initial call preferences and membership admission. Downstream consequences: remote presence and durable rows could claim media that could not be published; later heartbeats converged only part of the split state.
+- Root cause/group: requested intent was used as observed capture truth; `MEDIA_PERMISSION_LIFECYCLE_ATOMICITY`.
+- Platforms/providers: both legacy platforms; LiveKit independently derives initial membership from actual publication results and remains unchanged.
+- Affected files: legacy communication hook and mounted integration harness.
+- Repair/regression proof: admission is now false/false; promotion occurs only after native track and Realtime proof; missing requested tracks force matching local state false; a failed promotion disables both track kinds and restores muted durable membership; mounted initialization proves both successful promotion and fail-closed compensation.
+- Database/OTA/native requirement: no migration/native build; grouped OTA required.
+- Physical state/disposition: `REPAIRED_UNPROVEN`.
+
+### CC-314-NEGOTIATION — recovery and media attachment could create duplicate or skipped offers
+
+- Discovery source: Android failure log showed two `createOffer` calls on replacement peer 7 within 33 ms and `mediaStreamAddTrack() could not find track`; downstream camera/source audit.
+- Exact failure/layer/severity: concurrent sync paths had no per-peer offer guard shared by both offer producers; strict microphone negotiation could still collide with generic sync/recovery offers. Conversely, the shared offer helper skipped all connected peers, so a newly attached camera sender could never be renegotiated after connection. Signaling/media blocker.
+- Upstream dependencies: presence sync, lifecycle restart, missing-track attachment. Downstream consequences: unstable local descriptions, stale-track attachment, or camera enabled locally/durably without remote subscription.
+- Root cause/group: missing per-peer negotiation serialization and conflation of initial offer with forced media renegotiation; `MEDIA_PERMISSION_LIFECYCLE_ATOMICITY`.
+- Platforms/providers: legacy WebRTC both platforms; LiveKit negotiation remains provider-owned and unchanged; Watch Party namespace unchanged.
+- Affected files: legacy communication hook and mounted signaling/media tests.
+- Repair/regression proof: every generic, forced-camera, and strict-microphone offer enters one generation-cleared per-peer queue; normal concurrent offer requests deduplicate; forced media renegotiation bypasses initial-offer connected/debounce guards; mounted tests prove strict mic waits behind an existing peer offer and a connected peer receives exactly one required camera renegotiation before commit.
+- Database/OTA/native requirement: no migration/native build; grouped OTA required.
+- Physical state/disposition: `REPAIRED_UNPROVEN`.
+
+### CC-314-CAMERA-ATOMICITY — legacy camera control returned success without convergence
+
+- Discovery source: different-class adjacent media-control audit after microphone failure.
+- Exact failure/layer/severity: camera control ignored membership/presence/broadcast outcomes, and `toggleCamera` discarded the boolean result; thread UI therefore could clear an error after an unproved camera transition. Media-control blocker for required video proof.
+- Upstream dependencies: usable camera track and current call authority. Downstream consequences: UI/native/durable/remote media split, false control success, missing remote video.
+- Root cause/group: camera path lacked the strict transaction/compensation boundary already used for microphone; `MEDIA_PERMISSION_LIFECYCLE_ATOMICITY`.
+- Platforms/providers: legacy WebRTC both platforms; LiveKit retains its existing strict camera transaction.
+- Affected files: legacy communication hook and mounted camera transaction cases.
+- Repair/regression proof: exact session authority, durable readback, presence, and broadcast are now required before camera success; failure restores local intent/durable/broadcast state and is operationally reported; toggle returns the real result.
+- Database/OTA/native requirement: no migration/native build; grouped OTA required.
+- Physical state/disposition: `REPAIRED_UNPROVEN`.
 
 ## Remaining physical closure matrix
 
-Messaging persistence and one accepted/ended voice lifecycle have durable post-#312 evidence. The following remain mandatory from the beginning on exact installed updates: two-way Realtime/preview/unread/read clearing; Android keyboard; legacy voice usable two-way audio and controls; legacy video usable two-way render and controls; background/reconnect/cleanup/next call; Android foreground/warm/cold/decline/replay/stale entry; available iOS foreground/CallKit/termination/duplicate/stale entry; LiveKit canary path if dedicated accounts/devices are available. Any new blocker reopens the complete grouped failure graph.
+Post-#313 messaging, unread/read, and Android keyboard are physically proved but must be rerun from the beginning after the next grouped OTA. Required call proof remains: legacy voice usable two-way audio and controls; second clean voice; legacy video usable two-way render and controls; reverse direction; background/reconnect/cleanup/next call; Android foreground/warm/cold/decline/replay/stale entry; available iOS foreground/CallKit/termination/duplicate/stale entry; LiveKit canary path if dedicated accounts/devices are available. Any new blocker reopens the complete grouped failure graph.
