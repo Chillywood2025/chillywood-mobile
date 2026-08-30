@@ -30,6 +30,8 @@ const legacyOfferQueueMarker = "  const cleanupRemotePeer = useCallback";
 assert.equal(legacyHookSource.split(legacyOfferQueueMarker).length - 1, 1, "unique legacy offer queue exposure marker");
 const legacySnapshotMarker = "  const updatePresence = useCallback";
 assert.equal(legacyHookSource.split(legacySnapshotMarker).length - 1, 1, "unique legacy snapshot exposure marker");
+const legacyPeerSyncMarker = "  const syncPeerConnections = useCallback";
+assert.equal(legacyHookSource.split(legacyPeerSyncMarker).length - 1, 1, "unique legacy peer sync exposure marker");
 const instrumentedLegacyHookSource = legacyHookSource.replace(
   legacyRefMarker,
   `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { appStateLifecycleHandlerRef, auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, legacyMicAnswerWaitersRef, legacyMicControlRef, legacyMicLocalPrivacyStopRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, nativePermissionRequestDepthRef, peerConnectionsRef, roomRef, setChannelState, setLoading };`,
@@ -39,6 +41,9 @@ const instrumentedLegacyHookSource = legacyHookSource.replace(
 ).replace(
   legacySnapshotMarker,
   `  (globalThis as any).__chillywoodLegacyMicAssuranceRefs.refreshSnapshot = refreshSnapshot;\n${legacySnapshotMarker}`,
+).replace(
+  legacyPeerSyncMarker,
+  `  (globalThis as any).__chillywoodLegacyMicAssuranceRefs.createAndSendOffer = createAndSendOffer;\n${legacyPeerSyncMarker}`,
 );
 const compiledLegacyHook = ts.transpileModule(instrumentedLegacyHookSource, {
   compilerOptions: {
@@ -237,7 +242,11 @@ function createLegacyMountedRuntime(options = {}) {
       runtime.peers.push(this);
     }
 
-    addEventListener(event, listener) { this.listeners.set(event, listener); }
+    addEventListener(event, listener) {
+      const listeners = this.listeners.get(event) ?? new Set();
+      listeners.add(listener);
+      this.listeners.set(event, listeners);
+    }
     addIceCandidate() { return Promise.resolve(); }
     addTrack(track) {
       if (this.failAddTrack) throw new Error("addTrack rejected");
@@ -269,6 +278,8 @@ function createLegacyMountedRuntime(options = {}) {
     getSenders() { return this.senders; }
     getStats() { return Promise.resolve([]); }
     getTransceivers() { return []; }
+    removeEventListener(event, listener) { this.listeners.get(event)?.delete(listener); }
+    emit(event) { for (const listener of this.listeners.get(event) ?? []) listener(); }
     async setLocalDescription(description) {
       if (this.failSetLocalDescription && description?.type !== "rollback") throw new Error("setLocalDescription rejected");
       if (this.failRollback && description?.type === "rollback") throw new Error("rollback rejected");
@@ -278,9 +289,11 @@ function createLegacyMountedRuntime(options = {}) {
         this.localDescription = null;
         this.signalingState = "stable";
       }
+      this.emit("signalingstatechange");
     }
     async setRemoteDescription(description) {
       if (description?.type === "answer") this.signalingState = "stable";
+      this.emit("signalingstatechange");
     }
   }
 
@@ -598,7 +611,7 @@ function createLegacyMountedRuntime(options = {}) {
     },
     setTimeout: (callback, delay) => {
       runtime.timeoutCallbacks.push(callback);
-      runtime.timeoutHandles.push(options.fireOperationTimeouts && delay === 3_000 ? hostSetTimeout(callback, 1) : null);
+      runtime.timeoutHandles.push(options.fireOperationTimeouts && (delay === 3_000 || delay === 4_000) ? hostSetTimeout(callback, 1) : null);
       return runtime.timeoutCallbacks.length;
     },
   };
@@ -1198,6 +1211,105 @@ test("legacy grouped media lifecycle: strict microphone renegotiation waits for 
   assert.equal(result, true);
   assert.equal(runtime.peers[0].offerCalls, 1);
   assert.equal(runtime.peers[0].signalingState, "stable");
+});
+
+test("legacy recovered controls: delayed initial answer cannot consume and lose one microphone intent", async (t) => {
+  const runtime = createLegacyMountedRuntime({ peerConnectionState: "connecting" });
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  runtime.queueSend({ answer: false, event: "webrtc:offer" });
+
+  let initialOffer;
+  await act(async () => {
+    initialOffer = harness.refs.createAndSendOffer(runtime.remoteUserId, false);
+    await settle(24);
+  });
+  assert.equal(runtime.peers[0].signalingState, "have-local-offer");
+
+  let control;
+  await act(async () => {
+    control = harness.getResult().setMicrophoneEnabled(true);
+    await settle(24);
+  });
+  assert.equal(runtime.peers[0].offerCalls, 1, "media control waits behind the unanswered initial offer");
+  assert.equal(runtime.durableMic, false);
+
+  await runtime.peers[0].setRemoteDescription({ sdp: "initial-answer", type: "answer" });
+  assert.equal(await harness.run(() => initialOffer), true);
+  assert.equal(await harness.run(() => control), true);
+  assert.equal(runtime.peers[0].offerCalls, 2, "mic sender receives a new post-answer offer");
+  assert.equal(runtime.durableMic, true);
+  assert.equal(harness.getResult().micEnabled, true);
+});
+
+test("legacy recovered controls: delayed initial answer cannot falsely commit a camera sender absent from SDP", async (t) => {
+  const runtime = createLegacyMountedRuntime({ peerConnectionState: "connecting" });
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  runtime.queueSend({ answer: false, event: "webrtc:offer" });
+
+  let initialOffer;
+  await act(async () => {
+    initialOffer = harness.refs.createAndSendOffer(runtime.remoteUserId, false);
+    await settle(24);
+  });
+  assert.equal(runtime.peers[0].signalingState, "have-local-offer");
+  runtime.queueSend({ answer: false, event: "webrtc:offer" });
+
+  let control;
+  await act(async () => {
+    control = harness.getResult().toggleCamera();
+    await settle(24);
+  });
+  assert.equal(runtime.peers[0].offerCalls, 1, "camera renegotiation waits behind the unanswered initial offer");
+  assert.equal(runtime.durableCamera, false);
+
+  await runtime.peers[0].setRemoteDescription({ sdp: "initial-answer", type: "answer" });
+  assert.equal(await harness.run(() => initialOffer), true);
+  assert.equal(await harness.run(() => control), true);
+  assert.equal(runtime.peers[0].offerCalls, 2, "camera sender receives a new post-answer offer");
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(harness.getResult().cameraEnabled, true);
+});
+
+test("legacy recovered controls: an unanswered generic offer releases the queue only through the bounded failure path", async (t) => {
+  const runtime = createLegacyMountedRuntime({
+    fireOperationTimeouts: true,
+    peerConnectionState: "connecting",
+  });
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  runtime.queueSend({ answer: false, event: "webrtc:offer" });
+
+  const result = await harness.run(() => harness.refs.createAndSendOffer(runtime.remoteUserId, true));
+
+  assert.equal(result, false);
+  assert.equal(runtime.peers[0].signalingState, "have-local-offer");
+  assert.equal(runtime.durableMic, false);
+  assert.equal(runtime.durableCamera, false);
+});
+
+test("legacy recovered controls: a replaced peer cannot inherit a pending offer completion", async (t) => {
+  const runtime = createLegacyMountedRuntime({ peerConnectionState: "connecting" });
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  runtime.queueSend({ answer: false, event: "webrtc:offer" });
+  const oldPeer = runtime.peers[0];
+
+  let initialOffer;
+  await act(async () => {
+    initialOffer = harness.refs.createAndSendOffer(runtime.remoteUserId, true);
+    await settle(24);
+  });
+  const replacementPeer = runtime.createPeer();
+  harness.refs.peerConnectionsRef.current[runtime.remoteUserId] = replacementPeer;
+  await oldPeer.setRemoteDescription({ sdp: "stale-answer", type: "answer" });
+
+  assert.equal(await harness.run(() => initialOffer), false);
+  assert.equal(harness.refs.peerConnectionsRef.current[runtime.remoteUserId], replacementPeer);
+  assert.equal(replacementPeer.signalingState, "stable");
+  assert.equal(runtime.durableMic, false);
+  assert.equal(runtime.durableCamera, false);
 });
 
 test("legacy call-domain closure: muted privacy quarantines all local and sender-bound audio tracks", async (t) => {

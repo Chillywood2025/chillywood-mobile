@@ -26,6 +26,7 @@ type InRoomCommunicationPanelProps = {
   cameraEnabled: boolean;
   micEnabled: boolean;
   mediaControlsBusy?: boolean;
+  mediaControlMessage?: string | null;
   speakerEnabled?: boolean;
   mediaPermissionMessage?: string | null;
   canOpenMediaSettings?: boolean;
@@ -70,6 +71,7 @@ export function InRoomCommunicationPanel({
   cameraEnabled,
   micEnabled,
   mediaControlsBusy = false,
+  mediaControlMessage,
   speakerEnabled = false,
   mediaPermissionMessage,
   canOpenMediaSettings = false,
@@ -204,6 +206,16 @@ export function InRoomCommunicationPanel({
               <Text style={styles.permissionButtonText}>Open Settings</Text>
             </TouchableOpacity>
           ) : null}
+        </View>
+      ) : null}
+
+      {mediaControlMessage ? (
+        <View
+          testID="communication-media-control-message"
+          accessibilityLabel="Chi'lly Chat media control status"
+          style={[styles.controlMessageCard, fullscreenContentStyle]}
+        >
+          <Text style={styles.controlMessageText}>{mediaControlMessage}</Text>
         </View>
       ) : null}
 
@@ -393,6 +405,20 @@ const styles = StyleSheet.create({
     color: "#F7FAFF",
     fontSize: 12,
     fontWeight: "900",
+  },
+  controlMessageCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,128,148,0.34)",
+    backgroundColor: "rgba(255,128,148,0.08)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  controlMessageText: {
+    color: "#FFD5DC",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
   },
   participantStage: {
     gap: 12,
