@@ -16,6 +16,7 @@ import {
 } from "./use-livekit-chat-call-session";
 
 type UseChatCallMediaSessionOptions = {
+  authenticatedAccessToken: string;
   authenticatedUserId: string;
   allowBackgroundAudio?: boolean;
   enabled: boolean;
@@ -61,11 +62,13 @@ export function useChatCallMediaSession(options: UseChatCallMediaSessionOptions)
   });
 
   const legacySession = useCommunicationRoomSession({
+    authenticatedAccessToken: options.authenticatedAccessToken,
     authenticatedUserId: options.authenticatedUserId,
     roomId: options.roomId,
     enabled: shouldEnableLegacy,
     allowBackgroundAudio: options.allowBackgroundAudio,
     mediaActivationSerial: options.mediaActivationSerial,
+    restartDisconnectedSession: true,
     initialMediaPreferences: options.initialMediaPreferences,
     analyticsContext: {
       surface: "chat-thread",

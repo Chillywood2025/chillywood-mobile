@@ -27,6 +27,7 @@ import {
 import { supabase } from "./supabase";
 import { normalizePeopleSearchQuery } from "./peopleSearchNormalization";
 import { getWritablePartyUserId } from "./watchParty";
+import { getCurrentAccountSessionAuthoritySnapshot } from "./accountSessionAuthority";
 
 export const CHAT_THREADS_TABLE = "chat_threads";
 export const CHAT_THREAD_MEMBERS_TABLE = "chat_thread_members";
@@ -237,6 +238,14 @@ async function openOrRepairDirectThreadWithRpc(target: ChatTargetIdentity): Prom
 }
 
 async function getRequiredChatUserId() {
+  const mountedAuthority = getCurrentAccountSessionAuthoritySnapshot();
+  const mountedUserId = toText(mountedAuthority?.userId);
+  if (
+    mountedAuthority?.state === "ACTIVE"
+    && mountedAuthority.restoreOnly === false
+    && mountedAuthority.accountId === mountedUserId
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(mountedUserId)
+  ) return mountedUserId;
   const userId = toText(await getWritablePartyUserId());
   if (!userId) {
     throw new Error("Chi'lly Chat requires a signed-in user.");
@@ -778,10 +787,11 @@ export async function clearEndedChatThreadCall(threadId: string, expectedRoomId?
     fn: "clear_stale_chilly_chat_thread_call",
     args: { p_thread_id: string; p_expected_room_id: string | null },
   ) => PromiseLike<{ data: unknown; error: { message?: string } | null }>;
-  await rpc("clear_stale_chilly_chat_thread_call", {
+  const { error } = await rpc("clear_stale_chilly_chat_thread_call", {
     p_thread_id: normalizedThreadId,
     p_expected_room_id: normalizedRoomId || null,
   });
+  if (error) throw new Error(error.message || "Unable to clear the ended Chi'lly Chat call.");
 }
 
 export async function startChatThreadCall(threadId: string, mode: ChatCallType): Promise<{
@@ -872,6 +882,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
   let begunCall: BegunChillyChatCall;
   try {
     begunCall = await beginChillyChatCall({
+      actorUserId: currentUserId,
       callType: mode,
       communicationRoomId: roomId,
       threadId: thread.threadId,

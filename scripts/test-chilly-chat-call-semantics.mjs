@@ -18,6 +18,7 @@ import {
 import {
   canAttemptNativeCallBackgroundAudio,
   doesNativeCallActionOwnTransition,
+  resolveLegacyChatSessionRecovery,
   resolveAcceptedChatCallRoomId,
   resolveChillyChatCallParticipantRole,
   resolveIncomingCallPresentation,
@@ -29,6 +30,32 @@ import {
   shouldPreserveNativeCallBackgroundAudio,
   shouldShowOutgoingRingingPanel,
 } from "../_lib/communicationCallMediaPolicy.mjs";
+
+for (const [trigger, delayMs] of [
+  ["app_foreground", 0],
+  ["peer_failed", 0],
+  ["peer_disconnected", 2500],
+  ["realtime_closed", 0],
+  ["realtime_error", 1500],
+  ["realtime_timeout", 1500],
+]) {
+  assert.deepEqual(resolveLegacyChatSessionRecovery({
+    alreadyRequested: false,
+    appState: "active",
+    enabled: true,
+    ending: false,
+    generationIsCurrent: true,
+    trigger,
+  }), {delayMs, trigger}, `${trigger} rebuilds the exact accepted legacy session within a bounded delay`);
+}
+for (const denied of [
+  {alreadyRequested: true, appState: "active", enabled: true, ending: false, generationIsCurrent: true, trigger: "peer_failed"},
+  {alreadyRequested: false, appState: "background", enabled: true, ending: false, generationIsCurrent: true, trigger: "peer_failed"},
+  {alreadyRequested: false, appState: "active", enabled: false, ending: false, generationIsCurrent: true, trigger: "peer_failed"},
+  {alreadyRequested: false, appState: "active", enabled: true, ending: true, generationIsCurrent: true, trigger: "peer_failed"},
+  {alreadyRequested: false, appState: "active", enabled: true, ending: false, generationIsCurrent: false, trigger: "peer_failed"},
+  {alreadyRequested: false, appState: "active", enabled: true, ending: false, generationIsCurrent: true, trigger: "unknown"},
+]) assert.equal(resolveLegacyChatSessionRecovery(denied), null, "legacy recovery remains chat-only, current-generation, one-shot, and terminal-safe");
 import {
   createChillyChatNativeCallRouteBuffer,
   redirectChillyChatNativeCallSystemPath,
@@ -738,6 +765,7 @@ const nativeCoordinatorSource = await readFile(
 const chatThreadSource = await readFile(new URL("app/chat/[threadId].tsx", root), "utf8");
 const rootLayoutSource = await readFile(new URL("app/_layout.tsx", root), "utf8");
 const chatLibSource = await readFile(new URL("_lib/chat.ts", root), "utf8");
+const chillyChatCallsSource = await readFile(new URL("_lib/chillyChatCalls.ts", root), "utf8");
 const communicationLibSource = await readFile(new URL("_lib/communication.ts", root), "utf8");
 const authoritativeBusyBeginSource = await readFile(
   new URL("supabase/migrations/20260730040727_chilly_chat_busy_active_thread_guard.sql", root),
@@ -896,14 +924,27 @@ assert.match(
 );
 assert.match(
   chatThreadSource,
-  /useChatCallMediaSession\(\{[\s\S]{0,160}authenticatedUserId: currentUserId/u,
+  /useChatCallMediaSession\(\{[\s\S]{0,180}authenticatedAccessToken: String\(session\?\.access_token[\s\S]{0,120}authenticatedUserId: currentUserId/u,
   "accepted chat media receives the exact mounted SessionProvider subject",
 );
 assert.match(
   chatCallMediaProviderSource,
-  /useCommunicationRoomSession\(\{[\s\S]{0,160}authenticatedUserId: options\.authenticatedUserId[\s\S]{0,700}useLiveKitChatCallSession\(\{[\s\S]{0,160}authenticatedUserId: options\.authenticatedUserId/u,
+  /useCommunicationRoomSession\(\{[\s\S]{0,160}authenticatedAccessToken: options\.authenticatedAccessToken[\s\S]{0,160}authenticatedUserId: options\.authenticatedUserId[\s\S]{0,700}useLiveKitChatCallSession\(\{[\s\S]{0,160}authenticatedUserId: options\.authenticatedUserId/u,
   "the exact mounted subject reaches both legacy and LiveKit transports",
 );
+assert.match(communicationSessionSource, /let realtimeAccessToken = String\(authenticatedAccessToken/u, "legacy Realtime uses the mounted exact-session token before any fallback lookup");
+assert.match(chatCallMediaProviderSource, /restartDisconnectedSession: true/u, "only the Chi'lly Chat legacy adapter enables automatic same-room recovery");
+const beginCallBlock = chillyChatCallsSource.slice(
+  chillyChatCallsSource.indexOf("export async function beginChillyChatCall"),
+  chillyChatCallsSource.indexOf("export async function createChillyChatCallInvite"),
+);
+const updateCallBlock = chillyChatCallsSource.slice(
+  chillyChatCallsSource.indexOf("export async function updateChillyChatCallInviteStatus"),
+  chillyChatCallsSource.indexOf("export async function insertChillyChatCallEvent"),
+);
+assert.doesNotMatch(`${beginCallBlock}\n${updateCallBlock}`, /supabase\.auth\.getSession/u, "call begin and transition paths do not discard mounted identity for a redundant auth lookup");
+assert.match(chillyChatCallsSource, /payload\.role === "caller" \|\| payload\.role === "callee"/u, "call begin binds the server-returned role to the mounted actor");
+assert.match(chatLibSource, /getCurrentAccountSessionAuthoritySnapshot\(\)[\s\S]{0,420}getWritablePartyUserId/u, "direct chat operations prefer established exact mounted authority and retain a bounded fallback");
 const communicationJoinBlock = communicationLibSource.slice(
   communicationLibSource.indexOf("export async function joinCommunicationRoomSession"),
   communicationLibSource.indexOf("export async function touchCommunicationRoomSession"),
@@ -912,9 +953,25 @@ const communicationSignalBlock = communicationLibSource.slice(
   communicationLibSource.indexOf("export async function broadcastCommunicationRoomSignal"),
   communicationLibSource.indexOf("const isMissingColumnError"),
 );
+const communicationTouchBlock = communicationLibSource.slice(
+  communicationLibSource.indexOf("export async function touchCommunicationRoomSession"),
+  communicationLibSource.indexOf("export async function leaveCommunicationRoomSession"),
+);
 const clearEndedCallBlock = chatLibSource.slice(
   chatLibSource.indexOf("export async function clearEndedChatThreadCall"),
   chatLibSource.indexOf("export async function startChatThreadCall"),
+);
+const receiverSensitiveClient = {
+  rest: { marker: "receiver-preserved" },
+  rpc() {
+    assert.equal(this, receiverSensitiveClient, "the faithful RPC double requires its SupabaseClient receiver");
+    return this.rest.marker;
+  },
+};
+assert.equal(
+  receiverSensitiveClient.rpc.bind(receiverSensitiveClient)(),
+  "receiver-preserved",
+  "the production binding pattern executes an SDK-shaped receiver-sensitive RPC method",
 );
 for (const [sourceBlock, label] of [
   [communicationJoinBlock, "accepted room membership"],
@@ -952,6 +1009,9 @@ assert.match(
   /AUTHENTICATED_USER_ID_PATTERN[\s\S]{0,240}return AUTHENTICATED_USER_ID_PATTERN\.test\(userId\) \? userId\.toLowerCase\(\) : ""/u,
   "mounted identity inputs remain strictly UUID-bound",
 );
+assert.doesNotMatch(communicationTouchBlock, /if \(!room && membershipState !== "left"\) return null/u, "membership updates are not blocked by a circular pre-join room read");
+assert.match(communicationTouchBlock, /\.update\(updates\)[\s\S]{0,600}getCommunicationRoom\(roomId\)/u, "server-authorized membership mutation precedes optional room heartbeat readback");
+assert.match(clearEndedCallBlock, /if \(error\) throw new Error/u, "stale projection cleanup cannot silently report success after an RPC failure");
 const legacyMissingSnapshotBranch = communicationSessionSource.slice(
   communicationSessionSource.indexOf("if (!snapshot)", communicationSessionSource.indexOf("let joinedMembership")),
   communicationSessionSource.indexOf("if (snapshot.room.status === \"ended\")", communicationSessionSource.indexOf("let joinedMembership")),
@@ -1417,6 +1477,22 @@ assert.match(
   /if \(nextState === "active"\)[\s\S]{0,260}LiveKitAudioSession\.startAudioSession\(\)[\s\S]{0,420}setSpeaker\(speakerRequestedRef\.current\)/u,
   "foreground recovery restores capture and the last selected audio output",
 );
+const legacyAppStateBlock = communicationSessionSource.slice(
+  communicationSessionSource.indexOf('AppState.addEventListener("change"'),
+  communicationSessionSource.indexOf('const ensureTrackKind', communicationSessionSource.indexOf('AppState.addEventListener("change"')),
+);
+assert.match(
+  legacyAppStateBlock,
+  /nextState === "active"[\s\S]{0,1200}restartDisconnectedSession && \(channelStateRef\.current === "reconnecting" \|\| !channelRef\.current\)[\s\S]{0,240}requestLegacySessionRestart\("app_foreground"\)/u,
+  "legacy foreground recovery rebuilds a backgrounded or closed same-room session",
+);
+assert.match(
+  communicationSessionSource,
+  /legacySessionRestartSerial,\s*requestLegacySessionRestart,\s*\]\);/u,
+  "legacy foreground recovery serial invalidates the exact media-session initialization effect",
+);
+assert.match(communicationSessionSource, /CHANNEL_ERROR[\s\S]{0,600}requestLegacySessionRestart\(status === "CHANNEL_ERROR"/u, "Realtime terminal and error states rebuild the transport instead of only changing UI state");
+assert.match(communicationSessionSource, /mappedState === "failed"\) requestLegacySessionRestart\("peer_failed", generation\)[\s\S]{0,140}mappedState === "disconnected"\) requestLegacySessionRestart\("peer_disconnected", generation\)/u, "peer failures enter the same generation-bound recovery supervisor");
 const activeInviteReconciliationSource = chatThreadSource.slice(
   chatThreadSource.indexOf("const reconcileActiveInvite"),
   chatThreadSource.indexOf("const otherMember ="),

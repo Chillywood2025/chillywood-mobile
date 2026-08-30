@@ -7,6 +7,17 @@ export type NativeCallBackgroundAudioPolicyInput = {
 
 export function canAttemptNativeCallBackgroundAudio(input: NativeCallBackgroundAudioPolicyInput): boolean;
 export function shouldPreserveNativeCallBackgroundAudio(input: NativeCallBackgroundAudioPolicyInput): boolean;
+export function resolveLegacyChatSessionRecovery(input: {
+  alreadyRequested?: boolean;
+  appState?: string | null;
+  enabled?: boolean;
+  ending?: boolean;
+  generationIsCurrent?: boolean;
+  trigger?: string | null;
+}): Readonly<{
+  delayMs: number;
+  trigger: "app_foreground" | "peer_disconnected" | "peer_failed" | "realtime_closed" | "realtime_error" | "realtime_timeout";
+}> | null;
 
 export type ChillyChatCallParticipantRoleInput = {
   currentUserId?: string | null;

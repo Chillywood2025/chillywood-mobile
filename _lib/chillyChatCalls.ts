@@ -8,6 +8,7 @@ import {
 } from "./chillyChatCallDispatchSchema";
 
 import { supabase } from "./supabase";
+import { getCurrentAccountSessionAuthoritySnapshot } from "./accountSessionAuthority";
 
 export const CHAT_CALL_INVITES_TABLE = "chat_call_invites";
 export const CHAT_CALL_EVENTS_TABLE = "chat_call_events";
@@ -131,6 +132,15 @@ export const CHILLY_CHAT_RINGTONE_OPTIONS: readonly ChillyChatRingtoneOption[] =
 ];
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const CALL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const hasExactMountedActor = (actorUserId: string) => {
+  const authority = getCurrentAccountSessionAuthoritySnapshot();
+  return CALL_ID_PATTERN.test(actorUserId)
+    && authority?.state === "ACTIVE"
+    && authority.restoreOnly === false
+    && authority.userId === actorUserId
+    && authority.accountId === actorUserId;
+};
 
 const normalizeCallType = (value: unknown): ChillyChatCallType => {
   const normalized = toText(value).toLowerCase();
@@ -274,6 +284,7 @@ export async function dispatchChillyChatCallPush(input: {
 }
 
 export async function beginChillyChatCall(input: {
+  actorUserId: string;
   threadId: string;
   communicationRoomId: string;
   callType: ChillyChatCallType;
@@ -296,14 +307,10 @@ export async function beginChillyChatCall(input: {
   if (!invite) {
     throw new Error("Unable to read the reserved Chi'lly Chat call.");
   }
-  const session = await supabase.auth.getSession();
-  const currentUserId = toText(session.data.session?.user?.id);
-  const role = invite.callerUserId === currentUserId
-    ? "caller"
-    : invite.calleeUserId === currentUserId
-      ? "callee"
-      : null;
-  if (!role) {
+  const actorUserId = toText(input.actorUserId);
+  const role = payload.role === "caller" || payload.role === "callee" ? payload.role : null;
+  if (!hasExactMountedActor(actorUserId) || !role
+    || (role === "caller" ? invite.callerUserId : invite.calleeUserId) !== actorUserId) {
     throw new Error("The reserved Chi'lly Chat call does not belong to this account.");
   }
 
@@ -325,19 +332,18 @@ export async function createChillyChatCallInvite(input: {
   const communicationRoomId = toText(input.communicationRoomId).toUpperCase();
   const callerUserId = toText(input.callerUserId);
   const calleeUserId = toText(input.calleeUserId);
-  const { data: sessionData } = await supabase.auth.getSession();
-  const authenticatedUserId = toText(sessionData.session?.user?.id);
   if (
     !threadId
     || !communicationRoomId
     || !callerUserId
     || !calleeUserId
-    || authenticatedUserId !== callerUserId
+    || !hasExactMountedActor(callerUserId)
   ) {
     throw new Error("Unable to create Chi'lly Chat call invite for this account.");
   }
 
   const begun = await beginChillyChatCall({
+    actorUserId: callerUserId,
     callType: input.callType,
     communicationRoomId,
     threadId,
@@ -516,8 +522,7 @@ export async function updateChillyChatCallInviteStatus(input: {
   const actorUserId = toText(input.actorUserId);
   const inviteId = toText(input.invite.id);
   if (!actorUserId || !inviteId) return null;
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (toText(sessionData.session?.user?.id) !== actorUserId) return null;
+  if (!hasExactMountedActor(actorUserId)) return null;
 
   const { data, error } = await supabase.functions.invoke("chilly-chat-call-transition", {
     body: {

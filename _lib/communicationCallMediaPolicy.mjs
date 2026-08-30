@@ -22,6 +22,27 @@ export function shouldPreserveNativeCallBackgroundAudio(input) {
     && input?.hasUsableAudioTrack === true;
 }
 
+const LEGACY_CHAT_RECOVERY_DELAYS = Object.freeze({
+  app_foreground: 0,
+  peer_disconnected: 2500,
+  peer_failed: 0,
+  realtime_closed: 0,
+  realtime_error: 1500,
+  realtime_timeout: 1500,
+});
+
+export function resolveLegacyChatSessionRecovery(input) {
+  const trigger = String(input?.trigger ?? "").trim().toLowerCase();
+  if (input?.enabled !== true || input?.appState !== "active"
+    || input?.generationIsCurrent !== true || input?.ending === true
+    || input?.alreadyRequested === true
+    || !Object.prototype.hasOwnProperty.call(LEGACY_CHAT_RECOVERY_DELAYS, trigger)) return null;
+  return Object.freeze({
+    delayMs: LEGACY_CHAT_RECOVERY_DELAYS[trigger],
+    trigger,
+  });
+}
+
 export function setActiveCommunicationTracksEnabled(tracks, enabled) {
   let updatedCount = 0;
   for (const track of Array.isArray(tracks) ? tracks : []) {

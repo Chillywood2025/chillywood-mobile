@@ -36,6 +36,7 @@ import {
 import { reportRuntimeError } from "../_lib/logger";
 import {
   canAttemptNativeCallBackgroundAudio,
+  resolveLegacyChatSessionRecovery,
   setActiveCommunicationTracksEnabled,
   shouldPreserveNativeCallBackgroundAudio,
 } from "../_lib/communicationCallMediaPolicy.mjs";
@@ -53,6 +54,7 @@ import { normalizeRoomMembershipState } from "../_lib/roomRules";
 import { supabase } from "../_lib/supabase";
 
 type UseCommunicationRoomSessionOptions = {
+  authenticatedAccessToken?: string;
   authenticatedUserId?: string;
   roomId: string;
   initialMediaPreferences?: Partial<CommunicationMediaPreferences>;
@@ -60,6 +62,7 @@ type UseCommunicationRoomSessionOptions = {
   enabled?: boolean;
   allowBackgroundAudio?: boolean;
   mediaActivationSerial?: number;
+  restartDisconnectedSession?: boolean;
   analyticsContext?: {
     surface?: "party-room" | "live-room" | "communication-room" | "chat-thread";
     role?: "host" | "viewer" | null;
@@ -347,6 +350,7 @@ const waitForRealtimeOperation = async <T,>(operation: Promise<T>, timeoutMillis
 };
 
 export function useCommunicationRoomSession({
+  authenticatedAccessToken,
   authenticatedUserId,
   roomId,
   initialMediaPreferences,
@@ -354,6 +358,7 @@ export function useCommunicationRoomSession({
   enabled = true,
   allowBackgroundAudio = false,
   mediaActivationSerial = 0,
+  restartDisconnectedSession = false,
   analyticsContext,
 }: UseCommunicationRoomSessionOptions) {
   const [cameraPermission, requestCameraPermission, getCameraPermission] = useCameraPermissions();
@@ -372,6 +377,7 @@ export function useCommunicationRoomSession({
   const [remoteStreamsByUserId, setRemoteStreamsByUserId] = useState<Record<string, MediaStream>>({});
   const [connectionStateByUserId, setConnectionStateByUserId] = useState<Record<string, PeerConnectionState>>({});
   const [mediaControlsBusy, setMediaControlsBusy] = useState(false);
+  const [legacySessionRestartSerial, setLegacySessionRestartSerial] = useState(0);
 
   const localJoinedAtRef = useRef(new Date().toISOString());
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -398,6 +404,8 @@ export function useCommunicationRoomSession({
   const legacyMicLocalPrivacyStopRef = useRef<(() => boolean) | null>(null);
   const resumeMicAfterForegroundRef = useRef(false);
   const legacySessionGenerationRef = useRef(0);
+  const legacySessionRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const legacySessionRestartRequestedGenerationRef = useRef<number | null>(null);
   const mediaControlTailRef = useRef<Promise<void>>(Promise.resolve());
   const pendingMediaControlCountRef = useRef(0);
   const endingGenerationRef = useRef<number | null>(null);
@@ -405,6 +413,40 @@ export function useCommunicationRoomSession({
   const cameraFacingRef = useRef<"front" | "environment">("front");
   const appStateRef = useRef(AppState.currentState);
   const allowBackgroundAudioRef = useRef(allowBackgroundAudio);
+
+  const requestLegacySessionRestart = useCallback((trigger: string, expectedGeneration = legacySessionGenerationRef.current) => {
+    const recovery = resolveLegacyChatSessionRecovery({
+      alreadyRequested: legacySessionRestartRequestedGenerationRef.current === expectedGeneration,
+      appState: appStateRef.current,
+      enabled: restartDisconnectedSession,
+      ending: endingGenerationRef.current === expectedGeneration,
+      generationIsCurrent: expectedGeneration === legacySessionGenerationRef.current,
+      trigger,
+    });
+    if (!recovery) return false;
+    legacySessionRestartRequestedGenerationRef.current = expectedGeneration;
+    if (legacySessionRestartTimerRef.current) clearTimeout(legacySessionRestartTimerRef.current);
+    legacySessionRestartTimerRef.current = setTimeout(() => {
+      legacySessionRestartTimerRef.current = null;
+      if (!resolveLegacyChatSessionRecovery({
+        alreadyRequested: false,
+        appState: appStateRef.current,
+        enabled: restartDisconnectedSession,
+        ending: endingGenerationRef.current === expectedGeneration,
+        generationIsCurrent: expectedGeneration === legacySessionGenerationRef.current,
+        trigger,
+      })) return;
+      channelStateRef.current = "connecting";
+      setChannelState("connecting");
+      setLoading(true);
+      setLegacySessionRestartSerial((current) => current + 1);
+    }, recovery.delayMs);
+    return true;
+  }, [restartDisconnectedSession]);
+
+  useEffect(() => () => {
+    if (legacySessionRestartTimerRef.current) clearTimeout(legacySessionRestartTimerRef.current);
+  }, []);
 
   const cameraPermissionSnapshot = resolveMediaPermission(cameraPermission);
   const cameraPermissionState = cameraPermissionSnapshot.state;
@@ -1219,6 +1261,8 @@ export function useCommunicationRoomSession({
       if (mappedState === "connected") {
         clearOfferRetry(remoteUserId);
       }
+      if (mappedState === "failed") requestLegacySessionRestart("peer_failed", generation);
+      else if (mappedState === "disconnected") requestLegacySessionRestart("peer_disconnected", generation);
       if (mappedState === "connected" || mappedState === "connecting") {
         void logInboundVideoDiagnostics(remoteUserId, peerConnection, `pc_${mappedState}`);
       }
@@ -1252,7 +1296,7 @@ export function useCommunicationRoomSession({
       [remoteUserId]: "connecting",
     }));
     return peerConnection;
-  }, [attachMissingLocalTracks, clearOfferRetry, logInboundVideoDiagnostics, roomId, sendBroadcast]);
+  }, [attachMissingLocalTracks, clearOfferRetry, logInboundVideoDiagnostics, requestLegacySessionRestart, roomId, sendBroadcast]);
 
   const broadcastOfferDescription = useCallback(async (remoteUserId: string, description: { type?: unknown; sdp?: unknown } | null | undefined) => {
     const generation = legacySessionGenerationRef.current;
@@ -1545,6 +1589,7 @@ export function useCommunicationRoomSession({
     let active = true;
     const sessionGeneration = legacySessionGenerationRef.current + 1;
     legacySessionGenerationRef.current = sessionGeneration;
+    legacySessionRestartRequestedGenerationRef.current = null;
     const isActiveGeneration = () => (
       active && legacySessionGenerationRef.current === sessionGeneration
     );
@@ -1692,9 +1737,13 @@ export function useCommunicationRoomSession({
         return;
       }
 
-      const { data: realtimeSessionData } = await supabase.auth.getSession();
-      const realtimeAccessToken = String(realtimeSessionData.session?.access_token ?? "").trim();
-      const realtimeUserId = String(realtimeSessionData.session?.user?.id ?? "").trim();
+      let realtimeAccessToken = String(authenticatedAccessToken ?? "").trim();
+      let realtimeUserId = String(authenticatedUserId ?? "").trim();
+      if (!realtimeAccessToken) {
+        const { data: realtimeSessionData } = await supabase.auth.getSession();
+        realtimeAccessToken = String(realtimeSessionData.session?.access_token ?? "").trim();
+        realtimeUserId = String(realtimeSessionData.session?.user?.id ?? "").trim();
+      }
       if (!realtimeAccessToken || realtimeUserId !== resolvedIdentity.userId) {
         throw new Error("communication_realtime_auth_required");
       }
@@ -1972,6 +2021,11 @@ export function useCommunicationRoomSession({
         if (!isActiveGeneration()) return;
 
         if (status === "SUBSCRIBED") {
+          if (legacySessionRestartTimerRef.current) {
+            clearTimeout(legacySessionRestartTimerRef.current);
+            legacySessionRestartTimerRef.current = null;
+          }
+          legacySessionRestartRequestedGenerationRef.current = null;
           logChatRtc("presence_subscription_status", {
             roomId: snapshot.room.roomId,
             status,
@@ -2005,6 +2059,11 @@ export function useCommunicationRoomSession({
           });
           setChannelState("reconnecting");
           setError("Communication room reconnecting…");
+          requestLegacySessionRestart(status === "CHANNEL_ERROR"
+            ? "realtime_error"
+            : status === "TIMED_OUT"
+              ? "realtime_timeout"
+              : "realtime_closed", sessionGeneration);
           if (!reconnectTrackedRef.current) {
             reconnectTrackedRef.current = true;
             trackEvent("communication_reconnect", {
@@ -2109,8 +2168,11 @@ export function useCommunicationRoomSession({
     enabled,
     analyticsRole,
     analyticsSurface,
+    authenticatedAccessToken,
     authenticatedUserId,
     clearOfferRetry,
+    legacySessionRestartSerial,
+    requestLegacySessionRestart,
   ]);
 
   useEffect(() => {
@@ -2320,13 +2382,19 @@ export function useCommunicationRoomSession({
             reason: "app_foreground",
           });
         }
+        // A backgrounded Realtime channel can remain non-null after its
+        // underlying socket has closed. Treating that stale object as live
+        // leaves legacy WebRTC permanently reconnecting with no new offers.
+        // Rebuild this same accepted room session; the authoritative join is
+        // idempotent and remains bound to the existing invite and auth.uid().
+        if (restartDisconnectedSession && (channelStateRef.current === "reconnecting" || !channelRef.current)) {
+          requestLegacySessionRestart("app_foreground");
+          return;
+        }
         if (channelRef.current) {
           channelStateRef.current = "live";
           setChannelState("live");
           setError(null);
-        } else {
-          channelStateRef.current = "connecting";
-          setChannelState("connecting");
         }
         void restoreLocalMediaAfterForeground()
           .then(() => {
@@ -2395,7 +2463,7 @@ export function useCommunicationRoomSession({
     });
 
     return () => subscription.remove();
-  }, [analyticsRole, analyticsSurface, enabled, hasUsableLocalTrack, refreshSnapshot, restoreLocalMediaAfterForeground, stopLocalMediaKind]);
+  }, [analyticsRole, analyticsSurface, enabled, hasUsableLocalTrack, refreshSnapshot, requestLegacySessionRestart, restartDisconnectedSession, restoreLocalMediaAfterForeground, stopLocalMediaKind]);
 
   const ensureTrackKind = useCallback(async (kind: "audio" | "video") => {
     const currentStream = localStreamRef.current;
