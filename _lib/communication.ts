@@ -779,8 +779,6 @@ export async function touchCommunicationRoomSession(options: {
 
   const now = new Date().toISOString();
   const membershipState = normalizeRoomMembershipState(options.membershipState);
-  const room = await getCommunicationRoom(roomId).catch(() => null);
-  if (!room && membershipState !== "left") return null;
   const updates: CommunicationMembershipUpdate = {
     membership_state: membershipState,
     last_seen_at: now,
@@ -803,8 +801,10 @@ export async function touchCommunicationRoomSession(options: {
 
   if (error || !data) return null;
   const membership = parseCommunicationMembershipPayload(data);
-  if (room && membership && (membershipState === "active" || membershipState === "reconnecting")) {
-    void touchActiveCommunicationRoomHeartbeat(room);
+  if (membership && (membershipState === "active" || membershipState === "reconnecting")) {
+    void getCommunicationRoom(roomId)
+      .then((room) => room ? touchActiveCommunicationRoomHeartbeat(room) : undefined)
+      .catch(() => undefined);
   }
   return membership;
 }

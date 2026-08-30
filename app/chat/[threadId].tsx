@@ -236,7 +236,7 @@ function GatedSmartReplySuggestions(_: {
 export default function ChillyChatThreadScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, isLoading: authLoading, isSignedIn } = useSession();
+  const { session, user, isLoading: authLoading, isSignedIn } = useSession();
   const currentUserId = String(user?.id ?? "").trim();
   const {
     threadId: threadIdParam,
@@ -861,6 +861,7 @@ export default function ChillyChatThreadScreen() {
     markInstalledUiConnected,
     markParticipantVideoRendered,
   } = useChatCallMediaSession({
+    authenticatedAccessToken: String(session?.access_token ?? "").trim(),
     authenticatedUserId: currentUserId,
     roomId: activeCallRoomId,
     invite: activeCallInvite,
