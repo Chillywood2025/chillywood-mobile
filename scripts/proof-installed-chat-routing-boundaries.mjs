@@ -37,9 +37,12 @@ if (chat.indexOf("accountStatus?.restricted") > chat.indexOf("const nextThreads 
 [
   "account_access_status_readback",
   "p_user_id",
-  "restricted: toBoolean",
-  "scheduledDeletion: toBoolean",
-  "authSuspended: toBoolean",
+  'typeof data.restricted !== "boolean"',
+  'typeof data.scheduledDeletion !== "boolean"',
+  'typeof data.authSuspended !== "boolean"',
+  "restricted: data.restricted",
+  "scheduledDeletion: data.scheduledDeletion",
+  "authSuspended: data.authSuspended",
 ].forEach((needle) => requireText("account access helper", accountAccess, needle));
 
 [

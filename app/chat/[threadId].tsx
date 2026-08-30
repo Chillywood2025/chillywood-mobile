@@ -1683,7 +1683,7 @@ export default function ChillyChatThreadScreen() {
     invite: ChillyChatCallInvite,
   ) => {
     if (!invite || callBusy || !currentUserId) return false;
-    const roomId = String(invite.communicationRoomId ?? "").trim();
+    const roomId = normalizeCommunicationRoomIdentifier(invite.communicationRoomId);
     const joinAction = resolveIncomingCallRoomJoinAction({
       currentUserIsRoomHost: false,
       inviteBelongsToCurrentCallee:
@@ -1703,10 +1703,9 @@ export default function ChillyChatThreadScreen() {
     }
     setCallBusy(true);
     try {
-      const [latestInvite, latestThread, snapshot] = await Promise.all([
+      const [latestInvite, latestThread] = await Promise.all([
         readChillyChatCallInvite(invite.id).catch(() => null),
         getChatThread(threadId).catch(() => null),
-        getCommunicationRoomSnapshot(roomId).catch(() => null),
       ]);
       const authoritative =
         latestInvite?.status === "accepted"
@@ -1715,8 +1714,7 @@ export default function ChillyChatThreadScreen() {
         && latestInvite.communicationRoomId === roomId
         && latestInvite.calleeUserId === currentUserId
         && latestInvite.callerUserId !== currentUserId
-        && latestThread?.activeCommunicationRoomId === roomId
-        && snapshot?.room.status === "active";
+        && latestThread?.activeCommunicationRoomId === roomId;
       if (!authoritative || !latestInvite) {
         setCallDeliveryStatus("This Chi'lly Chat call is no longer available. Ask the caller to start a new call.");
         return false;
@@ -2090,49 +2088,32 @@ export default function ChillyChatThreadScreen() {
     }
 
     if (!callPanelOpen) {
-      const snapshot = await getCommunicationRoomSnapshot(activeCallRoomId).catch(() => null);
-      logChatCall("pre_join_snapshot", {
-        threadId,
-        roomId: activeCallRoomId,
-        snapshotStatus: snapshot?.room.status ?? "missing",
-      });
-      if (!snapshot || snapshot.room.status !== "active") {
-        await clearEndedChatThreadCall(threadId).catch(() => null);
-        setCallPanelOpen(false);
-        setCallDeliveryStatus("The previous call ended. Start a new call when both people are ready.");
-        logChatCall("handle_join_or_close_decision", {
-          threadId,
-          decision: "blocked_stale_room",
-          roomId: activeCallRoomId,
-        });
-        await loadThreadState();
-        return;
-      }
-
-      const currentUserIsRoomHost = snapshot.room.hostUserId === currentUserId;
-      if (!currentUserIsRoomHost) {
-        let joinInvite = activeCallInvite?.communicationRoomId === activeCallRoomId
-          ? activeCallInvite
+      let joinInvite = activeCallInvite?.communicationRoomId === activeCallRoomId
+        ? activeCallInvite
+        : outgoingCallInvite?.communicationRoomId === activeCallRoomId
+          ? outgoingCallInvite
           : incomingCallInvite?.communicationRoomId === activeCallRoomId
             ? incomingCallInvite
             : null;
-        if (normalizedExpectedInviteId && joinInvite?.id !== normalizedExpectedInviteId) {
-          joinInvite = null;
-        }
-        for (let attempt = 0; !joinInvite && normalizedExpectedInviteId && attempt < 6; attempt += 1) {
-          const requestedInvite = await readChillyChatCallInvite(normalizedExpectedInviteId).catch(() => null);
-          if (requestedInvite?.communicationRoomId === activeCallRoomId) joinInvite = requestedInvite;
-          if (!joinInvite && attempt < 5) {
-            await new Promise((resolve) => setTimeout(resolve, 300));
-          }
-        }
-        for (let attempt = 0; !joinInvite && !normalizedExpectedInviteId && attempt < 6; attempt += 1) {
-          joinInvite = await readLatestChillyChatCallInviteForRoom(activeCallRoomId).catch(() => null);
-          if (!joinInvite && attempt < 5) {
-            await new Promise((resolve) => setTimeout(resolve, 300));
-          }
-        }
+      if (normalizedExpectedInviteId && joinInvite?.id !== normalizedExpectedInviteId) {
+        joinInvite = null;
+      }
+      for (let attempt = 0; !joinInvite && normalizedExpectedInviteId && attempt < 6; attempt += 1) {
+        const requestedInvite = await readChillyChatCallInvite(normalizedExpectedInviteId).catch(() => null);
+        if (requestedInvite?.communicationRoomId === activeCallRoomId) joinInvite = requestedInvite;
+        if (!joinInvite && attempt < 5) await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      for (let attempt = 0; !joinInvite && !normalizedExpectedInviteId && attempt < 6; attempt += 1) {
+        joinInvite = await readLatestChillyChatCallInviteForRoom(activeCallRoomId).catch(() => null);
+        if (!joinInvite && attempt < 5) await new Promise((resolve) => setTimeout(resolve, 300));
+      }
 
+      const inviteBelongsToCurrentParticipant = !!joinInvite
+        && joinInvite.threadId === threadId
+        && (joinInvite.callerUserId === currentUserId || joinInvite.calleeUserId === currentUserId);
+      const currentUserIsRoomHost = inviteBelongsToCurrentParticipant
+        && joinInvite?.callerUserId === currentUserId;
+      if (!currentUserIsRoomHost) {
         const inviteBelongsToCurrentCallee = !!joinInvite
           && joinInvite.threadId === threadId
           && joinInvite.calleeUserId === currentUserId
@@ -2159,6 +2140,14 @@ export default function ChillyChatThreadScreen() {
           await loadThreadState();
           return;
         }
+        activeCallInviteRef.current = joinInvite;
+        setActiveCallInvite(joinInvite);
+      } else if (!joinInvite || (joinInvite.status !== "ringing" && joinInvite.status !== "accepted")) {
+        setCallPanelOpen(false);
+        setCallDeliveryStatus("This call is no longer available. Start a new call when both people are ready.");
+        await loadThreadState();
+        return;
+      } else {
         activeCallInviteRef.current = joinInvite;
         setActiveCallInvite(joinInvite);
       }
