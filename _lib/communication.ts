@@ -362,6 +362,13 @@ export const getCommunicationRTCModule = (): RTCModule | null => {
 
 export const buildCommunicationChannelName = (roomId: string) => `${COMMUNICATION_CHANNEL_PREFIX}${roomId}`;
 
+const createCommunicationOperationError = (operation: string, cause: unknown) => {
+  const detail = typeof cause === "object" && cause && "message" in cause
+    ? String((cause as { message?: unknown }).message ?? "").trim()
+    : "";
+  return new Error(detail || `Communication ${operation} failed.`);
+};
+
 export async function broadcastCommunicationRoomSignal(options: {
   roomId: string;
   event: CommunicationRoomSignalEvent;
@@ -390,11 +397,12 @@ export async function broadcastCommunicationRoomSignal(options: {
     p_event: options.event,
     p_payload: options.payload,
   });
-
-  return !error
-    && data?.sent === true
+  if (error) throw createCommunicationOperationError("signal broadcast", error);
+  const exactResponse = data?.sent === true
     && String(data.event ?? "") === options.event
     && formatCommunicationRoomCode(data.roomId) === roomId;
+  if (!exactResponse) throw new Error("Communication signal broadcast returned an invalid response.");
+  return true;
 }
 
 const isMissingColumnError = (error: unknown, column: string) => {
@@ -481,7 +489,7 @@ async function fetchCommunicationRoomRow(roomId: string): Promise<CommunicationR
     .returns<CommunicationRoomFullRow>()
     .maybeSingle();
 
-  if (!query.error && query.data) return query.data;
+  if (!query.error) return query.data ?? null;
 
   if (query.error && isMissingColumnError(query.error, "content_access_rule")) {
     const fallback = await supabase
@@ -490,10 +498,10 @@ async function fetchCommunicationRoomRow(roomId: string): Promise<CommunicationR
       .eq("room_id", normalizedRoomId)
       .returns<CommunicationRoomBaseRow>()
       .maybeSingle();
-    if (!fallback.error && fallback.data) return fallback.data;
+    if (fallback.error) throw createCommunicationOperationError("room fallback read", fallback.error);
+    return fallback.data ?? null;
   }
-
-  return null;
+  throw createCommunicationOperationError("room read", query.error);
 }
 
 export async function createCommunicationRoom(hostUserIdOrOptions?: string | CommunicationRoomCreateOptions): Promise<CreateCommunicationRoomResult> {
@@ -639,8 +647,9 @@ export async function getCommunicationRoomByCode(roomCode: string): Promise<Comm
       const room = parseCommunicationRoomPayload(fallback.data);
       return isCommunicationRoomActive(room) ? room : null;
     }
+    if (fallback.error) throw createCommunicationOperationError("room-code fallback read", fallback.error);
   }
-
+  if (query.error) throw createCommunicationOperationError("room-code read", query.error);
   return null;
 }
 
@@ -648,19 +657,15 @@ export async function listCommunicationRoomMemberships(roomId: string): Promise<
   const normalizedRoomId = formatCommunicationRoomCode(roomId);
   if (!normalizedRoomId) return [];
 
-  try {
-    const { data, error } = await supabase
-      .from(COMMUNICATION_ROOM_MEMBERSHIPS_TABLE)
-      .select(COMMUNICATION_ROOM_MEMBERSHIP_SELECT)
-      .eq("room_id", normalizedRoomId)
-      .order("joined_at", { ascending: true })
-      .returns<CommunicationMembershipRow[]>();
+  const { data, error } = await supabase
+    .from(COMMUNICATION_ROOM_MEMBERSHIPS_TABLE)
+    .select(COMMUNICATION_ROOM_MEMBERSHIP_SELECT)
+    .eq("room_id", normalizedRoomId)
+    .order("joined_at", { ascending: true })
+    .returns<CommunicationMembershipRow[]>();
 
-    if (error || !data) return [];
-    return data.map(parseCommunicationMembershipPayload).filter(isDefined);
-  } catch {
-    return [];
-  }
+  if (error) throw createCommunicationOperationError("membership read", error);
+  return (data ?? []).map(parseCommunicationMembershipPayload).filter(isDefined);
 }
 
 export async function getCommunicationRoomSnapshot(roomId: string): Promise<CommunicationRoomSnapshot | null> {
@@ -759,7 +764,8 @@ export async function joinCommunicationRoomSession(options: {
     p_mic_enabled: typeof options.micEnabled === "boolean" ? options.micEnabled : true,
   });
   const row = Array.isArray(data) ? data[0] ?? null : data;
-  if (error || !row) return null;
+  if (error) throw createCommunicationOperationError("membership join", error);
+  if (!row) return null;
   const membership = parseCommunicationMembershipPayload(row);
   return membership?.userId === requestedUserId ? membership : null;
 }
@@ -799,7 +805,8 @@ export async function touchCommunicationRoomSession(options: {
     .returns<CommunicationMembershipRow>()
     .single();
 
-  if (error || !data) return null;
+  if (error) throw createCommunicationOperationError("membership update", error);
+  if (!data) return null;
   const membership = parseCommunicationMembershipPayload(data);
   if (membership && (membershipState === "active" || membershipState === "reconnecting")) {
     void getCommunicationRoom(roomId)

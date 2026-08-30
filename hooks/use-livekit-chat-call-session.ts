@@ -603,7 +603,10 @@ export function useLiveKitChatCallSession({
     if (!activeBinding || !isCommittedSessionCurrent(activeBinding)) return null;
     const roomId = activeBinding.normalizedRoomId;
     const userId = activeBinding.userId;
-    const snapshot = await getCommunicationRoomSnapshot(roomId).catch(() => null);
+    const snapshot = await getCommunicationRoomSnapshot(roomId).catch((snapshotError) => {
+      reportRuntimeError("chat-call-livekit-membership-read", snapshotError, { roomId });
+      return null;
+    });
     if (
       !isCommittedSessionCurrent(activeBinding)
       || !snapshot
@@ -653,7 +656,10 @@ export function useLiveKitChatCallSession({
       micEnabled: micOn,
       displayName: currentIdentity.displayName,
       avatarUrl: currentIdentity.avatarUrl,
-    }).catch(() => null);
+    }).catch((membershipError) => {
+      reportRuntimeError("chat-call-livekit-membership-write", membershipError, { roomId });
+      return null;
+    });
     if (!isCommittedSessionCurrent(activeBinding)) return null;
     if (strict && !isExact(membership)) {
       const observed = await readCurrentMembershipMediaState(activeBinding);
@@ -1713,7 +1719,11 @@ export function useLiveKitChatCallSession({
             productRoomRef.current = latestSnapshot.room;
             refreshParticipantViews();
           })
-          .catch(() => undefined);
+          .catch((snapshotError) => {
+            reportRuntimeError("chat-call-livekit-heartbeat-snapshot", snapshotError, {
+              roomId: heartbeatBinding.normalizedRoomId,
+            });
+          });
       }, ROOM_HEARTBEAT_MS);
     };
 

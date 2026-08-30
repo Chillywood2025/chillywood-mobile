@@ -5,12 +5,17 @@ Closure method: recursive grouped closure; a merge is not physical proof.
 
 ## Durable recovery checkpoint
 
-- Protected `main`: `9965b107920619ecfa616bf69a2dfd6d5d9b71b9`; tree `3af0c6444c64da7ef080036127d57dbb0f764793`; parents `2650e56b64d56051271cdbf6a545bb330676b35a` and `7246ac105a450b5b2b0f7b72d8fcd25e0cd3add0`.
-- Latest merged repair: PR #314, head `7246ac105a450b5b2b0f7b72d8fcd25e0cd3add0`, normal two-parent merge `9965b107920619ecfa616bf69a2dfd6d5d9b71b9`, merged `2026-08-30T11:56:19Z`.
-- PR #314 used the Owner-authorized assurance-only temporary PR bypass on active ruleset `18940814`. Writable ruleset hash was `8edf290e70141cfe0b3a371f958e8add21f997de1c87e99cbe2c927b9a90904a` before and after; the temporary Owner User PR-only actor was removed immediately after the exact-head merge.
-- Exact #314 internal-v2 OTAs: Android group `93fcaced-cfb6-4c3f-911f-dc36c6eb963b`, update `01a05291-15d2-76b4-b6f4-4fedd95af06e`; iOS group `27bd04ef-7481-4829-8b68-94dd8df7f5f2`, update `01a05295-bb6f-7622-9b02-a0985fd72e36`. Attached Android build 91 and iPhone build 13 both consumed their exact update.
-- Post-#314 physical messaging is complete for this pass: A→B multiline `dda65563-d55b-469a-a407-b5347b5185c2`, B→A `f30dab3d-b3ff-4df5-98c6-c14dcb6d7d37`, Realtime, preview, unread increment and read clearing, thread selection, and Android keyboard visibility/multiline/send/scroll/background-resume were proved on the attached devices. The full matrix must restart after the next grouped OTA.
-- First post-#314 voice run: invite `6312d671-68ba-4805-adb8-9236f989c5d9`, room `RQ52S6`, accepted `2026-08-30T15:09:26.750745Z`, legacy WebRTC. Both devices reached two-participant `Connected`; Android unmute committed local capture and membership. iOS unmute committed `mic_enabled=true`, renegotiated, and started `AVAudioEngine`, but iOS still rendered self muted and Android rendered the remote muted. Normal termination at `15:13:54.591877Z` ended invite/room and left zero active memberships. This blocker reopened the grouped media-projection graph.
+- Protected `main`: `f3bc447dea6d5681ce632abfd07dc425fd1a46f3`; tree `88516bcc21e1f8af9cf593343abe748a5f6fa204`; parents `9965b107920619ecfa616bf69a2dfd6d5d9b71b9` and `1840f7156446ffa58060fae82fbcd3e48fc0b721`.
+- Latest merged repair: PR #315, head `1840f7156446ffa58060fae82fbcd3e48fc0b721`, normal two-parent merge `f3bc447dea6d5681ce632abfd07dc425fd1a46f3`.
+- PR #315 used the Owner-authorized assurance-only temporary PR bypass on active ruleset `18940814`. Writable ruleset hash was `8edf290e70141cfe0b3a371f958e8add21f997de1c87e99cbe2c927b9a90904a` before and after; temporary Owner user actor `210200794` produced bypass-state hash `8033733a5057046b5cd031e9606d0c25a11cd05596176c7a26cb16de5a2b2abe` and was removed immediately after the exact-head merge. Final active ruleset contains only Integration actor `4707730`.
+- Exact #315 internal-v2 OTAs: Android group `2bbf0eaf-57ca-46d7-b3bd-c3b190be380a`, update `01a05360-5870-7135-bc66-ab69109e0e97`, runtime `1.0.0-android-production-v2`; iOS group `7e9dccd7-d448-4491-963f-77830749af43`, update `01a05364-9097-7d77-a88d-1ce0cb1754ad`, runtime `1.0.0-ios-production-v2`. Both updates bind commit `f3bc447dea6d5681ce632abfd07dc425fd1a46f3`; attached Android build 91 and iPhone build 13 consumed the exact updates.
+- Post-#315 physical messaging for the interrupted pass: Android→iOS multiline `A2B_315_line1\nline2_20260830T1108Z`; iOS→Android multiline `B2A_315_line1\nline2_20260830T1109Z`; exact Realtime rendering; preview/unread/read proof with `UNREAD_315_20260830T1110Z`; Android keyboard visibility, multiline, send, and scroll. The full matrix must restart after the next grouped OTA.
+- A first invite `8267aa77-1569-48b1-8b8a-bd402a6335e1`, room `369GQQ`, expired before acceptance while evidence was being collected; production correctly marked it missed and left no memberships. This is tester delay, `NOT_A_DEFECT`.
+- Accepted blocker run: invite `04c90c77-de19-439a-85c4-eabaf074e458`, room `L46HPX`, accepted `2026-08-30T16:12:27.328555Z`, legacy WebRTC. Both devices reached two-member `Connected`; Android membership PATCH and `media:update` RPC returned 200, WebRTC offer/answer/ICE and remote-track callbacks completed, but a concurrent same-room snapshot replacement caused Android to reject its successful initial media promotion and compensate to muted. Android displayed `Call media could not be synchronized. The call remains muted.` Normal termination at `2026-08-30T16:15:00.312501Z` ended invite/room, left both memberships, cleared the thread projection, and returned both UIs to no active call.
+
+## Standing material cross-feature audit boundary
+
+Every recursive failure-graph pass includes shared or cross-feature code when it can materially affect Chi'lly Chat through authentication/session authority, navigation, Realtime, notifications, native lifecycle, media, provider routing, room namespace, or cleanup. Defects without a material path into the required Chi'lly Chat messaging/call closure remain out of scope and are not repaired under this task.
 
 ## Cumulative defects
 
@@ -182,6 +187,54 @@ Closure method: recursive grouped closure; a merge is not physical proof.
 - Database/OTA/native requirement: no migration and no native build; one grouped internal-v2 OTA required after exact merge.
 - Physical state/disposition: grouped repair implemented and executable regressions green; exact post-OTA full two-device proof pending; `REPAIRED_UNPROVEN`.
 
+### CC-316-MEDIA-AUTHORITY-RACE — same-room snapshot object churn revoked a successful media promotion
+
+- Discovery source: post-#315 accepted two-device voice run `04c90c77-de19-439a-85c4-eabaf074e458` / `L46HPX`; Android device logs and production API timing at `2026-08-30T16:12:30Z`.
+- Exact failure/layer/severity: membership PATCH, Presence track, and authenticated `media:update` RPC succeeded, but `updatePresence` required the captured room object to remain pointer-identical across awaits. A concurrent authoritative snapshot replaced that object for the same room and generation; the client misclassified the successful promotion as stale, disabled local media, and wrote muted compensation. Media authority/integration blocker.
+- Upstream dependencies: exact mounted user/token, accepted room, current Realtime channel, native tracks, durable membership, server signaling. Downstream consequences: false initial-sync failure, locally muted media despite successful producer operations, unusable voice/video start, misleading remote projection.
+- Root cause/group: mutable snapshot object identity was used as session authority instead of generation + exact channel + normalized room ID + exact user ID + active lifecycle; `LEGACY_TEMPORAL_AUTHORITY_AND_OPERATIONAL_TRUTH`.
+- Platforms/providers: physically Android on legacy WebRTC; same-class client logic is cross-platform. LiveKit uses committed generation/session keys and provider `Room` identity and is not changed to legacy authority semantics.
+- Affected files: `hooks/use-communication-room-session.ts`, mounted exact-hook regression.
+- Repair/regression proof: initial media presence now uses stable exact session authority and accepts a newly allocated snapshot for the same active room while continuing to reject a changed generation/channel/room/user. Mounted regression reproduces room-object replacement during the awaited `media:update` and proves mic/camera stay locally and durably enabled without a false promotion error.
+- Database/OTA/native requirement: no migration/native build; grouped internal-v2 OTA required after exact merge.
+- Physical state/disposition: repair implemented, executable regression green, post-OTA device proof pending; `REPAIRED_UNPROVEN`.
+
+### CC-316-SNAPSHOT-ORDER — overlapping room reads could regress mounted state
+
+- Discovery source: same-class/different-class temporal audit after `CC-316-MEDIA-AUTHORITY-RACE`.
+- Exact failure/layer/severity: membership, room, heartbeat, warmup, and `media:update` events could issue overlapping snapshot reads with no ordering owner; a slower older response could overwrite a newer room/membership projection. Temporal projection blocker affecting controls, participants, cleanup, and next-call state.
+- Upstream dependencies: concurrent Postgres changes, server-relayed media updates, and heartbeats. Downstream consequences: stale participants/media, terminal-state regression, cleanup disagreement, or a current transaction being evaluated against obsolete state.
+- Root cause/group: response completion order was treated as authority; `LEGACY_TEMPORAL_AUTHORITY_AND_OPERATIONAL_TRUTH`.
+- Platforms/providers: legacy WebRTC both platforms; shared communication reads also feed LiveKit, whose existing committed-session guards remain protected.
+- Affected files: legacy session hook and mounted snapshot regression.
+- Repair/regression proof: every snapshot request receives a monotonic serial; only the newest request in the current generation may project into refs/React state, while an older valid response can still return to its direct caller. An executable overlapping-read barrier proves the older response cannot replace the newer `updatedAt` state.
+- Database/OTA/native requirement: no migration/native build; grouped OTA required.
+- Physical state/disposition: `REPAIRED_UNPROVEN`.
+
+### CC-316-OPERATIONAL-TRUTH — communication failures were indistinguishable from absent state
+
+- Discovery source: required error-handling and adjacent shared-provider audit after the physical blocker.
+- Exact failure/layer/severity: communication room/membership reads, membership join/update, and signaling RPCs collapsed SDK/database errors into `null`, empty arrays, or `false`; state-channel terminal status, heartbeat/warmup reads, and LiveKit shared membership reads also suppressed the only operational evidence. Observability and fail-closed recovery blocker because unavailable authority could be misclassified as room absence, membership denial, or ordinary negative signaling.
+- Upstream dependencies: Supabase client receiver, PostgREST/RPC, Realtime state channel. Downstream consequences: misleading room-unavailable/muted behavior, missing bounded restart, hidden legacy offer/media failures, and hidden LiveKit membership reconciliation failures.
+- Root cause/group: broad error suppression erased the first failed operation; `LEGACY_TEMPORAL_AUTHORITY_AND_OPERATIONAL_TRUTH`.
+- Platforms/providers: both platforms; shared communication layer, legacy WebRTC, and LiveKit observability. Watch Party retains its retry/fallback behavior and room namespace.
+- Affected files: `_lib/communication.ts`, both provider hooks, executable operation-error and mounted state-channel regressions.
+- Repair/regression proof: valid absence remains `null`/empty, while SDK/RPC/query errors and malformed signal acknowledgements throw sanitized operational errors; call/provider callers report them and remain fail closed. The room-state channel now reports terminal statuses and requests the existing generation-deduplicated legacy restart. Executable fakes preserve receiver semantics and prove RPC/query failure, invalid response, state-channel failure, and bounded recovery behavior.
+- Database/OTA/native requirement: no migration/native build; grouped OTA required.
+- Physical state/disposition: `REPAIRED_UNPROVEN`.
+
+### CC-316-SAME-SESSION-CLEANUP — snapshot replacement could leave retired refs or skip foreground readback
+
+- Discovery source: same-class lifecycle audit of every room/identity pointer comparison.
+- Exact failure/layer/severity: effect cleanup cleared refs only if captured objects were still pointer-identical, although snapshot refresh legitimately replaces room/membership objects inside the same generation; foreground restore likewise skipped readback when the exact room/user objects were reallocated. Lifecycle/cleanup blocker.
+- Upstream dependencies: same accepted session, snapshot refresh, app background/foreground, effect retirement. Downstream consequences: stale refs after retirement, incorrect next-session inputs, or skipped authoritative foreground projection.
+- Root cause/group: object identity substituted for stable session identity; `LEGACY_TEMPORAL_AUTHORITY_AND_OPERATIONAL_TRUTH`.
+- Platforms/providers: both legacy platforms. Shared native entry/provider selection remain unchanged.
+- Affected files: legacy communication hook and existing stale-generation cleanup/foreground mounted cases.
+- Repair/regression proof: foreground continuation compares generation + normalized room ID + user ID; synchronous cleanup clears all projections when it owns the retiring generation, while the existing replacement-generation negative control proves stale cleanup cannot clear replacement session resources.
+- Database/OTA/native requirement: no migration/native build; grouped OTA required.
+- Physical state/disposition: `REPAIRED_UNPROVEN`.
+
 ## Remaining physical closure matrix
 
-Post-#314 messaging, unread/read, and Android keyboard are physically proved for the interrupted pass but must be rerun from the beginning after the next grouped OTA. Required call proof remains: legacy voice usable two-way audio and controls; second clean voice; legacy video usable two-way render and controls; reverse direction; background/reconnect/cleanup/next call; Android foreground/warm/cold/decline/replay/stale entry; available iOS foreground/CallKit/termination/duplicate/stale entry; LiveKit canary path if dedicated accounts/devices are available. Any new blocker reopens the complete grouped failure graph.
+Post-#315 messaging, unread/read, and Android keyboard are physically proved for the interrupted pass but must be rerun from the beginning after the next grouped OTA. Required call proof remains: legacy voice usable two-way audio and controls; second clean voice; legacy video usable two-way render and controls; reverse direction; background/reconnect/cleanup/next call; Android foreground/warm/cold/decline/replay/stale entry; available iOS foreground/CallKit/termination/duplicate/stale entry; LiveKit canary path if dedicated accounts/devices are available; Watch Party namespace isolation. Any new blocker reopens the complete grouped and materially connected cross-feature failure graph.
