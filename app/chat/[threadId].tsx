@@ -3725,10 +3725,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(6,10,18,0.96)",
   },
   composerKeyboardDocked: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
+    // KeyboardAvoidingView already owns Android keyboard-height compensation.
+    // Keep the composer in normal flow so the input stays visible above the keyboard.
+    position: "relative",
   },
   composerAffordanceRow: {
     flexDirection: "row",
