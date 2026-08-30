@@ -29,6 +29,13 @@ export type ReleaseDiagnostics = {
   isEmbeddedLaunch: boolean | null;
   isEmergencyLaunch: boolean | null;
   imageManipulatorNativeModuleAvailable: boolean;
+  internalV2OtaPlatform: string | null;
+  iosNativeCallsAvailable: boolean | null;
+  iosNativeCallsBuildEnabled: boolean | null;
+  iosNativeCallsDisabledReason: string | null;
+  iosNativeCallsRuntimeEnabled: boolean | null;
+  iosVoipApnsEnvironment: string | null;
+  iosVoipRegistrationStatus: string | null;
   latestKnownUpdateCheckResult: ReleaseUpdateCheckResult | null;
   nativeApplicationVersion: string | null;
   nativeBuildVersion: string | null;
@@ -52,6 +59,25 @@ const normalizeDate = (value: unknown) => {
   return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
 };
 
+const readRuntimeExtra = () => {
+  const extra = Constants.expoConfig?.extra;
+  if (!extra || typeof extra !== "object" || Array.isArray(extra)) return {};
+  const runtime = (extra as Record<string, unknown>).runtime;
+  return runtime && typeof runtime === "object" && !Array.isArray(runtime)
+    ? runtime as Record<string, unknown>
+    : {};
+};
+
+const readIosNativeCallsRuntimeEnabled = () => {
+  if (Platform.OS !== "ios") return null;
+  const runtime = readRuntimeExtra();
+  const communication = runtime.communication && typeof runtime.communication === "object" && !Array.isArray(runtime.communication)
+    ? runtime.communication as Record<string, unknown>
+    : {};
+  const value = communication.iosNativeCallsEnabled ?? runtime.iosNativeCallsEnabled;
+  return ["1", "true", "yes", "on"].includes(String(value ?? "").trim().toLowerCase());
+};
+
 let latestKnownUpdateCheckResult: ReleaseUpdateCheckResult | null = null;
 
 export function recordReleaseUpdateCheckResult(result: {
@@ -67,6 +93,7 @@ export function recordReleaseUpdateCheckResult(result: {
 }
 
 export function readReleaseDiagnostics(): ReleaseDiagnostics {
+  const runtime = readRuntimeExtra();
   return {
     appOwnership: normalizeText(Constants.appOwnership),
     appVersion: normalizeText(Application.nativeApplicationVersion ?? Constants.expoConfig?.version),
@@ -78,6 +105,13 @@ export function readReleaseDiagnostics(): ReleaseDiagnostics {
     isEmbeddedLaunch: typeof Updates.isEmbeddedLaunch === "boolean" ? Updates.isEmbeddedLaunch : null,
     isEmergencyLaunch: typeof Updates.isEmergencyLaunch === "boolean" ? Updates.isEmergencyLaunch : null,
     imageManipulatorNativeModuleAvailable: requireOptionalNativeModule(IMAGE_MANIPULATOR_NATIVE_MODULE_NAME) != null,
+    internalV2OtaPlatform: normalizeText(runtime.internalV2OtaPlatform),
+    iosNativeCallsAvailable: null,
+    iosNativeCallsBuildEnabled: null,
+    iosNativeCallsDisabledReason: null,
+    iosNativeCallsRuntimeEnabled: readIosNativeCallsRuntimeEnabled(),
+    iosVoipApnsEnvironment: null,
+    iosVoipRegistrationStatus: null,
     latestKnownUpdateCheckResult,
     nativeApplicationVersion: normalizeText(Application.nativeApplicationVersion),
     nativeBuildVersion: normalizeText(Application.nativeBuildVersion),
@@ -101,6 +135,13 @@ export function sanitizeReleaseDiagnosticsForDisplay(
     isEmbeddedLaunch: typeof diagnostics.isEmbeddedLaunch === "boolean" ? diagnostics.isEmbeddedLaunch : null,
     isEmergencyLaunch: typeof diagnostics.isEmergencyLaunch === "boolean" ? diagnostics.isEmergencyLaunch : null,
     imageManipulatorNativeModuleAvailable: diagnostics.imageManipulatorNativeModuleAvailable === true,
+    internalV2OtaPlatform: normalizeText(diagnostics.internalV2OtaPlatform),
+    iosNativeCallsAvailable: typeof diagnostics.iosNativeCallsAvailable === "boolean" ? diagnostics.iosNativeCallsAvailable : null,
+    iosNativeCallsBuildEnabled: typeof diagnostics.iosNativeCallsBuildEnabled === "boolean" ? diagnostics.iosNativeCallsBuildEnabled : null,
+    iosNativeCallsDisabledReason: normalizeText(diagnostics.iosNativeCallsDisabledReason),
+    iosNativeCallsRuntimeEnabled: typeof diagnostics.iosNativeCallsRuntimeEnabled === "boolean" ? diagnostics.iosNativeCallsRuntimeEnabled : null,
+    iosVoipApnsEnvironment: normalizeText(diagnostics.iosVoipApnsEnvironment),
+    iosVoipRegistrationStatus: normalizeText(diagnostics.iosVoipRegistrationStatus),
     latestKnownUpdateCheckResult: diagnostics.latestKnownUpdateCheckResult
       ? {
         checkedAt: normalizeDate(diagnostics.latestKnownUpdateCheckResult.checkedAt) ?? new Date(0).toISOString(),
@@ -134,6 +175,13 @@ export function formatReleaseDiagnosticsSummary(diagnostics: ReleaseDiagnosticsD
     `Embedded launch: ${formatBoolean(diagnostics.isEmbeddedLaunch)}`,
     `Emergency launch: ${formatBoolean(diagnostics.isEmergencyLaunch)}`,
     `ExpoImageManipulator native module: ${diagnostics.imageManipulatorNativeModuleAvailable ? "available" : "missing"}`,
+    `Internal-v2 OTA target: ${formatNullable(diagnostics.internalV2OtaPlatform)}`,
+    `iOS native calls available: ${formatBoolean(diagnostics.iosNativeCallsAvailable)}`,
+    `iOS native calls build enabled: ${formatBoolean(diagnostics.iosNativeCallsBuildEnabled)}`,
+    `iOS native calls runtime enabled: ${formatBoolean(diagnostics.iosNativeCallsRuntimeEnabled)}`,
+    `iOS native calls disabled reason: ${formatNullable(diagnostics.iosNativeCallsDisabledReason)}`,
+    `iOS VoIP APNs environment: ${formatNullable(diagnostics.iosVoipApnsEnvironment)}`,
+    `iOS VoIP registration: ${formatNullable(diagnostics.iosVoipRegistrationStatus)}`,
     `Check automatically: ${formatNullable(diagnostics.checkAutomatically)}`,
     `App ownership: ${formatNullable(diagnostics.appOwnership)}`,
     `Latest update check: ${updateCheck ? `${updateCheck.status} (${updateCheck.reason}) at ${updateCheck.checkedAt}` : "null"}`,

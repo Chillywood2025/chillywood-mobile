@@ -136,6 +136,8 @@ const retryMigration = read("supabase/migrations/20260718113000_durable_call_del
 const voipPolicy = read("supabase/functions/_shared/ios-voip-policy.mjs");
 const config = read("supabase/config.toml");
 const androidPlugin = read("plugins/withChillyChatNativeCallNotifications.js");
+const internalV2Publisher = read("scripts/publish-internal-v2-ota.mjs");
+const internalV2Proof = read("scripts/proof-internal-v2-ota-config.mjs");
 
 requireText(plugin, "IOS_NATIVE_CALLS_ENABLED", "iOS native-call capabilities must require the build-time flag.");
 requireText(plugin, "ChillywoodNativeCallsBuildEnabled", "The native module must receive the fail-closed build flag.");
@@ -173,7 +175,22 @@ requireText(facade, "EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED", "The JS facade must 
 requireText(facade, "communication.iosNativeCallsEnabled", "The canonical communication.iosNativeCallsEnabled runtime key must be supported.");
 requireText(facade, "configuredRuntimeValue === undefined", "The canonical manifest value must take precedence over a conflicting export environment value.");
 requireText(appConfig, "iosNativeCallsEnabled: iosQaRuntimeVersion", "The isolated ios-qa runtime must preserve its native-call manifest gate.");
+requireText(appConfig, 'internalV2OtaPlatform === "ios"', "The explicit iOS internal-v2 OTA target must preserve the compiled native-call capability.");
+requireText(appConfig, "CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM must be android or ios", "Unknown internal-v2 OTA targets must fail closed.");
 requireText(appConfig, "? true", "The explicit ios-qa runtime must enable only the already-compiled native-call bridge.");
+for (const marker of [
+  'git", ["status", "--porcelain"]',
+  'git", ["ls-remote", "origin", "refs/heads/main"]',
+  '"--environment",',
+  '"production",',
+  '`${platform}-internal-v2`',
+  "CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM",
+]) {
+  requireText(internalV2Publisher, marker, `The internal-v2 publisher must enforce ${marker}.`);
+}
+requireText(internalV2Proof, 'readConfig("ios")', "The internal-v2 proof must execute the iOS publication configuration.");
+requireText(internalV2Proof, 'readConfig("android")', "The internal-v2 proof must execute the Android publication configuration.");
+requireText(internalV2Proof, 'readConfig("production-v2")', "The internal-v2 proof must reject an unknown publication target.");
 requireText(facade, "if (!readiness.available", "PushKit registration must fail closed when build/runtime readiness is absent.");
 requireText(facade, "revokeIosVoipRegistration", "The JS facade must revoke on logout/account transition.");
 requireText(facade, "dispatchIosVoipIncomingCall", "The JS facade must expose incoming-only PushKit dispatch.");
