@@ -1490,6 +1490,7 @@ for (const permanentTestId of [
 for (const permanentSurfaceId of [
   "communication-call-panel",
   "communication-call-connection-status",
+  "communication-media-control-message",
 ]) {
   assert.match(
     inRoomPanelSource,
@@ -1497,6 +1498,26 @@ for (const permanentSurfaceId of [
     `the physical call matrix has a permanent ${permanentSurfaceId} surface target`,
   );
 }
+assert.match(
+  chatThreadSource,
+  /mediaControlMessage=\{callControlError\}/u,
+  "call-control failures remain visible inside the fullscreen call surface",
+);
+assert.match(
+  inRoomPanelSource,
+  /\{mediaControlMessage\}/u,
+  "the fullscreen panel renders the exact media-control failure text without replacing the call",
+);
+assert.match(
+  chatThreadSource,
+  /const nativeControlUpdated = await setIosNativeCallMuted[\s\S]{0,500}setCallControlError\(message\)/u,
+  "an in-app microphone commit cannot silently diverge from the iOS native call control",
+);
+assert.match(
+  chatThreadSource,
+  /action === "mute" \|\| action === "unmute"[\s\S]{0,500}const updated = await setMicrophoneEnabled[\s\S]{0,500}setCallControlError\(message\)/u,
+  "a trusted native microphone action cannot silently fail after claim consumption",
+);
 for (const permanentVideoId of [
   "communication-participant-self",
   "communication-participant-remote",

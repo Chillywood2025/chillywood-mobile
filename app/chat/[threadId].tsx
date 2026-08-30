@@ -307,6 +307,7 @@ export default function ChillyChatThreadScreen() {
   const [outgoingCallInvite, setOutgoingCallInvite] = useState<ChillyChatCallInvite | null>(null);
   const [activeCallInvite, setActiveCallInvite] = useState<ChillyChatCallInvite | null>(null);
   const [callDeliveryStatus, setCallDeliveryStatus] = useState<string | null>(null);
+  const [callControlError, setCallControlError] = useState<string | null>(null);
   const [callPreferences, setCallPreferences] = useState<NotificationPreferenceSettings | null>(null);
   const [headerQuickActionsOpen, setHeaderQuickActionsOpen] = useState(false);
   const [friendState, setFriendState] = useState<FriendRelationshipState | null>(null);
@@ -966,22 +967,39 @@ export default function ChillyChatThreadScreen() {
     })().finally(() => { acceptedIosNativeMediaSettlementInFlightRef.current = false; });
   }, [activeCallInvite?.id, activeCallInvite?.status, activeCallRoomId, callChannelState, callMediaProvider, currentUserId, leaveRoom, loadThreadState, requestedNativeCallUuid, terminateAcceptedIosNativeAnswer, threadId]);
 
+  useEffect(() => {
+    setCallControlError(null);
+  }, [activeCallInvite?.id, activeCallRoomId]);
+
   const handleToggleCallMic = useCallback(async () => {
     const nextEnabled = !micEnabled;
     try {
       const updated = await setMicrophoneEnabled(nextEnabled);
       if (!updated) {
-        setError(canOpenMediaSettings
+        const message = canOpenMediaSettings
           ? "Microphone permission is unavailable. The call remains connected."
-          : "Microphone state could not be synchronized. The call remains connected.");
+          : "Microphone state could not be synchronized. The call remains connected.";
+        setError(message);
+        setCallControlError(message);
         return;
       }
       setError(null);
+      setCallControlError(null);
       if (requestedNativeCallUuid) {
-        await setIosNativeCallMuted(requestedNativeCallUuid, !nextEnabled).catch(() => false);
+        const nativeControlUpdated = await setIosNativeCallMuted(requestedNativeCallUuid, !nextEnabled);
+        if (!nativeControlUpdated) {
+          const message = "Microphone changed, but the native call control could not be synchronized.";
+          setError(message);
+          setCallControlError(message);
+          reportRuntimeError("chat-call-toggle-native-microphone", new Error("native_microphone_control_sync_failed"), {
+            threadId,
+          });
+        }
       }
     } catch (mediaError) {
-      setError("The microphone could not be changed. The call remains connected.");
+      const message = "The microphone could not be changed. The call remains connected.";
+      setError(message);
+      setCallControlError(message);
       reportRuntimeError("chat-call-toggle-microphone", mediaError, { threadId });
     }
   }, [canOpenMediaSettings, micEnabled, requestedNativeCallUuid, setMicrophoneEnabled, threadId]);
@@ -989,10 +1007,18 @@ export default function ChillyChatThreadScreen() {
   const handleToggleCallCamera = useCallback(async () => {
     try {
       const updated = await toggleCamera();
-      if (updated === false) return;
+      if (updated === false) {
+        const message = "Camera state could not be synchronized. The call remains connected.";
+        setError(message);
+        setCallControlError(message);
+        return;
+      }
       setError(null);
+      setCallControlError(null);
     } catch (mediaError) {
-      setError("The camera could not be changed. The call remains connected.");
+      const message = "The camera could not be changed. The call remains connected.";
+      setError(message);
+      setCallControlError(message);
       reportRuntimeError("chat-call-toggle-camera", mediaError, { threadId });
     }
   }, [threadId, toggleCamera]);
@@ -1001,12 +1027,17 @@ export default function ChillyChatThreadScreen() {
     try {
       const updated = await switchCamera();
       if (!updated) {
-        setError("The camera could not be flipped on this device. The call remains connected.");
+        const message = "The camera could not be flipped on this device. The call remains connected.";
+        setError(message);
+        setCallControlError(message);
         return;
       }
       setError(null);
+      setCallControlError(null);
     } catch (mediaError) {
-      setError("The camera could not be flipped on this device. The call remains connected.");
+      const message = "The camera could not be flipped on this device. The call remains connected.";
+      setError(message);
+      setCallControlError(message);
       reportRuntimeError("chat-call-switch-camera", mediaError, { threadId });
     }
   }, [switchCamera, threadId]);
@@ -1023,11 +1054,16 @@ export default function ChillyChatThreadScreen() {
       if (liveKitUpdated || nativeUpdated) {
         setNativeSpeakerEnabled(nextSpeakerEnabled);
         setError(null);
+        setCallControlError(null);
         return;
       }
-      setError("The audio output could not be changed. The call remains connected.");
+      const message = "The audio output could not be changed. The call remains connected.";
+      setError(message);
+      setCallControlError(message);
     } catch (routeError) {
-      setError("The audio output could not be changed. The call remains connected.");
+      const message = "The audio output could not be changed. The call remains connected.";
+      setError(message);
+      setCallControlError(message);
       reportRuntimeError("chat-call-audio-route", routeError, { threadId });
     }
   }, [callMediaProvider, nativeSpeakerEnabled, setCallMediaSpeaker, threadId]);
@@ -1996,7 +2032,19 @@ export default function ChillyChatThreadScreen() {
       if (action === "mute" || action === "unmute") {
         const shouldMute = action === "mute";
         if (invite.status === "accepted") {
-          await setMicrophoneEnabled(!shouldMute);
+          const updated = await setMicrophoneEnabled(!shouldMute);
+          if (!updated) {
+            const message = "The native microphone action could not be synchronized. Open the call to try again.";
+            setError(message);
+            setCallControlError(message);
+            reportRuntimeError("chat-call-native-microphone-action", new Error("native_microphone_action_sync_failed"), {
+              action,
+              threadId,
+            });
+          } else {
+            setError(null);
+            setCallControlError(null);
+          }
         }
         return;
       }
@@ -3027,6 +3075,7 @@ export default function ChillyChatThreadScreen() {
             speakerEnabled={nativeSpeakerEnabled}
             leaveLabel={outgoingCallRinging ? "Cancel Call" : "End Call"}
             mediaPermissionMessage={mediaPermissionMessage}
+            mediaControlMessage={callControlError}
             canOpenMediaSettings={canOpenMediaSettings}
             showControls={outgoingCallRinging || activeCallInvite?.status === "accepted"}
             showMediaControls={!outgoingCallRinging && !callError && !callLoading}

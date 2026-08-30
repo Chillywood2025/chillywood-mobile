@@ -108,6 +108,7 @@ const OFFER_RETRY_DELAY_MILLIS = 2_500;
 const OFFER_RETRY_MIN_INTERVAL_MILLIS = 2_000;
 const REALTIME_OPERATION_TIMEOUT_MILLIS = 3_000;
 const LEGACY_MIC_RENEGOTIATION_TIMEOUT_MILLIS = 3_000;
+const LEGACY_SIGNALING_STABLE_TIMEOUT_MILLIS = 4_000;
 const PREFERRED_VIDEO_CODEC = "VP8";
 
 const logChatRtc = (event: string, details?: Record<string, unknown>) => {
@@ -347,6 +348,48 @@ const waitForRealtimeOperation = async <T,>(operation: Promise<T>, timeoutMillis
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }
+};
+
+const waitForLegacyPeerSignalingStable = async (
+  peerConnection: any,
+  isCurrent: () => boolean,
+) => {
+  if (!isCurrent()) return false;
+  if (String(peerConnection?.signalingState ?? "stable") === "stable") return true;
+  if (
+    String(peerConnection?.signalingState ?? "") === "closed"
+    || String(peerConnection?.connectionState ?? "") === "closed"
+    || typeof peerConnection?.addEventListener !== "function"
+  ) return false;
+
+  let settled = false;
+  let settle = (_stable: boolean) => {};
+  const transition = new Promise<boolean>((resolve) => {
+    settle = (stable) => {
+      if (settled) return;
+      settled = true;
+      resolve(stable);
+    };
+  });
+  const onSignalingStateChange = () => {
+    if (!isCurrent()) {
+      settle(false);
+      return;
+    }
+    const signalingState = String(peerConnection?.signalingState ?? "");
+    if (signalingState === "stable") settle(true);
+    else if (signalingState === "closed") settle(false);
+  };
+  peerConnection.addEventListener("signalingstatechange", onSignalingStateChange);
+  onSignalingStateChange();
+  const stable = await waitForRealtimeOperation(
+    transition,
+    LEGACY_SIGNALING_STABLE_TIMEOUT_MILLIS,
+  );
+  peerConnection.removeEventListener?.("signalingstatechange", onSignalingStateChange);
+  return stable === true
+    && isCurrent()
+    && String(peerConnection?.signalingState ?? "") === "stable";
 };
 
 export function useCommunicationRoomSession({
@@ -1519,14 +1562,34 @@ export function useCommunicationRoomSession({
           const resent = await broadcastOfferDescription(remoteUserId, existingLocalDescription);
           if (generation !== legacySessionGenerationRef.current || peerConnectionsRef.current[remoteUserId] !== peerConnection) return false;
           scheduleOfferRetry(remoteUserId);
-          return resent;
+          if (!resent) return false;
+          if (!forceRenegotiation) return true;
+          const answered = await waitForLegacyPeerSignalingStable(peerConnection, () => (
+            generation === legacySessionGenerationRef.current
+            && peerConnectionsRef.current[remoteUserId] === peerConnection
+          ));
+          if (!answered) return false;
+          clearOfferRetry(remoteUserId);
         }
-        logChatRtc("offer_skipped_unstable", {
-          roomId,
-          remoteUserId,
-          peer: describePeerConnection(peerConnection),
-        });
-        return false;
+        if (String(peerConnection.signalingState ?? "stable") !== "stable") {
+          const stabilized = await waitForLegacyPeerSignalingStable(peerConnection, () => (
+            generation === legacySessionGenerationRef.current
+            && peerConnectionsRef.current[remoteUserId] === peerConnection
+          ));
+          if (!stabilized) {
+            logChatRtc("offer_skipped_unstable", {
+              roomId,
+              remoteUserId,
+              peer: describePeerConnection(peerConnection),
+            });
+            return false;
+          }
+          logChatRtc("offer_waited_for_stable", {
+            roomId,
+            remoteUserId,
+            peer: describePeerConnection(peerConnection),
+          });
+        }
       }
 
       const lastOfferSentAt = lastOfferSentAtRef.current[remoteUserId] ?? 0;
@@ -1551,7 +1614,13 @@ export function useCommunicationRoomSession({
       const sent = await broadcastOfferDescription(remoteUserId, normalizedOffer);
       if (!sent || generation !== legacySessionGenerationRef.current || peerConnectionsRef.current[remoteUserId] !== peerConnection) return false;
       scheduleOfferRetry(remoteUserId);
-      return true;
+      if (!forceRenegotiation) return true;
+      const answered = await waitForLegacyPeerSignalingStable(peerConnection, () => (
+        generation === legacySessionGenerationRef.current
+        && peerConnectionsRef.current[remoteUserId] === peerConnection
+      ));
+      if (answered) clearOfferRetry(remoteUserId);
+      return answered;
     }, !forceRenegotiation)
   ), [
     broadcastOfferDescription,
@@ -2847,8 +2916,11 @@ export function useCommunicationRoomSession({
       !isLegacyMicSessionAuthorityCurrent(authority)
       || peerConnectionsRef.current[remoteUserId] !== peerConnection
       || String(peerConnection?.connectionState ?? "") === "closed"
-      || String(peerConnection?.signalingState ?? "stable") !== "stable"
     ) return false;
+    if (!await waitForLegacyPeerSignalingStable(peerConnection, () => (
+      isLegacyMicSessionAuthorityCurrent(authority)
+      && peerConnectionsRef.current[remoteUserId] === peerConnection
+    ))) return false;
 
     const negotiationId = [
       "legacy-mic",
@@ -3550,6 +3622,9 @@ export function useCommunicationRoomSession({
         if (muted.privacyProved && !muted.committed && isLegacyMicSessionAuthorityCurrent(authority)) {
           await updatePresence(cameraEnabledOverride, false);
           await commitProvedLegacyMicMute(authority, cameraEnabledOverride);
+        }
+        if (isLegacyMicSessionAuthorityCurrent(authority)) {
+          setError("Microphone could not start after call signaling settled. The call remains muted.");
         }
         return false;
       }
