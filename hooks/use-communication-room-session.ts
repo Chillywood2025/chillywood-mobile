@@ -406,6 +406,7 @@ export function useCommunicationRoomSession({
   const legacyMicLocalPrivacyStopRef = useRef<(() => boolean) | null>(null);
   const resumeMicAfterForegroundRef = useRef(false);
   const legacySessionGenerationRef = useRef(0);
+  const snapshotRefreshSerialRef = useRef(0);
   const legacySessionRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const legacySessionRestartRequestedGenerationRef = useRef<number | null>(null);
   const mediaControlTailRef = useRef<Promise<void>>(Promise.resolve());
@@ -880,7 +881,13 @@ export function useCommunicationRoomSession({
       roomId: activeRoom.roomId,
       event,
       payload,
-    }).catch(() => false);
+    }).catch((broadcastError) => {
+      reportRuntimeError("communication-realtime-broadcast", broadcastError, {
+        event,
+        roomId: activeRoom.roomId,
+      });
+      return false;
+    });
   }, []);
 
   const applyParticipantsFromSources = useCallback(async (presenceByUserId?: Record<string, PresenceStatePayload>) => {
@@ -923,8 +930,8 @@ export function useCommunicationRoomSession({
 
     if (
       generation !== legacySessionGenerationRef.current
-      || identityRef.current !== resolvedIdentity
-      || roomRef.current !== resolvedRoom
+      || String(identityRef.current?.userId ?? "").trim() !== resolvedIdentity.userId
+      || formatRoomId(roomRef.current?.roomId ?? "") !== resolvedRoom.roomId
     ) return [];
     setPresenceParticipants(nextParticipants);
     logChatRtc("participant_sources_applied", {
@@ -942,6 +949,8 @@ export function useCommunicationRoomSession({
 
   const refreshSnapshot = useCallback(async (targetRoomId?: string) => {
     const generation = legacySessionGenerationRef.current;
+    const requestSerial = snapshotRefreshSerialRef.current + 1;
+    snapshotRefreshSerialRef.current = requestSerial;
     const resolvedRoomId = formatRoomId(targetRoomId ?? roomRef.current?.roomId ?? roomId);
     if (!resolvedRoomId) return null;
 
@@ -953,6 +962,13 @@ export function useCommunicationRoomSession({
       });
       return null;
     }
+
+    // Realtime membership, room, and media events can launch overlapping
+    // reads. Only the newest response may project into the mounted session;
+    // an older response is still valid for its direct caller, but it must not
+    // overwrite newer room or membership truth.
+    if (requestSerial !== snapshotRefreshSerialRef.current) return snapshot;
+    if (formatRoomId(snapshot.room.roomId) !== resolvedRoomId) return null;
 
     roomRef.current = snapshot.room;
     membershipsRef.current = snapshot.memberships;
@@ -973,6 +989,16 @@ export function useCommunicationRoomSession({
     const resolvedRoom = roomRef.current;
     const resolvedIdentity = identityRef.current;
     if (!channel || !resolvedRoom || !resolvedIdentity) return false;
+    const resolvedRoomId = formatRoomId(resolvedRoom.roomId);
+    const resolvedUserId = String(resolvedIdentity.userId ?? "").trim();
+    const isCurrentAuthority = () => {
+      const sessionState = channelStateRef.current;
+      return generation === legacySessionGenerationRef.current
+        && channelRef.current === channel
+        && formatRoomId(roomRef.current?.roomId ?? "") === resolvedRoomId
+        && String(identityRef.current?.userId ?? "").trim() === resolvedUserId
+        && (sessionState === "connecting" || sessionState === "live" || sessionState === "reconnecting");
+    };
 
     const membership = await touchCommunicationRoomSession({
       roomId: resolvedRoom.roomId,
@@ -990,14 +1016,11 @@ export function useCommunicationRoomSession({
     });
     if (
       !membership
-      || formatRoomId(membership.roomId) !== resolvedRoom.roomId
-      || membership.userId !== resolvedIdentity.userId
+      || formatRoomId(membership.roomId) !== resolvedRoomId
+      || membership.userId !== resolvedUserId
       || membership.cameraEnabled !== nextCameraEnabled
       || membership.micEnabled !== nextMicEnabled
-      || generation !== legacySessionGenerationRef.current
-      || channelRef.current !== channel
-      || roomRef.current !== resolvedRoom
-      || identityRef.current !== resolvedIdentity
+      || !isCurrentAuthority()
     ) return false;
 
     const trackResult = await channel.track(
@@ -1032,10 +1055,7 @@ export function useCommunicationRoomSession({
       return false;
     });
     return broadcastResult === true
-      && generation === legacySessionGenerationRef.current
-      && channelRef.current === channel
-      && roomRef.current === resolvedRoom
-      && identityRef.current === resolvedIdentity;
+      && isCurrentAuthority();
   }, []);
 
   const runSerializedMediaControl = useCallback(<T,>(task: () => Promise<T>) => {
@@ -1909,6 +1929,11 @@ export function useCommunicationRoomSession({
         }
       });
 
+      const reportSnapshotRefreshFailure = (scope: string, refreshError: unknown) => {
+        reportRuntimeError(scope, refreshError, {
+          roomId: snapshot.room.roomId,
+        });
+      };
       const stateChannel = supabase
         .channel(stateChannelName)
         .on(
@@ -1921,7 +1946,9 @@ export function useCommunicationRoomSession({
           },
           () => {
             if (!isActiveGeneration()) return;
-            void refreshSnapshot(snapshot.room.roomId);
+            void refreshSnapshot(snapshot.room.roomId).catch((refreshError) => {
+              reportSnapshotRefreshFailure("communication-membership-snapshot-refresh", refreshError);
+            });
           },
         )
         .on(
@@ -1934,12 +1961,31 @@ export function useCommunicationRoomSession({
           },
           () => {
             if (!isActiveGeneration()) return;
-            void refreshSnapshot(snapshot.room.roomId);
+            void refreshSnapshot(snapshot.room.roomId).catch((refreshError) => {
+              reportSnapshotRefreshFailure("communication-room-snapshot-refresh", refreshError);
+            });
           },
-        )
-        .subscribe();
+        );
 
       snapshotChannelRef.current = stateChannel;
+      stateChannel.subscribe((status, subscriptionError) => {
+        if (!isActiveGeneration()) return;
+        logChatRtc("snapshot_subscription_status", {
+          roomId: snapshot.room.roomId,
+          status,
+        });
+        if (status !== "CHANNEL_ERROR" && status !== "TIMED_OUT" && status !== "CLOSED") return;
+        reportRuntimeError(
+          "communication-snapshot-subscription",
+          subscriptionError ?? new Error(`communication_snapshot_subscription_${status.toLowerCase()}`),
+          { roomId: snapshot.room.roomId, status },
+        );
+        requestLegacySessionRestart(status === "CHANNEL_ERROR"
+          ? "snapshot_realtime_error"
+          : status === "TIMED_OUT"
+            ? "snapshot_realtime_timeout"
+            : "snapshot_realtime_closed", sessionGeneration);
+      });
 
       const channel = supabase.channel(presenceChannelName, {
         config: {
@@ -2335,10 +2381,20 @@ export function useCommunicationRoomSession({
       void cleanupChannel(capturedChannel);
       cleanupSnapshotChannel(capturedSnapshotChannel);
       cleanupSessionMedia(capturedMedia);
-      if (roomRef.current === capturedRoom) roomRef.current = null;
-      if (identityRef.current === capturedIdentity) identityRef.current = null;
-      if (membershipsRef.current === capturedMemberships) membershipsRef.current = [];
-      if (presenceStateRef.current === capturedPresenceState) presenceStateRef.current = {};
+      // React runs this cleanup synchronously before mounting the replacement
+      // generation. If this effect still owned the generation, clear every
+      // same-session projection even when a snapshot replaced its object.
+      if (wasCurrentGeneration) {
+        roomRef.current = null;
+        identityRef.current = null;
+        membershipsRef.current = [];
+        presenceStateRef.current = {};
+      } else {
+        if (roomRef.current === capturedRoom) roomRef.current = null;
+        if (identityRef.current === capturedIdentity) identityRef.current = null;
+        if (membershipsRef.current === capturedMemberships) membershipsRef.current = [];
+        if (presenceStateRef.current === capturedPresenceState) presenceStateRef.current = {};
+      }
     };
   }, [
     applyParticipantsFromSources,
@@ -2382,7 +2438,11 @@ export function useCommunicationRoomSession({
           && hasUsableLocalTrack("audio"),
         displayName: identity.displayName,
         avatarUrl: identity.avatarUrl,
-      }).then(() => refreshSnapshot(room.roomId));
+      }).then(() => refreshSnapshot(room.roomId)).catch((heartbeatError) => {
+        reportRuntimeError("communication-membership-heartbeat", heartbeatError, {
+          roomId: room.roomId,
+        });
+      });
     }, HEARTBEAT_INTERVAL_MILLIS);
 
     return () => clearInterval(interval);
@@ -2413,7 +2473,12 @@ export function useCommunicationRoomSession({
       if (inFlight) return;
       attempts += 1;
       inFlight = true;
-      const snapshot = await refreshSnapshot(room.roomId).catch(() => null);
+      const snapshot = await refreshSnapshot(room.roomId).catch((warmupError) => {
+        reportRuntimeError("communication-snapshot-warmup", warmupError, {
+          roomId: room.roomId,
+        });
+        return null;
+      });
       inFlight = false;
 
       const activeMemberships = getActiveCommunicationMemberships(snapshot?.memberships ?? membershipsRef.current);
@@ -2595,8 +2660,8 @@ export function useCommunicationRoomSession({
           .then(() => {
             if (
               generation !== legacySessionGenerationRef.current
-              || roomRef.current !== currentRoom
-              || identityRef.current !== currentIdentity
+              || formatRoomId(roomRef.current?.roomId ?? "") !== currentRoom.roomId
+              || String(identityRef.current?.userId ?? "").trim() !== currentIdentity.userId
             ) return null;
             return refreshSnapshot(currentRoom.roomId);
           })

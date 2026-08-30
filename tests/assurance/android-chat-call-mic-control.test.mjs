@@ -28,12 +28,17 @@ const legacyRefMarker = "  const microphonePermissionRef = useRef<MediaPermissio
 assert.equal(legacyHookSource.split(legacyRefMarker).length - 1, 1, "unique legacy ref exposure marker");
 const legacyOfferQueueMarker = "  const cleanupRemotePeer = useCallback";
 assert.equal(legacyHookSource.split(legacyOfferQueueMarker).length - 1, 1, "unique legacy offer queue exposure marker");
+const legacySnapshotMarker = "  const updatePresence = useCallback";
+assert.equal(legacyHookSource.split(legacySnapshotMarker).length - 1, 1, "unique legacy snapshot exposure marker");
 const instrumentedLegacyHookSource = legacyHookSource.replace(
   legacyRefMarker,
   `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { appStateLifecycleHandlerRef, auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, legacyMicAnswerWaitersRef, legacyMicControlRef, legacyMicLocalPrivacyStopRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, nativePermissionRequestDepthRef, peerConnectionsRef, roomRef, setChannelState, setLoading };`,
 ).replace(
   legacyOfferQueueMarker,
   `  (globalThis as any).__chillywoodLegacyMicAssuranceRefs.runSerializedPeerOffer = runSerializedPeerOffer;\n${legacyOfferQueueMarker}`,
+).replace(
+  legacySnapshotMarker,
+  `  (globalThis as any).__chillywoodLegacyMicAssuranceRefs.refreshSnapshot = refreshSnapshot;\n${legacySnapshotMarker}`,
 );
 const compiledLegacyHook = ts.transpileModule(instrumentedLegacyHookSource, {
   compilerOptions: {
@@ -164,6 +169,7 @@ function createLegacyMountedRuntime(options = {}) {
     senderReplacements: 0,
     removedChannels: [],
     sendActions: [],
+    snapshotActions: [],
     timeoutHandles: [],
     timeoutCallbacks: [],
     tokenRequests: 0,
@@ -289,6 +295,7 @@ function createLegacyMountedRuntime(options = {}) {
   runtime.queueMembership = (action) => runtime.membershipActions.push(action);
   runtime.queuePermission = (permission) => runtime.permissionActions.push(permission);
   runtime.queueSend = (action) => runtime.sendActions.push(action);
+  runtime.queueSnapshot = (action) => runtime.snapshotActions.push(action);
   runtime.queuePresenceTrack = (action) => runtime.presenceTrackActions.push(action);
   runtime.emitAppState = async (nextState) => {
     runtime.appState = nextState;
@@ -332,6 +339,7 @@ function createLegacyMountedRuntime(options = {}) {
   class FakeChannel {
     constructor(topic) {
       this.handlers = [];
+      this.subscriptionCallback = null;
       this.topic = topic;
       runtime.channels.push(this);
     }
@@ -390,8 +398,12 @@ function createLegacyMountedRuntime(options = {}) {
       }
       return "ok";
     }
+    async emitSubscriptionStatus(status, error) {
+      await this.subscriptionCallback?.(status, error);
+    }
     subscribe(callback) {
-      if (typeof callback === "function") void Promise.resolve().then(() => callback("SUBSCRIBED"));
+      this.subscriptionCallback = typeof callback === "function" ? callback : null;
+      if (this.subscriptionCallback) void Promise.resolve().then(() => this.subscriptionCallback("SUBSCRIBED"));
       return this;
     }
     async track(payload) {
@@ -445,7 +457,17 @@ function createLegacyMountedRuntime(options = {}) {
       createCommunicationMediaStream: createMediaStream,
       endCommunicationRoom: async () => { runtime.roomEndCalls += 1; return null; },
       getActiveCommunicationMemberships: (memberships) => memberships.filter((membership) => !membership.leftAt),
-      getCommunicationRoomSnapshot: async () => ({ memberships: activeMemberships(), room: makeRoom(runtime) }),
+      getCommunicationRoomSnapshot: async () => {
+        const action = runtime.snapshotActions.shift() ?? {};
+        action.mutate?.({ runtime });
+        if (action.wait) await action.wait;
+        if (action.outcome === "reject") throw new Error("snapshot rejected");
+        if (action.outcome === "missing") return null;
+        return {
+          memberships: action.memberships ?? activeMemberships(),
+          room: action.room ?? makeRoom(runtime),
+        };
+      },
       getCommunicationRTCModule: () => rtc,
       getCommunicationStreamURL: (stream) => stream?.toURL?.() ?? "",
       getCommunicationTrack: getTrack,
@@ -486,6 +508,9 @@ function createLegacyMountedRuntime(options = {}) {
     },
     "../_lib/communicationCallMediaPolicy.mjs": {
       canAttemptNativeCallBackgroundAudio: () => false,
+      resolveLegacyChatSessionRecovery: ({ alreadyRequested, enabled, ending, generationIsCurrent }) => (
+        enabled && generationIsCurrent && !ending && !alreadyRequested ? { delayMs: 1 } : null
+      ),
       setActiveCommunicationTracksEnabled: (tracks, enabled) => {
         let updated = 0;
         for (const track of tracks) {
@@ -990,6 +1015,72 @@ test("legacy grouped media lifecycle: membership admission is muted until native
     && message.payload?.cameraOn === true
     && message.payload?.micOn === true
   )), "proved initial media promotion is relayed to the remote projection seam");
+});
+
+test("legacy grouped media lifecycle: same-room snapshot object churn cannot revoke proved initial media", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  runtime.queueSend({
+    event: "media:update",
+    mutate: () => {
+      runtime.readAssuranceRefs().roomRef.current = makeRoom(runtime);
+    },
+  });
+  const harness = await mountLegacyHook(runtime, {
+    authenticatedAccessToken: "exact-access-token",
+    authenticatedUserId: runtime.userId,
+    enabled: true,
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+
+  assert.equal(harness.getResult().cameraEnabled, true);
+  assert.equal(harness.getResult().micEnabled, true);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.durableMic, true);
+  assert.equal(runtime.errors.some((entry) => entry.scope === "communication-presence-initial-promotion"), false);
+});
+
+test("legacy snapshot authority: an older overlapping response cannot overwrite the newest same-session snapshot", async (t) => {
+  let releaseOlder;
+  const olderBarrier = new Promise((resolve) => { releaseOlder = resolve; });
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  const olderRoom = { ...makeRoom(runtime), updatedAt: "2026-08-11T00:00:01.000Z" };
+  const newerRoom = { ...makeRoom(runtime), updatedAt: "2026-08-11T00:00:02.000Z" };
+  runtime.queueSnapshot({ room: olderRoom, wait: olderBarrier });
+  runtime.queueSnapshot({ room: newerRoom });
+
+  let olderRead;
+  await act(async () => {
+    olderRead = harness.refs.refreshSnapshot(runtime.roomId);
+    await settle(8);
+  });
+  await harness.run(() => harness.refs.refreshSnapshot(runtime.roomId));
+  releaseOlder();
+  await harness.run(() => olderRead);
+
+  assert.equal(harness.refs.roomRef.current.updatedAt, newerRoom.updatedAt);
+  assert.equal(harness.getResult().room.updatedAt, newerRoom.updatedAt);
+});
+
+test("legacy snapshot authority: room-state Realtime terminal status is observable and enters bounded recovery", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, {
+    authenticatedAccessToken: "exact-access-token",
+    authenticatedUserId: runtime.userId,
+    enabled: true,
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: false },
+    restartDisconnectedSession: true,
+  });
+  t.after(() => harness.unmount());
+  const stateChannel = runtime.channels.find((channel) => channel.topic === `comm-room-state-${runtime.roomId}`);
+  assert.ok(stateChannel);
+
+  await harness.run(() => stateChannel.emitSubscriptionStatus("CHANNEL_ERROR", new Error("state channel rejected")));
+
+  assert.equal(runtime.errors.some((entry) => entry.scope === "communication-snapshot-subscription"), true);
+  assert.ok(runtime.timeoutCallbacks.some(Boolean), "state-channel failure schedules the generation-deduplicated session recovery");
 });
 
 test("legacy media projection: stale local Presence cannot override committed microphone and camera state", async (t) => {
