@@ -1,42 +1,25 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import * as Updates from "expo-updates";
 import React, { useEffect, useRef } from "react";
-import { AppState, Linking, Platform, type AppStateStatus } from "react-native";
+import { AppState, Platform, type AppStateStatus } from "react-native";
 
 import { trackEvent } from "./analytics";
-import { APPLICATION_LEGAL_PATHS } from "./appLinks";
 import { debugLog, reportRuntimeError } from "./logger";
-import {
-  hasCallSensitiveNavigationParams,
-  normalizeNavigationResumePath,
-  parseNavigationResumeRecord,
-} from "./navigationResumePolicy.mjs";
 import { recordReleaseUpdateCheckResult } from "./releaseDiagnostics";
 import {
   resolveFetchedRuntimeUpdateActivationKey,
   resolvePendingRuntimeUpdateActivationKey,
 } from "./runtimeUpdateActivationPolicy.mjs";
-import { useSession } from "./session";
 
 const LAST_CHECK_AT_KEY = "chillywood.runtimeUpdate.lastCheckAt";
-const NAVIGATION_RESUME_KEY_PREFIX = "chillywood.navigation.lastPath.v1";
 const RESUME_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 const MIN_BACKGROUND_BEFORE_RESUME_CHECK_MS = 10 * 60 * 1000;
 const STARTUP_CHECK_DELAY_MS = 1800;
 const RELOAD_DELAY_MS = 250;
-const NAVIGATION_RESUME_LEGAL_PATHS = [...APPLICATION_LEGAL_PATHS];
 
 type RuntimeUpdateReason = "startup" | "resume";
 
-type NavigationResumeRecord = {
-  pathname: string;
-  savedAt: number;
-};
-
 const shouldUseRuntimeUpdates = () => !__DEV__ && Platform.OS !== "web" && Updates.isEnabled;
-
-const getNavigationResumeKey = (userId: string) => `${NAVIGATION_RESUME_KEY_PREFIX}:${userId}`;
 
 const getManifestUpdateId = (manifest: unknown) => {
   if (!manifest || typeof manifest !== "object") return null;
@@ -165,13 +148,6 @@ const checkForRuntimeUpdate = async (
 };
 
 export function RuntimeUpdateGate() {
-  const pathname = usePathname();
-  const params = useGlobalSearchParams();
-  const router = useRouter();
-  const { isLoading, isSignedIn, user } = useSession();
-  const authenticatedUserId = String(user?.id ?? "").trim();
-  const restoreAttemptedUserRef = useRef<string | null>(null);
-  const restoreSettledUserRef = useRef<string | null>(null);
   const checkInFlightRef = useRef(false);
   const reloadRequestedRef = useRef<string | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
@@ -181,71 +157,6 @@ export function RuntimeUpdateGate() {
   const isRollbackToEmbedded = Boolean(
     updatesState.downloadedUpdate && !downloadedUpdateId,
   );
-
-  useEffect(() => {
-    if (isSignedIn) return;
-    restoreAttemptedUserRef.current = null;
-    restoreSettledUserRef.current = null;
-  }, [isSignedIn]);
-
-  useEffect(() => {
-    if (isLoading || !isSignedIn || !authenticatedUserId) return undefined;
-    if (restoreAttemptedUserRef.current === authenticatedUserId) return undefined;
-    restoreAttemptedUserRef.current = authenticatedUserId;
-
-    if (pathname !== "/") {
-      restoreSettledUserRef.current = authenticatedUserId;
-      return undefined;
-    }
-
-    let active = true;
-    const storageKey = getNavigationResumeKey(authenticatedUserId);
-    void Promise.all([
-      Linking.getInitialURL().catch(() => null),
-      AsyncStorage.getItem(storageKey).catch(() => null),
-    ]).then(([initialUrl, rawRecord]) => {
-      if (!active || initialUrl) return;
-      const record = parseNavigationResumeRecord(rawRecord, NAVIGATION_RESUME_LEGAL_PATHS);
-      if (!record || record.pathname === "/") return;
-      router.replace(record.pathname as Parameters<typeof router.replace>[0]);
-      debugLog("navigation-resume", "Restored durable route after app relaunch", {
-        pathname: record.pathname,
-      });
-    }).catch((error) => {
-      reportRuntimeError("navigation-resume-restore", error, {
-        source: "runtime-update-gate",
-      });
-    }).finally(() => {
-      if (active) restoreSettledUserRef.current = authenticatedUserId;
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [authenticatedUserId, isLoading, isSignedIn, pathname, router]);
-
-  useEffect(() => {
-    if (!isSignedIn || !authenticatedUserId) return;
-    if (pathname === "/" && restoreSettledUserRef.current !== authenticatedUserId) return;
-
-    const storageKey = getNavigationResumeKey(authenticatedUserId);
-    if (hasCallSensitiveNavigationParams(pathname, params)) {
-      void AsyncStorage.removeItem(storageKey).catch(() => null);
-      return;
-    }
-
-    const normalizedPath = normalizeNavigationResumePath(pathname, NAVIGATION_RESUME_LEGAL_PATHS);
-    if (!normalizedPath) {
-      void AsyncStorage.removeItem(storageKey).catch(() => null);
-      return;
-    }
-
-    const record: NavigationResumeRecord = {
-      pathname: normalizedPath,
-      savedAt: Date.now(),
-    };
-    void AsyncStorage.setItem(storageKey, JSON.stringify(record)).catch(() => null);
-  }, [authenticatedUserId, isSignedIn, params, pathname]);
 
   useEffect(() => {
     if (!shouldUseRuntimeUpdates()) return;
