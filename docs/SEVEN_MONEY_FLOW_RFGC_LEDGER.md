@@ -28,7 +28,7 @@ This ledger is cumulative. A merge alone does not close a defect. Production mon
 - OTA requirement: none; database authority and tests only.
 - Physical/provider proof requirement: executable local pgTAP, full money/provider policy matrix, and fail-closed live-state readback. No real charge or payout.
 - Test blind spot: prior tests proved service-role ACLs and serialized lifecycle transitions but did not require provider-origin evidence at the seam. New pgTAP proves immutable receipt ACLs, absent-receipt rejection, exact provider/user/creator/economics/environment/destination bindings, server-owned settlement holds, and non-executable predecessor functions.
-- Disposition: `REPAIRED_UNPROVEN` until exact merge, migration readback, and final matrix rerun.
+- Disposition: `PROVIDER_PROVEN`. Exact head `3ac5dc4fc109a1f7db92d07c3273331fc2fff1a1` was merged by normal two-parent merge `027c6558b125dce7474bed07fa927bd57cda75b1`; exact migration `20260830203952` was the only migration deployed. Remote migration history, schema dump, RLS/ACL/function source, switch state, and the final complete applicable matrix were read back successfully.
 
 ## RFGC-002 — Premium proof script stale source-string assertion
 
@@ -117,11 +117,23 @@ This ledger is cumulative. A merge alone does not close a defect. Production mon
 ## Closure counts
 
 - `BLOCKING_OPEN`: 0
-- `REPAIRED_UNPROVEN`: 1
+- `REPAIRED_UNPROVEN`: 0
 - `PHYSICALLY_PROVEN`: 0
-- `PROVIDER_PROVEN`: 0
+- `PROVIDER_PROVEN`: 1
 - `NONBLOCKING_DEBT`: 1
 - `EXTERNAL_BLOCKED`: 2
 - `NOT_A_DEFECT`: 0
 
-Counts are updated after merge, exact migration deployment/readback, and the final full-matrix restart.
+## Final closure evidence
+
+- Grouped repair PR: `#320`.
+- Candidate head/tree: `3ac5dc4fc109a1f7db92d07c3273331fc2fff1a1` / `d5935268aa94a8439564524f8b2629113dd2a5e9`.
+- Merge SHA/parents/tree: `027c6558b125dce7474bed07fa927bd57cda75b1` / `afb6bde1b2d39e90750e2c0ebab00c55e5f12dbe 3ac5dc4fc109a1f7db92d07c3273331fc2fff1a1` / `d5935268aa94a8439564524f8b2629113dd2a5e9`.
+- Ruleset: remained active; authenticated Owner PR-only bypass was added only for the exact validated head and immediately removed. Pre-bypass readback SHA-256 was `5a663d2f397d2d64d5926261c6c27de778cbe3a0e4d10fe0ec54d63e81d59e17`; post-restoration readback SHA-256 was `9fdc591206ff9c39a159ba8df0b63046a0ad9a4ec7fd3c98862de4872eb495e2` because GitHub updated metadata timestamps, while the normalized ruleset payload was byte-identical before/after.
+- Database: only migration `20260830203952_lock_unverified_settlement_and_payout_authority.sql` deployed; source SHA-256 `dc36122dc14727a3df26cdc9aa24a0fa290174d1fa8b5e37e4c8ca6a4acfc076`; remote history and production schema readback succeeded.
+- Executable proof: full pgTAP 78 files/2,891 assertions; new receipt seam 14/14; creator-money authority closeout 136/136; TypeScript; lint with zero errors; CI Supabase integration; and 26 post-deployment money/provider/commerce/access/refund/payout/room tests and guards passed.
+- Security: standard repository scan found the receipt-authority defect repaired by PR `#320`; exact patch security-diff scan had zero surviving findings. P0 = 0, P1 = 0, launch-impacting P2 = 0.
+- Physical: attached Android verified authenticated Premium UI and exact sandbox creator-support UI with Premium/creator separation. No real charge, entitlement credit, payable event, or payout occurred. Provider checkout and cold-state tester-artifact limitations remain explicitly `EXTERNAL_BLOCKED` under `RFGC-EXT-001` and `RFGC-EXT-002`.
+- Deployment: no OTA was required because the grouped repair changed database authority, pgTAP, and documentation only.
+
+Final engineering counts are zero `BLOCKING_OPEN` and zero `REPAIRED_UNPROVEN`. External provider activation remains separate and fail-closed.
