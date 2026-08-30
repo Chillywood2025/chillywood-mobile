@@ -477,7 +477,7 @@ insert into public.chat_call_invites (
   'CHATCALLROOM',
   'a1111111-1111-4111-8111-111111111111',
   'b2222222-2222-4222-8222-222222222222',
-  'video', 'accepted', now() + interval '5 minutes', now()
+  'video', 'accepted', now() - interval '5 minutes', now()
 );
 alter table public.chat_call_invites enable trigger enforce_chat_call_invites_abuse_guard;
 select throws_ok(
@@ -495,7 +495,7 @@ select lives_ok(
 select is(
   (public.clear_stale_chilly_chat_thread_call('aa111111-1111-4111-8111-111111111111', 'CHATCALLROOM') ->> 'reason'),
   'active_invite',
-  '45. compare-and-clear cannot detach an accepted call'
+  '45. compare-and-clear cannot detach a fresh accepted call after its ringing deadline'
 );
 select set_config('request.jwt.claims', '{"role":"authenticated","sub":"c3333333-3333-4333-8333-333333333333","session_id":"c3333333-3333-4333-8333-333333333301"}', true);
 select throws_ok(

@@ -214,8 +214,10 @@ assertIncludes(layout, 'nextState === "active"', "the authenticated bridge must 
 assertNotIncludes(chillyChatNativeCallRouteBuffer, "console.", "the early native call action buffer must not log private URLs");
 assertIncludes(communicationPanel, "statusLabelOverride", "communication panel must allow honest call status labels");
 assertIncludes(chatLib, "reconcileActiveChatThreadCallState", "inbox/thread reads must reconcile stale active call state");
-assertIncludes(chatLib, "shouldClearStaleActiveThreadCall", "stale active call cleanup must be backed by invite/room readback");
+assertIncludes(chatLib, "shouldRequestStaleActiveThreadCallCleanup", "stale active call cleanup must be backed by invite/room readback");
 assertIncludes(clearEndedCallBody, 'rpc("clear_stale_chilly_chat_thread_call"', "stale active call cleanup must use the authoritative compare-and-clear RPC");
+assertIncludes(chatLib, "shouldApplyAuthoritativeChatCallCleanup(cleanup)", "local call state must follow the authoritative cleanup result");
+assertIncludes(chatLib, "thread.activeCommunicationRoomId", "reconciliation cleanup must compare against the exact observed room");
 assertIncludes(chatRoomAuthorityClosure, 'if not public."can_access_chat_thread"(p_thread_id)', "stale active call cleanup RPC must require exact thread membership");
 assertIncludes(chatRoomAuthorityClosure, "chat_call_room_identity_mismatch", "stale active call cleanup RPC must reject a newer/different active room");
 assertIncludes(chatLib, "CHAT_CALL_INVITES_TABLE", "stale active call cleanup must read real call invites");

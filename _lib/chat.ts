@@ -28,6 +28,11 @@ import { supabase } from "./supabase";
 import { normalizePeopleSearchQuery } from "./peopleSearchNormalization";
 import { getWritablePartyUserId } from "./watchParty";
 import { getCurrentAccountSessionAuthoritySnapshot } from "./accountSessionAuthority";
+import {
+  resolveChatThreadCallReconciliation,
+  shouldApplyAuthoritativeChatCallCleanup,
+} from "./communicationCallMediaPolicy.mjs";
+import { reportRuntimeError } from "./logger";
 
 export const CHAT_THREADS_TABLE = "chat_threads";
 export const CHAT_THREAD_MEMBERS_TABLE = "chat_thread_members";
@@ -391,12 +396,12 @@ async function enrichChatThreadsWithUsernames(threads: ChatThreadSummary[]) {
   });
 }
 
-async function shouldClearStaleActiveThreadCall(thread: ChatThreadSummary): Promise<boolean> {
+async function shouldRequestStaleActiveThreadCallCleanup(thread: ChatThreadSummary): Promise<boolean> {
   const threadId = toText(thread.threadId);
   const roomId = toText(thread.activeCommunicationRoomId);
   if (!threadId || !roomId || !thread.activeCallType) return false;
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from(CHAT_CALL_INVITES_TABLE)
     .select("id,thread_id,communication_room_id,status,created_at,expires_at")
     .eq("thread_id", threadId)
@@ -404,30 +409,48 @@ async function shouldClearStaleActiveThreadCall(thread: ChatThreadSummary): Prom
     .order("created_at", { ascending: false })
     .limit(1)
     .returns<ChatCallInviteStatusRow[]>();
+  if (error) throw new Error(error.message || "Unable to read the active Chi'lly Chat call invite.");
 
   const invite = data?.[0] ?? null;
-  if (invite) {
-    const inviteStatus = toText(invite.status).toLowerCase();
-    const expiresAt = Date.parse(toText(invite.expires_at));
-    const expired = Number.isFinite(expiresAt) && expiresAt <= Date.now();
-    if (inviteStatus === "ringing" && !expired) return false;
-    if (inviteStatus === "accepted" && !expired) {
-      const snapshot = await getCommunicationRoomSnapshot(roomId).catch(() => null);
-      return !(snapshot?.room && isCommunicationRoomActive(snapshot.room));
-    }
-    return true;
+  const inviteStatus = toText(invite?.status).toLowerCase();
+  let roomState: "active" | "inactive" | "unavailable" = "unavailable";
+  if (inviteStatus === "accepted" || !invite) {
+    const snapshot = await getCommunicationRoomSnapshot(roomId);
+    roomState = snapshot?.room && isCommunicationRoomActive(snapshot.room) ? "active" : "inactive";
   }
-
-  const snapshot = await getCommunicationRoomSnapshot(roomId).catch(() => null);
-  return !(snapshot?.room && isCommunicationRoomActive(snapshot.room));
+  return resolveChatThreadCallReconciliation({
+    inviteExpiresAt: invite?.expires_at,
+    inviteStatus,
+    nowMs: Date.now(),
+    roomState,
+  }) === "authoritative_cleanup";
 }
 
 async function reconcileActiveChatThreadCallState(threads: ChatThreadSummary[]): Promise<ChatThreadSummary[]> {
   return Promise.all(threads.map(async (thread) => {
     if (!thread.activeCommunicationRoomId || !thread.activeCallType) return thread;
-    const shouldClear = await shouldClearStaleActiveThreadCall(thread).catch(() => false);
-    if (!shouldClear) return thread;
-    await clearEndedChatThreadCall(thread.threadId).catch(() => null);
+    let shouldRequestCleanup = false;
+    try {
+      shouldRequestCleanup = await shouldRequestStaleActiveThreadCallCleanup(thread);
+    } catch (error) {
+      reportRuntimeError("chilly-chat-call-reconciliation-read", error, {
+        roomId: thread.activeCommunicationRoomId,
+        threadId: thread.threadId,
+      });
+      return thread;
+    }
+    if (!shouldRequestCleanup) return thread;
+    let cleanup: ChatThreadCallCleanupResult;
+    try {
+      cleanup = await clearEndedChatThreadCall(thread.threadId, thread.activeCommunicationRoomId);
+    } catch (error) {
+      reportRuntimeError("chilly-chat-call-reconciliation-cleanup", error, {
+        roomId: thread.activeCommunicationRoomId,
+        threadId: thread.threadId,
+      });
+      return thread;
+    }
+    if (!shouldApplyAuthoritativeChatCallCleanup(cleanup)) return thread;
     return {
       ...thread,
       activeCommunicationRoomId: undefined,
@@ -779,19 +802,40 @@ export async function markChatThreadRead(threadId: string): Promise<void> {
     .eq("user_id", currentUserId);
 }
 
-export async function clearEndedChatThreadCall(threadId: string, expectedRoomId?: string | null): Promise<void> {
+export type ChatThreadCallCleanupResult = {
+  cleared: boolean;
+  reason: string;
+  roomId?: string;
+};
+
+export async function clearEndedChatThreadCall(
+  threadId: string,
+  expectedRoomId?: string | null,
+): Promise<ChatThreadCallCleanupResult> {
   const normalizedThreadId = toText(threadId);
-  if (!normalizedThreadId) return;
+  if (!normalizedThreadId) return { cleared: false, reason: "missing_thread" };
   const normalizedRoomId = formatCommunicationRoomCode(expectedRoomId);
   const rpc = supabase.rpc.bind(supabase) as unknown as (
     fn: "clear_stale_chilly_chat_thread_call",
     args: { p_thread_id: string; p_expected_room_id: string | null },
   ) => PromiseLike<{ data: unknown; error: { message?: string } | null }>;
-  const { error } = await rpc("clear_stale_chilly_chat_thread_call", {
+  const { data, error } = await rpc("clear_stale_chilly_chat_thread_call", {
     p_thread_id: normalizedThreadId,
     p_expected_room_id: normalizedRoomId || null,
   });
   if (error) throw new Error(error.message || "Unable to clear the ended Chi'lly Chat call.");
+  const result = data && typeof data === "object" && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : null;
+  const reason = toText(result?.reason);
+  if (!result || typeof result.cleared !== "boolean" || !reason) {
+    throw new Error("The Chi'lly Chat cleanup response was malformed.");
+  }
+  return {
+    cleared: result.cleared,
+    reason,
+    roomId: toText(result.roomId) || undefined,
+  };
 }
 
 export async function startChatThreadCall(threadId: string, mode: ChatCallType): Promise<{
