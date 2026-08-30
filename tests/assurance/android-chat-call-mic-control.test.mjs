@@ -154,6 +154,8 @@ function createLegacyMountedRuntime(options = {}) {
     permissionActions: [],
     presenceTracks: [],
     presenceTrackActions: [],
+    remoteDurableCamera: !!options.remoteDurableCamera,
+    remoteDurableMic: !!options.remoteDurableMic,
     remoteUserId: "remote-user",
     roomEndCalls: 0,
     roomId: "ROOM-LEGACY",
@@ -316,8 +318,15 @@ function createLegacyMountedRuntime(options = {}) {
   };
 
   const activeMemberships = () => [
-    makeMembership(runtime),
-    makeMembership(runtime, { userId: runtime.remoteUserId }),
+    makeMembership(runtime, {
+      cameraEnabled: runtime.durableCamera,
+      micEnabled: runtime.durableMic,
+    }),
+    makeMembership(runtime, {
+      cameraEnabled: runtime.remoteDurableCamera,
+      micEnabled: runtime.remoteDurableMic,
+      userId: runtime.remoteUserId,
+    }),
   ];
 
   class FakeChannel {
@@ -328,10 +337,29 @@ function createLegacyMountedRuntime(options = {}) {
     }
 
     on(...args) { this.handlers.push(args); return this; }
+    async emitBroadcast(event, payload) {
+      const callbacks = this.handlers
+        .filter(([type, filter]) => type === "broadcast" && filter?.event === event)
+        .map(([, , callback]) => callback);
+      for (const callback of callbacks) await callback({ payload });
+    }
     presenceState() {
       return {
-        [runtime.userId]: [{ displayName: "Local", joinedAt: "2026-08-11T00:00:00.000Z", micOn: runtime.durableMic, userId: runtime.userId }],
-        [runtime.remoteUserId]: [{ displayName: "Remote", isHost: true, joinedAt: "2026-08-11T00:00:00.000Z", micOn: false, userId: runtime.remoteUserId }],
+        [runtime.userId]: [{
+          cameraOn: options.staleLocalPresence ? false : runtime.durableCamera,
+          displayName: "Local",
+          joinedAt: "2026-08-11T00:00:00.000Z",
+          micOn: options.staleLocalPresence ? false : runtime.durableMic,
+          userId: runtime.userId,
+        }],
+        [runtime.remoteUserId]: [{
+          cameraOn: options.staleRemotePresence ? false : runtime.remoteDurableCamera,
+          displayName: "Remote",
+          isHost: true,
+          joinedAt: "2026-08-11T00:00:00.000Z",
+          micOn: options.staleRemotePresence ? false : runtime.remoteDurableMic,
+          userId: runtime.remoteUserId,
+        }],
       };
     }
     async send(message) {
@@ -582,11 +610,11 @@ async function mountLegacyHook(runtime, optionOverrides = {}) {
   });
   const refs = runtime.readAssuranceRefs();
   assert.ok(refs, "legacy exact hook exposes only its mutable test boundary");
-  refs.channelRef.current = runtime.createChannel("legacy-mic-exact-channel");
+  refs.channelRef.current ??= runtime.createChannel("legacy-mic-exact-channel");
   refs.channelStateRef.current = "live";
-  refs.identityRef.current = { avatarUrl: null, displayName: "Local", userId: runtime.userId };
-  refs.roomRef.current = makeRoom(runtime);
-  refs.peerConnectionsRef.current[runtime.remoteUserId] = runtime.createPeer();
+  refs.identityRef.current ??= { avatarUrl: null, displayName: "Local", userId: runtime.userId };
+  refs.roomRef.current ??= makeRoom(runtime);
+  refs.peerConnectionsRef.current[runtime.remoteUserId] ??= runtime.createPeer();
   await act(async () => {
     refs.setLoading(false);
     refs.setChannelState("live");
@@ -957,6 +985,58 @@ test("legacy grouped media lifecycle: membership admission is muted until native
   assert.equal(runtime.joinCalls[0].micEnabled, false);
   assert.ok(runtime.mediaCreateCalls.some((call) => call.audio === true && call.video === true));
   assert.ok(runtime.membershipTouches.some((touch) => touch.cameraEnabled === true && touch.micEnabled === true));
+  assert.ok(runtime.broadcasts.some((message) => (
+    message.event === "media:update"
+    && message.payload?.cameraOn === true
+    && message.payload?.micOn === true
+  )), "proved initial media promotion is relayed to the remote projection seam");
+});
+
+test("legacy media projection: stale local Presence cannot override committed microphone and camera state", async (t) => {
+  const runtime = createLegacyMountedRuntime({ staleLocalPresence: true });
+  const harness = await mountLegacyHook(runtime, {
+    authenticatedAccessToken: "exact-access-token",
+    authenticatedUserId: runtime.userId,
+    enabled: true,
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+
+  const self = harness.getResult().participants.find((participant) => participant.isSelf);
+  assert.equal(harness.getResult().cameraEnabled, true);
+  assert.equal(harness.getResult().micEnabled, true);
+  assert.equal(self?.cameraOn, true, "committed local camera state owns the self projection");
+  assert.equal(self?.micOn, true, "committed local microphone state owns the self projection");
+});
+
+test("legacy media projection: a server-relayed media update refreshes durable remote membership over stale Presence", async (t) => {
+  const runtime = createLegacyMountedRuntime({ staleRemotePresence: true });
+  const harness = await mountLegacyHook(runtime, {
+    authenticatedAccessToken: "exact-access-token",
+    authenticatedUserId: runtime.userId,
+    enabled: true,
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: false },
+  });
+  t.after(() => harness.unmount());
+
+  assert.equal(
+    harness.getResult().participants.find((participant) => participant.userId === runtime.remoteUserId)?.micOn,
+    false,
+  );
+  runtime.remoteDurableCamera = true;
+  runtime.remoteDurableMic = true;
+  await harness.run(async () => {
+    await harness.refs.channelRef.current.emitBroadcast("media:update", {
+      cameraOn: true,
+      fromUserId: runtime.remoteUserId,
+      micOn: true,
+      roomId: runtime.roomId,
+    });
+  });
+
+  const remote = harness.getResult().participants.find((participant) => participant.userId === runtime.remoteUserId);
+  assert.equal(remote?.cameraOn, true, "remote camera projection comes from refreshed durable membership");
+  assert.equal(remote?.micOn, true, "remote microphone projection comes from refreshed durable membership");
 });
 
 test("legacy grouped media lifecycle: failed initial media promotion disables tracks and restores muted membership", async (t) => {

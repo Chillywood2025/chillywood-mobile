@@ -905,18 +905,18 @@ export function useCommunicationRoomSession({
       return {
         userId: participantId,
         displayName: String(
-          presence?.displayName
-            ?? membership?.displayName
+          membership?.displayName
+            ?? presence?.displayName
             ?? (participantId === resolvedIdentity.userId ? resolvedIdentity.displayName : "Participant"),
         ).trim() || "Participant",
-        avatarUrl: String(presence?.avatarUrl ?? membership?.avatarUrl ?? "").trim() || undefined,
-        cameraOn: typeof presence?.cameraOn === "boolean"
-          ? presence.cameraOn
-          : (membership?.cameraEnabled ?? (participantId === resolvedIdentity.userId ? cameraEnabledRef.current : false)),
-        micOn: typeof presence?.micOn === "boolean"
-          ? presence.micOn
-          : (membership?.micEnabled ?? (participantId === resolvedIdentity.userId ? micEnabledRef.current : false)),
-        joinedAt: String(presence?.joinedAt ?? membership?.joinedAt ?? new Date().toISOString()),
+        avatarUrl: String(membership?.avatarUrl ?? presence?.avatarUrl ?? "").trim() || undefined,
+        cameraOn: participantId === resolvedIdentity.userId
+          ? cameraEnabledRef.current
+          : (membership?.cameraEnabled ?? (typeof presence?.cameraOn === "boolean" ? presence.cameraOn : false)),
+        micOn: participantId === resolvedIdentity.userId
+          ? micEnabledRef.current
+          : (membership?.micEnabled ?? (typeof presence?.micOn === "boolean" ? presence.micOn : false)),
+        joinedAt: String(membership?.joinedAt ?? presence?.joinedAt ?? new Date().toISOString()),
         isHost: resolvedRoom.hostUserId === participantId,
       } as CommunicationParticipantPresence;
     }).filter(Boolean) as CommunicationParticipantPresence[];
@@ -1016,7 +1016,22 @@ export function useCommunicationRoomSession({
       });
       return null;
     });
-    return trackResult === "ok"
+    if (trackResult !== "ok") return false;
+
+    const broadcastResult = await broadcastCommunicationRoomSignal({
+      roomId: resolvedRoom.roomId,
+      event: "media:update",
+      payload: {
+        cameraOn: nextCameraEnabled,
+        micOn: nextMicEnabled,
+      },
+    }).catch((presenceError) => {
+      reportRuntimeError("communication-realtime-media-update", presenceError, {
+        roomId: resolvedRoom.roomId,
+      });
+      return false;
+    });
+    return broadcastResult === true
       && generation === legacySessionGenerationRef.current
       && channelRef.current === channel
       && roomRef.current === resolvedRoom
@@ -1668,15 +1683,29 @@ export function useCommunicationRoomSession({
             payload: {
               reason: "host-left",
             },
-          }).catch(() => false);
+          }).catch((roomEndBroadcastError) => {
+            reportRuntimeError("communication-room-end-broadcast", roomEndBroadcastError, {
+              roomId: resolvedRoom.roomId,
+            });
+            return false;
+          });
         }
-        await endCommunicationRoom(resolvedRoom.roomId, resolvedIdentity.userId).catch(() => {});
+        await endCommunicationRoom(resolvedRoom.roomId, resolvedIdentity.userId).catch((roomEndError) => {
+          reportRuntimeError("communication-room-end", roomEndError, {
+            roomId: resolvedRoom.roomId,
+          });
+        });
       }
 
       await leaveCommunicationRoomSession({
         roomId: resolvedRoom.roomId,
         userId: resolvedIdentity.userId,
-      }).catch(() => null);
+      }).catch((roomLeaveError) => {
+        reportRuntimeError("communication-room-leave", roomLeaveError, {
+          roomId: resolvedRoom.roomId,
+        });
+        return null;
+      });
     }
 
     trackEvent("communication_disconnect", {
@@ -2094,21 +2123,24 @@ export function useCommunicationRoomSession({
 
         const peerConnection = await ensurePeerConnection(fromUserId);
         if (!peerConnection || !isActiveGeneration()) return;
-        await peerConnection.addIceCandidate(new rtc.RTCIceCandidate(payload.candidate as any)).catch(() => {});
+        await peerConnection.addIceCandidate(new rtc.RTCIceCandidate(payload.candidate as any)).catch((iceError: unknown) => {
+          reportRuntimeError("communication-webrtc-ice-candidate", iceError, {
+            roomId: snapshot.room.roomId,
+            remoteUserId: fromUserId,
+          });
+        });
       });
 
       channel.on("broadcast", { event: "media:update" }, ({ payload }: { payload: Record<string, unknown> }) => {
         if (!isActiveGeneration()) return;
         const fromUserId = String(payload?.fromUserId ?? "").trim();
         if (!isExactInboundRoom(payload) || !isAuthorizedInboundParticipant(fromUserId)) return;
-        const current = presenceStateRef.current[fromUserId] ?? {};
-        presenceStateRef.current[fromUserId] = {
-          ...current,
-          userId: fromUserId,
-          cameraOn: typeof payload?.cameraOn === "boolean" ? payload.cameraOn : current.cameraOn,
-          micOn: typeof payload?.micOn === "boolean" ? payload.micOn : current.micOn,
-        };
-        void applyParticipantsFromSources();
+        void refreshSnapshot(snapshot.room.roomId).catch((mediaProjectionError) => {
+          reportRuntimeError("communication-media-projection-refresh", mediaProjectionError, {
+            roomId: snapshot.room.roomId,
+            remoteUserId: fromUserId,
+          });
+        });
       });
 
       channel.on("broadcast", { event: "room:end" }, ({ payload }: { payload: Record<string, unknown> }) => {
@@ -2130,7 +2162,7 @@ export function useCommunicationRoomSession({
         onRoomEndedRef.current?.(reason);
       });
 
-      channel.subscribe(async (status) => {
+      channel.subscribe(async (status, subscriptionError) => {
         if (!isActiveGeneration()) return;
 
         if (status === "SUBSCRIBED") {
@@ -2195,6 +2227,12 @@ export function useCommunicationRoomSession({
         }
 
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          if (subscriptionError) {
+            reportRuntimeError("communication-realtime-subscription", subscriptionError, {
+              roomId: snapshot.room.roomId,
+              status,
+            });
+          }
           logChatRtc("presence_subscription_status", {
             roomId: snapshot.room.roomId,
             status,
@@ -2230,7 +2268,12 @@ export function useCommunicationRoomSession({
               micEnabled: micEnabledRef.current,
               displayName: currentIdentity.displayName,
               avatarUrl: currentIdentity.avatarUrl,
-            }).catch(() => null);
+            }).catch((reconnectMembershipError) => {
+              reportRuntimeError("communication-reconnect-membership", reconnectMembershipError, {
+                roomId: currentRoom.roomId,
+              });
+              return null;
+            });
             if (!isActiveGeneration()) return;
             await refreshSnapshot(currentRoom.roomId);
           }
@@ -2282,7 +2325,12 @@ export function useCommunicationRoomSession({
           micEnabled: micEnabledRef.current,
           displayName: capturedIdentity.displayName,
           avatarUrl: capturedIdentity.avatarUrl,
-        }).catch(() => null);
+        }).catch((recoveryMembershipError) => {
+          reportRuntimeError("communication-init-recovery-membership", recoveryMembershipError, {
+            roomId: capturedRoom.roomId,
+          });
+          return null;
+        });
       }
       void cleanupChannel(capturedChannel);
       cleanupSnapshotChannel(capturedSnapshotChannel);
@@ -2792,7 +2840,12 @@ export function useCommunicationRoomSession({
         && isLegacyMicSessionAuthorityCurrent(authority)
         && peerConnectionsRef.current[remoteUserId] === peerConnection
         && String(peerConnection?.signalingState ?? "stable") === "stable";
-    } catch {
+    } catch (renegotiationError) {
+      reportRuntimeError("communication-legacy-microphone-renegotiation", renegotiationError, {
+        phase,
+        remoteUserId,
+        roomId: authority.roomId,
+      });
       completed = false;
     }
     delete legacyMicAnswerWaitersRef.current[negotiationId];
@@ -2822,7 +2875,12 @@ export function useCommunicationRoomSession({
       micEnabled: nextMicEnabled,
       displayName: resolvedIdentity.displayName,
       avatarUrl: resolvedIdentity.avatarUrl,
-    }).catch(() => null);
+    }).catch((presenceError) => {
+      reportRuntimeError("communication-legacy-membership-media-commit", presenceError, {
+        roomId: authority.roomId,
+      });
+      return null;
+    });
     if (
       !membership
       || formatRoomId(membership.roomId) !== authority.roomId
@@ -2843,7 +2901,12 @@ export function useCommunicationRoomSession({
         },
         joinedAt: localJoinedAtRef.current,
       }),
-    )).catch(() => null);
+    )).catch((presenceError) => {
+      reportRuntimeError("communication-legacy-realtime-presence-commit", presenceError, {
+        roomId: authority.roomId,
+      });
+      return null;
+    });
     return {
       durableWritten: true,
       ok: trackResult === "ok" && isLegacyMicSessionAuthorityCurrent(authority),
@@ -2863,7 +2926,12 @@ export function useCommunicationRoomSession({
         cameraOn: nextCameraEnabled,
         micOn: nextMicEnabled,
       },
-    })).catch(() => false);
+    })).catch((broadcastError) => {
+      reportRuntimeError("communication-legacy-media-broadcast", broadcastError, {
+        roomId: authority.roomId,
+      });
+      return false;
+    });
     return {
       ok: result === true && isLegacyMicSessionAuthorityCurrent(authority),
       sent: result === true,
@@ -3590,7 +3658,8 @@ export function useCommunicationRoomSession({
         return {
           ...participant,
           isSelf,
-          cameraOn: isSelf ? participant.cameraOn : participant.cameraOn,
+          cameraOn: isSelf ? cameraEnabled : participant.cameraOn,
+          micOn: isSelf ? micEnabled : participant.micOn,
           streamURL: isSelf
             ? localVideoStreamURL || undefined
             : remoteVideoStreamURL || undefined,
