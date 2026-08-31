@@ -56,7 +56,7 @@ This ledger is cumulative. A merge alone does not close a defect. Production mon
 - OTA requirement: none.
 - Physical/provider proof requirement: provider sandbox/StoreKit proof when an authenticated provider test surface is available.
 - Test blind spot: source-string assertions can drift independently from executable behavior and can accidentally reject a newer, stricter integration seam.
-- Disposition: `REPAIRED_UNPROVEN` until the exact grouped candidate is merged; all three corrected executable proofs pass locally.
+- Disposition: `PROVIDER_PROVEN`. The corrected proofs merged in PR `#322` and passed again against exact protected main `8ad050efd9fd0cef966adb0c40439b66ae6744c6`.
 
 ## RFGC-003 — RevenueCat native success rejected before server projection
 
@@ -85,7 +85,36 @@ This ledger is cumulative. A merge alone does not close a defect. Production mon
 - Native-build requirement: none established. Build 91 contains the current production public configuration and passed clear-state sign-in from the embedded runtime; native fingerprint/runtime remain compatible with this JavaScript repair.
 - Physical/provider proof requirement: exact OTA consumption followed by Premium sandbox purchase, authoritative UI convergence, restore, expiry/revocation readback where the sandbox permits, and available exact creator-flow checks on both attached platforms.
 - Test blind spot: the prior validator test double always supplied a transaction ID and did not reproduce Android's valid token-only return. The new executable proof covers token-only Android, transaction-ID-only Apple, absent correlation, product mismatch, malformed date, cancellation, bounded projection settlement, stale authority, Premium purchase/restore wiring, and Paid Video ambiguous-result reconciliation.
-- Disposition: `REPAIRED_UNPROVEN` pending exact-head merge, OTA, and physical provider proof.
+- Disposition: `PHYSICALLY_PROVEN` on Android. PR `#322` merged as `8ad050efd9fd0cef966adb0c40439b66ae6744c6`; Android consumed exact update `01a054fa-6c9d-74a4-9eae-1d5b02058b8e`, completed Google Play sandbox purchase, converged to active server authority, restored, canceled, expired, and refreshed to inactive. The same purchase produced no creator access grant, creator ledger row, or creator purchase intent. iOS consumed its exact grouped update and reached the App Store/TestFlight sandbox checkout for the exact Premium product, but Apple Account password reauthentication remains external.
+
+## RFGC-004 — Platform Studio route adapter violated React and product boundaries
+
+- Defect ID: `RFGC-004`
+- Flow(s): Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, Event Pass creator setup/readback; Premium is the upstream creator-tool gate.
+- User role: authenticated Premium/Owner creator entering Platform Studio.
+- Creator role: exact signed-in creator whose Money Center is being inspected.
+- Platform: Android directly observed; shared JavaScript route also affects iOS.
+- Provider: provider-independent route failure before RevenueCat/Stripe/store readback.
+- Discovery evidence: on Android build 91 with exact grouped OTA `01a054fa-6c9d-74a4-9eae-1d5b02058b8e`, Settings -> Platform Studio reached App Recovery. Logcat at `2026-08-31T00:06:06Z` recorded `Rendered fewer hooks than expected` at `PlatformStudioRoute`.
+- First failed boundary: preferred route adapter -> mounted `ChannelStudioScreen` React component.
+- Visible symptom: App Recovery blocked Money Center and all six creator-money provider surfaces.
+- Upstream producer: authenticated session, exact route navigation, Premium/Owner access state, and asynchronous entitlement/provider loading.
+- Downstream consequence: creator catalog setup, provider readiness, transaction inspection, Stripe readiness, and the physical seven-flow matrix could not proceed.
+- Root cause: the preferred route invoked the hook-heavy screen as `ChannelStudioScreen()` rather than mounting `<ChannelStudioScreen />`, attaching the child's hooks to the wrapper. The same adapter recursively rewrote the rendered tree and globally replaced `Alert.alert`.
+- Root-cause group: unsafe cross-feature route/terminology adapter at the auth/Premium/Money Center integration seam.
+- Same-class siblings: all app/lib/component sources were searched for direct component execution at route boundaries and process-wide `Alert.alert` replacement; no second validated sibling remained.
+- Adjacent different-class risks: the broad `Channel` -> `Platform` rewrite changed the canonical `Channel Subscription` product label and the global Alert override could affect unrelated mounted routes. Generic creator-surface terminology is now owned explicitly by source copy while canonical product/API identifiers remain unchanged. Creator-money callbacks now also bind their analytics identity and platform-specific provider copy to current hook dependencies instead of retaining stale closures across account/platform state changes.
+- Shared integration seams: Settings/Profile/compatibility redirects -> Platform Studio -> auth/beta/Premium gates -> Money Center -> six creator-money managers -> provider/readback surfaces.
+- Security impact: no money, entitlement, ledger, RLS, or payout authority changed. Removing process-wide UI mutation reduces cross-route ambiguity.
+- Financial impact: restores access to sandbox/read-only setup without enabling live money, public products, charges, balances, or payouts.
+- Changed files: `app/channel-studio/index.tsx`, `app/channel-settings.tsx`, `scripts/guard-route-contracts.mjs`, `docs/SEVEN_MONEY_FLOW_RFGC_LEDGER.md`.
+- Migration requirement: none.
+- Provider mutation requirement: none.
+- OTA requirement: one grouped compatible `internal-v2` OTA after exact protected merge.
+- Native-build requirement: none; the change is JavaScript-only and current runtimes/fingerprints are already proven compatible.
+- Physical/provider proof requirement: exact grouped OTA consumption on both devices; Android and iOS Platform Studio entry; Money Center six-flow surface traversal; no App Recovery; canonical Channel Subscription label; complete available provider matrix restarted from the beginning.
+- Test blind spot: source guards required the terminology rewriter instead of enforcing a React component boundary, so they institutionalized the invalid adapter. The route contract now rejects plain-function screen execution, global Alert mutation, and rendered-tree product rewriting.
+- Disposition: `REPAIRED_UNPROVEN` pending exact-head merge, OTA, and restarted physical provider proof.
 
 ## RFGC-EXT-001 — Production provider activation/readback unavailable
 
@@ -146,14 +175,14 @@ This ledger is cumulative. A merge alone does not close a defect. Production mon
 ## Closure counts
 
 - `BLOCKING_OPEN`: 0
-- `REPAIRED_UNPROVEN`: 2
-- `PHYSICALLY_PROVEN`: 1
-- `PROVIDER_PROVEN`: 1
+- `REPAIRED_UNPROVEN`: 1
+- `PHYSICALLY_PROVEN`: 2
+- `PROVIDER_PROVEN`: 2
 - `NONBLOCKING_DEBT`: 0
 - `EXTERNAL_BLOCKED`: 1
 - `NOT_A_DEFECT`: 0
 
-These are pre-merge activation-continuation counts. `RFGC-002` and `RFGC-003` may move out of `REPAIRED_UNPROVEN` only after exact-head merge and the required post-OTA/provider proof.
+These are current provider/activation-continuation counts. `RFGC-004` may move out of `REPAIRED_UNPROVEN` only after exact-head merge, the required grouped OTA, and restarted physical provider proof.
 
 ## Final closure evidence
 
