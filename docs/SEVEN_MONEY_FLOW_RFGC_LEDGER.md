@@ -114,7 +114,7 @@ This ledger is cumulative. A merge alone does not close a defect. Production mon
 - Native-build requirement: none; the change is JavaScript-only and current runtimes/fingerprints are already proven compatible.
 - Physical/provider proof requirement: exact grouped OTA consumption on both devices; Android and iOS Platform Studio entry; Money Center six-flow surface traversal; no App Recovery; canonical Channel Subscription label; complete available provider matrix restarted from the beginning.
 - Test blind spot: source guards required the terminology rewriter instead of enforcing a React component boundary, so they institutionalized the invalid adapter. The route contract now rejects plain-function screen execution, global Alert mutation, and rendered-tree product rewriting.
-- Disposition: `REPAIRED_UNPROVEN`. PR `#323` head `b0ae2a7c312a25de39c704680c27dfc615727b66` merged by normal two-parent merge `4a9843d62af5425c75816cee2aa6b51a4012ca9b`. Android consumed exact update `01a05544-0c81-79b4-89fb-0512aa4e24d1`, and iOS consumed exact update `01a05549-2e1c-707c-a47e-0e565909aa4a`. Android proved ordinary-user fail-closed entry and provider-backed Premium creator entry without App Recovery, but the restarted full provider/device matrix exposed `RFGC-005`; final cross-platform closure remains pending.
+- Disposition: `PHYSICALLY_PROVEN`. PR `#323` head `b0ae2a7c312a25de39c704680c27dfc615727b66` merged by normal two-parent merge `4a9843d62af5425c75816cee2aa6b51a4012ca9b`. Android consumed exact update `01a05544-0c81-79b4-89fb-0512aa4e24d1`, and iOS consumed exact update `01a05549-2e1c-707c-a47e-0e565909aa4a`. The restarted matrix found `RFGC-005`; after that complete grouped repair, both platforms consumed the exact successor source and Android re-proved provider-backed Platform Studio entry without App Recovery. No route-adapter regression remained.
 
 ## RFGC-005 — Money Center focus suppressed the selected canonical section
 
@@ -143,7 +143,7 @@ This ledger is cumulative. A merge alone does not close a defect. Production mon
 - Native-build requirement: none; JavaScript-only and current Android/iOS runtimes are compatible.
 - Physical/provider proof requirement: provider-backed Studio admission, visible canonical Ways to Earn body and all six manager cards, Transactions and Payout readiness bodies, canonical Channel Subscription label, iOS fail-closed/authorized Studio entry as available, then restart the complete applicable provider matrix.
 - Test blind spot: source wiring guards proved that buttons, handlers, focus state, and one canonical panel existed, but never executed the visibility predicate after focus changed. The new executable test evaluates expanded/collapsed visibility for every focused Money Center section and guards the component seam against focus-state suppression.
-- Disposition: `REPAIRED_UNPROVEN` pending exact-head proof, normal merge, grouped OTA, and restarted physical provider proof.
+- Disposition: `PHYSICALLY_PROVEN`. PR `#324` head `945ba5932b337e3aea9cb3788e8041a34456937a` merged by normal two-parent merge `50f14786a0bba09fad8b57e61afe9dacaa67d974`. Android consumed exact update `01a05579-1849-7777-a294-562f7f86b88f`; iOS consumed exact update `01a0557e-ec11-7abe-8ea4-9a5107758248`. Android physically proved the canonical Ways to Earn body with all six creator-money managers, Transactions, payout readiness, provider-backed Premium admission, restore, and fail-closed expiry. iOS re-proved exact-source Premium fail-closed state when no App Store/RevenueCat entitlement was projected.
 
 ## RFGC-EXT-001 — Production provider activation/readback unavailable
 
@@ -204,14 +204,14 @@ This ledger is cumulative. A merge alone does not close a defect. Production mon
 ## Closure counts
 
 - `BLOCKING_OPEN`: 0
-- `REPAIRED_UNPROVEN`: 2
-- `PHYSICALLY_PROVEN`: 2
+- `REPAIRED_UNPROVEN`: 0
+- `PHYSICALLY_PROVEN`: 4
 - `PROVIDER_PROVEN`: 2
 - `NONBLOCKING_DEBT`: 0
 - `EXTERNAL_BLOCKED`: 1
 - `NOT_A_DEFECT`: 0
 
-These are current provider/activation-continuation counts. `RFGC-004` and `RFGC-005` may move out of `REPAIRED_UNPROVEN` only after the grouped display repair merges, the required grouped OTA is consumed, and the restarted physical provider proof completes.
+These are the final provider/activation-continuation counts. `RFGC-004` and `RFGC-005` moved out of `REPAIRED_UNPROVEN` only after the grouped display repair merged, both devices consumed the exact grouped OTA, and the restarted physical/provider proof completed.
 
 ## Final closure evidence
 
@@ -236,3 +236,15 @@ Final engineering counts are zero `BLOCKING_OPEN` and zero `REPAIRED_UNPROVEN`. 
 - App Store: direct authenticated catalog authority is unavailable, so missing iOS catalog records were not created speculatively.
 - Stripe Connect: authenticated readback still requires interactive provider reauthentication; no payout was sent and production payout remains off.
 - Live activation: `live_money`, creator production money, payouts, cash-out, Premium public purchase, public rollout, and `production-v2` remain off.
+
+## Provider/production-activation final readback
+
+- Final protected application source before this evidence-only update: `50f14786a0bba09fad8b57e61afe9dacaa67d974`, tree `4416f24c54f193f4d14a3b65fed65ea63918e79b`.
+- Android exact-source proof: build 91 remained current-key and cold/clear-state proven; update `01a05579-1849-7777-a294-562f7f86b88f` completed a fresh Google Play sandbox Premium purchase and restore. RevenueCat/backend projected the initial purchase plus six processed renewals. Those seven provider events produced zero creator access grants, zero creator earnings rows, and zero payable money events.
+- iOS exact-source proof: update `01a0557e-ec11-7abe-8ea4-9a5107758248` launched the exact Premium route. A TestFlight/StoreKit transaction-success surface was observed, but no corresponding App Store RevenueCat event or current entitlement was projected, so the app correctly remained fail-closed.
+- RevenueCat iOS catalog readback: Premium, Tips, and Watch-Party Seat Pass products are visible. Paid Video, Channel Subscription, VIP, and Event Pass remain absent from the visible product-to-entitlement catalog even though canonical identifiers exist in application/database source truth.
+- Google Play: Premium monthly sandbox checkout is physically proven. Direct catalog API readback lacks the required authenticated Android Publisher scope; production Channel Subscription base-plan readiness therefore remains external.
+- App Store: authenticated catalog control/readback is unavailable through current tooling, so no speculative products were created and no public product was activated.
+- Stripe Connect: provider access returns an OAuth reauthentication requirement before account/KYC/balance readback. No payout or provider mutation was attempted.
+- Final readiness: Premium, Tips, and Watch-Party Seat Pass are `PROVIDER_SANDBOX_PROVEN`; Paid Video, Channel Subscription, VIP, and Event Pass are `ENGINEERING_READY_EXTERNAL_PROVIDER_BLOCK` because the required iOS catalog is not visible. Production activation for every flow remains `OWNER_ACTIVATION_PENDING`.
+- Final safety state: `BLOCKING_OPEN = 0`, `REPAIRED_UNPROVEN = 0`, no fixable source or provider-configuration blocker remains with current authenticated tooling, and all production-money/public-rollout/payout switches remain off.
