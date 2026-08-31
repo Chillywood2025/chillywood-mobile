@@ -16,6 +16,7 @@ import {
   readPublicEventSummaries,
 } from "./liveEvents";
 import { supabase } from "./supabase";
+import { normalizePlatformSubscriptionNotificationCopy } from "./userFacingProductCopy";
 import {
   CHAT_CALL_INVITES_TABLE,
   normalizeChillyChatRingtoneKey,
@@ -635,7 +636,8 @@ const parseNotificationRow = (row: NotificationRow | null): NotificationRecord |
 
   const id = normalizeText(row.id);
   const userId = normalizeText(row.user_id);
-  const title = normalizeText(row.title);
+  const notificationType = normalizeText(row.notification_type) || normalizeNotificationCategory(row.category);
+  const title = normalizePlatformSubscriptionNotificationCopy(row.title, notificationType);
   if (!id || !userId || !title) return null;
 
   const target = normalizeNotificationTarget({
@@ -645,7 +647,6 @@ const parseNotificationRow = (row: NotificationRow | null): NotificationRecord |
   });
   const readAt = normalizeIsoTimestamp(row.read_at);
   const dismissedAt = normalizeIsoTimestamp(row.dismissed_at);
-  const notificationType = normalizeText(row.notification_type) || normalizeNotificationCategory(row.category);
   const status = normalizeText(row.status) || "pending";
   const action = classifyNotificationAction({
     category: normalizeNotificationCategory(row.category),
@@ -661,7 +662,7 @@ const parseNotificationRow = (row: NotificationRow | null): NotificationRecord |
     category: normalizeNotificationCategory(row.category),
     notificationType,
     title,
-    body: normalizeText(row.body) || null,
+    body: normalizePlatformSubscriptionNotificationCopy(row.body, notificationType) || null,
     deepLink: normalizeText(row.deep_link) || null,
     status,
     target,
