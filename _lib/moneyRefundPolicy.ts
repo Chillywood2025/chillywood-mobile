@@ -225,7 +225,7 @@ export const MONEY_REFUND_POLICIES: Record<MoneyRefundPolicyKey, MoneyRefundPoli
     payoutHoldRequired: true,
     providerActionRequired: true,
     creditFirst: true,
-    userCopy: "VIP is creator-specific and separate from Premium and subscription.",
+    userCopy: "VIP is a creator-specific 30-day pass; verified refund or revocation ends access independently of Premium and subscriptions.",
     creatorCopy: "Creator payout is held until VIP obligation period/risk window clears.",
     adminCopy: "No standard refund after valid access period/use unless platform/admin/legal/provider decision requires it.",
   },

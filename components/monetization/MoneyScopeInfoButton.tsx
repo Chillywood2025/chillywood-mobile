@@ -165,11 +165,12 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
     includes: [
       "creator-specific subscriber area/access where enabled",
       "subscriber-only creator content or updates where actually available",
+      "this creator's ordinary Paid Videos while the subscription is active",
     ],
     doesNotInclude: [
       "Chi'llywood Premium",
       "VIP pass",
-      "paid videos unless separately included by explicit product logic",
+      "VIP-only videos",
       "Watch-Party Seat Passes",
       "event passes",
       "other creators",
@@ -178,20 +179,21 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
     ],
     whereItWorks: "Only on this creator Platform and subscriber surfaces backed by active access.",
     whoControlsIt: "The creator controls the subscription offer; effective access uses provider/access resolver state.",
-    lifecycleNote: "Subscription is creator-specific and can end, expire, refund, or revoke separately from other products.",
-    payoutNote: "Subscription access does not grant creator payout access or create cash-out eligibility.",
+    lifecycleNote: "Included Paid Video access ends when the subscription is inactive. Exact videos purchased separately keep their own independent grant lifecycle.",
+    payoutNote: "Watching an included Paid Video creates no extra purchase, provider transaction, ledger event, or payout.",
   },
   vip_pass: {
     title: "VIP Pass",
-    shortDescription: "Creator-specific VIP access, separate from subscription and Premium.",
+    shortDescription: "A one-time, creator-specific VIP Pass valid for exactly 30 days.",
     includes: [
       "creator-specific VIP status/access where enabled",
       "VIP Area access where active",
+      "this creator's VIP-only video shelf/content while active",
     ],
     doesNotInclude: [
       "Chi'llywood Premium",
       "channel subscription unless separately granted",
-      "paid videos",
+      "ordinary Paid Video ownership or subscription access",
       "Watch-Party Seat Passes",
       "event passes",
       "LiveKit, host, or speaker authority",
@@ -200,7 +202,7 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
     ],
     whereItWorks: "Only on this creator Platform and VIP surfaces backed by active access.",
     whoControlsIt: "The creator controls the VIP offer; the access resolver controls whether VIP is active.",
-    lifecycleNote: "VIP is creator-specific and can expire, refund, or revoke separately from subscriptions and Premium.",
+    lifecycleNote: "The 30-day period starts at verified activation. Expiry, refund, or revocation removes VIP access; another verified purchase starts a new period.",
     payoutNote: "VIP access does not grant creator payout access or cash-out eligibility.",
   },
   event_pass: {

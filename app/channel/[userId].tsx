@@ -986,7 +986,11 @@ export default function PublicChannelScreen() {
       <CreatorVideoCard
         video={video}
         mode={showOwnerControls ? "owner" : "public"}
-        accessLabel={video.vipAccessRequired ? (vipAccess?.allowed ? "VIP" : "VIP · Locked") : undefined}
+        accessLabel={video.vipAccessRequired
+          ? (vipAccess?.allowed ? "VIP" : "VIP · Locked")
+          : video.paidAccessRequired
+            ? (subscriptionAccess?.allowed ? "Included with subscription" : "Paid Video")
+            : undefined}
         testID="platform-content-open-button"
         featured
         onOpen={() => openPlayer(video)}
@@ -1001,7 +1005,11 @@ export default function PublicChannelScreen() {
       <CreatorVideoCard
         video={video}
         mode={showOwnerControls ? "owner" : "public"}
-        accessLabel={video.vipAccessRequired ? (vipAccess?.allowed ? "VIP" : "VIP · Locked") : undefined}
+        accessLabel={video.vipAccessRequired
+          ? (vipAccess?.allowed ? "VIP" : "VIP · Locked")
+          : video.paidAccessRequired
+            ? (subscriptionAccess?.allowed ? "Included with subscription" : "Paid Video")
+            : undefined}
         testID="platform-content-open-button"
         onOpen={() => openPlayer(video)}
         onShare={() => { void shareSelectedVideo(video); }}
@@ -1262,7 +1270,7 @@ export default function PublicChannelScreen() {
     if (!offer || (!sandboxTesterActive && !isOwnerPlatformMode(platformMode))) return null;
     const subscribed = subscriptionAccess?.allowed === true;
     const unavailable = !subscribed && !subscriptionAccess?.requiresPurchase;
-    const unavailableCopy = "Platform Subscription is not available for this creator Platform in sandbox right now. Premium, VIP, paid videos, Watch-Party Seat Passes, and paid events stay separate.";
+    const unavailableCopy = "Platform Subscription is not available for this creator Platform in sandbox right now. Premium, VIP-only content, Watch-Party Seat Passes, and Event Passes stay separate.";
     if (isOwnerPlatformMode(platformMode)) {
       return (
         <AppSection title="Platform Subscription" statusLabel={offer ? "Manage" : "Not set"} statusTone={offer ? "success" : "muted"}>
@@ -1270,7 +1278,7 @@ export default function PublicChannelScreen() {
             <Text style={styles.cardKicker}>Owner tools</Text>
             <Text style={styles.cardTitle}>{offer?.title ?? "Subscription offer"}</Text>
             <Text style={styles.cardBody}>
-              Manage this creator Platform subscription. This is separate from Chi’llywood Premium, VIP, paid videos, Watch-Party Seat Passes, paid events, and payouts.
+              Manage recurring subscriber access and temporary access to this creator’s ordinary Paid Videos. Premium, VIP-only content, Watch-Party Seat Passes, Event Passes, and payouts stay separate.
             </Text>
             <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
             <View style={styles.ownerCommerceActions}>
@@ -1299,7 +1307,7 @@ export default function PublicChannelScreen() {
           <Text style={styles.cardKicker}>Creator membership</Text>
           <Text style={styles.cardTitle}>{offer.title}</Text>
 	          <Text style={styles.cardBody}>
-	            {`Sandbox Test: subscribe to this creator Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party Seat Passes, paid events, or other creators.`}
+	            {`Sandbox Test: subscribe to this creator Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. While active, this includes the creator's ordinary Paid Videos, but not VIP-only content, Premium, paid Watch-Party Seat Passes, Event Passes, or other creators.`}
 	          </Text>
           {subscriptionNotice ? <Text style={styles.metaText}>{subscriptionNotice}</Text> : null}
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
@@ -1337,7 +1345,7 @@ export default function PublicChannelScreen() {
             <Text style={styles.cardKicker}>Owner tools</Text>
             <Text style={styles.cardTitle}>{offer?.title ?? "VIP offer"}</Text>
             <Text style={styles.cardBody}>
-              Manage creator-specific VIP for this Platform. VIP does not unlock Chi’llywood Premium, subscriptions, paid videos, Watch-Party Seat Passes, paid events, room authority, or payouts.
+              Manage the one-time 30-day creator-specific VIP Pass and VIP-only shelf for this Platform. VIP does not unlock Premium, Channel Subscription, ordinary Paid Video ownership, Watch-Party Seat Passes, Event Passes, room authority, or payouts.
             </Text>
             <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
             <View style={styles.ownerCommerceActions}>
@@ -1366,7 +1374,7 @@ export default function PublicChannelScreen() {
           <Text style={styles.cardKicker}>Creator-specific VIP</Text>
           <Text style={styles.cardTitle}>{offer.title}</Text>
           <Text style={styles.cardBody}>
-            {`Sandbox Test: get VIP for this creator Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. VIP does not unlock Chi'llywood Premium, paid videos, paid Watch-Party Seat Passes, paid events, subscriptions, LiveKit authority, room permissions, or other creators.`}
+            {`Sandbox Test: get a one-time 30-day VIP Pass for this creator Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. It includes this creator's VIP-only shelf, but not Premium, Channel Subscription, ordinary Paid Video ownership, Watch-Party Seat Passes, Event Passes, LiveKit authority, room permissions, or other creators.`}
           </Text>
           {vipNotice ? <Text style={styles.metaText}>{vipNotice}</Text> : null}
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}

@@ -224,7 +224,7 @@ test("unknown or structurally incomplete allowed responses fail closed across ev
 });
 
 test("canonical paid-video owner/free/grant results allow, while exact purchase metadata alone opens checkout", async () => {
-  for (const reason of ["owner", "free_content", "purchase_grant", "sandbox_grant", "active_grant"]) {
+  for (const reason of ["owner", "free_content", "purchase_grant", "sandbox_grant", "active_grant", "active_creator_subscription"]) {
     const api = loadAccessModule("_lib/creatorPaidVideos.ts", {
       allowed: true,
       reason,
@@ -281,7 +281,15 @@ test("paid Event access requires exact free, owner, or source-bound pass authori
 test("VIP access requires exact creator-bound owner or pass identity", async () => {
   const validPayloads = [
     { allowed: true, reason: "creator_or_admin", previewAuthority: true, requiresPurchase: false, offer: vipOffer() },
-    { allowed: true, reason: "vip_active", requiresPurchase: false, vipPassId: AUTHORITY_ID, offer: vipOffer() },
+    {
+      allowed: true,
+      reason: "vip_active",
+      requiresPurchase: false,
+      vipPassId: AUTHORITY_ID,
+      activatedAt: "2026-08-01T00:00:00.000Z",
+      expiresAt: "2026-08-31T00:00:00.000Z",
+      offer: vipOffer(),
+    },
   ];
   for (const payload of validPayloads) {
     const api = loadAccessModule("_lib/creatorVipPasses.ts", payload);
@@ -292,13 +300,15 @@ test("VIP access requires exact creator-bound owner or pass identity", async () 
     { ...validPayloads[1], vipPassId: null },
     { ...validPayloads[1], offer: vipOffer({ creatorId: SOURCE_ID }) },
     { ...validPayloads[1], offer: vipOffer({ passType: "subscription" }) },
+    { ...validPayloads[1], expiresAt: "2026-09-01T00:00:00.000Z" },
+    { ...validPayloads[1], activatedAt: "not-a-time" },
   ]) {
     const api = loadAccessModule("_lib/creatorVipPasses.ts", payload);
     assert.equal((await api.resolveCreatorVipPassAccess(CREATOR_ID)).allowed, false);
   }
 });
 
-test("channel access requires an exact creator-bound finite current subscription", async () => {
+test("channel access trusts an exact finite server-authorized subscription tuple, not the client clock", async () => {
   const creatorApi = loadAccessModule("_lib/channelSubscriptions.ts", {
     allowed: true,
     reason: "creator_or_admin",
@@ -334,7 +344,7 @@ test("channel access requires an exact creator-bound finite current subscription
       reason: "subscription_active",
       requiresPurchase: false,
       subscriptionId: AUTHORITY_ID,
-      currentPeriodEnd: "2020-01-01T00:00:00.000Z",
+      currentPeriodEnd: "not-a-time",
       offer: subscriptionOffer(),
     },
     {
@@ -506,6 +516,8 @@ test("offer lifecycle status cannot turn a paused, sold-out, or blocked offer in
         reason: "vip_active",
         requiresPurchase: false,
         vipPassId: AUTHORITY_ID,
+        activatedAt: "2026-08-01T00:00:00.000Z",
+        expiresAt: "2026-08-31T00:00:00.000Z",
         offer: vipOffer({ status }),
       }),
       ["paused"],

@@ -195,8 +195,8 @@ test("RPC failure and malformed paid-content results fail closed", async () => {
   }
 });
 
-test("only structurally exact owner, free, and purchase-required results are resolved", async () => {
-  for (const reason of ["owner", "free_content"]) {
+test("only structurally exact owner, free, subscription, and purchase-required results are resolved", async () => {
+  for (const reason of ["owner", "free_content", "active_creator_subscription"]) {
     const runtime = loadCreatorMonetization(async () => ({
       data: { allowed: true, reason, requiresPurchase: false },
       error: null,
@@ -289,8 +289,8 @@ test("unavailable, malformed, and purchase-required authority never reach any pl
   }
 });
 
-test("resolved owner and free authority may reach signed playback resolution", async () => {
-  for (const reason of ["owner", "free_content"]) {
+test("resolved owner, free, and exact-creator subscription authority may reach signed playback resolution", async () => {
+  for (const reason of ["owner", "free_content", "active_creator_subscription"]) {
     const runtime = loadCreatorVideoRuntime({
       allowed: true,
       reason,

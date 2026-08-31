@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,6 +21,8 @@ import { CREATOR_MONEY_ROUTE_TARGETS } from "../../_lib/creatorMonetizationRoute
 import { resolvePlatformDisplayIdentity } from "../../_lib/platformIdentity";
 import { useSession } from "../../_lib/session";
 import { buildUserChannelProfile, readUserProfileByUserId } from "../../_lib/userData";
+import { readCreatorVideos, type CreatorVideo } from "../../_lib/creatorVideos";
+import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
 import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
 import { MoneyScopeStrip, MoneyStatusChip } from "../../components/monetization/money-ui";
 
@@ -40,16 +42,19 @@ export default function CreatorVipPassScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [vipVideos, setVipVideos] = useState<CreatorVideo[]>([]);
 
-  const loadAccess = async () => {
+  const loadAccess = useCallback(async () => {
     if (!creatorId || sessionLoading) return;
     setLoading(true);
     setNotice(null);
-    const [nextAccess, profile] = await Promise.all([
+    const [nextAccess, profile, creatorVideos] = await Promise.all([
       resolveCreatorVipPassAccess(creatorId).catch(() => null),
       readUserProfileByUserId(creatorId).catch(() => null),
+      readCreatorVideos(creatorId, { limit: 50 }).catch(() => []),
     ]);
     setAccess(nextAccess);
+    setVipVideos(creatorVideos.filter((video) => video.vipAccessRequired));
     const channelProfile = buildUserChannelProfile({
       id: creatorId,
       profile,
@@ -61,11 +66,11 @@ export default function CreatorVipPassScreen() {
       fallbackDisplayName: "Untitled Platform",
     }).displayName);
     setLoading(false);
-  };
+  }, [creatorId, sessionLoading]);
 
   useEffect(() => {
     void loadAccess();
-  }, [creatorId, sessionLoading]);
+  }, [loadAccess]);
 
   const handleGetVip = async () => {
     if (!creatorId || busy) return;
@@ -144,19 +149,39 @@ export default function CreatorVipPassScreen() {
             <Text style={styles.title}>VIP Pass active</Text>
             <Text style={styles.platformName}>{creatorName}</Text>
             <Text style={styles.body}>
-              {"VIP is active for this creator's Platform only."}
+              {"VIP is active for this creator's Platform only and includes this creator's VIP-only video shelf."}
             </Text>
+            {!isOwner && access?.expiresAt ? (
+              <Text style={styles.meta}>VIP expires {new Date(access.expiresAt).toLocaleString()}.</Text>
+            ) : null}
             <MoneyScopeStrip
-              includes="Creator-specific VIP access for this Platform."
-              excludes="Chi'llywood Premium, subscriptions, paid videos, paid Watch-Party Seat Passes, paid events, LiveKit authority, room permissions, or other creators."
+              includes="30-day creator-specific VIP status, VIP Area, and this creator's VIP-only video shelf/content."
+              excludes="Channel Subscription, ordinary Paid Video ownership, Chi'llywood Premium, Watch-Party Seat Passes, Event Passes, LiveKit authority, room permissions, payouts, or other creators."
               includesTestID="vip-area-includes-list"
               excludesTestID="vip-area-does-not-include-list"
             />
             <MoneyScopeInfoButton scope="vip_pass" label="What does VIP include?" />
-            <View style={styles.emptyStateCard}>
-              <Text style={styles.emptyStateTitle}>No VIP perks yet</Text>
-              <Text style={styles.emptyStateBody}>{isOwner ? "VIP perks can be managed from Platform Studio when the perk system is backed." : "VIP perks coming later."}</Text>
-            </View>
+            {vipVideos.length ? (
+              <View style={styles.ownerActionStack} testID="vip-area-video-shelf">
+                <Text style={styles.emptyStateTitle}>VIP-only videos</Text>
+                {vipVideos.map((video) => (
+                  <CreatorVideoCard
+                    key={video.id}
+                    video={video}
+                    mode={isOwner ? "owner" : "public"}
+                    accessLabel="VIP"
+                    testID="vip-area-video-open-button"
+                    onOpen={() => router.push({ pathname: "/player/[id]", params: { id: video.id, source: "creator-video" } })}
+                  />
+                ))}
+                <Text style={styles.emptyStateBody}>Additional perks appear only when the creator explicitly implements them.</Text>
+              </View>
+            ) : (
+              <View style={styles.emptyStateCard}>
+                <Text style={styles.emptyStateTitle}>VIP content</Text>
+                <Text style={styles.emptyStateBody}>VIP is active. This creator has not added VIP-only content yet. Additional perks appear only when the creator implements them.</Text>
+              </View>
+            )}
             {isOwner ? (
               <View style={styles.ownerActionStack}>
                 <TouchableOpacity
@@ -188,12 +213,12 @@ export default function CreatorVipPassScreen() {
             <Text style={styles.title}>{offer?.title ?? "VIP Pass"}</Text>
             <Text style={styles.body}>
               {needsPurchase
-                ? `Get VIP Pass for ${creatorName}'s Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. VIP is creator-specific and does not include Chi'llywood Premium, paid videos, Watch-Party Seat Passes, paid events, subscriptions, or other creators.`
+                ? `Get a one-time 30-day VIP Pass for ${creatorName}'s Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. It includes this creator's VIP Area and VIP-only video shelf. It does not auto-renew or include Channel Subscription, ordinary Paid Videos, Premium, Watch-Party Seat Passes, Event Passes, or other creators.`
                 : "VIP Pass purchases are temporarily unavailable while setup is being finalized. VIP access stays locked until access is verified."}
             </Text>
             <MoneyScopeStrip
-              includes="Creator-specific VIP access for this Platform when active."
-              excludes="Chi'llywood Premium, subscriptions, paid videos, Watch-Party Seat Passes, paid events, room authority, and other creators stay separate."
+              includes="Exactly 30 days of creator-specific VIP Area and VIP-only content access after verified activation."
+              excludes="Channel Subscription, ordinary Paid Video ownership, Premium, Watch-Party Seat Passes, Event Passes, room authority, payouts, and other creators stay separate."
             />
             <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}

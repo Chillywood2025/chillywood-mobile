@@ -43,6 +43,12 @@ type PublicClipMetadataRow = {
   template_preset: string | null;
 };
 
+type PublicPaidVideoPriceRow = {
+  content_id: string;
+  creator_id: string;
+  is_paid: boolean | null;
+};
+
 type PublicClipMetadata = {
   clip_metadata_public: boolean;
   clip_title_text: string;
@@ -233,6 +239,30 @@ const readPublicClipMetadata = async (
 
   const rows = (data ?? []) as PublicClipMetadataRow[];
   return new Map(rows.map((row) => [toText(row.video_id), mapPublicClipMetadata(row)]));
+};
+
+const readOrdinaryPaidVideoIds = async (
+  adminClient: SupabaseAdminClient,
+  rows: PublicCreatorVideoRow[],
+) => {
+  const videoIds = Array.from(new Set(rows.map((row) => toText(row.id)).filter(Boolean))).slice(0, 100);
+  if (!videoIds.length) return new Set<string>();
+  const ownerByVideoId = new Map(rows.map((row) => [toText(row.id), toText(row.owner_id)]));
+  const { data, error } = await adminClient
+    .from("creator_content_prices")
+    .select("content_id,creator_id,is_paid")
+    .eq("content_type", "creator_video")
+    .eq("is_paid", true)
+    .in("content_id", videoIds);
+  if (error || !data) {
+    if (error) console.error("public creator paid-video classification query failed", error.message);
+    return new Set<string>();
+  }
+  return new Set((data as PublicPaidVideoPriceRow[])
+    .filter((price) => price.is_paid === true
+      && ownerByVideoId.get(toText(price.content_id)) === toText(price.creator_id))
+    .map((price) => toText(price.content_id))
+    .filter(Boolean));
 };
 
 const readPublishedOfficialRachiOriginalVideoIds = async (
@@ -460,6 +490,7 @@ const createThumbnailUrl = async (
 const mapPublicVideo = async (
   row: PublicCreatorVideoRow,
   publicClipMetadata: PublicClipMetadata | undefined,
+  ordinaryPaidVideoIds: Set<string>,
   ownerIdOverride: string | undefined,
   originConfig: {
     provider: "s3" | "cloudflare_r2";
@@ -480,6 +511,8 @@ const mapPublicVideo = async (
     : "clean",
   thumbnailUrl: await createThumbnailUrl(row, originConfig),
   vipAccessRequired: row.vip_access_required === true,
+  paidAccessRequired: row.vip_access_required !== true
+    && ordinaryPaidVideoIds.has(toText(row.id)),
   createdAt: toText(row.created_at) || new Date().toISOString(),
   updatedAt: toText(row.updated_at) || toText(row.created_at) || new Date().toISOString(),
   ...(publicClipMetadata ?? EMPTY_PUBLIC_CLIP_METADATA),
@@ -624,10 +657,12 @@ Deno.serve(async (req): Promise<Response> => {
       rows.filter(isPublicCreatorVideoRowSafe),
     );
     const metadataByVideoId = await readPublicClipMetadata(adminClient, rows.map((row) => row.id));
+    const ordinaryPaidVideoIds = await readOrdinaryPaidVideoIds(adminClient, rows);
     const ownerOverridesByVideoId = await readOfficialRachiOwnerOverrides(adminClient, rows.map((row) => row.id));
     const videos = await Promise.all(rows.map((row) => mapPublicVideo(
       row,
       metadataByVideoId.get(toText(row.id)),
+      ordinaryPaidVideoIds,
       ownerOverridesByVideoId.get(toText(row.id)),
       originConfig,
     )));

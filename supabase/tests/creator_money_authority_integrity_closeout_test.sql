@@ -1,5 +1,5 @@
 begin;
-select plan(136);
+select plan(144);
 
 -- Successor-owned authority surfaces exist and remain service/internal only.
 select has_table('public', 'creator_earnings_lifecycle_events', 'append-only creator earnings lifecycle exists');
@@ -1532,6 +1532,83 @@ select ok(
   'channel subscription initial purchase binds the exact initiating session and finite grant chain'
 );
 
+insert into public.videos (
+  id,owner_id,title,visibility,moderation_status,
+  storage_provider,storage_bucket,storage_object_key,storage_path,
+  mime_type,file_size_bytes,vip_access_required
+)
+select
+  video.id,video.owner_id,video.title,'public','clean',
+  'cloudflare_r2','chillywood-media-origin',
+  video.owner_id::text||'/'||video.id::text||'/source.mp4',
+  video.owner_id::text||'/'||video.id::text||'/source.mp4',
+  'video/mp4',1024,video.vip_required
+from pg_temp.creator_money_closeout_fixture fixture
+cross join lateral (values
+  ('a8500000-0000-4000-8000-000000000001'::uuid,fixture.creator_id,'Subscription ordinary Paid Video',false),
+  ('a8500000-0000-4000-8000-000000000002'::uuid,fixture.creator_id,'Subscription must not unlock VIP',true),
+  ('a8500000-0000-4000-8000-000000000003'::uuid,'a1000000-0000-4000-8000-000000000008'::uuid,'Other creator Paid Video',false)
+) video(id,owner_id,title,vip_required);
+update public.videos
+set scan_status='clean',scan_provider='pgtap',scan_result='clean',scanned_at=now()
+where id in (
+  'a8500000-0000-4000-8000-000000000001',
+  'a8500000-0000-4000-8000-000000000002',
+  'a8500000-0000-4000-8000-000000000003'
+);
+set local session_replication_role=replica;
+insert into public.creator_content_prices (
+  creator_id,content_type,content_id,is_paid,price_cents,currency,status,
+  provider,provider_product_id,provider_product_key
+)
+select owner_id,'creator_video',id,true,499,'usd','sandbox',
+  'revenuecat_app_store','com.chillywood.paidvideo.tier3','paid_video_store_catalog'
+from public.videos
+where id in (
+  'a8500000-0000-4000-8000-000000000001',
+  'a8500000-0000-4000-8000-000000000003'
+);
+set local session_replication_role=origin;
+create temporary table creator_access_doctrine_economics_before as
+select
+  (select count(*) from public.content_access_grants) paid_access_count,
+  (select count(*) from public.money_access_ledger_events) ledger_count,
+  (select count(*) from public.provider_events) provider_count;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000005","session_id":"b5000000-0000-4000-8000-000000000005"}',
+  true
+);
+select is(
+  public.resolve_creator_content_access(
+    'creator_video','a8500000-0000-4000-8000-000000000001'
+  )->>'reason',
+  'active_creator_subscription',
+  'active exact-creator subscription authorizes an ordinary Paid Video'
+);
+select ok(
+  not coalesce((public.resolve_creator_content_access(
+    'creator_video','a8500000-0000-4000-8000-000000000002'
+  )->>'allowed')::boolean,false),
+  'active Channel Subscription does not authorize that creator VIP-only video'
+);
+select ok(
+  not coalesce((public.resolve_creator_content_access(
+    'creator_video','a8500000-0000-4000-8000-000000000003'
+  )->>'allowed')::boolean,false),
+  'Creator A subscription does not authorize Creator B ordinary Paid Video'
+);
+reset role;
+select set_config('request.jwt.claims','{}',true);
+select ok(
+  before.paid_access_count=(select count(*) from public.content_access_grants)
+  and before.ledger_count=(select count(*) from public.money_access_ledger_events)
+  and before.provider_count=(select count(*) from public.provider_events),
+  'subscription-derived video reads create no purchase, ledger, or provider event'
+) from pg_temp.creator_access_doctrine_economics_before before;
+
 select public.process_revenuecat_app_store_event_atomic(
   'closeout-channel-cancel-prepaid','CANCELLATION',
   'a1000000-0000-4000-8000-000000000005',
@@ -1539,6 +1616,108 @@ select public.process_revenuecat_app_store_event_atomic(
   now()+interval '30 days',null,null,repeat('6',64),
   'closeout-channel-renewal-original',null
 );
+create temporary table creator_access_doctrine_subscription_snapshot as
+select
+  subscription.id subscription_id,
+  subscription.status subscription_status,
+  subscription.current_period_end,
+  grant_row.id access_grant_id,
+  grant_row.status grant_status,
+  grant_row.expires_at grant_expires_at
+from public.creator_channel_subscriptions subscription
+join public.access_grants grant_row on grant_row.id=subscription.access_grant_id
+where subscription.subscriber_id='a1000000-0000-4000-8000-000000000005'
+  and subscription.offer_id='a8000000-0000-4000-8000-000000000001';
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000005","session_id":"b5000000-0000-4000-8000-000000000005"}',
+  true
+);
+select is(
+  public.resolve_creator_content_access(
+    'creator_video','a8500000-0000-4000-8000-000000000001'
+  )->>'reason',
+  'active_creator_subscription',
+  'canceled subscription retains included Paid Video access through its paid-through period'
+);
+reset role;
+select set_config('request.jwt.claims','{}',true);
+
+set local session_replication_role=replica;
+update public.creator_channel_subscriptions
+set status='expired',current_period_end=now()-interval '1 second'
+where subscriber_id='a1000000-0000-4000-8000-000000000005'
+  and offer_id='a8000000-0000-4000-8000-000000000001';
+update public.access_grants
+set status='expired',expires_at=now()-interval '1 second'
+where id=(select access_grant_id from public.creator_channel_subscriptions
+  where subscriber_id='a1000000-0000-4000-8000-000000000005'
+    and offer_id='a8000000-0000-4000-8000-000000000001');
+set local session_replication_role=origin;
+set local role authenticated;
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000005","session_id":"b5000000-0000-4000-8000-000000000005"}',true);
+select ok(
+  not coalesce((public.resolve_creator_content_access('creator_video','a8500000-0000-4000-8000-000000000001')->>'allowed')::boolean,false),
+  'expired Channel Subscription removes subscription-derived Paid Video access'
+);
+reset role;
+select set_config('request.jwt.claims','{}',true);
+
+set local session_replication_role=replica;
+update public.creator_channel_subscriptions
+set status='refunded',current_period_end=now()+interval '30 days'
+where subscriber_id='a1000000-0000-4000-8000-000000000005'
+  and offer_id='a8000000-0000-4000-8000-000000000001';
+update public.access_grants
+set status='refunded',expires_at=now()+interval '30 days',refunded_at=now()
+where id=(select access_grant_id from public.creator_channel_subscriptions
+  where subscriber_id='a1000000-0000-4000-8000-000000000005'
+    and offer_id='a8000000-0000-4000-8000-000000000001');
+set local session_replication_role=origin;
+set local role authenticated;
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000005","session_id":"b5000000-0000-4000-8000-000000000005"}',true);
+select ok(
+  not coalesce((public.resolve_creator_content_access('creator_video','a8500000-0000-4000-8000-000000000001')->>'allowed')::boolean,false),
+  'refunded Channel Subscription removes subscription-derived Paid Video access'
+);
+reset role;
+select set_config('request.jwt.claims','{}',true);
+
+set local session_replication_role=replica;
+update public.creator_channel_subscriptions
+set status='revoked'
+where subscriber_id='a1000000-0000-4000-8000-000000000005'
+  and offer_id='a8000000-0000-4000-8000-000000000001';
+update public.access_grants
+set status='revoked',refunded_at=null,revoked_at=now()
+where id=(select access_grant_id from public.creator_channel_subscriptions
+  where subscriber_id='a1000000-0000-4000-8000-000000000005'
+    and offer_id='a8000000-0000-4000-8000-000000000001');
+set local session_replication_role=origin;
+set local role authenticated;
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000005","session_id":"b5000000-0000-4000-8000-000000000005"}',true);
+select ok(
+  not coalesce((public.resolve_creator_content_access('creator_video','a8500000-0000-4000-8000-000000000001')->>'allowed')::boolean,false),
+  'revoked Channel Subscription removes subscription-derived Paid Video access'
+);
+reset role;
+select set_config('request.jwt.claims','{}',true);
+set local session_replication_role=replica;
+update public.creator_channel_subscriptions
+set status=snapshot.subscription_status,
+    current_period_end=snapshot.current_period_end
+from pg_temp.creator_access_doctrine_subscription_snapshot snapshot
+where creator_channel_subscriptions.id=snapshot.subscription_id;
+update public.access_grants
+set status=snapshot.grant_status,
+    expires_at=snapshot.grant_expires_at,
+    refunded_at=null,
+    revoked_at=null
+from pg_temp.creator_access_doctrine_subscription_snapshot snapshot
+where access_grants.id=snapshot.access_grant_id;
+set local session_replication_role=origin;
 
 update public.creator_channel_subscription_offers
 set status='archived',price_cents=799

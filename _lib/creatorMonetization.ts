@@ -185,6 +185,7 @@ const CREATOR_CONTENT_ACCESS_ALLOWED_REASONS = new Set([
   "purchase_grant",
   "sandbox_grant",
   "active_grant",
+  "active_creator_subscription",
 ]);
 const CREATOR_CONTENT_ACCESS_DENIED_REASONS = new Set([
   "content_unavailable",

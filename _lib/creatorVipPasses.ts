@@ -23,6 +23,8 @@ export const VIP_PASS_SANDBOX_PRODUCT_KEY = "vip_pass_sandbox_499";
 export const VIP_PASS_SANDBOX_PROVIDER_PRODUCT_ID = "cw_vip_pass_sandbox_499";
 export const VIP_PASS_POLL_ATTEMPTS = 10;
 export const VIP_PASS_POLL_DELAY_MS = 1500;
+export const VIP_PASS_DURATION_DAYS = 30;
+const VIP_PASS_DURATION_MS = VIP_PASS_DURATION_DAYS * 24 * 60 * 60 * 1000;
 
 export type CreatorVipPassOfferStatus = "draft" | "sandbox" | "active" | "paused" | "blocked" | "archived";
 
@@ -48,6 +50,8 @@ export type CreatorVipPassAccess = {
   reason: string;
   requiresPurchase: boolean;
   vipPassId: string | null;
+  activatedAt: string | null;
+  expiresAt: string | null;
   priceCents: number | null;
   currency: string | null;
   creatorId: string | null;
@@ -185,6 +189,8 @@ const unavailableVipAccess = (reason = "malformed_access_response"): CreatorVipP
   reason,
   requiresPurchase: false,
   vipPassId: null,
+  activatedAt: null,
+  expiresAt: null,
   priceCents: null,
   currency: null,
   creatorId: null,
@@ -214,7 +220,7 @@ const parseAuthoritativeVipOffer = (
     && isAccessProvider(provider)
     && !!accessText(row.providerProductId)
     && !!accessText(row.providerProductKey)
-    && ["sandbox", "active", "paused"].includes(accessText(row.status))
+    && ["sandbox", "active", "paused", "archived"].includes(accessText(row.status))
     ? offer
     : null;
 };
@@ -242,11 +248,22 @@ const normalizeAccess = (value: unknown, expectedCreatorId: string): CreatorVipP
       return { ...unavailableVipAccess(reason), allowed: true, creatorId: offer.creatorId, offer };
     }
     if (reason === "vip_active" && ACCESS_UUID_PATTERN.test(accessText(row.vipPassId))) {
+      const activatedAt = accessText(row.activatedAt);
+      const expiresAt = accessText(row.expiresAt);
+      const activatedAtMs = Date.parse(activatedAt);
+      const expiresAtMs = Date.parse(expiresAt);
+      if (
+        !Number.isFinite(activatedAtMs)
+        || !Number.isFinite(expiresAtMs)
+        || expiresAtMs - activatedAtMs !== VIP_PASS_DURATION_MS
+      ) return unavailableVipAccess();
       return {
         allowed: true,
         reason,
         requiresPurchase: false,
         vipPassId: accessText(row.vipPassId),
+        activatedAt,
+        expiresAt,
         priceCents: offer.priceCents,
         currency: offer.currency,
         creatorId: offer.creatorId,
@@ -285,6 +302,8 @@ const normalizeAccess = (value: unknown, expectedCreatorId: string): CreatorVipP
     reason,
     requiresPurchase: true,
     vipPassId: null,
+    activatedAt: null,
+    expiresAt: null,
     priceCents,
     currency,
     creatorId,
@@ -360,6 +379,8 @@ export async function resolveCreatorVipPassAccess(creatorId: string): Promise<Cr
       reason: "access_check_failed",
       requiresPurchase: false,
       vipPassId: null,
+      activatedAt: null,
+      expiresAt: null,
       priceCents: null,
       currency: null,
       creatorId: null,

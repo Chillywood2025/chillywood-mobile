@@ -139,8 +139,8 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     providerProductId: "channel_subscription_sandbox_monthly_499",
     priceLabel: "$4.99/month sandbox/test",
     providerRail: resolveProviderRail(),
-    unlocks: "Creates subscriber status for this creator channel only.",
-    safety: "Does not unlock Chi'llywood Premium, VIP, paid videos, Watch-Party Seat Passes, paid events, LiveKit authority, or other creators.",
+    unlocks: "Creates subscriber status and temporary access to this creator's ordinary Paid Videos while active.",
+    safety: "Does not create permanent Paid Video ownership or unlock Chi'llywood Premium, VIP-only videos, Watch-Party Seat Passes, paid events, LiveKit authority, or other creators.",
   },
   {
     key: "vip_pass_sandbox_499",
@@ -150,8 +150,8 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     providerProductId: "cw_vip_pass_sandbox_499",
     priceLabel: "$4.99 sandbox/test",
     providerRail: resolveProviderRail(),
-    unlocks: "Creates VIP status for this creator channel only.",
-    safety: "Does not unlock Premium, paid videos, event passes, channel subscriptions, Watch-Party Seat Passes, LiveKit authority, or other creators.",
+    unlocks: "Creates exactly 30 days of VIP status and VIP-only shelf access for this creator.",
+    safety: "Does not auto-renew or unlock Premium, ordinary Paid Video ownership, event passes, channel subscriptions, Watch-Party Seat Passes, LiveKit authority, or other creators.",
   },
   {
     key: "event_pass_sandbox_099",

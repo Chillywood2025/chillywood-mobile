@@ -772,7 +772,7 @@ const buyerNotificationPlanForProduct = (
   }
   if (productType === "channel_subscription") {
     return {
-      body: "Channel Subscription active.",
+      body: "Channel Subscription active. This creator's ordinary Paid Videos are included while it remains active; VIP-only content is separate.",
       category: "creator_money_purchase",
       notificationType: "channel_subscription_active",
       priority: 4,
@@ -782,7 +782,7 @@ const buyerNotificationPlanForProduct = (
   }
   if (productType === "vip_pass") {
     return {
-      body: "VIP Pass active.",
+      body: "Your creator-specific VIP Pass is active for 30 days, including this creator's VIP-only shelf.",
       category: "creator_money_purchase",
       notificationType: "vip_access_active",
       priority: 4,

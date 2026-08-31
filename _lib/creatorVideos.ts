@@ -116,6 +116,7 @@ export type CreatorVideo = {
   playbackQualityLabel: string | null;
   playbackDelivery: VodPlaybackDeliveryMetadata | null;
   paidContentAccess: CreatorContentAccessResolution | null;
+  paidAccessRequired: boolean;
   vipAccessRequired: boolean;
   vipAccess: CreatorVipVideoAccess | null;
   visibilityAccess: CreatorVideoVisibilityAccess | null;
@@ -145,6 +146,7 @@ type PublicCreatorVideoCardRow = {
   createdAt?: unknown;
   updatedAt?: unknown;
   vipAccessRequired?: unknown;
+  paidAccessRequired?: unknown;
   clip_metadata_public?: unknown;
   clip_title_text?: unknown;
   clip_subtitle_text?: unknown;
@@ -420,6 +422,7 @@ async function parseCreatorVideo(
     playbackQualityLabel: null,
     playbackDelivery: null,
     paidContentAccess: null,
+    paidAccessRequired: false,
     vipAccessRequired: (row as CreatorVideoRow & { vip_access_required?: boolean }).vip_access_required === true,
     vipAccess: null,
     visibilityAccess: null,
@@ -470,6 +473,7 @@ const parsePublicCreatorVideoCard = (row: PublicCreatorVideoCardRow): CreatorVid
   playbackQualityLabel: null,
   playbackDelivery: null,
   paidContentAccess: null,
+  paidAccessRequired: row.paidAccessRequired === true && row.vipAccessRequired !== true,
   vipAccessRequired: row.vipAccessRequired === true,
   vipAccess: null,
   visibilityAccess: null,
@@ -664,6 +668,7 @@ function createLockedCreatorVideo(
     playbackQualityLabel: null,
     playbackDelivery: null,
     paidContentAccess: null,
+    paidAccessRequired: false,
     vipAccessRequired: false,
     vipAccess: null,
     visibilityAccess: access,
@@ -709,6 +714,7 @@ function createPaidContentLockedCreatorVideo(
     playbackQualityLabel: null,
     playbackDelivery: null,
     paidContentAccess: access,
+    paidAccessRequired: true,
     vipAccessRequired: false,
     vipAccess: null,
     visibilityAccess: null,
@@ -721,7 +727,7 @@ function createPaidContentLockedCreatorVideo(
 
 function createVipLockedCreatorVideo(videoId: string, access: CreatorVipVideoAccess): CreatorVideo {
   const now = new Date().toISOString();
-  return { id: videoId, ownerId: access.creatorId ?? "", title: "VIP creator video", description: "Active VIP access for this creator is required before this video can play.", visibility: "public", moderationStatus: "clean", moderationReason: null, moderatedAt: null, moderatedBy: null, playbackUrl: "", thumbnailUrl: "", storageProvider: "supabase", storageBucket: "", storageObjectKey: "", storagePath: "", thumbStoragePath: "", mimeType: "", fileSizeBytes: null, playbackResolution: createUnavailableVodPlaybackResolution(videoId, access.reason), playbackQualityLabel: null, playbackDelivery: null, paidContentAccess: null, vipAccessRequired: true, vipAccess: access, visibilityAccess: null, renditionStatuses: [], publicClipMetadata: null, createdAt: now, updatedAt: now };
+  return { id: videoId, ownerId: access.creatorId ?? "", title: "VIP creator video", description: "Active VIP access for this creator is required before this video can play.", visibility: "public", moderationStatus: "clean", moderationReason: null, moderatedAt: null, moderatedBy: null, playbackUrl: "", thumbnailUrl: "", storageProvider: "supabase", storageBucket: "", storageObjectKey: "", storagePath: "", thumbStoragePath: "", mimeType: "", fileSizeBytes: null, playbackResolution: createUnavailableVodPlaybackResolution(videoId, access.reason), playbackQualityLabel: null, playbackDelivery: null, paidContentAccess: null, paidAccessRequired: false, vipAccessRequired: true, vipAccess: access, visibilityAccess: null, renditionStatuses: [], publicClipMetadata: null, createdAt: now, updatedAt: now };
 }
 
 export async function readCreatorVideoForPlayer(videoId: string): Promise<CreatorVideo | null> {

@@ -265,7 +265,6 @@ const normalizeAccess = (value: unknown, expectedCreatorId: string): ChannelSubs
       && ACCESS_UUID_PATTERN.test(accessText(row.subscriptionId))
       && currentPeriodEnd
       && Number.isFinite(Date.parse(currentPeriodEnd))
-      && Date.parse(currentPeriodEnd) > Date.now()
     ) {
       return {
         allowed: true,
