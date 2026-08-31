@@ -117,9 +117,14 @@ assertIncludes(title, 'pathname: "/watch-party"', "Title to Watch-Party Waiting 
 assertIncludes(title, "requireWatchPartyLivePremium", "Title Watch-Party Premium preflight");
 
 assertIncludes(channelStudio, 'import { ChannelStudioScreen } from "../channel-settings";', "Platform Studio wrapper import");
-assertIncludes(channelStudio, "export default function PlatformStudioRoute()", "Platform Studio terminology-safe wrapper export");
-assertIncludes(channelStudio, "replacePlatformStudioTerminology", "Platform Studio terminology normalization");
+assertIncludes(channelStudio, "export default function PlatformStudioRoute()", "Platform Studio component wrapper export");
+assertIncludes(channelStudio, "return <ChannelStudioScreen />;", "Platform Studio preserves the child component hook boundary");
+assertNotIncludes(channelStudio, "ChannelStudioScreen()", "Platform Studio must not execute its hook-heavy child as a plain function");
+assertNotIncludes(channelStudio, "Alert.alert =", "Platform Studio must not mutate the process-wide Alert implementation");
+assertNotIncludes(channelStudio, "rewritePlatformStudioNode", "Platform Studio must not rewrite canonical product labels in the rendered tree");
 assertIncludes(channelSettings, "export function ChannelStudioScreen()", "Platform Studio implementation owner");
+assertIncludes(channelSettings, 'title: "Channel subscription"', "Platform Studio preserves the canonical Channel Subscription product label");
+assertIncludes(channelSettings, "other creators' Platforms", "Platform Studio source owns generic Platform terminology");
 assertIncludes(routeDoc, "/channel-studio` | Platform Studio", "Platform Studio preferred route doc");
 assertIncludes(routeDoc, "/channel-settings` | Platform Studio compatibility", "Platform Studio compatibility route doc");
 
