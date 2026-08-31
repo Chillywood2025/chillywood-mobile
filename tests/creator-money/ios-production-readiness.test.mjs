@@ -17,6 +17,7 @@ const settlement = read("supabase/migrations/202608210004_creator_money_settleme
 const convergence = read("supabase/migrations/202608210005_creator_money_terminal_reconciliation_and_payout_allocations.sql");
 const payoutCompletion = read("supabase/migrations/202608210006_creator_money_payout_processing_recovery_completion.sql");
 const payoutLocking = read("supabase/migrations/202608210007_creator_money_payout_result_locking_fix.sql");
+const settlementDoctrine = read("supabase/migrations/20260831130000_creator_money_refund_settlement_doctrine_closure.sql");
 const paidVideo = read("_lib/creatorPaidVideos.ts");
 const paidEvents = read("_lib/paidCreatorEvents.ts");
 const vipPasses = read("_lib/creatorVipPasses.ts");
@@ -144,13 +145,19 @@ test("purchase authority requires exact source, eligibility, provider proof, and
   assert.match(atomic, /grants_payout_access/);
 });
 
-test("provider processing cannot skip settlement and hold before payout availability", () => {
+test("provider processing cannot skip canonical settlement, obligation, reserve, or payout authority", () => {
   assert.match(settlement, /finalize_creator_money_settlement/);
   assert.match(settlement, /release_mature_creator_money_settlements/);
-  assert.match(settlement, /payout_hold_days_min/);
   assert.match(settlement, /pending_verification/);
   assert.match(settlement, /payout_switches_not_enabled/);
   assert.match(settlement, /settlement_reference_hash/);
+  assert.match(settlementDoctrine, /provider_event\.occurred_at/);
+  assert.match(settlementDoctrine, /interval '7 days'/);
+  assert.match(settlementDoctrine, /interval '48 hours'/);
+  assert.match(settlementDoctrine, /reserve_basis_points/);
+  assert.match(settlementDoctrine, /interval '30 days'/);
+  assert.match(settlementDoctrine, /caller_hold_days_not_allowed/);
+  assert.match(settlementDoctrine, /payout_allocation_exceeds_available_after_reserve/);
 });
 
 test("refund, reversal, partial payout, in-flight payout, and post-payout recovery are represented", () => {
@@ -169,7 +176,7 @@ test("refund, reversal, partial payout, in-flight payout, and post-payout recove
 });
 
 test("source-only readiness migrations contain no outbound provider money movement", () => {
-  const source = [readiness, routing, atomic, settlement, convergence, payoutCompletion, payoutLocking].join("\n");
+  const source = [readiness, routing, atomic, settlement, convergence, payoutCompletion, payoutLocking, settlementDoctrine].join("\n");
   for (const forbidden of ["stripe.transfers.create", "stripe.payouts.create", "api.stripe.com", "api.revenuecat.com"]) {
     assert.equal(source.includes(forbidden), false, forbidden);
   }

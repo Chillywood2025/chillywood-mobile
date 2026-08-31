@@ -1345,7 +1345,7 @@ export default function PublicChannelScreen() {
             <Text style={styles.cardKicker}>Owner tools</Text>
             <Text style={styles.cardTitle}>{offer?.title ?? "VIP offer"}</Text>
             <Text style={styles.cardBody}>
-              Manage the one-time 30-day creator-specific VIP Pass and VIP-only shelf for this Platform. VIP does not unlock Premium, Channel Subscription, ordinary Paid Video ownership, Watch-Party Seat Passes, Event Passes, room authority, or payouts.
+              Manage the one-time 30-day creator-specific VIP Pass and VIP-only shelf for this Platform. VIP does not unlock Premium, Platform Subscription, ordinary Paid Video ownership, Watch-Party Seat Passes, Event Passes, room authority, or payouts.
             </Text>
             <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
             <View style={styles.ownerCommerceActions}>
@@ -1374,7 +1374,7 @@ export default function PublicChannelScreen() {
           <Text style={styles.cardKicker}>Creator-specific VIP</Text>
           <Text style={styles.cardTitle}>{offer.title}</Text>
           <Text style={styles.cardBody}>
-            {`Sandbox Test: get a one-time 30-day VIP Pass for this creator Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. It includes this creator's VIP-only shelf, but not Premium, Channel Subscription, ordinary Paid Video ownership, Watch-Party Seat Passes, Event Passes, LiveKit authority, room permissions, or other creators.`}
+            {`Sandbox Test: get a one-time 30-day VIP Pass for this creator Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. It includes this creator's VIP-only shelf, but not Premium, Platform Subscription, ordinary Paid Video ownership, Watch-Party Seat Passes, Event Passes, LiveKit authority, room permissions, or other creators.`}
           </Text>
           {vipNotice ? <Text style={styles.metaText}>{vipNotice}</Text> : null}
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}

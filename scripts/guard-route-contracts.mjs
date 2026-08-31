@@ -123,7 +123,7 @@ assertNotIncludes(channelStudio, "ChannelStudioScreen()", "Platform Studio must 
 assertNotIncludes(channelStudio, "Alert.alert =", "Platform Studio must not mutate the process-wide Alert implementation");
 assertNotIncludes(channelStudio, "rewritePlatformStudioNode", "Platform Studio must not rewrite canonical product labels in the rendered tree");
 assertIncludes(channelSettings, "export function ChannelStudioScreen()", "Platform Studio implementation owner");
-assertIncludes(channelSettings, 'title: "Channel subscription"', "Platform Studio preserves the canonical Channel Subscription product label");
+assertIncludes(channelSettings, 'title: "Platform subscription"', "Platform Studio uses the user-facing Platform Subscription label");
 assertIncludes(channelSettings, "other creators' Platforms", "Platform Studio source owns generic Platform terminology");
 assertIncludes(routeDoc, "/channel-studio` | Platform Studio", "Platform Studio preferred route doc");
 assertIncludes(routeDoc, "/channel-settings` | Platform Studio compatibility", "Platform Studio compatibility route doc");
@@ -134,7 +134,7 @@ assertIncludes(communicationRoom, 'router.replace("/chat")', "Communication room
 
 assertIncludes(monetization, 'premium_subscription: {', "Premium target remains separate");
 assertIncludes(monetization, 'id: "premium_subscription"', "Premium product id remains separate");
-assertIncludes(channelSubscriptionRoute, "does not include Chi'llywood Premium", "Channel Subscription separation copy");
+assertIncludes(channelSubscriptionRoute, "does not include Chi'llywood Premium", "Platform Subscription separation copy");
 assertIncludes(vipRoute, "does not unlock Chi'llywood Premium", "VIP separation copy");
 assertIncludes(platformIdentity, "GENERATED_USERNAME_PATTERN", "Platform identity generated fallback guard");
 assertIncludes(platformIdentity, '"Untitled Platform"', "Platform identity clean fallback");

@@ -47,14 +47,19 @@ export type CreatorEarningsLedgerStatus = "pending" | "held" | "available" | "pa
 export type CreatorEarningsLedgerEntry = {
   ledgerStatus: CreatorEarningsLedgerStatus;
   netCreatorAmountCents: number;
+  reserveAmountCents?: number;
 };
 
 export type CreatorEarningsBalances = {
   pendingCents: number;
   heldCents: number;
+  reservedCents: number;
   availableCents: number;
   paidCents: number;
   reversedCents: number;
+  negativeAdjustmentCents: number;
+  payoutBlockedByNegativeAdjustment: boolean;
+  authorityQuarantined: boolean;
 };
 
 export type CreatorMonetizationFoundationSummary = {
@@ -340,16 +345,24 @@ export const deriveCreatorEarningsBalances = (
   const balances: CreatorEarningsBalances = {
     pendingCents: 0,
     heldCents: 0,
+    reservedCents: 0,
     availableCents: 0,
     paidCents: 0,
     reversedCents: 0,
+    negativeAdjustmentCents: 0,
+    payoutBlockedByNegativeAdjustment: false,
+    authorityQuarantined: false,
   };
 
   entries.forEach((entry) => {
     const amount = Math.trunc(entry.netCreatorAmountCents || 0);
     if (entry.ledgerStatus === "pending") balances.pendingCents += amount;
     if (entry.ledgerStatus === "held") balances.heldCents += amount;
-    if (entry.ledgerStatus === "available") balances.availableCents += amount;
+    if (entry.ledgerStatus === "available") {
+      const reserved = Math.max(0, Math.min(amount, Math.trunc(entry.reserveAmountCents || 0)));
+      balances.reservedCents += reserved;
+      balances.availableCents += amount - reserved;
+    }
     if (entry.ledgerStatus === "paid") balances.paidCents += amount;
     if (entry.ledgerStatus === "reversed") balances.reversedCents += amount;
   });
@@ -540,9 +553,13 @@ export async function readCreatorPayoutBalances(creatorId?: string | null): Prom
   return {
     pendingCents: toCents(data.pendingCents),
     heldCents: toCents(data.heldCents),
+    reservedCents: toCents(data.reservedCents),
     availableCents: toCents(data.availableCents),
     paidCents: toCents(data.paidCents),
     reversedCents: toCents(data.reversedCents),
+    negativeAdjustmentCents: toCents(data.negativeAdjustmentCents),
+    payoutBlockedByNegativeAdjustment: data.payoutBlockedByNegativeAdjustment === true,
+    authorityQuarantined: data.authorityQuarantined === true,
   };
 }
 

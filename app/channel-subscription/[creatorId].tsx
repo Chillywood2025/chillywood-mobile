@@ -93,7 +93,7 @@ export default function ChannelSubscriptionScreen() {
         "Subscribe",
         error instanceof Error && error.message
           ? error.message
-          : "Channel Subscription checkout is not available right now.",
+          : "Platform Subscription checkout is not available right now.",
       );
       await loadAccess();
     } finally {
@@ -123,7 +123,7 @@ export default function ChannelSubscriptionScreen() {
           <TouchableOpacity style={styles.backButton} activeOpacity={0.82} onPress={() => router.back()}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Channel Subscription</Text>
+          <Text style={styles.headerTitle}>Platform Subscription</Text>
         </View>
 
         {loading || sessionLoading ? (
@@ -141,7 +141,7 @@ export default function ChannelSubscriptionScreen() {
                 testID={isOwner ? "subscriber-area-owner-preview-badge" : "subscriber-area-subscribed-badge"}
               />
             </View>
-            <Text style={styles.title}>Channel Subscription active</Text>
+            <Text style={styles.title}>Platform Subscription active</Text>
             <Text style={styles.platformName}>{creatorName}</Text>
 	            <Text style={styles.body}>
 	              {"Your recurring creator subscription is active for this Platform and includes this creator's ordinary Paid Videos while access remains active."}
@@ -189,12 +189,12 @@ export default function ChannelSubscriptionScreen() {
           </View>
         ) : (
           <View style={styles.card} testID="subscriber-area-access-denied-state">
-            <Text style={styles.kicker}>Channel Subscription required</Text>
-            <Text style={styles.title}>{offer?.title ?? "Channel Subscription"}</Text>
+            <Text style={styles.kicker}>Platform Subscription required</Text>
+            <Text style={styles.title}>{offer?.title ?? "Platform Subscription"}</Text>
             <Text style={styles.body}>
               {needsPurchase
-                ? `Start a recurring Channel Subscription to ${creatorName}'s Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. While active, it includes this creator's subscriber access and ordinary Paid Videos. It does not include VIP-only content, Premium, paid Watch-Party Seat Passes, Event Passes, or other creators.`
-                : "Channel Subscription purchases are temporarily unavailable while setup is being finalized. Subscriber access stays locked until access is verified."}
+                ? `Start a recurring Platform Subscription to ${creatorName}'s Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. While active, it includes this creator's subscriber access and ordinary Paid Videos. It does not include VIP-only content, Premium, paid Watch-Party Seat Passes, Event Passes, or other creators.`
+                : "Platform Subscription purchases are temporarily unavailable while setup is being finalized. Subscriber access stays locked until access is verified."}
             </Text>
             <MoneyScopeStrip
               includes="Subscriber access and this creator's ordinary Paid Videos while active."
@@ -210,9 +210,9 @@ export default function ChannelSubscriptionScreen() {
                 onPress={needsPurchase ? handleSubscribe : loadAccess}
                 testID="subscriber-area-subscribe-button"
                 accessibilityRole="button"
-                accessibilityLabel={needsPurchase ? "Start Channel Subscription" : "Refresh Channel Subscription status"}
+                accessibilityLabel={needsPurchase ? "Start Platform Subscription" : "Refresh Platform Subscription status"}
               >
-                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{needsPurchase ? "Start Channel Subscription" : "Refresh status"}</Text>}
+                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{needsPurchase ? "Start Platform Subscription" : "Refresh status"}</Text>}
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.secondaryButton}

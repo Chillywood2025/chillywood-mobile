@@ -145,7 +145,7 @@ const parseOffer = (row: Record<string, unknown>): ChannelSubscriptionOffer | nu
   return {
     id,
     creatorId,
-    title: toText(row.title) || "Channel subscription",
+    title: toText(row.title) || "Platform subscription",
     description: toText(row.description) || null,
     priceCents: toCents(row.priceCents),
     currency: toText(row.currency) || "usd",
@@ -172,7 +172,7 @@ const parseTransaction = (row: Record<string, unknown>): ChannelSubscriptionTran
     subscriptionId: toText(row.subscriptionId) || null,
     subscriberId: toText(row.subscriberId),
     creatorId,
-    title: toText(row.title) || "Channel subscription",
+    title: toText(row.title) || "Platform subscription",
     amountCents: toCents(row.amountCents),
     currency: toText(row.currency) || "usd",
     provider: toText(row.provider) || resolveRevenueCatProvider(),
@@ -456,15 +456,15 @@ export async function saveChannelSubscriptionOffer(input: {
   status?: ChannelSubscriptionOfferStatus;
 }): Promise<ChannelSubscriptionOffer> {
   const { data, error } = await rpcClient.rpc("set_creator_channel_subscription_offer", {
-    p_title: input.title ?? "Channel subscription",
+    p_title: input.title ?? "Platform subscription",
     p_description: input.description ?? null,
     p_status: input.status ?? "sandbox",
   });
-  if (error) throw new Error("Channel Subscription settings could not be saved.");
+  if (error) throw new Error("Platform Subscription settings could not be saved.");
   const offer = data && typeof data === "object" && !Array.isArray(data)
     ? parseOffer(data as Record<string, unknown>)
     : null;
-  if (!offer) throw new Error("Channel Subscription settings could not be read.");
+  if (!offer) throw new Error("Platform Subscription settings could not be read.");
   return offer;
 }
 
@@ -499,13 +499,13 @@ export async function createChannelSubscriptionPurchaseIntent(
   const { data, error } = await rpcClient.rpc("create_creator_channel_subscription_purchase_intent", {
     p_offer_id: offerId,
   });
-  if (error) throw new Error("Channel Subscription checkout is not available right now.");
+  if (error) throw new Error("Platform Subscription checkout is not available right now.");
   if (!data || typeof data !== "object" || Array.isArray(data)) {
-    throw new Error("Channel Subscription checkout authority could not be verified.");
+    throw new Error("Platform Subscription checkout authority could not be verified.");
   }
   const row = data as Record<string, unknown>;
   if (typeof row.alreadySubscribed !== "boolean") {
-    throw new Error("Channel Subscription checkout authority could not be verified.");
+    throw new Error("Platform Subscription checkout authority could not be verified.");
   }
   const validated = row.alreadySubscribed
     ? validateHistoricalCreatorMoneyPurchaseIntent(data, expected)
@@ -523,7 +523,7 @@ export async function createChannelSubscriptionPurchaseIntent(
       : Platform.OS === "android" && expected.provider === "revenuecat_google_play"
         ? validateCreatorMoneyPurchaseIntent(data, { ...expected, status: "pending" })
         : null;
-  if (!validated) throw new Error("Channel Subscription checkout authority could not be verified.");
+  if (!validated) throw new Error("Platform Subscription checkout authority could not be verified.");
   return {
     ...validated,
     alreadySubscribed: row.alreadySubscribed,
@@ -588,7 +588,7 @@ export async function purchaseChannelSubscription(input: {
   if (!purchaseSubject) {
     return {
       ok: false,
-      message: "Sign in again before starting Channel Subscription checkout. Nothing was charged.",
+      message: "Sign in again before starting Platform Subscription checkout. Nothing was charged.",
       access,
     };
   }
@@ -619,7 +619,7 @@ export async function purchaseChannelSubscription(input: {
   if (!pkg && !storeProduct) {
     return {
       ok: false,
-      message: "Channel Subscription sandbox product is not available on this device yet.",
+      message: "Platform Subscription sandbox product is not available on this device yet.",
       access,
       intentId: intent.id,
       productId,
@@ -638,7 +638,7 @@ export async function purchaseChannelSubscription(input: {
   if (!await revalidateCreatorMoneyPurchaseSubject(purchaseSubject)) {
     return {
       ok: false,
-      message: "Your session changed before Channel Subscription checkout. Nothing was charged.",
+      message: "Your session changed before Platform Subscription checkout. Nothing was charged.",
       access,
       intentId: intent.id,
       productId,
@@ -666,8 +666,8 @@ export async function purchaseChannelSubscription(input: {
     return {
       ok: false,
       message: isRevenueCatUserCancellation(error)
-        ? "Channel Subscription was canceled. Nothing changed."
-        : "Channel Subscription checkout could not be completed. Try again later.",
+        ? "Platform Subscription was canceled. Nothing changed."
+        : "Platform Subscription checkout could not be completed. Try again later.",
       access: verifiedAccess,
       intentId: intent.id,
       productId,

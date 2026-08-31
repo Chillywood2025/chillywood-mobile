@@ -133,7 +133,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
   },
   {
     key: "channel_subscription_sandbox_monthly_499",
-    label: "Channel subscription",
+    label: "Platform subscription",
     sourceType: "channel_subscription",
     productType: "channel_subscription",
     providerProductId: "channel_subscription_sandbox_monthly_499",
@@ -151,7 +151,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     priceLabel: "$4.99 sandbox/test",
     providerRail: resolveProviderRail(),
     unlocks: "Creates exactly 30 days of VIP status and VIP-only shelf access for this creator.",
-    safety: "Does not auto-renew or unlock Premium, ordinary Paid Video ownership, event passes, channel subscriptions, Watch-Party Seat Passes, LiveKit authority, or other creators.",
+    safety: "Does not auto-renew or unlock Premium, ordinary Paid Video ownership, event passes, platform subscriptions, Watch-Party Seat Passes, LiveKit authority, or other creators.",
   },
   {
     key: "event_pass_sandbox_099",

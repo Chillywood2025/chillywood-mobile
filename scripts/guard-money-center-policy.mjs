@@ -170,7 +170,11 @@ assertNotIncludes(channelSettings, "money-center-creator-setup-button", "Money C
 assertNotIncludes(channelSettings, "money-center-cashout-readiness-button", "Money Center duplicate cashout action removed");
 assertIncludes(channelSettings, "money-sandbox-setup-button", "Sandbox QA owns creator setup action");
 assertIncludes(channelSettings, "money-payout-review-readiness-button", "Payout readiness owns cashout review action");
-assertIncludes(channelSettings, "Available balance", "overview available balance");
+assertIncludes(channelSettings, 'label: "Pending"', "overview pending balance");
+assertIncludes(channelSettings, 'label: "Reserved"', "overview reserved balance");
+assertIncludes(channelSettings, 'label: "Available"', "overview available balance");
+assertIncludes(channelSettings, 'label: "Reversed / adjusted"', "overview reversal/adjustment balance");
+assertIncludes(channelSettings, "readCreatorPayoutBalances", "server-authoritative creator balance readback");
 assertIncludes(channelSettings, "Transactions", "canonical overview transactions summary");
 assertIncludes(channelSettings, "Payout readiness", "canonical overview payout-readiness summary");
 assertIncludes(channelSettings, "Sandbox/test mode. No real charges, payouts, cashout, or withdrawals.", "single Money Center sandbox safety summary");

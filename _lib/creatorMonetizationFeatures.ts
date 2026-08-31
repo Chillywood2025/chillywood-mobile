@@ -73,7 +73,7 @@ export const CREATOR_MONETIZATION_FEATURE_CATALOG: readonly MonetizationFeatureC
   },
   {
     key: "channel_subscriptions",
-    title: "Channel Subscriptions",
+    title: "Platform Subscriptions",
     creatorDescription: "Offer monthly creator membership.",
     fanActionLabel: "Subscribe",
     creatorActionLabel: "Set up",

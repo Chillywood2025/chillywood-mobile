@@ -156,7 +156,7 @@ export default function CreatorVipPassScreen() {
             ) : null}
             <MoneyScopeStrip
               includes="30-day creator-specific VIP status, VIP Area, and this creator's VIP-only video shelf/content."
-              excludes="Channel Subscription, ordinary Paid Video ownership, Chi'llywood Premium, Watch-Party Seat Passes, Event Passes, LiveKit authority, room permissions, payouts, or other creators."
+              excludes="Platform Subscription, ordinary Paid Video ownership, Chi'llywood Premium, Watch-Party Seat Passes, Event Passes, LiveKit authority, room permissions, payouts, or other creators."
               includesTestID="vip-area-includes-list"
               excludesTestID="vip-area-does-not-include-list"
             />
@@ -213,12 +213,12 @@ export default function CreatorVipPassScreen() {
             <Text style={styles.title}>{offer?.title ?? "VIP Pass"}</Text>
             <Text style={styles.body}>
               {needsPurchase
-                ? `Get a one-time 30-day VIP Pass for ${creatorName}'s Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. It includes this creator's VIP Area and VIP-only video shelf. It does not auto-renew or include Channel Subscription, ordinary Paid Videos, Premium, Watch-Party Seat Passes, Event Passes, or other creators.`
+                ? `Get a one-time 30-day VIP Pass for ${creatorName}'s Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. It includes this creator's VIP Area and VIP-only video shelf. It does not auto-renew or include Platform Subscription, ordinary Paid Videos, Premium, Watch-Party Seat Passes, Event Passes, or other creators.`
                 : "VIP Pass purchases are temporarily unavailable while setup is being finalized. VIP access stays locked until access is verified."}
             </Text>
             <MoneyScopeStrip
               includes="Exactly 30 days of creator-specific VIP Area and VIP-only content access after verified activation."
-              excludes="Channel Subscription, ordinary Paid Video ownership, Premium, Watch-Party Seat Passes, Event Passes, room authority, payouts, and other creators stay separate."
+              excludes="Platform Subscription, ordinary Paid Video ownership, Premium, Watch-Party Seat Passes, Event Passes, room authority, payouts, and other creators stay separate."
             />
             <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}
