@@ -144,6 +144,7 @@
     "proof:seven-flow-provider-verification": "node ./scripts/proof-seven-flow-provider-verification.mjs",
     "proof:creator-money-production-provider-products": "node ./scripts/proof-creator-money-production-provider-products.mjs",
     "proof:creator-monetization-route-button-wiring": "node ./scripts/proof-creator-monetization-route-button-wiring.mjs",
+    "test:money-center-section-visibility": "node --test ./tests/creator-money/money-center-section-visibility.test.mjs",
     "proof:creator-money-notification-routing": "node ./scripts/proof-creator-money-notification-routing.mjs",
     "proof:creator-money-notification-records": "node ./scripts/proof-creator-money-notification-records.mjs",
     "proof:notification-center-money-activity": "node ./scripts/proof-notification-center-money-activity.mjs",

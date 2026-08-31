@@ -27,6 +27,7 @@ const packageJson = read("package.json");
 const providerReadiness = read("_lib/providerReadiness.ts");
 const paymentRailPolicy = read("_lib/paymentRailPolicy.ts");
 const moneyFeatureFlags = read("_lib/moneyFeatureFlags.ts");
+const moneyCenterSectionVisibility = read("_lib/moneyCenterSectionVisibility.ts");
 const moneyAuditEvents = read("_lib/moneyAuditEvents.ts");
 const monetizationFeatureCatalog = read("_lib/creatorMonetizationFeatures.ts");
 const monetizationRouteTargets = read("_lib/creatorMonetizationRouteTargets.ts");
@@ -80,8 +81,11 @@ assertIncludes(channelSettings, "moneyManageNotice", "Money Center visible manag
 ].forEach((testID) => {
   assertIncludes(channelSettings, testID, `Money Center actual tappable feature CTA ${testID}`);
 });
-assertIncludes(channelSettings, "activeMoneyCenterFocusSection", "Money Center route/deep-link focus state");
 assertIncludes(channelSettings, "focusMoneyCenterSection", "Money Center route/deep-link focus handler");
+assertIncludes(channelSettings, "isMoneyCenterSectionBodyVisible(expanded)", "Money Center expanded-section visibility contract");
+assertIncludes(moneyCenterSectionVisibility, "=> expanded", "Money Center selected sections remain visible when expanded");
+assertNotIncludes(channelSettings, "expanded && id !== activeMoneyCenterFocusSection", "Money Center focus state must not suppress the selected section body");
+assertNotIncludes(channelSettings, "activeMoneyCenterFocusSection", "Money Center must not retain the obsolete split focus/display state");
 assertIncludes(channelSettings, "{renderMoneyCenterOverviewContent()}", "Money Center renders one canonical overview surface");
 assertNotIncludes(channelSettings, "{renderMoneyCenterFocusTabs()}", "Money Center must not render duplicate focus tabs");
 assertNotIncludes(channelSettings, "{renderActiveMoneyCenterFocusContent()}", "Money Center must not render duplicate focused content above accordions");
