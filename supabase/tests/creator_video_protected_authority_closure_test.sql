@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 set search_path=public,extensions;
-select plan(31);
+select plan(36);
 
 select ok(
   pg_get_functiondef('public.resolve_creator_content_access(text,uuid)'::regprocedure)
@@ -14,13 +14,15 @@ select ok(
 );
 
 select ok(
-  pg_get_functiondef('public.resolve_creator_content_access(text,uuid)'::regprocedure)
+  pg_get_functiondef('public.resolve_creator_content_access_pre_subscription_doctrine(text,uuid)'::regprocedure)
     ilike '%resolve_creator_vip_pass_access"(v_owner_id%'
-  and pg_get_functiondef('public.resolve_creator_content_access(text,uuid)'::regprocedure)
+  and pg_get_functiondef('public.resolve_creator_content_access_pre_subscription_doctrine(text,uuid)'::regprocedure)
     ilike '%v_vip->>''reason''=''vip_active''%'
   and pg_get_functiondef('public.resolve_creator_content_access(text,uuid)'::regprocedure)
-    ilike '%v_vip->''offer''->>''creatorId''%',
-  '2. VIP authority is delegated to the canonical exact-creator provider resolver and cross-bound on return'
+    ilike '%creator_video_subscription_access_internal%'
+  and pg_get_functiondef('public.creator_video_subscription_access_internal(uuid)'::regprocedure)
+    ilike '%not coalesce(video."vip_access_required",false)%',
+  '2. VIP remains exact-creator authority while only ordinary Paid Video delegates to exact subscription authority'
 );
 
 select ok(
@@ -245,6 +247,31 @@ select public.process_revenuecat_app_store_event_atomic(
   null,99,'usd',repeat('d',64),'protected-video-vip-a-original',null
 );
 
+select ok(
+  grant_row.expires_at=grant_row.starts_at+interval '30 days'
+  and pass_row.activated_at=grant_row.starts_at
+  and pass_row.expires_at=grant_row.expires_at,
+  '32. verified VIP activation creates one canonical finite 30-day grant and pass period'
+) from public.access_grants grant_row
+join public.creator_vip_passes pass_row
+  on pass_row.access_grant_id=grant_row.id
+where grant_row.grant_type='vip_pass'
+  and grant_row.source_id='f3000000-0000-4000-8000-000000000001';
+
+update public.access_grants
+set expires_at=now()+interval '100 days'
+where grant_type='vip_pass'
+  and source_id='f3000000-0000-4000-8000-000000000001';
+select ok(
+  grant_row.expires_at=grant_row.starts_at+interval '30 days'
+  and pass_row.expires_at=pass_row.activated_at+interval '30 days',
+  '33. caller-supplied VIP extension is canonicalized and cannot extend authority'
+) from public.access_grants grant_row
+join public.creator_vip_passes pass_row
+  on pass_row.access_grant_id=grant_row.id
+where grant_row.grant_type='vip_pass'
+  and grant_row.source_id='f3000000-0000-4000-8000-000000000001';
+
 set local role authenticated;
 select set_config('request.jwt.claims','{"role":"authenticated","sub":"f1000000-0000-4000-8000-000000000002","session_id":"f1100000-0000-4000-8000-000000000002"}',true);
 select ok(
@@ -308,6 +335,103 @@ select ok(
 );
 reset role;
 select set_config('request.jwt.claims','{}',true);
+
+create temporary table creator_vip_lifecycle_snapshot as
+select
+  grant_row.id grant_id, grant_row.status grant_status,
+  grant_row.starts_at grant_starts_at, grant_row.expires_at grant_expires_at,
+  grant_row.refunded_at grant_refunded_at, grant_row.revoked_at grant_revoked_at,
+  pass_row.id pass_id, pass_row.status pass_status,
+  pass_row.activated_at pass_activated_at, pass_row.expires_at pass_expires_at,
+  pass_row.refunded_at pass_refunded_at, pass_row.revoked_at pass_revoked_at
+from public.access_grants grant_row
+join public.creator_vip_passes pass_row on pass_row.access_grant_id=grant_row.id
+where grant_row.grant_type='vip_pass'
+  and grant_row.source_id='f3000000-0000-4000-8000-000000000001';
+
+set local session_replication_role=replica;
+update public.access_grants grant_row
+set status='sandbox_only',starts_at=now()-interval '30 days',expires_at=now(),
+    refunded_at=null,revoked_at=null
+from pg_temp.creator_vip_lifecycle_snapshot snapshot
+where grant_row.id=snapshot.grant_id;
+update public.creator_vip_passes pass_row
+set status='active',activated_at=now()-interval '30 days',expires_at=now(),
+    refunded_at=null,revoked_at=null
+from pg_temp.creator_vip_lifecycle_snapshot snapshot
+where pass_row.id=snapshot.pass_id;
+set local session_replication_role=origin;
+set local role authenticated;
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"f1000000-0000-4000-8000-000000000002","session_id":"f1100000-0000-4000-8000-000000000002"}',true);
+select ok(
+  not coalesce((public.resolve_creator_vip_pass_access(
+    'f1000000-0000-4000-8000-000000000001'
+  )->>'allowed')::boolean,false),
+  '34. VIP denies at or after the canonical 30-day expiry boundary'
+);
+reset role;
+select set_config('request.jwt.claims','{}',true);
+
+set local session_replication_role=replica;
+update public.access_grants grant_row
+set status='refunded',starts_at=snapshot.grant_starts_at,
+    expires_at=snapshot.grant_expires_at,refunded_at=now(),revoked_at=null
+from pg_temp.creator_vip_lifecycle_snapshot snapshot
+where grant_row.id=snapshot.grant_id;
+update public.creator_vip_passes pass_row
+set status='refunded',activated_at=snapshot.pass_activated_at,
+    expires_at=snapshot.pass_expires_at,refunded_at=now(),revoked_at=null
+from pg_temp.creator_vip_lifecycle_snapshot snapshot
+where pass_row.id=snapshot.pass_id;
+set local session_replication_role=origin;
+set local role authenticated;
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"f1000000-0000-4000-8000-000000000002","session_id":"f1100000-0000-4000-8000-000000000002"}',true);
+select ok(
+  not coalesce((public.resolve_creator_vip_pass_access(
+    'f1000000-0000-4000-8000-000000000001'
+  )->>'allowed')::boolean,false),
+  '35. verified VIP refund removes exact-creator access'
+);
+reset role;
+select set_config('request.jwt.claims','{}',true);
+
+set local session_replication_role=replica;
+update public.access_grants grant_row
+set status='revoked',starts_at=snapshot.grant_starts_at,
+    expires_at=snapshot.grant_expires_at,refunded_at=null,revoked_at=now()
+from pg_temp.creator_vip_lifecycle_snapshot snapshot
+where grant_row.id=snapshot.grant_id;
+update public.creator_vip_passes pass_row
+set status='revoked',activated_at=snapshot.pass_activated_at,
+    expires_at=snapshot.pass_expires_at,refunded_at=null,revoked_at=now()
+from pg_temp.creator_vip_lifecycle_snapshot snapshot
+where pass_row.id=snapshot.pass_id;
+set local session_replication_role=origin;
+set local role authenticated;
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"f1000000-0000-4000-8000-000000000002","session_id":"f1100000-0000-4000-8000-000000000002"}',true);
+select ok(
+  not coalesce((public.resolve_creator_vip_pass_access(
+    'f1000000-0000-4000-8000-000000000001'
+  )->>'allowed')::boolean,false),
+  '36. verified VIP revocation removes exact-creator access'
+);
+reset role;
+select set_config('request.jwt.claims','{}',true);
+
+set local session_replication_role=replica;
+update public.access_grants grant_row
+set status=snapshot.grant_status,starts_at=snapshot.grant_starts_at,
+    expires_at=snapshot.grant_expires_at,refunded_at=snapshot.grant_refunded_at,
+    revoked_at=snapshot.grant_revoked_at
+from pg_temp.creator_vip_lifecycle_snapshot snapshot
+where grant_row.id=snapshot.grant_id;
+update public.creator_vip_passes pass_row
+set status=snapshot.pass_status,activated_at=snapshot.pass_activated_at,
+    expires_at=snapshot.pass_expires_at,refunded_at=snapshot.pass_refunded_at,
+    revoked_at=snapshot.pass_revoked_at
+from pg_temp.creator_vip_lifecycle_snapshot snapshot
+where pass_row.id=snapshot.pass_id;
+set local session_replication_role=origin;
 
 select throws_ok(
   $$update public.videos set vip_access_required=true where id='f2000000-0000-4000-8000-000000000002'$$,

@@ -144,11 +144,11 @@ export default function ChannelSubscriptionScreen() {
             <Text style={styles.title}>Channel Subscription active</Text>
             <Text style={styles.platformName}>{creatorName}</Text>
 	            <Text style={styles.body}>
-	              {"Your creator subscription is active for this Platform only."}
+	              {"Your recurring creator subscription is active for this Platform and includes this creator's ordinary Paid Videos while access remains active."}
 	            </Text>
             <MoneyScopeStrip
-              includes="Subscriber access for this creator Platform."
-              excludes="This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party Seat Passes, paid events, LiveKit authority, or other creators."
+              includes="Creator subscriber access and this creator's ordinary Paid Videos while the subscription is active."
+              excludes="VIP-only content, Chi'llywood Premium, paid Watch-Party Seat Passes, Event Passes, LiveKit authority, payouts, or other creators."
               includesTestID="subscriber-area-includes-list"
               excludesTestID="subscriber-area-does-not-include-list"
             />
@@ -156,6 +156,8 @@ export default function ChannelSubscriptionScreen() {
             {access?.currentPeriodEnd ? (
               <Text style={styles.meta}>Current period ends {new Date(access.currentPeriodEnd).toLocaleString()}.</Text>
             ) : null}
+            <Text style={styles.meta}>Included video access ends when the subscription becomes inactive. Paid Videos purchased separately keep their own grant lifecycle.</Text>
+            <Text style={styles.meta}>{"This does not include Chi'llywood Premium or VIP-only content."}</Text>
             <View style={styles.emptyStateCard}>
               <Text style={styles.emptyStateTitle}>No subscriber-only posts yet</Text>
               <Text style={styles.emptyStateBody}>{isOwner ? "Subscriber-only posts can be managed from Platform Studio when the post system is backed." : "Subscriber-only posts coming later."}</Text>
@@ -191,12 +193,12 @@ export default function ChannelSubscriptionScreen() {
             <Text style={styles.title}>{offer?.title ?? "Channel Subscription"}</Text>
             <Text style={styles.body}>
               {needsPurchase
-                ? `Start Channel Subscription to ${creatorName}'s Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. This unlocks subscriber access for this creator only and does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party Seat Passes, paid events, or other creators.`
+                ? `Start a recurring Channel Subscription to ${creatorName}'s Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. While active, it includes this creator's subscriber access and ordinary Paid Videos. It does not include VIP-only content, Premium, paid Watch-Party Seat Passes, Event Passes, or other creators.`
                 : "Channel Subscription purchases are temporarily unavailable while setup is being finalized. Subscriber access stays locked until access is verified."}
             </Text>
             <MoneyScopeStrip
-              includes="Subscriber access for this creator Platform when active."
-              excludes="Chi'llywood Premium, VIP, paid videos, Watch-Party Seat Passes, paid events, and other creators stay separate."
+              includes="Subscriber access and this creator's ordinary Paid Videos while active."
+              excludes="VIP-only content, Premium, Watch-Party Seat Passes, Event Passes, payouts, and other creators stay separate."
             />
             <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}

@@ -84,6 +84,9 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - net receipts means after store/payment fees, taxes, refunds, chargebacks, provider fees, and adjustments
 - do not promise exact dollars per view or guaranteed earnings
 - do not create fake paid content purchases, fake access records, fake creator sales, fake earnings, or fake balances
+- A VIP Pass is one verified, non-renewing purchase bound to one exact creator. It grants exactly 30 days of that creator's VIP status, VIP Area, and VIP-only video shelf/content from canonical verified activation time. Expiry, refund, or revocation fails closed. VIP does not grant Channel Subscription, ordinary Paid Video ownership, Premium, Watch-Party Seat Passes, Event Passes, room/LiveKit authority, payout authority, or another creator's access.
+- A Channel Subscription is a recurring subscription bound to one exact creator. While canonical provider-backed access is active, it grants that creator's subscriber access and ordinary Paid Videos as a read-time alternate authority. It does not create per-video ownership, access rows, provider transactions, ledger entries, or earnings. When inactive, this derived access ends; exact Paid Videos bought separately keep their independent grant lifecycle.
+- VIP-only creator videos require valid VIP for that exact creator and never unlock from Channel Subscription or an ordinary Paid Video purchase. An ordinary Paid Video allows either its exact direct valid grant or an active Channel Subscription to its exact creator. Cross-creator access and Premium/Seat Pass/Event Pass substitutions are forbidden.
 - creators keep 100% of the tip amount/net tip
 - tips are anonymous to other users but fully traceable in backend and admin records
 - Chi'llywood should not take a direct percentage cut from the tip amount

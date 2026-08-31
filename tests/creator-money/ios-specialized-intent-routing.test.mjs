@@ -41,6 +41,7 @@ const instantiate = (path, mocks = {}) => {
 
 const iosCatalog = instantiate("_lib/iosAppStoreCommerce.ts");
 const authority = instantiate("_lib/creatorMoneyPurchaseAuthority.ts");
+const revenueCatPurchaseClosure = instantiate("_lib/revenuecatPurchaseClosure.ts");
 
 const expected = ({ sourceType, sourceId, amountMinor, providerProductId }) => ({
   userId: VIEWER_ID,
@@ -517,6 +518,7 @@ test("RevenueCat purchase mutations require the selected exact product and a com
       withAuthorityReadDeadline: async (promise) => await promise,
     },
     "./logger": { debugLog: inert, reportRuntimeError: inert },
+    "./revenuecatPurchaseClosure": revenueCatPurchaseClosure,
     "./runtimeConfig": {
       getRuntimeConfig: () => ({
         revenueCat: {
