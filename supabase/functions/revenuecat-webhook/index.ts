@@ -772,12 +772,12 @@ const buyerNotificationPlanForProduct = (
   }
   if (productType === "channel_subscription") {
     return {
-      body: "Channel Subscription active. This creator's ordinary Paid Videos are included while it remains active; VIP-only content is separate.",
+      body: "Platform Subscription active. This creator's ordinary Paid Videos are included while it remains active; VIP-only content is separate.",
       category: "creator_money_purchase",
       notificationType: "channel_subscription_active",
       priority: 4,
       recipientUserId: buyerUserId,
-      title: "Channel Subscription active",
+      title: "Platform Subscription active",
     };
   }
   if (productType === "vip_pass") {
@@ -846,7 +846,7 @@ const creatorNotificationPlanForProduct = (
       notificationType: "channel_subscription_started",
       priority: 4,
       recipientUserId: creatorUserId,
-      title: "Channel Subscription started",
+      title: "Platform Subscription started",
     };
   }
   if (productType === "vip_pass") {

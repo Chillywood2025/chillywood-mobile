@@ -72,6 +72,8 @@ export type MoneyRefundPolicyDecisionInput = {
 
 export type MoneyRefundPolicyDecision = {
   key: MoneyRefundPolicyKey;
+  standardRefundReviewEligible: boolean;
+  authoritativeReversalRequired: boolean;
   refundEligibility: boolean;
   creditEligibility: boolean;
   cashRefundEligibility: boolean;
@@ -86,11 +88,11 @@ export type MoneyRefundPolicyDecision = {
 };
 
 export const REFUND_CREDIT_PAYOUT_HOLD_COPY = {
-  refundReviewRequired: "Refund review required",
+  refundReviewRequired: "Standard remedy review required",
   creatorCreditMaybe: "Credit may be issued if creator obligations are not met.",
   noStandardRefundAfterUse: "No standard refunds after access is used.",
-  tipsUnlockNothing: "Tips unlock nothing and are generally non-refundable.",
-  payoutHeld: "Payout held until obligation and refund window clear.",
+  tipsUnlockNothing: "Tips unlock nothing and are final and non-refundable through Chi'llywood.",
+  payoutHeld: "Pending earnings are not payout-ready until server-owned settlement and risk holds clear.",
   creditsInactive: "Credits are not cash, not withdrawable, and not active until approved.",
 } as const;
 
@@ -112,32 +114,32 @@ export const MONEY_REFUND_POLICIES: Record<MoneyRefundPolicyKey, MoneyRefundPoli
   premium_subscription: {
     key: "premium_subscription",
     title: "Chi'llywood Premium",
-    policySummary: "Generally non-refundable after purchase/renewal except law, store/provider/admin decision, fraud, duplicate charge, unauthorized purchase, or platform technical failure.",
-    defaultRemedy: "admin_review_required",
-    eligibleBeforeUse: ["not_started"],
+    policySummary: "Chi'llywood provides no standard refunds for Premium purchases or renewals. Canceling stops future renewal; authoritative store, provider, legal, fraud, duplicate-charge, or unauthorized-purchase reversals still reconcile.",
+    defaultRemedy: "none",
+    eligibleBeforeUse: [],
     noStandardRefundAfter: ["consumed"],
     creatorObligationRequired: false,
     payoutHoldRequired: false,
     providerActionRequired: true,
     creditFirst: false,
-    userCopy: "Premium is app-wide platform access and is not creator income.",
+    userCopy: "Premium is app-wide access, not creator income. Canceling stops future renewal and is not a refund; paid-through access follows authoritative provider status.",
     creatorCopy: "Premium does not create a creator payout hold.",
-    adminCopy: "Provider/store/legal/admin exceptions require review; no creator payout hold is needed.",
+    adminCopy: "There is no ordinary Chi'llywood Premium refund path. Reconcile authoritative provider/store/legal reversals without creating creator earnings or payout holds.",
   },
   creator_tip: {
     key: "creator_tip",
     title: "Creator Tip",
     policySummary: "No standard refunds. Exceptions include fraud, duplicate charge, unauthorized purchase, provider/legal/admin decision, or platform/creator abuse.",
-    defaultRemedy: "admin_review_required",
-    eligibleBeforeUse: ["not_started"],
+    defaultRemedy: "none",
+    eligibleBeforeUse: [],
     noStandardRefundAfter: ["consumed"],
-    creatorObligationRequired: true,
+    creatorObligationRequired: false,
     payoutHoldRequired: true,
     providerActionRequired: true,
     creditFirst: false,
     userCopy: REFUND_CREDIT_PAYOUT_HOLD_COPY.tipsUnlockNothing,
-    creatorCopy: "Creator payout stays held until fraud, chargeback, and reversal windows clear.",
-    adminCopy: "Tips remain support only. Any exception needs provider/admin/legal review.",
+    creatorCopy: "Tip earnings begin Pending, clear a server-owned 7-day settlement hold, and remain subject to reserve and later provider reversal adjustments.",
+    adminCopy: "Tips have no standard Chi'llywood refund. Reconcile authoritative fraud, duplicate, unauthorized, chargeback, provider, and legal reversals exactly once.",
   },
   paid_creator_video: {
     key: "paid_creator_video",
@@ -151,7 +153,7 @@ export const MONEY_REFUND_POLICIES: Record<MoneyRefundPolicyKey, MoneyRefundPoli
     providerActionRequired: true,
     creditFirst: false,
     userCopy: "Access is scoped to this one paid creator video.",
-    creatorCopy: "Creator payout is held until access delivery and the refund-risk window clear.",
+    creatorCopy: "Direct-purchase earnings begin Pending and use the server-owned 7-day settlement hold; subscription-included views create no Paid Video earnings.",
     adminCopy: "Do not treat playback-started/consumed access as standard refundable unless platform/provider/admin review requires it.",
   },
   watch_party_ticket: {
@@ -166,7 +168,7 @@ export const MONEY_REFUND_POLICIES: Record<MoneyRefundPolicyKey, MoneyRefundPoli
     providerActionRequired: true,
     creditFirst: false,
     userCopy: "Seat Pass access is for one room target only.",
-    creatorCopy: "Creator payout is held until the room obligation and refund window clear.",
+    creatorCopy: "Earnings remain Pending until successful canonical room completion plus 48 hours; advance purchases are not withdrawable.",
     adminCopy: "Seat Pass grants entry only; it does not grant host, speaker, moderator, admin, or LiveKit publish authority.",
   },
   live_watch_party_access_pass: {
@@ -201,32 +203,32 @@ export const MONEY_REFUND_POLICIES: Record<MoneyRefundPolicyKey, MoneyRefundPoli
   },
   channel_subscription: {
     key: "channel_subscription",
-    title: "Channel Subscription",
-    policySummary: "Credit-first remedy when creator obligations are not met during the paid period.",
-    defaultRemedy: "in_app_credit_review",
+    title: "Platform Subscription",
+    policySummary: "Cancel anytime to stop future renewal. Paid-through access continues unless authoritative provider state ends it; there is no standard prorated refund for an already-started period.",
+    defaultRemedy: "cash_refund_review",
     eligibleBeforeUse: ["not_started", "access_granted"],
     noStandardRefundAfter: ["consumed"],
     creatorObligationRequired: true,
     payoutHoldRequired: true,
     providerActionRequired: true,
-    creditFirst: true,
-    userCopy: "Subscription is creator-specific and is not Chi'llywood Premium.",
-    creatorCopy: "Creator payout is held until the creator obligation window clears.",
-    adminCopy: "Cash refund only if law, store/provider, or admin decision requires it.",
+    creditFirst: false,
+    userCopy: "This recurring subscription is creator-specific. Canceling stops future renewal, not the current paid period, and VIP-only content is excluded.",
+    creatorCopy: "Each verified billing period has its own server-owned 7-day settlement hold; included Paid Video views create no extra earnings.",
+    adminCopy: "No standard prorated refund for a started period. Backed-access failure may enter remedy review; authoritative provider/store/legal reversals always reconcile.",
   },
   vip_pass: {
     key: "vip_pass",
     title: "VIP Pass",
-    policySummary: "Credit/refund review eligible if creator deactivates/removes VIP access early, misrepresents VIP, or admin finds obligation failure.",
-    defaultRemedy: "in_app_credit_review",
+    policySummary: "VIP provides 30 days of exact-creator access. There is no standard refund after valid access is delivered; failed delivery, early removal, or material misrepresentation may be reviewed.",
+    defaultRemedy: "cash_refund_review",
     eligibleBeforeUse: ["not_started", "access_granted"],
     noStandardRefundAfter: ["consumed"],
     creatorObligationRequired: true,
     payoutHoldRequired: true,
     providerActionRequired: true,
-    creditFirst: true,
+    creditFirst: false,
     userCopy: "VIP is a creator-specific 30-day pass; verified refund or revocation ends access independently of Premium and subscriptions.",
-    creatorCopy: "Creator payout is held until VIP obligation period/risk window clears.",
+    creatorCopy: "VIP access lasts 30 days, while creator earnings use a separate server-owned 7-day settlement hold and reserve rules.",
     adminCopy: "No standard refund after valid access period/use unless platform/admin/legal/provider decision requires it.",
   },
   event_pass: {
@@ -241,7 +243,7 @@ export const MONEY_REFUND_POLICIES: Record<MoneyRefundPolicyKey, MoneyRefundPoli
     providerActionRequired: true,
     creditFirst: false,
     userCopy: "Event pass unlocks this one event only.",
-    creatorCopy: "Creator payout is held until event completion plus review/refund window.",
+    creatorCopy: "Earnings remain Pending until successful canonical event completion plus 48 hours; advance purchases are not withdrawable.",
     adminCopy: "Canceled, ended, expired, refunded, or revoked events should deny access clearly.",
   },
   merch_physical_good: {
@@ -304,6 +306,8 @@ export function resolveMoneyRefundPolicyDecision(input: MoneyRefundPolicyDecisio
     reasonCodes.push("setup_status_only", "cashout_withdrawal_payout_inactive");
     return {
       key: input.key,
+      standardRefundReviewEligible: false,
+      authoritativeReversalRequired: false,
       refundEligibility: false,
       creditEligibility: false,
       cashRefundEligibility: false,
@@ -318,12 +322,16 @@ export function resolveMoneyRefundPolicyDecision(input: MoneyRefundPolicyDecisio
     };
   }
 
-  if (platformFault || providerOrLegalRequired || obligationState === "failed" || obligationState === "review_required") {
+  if (providerOrLegalRequired) {
+    providerActionRequired = policy.providerActionRequired;
+    adminReviewRequired = true;
+    reasonCodes.push("authoritative_provider_or_legal_reversal");
+  } else if (platformFault || obligationState === "failed" || obligationState === "review_required") {
     refundEligibility = policy.defaultRemedy !== "none";
     creditEligibility = policy.creditFirst || policy.defaultRemedy === "in_app_credit_review";
     cashRefundEligibility = !policy.creditFirst && policy.defaultRemedy !== "none";
-    providerActionRequired = policy.providerActionRequired && (providerOrLegalRequired || cashRefundEligibility);
-    reasonCodes.push(platformFault ? "platform_fault_review" : "provider_legal_admin_or_obligation_review");
+    providerActionRequired = policy.providerActionRequired && cashRefundEligibility;
+    reasonCodes.push(platformFault ? "platform_fault_review" : "creator_obligation_review");
   } else if (policy.eligibleBeforeUse.includes(consumptionState)) {
     refundEligibility = policy.defaultRemedy !== "none";
     creditEligibility = policy.creditFirst || policy.defaultRemedy === "in_app_credit_review";
@@ -358,6 +366,8 @@ export function resolveMoneyRefundPolicyDecision(input: MoneyRefundPolicyDecisio
 
   return {
     key: input.key,
+    standardRefundReviewEligible: refundEligibility,
+    authoritativeReversalRequired: providerOrLegalRequired && providerActionRequired,
     refundEligibility,
     creditEligibility,
     cashRefundEligibility,
@@ -398,23 +408,12 @@ export function resolveCreatorPayoutHoldPolicy(input: {
       reasonCodes: ["creator_obligation_not_cleared"],
     };
   }
-  if (!input.refundWindowCleared || !input.chargebackWindowCleared) {
-    return {
-      payoutHoldState: "held" as PayoutHoldState,
-      canReleasePayoutNow: false,
-      reasonCodes: ["refund_or_chargeback_window_open"],
-    };
-  }
-  if (!input.payoutsEnabled || !input.liveMoneyEnabled) {
-    return {
-      payoutHoldState: "eligible_later" as PayoutHoldState,
-      canReleasePayoutNow: false,
-      reasonCodes: ["payouts_or_live_money_disabled"],
-    };
-  }
   return {
-    payoutHoldState: "released_later" as PayoutHoldState,
+    payoutHoldState: "held" as PayoutHoldState,
     canReleasePayoutNow: false,
-    reasonCodes: ["future_release_requires_separate_approval_and_evidence"],
+    reasonCodes: [
+      "server_authoritative_settlement_required",
+      "client_flags_cannot_release_payout",
+    ],
   };
 }

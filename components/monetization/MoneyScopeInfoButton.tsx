@@ -48,8 +48,8 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
     ],
     whereItWorks: "Across the app only where Chi'llywood Premium is the backed gate.",
     whoControlsIt: `Chi'llywood Premium is account-owned through ${DIGITAL_STORE_NAME} and RevenueCat entitlement checks.`,
-    lifecycleNote: "Restore/manage actions affect app-wide Premium only, not creator offers.",
-    payoutNote: "Premium is platform subscription access. It does not create creator earnings or payout access.",
+    lifecycleNote: "Canceling stops future renewal and is not a refund. Chi'llywood has no standard Premium refund; paid-through access and any provider/store/legal reversal follow authoritative provider status.",
+    payoutNote: "Premium never creates creator earnings, settlement holds, reserves, or payout access.",
   },
   creator_tip: {
     title: "Creator Tip",
@@ -70,8 +70,8 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
     ],
     whereItWorks: "Only as support for the selected creator Platform.",
     whoControlsIt: "The viewer chooses the tip amount where tips are available; creator setup controls whether tips appear.",
-    lifecycleNote: "A tip is not an access product and does not change viewer permissions.",
-    payoutNote: "Payouts remain off unless a separate production payout approval lane is completed.",
+    lifecycleNote: "A tip is final and non-refundable through Chi'llywood and never changes viewer permissions. Authoritative fraud, duplicate, unauthorized, chargeback, provider, or legal reversals still reconcile.",
+    payoutNote: "Creator earnings begin Pending, use a server-owned 7-day settlement hold, and remain subject to reserve and later reversal adjustments. Production payouts remain off.",
   },
   paid_creator_video: {
     title: "Paid Creator Video",
@@ -83,7 +83,7 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
     doesNotInclude: [
       "other creator videos",
       "Chi'llywood Premium",
-      "channel subscription",
+      "platform subscription",
       "VIP",
       "Watch-Party Seat Passes",
       "event passes",
@@ -92,8 +92,8 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
     ],
     whereItWorks: "Only on the exact paid video tied to the purchase/access grant.",
     whoControlsIt: "The creator controls the video offer; safety, visibility, and access resolvers still apply.",
-    lifecycleNote: "Access is scoped to the exact video and can be denied if the video becomes unsafe, private, removed, expired, refunded, or revoked.",
-    payoutNote: "Sandbox/setup rows are not payable while live money and payouts are off.",
+    lifecycleNote: "Before meaningful playback, failed delivery or platform fault may enter remedy review. After playback begins there is no standard refund, but authoritative reversals still reconcile and can revoke the direct grant.",
+    payoutNote: "Direct-purchase earnings begin Pending and use a server-owned 7-day hold. Subscription-included playback creates no extra transaction or earnings.",
   },
   watch_party_ticket: {
     title: "Watch-Party Seat Pass",
@@ -117,8 +117,8 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
     ],
     whereItWorks: "Only on the linked Watch-Party target. It does not unlock Live Stage.",
     whoControlsIt: "Room entry still depends on the room, Seat Pass/access resolver, and route policy.",
-    lifecycleNote: "Seat Pass access is viewer/participant entry only. Expired, refunded, revoked, ended, or unsafe rooms should deny access clearly.",
-    payoutNote: "Seat Pass payment/access does not grant payout access or create payable balances while live money is off.",
+    lifecycleNote: "Cancellation, unavailable-room, or creator/platform delivery failure may enter remedy review before meaningful entry. Successful use blocks a standard refund; authoritative reversals still reconcile.",
+    payoutNote: "Earnings remain Pending through successful canonical room completion plus 48 hours. Advance purchases, canceled rooms, and reserved funds are not payout-ready.",
   },
   live_watch_party_access_pass: {
     title: "Live Watch-Party Access Pass",
@@ -160,7 +160,7 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
     payoutNote: "Seat pass rows remain sandbox/not-payable unless a separate live-money approval lane is completed.",
   },
   channel_subscription: {
-    title: "Channel Subscription",
+    title: "Platform Subscription",
     shortDescription: "Creator-specific subscriber access. It is not Chi'llywood Premium.",
     includes: [
       "creator-specific subscriber area/access where enabled",
@@ -179,8 +179,8 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
     ],
     whereItWorks: "Only on this creator Platform and subscriber surfaces backed by active access.",
     whoControlsIt: "The creator controls the subscription offer; effective access uses provider/access resolver state.",
-    lifecycleNote: "Included Paid Video access ends when the subscription is inactive. Exact videos purchased separately keep their own independent grant lifecycle.",
-    payoutNote: "Watching an included Paid Video creates no extra purchase, provider transaction, ledger event, or payout.",
+    lifecycleNote: "Canceling stops future renewal and is not a prorated refund. Paid-through access continues unless authoritative provider state ends it; separately purchased videos keep their independent lifecycle.",
+    payoutNote: "Each verified billing period uses its own server-owned 7-day settlement hold. Included Paid Video viewing creates no extra purchase, transaction, ledger event, or payout.",
   },
   vip_pass: {
     title: "VIP Pass",
@@ -192,7 +192,7 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
     ],
     doesNotInclude: [
       "Chi'llywood Premium",
-      "channel subscription unless separately granted",
+      "platform subscription unless separately granted",
       "ordinary Paid Video ownership or subscription access",
       "Watch-Party Seat Passes",
       "event passes",
@@ -202,8 +202,8 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
     ],
     whereItWorks: "Only on this creator Platform and VIP surfaces backed by active access.",
     whoControlsIt: "The creator controls the VIP offer; the access resolver controls whether VIP is active.",
-    lifecycleNote: "The 30-day period starts at verified activation. Expiry, refund, or revocation removes VIP access; another verified purchase starts a new period.",
-    payoutNote: "VIP access does not grant creator payout access or cash-out eligibility.",
+    lifecycleNote: "The 30-day period starts at verified activation. There is no standard refund after valid access is delivered; failed delivery, early removal, or material misrepresentation may enter review, and authoritative reversal ends access.",
+    payoutNote: "The 30-day access term is separate from the server-owned 7-day creator settlement hold and reserve. VIP never grants payout access.",
   },
   event_pass: {
     title: "Event Pass",
@@ -224,8 +224,8 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
     ],
     whereItWorks: "Only on the linked creator event.",
     whoControlsIt: "The creator controls the event/pass; event state and access resolver decide entry.",
-    lifecycleNote: "Canceled, ended, expired, refunded, or revoked events should deny access clearly.",
-    payoutNote: "Event pass access does not grant creator payout access or create payable balances while live money is off.",
+    lifecycleNote: "Cancellation, material unavailability/change, or delivery failure may enter remedy review before attendance. Successful attendance blocks a standard refund; authoritative reversals still reconcile.",
+    payoutNote: "Earnings remain Pending through successful canonical event completion plus 48 hours. Advance purchases, canceled events, and reserved funds are not payout-ready.",
   },
   merch_physical_good: {
     title: "Physical Merch",
@@ -252,7 +252,7 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
   },
   payout_readiness: {
     title: "Payout Readiness",
-    shortDescription: "Setup/status only. It is not cash-out, withdrawal, payable balance, or real payout.",
+    shortDescription: "Setup/status only. Pending or Reserved earnings are not Available and cannot be paid.",
     includes: [
       "provider setup/status checks where available",
       "KYC, tax, provider, and readiness labels where backed",
@@ -271,8 +271,8 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
     ],
     whereItWorks: "Only in creator/admin readiness surfaces. It does not execute money movement.",
     whoControlsIt: "Owner/provider/legal/accounting approval is required before any future production payout lane can execute.",
-    lifecycleNote: "Readiness may create or sync setup/status rows, but production execution stays blocked.",
-    payoutNote: "Payouts, cash-out, withdrawal, transfer, and payable balances are inactive while live money and payouts are off.",
+    lifecycleNote: "Pending clears only through server-owned settlement rules. Reserved remains unavailable until server release; provider reversals append adjustments and unresolved negative exposure blocks payout.",
+    payoutNote: "Only Available money may be allocated. Pending, Reserved, Reversed, and negative-balance exposure cannot pay; production payouts remain off.",
   },
 };
 

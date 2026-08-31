@@ -22,6 +22,7 @@ const assertNotIncludes = (source, needle, label) => {
 const packageJson = read("package.json");
 const policy = read("_lib/moneyRefundPolicy.ts");
 const migration = read("supabase/migrations/20260621091458_refund_credit_payout_hold_foundation.sql");
+const doctrineMigration = read("supabase/migrations/20260831130000_creator_money_refund_settlement_doctrine_closure.sql");
 const docs = read("docs/REFUND_CREDIT_PAYOUT_HOLD_FOUNDATION.md");
 const docsLower = docs.toLowerCase();
 
@@ -58,17 +59,39 @@ assertIncludes(packageJson, "guard:refund-credit-payout-hold-policy", "package g
   assertIncludes(docs, key, `docs policy key ${key}`);
 });
 
-assertIncludes(policy, "Generally non-refundable after purchase/renewal", "Premium generally non-refundable policy");
-assertIncludes(policy, "Premium is app-wide platform access and is not creator income.", "Premium not creator income");
-assertIncludes(policy, "No standard refunds.", "tips no standard refunds");
+assertIncludes(policy, "no standard refunds for Premium purchases or renewals", "Premium standard no-refund policy");
+assertIncludes(policy, "Premium is app-wide access, not creator income", "Premium not creator income");
+assertIncludes(policy, "final and non-refundable through Chi'llywood", "tips final/non-refundable doctrine");
 assertIncludes(policy, "Tips unlock nothing", "tips unlock nothing");
-assertIncludes(policy, "Credit-first remedy", "channel subscription credit-first remedy");
+assertIncludes(policy, "no standard prorated refund", "channel subscription no-prorated-refund doctrine");
+assertIncludes(policy, "server-owned 7-day settlement hold", "ordinary creator settlement hold");
+assertIncludes(policy, "successful canonical room completion plus 48 hours", "Watch-Party completion settlement");
+assertIncludes(policy, "successful canonical event completion plus 48 hours", "Event completion settlement");
 assertIncludes(policy, "Refund eligible before room entry/use", "ticket refund before entry/use");
 assertIncludes(policy, "buyer has not entered/attended before cutoff", "event refund before attendance");
 assertIncludes(policy, "Seat pass grants eligibility only; host approval and LiveKit token rules still win.", "seat pass host approval rule");
 assertIncludes(policy, "Refund/return to original payment method", "merch original payment/return policy");
 assertIncludes(policy, "Stripe/merch provider is separate from in-app digital goods billing.", "merch provider separation");
 assertIncludes(policy, "No cash-out, withdrawal, payable balance, or real payout is active.", "payout readiness setup only");
+
+[
+  "creator_money_settlement_policies",
+  "creator_money_obligation_completion_receipts",
+  "provider_event.occurred_at",
+  "interval '7 days'",
+  "interval '48 hours'",
+  "reserve_basis_points",
+  "interval '30 days'",
+  "client_flags_cannot_release_payout",
+  "caller_hold_days_not_allowed",
+  "payout_allocation_exceeds_available_after_reserve",
+  "negativeAdjustmentCents",
+].forEach((needle) => assertIncludes(doctrineMigration, needle, `settlement doctrine ${needle}`));
+
+assertIncludes(doctrineMigration, 'revoke insert, update, delete on public."money_refund_policy_rules" from authenticated', "policy mutation revoked");
+assertIncludes(doctrineMigration, "authoritative_provider_or_legal_reversal", "provider reversal separated from standard refund");
+assertNotIncludes(doctrineMigration, "stripe.refunds.create", "Stripe refund API call");
+assertNotIncludes(doctrineMigration, "transfers.create", "provider transfer API call");
 
 assertIncludes(migration, '"cash_equivalent" = false and "transferable" = false and "withdrawable" = false and "payable" = false', "credits non-cash/non-transferable/non-withdrawable");
 assertIncludes(migration, '"spendable" = false', "credits default not spendable");

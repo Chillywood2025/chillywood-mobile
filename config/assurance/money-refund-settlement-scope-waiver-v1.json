@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "contractId": "money-refund-settlement-scope-waiver-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
+  "objective": "Close the seven-flow refund, provider-reversal, creator-settlement, reserve, payout-readiness, and user-facing Platform Subscription doctrine as one exact-head financial authority repair.",
+  "exactReason": "The owner-required recursive full-graph closure crosses one forward financial migration, executable database and application regressions, the Money Center readback, all affected purchase disclosures, and the exact Platform Subscription terminology surfaces. Splitting those coupled authority and disclosure changes would permit server policy, payout readiness, tests, or user-facing doctrine to diverge at merge time.",
+  "reviewer": "creator-money-security-database-exact-head-review-lanes",
+  "supportingDomains": ["application-disclosure", "CI-test-infrastructure", "documentation-metadata"],
+  "secondHighRiskDomain": false,
+  "newTimeboxHours": 8,
+  "fileBudget": {"default": 15, "waivedMaximum": 24},
+  "lineBudget": {"default": 1200, "waivedMaximum": 1600},
+  "reviewStatus": "REQUIRED_BEFORE_MERGE",
+  "prohibitedScope": ["production money activation", "provider catalog mutation", "real payout execution", "production-v2 publication", "public rollout increase", "native build creation"]
+}
