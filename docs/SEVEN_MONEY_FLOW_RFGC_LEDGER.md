@@ -114,7 +114,36 @@ This ledger is cumulative. A merge alone does not close a defect. Production mon
 - Native-build requirement: none; the change is JavaScript-only and current runtimes/fingerprints are already proven compatible.
 - Physical/provider proof requirement: exact grouped OTA consumption on both devices; Android and iOS Platform Studio entry; Money Center six-flow surface traversal; no App Recovery; canonical Channel Subscription label; complete available provider matrix restarted from the beginning.
 - Test blind spot: source guards required the terminology rewriter instead of enforcing a React component boundary, so they institutionalized the invalid adapter. The route contract now rejects plain-function screen execution, global Alert mutation, and rendered-tree product rewriting.
-- Disposition: `REPAIRED_UNPROVEN` pending exact-head merge, OTA, and restarted physical provider proof.
+- Disposition: `REPAIRED_UNPROVEN`. PR `#323` head `b0ae2a7c312a25de39c704680c27dfc615727b66` merged by normal two-parent merge `4a9843d62af5425c75816cee2aa6b51a4012ca9b`. Android consumed exact update `01a05544-0c81-79b4-89fb-0512aa4e24d1`, and iOS consumed exact update `01a05549-2e1c-707c-a47e-0e565909aa4a`. Android proved ordinary-user fail-closed entry and provider-backed Premium creator entry without App Recovery, but the restarted full provider/device matrix exposed `RFGC-005`; final cross-platform closure remains pending.
+
+## RFGC-005 — Money Center focus suppressed the selected canonical section
+
+- Defect ID: `RFGC-005`
+- Flow(s): Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, and Event Pass; creator-money Transactions and Payout readiness share the boundary. Premium is the upstream Studio admission gate.
+- User role: authenticated Premium creator using provider-backed sandbox authority.
+- Creator role: exact signed-in proof creator whose six setup managers and readbacks are being inspected.
+- Platform: Android directly observed; shared JavaScript rendering affects iOS.
+- Provider: exposed after a Google Play/RevenueCat Premium sandbox purchase and exact server entitlement projection; the failed boundary itself is provider-independent.
+- Discovery evidence: Android exact OTA `01a05544-0c81-79b4-89fb-0512aa4e24d1` completed Google Play sandbox purchase for user `7561f256-1567-4d97-9e0c-9156e66c6f72`; RevenueCat event `573CACD4-B2E8-4223-AB8C-406A68331A9C` projected active Premium authority. Platform Studio opened, but tapping `money-center-open-ways-to-earn-button` left the six-flow panel absent.
+- First failed boundary: Money Center focus action -> canonical expanded accordion body.
+- Visible symptom: Open Ways to Earn did not reveal the six creator-money managers. The same state rule suppressed focused Transactions and Payout readiness bodies.
+- Upstream producer: route focus, human tap, or manager action sets the focused section and expands it.
+- Downstream consequence: all six creator-money managers, transaction inspection, payout readiness, and provider status traversal can be blocked even though provider-backed Studio admission is valid.
+- Root cause: removal of a former duplicate focused-content renderer retained both `expanded && id !== activeMoneyCenterFocusSection` and its separate focus state; after the duplicate renderer was deleted, the inequality hid the only canonical body whenever selected while the stale focus state had no remaining valid rendering purpose.
+- Root-cause group: stale focus/display split after Money Center duplicate-surface consolidation.
+- Same-class siblings: Ways to Earn, Transactions, and Payout readiness all share the same accordion renderer and were collected into this repair. Other Studio Home, Clip, and Brand accordion renderers use their own coherent expansion rules and were not changed.
+- Adjacent different-class risks: route/deep-link focus, manager target selection, canonical Channel Subscription naming, Premium admission refresh, provider-readiness display, and live-money/payout fail-closed state were inspected. No authority, catalog, ledger, RLS, or provider mutation is required.
+- Shared integration seams: provider-backed Premium -> Platform Studio -> Money Center overview -> focused accordion -> six inline managers / transactions / payout readiness.
+- Security impact: none to financial authority. The repair only restores rendering of already-authorized sandbox/read-only controls.
+- Financial impact: none. Live money, payable balances, public products, cash-out, and payouts remain off.
+- Changed files: `_lib/moneyCenterSectionVisibility.ts`, `app/channel-settings.tsx`, `tests/creator-money/money-center-section-visibility.test.mjs`, `scripts/guard-money-center-policy.mjs`, `scripts/proof-creator-monetization-route-button-wiring.mjs`, `package.json`, `docs/SEVEN_MONEY_FLOW_RFGC_LEDGER.md`.
+- Migration requirement: none.
+- Provider mutation requirement: none.
+- OTA requirement: one grouped compatible `internal-v2` OTA after exact protected merge.
+- Native-build requirement: none; JavaScript-only and current Android/iOS runtimes are compatible.
+- Physical/provider proof requirement: provider-backed Studio admission, visible canonical Ways to Earn body and all six manager cards, Transactions and Payout readiness bodies, canonical Channel Subscription label, iOS fail-closed/authorized Studio entry as available, then restart the complete applicable provider matrix.
+- Test blind spot: source wiring guards proved that buttons, handlers, focus state, and one canonical panel existed, but never executed the visibility predicate after focus changed. The new executable test evaluates expanded/collapsed visibility for every focused Money Center section and guards the component seam against focus-state suppression.
+- Disposition: `REPAIRED_UNPROVEN` pending exact-head proof, normal merge, grouped OTA, and restarted physical provider proof.
 
 ## RFGC-EXT-001 — Production provider activation/readback unavailable
 
@@ -175,14 +204,14 @@ This ledger is cumulative. A merge alone does not close a defect. Production mon
 ## Closure counts
 
 - `BLOCKING_OPEN`: 0
-- `REPAIRED_UNPROVEN`: 1
+- `REPAIRED_UNPROVEN`: 2
 - `PHYSICALLY_PROVEN`: 2
 - `PROVIDER_PROVEN`: 2
 - `NONBLOCKING_DEBT`: 0
 - `EXTERNAL_BLOCKED`: 1
 - `NOT_A_DEFECT`: 0
 
-These are current provider/activation-continuation counts. `RFGC-004` may move out of `REPAIRED_UNPROVEN` only after exact-head merge, the required grouped OTA, and restarted physical provider proof.
+These are current provider/activation-continuation counts. `RFGC-004` and `RFGC-005` may move out of `REPAIRED_UNPROVEN` only after the grouped display repair merges, the required grouped OTA is consumed, and the restarted physical provider proof completes.
 
 ## Final closure evidence
 

@@ -133,6 +133,7 @@ import {
   type MoneyFeatureFlagState,
   type MoneyFeatureFlagSummaryRow,
 } from "../_lib/moneyFeatureFlags";
+import { isMoneyCenterSectionBodyVisible } from "../_lib/moneyCenterSectionVisibility";
 import {
   findProviderReadinessSummary,
   getCreatorReadinessLabel,
@@ -1188,19 +1189,6 @@ const createInitialMonetizationSections = (tab: unknown, focus: unknown) => {
   return sections;
 };
 
-const createInitialMoneyCenterFocusSection = (
-  tab: unknown,
-  focus: unknown,
-  manage: unknown,
-): MoneyCenterFocusSection => {
-  if (normalizeMoneyManageTarget(manage)) return "ways_to_earn";
-  const routedSection = normalizeMonetizationSectionId(tab) ?? normalizeMonetizationSectionId(focus);
-  if (routedSection === "transactions") return "transactions";
-  if (routedSection === "payouts") return "payouts";
-  if (routedSection === "ways_to_earn" || routedSection === "offers") return "ways_to_earn";
-  return "overview";
-};
-
 const getCreatorVideoCreatedTimestamp = (video: CreatorVideo) => {
   const timestamp = Date.parse(video.createdAt || video.updatedAt);
   return Number.isFinite(timestamp) ? timestamp : 0;
@@ -1312,9 +1300,6 @@ export function ChannelStudioScreen() {
   );
   const [expandedMonetizationSections, setExpandedMonetizationSections] = useState<ReadonlySet<MonetizationSectionId>>(
     () => createInitialMonetizationSections(routeParams.tab, routeParams.focus),
-  );
-  const [activeMoneyCenterFocusSection, setActiveMoneyCenterFocusSection] = useState<MoneyCenterFocusSection>(
-    () => createInitialMoneyCenterFocusSection(routeParams.tab, routeParams.focus, routeParams.manage),
   );
   const [activeMoneyManageTarget, setActiveMoneyManageTarget] = useState<MonetizationFeatureKey | null>(
     () => createInitialMoneyManageTarget(routeParams.manage),
@@ -1527,7 +1512,6 @@ export function ChannelStudioScreen() {
   const focusMoneyCenterSection = useCallback((id: MoneyCenterFocusSection) => {
     setActiveStudioTab("monetization");
     setExpandedMonetizationSections((current) => new Set([...current, id]));
-    setActiveMoneyCenterFocusSection(id);
   }, []);
   const toggleClipSection = (id: ClipStudioSectionId) => {
     setExpandedClipSections((current) => {
@@ -1550,16 +1534,10 @@ export function ChannelStudioScreen() {
       ?? normalizeMonetizationSectionId(routeParams.focus);
     if (nextTab === "monetization" && monetizationSection) {
       setExpandedMonetizationSections((current) => new Set([...current, monetizationSection]));
-      if (monetizationSection === "transactions") setActiveMoneyCenterFocusSection("transactions");
-      else if (monetizationSection === "payouts") setActiveMoneyCenterFocusSection("payouts");
-      else if (monetizationSection === "ways_to_earn" || monetizationSection === "offers") {
-        setActiveMoneyCenterFocusSection("ways_to_earn");
-      }
     }
     const manageTarget = normalizeMoneyManageTarget(routeParams.manage);
     if (nextTab === "monetization" && manageTarget) {
       setActiveMoneyManageTarget(manageTarget);
-      setActiveMoneyCenterFocusSection("ways_to_earn");
       setExpandedMonetizationSections((current) => new Set([...current, "ways_to_earn"]));
     }
     if (routeAction === "upload") setContentStatusFilter("all");
@@ -2532,7 +2510,6 @@ export function ChannelStudioScreen() {
     setPayoutSetupNotice(
       `Cashout readiness reviewed. Cashout not live yet. No real payout will be sent. ${blockers} ${nextSteps}`,
     );
-    setActiveMoneyCenterFocusSection("payouts");
     setExpandedMonetizationSections((current) => {
       const next = new Set<MonetizationSectionId>([...current, "payouts", "providers", "tax_legal"]);
       next.delete("ways_to_earn");
@@ -6349,7 +6326,7 @@ export function ChannelStudioScreen() {
     children: React.ReactNode;
   }) => {
     const expanded = expandedMonetizationSections.has(id);
-    const showBody = expanded && id !== activeMoneyCenterFocusSection;
+    const showBody = isMoneyCenterSectionBodyVisible(expanded);
     return (
       <View
         style={styles.studioAccordionCard}
@@ -7927,7 +7904,6 @@ export function ChannelStudioScreen() {
     ) => {
       setActiveMoneyManageTarget(target);
       setMoneyManageNotice(notice);
-      setActiveMoneyCenterFocusSection("ways_to_earn");
       setExpandedMonetizationSections((current) => new Set([...current, ...sections]));
       router.setParams({
         tab: "monetization",
@@ -8019,7 +7995,6 @@ export function ChannelStudioScreen() {
       router.push({ pathname: "/channel/[userId]", params: { userId: String(user.id), preview: "public" } });
     };
     const openMoneyTransactions = () => {
-      setActiveMoneyCenterFocusSection("transactions");
       setExpandedMonetizationSections((current) => new Set([...current, "transactions"]));
     };
     const sandboxTesterOfferCards: SandboxTesterOfferCard[] = [
