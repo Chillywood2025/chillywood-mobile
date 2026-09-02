@@ -501,6 +501,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   formalNoticeButton: {
+    minWidth: 48,
     minHeight: 48,
     alignSelf: "flex-start",
     borderRadius: 999,
@@ -515,6 +516,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   primaryButton: {
+    minWidth: 48,
     minHeight: 48,
     borderRadius: 999,
     backgroundColor: "#DC143C",
@@ -530,6 +532,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   secondaryButton: {
+    minWidth: 48,
     minHeight: 48,
     borderRadius: 999,
     borderWidth: 1,

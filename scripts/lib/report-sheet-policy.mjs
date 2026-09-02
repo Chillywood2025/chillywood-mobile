@@ -1,11 +1,14 @@
 import { parse } from "@babel/parser";
+import { createHash } from "node:crypto";
+const REPORT_SHEET_RELEASE_SHA256 = "fc5e294bcaed9079f5710299ba90596ebef9665ece67fb800a3e3ee706e13df6";
 const isNode = (value) => Boolean(value && typeof value === "object" && typeof value.type === "string");
 const walk = (node, visit) => {
   if (!isNode(node)) return;
   visit(node);
   if (node.type === "LogicalExpression" && node.operator === "&&" &&
-    node.left?.type === "BooleanLiteral") {
-    if (node.left.value) walk(node.right, visit);
+    ["JSXElement", "JSXFragment"].includes(unwrap(node.right)?.type)) {
+    if (node.left?.type === "BooleanLiteral" && node.left.value)
+      walk(node.right, visit);
     return;
   }
   if (node.type === "ConditionalExpression" && node.test?.type === "BooleanLiteral") {
@@ -115,6 +118,7 @@ const staticString = (node, bindings, seen = new Set()) => {
   const value = unwrap(node);
   if (!value) return null;
   if (value.type === "StringLiteral") return value.value;
+  if (value.type === "JSXText") return value.value;
   if (value.type === "TemplateLiteral") {
     let output = "";
     for (let index = 0; index < value.quasis.length; index += 1) {
@@ -142,7 +146,9 @@ const staticString = (node, bindings, seen = new Set()) => {
     const property = callee?.computed
       ? unwrap(callee.property)?.value
       : unwrap(callee?.property)?.name;
-    const items = unwrap(callee?.object);
+    let items = unwrap(callee?.object);
+    if (items?.type === "Identifier" && bindings.has(items.name))
+      items = unwrap(bindings.get(items.name));
     const separator =
       value.arguments.length === 0
         ? ","
@@ -180,10 +186,8 @@ const stringSkeleton = (node, bindings, seen = new Set()) => {
   if (value.type === "TemplateLiteral") {
     return value.quasis
       .map((quasi, index) => {
-        const expression =
-          index < value.expressions.length
-            ? stringSkeleton(value.expressions[index], bindings, seen)
-            : "";
+        const expression = index < value.expressions.length
+          ? stringSkeleton(value.expressions[index], bindings, seen) : "";
         return `${quasi.value.cooked ?? quasi.value.raw} ${expression}`;
       })
       .join(" ");
@@ -191,39 +195,41 @@ const stringSkeleton = (node, bindings, seen = new Set()) => {
   if (value.type === "BinaryExpression" && value.operator === "+") {
     return `${stringSkeleton(value.left, bindings, seen)} ${stringSkeleton(value.right, bindings, seen)}`;
   }
-  if (
-    value.type === "Identifier" &&
-    bindings.has(value.name) &&
-    !seen.has(value.name)
-  ) {
+  if (value.type === "Identifier" && bindings.has(value.name) && !seen.has(value.name)) {
     const nextSeen = new Set(seen);
     nextSeen.add(value.name);
     return stringSkeleton(bindings.get(value.name), bindings, nextSeen);
   }
   return " ";
 };
-const jsxName = (element) => {
-  const name = element?.openingElement?.name;
-  return name?.type === "JSXIdentifier" ? name.name : null;
+const unsafeRoutingCopy = (value) => /\bqueue\b|review\s+path\s*:/i.test(value);
+const unsafePrivacyCopy = (value) => /reports? (?:are |may be )?(?:shared|visible) (?:with|to) the reported (?:person|user)|reported (?:person|user) (?:can|will|may) (?:see|receive)|reported users? (?:are|will be) notified|(?:show|share|reveal|disclose|send).{0,48}(?:identity|name).{0,48}(?:account|reported|person|user)|(?:account|reported|person|user).{0,48}(?:see|receive|view).{0,48}(?:identity|name)/i.test(value);
+const renderedTextSkeleton = (element, bindings) => {
+  const parts = [];
+  walk(element, (node) => {
+    if (node.type === "JSXText") parts.push(node.value);
+    if (node.type === "JSXExpressionContainer")
+      parts.push(stringSkeleton(node.expression, bindings));
+  });
+  return parts.join(" ").replace(/\s+/g, " ").trim();
 };
-const jsxAttribute = (element, name) =>
-  element?.openingElement?.attributes?.find(
-    (attribute) =>
-      attribute.type === "JSXAttribute" &&
-      attribute.name?.type === "JSXIdentifier" &&
-      attribute.name.name === name,
-  ) ?? null;
+const jsxName = (element) => element?.openingElement?.name?.type === "JSXIdentifier"
+  ? element.openingElement.name.name : null;
+const jsxAttribute = (element, name) => {
+  const attributes = element?.openingElement?.attributes ?? [];
+  if (attributes.some((entry) => entry.type === "JSXSpreadAttribute")) return null;
+  const matches = attributes.filter((attribute) => attribute.type === "JSXAttribute" &&
+    attribute.name?.type === "JSXIdentifier" && attribute.name.name === name);
+  return matches.length === 1 ? matches[0] : null;
+};
 const jsxAttributeExpression = (element, name) => {
   const attribute = jsxAttribute(element, name);
   return attribute?.value?.type === "JSXExpressionContainer"
-    ? unwrap(attribute.value.expression)
-    : null;
+    ? unwrap(attribute.value.expression) : null;
 };
 const jsxAttributeString = (element, name) => {
   const attribute = jsxAttribute(element, name);
-  return attribute?.value?.type === "StringLiteral"
-    ? attribute.value.value
-    : null;
+  return attribute?.value?.type === "StringLiteral" ? attribute.value.value : null;
 };
 const exactBusyStyle = (element, styleName) => {
   const value = jsxAttributeExpression(element, "style");
@@ -237,99 +243,72 @@ const exactBusyStyle = (element, styleName) => {
 const jsxElements = (node, name) => {
   const elements = [];
   walk(node, (candidate) => {
-    if (candidate.type === "JSXElement" && jsxName(candidate) === name)
-      elements.push(candidate);
+    if (candidate.type === "JSXElement" && jsxName(candidate) === name) elements.push(candidate);
   });
   return elements;
 };
-
 const literalStrings = (node) => {
   const values = [];
   walk(node, (candidate) => {
     if (candidate.type === "StringLiteral") values.push(candidate.value);
-    if (candidate.type === "JSXText" && candidate.value.trim())
-      values.push(candidate.value.trim());
+    if (candidate.type === "JSXText" && candidate.value.trim()) values.push(candidate.value.trim());
   });
   return values;
 };
-
 const jsxRendersIdentifier = (element, name) => {
   let rendered = false;
   walk(element, (candidate) => {
-    if (
-      candidate.type === "JSXExpressionContainer" &&
-      candidate.expression?.type === "Identifier" &&
-      candidate.expression.name === name
-    ) {
+    if (candidate.type === "JSXExpressionContainer" &&
+      candidate.expression?.type === "Identifier" && candidate.expression.name === name)
       rendered = true;
-    }
   });
   return rendered;
 };
-
 const objectProperty = (object, name) => {
   const value = unwrap(object);
   if (value?.type !== "ObjectExpression") return null;
   if (value.properties.some((property) => property.type === "SpreadElement"))
     return null;
   const matches = value.properties.filter((property) => {
-      if (property.type !== "ObjectProperty") return false;
-      const key = property.computed
-        ? unwrap(property.key)?.value
-        : (property.key?.name ?? property.key?.value);
-      return key === name;
-    });
+    if (property.type !== "ObjectProperty") return false;
+    const key = property.computed ? unwrap(property.key)?.value
+      : (property.key?.name ?? property.key?.value);
+    return key === name;
+  });
   return matches.length === 1 ? matches[0] : null;
 };
-
 const objectPropertyValue = (object, name) =>
   unwrap(objectProperty(object, name)?.value);
-
 const findReportSheet = (program) => {
   for (const statement of program.body) {
-    if (
-      statement.type === "ExportNamedDeclaration" &&
+    if (statement.type === "ExportNamedDeclaration" &&
       statement.declaration?.type === "FunctionDeclaration" &&
-      statement.declaration.id?.name === "ReportSheet"
-    ) {
-      return statement.declaration;
-    }
+      statement.declaration.id?.name === "ReportSheet") return statement.declaration;
   }
   return null;
 };
-
 const exactPlatformKeyboardBehavior = (node) => {
   const value = unwrap(node);
   if (value?.type !== "ConditionalExpression") return false;
   const test = unwrap(value.test);
-  return (
-    test?.type === "BinaryExpression" &&
+  return test?.type === "BinaryExpression" &&
     test.operator === "===" &&
     memberMatches(test.left, "Platform", "OS") &&
     unwrap(test.right)?.type === "StringLiteral" &&
     unwrap(test.right).value === "ios" &&
     unwrap(value.consequent)?.type === "StringLiteral" &&
     unwrap(value.consequent).value === "padding" &&
-    unwrap(value.alternate)?.type === "StringLiteral" &&
-    unwrap(value.alternate).value === "height"
-  );
+    unwrap(value.alternate)?.type === "StringLiteral" && unwrap(value.alternate).value === "height";
 };
-
 const exactInset = (node, side, minimum) => {
   const value = unwrap(node);
-  if (
-    value?.type !== "CallExpression" ||
-    !memberMatches(value.callee, "Math", "max")
-  )
+  if (value?.type !== "CallExpression" || !memberMatches(value.callee, "Math", "max"))
     return false;
-  return (
-    value.arguments.length === 2 &&
+  return value.arguments.length === 2 &&
     memberMatches(value.arguments[0], "insets", side) &&
     unwrap(value.arguments[1])?.type === "NumericLiteral" &&
-    unwrap(value.arguments[1]).value === minimum
-  );
+    unwrap(value.arguments[1]).value === minimum;
 };
-
 const validateStyleContract = (programBindings, findings) => {
   const stylesCall = unwrap(programBindings.get("styles"));
   if (
@@ -359,11 +338,15 @@ const validateStyleContract = (programBindings, findings) => {
     stylesCall.arguments[0],
     "sheetContent",
   );
-  if (objectProperty(sheetContentStyle, "paddingHorizontal")) {
-    findings.push(
-      "sheet content must not override safe-area-aware side padding",
-    );
-  }
+  const contentGap = objectPropertyValue(sheetContentStyle, "gap");
+  if (sheetContentStyle?.properties?.length !== 1 ||
+    contentGap?.type !== "NumericLiteral" || contentGap.value !== 12)
+    findings.push("sheet content must not override safe-area-aware layout");
+  if (objectProperty(sheetStyle, "display"))
+    findings.push("sheet style must remain visibly rendered");
+  const helperStyle = objectPropertyValue(stylesCall.arguments[0], "helperText");
+  if (objectProperty(helperStyle, "display") || objectProperty(helperStyle, "opacity"))
+    findings.push("report privacy guidance must remain visibly styled");
   for (const styleName of [
     "categoryChip",
     "formalNoticeButton",
@@ -372,25 +355,12 @@ const validateStyleContract = (programBindings, findings) => {
   ]) {
     const style = objectPropertyValue(stylesCall.arguments[0], styleName);
     const minHeight = objectPropertyValue(style, "minHeight");
-    if (minHeight?.type !== "NumericLiteral" || minHeight.value < 48) {
-      findings.push(
-        `${styleName} must preserve a 48-point minimum touch height`,
-      );
-    }
-  }
-  const categoryChip = objectPropertyValue(
-    stylesCall.arguments[0],
-    "categoryChip",
-  );
-  const categoryMinWidth = objectPropertyValue(categoryChip, "minWidth");
-  if (
-    categoryMinWidth?.type !== "NumericLiteral" ||
-    categoryMinWidth.value < 48
-  ) {
-    findings.push("categoryChip must preserve a 48-point minimum touch width");
+    const minWidth = objectPropertyValue(style, "minWidth");
+    if (minHeight?.type !== "NumericLiteral" || minHeight.value < 48 ||
+      minWidth?.type !== "NumericLiteral" || minWidth.value < 48)
+      findings.push(`${styleName} must preserve a 48-point minimum touch target`);
   }
 };
-
 const validateVisibilityReset = (reportSheet, findings) => {
   const effects = [];
   for (const statement of reportSheet.body.body) {
@@ -429,12 +399,11 @@ const validateVisibilityReset = (reportSheet, findings) => {
       exactResetBlock(block, false)
     );
   });
-  if (!resetEffect)
+  if (!resetEffect || effects.length !== 1)
     findings.push(
       "visibility effect must directly clear category and note when the sheet closes",
     );
 };
-
 const validateSubmitHandler = (renderRoot, findings) => {
   const sendButtons = jsxElements(renderRoot, "TouchableOpacity").filter(
     (element) => literalStrings(element).includes("Send Report"),
@@ -471,7 +440,6 @@ const validateSubmitHandler = (renderRoot, findings) => {
       "Send Report accessibility state must reflect its busy/disabled authority",
     );
   }
-
   const selectedCategory = directVariable(handler.body, "selectedCategoryNote");
   const categoryTemplate = unwrap(selectedCategory?.init);
   if (
@@ -491,7 +459,6 @@ const validateSubmitHandler = (renderRoot, findings) => {
       "submitted category note must contain only the selected customer category label",
     );
   }
-
   const normalizedNote = unwrap(
     directVariable(handler.body, "normalizedNote")?.init,
   );
@@ -502,7 +469,6 @@ const validateSubmitHandler = (renderRoot, findings) => {
   ) {
     findings.push("submitted free-form note must be the trimmed note state");
   }
-
   const submitCall = directCall(handler.body, "onSubmit");
   const payload = unwrap(submitCall?.arguments?.[0]);
   if (
@@ -548,9 +514,10 @@ const validateSubmitHandler = (renderRoot, findings) => {
     }
   }
 };
-
 export const validateReportSheetSource = (source) => {
   const findings = [];
+  if (createHash("sha256").update(source).digest("hex") !== REPORT_SHEET_RELEASE_SHA256)
+    findings.push("report sheet differs from the exact reviewed release-candidate source");
   let ast;
   try {
     ast = parse(source, {
@@ -562,7 +529,6 @@ export const validateReportSheetSource = (source) => {
       `report sheet did not parse: ${error instanceof Error ? error.message : String(error)}`,
     ];
   }
-
   const program = ast.program;
   const programBindings = collectBindings(program.body);
   const reportSheet = findReportSheet(program);
@@ -570,7 +536,6 @@ export const validateReportSheetSource = (source) => {
     return ["exported ReportSheet function declaration is missing"];
   const functionBindings = collectBindings(reportSheet.body.body);
   const allBindings = new Map([...programBindings, ...functionBindings]);
-
   const returnStatements = reportSheet.body.body.filter(
     (statement) => statement.type === "ReturnStatement",
   );
@@ -579,14 +544,14 @@ export const validateReportSheetSource = (source) => {
     returnStatements.length !== 1 ||
     returnStatements[0] !== reportSheet.body.body.at(-1) ||
     reportSheet.body.body.some((statement) =>
-      ["IfStatement", "ThrowStatement"].includes(statement.type),
+      !["VariableDeclaration", "ExpressionStatement", "ReturnStatement"].includes(statement.type),
     ) ||
+    reportSheet.body.body.filter((statement) => statement.type === "ExpressionStatement").length !== 1 ||
     renderRoot?.type !== "JSXElement" ||
     jsxName(renderRoot) !== "Modal"
   ) {
     findings.push("ReportSheet must directly return one reachable Modal tree");
   }
-
   const helperText = staticString(
     programBindings.get("REPORT_SHEET_HELPER_TEXT"),
     programBindings,
@@ -602,11 +567,7 @@ export const validateReportSheetSource = (source) => {
       "customer-safe destination, privacy, and non-enforcement copy must share one bound helper constant",
     );
   }
-  if (
-    /scoped moderation queue|review\s+path\s*:|\.\s*queue\s*:/i.test(
-      helperText ?? "",
-    )
-  ) {
+  if (unsafeRoutingCopy(helperText ?? "")) {
     findings.push(
       "rendered helper copy must not claim client-owned moderation routing",
     );
@@ -621,9 +582,14 @@ export const validateReportSheetSource = (source) => {
     );
   }
   const textElements = jsxElements(renderRoot, "Text");
+  for (const copy of textElements.map((element) => renderedTextSkeleton(element, allBindings))) {
+    if (unsafeRoutingCopy(copy)) findings.push("rendered copy must not claim client-owned moderation routing");
+    if (unsafePrivacyCopy(copy)) findings.push("rendered copy must not contradict reporter privacy doctrine");
+  }
   if (
     textElements.filter((element) =>
-      jsxRendersIdentifier(element, "REPORT_SHEET_HELPER_TEXT"),
+      jsxRendersIdentifier(element, "REPORT_SHEET_HELPER_TEXT") &&
+      memberMatches(jsxAttributeExpression(element, "style"), "styles", "helperText"),
     ).length !== 1
   ) {
     findings.push(
@@ -632,18 +598,32 @@ export const validateReportSheetSource = (source) => {
   }
   if (
     textElements.filter((element) =>
-      jsxRendersIdentifier(element, "REPORT_SHEET_GOOD_FAITH_TEXT"),
+      jsxRendersIdentifier(element, "REPORT_SHEET_GOOD_FAITH_TEXT") &&
+      memberMatches(jsxAttributeExpression(element, "style"), "styles", "helperText"),
     ).length !== 1
   ) {
     findings.push("good-faith guidance must be rendered by ReportSheet");
   }
-
   const insets = directVariable(reportSheet.body, "insets");
   if (!callMatches(insets?.init, "useSafeAreaInsets")) {
     findings.push("ReportSheet must directly bind safe-area insets");
   }
   validateStyleContract(programBindings, findings);
   validateVisibilityReset(reportSheet, findings);
+  const categorySelection = unwrap(directVariable(reportSheet.body, "categoryOption")?.init);
+  const finder = unwrap(categorySelection?.left);
+  const findCallee = unwrap(finder?.callee);
+  const findCallback = unwrap(finder?.arguments?.[0]);
+  const findTest = unwrap(findCallback?.body);
+  const fallback = unwrap(categorySelection?.right);
+  if (categorySelection?.type !== "LogicalExpression" || categorySelection.operator !== "??" ||
+    finder?.type !== "CallExpression" || !isIdentifier(findCallee?.object, "REPORT_SHEET_CATEGORY_OPTIONS") ||
+    unwrap(findCallee?.property)?.name !== "find" || findCallback?.type !== "ArrowFunctionExpression" ||
+    findTest?.type !== "BinaryExpression" || findTest.operator !== "===" ||
+    !memberMatches(findTest.left, "entry", "key") || !isIdentifier(findTest.right, "categoryKey") ||
+    fallback?.type !== "MemberExpression" || !isIdentifier(fallback.object, "REPORT_SHEET_CATEGORY_OPTIONS") ||
+    unwrap(fallback.property)?.value !== 0)
+    findings.push("selected report option must be looked up from categoryKey with the canonical fallback");
   const stateCalls = { setCategoryKey: 0, setNote: 0 };
   walk(reportSheet.body, (node) => {
     if (callMatches(node, "setCategoryKey")) stateCalls.setCategoryKey += 1;
@@ -651,7 +631,6 @@ export const validateReportSheetSource = (source) => {
   });
   if (stateCalls.setCategoryKey !== 3 || stateCalls.setNote !== 2)
     findings.push("report state must have only the canonical selection and reset writers");
-
   const closeAndReset = unwrap(
     directVariable(reportSheet.body, "closeAndReset")?.init,
   );
@@ -665,7 +644,6 @@ export const validateReportSheetSource = (source) => {
       "closeAndReset must ignore busy dismissal, then clear category/note before calling onClose",
     );
   }
-
   const modals = jsxElements(renderRoot, "Modal");
   if (
     modals.length !== 1 ||
@@ -677,8 +655,9 @@ export const validateReportSheetSource = (source) => {
   ) {
     findings.push("native modal dismissal must be bound to closeAndReset");
   }
-
   const touchables = jsxElements(renderRoot, "TouchableOpacity");
+  if (touchables.length !== 5)
+    findings.push("report sheet must retain only the canonical action inventory");
   const backdrop = touchables.find((element) =>
     memberMatches(
       jsxAttributeExpression(element, "style"),
@@ -732,10 +711,23 @@ export const validateReportSheetSource = (source) => {
     literalStrings(element).includes("Open Copyright Report"),
   );
   const copyrightButton = copyrightButtons[0];
+  const copyrightConditions = [];
+  walk(renderRoot, (node) => {
+    if (node.type === "ConditionalExpression" &&
+      literalStrings(node.consequent).includes("Open Copyright Report"))
+      copyrightConditions.push(node);
+  });
+  const copyrightTest = unwrap(copyrightConditions[0]?.test);
   const copyrightHandler = jsxAttributeExpression(copyrightButton, "onPress");
   const copyrightGuard = copyrightHandler?.body?.body?.[0];
   if (
     copyrightButtons.length !== 1 ||
+    copyrightConditions.length !== 1 ||
+    copyrightTest?.type !== "BinaryExpression" || copyrightTest.operator !== "===" ||
+    !memberMatches(copyrightTest.left, "categoryOption", "backedCategory") ||
+    staticString(copyrightTest.right, new Map()) !== "copyright" ||
+    copyrightHandler?.body?.type !== "BlockStatement" ||
+    copyrightHandler.body.body.length !== 3 ||
     !exactBusyStyle(copyrightButton, "formalNoticeButton") ||
     !isIdentifier(jsxAttributeExpression(copyrightButton, "disabled"), "busy") ||
     !isIdentifier(
@@ -748,6 +740,8 @@ export const validateReportSheetSource = (source) => {
     copyrightGuard?.type !== "IfStatement" ||
     !isIdentifier(copyrightGuard.test, "busy") ||
     copyrightGuard.consequent?.type !== "ReturnStatement" ||
+    copyrightGuard.consequent.argument ||
+    copyrightGuard.alternate ||
     !statementCall(copyrightHandler.body.body[1], "closeAndReset") ||
     !memberMatches(
       unwrap(copyrightHandler.body.body[2]?.expression)?.callee,
@@ -925,15 +919,19 @@ export const validateReportSheetSource = (source) => {
     "REPORT_SHEET_CATEGORY_OPTIONS",
   );
   const optionTuples = unwrap(optionsInitializer)?.elements?.map((entry) =>
-    ["key", "label", "backedCategory"].map((name) =>
+    ["key", "label", "description", "backedCategory"].map((name) =>
       staticString(objectPropertyValue(entry, name), programBindings),
     ).join("|"),
   );
-  const expectedOptionTuples = "harassment_bullying|Harassment or bullying|harassment;hate_discrimination|Hate or discrimination|abuse;threats_violence|Threats or violence|safety;sexual_exploitation|Sexual content or exploitation|safety;self_harm_danger|Self-harm or dangerous behavior|safety;minor_safety|Minor safety|safety;illegal_activity|Illegal activity|safety;spam_scam|Spam or scam|safety;impersonation|Impersonation|impersonation;privacy_doxxing|Privacy violation/doxxing|safety;copyright_dmca|Copyright/DMCA|copyright;deceptive_content|Misinformation or deceptive content|other;graphic_violent_content|Graphic/violent content|safety;fraud_payment|Fraud/payment concern|safety;live_safety|Live safety issue|safety;other|Other|other".split(";");
+  const expectedOptionTuples = "harassment_bullying|Harassment or bullying|Targeted abuse, stalking, hostile contact, or repeated unwanted behavior.|harassment;hate_discrimination|Hate or discrimination|Attacks or exclusion based on protected traits, identity, or community.|abuse;threats_violence|Threats or violence|Threats, violent behavior, weapons, live danger, or immediate safety risk.|safety;sexual_exploitation|Sexual content or exploitation|Non-consensual sexual content, exploitation, or sexual safety concerns.|safety;self_harm_danger|Self-harm or dangerous behavior|Self-harm, suicide, dangerous behavior, or a live emergency concern.|safety;minor_safety|Minor safety|Child/minor safety, exploitation, grooming, or age-related risk.|safety;illegal_activity|Illegal activity|Illegal goods, criminal activity, exploitation, or severe platform abuse.|safety;spam_scam|Spam or scam|Spam, phishing, malware, fake giveaways, or manipulative promotion.|safety;impersonation|Impersonation|Fake person, creator, brand, official account, or false affiliation.|impersonation;privacy_doxxing|Privacy violation/doxxing|Private information, doxxing, unwanted personal data, or privacy invasion.|safety;copyright_dmca|Copyright/DMCA|Copyright, stolen media, unauthorized upload, or formal rights concern.|copyright;deceptive_content|Misinformation or deceptive content|Deceptive claims, misleading identity, or harmful false context.|other;graphic_violent_content|Graphic/violent content|Graphic injury, gore, violent imagery, or shocking unsafe content.|safety;fraud_payment|Fraud/payment concern|Suspicious paid access, refund/access issue, or payment-related abuse.|safety;live_safety|Live safety issue|Unsafe live behavior, room abuse, dangerous participant, or live disruption.|safety;other|Other|Something else that needs moderation review.|other".split(";");
   if (JSON.stringify(optionTuples) !== JSON.stringify(expectedOptionTuples))
     findings.push("report options must retain the exact unique customer-to-backend mapping");
   const categoryMaps = [];
   walk(renderRoot, (node) => {
+    if (node.type === "JSXSpreadAttribute")
+      findings.push("protected report UI must not use effective-prop JSX spreads");
+    if (node.type === "JSXAttribute" && node.name?.name === "pointerEvents")
+      findings.push("report UI must not disable interaction through pointerEvents");
     const callee = unwrap(node?.callee);
     const property = callee?.computed
       ? unwrap(callee.property)?.value
@@ -975,7 +973,7 @@ export const validateReportSheetSource = (source) => {
         );
     }
     if (
-      ["StringLiteral", "TemplateLiteral", "BinaryExpression", "CallExpression", "Identifier"].includes(
+      ["StringLiteral", "JSXText", "TemplateLiteral", "BinaryExpression", "CallExpression", "Identifier"].includes(
         node.type,
       )
     ) {
@@ -983,18 +981,14 @@ export const validateReportSheetSource = (source) => {
         .replace(/\s+/g, " ")
         .trim();
       if (
-        /scoped moderation queue|review\s+path\s*:|\.\s*queue\s*:/i.test(
-          candidate,
-        )
+        unsafeRoutingCopy(candidate)
       ) {
         findings.push(
           "ReportSheet must not render or submit client-invented moderation routing",
         );
       }
       if (
-        /reports? (?:are |may be )?(?:shared|visible) (?:with|to) the reported (?:person|user)|reported (?:person|user) (?:can|will|may) (?:see|receive)|reported users? (?:are|will be) notified/i.test(
-          candidate,
-        )
+        unsafePrivacyCopy(candidate)
       ) {
         findings.push(
           "ReportSheet must not contradict reporter privacy or notification doctrine",
