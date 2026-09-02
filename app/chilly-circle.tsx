@@ -547,7 +547,7 @@ export default function ChillyCircleScreen() {
             </View>
           </View>
           <Text style={styles.officialMeta} numberOfLines={1}>Official connection</Text>
-          <Text style={styles.officialMeta} numberOfLines={1}>Your first Chi’lly Circle connection</Text>
+          <Text style={styles.officialMeta} numberOfLines={1}>Your first Chi&apos;lly Circle connection</Text>
           <Text style={styles.officialMeta} numberOfLines={1}>Rachi does not read your private chats.</Text>
         </View>
       </TouchableOpacity>
@@ -585,7 +585,7 @@ export default function ChillyCircleScreen() {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.pageTitle}>Chi’lly Circle</Text>
+      <Text style={styles.pageTitle}>Chi&apos;lly Circle</Text>
       <Text style={styles.pageSubtle}>Find people and manage official and mutual connections.</Text>
 
       <View style={styles.searchShell}>

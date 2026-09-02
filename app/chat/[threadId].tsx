@@ -2551,7 +2551,7 @@ export default function ChillyChatThreadScreen() {
   if (!isSignedIn) {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
-        <Text style={styles.stateText}>Sign in to open Chi’lly Chat.</Text>
+        <Text style={styles.stateText}>Sign in to open Chi&apos;lly Chat.</Text>
         <TouchableOpacity
           style={[styles.secondaryBtn, styles.signInBtn]}
           activeOpacity={0.85}
@@ -2585,9 +2585,9 @@ export default function ChillyChatThreadScreen() {
   if (officialAccount) {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28, paddingHorizontal: 24 }]}>
-        <Text style={styles.stateText}>Rachi now lives in Chi’lly Circle.</Text>
+        <Text style={styles.stateText}>Rachi now lives in Chi&apos;lly Circle.</Text>
         <Text style={[styles.stateText, styles.centeredStateBody]}>
-          Rachi is your first official Chi’lly Circle connection. Chi’lly Chat is for direct threads with people.
+          Rachi is your first official Chi&apos;lly Circle connection. Chi&apos;lly Chat is for direct threads with people.
         </Text>
         <TouchableOpacity
           style={[styles.secondaryBtn, styles.signInBtn]}
@@ -2596,7 +2596,7 @@ export default function ChillyChatThreadScreen() {
             router.replace("/chilly-circle" as Parameters<typeof router.replace>[0]);
           }}
         >
-          <Text style={styles.secondaryBtnText}>Open Chi’lly Circle</Text>
+          <Text style={styles.secondaryBtnText}>Open Chi&apos;lly Circle</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85} onPress={() => router.back()}>
           <Text style={styles.secondaryBtnText}>Back</Text>
@@ -2665,7 +2665,7 @@ export default function ChillyChatThreadScreen() {
             )}
           </View>
           <Text style={styles.headerHint}>
-            Tap the avatar for profile, Chi’lly Circle, report, and call actions.
+            Tap the avatar for profile, Chi&apos;lly Circle, report, and call actions.
           </Text>
         </View>
       </View>
@@ -2677,7 +2677,7 @@ export default function ChillyChatThreadScreen() {
             {otherMemberDisplayName}
           </Text>
           <Text style={styles.headerQuickActionBody}>
-            Open the profile, manage Chi’lly Circle, or keep voice/video entry in this same thread.
+            Open the profile, manage Chi&apos;lly Circle, or keep voice/video entry in this same thread.
           </Text>
           <View style={styles.headerQuickActionRow}>
             <TouchableOpacity
@@ -2861,7 +2861,7 @@ export default function ChillyChatThreadScreen() {
               ? `${otherMemberDisplayName} is still being notified. Tap Open Ringing Call to return.`
               : activeCallInvite?.status === "accepted"
                 ? "Your call is still connected. Tap Open Call to return to the controls."
-                : `${otherMemberDisplayName} can join from this same thread. Open Chi’lly Chat to join.`}
+                : `${otherMemberDisplayName} can join from this same thread. Open Chi'lly Chat to join.`}
           </Text>
         </View>
       ) : null}

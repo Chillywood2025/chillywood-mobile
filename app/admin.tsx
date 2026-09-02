@@ -13979,7 +13979,7 @@ export default function AdminStudioScreen() {
                   <Text style={styles.actionText}>Open Platform</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/chilly-circle")}>
-                  <Text style={styles.actionText}>Open Chi’lly Circle</Text>
+                  <Text style={styles.actionText}>Open Chi&apos;lly Circle</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.actionBtn, styles.configSaveBtnDisabled]} disabled>
                   <Text style={styles.actionText}>Upload Original</Text>
@@ -16476,7 +16476,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>LIVE OPS FIX CENTER</Text>
               <Text style={styles.configTitle}>Owner/Admin Live remediation approvals</Text>
               <Text style={styles.configBody}>
-                Real incident cards for Live Stage, Watch-Party Live, and Chi’lly Chat call reliability only. Approvals go through the server-side proxy; this screen never holds ops approval tokens.
+                Real incident cards for Live Stage, Watch-Party Live, and Chi&apos;lly Chat call reliability only. Approvals go through the server-side proxy; this screen never holds ops approval tokens.
               </Text>
             </View>
             <View style={[styles.badge, getLiveOpsRiskStyle(liveOpsHighestRisk)]}>

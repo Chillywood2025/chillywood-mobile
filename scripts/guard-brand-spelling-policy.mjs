@@ -66,6 +66,7 @@ const textExtensions = new Set([
 
 const canonicalBrand = "Chi" + "'llywood";
 const visibleBrandPattern = /\b[Cc][Hh][Ii](?:['\u2019\u2018`\u00b4\s-]*)[Ll]{1,3}(?:['\u2019\u2018`\u00b4\s-]*)[Yy]?(?:['\u2019\u2018`\u00b4\s-]*)[Ww][Oo][Oo][Dd]\b/gu;
+const noncanonicalProductApostrophePattern = /\bChi[\u2019\u2018`\u00b4]lly\s+(?:Chat|Circle)\b/gu;
 
 const technicalLowercaseContextPattern =
   /(?:com\.chillywood\.mobile|chillywood-mobile|chillywoodstream\.com|chillywood\.test|chillywood-[a-z0-9-]+\.(?:png|jpg|jpeg|webp|svg)|[./@_-]chillywood|chillywood[./@_-])/u;
@@ -142,6 +143,9 @@ for (const filePath of walk(repoRoot)) {
       if (relativePath === "scripts/guard-brand-spelling-policy.mjs") continue;
       violations.push(`${relativePath}:${index + 1}: ${candidate}`);
     }
+    for (const match of line.matchAll(noncanonicalProductApostrophePattern)) {
+      violations.push(`${relativePath}:${index + 1}: ${match[0]}`);
+    }
   });
 }
 
@@ -155,7 +159,7 @@ if (missingCoveragePaths.length > 0) {
 }
 
 if (violations.length > 0) {
-  console.error("Brand spelling guard failed. Canonical visible brand is Chi'llywood.");
+  console.error("Brand spelling guard failed. Canonical visible names use the straight apostrophe in Chi'llywood, Chi'lly Chat, and Chi'lly Circle.");
   console.error("Fix no-y visible brand variants; keep technical identifiers like com.chillywood.mobile unchanged.");
   for (const violation of violations) console.error(`- ${violation}`);
   process.exit(1);

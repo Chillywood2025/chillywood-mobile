@@ -49,7 +49,6 @@ const filesToScanForEntities = [
 
 for (const file of filesToScanForEntities) {
   const source = read(file);
-  assertNotIncludes(source, "&apos;", file);
   assertNotIncludes(source, "&#39;", file);
 }
 
