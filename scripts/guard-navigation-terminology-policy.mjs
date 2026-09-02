@@ -45,11 +45,16 @@ const getPropertyKey = (propertyPath) => {
 const resolveContainerProperty = (containerPath, propertyKey, visitedBindings) => {
   const resolvedContainer = resolveConstantPath(containerPath, visitedBindings);
   if (resolvedContainer.isObjectExpression()) {
+    let resolvedProperty = null;
     for (const propertyPath of resolvedContainer.get("properties")) {
       if (propertyPath.isObjectProperty() && getPropertyKey(propertyPath) === propertyKey) {
-        return resolveConstantPath(propertyPath.get("value"), visitedBindings);
+        resolvedProperty = resolveConstantPath(propertyPath.get("value"), visitedBindings);
+      } else if (propertyPath.isSpreadElement()) {
+        resolvedProperty = resolveContainerProperty(propertyPath.get("argument"), propertyKey, visitedBindings)
+          ?? resolvedProperty;
       }
     }
+    if (resolvedProperty) return resolvedProperty;
   }
   if (resolvedContainer.isArrayExpression() && /^\d+$/u.test(String(propertyKey))) {
     const elementPath = resolvedContainer.get("elements")[Number(propertyKey)];
@@ -60,7 +65,16 @@ const resolveContainerProperty = (containerPath, propertyKey, visitedBindings) =
 
 function resolveConstantPath(nodePath, visitedBindings = new Set()) {
   if (!nodePath?.node) return nodePath;
-  if (nodePath.isMemberExpression()) {
+  if (
+    nodePath.isParenthesizedExpression?.()
+    || nodePath.isTSAsExpression?.()
+    || nodePath.isTSTypeAssertion?.()
+    || nodePath.isTSSatisfiesExpression?.()
+    || nodePath.isTSNonNullExpression?.()
+  ) {
+    return resolveConstantPath(nodePath.get("expression"), visitedBindings);
+  }
+  if (nodePath.isMemberExpression() || nodePath.isOptionalMemberExpression?.()) {
     const propertyPath = nodePath.get("property");
     const propertyKey = !nodePath.node.computed && propertyPath.isIdentifier()
       ? propertyPath.node.name
@@ -82,11 +96,24 @@ function resolveConstantPath(nodePath, visitedBindings = new Set()) {
     for (const propertyPath of idPath.get("properties")) {
       if (!propertyPath.isObjectProperty()) continue;
       const valuePath = propertyPath.get("value");
-      if (!valuePath.isIdentifier({ name: nodePath.node.name })) continue;
+      const boundIdentifierPath = valuePath.isAssignmentPattern() ? valuePath.get("left") : valuePath;
+      if (!boundIdentifierPath.isIdentifier({ name: nodePath.node.name })) continue;
       const sourceKey = getPropertyKey(propertyPath);
       if (sourceKey !== null) {
-        return resolveContainerProperty(initPath, sourceKey, nextVisited) ?? nodePath;
+        return resolveContainerProperty(initPath, sourceKey, nextVisited)
+          ?? (valuePath.isAssignmentPattern() ? resolveConstantPath(valuePath.get("right"), nextVisited) : nodePath);
       }
+    }
+  }
+  if (idPath.isArrayPattern()) {
+    const elementPaths = idPath.get("elements");
+    for (let index = 0; index < elementPaths.length; index += 1) {
+      const elementPath = elementPaths[index];
+      if (!elementPath?.node) continue;
+      const boundIdentifierPath = elementPath.isAssignmentPattern() ? elementPath.get("left") : elementPath;
+      if (!boundIdentifierPath.isIdentifier({ name: nodePath.node.name })) continue;
+      return resolveContainerProperty(initPath, String(index), nextVisited)
+        ?? (elementPath.isAssignmentPattern() ? resolveConstantPath(elementPath.get("right"), nextVisited) : nodePath);
     }
   }
   return nodePath;
@@ -115,6 +142,13 @@ const collectStringFragments = (nodePath, visitedBindings = new Set()) => {
   if (nodePath.isIdentifier()) collectReferencedBinding(nodePath);
   nodePath.traverse({
     MemberExpression(memberPath) {
+      const resolvedMemberPath = resolveConstantPath(memberPath, visitedBindings);
+      if (resolvedMemberPath !== memberPath) {
+        fragments.push(...collectStringFragments(resolvedMemberPath, visitedBindings));
+        memberPath.skip();
+      }
+    },
+    OptionalMemberExpression(memberPath) {
       const resolvedMemberPath = resolveConstantPath(memberPath, visitedBindings);
       if (resolvedMemberPath !== memberPath) {
         fragments.push(...collectStringFragments(resolvedMemberPath, visitedBindings));
@@ -487,6 +521,12 @@ if (findUnsafeThrownErrors(friendGraph).length > 0) {
   'const left = "chan"; const right = "nel"; ({ get message() { return left + status + right; } });',
   'const COPY = { left: "chan", right: "nel" }; ({ message: COPY.left + status + COPY.right });',
   'const COPY = { left: "chan", right: "nel" }; const { left, right } = COPY; ({ message: left + status + right });',
+  'const COPY = ({ left: "chan", right: "nel" } as const); ({ message: COPY.left + status + COPY.right });',
+  'const COPY = ({ left: "chan", right: "nel" } satisfies Record<string, string>); ({ message: COPY.left + status + COPY.right });',
+  'const COPY = { ...{ left: "chan", right: "nel" } }; ({ message: COPY.left + status + COPY.right });',
+  'const COPY = ["chan", "nel"] as const; const [left, right] = COPY; ({ message: left + status + right });',
+  'const { left = "chan", right = "nel" } = {}; ({ message: left + status + right });',
+  'const COPY = { left: "chan", right: "nel" }; ({ message: COPY?.left + status + COPY?.right });',
 ].forEach((mutant) => {
   if (!hasStaleStaticChannelMessage(mutant)) {
     fail(`Platform audience guard accepted binding/dynamic stale-message mutant: ${mutant}`);
