@@ -27,6 +27,138 @@ const parseTsx = (source) => parse(source, {
   plugins: ["typescript", "jsx", "decorators-legacy", "classProperties", "classPrivateProperties", "classPrivateMethods", "importAttributes"],
 });
 
+const unwrapExpression = (nodePath) => {
+  let currentPath = nodePath;
+  while (
+    currentPath?.isTSAsExpression?.()
+    || currentPath?.isTSTypeAssertion?.()
+    || currentPath?.isTSNonNullExpression?.()
+    || currentPath?.isParenthesizedExpression?.()
+  ) {
+    currentPath = currentPath.get("expression");
+  }
+  return currentPath;
+};
+
+const flattenLogical = (nodePath, operator) => {
+  const expressionPath = unwrapExpression(nodePath);
+  if (!expressionPath?.isLogicalExpression({ operator })) return [expressionPath];
+  return [
+    ...flattenLogical(expressionPath.get("left"), operator),
+    ...flattenLogical(expressionPath.get("right"), operator),
+  ];
+};
+
+const matchExactTerms = (terms, predicates) => {
+  if (terms.length !== predicates.length) return false;
+  const unmatched = [...terms];
+  return predicates.every((predicate) => {
+    const index = unmatched.findIndex((term) => predicate(term));
+    if (index < 0) return false;
+    unmatched.splice(index, 1);
+    return true;
+  });
+};
+
+const isMemberChain = (nodePath, names) => {
+  let currentPath = unwrapExpression(nodePath);
+  for (let index = names.length - 1; index > 0; index -= 1) {
+    if (!currentPath?.isMemberExpression() || currentPath.node.computed
+      || !currentPath.get("property").isIdentifier({ name: names[index] })) return false;
+    currentPath = unwrapExpression(currentPath.get("object"));
+  }
+  return currentPath?.isIdentifier({ name: names[0] }) ?? false;
+};
+
+const isAppStateActive = (nodePath) => {
+  const expressionPath = unwrapExpression(nodePath);
+  if (!expressionPath?.isBinaryExpression({ operator: "===" })) return false;
+  const leftPath = unwrapExpression(expressionPath.get("left"));
+  const rightPath = unwrapExpression(expressionPath.get("right"));
+  return (leftPath.isIdentifier({ name: "appState" }) && rightPath.isStringLiteral({ value: "active" }))
+    || (rightPath.isIdentifier({ name: "appState" }) && leftPath.isStringLiteral({ value: "active" }));
+};
+
+const getIdentifierBinding = (identifierPath, name) => (
+  identifierPath?.isIdentifier({ name }) ? identifierPath.scope.getBinding(name) : null
+);
+
+const getBindingInitializer = (identifierPath, name) => {
+  const binding = getIdentifierBinding(identifierPath, name);
+  return binding?.path.isVariableDeclarator() ? binding.path.get("init") : null;
+};
+
+const hasParameterBinding = (identifierPath, name) => getIdentifierBinding(identifierPath, name)?.kind === "param";
+
+const isRoleGrantPublishIntent = (nodePath) => {
+  const expressionPath = unwrapExpression(nodePath);
+  if (!expressionPath?.isLogicalExpression({ operator: "??" })) return false;
+  const publishOverridePath = unwrapExpression(expressionPath.get("left"));
+  if (!publishOverridePath.isIdentifier({ name: "publishLocalVideo" })
+    || !hasParameterBinding(publishOverridePath, "publishLocalVideo")) return false;
+  const grantTerms = flattenLogical(expressionPath.get("right"), "&&");
+  return matchExactTerms(grantTerms, [
+    (term) => {
+      const comparisonPath = unwrapExpression(term);
+      if (!comparisonPath?.isBinaryExpression({ operator: "!==" })) return false;
+      const leftPath = unwrapExpression(comparisonPath.get("left"));
+      const rightPath = unwrapExpression(comparisonPath.get("right"));
+      return (isMemberChain(leftPath, ["joinContract", "participantRole"]) && rightPath.isStringLiteral({ value: "viewer" }))
+        || (isMemberChain(rightPath, ["joinContract", "participantRole"]) && leftPath.isStringLiteral({ value: "viewer" }));
+    },
+    (term) => isMemberChain(term, ["joinContract", "requestedGrants", "canPublish"]),
+  ]);
+};
+
+const isOperativeReturnedJsx = (elementPath) => {
+  let currentPath = elementPath;
+  while (currentPath?.parentPath) {
+    const parentPath = currentPath.parentPath;
+    if (parentPath.isReturnStatement()) return true;
+    if (parentPath.isFunction()) return false;
+    if (parentPath.isLogicalExpression({ operator: "&&" })
+      && currentPath.key === "right"
+      && unwrapExpression(parentPath.get("left")).isBooleanLiteral({ value: false })) return false;
+    if (parentPath.isConditionalExpression()) {
+      const testPath = unwrapExpression(parentPath.get("test"));
+      if (currentPath.key === "consequent" && testPath.isBooleanLiteral({ value: false })) return false;
+      if (currentPath.key === "alternate" && testPath.isBooleanLiteral({ value: true })) return false;
+    }
+    currentPath = parentPath;
+  }
+  return false;
+};
+
+const hasExpectedCaptureAuthority = (effectiveInitPath, roomComponentName) => {
+  const effectiveTerms = flattenLogical(effectiveInitPath, "&&");
+  if (!matchExactTerms(effectiveTerms, [
+    (term) => term?.isIdentifier({ name: "shouldConnectRoom" }),
+    (term) => term?.isIdentifier({ name: "publishLocalCamera" }),
+  ])) return false;
+  const shouldConnectPath = effectiveTerms.find((term) => term.isIdentifier({ name: "shouldConnectRoom" }));
+  const publishIntentPath = effectiveTerms.find((term) => term.isIdentifier({ name: "publishLocalCamera" }));
+  const shouldConnectInit = getBindingInitializer(shouldConnectPath, "shouldConnectRoom");
+
+  if (roomComponentName === "HybridLiveKitRoom") {
+    return isAppStateActive(shouldConnectInit)
+      && hasParameterBinding(publishIntentPath, "publishLocalCamera");
+  }
+  if (roomComponentName !== "LiveKitRoom") return false;
+
+  const connectionTerms = flattenLogical(shouldConnectInit, "&&");
+  if (!matchExactTerms(connectionTerms, [
+    (term) => term?.isIdentifier({ name: "active" }),
+    (term) => term?.isIdentifier({ name: "appIsInteractive" }),
+  ])) return false;
+  const activePath = connectionTerms.find((term) => term.isIdentifier({ name: "active" }));
+  const interactivePath = connectionTerms.find((term) => term.isIdentifier({ name: "appIsInteractive" }));
+  const interactiveInit = getBindingInitializer(interactivePath, "appIsInteractive");
+  const publishIntentInit = getBindingInitializer(publishIntentPath, "publishLocalCamera");
+  return hasParameterBinding(activePath, "active")
+    && isAppStateActive(interactiveInit)
+    && isRoleGrantPublishIntent(publishIntentInit);
+};
+
 const hasEffectiveLiveKitCaptureGate = (source, roomComponentName) => {
   const ast = parseTsx(source);
   let hybridRoomCount = 0;
@@ -35,6 +167,7 @@ const hasEffectiveLiveKitCaptureGate = (source, roomComponentName) => {
     JSXOpeningElement(elementPath) {
       if (!elementPath.get("name").isJSXIdentifier({ name: roomComponentName })) return;
       hybridRoomCount += 1;
+      if (!isOperativeReturnedJsx(elementPath)) return;
       for (const attributePath of elementPath.get("attributes")) {
         if (!attributePath.isJSXAttribute() || !attributePath.get("name").isJSXIdentifier({ name: "video" })) continue;
         const valuePath = attributePath.get("value");
@@ -48,9 +181,7 @@ const hasEffectiveLiveKitCaptureGate = (source, roomComponentName) => {
         const effectiveInitPath = effectiveBinding?.path.isVariableDeclarator()
           ? effectiveBinding.path.get("init")
           : null;
-        if (effectiveInitPath?.isLogicalExpression({ operator: "&&" })
-          && effectiveInitPath.get("left").isIdentifier({ name: "shouldConnectRoom" })
-          && effectiveInitPath.get("right").isIdentifier({ name: "publishLocalCamera" })) {
+        if (effectiveInitPath && hasExpectedCaptureAuthority(effectiveInitPath, roomComponentName)) {
           boundVideoPropCount += 1;
         }
       }
@@ -132,20 +263,57 @@ assertEffectiveLiveKitCaptureGate(liveKitSurface, "LiveKitRoom", "Watch-Party Li
 assertIncludes(liveStage, "createLiveKitV1RoomOptions", "Live Stage v1 room options");
 assertEffectiveLiveKitCaptureGate(liveStage, "HybridLiveKitRoom", "Live Stage effective capture options");
 
-for (const [label, source, roomComponentName] of [["Watch-Party LiveKit", liveKitSurface, "LiveKitRoom"], ["Live Stage", liveStage, "HybridLiveKitRoom"]]) {
-  const disconnectedProp = source.replace(
-    "video={effectivePublishLocalCamera ? LIVE_VIDEO_CAPTURE_OPTIONS : false}",
-    "video={publishLocalCamera ? LIVE_VIDEO_CAPTURE_OPTIONS : false}",
-  );
-  if (hasEffectiveLiveKitCaptureGate(disconnectedProp, roomComponentName)) {
-    fail(`${label} capture guard accepted a video prop disconnected from the effective foreground gate.`);
+for (const roomComponentName of ["LiveKitRoom", "HybridLiveKitRoom"]) {
+  const authorityFixture = roomComponentName === "LiveKitRoom"
+    ? `
+      const publishLocalCamera = publishLocalVideo
+        ?? (joinContract.participantRole !== "viewer" && joinContract.requestedGrants.canPublish);
+      const appIsInteractive = appState === "active";
+      const shouldConnectRoom = appIsInteractive && active;
+    `
+    : `
+      const shouldConnectRoom = "active" === appState;
+    `;
+  const fixtureParameters = roomComponentName === "LiveKitRoom"
+    ? "{ active, publishLocalVideo }"
+    : "{ publishLocalCamera }";
+  const validFixture = `
+    const Example = (${fixtureParameters}) => {
+      ${authorityFixture}
+      const effectivePublishLocalCamera = publishLocalCamera && shouldConnectRoom;
+      return <${roomComponentName}
+        video={effectivePublishLocalCamera
+          ? LIVE_VIDEO_CAPTURE_OPTIONS
+          : false}
+      />;
+    };
+  `;
+  if (!hasEffectiveLiveKitCaptureGate(validFixture, roomComponentName)) {
+    fail(`${roomComponentName} capture guard rejected an equivalent formatted gate.`);
   }
-  const unconditionalGate = source.replace(
-    "const effectivePublishLocalCamera = shouldConnectRoom && publishLocalCamera;",
+  const disconnectedProp = validFixture.replace("video={effectivePublishLocalCamera", "video={publishLocalCamera");
+  if (hasEffectiveLiveKitCaptureGate(disconnectedProp, roomComponentName)) {
+    fail(`${roomComponentName} capture guard accepted a video prop disconnected from the effective foreground gate.`);
+  }
+  const unconditionalGate = validFixture.replace(
+    "const effectivePublishLocalCamera = publishLocalCamera && shouldConnectRoom;",
     "const effectivePublishLocalCamera = true;",
   );
   if (hasEffectiveLiveKitCaptureGate(unconditionalGate, roomComponentName)) {
-    fail(`${label} capture guard accepted an effective camera binding without lifecycle and publish intent.`);
+    fail(`${roomComponentName} capture guard accepted an effective camera binding without lifecycle and publish intent.`);
+  }
+  const unconditionalConnection = validFixture.replace(
+    roomComponentName === "LiveKitRoom"
+      ? "const shouldConnectRoom = appIsInteractive && active;"
+      : 'const shouldConnectRoom = "active" === appState;',
+    "const shouldConnectRoom = true;",
+  );
+  if (hasEffectiveLiveKitCaptureGate(unconditionalConnection, roomComponentName)) {
+    fail(`${roomComponentName} capture guard accepted a room connection without the foreground lifecycle gate.`);
+  }
+  const deadReturn = validFixture.replace("return <", "return false && <");
+  if (hasEffectiveLiveKitCaptureGate(deadReturn, roomComponentName)) {
+    fail(`${roomComponentName} capture guard accepted a statically unreachable room render.`);
   }
 }
 

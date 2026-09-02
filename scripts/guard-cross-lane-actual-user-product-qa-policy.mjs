@@ -33,17 +33,6 @@ const parseTsx = (source) => parse(source, {
   plugins: ["typescript", "jsx", "decorators-legacy", "classProperties", "classPrivateProperties", "classPrivateMethods", "importAttributes"],
 });
 
-const pathContainsIdentifier = (nodePath, name) => {
-  if (nodePath.isIdentifier({ name })) return true;
-  let found = false;
-  nodePath.traverse({
-    Identifier(identifierPath) {
-      if (identifierPath.isIdentifier({ name })) found = true;
-    },
-  });
-  return found;
-};
-
 const findIdentifierPath = (nodePath, name) => {
   if (nodePath.isIdentifier({ name })) return nodePath;
   let match = null;
@@ -53,6 +42,26 @@ const findIdentifierPath = (nodePath, name) => {
     },
   });
   return match;
+};
+
+const flattenLogical = (nodePath, operator) => {
+  const expressionPath = unwrapExpression(nodePath);
+  if (!expressionPath?.isLogicalExpression({ operator })) return [expressionPath];
+  return [
+    ...flattenLogical(expressionPath.get("left"), operator),
+    ...flattenLogical(expressionPath.get("right"), operator),
+  ];
+};
+
+const matchExactTerms = (terms, predicates) => {
+  if (terms.length !== predicates.length) return false;
+  const unmatched = [...terms];
+  return predicates.every((predicate) => {
+    const index = unmatched.findIndex((term) => predicate(term));
+    if (index < 0) return false;
+    unmatched.splice(index, 1);
+    return true;
+  });
 };
 
 const unwrapExpression = (nodePath) => {
@@ -76,20 +85,95 @@ const isParticipantMember = (nodePath, propertyName) => {
     && expressionPath.get("property").isIdentifier({ name: propertyName });
 };
 
-const pathContainsParticipantMember = (nodePath, propertyName) => {
-  if (isParticipantMember(nodePath, propertyName)) return true;
-  let found = false;
-  nodePath.traverse({
-    MemberExpression(memberPath) {
-      if (isParticipantMember(memberPath, propertyName)) found = true;
-    },
-  });
-  return found;
-};
-
 const bindingInitializer = (identifierPath, name) => {
   const binding = identifierPath?.scope.getBinding(name);
   return binding?.path.isVariableDeclarator() ? binding.path.get("init") : null;
+};
+
+const isDoubleNegated = (nodePath, predicate) => {
+  const expressionPath = unwrapExpression(nodePath);
+  if (!expressionPath?.isUnaryExpression({ operator: "!" })) return false;
+  const innerPath = unwrapExpression(expressionPath.get("argument"));
+  return innerPath?.isUnaryExpression({ operator: "!" })
+    && predicate(unwrapExpression(innerPath.get("argument")));
+};
+
+const isRemoteCameraGate = (nodePath) => matchExactTerms(flattenLogical(nodePath, "||"), [
+  (term) => {
+    const expressionPath = unwrapExpression(term);
+    return expressionPath?.isUnaryExpression({ operator: "!" })
+      && isParticipantMember(expressionPath.get("argument"), "isSelf");
+  },
+  (term) => term?.isIdentifier({ name: "cameraRequested" }),
+]);
+
+const isLocalCameraTypeCheck = (nodePath) => {
+  const expressionPath = unwrapExpression(nodePath);
+  if (!expressionPath?.isBinaryExpression({ operator: "===" })) return false;
+  const isTypeofLocalCamera = (operandPath) => {
+    const unwrappedPath = unwrapExpression(operandPath);
+    return unwrappedPath?.isUnaryExpression({ operator: "typeof" })
+      && unwrapExpression(unwrappedPath.get("argument")).isIdentifier({ name: "localCameraEnabled" });
+  };
+  const leftPath = unwrapExpression(expressionPath.get("left"));
+  const rightPath = unwrapExpression(expressionPath.get("right"));
+  return (isTypeofLocalCamera(leftPath) && rightPath.isStringLiteral({ value: "boolean" }))
+    || (isTypeofLocalCamera(rightPath) && leftPath.isStringLiteral({ value: "boolean" }));
+};
+
+const isCameraRequestedInitializer = (nodePath) => {
+  const expressionPath = unwrapExpression(nodePath);
+  if (!expressionPath?.isConditionalExpression()
+    || !unwrapExpression(expressionPath.get("test")).isIdentifier({ name: "isVideoCall" })
+    || !unwrapExpression(expressionPath.get("alternate")).isBooleanLiteral({ value: false })) return false;
+  const localChoicePath = unwrapExpression(expressionPath.get("consequent"));
+  if (!localChoicePath?.isConditionalExpression()
+    || !unwrapExpression(localChoicePath.get("consequent")).isIdentifier({ name: "localCameraEnabled" })
+    || !isParticipantMember(localChoicePath.get("alternate"), "cameraOn")) return false;
+  return matchExactTerms(flattenLogical(localChoicePath.get("test"), "&&"), [
+    (term) => isParticipantMember(term, "isSelf"),
+    (term) => isLocalCameraTypeCheck(term),
+  ]);
+};
+
+const isHasLiveKitVideoInitializer = (nodePath) => matchExactTerms(flattenLogical(nodePath, "&&"), [
+  (term) => term?.isIdentifier({ name: "isVideoCall" }),
+  (term) => isDoubleNegated(term, (operandPath) => isParticipantMember(operandPath, "liveKitVideoTrackReference")),
+  (term) => isRemoteCameraGate(term),
+]);
+
+const isHasVideoStreamInitializer = (nodePath) => matchExactTerms(flattenLogical(nodePath, "&&"), [
+  (term) => term?.isIdentifier({ name: "isVideoCall" }),
+  (term) => matchExactTerms(flattenLogical(term, "||"), [
+    (option) => isDoubleNegated(option, (operandPath) => isParticipantMember(operandPath, "streamURL")),
+    (option) => option?.isIdentifier({ name: "hasLiveKitVideo" }),
+  ]),
+  (term) => isRemoteCameraGate(term),
+]);
+
+const isShowLegacyVideoInitializer = (nodePath) => matchExactTerms(flattenLogical(nodePath, "&&"), [
+  (term) => isDoubleNegated(term, (operandPath) => operandPath?.isIdentifier({ name: "RTCView" })),
+  (term) => isDoubleNegated(term, (operandPath) => isParticipantMember(operandPath, "streamURL")),
+  (term) => term?.isIdentifier({ name: "hasVideoStream" }),
+]);
+
+const isOperativeReturnedExpression = (expressionPath) => {
+  let currentPath = expressionPath;
+  while (currentPath?.parentPath) {
+    const parentPath = currentPath.parentPath;
+    if (parentPath.isReturnStatement()) return true;
+    if (parentPath.isFunction()) return false;
+    if (parentPath.isLogicalExpression({ operator: "&&" })
+      && currentPath.key === "right"
+      && unwrapExpression(parentPath.get("left")).isBooleanLiteral({ value: false })) return false;
+    if (parentPath.isConditionalExpression()) {
+      const testPath = unwrapExpression(parentPath.get("test"));
+      if (currentPath.key === "consequent" && testPath.isBooleanLiteral({ value: false })) return false;
+      if (currentPath.key === "alternate" && testPath.isBooleanLiteral({ value: true })) return false;
+    }
+    currentPath = parentPath;
+  }
+  return false;
 };
 
 const hasBoundHybridVideoRender = (source) => {
@@ -104,13 +188,13 @@ const hasBoundHybridVideoRender = (source) => {
     },
     ConditionalExpression(conditionalPath) {
       const liveKitTestPath = conditionalPath.get("test");
-      if (!liveKitTestPath.isIdentifier({ name: "hasLiveKitVideo" })) return;
+      if (!liveKitTestPath.isIdentifier({ name: "hasLiveKitVideo" })
+        || !isOperativeReturnedExpression(conditionalPath)) return;
       const hasLiveKitVideoInit = bindingInitializer(liveKitTestPath, "hasLiveKitVideo");
-      if (!hasLiveKitVideoInit
-        || !pathContainsIdentifier(hasLiveKitVideoInit, "isVideoCall")
-        || !pathContainsParticipantMember(hasLiveKitVideoInit, "liveKitVideoTrackReference")
-        || !pathContainsParticipantMember(hasLiveKitVideoInit, "isSelf")
-        || !pathContainsIdentifier(hasLiveKitVideoInit, "cameraRequested")) return;
+      if (!hasLiveKitVideoInit || !isHasLiveKitVideoInitializer(hasLiveKitVideoInit)) return;
+      const liveKitCameraPath = findIdentifierPath(hasLiveKitVideoInit, "cameraRequested");
+      const cameraRequestedInit = bindingInitializer(liveKitCameraPath, "cameraRequested");
+      if (!cameraRequestedInit || !isCameraRequestedInitializer(cameraRequestedInit)) return;
       let hasBoundLiveKitTrack = false;
       conditionalPath.get("consequent").traverse({
         JSXOpeningElement(elementPath) {
@@ -126,25 +210,27 @@ const hasBoundHybridVideoRender = (source) => {
       });
 
       const fallbackPath = conditionalPath.get("alternate");
-      if (!fallbackPath.isConditionalExpression()
-        || !pathContainsIdentifier(fallbackPath.get("test"), "showLegacyVideo")
-        || !pathContainsIdentifier(fallbackPath.get("test"), "RTCView")) return;
-      const showLegacyIdentifierPath = findIdentifierPath(fallbackPath.get("test"), "showLegacyVideo");
+      if (!fallbackPath.isConditionalExpression()) return;
+      const fallbackTestPath = fallbackPath.get("test");
+      const fallbackTerms = flattenLogical(fallbackTestPath, "&&");
+      if (!matchExactTerms(fallbackTerms, [
+        (term) => term?.isIdentifier({ name: "showLegacyVideo" }),
+        (term) => term?.isIdentifier({ name: "RTCView" }),
+      ])) return;
+      const showLegacyIdentifierPath = fallbackTerms.find((term) => term.isIdentifier({ name: "showLegacyVideo" }));
       const showLegacyInit = bindingInitializer(showLegacyIdentifierPath, "showLegacyVideo");
       const hasVideoStreamIdentifierPath = showLegacyInit
         ? findIdentifierPath(showLegacyInit, "hasVideoStream")
         : null;
       const hasVideoStreamInit = bindingInitializer(hasVideoStreamIdentifierPath, "hasVideoStream");
-      if (!showLegacyInit
-        || !pathContainsIdentifier(showLegacyInit, "RTCView")
-        || !pathContainsParticipantMember(showLegacyInit, "streamURL")
-        || !pathContainsIdentifier(showLegacyInit, "hasVideoStream")
-        || !hasVideoStreamInit
-        || !pathContainsIdentifier(hasVideoStreamInit, "isVideoCall")
-        || !pathContainsParticipantMember(hasVideoStreamInit, "streamURL")
-        || !pathContainsIdentifier(hasVideoStreamInit, "hasLiveKitVideo")
-        || !pathContainsParticipantMember(hasVideoStreamInit, "isSelf")
-        || !pathContainsIdentifier(hasVideoStreamInit, "cameraRequested")) return;
+      if (!showLegacyInit || !isShowLegacyVideoInitializer(showLegacyInit)
+        || !hasVideoStreamInit || !isHasVideoStreamInitializer(hasVideoStreamInit)) return;
+      const streamLiveKitPath = findIdentifierPath(hasVideoStreamInit, "hasLiveKitVideo");
+      const streamLiveKitInit = bindingInitializer(streamLiveKitPath, "hasLiveKitVideo");
+      const streamCameraPath = findIdentifierPath(hasVideoStreamInit, "cameraRequested");
+      const streamCameraInit = bindingInitializer(streamCameraPath, "cameraRequested");
+      if (streamLiveKitInit?.node !== hasLiveKitVideoInit.node
+        || streamCameraInit?.node !== cameraRequestedInit.node) return;
       let hasBoundLegacyRtc = false;
       fallbackPath.get("consequent").traverse({
         JSXOpeningElement(elementPath) {
@@ -241,19 +327,80 @@ forbidMatch("cross-lane QA doc", doc, /\b(?:\d{1,3}\.){3}\d{1,3}\b/, "raw IP val
 
 forbidMatch("communication participant grid", participantGrid, /const\s+showVideo\s*=\s*!!RTCView\s*&&\s*!!participant\.streamURL\s*&&\s*participant\.cameraOn/, "RTC video render gated by stale cameraOn");
 forbidMatch("communication participant grid", participantGrid, /remoteRenderableCount:[^\n]+participant\.cameraOn/, "remote renderability debug gated by stale cameraOn");
-requireText("communication participant grid", participantGrid, "const hasLiveKitVideo = isVideoCall");
-requireText("communication participant grid", participantGrid, "!!participant.liveKitVideoTrackReference");
-requireText("communication participant grid", participantGrid, "const hasVideoStream = isVideoCall");
-requireText("communication participant grid", participantGrid, "(!!participant.streamURL || hasLiveKitVideo)");
-requireText("communication participant grid", participantGrid, "const showLegacyVideo = !!RTCView && !!participant.streamURL && hasVideoStream;");
 requireText("communication participant grid", participantGrid, "Video connected");
 if (!hasBoundHybridVideoRender(participantGrid)) {
   fail("communication participant grid must bind the LiveKit track and legacy RTC fallback to their operative render conditions");
 }
 
-const disconnectedHybridRender = participantGrid.replace("{hasLiveKitVideo ? (", "{false ? (");
+const validHybridRenderFixture = `
+  const Grid = () => {
+    const cameraRequested = isVideoCall
+      ? participant.isSelf && typeof localCameraEnabled === "boolean"
+        ? localCameraEnabled
+        : participant.cameraOn
+      : false;
+    const hasLiveKitVideo = isVideoCall
+      && !!participant.liveKitVideoTrackReference
+      && (!participant.isSelf || cameraRequested);
+    const hasVideoStream = isVideoCall
+      && (!!participant.streamURL || hasLiveKitVideo)
+      && (!participant.isSelf || cameraRequested);
+    const showLegacyVideo = !!RTCView && !!participant.streamURL && hasVideoStream;
+    return hasLiveKitVideo ? (
+      <LiveKitVideoTrack trackRef={participant.liveKitVideoTrackReference as unknown} />
+    ) : showLegacyVideo && RTCView ? (
+      <RTCView streamURL={participant.streamURL as string} />
+    ) : null;
+  };
+`;
+if (!hasBoundHybridVideoRender(validHybridRenderFixture)) {
+  fail("communication participant grid guard rejected an equivalent formatted hybrid render chain");
+}
+const disconnectedHybridRender = validHybridRenderFixture.replace("return hasLiveKitVideo ? (", "return false ? (");
 if (hasBoundHybridVideoRender(disconnectedHybridRender)) {
   fail("communication participant grid guard accepted a LiveKit render branch disconnected from hasLiveKitVideo");
+}
+const disconnectedLegacyFallback = validHybridRenderFixture.replace(
+  ") : showLegacyVideo && RTCView ? (",
+  ") : false && showLegacyVideo && RTCView ? (",
+);
+if (hasBoundHybridVideoRender(disconnectedLegacyFallback)) {
+  fail("communication participant grid guard accepted a disabled legacy RTC fallback");
+}
+const disabledLiveKitBinding = validHybridRenderFixture.replace(
+  "const hasLiveKitVideo = isVideoCall",
+  "const hasLiveKitVideo = false && isVideoCall",
+);
+if (hasBoundHybridVideoRender(disabledLiveKitBinding)) {
+  fail("communication participant grid guard accepted an always-false LiveKit render binding");
+}
+const disabledLegacyBinding = validHybridRenderFixture.replace(
+  "const showLegacyVideo = !!RTCView",
+  "const showLegacyVideo = false && !!RTCView",
+);
+if (hasBoundHybridVideoRender(disabledLegacyBinding)) {
+  fail("communication participant grid guard accepted an always-false legacy render binding");
+}
+const negatedLegacyCapability = validHybridRenderFixture.replace(
+  ") : showLegacyVideo && RTCView ? (",
+  ") : showLegacyVideo && !RTCView ? (",
+);
+if (hasBoundHybridVideoRender(negatedLegacyCapability)) {
+  fail("communication participant grid guard accepted a negated legacy RTC capability gate");
+}
+const disconnectedCameraIntent = validHybridRenderFixture.replace(
+  "const cameraRequested = isVideoCall",
+  "const cameraRequested = true",
+);
+if (hasBoundHybridVideoRender(disconnectedCameraIntent)) {
+  fail("communication participant grid guard accepted camera rendering disconnected from call intent");
+}
+const deadHybridReturn = validHybridRenderFixture.replace("return hasLiveKitVideo ? (", "return false && (hasLiveKitVideo ? (").replace(
+  ") : null;\n  };",
+  ") : null);\n  };",
+);
+if (hasBoundHybridVideoRender(deadHybridReturn)) {
+  fail("communication participant grid guard accepted a statically unreachable hybrid render chain");
 }
 
 forbidMatch("live stage screen", liveStage, /showHeroRemoteVideo[^\n]+cameraOn/, "hero remote Live video gated by stale cameraOn");
