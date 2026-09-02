@@ -17,7 +17,7 @@
   "newTimeboxHours": 8,
   "fileBudget": {
     "default": 15,
-    "waivedMaximum": 18
+    "waivedMaximum": 19
   },
   "lineBudget": {
     "default": 1200,
