@@ -1,6 +1,8 @@
 import { parse } from "@babel/parser";
 import { createHash } from "node:crypto";
-const REPORT_SHEET_RELEASE_SHA256 = "fc5e294bcaed9079f5710299ba90596ebef9665ece67fb800a3e3ee706e13df6";
+const REPORT_SHEET_RELEASE_SHA256 = "fc5e294bcaed9079f5710299ba90596ebef9665ece67fb800a3e3ee706e13df6"; const REPORT_SHEET_SEMANTIC_SHA256 = "3e96e2ccba86867dd69eea6010dad13c01d2d0fe02847564a67467daa8b03be5";
+const AST_METADATA_KEYS = new Set(["loc", "start", "end", "extra", "comments", "leadingComments", "innerComments", "trailingComments", "errors"]);
+const canonicalAst = (value) => Array.isArray(value) ? value.map(canonicalAst) : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).filter(([key]) => !AST_METADATA_KEYS.has(key)).map(([key, item]) => [key, canonicalAst(item)])) : value;
 const isNode = (value) => Boolean(value && typeof value === "object" && typeof value.type === "string");
 const walk = (node, visit, bindings = new Map()) => {
   if (!isNode(node)) return;
@@ -518,16 +520,14 @@ export const validateReportSheetSource = (source, { enforceReleaseHash = true } 
     findings.push("report sheet differs from the exact reviewed release-candidate source");
   let ast;
   try {
-    ast = parse(source, {
-      sourceType: "module",
-      plugins: ["typescript", "jsx"],
-    });
+    ast = parse(source, { sourceType: "module", plugins: ["typescript", "jsx"] });
   } catch (error) {
     return [
       `report sheet did not parse: ${error instanceof Error ? error.message : String(error)}`,
     ];
   }
   const program = ast.program;
+  if (createHash("sha256").update(JSON.stringify(canonicalAst(program))).digest("hex") !== REPORT_SHEET_SEMANTIC_SHA256) findings.push("report sheet semantic syntax differs from the reviewed release-candidate contract");
   const programBindings = collectBindings(program.body);
   const reportSheet = findReportSheet(program);
   if (!reportSheet)
