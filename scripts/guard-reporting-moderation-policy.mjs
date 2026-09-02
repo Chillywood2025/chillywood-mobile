@@ -10,15 +10,11 @@ const fail = (message) => {
   process.exit(1);
 };
 
-const workflowDoc = read(
-  "docs/legal/REPORTING_MODERATION_PRODUCTION_WORKFLOW.md",
-);
+const workflowDoc = read("docs/legal/REPORTING_MODERATION_PRODUCTION_WORKFLOW.md");
 const moderationDoc = read("docs/legal/MODERATION_REPORTING_WORKFLOW.md");
 const reportSheet = read("components/safety/report-sheet.tsx");
 const moderationLib = read("_lib/moderation.ts");
-const duplicateMigration = read(
-  "supabase/migrations/20260625202127_reporting_moderation_duplicate_guard.sql",
-);
+const duplicateMigration = read("supabase/migrations/20260625202127_reporting_moderation_duplicate_guard.sql");
 const packageJson = read("package.json");
 
 [
@@ -104,6 +100,8 @@ const reportSheetMutants = [
   ["hidden helper style", reportSheet.replace('helperText: {\n    color: "#8F99B1",\n    fontSize: 12,', 'helperText: {\n    color: "transparent",\n    fontSize: 0,')],
   ["hidden overlay style", reportSheet.replace("  overlay: {", '  overlay: {\n    display: "none",')],
   ["wrong selected chip style", reportSheet.replace("categoryKey === entry.key && styles.categoryChipActive", "busy === false && styles.categoryChipActive")],
+  ["tree-shaken submit annotation", reportSheet.replace("void onSubmit({", "void /*#__PURE__*/ onSubmit({")],
+  ["redirected JSX runtime pragma", `/** @jsxImportSource malicious-jsx-runtime */\n${reportSheet}`],
 ];
 for (const [name, mutant] of reportSheetMutants) {
   if (mutant === reportSheet)
@@ -111,6 +109,8 @@ for (const [name, mutant] of reportSheetMutants) {
   if (validateReportSheetSource(mutant, { enforceReleaseHash: false }).length === 0)
     fail(`report sheet mutant escaped: ${name}`);
 }
+const formattingOnly = [reportSheet.replace('<View style={styles.overlay}>', '<View style={styles.overlay}>{/* formatting-only review comment */}'), reportSheet.replace('<View style={styles.overlay}>', '<View style={styles.overlay}>\n\n'), reportSheet.replace('              <Text style={styles.kicker}>', '          <Text style={styles.kicker}>')];
+if (formattingOnly.some((source) => validateReportSheetSource(source, { enforceReleaseHash: false }).length)) fail("formatting-only JSX changes must not alter the semantic freeze");
 
 [
   "SAFETY_REPORT_TARGET_TYPES",

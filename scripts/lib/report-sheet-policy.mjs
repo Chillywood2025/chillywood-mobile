@@ -1,9 +1,8 @@
 import { parse } from "@babel/parser";
 import { createHash } from "node:crypto";
-const REPORT_SHEET_RELEASE_SHA256 = "fc5e294bcaed9079f5710299ba90596ebef9665ece67fb800a3e3ee706e13df6"; const REPORT_SHEET_SEMANTIC_SHA256 = "3e96e2ccba86867dd69eea6010dad13c01d2d0fe02847564a67467daa8b03be5";
+const REPORT_SHEET_RELEASE_SHA256 = "fc5e294bcaed9079f5710299ba90596ebef9665ece67fb800a3e3ee706e13df6"; const REPORT_SHEET_SEMANTIC_SHA256 = "511028c50726c7f3c145b64eb22ed465949cafa1c95c10d8e11f333b1007b1d7";
 const AST_METADATA_KEYS = new Set(["loc", "start", "end", "extra", "comments", "leadingComments", "innerComments", "trailingComments", "errors"]);
-const canonicalAst = (value) => Array.isArray(value) ? value.map(canonicalAst) : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).filter(([key]) => !AST_METADATA_KEYS.has(key)).map(([key, item]) => [key, canonicalAst(item)])) : value;
-const isNode = (value) => Boolean(value && typeof value === "object" && typeof value.type === "string");
+const canonicalAst = (value) => Array.isArray(value) ? value.map(canonicalAst).filter((item) => item !== null) : value?.type === "JSXExpressionContainer" && value.expression?.type === "JSXEmptyExpression" ? null : value?.type === "JSXText" ? (value.value.trim() ? { type: "JSXText", value: value.value.replace(/\s+/g, " ").trim() } : null) : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).filter(([key]) => !AST_METADATA_KEYS.has(key)).map(([key, item]) => [key, canonicalAst(item)])) : value; const isNode = (value) => Boolean(value && typeof value === "object" && typeof value.type === "string");
 const walk = (node, visit, bindings = new Map()) => {
   if (!isNode(node)) return;
   visit(node);
@@ -516,6 +515,7 @@ const validateSubmitHandler = (renderRoot, findings, bindings) => {
 };
 export const validateReportSheetSource = (source, { enforceReleaseHash = true } = {}) => {
   const findings = [];
+  if (/(?:\/\*+|\/\/)\s*(?:[#@][A-Za-z_]|webpack[A-Za-z]+\s*:)/.test(source)) findings.push("report sheet must not contain build-semantic comment directives");
   if (enforceReleaseHash && createHash("sha256").update(source).digest("hex") !== REPORT_SHEET_RELEASE_SHA256)
     findings.push("report sheet differs from the exact reviewed release-candidate source");
   let ast;
