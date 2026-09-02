@@ -39,10 +39,6 @@ import { createForegroundAuthenticatedUiCallIntent } from "../../_lib/nativeCall
 import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
 import { formatUsernameHandle } from "../../_lib/usernameHandles";
 
-type InboxErrorState = {
-  message: string;
-};
-
 const CHAT_SUGGESTION_MIN_LENGTH = 2;
 const CHAT_SUGGESTION_DEBOUNCE_MS = 300;
 const CHAT_THREAD_PREVIEW_LIMIT = 4;
@@ -101,7 +97,7 @@ export default function ChillyChatInboxScreen() {
   const [threads, setThreads] = useState<ChatThreadSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<InboxErrorState | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [restrictedAccess, setRestrictedAccess] = useState<AccountAccessStatusReadback | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
@@ -152,9 +148,7 @@ export default function ChillyChatInboxScreen() {
           setActiveFriendUserIds([]);
         });
     } catch (loadError: any) {
-      setError({
-        message: getUserFacingErrorMessage(loadError, "Unable to load Chi'lly Chat right now."),
-      });
+      setError(getUserFacingErrorMessage(loadError, "Unable to load Chi'lly Chat right now."));
       setActiveFriendUserIds([]);
     } finally {
       setLoading(false);
@@ -371,9 +365,10 @@ export default function ChillyChatInboxScreen() {
                 setThreads((current) => current.some((item) => item.threadId === thread.threadId) ? current : [thread, ...current]);
                 Alert.alert(
                   "Couldn't remove conversation",
-                  hideError instanceof Error
-                    ? hideError.message
-                    : "Couldn't remove this conversation right now. Please try again.",
+                  getUserFacingErrorMessage(
+                    hideError,
+                    "Couldn't remove this conversation right now. Please try again.",
+                  ),
                 );
               });
           },
@@ -431,9 +426,10 @@ export default function ChillyChatInboxScreen() {
       setSearchPeopleResults([]);
       openThread(thread, startCall);
     } catch (threadError) {
-      const message = threadError instanceof Error
-        ? threadError.message
-        : "Unable to open Chi'lly Chat with this person right now.";
+      const message = getUserFacingErrorMessage(
+        threadError,
+        "Unable to open Chi'lly Chat with this person right now.",
+      );
       setSearchPeopleError(message);
     } finally {
       setStartingChatUserId("");
@@ -581,7 +577,7 @@ export default function ChillyChatInboxScreen() {
         <View style={styles.headerErrorCard}>
           <View style={styles.headerErrorCopy}>
             <Text style={styles.headerErrorTitle}>Inbox needs another try</Text>
-            <Text style={styles.headerErrorBody}>{error.message}</Text>
+            <Text style={styles.headerErrorBody}>{error}</Text>
           </View>
           <TouchableOpacity
             style={styles.headerErrorAction}
@@ -811,7 +807,7 @@ export default function ChillyChatInboxScreen() {
                 ? "Try another name, handle, or clear your search."
                 : "Open Chi'lly Chat from a profile to start your first direct thread."}
             </Text>
-            {error ? <Text style={styles.errorText}>{error.message}</Text> : null}
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
           </View>
         )}
         renderItem={({ item }) => {

@@ -7,6 +7,7 @@ import {
   type SocialAttachmentFile,
   type SocialAttachmentPickerScope,
 } from "./socialAttachments";
+import { UserFacingError } from "./userFacingErrors";
 
 const imageFileNameFromUri = (uri: string) => {
   const name = uri.split("/").pop()?.trim();
@@ -17,7 +18,10 @@ const loadImagePicker = async () => {
   try {
     return await import("expo-image-picker");
   } catch {
-    throw new Error("Photo gallery needs the current app build. Install a rebuilt app, then try Photos again.");
+    throw new UserFacingError(
+      "attachment_action",
+      "Photo gallery needs the current app build. Install a rebuilt app, then try Photos again.",
+    );
   }
 };
 
@@ -50,11 +54,11 @@ export async function pickSocialAttachmentFile(scope: SocialAttachmentPickerScop
 
     if (result.canceled) return null;
     const asset = result.assets[0];
-    if (!asset?.uri) throw new Error("Choose a photo before posting.");
+    if (!asset?.uri) throw new UserFacingError("attachment_action", "Choose a photo before posting.");
 
     const file = buildSocialAttachmentFileFromImageAsset(asset);
     const validationMessage = getSocialAttachmentValidationMessage(file);
-    if (validationMessage) throw new Error(validationMessage);
+    if (validationMessage) throw new UserFacingError("attachment_action", validationMessage);
     return file;
   }
 
@@ -66,10 +70,10 @@ export async function pickSocialAttachmentFile(scope: SocialAttachmentPickerScop
 
   if (result.canceled) return null;
   const asset = result.assets[0];
-  if (!asset?.uri) throw new Error("Choose an attachment before posting.");
+  if (!asset?.uri) throw new UserFacingError("attachment_action", "Choose an attachment before posting.");
 
   const file = buildSocialAttachmentFileFromDocumentAsset(asset);
   const validationMessage = getSocialAttachmentValidationMessage(file);
-  if (validationMessage) throw new Error(validationMessage);
+  if (validationMessage) throw new UserFacingError("attachment_action", validationMessage);
   return file;
 }

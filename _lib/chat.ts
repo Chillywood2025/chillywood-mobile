@@ -33,6 +33,7 @@ import {
   shouldApplyAuthoritativeChatCallCleanup,
 } from "./communicationCallMediaPolicy.mjs";
 import { reportRuntimeError } from "./logger";
+import { UserFacingError } from "./userFacingErrors";
 
 export const CHAT_THREADS_TABLE = "chat_threads";
 export const CHAT_THREAD_MEMBERS_TABLE = "chat_thread_members";
@@ -214,13 +215,13 @@ async function openOrRepairDirectThreadWithRpc(target: ChatTargetIdentity): Prom
       targetUserId,
       message: error.message ?? "unknown_error",
     });
-    throw new Error("Unable to open Chi'lly Chat with this person right now.");
+    throw new UserFacingError("chat_action", "Unable to open Chi'lly Chat with this person right now.");
   }
 
   const threadId = toText(data?.[0]?.thread_id);
   if (!threadId) {
     logChatThread("direct_thread_rpc_repair_missing_thread", { targetUserId });
-    throw new Error("Unable to open Chi'lly Chat with this person right now.");
+    throw new UserFacingError("chat_action", "Unable to open Chi'lly Chat with this person right now.");
   }
 
   const thread = await getChatThread(threadId);
@@ -229,7 +230,7 @@ async function openOrRepairDirectThreadWithRpc(target: ChatTargetIdentity): Prom
       targetUserId,
       threadId,
     });
-    throw new Error("Unable to open Chi'lly Chat with this person right now.");
+    throw new UserFacingError("chat_action", "Unable to open Chi'lly Chat with this person right now.");
   }
 
   await unhideChatThreadForMe(thread.threadId);
@@ -253,7 +254,7 @@ async function getRequiredChatUserId() {
   ) return mountedUserId;
   const userId = toText(await getWritablePartyUserId());
   if (!userId) {
-    throw new Error("Chi'lly Chat requires a signed-in user.");
+    throw new UserFacingError("chat_action", "Chi'lly Chat requires a signed-in user.");
   }
   return userId;
 }
@@ -538,7 +539,7 @@ export async function getChatThreadByActiveCommunicationRoomId(roomId: string): 
 export async function hideChatThreadFromInbox(threadId: string): Promise<void> {
   const normalizedThreadId = toText(threadId);
   if (!normalizedThreadId) {
-    throw new Error("This Chi'lly Chat thread is unavailable.");
+    throw new UserFacingError("chat_action", "This Chi'lly Chat thread is unavailable.");
   }
 
   const rpc = (supabase.rpc as unknown as (
@@ -555,9 +556,9 @@ export async function hideChatThreadFromInbox(threadId: string): Promise<void> {
       message: error.message ?? "unknown_error",
     });
     if (String(error.message ?? "").includes("active_call_in_progress")) {
-      throw new Error("Finish or leave the active call before removing this conversation from your inbox.");
+      throw new UserFacingError("chat_action", "Finish or leave the active call before removing this conversation from your inbox.");
     }
-    throw new Error("Couldn't remove this conversation right now. Please try again.");
+    throw new UserFacingError("chat_action", "Couldn't remove this conversation right now. Please try again.");
   }
 }
 
@@ -609,10 +610,10 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
   const currentUserId = await getRequiredChatUserId();
   const targetUserId = toText(target.userId);
   if (!targetUserId) {
-    throw new Error("Missing target user for Chi'lly Chat thread.");
+    throw new UserFacingError("chat_action", "Missing target user for Chi'lly Chat thread.");
   }
   if (targetUserId === currentUserId) {
-    throw new Error("Use the Chi'lly Chat inbox for your own profile.");
+    throw new UserFacingError("chat_action", "Use the Chi'lly Chat inbox for your own profile.");
   }
 
   logChatThread("direct_thread_start", {
@@ -691,11 +692,11 @@ export async function sendChatMessage(
   const hasAttachment = !!attachmentFile;
   const bodyForInsert = trimmedBody || (attachmentFile ? toText(attachmentFile.name) || "Attachment" : "");
   if (!normalizedThreadId || !bodyForInsert) {
-    throw new Error("Message text is required.");
+    throw new UserFacingError("chat_action", "Message text is required.");
   }
   const thread = await getChatThread(normalizedThreadId);
   if (!thread?.currentMember) {
-    throw new Error("This Chi'lly Chat thread is unavailable.");
+    throw new UserFacingError("chat_action", "This Chi'lly Chat thread is unavailable.");
   }
 
   logChatInvite("send_message_start", {
@@ -859,7 +860,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       threadId: toText(threadId),
       mode,
     });
-    throw new Error("Unable to load Chi'lly Chat thread.");
+    throw new UserFacingError("chat_action", "Unable to load Chi'lly Chat thread.");
   }
 
   const existingRoomId = toText(thread.activeCommunicationRoomId);
@@ -919,7 +920,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       roomId,
       mode,
     });
-    throw new Error("Unable to start Chi'lly Chat call. The receiver is unavailable.");
+    throw new UserFacingError("chat_action", "Unable to start Chi'lly Chat call. The receiver is unavailable.");
   }
 
   let delivery: ChillyChatCallInviteDelivery | null = null;
@@ -940,7 +941,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       mode,
       message: inviteError instanceof Error ? inviteError.message : "invite_failed",
     });
-    throw new Error("Unable to start Chi'lly Chat call. The receiver invite could not be saved.");
+    throw new UserFacingError("chat_action", "Unable to start Chi'lly Chat call. The receiver invite could not be saved.");
   }
 
   if (begunCall.created) {
@@ -985,7 +986,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       roomId,
       mode,
     });
-    throw new Error("Unable to refresh Chi'lly Chat call state.");
+    throw new UserFacingError("chat_action", "Unable to refresh Chi'lly Chat call state.");
   }
 
   logChatCall("thread_call_start_success", {

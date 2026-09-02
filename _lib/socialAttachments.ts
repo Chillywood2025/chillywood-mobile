@@ -10,6 +10,7 @@ import {
   type MediaStorageProvider,
 } from "./mediaStorage";
 import { supabase } from "./supabase";
+import { UserFacingError } from "./userFacingErrors";
 
 export const SOCIAL_ATTACHMENT_BUCKET = "social-attachments";
 export const SOCIAL_ATTACHMENT_SIGNED_URL_SECONDS = 60 * 60;
@@ -263,7 +264,7 @@ async function getSignedInUserSession() {
   const { data, error } = await supabase.auth.getSession();
   const userId = toText(data.session?.user?.id);
   if (error || !userId) {
-    throw new Error("Sign in before adding attachments.");
+    throw new UserFacingError("attachment_action", "Sign in before adding attachments.");
   }
   return { userId };
 }
@@ -396,7 +397,7 @@ export async function createSocialAttachmentForSurface(input: {
   file: SocialAttachmentFile;
 }): Promise<SocialAttachment> {
   const surfaceId = toText(input.surfaceId);
-  if (!surfaceId) throw new Error("Attachment target is missing.");
+  if (!surfaceId) throw new UserFacingError("attachment_action", "Attachment target is missing.");
 
   const { userId } = await getSignedInUserSession();
   const id = createClientId();
@@ -404,7 +405,7 @@ export async function createSocialAttachmentForSurface(input: {
   const preparedUpload = await (async () => {
     try {
       const validationMessage = getSocialAttachmentValidationMessage(normalized.file);
-      if (validationMessage) throw new Error(validationMessage);
+      if (validationMessage) throw new UserFacingError("attachment_action", validationMessage);
 
       const mimeType = inferMimeType(normalized.file);
       const fileName = getReadableSocialAttachmentName({ name: normalized.file.name });

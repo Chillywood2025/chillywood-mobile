@@ -7,11 +7,27 @@ const normalizeErrorText = (error: unknown) => {
   return String(error ?? "").trim();
 };
 
+export type UserFacingErrorCode =
+  | "attachment_action"
+  | "chat_action"
+  | "circle_action";
+
+export class UserFacingError extends Error {
+  readonly code: UserFacingErrorCode;
+
+  constructor(code: UserFacingErrorCode, message: string) {
+    super(message);
+    this.name = "UserFacingError";
+    this.code = code;
+  }
+}
+
 export function getUserFacingErrorMessage(error: unknown, fallback: string) {
   const rawMessage = normalizeErrorText(error);
   const message = rawMessage.toLowerCase();
 
   if (!message) return fallback;
+  if (error instanceof UserFacingError) return rawMessage;
 
   if (
     message.includes("invalid login credentials")
@@ -46,17 +62,6 @@ export function getUserFacingErrorMessage(error: unknown, fallback: string) {
   }
 
   if (
-    message.includes("jwt")
-    || message.includes("auth")
-    || message.includes("session")
-    || message.includes("sign in")
-    || message.includes("not authenticated")
-    || message.includes("invalid login")
-  ) {
-    return "Sign in again, then try that action one more time.";
-  }
-
-  if (
     message.includes("permission")
     || message.includes("policy")
     || message.includes("rls")
@@ -70,9 +75,21 @@ export function getUserFacingErrorMessage(error: unknown, fallback: string) {
   }
 
   if (
-    message.includes("storage")
+    message.includes("jwt")
+    || message.includes("auth session")
+    || message.includes("authentication")
+    || message.includes("session expired")
+    || message.includes("sign in")
+    || message.includes("not authenticated")
+    || message.includes("invalid login")
+  ) {
+    return "Sign in again, then try that action one more time.";
+  }
+
+  if (
+    message.includes("storage bucket")
+    || message.includes("object storage")
     || message.includes("bucket")
-    || message.includes("object")
     || message.includes("signed url")
     || message.includes("upload")
   ) {
@@ -82,17 +99,18 @@ export function getUserFacingErrorMessage(error: unknown, fallback: string) {
   if (
     message.includes("too large")
     || message.includes("file size")
-    || message.includes("maximum")
-    || message.includes("exceeded")
+    || message.includes("payload too large")
+    || ((message.includes("file") || message.includes("upload"))
+      && (message.includes("maximum") || message.includes("exceeded")))
   ) {
     return "That file is too large for this upload.";
   }
 
   if (
     message.includes("mime")
-    || message.includes("unsupported")
     || message.includes("file type")
     || message.includes("extension")
+    || (message.includes("unsupported") && message.includes("file"))
   ) {
     return "That file type is not supported here.";
   }
