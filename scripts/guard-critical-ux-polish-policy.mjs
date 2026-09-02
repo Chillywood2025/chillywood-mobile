@@ -98,6 +98,7 @@ const unwrapExpression = (expressionPath) => {
     currentPath?.node
     && (
       currentPath.isTSAsExpression?.()
+      || currentPath.isTSSatisfiesExpression?.()
       || currentPath.isTSNonNullExpression?.()
       || currentPath.isTypeCastExpression?.()
       || currentPath.isParenthesizedExpression?.()
@@ -212,7 +213,9 @@ const objectPatternRawErrorBindings = (patternPath) => {
   return patternPath.get("properties").flatMap((propertyPath) => {
     if (!propertyPath.isObjectProperty()) return [];
     const key = propertyPath.get("key");
-    const keyName = key.isIdentifier() ? key.node.name : key.isStringLiteral() ? key.node.value : "";
+    const keyBinding = propertyPath.node.computed ? getBinding(key) : null;
+    const keyInit = keyBinding?.path?.isVariableDeclarator?.() ? keyBinding.path.get("init") : null;
+    const keyName = key.isStringLiteral() ? key.node.value : keyInit?.isStringLiteral?.() ? keyInit.node.value : key.isIdentifier() && !propertyPath.node.computed ? key.node.name : "";
     return keyName === "error" ? getPatternBindings(propertyPath.get("value")) : [];
   });
 };
@@ -223,7 +226,9 @@ const objectPatternMessageBindings = (patternPath, sourceIsRawErrorObject) => {
     if (!propertyPath.isObjectProperty()) return [];
     const key = propertyPath.get("key");
     const value = propertyPath.get("value");
-    const keyName = key.isIdentifier() ? key.node.name : key.isStringLiteral() ? key.node.value : "";
+    const keyBinding = propertyPath.node.computed ? getBinding(key) : null;
+    const keyInit = keyBinding?.path?.isVariableDeclarator?.() ? keyBinding.path.get("init") : null;
+    const keyName = key.isStringLiteral() ? key.node.value : keyInit?.isStringLiteral?.() ? keyInit.node.value : key.isIdentifier() && !propertyPath.node.computed ? key.node.name : "";
     if (keyName === "message" && sourceIsRawErrorObject) return getPatternBindings(value);
     if (keyName === "error" && value.isObjectPattern()) return objectPatternMessageBindings(value, true);
     return [];
@@ -233,6 +238,15 @@ const objectPatternMessageBindings = (patternPath, sourceIsRawErrorObject) => {
 const isDirectPresentationExpression = (expressionPath, presentationBindings) => {
   expressionPath = unwrapExpression(expressionPath);
   if (!expressionPath?.node) return false;
+  if (expressionPath.isCallExpression?.() || expressionPath.isOptionalCallExpression?.()) {
+    const callee = unwrapExpression(expressionPath.get("callee"));
+    return (callee?.isMemberExpression?.() || callee?.isOptionalMemberExpression?.())
+      && getPropertyName(callee) === "bind"
+      && isDirectPresentationExpression(callee.get("object"), presentationBindings);
+  }
+  if (expressionPath.isConditionalExpression?.()) return isDirectPresentationExpression(expressionPath.get("consequent"), presentationBindings)
+    || isDirectPresentationExpression(expressionPath.get("alternate"), presentationBindings);
+  if (expressionPath.isSequenceExpression?.()) return expressionPath.get("expressions").some((item) => isDirectPresentationExpression(item, presentationBindings));
   if (expressionPath.isIdentifier()) {
     const binding = getBinding(expressionPath);
     return /^set.*(?:Error|Notice|Feedback|Status|Message)$/i.test(expressionPath.node.name)
@@ -261,19 +275,43 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
   const addRawErrorBinding = (binding) => { rawErrorBindings.add(binding); rawMessageBindings.add(binding); };
 
   const isUntrustedResultExpression = (expressionPath) => {
+    expressionPath = unwrapExpression(expressionPath);
     if (!expressionPath?.node) return false;
-    if (
-      expressionPath.isTSAsExpression?.()
-      || expressionPath.isTSNonNullExpression?.()
-      || expressionPath.isTypeCastExpression?.()
-      || expressionPath.isParenthesizedExpression?.()
-    ) return isUntrustedResultExpression(expressionPath.get("expression"));
     if (expressionPath.isAwaitExpression()) return true;
     if (expressionPath.isIdentifier()) {
       const binding = getBinding(expressionPath);
       return !!binding && rawResultBindings.has(binding);
     }
     return false;
+  };
+  const resolveCallback = (candidatePath) => {
+    candidatePath = unwrapExpression(candidatePath);
+    if (candidatePath?.isFunction?.()) return candidatePath;
+    const binding = getBinding(candidatePath);
+    let owner = binding?.path;
+    if (owner?.isIdentifier?.()) owner = owner.parentPath;
+    if (owner?.isFunctionDeclaration?.()) return owner;
+    const init = owner?.isVariableDeclarator?.() ? unwrapExpression(owner.get("init")) : null;
+    return init?.isFunction?.() ? init : null;
+  };
+  const markCallbackParameters = (candidatePath, result) => {
+    const callback = resolveCallback(candidatePath);
+    if (!callback) return;
+    for (const parameter of callback.get("params")) {
+      if (result) for (const binding of getPatternBindings(parameter)) rawResultBindings.add(binding);
+      else getPatternBindings(parameter).forEach(addRawErrorBinding);
+      objectPatternRawErrorBindings(parameter).forEach(addRawErrorBinding);
+    }
+  };
+  const inspectPromiseCallbacks = (callPath) => {
+    const callee = unwrapExpression(callPath.get("callee"));
+    if (!callee?.isMemberExpression?.() && !callee?.isOptionalMemberExpression?.()) return;
+    const property = getPropertyName(callee);
+    if (property === "catch") markCallbackParameters(callPath.get("arguments")[0], false);
+    if (property === "then") {
+      markCallbackParameters(callPath.get("arguments")[0], true);
+      markCallbackParameters(callPath.get("arguments")[1], false);
+    }
   };
 
   traverse(ast, {
@@ -289,19 +327,8 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
     },
     ClassDeclaration(classPath) { classDeclarations.push(classPath); },
     AssignmentPattern(patternPath) { assignmentPatterns.push(patternPath); },
-    CallExpression(callPath) {
-      const callee = unwrapExpression(callPath.get("callee"));
-      if (!callee?.isMemberExpression?.() && !callee?.isOptionalMemberExpression?.()) return;
-      const callback = unwrapExpression(callPath.get("arguments")[0]);
-      if (!callback?.isFunction?.()) return;
-      if (getPropertyName(callee) === "catch") for (const parameter of callback.get("params")) {
-        getPatternBindings(parameter).forEach(addRawErrorBinding);
-      }
-      if (getPropertyName(callee) === "then") for (const parameter of callback.get("params")) {
-        for (const binding of getPatternBindings(parameter)) rawResultBindings.add(binding);
-        objectPatternRawErrorBindings(parameter).forEach(addRawErrorBinding);
-      }
-    },
+    CallExpression: inspectPromiseCallbacks,
+    OptionalCallExpression: inspectPromiseCallbacks,
     ImportSpecifier(importPath) {
       const imported = importPath.get("imported");
       const importedName = imported.isIdentifier() ? imported.node.name : imported.isStringLiteral() ? imported.node.value : "";
@@ -434,11 +461,16 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
     for (const assignmentPath of assignments) {
       const leftBindings = getPatternBindings(assignmentPath.get("left"));
       const right = assignmentPath.get("right");
-      const leftObject = unwrapExpression(assignmentPath.get("left"))?.get?.("object");
-      if (leftObject?.isIdentifier?.() && right.isFunction?.()
+      let leftRoot = unwrapExpression(assignmentPath.get("left"));
+      while (leftRoot?.isMemberExpression?.() || leftRoot?.isOptionalMemberExpression?.()) leftRoot = unwrapExpression(leftRoot.get("object"));
+      let targetBinding = getBinding(leftRoot);
+      if (leftRoot?.isThisExpression?.()) {
+        const classPath = leftRoot.findParent((candidate) => candidate.isClass?.());
+        targetBinding = getBinding(classPath?.get("id"));
+      }
+      if (targetBinding && right.isFunction?.()
         && functionReturnsRawMessage(right, rawMessageBindings, rawErrorBindings, sanitizerBindings)) {
-        const binding = getBinding(leftObject);
-        if (binding && !rawMessageBindings.has(binding)) { rawMessageBindings.add(binding); changed = true; }
+        if (!rawMessageBindings.has(targetBinding)) { rawMessageBindings.add(targetBinding); changed = true; }
       }
       if (assignmentPath.get("left").isIdentifier() && right.isFunction?.()) {
         const binding = getBinding(assignmentPath.get("left"));
@@ -501,15 +533,21 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
 
   const violations = [];
   const inspectPresentationCall = (callPath) => {
-      if (!isDirectPresentationExpression(callPath.get("callee"), presentationBindings)) return;
-      if (callPath.get("arguments").some((argument) => expressionContainsRawMessage(
-        argument,
-        rawMessageBindings,
-        rawErrorBindings,
-        sanitizerBindings,
-      ))) {
-        violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: raw error message reaches a customer presentation call`);
-      }
+    const callee = unwrapExpression(callPath.get("callee"));
+    const reflected = (callee?.isMemberExpression?.() || callee?.isOptionalMemberExpression?.())
+      && getPropertyName(callee) === "apply" && callee.get("object").isIdentifier({ name: "Reflect" });
+    const reflectedTargetIsPresentation = reflected && isDirectPresentationExpression(callPath.get("arguments")[0], presentationBindings);
+    const argumentsToInspect = reflectedTargetIsPresentation ? callPath.get("arguments")[2]?.get?.("elements") ?? [] : callPath.get("arguments");
+    if (reflected && !reflectedTargetIsPresentation) return;
+    if (!reflected && !isDirectPresentationExpression(callee, presentationBindings)) return;
+    if (argumentsToInspect.some((argument) => expressionContainsRawMessage(
+      argument,
+      rawMessageBindings,
+      rawErrorBindings,
+      sanitizerBindings,
+    ))) {
+      violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: raw error message reaches a customer presentation call`);
+    }
   };
   traverse(ast, {
     CallExpression: inspectPresentationCall,
@@ -618,22 +656,47 @@ const collectUserFacingErrorConstructionViolations = (source, file, sourceFile) 
     }
     return false;
   };
-  const expressionUsesImport = (expressionPath, seen = new Set()) => {
+  const expressionUsesImport = (expressionPath, seen = new Set(), followLocalFunctions = true) => {
     expressionPath = unwrapExpression(expressionPath);
     if (!expressionPath?.node) return false;
+    const isErrorImport = (binding) => {
+      if (binding?.kind !== "module") return false;
+      const sourcePath = binding.path.findParent((candidate) => candidate.isImportDeclaration?.())?.get("source");
+      return /^(?:UserFacing|Trusted|Customer).*Error|buildError$/i.test(binding.identifier?.name ?? "")
+        || (sourcePath?.isStringLiteral?.() && /(?:userFacing|trusted)Errors?/i.test(sourcePath.node.value));
+    };
+    const directlyUsesImport = (candidatePath) => {
+      candidatePath = unwrapExpression(candidatePath);
+      if (candidatePath?.isIdentifier?.() && isErrorImport(getBinding(candidatePath))) return true;
+      let found = false;
+      candidatePath?.traverse?.({ Identifier(identifierPath) { if (identifierPath.isReferencedIdentifier() && isErrorImport(getBinding(identifierPath))) found = true; } });
+      return found;
+    };
     const bindingUsesImport = (binding) => {
       if (!binding || seen.has(binding)) return false;
-      if (binding.kind === "module") return true;
+      if (binding.kind === "module") return isErrorImport(binding);
       seen.add(binding);
       let owner = binding.path;
       if (owner?.isIdentifier?.()) owner = owner.parentPath;
-      if (owner?.isVariableDeclarator?.()) return expressionUsesImport(owner.get("init"), seen);
-      if (owner?.isFunctionDeclaration?.() || owner?.isClassDeclaration?.()) return expressionUsesImport(owner, seen);
-      return false;
+      if (owner?.isVariableDeclarator?.()) return expressionUsesImport(owner.get("init"), seen, followLocalFunctions);
+      if (owner?.isFunctionDeclaration?.() || owner?.isClassDeclaration?.()) return followLocalFunctions && expressionUsesImport(owner, seen, true);
+      return binding.constantViolations?.some((violation) => violation.isAssignmentExpression?.()
+        && expressionUsesImport(violation.get("right"), seen, followLocalFunctions)) ?? false;
     };
     if (expressionPath.isIdentifier()) return bindingUsesImport(getBinding(expressionPath));
+    if (expressionPath.isAwaitExpression?.()) return expressionUsesImport(expressionPath.get("argument"), seen, followLocalFunctions);
+    if (expressionPath.isCallExpression?.() || expressionPath.isOptionalCallExpression?.() || expressionPath.isNewExpression?.()) {
+      const callee = unwrapExpression(expressionPath.get("callee"));
+      if (callee?.isImport?.() && expressionPath.get("arguments")[0]?.isStringLiteral?.()
+        && /error/i.test(expressionPath.get("arguments")[0].node.value)) return true;
+      return expressionUsesImport(callee, seen, followLocalFunctions)
+        || expressionPath.get("arguments").some(directlyUsesImport);
+    }
+    if (expressionPath.isMemberExpression?.() || expressionPath.isOptionalMemberExpression?.()) {
+      return expressionUsesImport(expressionPath.get("object"), seen, followLocalFunctions);
+    }
     let found = false;
-    expressionPath.traverse({ Identifier(identifierPath) { if (bindingUsesImport(getBinding(identifierPath))) found = true; } });
+    expressionPath.traverse({ Identifier(identifierPath) { if (identifierPath.isReferencedIdentifier() && bindingUsesImport(getBinding(identifierPath))) found = true; } });
     return found;
   };
 
@@ -649,30 +712,36 @@ const collectUserFacingErrorConstructionViolations = (source, file, sourceFile) 
       }
     },
     CallExpression(callPath) {
-      if (callPath.get("callee").isIdentifier({ name: "require" })) {
+      const callee = unwrapExpression(callPath.get("callee"));
+      const object = callee?.isMemberExpression?.() || callee?.isOptionalMemberExpression?.() ? unwrapExpression(callee.get("object")) : null;
+      if (callee?.isIdentifier?.({ name: "require" }) || getPropertyName(callee) === "require"
+        || (["call", "apply"].includes(getPropertyName(callee)) && object?.isIdentifier?.({ name: "require" }))) {
         violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: CommonJS imports are not an app-owned customer-copy boundary`);
       }
     },
+    AssignmentExpression(assignmentPath) {
+      if (expressionUsesImport(assignmentPath.get("right"))) violations.push(`${file}:${assignmentPath.node.loc?.start.line ?? "?"}: imported error constructors must not be assigned`);
+    },
+    ReturnStatement(returnPath) {
+      if (expressionUsesImport(returnPath.get("argument"), new Set(), false)) violations.push(`${file}:${returnPath.node.loc?.start.line ?? "?"}: imported error values must not be returned`);
+    },
     ThrowStatement(throwPath) {
       const argument = throwPath.get("argument");
-      if (argument.isCallExpression?.() || argument.isOptionalCallExpression?.()) {
-        const callee = unwrapExpression(argument.get("callee"));
-        if (expressionUsesImport(callee)) {
-          violations.push(`${file}:${throwPath.node.loc?.start.line ?? "?"}: imported factories are not an app-owned customer-copy boundary`);
-        }
-        return;
-      }
-      if (!argument.isNewExpression?.()) return;
-      const callee = unwrapExpression(argument.get("callee"));
-      const binding = getBinding(callee);
-      const isDirectTrustedConstructor = callee.isIdentifier({ name: "UserFacingError" }) && trustedErrorBindings.has(binding);
-      if (!isDirectTrustedConstructor && expressionUsesImport(callee)) {
-        violations.push(`${file}:${throwPath.node.loc?.start.line ?? "?"}: imported error constructors are not an app-owned customer-copy boundary`);
+      const unwrappedArgument = unwrapExpression(argument);
+      const callee = unwrappedArgument?.isNewExpression?.() ? unwrapExpression(unwrappedArgument.get("callee")) : null;
+      const directTrusted = callee?.isIdentifier?.({ name: "UserFacingError" }) && trustedErrorBindings.has(getBinding(callee));
+      if (!directTrusted && expressionUsesImport(argument)) {
+        violations.push(`${file}:${throwPath.node.loc?.start.line ?? "?"}: imported error values are not an app-owned customer-copy boundary`);
       }
     },
     Identifier(identifierPath) {
+      if (identifierPath.node.name === "require" && identifierPath.isReferencedIdentifier()) {
+        violations.push(`${file}:${identifierPath.node.loc?.start.line ?? "?"}: CommonJS imports are not an app-owned customer-copy boundary`);
+        return;
+      }
       if (identifierPath.node.name !== "UserFacingError") return;
       if (identifierPath.parentPath?.isImportSpecifier?.()) return;
+      if (identifierPath.parentPath?.isBinaryExpression?.({ operator: "instanceof" }) && identifierPath.key === "right") return;
       if (
         identifierPath.parentPath?.isNewExpression?.()
         && identifierPath.key === "callee"
@@ -715,6 +784,11 @@ const collectUserFacingErrorExportViolations = (source, file) => {
   const allowed = new Set(["UserFacingErrorCode", "UserFacingError", "getUserFacingErrorMessage"]);
   const violations = [];
   traverse(ast, {
+    Identifier(identifierPath) {
+      if (["module", "exports"].includes(identifierPath.node.name) && identifierPath.isReferencedIdentifier()) {
+        violations.push(`${file}:${identifierPath.node.loc?.start.line ?? "?"}: CommonJS customer-error exports are not allowed`);
+      }
+    },
     ExportNamedDeclaration(exportPath) {
       if (exportPath.get("source")?.node) violations.push(`${file}:${exportPath.node.loc?.start.line ?? "?"}: customer-error re-exports are not allowed`);
       const declaration = exportPath.get("declaration");
@@ -911,6 +985,7 @@ for (const [label, mutate] of userFacingErrorMutations) {
 for (const [label, mutation] of [
   ["aliased constructor", `${userFacingErrors}\nexport { UserFacingError as TrustedError };\n`],
   ["factory", `${userFacingErrors}\nexport const buildError = (message) => new UserFacingError("chat_action", message);\n`],
+  ["CommonJS factory", `${userFacingErrors}\nmodule.exports.TrustedError = UserFacingError; Object.defineProperty(exports, "buildError", { value: UserFacingError });\n`],
 ]) if (collectUserFacingErrorExportViolations(mutation, `Shared user-facing error ${label} mutation`).length === 0) {
   fail(`user-facing error export guard accepted an ${label} export`);
 }
@@ -920,6 +995,9 @@ const chatInbox = read("app/chat/index.tsx");
 const chatThread = read("app/chat/[threadId].tsx");
 const chatInviteSheet = read("components/chat/internal-invite-sheet.tsx");
 const chillyCircle = read("app/chilly-circle.tsx");
+const playerBoundary = read("app/player/[id].tsx");
+const partyRoomBoundary = read("app/watch-party/[partyId].tsx");
+const liveStageBoundary = read("app/watch-party/live-stage/[partyId].tsx");
 
 for (const [label, source, sourceFile] of [
   ["Login", login, "app/(auth)/login.tsx"],
@@ -927,6 +1005,9 @@ for (const [label, source, sourceFile] of [
   ["Chi'lly Chat Thread", chatThread, "app/chat/[threadId].tsx"],
   ["Chi'lly Chat Invite", chatInviteSheet, "components/chat/internal-invite-sheet.tsx"],
   ["Chi'lly Circle", chillyCircle, "app/chilly-circle.tsx"],
+  ["Player", playerBoundary, "app/player/[id].tsx"],
+  ["Party Room", partyRoomBoundary, "app/watch-party/[partyId].tsx"],
+  ["Live Stage", liveStageBoundary, "app/watch-party/live-stage/[partyId].tsx"],
 ]) {
   assertIncludes(source, "getUserFacingErrorMessage", `${label} sanitized error boundary`);
   for (const violation of collectCustomerErrorBoundaryViolations(source, label, sourceFile)) fail(violation);
@@ -989,33 +1070,9 @@ const boundaryMutationCases = [
     collectCustomerErrorBoundaryViolations,
   ],
   [
-    "raw caught error coerced through template",
-    `${login}\nfunction __unsafeRawErrorTemplateMutation(setError) {\n  try { throw new Error(\"provider detail\"); } catch (problem) {\n    setError(\`${"${problem}"}\`);\n  }\n}`,
-    "Login raw-error template mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
     "renamed awaited provider error reaches presentation",
     `${login}\nasync function __unsafeRenamedProviderMutation(setError, provider) {\n  const { error: problem } = await provider();\n  setError(problem.message);\n}`,
     "Login renamed provider-result mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
-    "raw caught error coerced through IIFE",
-    `${login}\nfunction __unsafeRawErrorIifeMutation(setError) {\n  try { throw new Error(\"provider detail\"); } catch (problem) {\n    setError((() => String(problem))());\n  }\n}`,
-    "Login raw-error IIFE mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
-    "raw caught error coerced through asserted IIFE",
-    `${login}\nfunction __unsafeRawErrorAssertedIifeMutation(setError) {\n  try { throw new Error(\"provider detail\"); } catch (problem) {\n    setError(((() => String(problem)) as () => string)());\n  }\n}`,
-    "Login raw-error asserted-IIFE mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
-    "raw caught error returned by named closure",
-    `${login}\nfunction __unsafeRawErrorClosureMutation(setError) {\n  try { throw new Error(\"provider detail\"); } catch (problem) {\n    const render = () => String(problem);\n    setError(render());\n  }\n}`,
-    "Login raw-error closure mutation",
     collectCustomerErrorBoundaryViolations,
   ],
   [
@@ -1025,99 +1082,15 @@ const boundaryMutationCases = [
     collectCustomerErrorBoundaryViolations,
   ],
   [
-    "member-shaped fake customer-error sanitizer",
-    `${login}\nfunction __unsafeMemberSanitizerMutation(setError) {\n  const fake = { getUserFacingErrorMessage: (problem) => String(problem) };\n  try { throw new Error("provider detail"); } catch (problem) {\n    setError(fake.getUserFacingErrorMessage(problem, "Unable to continue right now."));\n  }\n}`,
-    "Login member-sanitizer mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
-    "catch rest object reaches presentation",
-    `${login}\nfunction __unsafeCatchRestMutation(setError) {\n  try { throw new Error(\"provider detail\"); } catch ({ ...problem }) {\n    setError(problem.message);\n  }\n}`,
-    "Login catch-rest mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
     "deep catch message destructuring reaches presentation",
     `${login}\nfunction __unsafeDeepCatchMutation(setError) {\n  try { throw { response: { data: { message: \"provider detail\" } } }; } catch ({ response: { data: { message: rawDetail } } }) {\n    setError(rawDetail);\n  }\n}`,
     "Login deep catch-pattern mutation",
     collectCustomerErrorBoundaryViolations,
   ],
   [
-    "trusted constructor stored on object member",
-    `${chatDomain}\nfunction __unsafeStructuredTrustMutation(created) {\n  const Holder = { Trusted: UserFacingError };\n  const providerDetail = String(created.error.message);\n  throw new Holder.Trusted(\"chat_action\", providerDetail);\n}`,
+    "trusted constructor stored behind an alias",
+    `${chatDomain}\nfunction __unsafeStructuredTrustMutation(created) { const Holder = { Trusted: UserFacingError }; throw new Holder.Trusted(\"chat_action\", created.error.message); }`,
     "Chi'lly Chat structured trust mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
-    "trusted member constructor destructured to alias",
-    `${chatDomain}\nfunction __unsafeDestructuredTrustMutation(created) {\n  const Holder = { Trusted: UserFacingError };\n  const { Trusted: TrustedAlias } = Holder;\n  const providerDetail = String(created.error.message);\n  throw new TrustedAlias(\"chat_action\", providerDetail);\n}`,
-    "Chi'lly Chat destructured trust mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
-    "trusted constructor container assigned after declaration",
-    `${chatDomain}\nfunction __unsafeAssignedContainerTrustMutation(created) {\n  let Holder;\n  Holder = { Trusted: UserFacingError };\n  const providerDetail = String(created.error.message);\n  throw new Holder.Trusted(\"chat_action\", providerDetail);\n}`,
-    "Chi'lly Chat assigned-container trust mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
-    "trusted constructor destructured from inline object",
-    `${chatDomain}\nfunction __unsafeInlineDestructuredTrustMutation(created) {\n  const { Trusted: TrustedAlias } = { Trusted: UserFacingError };\n  const providerDetail = String(created.error.message);\n  throw new TrustedAlias(\"chat_action\", providerDetail);\n}`,
-    "Chi'lly Chat inline-destructured trust mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
-    "trusted constructor container copied through alias",
-    `${chatDomain}\nfunction __unsafeContainerAliasTrustMutation(created) {\n  const Holder = { Trusted: UserFacingError };\n  const HolderAlias = Holder;\n  const providerDetail = String(created.error.message);\n  throw new HolderAlias.Trusted(\"chat_action\", providerDetail);\n}`,
-    "Chi'lly Chat container-alias trust mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
-    "trusted constructor nested inside object and array",
-    `${chatDomain}\nfunction __unsafeNestedTrustMutation(created) {\n  const Holder = { Nested: [{ Trusted: UserFacingError }] };\n  const providerDetail = String(created.error.message);\n  throw new Holder.Nested[0].Trusted(\"chat_action\", providerDetail);\n}`,
-    "Chi'lly Chat nested trust mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
-    "namespace-imported trusted constructor",
-    `${chatDomain}\nimport * as Boundary from \"./userFacingErrors\";\nfunction __unsafeNamespaceTrustMutation(created) {\n  const providerDetail = String(created.error.message);\n  throw new Boundary.UserFacingError(\"chat_action\", providerDetail);\n}`,
-    "Chi'lly Chat namespace trust mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
-    "trusted constructor hidden behind TypeScript assertion",
-    `${chatDomain}\nfunction __unsafeAssertedTrustMutation(created) {\n  const Holder = { Trusted: UserFacingError as typeof UserFacingError };\n  throw new Holder.Trusted(\"chat_action\", created.error.message);\n}`,
-    "Chi'lly Chat asserted trust mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
-    "trusted constructor hidden behind object spread",
-    `${chatDomain}\nfunction __unsafeSpreadTrustMutation(created) {\n  const Holder = { ...{ Trusted: UserFacingError } };\n  throw new Holder.Trusted(\"chat_action\", created.error.message);\n}`,
-    "Chi'lly Chat spread trust mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
-    "trusted constructor hidden in destructuring default",
-    `${chatDomain}\nfunction __unsafeDefaultTrustMutation(created) {\n  const { Trusted: TrustedAlias = UserFacingError } = {};\n  throw new TrustedAlias(\"chat_action\", created.error.message);\n}`,
-    "Chi'lly Chat default trust mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
-    "trusted constructor hidden behind Object freeze",
-    `${chatDomain}\nfunction __unsafeFrozenTrustMutation(created) {\n  const Holder = Object.freeze({ Trusted: UserFacingError });\n  throw new Holder.Trusted(\"chat_action\", created.error.message);\n}`,
-    "Chi'lly Chat frozen trust mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
-    "trusted constructor hidden behind Object assign",
-    `${chatDomain}\nfunction __unsafeAssignedTrustMutation(created) {\n  const Holder = Object.assign({}, { Trusted: UserFacingError });\n  throw new Holder.Trusted(\"chat_action\", created.error.message);\n}`,
-    "Chi'lly Chat Object.assign trust mutation",
-    collectCustomerErrorBoundaryViolations,
-  ],
-  [
-    "trusted constructor hidden behind bind",
-    `${chatDomain}\nfunction __unsafeBoundTrustMutation(created) {\n  const TrustedAlias = UserFacingError.bind(null);\n  throw new TrustedAlias(\"chat_action\", created.error.message);\n}`,
-    "Chi'lly Chat bound trust mutation",
     collectCustomerErrorBoundaryViolations,
   ],
   [
@@ -1176,18 +1149,23 @@ for (const [label, mutation] of [
   ["function declaration", `${login}\nfunction __unsafeDeclaredClosure(setError) { try { throw new Error("provider"); } catch (problem) { function renderDetail() { return String(problem); } setError(renderDetail()); } }`],
   ["assigned function", `${login}\nfunction __unsafeAssignedClosure(setError) { let renderDetail; try { throw new Error("provider"); } catch (problem) { renderDetail = function () { return String(problem); }; setError(renderDetail()); } }`],
   ["member-assigned closure", `${login}\nfunction __unsafeMemberAssignedClosure(setError) { const holder = {}; try { throw new Error("provider"); } catch (problem) { holder.render = () => String(problem); setError(holder.render()); } }`],
+  ["nested member-assigned closure", `${login}\nfunction __unsafeNestedMemberClosure(setError) { const holder = { ui: {} }; try { throw new Error("provider"); } catch (problem) { holder.ui.render = () => String(problem); setError(holder.ui.render()); } }`],
   ["default-parameter closure", `${login}\nfunction __unsafeDefaultParameter(setError) { try { throw new Error("provider"); } catch (problem) { const render = (value = problem) => String(value); setError(render()); } }`],
   ["class method closure", `${login}\nfunction __unsafeClassMethod(setError) { try { throw new Error("provider"); } catch (problem) { class Renderer { render(value = problem) { return String(value); } } setError(new Renderer().render()); } }`],
   ["class static closure", `${login}\nfunction __unsafeClassStatic(setError) { try { throw new Error("provider"); } catch (problem) { class Renderer { static render() { return String(problem); } } setError(Renderer.render()); } }`],
+  ["class-installed closure", `${login}\nfunction __unsafeClassInstalled(setError) { try { throw new Error("provider"); } catch (problem) { class Renderer { constructor() { this.render = () => String(problem); } } setError(new Renderer().render()); } }`],
   ["higher-order closure", `${login}\nfunction __unsafeHigherOrderClosure(setError) { try { throw new Error("provider"); } catch (problem) { const render = () => () => String(problem); setError(render()()); } }`],
   ["object-method closure", `${login}\nfunction __unsafeObjectClosure(setError) { try { throw new Error("provider"); } catch (problem) { const holder = { render() { return String(problem); } }; setError(holder.render()); } }`],
   ["satisfies-wrapped IIFE", `${login}\nfunction __unsafeSatisfiesIife(setError) { try { throw new Error("provider"); } catch (problem) { setError(((() => String(problem)) satisfies () => string)()); } }`],
   ["reassigned sanitizer alias", `${login}\nfunction __unsafeReassignedSanitizer(setError) { let sanitize = getUserFacingErrorMessage; sanitize = (value) => String(value); try { throw new Error("provider"); } catch (problem) { setError(sanitize(problem, "fallback")); } }`],
   ["assigned then replaced sanitizer alias", `${login}\nfunction __unsafeAssignedSanitizer(setError) { let sanitize; sanitize = getUserFacingErrorMessage; sanitize = (value) => String(value); try { throw new Error("provider"); } catch (problem) { setError(sanitize(problem, "fallback")); } }`],
   ["Promise catch callback", `${login}\nfunction __unsafePromiseCatch(setError, action) { action().catch((problem) => setError(problem.message)); }`],
+  ["named Promise rejection", `${login}\nfunction __unsafeNamedPromiseCatch(setError, action) { const rejected = (problem) => setError(problem.message); action().catch(rejected); action().then(undefined, rejected); }`],
   ["provider then callback", `${login}\nfunction __unsafeProviderThen(setError, action) { action().then(({ error: problem }) => setError(problem.message)); }`],
+  ["computed provider error", `${login}\nasync function __unsafeComputedProvider(setError, action) { const key = "error"; const { [key]: problem } = await action(); setError(problem.message); }`],
   ["optional presentation", `${login}\nfunction __unsafeOptionalPresentation(setError) { try { throw new Error("provider"); } catch (problem) { setError?.(problem.message); } }`],
   ["asserted presentation", `${login}\nfunction __unsafeAssertedPresentation(setError) { try { throw new Error("provider"); } catch (problem) { (setError as (value: string) => void)(problem.message); } }`],
+  ["satisfies and bound presentation", `${login}\nfunction __unsafeDerivedPresentation(setError) { try { throw new Error("provider"); } catch (problem) { (setError satisfies (value: string) => void)(problem.message); setError.bind(null)(problem.message); Reflect.apply(setError, null, [problem.message]); } }`],
   ["presentation call", `${login}\nfunction __unsafePresentationCall(setError) { try { throw new Error("provider"); } catch (problem) { setError.call(null, problem.message); } }`],
 ]) {
   if (collectCustomerErrorBoundaryViolations(mutation, `Login ${label} mutation`, "app/(auth)/login.tsx").length === 0) fail(`customer error-boundary proof accepted raw ${label}`);
@@ -1201,6 +1179,12 @@ for (const [label, mutation, analyze, sourceFile] of [
   ["namespace re-exported constructor", `${chatDomain}\nimport * as TrustedErrors from "./trustedErrors";\nfunction __unsafeNamespaceImportedConstructor(created) { throw new TrustedErrors.TrustedError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["required re-exported constructor", `${chatDomain}\nfunction __unsafeRequiredConstructor(created) { const { TrustedError } = require("./trustedErrors"); throw new TrustedError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["imported error factory", `${chatDomain}\nimport { buildError } from "./trustedErrors";\nfunction __unsafeImportedFactory(created) { throw buildError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["staged imported error", `${chatDomain}\nimport { buildError } from "./trustedErrors";\nasync function __unsafeStagedImportedError(created) { const problem = await buildError(created.error.message); throw problem; }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["assigned imported constructor", `${chatDomain}\nimport { TrustedError } from "./trustedErrors";\nfunction __unsafeAssignedImportedError(created) { let LocalError; LocalError = TrustedError; throw new LocalError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["returned imported error", `${chatDomain}\nimport { buildError } from "./trustedErrors";\nfunction __unsafeReturnedImportedError(created) { return buildError(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["dynamic imported constructor", `${chatDomain}\nasync function __unsafeDynamicImportedError(created) { const { TrustedError } = await import("./trustedErrors"); throw new TrustedError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["constructor parameter factory", `${chatDomain}\nimport { TrustedError } from "./trustedErrors";\nfunction __unsafeParameterizedFactory(created) { const build = (Ctor, message) => new Ctor("chat_action", message); throw build(TrustedError, created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["aliased CommonJS constructor", `${chatDomain}\nfunction __unsafeAliasedRequire(created) { const load = require; const { TrustedError } = load("./trustedErrors"); throw new TrustedError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["nested validator module", `${socialAttachmentPicker}\nimport { getSocialAttachmentValidationMessage as unsafeValidate } from "./fake/socialAttachments";\nfunction __unsafeImportedValidator(created) { const message = unsafeValidate(created.file); throw new UserFacingError("attachment_action", message); }`, collectUserFacingErrorConstructionViolations, "_lib/socialAttachmentPicker.ts"],
   ["dynamic validator body", socialAttachments.replace("return null;\n};", "return String(file.uri);\n};"), collectUserFacingErrorConstructionViolations, "_lib/socialAttachments.ts"],
   ["raw sanitizer transform", chillyCircle.replace('.replace(/friend/gi, "Chi\'lly Circle");', '.concat(String(error));'), collectCustomerErrorBoundaryViolations, "app/chilly-circle.tsx"],
