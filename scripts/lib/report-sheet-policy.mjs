@@ -515,7 +515,7 @@ const validateSubmitHandler = (renderRoot, findings, bindings) => {
 };
 export const validateReportSheetSource = (source, { enforceReleaseHash = true } = {}) => {
   const findings = [];
-  if (/(?:\/\*+|\/\/)\s*(?:[#@][A-Za-z_]|webpack[A-Za-z]+\s*:)/.test(source)) findings.push("report sheet must not contain build-semantic comment directives");
+  if (/(?:[#@]__(?:PURE|NO_SIDE_EFFECTS)__|@jsx(?:ImportSource|Runtime|Frag)?\b|@vite-ignore\b|webpack[A-Za-z]+\s*:)/i.test(source)) findings.push("report sheet must not contain build-semantic comment directives");
   if (enforceReleaseHash && createHash("sha256").update(source).digest("hex") !== REPORT_SHEET_RELEASE_SHA256)
     findings.push("report sheet differs from the exact reviewed release-candidate source");
   let ast;

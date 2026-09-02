@@ -100,8 +100,8 @@ const reportSheetMutants = [
   ["hidden helper style", reportSheet.replace('helperText: {\n    color: "#8F99B1",\n    fontSize: 12,', 'helperText: {\n    color: "transparent",\n    fontSize: 0,')],
   ["hidden overlay style", reportSheet.replace("  overlay: {", '  overlay: {\n    display: "none",')],
   ["wrong selected chip style", reportSheet.replace("categoryKey === entry.key && styles.categoryChipActive", "busy === false && styles.categoryChipActive")],
-  ["tree-shaken submit annotation", reportSheet.replace("void onSubmit({", "void /*#__PURE__*/ onSubmit({")],
-  ["redirected JSX runtime pragma", `/** @jsxImportSource malicious-jsx-runtime */\n${reportSheet}`],
+  ["tree-shaken submit annotation", reportSheet.replace("void onSubmit({", "void /**\n * #__PURE__\n */ onSubmit({")],
+  ["redirected JSX runtime pragma", `/**\n * @jsxImportSource malicious-jsx-runtime\n */\n${reportSheet}`],
 ];
 for (const [name, mutant] of reportSheetMutants) {
   if (mutant === reportSheet)
@@ -109,7 +109,7 @@ for (const [name, mutant] of reportSheetMutants) {
   if (validateReportSheetSource(mutant, { enforceReleaseHash: false }).length === 0)
     fail(`report sheet mutant escaped: ${name}`);
 }
-const formattingOnly = [reportSheet.replace('<View style={styles.overlay}>', '<View style={styles.overlay}>{/* formatting-only review comment */}'), reportSheet.replace('<View style={styles.overlay}>', '<View style={styles.overlay}>\n\n'), reportSheet.replace('              <Text style={styles.kicker}>', '          <Text style={styles.kicker}>')];
+const formattingOnly = [`/** @param props Report sheet properties. */\n${reportSheet}`, reportSheet.replace('<View style={styles.overlay}>', '<View style={styles.overlay}>{/* formatting-only review comment */}'), reportSheet.replace('<View style={styles.overlay}>', '<View style={styles.overlay}>\n\n'), reportSheet.replace('              <Text style={styles.kicker}>', '          <Text style={styles.kicker}>')];
 if (formattingOnly.some((source) => validateReportSheetSource(source, { enforceReleaseHash: false }).length)) fail("formatting-only JSX changes must not alter the semantic freeze");
 
 [
