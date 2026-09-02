@@ -101,8 +101,12 @@ forbidMatch("cross-lane QA doc", doc, /\b(?:\d{1,3}\.){3}\d{1,3}\b/, "raw IP val
 
 forbidMatch("communication participant grid", participantGrid, /const\s+showVideo\s*=\s*!!RTCView\s*&&\s*!!participant\.streamURL\s*&&\s*participant\.cameraOn/, "RTC video render gated by stale cameraOn");
 forbidMatch("communication participant grid", participantGrid, /remoteRenderableCount:[^\n]+participant\.cameraOn/, "remote renderability debug gated by stale cameraOn");
-requireText("communication participant grid", participantGrid, "const hasVideoStream = !!participant.streamURL;");
-requireText("communication participant grid", participantGrid, "const showVideo = !!RTCView && hasVideoStream;");
+requireText("communication participant grid", participantGrid, "const hasLiveKitVideo = isVideoCall");
+requireText("communication participant grid", participantGrid, "!!participant.liveKitVideoTrackReference");
+requireText("communication participant grid", participantGrid, "const hasVideoStream = isVideoCall");
+requireText("communication participant grid", participantGrid, "(!!participant.streamURL || hasLiveKitVideo)");
+requireText("communication participant grid", participantGrid, "const showLegacyVideo = !!RTCView && !!participant.streamURL && hasVideoStream;");
+requireText("communication participant grid", participantGrid, "<LiveKitVideoTrack");
 requireText("communication participant grid", participantGrid, "Video connected");
 
 forbidMatch("live stage screen", liveStage, /showHeroRemoteVideo[^\n]+cameraOn/, "hero remote Live video gated by stale cameraOn");

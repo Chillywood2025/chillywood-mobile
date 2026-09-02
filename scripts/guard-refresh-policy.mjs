@@ -85,7 +85,7 @@ assertIncludes(roomRules, "ROOM_MEMBERSHIP_ACTIVE_WINDOW_MILLIS = ROOM_MEMBERSHI
 assertIncludes(liveKitSurface, "createLiveKitV1RoomOptions", "Watch-Party LiveKit v1 room options");
 assertIncludes(liveKitSurface, "video={effectivePublishLocalCamera ? LIVE_VIDEO_CAPTURE_OPTIONS : false}", "Watch-Party LiveKit capture options");
 assertIncludes(liveStage, "createLiveKitV1RoomOptions", "Live Stage v1 room options");
-assertIncludes(liveStage, "video={publishLocalCamera ? LIVE_VIDEO_CAPTURE_OPTIONS : false}", "Live Stage capture options");
+assertIncludes(liveStage, "video={effectivePublishLocalCamera ? LIVE_VIDEO_CAPTURE_OPTIONS : false}", "Live Stage effective capture options");
 
 assertIncludes(chatThread, "READ_RECEIPT_THROTTLE_MS", "Chat read receipt throttle");
 assertIncludes(chatThread, "markThreadReadWithThrottle", "Chat throttled mark-read wrapper");
