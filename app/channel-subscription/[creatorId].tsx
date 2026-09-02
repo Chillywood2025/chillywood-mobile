@@ -148,7 +148,7 @@ export default function ChannelSubscriptionScreen() {
 	            </Text>
             <MoneyScopeStrip
               includes="Creator subscriber access and this creator's ordinary Paid Videos while the subscription is active."
-              excludes="VIP-only content, Chi'llywood Premium, paid Watch-Party Seat Passes, Event Passes, LiveKit authority, payouts, or other creators."
+              excludes="VIP-only content, Chi'llywood Premium, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, LiveKit authority, payouts, or other creators."
               includesTestID="subscriber-area-includes-list"
               excludesTestID="subscriber-area-does-not-include-list"
             />
@@ -193,12 +193,12 @@ export default function ChannelSubscriptionScreen() {
             <Text style={styles.title}>{offer?.title ?? "Platform Subscription"}</Text>
             <Text style={styles.body}>
               {needsPurchase
-                ? `Start a recurring Platform Subscription to ${creatorName}'s Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. While active, it includes this creator's subscriber access and ordinary Paid Videos. It does not include VIP-only content, Premium, paid Watch-Party Seat Passes, Event Passes, or other creators.`
+                ? `Start a recurring Platform Subscription to ${creatorName}'s Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. While active, it includes this creator's subscriber access and ordinary Paid Videos. It does not include VIP-only content, Premium, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, or other creators.`
                 : "Platform Subscription purchases are temporarily unavailable while setup is being finalized. Subscriber access stays locked until access is verified."}
             </Text>
             <MoneyScopeStrip
               includes="Subscriber access and this creator's ordinary Paid Videos while active."
-              excludes="VIP-only content, Premium, Watch-Party Seat Passes, Event Passes, payouts, and other creators stay separate."
+              excludes="VIP-only content, Premium, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, payouts, and other creators stay separate."
             />
             <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}

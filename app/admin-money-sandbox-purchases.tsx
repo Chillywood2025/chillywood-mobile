@@ -29,19 +29,19 @@ type SandboxProduct = {
 const SANDBOX_PRODUCTS: SandboxProduct[] = [
   {
     key: "watch_party_live_ticket_sandbox_099",
-    label: "Watch-Party Live Seat Pass",
+    label: "Party Room Pass",
     sourceType: "watch_party_live",
     providerProductId: "cw_watch_party_live_ticket_sandbox_099",
   },
   {
     key: "live_watch_party_access_pass_sandbox_099",
-    label: "Live Watch-Party access pass",
+    label: "Live Stage Pass",
     sourceType: "live_watch_party_access",
     providerProductId: "cw_live_watch_party_access_sandbox_099",
   },
   {
     key: "live_watch_party_seat_pass_sandbox_099",
-    label: "Live Watch-Party seat pass",
+    label: "Live Stage Seat Pass",
     sourceType: "live_watch_party_seat",
     providerProductId: "cw_live_watch_party_seat_sandbox_099",
   },
@@ -59,7 +59,7 @@ const SANDBOX_PRODUCTS: SandboxProduct[] = [
   },
   {
     key: "event_pass_sandbox_099",
-    label: "Event pass",
+    label: "Event Pass",
     sourceType: "event",
     providerProductId: "cw_event_pass_sandbox_099",
   },
@@ -149,9 +149,13 @@ export default function AdminMoneySandboxPurchasesScreen() {
   const runSandboxPurchase = useCallback(async () => {
     if (!allowed || busy) return;
     if (Platform.OS === "ios") {
+      const liveStageProduct = selectedProduct.sourceType === "live_watch_party_access"
+        || selectedProduct.sourceType === "live_watch_party_seat";
       Alert.alert(
-        "Use a finite App Store checkout",
-        "This generic sandbox screen cannot open dynamic Apple products. Use the dedicated Tip or Watch-Party Seat Pass flow; nothing was charged.",
+        liveStageProduct ? "Live Stage checkout unavailable on iPhone" : "Use a finite App Store checkout",
+        liveStageProduct
+          ? "Live Stage Pass and Live Stage Seat Pass remain bound to the verified Google Play sandbox. They cannot be purchased on this iPhone build, and nothing was charged."
+          : "This generic sandbox screen cannot open dynamic Apple products. Use the dedicated contextual Tip or Party Room Pass flow; nothing was charged.",
       );
       return;
     }

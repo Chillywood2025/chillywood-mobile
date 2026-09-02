@@ -107,6 +107,7 @@ import {
     getSafePartyUserId,
     joinPartyRoomSession,
     leavePartyRoomSession,
+    paidWatchPartyResolutionIsExactFreeRoom,
     resolvePremiumAccessKeyForRoom,
     sendPartyMessageRecord,
     setPartyRoomPolicies,
@@ -248,12 +249,12 @@ const isAccessSheetReason = (reason: string | null | undefined): reason is Acces
 );
 
 const getRoomAccessGateTitle = (access: Pick<RoomAccessResolution, "label" | "reason"> | null | undefined) => (
-  access?.reason === "party_pass_required" ? "Seat Pass access not currently available" : "Premium room access not currently available"
+  access?.reason === "party_pass_required" ? "Party Room Pass not currently available" : "Premium room access not currently available"
 );
 
 const getRoomAccessGateBody = (access: Pick<RoomAccessResolution, "label" | "reason"> | null | undefined) => (
   access?.reason === "party_pass_required"
-    ? "This room stays locked because Watch-Party Seat Pass access is not currently available for this device or account."
+    ? "This Party Room stays locked because its Party Room Pass is not currently available for this device or account."
     : "This room stays locked because premium room access is not currently available for this device or account."
 );
 
@@ -268,6 +269,20 @@ const getAccessGateTitle = (gate: MonetizationGate) => {
   }
   return getRoomAccessGateTitle(gate.access);
 };
+
+const unavailablePaidTicketAccess = (reason: string): PaidWatchPartyTicketAccess => ({
+  allowed: false,
+  reason,
+  requiresPurchase: false,
+  ticketId: null,
+  priceCents: null,
+  currency: null,
+  creatorId: null,
+  provider: null,
+  providerProductId: null,
+  providerProductKey: null,
+  offer: null,
+});
 
 const getAccessGateBody = (gate: MonetizationGate) => {
   if (gate.source === "live_first" || gate.source === "watch_party_live") {
@@ -467,6 +482,7 @@ export default function WatchPartyRoomScreen() {
   const myProfileUsernameRef = useRef<string>("");
   const myCameraPreviewUrlRef = useRef<string>("");
   const myRoleRef = useRef<"host" | "viewer" | null>(null);
+  const paidTicketAuthoritySeenRef = useRef(false);
   const reactionCounterRef = useRef(0);
   const participantReactionTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const tapPulseTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -798,20 +814,27 @@ export default function WatchPartyRoomScreen() {
         if (cancelled) return;
 
         const hasTicketedTarget = !!ticketAccess && (
-          ticketAccess.allowed
-          || ticketAccess.requiresPurchase
+          ticketAccess.requiresPurchase
           || !!ticketAccess.offer?.id
           || !!ticketAccess.ticketId
         );
+        paidTicketAuthoritySeenRef.current = isTicketedPartyRoom && hasTicketedTarget;
         const exactTicketAllowsEntry = isTicketedPartyRoom && hasTicketedTarget && ticketAccess?.allowed === true;
 
-        if (isTicketedPartyRoom && ticketAccess && hasTicketedTarget && !ticketAccess.allowed) {
+        if (
+          isTicketedPartyRoom
+          && ticketAccess
+          && (
+            (hasTicketedTarget && !ticketAccess.allowed)
+            || (!hasTicketedTarget && !paidWatchPartyResolutionIsExactFreeRoom(ticketAccess))
+          )
+        ) {
           setRoom(snapshot.room);
           setPaidTicketGate(ticketAccess);
           setPaidTicketNotice(
             ticketAccess.requiresPurchase
-              ? "Reserve your seat before entering the Party Room."
-              : "This Seat Pass is not available right now.",
+              ? "Get a Party Room Pass before entering the Party Room."
+              : "This Party Room Pass is not available right now.",
           );
           setLoading(false);
           trackEvent("money_provider_blocked_state_seen", {
@@ -1180,20 +1203,9 @@ export default function WatchPartyRoomScreen() {
       channel.on("broadcast", { event: "participant:seat-state" }, ({ payload }: { payload: Record<string, unknown> }) => {
         const participantId = String(payload?.participantId ?? "").trim();
         if (!participantId) return;
-        const nextRoleRaw = String(payload?.role ?? "").trim();
-        const nextRole: SharedParticipantLocalState["role"] =
-          nextRoleRaw === "host" || nextRoleRaw === "speaker" ? nextRoleRaw : "listener";
-        const nextState: SharedParticipantLocalState = {
-          role: nextRole,
-          isMuted: !!payload?.isMuted,
-          isRemoved: !!payload?.isRemoved,
-        };
-        setParticipantSeatRequestById((prev) => ({ ...prev, [participantId]: false }));
-        setParticipantStateById((prev) => ({ ...prev, [participantId]: nextState }));
-        if (nextState.role !== "speaker") {
-          setIsSpeakingById((prev) => ({ ...prev, [participantId]: false }));
-        }
-        refreshRoomSnapshot(myUserIdRef.current).catch(() => null);
+        // Broadcast payloads are refresh hints only. Persisted membership is
+        // authoritative for speaker, mute, removal, host, and moderator UI.
+        void refreshRoomSnapshot(myUserIdRef.current);
       });
 
       // Subscribe → track presence once confirmed
@@ -1452,21 +1464,76 @@ export default function WatchPartyRoomScreen() {
 
       if (nextState === "active") {
         setConnState((prev) => (prev === "reconnecting" ? "connecting" : prev));
-        void touchPartyRoomSession({
-          partyId,
-          userId: currentUserId,
-          role: myRoleRef.current === "host" ? "host" : "viewer",
-          stageRole: currentMembership?.stageRole ?? (myRoleRef.current === "host" ? "host" : undefined),
-          canSpeak: currentMembership?.canSpeak ?? (myRoleRef.current === "host"),
-          cameraEnabled: false,
-          micEnabled: false,
-          displayName: myProfileUsernameRef.current,
-          cameraPreviewUrl: myCameraPreviewUrlRef.current,
-          membershipState: "active",
-        }).then(() => refreshRoomSnapshot(currentUserId)).catch((error) => {
-          reportRuntimeError("watch-party-appstate-active", error, {
+        void (async () => {
+          if (room?.roomType !== "live") {
+            let ticketAccess: PaidWatchPartyTicketAccess;
+            try {
+              ticketAccess = await resolvePaidWatchPartyTicketAccess(partyId);
+            } catch (error) {
+              if (paidTicketAuthoritySeenRef.current || paidTicketGate) {
+                setPaidTicketGate(unavailablePaidTicketAccess("resume_verification_unavailable"));
+                setPaidTicketNotice("Party Room Pass access could not be refreshed after resume. This room stays locked until access is verified.");
+                setConnState("error");
+                return;
+              }
+              reportRuntimeError("watch-party-appstate-ticket-refresh", error, { partyId });
+              return;
+            }
+
+            const hasTicketedTarget = !!(
+              ticketAccess.requiresPurchase
+              || ticketAccess.offer?.id
+              || ticketAccess.ticketId
+            );
+            if (!hasTicketedTarget && !paidWatchPartyResolutionIsExactFreeRoom(ticketAccess)) {
+              setPaidTicketGate(ticketAccess);
+              setPaidTicketNotice("Party Room Pass access could not be refreshed after resume. This room stays locked until access is verified.");
+              setConnState("error");
+              return;
+            }
+            paidTicketAuthoritySeenRef.current = hasTicketedTarget;
+            if (hasTicketedTarget && !ticketAccess.allowed) {
+              setPaidTicketGate(ticketAccess);
+              setPaidTicketNotice(
+                ticketAccess.requiresPurchase
+                  ? "Party Room Pass required. Access changed while the app was away."
+                  : "Party Room Pass access could not be verified after resume.",
+              );
+              setConnState("error");
+              return;
+            }
+            if (paidTicketGate) {
+              setPaidTicketGate(null);
+              setPaidTicketNotice(
+                hasTicketedTarget
+                  ? "Party Room Pass active. You're cleared to enter this Party Room."
+                  : null,
+              );
+              setLoading(true);
+              setJoinRetryToken((value) => value + 1);
+              return;
+            }
+          }
+
+          const membership = await touchPartyRoomSession({
             partyId,
+            userId: currentUserId,
+            role: myRoleRef.current === "host" ? "host" : "viewer",
+            stageRole: currentMembership?.stageRole ?? (myRoleRef.current === "host" ? "host" : undefined),
+            canSpeak: currentMembership?.canSpeak ?? (myRoleRef.current === "host"),
+            cameraEnabled: false,
+            micEnabled: false,
+            displayName: myProfileUsernameRef.current,
+            cameraPreviewUrl: myCameraPreviewUrlRef.current,
+            membershipState: "active",
           });
+          if (!membership) {
+            setConnState("error");
+            return;
+          }
+          await refreshRoomSnapshot(currentUserId);
+        })().catch((error) => {
+          reportRuntimeError("watch-party-appstate-active", error, { partyId });
         });
         return;
       }
@@ -1493,7 +1560,7 @@ export default function WatchPartyRoomScreen() {
     return () => {
       subscription.remove();
     };
-  }, [partyId, refreshRoomSnapshot]);
+  }, [paidTicketGate, partyId, refreshRoomSnapshot, room?.roomType]);
 
   // ── Host: toggle lock room ───────────────────────────────────────────────────
   const onToggleLockRoom = useCallback(async () => {
@@ -1910,7 +1977,7 @@ export default function WatchPartyRoomScreen() {
     const normalizedPartyId = String(room?.partyId ?? partyId ?? "").trim();
     if (!normalizedPartyId || paidTicketBusy) return;
     if (!paidWatchPartyCheckoutAvailable) {
-      setPaidTicketNotice("Seat Pass purchases are temporarily unavailable while setup is being finalized. This room stays locked until access is verified.");
+      setPaidTicketNotice("Party Room Pass purchases are temporarily unavailable while setup is being finalized. This room stays locked until access is verified.");
       return;
     }
     setPaidTicketBusy(true);
@@ -1923,12 +1990,13 @@ export default function WatchPartyRoomScreen() {
       setPaidTicketGate(result.access);
       setPaidTicketNotice(result.message);
       if (result.ok && result.access.allowed) {
+        paidTicketAuthoritySeenRef.current = true;
         setPaidTicketGate(null);
         setLoading(true);
         setJoinRetryToken((value) => value + 1);
       }
     } catch {
-      setPaidTicketNotice("Seat Pass checkout could not start. Try again later.");
+      setPaidTicketNotice("Party Room Pass checkout could not start. Try again later.");
     } finally {
       setPaidTicketBusy(false);
     }
@@ -2741,21 +2809,21 @@ export default function WatchPartyRoomScreen() {
         <View style={styles.errorCard} testID="watch-party-ticket-lock-card">
           <View style={styles.ticketGateHeaderRow}>
             <Text style={styles.errorTitle}>
-              {paidTicketGate.requiresPurchase ? "Seat Pass required" : "Seat Pass unavailable"}
+              {paidTicketGate.requiresPurchase ? "Party Room Pass required" : "Party Room Pass unavailable"}
             </Text>
-            <MoneyStatusChip label={paidTicketGate.requiresPurchase ? "Seat Pass" : "Unavailable"} tone={paidTicketGate.requiresPurchase ? "premium" : "warning"} />
+            <MoneyStatusChip label={paidTicketGate.requiresPurchase ? "Party Room Pass" : "Unavailable"} tone={paidTicketGate.requiresPurchase ? "premium" : "warning"} />
           </View>
           <Text style={styles.ticketPrice}>{priceLabel}</Text>
           <Text style={styles.errorBody}>
             {paidTicketGate.requiresPurchase && paidWatchPartyCheckoutAvailable
-              ? `This Seat Pass unlocks access to this Watch-Party room only for ${priceLabel}. It does not include Premium, subscriptions, VIP, paid videos, other rooms, or events.`
-              : "Seat Pass purchases are temporarily unavailable while setup is being finalized. This room stays locked until access is verified."}
+              ? `A Party Room Pass gives you entry to this exact Party Room for ${priceLabel}. It does not include Live Stage, speaking, camera, microphone, host, moderator, LiveKit publish authority, Premium, subscriptions, VIP, paid videos, other rooms, or Events.`
+              : "Party Room Pass purchases are temporarily unavailable while setup is being finalized. This room stays locked until access is verified."}
           </Text>
           <MoneyScopeStrip
             includes="Access to this Watch-Party room target only."
-            excludes="Chi'llywood Premium, subscriptions, VIP, paid videos, event passes, LiveKit publish authority, host controls, and other rooms stay separate."
+            excludes="Chi'llywood Premium, subscriptions, VIP, paid videos, Event Passes, LiveKit publish authority, host controls, and other rooms stay separate."
           />
-          <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this Seat Pass unlock?" />
+          <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this Party Room Pass unlock?" />
           <RouteBackedMonetizationProofCard config={routeProofConfig} surface="watch_party_ticket" />
           {paidTicketGate.requiresPurchase ? (
             <TouchableOpacity
@@ -2765,11 +2833,11 @@ export default function WatchPartyRoomScreen() {
               disabled={paidTicketBusy}
               testID="watch-party-ticket-purchase-button"
               accessibilityRole="button"
-              accessibilityLabel="Get Watch-Party Seat Pass"
+              accessibilityLabel={`Join Party Room with Party Room Pass for ${priceLabel}`}
               accessibilityState={{ disabled: paidTicketBusy, busy: paidTicketBusy }}
             >
               <Text style={[styles.secondaryBtnText, styles.accessPrimaryButtonText]}>
-                {paidTicketBusy ? "Opening Store" : "Get Seat Pass"}
+                {paidTicketBusy ? "Opening Store" : `Join Party Room — ${priceLabel}`}
               </Text>
             </TouchableOpacity>
           ) : null}

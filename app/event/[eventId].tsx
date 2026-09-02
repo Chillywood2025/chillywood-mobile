@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, AppState, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
@@ -46,7 +46,7 @@ const formatEventType = (value: string | null) => {
 };
 
 const LOCKED_COPY =
-  "This pass unlocks this creator event only. It does not include Chi'llywood Premium, subscriptions, VIP, paid videos, Watch-Party Seat Passes, other events, or other creator content.";
+  "An Event Pass gives access to this exact Event only. It does not include Party Room, Live Stage, a speaking seat, host/moderator authority, Chi'llywood Premium, subscriptions, VIP, paid videos, other Events, or other creator content.";
 
 const unavailableEventPassCopy = (status: string | null | undefined) => {
   const normalized = normalizeText(status).toLowerCase();
@@ -75,7 +75,7 @@ export default function PaidCreatorEventRoute() {
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
 
-  const load = async () => {
+  const load = React.useCallback(async () => {
     setLoading(true);
     setError("");
     const [{ data: eventRow, error: eventError }, accessResult] = await Promise.all([
@@ -90,7 +90,7 @@ export default function PaidCreatorEventRoute() {
     setEvent((eventRow as EventRow | null) ?? null);
     setAccess(accessResult);
     setLoading(false);
-  };
+  }, [eventId]);
 
   useEffect(() => {
     if (!eventId) {
@@ -107,7 +107,14 @@ export default function PaidCreatorEventRoute() {
     return () => {
       active = false;
     };
-  }, [eventId]);
+  }, [eventId, load]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active" && eventId) void load();
+    });
+    return () => subscription.remove();
+  }, [eventId, load]);
 
   const onBuyEventPass = async () => {
     if (!eventId || purchaseLoading) return;
@@ -123,7 +130,7 @@ export default function PaidCreatorEventRoute() {
       setNotice(result.message);
       if (result.ok) await load();
     } catch {
-      setError("Event pass checkout is not available right now.");
+      setError("Event Pass checkout is not available right now.");
     } finally {
       setPurchaseLoading(false);
     }
@@ -133,6 +140,11 @@ export default function PaidCreatorEventRoute() {
   const locked = !!access && !access.allowed && access.requiresPurchase;
   const soldOut = access?.reason === "sold_out";
   const unavailable = !!access && !access.allowed && !access.requiresPurchase;
+  const confirmedEventPass = !!access?.allowed
+    && access.reason === "event_pass_confirmed"
+    && !!access.passId;
+  const creatorPreview = !!access?.allowed && access.reason === "creator_or_admin";
+  const freeEvent = !!access?.allowed && access.reason === "free_event";
   const title = event?.event_title || offer?.title || "Creator event";
 
   const onSubmitEventReport = async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
@@ -176,7 +188,7 @@ export default function PaidCreatorEventRoute() {
           </View>
         ) : (
           <View style={styles.card}>
-            <Text style={styles.kicker}>PAID EVENT</Text>
+            <Text style={styles.kicker}>EVENT</Text>
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.body}>
               {formatEventType(event?.event_type ?? offer?.eventType ?? null)} · Starts {formatDate(event?.starts_at ?? offer?.startsAt ?? null)}
@@ -194,20 +206,36 @@ export default function PaidCreatorEventRoute() {
               ) : null}
             </View>
 
-            {access?.allowed ? (
+            {confirmedEventPass ? (
               <View testID="event-pass-access-granted-state">
                 <MoneySuccessReceipt
-                  title="Event pass confirmed"
-                  body="You can access this creator event. This pass does not grant Chi'llywood Premium, VIP, paid videos, Watch-Party Seat Passes, other events, or LiveKit host controls."
+                  title="Event Pass active"
+                  body="You have access to this Event. It does not grant generic Party Room or Live Stage access, speaking, host, moderator, camera, microphone, or LiveKit publish authority."
                   testID="event-pass-success-receipt"
                 />
                 <Text style={styles.detail}>Access reason: {access.reason}</Text>
               </View>
+            ) : creatorPreview ? (
+              <View style={styles.stateBox} testID="event-creator-preview-state">
+                <Text style={styles.stateTitle}>Creator preview</Text>
+                <Text style={styles.body}>
+                  {offer
+                    ? "This Event is Paid for viewers. They need the exact Event Pass shown here before entry. Your creator authority is separate from a purchase."
+                    : "This Event is free for viewers. No Event Pass is required."}
+                </Text>
+              </View>
+            ) : freeEvent ? (
+              <View style={styles.stateBox} testID="event-free-access-state">
+                <Text style={styles.stateTitle}>Open Event</Text>
+                <Text style={styles.body}>
+                  This Event is free to enter. No Event Pass is required. Chi’llywood Premium remains separate.
+                </Text>
+              </View>
             ) : locked ? (
               <MoneyOfferCard
                 testID="event-pass-lock-card"
-                kicker="Creator event pass"
-                title="Event pass required"
+                kicker="Event Pass"
+                title="Event Pass required"
                 price={offer ? formatPaidCreatorEventPrice(offer.priceCents, offer.currency) : null}
                 body={LOCKED_COPY}
                 statusLabel={soldOut ? "Sold out" : "Locked"}
@@ -215,12 +243,12 @@ export default function PaidCreatorEventRoute() {
               >
                 <MoneyScopeStrip
                   includes="Access to this creator event only."
-                  excludes="Chi'llywood Premium, VIP, subscriptions, paid videos, Watch-Party Seat Passes, other events, and host authority stay separate."
+                  excludes="Party Room Pass, Live Stage Pass, Live Stage Seat Pass, Chi'llywood Premium, VIP, subscriptions, paid videos, other Events, and host authority stay separate."
                 />
                 <MoneyScopeInfoButton scope="event_pass" label="What does this unlock?" />
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Get Event Pass"
+                  accessibilityLabel={offer ? `Join Event with Event Pass for ${formatPaidCreatorEventPrice(offer.priceCents, offer.currency)}` : "Get Event Pass"}
                   testID="event-pass-purchase-button"
                   onPress={onBuyEventPass}
                   style={[styles.primaryButton, purchaseLoading && styles.buttonDisabled]}
@@ -234,7 +262,7 @@ export default function PaidCreatorEventRoute() {
                       </Text>
                     </View>
                   ) : (
-                    <Text style={styles.primaryButtonText}>{soldOut ? "Sold Out" : "Get Event Pass"}</Text>
+                    <Text style={styles.primaryButtonText}>{soldOut ? "Sold Out" : offer ? `Join Event — ${formatPaidCreatorEventPrice(offer.priceCents, offer.currency)}` : "Get Event Pass"}</Text>
                   )}
                 </Pressable>
               </MoneyOfferCard>
@@ -248,14 +276,7 @@ export default function PaidCreatorEventRoute() {
                   {unavailableEventPassCopy(event?.status || offer?.status || access?.reason)}
                 </Text>
               </View>
-            ) : (
-              <View style={styles.stateBox}>
-                <Text style={styles.stateTitle}>Open Event</Text>
-                <Text style={styles.body}>
-                  This event is not currently configured as a paid Event Pass. Chi’llywood Premium is separate from creator event passes.
-                </Text>
-              </View>
-            )}
+            ) : null}
 
             {notice ? <Text style={styles.notice}>{notice}</Text> : null}
             {error ? <Text style={styles.error}>{error}</Text> : null}

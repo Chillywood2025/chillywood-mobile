@@ -66,7 +66,14 @@ assertIncludes(moneyFlags, "live_money_enabled: \"off\"", "live money remains of
 assertIncludes(moneyFlags, "payouts_enabled: \"off\"", "payouts remain off");
 assertIncludes(routeTargets, 'viewerTarget: "/watch-party/[partyId]"', "Watch-Party money routes to Party Room");
 
-assertNotIncludes(revenuecatWebhook, "chillywoodmobile://watch-party/live-stage", "creator-money notifications must not route to Live Stage");
+assertIncludes(revenuecatWebhook, "deepLink: `chillywoodmobile://watch-party/${partyId}`", "Party Room Pass notification routes to exact Party Room");
+assertIncludes(revenuecatWebhook, 'route: "/watch-party/[partyId]"', "Party Room Pass notification retains Party Room route identity");
+assertIncludes(revenuecatWebhook, "deepLink: `chillywoodmobile://watch-party/live-stage/${partyId}`", "Live Stage notifications route to exact Live Stage");
+assertIncludes(revenuecatWebhook, 'route: "/watch-party/live-stage/[partyId]"', "Live Stage notifications retain Live Stage route identity");
+assertIncludes(revenuecatWebhook, '.from("paid_watch_party_offers")', "Party Room notification target comes from canonical offer state");
+assertIncludes(revenuecatWebhook, '.from("paid_live_watch_party_offers")', "Live Stage notification target comes from canonical offer state");
+assertIncludes(revenuecatWebhook, '.eq("pass_type", input.productType)', "Live Stage notification target preserves exact product identity");
+assertIncludes(revenuecatWebhook, '.from("paid_creator_events")', "Event notification target comes from canonical Event state");
 assertIncludes(revenuecatWebhook, "notifications guide buyers and creators", "notification code is route guidance only");
 assertNotIncludes(revenuecatWebhook, "payout_request", "notifications must not create payout requests");
 assertNotIncludes(settings, "Money notification Chat", "Chat must not become money notification center");

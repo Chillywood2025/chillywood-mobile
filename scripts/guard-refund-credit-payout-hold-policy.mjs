@@ -69,7 +69,7 @@ assertIncludes(policy, "successful canonical room completion plus 48 hours", "Wa
 assertIncludes(policy, "successful canonical event completion plus 48 hours", "Event completion settlement");
 assertIncludes(policy, "Refund eligible before room entry/use", "ticket refund before entry/use");
 assertIncludes(policy, "buyer has not entered/attended before cutoff", "event refund before attendance");
-assertIncludes(policy, "Seat pass grants eligibility only; host approval and LiveKit token rules still win.", "seat pass host approval rule");
+assertIncludes(policy, "A Live Stage Seat Pass grants eligibility only; host approval and LiveKit token rules still win.", "Live Stage Seat Pass host approval rule");
 assertIncludes(policy, "Refund/return to original payment method", "merch original payment/return policy");
 assertIncludes(policy, "Stripe/merch provider is separate from in-app digital goods billing.", "merch provider separation");
 assertIncludes(policy, "No cash-out, withdrawal, payable balance, or real payout is active.", "payout readiness setup only");

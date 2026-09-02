@@ -186,14 +186,17 @@ export const getLiveStagePrimaryRoleLabel = (options: {
   participant?: LiveStageParticipantLike | null;
   state?: LiveStageParticipantStateLike | null;
   isRequesting?: boolean;
+  seatState?: "eligible" | "requested" | "rejected" | "approved" | null;
 }) => {
   const role = roleFromParticipant(options.participant ?? {}, options.state ?? undefined);
   const isRemoved = !!options.state?.isRemoved;
   if (isRemoved) return "Removed";
-  if (options.isRequesting && role !== "host" && role !== "speaker") return "Seat request pending";
+  if ((options.isRequesting || options.seatState === "requested") && role !== "host" && role !== "speaker") return "Seat requested";
   if (role === "host") return "Host";
-  if (role === "speaker") return "Seated";
-  return "Audience";
+  if (role === "speaker") return "Approved speaker";
+  if (options.seatState === "rejected") return "Rejected";
+  if (options.seatState === "eligible" || options.seatState === "approved") return "Seat eligible";
+  return "Viewer";
 };
 
 export const resolveDesiredLiveKitAuthority = (options: {

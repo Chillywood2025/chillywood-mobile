@@ -167,7 +167,7 @@ const parseOffer = (row: Record<string, unknown>): PaidWatchPartyOffer | null =>
     hostId,
     titleId: toText(row.titleId) || null,
     videoId: toText(row.videoId) || null,
-    title: toText(row.title) || "Watch-Party Seat Pass",
+    title: toText(row.title) || "Party Room Pass",
     description: toText(row.description) || null,
     priceCents: toCents(row.priceCents),
     currency: toText(row.currency) || "usd",
@@ -193,7 +193,7 @@ const parseTransaction = (row: Record<string, unknown>): PaidWatchPartyTransacti
     id,
     offerId,
     partyId: toText(row.partyId) || null,
-    roomTitle: toText(row.roomTitle) || "Watch-Party Seat Pass",
+    roomTitle: toText(row.roomTitle) || "Party Room Pass",
     buyerId: toText(row.buyerId),
     creatorId,
     amountCents: toCents(row.amountCents),
@@ -413,11 +413,11 @@ export async function savePaidWatchPartyOffer(input: {
     p_seat_limit: input.seatLimit == null ? null : Math.max(1, Math.trunc(input.seatLimit)),
     p_status: input.status ?? "sandbox",
   });
-  if (error) throw new Error("Paid Watch-Party Seat Pass settings could not be saved.");
+  if (error) throw new Error("Party Room entry settings could not be saved.");
   const offer = data && typeof data === "object" && !Array.isArray(data)
     ? parseOffer(data as Record<string, unknown>)
     : null;
-  if (!offer) throw new Error("Paid Watch-Party Seat Pass settings could not be read.");
+  if (!offer) throw new Error("Party Room entry settings could not be read.");
   return offer;
 }
 
@@ -450,19 +450,19 @@ export async function createPaidWatchPartyTicketPurchaseIntent(
   const { data, error } = await rpcClient.rpc("create_paid_watch_party_ticket_purchase_intent", {
     p_offer_id: offerId,
   });
-  if (error) throw new Error("Seat Pass checkout is not available right now.");
+  if (error) throw new Error("Party Room Pass checkout is not available right now.");
   if (!data || typeof data !== "object" || Array.isArray(data)) {
-    throw new Error("Seat Pass checkout authority could not be verified.");
+    throw new Error("Party Room Pass checkout authority could not be verified.");
   }
   const row = data as Record<string, unknown>;
   if (typeof row.alreadyPurchased !== "boolean") {
-    throw new Error("Seat Pass checkout authority could not be verified.");
+    throw new Error("Party Room Pass checkout authority could not be verified.");
   }
   const validated = validateCreatorMoneyPurchaseIntent(data, {
     ...expected,
     status: row.alreadyPurchased ? "consumed" : "pending",
   });
-  if (!validated) throw new Error("Seat Pass checkout authority could not be verified.");
+  if (!validated) throw new Error("Party Room Pass checkout authority could not be verified.");
   return {
     ...validated,
     alreadyPurchased: row.alreadyPurchased,
@@ -488,20 +488,20 @@ const createIosPaidWatchPartyTicketPurchaseIntent = async (
     p_source_id: offerId,
     p_source_type: "watch_party_live",
   });
-  if (error) throw new Error("App Store Seat Pass checkout is not available right now.");
+  if (error) throw new Error("App Store Party Room Pass checkout is not available right now.");
   if (!data || typeof data !== "object" || Array.isArray(data)) {
-    throw new Error("App Store Seat Pass checkout authority could not be verified.");
+    throw new Error("App Store Party Room Pass checkout authority could not be verified.");
   }
   const row = data as Record<string, unknown>;
   if (typeof row.alreadyPurchased !== "boolean") {
-    throw new Error("App Store Seat Pass checkout authority could not be verified.");
+    throw new Error("App Store Party Room Pass checkout authority could not be verified.");
   }
   const validated = validateCreatorMoneyPurchaseIntent(data, {
     ...expected,
     status: row.alreadyPurchased ? "consumed" : "pending",
   });
   if (!validated || validated.providerProductId !== product.productId) {
-    throw new Error("App Store Seat Pass checkout authority could not be verified.");
+    throw new Error("App Store Party Room Pass checkout authority could not be verified.");
   }
   return {
     ...validated,
@@ -526,10 +526,10 @@ export async function purchasePaidWatchPartyTicket(input: {
 }): Promise<PaidWatchPartyTicketPurchaseResult> {
   const access = await resolvePaidWatchPartyTicketAccess(input.partyId);
   if (access.allowed) {
-    return { ok: true, message: "Seat Pass confirmed.", access };
+    return { ok: true, message: "Party Room Pass active. You're cleared to enter this Party Room.", access };
   }
   if (!access.requiresPurchase || !access.offer?.id) {
-    return { ok: false, message: "This Seat Pass is not available right now.", access };
+    return { ok: false, message: "This Party Room Pass is not available right now.", access };
   }
   if (
     !access.creatorId
@@ -537,7 +537,7 @@ export async function purchasePaidWatchPartyTicket(input: {
     || !access.providerProductId
     || typeof access.priceCents !== "number"
     || !access.currency
-  ) return { ok: false, message: "This Seat Pass is not available right now.", access };
+  ) return { ok: false, message: "This Party Room Pass is not available right now.", access };
 
   const iosProduct = Platform.OS === "ios"
     ? access.offer.providerProductId
@@ -555,7 +555,7 @@ export async function purchasePaidWatchPartyTicket(input: {
     ) {
       return {
         ok: false,
-        message: "This Seat Pass does not match an approved App Store tier. Nothing was charged.",
+        message: "This Party Room Pass does not match an approved App Store tier. Nothing was charged.",
         access,
       };
     }
@@ -574,7 +574,7 @@ export async function purchasePaidWatchPartyTicket(input: {
     if (!decision.allowed || decision.provider !== "revenuecat_app_store") {
       return {
         ok: false,
-        message: "App Store sandbox Seat Passes are disabled for this build. Nothing was charged.",
+        message: "App Store sandbox Party Room Passes are disabled for this build. Nothing was charged.",
         access,
       };
     }
@@ -584,7 +584,7 @@ export async function purchasePaidWatchPartyTicket(input: {
   if (!purchaseSubject) {
     return {
       ok: false,
-      message: "Sign in again before starting Seat Pass checkout. Nothing was charged.",
+      message: "Sign in again before starting Party Room Pass checkout. Nothing was charged.",
       access,
     };
   }
@@ -606,7 +606,9 @@ export async function purchasePaidWatchPartyTicket(input: {
     const verifiedAccess = await waitForPaidWatchPartyTicketAccess(input.partyId);
     return {
       ok: verifiedAccess.allowed,
-      message: verifiedAccess.allowed ? "Seat Pass confirmed." : "Seat Pass is still being confirmed.",
+      message: verifiedAccess.allowed
+        ? "Party Room Pass active. You're cleared to enter this Party Room."
+        : "Party Room Pass is still being confirmed.",
       access: verifiedAccess,
       intentId: intent.id,
     };
@@ -618,7 +620,7 @@ export async function purchasePaidWatchPartyTicket(input: {
   if (!product) {
     return {
       ok: false,
-      message: "Seat Pass sandbox product is not available on this device yet.",
+      message: "Party Room Pass sandbox product is not available on this device yet.",
       access,
       intentId: intent.id,
       productId,
@@ -637,7 +639,7 @@ export async function purchasePaidWatchPartyTicket(input: {
   if (!await revalidateCreatorMoneyPurchaseSubject(purchaseSubject)) {
     return {
       ok: false,
-      message: "Your session changed before Seat Pass checkout. Nothing was charged.",
+      message: "Your session changed before Party Room Pass checkout. Nothing was charged.",
       access,
       intentId: intent.id,
       productId,
@@ -652,7 +654,7 @@ export async function purchasePaidWatchPartyTicket(input: {
     if (verifiedAccess.allowed) {
       return {
         ok: true,
-        message: "Seat Pass confirmed. Join Party Waiting Room.",
+        message: "Party Room Pass active. You're cleared to enter this Party Room.",
         access: verifiedAccess,
         intentId: intent.id,
         productId,
@@ -662,7 +664,7 @@ export async function purchasePaidWatchPartyTicket(input: {
     if (isRevenueCatUserCancellation(error)) {
       return {
         ok: false,
-        message: "Seat Pass purchase was canceled. Nothing changed.",
+        message: "Party Room Pass purchase was canceled. Nothing changed.",
         access: verifiedAccess,
         intentId: intent.id,
         productId,
@@ -677,8 +679,8 @@ export async function purchasePaidWatchPartyTicket(input: {
     return {
       ok: false,
       message: Platform.OS === "ios"
-        ? "Seat Pass purchase did not finish. If the App Store shows it as pending, refresh this room in a moment."
-        : "Seat Pass purchase did not finish. If Google Play shows it as pending, refresh this room in a moment.",
+        ? "Party Room Pass purchase did not finish. If the App Store shows it as pending, refresh this room in a moment."
+        : "Party Room Pass purchase did not finish. If Google Play shows it as pending, refresh this room in a moment.",
       access: verifiedAccess,
       intentId: intent.id,
       productId,
@@ -690,7 +692,7 @@ export async function purchasePaidWatchPartyTicket(input: {
   if (!verifiedAccess.allowed) {
     return {
       ok: false,
-      message: "Purchase received. Waiting for the verified Seat Pass to finish.",
+      message: "Purchase received. Waiting for the verified Party Room Pass to finish.",
       access: verifiedAccess,
       intentId: intent.id,
       productId,
@@ -708,7 +710,7 @@ export async function purchasePaidWatchPartyTicket(input: {
 
   return {
     ok: true,
-    message: "Seat Pass confirmed. Join Party Waiting Room.",
+    message: "Party Room Pass active. You're cleared to enter this Party Room.",
     access: verifiedAccess,
     intentId: intent.id,
     productId,

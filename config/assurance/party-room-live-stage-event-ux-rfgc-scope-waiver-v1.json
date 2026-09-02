@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "contractId": "party-room-live-stage-event-ux-rfgc-scope-waiver-v1",
+  "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
+  "objective": "Close the exact creator-to-viewer Party Room, Live Stage entry, Live Stage seat-eligibility, and Event Pass UX graph while preserving the existing #327/#329 provider, grant, RLS, settlement, refund, and LiveKit authorities.",
+  "exactReason": "The Owner-required recursive audit found one coupled display-and-integration defect group spanning creator setup, viewer offers, entry-before-seat enforcement, exact purchase readback, host seat-state presentation, contextual routes, notifications, lifecycle refresh, Money Center labels, and regression proof. Splitting these producers and consumers would leave buyers able to misunderstand or strand a pass while the unchanged financial and media authorities continued to operate behind contradictory UI.",
+  "reviewer": "party-room-live-stage-event-ux-rfgc-four-lane-exact-head-review-set",
+  "supportingDomains": [
+    "Party-Room",
+    "Live-Stage",
+    "Event-Pass",
+    "RevenueCat-sandbox-reconciliation",
+    "database-RLS",
+    "LiveKit-authority",
+    "notifications-and-deep-links",
+    "Money-Center",
+    "lifecycle-and-accessibility"
+  ],
+  "secondHighRiskDomain": false,
+  "newTimeboxHours": 8,
+  "fileBudget": {
+    "default": 15,
+    "waivedMaximum": 55
+  },
+  "lineBudget": {
+    "default": 1200,
+    "waivedMaximum": 3200
+  },
+  "reviewStatus": "FRESH_FOUR_LANE_EXACT_HEAD_REVIEW_REQUIRED_BEFORE_MERGE",
+  "prohibitedScope": [
+    "internal product identifier rename",
+    "production money activation",
+    "production payout execution",
+    "real provider charge",
+    "provider catalog mutation",
+    "production-v2 publication",
+    "public rollout increase",
+    "native build creation unless compatibility proves it required",
+    "assurance control-plane repair"
+  ]
+}

@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 1,
+  "ledgerId": "PARTY_ROOM_LIVE_STAGE_EVENT_UX_RFGC_LEDGER_V1",
+  "method": "RECURSIVE_FULL_GRAPH_CLOSURE",
+  "startingProtectedMain": {
+    "sha": "104d8d222fdbd704938ecf934fde37e8960390e0",
+    "tree": "832028147eb6ffb5a44a0c6740946ca62e152fd5"
+  },
+  "preoperationDisposition": "OWNER_AUTHORIZED_PREOP_ASSURANCE_CONTINUATION",
+  "authorityPreserved": [
+    "watch_party_live_ticket",
+    "live_watch_party_access_pass",
+    "live_watch_party_seat_pass",
+    "event_pass",
+    "#327 settlement/refund/reserve authority",
+    "#329 exact buyer/creator/target/provider/grant/RLS authority",
+    "#329 host-approved persisted speaker and server LiveKit authority"
+  ],
+  "proof": {
+    "sourceAndModel": "24 focused RFGC tests, route/monetization/notification/refund guards, TypeScript, lint, and a frozen-head exact-diff security review with zero reportable findings",
+    "databaseAndIntegration": "Clean local Supabase reset followed by 81 pgTAP files and 3,023 tests, including the new entry-first and seat-state closure test, all passing",
+    "providerAndPhysicalLimits": "Positive store and physical-device states remain separately classified below; no receipt, role, pass, transaction, approval, balance, or device identity was fabricated"
+  },
+  "entries": [
+    {
+      "id": "RFGC-UX-001",
+      "class": "creator_party_room",
+      "firstFailedBoundary": "creator configuration",
+      "finding": "Party Room setup exposed a Seat Pass product choice instead of contextual Free or Paid room entry.",
+      "repair": "Replace the product-oriented control with Free/Paid Party Room entry, an exact price, a viewer preview, and a cancel-to-free lifecycle.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-002",
+      "class": "creator_live_stage",
+      "firstFailedBoundary": "creator configuration",
+      "finding": "Live Stage entry and speaking-seat eligibility were not independently understandable or configurable.",
+      "repair": "Add independent Free/Paid viewer-entry and Free/Paid speaking-seat controls with exact public names and authority exclusions.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-003",
+      "class": "public_naming",
+      "firstFailedBoundary": "display layer",
+      "finding": "Ordinary creator and viewer surfaces used stale Ticket, Seat Pass, and Live Access wording.",
+      "repair": "Centralize and apply Party Room Pass, Live Stage Pass, Live Stage Seat Pass, and Event Pass display names without changing internal identities.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-004",
+      "class": "viewer_party_room",
+      "firstFailedBoundary": "locked offer",
+      "finding": "Paid Party Room copy did not unambiguously state exact room entry or exclude Live Stage and room/media authority.",
+      "repair": "Show the exact Party Room Pass, price, destination, authority exclusions, contextual CTA, and exact confirmation.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-005",
+      "class": "viewer_live_entry",
+      "firstFailedBoundary": "locked offer",
+      "finding": "Paid Live Stage entry could be confused with a speaking-seat product.",
+      "repair": "Present Live Stage Pass as exact viewer/listener entry only, with a Watch Live CTA and no speaking or publish implication.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-006",
+      "class": "seat_dependency",
+      "firstFailedBoundary": "purchase intent",
+      "finding": "A paid-entry Live Stage lacked a client and database backstop requiring exact entry authority before a Seat Pass charge.",
+      "repair": "Enforce entry-first in the client and before pending seat purchase intents using the unchanged exact provider/grant authority.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-007",
+      "class": "seat_semantics",
+      "firstFailedBoundary": "viewer and host presentation",
+      "finding": "Seat eligibility, a seat request, rejection, approval, current speaker membership, and removal were not durably distinguished.",
+      "repair": "Persist paid seat request/rejection state, derive approval from current canonical speaker membership, and render distinct host/viewer states without granting role authority.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-008",
+      "class": "seat_lifecycle",
+      "firstFailedBoundary": "server readback",
+      "finding": "A prior approved timestamp could continue to present approval after current speaker membership was removed or provider authority became stale.",
+      "repair": "Require exact active provider/grant proof for host state and current persisted speaker membership for Approved; refresh stale request state from server truth.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-009",
+      "class": "live_first_surface",
+      "firstFailedBoundary": "Live Stage mode rendering",
+      "finding": "Seat purchase and request controls were reachable in hybrid mode but absent from the Live-first Stage mode.",
+      "repair": "Add the same exact Seat Pass explanation, purchase, and request controls to Live-first Stage overlay context.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-010",
+      "class": "event_separation",
+      "firstFailedBoundary": "Event access presentation",
+      "finding": "Event access used generic paid-event wording and an allowed free or creator-preview state could masquerade as an active Event Pass.",
+      "repair": "Separate confirmed Event Pass, creator preview, and free Event states and retain exact Event-only routing with no inferred Live Stage authority.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-011",
+      "class": "generic_catalog",
+      "firstFailedBoundary": "viewer discovery",
+      "finding": "Channel discovery could behave like a generic product catalog instead of letting the exact Party Room or Event choose its product.",
+      "repair": "Route discovery CTAs to the exact target where the contextual lock and purchase authority resolve.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-012",
+      "class": "purchase_confirmation",
+      "firstFailedBoundary": "provider reconciliation readback",
+      "finding": "Confirmations were generic or could remain stale while exact access became active.",
+      "repair": "Bind confirmation to exact offer/target readback and state the precise Party Room, Live entry, seat eligibility, or Event authority obtained.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-013",
+      "class": "duplicate_restore_stale",
+      "firstFailedBoundary": "purchase CTA state",
+      "finding": "Live purchase completion lacked bounded reconciliation polling and lifecycle refresh could leave duplicate or stale purchase CTAs.",
+      "repair": "Recognize already-purchased exact grants, poll exact provider reconciliation, and re-resolve access on foreground/resume.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-014",
+      "class": "offer_lifecycle",
+      "firstFailedBoundary": "creator configuration readback",
+      "finding": "Disabled Party Room, Live Stage, or Event offers could leave stale active display configuration.",
+      "repair": "Synchronize display-only config status from exact canonical offer status without deleting financial history.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-015",
+      "class": "notifications_and_deep_links",
+      "firstFailedBoundary": "post-purchase routing",
+      "finding": "Generic ticket/access notification labels did not communicate the exact product and destination.",
+      "repair": "Use public product names and exact Party Room, Live Stage seat context, and Event deep links for purchase, request, approval, rejection, refund, and reversal states.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-016",
+      "class": "money_center",
+      "firstFailedBoundary": "creator transaction presentation",
+      "finding": "Money Center exposed stale Party/Seat terminology and omitted clear Live Stage entry-versus-seat rows.",
+      "repair": "Render the four public names, exact target meaning, and separate Live Stage entry and seat summaries while retaining internal/provider identity behind the display layer.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-017",
+      "class": "cross_product_negative_copy",
+      "firstFailedBoundary": "scope explanation",
+      "finding": "Premium, Platform Subscription, VIP, Paid Video, Party Room, Live Stage, seat, and Event exclusions were inconsistently named.",
+      "repair": "Make cross-product exclusions explicit without changing #326 Premium, subscription, VIP, or Paid Video doctrine.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-018",
+      "class": "accessibility_small_screen",
+      "firstFailedBoundary": "interactive layout",
+      "finding": "Long names, paired prices, and Live creator controls lacked complete wrapping, selected-state labels, and bounded scrolling/overlay behavior on small screens.",
+      "repair": "Add accessible labels/states, wrapping and minimum touch widths, a collapsible scrollable Live setup overlay, and exact CTA text.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-019",
+      "class": "party_room_admission_order",
+      "firstFailedBoundary": "Party Waiting Room prerequisite resolution",
+      "finding": "The waiting-room join path checked Premium before resolving the exact Party Room offer, so an already-owned paid pass could be blocked even though hardened admission treats it as the exact paid-room authority; the direct route also misclassified a free-room response as a paid target.",
+      "repair": "Resolve exact Party Room offer/pass authority first, block a missing paid pass regardless of Premium, use exact paid authority when present, and retain the existing Premium prerequisite only for free Party Rooms.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-020",
+      "class": "party_room_resume_authority",
+      "firstFailedBoundary": "foreground lifecycle reconciliation",
+      "finding": "Party Room resume could touch membership before an asynchronous pass refresh finished and could fail to restart bootstrap after a background purchase completed.",
+      "repair": "Revalidate exact Party Room Pass authority before membership touch, fail closed when a previously paid target cannot be verified, and restart bootstrap after pass recovery or background completion.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-021",
+      "class": "realtime_role_presentation",
+      "firstFailedBoundary": "Realtime presentation consumer",
+      "finding": "Client broadcast payloads could directly paint speaker, mute, or removal state before canonical persisted membership readback.",
+      "repair": "Treat seat-state broadcasts only as refresh hints and derive role, mute, removal, approval, and speaker presentation from persisted server state.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-022",
+      "class": "notification_target_binding",
+      "firstFailedBoundary": "notification/deep-link target resolution",
+      "finding": "Purchase and terminal notifications could accept target metadata before resolving the exact Party Room or Live Stage offer, leaving a wrong-target route possible if metadata diverged from canonical offer state.",
+      "repair": "Resolve Party Room, Live Stage, and Event notification destinations from the exact creator/product-bound canonical offer or Event row and reject mismatched target metadata.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-023",
+      "class": "platform_provider_presentation",
+      "firstFailedBoundary": "creator/provider and viewer/checkout presentation",
+      "finding": "Generic creator setup could describe Live Stage products as App Store-backed on iOS even though #329 binds those exact sandbox products to Google Play, while iPhone viewer surfaces still rendered purchase CTAs that could only fail after a tap.",
+      "repair": "Keep both Live Stage product tiers bound to Google Play, disclose the Android-only sandbox reach in creator setup and confirmation copy, suppress unavailable viewer purchase controls on iPhone/non-Android builds, and make the internal diagnostic explain the same provider boundary without changing product identity.",
+      "disposition": "PROVEN"
+    }
+  ],
+  "limitations": [
+    {
+      "id": "RFGC-LIMIT-001",
+      "finding": "Positive provider purchases require legitimate configured sandbox identities and catalog state; no test fixture may fabricate a provider receipt.",
+      "disposition": "PROVIDER_SANDBOX_LIMITED"
+    },
+    {
+      "id": "RFGC-LIMIT-002",
+      "finding": "Physical Android/iOS evidence is limited to legitimately attached devices and already-authorized identities; signed, installed, physical, and public-canary tiers remain separate.",
+      "disposition": "EXTERNAL_BLOCKED"
+    }
+  ],
+  "counts": {
+    "BLOCKING_OPEN": 0,
+    "REPAIRED_UNPROVEN": 0,
+    "PROVEN": 23,
+    "NONBLOCKING_DEBT": 0,
+    "PROVIDER_SANDBOX_LIMITED": 1,
+    "EXTERNAL_BLOCKED": 1,
+    "NOT_A_DEFECT": 0
+  }
+}

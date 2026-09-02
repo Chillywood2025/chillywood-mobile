@@ -76,13 +76,16 @@ export async function readRouteBackedMonetizationProofConfig(options: {
     .eq("source_id", sourceId)
     .in("source_type", sourceTypes)
     .eq("environment", "sandbox")
+    .eq("status", "sandbox")
     .eq("payable_state", "not_payable")
     .eq("production_enabled", false)
     .eq("payout_enabled", false)
     .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(sourceTypes.length);
 
-  if (error || !data) return null;
-  return mapProofConfig(data as Record<string, unknown>);
+  if (error || !Array.isArray(data)) return null;
+  const exactSource = sourceTypes
+    .map((sourceType) => data.find((row) => normalizeText(row?.source_type) === sourceType))
+    .find(Boolean);
+  return exactSource ? mapProofConfig(exactSource as Record<string, unknown>) : null;
 }

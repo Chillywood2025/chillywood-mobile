@@ -1179,12 +1179,12 @@ export default function PublicChannelScreen() {
         available: !!firstVideo,
       },
       {
-        title: "Watch-Party Seat Pass",
+        title: "Party Room",
         scopeKey: "watch_party_ticket" as MoneyScopeKey,
         body: watchPartyTicketOffer?.partyId
-          ? "Get a sandbox Watch-Party Seat Pass for this room."
-          : "Seat Pass test unavailable - creator needs a Party Room target.",
-        button: "Get test Seat",
+          ? "Open the exact Party Room to see whether entry is Free or requires its Party Room Pass."
+          : "Party Room unavailable - this creator needs a Party Room target.",
+        button: "Open Party Room",
         testID: "tester-watch-party-ticket-button",
         onPress: () => {
           if (!watchPartyTicketOffer?.partyId) return;
@@ -1196,10 +1196,10 @@ export default function PublicChannelScreen() {
         available: !!watchPartyTicketOffer?.partyId,
       },
       {
-        title: "Event Pass",
+        title: "Event",
         scopeKey: "event_pass" as MoneyScopeKey,
-        body: firstEvent ? "Get a sandbox Event Pass for this event." : "Event pass unavailable - creator needs an event.",
-        button: "Get test event pass",
+        body: firstEvent ? "Open the exact Event to see whether access is Free or requires its Event Pass." : "Event unavailable - creator needs an Event target.",
+        button: "Open Event",
         testID: "tester-event-pass-button",
         onPress: () => {
           if (firstEvent) router.push(`/event/${firstEvent.id}` as Parameters<typeof router.push>[0]);
@@ -1270,7 +1270,7 @@ export default function PublicChannelScreen() {
     if (!offer || (!sandboxTesterActive && !isOwnerPlatformMode(platformMode))) return null;
     const subscribed = subscriptionAccess?.allowed === true;
     const unavailable = !subscribed && !subscriptionAccess?.requiresPurchase;
-    const unavailableCopy = "Platform Subscription is not available for this creator Platform in sandbox right now. Premium, VIP-only content, Watch-Party Seat Passes, and Event Passes stay separate.";
+    const unavailableCopy = "Platform Subscription is not available for this creator Platform in sandbox right now. Premium, VIP-only content, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, and Event Passes stay separate.";
     if (isOwnerPlatformMode(platformMode)) {
       return (
         <AppSection title="Platform Subscription" statusLabel={offer ? "Manage" : "Not set"} statusTone={offer ? "success" : "muted"}>
@@ -1278,7 +1278,7 @@ export default function PublicChannelScreen() {
             <Text style={styles.cardKicker}>Owner tools</Text>
             <Text style={styles.cardTitle}>{offer?.title ?? "Subscription offer"}</Text>
             <Text style={styles.cardBody}>
-              Manage recurring subscriber access and temporary access to this creator’s ordinary Paid Videos. Premium, VIP-only content, Watch-Party Seat Passes, Event Passes, and payouts stay separate.
+              Manage recurring subscriber access and temporary access to this creator’s ordinary Paid Videos. Premium, VIP-only content, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, and payouts stay separate.
             </Text>
             <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
             <View style={styles.ownerCommerceActions}>
@@ -1307,7 +1307,7 @@ export default function PublicChannelScreen() {
           <Text style={styles.cardKicker}>Creator membership</Text>
           <Text style={styles.cardTitle}>{offer.title}</Text>
 	          <Text style={styles.cardBody}>
-	            {`Sandbox Test: subscribe to this creator Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. While active, this includes the creator's ordinary Paid Videos, but not VIP-only content, Premium, paid Watch-Party Seat Passes, Event Passes, or other creators.`}
+	            {`Sandbox Test: subscribe to this creator Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. While active, this includes the creator's ordinary Paid Videos, but not VIP-only content, Premium, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, or other creators.`}
 	          </Text>
           {subscriptionNotice ? <Text style={styles.metaText}>{subscriptionNotice}</Text> : null}
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
@@ -1337,7 +1337,7 @@ export default function PublicChannelScreen() {
     if (!offer || (!sandboxTesterActive && !isOwnerPlatformMode(platformMode))) return null;
     const isVip = vipAccess?.allowed === true;
     const unavailable = !isVip && !vipAccess?.requiresPurchase;
-    const unavailableCopy = "VIP is not available for this creator Platform in sandbox right now. Premium, subscriptions, paid videos, Watch-Party Seat Passes, and paid events stay separate.";
+    const unavailableCopy = "VIP is not available for this creator Platform in sandbox right now. Premium, subscriptions, paid videos, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, and Event Passes stay separate.";
     if (isOwnerPlatformMode(platformMode)) {
       return (
         <AppSection title="VIP Pass" statusLabel={offer ? "Manage" : "Not set"} statusTone={offer ? "success" : "muted"}>
@@ -1345,7 +1345,7 @@ export default function PublicChannelScreen() {
             <Text style={styles.cardKicker}>Owner tools</Text>
             <Text style={styles.cardTitle}>{offer?.title ?? "VIP offer"}</Text>
             <Text style={styles.cardBody}>
-              Manage the one-time 30-day creator-specific VIP Pass and VIP-only shelf for this Platform. VIP does not unlock Premium, Platform Subscription, ordinary Paid Video ownership, Watch-Party Seat Passes, Event Passes, room authority, or payouts.
+              Manage the one-time 30-day creator-specific VIP Pass and VIP-only shelf for this Platform. VIP does not unlock Premium, Platform Subscription, ordinary Paid Video ownership, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, room authority, or payouts.
             </Text>
             <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
             <View style={styles.ownerCommerceActions}>
@@ -1374,7 +1374,7 @@ export default function PublicChannelScreen() {
           <Text style={styles.cardKicker}>Creator-specific VIP</Text>
           <Text style={styles.cardTitle}>{offer.title}</Text>
           <Text style={styles.cardBody}>
-            {`Sandbox Test: get a one-time 30-day VIP Pass for this creator Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. It includes this creator's VIP-only shelf, but not Premium, Platform Subscription, ordinary Paid Video ownership, Watch-Party Seat Passes, Event Passes, LiveKit authority, room permissions, or other creators.`}
+            {`Sandbox Test: get a one-time 30-day VIP Pass for this creator Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. It includes this creator's VIP-only shelf, but not Premium, Platform Subscription, ordinary Paid Video ownership, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, LiveKit authority, room permissions, or other creators.`}
           </Text>
           {vipNotice ? <Text style={styles.metaText}>{vipNotice}</Text> : null}
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
@@ -1434,25 +1434,25 @@ export default function PublicChannelScreen() {
           ],
         },
         {
-          title: "Watch-Party Seat Passes",
+          title: "Party Room Passes",
           scopeKey: "watch_party_ticket" as MoneyScopeKey,
-          body: "Choose a Party Room target. Seat Pass access does not grant host or LiveKit authority.",
+          body: "Choose a Party Room target. A Party Room Pass grants entry to that exact room only and never Live Stage, host, speaker, moderator, or LiveKit authority.",
           status: watchPartyTicketOffer?.partyId ? "Target ready" : "Needs target",
           actions: [
             {
-              label: watchPartyTicketOffer?.partyId ? "Manage Seat Pass target" : "Choose Party Room target",
+              label: watchPartyTicketOffer?.partyId ? "Manage Party Room entry" : "Choose Party Room target",
               onPress: () => router.push(CREATOR_MONEY_ROUTE_TARGETS.watchPartyTicket.ownerTarget as unknown as Parameters<typeof router.push>[0]),
             },
           ],
         },
         {
-          title: "Event passes",
+          title: "Event Passes",
           scopeKey: "event_pass" as MoneyScopeKey,
           body: "Manage event access. Each pass is for one creator event only.",
           status: firstEvent ? "Event ready" : "Needs event",
           actions: [
             {
-              label: "Manage event pass",
+              label: "Manage Event Pass",
               onPress: () => router.push(CREATOR_MONEY_ROUTE_TARGETS.eventPass.ownerTarget as unknown as Parameters<typeof router.push>[0]),
             },
           ],
@@ -1473,7 +1473,7 @@ export default function PublicChannelScreen() {
         {
           title: "VIP",
           scopeKey: "vip_pass" as MoneyScopeKey,
-          body: "Creator-specific VIP only. Does not unlock Premium, paid videos, Seat Passes, or events.",
+          body: "Creator-specific VIP only. Does not unlock Premium, paid videos, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, or Events.",
           status: vipOffer ? "Manage" : "Not set",
           actions: [
             {
@@ -1591,16 +1591,16 @@ export default function PublicChannelScreen() {
         },
       },
       {
-        title: "Seat Pass",
+        title: "Party Room",
         scopeKey: "watch_party_ticket" as MoneyScopeKey,
-        body: "Access this Watch-Party target only.",
+        body: "Open this exact Party Room to see whether entry is Free or requires its Party Room Pass.",
         price: watchPartyTicketOffer ? formatPaidWatchPartyTicketPrice(watchPartyTicketOffer.priceCents, watchPartyTicketOffer.currency) : null,
-        button: watchPartyTicketOffer?.partyId ? "Get Seat" : "Seat Pass status",
+        button: watchPartyTicketOffer?.partyId ? "Open Party Room" : "Party Room status",
         testID: sandboxTesterActive ? "tester-watch-party-ticket-button" : "platform-support-ticket-button",
         available: !!watchPartyTicketOffer?.partyId,
         onPress: () => {
           if (!watchPartyTicketOffer?.partyId) {
-            openCreatorMoneyResolution("Seat Pass status", "No backed Watch-Party Seat Pass target is attached yet. Creators manage Seat Pass setup from Platform Studio; viewers can open support if this looks wrong.");
+            openCreatorMoneyResolution("Party Room status", "No backed Party Room target is attached yet. Creators manage Party Room entry from its contextual setup; viewers can open support if this looks wrong.");
             return;
           }
           router.push({
@@ -1610,11 +1610,11 @@ export default function PublicChannelScreen() {
         },
       },
       {
-        title: "Event pass",
+        title: "Event Pass",
         scopeKey: "event_pass" as MoneyScopeKey,
         body: firstEvent ? "Access this event only." : "Paid event status and setup path for this Platform.",
         price: sandboxTesterActive ? "Sandbox pass" : null,
-        button: firstEvent ? "Get event pass" : "Event pass status",
+        button: firstEvent ? "Open Event" : "Event Pass status",
         testID: sandboxTesterActive ? "tester-event-pass-button" : "platform-support-event-pass-button",
         available: !!firstEvent,
         onPress: () => {
@@ -1622,7 +1622,7 @@ export default function PublicChannelScreen() {
             router.push(`/event/${firstEvent.id}` as Parameters<typeof router.push>[0]);
             return;
           }
-          openCreatorMoneyResolution("Event pass status", "This Platform does not have a backed paid event target yet. Creators manage paid-event setup from Platform Studio; viewers can open support if this looks wrong.");
+          openCreatorMoneyResolution("Event Pass status", "This Platform does not have a backed Event target yet. Creators manage Event Pass setup from Platform Studio; viewers can open support if this looks wrong.");
         },
       },
     ];
@@ -1636,7 +1636,7 @@ export default function PublicChannelScreen() {
           <Text style={styles.cardKicker}>{sandboxTesterActive ? "Sandbox tester" : "Creator support"}</Text>
           <Text style={styles.cardTitle}>{sandboxTesterActive ? "Test purchases. No real money moves." : "Choose exactly what you want to support."}</Text>
           <Text style={styles.cardBody}>
-            Premium, subscriptions, VIP, tips, videos, Seat Passes, and event passes are separate.
+            Premium, subscriptions, VIP, tips, videos, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, and Event Passes are separate.
           </Text>
         </View>
         <View style={styles.supportList}>

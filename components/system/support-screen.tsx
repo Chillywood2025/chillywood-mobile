@@ -25,7 +25,7 @@ const PUBLIC_SUPPORT_FLOWS = [
   "Browse Home, Explore, Title, and Player while signed out.",
   "Sign in, then create or join a watch party and leave cleanly.",
   "Open Chi'lly Chat, start a thread or call handoff, then reconnect cleanly.",
-  "Try premium or Seat Pass gating and confirm retry works.",
+  "Try Premium or contextual Party Room Pass / Live Stage Pass gating and confirm retry works.",
   "Send a safety report and one support feedback item from a signed-in account.",
 ];
 
@@ -34,7 +34,7 @@ const CLOSED_BETA_FLOWS = [
   "Home -> Title -> Player with normal playback and return flow.",
   "Watch-party create/join -> room -> live stage -> leave/rejoin.",
   "Chi'lly Chat thread and call handoff with reconnect after backgrounding.",
-  "Premium or Seat Pass gates, unlock retry, and room re-entry.",
+  "Premium or contextual Party Room Pass / Live Stage Pass gates, unlock retry, and room re-entry.",
   "Safety reports after sign-in is fully restored for beta accounts.",
 ];
 

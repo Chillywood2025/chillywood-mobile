@@ -61,9 +61,9 @@ export const getAccessSheetCopy = (options: {
 
   return {
     title: "Unlock This Room",
-    body: `This room uses Watch-Party Seat Pass access. Unlock it once and jump back in without breaking the ${appDisplayName} flow.`,
-    actionLabel: "Get Seat Pass",
-    kicker: "SEAT PASS",
+    body: `This Party Room requires its exact Party Room Pass. It does not include Live Stage, speaking, host, moderator, camera, microphone, or LiveKit publish authority in ${appDisplayName}.`,
+    actionLabel: "Get Party Room Pass",
+    kicker: "PARTY ROOM PASS",
   };
 };
 
@@ -75,7 +75,7 @@ export const getAccessSheetEntryLabel = (options: {
     return "View Premium";
   }
 
-  return options.canPurchase ? "Get Seat Pass" : "View Room Access";
+  return options.canPurchase ? "Get Party Room Pass" : "View Party Room Access";
 };
 
 type AccessSheetProps = {
@@ -223,7 +223,7 @@ export function AccessSheet({
       ? "Room access is not currently available"
       : (titleOverride ?? baseCopy.title),
     body: renderDeferredUnavailable
-      ? "Watch-Party Seat Pass access is not currently available for this room on this device or account. Access will appear here when it becomes available."
+      ? "Party Room Pass access is not currently available for this exact Party Room on this device or account. Access will appear here when it becomes available."
       : (bodyOverride ?? baseCopy.body),
     actionLabel: renderDeferredUnavailable
       ? "Got it"

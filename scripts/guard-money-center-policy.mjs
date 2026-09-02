@@ -55,7 +55,7 @@ assertIncludes(packageJson, "guard:money-center-policy", "package guard script")
 [
   "Accept tips from fans.",
   "Charge fans to unlock selected videos.",
-  "Sell Seat Pass access to hosted Watch-Party rooms.",
+  "Charge for entry to one exact hosted Party Room.",
   "Offer monthly creator membership.",
   "Sell creator-specific VIP status and access.",
   "Sell Event Passes to live events and premieres.",
@@ -183,10 +183,20 @@ assertIncludes(channelSettings, "No real payout will be sent", "cashout readines
 assertIncludes(channelSettings, "Payouts and cashout remain OFF for production money movement.", "payout/cashout production-off copy");
 assertIncludes(channelSettings, "Payments are unavailable right now.", "payments unavailable warning");
 assertIncludes(channelSettings, "Offer type: paid_video", "paid video offer row");
-assertIncludes(channelSettings, "Offer type: paid_watch_party", "paid watch-party offer row");
-assertIncludes(channelSettings, "Offer type: channel_subscription", "channel subscription offer row");
-assertIncludes(channelSettings, "Offer type: vip_pass", "VIP offer row");
-assertIncludes(channelSettings, "Offer type: paid_event", "paid event offer row");
+assertIncludes(channelSettings, 'label: "Party Room Passes"', "Party Room Pass public offer row");
+assertIncludes(channelSettings, 'label: "Live Stage Passes"', "Live Stage Pass public offer row");
+assertIncludes(channelSettings, 'label: "Live Stage Seat Passes"', "Live Stage Seat Pass public offer row");
+assertIncludes(channelSettings, 'label: "Platform Subscriptions"', "Platform Subscription public offer row");
+assertIncludes(channelSettings, 'label: "VIP passes"', "VIP public offer row");
+assertIncludes(channelSettings, 'label: "Event Passes"', "Event Pass public offer row");
+[
+  "Offer type: paid_watch_party",
+  "Offer type: channel_subscription",
+  "Offer type: vip_pass",
+  "Offer type: paid_event",
+].forEach((internalOfferLabel) => {
+  assertNotIncludes(channelSettings, internalOfferLabel, "ordinary creator offer rows must use public product names");
+});
 assertIncludes(channelSettings, "Offer type: merch", "merch offer row");
 assertIncludes(channelSettings, "moneyTransactionFilter", "single filtered transactions list");
 assertIncludes(creatorMonetizationSetupRoute, "focus=offers", "creator setup compatibility redirect");
@@ -266,7 +276,7 @@ assertIncludes(admin, "Payable sandbox/setup rows", "Owner/Admin payable rows la
 assertIncludes(admin, "Duplicate webhook idempotency", "Owner/Admin idempotency proof row");
 assertIncludes(admin, "Admin revoke", "Owner/Admin admin revoke proof row");
 assertIncludes(admin, "Failed/expired intent", "Owner/Admin failed expired intent proof row");
-assertIncludes(admin, "Event pass safety", "Owner/Admin event pass safety proof row");
+assertIncludes(admin, "Event Pass safety", "Owner/Admin Event Pass safety proof row");
 assertIncludes(admin, '{ label: "Stripe digital checkout", value: "Absent" }', "Owner/Admin Stripe digital checkout absence row");
 assertIncludes(moneyAuditEvents, "readAdminMoneyAuditSourceRows", "admin safe money source row reader");
 assertIncludes(moneyAuditEvents, "readCreatorMoneyAuditSourceRows", "creator scoped money source row reader");

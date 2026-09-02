@@ -476,7 +476,7 @@ async function enforceParticipantState(
     ) {
       return json(403, {
         error: "paid_seat_viewer_only",
-        message: "A paid Watch-Party ticket grants viewer/listener authority only.",
+        message: "Payment never grants a speaking role or LiveKit publish authority. When paid Live Stage seat eligibility is required, an active Live Stage Seat Pass only makes the viewer eligible; host approval still wins.",
       });
     }
 

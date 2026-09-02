@@ -89,7 +89,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
   },
   {
     key: "watch_party_live_ticket_sandbox_099",
-    label: "Watch-Party Live Seat Pass",
+    label: "Party Room Pass",
     sourceType: "watch_party_live",
     productType: "watch_party_live_ticket",
     providerProductId: "cw_watch_party_live_ticket_sandbox_099",
@@ -100,25 +100,25 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
   },
   {
     key: "live_watch_party_access_pass_sandbox_099",
-    label: "Live Watch-Party access pass",
+    label: "Live Stage Pass",
     sourceType: "live_watch_party_access",
     productType: "live_watch_party_access_pass",
     providerProductId: "cw_live_watch_party_access_sandbox_099",
     priceLabel: "$0.99 sandbox/test",
-    providerRail: resolveProviderRail(),
+    providerRail: REVENUECAT_GOOGLE_PLAY_PROVIDER,
     unlocks: "Allows viewer/listener entry only.",
     safety: "No host, speaker, moderator, admin, or LiveKit publish authority is granted.",
   },
   {
     key: "live_watch_party_seat_pass_sandbox_099",
-    label: "Live Watch-Party seat pass",
+    label: "Live Stage Seat Pass",
     sourceType: "live_watch_party_seat",
     productType: "live_watch_party_seat_pass",
     providerProductId: "cw_live_watch_party_seat_sandbox_099",
     priceLabel: "$0.99 sandbox/test",
-    providerRail: resolveProviderRail(),
-    unlocks: "Makes a viewer eligible to request or reserve a seat.",
-    safety: "Host approval is still required before mic/camera/publish can turn on.",
+    providerRail: REVENUECAT_GOOGLE_PLAY_PROVIDER,
+    unlocks: "Makes a viewer eligible to request a speaking seat on one exact Live Stage.",
+    safety: "Host approval and current persisted speaker membership are still required before mic/camera/publish can turn on.",
   },
   {
     key: "creator_tip_sandbox_099",
@@ -140,7 +140,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     priceLabel: "$4.99/month sandbox/test",
     providerRail: resolveProviderRail(),
     unlocks: "Creates subscriber status and temporary access to this creator's ordinary Paid Videos while active.",
-    safety: "Does not create permanent Paid Video ownership or unlock Chi'llywood Premium, VIP-only videos, Watch-Party Seat Passes, paid events, LiveKit authority, or other creators.",
+    safety: "Does not create permanent Paid Video ownership or unlock Chi'llywood Premium, VIP-only videos, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, LiveKit authority, or other creators.",
   },
   {
     key: "vip_pass_sandbox_499",
@@ -151,11 +151,11 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     priceLabel: "$4.99 sandbox/test",
     providerRail: resolveProviderRail(),
     unlocks: "Creates exactly 30 days of VIP status and VIP-only shelf access for this creator.",
-    safety: "Does not auto-renew or unlock Premium, ordinary Paid Video ownership, event passes, platform subscriptions, Watch-Party Seat Passes, LiveKit authority, or other creators.",
+    safety: "Does not auto-renew or unlock Premium, ordinary Paid Video ownership, Event Passes, platform subscriptions, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, LiveKit authority, or other creators.",
   },
   {
     key: "event_pass_sandbox_099",
-    label: "Event pass",
+    label: "Event Pass",
     sourceType: "event",
     productType: "event_pass",
     providerProductId: "cw_event_pass_sandbox_099",
@@ -345,7 +345,7 @@ export async function launchCreatorSandboxDigitalPurchase(input: {
       useCase: tier.sourceType === "creator_tip" ? "creator_tip_support" : "creator_paid_digital_content",
     });
     if (!decision.allowed) throw new Error(IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY);
-    throw new Error("Use the dedicated finite-catalog App Store tip or Seat Pass checkout. Nothing was charged.");
+    throw new Error("Use the dedicated contextual App Store checkout for this creator product. Nothing was charged.");
   }
   if (tier.providerRail !== REVENUECAT_GOOGLE_PLAY_PROVIDER && tier.providerRail !== REVENUECAT_APP_STORE_PROVIDER) {
     throw new Error("Digital sandbox purchases must use Google Play / RevenueCat.");

@@ -11,6 +11,7 @@ const liveMoney = read("_lib/liveWatchPartyMoney.ts");
 const webhook = read("supabase/functions/revenuecat-webhook/index.ts");
 const liveKit = read("supabase/functions/livekit-token/index.ts");
 const migration = read("supabase/migrations/20260901010000_watch_party_live_money_rfgc_closure.sql");
+const uxMigration = read("supabase/migrations/20260902091803_party_room_live_stage_event_ux_rfgc.sql");
 
 test("Player remains Party Waiting Room -> Party Room and Party Room cannot shortcut to Live Stage", () => {
   assert.match(player, /pathname:\s*"\/watch-party"/u);
@@ -24,8 +25,8 @@ test("Live Stage performs exact live-pass admission after ordinary room and Prem
   const joinIndex = liveStage.indexOf("joinPartyRoomSession({");
   assert.ok(ordinaryIndex >= 0 && exactLiveIndex > ordinaryIndex && joinIndex > exactLiveIndex);
   assert.match(liveStage, /exactLivePassRequired/u);
-  assert.match(liveStage, /Live Access Pass for viewer\/listener entry/u);
-  assert.match(liveStage, /Live Seat Pass provides only seat eligibility and never substitutes for access or guarantees speaking/u);
+  assert.match(liveStage, /Live Stage Pass gives you viewer\/listener access to this exact Live Stage/u);
+  assert.match(liveStage, /Live Stage Seat Pass makes a viewer eligible for a speaking seat/u);
   assert.match(liveStage, /exact_live_access_pass_required/u);
   assert.match(liveStage, /returnToLiveWaitingRoomRoute/u);
   assert.doesNotMatch(liveStage, /returnToWatchPartyRoomRoute/u);
@@ -57,6 +58,7 @@ test("access never becomes a speaker and seat eligibility still requires persist
   assert.match(migration, /v_allowed:=v_access_offer\."id" is null or v_access_grant\."id" is not null/u);
   assert.match(migration, /v_speaker_eligible:=v_seat_offer\."id" is null or v_seat_grant\."id" is not null/u);
   assert.match(liveStage, /currentUserHasLiveSeatRequestEligibility/u);
+  assert.match(liveStage, /requestMyLiveWatchPartySeat\(partyId\)/u);
   assert.match(liveStage, /live-stage-buy-seat-eligibility/u);
   assert.equal([...liveStage.matchAll(/testID="live-stage-buy-seat-eligibility"/gu)].length, 1);
   assert.doesNotMatch(liveStage, /testID="live-stage-buy-seat-pass"/u);
@@ -67,11 +69,36 @@ test("RevenueCat routes both live products through the dedicated atomic projecto
   assert.match(webhook, /live_watch_party_seat_pass/u);
   assert.match(webhook, /process_revenuecat_live_watch_party_event_atomic/u);
   assert.match(webhook, /watch-party\/live-stage\/\$\{partyId\}/u);
-  assert.match(webhook, /Seat eligibility is ready/u);
+  assert.match(webhook, /Live Stage Seat Pass active/u);
   assert.match(webhook, /Host approval is still required/u);
   assert.match(webhook, /createLiveWatchPartyTerminalNotifications/u);
   assert.match(webhook, /creator_money_refunded/u);
   assert.match(webhook, /creator_money_revoked/u);
+});
+
+test("seat purchase is entry-first at both client and database boundaries", () => {
+  const clientPrecheck = liveMoney.indexOf('input.passType === "live_watch_party_seat_pass"');
+  const intentCall = liveMoney.indexOf('rpc("create_live_watch_party_purchase_intent"');
+  const providerCharge = liveMoney.indexOf("purchaseRevenueCatStoreProduct(storeProduct");
+  const finalEntryCheck = liveMoney.lastIndexOf("await readLiveWatchPartyMoneyAccess(input.partyId)", providerCharge);
+  assert.ok(clientPrecheck >= 0 && intentCall > clientPrecheck);
+  assert.ok(finalEntryCheck > intentCall && providerCharge > finalEntryCheck);
+  assert.match(liveMoney, /Live Stage Pass is required before a Live Stage Seat Pass can be purchased/u);
+  assert.match(uxMigration, /live_stage_entry_required_before_seat_pass/u);
+  assert.match(uxMigration, /enforce_live_stage_entry_before_seat_intent/u);
+  assert.match(uxMigration, /has_exact_live_watch_party_pass_internal/u);
+});
+
+test("paid seat requests persist eligibility, request, rejection, and approval without creating media authority", () => {
+  assert.match(uxMigration, /request_my_live_watch_party_seat/u);
+  assert.match(uxMigration, /review_live_watch_party_seat_request/u);
+  assert.match(uxMigration, /requested_at/u);
+  assert.match(uxMigration, /'seat_state','requested'/u);
+  assert.match(uxMigration, /'seat_state','rejected'/u);
+  assert.match(uxMigration, /new\."stage_role"='speaker'/u);
+  assert.match(uxMigration, /'seat_state','approved'/u);
+  assert.match(uxMigration, /'authority_granted',false/u);
+  assert.doesNotMatch(uxMigration, /set\s+"stage_role"='speaker'/u);
 });
 
 test("live settlement is completion-based with 48-hour hold, reserve, and terminal revocation", () => {
