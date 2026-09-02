@@ -18,6 +18,7 @@ import {
   getDiscoveryAdPolicyLabel,
   getDiscoveryAccessLabel,
   getDiscoveryLiveLabel,
+  getDiscoveryPassLabel,
   readPublicDiscoveryFeedItem,
   type DiscoveryFeedItem,
 } from "../../_lib/discoveryFeed";
@@ -54,6 +55,41 @@ const formatDate = (value?: string | null) => {
 
 const getPrimaryActorId = (item: DiscoveryFeedItem) =>
   String(item.channel_user_id ?? item.owner_user_id ?? item.host_user_id ?? "").trim();
+
+const getRightsLabel = (rightsStatus: string) => {
+  switch (rightsStatus) {
+    case "creator_owned":
+      return "Creator-owned";
+    case "chillywood_original":
+      return "Chi'llywood Original";
+    case "licensed_for_public_stream":
+      return "Licensed for public viewing";
+    default:
+      return "Rights unavailable";
+  }
+};
+
+const getSpectatorStateLabel = (state: SpectatorPlaybackReadout["state"]) => {
+  switch (state) {
+    case "available":
+      return "Ready to watch";
+    case "loading":
+      return "Checking availability";
+    case "waiting_for_egress":
+      return "Preparing playback";
+    case "ended":
+      return "Ended";
+    case "blocked_ticketed":
+      return "Pass required";
+    case "blocked_premium_full_room":
+      return "Premium required";
+    case "not_configured":
+    case "unavailable":
+      return "Playback unavailable";
+    default:
+      return "Unavailable for this preview";
+  }
+};
 
 export default function SpectatorMetadataScreen() {
   const router = useRouter();
@@ -243,7 +279,7 @@ export default function SpectatorMetadataScreen() {
           <>
             <Text style={styles.centerTitle}>Spectator view unavailable</Text>
             <Text style={styles.centerBody}>
-              This item is private to the creator’s Chi’lly Circle, protected, blocked, or unavailable.
+              This item is private to the creator&apos;s Chi&apos;lly Circle, protected, blocked, or unavailable.
             </Text>
           </>
         )}
@@ -264,7 +300,16 @@ export default function SpectatorMetadataScreen() {
     ? launchEligibility.canStartLiveWatchParty
     : launchEligibility.canStartWatchPartyLive;
   const primaryBusy = startingAction === launchEligibility.primaryAction;
-  const reactionBusy = startingAction === "start_live_reaction";
+  const passLabel = getDiscoveryPassLabel(item);
+  const fullExperienceCopy = playback.fullRoomRequiresTicket
+    ? passLabel === "Pass required"
+      ? "An access pass is required for this exact experience."
+      : `${passLabel} required for this exact experience.`
+    : playback.fullRoomRequiresPremium
+      ? "Premium required for this full experience."
+      : decision.canJoinFullRoom
+        ? "Available from this item's main entry."
+        : "The full experience is not available from this preview.";
 
   return (
     <View style={styles.screen}>
@@ -336,11 +381,11 @@ export default function SpectatorMetadataScreen() {
         <View style={styles.detailCard}>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Access</Text>
-            <Text style={styles.detailValue}>{decision.accessType.replaceAll("_", " ")}</Text>
+            <Text style={styles.detailValue}>{getDiscoveryAccessLabel(item)}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Safety</Text>
-            <Text style={styles.detailValue}>{decision.rightsStatus.replaceAll("_", " ")}</Text>
+            <Text style={styles.detailLabel}>Viewing rights</Text>
+            <Text style={styles.detailValue}>{getRightsLabel(decision.rightsStatus)}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Ad policy</Text>
@@ -348,19 +393,11 @@ export default function SpectatorMetadataScreen() {
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Spectator state</Text>
-            <Text style={styles.detailValue}>{playback.state.replaceAll("_", " ")}</Text>
+            <Text style={styles.detailValue}>{getSpectatorStateLabel(playback.state)}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Full room</Text>
-            <Text style={styles.detailValue}>
-              {playback.fullRoomRequiresTicket
-                ? "Contextual access-pass flow required later"
-                : playback.fullRoomRequiresPremium
-                  ? "Premium required for full room"
-                  : decision.canJoinFullRoom
-                    ? "Use the gated room route"
-                    : "Not available from spectator metadata"}
-            </Text>
+            <Text style={styles.detailLabel}>Full experience</Text>
+            <Text style={styles.detailValue}>{fullExperienceCopy}</Text>
           </View>
         </View>
 
@@ -375,32 +412,6 @@ export default function SpectatorMetadataScreen() {
           >
             <Text style={styles.primaryButtonText}>
               {primaryBusy ? "Starting..." : launchEligibility.primaryLabel}
-            </Text>
-          </TouchableOpacity>
-          {launchEligibility.kind === "live" ? (
-            <TouchableOpacity
-              style={[styles.secondaryButton, !!startingAction && styles.buttonDisabled]}
-              activeOpacity={0.86}
-              disabled={!!startingAction}
-              onPress={() => launchEligibility.canStartLiveWatchParty
-                ? handleStart("start_live_reaction")
-                : Alert.alert("Live Watch-Party status", launchEligibility.disabledReason || "This source cannot start a Live Watch-Party yet.")}
-            >
-              <Text style={styles.secondaryButtonText}>
-                {reactionBusy ? "Starting..." : launchEligibility.reactionLabel}
-              </Text>
-            </TouchableOpacity>
-          ) : null}
-          <TouchableOpacity
-            style={[styles.secondaryButton, !!startingAction && styles.buttonDisabled]}
-            activeOpacity={0.86}
-            disabled={!!startingAction}
-            onPress={() => primaryCanStart
-              ? handleStart(launchEligibility.primaryAction)
-              : Alert.alert("Watch party status", launchEligibility.disabledReason || "This source cannot start that room yet.")}
-          >
-            <Text style={styles.secondaryButtonText}>
-              {primaryBusy ? "Starting..." : launchEligibility.secondaryLabel}
             </Text>
           </TouchableOpacity>
           {launchEligibility.disabledReason ? (

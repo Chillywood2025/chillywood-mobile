@@ -132,17 +132,54 @@ export function isSpectatorPlaybackBlocked(item: Pick<DiscoveryFeedItem, "is_spe
   return item.is_spectator_playback_enabled !== true;
 }
 
+type DiscoveryPassContext = Partial<Pick<
+  DiscoveryFeedItem,
+  "item_type" | "source_type"
+>>;
+
+export function getDiscoveryPassLabel(item: DiscoveryPassContext) {
+  if (item.item_type === "live_room") return "Live Stage Pass";
+  if (item.item_type === "watch_party") return "Party Room Pass";
+  if (item.item_type === "creator_event") return "Event Pass";
+  if (item.source_type === "live_stage" || item.source_type === "live_stage_room") return "Live Stage Pass";
+  if (item.source_type === "watch_party_room") return "Party Room Pass";
+  if (item.source_type === "creator_event" || item.source_type === "event") return "Event Pass";
+  return "Pass required";
+}
+
 export function getDiscoveryAccessLabel(item: Pick<
   DiscoveryFeedItem,
   "access_type" | "visibility" | "requires_premium_to_join" | "requires_ticket_to_watch" | "requires_subscription_to_watch"
->) {
-  if (item.requires_ticket_to_watch || item.access_type === "ticketed") return "Ticketed";
+> & DiscoveryPassContext) {
+  if (item.requires_ticket_to_watch || item.access_type === "ticketed") return getDiscoveryPassLabel(item);
   if (item.requires_subscription_to_watch || item.access_type === "subscriber_only_later") return "Subscriber";
   if (item.requires_premium_to_join || item.access_type === "premium_only") return "Premium";
   if (item.access_type === "circle" || item.visibility === "circle" || item.visibility === "chilly_circle") return "Chi'lly Circle";
   if (item.access_type === "public_free" || item.visibility === "public") return "Public";
   if (item.access_type === "invite_only" || item.visibility === "invite_only") return "Invite Only";
   return "Private";
+}
+
+export function getDiscoveryItemDestination(item: Pick<
+  DiscoveryFeedItem,
+  "channel_user_id" | "event_id" | "host_user_id" | "id" | "item_type" | "media_id" | "owner_user_id"
+>) {
+  const mediaId = normalizeText(item.media_id);
+  if (item.item_type === "creator_upload" && mediaId) {
+    return `/player/${encodeURIComponent(mediaId)}?source=creator-video`;
+  }
+
+  const eventId = normalizeText(item.event_id);
+  if (item.item_type === "creator_event" && eventId) {
+    return `/event/${encodeURIComponent(eventId)}`;
+  }
+
+  const platformUserId = normalizeText(item.channel_user_id ?? item.owner_user_id ?? item.host_user_id);
+  if (item.item_type === "channel_update" && platformUserId) {
+    return `/channel/${encodeURIComponent(platformUserId)}`;
+  }
+
+  return `/spectate/${encodeURIComponent(item.id)}`;
 }
 
 export function getDiscoveryLiveLabel(item: Pick<DiscoveryFeedItem, "live_state" | "item_type">) {

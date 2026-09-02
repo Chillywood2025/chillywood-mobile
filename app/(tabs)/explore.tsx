@@ -26,6 +26,7 @@ import {
 } from "../../_lib/creatorVideos";
 import {
   getDiscoveryAccessLabel,
+  getDiscoveryItemDestination,
   getDiscoveryLiveLabel,
   getDiscoveryRankingReasonLabel,
   rankDiscoveryFeedItems,
@@ -495,7 +496,7 @@ export default function ExploreScreen() {
         title: event.eventTitle,
         subtitle: formatEventMode(event),
         badge: "Live",
-        onPress: () => openChannel(event.hostUserId),
+        onPress: () => openEvent(event.id),
       }));
       const suggestions = [...liveFeedSuggestions, ...liveEventSuggestions].slice(0, 6);
       if (suggestions.length) {
@@ -515,7 +516,7 @@ export default function ExploreScreen() {
         title: event.eventTitle,
         subtitle: formatDateTime(event.startsAt),
         badge: formatEventMode(event),
-        onPress: () => openChannel(event.hostUserId),
+        onPress: () => openEvent(event.id),
       }));
 
       if (suggestions.length) {
@@ -723,26 +724,14 @@ export default function ExploreScreen() {
     });
   }
 
+  function openEvent(eventId?: string | null) {
+    const safeEventId = String(eventId ?? "").trim();
+    if (!safeEventId) return;
+    router.push({ pathname: "/event/[eventId]", params: { eventId: safeEventId } });
+  }
+
   function openDiscoveryFeedItem(item: DiscoveryFeedItem) {
-    const mediaId = String(item.media_id ?? "").trim();
-    if (item.item_type === "creator_upload" && mediaId) {
-      router.push({
-        pathname: "/player/[id]",
-        params: {
-          id: mediaId,
-          source: "creator-video",
-        },
-      });
-      return;
-    }
-
-    const channelUserId = String(item.channel_user_id ?? item.owner_user_id ?? item.host_user_id ?? "").trim();
-    if ((item.item_type === "channel_update" || item.item_type === "creator_event") && channelUserId) {
-      openChannel(channelUserId);
-      return;
-    }
-
-    router.push(`/spectate/${encodeURIComponent(item.id)}` as any);
+    router.push(getDiscoveryItemDestination(item) as any);
   }
 
   const renderBackedSection = (
@@ -826,7 +815,7 @@ export default function ExploreScreen() {
       key={`${replay ? "replay-event" : "event"}-${event.id}`}
       style={styles.discoveryCard}
       activeOpacity={0.9}
-      onPress={() => openChannel(event.hostUserId)}
+      onPress={() => openEvent(event.id)}
       accessibilityRole="button"
       accessibilityLabel={`Open ${event.eventTitle}`}
     >

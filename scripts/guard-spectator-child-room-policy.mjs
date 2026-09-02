@@ -26,7 +26,13 @@ const assertMatch = (label, haystack, pattern) => {
 const migration = read("supabase/migrations/202605260003_spectator_child_room_source_links.sql");
 const replayFixtureMigration = read("supabase/migrations/202605260006_spectator_replay_archive_fixture.sql");
 const startRoomFunction = read("supabase/functions/spectator-start-room/index.ts");
-const spectatorRoute = read("app/spectate/[itemId].tsx");
+const spectatorEntryRoute = read("app/spectate/[itemId].tsx");
+const spectatorMetadataRoute = read("app/spectate-metadata/[itemId].tsx");
+const spectatorLiveRoute = read("app/spectate-live/[itemId].tsx");
+const discovery = read("_lib/discoveryFeed.ts");
+const home = read("app/(tabs)/index.tsx");
+const live = read("app/(tabs)/live.tsx");
+const explore = read("app/(tabs)/explore.tsx");
 const watchPartyRoute = read("app/watch-party/[partyId].tsx");
 const liveStageRoute = read("app/watch-party/live-stage/[partyId].tsx");
 const playerRoute = read("app/player/[id].tsx");
@@ -83,20 +89,26 @@ assertIncludes("no original publish response", startRoomFunction, "originalRoomP
 assertNotIncludes("returned participant token", startRoomFunction, "participantToken:");
 assertNotIncludes("returned raw HLS URL", startRoomFunction, "hlsPlaybackUrl");
 
-const spectatorLaunchCopySurface = `${spectatorRoute}\n${launchHelper}`;
+const spectatorLaunchCopySurface = `${spectatorMetadataRoute}\n${spectatorLiveRoute}\n${launchHelper}`;
 [
   "Start Watch-Party Live",
   "Start Live Watch-Party",
-  "Watch with your Chi'lly Circle",
+  "React with Friends",
   "Source live has ended",
   "This live can’t be used for a watch party",
   "Share",
   "View Platform",
   "Report",
 ].forEach((needle) => assertIncludes("Spectator CTA copy", spectatorLaunchCopySurface, needle));
+assertNotIncludes("duplicate Circle launch CTA", spectatorLaunchCopySurface, "Watch with your Chi'lly Circle");
+assertNotIncludes("duplicate reaction CTA", spectatorLaunchCopySurface, "Start Reaction Room");
 
-assertIncludes("Spectator signed-in handoff", spectatorRoute, "/(auth)/login");
-assertIncludes("Spectator launch helper", spectatorRoute, "startSpectatorChildRoom");
+assertIncludes("Spectator entry metadata resolver", spectatorEntryRoute, "LegacySpectatorMetadataScreen");
+assertIncludes("Spectator entry live resolver", spectatorEntryRoute, "/spectate-live/");
+assertIncludes("Metadata signed-in handoff", spectatorMetadataRoute, "/(auth)/login");
+assertIncludes("Metadata launch helper", spectatorMetadataRoute, "startSpectatorChildRoom");
+assertIncludes("Live signed-in handoff", spectatorLiveRoute, "/(auth)/login");
+assertIncludes("Live launch helper", spectatorLiveRoute, "startSpectatorChildRoom");
 assertIncludes("safe share link", launchHelper, "chillywoodmobile://spectate/");
 assertIncludes("client token assertion", launchHelper, "originalRoomTokenReturned !== false");
 assertIncludes("resolver supports spectator source", sourceResolver, "spectator_playback");
@@ -117,12 +129,39 @@ assertNotIncludes("replay fixture live-stage claim", replayFixtureMigration, "'s
 assertMatch("Watch-Party route ownership", watchPartyRoute, /pathname:\s*"\/player\/\[id\]"/);
 assertMatch("Live Watch-Party route ownership", liveStageRoute, /export default function WatchPartyLiveStageScreen/);
 
-const combinedUserFacing = `${spectatorRoute}\n${watchPartyRoute}\n${liveStageRoute}\n${playerRoute}`;
+[
+  ["Home", home],
+  ["Live", live],
+  ["Explore", explore],
+].forEach(([label, source]) => {
+  assertIncludes(`${label} exact discovery routing`, source, "getDiscoveryItemDestination(item)");
+  assertIncludes(`${label} exact Event routing`, source, "openEvent(event.id)");
+  assertNotIncludes(`${label} Event-to-Platform routing`, source, "openChannel(event.hostUserId)");
+  assertNotIncludes(`${label} Event-to-Platform routing`, source, "openPlatform(event.hostUserId)");
+  assertNotIncludes(
+    `${label} mixed Event and Platform discovery routing`,
+    source,
+    'item.item_type === "channel_update" || item.item_type === "creator_event"',
+  );
+});
+assertIncludes("exact Event destination", discovery, "/event/${encodeURIComponent(eventId)}");
+assertIncludes("exact creator-video destination", discovery, "/player/${encodeURIComponent(mediaId)}?source=creator-video");
+assertIncludes("Event Pass public label", discovery, 'return "Event Pass"');
+assertIncludes("Party Room Pass public label", discovery, 'return "Party Room Pass"');
+assertIncludes("Live Stage Pass public label", discovery, 'return "Live Stage Pass"');
+assertNotIncludes("generic ticketed discovery label", discovery, 'return "Ticketed"');
+assertNotIncludes("implicit Event-to-Live pass relationship", discovery, "|| item.event_id");
+
+const combinedUserFacing = `${spectatorEntryRoute}\n${spectatorMetadataRoute}\n${spectatorLiveRoute}\n${watchPartyRoute}\n${liveStageRoute}\n${playerRoute}`;
 assertNotIncludes("user-facing Mini Platform copy", combinedUserFacing, "Mini Platform");
-assertNotIncludes("user-facing backend copy", spectatorRoute, "backend");
-assertNotIncludes("user-facing RPC copy", spectatorRoute, "RPC");
-assertNotIncludes("user-facing source rows copy", spectatorRoute, "source rows");
-assertNotIncludes("user-facing not wired copy", spectatorRoute, "not wired");
+assertNotIncludes("user-facing backend copy", combinedUserFacing, "backend");
+assertNotIncludes("user-facing RPC copy", combinedUserFacing, '"RPC"');
+assertNotIncludes("user-facing source rows copy", combinedUserFacing, "source rows");
+assertNotIncludes("user-facing not wired copy", combinedUserFacing, "not wired");
+assertNotIncludes("unfinished access-pass copy", combinedUserFacing, "required later");
+assertNotIncludes("raw access enum formatting", spectatorMetadataRoute, 'accessType.replaceAll("_", " ")');
+assertNotIncludes("raw rights enum formatting", spectatorMetadataRoute, 'rightsStatus.replaceAll("_", " ")');
+assertNotIncludes("raw playback enum formatting", spectatorMetadataRoute, 'playback.state.replaceAll("_", " ")');
 
 if (checks.length) {
   console.error("Spectator child-room guard failed:");

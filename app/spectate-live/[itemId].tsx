@@ -149,7 +149,7 @@ function ImmersiveLivePage({
       <View pointerEvents="none" style={styles.liveCopy}>
         <View style={styles.badgeRow}>
           <Text style={styles.liveBadge}>LIVE</Text>
-          <Text style={styles.accessBadge}>{lane === "circle" ? "Chi’lly Circle" : getDiscoveryAccessLabel(item)}</Text>
+          <Text style={styles.accessBadge}>{lane === "circle" ? "Chi'lly Circle" : getDiscoveryAccessLabel(item)}</Text>
           <Text style={styles.watchOnlyBadge}>WATCH ONLY</Text>
         </View>
         <Text style={styles.title} numberOfLines={2}>{title}</Text>
@@ -428,7 +428,7 @@ export default function ImmersiveLiveSpectatorScreen() {
                 <View style={styles.sheetHandle} />
                 <View style={styles.sheetBadgeRow}>
                   <Text style={styles.liveBadge}>LIVE</Text>
-                  <Text style={styles.accessBadge}>{lane === "circle" ? "Chi’lly Circle" : "Public"}</Text>
+                  <Text style={styles.accessBadge}>{lane === "circle" ? "Chi'lly Circle" : "Public"}</Text>
                   <Text style={styles.watchOnlyBadge}>WATCH ONLY</Text>
                 </View>
                 <Text style={styles.sheetTitle} numberOfLines={2}>{String(sheetItem.title ?? "Live now").trim() || "Live now"}</Text>
