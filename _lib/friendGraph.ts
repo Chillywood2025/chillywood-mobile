@@ -153,7 +153,9 @@ async function readFriendRelationshipRow(
     .returns<FriendRelationshipRow>()
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    throw new Error("Chi'lly Circle status is unavailable right now.");
+  }
 
   return parseFriendRelationshipRow(data);
 }
@@ -258,7 +260,9 @@ async function mutateFriendRelationship(otherUserId: string, action: "accept" | 
     target_user_id: normalizedOtherUserId,
   });
 
-  if (error) throw error;
+  if (error) {
+    throw new Error("Unable to update Chi'lly Circle right now.");
+  }
 
   const relationship = parseFriendRelationshipRow(unwrapMaybeSingle(data as FriendRelationshipRow | FriendRelationshipRow[] | null));
   return buildFriendRelationshipState({
@@ -371,8 +375,9 @@ async function readCurrentUserRelationships(): Promise<{
       .returns<FriendRelationshipRow[]>(),
   ]);
 
-  if (lowError) throw lowError;
-  if (highError) throw highError;
+  if (lowError || highError) {
+    throw new Error("Chi'lly Circle could not load right now.");
+  }
 
   const relationshipMap = new Map<string, FriendRelationshipRecord>();
   for (const row of [...(lowRows ?? []), ...(highRows ?? [])]) {
@@ -450,7 +455,9 @@ export async function sendFriendRequest(otherUserId: string): Promise<FriendRela
     target_user_id: normalizedOtherUserId,
   });
 
-  if (error) throw error;
+  if (error) {
+    throw new Error("Unable to update Chi'lly Circle right now.");
+  }
 
   const relationship = parseFriendRelationshipRow(unwrapMaybeSingle(data as FriendRelationshipRow | FriendRelationshipRow[] | null));
   return buildFriendRelationshipState({
@@ -594,8 +601,9 @@ export async function readActiveFriendUserIds(): Promise<string[]> {
       .returns<FriendRelationshipRow[]>(),
   ]);
 
-  if (lowError) throw lowError;
-  if (highError) throw highError;
+  if (lowError || highError) {
+    throw new Error("Chi'lly Circle could not load right now.");
+  }
 
   const friendUserIds = new Set<string>();
   for (const row of [...(lowRows ?? []), ...(highRows ?? [])]) {

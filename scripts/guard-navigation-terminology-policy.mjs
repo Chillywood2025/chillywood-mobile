@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { parse } from "@babel/parser";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -19,9 +20,58 @@ const assertNotIncludes = (source, needle, label) => {
   if (source.includes(needle)) fail(`${label} must not include ${needle}`);
 };
 
-const hasStaleStaticChannelMessage = (source) => source
-    .split(/\r?\n/u)
-    .some((line) => /\bmessage:\s*["'`]/u.test(line) && /\bchannel\b/iu.test(line));
+const staticStringValue = (node) => {
+  if (!node || typeof node !== "object") return null;
+  if (node.type === "StringLiteral") return node.value;
+  if (node.type === "TemplateLiteral") {
+    let value = node.quasis[0]?.value.cooked ?? node.quasis[0]?.value.raw ?? "";
+    for (let index = 0; index < node.expressions.length; index += 1) {
+      const expression = staticStringValue(node.expressions[index]);
+      if (expression === null) return null;
+      const quasi = node.quasis[index + 1];
+      value += expression + (quasi?.value.cooked ?? quasi?.value.raw ?? "");
+    }
+    return value;
+  }
+  if (node.type === "BinaryExpression" && node.operator === "+") {
+    const left = staticStringValue(node.left);
+    const right = staticStringValue(node.right);
+    return left === null || right === null ? null : `${left}${right}`;
+  }
+  if (["ParenthesizedExpression", "TSAsExpression", "TSTypeAssertion"].includes(node.type)) {
+    return staticStringValue(node.expression);
+  }
+  return null;
+};
+
+const hasStaleStaticChannelMessage = (source) => {
+  const ast = parse(source, {
+    sourceType: "unambiguous",
+    plugins: ["typescript", "jsx", "decorators-legacy", "classProperties", "classPrivateProperties", "classPrivateMethods", "importAttributes"],
+  });
+  const seen = new WeakSet();
+  let stale = false;
+  const visit = (node) => {
+    if (stale || !node || typeof node !== "object" || seen.has(node)) return;
+    seen.add(node);
+    if (node.type === "ObjectProperty" && !node.computed) {
+      const key = node.key?.type === "Identifier" || node.key?.type === "StringLiteral"
+        ? node.key.name ?? node.key.value
+        : null;
+      const value = key === "message" ? staticStringValue(node.value) : null;
+      if (value !== null && /\bchannel\b/iu.test(value)) {
+        stale = true;
+        return;
+      }
+    }
+    for (const child of Object.values(node)) {
+      if (Array.isArray(child)) child.forEach(visit);
+      else visit(child);
+    }
+  };
+  visit(ast);
+  return stale;
+};
 
 const assertStaticMessagesUsePlatformTerminology = (source, label) => {
   if (hasStaleStaticChannelMessage(source)) {
@@ -225,6 +275,9 @@ assertIncludes(roomBlueprint, "Party Room must not hand off to Live Stage", "Par
   [creatorVipPasses, "Creator-specific VIP access for this Platform only.", "VIP Platform isolation copy"],
   [profilePrivacy, "A Platform audience block prevents full profile access between these accounts.", "Profile privacy Platform copy"],
   [friendGraph, "Chi'lly Circle is unavailable while a Platform audience block exists between these accounts.", "Chi'lly Circle Platform copy"],
+  [friendGraph, "Chi'lly Circle status is unavailable right now.", "Chi'lly Circle safe read-error copy"],
+  [friendGraph, "Unable to update Chi'lly Circle right now.", "Chi'lly Circle safe mutation-error copy"],
+  [friendGraph, "Chi'lly Circle could not load right now.", "Chi'lly Circle safe list-error copy"],
   [channelReadModels, "This Platform could not be identified.", "Platform read-model error copy"],
   [accessEntitlements, "The Platform owner or profile defaults are still missing.", "Platform access diagnostic copy"],
   [accessEntitlements, "No explicit Platform profile was available, so access fell back to open defaults.", "Platform access fallback copy"],
@@ -245,6 +298,9 @@ assertStaticMessagesUsePlatformTerminology(channelAudience, "Platform audience c
   [creatorVipPasses, "for this channel only", "VIP copy"],
   [profilePrivacy, "channel audience block", "Profile privacy copy"],
   [friendGraph, "channel audience block", "Chi'lly Circle copy"],
+  [friendGraph, "if (error) throw error;", "Chi'lly Circle raw provider error forwarding"],
+  [friendGraph, "if (lowError) throw lowError;", "Chi'lly Circle raw provider error forwarding"],
+  [friendGraph, "if (highError) throw highError;", "Chi'lly Circle raw provider error forwarding"],
   [channelReadModels, "Channel user id is required.", "Platform read-model copy"],
   [accessEntitlements, "Channel user id or profile defaults", "Platform access diagnostic copy"],
   [accessEntitlements, "No explicit channel profile row", "Platform access fallback copy"],
@@ -257,11 +313,16 @@ assertStaticMessagesUsePlatformTerminology(channelAudience, "Platform audience c
 
 [
   'message: "You cannot follow your own channel."',
+  'message : "You cannot follow your own channel."',
+  'message:\n    "You cannot follow your own channel."',
+  'message: "You cannot follow your own chan" + "nel."',
+  'message: "You cannot follow your own ch\\u0061nnel."',
+  'message: (`This ${"chan" + "nel"} is unavailable.`)',
   'message: "Only the channel owner can review this request."',
   "message: 'Channel follow failed.'",
   "message: `This channel is unavailable.`",
 ].forEach((mutant) => {
-  if (!hasStaleStaticChannelMessage(mutant)) {
+  if (!hasStaleStaticChannelMessage(`({ ${mutant} })`)) {
     fail(`Platform audience guard accepted stale-message mutant: ${mutant}`);
   }
 });
