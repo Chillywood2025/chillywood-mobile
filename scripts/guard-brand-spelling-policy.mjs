@@ -141,15 +141,17 @@ function addViolation(relativePath, line, candidate) {
   violations.push(key);
 }
 
-function getRenderedProductNameViolations(value) {
+function getRenderedProductNameViolations(value, { rejectLiteralEntities = true } = {}) {
   const text = String(value ?? "");
   const findings = [];
   for (const match of text.matchAll(productNamePattern)) {
     if (match[1] === "'") continue;
     findings.push(match[0]);
   }
-  for (const match of text.matchAll(productEntityPattern)) {
-    findings.push(match[0]);
+  if (rejectLiteralEntities) {
+    for (const match of text.matchAll(productEntityPattern)) {
+      findings.push(match[0]);
+    }
   }
   return findings;
 }
@@ -163,8 +165,15 @@ function inspectRenderedProductNames(relativePath, line, value) {
 function staticStringValue(node) {
   if (!node || typeof node !== "object") return null;
   if (node.type === "StringLiteral" || node.type === "JSXText") return node.value;
-  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
-    return node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join("");
+  if (node.type === "TemplateLiteral") {
+    let value = node.quasis[0]?.value.cooked ?? node.quasis[0]?.value.raw ?? "";
+    for (let index = 0; index < node.expressions.length; index += 1) {
+      const expression = staticStringValue(node.expressions[index]);
+      if (expression === null) return null;
+      const quasi = node.quasis[index + 1];
+      value += expression + (quasi?.value.cooked ?? quasi?.value.raw ?? "");
+    }
+    return value;
   }
   if (node.type === "BinaryExpression" && node.operator === "+") {
     const left = staticStringValue(node.left);
@@ -175,7 +184,7 @@ function staticStringValue(node) {
 }
 
 function getJavaScriptProductNameViolations(relativePath, text) {
-  if (!/chi/iu.test(text) || !/(?:chat|circle)/iu.test(text)) return [];
+  if (!/(?:chat|circle|lly|\\u|&#|&(?:apos|rsquo|lsquo);)/iu.test(text)) return [];
   const extension = path.extname(relativePath);
   const plugins = ["jsx", "decorators-legacy", "classProperties", "classPrivateProperties", "classPrivateMethods", "importAttributes"];
   if (extension === ".ts" || extension === ".tsx") plugins.push("typescript");
@@ -208,6 +217,23 @@ function inspectJavaScriptProductNames(relativePath, text) {
   }
 }
 
+function decodeNonJavaScriptProductText(value) {
+  return String(value ?? "")
+    .replace(/\\u\{([0-9a-f]{1,6})\}/giu, (_match, codePoint) => String.fromCodePoint(Number.parseInt(codePoint, 16)))
+    .replace(/\\u([0-9a-f]{4})/giu, (_match, codePoint) => String.fromCodePoint(Number.parseInt(codePoint, 16)))
+    .replace(/&(?:apos|#39|#x27);/giu, "'")
+    .replace(/&(?:rsquo|#8217|#x2019);/giu, "\u2019")
+    .replace(/&(?:lsquo|#8216|#x2018);/giu, "\u2018")
+    .replace(/["'`]\s*\+\s*["'`]/gu, "");
+}
+
+function getNonJavaScriptProductNameViolations(value) {
+  return getRenderedProductNameViolations(
+    decodeNonJavaScriptProductText(value),
+    { rejectLiteralEntities: false },
+  );
+}
+
 const productNameMutationCases = [
   "const label = <Text>CHI’LLY CHAT</Text>;",
   "const label = \"Chi\\u2019lly Chat\";",
@@ -218,6 +244,8 @@ const productNameMutationCases = [
   "const label = \"Chilly Chat\";",
   "const label = \"Chi-lly Circle\";",
   "const label = <Text>{\"Chi&apos;lly Chat\"}</Text>;",
+  "const label = `${\"Chi\"}\u2019lly Chat`;",
+  "const label = \"\\u0043hi\\u2019lly \\u0043hat\";",
 ];
 for (const source of productNameMutationCases) {
   if (getJavaScriptProductNameViolations("guard-product-name-fixture.tsx", source).length === 0) {
@@ -231,6 +259,17 @@ for (const source of [
   if (getJavaScriptProductNameViolations("guard-product-name-fixture.tsx", source).length > 0) {
     throw new Error(`Brand spelling guard self-test rejected canonical product source: ${source}`);
   }
+}
+for (const source of [
+  "let label = \"Chi\\u{2019}lly Circle\"",
+  "let label = \"Chi\" + \"’lly Circle\"",
+]) {
+  if (getNonJavaScriptProductNameViolations(source).length === 0) {
+    throw new Error(`Brand spelling guard self-test accepted noncanonical non-JavaScript source: ${source}`);
+  }
+}
+if (getNonJavaScriptProductNameViolations("<p>Chi&apos;lly Chat</p>").length > 0) {
+  throw new Error("Brand spelling guard self-test rejected canonical HTML entity rendering");
 }
 
 for (const filePath of walk(repoRoot)) {
@@ -250,7 +289,11 @@ for (const filePath of walk(repoRoot)) {
   if (javascriptExtensions.has(path.extname(relativePath))) {
     inspectJavaScriptProductNames(relativePath, text);
   } else {
-    lines.forEach((line, index) => inspectRenderedProductNames(relativePath, index + 1, line));
+    lines.forEach((line, index) => {
+      for (const candidate of getNonJavaScriptProductNameViolations(line)) {
+        addViolation(relativePath, index + 1, candidate);
+      }
+    });
   }
 }
 
