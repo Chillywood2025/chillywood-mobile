@@ -7900,6 +7900,8 @@ export function ChannelStudioScreen() {
     const formatCreatorSetupSourceLabel = (sourceType: CreatorMonetizationSetupSourceType) => {
       if (sourceType === "paid_content") return "Paid Video";
       if (sourceType === "watch_party_live") return "Watch-Party Seat Pass";
+      if (sourceType === "live_watch_party_access") return "Live Stage Access Pass";
+      if (sourceType === "live_watch_party_seat") return "Live Stage seat eligibility";
       if (sourceType === "channel_subscription") return "Platform Subscription";
       if (sourceType === "vip_pass") return "VIP";
       if (sourceType === "event") return "Event Pass";
@@ -8877,7 +8879,7 @@ export function ChannelStudioScreen() {
         <View style={styles.eventEmptyCard}>
           <Text style={styles.eventEmptyTitle}>Premium is separate from creator purchases.</Text>
           <Text style={styles.eventEmptyBody}>
-            {"Fans do not buy Chi'llywood Premium when they tip, unlock a video, get a Seat Pass, subscribe to a creator, get VIP, or buy an event pass."}
+            {"Fans do not buy Chi'llywood Premium when they tip, unlock a video, get an ordinary Party Room Seat Pass, buy exact Live Stage viewer access, buy Live Stage seat eligibility, subscribe to a creator, get VIP, or buy an event pass."}
           </Text>
           <MoneyScopeInfoButton scope="premium" label="What does Premium unlock?" />
         </View>
@@ -8918,7 +8920,7 @@ export function ChannelStudioScreen() {
         {renderCreatorMoneyEventRows(
           filteredTransactionEvents,
           "No transactions yet",
-          "Tips, video unlocks, Seat Passes, subscriptions, VIP purchases, event passes, merch, refunds, failed payments, and chargebacks will appear here when supported.",
+          "Tips, video unlocks, ordinary Party Room Seat Passes, Live Stage Access Passes, Live Stage seat eligibility, subscriptions, VIP purchases, event passes, merch, refunds, failed payments, and chargebacks will appear here when backed.",
           8,
         )}
       </View>

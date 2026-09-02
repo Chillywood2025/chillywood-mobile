@@ -3259,6 +3259,11 @@ export default function ProfileScreen() {
           router.push({ pathname: "/watch-party/[partyId]", params: { partyId: entityId } });
         }
         return;
+      case "/watch-party/live-stage/[partyId]":
+        if (entityId) {
+          router.push({ pathname: "/watch-party/live-stage/[partyId]", params: { partyId: entityId } });
+        }
+        return;
       case "/title/[id]":
         if (entityId) {
           router.push({ pathname: "/title/[id]", params: { id: entityId } });
