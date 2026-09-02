@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 
+import { parse } from "@babel/parser";
+import traverseModule from "@babel/traverse";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+
+const traverse = traverseModule.default ?? traverseModule;
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
@@ -19,6 +23,233 @@ const assertNotIncludes = (source, needle, label) => {
   if (source.includes(needle)) fail(`${label} must not include ${needle}`);
 };
 
+const parseSource = (source) => parse(source, {
+  sourceType: "unambiguous",
+  plugins: ["typescript", "jsx", "decorators-legacy", "classProperties", "classPrivateProperties", "classPrivateMethods", "importAttributes"],
+});
+
+const evaluateStringPath = (nodePath) => {
+  const evaluated = nodePath?.evaluate?.();
+  return evaluated?.confident && typeof evaluated.value === "string" ? evaluated.value : null;
+};
+
+const staleChannelPattern = /\bchannels?\b/iu;
+
+const getPropertyKey = (propertyPath) => {
+  const keyPath = propertyPath.get("key");
+  return !propertyPath.node.computed && keyPath.isIdentifier()
+    ? keyPath.node.name
+    : evaluateStringPath(keyPath);
+};
+
+const resolveContainerProperty = (containerPath, propertyKey, visitedBindings) => {
+  const resolvedContainer = resolveConstantPath(containerPath, visitedBindings);
+  if (resolvedContainer.isObjectExpression()) {
+    let resolvedProperty = null;
+    for (const propertyPath of resolvedContainer.get("properties")) {
+      if (propertyPath.isObjectProperty() && getPropertyKey(propertyPath) === propertyKey) {
+        resolvedProperty = resolveConstantPath(propertyPath.get("value"), visitedBindings);
+      } else if (propertyPath.isSpreadElement()) {
+        resolvedProperty = resolveContainerProperty(propertyPath.get("argument"), propertyKey, visitedBindings)
+          ?? resolvedProperty;
+      }
+    }
+    if (resolvedProperty) return resolvedProperty;
+  }
+  if (resolvedContainer.isArrayExpression() && /^\d+$/u.test(String(propertyKey))) {
+    const elementPath = resolvedContainer.get("elements")[Number(propertyKey)];
+    if (elementPath?.node) return resolveConstantPath(elementPath, visitedBindings);
+  }
+  return null;
+};
+
+function resolveConstantPath(nodePath, visitedBindings = new Set()) {
+  if (!nodePath?.node) return nodePath;
+  if (
+    nodePath.isParenthesizedExpression?.()
+    || nodePath.isTSAsExpression?.()
+    || nodePath.isTSTypeAssertion?.()
+    || nodePath.isTSSatisfiesExpression?.()
+    || nodePath.isTSNonNullExpression?.()
+  ) {
+    return resolveConstantPath(nodePath.get("expression"), visitedBindings);
+  }
+  if (nodePath.isMemberExpression() || nodePath.isOptionalMemberExpression?.()) {
+    const propertyPath = nodePath.get("property");
+    const propertyKey = !nodePath.node.computed && propertyPath.isIdentifier()
+      ? propertyPath.node.name
+      : evaluateStringPath(propertyPath);
+    if (propertyKey !== null) {
+      return resolveContainerProperty(nodePath.get("object"), propertyKey, visitedBindings) ?? nodePath;
+    }
+  }
+  if (!nodePath.isIdentifier() || !nodePath.isReferencedIdentifier()) return nodePath;
+  const binding = nodePath.scope.getBinding(nodePath.node.name);
+  if (!binding?.constant || !binding.path.isVariableDeclarator() || visitedBindings.has(binding)) return nodePath;
+  const initPath = binding.path.get("init");
+  if (!initPath?.node) return nodePath;
+  const nextVisited = new Set(visitedBindings);
+  nextVisited.add(binding);
+  const idPath = binding.path.get("id");
+  if (idPath.isIdentifier()) return resolveConstantPath(initPath, nextVisited);
+  if (idPath.isObjectPattern()) {
+    for (const propertyPath of idPath.get("properties")) {
+      if (!propertyPath.isObjectProperty()) continue;
+      const valuePath = propertyPath.get("value");
+      const boundIdentifierPath = valuePath.isAssignmentPattern() ? valuePath.get("left") : valuePath;
+      if (!boundIdentifierPath.isIdentifier({ name: nodePath.node.name })) continue;
+      const sourceKey = getPropertyKey(propertyPath);
+      if (sourceKey !== null) {
+        return resolveContainerProperty(initPath, sourceKey, nextVisited)
+          ?? (valuePath.isAssignmentPattern() ? resolveConstantPath(valuePath.get("right"), nextVisited) : nodePath);
+      }
+    }
+  }
+  if (idPath.isArrayPattern()) {
+    const elementPaths = idPath.get("elements");
+    for (let index = 0; index < elementPaths.length; index += 1) {
+      const elementPath = elementPaths[index];
+      if (!elementPath?.node) continue;
+      const boundIdentifierPath = elementPath.isAssignmentPattern() ? elementPath.get("left") : elementPath;
+      if (!boundIdentifierPath.isIdentifier({ name: nodePath.node.name })) continue;
+      return resolveContainerProperty(initPath, String(index), nextVisited)
+        ?? (elementPath.isAssignmentPattern() ? resolveConstantPath(elementPath.get("right"), nextVisited) : nodePath);
+    }
+  }
+  return nodePath;
+}
+
+const collectStringFragments = (nodePath, visitedBindings = new Set()) => {
+  const resolvedPath = resolveConstantPath(nodePath, visitedBindings);
+  if (resolvedPath !== nodePath) return collectStringFragments(resolvedPath, visitedBindings);
+  const evaluated = evaluateStringPath(nodePath);
+  if (evaluated !== null) return [evaluated];
+  const fragments = [];
+  const collectReferencedBinding = (identifierPath) => {
+    if (!identifierPath.isReferencedIdentifier()) return;
+    if (identifierPath.parentPath?.isMemberExpression() && identifierPath.key === "object") return;
+    const resolvedBindingPath = resolveConstantPath(identifierPath, visitedBindings);
+    if (resolvedBindingPath !== identifierPath) {
+      fragments.push(...collectStringFragments(resolvedBindingPath, visitedBindings));
+    }
+  };
+  if (nodePath.isStringLiteral()) fragments.push(nodePath.node.value);
+  if (nodePath.isTemplateLiteral()) {
+    nodePath.get("quasis").forEach((templatePath) => {
+      fragments.push(templatePath.node.value.cooked ?? templatePath.node.value.raw ?? "");
+    });
+  }
+  if (nodePath.isIdentifier()) collectReferencedBinding(nodePath);
+  nodePath.traverse({
+    MemberExpression(memberPath) {
+      const resolvedMemberPath = resolveConstantPath(memberPath, visitedBindings);
+      if (resolvedMemberPath !== memberPath) {
+        fragments.push(...collectStringFragments(resolvedMemberPath, visitedBindings));
+        memberPath.skip();
+      }
+    },
+    OptionalMemberExpression(memberPath) {
+      const resolvedMemberPath = resolveConstantPath(memberPath, visitedBindings);
+      if (resolvedMemberPath !== memberPath) {
+        fragments.push(...collectStringFragments(resolvedMemberPath, visitedBindings));
+        memberPath.skip();
+      }
+    },
+    StringLiteral(stringPath) {
+      fragments.push(stringPath.node.value);
+    },
+    TemplateElement(templatePath) {
+      fragments.push(templatePath.node.value.cooked ?? templatePath.node.value.raw ?? "");
+    },
+    ReferencedIdentifier: collectReferencedBinding,
+  });
+  return fragments;
+};
+
+const pathContainsChannelText = (nodePath) => {
+  const fragments = collectStringFragments(nodePath);
+  return fragments.some((fragment) => staleChannelPattern.test(fragment))
+    || staleChannelPattern.test(fragments.join(""));
+};
+
+const hasStaleStaticChannelMessage = (source) => {
+  const ast = parseSource(source);
+  let stale = false;
+  traverse(ast, {
+    StringLiteral(stringPath) {
+      if (staleChannelPattern.test(stringPath.node.value)) stale = true;
+    },
+    TemplateElement(templatePath) {
+      const value = templatePath.node.value.cooked ?? templatePath.node.value.raw ?? "";
+      if (staleChannelPattern.test(value)) stale = true;
+    },
+    "BinaryExpression|TemplateLiteral"(expressionPath) {
+      const value = evaluateStringPath(expressionPath);
+      if (value !== null && staleChannelPattern.test(value)) stale = true;
+    },
+    ObjectProperty(propertyPath) {
+      if (stale) return;
+      const key = getPropertyKey(propertyPath);
+      if (key === "message" && pathContainsChannelText(propertyPath.get("value"))) stale = true;
+    },
+    AssignmentExpression(assignmentPath) {
+      if (stale || assignmentPath.node.operator !== "=") return;
+      const leftPath = assignmentPath.get("left");
+      if (!leftPath.isMemberExpression()) return;
+      const propertyPath = leftPath.get("property");
+      const key = !leftPath.node.computed && propertyPath.isIdentifier()
+        ? propertyPath.node.name
+        : evaluateStringPath(propertyPath);
+      if (key === "message" && pathContainsChannelText(assignmentPath.get("right"))) stale = true;
+    },
+    ObjectMethod(methodPath) {
+      if (stale || getPropertyKey(methodPath) !== "message") return;
+      methodPath.traverse({
+        ReturnStatement(returnPath) {
+          const argumentPath = returnPath.get("argument");
+          if (argumentPath?.node && pathContainsChannelText(argumentPath)) stale = true;
+        },
+      });
+    },
+  });
+  return stale;
+};
+
+const approvedCircleErrors = new Set([
+  "Chi'lly Circle status is unavailable right now.",
+  "Choose a person to update Chi'lly Circle.",
+  "Official accounts appear as pinned Chi'lly Circle connections and are not managed as normal requests.",
+  "Chi'lly Circle requires a signed-in user.",
+  "You cannot update Chi'lly Circle with yourself.",
+  "Chi'lly Circle is unavailable while a Platform audience block exists between these accounts.",
+  "Unable to update Chi'lly Circle right now.",
+  "Chi'lly Circle could not load right now.",
+  "You cannot request yourself.",
+]);
+
+const findUnsafeThrownErrors = (source) => {
+  const ast = parseSource(source);
+  const unsafe = [];
+  traverse(ast, {
+    ThrowStatement(throwPath) {
+      const argumentPath = throwPath.get("argument");
+      const calleePath = argumentPath.isNewExpression() ? argumentPath.get("callee") : null;
+      const argumentPaths = argumentPath.isNewExpression() ? argumentPath.get("arguments") : [];
+      const message = calleePath?.isIdentifier({ name: "Error" })
+        ? evaluateStringPath(argumentPaths[0])
+        : null;
+      if (message === null || !approvedCircleErrors.has(message)) unsafe.push(throwPath.node.type);
+    },
+  });
+  return unsafe;
+};
+
+const assertStaticMessagesUsePlatformTerminology = (source, label) => {
+  if (hasStaleStaticChannelMessage(source)) {
+    fail(`${label} exposes stale Channel terminology in a customer-facing message`);
+  }
+};
+
 const tabs = read("app/(tabs)/_layout.tsx");
 const liveTab = read("app/(tabs)/live.tsx");
 const profileTab = read("app/(tabs)/profile.tsx");
@@ -29,6 +260,16 @@ const homeRoute = read("app/home.tsx");
 const libraryRoute = read("app/library.tsx");
 const player = read("app/player/[id].tsx");
 const watchPartyIndex = read("app/watch-party/index.tsx");
+const channelAudience = read("_lib/channelAudience.ts");
+const channelSubscriptions = read("_lib/channelSubscriptions.ts");
+const creatorVipPasses = read("_lib/creatorVipPasses.ts");
+const profilePrivacy = read("_lib/profilePrivacy.ts");
+const friendGraph = read("_lib/friendGraph.ts");
+const channelReadModels = read("_lib/channelReadModels.ts");
+const accessEntitlements = read("_lib/accessEntitlements.ts");
+const dmca = read("_lib/dmca.ts");
+const channelSubscriptionRoute = read("app/channel-subscription/[creatorId].tsx");
+const vipPassRoute = read("app/vip-pass/[creatorId].tsx");
 const mainTabTopBar = read("components/navigation/main-tab-top-bar.tsx");
 const iconSymbol = read("components/ui/icon-symbol.tsx");
 const masterVision = read("MASTER_VISION.md");
@@ -52,16 +293,16 @@ assertNotIncludes(tabs, "title: 'Profile'", "normal bottom navigation label");
 assertIncludes(iconSymbol, "'play.circle.fill': 'live-tv'", "Live bottom-nav icon");
 
 assertIncludes(liveTab, "heroHeader", "Live screen Hero header pattern");
-assertIncludes(liveTab, "compactActionCard", "Live screen Compact action cards pattern");
-assertIncludes(liveTab, "actionRow", "Live screen Action rows pattern");
+assertIncludes(liveTab, "quickActions", "Live screen quick actions pattern");
+assertIncludes(liveTab, "primaryButton", "Live screen primary action pattern");
+assertIncludes(liveTab, "secondaryButton", "Live screen secondary actions pattern");
 assertIncludes(liveTab, "statusPill", "Live screen Status pills pattern");
-assertIncludes(liveTab, "choiceChip", "Live screen Choice chips pattern");
 assertIncludes(liveTab, "disclosureCard", "Live screen Progressive disclosure pattern");
 assertIncludes(liveTab, "emptyState", "Live screen Empty state pattern");
-assertIncludes(liveTab, "Start or join a people-first live room.", "Live Watch-Party user copy");
-assertIncludes(liveTab, "Use a room code for an existing content-first Watch-Party Live room.", "Watch-Party Live user copy");
-assertIncludes(liveTab, "Choose a title or creator video first, then start Watch-Party Live from the player.", "Browse Titles user copy");
-assertIncludes(liveTab, "Paid Watch-Party Seat Passes stay in Party Waiting Room to Party Room, not Live Stage.", "Party Room separation");
+assertIncludes(liveTab, "Watch what is live now, see upcoming events, start a people-first room, or enter a Watch-Party code.", "Live hub user copy");
+assertIncludes(liveTab, "Start Live opens the people-first Live Watch-Party path.", "Live Watch-Party user copy");
+assertIncludes(liveTab, "Enter Code joins an existing Watch-Party Live room.", "Watch-Party Live user copy");
+assertIncludes(liveTab, "Upcoming Events opens the exact Event so viewers can see its access and schedule.", "exact Event user copy");
 assertIncludes(liveTab, "requireLiveFirstPremium", "Live tab Premium/runtime preflight");
 assertIncludes(liveTab, 'params: { mode: "live", source: "bottom-live-tab" }', "Live tab route mapping");
 assertIncludes(liveTab, "CHILLYWOOD_BACKGROUND_SOURCE", "Live tab Chi'llywood background");
@@ -195,6 +436,113 @@ assertIncludes(roomBlueprint, "Party Room must not hand off to Live Stage", "Par
     ["app/(tabs)/explore.tsx", explore],
     ["app/(tabs)/_layout.tsx", tabs],
   ].forEach(([label, source]) => assertNotIncludes(source, needle, label));
+});
+
+[
+  [channelAudience, "Platform followed.", "Platform follow confirmation"],
+  [channelAudience, "You cannot follow your own Platform.", "Platform self-follow copy"],
+  [channelAudience, "Only the Platform owner or an authorized admin can review this audience request.", "Platform audience authority copy"],
+  [channelSubscriptions, "Platform Subscription received. Waiting for verified access to finish syncing.", "Platform Subscription sync copy"],
+  [creatorVipPasses, "Creator-specific VIP access for this Platform only.", "VIP Platform isolation copy"],
+  [profilePrivacy, "A Platform audience block prevents full profile access between these accounts.", "Profile privacy Platform copy"],
+  [friendGraph, "Chi'lly Circle is unavailable while a Platform audience block exists between these accounts.", "Chi'lly Circle Platform copy"],
+  [friendGraph, "Chi'lly Circle status is unavailable right now.", "Chi'lly Circle safe read-error copy"],
+  [friendGraph, "Unable to update Chi'lly Circle right now.", "Chi'lly Circle safe mutation-error copy"],
+  [friendGraph, "Chi'lly Circle could not load right now.", "Chi'lly Circle safe list-error copy"],
+  [friendGraph, "Choose a person to update Chi'lly Circle.", "Chi'lly Circle missing-person copy"],
+  [channelReadModels, "This Platform could not be identified.", "Platform read-model error copy"],
+  [accessEntitlements, "The Platform owner or profile defaults are still missing.", "Platform access diagnostic copy"],
+  [accessEntitlements, "No explicit Platform profile was available, so access fell back to open defaults.", "Platform access fallback copy"],
+  [dmca, "Warn a user or Platform that active copyright strikes have triggered review.", "copyright Platform copy"],
+  [channelSubscriptionRoute, "Back to Platform", "Platform Subscription return action"],
+  [channelSubscriptionRoute, "Back to creator Platform", "Platform Subscription return accessibility label"],
+  [vipPassRoute, "Back to Platform", "VIP return action"],
+  [vipPassRoute, "Back to creator Platform", "VIP return accessibility label"],
+].forEach(([source, needle, label]) => assertIncludes(source, needle, label));
+
+assertStaticMessagesUsePlatformTerminology(channelAudience, "Platform audience copy");
+if (findUnsafeThrownErrors(friendGraph).length > 0) {
+  fail("Chi'lly Circle must throw only approved, static customer-safe errors");
+}
+
+[
+  [channelAudience, "Channel follow requires a channel user id.", "Platform audience copy"],
+  [channelAudience, "String(error.message", "Platform audience raw provider error copy"],
+  [channelAudience, "String(error?.message", "Platform audience raw provider error copy"],
+  [channelSubscriptions, "verified channel status", "Platform Subscription copy"],
+  [creatorVipPasses, "for this channel only", "VIP copy"],
+  [profilePrivacy, "channel audience block", "Profile privacy copy"],
+  [friendGraph, "channel audience block", "Chi'lly Circle copy"],
+  [friendGraph, "target user id", "Chi'lly Circle developer-facing identifier copy"],
+  [channelReadModels, "Channel user id is required.", "Platform read-model copy"],
+  [accessEntitlements, "Channel user id or profile defaults", "Platform access diagnostic copy"],
+  [accessEntitlements, "No explicit channel profile row", "Platform access fallback copy"],
+  [dmca, "Warn a user or channel", "copyright copy"],
+  [channelSubscriptionRoute, "Back to channel", "Platform Subscription return action"],
+  [channelSubscriptionRoute, "Back to creator channel", "Platform Subscription return accessibility label"],
+  [vipPassRoute, "Back to channel", "VIP return action"],
+  [vipPassRoute, "Back to creator channel", "VIP return accessibility label"],
+].forEach(([source, needle, label]) => assertNotIncludes(source, needle, label));
+
+[
+  'message: "You cannot follow your own channel."',
+  'message : "You cannot follow your own channel."',
+  'message:\n    "You cannot follow your own channel."',
+  'message: "You cannot follow your own chan" + "nel."',
+  'message: "You cannot follow your own ch\\u0061nnel."',
+  'message: (`This ${"chan" + "nel"} is unavailable.`)',
+  '["message"]: "This channel is unavailable."',
+  'message: "Creator channels are unavailable."',
+  'message: ("This channel is unavailable." satisfies string)',
+  'message: ("This channel is unavailable."!)',
+  'message: "Only the channel owner can review this request."',
+  "message: 'Channel follow failed.'",
+  "message: `This channel is unavailable.`",
+].forEach((mutant) => {
+  if (!hasStaleStaticChannelMessage(`({ ${mutant} })`)) {
+    fail(`Platform audience guard accepted stale-message mutant: ${mutant}`);
+  }
+});
+
+[
+  'const stale = "This channel is unavailable."; ({ message: stale });',
+  'const key = "message"; ({ [key]: "This channel is unavailable." });',
+  '({ message: `Open ${creatorName} channel.` });',
+  '({ message: "This channel is " + status });',
+  '({ ["message"]: `Open ${creatorName} channel.` });',
+  'const stale = "channel"; ({ message: "Open " + stale + status });',
+  'const stale = "channel"; ({ message: `Open ${stale} ${status}` });',
+  'const left = "chan"; const right = "nel"; ({ message: left + status + right });',
+  'const COPY = { stale: "This channel is unavailable." }; ({ message: COPY.stale });',
+  'const { stale } = { stale: "This channel is unavailable." }; ({ message: stale });',
+  'const COPY = { stale: "This channel is unavailable." }; const result = {}; result.message = COPY.stale;',
+  '({ get message() { return "This channel is unavailable."; } });',
+  'const left = "chan"; const right = "nel"; const result = {}; result.message = left + status + right;',
+  'const left = "chan"; const right = "nel"; ({ get message() { return left + status + right; } });',
+  'const COPY = { left: "chan", right: "nel" }; ({ message: COPY.left + status + COPY.right });',
+  'const COPY = { left: "chan", right: "nel" }; const { left, right } = COPY; ({ message: left + status + right });',
+  'const COPY = ({ left: "chan", right: "nel" } as const); ({ message: COPY.left + status + COPY.right });',
+  'const COPY = ({ left: "chan", right: "nel" } satisfies Record<string, string>); ({ message: COPY.left + status + COPY.right });',
+  'const COPY = { ...{ left: "chan", right: "nel" } }; ({ message: COPY.left + status + COPY.right });',
+  'const COPY = ["chan", "nel"] as const; const [left, right] = COPY; ({ message: left + status + right });',
+  'const { left = "chan", right = "nel" } = {}; ({ message: left + status + right });',
+  'const COPY = { left: "chan", right: "nel" }; ({ message: COPY?.left + status + COPY?.right });',
+].forEach((mutant) => {
+  if (!hasStaleStaticChannelMessage(mutant)) {
+    fail(`Platform audience guard accepted binding/dynamic stale-message mutant: ${mutant}`);
+  }
+});
+
+[
+  "throw error;",
+  "if (error) { throw error; }",
+  "const providerError = error; throw providerError;",
+  "throw new Error(error.message);",
+  "throw new Error(`Provider: ${error.message}`);",
+].forEach((mutant) => {
+  if (findUnsafeThrownErrors(`const run = () => { ${mutant} };`).length === 0) {
+    fail(`Chi'lly Circle error guard accepted unsafe-throw mutant: ${mutant}`);
+  }
 });
 
 if (process.exitCode) {

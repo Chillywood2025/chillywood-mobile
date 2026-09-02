@@ -167,7 +167,7 @@ const pickLatestIso = (...values: Array<string | null | undefined>) => {
 async function readChannelHelperContext(channelUserId: string) {
   const normalizedChannelUserId = normalizeText(channelUserId);
   if (!normalizedChannelUserId) {
-    throw new Error("Channel user id is required.");
+    throw new Error("This Platform could not be identified.");
   }
 
   const { data: sessionData } = await supabase.auth.getSession();

@@ -358,7 +358,7 @@ export async function saveCreatorVipPassOffer(input: {
 }): Promise<CreatorVipPassOffer> {
   const { data, error } = await rpcClient.rpc("set_creator_vip_pass_offer", {
     p_title: input.title ?? "VIP Pass",
-    p_description: input.description ?? "Creator-specific VIP status for this channel only.",
+    p_description: input.description ?? "Creator-specific VIP access for this Platform only.",
     p_status: input.status ?? "sandbox",
   });
   if (error) throw new Error("VIP Pass settings could not be saved.");
