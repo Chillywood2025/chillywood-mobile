@@ -44,6 +44,17 @@ const pathContainsIdentifier = (nodePath, name) => {
   return found;
 };
 
+const findIdentifierPath = (nodePath, name) => {
+  if (nodePath.isIdentifier({ name })) return nodePath;
+  let match = null;
+  nodePath.traverse({
+    Identifier(identifierPath) {
+      if (!match && identifierPath.isIdentifier({ name })) match = identifierPath;
+    },
+  });
+  return match;
+};
+
 const unwrapExpression = (nodePath) => {
   let currentPath = nodePath;
   while (
@@ -65,6 +76,22 @@ const isParticipantMember = (nodePath, propertyName) => {
     && expressionPath.get("property").isIdentifier({ name: propertyName });
 };
 
+const pathContainsParticipantMember = (nodePath, propertyName) => {
+  if (isParticipantMember(nodePath, propertyName)) return true;
+  let found = false;
+  nodePath.traverse({
+    MemberExpression(memberPath) {
+      if (isParticipantMember(memberPath, propertyName)) found = true;
+    },
+  });
+  return found;
+};
+
+const bindingInitializer = (identifierPath, name) => {
+  const binding = identifierPath?.scope.getBinding(name);
+  return binding?.path.isVariableDeclarator() ? binding.path.get("init") : null;
+};
+
 const hasBoundHybridVideoRender = (source) => {
   const ast = parseTsx(source);
   let liveKitTrackElementCount = 0;
@@ -76,7 +103,14 @@ const hasBoundHybridVideoRender = (source) => {
       if (elementPath.get("name").isJSXIdentifier({ name: "RTCView" })) legacyRtcElementCount += 1;
     },
     ConditionalExpression(conditionalPath) {
-      if (!conditionalPath.get("test").isIdentifier({ name: "hasLiveKitVideo" })) return;
+      const liveKitTestPath = conditionalPath.get("test");
+      if (!liveKitTestPath.isIdentifier({ name: "hasLiveKitVideo" })) return;
+      const hasLiveKitVideoInit = bindingInitializer(liveKitTestPath, "hasLiveKitVideo");
+      if (!hasLiveKitVideoInit
+        || !pathContainsIdentifier(hasLiveKitVideoInit, "isVideoCall")
+        || !pathContainsParticipantMember(hasLiveKitVideoInit, "liveKitVideoTrackReference")
+        || !pathContainsParticipantMember(hasLiveKitVideoInit, "isSelf")
+        || !pathContainsIdentifier(hasLiveKitVideoInit, "cameraRequested")) return;
       let hasBoundLiveKitTrack = false;
       conditionalPath.get("consequent").traverse({
         JSXOpeningElement(elementPath) {
@@ -95,6 +129,22 @@ const hasBoundHybridVideoRender = (source) => {
       if (!fallbackPath.isConditionalExpression()
         || !pathContainsIdentifier(fallbackPath.get("test"), "showLegacyVideo")
         || !pathContainsIdentifier(fallbackPath.get("test"), "RTCView")) return;
+      const showLegacyIdentifierPath = findIdentifierPath(fallbackPath.get("test"), "showLegacyVideo");
+      const showLegacyInit = bindingInitializer(showLegacyIdentifierPath, "showLegacyVideo");
+      const hasVideoStreamIdentifierPath = showLegacyInit
+        ? findIdentifierPath(showLegacyInit, "hasVideoStream")
+        : null;
+      const hasVideoStreamInit = bindingInitializer(hasVideoStreamIdentifierPath, "hasVideoStream");
+      if (!showLegacyInit
+        || !pathContainsIdentifier(showLegacyInit, "RTCView")
+        || !pathContainsParticipantMember(showLegacyInit, "streamURL")
+        || !pathContainsIdentifier(showLegacyInit, "hasVideoStream")
+        || !hasVideoStreamInit
+        || !pathContainsIdentifier(hasVideoStreamInit, "isVideoCall")
+        || !pathContainsParticipantMember(hasVideoStreamInit, "streamURL")
+        || !pathContainsIdentifier(hasVideoStreamInit, "hasLiveKitVideo")
+        || !pathContainsParticipantMember(hasVideoStreamInit, "isSelf")
+        || !pathContainsIdentifier(hasVideoStreamInit, "cameraRequested")) return;
       let hasBoundLegacyRtc = false;
       fallbackPath.get("consequent").traverse({
         JSXOpeningElement(elementPath) {

@@ -29,19 +29,9 @@ const parseTsx = (source) => parse(source, {
 
 const hasEffectiveLiveKitCaptureGate = (source, roomComponentName) => {
   const ast = parseTsx(source);
-  let effectiveDeclarationCount = 0;
   let hybridRoomCount = 0;
   let boundVideoPropCount = 0;
   traverse(ast, {
-    VariableDeclarator(variablePath) {
-      if (!variablePath.get("id").isIdentifier({ name: "effectivePublishLocalCamera" })) return;
-      const initPath = variablePath.get("init");
-      if (initPath.isLogicalExpression({ operator: "&&" })
-        && initPath.get("left").isIdentifier({ name: "shouldConnectRoom" })
-        && initPath.get("right").isIdentifier({ name: "publishLocalCamera" })) {
-        effectiveDeclarationCount += 1;
-      }
-    },
     JSXOpeningElement(elementPath) {
       if (!elementPath.get("name").isJSXIdentifier({ name: roomComponentName })) return;
       hybridRoomCount += 1;
@@ -50,16 +40,23 @@ const hasEffectiveLiveKitCaptureGate = (source, roomComponentName) => {
         const valuePath = attributePath.get("value");
         if (!valuePath.isJSXExpressionContainer()) continue;
         const expressionPath = valuePath.get("expression");
-        if (expressionPath.isConditionalExpression()
-          && expressionPath.get("test").isIdentifier({ name: "effectivePublishLocalCamera" })
-          && expressionPath.get("consequent").isIdentifier({ name: "LIVE_VIDEO_CAPTURE_OPTIONS" })
-          && expressionPath.get("alternate").isBooleanLiteral({ value: false })) {
+        if (!expressionPath.isConditionalExpression()
+          || !expressionPath.get("test").isIdentifier({ name: "effectivePublishLocalCamera" })
+          || !expressionPath.get("consequent").isIdentifier({ name: "LIVE_VIDEO_CAPTURE_OPTIONS" })
+          || !expressionPath.get("alternate").isBooleanLiteral({ value: false })) continue;
+        const effectiveBinding = expressionPath.get("test").scope.getBinding("effectivePublishLocalCamera");
+        const effectiveInitPath = effectiveBinding?.path.isVariableDeclarator()
+          ? effectiveBinding.path.get("init")
+          : null;
+        if (effectiveInitPath?.isLogicalExpression({ operator: "&&" })
+          && effectiveInitPath.get("left").isIdentifier({ name: "shouldConnectRoom" })
+          && effectiveInitPath.get("right").isIdentifier({ name: "publishLocalCamera" })) {
           boundVideoPropCount += 1;
         }
       }
     },
   });
-  return effectiveDeclarationCount === 1 && hybridRoomCount === 1 && boundVideoPropCount === 1;
+  return hybridRoomCount === 1 && boundVideoPropCount === 1;
 };
 
 const assertEffectiveLiveKitCaptureGate = (source, roomComponentName, label) => {
@@ -142,6 +139,13 @@ for (const [label, source, roomComponentName] of [["Watch-Party LiveKit", liveKi
   );
   if (hasEffectiveLiveKitCaptureGate(disconnectedProp, roomComponentName)) {
     fail(`${label} capture guard accepted a video prop disconnected from the effective foreground gate.`);
+  }
+  const unconditionalGate = source.replace(
+    "const effectivePublishLocalCamera = shouldConnectRoom && publishLocalCamera;",
+    "const effectivePublishLocalCamera = true;",
+  );
+  if (hasEffectiveLiveKitCaptureGate(unconditionalGate, roomComponentName)) {
+    fail(`${label} capture guard accepted an effective camera binding without lifecycle and publish intent.`);
   }
 }
 
