@@ -16,12 +16,14 @@ Deno.test("paid Seat authority readback requires structured server truth", () =>
     allowed: true,
     hostAuthority: false,
     paidSeatRequired: true,
+    speakerEligible: false,
     expiresAt: "2026-08-24T12:01:00.000Z",
     reason: "paid_seat_exact",
   }), {
     allowed: true,
     hostAuthority: false,
     paidSeatRequired: true,
+    speakerEligible: false,
     expiresAt: "2026-08-24T12:01:00.000Z",
     reason: "paid_seat_exact",
   }, "exact authority");

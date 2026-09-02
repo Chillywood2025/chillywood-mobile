@@ -1,10 +1,14 @@
 export type WatchPartyLiveKitAuthority = {
   allowed: true;
   paidSeatRequired: boolean;
+  speakerEligible: boolean;
   hostAuthority: boolean;
   expiresAt: string | null;
   reason:
     | "exact_paid_seat_viewer_authority"
+    | "exact_live_access_viewer_authority"
+    | "exact_live_seat_eligibility_authority"
+    | "exact_live_seat_eligibility_authority_required"
     | "non_seat_room_authority"
     | "non_seat_room_host_authority"
     | "paid_room_host_authority";
@@ -13,10 +17,12 @@ export type WatchPartyLiveKitAuthority = {
 export type WatchPartyLiveKitAuthorityDecision = WatchPartyLiveKitAuthority | {
   allowed: false;
   paidSeatRequired: boolean;
+  speakerEligible: boolean;
   hostAuthority: boolean;
   expiresAt: null;
   reason:
     | "exact_paid_seat_authority_required"
+    | "exact_live_pass_authority_required"
     | "paid_room_host_creator_authority_required"
     | "room_viewer_authority_required"
     | "viewer_session_authority_invalid";
@@ -24,12 +30,16 @@ export type WatchPartyLiveKitAuthorityDecision = WatchPartyLiveKitAuthority | {
 
 const ALLOWED_REASONS = new Set<WatchPartyLiveKitAuthority["reason"]>([
   "exact_paid_seat_viewer_authority",
+  "exact_live_access_viewer_authority",
+  "exact_live_seat_eligibility_authority",
+  "exact_live_seat_eligibility_authority_required",
   "non_seat_room_authority",
   "non_seat_room_host_authority",
   "paid_room_host_authority",
 ]);
 const DENIED_REASONS = new Set<Extract<WatchPartyLiveKitAuthorityDecision, { allowed: false }>["reason"]>([
   "exact_paid_seat_authority_required",
+  "exact_live_pass_authority_required",
   "paid_room_host_creator_authority_required",
   "room_viewer_authority_required",
   "viewer_session_authority_invalid",
@@ -44,6 +54,9 @@ export const parseWatchPartyLiveKitAuthorityDecision = (
 ): WatchPartyLiveKitAuthorityDecision | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
+  const speakerEligible = isExactBoolean(row.speakerEligible)
+    ? row.speakerEligible
+    : row.hostAuthority === true || row.paidSeatRequired === false;
   if (
     !isExactBoolean(row.allowed)
     || !isExactBoolean(row.paidSeatRequired)
@@ -61,6 +74,7 @@ export const parseWatchPartyLiveKitAuthorityDecision = (
     return {
       allowed: false,
       paidSeatRequired: row.paidSeatRequired,
+      speakerEligible: false,
       hostAuthority: row.hostAuthority,
       expiresAt: null,
       reason: row.reason as Extract<WatchPartyLiveKitAuthorityDecision, { allowed: false }>["reason"],
@@ -80,6 +94,7 @@ export const parseWatchPartyLiveKitAuthorityDecision = (
     return {
       allowed: true,
       paidSeatRequired: false,
+      speakerEligible,
       hostAuthority: row.hostAuthority,
       expiresAt: null,
       reason,
@@ -89,6 +104,9 @@ export const parseWatchPartyLiveKitAuthorityDecision = (
   if (
     typeof row.expiresAt !== "string"
     || (reason !== "exact_paid_seat_viewer_authority"
+      && reason !== "exact_live_access_viewer_authority"
+      && reason !== "exact_live_seat_eligibility_authority"
+      && reason !== "exact_live_seat_eligibility_authority_required"
       && reason !== "paid_room_host_authority")
     || row.hostAuthority !== (reason === "paid_room_host_authority")
   ) return null;
@@ -103,6 +121,7 @@ export const parseWatchPartyLiveKitAuthorityDecision = (
   return {
     allowed: true,
     paidSeatRequired: true,
+    speakerEligible: reason === "exact_live_seat_eligibility_authority" && speakerEligible,
     hostAuthority: row.hostAuthority,
     expiresAt: row.expiresAt,
     reason,

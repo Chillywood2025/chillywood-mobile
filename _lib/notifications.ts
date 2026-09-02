@@ -75,6 +75,8 @@ export type NotificationCategory =
 export type CreatorMoneyBuyerNotificationType =
   | "paid_video_unlocked"
   | "watch_party_ticket_ready"
+  | "live_watch_party_access_ready"
+  | "live_watch_party_seat_eligible"
   | "channel_subscription_active"
   | "vip_access_active"
   | "event_pass_active"
@@ -83,6 +85,8 @@ export type CreatorMoneyBuyerNotificationType =
 export type CreatorMoneySellerNotificationType =
   | "paid_video_sold"
   | "watch_party_ticket_sold"
+  | "live_watch_party_access_sold"
+  | "live_watch_party_seat_sold"
   | "channel_subscription_started"
   | "vip_pass_sold"
   | "event_pass_sold"
@@ -91,6 +95,8 @@ export type CreatorMoneySellerNotificationType =
 export const CREATOR_MONEY_BUYER_NOTIFICATION_TYPES: readonly CreatorMoneyBuyerNotificationType[] = [
   "paid_video_unlocked",
   "watch_party_ticket_ready",
+  "live_watch_party_access_ready",
+  "live_watch_party_seat_eligible",
   "channel_subscription_active",
   "vip_access_active",
   "event_pass_active",
@@ -100,6 +106,8 @@ export const CREATOR_MONEY_BUYER_NOTIFICATION_TYPES: readonly CreatorMoneyBuyerN
 export const CREATOR_MONEY_SELLER_NOTIFICATION_TYPES: readonly CreatorMoneySellerNotificationType[] = [
   "paid_video_sold",
   "watch_party_ticket_sold",
+  "live_watch_party_access_sold",
+  "live_watch_party_seat_sold",
   "channel_subscription_started",
   "vip_pass_sold",
   "event_pass_sold",
@@ -338,6 +346,8 @@ const IMPORTANT_NOTIFICATION_CATEGORIES: readonly NotificationCategory[] = [
 const CREATOR_MONEY_BUYER_ACTION_LABELS: Record<string, string> = {
   paid_video_unlocked: "Watch video",
   watch_party_ticket_ready: "Enter room",
+  live_watch_party_access_ready: "Enter Live Stage",
+  live_watch_party_seat_eligible: "Open seat request",
   channel_subscription_active: "View subscription",
   vip_access_active: "View VIP",
   event_pass_active: "View event",
@@ -347,6 +357,8 @@ const CREATOR_MONEY_BUYER_ACTION_LABELS: Record<string, string> = {
 const CREATOR_MONEY_CREATOR_ACTION_LABELS: Record<string, string> = {
   paid_video_sold: "View transaction",
   watch_party_ticket_sold: "View transaction",
+  live_watch_party_access_sold: "View transaction",
+  live_watch_party_seat_sold: "Open Live Stage",
   channel_subscription_started: "View transaction",
   vip_pass_sold: "View transaction",
   event_pass_sold: "View transaction",

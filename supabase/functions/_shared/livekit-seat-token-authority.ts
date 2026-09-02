@@ -2,6 +2,7 @@ export type WatchPartyViewerAuthority = {
   allowed: boolean;
   hostAuthority: boolean;
   paidSeatRequired: boolean;
+  speakerEligible: boolean;
   expiresAt: string | null;
   reason: string;
 };
@@ -50,6 +51,9 @@ export const normalizeWatchPartyViewerAuthority = (
     allowed: value.allowed,
     hostAuthority: value.hostAuthority,
     paidSeatRequired: value.paidSeatRequired,
+    speakerEligible: typeof value.speakerEligible === "boolean"
+      ? value.speakerEligible
+      : value.hostAuthority || !value.paidSeatRequired,
     expiresAt,
     reason,
   };

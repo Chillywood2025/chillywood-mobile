@@ -470,6 +470,7 @@ async function enforceParticipantState(
     }
     if (
       targetAuthority.paidSeatRequired
+      && !targetAuthority.speakerEligible
       && targetUserId !== room.hostUserId
       && nextStageRole !== "listener"
     ) {
@@ -1052,7 +1053,7 @@ async function resolveEffectiveParticipantRole(
       };
     }
 
-    if (authority.allowed && authority.paidSeatRequired) {
+    if (authority.allowed && authority.paidSeatRequired && !authority.speakerEligible) {
       return {
         ok: true,
         participantRole: "viewer",

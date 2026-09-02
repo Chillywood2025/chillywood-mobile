@@ -90,6 +90,10 @@ type RevenueCatTerminalWriteResult = {
   entitlementStatus: string | null;
   entitlementActive: boolean;
   grantStatus: string | null;
+  ledgerEventId: string | null;
+  productKey: string | null;
+  productType: string | null;
+  purchaseIntentId: string | null;
 };
 type RevenueCatTerminalQuarantineResult = {
   status: "quarantined";
@@ -148,12 +152,18 @@ const ignoredDynamicMoneyAccess = (
 type MoneyNotificationType =
   | "paid_video_unlocked"
   | "watch_party_ticket_ready"
+  | "live_watch_party_access_ready"
+  | "live_watch_party_seat_eligible"
   | "channel_subscription_active"
   | "vip_access_active"
   | "event_pass_active"
   | "tip_sent_receipt"
   | "paid_video_sold"
   | "watch_party_ticket_sold"
+  | "live_watch_party_access_sold"
+  | "live_watch_party_seat_sold"
+  | "creator_money_refunded"
+  | "creator_money_revoked"
   | "channel_subscription_started"
   | "vip_pass_sold"
   | "event_pass_sold"
@@ -580,6 +590,8 @@ const readStoreProductResolution = async (
 const isCreatorMoneyNotificationProduct = (productType: string) => (
   productType === "paid_content_access"
   || productType === "watch_party_live_ticket"
+  || productType === "live_watch_party_access_pass"
+  || productType === "live_watch_party_seat_pass"
   || productType === "event_pass"
   || productType === "channel_subscription"
   || productType === "vip_pass"
@@ -723,6 +735,15 @@ const resolveCreatorMoneyNotificationTarget = async (
   if (input.productType === "watch_party_live_ticket") {
     return resolveWatchPartyNotificationTarget(adminClient, sourceId, input.metadata);
   }
+  if (input.productType === "live_watch_party_access_pass" || input.productType === "live_watch_party_seat_pass") {
+    const partyId = toText(input.metadata.party_id);
+    if (!partyId) return null;
+    return {
+      deepLink: `chillywoodmobile://watch-party/live-stage/${partyId}`,
+      entityId: partyId,
+      route: "/watch-party/live-stage/[partyId]",
+    };
+  }
   if (input.productType === "channel_subscription" && input.creatorId) {
     return {
       deepLink: `chillywoodmobile://channel-subscription/${input.creatorId}`,
@@ -768,6 +789,26 @@ const buyerNotificationPlanForProduct = (
       priority: 4,
       recipientUserId: buyerUserId,
       title: "Your Seat Pass is ready",
+    };
+  }
+  if (productType === "live_watch_party_access_pass") {
+    return {
+      body: "Your exact Live Stage viewer/listener access is ready. This does not include a speaking seat.",
+      category: "creator_money_purchase",
+      notificationType: "live_watch_party_access_ready",
+      priority: 4,
+      recipientUserId: buyerUserId,
+      title: "Live Access Pass ready",
+    };
+  }
+  if (productType === "live_watch_party_seat_pass") {
+    return {
+      body: "Seat eligibility is ready for this exact Live Stage. Host approval is still required before camera or microphone.",
+      category: "creator_money_purchase",
+      notificationType: "live_watch_party_seat_eligible",
+      priority: 4,
+      recipientUserId: buyerUserId,
+      title: "Seat eligibility ready",
     };
   }
   if (productType === "channel_subscription") {
@@ -837,6 +878,26 @@ const creatorNotificationPlanForProduct = (
       priority: 4,
       recipientUserId: creatorUserId,
       title: "Seat Pass sold",
+    };
+  }
+  if (productType === "live_watch_party_access_pass") {
+    return {
+      body: "Exact Live Stage viewer/listener access sold. Open Money Center Transactions for completion and hold status.",
+      category: "creator_money_sale",
+      notificationType: "live_watch_party_access_sold",
+      priority: 4,
+      recipientUserId: creatorUserId,
+      title: "Live Access Pass sold",
+    };
+  }
+  if (productType === "live_watch_party_seat_pass") {
+    return {
+      body: "Seat eligibility sold. The viewer may submit a request in the exact Live Stage; payment did not create or approve a speaker request.",
+      category: "creator_money_sale",
+      notificationType: "live_watch_party_seat_sold",
+      priority: 4,
+      recipientUserId: creatorUserId,
+      title: "Seat eligibility sold",
     };
   }
   if (productType === "channel_subscription") {
@@ -1151,6 +1212,48 @@ const createCreatorMoneyNotifications = async (
   }
 };
 
+const createLiveWatchPartyTerminalNotifications = async (
+  adminClient: SupabaseClientLike,
+  input: { buyerUserId: string; eventType: string; terminal: RevenueCatTerminalWriteResult },
+) => {
+  if (input.terminal.status !== "processed" || !input.terminal.purchaseIntentId
+    || !input.terminal.ledgerEventId || !input.terminal.providerEventId
+    || !input.terminal.productKey || !input.terminal.productType
+    || !["live_watch_party_access_pass", "live_watch_party_seat_pass"].includes(input.terminal.productType)) return;
+  const { data: intent } = await adminClient.from("money_purchase_intents")
+    .select("creator_id,metadata,source_id,source_type")
+    .eq("id", input.terminal.purchaseIntentId).maybeSingle();
+  const creatorId = toText(intent?.creator_id);
+  const sourceId = toText(intent?.source_id);
+  const sourceType = toText(intent?.source_type);
+  if (!creatorId || !sourceId || !["live_watch_party_access", "live_watch_party_seat"].includes(sourceType)) return;
+  const target = await resolveCreatorMoneyNotificationTarget(adminClient, {
+    creatorId, metadata: safeObject(intent?.metadata), productType: input.terminal.productType, sourceId,
+  });
+  if (!target) return;
+  const refunded = input.eventType === "REFUND";
+  const seat = input.terminal.productType === "live_watch_party_seat_pass";
+  const notificationType: MoneyNotificationType = refunded ? "creator_money_refunded" : "creator_money_revoked";
+  const label = seat ? "Live Stage seat eligibility" : "Live Stage viewer/listener access";
+  await createCreatorMoneyNotification(adminClient, {
+    actorUserId: creatorId, dedupeEventId: input.terminal.providerEventId,
+    ledgerEventId: input.terminal.ledgerEventId, productKey: input.terminal.productKey,
+    sourceId, sourceType, target,
+    plan: { body: `${label} for this exact target was ${refunded ? "refunded" : "revoked"}. It no longer grants authority.`,
+      category: "creator_money_purchase", notificationType, priority: 5,
+      recipientUserId: input.buyerUserId, title: refunded ? "Live pass refunded" : "Live pass revoked" },
+  });
+  if (creatorId !== input.buyerUserId) await createCreatorMoneyNotification(adminClient, {
+    actorUserId: input.buyerUserId, dedupeEventId: input.terminal.providerEventId,
+    ledgerEventId: input.terminal.ledgerEventId, productKey: input.terminal.productKey,
+    sourceId, sourceType,
+    target: { deepLink: "chillywoodmobile://channel-studio?tab=monetization&focus=transactions", entityId: creatorId, route: "/channel-studio" },
+    plan: { body: `${label} was ${refunded ? "refunded" : "reversed"}. Its earnings cannot become payout-ready.`,
+      category: "creator_money_sale", notificationType, priority: 5,
+      recipientUserId: creatorId, title: refunded ? "Live pass refund recorded" : "Live pass reversal recorded" },
+  });
+};
+
 const writeIosConsumableFromRevenueCatEvent = async (
   adminClient: SupabaseClientLike,
   event: RevenueCatEvent,
@@ -1234,6 +1337,84 @@ const writeIosConsumableFromRevenueCatEvent = async (
     duplicateProviderEvent: result.duplicateProviderEvent === true,
     duplicateAccessGrant: result.duplicateAccessGrant === true,
     duplicateLedgerEvent: result.duplicateLedgerEvent === true,
+  };
+};
+
+const writeLiveWatchPartyMoneyFromRevenueCatEvent = async (
+  adminClient: SupabaseClientLike,
+  event: RevenueCatEvent,
+  rawBody: string,
+): Promise<DynamicMoneyAccessResult> => {
+  const eventType = normalizeEventType(event.type);
+  const eventId = await resolveEventId(event, rawBody);
+  const userId = resolveUserId(event);
+  const rawProductId = resolveProductId(event);
+  const environment = normalizeMoneyAccessEnvironment(event.environment);
+  const storePolicy = revenueCatStorePolicy(event);
+  const googleReference = storePolicy.provider === "revenuecat_google_play"
+    ? resolveGooglePlayProductReference(rawProductId)
+    : null;
+  const providerProductId = storePolicy.provider === "revenuecat_google_play"
+    ? googleReference?.providerProductId ?? ""
+    : toText(rawProductId);
+  const providerValue = resolveCreatorMoneyProviderValue(event, eventType);
+  if (!eventType || !userId || !providerProductId) {
+    return ignoredDynamicMoneyAccess(environment, "live_watch_party_provider_identity_required");
+  }
+  if (storePolicy.provider !== "revenuecat_app_store" && storePolicy.provider !== "revenuecat_google_play") {
+    return ignoredDynamicMoneyAccess(environment, "live_watch_party_store_identity_required");
+  }
+  const { data, error } = await adminClient.rpc("process_revenuecat_live_watch_party_event_atomic", {
+    p_amount_minor: providerValue.amountMinor,
+    p_currency: providerValue.currency,
+    p_environment: environment,
+    p_event_type: eventType,
+    p_occurred_at: toIsoFromMs(event.event_timestamp_ms) ?? new Date().toISOString(),
+    p_original_transaction_id: resolveOriginalTransactionId(event),
+    p_provider: storePolicy.provider,
+    p_provider_event_id: eventId,
+    p_provider_product_id: providerProductId,
+    p_raw_payload_hash: await hashText(rawBody),
+    p_user_id: userId,
+  });
+  if (error) throw new Error(`RevenueCat exact Live Watch-Party transaction failed: ${error.message}`);
+  const result = safeObject(data);
+  const purchaseIntentId = toText(result.purchaseIntentId) || null;
+  const ledgerEventId = toText(result.ledgerEventId) || null;
+  const providerEventId = toText(result.providerEventId) || null;
+  const status = toText(result.status) === "processed" ? "processed" : "ignored";
+  if (status === "processed" && purchaseIntentId && ledgerEventId && providerEventId) {
+    const { data: intent } = await adminClient.from("money_purchase_intents")
+      .select("creator_id,metadata,source_id,source_type")
+      .eq("id", purchaseIntentId)
+      .maybeSingle();
+    await createCreatorMoneyNotifications(adminClient, {
+      buyerUserId: userId,
+      creatorId: toText(intent?.creator_id) || null,
+      eventType,
+      ledgerEventId,
+      metadata: safeObject(intent?.metadata),
+      productKey: toText(result.productKey),
+      productType: toText(result.productType),
+      providerEventId,
+      sourceId: toText(intent?.source_id) || null,
+      sourceType: toText(intent?.source_type) || null,
+    });
+  }
+  return {
+    status,
+    productKey: toText(result.productKey) || null,
+    providerEventId,
+    accessGrantId: toText(result.accessGrantId) || null,
+    ledgerEventId,
+    purchaseIntentId,
+    environment,
+    payableState: toText(result.payableState) as DynamicMoneyAccessResult["payableState"],
+    grantStatus: toText(result.grantStatus) as DynamicMoneyAccessResult["grantStatus"],
+    reason: toText(result.reason) || "exact_live_watch_party_transaction_complete",
+    duplicateProviderEvent: result.duplicateProviderEvent === true,
+    duplicateAccessGrant: false,
+    duplicateLedgerEvent: false,
   };
 };
 
@@ -1410,6 +1591,10 @@ const writeRevenueCatTerminalEventFromRevenueCatEvent = async (
     entitlementStatus: toText(result.entitlementStatus) || null,
     entitlementActive,
     grantStatus: toText(result.grantStatus) || null,
+    ledgerEventId: toText(result.ledgerEventId) || null,
+    productKey: toText(result.productKey) || null,
+    productType: toText(result.productType) || null,
+    purchaseIntentId: toText(result.purchaseIntentId) || null,
   };
 };
 
@@ -2129,6 +2314,9 @@ Deno.serve(async (req) => {
           event,
           rawBody,
         );
+        await createLiveWatchPartyTerminalNotifications(adminConfig.client, {
+          buyerUserId: resolveUserId(event), eventType: terminalEventType, terminal: terminalWrite,
+        });
         const capability = terminalWrite.domain === "premium"
           ? "premium_entitlement"
           : "digital_access_sandbox";
@@ -2186,7 +2374,16 @@ Deno.serve(async (req) => {
       if (!eventType) throw new Error("RevenueCat webhook event type is missing.");
       if (!userId) throw new Error("RevenueCat webhook app user id is missing or anonymous.");
 
-      const dynamicWrite = storePolicy.provider === "revenuecat_app_store"
+      const productResolution = productId
+        ? await readStoreProductResolution(adminConfig.client, { event, productId })
+        : null;
+      const resolvedProductType = toText(productResolution?.product?.product_type);
+      const isExactLiveWatchPartyProduct = resolvedProductType === "live_watch_party_access_pass"
+        || resolvedProductType === "live_watch_party_seat_pass";
+
+      const dynamicWrite = isExactLiveWatchPartyProduct
+        ? await writeLiveWatchPartyMoneyFromRevenueCatEvent(adminConfig.client, event, rawBody)
+        : storePolicy.provider === "revenuecat_app_store"
         ? await writeIosConsumableFromRevenueCatEvent(adminConfig.client, event, rawBody)
         : storePolicy.provider === "revenuecat_google_play"
         ? await writeGooglePlayCreatorMoneyFromRevenueCatEvent(adminConfig.client, event, rawBody)

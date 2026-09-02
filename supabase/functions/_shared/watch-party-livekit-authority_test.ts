@@ -58,3 +58,39 @@ Deno.test("non-paid host and viewer proofs remain bounded by configured TTL", ()
   assertEquals(resolveWatchPartyLiveKitTokenTtlSeconds(viewer!, 120, NOW), 120, "viewer TTL");
   assertEquals(resolveWatchPartyLiveKitTokenTtlSeconds(host!, null, NOW), 3600, "host default TTL");
 });
+
+Deno.test("Live Access stays viewer-only while Live Seat is only speaker eligible", () => {
+  const access = parseWatchPartyLiveKitAuthority({
+    allowed: true,
+    expiresAt: "2026-08-25T12:00:25.000Z",
+    hostAuthority: false,
+    paidSeatRequired: true,
+    speakerEligible: false,
+    reason: "exact_live_access_viewer_authority",
+  }, NOW);
+  const seat = parseWatchPartyLiveKitAuthority({
+    allowed: true,
+    expiresAt: "2026-08-25T12:00:25.000Z",
+    hostAuthority: false,
+    paidSeatRequired: true,
+    speakerEligible: true,
+    reason: "exact_live_seat_eligibility_authority",
+  }, NOW);
+  assertEquals(access?.speakerEligible, false, "access pass cannot publish");
+  assertEquals(seat?.speakerEligible, true, "seat pass can enter host approval flow");
+  assertEquals(seat?.hostAuthority, false, "seat pass is not host authority");
+});
+
+Deno.test("missing paid seat eligibility preserves viewer entry but cannot publish", () => {
+  const viewer = parseWatchPartyLiveKitAuthority({
+    allowed: true,
+    expiresAt: "2026-08-25T12:00:25.000Z",
+    hostAuthority: false,
+    paidSeatRequired: true,
+    speakerEligible: false,
+    reason: "exact_live_seat_eligibility_authority_required",
+  }, NOW);
+  assertEquals(viewer?.allowed, true, "viewer admission stays valid");
+  assertEquals(viewer?.speakerEligible, false, "missing Seat Pass cannot publish");
+  assertEquals(viewer?.hostAuthority, false, "missing Seat Pass cannot become host");
+});
