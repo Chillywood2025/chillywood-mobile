@@ -5,15 +5,12 @@ const isNode = (value) => Boolean(value && typeof value === "object" && typeof v
 const walk = (node, visit, bindings = new Map()) => {
   if (!isNode(node)) return;
   visit(node);
-  if (node.type === "LogicalExpression" && node.operator === "&&" &&
-    ["JSXElement", "JSXFragment"].includes(unwrap(node.right)?.type)) {
+  if (node.type === "LogicalExpression" && node.operator === "&&" && ["JSXElement", "JSXFragment"].includes(unwrap(node.right)?.type)) {
     if (staticTruth(node.left, bindings) !== false) walk(node.right, visit, bindings);
     return;
   }
-  if (node.type === "ConditionalExpression" && node.test?.type === "BooleanLiteral") {
-    walk(node.test.value ? node.consequent : node.alternate, visit, bindings);
-    return;
-  }
+  if (node.type === "ConditionalExpression" && node.test?.type === "BooleanLiteral")
+    return walk(node.test.value ? node.consequent : node.alternate, visit, bindings);
   for (const [key, value] of Object.entries(node)) {
     if (["loc", "start", "end", "extra", "comments"].includes(key)) continue;
     if (Array.isArray(value)) value.forEach((entry) => walk(entry, visit, bindings));
@@ -22,10 +19,7 @@ const walk = (node, visit, bindings = new Map()) => {
 };
 const unwrap = (node) => {
   let current = node;
-  while (current?.type === "TSAsExpression" ||
-    current?.type === "TSTypeAssertion" ||
-    current?.type === "TSNonNullExpression" ||
-    current?.type === "ParenthesizedExpression") {
+  while (["TSAsExpression", "TSTypeAssertion", "TSNonNullExpression", "ParenthesizedExpression"].includes(current?.type)) {
     current = current.expression;
   }
   return current;
@@ -34,26 +28,21 @@ const staticTruth = (node, bindings, seen = new Set()) => {
   const value = unwrap(node);
   if (value?.type === "BooleanLiteral") return value.value;
   if (value?.type === "NullLiteral") return false;
-  if (value?.type === "NumericLiteral" || value?.type === "StringLiteral") return Boolean(value.value);
-  if (value?.type === "Identifier" && bindings.has(value.name) && !seen.has(value.name))
-    return staticTruth(bindings.get(value.name), bindings, new Set([...seen, value.name]));
+  if (["NumericLiteral", "StringLiteral"].includes(value?.type)) return Boolean(value.value);
+  if (callMatches(value, "Boolean") && value.arguments.length === 1)
+    return staticTruth(value.arguments[0], bindings, seen);
+  if (value?.type === "Identifier" && bindings.has(value.name) && !seen.has(value.name)) return staticTruth(bindings.get(value.name), bindings, new Set([...seen, value.name]));
   return null;
 };
-const isIdentifier = (node, name) =>
-  unwrap(node)?.type === "Identifier" && unwrap(node).name === name;
+const isIdentifier = (node, name) => unwrap(node)?.type === "Identifier" && unwrap(node).name === name;
 const memberMatches = (node, objectName, propertyName) => {
   const member = unwrap(node);
-  if (member?.type !== "MemberExpression" &&
-    member?.type !== "OptionalMemberExpression") return false;
-  const property = member.computed
-    ? unwrap(member.property)?.value
-    : unwrap(member.property)?.name;
+  if (!["MemberExpression", "OptionalMemberExpression"].includes(member?.type)) return false;
+  const property = member.computed ? unwrap(member.property)?.value : unwrap(member.property)?.name;
   return isIdentifier(member.object, objectName) && property === propertyName;
 };
-const callMatches = (node, calleeName) => {
-  const call = unwrap(node);
-  return call?.type === "CallExpression" && isIdentifier(call.callee, calleeName);
-};
+const callMatches = (node, calleeName) => unwrap(node)?.type === "CallExpression" &&
+  isIdentifier(unwrap(node).callee, calleeName);
 const directVariable = (block, name) => {
   if (block?.type !== "BlockStatement") return null;
   for (const statement of block.body) {
@@ -66,8 +55,7 @@ const directVariable = (block, name) => {
 const directCall = (block, calleeName) => {
   if (block?.type !== "BlockStatement") return null;
   for (const statement of block.body) {
-    const expression = statement.type === "ExpressionStatement"
-      ? unwrap(statement.expression) : null;
+    const expression = statement.type === "ExpressionStatement" ? unwrap(statement.expression) : null;
     const candidate = expression?.type === "UnaryExpression" &&
       expression.operator === "void" ? unwrap(expression.argument) : expression;
     if (callMatches(candidate, calleeName)) return candidate;
@@ -75,20 +63,16 @@ const directCall = (block, calleeName) => {
   return null;
 };
 const statementCall = (statement, calleeName, expectedValue) => {
-  const expression = statement?.type === "ExpressionStatement"
-    ? unwrap(statement.expression) : null;
-  const candidate = expression?.type === "UnaryExpression" &&
-    expression.operator === "void" ? unwrap(expression.argument) : expression;
+  const expression = statement?.type === "ExpressionStatement" ? unwrap(statement.expression) : null;
+  const candidate = expression?.type === "UnaryExpression" && expression.operator === "void"
+    ? unwrap(expression.argument) : expression;
   if (!callMatches(candidate, calleeName)) return false;
   if (expectedValue === undefined) return candidate.arguments.length === 0;
   const argument = unwrap(candidate.arguments[0]);
-  return candidate.arguments.length === 1 && argument?.type === "StringLiteral" &&
-    argument.value === expectedValue;
+  return candidate.arguments.length === 1 && argument?.type === "StringLiteral" && argument.value === expectedValue;
 };
 const exactResetBlock = (block, includeClose) => {
-  const expectedLength = includeClose ? 3 : 2;
-  if (block?.type !== "BlockStatement" || block.body.length !== expectedLength)
-    return false;
+  if (block?.type !== "BlockStatement" || block.body.length !== (includeClose ? 3 : 2)) return false;
   return (
     statementCall(block.body[0], "setCategoryKey", "harassment_bullying") &&
     statementCall(block.body[1], "setNote", "") &&
@@ -202,6 +186,17 @@ const stringSkeleton = (node, bindings, seen = new Set()) => {
   }
   if (value.type === "BinaryExpression" && value.operator === "+") {
     return `${stringSkeleton(value.left, bindings, seen)} ${stringSkeleton(value.right, bindings, seen)}`;
+  }
+  if (value.type === "ConditionalExpression") {
+    const truth = staticTruth(value.test, bindings);
+    if (truth !== null) return stringSkeleton(truth ? value.consequent : value.alternate, bindings, seen);
+    return `${stringSkeleton(value.consequent, bindings, seen)} ${stringSkeleton(value.alternate, bindings, seen)}`;
+  }
+  if (value.type === "CallExpression") {
+    const callee = unwrap(value.callee);
+    const items = unwrap(callee?.object);
+    if (["MemberExpression", "OptionalMemberExpression"].includes(callee?.type) && unwrap(callee.property)?.name === "join" && items?.type === "ArrayExpression")
+      return items.elements.map((entry) => stringSkeleton(entry, bindings, seen)).join(" ");
   }
   if (value.type === "Identifier" && bindings.has(value.name) && !seen.has(value.name)) {
     const nextSeen = new Set(seen);
@@ -336,42 +331,29 @@ const validateStyleContract = (programBindings, findings) => {
     objectPropertyValue(overlayStyle, "justifyContent")?.value !== "flex-end")
     findings.push("report sheet ancestor styles must remain visible and full-screen");
   const maxHeight = objectPropertyValue(sheetStyle, "maxHeight");
-  if (maxHeight?.type !== "StringLiteral" || maxHeight.value !== "92%") {
-    findings.push(
-      "sheet maxHeight must be exactly 92% in the rendered style contract",
-    );
-  }
-  const scrollerStyle = objectPropertyValue(
-    stylesCall.arguments[0],
-    "sheetScroller",
-  );
+  if (maxHeight?.type !== "StringLiteral" || maxHeight.value !== "92%")
+    findings.push("sheet maxHeight must be exactly 92% in the rendered style contract");
+  const scrollerStyle = objectPropertyValue(stylesCall.arguments[0], "sheetScroller");
   const flexGrow = objectPropertyValue(scrollerStyle, "flexGrow");
   if (scrollerStyle?.properties?.length !== 1 || flexGrow?.type !== "NumericLiteral" || flexGrow.value !== 0) {
     findings.push("sheet scroller must remain content-bounded");
   }
-  const sheetContentStyle = objectPropertyValue(
-    stylesCall.arguments[0],
-    "sheetContent",
-  );
+  const sheetContentStyle = objectPropertyValue(stylesCall.arguments[0], "sheetContent");
   const contentGap = objectPropertyValue(sheetContentStyle, "gap");
   if (sheetContentStyle?.properties?.length !== 1 ||
     contentGap?.type !== "NumericLiteral" || contentGap.value !== 12)
     findings.push("sheet content must not override safe-area-aware layout");
   if (sheetStyle?.properties?.length !== 8 || objectProperty(sheetStyle, "display") || objectProperty(sheetStyle, "opacity"))
     findings.push("sheet style must remain visibly rendered");
-  const helperStyle = objectPropertyValue(stylesCall.arguments[0], "helperText");
-  if (objectProperty(helperStyle, "display") || objectProperty(helperStyle, "opacity"))
+  const helperStyle = objectPropertyValue(stylesCall.arguments[0], "helperText"); if (helperStyle?.properties?.length !== 4 || objectPropertyValue(helperStyle, "color")?.value !== "#8F99B1" ||
+    objectPropertyValue(helperStyle, "fontSize")?.value !== 12 || objectPropertyValue(helperStyle, "lineHeight")?.value !== 18)
     findings.push("report privacy guidance must remain visibly styled");
-  for (const styleName of [
-    "categoryChip",
-    "formalNoticeButton",
-    "primaryButton",
-    "secondaryButton",
-  ]) {
+  for (const styleName of ["categoryChip", "formalNoticeButton", "primaryButton", "secondaryButton"]) {
     const style = objectPropertyValue(stylesCall.arguments[0], styleName);
+    const expectedCount = { categoryChip: 9, formalNoticeButton: 8, primaryButton: 6, secondaryButton: 8 }[styleName];
     const minHeight = objectPropertyValue(style, "minHeight");
     const minWidth = objectPropertyValue(style, "minWidth");
-    if (objectProperty(style, "width") || minHeight?.type !== "NumericLiteral" || minHeight.value < 48 ||
+    if (style?.properties?.length !== expectedCount || objectProperty(style, "width") || minHeight?.type !== "NumericLiteral" || minHeight.value < 48 ||
       minWidth?.type !== "NumericLiteral" || minWidth.value < 48)
       findings.push(`${styleName} must preserve a 48-point minimum touch target`);
   }
@@ -432,7 +414,8 @@ const validateSubmitHandler = (renderRoot, findings, bindings) => {
   if (
     handler?.type !== "ArrowFunctionExpression" ||
     handler.body?.type !== "BlockStatement" ||
-    handler.body.body.length !== 3
+    handler.body.body.length !== 3 || handler.body.body.slice(0, 2).some((entry) =>
+      entry.type !== "VariableDeclaration" || entry.declarations.length !== 1)
   ) {
     findings.push("Send Report must use a bound block handler");
     return;
@@ -549,6 +532,14 @@ export const validateReportSheetSource = (source, { enforceReleaseHash = true } 
   const reportSheet = findReportSheet(program);
   if (!reportSheet)
     return ["exported ReportSheet function declaration is missing"];
+  if (JSON.stringify(reportSheet.params[0]?.properties?.map((entry) => entry.key?.name)) !==
+    JSON.stringify(["visible", "title", "description", "busy", "onSubmit", "onClose"]))
+    findings.push("ReportSheet must bind the exact reviewed property interface");
+  const variableNames = reportSheet.body.body.filter((entry) => entry.type === "VariableDeclaration")
+    .flatMap((entry) => entry.declarations.map((item) => item.id.type === "Identifier" ? item.id.name :
+      item.id.elements.map((part) => part?.name).join(",")));
+  if (JSON.stringify(variableNames) !== JSON.stringify(["router", "insets", "categoryKey,setCategoryKey", "note,setNote", "categoryOption", "closeAndReset"]))
+    findings.push("ReportSheet must retain only the reviewed state and handler bindings");
   const functionBindings = collectBindings(reportSheet.body.body);
   const allBindings = new Map([...programBindings, ...functionBindings]);
   const returnStatements = reportSheet.body.body.filter(
@@ -607,7 +598,8 @@ export const validateReportSheetSource = (source, { enforceReleaseHash = true } 
   if (
     textElements.filter((element) =>
       jsxRendersIdentifier(element, "REPORT_SHEET_HELPER_TEXT", allBindings) &&
-      memberMatches(jsxAttributeExpression(element, "style"), "styles", "helperText"),
+      memberMatches(jsxAttributeExpression(element, "style"), "styles", "helperText") &&
+      element.openingElement.attributes.length === 1,
     ).length !== 1
   ) {
     findings.push(
@@ -622,9 +614,8 @@ export const validateReportSheetSource = (source, { enforceReleaseHash = true } 
   ) {
     findings.push("good-faith guidance must be rendered by ReportSheet");
   }
-  const router = directVariable(reportSheet.body, "router");
-  const insets = directVariable(reportSheet.body, "insets");
-  if (!callMatches(router?.init, "useRouter") || !callMatches(insets?.init, "useSafeAreaInsets")) {
+  if (programBindings.has("useRouter") || !callMatches(directVariable(reportSheet.body, "router")?.init, "useRouter") ||
+    !callMatches(directVariable(reportSheet.body, "insets")?.init, "useSafeAreaInsets")) {
     findings.push("ReportSheet must directly bind safe-area insets");
   }
   validateStyleContract(programBindings, findings);
@@ -638,6 +629,7 @@ export const validateReportSheetSource = (source, { enforceReleaseHash = true } 
   if (categorySelection?.type !== "LogicalExpression" || categorySelection.operator !== "??" ||
     finder?.type !== "CallExpression" || !isIdentifier(findCallee?.object, "REPORT_SHEET_CATEGORY_OPTIONS") ||
     unwrap(findCallee?.property)?.name !== "find" || findCallback?.type !== "ArrowFunctionExpression" ||
+    findCallback.params.length !== 1 || !isIdentifier(findCallback.params[0], "entry") ||
     findTest?.type !== "BinaryExpression" || findTest.operator !== "===" ||
     !memberMatches(findTest.left, "entry", "key") || !isIdentifier(findTest.right, "categoryKey") ||
     fallback?.type !== "MemberExpression" || !isIdentifier(fallback.object, "REPORT_SHEET_CATEGORY_OPTIONS") ||
@@ -867,6 +859,8 @@ export const validateReportSheetSource = (source, { enforceReleaseHash = true } 
       activeStyle?.type !== "LogicalExpression" ||
       activeStyle.operator !== "&&" ||
       unwrap(activeStyle.left)?.operator !== "===" ||
+      !isIdentifier(unwrap(activeStyle.left)?.left, "categoryKey") ||
+      !memberMatches(unwrap(activeStyle.left)?.right, "entry", "key") ||
       !memberMatches(activeStyle.right, "styles", "categoryChipActive") ||
       disabledStyle?.type !== "LogicalExpression" ||
       !isIdentifier(disabledStyle.left, "busy") ||
@@ -929,10 +923,13 @@ export const validateReportSheetSource = (source, { enforceReleaseHash = true } 
   walk(renderRoot, (node) => {
     if (node.type === "JSXSpreadAttribute")
       findings.push("protected report UI must not use effective-prop JSX spreads");
-    if (node.type === "JSXAttribute" && node.name?.name === "pointerEvents")
-      findings.push("report UI must not disable interaction through pointerEvents");
+    if (node.type === "JSXAttribute" && node.name?.name === "pointerEvents") findings.push("report UI must not disable interaction through pointerEvents");
+    if (node.type === "JSXAttribute" && node.name?.name === "contentInset") findings.push("report UI must not override canonical safe-area placement");
+    if (node.type === "JSXAttribute" && ["accessibilityElementsHidden", "importantForAccessibility"].includes(node.name?.name))
+      findings.push("report UI must not hide reviewed controls from assistive technology");
     if (node.type === "JSXAttribute" && node.name?.name === "onPress") pressHandlers += 1;
-    if (node.type === "JSXAttribute" && ["onLongPress", "onAccessibilityTap", "onMagicTap"].includes(node.name?.name))
+    if (node.type === "JSXAttribute" && /^on[A-Z]/.test(node.name?.name ?? "") &&
+      !["onPress", "onRequestClose", "onChangeText"].includes(node.name.name))
       findings.push("report UI must not add unreviewed action handlers");
     const callee = unwrap(node?.callee);
     const property = callee?.computed
@@ -942,11 +939,12 @@ export const validateReportSheetSource = (source, { enforceReleaseHash = true } 
       isIdentifier(callee.object, "REPORT_SHEET_CATEGORY_OPTIONS") && property === "map")
       categoryMaps.push(node);
   }, allBindings);
-  if (categoryMaps.length !== 1)
-    findings.push("rendered category controls must map the canonical options exactly once");
-  if (pressHandlers !== 5)
-    findings.push("report UI must retain exactly five reviewed press handlers");
-  walk(optionsInitializer, (node) => {
+  if (categoryMaps.length !== 1) findings.push("rendered category controls must map the canonical options exactly once"); const categoryCallback = unwrap(categoryMaps[0]?.arguments?.[0]);
+  if (categoryCallback?.type !== "ArrowFunctionExpression" || categoryCallback.params.length !== 1 ||
+    !isIdentifier(categoryCallback.params[0], "entry") ||
+    jsxElements(categoryCallback.body, "TouchableOpacity", allBindings)[0] !== categoryButtons[0])
+    findings.push("category controls must bind the canonical map entry callback");
+  if (pressHandlers !== 5) findings.push("report UI must retain exactly five reviewed press handlers"); walk(optionsInitializer, (node) => {
     if (node.type !== "ObjectProperty") return;
     const key = node.computed
       ? unwrap(node.key)?.value
