@@ -42,6 +42,8 @@ const functionFiles = list("find supabase/functions -maxdepth 2 -type f -name 'i
 // them here makes any later route/function addition fail until it is reviewed.
 const postAuditRouteInventory = new Set([
   "app/+native-intent.tsx",
+  "app/spectate-live/[itemId].tsx",
+  "app/spectate-metadata/[itemId].tsx",
 ]);
 const postAuditFunctionInventory = new Set([
   "chilly-chat-call-transition-retry",
