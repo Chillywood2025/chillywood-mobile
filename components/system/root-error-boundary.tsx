@@ -101,7 +101,7 @@ function RootBoundaryFallback({
     <View style={styles.outer}>
       <View style={styles.card}>
         <Text style={styles.kicker}>APP RECOVERY</Text>
-        <Text style={styles.title}>Chi’llywood needs a quick reset.</Text>
+        <Text style={styles.title}>Chi&apos;llywood needs a quick reset.</Text>
         <Text style={styles.body}>
           Try this screen again. If it keeps happening, send a report with the current route attached.
         </Text>
