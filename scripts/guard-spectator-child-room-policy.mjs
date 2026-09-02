@@ -155,6 +155,8 @@ assertIncludes("exact discovery target identity gate", discovery, "hasDiscoveryD
 assertIncludes("public discovery identity filtering", discovery, "data.filter(isDiscoveryFeedItemEligibleForRanking)");
 assertIncludes("Live Event destination label", live, ">Open Event</Text>");
 assertNotIncludes("stale Live Event destination label", live, ">Open Platform</Text>");
+assertIncludes("Upcoming Event disclosure", live, "Upcoming Events opens the exact Event");
+assertNotIncludes("stale Upcoming Event disclosure", live, "Upcoming Events opens the hosting Platform");
 
 const combinedUserFacing = `${spectatorEntryRoute}\n${spectatorMetadataRoute}\n${spectatorLiveRoute}\n${watchPartyRoute}\n${liveStageRoute}\n${playerRoute}`;
 assertNotIncludes("user-facing Mini Platform copy", combinedUserFacing, "Mini Platform");

@@ -276,7 +276,7 @@ export default function LiveTabScreen() {
                 <Text style={styles.detailText}>Start Live opens the people-first Live Watch-Party path.</Text>
                 <Text style={styles.detailText}>Enter Code joins an existing Watch-Party Live room.</Text>
                 <Text style={styles.detailText}>Live Now is backed by public discovery and public creator-event data.</Text>
-                <Text style={styles.detailText}>Upcoming Events opens the hosting Platform so viewers can see the creator and event context.</Text>
+                <Text style={styles.detailText}>Upcoming Events opens the exact Event so viewers can see its access and schedule.</Text>
               </View>
             ) : null}
           </View>
