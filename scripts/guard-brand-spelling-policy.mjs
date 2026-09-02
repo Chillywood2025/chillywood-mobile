@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 
-const excludedDirs = new Set([
+const excludedTopLevelDirs = new Set([
   ".expo",
   ".git",
   "android",
@@ -17,6 +17,7 @@ const excludedDirs = new Set([
   "ios",
   "node_modules",
 ]);
+const excludedNestedDirs = new Set([".git", "build", "coverage", "dist", "node_modules"]);
 
 const excludedPaths = new Set(["supabase/.temp"]);
 const supabaseFunctionsRoot = path.join("supabase", "functions");
@@ -25,9 +26,24 @@ const userFacingRoots = new Set([
   "_lib",
   "app",
   "components",
+  "constants",
+  "hooks",
   "legal",
+  "modules",
   "public-site",
   "supabase",
+]);
+
+const requiredCoveragePaths = new Set([
+  "_lib/accessProductPresentation.ts",
+  "app/_layout.tsx",
+  "components/legal/legal-policy-viewer.tsx",
+  "constants/theme.ts",
+  "hooks/use-livekit-chat-call-session.ts",
+  "legal/policies.mjs",
+  "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift",
+  "public-site/legal-site/build.mjs",
+  "supabase/functions/notification-device-tokens/index.ts",
 ]);
 
 const textExtensions = new Set([
@@ -40,6 +56,7 @@ const textExtensions = new Set([
   ".md",
   ".mjs",
   ".sql",
+  ".swift",
   ".tsx",
   ".ts",
   ".txt",
@@ -66,7 +83,9 @@ function shouldSkip(relativePath) {
       return true;
     }
   }
-  return relativePath.split(path.sep).some((part) => excludedDirs.has(part));
+  const parts = relativePath.split(path.sep);
+  if (excludedTopLevelDirs.has(parts[0])) return true;
+  return parts.slice(1).some((part) => excludedNestedDirs.has(part));
 }
 
 function* walk(dir) {
@@ -108,9 +127,11 @@ function isAllowedTechnicalMatch(relativePath, candidate, line) {
 }
 
 const violations = [];
+const visitedPaths = new Set();
 
 for (const filePath of walk(repoRoot)) {
   const relativePath = path.relative(repoRoot, filePath);
+  visitedPaths.add(relativePath);
   const text = readFileSync(filePath, "utf8");
   const lines = text.split(/\r?\n/);
   lines.forEach((line, index) => {
@@ -122,6 +143,15 @@ for (const filePath of walk(repoRoot)) {
       violations.push(`${relativePath}:${index + 1}: ${candidate}`);
     }
   });
+}
+
+const missingCoveragePaths = [...requiredCoveragePaths]
+  .filter((relativePath) => !visitedPaths.has(relativePath));
+
+if (missingCoveragePaths.length > 0) {
+  console.error("Brand spelling guard coverage failed. Required customer-visible roots were not traversed.");
+  for (const relativePath of missingCoveragePaths) console.error(`- ${relativePath}`);
+  process.exit(1);
 }
 
 if (violations.length > 0) {
