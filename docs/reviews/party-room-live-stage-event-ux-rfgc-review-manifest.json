@@ -1,0 +1,97 @@
+{
+  "implementationPrNumber": 331,
+  "implementationBranch": "codex/party-room-live-stage-event-ux-rfgc",
+  "implementationHead": "21612eff31d2262d8f6454825386333325eb175e",
+  "implementationTree": "d7250fb9201fadc0907bd0be25b183e8d4122379",
+  "baseHead": "104d8d222fdbd704938ecf934fde37e8960390e0",
+  "changedFileHash": "d12dd8fa0fb3b68461f85b877e917904cd0a87ee6ab33172494b7f03c98d3ae8",
+  "migrationSetHash": "bbd3370dcd5dff0adb500a07b51961cdda5564ce9e9d1f066694ee86558eb9d0",
+  "configHash": "bf0933f584b5e44a0159ae237dcb99714821f78ffd98702e50bb77d986cacc58",
+  "testResults": {
+    "phase1Ci": {
+      "status": "pass",
+      "qualification": "EXACT_FROZEN_HEAD_FULL_CI_PASS",
+      "runId": 33625959184,
+      "implementationHead": "21612eff31d2262d8f6454825386333325eb175e",
+      "jobs": {
+        "total": 14,
+        "passed": 14,
+        "failed": 0
+      }
+    },
+    "readyStateCi": {
+      "status": "assurance_only_control_plane_blocked",
+      "runId": 33626684329,
+      "implementationHead": "21612eff31d2262d8f6454825386333325eb175e",
+      "jobs": {
+        "total": 14,
+        "passed": 11,
+        "assuranceOnlyFailed": 3
+      },
+      "findings": [
+        "ASSURANCE_TASK_CONTEXT_UNBOUND",
+        "ASSURANCE_PR_FILE_BUDGET_EXCEEDED",
+        "ASSURANCE_PR_LINE_BUDGET_EXCEEDED",
+        "ASSURANCE_MIXED_HIGH_RISK_SCOPE",
+        "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN",
+        "ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND",
+        "PHASE1_RISK_CLOSURE_PROTECTED_READY_DECISION_INVALID"
+      ]
+    },
+    "database": {
+      "files": 81,
+      "assertions": 3023,
+      "status": "pass"
+    },
+    "focused": {
+      "productUxMatrix": "24/24 pass",
+      "routeAndAccessGuards": "pass",
+      "providerAndLifecycleGuards": "pass",
+      "notificationAndMoneyCenterGuards": "pass"
+    },
+    "static": {
+      "lint": "0 errors; 107 pre-existing warnings",
+      "typecheck": "pass",
+      "edgeFunctionDenoChecks": "pass",
+      "nativeAndOtaGuards": "pass"
+    },
+    "security": {
+      "scanId": "d9d4a5b6-bdf0-41c0-96d2-c64a2b8cdd89",
+      "coverage": "complete 49/49",
+      "findings": 0
+    }
+  },
+  "testResultHash": "b843c276a6a2a911c88e12793c221910542a885131c9a92d50a9237d5e201320",
+  "reviewLevel": "C",
+  "reviewHead": "f0f04dc67390ca01a1d84ea307ad0167b22aef3f",
+  "reviewTimestamp": "2026-09-02T11:56:12Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback"
+  ],
+  "findings": [
+    {
+      "id": "RFGC-ASSURANCE-CONTROL-PLANE-001",
+      "severity": "P2",
+      "status": "owner_authorized_preop_assurance_continuation",
+      "launchImpacting": false,
+      "detail": "The pre-operation active-task check reported MANDATORY_COMMAND_DROPPED. The ready-state rerun then reported only the unbound task, unrecognized waiver, mixed-risk/objective, engineering-closure, and derived protected-ready decision failures. Continuation is limited to the Owner-authorized assurance-control-plane mismatch; neither run is represented as a passed gate."
+    },
+    {
+      "id": "RFGC-PROVIDER-PHYSICAL-LIMIT-002",
+      "severity": "P2",
+      "status": "provider_sandbox_limited",
+      "launchImpacting": false,
+      "detail": "No legitimate configured provider identity and complete attached Android/iOS device state was available for every positive purchase and role matrix case; no receipt, pass, role, transaction, or approval was fabricated."
+    },
+    {
+      "id": "RFGC-TAC-ADVISORY-LIMIT-003",
+      "severity": "P2",
+      "status": "external_advisory_unavailable",
+      "launchImpacting": false,
+      "detail": "The optional TAC connector was not signed in. Repository-owned exact-head review and the sealed Codex Security scan completed with zero findings."
+    }
+  ]
+}
