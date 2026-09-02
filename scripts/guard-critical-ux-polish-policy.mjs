@@ -75,6 +75,42 @@ assertIncludes(userFacingErrors, "getUserFacingErrorMessage", "shared user-facin
 assertIncludes(userFacingErrors, "This account does not have permission", "permission-safe error copy");
 assertIncludes(userFacingErrors, "Sign in again", "auth-safe error copy");
 assertIncludes(userFacingErrors, "Check your connection", "network-safe error copy");
+assertIncludes(userFacingErrors, "The email or password is incorrect.", "credential-safe error copy");
+assertIncludes(userFacingErrors, "Confirm your email", "email-confirmation-safe error copy");
+assertIncludes(userFacingErrors, "Too many attempts.", "rate-limit-safe error copy");
+assertIncludes(userFacingErrors, "Unknown messages must fail closed", "unknown-error fail-closed policy");
+assertNotIncludes(userFacingErrors, "return rawMessage", "unknown provider or database error passthrough");
+
+const login = read("app/(auth)/login.tsx");
+const chatInbox = read("app/chat/index.tsx");
+const chatThread = read("app/chat/[threadId].tsx");
+const chatInviteSheet = read("components/chat/internal-invite-sheet.tsx");
+const chillyCircle = read("app/chilly-circle.tsx");
+
+for (const [label, source] of [
+  ["Login", login],
+  ["Chi'lly Chat Inbox", chatInbox],
+  ["Chi'lly Chat Thread", chatThread],
+  ["Chi'lly Chat Invite", chatInviteSheet],
+  ["Chi'lly Circle", chillyCircle],
+]) {
+  assertIncludes(source, "getUserFacingErrorMessage", `${label} sanitized error boundary`);
+}
+
+for (const [label, source, unsafeExpression] of [
+  ["Login", login, "Alert.alert(\"Login Error\", error.message)"],
+  ["Chi'lly Chat Inbox", chatInbox, "message: loadError?.message ??"],
+  ["Chi'lly Chat Thread load", chatThread, "setError(loadError?.message ??"],
+  ["Chi'lly Chat Thread attachment", chatThread, "setError(error instanceof Error ? error.message"],
+  ["Chi'lly Chat Thread resume", chatThread, "setError(resumeError instanceof Error ? resumeError.message"],
+  ["Chi'lly Chat Thread accept", chatThread, "setError(acceptError instanceof Error ? acceptError.message"],
+  ["Chi'lly Chat Thread decline", chatThread, "setError(declineError instanceof Error ? declineError.message"],
+  ["Chi'lly Chat Invite search", chatInviteSheet, "setError(searchError?.message ??"],
+  ["Chi'lly Chat Invite send", chatInviteSheet, "setError(inviteError?.message ??"],
+  ["Chi'lly Circle", chillyCircle, "const message = error instanceof Error ? error.message"],
+]) {
+  assertNotIncludes(source, unsafeExpression, `${label} raw error presentation`);
+}
 
 const rootBoundary = read("components/system/root-error-boundary.tsx");
 const rootLayout = read("app/_layout.tsx");

@@ -36,6 +36,7 @@ import {
 } from "../../_lib/peopleSearchNormalization";
 import { useSession } from "../../_lib/session";
 import { createForegroundAuthenticatedUiCallIntent } from "../../_lib/nativeCallTransitionProvenance.mjs";
+import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
 import { formatUsernameHandle } from "../../_lib/usernameHandles";
 
 type InboxErrorState = {
@@ -152,7 +153,7 @@ export default function ChillyChatInboxScreen() {
         });
     } catch (loadError: any) {
       setError({
-        message: loadError?.message ?? "Unable to load Chi'lly Chat right now.",
+        message: getUserFacingErrorMessage(loadError, "Unable to load Chi'lly Chat right now."),
       });
       setActiveFriendUserIds([]);
     } finally {

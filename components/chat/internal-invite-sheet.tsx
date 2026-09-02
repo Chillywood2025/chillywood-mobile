@@ -18,6 +18,7 @@ import {
   normalizePeopleSearchQuery,
   PEOPLE_SEARCH_NO_RESULTS_COPY,
 } from "../../_lib/peopleSearchNormalization";
+import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
 
 const logInviteDebug = (..._args: unknown[]) => {};
 
@@ -169,7 +170,7 @@ export function InternalInviteSheet({
                 message: searchError?.message ?? "unknown_error",
               });
             }
-            setError(searchError?.message ?? "Unable to search Chi'llywood people right now.");
+            setError(getUserFacingErrorMessage(searchError, "Unable to search Chi'llywood people right now."));
           }
         })
         .finally(() => {
@@ -238,7 +239,7 @@ export function InternalInviteSheet({
           message: inviteError?.message ?? "unknown_error",
         });
       }
-      setError(inviteError?.message ?? "Unable to send this Chi'llywood invite right now.");
+      setError(getUserFacingErrorMessage(inviteError, "Unable to send this Chi'llywood invite right now."));
     } finally {
       setSendingUserId("");
     }

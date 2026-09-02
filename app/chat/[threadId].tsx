@@ -110,6 +110,7 @@ import {
   READ_RECEIPT_THROTTLE_MS,
 } from "../../_lib/performancePolicy";
 import { useSession } from "../../_lib/session";
+import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
 import { formatUsernameHandle } from "../../_lib/usernameHandles";
 import {
   SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
@@ -807,7 +808,7 @@ export default function ChillyChatThreadScreen() {
         threadId,
         message: loadError?.message ?? "unknown_error",
       });
-      setError(loadError?.message ?? "Unable to load this Chi'lly Chat thread.");
+      setError(getUserFacingErrorMessage(loadError, "Unable to load this Chi'lly Chat thread."));
       setLoading(false);
     }
   }, [applyAcceptedIncomingInviteState, currentUserId, isSignedIn, markThreadReadWithThrottle, reconcileEndedCallState, stopOutgoingRingback, threadId]);
@@ -1567,7 +1568,7 @@ export default function ChillyChatThreadScreen() {
       setAttachmentFile(file);
     } catch (error) {
       setAttachmentFile(null);
-      setError(error instanceof Error ? error.message : "Unable to attach that file right now.");
+      setError(getUserFacingErrorMessage(error, "Unable to attach that file right now."));
     }
   }, []);
 
@@ -1811,7 +1812,7 @@ export default function ChillyChatThreadScreen() {
       await loadThreadState();
       return true;
     } catch (resumeError) {
-      setError(resumeError instanceof Error ? resumeError.message : "Unable to resume this Chi'lly Chat call.");
+      setError(getUserFacingErrorMessage(resumeError, "Unable to resume this Chi'lly Chat call."));
       return false;
     } finally {
       setCallBusy(false);
@@ -1872,7 +1873,7 @@ export default function ChillyChatThreadScreen() {
       await loadThreadState();
       return true;
     } catch (acceptError) {
-      setError(acceptError instanceof Error ? acceptError.message : "Unable to accept this Chi'lly Chat call.");
+      setError(getUserFacingErrorMessage(acceptError, "Unable to accept this Chi'lly Chat call."));
       return false;
     } finally {
       setCallBusy(false);
@@ -1944,7 +1945,7 @@ export default function ChillyChatThreadScreen() {
       });
       await loadThreadState();
     } catch (declineError) {
-      setError(declineError instanceof Error ? declineError.message : "Unable to decline this Chi'lly Chat call.");
+      setError(getUserFacingErrorMessage(declineError, "Unable to decline this Chi'lly Chat call."));
     } finally {
       setCallBusy(false);
     }

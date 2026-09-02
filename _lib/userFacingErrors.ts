@@ -14,6 +14,26 @@ export function getUserFacingErrorMessage(error: unknown, fallback: string) {
   if (!message) return fallback;
 
   if (
+    message.includes("invalid login credentials")
+    || message.includes("invalid credentials")
+    || message.includes("incorrect password")
+  ) {
+    return "The email or password is incorrect.";
+  }
+
+  if (message.includes("email not confirmed") || message.includes("email is not confirmed")) {
+    return "Confirm your email, then try signing in again.";
+  }
+
+  if (
+    message.includes("too many requests")
+    || message.includes("rate limit")
+    || message.includes("too many attempts")
+  ) {
+    return "Too many attempts. Wait a moment, then try again.";
+  }
+
+  if (
     message.includes("network")
     || message.includes("failed to fetch")
     || message.includes("fetch failed")
@@ -90,5 +110,7 @@ export function getUserFacingErrorMessage(error: unknown, fallback: string) {
     return fallback;
   }
 
-  return rawMessage.length <= 140 ? rawMessage : fallback;
+  // Provider, database, and runtime error text is not a customer-facing copy
+  // contract. Unknown messages must fail closed to the action-specific fallback.
+  return fallback;
 }
