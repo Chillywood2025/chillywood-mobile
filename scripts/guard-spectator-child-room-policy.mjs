@@ -2,6 +2,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 const root = process.cwd();
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
@@ -174,6 +175,32 @@ const publicRankingGate = readExportedFunction(
   "isDiscoveryFeedItemEligibleForRanking",
   "isSpectatorPlaybackBlocked",
 );
+const identityModule = { exports: {} };
+const identityProgram = ts.transpileModule(
+  `const normalizeText = (value: unknown) => String(value ?? "").trim();\n${identityGate}\nexport { hasDiscoveryDestinationIdentity };`,
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
+).outputText;
+new Function("module", "exports", identityProgram)(identityModule, identityModule.exports);
+const { hasDiscoveryDestinationIdentity } = identityModule.exports;
+if (typeof hasDiscoveryDestinationIdentity !== "function") {
+  checks.push("Discovery destination identity gate could not be executed");
+} else {
+  [
+    ["blank item id", { id: "", item_type: "manual_foundation" }, false],
+    ["generic spectator item", { id: "feed-1", item_type: "manual_foundation" }, true],
+    ["upload missing media", { id: "feed-1", item_type: "creator_upload" }, false],
+    ["upload exact media", { id: "feed-1", item_type: "creator_upload", media_id: "media-1" }, true],
+    ["Event missing Event id", { id: "feed-1", item_type: "creator_event" }, false],
+    ["Event exact Event id", { id: "feed-1", item_type: "creator_event", event_id: "event-1" }, true],
+    ["Platform update missing actor", { id: "feed-1", item_type: "channel_update" }, false],
+    ["Platform update channel actor", { id: "feed-1", item_type: "channel_update", channel_user_id: "user-1" }, true],
+    ["Platform update owner actor", { id: "feed-1", item_type: "channel_update", owner_user_id: "user-1" }, true],
+    ["Platform update host actor", { id: "feed-1", item_type: "channel_update", host_user_id: "user-1" }, true],
+  ].forEach(([label, input, expected]) => {
+    const actual = hasDiscoveryDestinationIdentity(input);
+    if (actual !== expected) checks.push(`Discovery destination identity variant failed: ${label}`);
+  });
+}
 assertIncludes("blank discovery item rejection", identityGate, "if (!normalizeText(item.id)) return false;");
 assertIncludes(
   "creator upload exact media identity",
@@ -208,7 +235,11 @@ assertNotIncludes("user-facing backend copy", combinedUserFacing, "The backend i
 assertNotIncludes("user-facing RPC copy", combinedUserFacing, "RPC required to continue");
 assertNotIncludes("user-facing source rows copy", combinedUserFacing, "Missing source rows");
 assertNotIncludes("user-facing not wired copy", combinedUserFacing, "Playback is not wired");
-assertNotIncludes("unfinished access-pass copy", combinedUserFacing, "required later");
+assertNotIncludes(
+  "unfinished access-pass copy",
+  combinedUserFacing,
+  "Contextual access-pass flow required later",
+);
 assertNotIncludes("raw access enum formatting", spectatorMetadataRoute, 'accessType.replaceAll("_", " ")');
 assertNotIncludes("raw rights enum formatting", spectatorMetadataRoute, 'rightsStatus.replaceAll("_", " ")');
 assertNotIncludes("raw playback enum formatting", spectatorMetadataRoute, 'playback.state.replaceAll("_", " ")');
