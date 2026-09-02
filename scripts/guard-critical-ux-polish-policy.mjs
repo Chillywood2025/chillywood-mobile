@@ -48,17 +48,6 @@ const getBinding = (identifierPath) => (
     : null
 );
 
-const getRootIdentifierPath = (expressionPath) => {
-  let currentPath = expressionPath;
-  while (
-    currentPath?.isMemberExpression?.()
-    || currentPath?.isOptionalMemberExpression?.()
-  ) {
-    currentPath = currentPath.get("object");
-  }
-  return currentPath?.isIdentifier?.() ? currentPath : null;
-};
-
 const isRawErrorObjectExpression = (expressionPath, rawErrorBindings, allowNameHeuristic = true) => {
   if (!expressionPath?.node) return false;
   if (expressionPath.isIdentifier()) {
@@ -206,118 +195,6 @@ const isDirectPresentationExpression = (expressionPath, presentationBindings) =>
     && expressionPath.get("object").isIdentifier({ name: "Alert" });
 };
 
-const isTrustedErrorConstructorExpression = (
-  expressionPath,
-  trustedErrorConstructorBindings,
-  trustedErrorContainerProperties,
-) => {
-  if (expressionPath?.isIdentifier?.()) {
-    const binding = getBinding(expressionPath);
-    return expressionPath.node.name === "UserFacingError"
-      || (!!binding && trustedErrorConstructorBindings.has(binding));
-  }
-  if (expressionPath?.isMemberExpression?.() || expressionPath?.isOptionalMemberExpression?.()) {
-    const rootBinding = getBinding(getRootIdentifierPath(expressionPath));
-    const trustedProperties = rootBinding
-      ? trustedErrorContainerProperties.get(rootBinding)
-      : null;
-    return !!rootBinding && (
-      trustedErrorConstructorBindings.has(rootBinding)
-      || trustedProperties?.has("*")
-      || trustedProperties?.has(getPropertyName(expressionPath))
-    );
-  }
-  return false;
-};
-
-const getTrustedErrorContainerPropertyNames = (
-  sourcePath,
-  trustedErrorConstructorBindings,
-  trustedErrorContainerProperties,
-) => {
-  if (sourcePath?.isIdentifier?.()) {
-    const sourceBinding = getBinding(sourcePath);
-    return sourceBinding
-      ? [...(trustedErrorContainerProperties.get(sourceBinding) ?? [])]
-      : [];
-  }
-  if (sourcePath?.isMemberExpression?.() || sourcePath?.isOptionalMemberExpression?.()) {
-    return isTrustedErrorConstructorExpression(
-      sourcePath,
-      trustedErrorConstructorBindings,
-      trustedErrorContainerProperties,
-    ) ? ["*"] : [];
-  }
-  if (sourcePath?.isArrayExpression?.()) {
-    return sourcePath.get("elements").some((elementPath) => (
-      isTrustedErrorConstructorExpression(
-        elementPath,
-        trustedErrorConstructorBindings,
-        trustedErrorContainerProperties,
-      )
-      || getTrustedErrorContainerPropertyNames(
-        elementPath,
-        trustedErrorConstructorBindings,
-        trustedErrorContainerProperties,
-      ).length > 0
-    )) ? ["*"] : [];
-  }
-  if (!sourcePath?.isObjectExpression?.()) return [];
-  const trustedProperties = [];
-  for (const propertyPath of sourcePath.get("properties")) {
-    if (!propertyPath.isObjectProperty()) continue;
-    const key = propertyPath.get("key");
-    const value = propertyPath.get("value");
-    const keyName = key.isIdentifier() ? key.node.name : key.isStringLiteral() ? key.node.value : "";
-    if (!keyName) continue;
-    if (isTrustedErrorConstructorExpression(
-      value,
-      trustedErrorConstructorBindings,
-      trustedErrorContainerProperties,
-    )) {
-      trustedProperties.push(keyName);
-      continue;
-    }
-    if (getTrustedErrorContainerPropertyNames(
-      value,
-      trustedErrorConstructorBindings,
-      trustedErrorContainerProperties,
-    ).length > 0) {
-      trustedProperties.push(keyName, "*");
-    }
-  }
-  return trustedProperties;
-};
-
-const getTrustedConstructorPatternBindings = (
-  patternPath,
-  sourcePath,
-  trustedErrorConstructorBindings,
-  trustedErrorContainerProperties,
-) => {
-  if (!patternPath?.isObjectPattern?.() && !patternPath?.isArrayPattern?.()) return [];
-  const trustedProperties = new Set(getTrustedErrorContainerPropertyNames(
-    sourcePath,
-    trustedErrorConstructorBindings,
-    trustedErrorContainerProperties,
-  ));
-  if (!trustedProperties.size) return [];
-  if (patternPath.isArrayPattern() || trustedProperties.has("*")) {
-    return getPatternBindings(patternPath).filter(
-      (binding) => !trustedErrorConstructorBindings.has(binding),
-    );
-  }
-  return patternPath.get("properties").flatMap((propertyPath) => {
-    if (!propertyPath.isObjectProperty()) return [];
-    const key = propertyPath.get("key");
-    const keyName = key.isIdentifier() ? key.node.name : key.isStringLiteral() ? key.node.value : "";
-    if (!trustedProperties.has(keyName)) return [];
-    return getPatternBindings(propertyPath.get("value")).filter(
-      (binding) => !trustedErrorConstructorBindings.has(binding),
-    );
-  });
-};
-
 const collectCustomerErrorBoundaryViolations = (source, file) => {
   const ast = parse(source, { sourceType: "unambiguous", plugins: ["typescript", "jsx"] });
   const rawErrorBindings = new Set();
@@ -325,8 +202,6 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
   const rawMessageBindings = new Set();
   const presentationBindings = new Set();
   const sanitizerBindings = new Set();
-  const trustedErrorConstructorBindings = new Set();
-  const trustedErrorContainerProperties = new Map();
   const declarators = [];
   const assignments = [];
 
@@ -357,20 +232,10 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
     ImportSpecifier(importPath) {
       const imported = importPath.get("imported");
       const importedName = imported.isIdentifier() ? imported.node.name : imported.isStringLiteral() ? imported.node.value : "";
-      if (importedName === "UserFacingError") {
-        const binding = getBinding(importPath.get("local"));
-        if (binding) trustedErrorConstructorBindings.add(binding);
-      }
       if (importedName === "getUserFacingErrorMessage") {
         const binding = getBinding(importPath.get("local"));
         if (binding) sanitizerBindings.add(binding);
       }
-    },
-    ImportNamespaceSpecifier(importPath) {
-      const source = importPath.parentPath?.get("source");
-      if (!source?.isStringLiteral?.() || !/userFacingErrors$/u.test(source.node.value)) return;
-      const binding = getBinding(importPath.get("local"));
-      if (binding) trustedErrorContainerProperties.set(binding, new Set(["UserFacingError"]));
     },
     VariableDeclarator(declaratorPath) {
       declarators.push(declaratorPath);
@@ -411,24 +276,6 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
           }
         }
       }
-      if (id.isIdentifier()) {
-        const trustedProperties = getTrustedErrorContainerPropertyNames(
-          init,
-          trustedErrorConstructorBindings,
-          trustedErrorContainerProperties,
-        );
-        const containerBinding = getBinding(id);
-        if (containerBinding && trustedProperties.length) {
-          const currentProperties = trustedErrorContainerProperties.get(containerBinding) ?? new Set();
-          for (const propertyName of trustedProperties) {
-            if (!currentProperties.has(propertyName)) {
-              currentProperties.add(propertyName);
-              changed = true;
-            }
-          }
-          trustedErrorContainerProperties.set(containerBinding, currentProperties);
-        }
-      }
       if (!id.isObjectPattern() && isRawErrorObjectExpression(init, rawErrorBindings, false)) {
         for (const binding of idBindings) {
           if (!rawErrorBindings.has(binding)) {
@@ -452,27 +299,6 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
         for (const binding of idBindings) {
           if (!presentationBindings.has(binding)) {
             presentationBindings.add(binding);
-            changed = true;
-          }
-        }
-      }
-      for (const binding of getTrustedConstructorPatternBindings(
-        id,
-        init,
-        trustedErrorConstructorBindings,
-        trustedErrorContainerProperties,
-      )) {
-        trustedErrorConstructorBindings.add(binding);
-        changed = true;
-      }
-      if (isTrustedErrorConstructorExpression(
-        init,
-        trustedErrorConstructorBindings,
-        trustedErrorContainerProperties,
-      )) {
-        for (const binding of idBindings) {
-          if (!trustedErrorConstructorBindings.has(binding)) {
-            trustedErrorConstructorBindings.add(binding);
             changed = true;
           }
         }
@@ -534,66 +360,6 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
           }
         }
       }
-      const left = assignmentPath.get("left");
-      if (left.isIdentifier()) {
-        const trustedProperties = getTrustedErrorContainerPropertyNames(
-          right,
-          trustedErrorConstructorBindings,
-          trustedErrorContainerProperties,
-        );
-        const containerBinding = getBinding(left);
-        if (containerBinding && trustedProperties.length) {
-          const currentProperties = trustedErrorContainerProperties.get(containerBinding) ?? new Set();
-          for (const propertyName of trustedProperties) {
-            if (!currentProperties.has(propertyName)) {
-              currentProperties.add(propertyName);
-              changed = true;
-            }
-          }
-          trustedErrorContainerProperties.set(containerBinding, currentProperties);
-        }
-      }
-      if (left.isMemberExpression() || left.isOptionalMemberExpression()) {
-        const objectBinding = getBinding(getRootIdentifierPath(left));
-        const propertyName = getPropertyName(left);
-        if (
-          objectBinding
-          && isTrustedErrorConstructorExpression(
-            right,
-            trustedErrorConstructorBindings,
-            trustedErrorContainerProperties,
-          )
-        ) {
-          const currentProperties = trustedErrorContainerProperties.get(objectBinding) ?? new Set();
-          const nextProperty = propertyName || "*";
-          if (!currentProperties.has(nextProperty)) {
-            currentProperties.add(nextProperty);
-            trustedErrorContainerProperties.set(objectBinding, currentProperties);
-            changed = true;
-          }
-        }
-      }
-      for (const binding of getTrustedConstructorPatternBindings(
-        left,
-        right,
-        trustedErrorConstructorBindings,
-        trustedErrorContainerProperties,
-      )) {
-        trustedErrorConstructorBindings.add(binding);
-        changed = true;
-      }
-      if (isTrustedErrorConstructorExpression(
-        right,
-        trustedErrorConstructorBindings,
-        trustedErrorContainerProperties,
-      )) {
-        for (const binding of leftBindings) {
-          if (!trustedErrorConstructorBindings.has(binding)) {
-            trustedErrorConstructorBindings.add(binding);
-            changed = true;
-          }
-        }
-      }
     }
   }
 
@@ -618,27 +384,6 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
         sanitizerBindings,
       )) {
         violations.push(`${file}:${expressionContainerPath.node.loc?.start.line ?? "?"}: raw error message reaches customer JSX`);
-      }
-    },
-    NewExpression(newExpressionPath) {
-      const callee = newExpressionPath.get("callee");
-      const calleeBinding = getBinding(callee);
-      if (
-        !isTrustedErrorConstructorExpression(
-          callee,
-          trustedErrorConstructorBindings,
-          trustedErrorContainerProperties,
-        )
-        && (!calleeBinding || !trustedErrorConstructorBindings.has(calleeBinding))
-      ) return;
-      const messageArgument = newExpressionPath.get("arguments")[1];
-      if (expressionContainsRawMessage(
-        messageArgument,
-        rawMessageBindings,
-        rawErrorBindings,
-        sanitizerBindings,
-      )) {
-        violations.push(`${file}:${newExpressionPath.node.loc?.start.line ?? "?"}: raw error message is mislabeled as a trusted UserFacingError`);
       }
     },
   });
@@ -734,59 +479,11 @@ const collectDomainErrorPolicyViolations = (source, file) => [
 const collectPlainThrownErrorViolations = (source, file) => {
   const ast = parse(source, { sourceType: "unambiguous", plugins: ["typescript", "jsx"] });
   const violations = [];
-  const plainErrorConstructorBindings = new Set();
-  const plainErrorContainerBindings = new Set();
-  const declarators = [];
-  const assignments = [];
 
-  const isPlainErrorConstructorExpression = (expressionPath) => {
-    if (!expressionPath?.node) return false;
-    if (
-      expressionPath.isTSAsExpression?.()
-      || expressionPath.isTSNonNullExpression?.()
-      || expressionPath.isTypeCastExpression?.()
-      || expressionPath.isParenthesizedExpression?.()
-    ) {
-      return isPlainErrorConstructorExpression(expressionPath.get("expression"));
-    }
-    if (expressionPath.isIdentifier()) {
-      const binding = getBinding(expressionPath);
-      return (expressionPath.node.name === "Error" && !binding)
-        || (!!binding && plainErrorConstructorBindings.has(binding));
-    }
-    if (expressionPath.isMemberExpression() || expressionPath.isOptionalMemberExpression()) {
-      if (
-        expressionPath.get("object").isIdentifier({ name: "globalThis" })
-        && getPropertyName(expressionPath) === "Error"
-      ) return true;
-      const rootBinding = getBinding(getRootIdentifierPath(expressionPath));
-      return !!rootBinding && plainErrorContainerBindings.has(rootBinding);
-    }
-    return false;
-  };
-
-  const expressionContainsPlainErrorConstructor = (expressionPath) => {
-    if (!expressionPath?.node) return false;
-    if (isPlainErrorConstructorExpression(expressionPath)) return true;
-    if (expressionPath.isObjectExpression()) {
-      return expressionPath.get("properties").some((propertyPath) => (
-        propertyPath.isObjectProperty()
-        && expressionContainsPlainErrorConstructor(propertyPath.get("value"))
-      ));
-    }
-    if (expressionPath.isArrayExpression()) {
-      return expressionPath.get("elements").some(expressionContainsPlainErrorConstructor);
-    }
-    return false;
-  };
-
+  // This picker has one error contract: app-owned guidance is typed as
+  // UserFacingError. Keeping plain Error entirely out of this small module is
+  // stronger and easier to audit than following arbitrary constructor aliases.
   traverse(ast, {
-    VariableDeclarator(declaratorPath) {
-      declarators.push(declaratorPath);
-    },
-    AssignmentExpression(assignmentPath) {
-      assignments.push(assignmentPath);
-    },
     Identifier(identifierPath) {
       if (identifierPath.node.name === "Error") {
         violations.push(`${file}:${identifierPath.node.loc?.start.line ?? "?"}: attachment picker guidance must not reference plain Error`);
@@ -798,57 +495,6 @@ const collectPlainThrownErrorViolations = (source, file) => {
         && (stringPath.parentPath?.isMemberExpression?.() || stringPath.parentPath?.isOptionalMemberExpression?.())
       ) {
         violations.push(`${file}:${stringPath.node.loc?.start.line ?? "?"}: attachment picker guidance must not reference plain Error`);
-      }
-    },
-  });
-
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const declaratorPath of declarators) {
-      if (!expressionContainsPlainErrorConstructor(declaratorPath.get("init"))) continue;
-      for (const binding of getPatternBindings(declaratorPath.get("id"))) {
-        if (!plainErrorConstructorBindings.has(binding)) {
-          plainErrorConstructorBindings.add(binding);
-          changed = true;
-        }
-        if (!plainErrorContainerBindings.has(binding)) {
-          plainErrorContainerBindings.add(binding);
-          changed = true;
-        }
-      }
-    }
-    for (const assignmentPath of assignments) {
-      if (!expressionContainsPlainErrorConstructor(assignmentPath.get("right"))) continue;
-      for (const binding of getPatternBindings(assignmentPath.get("left"))) {
-        if (!plainErrorConstructorBindings.has(binding)) {
-          plainErrorConstructorBindings.add(binding);
-          changed = true;
-        }
-        if (!plainErrorContainerBindings.has(binding)) {
-          plainErrorContainerBindings.add(binding);
-          changed = true;
-        }
-      }
-      const left = assignmentPath.get("left");
-      if (left.isMemberExpression() || left.isOptionalMemberExpression()) {
-        const rootBinding = getBinding(getRootIdentifierPath(left));
-        if (rootBinding && !plainErrorContainerBindings.has(rootBinding)) {
-          plainErrorContainerBindings.add(rootBinding);
-          changed = true;
-        }
-      }
-    }
-  }
-
-  traverse(ast, {
-    ThrowStatement(throwPath) {
-      const argument = throwPath.get("argument");
-      if (
-        (argument.isNewExpression() || argument.isCallExpression())
-        && isPlainErrorConstructorExpression(argument.get("callee"))
-      ) {
-        violations.push(`${file}: app-owned picker guidance must use UserFacingError`);
       }
     },
   });
