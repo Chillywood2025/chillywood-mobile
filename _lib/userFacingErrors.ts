@@ -87,16 +87,6 @@ export function getUserFacingErrorMessage(error: unknown, fallback: string) {
   }
 
   if (
-    message.includes("storage bucket")
-    || message.includes("object storage")
-    || message.includes("bucket")
-    || message.includes("signed url")
-    || message.includes("upload")
-  ) {
-    return "The file could not be saved right now. Try again in a moment.";
-  }
-
-  if (
     message.includes("too large")
     || message.includes("file size")
     || message.includes("payload too large")
@@ -113,6 +103,16 @@ export function getUserFacingErrorMessage(error: unknown, fallback: string) {
     || (message.includes("unsupported") && message.includes("file"))
   ) {
     return "That file type is not supported here.";
+  }
+
+  if (
+    message.includes("storage bucket")
+    || message.includes("object storage")
+    || message.includes("bucket")
+    || message.includes("signed url")
+    || message.includes("upload")
+  ) {
+    return "The file could not be saved right now. Try again in a moment.";
   }
 
   if (

@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
 import { parse } from "@babel/parser";
+import traverseModule from "@babel/traverse";
 import { Buffer } from "node:buffer";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+
+const traverse = traverseModule.default ?? traverseModule;
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
@@ -22,67 +25,307 @@ const assertNotIncludes = (source, needle, label) => {
   if (source.includes(needle)) fail(`${label} must not include ${needle}`);
 };
 
-const getMemberRootIdentifier = (node) => {
-  let current = node;
-  while (current?.type === "MemberExpression" || current?.type === "OptionalMemberExpression") {
-    current = current.object;
+const getPropertyName = (pathValue) => {
+  if (!pathValue?.isMemberExpression?.() && !pathValue?.isOptionalMemberExpression?.()) return "";
+  const property = pathValue.get("property");
+  if (!pathValue.node.computed && property.isIdentifier()) return property.node.name;
+  return property.isStringLiteral() ? property.node.value : "";
+};
+
+const getBinding = (identifierPath) => (
+  identifierPath?.isIdentifier?.()
+    ? identifierPath.scope.getBinding(identifierPath.node.name)
+    : null
+);
+
+const isRawErrorObjectExpression = (expressionPath, rawErrorBindings) => {
+  if (!expressionPath?.node) return false;
+  if (expressionPath.isIdentifier()) {
+    const binding = getBinding(expressionPath);
+    return (binding && rawErrorBindings.has(binding)) || /error/i.test(expressionPath.node.name);
   }
-  return current?.type === "Identifier" ? current.name : "";
-};
-
-const isErrorMessageMember = (node) => {
-  if (node?.type !== "MemberExpression" && node?.type !== "OptionalMemberExpression") return false;
-  const propertyName = node.computed
-    ? (node.property?.type === "StringLiteral" ? node.property.value : "")
-    : (node.property?.type === "Identifier" ? node.property.name : "");
-  return propertyName === "message" && /error/i.test(getMemberRootIdentifier(node));
-};
-
-const containsErrorMessageMember = (node, seen = new WeakSet()) => {
-  if (!node || typeof node !== "object" || seen.has(node)) return false;
-  seen.add(node);
-  if (isErrorMessageMember(node)) return true;
-  return Object.values(node).some((child) => (
-    Array.isArray(child)
-      ? child.some((item) => containsErrorMessageMember(item, seen))
-      : containsErrorMessageMember(child, seen)
-  ));
-};
-
-const isCustomerPresentationCall = (node) => {
-  const callee = node?.callee;
-  if (callee?.type === "Identifier") {
-    return /^set.*(?:Error|Notice|Feedback|Status|Message)$/i.test(callee.name);
+  if (expressionPath.isMemberExpression() || expressionPath.isOptionalMemberExpression()) {
+    return getPropertyName(expressionPath) === "error";
   }
-  return callee?.type === "MemberExpression"
-    && callee.object?.type === "Identifier"
-    && callee.object.name === "Alert"
-    && callee.property?.type === "Identifier"
-    && callee.property.name === "alert";
+  if (
+    expressionPath.isTSAsExpression?.()
+    || expressionPath.isTSNonNullExpression?.()
+    || expressionPath.isTypeCastExpression?.()
+    || expressionPath.isParenthesizedExpression?.()
+  ) {
+    return isRawErrorObjectExpression(expressionPath.get("expression"), rawErrorBindings);
+  }
+  return false;
 };
 
-const assertNoRawErrorPresentation = (source, file) => {
+const isRawMessageMemberPath = (memberPath, rawErrorBindings) => {
+  if (getPropertyName(memberPath) !== "message") return false;
+  return isRawErrorObjectExpression(memberPath.get("object"), rawErrorBindings);
+};
+
+const expressionContainsRawMessage = (expressionPath, rawMessageBindings, rawErrorBindings) => {
+  if (!expressionPath?.node) return false;
+  if (isRawMessageMemberPath(expressionPath, rawErrorBindings)) return true;
+  if (expressionPath.isIdentifier()) {
+    const binding = getBinding(expressionPath);
+    return !!binding && rawMessageBindings.has(binding);
+  }
+  let found = false;
+  expressionPath.traverse({
+    Function(innerPath) {
+      innerPath.skip();
+    },
+    MemberExpression(innerPath) {
+      if (isRawMessageMemberPath(innerPath, rawErrorBindings)) {
+        found = true;
+        innerPath.stop();
+      }
+    },
+    OptionalMemberExpression(innerPath) {
+      if (isRawMessageMemberPath(innerPath, rawErrorBindings)) {
+        found = true;
+        innerPath.stop();
+      }
+    },
+    Identifier(innerPath) {
+      const binding = getBinding(innerPath);
+      if (binding && rawMessageBindings.has(binding)) {
+        found = true;
+        innerPath.stop();
+      }
+    },
+  });
+  return found;
+};
+
+const getPatternBindings = (patternPath) => {
+  if (!patternPath?.node) return [];
+  if (patternPath.isIdentifier()) {
+    const binding = getBinding(patternPath);
+    return binding ? [binding] : [];
+  }
+  if (patternPath.isAssignmentPattern()) return getPatternBindings(patternPath.get("left"));
+  if (patternPath.isRestElement()) return getPatternBindings(patternPath.get("argument"));
+  return patternPath.getBindingIdentifiers
+    ? Object.keys(patternPath.getBindingIdentifiers()).flatMap((name) => {
+      const binding = patternPath.scope.getBinding(name);
+      return binding ? [binding] : [];
+    })
+    : [];
+};
+
+const objectPatternRawErrorBindings = (patternPath) => {
+  if (!patternPath?.isObjectPattern?.()) return [];
+  return patternPath.get("properties").flatMap((propertyPath) => {
+    if (!propertyPath.isObjectProperty()) return [];
+    const key = propertyPath.get("key");
+    const keyName = key.isIdentifier() ? key.node.name : key.isStringLiteral() ? key.node.value : "";
+    return keyName === "error" ? getPatternBindings(propertyPath.get("value")) : [];
+  });
+};
+
+const objectPatternMessageBindings = (patternPath, sourceIsRawErrorObject) => {
+  if (!patternPath?.isObjectPattern?.()) return [];
+  return patternPath.get("properties").flatMap((propertyPath) => {
+    if (!propertyPath.isObjectProperty()) return [];
+    const key = propertyPath.get("key");
+    const value = propertyPath.get("value");
+    const keyName = key.isIdentifier() ? key.node.name : key.isStringLiteral() ? key.node.value : "";
+    if (keyName === "message" && sourceIsRawErrorObject) return getPatternBindings(value);
+    if (keyName === "error" && value.isObjectPattern()) return objectPatternMessageBindings(value, true);
+    return [];
+  });
+};
+
+const isDirectPresentationExpression = (expressionPath, presentationBindings) => {
+  if (!expressionPath?.node) return false;
+  if (expressionPath.isIdentifier()) {
+    const binding = getBinding(expressionPath);
+    return /^set.*(?:Error|Notice|Feedback|Status|Message)$/i.test(expressionPath.node.name)
+      || (!!binding && presentationBindings.has(binding));
+  }
+  return (expressionPath.isMemberExpression() || expressionPath.isOptionalMemberExpression())
+    && getPropertyName(expressionPath) === "alert"
+    && expressionPath.get("object").isIdentifier({ name: "Alert" });
+};
+
+const isTrustedErrorConstructorExpression = (expressionPath, trustedErrorConstructorBindings) => {
+  if (!expressionPath?.isIdentifier?.()) return false;
+  const binding = getBinding(expressionPath);
+  return expressionPath.node.name === "UserFacingError"
+    || (!!binding && trustedErrorConstructorBindings.has(binding));
+};
+
+const collectCustomerErrorBoundaryViolations = (source, file) => {
   const ast = parse(source, { sourceType: "unambiguous", plugins: ["typescript", "jsx"] });
-  const seen = new WeakSet();
-  const visit = (node) => {
-    if (!node || typeof node !== "object" || seen.has(node)) return;
-    seen.add(node);
-    if (
-      node.type === "CallExpression"
-      && isCustomerPresentationCall(node)
-      && node.arguments.some((argument) => containsErrorMessageMember(argument))
-    ) {
-      fail(`${file} must not send raw error.message values to a customer presentation sink`);
+  const rawErrorBindings = new Set();
+  const rawMessageBindings = new Set();
+  const presentationBindings = new Set();
+  const trustedErrorConstructorBindings = new Set();
+  const declarators = [];
+  const assignments = [];
+
+  traverse(ast, {
+    CatchClause(catchPath) {
+      for (const binding of getPatternBindings(catchPath.get("param"))) rawErrorBindings.add(binding);
+    },
+    ImportSpecifier(importPath) {
+      const imported = importPath.get("imported");
+      const importedName = imported.isIdentifier() ? imported.node.name : imported.isStringLiteral() ? imported.node.value : "";
+      if (importedName === "UserFacingError") {
+        const binding = getBinding(importPath.get("local"));
+        if (binding) trustedErrorConstructorBindings.add(binding);
+      }
+    },
+    VariableDeclarator(declaratorPath) {
+      declarators.push(declaratorPath);
+    },
+    AssignmentExpression(assignmentPath) {
+      assignments.push(assignmentPath);
+    },
+  });
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const declaratorPath of declarators) {
+      const id = declaratorPath.get("id");
+      const init = declaratorPath.get("init");
+      if (!init?.node) continue;
+      const idBindings = getPatternBindings(id);
+      for (const binding of objectPatternRawErrorBindings(id)) {
+        if (!rawErrorBindings.has(binding)) {
+          rawErrorBindings.add(binding);
+          changed = true;
+        }
+      }
+      if (!id.isObjectPattern() && isRawErrorObjectExpression(init, rawErrorBindings)) {
+        for (const binding of idBindings) {
+          if (!rawErrorBindings.has(binding)) {
+            rawErrorBindings.add(binding);
+            changed = true;
+          }
+        }
+      }
+      const nextMessageBindings = id.isObjectPattern()
+        ? objectPatternMessageBindings(id, isRawErrorObjectExpression(init, rawErrorBindings))
+        : expressionContainsRawMessage(init, rawMessageBindings, rawErrorBindings)
+          ? idBindings
+          : [];
+      for (const binding of nextMessageBindings) {
+        if (!rawMessageBindings.has(binding)) {
+          rawMessageBindings.add(binding);
+          changed = true;
+        }
+      }
+      if (isDirectPresentationExpression(init, presentationBindings)) {
+        for (const binding of idBindings) {
+          if (!presentationBindings.has(binding)) {
+            presentationBindings.add(binding);
+            changed = true;
+          }
+        }
+      }
+      if (isTrustedErrorConstructorExpression(init, trustedErrorConstructorBindings)) {
+        for (const binding of idBindings) {
+          if (!trustedErrorConstructorBindings.has(binding)) {
+            trustedErrorConstructorBindings.add(binding);
+            changed = true;
+          }
+        }
+      }
     }
-    if (node.type === "JSXExpressionContainer" && containsErrorMessageMember(node.expression)) {
-      fail(`${file} must not render raw error.message values in JSX`);
+    for (const assignmentPath of assignments) {
+      const leftBindings = getPatternBindings(assignmentPath.get("left"));
+      const right = assignmentPath.get("right");
+      const rightIsRawErrorObject = isRawErrorObjectExpression(right, rawErrorBindings);
+      for (const binding of objectPatternRawErrorBindings(assignmentPath.get("left"))) {
+        if (!rawErrorBindings.has(binding)) {
+          rawErrorBindings.add(binding);
+          changed = true;
+        }
+      }
+      if (!assignmentPath.get("left").isObjectPattern() && rightIsRawErrorObject) {
+        for (const binding of leftBindings) {
+          if (!rawErrorBindings.has(binding)) {
+            rawErrorBindings.add(binding);
+            changed = true;
+          }
+        }
+      }
+      const nextMessageBindings = assignmentPath.get("left").isObjectPattern() && rightIsRawErrorObject
+        ? objectPatternMessageBindings(assignmentPath.get("left"), true)
+        : assignmentPath.get("left").isObjectPattern()
+          ? objectPatternMessageBindings(assignmentPath.get("left"), false)
+        : expressionContainsRawMessage(right, rawMessageBindings, rawErrorBindings)
+          ? leftBindings
+          : [];
+      for (const binding of nextMessageBindings) {
+          if (!rawMessageBindings.has(binding)) {
+            rawMessageBindings.add(binding);
+            changed = true;
+          }
+      }
+      if (isDirectPresentationExpression(right, presentationBindings)) {
+        for (const binding of leftBindings) {
+          if (!presentationBindings.has(binding)) {
+            presentationBindings.add(binding);
+            changed = true;
+          }
+        }
+      }
+      if (isTrustedErrorConstructorExpression(right, trustedErrorConstructorBindings)) {
+        for (const binding of leftBindings) {
+          if (!trustedErrorConstructorBindings.has(binding)) {
+            trustedErrorConstructorBindings.add(binding);
+            changed = true;
+          }
+        }
+      }
     }
-    for (const child of Object.values(node)) {
-      if (Array.isArray(child)) child.forEach(visit);
-      else visit(child);
-    }
-  };
-  visit(ast);
+  }
+
+  const violations = [];
+  traverse(ast, {
+    CallExpression(callPath) {
+      if (!isDirectPresentationExpression(callPath.get("callee"), presentationBindings)) return;
+      if (callPath.get("arguments").some((argument) => expressionContainsRawMessage(argument, rawMessageBindings, rawErrorBindings))) {
+        violations.push(`${file}: raw error message reaches a customer presentation call`);
+      }
+    },
+    JSXExpressionContainer(expressionContainerPath) {
+      if (expressionContainsRawMessage(expressionContainerPath.get("expression"), rawMessageBindings, rawErrorBindings)) {
+        violations.push(`${file}: raw error message reaches customer JSX`);
+      }
+    },
+    NewExpression(newExpressionPath) {
+      const callee = newExpressionPath.get("callee");
+      const calleeBinding = getBinding(callee);
+      if (
+        !isTrustedErrorConstructorExpression(callee, trustedErrorConstructorBindings)
+        && (!calleeBinding || !trustedErrorConstructorBindings.has(calleeBinding))
+      ) return;
+      const messageArgument = newExpressionPath.get("arguments")[1];
+      if (expressionContainsRawMessage(messageArgument, rawMessageBindings, rawErrorBindings)) {
+        violations.push(`${file}: raw error message is mislabeled as a trusted UserFacingError`);
+      }
+    },
+  });
+  return [...new Set(violations)];
+};
+
+const collectPlainThrownErrorViolations = (source, file) => {
+  const ast = parse(source, { sourceType: "unambiguous", plugins: ["typescript", "jsx"] });
+  const violations = [];
+  traverse(ast, {
+    ThrowStatement(throwPath) {
+      const argument = throwPath.get("argument");
+      if (argument.isNewExpression() && argument.get("callee").isIdentifier({ name: "Error" })) {
+        violations.push(`${file}: app-owned picker guidance must use UserFacingError`);
+      }
+    },
+  });
+  return violations;
 };
 
 const loadUserFacingErrorModule = async (source, label) => {
@@ -113,6 +356,8 @@ const getUserFacingBehaviorFailures = async (source, label) => {
       [new Error("Network request failed"), "Check your connection and try again."],
       [new Error("JWT expired"), "Sign in again, then try that action one more time."],
       [new Error("authorization denied"), "This account does not have permission to complete that action."],
+      [new Error("Upload file size exceeded maximum"), "That file is too large for this upload."],
+      [new Error("Unsupported MIME type for upload"), "That file type is not supported here."],
       [
         new UserFacingError("attachment_action", "Photo gallery needs the current app build."),
         "Photo gallery needs the current app build.",
@@ -242,7 +487,7 @@ for (const [label, source] of [
   ["Chi'lly Circle", chillyCircle],
 ]) {
   assertIncludes(source, "getUserFacingErrorMessage", `${label} sanitized error boundary`);
-  assertNoRawErrorPresentation(source, label);
+  for (const violation of collectCustomerErrorBoundaryViolations(source, label)) fail(violation);
 }
 
 const chatDomain = read("_lib/chat.ts");
@@ -258,11 +503,49 @@ for (const [label, source, code] of [
 ]) {
   assertIncludes(source, "UserFacingError", `${label} trusted domain error type`);
   assertIncludes(source, `\"${code}\"`, `${label} trusted domain error code`);
+  for (const violation of collectCustomerErrorBoundaryViolations(source, label)) fail(violation);
 }
 
-assertNotIncludes(chatDomain, 'new UserFacingError("chat_action", error.message', "Chi'lly Chat raw provider error trust");
-assertNotIncludes(chatDomain, 'new UserFacingError("chat_action", created.error.message', "Chi'lly Chat raw call provider error trust");
+for (const violation of collectPlainThrownErrorViolations(socialAttachmentPicker, "Social attachment picker")) fail(violation);
 assertNotIncludes(chatInbox, "InboxErrorState", "Chi'lly Chat Inbox error state must stay presentation-safe");
+
+const boundaryMutationCases = [
+  [
+    "renamed catch, destructured message, and setter alias",
+    `${login}\nfunction __unsafePresentationMutation(setError) {\n  try { throw new Error(\"provider detail\"); } catch (problem) {\n    const { message: rawDetail } = problem;\n    const presentFailure = setError;\n    presentFailure(rawDetail);\n  }\n}`,
+    "Login mutation",
+    collectCustomerErrorBoundaryViolations,
+  ],
+  [
+    "raw provider message trusted through String and alias",
+    `${chatDomain}\nfunction __unsafeTrustMutation(created) {\n  const TrustedErrorAlias = UserFacingError;\n  const providerDetail = String(created.error.message);\n  throw new TrustedErrorAlias(\"chat_action\", providerDetail);\n}`,
+    "Chi'lly Chat trust mutation",
+    collectCustomerErrorBoundaryViolations,
+  ],
+  [
+    "raw catch message assigned before setter alias",
+    `${login}\nfunction __unsafeAssignmentMutation(setError) {\n  let rawDetail;\n  try { throw new Error(\"provider detail\"); } catch (renamedProblem) {\n    rawDetail = renamedProblem.message;\n  }\n  const presentFailure = setError;\n  presentFailure(rawDetail);\n}`,
+    "Login assignment mutation",
+    collectCustomerErrorBoundaryViolations,
+  ],
+  [
+    "trusted picker guidance downgraded to Error",
+    socialAttachmentPicker.replace("throw new UserFacingError(", "throw new Error("),
+    "Social attachment picker mutation",
+    collectPlainThrownErrorViolations,
+  ],
+];
+
+for (const [label, mutatedSource, mutatedFile, analyze] of boundaryMutationCases) {
+  const originalSource = label.includes("picker") ? socialAttachmentPicker : label.includes("provider") ? chatDomain : login;
+  if (mutatedSource === originalSource) {
+    fail(`customer error-boundary mutation fixture did not apply: ${label}`);
+    continue;
+  }
+  if (analyze(mutatedSource, mutatedFile).length === 0) {
+    fail(`customer error-boundary proof accepted mutation: ${label}`);
+  }
+}
 
 for (const [label, source, unsafeExpression] of [
   ["Login", login, "Alert.alert(\"Login Error\", error.message)"],
