@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
   getDiscoveryAccessLabel,
+  getDiscoveryItemDestination,
   readRankedPublicDiscoveryFeedItems,
   type DiscoveryFeedItem,
 } from "../../_lib/discoveryFeed";
@@ -130,24 +131,14 @@ export default function LiveTabScreen() {
     };
   };
 
-  const openPlatform = (userId?: string | null) => {
-    const id = String(userId ?? "").trim();
+  const openEvent = (eventId?: string | null) => {
+    const id = String(eventId ?? "").trim();
     if (!id) return;
-    router.push({ pathname: "/channel/[userId]", params: { userId: id } });
+    router.push({ pathname: "/event/[eventId]", params: { eventId: id } });
   };
 
   const openDiscoveryItem = (item: DiscoveryFeedItem) => {
-    const mediaId = String(item.media_id ?? "").trim();
-    if (item.item_type === "creator_upload" && mediaId) {
-      router.push({ pathname: "/player/[id]", params: { id: mediaId, source: "creator-video" } });
-      return;
-    }
-    const platformUserId = String(item.channel_user_id ?? item.owner_user_id ?? item.host_user_id ?? "").trim();
-    if ((item.item_type === "channel_update" || item.item_type === "creator_event") && platformUserId) {
-      openPlatform(platformUserId);
-      return;
-    }
-    router.push(`/spectate/${encodeURIComponent(item.id)}` as any);
+    router.push(getDiscoveryItemDestination(item) as any);
   };
 
   const totalLiveNow = liveItems.length + liveEvents.length;
@@ -225,11 +216,11 @@ export default function LiveTabScreen() {
                   );
                 })}
                 {liveEvents.map((event) => (
-                  <TouchableOpacity key={`event-${event.id}`} style={styles.discoveryCard} activeOpacity={0.88} onPress={() => openPlatform(event.hostUserId)} accessibilityRole="button" accessibilityLabel={`Open ${event.eventTitle}`}>
+                  <TouchableOpacity key={`event-${event.id}`} style={styles.discoveryCard} activeOpacity={0.88} onPress={() => openEvent(event.id)} accessibilityRole="button" accessibilityLabel={`Open ${event.eventTitle}`}>
                     <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>LIVE EVENT</Text></View>
                     <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
                     <Text style={styles.cardBody}>{formatEventMode(event)}</Text>
-                    <Text style={styles.cardMeta}>Open Platform</Text>
+                    <Text style={styles.cardMeta}>Open Event</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -249,7 +240,7 @@ export default function LiveTabScreen() {
             {upcomingEvents.length ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
                 {upcomingEvents.map((event) => (
-                  <TouchableOpacity key={`upcoming-${event.id}`} style={styles.discoveryCard} activeOpacity={0.88} onPress={() => openPlatform(event.hostUserId)} accessibilityRole="button" accessibilityLabel={`Open ${event.eventTitle}`}>
+                  <TouchableOpacity key={`upcoming-${event.id}`} style={styles.discoveryCard} activeOpacity={0.88} onPress={() => openEvent(event.id)} accessibilityRole="button" accessibilityLabel={`Open ${event.eventTitle}`}>
                     <View style={styles.upcomingBadge}><Text style={styles.upcomingBadgeText}>UPCOMING</Text></View>
                     <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
                     <Text style={styles.cardBody}>{formatEventMode(event)}</Text>
@@ -285,7 +276,7 @@ export default function LiveTabScreen() {
                 <Text style={styles.detailText}>Start Live opens the people-first Live Watch-Party path.</Text>
                 <Text style={styles.detailText}>Enter Code joins an existing Watch-Party Live room.</Text>
                 <Text style={styles.detailText}>Live Now is backed by public discovery and public creator-event data.</Text>
-                <Text style={styles.detailText}>Upcoming Events opens the hosting Platform so viewers can see the creator and event context.</Text>
+                <Text style={styles.detailText}>Upcoming Events opens the exact Event so viewers can see its access and schedule.</Text>
               </View>
             ) : null}
           </View>

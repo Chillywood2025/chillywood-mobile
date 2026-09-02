@@ -25,6 +25,8 @@ const playback = read("_lib/spectatorPlayback.ts");
 const startRoom = read("supabase/functions/spectator-start-room/index.ts");
 const playbackFunction = read("supabase/functions/spectator-playback/index.ts");
 const spectateRoute = read("app/spectate/[itemId].tsx");
+const spectateMetadataRoute = read("app/spectate-metadata/[itemId].tsx");
+const spectateLiveRoute = read("app/spectate-live/[itemId].tsx");
 const home = read("app/(tabs)/index.tsx");
 const explore = read("app/(tabs)/explore.tsx");
 const docs = read("docs/SPECTATOR_CHILD_ROOM_FLOW.md");
@@ -88,7 +90,10 @@ assertIncludes(playback, "isCircleSpectatorItem", "_lib/spectatorPlayback.ts");
 
 assertIncludes(spectateRoute, "readPublicDiscoveryFeedItem", "/spectate route");
 assertIncludes(spectateRoute, "readCircleSpectatorFeedItem", "/spectate route");
-assertIncludes(spectateRoute, "circleAccess: nextLane === \"circle\" ? \"allowed\" : undefined", "/spectate route");
+assertIncludes(spectateMetadataRoute, "circleAccess: nextLane === \"circle\" ? \"allowed\" : undefined", "/spectate metadata route");
+assertIncludes(spectateMetadataRoute, "readCircleSpectatorFeedItem", "/spectate metadata route");
+assertIncludes(spectateLiveRoute, "readRankedCircleSpectatorFeedItems", "/spectate live route");
+assertIncludes(spectateLiveRoute, "Chi'lly Circle", "/spectate live public copy");
 assertIncludes(home, "readRankedCircleSpectatorFeedItems", "Home");
 assertIncludes(home, "Circle Live Now", "Home");
 assertIncludes(home, "Circle Watch-Party Ready", "Home");
@@ -116,6 +121,8 @@ assertNotIncludes(explore, "circle_spectator_feed_items", "Explore public-only s
     ["_lib/spectatorAccess.ts", access],
     ["_lib/spectatorPlayback.ts", playback],
     ["app/spectate/[itemId].tsx", spectateRoute],
+    ["app/spectate-metadata/[itemId].tsx", spectateMetadataRoute],
+    ["app/spectate-live/[itemId].tsx", spectateLiveRoute],
     ["app/(tabs)/index.tsx", home],
     ["app/(tabs)/explore.tsx", explore],
   ]) {

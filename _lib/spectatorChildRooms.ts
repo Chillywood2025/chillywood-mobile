@@ -10,8 +10,6 @@ export type SpectatorLaunchEligibility = {
   kind: SpectatorLaunchKind;
   primaryAction: SpectatorLaunchAction;
   primaryLabel: "Start Watch-Party Live" | "Start Live Watch-Party";
-  secondaryLabel: "Watch with your Chi'lly Circle";
-  reactionLabel: "Start Reaction Room" | null;
   canStartWatchPartyLive: boolean;
   canStartLiveWatchParty: boolean;
   canShare: boolean;
@@ -116,8 +114,6 @@ export const resolveSpectatorLaunchEligibility = (
     kind,
     primaryAction,
     primaryLabel,
-    secondaryLabel: "Watch with your Chi'lly Circle",
-    reactionLabel: isLive ? "Start Reaction Room" : null,
     canStartWatchPartyLive,
     canStartLiveWatchParty,
     canShare: publicSafe && item?.allow_public_share === true,

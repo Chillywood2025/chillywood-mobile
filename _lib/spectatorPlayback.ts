@@ -1,5 +1,9 @@
 import type { DiscoveryFeedItem } from "./discoveryFeed";
-import { isFeedItemPubliclyDiscoverable, isPublicSpectatorSafeRightsStatus } from "./discoveryFeed";
+import {
+  getDiscoveryPassLabel,
+  isFeedItemPubliclyDiscoverable,
+  isPublicSpectatorSafeRightsStatus,
+} from "./discoveryFeed";
 import type { SpectatorAccessDecision } from "./spectatorAccess";
 import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from "./supabase";
 
@@ -250,10 +254,15 @@ export function resolveSpectatorPlaybackState(
   }
 
   if (decision.requiresTicket) {
+    const passLabel = getDiscoveryPassLabel(item);
+    const title = passLabel === "Pass required" ? "Pass required." : `${passLabel} required.`;
+    const copy = passLabel === "Pass required"
+      ? "Get the access pass for this exact experience before opening its viewer destination."
+      : `Get the ${passLabel} for this exact experience before opening its viewer destination.`;
     return blockedReadout(
       "blocked_ticketed",
-      "Spectator playback is ticketed.",
-      "This exact spectator target needs its contextual access pass before public playback can be shown here.",
+      title,
+      copy,
       decision,
     );
   }

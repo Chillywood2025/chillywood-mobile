@@ -48,6 +48,7 @@ import { readProfilePosts, type ProfilePost } from "../../_lib/profilePosts";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import {
     getDiscoveryAccessLabel,
+    getDiscoveryItemDestination,
     getDiscoveryLiveLabel,
     getDiscoveryRankingReasonLabel,
     rankDiscoveryFeedItems,
@@ -485,6 +486,12 @@ export default function HomeScreen() {
     });
   }
 
+  function openEvent(eventId?: string | null) {
+    const safeEventId = String(eventId ?? "").trim();
+    if (!safeEventId) return;
+    router.push({ pathname: "/event/[eventId]", params: { eventId: safeEventId } });
+  }
+
   function openRachiProfile() {
     router.push({
       pathname: "/profile/[userId]",
@@ -492,32 +499,8 @@ export default function HomeScreen() {
     });
   }
 
-  function openSpectatorMetadata(itemId?: string | null) {
-    const safeItemId = String(itemId ?? "").trim();
-    if (!safeItemId) return;
-    router.push(`/spectate/${encodeURIComponent(safeItemId)}` as any);
-  }
-
   function openDiscoveryFeedItem(item: DiscoveryFeedItem) {
-    const mediaId = String(item.media_id ?? "").trim();
-    if (item.item_type === "creator_upload" && mediaId) {
-      router.push({
-        pathname: "/player/[id]",
-        params: {
-          id: mediaId,
-          source: "creator-video",
-        },
-      });
-      return;
-    }
-
-    const channelUserId = String(item.channel_user_id ?? item.owner_user_id ?? item.host_user_id ?? "").trim();
-    if ((item.item_type === "channel_update" || item.item_type === "creator_event") && channelUserId) {
-      openChannel(channelUserId);
-      return;
-    }
-
-    openSpectatorMetadata(item.id);
+    router.push(getDiscoveryItemDestination(item) as any);
   }
 
   async function shareCreatorVideo(video: CreatorVideo) {
@@ -695,7 +678,7 @@ export default function HomeScreen() {
         key={`event-${event.id}`}
         style={styles.feedEventCard}
         activeOpacity={0.9}
-        onPress={() => openChannel(event.hostUserId)}
+        onPress={() => openEvent(event.id)}
         accessibilityRole="button"
         accessibilityLabel={`Open ${event.eventTitle}`}
       >
