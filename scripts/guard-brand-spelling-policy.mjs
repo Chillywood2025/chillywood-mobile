@@ -19,6 +19,7 @@ const excludedDirs = new Set([
 ]);
 
 const excludedPaths = new Set(["supabase/.temp"]);
+const supabaseFunctionsRoot = path.join("supabase", "functions");
 
 const userFacingRoots = new Set([
   "_lib",
@@ -55,9 +56,15 @@ const technicalLowercaseContextPattern =
 function shouldSkip(relativePath) {
   if (excludedPaths.has(relativePath)) return true;
   if (!userFacingRoots.has(relativePath.split(path.sep)[0])) return true;
-  if (relativePath.startsWith(`supabase${path.sep}`)
-    && !relativePath.startsWith(`supabase${path.sep}functions${path.sep}`)) {
-    return true;
+  if (relativePath.startsWith(`supabase${path.sep}`)) {
+    if (relativePath !== supabaseFunctionsRoot
+      && !relativePath.startsWith(`${supabaseFunctionsRoot}${path.sep}`)) {
+      return true;
+    }
+    if (/(?:^|\/)(?:__tests__|fixtures)(?:\/|$)/u.test(relativePath)
+      || /(?:_test|\.test)\.[cm]?[jt]sx?$/u.test(relativePath)) {
+      return true;
+    }
   }
   return relativePath.split(path.sep).some((part) => excludedDirs.has(part));
 }
