@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { validateReportSheetSource } from "./lib/report-sheet-policy.mjs";
+
 const root = process.cwd();
 const read = (path) => readFileSync(join(root, path), "utf8");
 const fail = (message) => {
@@ -27,7 +29,8 @@ const packageJson = read("package.json");
   "Staff access requires exact scopes and case/report context",
   "No reporter identity, raw storage paths, signed URLs, raw IPs, tokens, provider secrets, tax IDs, bank details, or private provider IDs are exposed",
 ].forEach((needle) => {
-  if (!workflowDoc.includes(needle)) fail(`missing workflow doctrine: ${needle}`);
+  if (!workflowDoc.includes(needle))
+    fail(`missing workflow doctrine: ${needle}`);
 });
 
 [
@@ -51,29 +54,63 @@ const packageJson = read("package.json");
   "suspicious purchase/access/refund issue",
   "impersonation/username/handle issue",
 ].forEach((needle) => {
-  if (!workflowDoc.includes(needle)) fail(`missing reportable surface: ${needle}`);
+  if (!workflowDoc.includes(needle))
+    fail(`missing reportable surface: ${needle}`);
 });
 
-[
-  "REPORT_SHEET_CATEGORY_OPTIONS",
-  "harassment_bullying",
-  "hate_discrimination",
-  "threats_violence",
-  "sexual_exploitation",
-  "self_harm_danger",
-  "minor_safety",
-  "illegal_activity",
-  "spam_scam",
-  "privacy_doxxing",
-  "copyright_dmca",
-  "fraud_payment",
-  "live_safety",
-  "Please report in good faith",
-  "Reporter identity stays private by default",
-  "reports do not remove content automatically",
-].forEach((needle) => {
-  if (!reportSheet.includes(needle)) fail(`missing report sheet marker: ${needle}`);
-});
+const reportSheetFindings = validateReportSheetSource(reportSheet);
+if (reportSheetFindings.length) fail(reportSheetFindings.join("; "));
+
+const reportSheetMutants = [
+  ["dynamic routing fragments", reportSheet.replace('<Text style={styles.helperText}>{REPORT_SHEET_HELPER_TEXT}</Text>', '<Text style={styles.helperText}>{REPORT_SHEET_HELPER_TEXT}</Text><Text>{["Review", title, "path:", description, "urgent"].join(" ")}</Text>')],
+  ["dynamic privacy fragments", reportSheet.replace('<Text style={styles.helperText}>{REPORT_SHEET_HELPER_TEXT}</Text>', '<Text style={styles.helperText}>{REPORT_SHEET_HELPER_TEXT}</Text><Text>{["Reporter identity is", title, "shared with", description, "the reported user"].join(" ")}</Text>')],
+  ["submitted queue claim", reportSheet.replace("Selected report category: ${categoryOption.label}.", "Selected report category: ${categoryOption.label}. Queue: urgent.")],
+  ["keyboard container", reportSheet.replaceAll("KeyboardAvoidingView", "View")],
+  ["small-screen bound", reportSheet.replace('maxHeight: "92%"', 'maxHeight: "920%"')],
+  ["safe-area padding", reportSheet.replace("Math.max(insets.bottom, 16)", "16")],
+  ["state reset polarity", reportSheet.replace("if (!visible)", "if (visible)")],
+  ["category semantics", reportSheet.replace('accessibilityRole="radio"', 'accessibilityRole="button"')],
+  ["category selector no-op", reportSheet.replace("onPress={() => setCategoryKey(entry.key)}", "onPress={() => undefined}")],
+  ["wrong category finder binding", reportSheet.replace("find((entry) => entry.key === categoryKey)", "find((_option, entry) => entry.key === categoryKey)")],
+  ["wrong category map binding", reportSheet.replace("  const categoryOption =", "  const entry = REPORT_SHEET_CATEGORY_OPTIONS[0];\n  const categoryOption =").replace("REPORT_SHEET_CATEGORY_OPTIONS.map((entry)", "REPORT_SHEET_CATEGORY_OPTIONS.map((_option)")],
+  ["busy copyright navigation", reportSheet.replace('disabled={busy}\n                    accessibilityRole="button"\n                    accessibilityLabel="Open Copyright Report"', 'disabled={false}\n                    accessibilityRole="button"\n                    accessibilityLabel="Open Copyright Report"')],
+  ["wrong copyright route", reportSheet.replace('"/copyright-report" as Parameters<', '"/settings" as Parameters<')],
+  ["cancel bypasses reset", reportSheet.replace('accessibilityLabel="Cancel report"\n                accessibilityState={{ disabled: busy }}\n                onPress={closeAndReset}', 'accessibilityLabel="Cancel report"\n                accessibilityState={{ disabled: busy }}\n                onPress={onClose}')],
+  ["close handler omits resets", reportSheet.replace('const closeAndReset = () => {\n    if (busy) return;\n    setCategoryKey("harassment_bullying");\n    setNote("");\n    onClose();\n  };', "const closeAndReset = () => {\n    if (busy) return;\n    onClose();\n  };")],
+  ["unconditional return before resets", reportSheet.replace("const closeAndReset = () => {\n    if (busy) return;", "const closeAndReset = () => {\n    return;")],
+  ["contradictory composed privacy copy", reportSheet.replace("{REPORT_SHEET_HELPER_TEXT}", '{[REPORT_SHEET_HELPER_TEXT, "Reports are shared with the reported person."].join(" ")}')],
+  ["contradictory helper privacy copy", reportSheet.replace("Your report goes to the moderation team.", "Your identity may be disclosed to the reported user. Your report goes to the moderation team.")],
+  ["wrong submitted category", reportSheet.replace("category: categoryOption.backedCategory,", 'category: "other",')],
+  ["overridden submitted category", reportSheet.replace("category: categoryOption.backedCategory,", 'category: categoryOption.backedCategory,\n                    ...{ category: "other" },')],
+  ["composed rendered routing claim", reportSheet.replace('while they are reviewed.";', 'while they are reviewed. " + ["Review", "path: normal"].join(" ");')],
+  ["disabled keyboard avoidance", reportSheet.replace("style={styles.keyboardAvoider}", "style={styles.keyboardAvoider}\n        enabled={false}")],
+  ["noninteractive sheet", reportSheet.replace("style={styles.overlay}", 'style={styles.overlay} pointerEvents="none"')],
+  ["overridden safe-area padding", reportSheet.replace("              ]}\n              keyboardShouldPersistTaps", "                { paddingBottom: 0 },\n              ]}\n              keyboardShouldPersistTaps")],
+  ["stale reset effect", reportSheet.replace("  }, [visible]);", "  }, []);")],
+  ["object setter alias action", reportSheet.replace("  const closeAndReset = () => {", "  const writers = { note: setNote };\n  const closeAndReset = () => {").replace('style={styles.description}', 'style={styles.description} onTouchEnd={() => writers.note("stale")}')],
+  ["Boolean-gated modal contents", reportSheet.replace("  const router = useRouter();", "  const showSheet = Boolean(false);\n  const router = useRouter();").replace("      <KeyboardAvoidingView", "      {showSheet && <KeyboardAvoidingView").replace("      </KeyboardAvoidingView>", "      </KeyboardAvoidingView>}")],
+  ["shadowed submit action", reportSheet.replace('const selectedCategoryNote = `Selected report category: ${categoryOption.label}.`;', 'const selectedCategoryNote = `Selected report category: ${categoryOption.label}.`, onSubmit = (_input: unknown) => undefined;')],
+  ["shadowed router authority", reportSheet.replace('import { useRouter } from "expo-router";', 'import { useRouter as realUseRouter } from "expo-router";\nconst useRouter = () => ({ push: (_route: unknown) => undefined });')],
+  ["permanently disabled submit", reportSheet.replace("style={[styles.primaryButton, busy && styles.buttonDisabled]}\n                activeOpacity={0.86}\n                disabled={busy}", "style={[styles.primaryButton, busy && styles.buttonDisabled]}\n                activeOpacity={0.86}\n                disabled={true}")],
+  ["hidden primary action", reportSheet.replace("  primaryButton: {", '  primaryButton: {\n    display: "none",')],
+  ["hidden modal accessibility", reportSheet.replace("accessibilityViewIsModal", 'accessibilityViewIsModal importantForAccessibility="no-hide-descendants"')],
+  ["unsafe content inset", reportSheet.replace('keyboardShouldPersistTaps="handled"', 'contentInset={{ left: -200 }} keyboardShouldPersistTaps="handled"')],
+  ["alternate dismissal action", reportSheet.replace('style={styles.description}', 'style={styles.description} onTouchEnd={onClose}')],
+  ["hidden helper accessibility", reportSheet.replace('<Text style={styles.helperText}>{REPORT_SHEET_HELPER_TEXT}</Text>', '<Text style={styles.helperText} accessible={false}>{REPORT_SHEET_HELPER_TEXT}</Text>')],
+  ["hidden helper style", reportSheet.replace('helperText: {\n    color: "#8F99B1",\n    fontSize: 12,', 'helperText: {\n    color: "transparent",\n    fontSize: 0,')],
+  ["hidden overlay style", reportSheet.replace("  overlay: {", '  overlay: {\n    display: "none",')],
+  ["wrong selected chip style", reportSheet.replace("categoryKey === entry.key && styles.categoryChipActive", "busy === false && styles.categoryChipActive")],
+  ["tree-shaken submit annotation", reportSheet.replace("void onSubmit({", "void /**\n * #__PURE__\n */ onSubmit({")],
+  ["redirected JSX runtime pragma", `/**\n * @jsxImportSource malicious-jsx-runtime\n */\n${reportSheet}`],
+];
+for (const [name, mutant] of reportSheetMutants) {
+  if (mutant === reportSheet)
+    fail(`mutation setup did not alter report sheet: ${name}`);
+  if (validateReportSheetSource(mutant, { enforceReleaseHash: false }).length === 0)
+    fail(`report sheet mutant escaped: ${name}`);
+}
+const formattingOnly = [`/** @param props Report sheet properties. */\n${reportSheet}`, reportSheet.replace('<View style={styles.overlay}>', '<View style={styles.overlay}>{/* formatting-only review comment */}'), reportSheet.replace('<View style={styles.overlay}>', '<View style={styles.overlay}>\n\n'), reportSheet.replace('              <Text style={styles.kicker}>', '          <Text style={styles.kicker}>')];
+if (formattingOnly.some((source) => validateReportSheetSource(source, { enforceReleaseHash: false }).length)) fail("formatting-only JSX changes must not alter the semantic freeze");
 
 [
   "SAFETY_REPORT_TARGET_TYPES",
@@ -82,34 +119,46 @@ const packageJson = read("package.json");
   "Choose a supported report category.",
   "dedupe_safety_report",
 ].forEach((needle) => {
-  if (!moderationLib.includes(needle)) fail(`missing report intake marker: ${needle}`);
+  if (!moderationLib.includes(needle))
+    fail(`missing report intake marker: ${needle}`);
 });
 
 [
   "enforce_safety_reports_duplicate_guard",
   "safety_report_duplicate_window",
-  "before insert on public.\"safety_reports\"",
+  'before insert on public."safety_reports"',
 ].forEach((needle) => {
-  if (!duplicateMigration.includes(needle)) fail(`missing duplicate backend guard marker: ${needle}`);
+  if (!duplicateMigration.includes(needle))
+    fail(`missing duplicate backend guard marker: ${needle}`);
 });
 
-if (/reported users are notified merely because a report was filed/i.test(`${workflowDoc}\n${moderationDoc}`)) {
+if (
+  /reported users are notified merely because a report was filed/i.test(
+    `${workflowDoc}\n${moderationDoc}`,
+  )
+) {
   fail("docs must not notify reported users merely because a report was filed");
 }
-if (/auto-?delete reported content|automatically delete content|auto-?ban reported users/i.test(`${workflowDoc}\n${moderationDoc}`)) {
+if (
+  /auto-?delete reported content|automatically delete content|auto-?ban reported users/i.test(
+    `${workflowDoc}\n${moderationDoc}`,
+  )
+) {
   fail("reports must not auto-delete content or auto-ban users");
 }
-if (/provider refund execution enabled|provider refunds enabled|payouts enabled|live_money_enabled\s*(?:is|=|:)\s*(?:on|enabled)/i.test(workflowDoc)) {
+if (
+  /provider refund execution enabled|provider refunds enabled|payouts enabled|live_money_enabled\s*(?:is|=|:)\s*(?:on|enabled)/i.test(
+    workflowDoc,
+  )
+) {
   fail("workflow must not enable provider refunds, payouts, or live money");
 }
 if (/support.+backend role|backend role.+support/i.test(workflowDoc)) {
   fail("support must not be introduced as a backend role");
 }
-if (/raw storage paths|signed URLs|raw IPs|tokens|provider secrets|tax IDs|bank details|private provider IDs/.test(reportSheet)) {
-  fail("user-facing report sheet must not mention or expose private implementation details");
-}
-
-if (!packageJson.includes("\"proof:reporting-moderation-workflow\"")) fail("missing proof package script");
-if (!packageJson.includes("\"guard:reporting-moderation-policy\"")) fail("missing guard package script");
+if (!packageJson.includes('"proof:reporting-moderation-workflow"'))
+  fail("missing proof package script");
+if (!packageJson.includes('"guard:reporting-moderation-policy"'))
+  fail("missing guard package script");
 
 console.log("guard:reporting-moderation-policy passed");

@@ -1,6 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { validateReportSheetSource } from "./lib/report-sheet-policy.mjs";
+
 const root = process.cwd();
 const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "");
 const artifactDir = `/tmp/app-reporting-moderation-workflow-proof-${stamp}`;
@@ -65,7 +67,12 @@ for (const marker of requiredWorkflowMarkers) {
   "live safety issue",
   "other",
 ].forEach((marker) => {
-  check(`category:${marker}`, workflowDocLower.includes(marker.toLowerCase()) && reportSheetLower.includes(marker.toLowerCase()), marker);
+  check(
+    `category:${marker}`,
+    workflowDocLower.includes(marker.toLowerCase()) &&
+      reportSheetLower.includes(marker.toLowerCase()),
+    marker,
+  );
 });
 
 [
@@ -74,10 +81,10 @@ for (const marker of requiredWorkflowMarkers) {
   "This report target is not supported.",
   "Choose a supported report category.",
   "dedupe_safety_report",
-  ".eq(\"reporter_user_id\", reporterUserId)",
-  ".eq(\"target_type\", input.targetType)",
-  ".eq(\"target_id\", targetId)",
-  ".eq(\"category\", input.category)",
+  '.eq("reporter_user_id", reporterUserId)',
+  '.eq("target_type", input.targetType)',
+  '.eq("target_id", targetId)',
+  '.eq("category", input.category)',
 ].forEach((marker) => {
   check(`moderation_lib:${marker}`, moderationLib.includes(marker), marker);
 });
@@ -88,26 +95,34 @@ for (const marker of requiredWorkflowMarkers) {
   "same authenticated reporter against the same target/category",
   "Does not expose reporter identity or mutate target content",
 ].forEach((marker) => {
-  check(`duplicate_guard:${marker}`, duplicateMigration.includes(marker), marker);
+  check(
+    `duplicate_guard:${marker}`,
+    duplicateMigration.includes(marker),
+    marker,
+  );
 });
 
-[
-  "Your report goes to a scoped moderation queue",
-  "Reporter identity stays private by default",
-  "reports do not remove content automatically",
-  "Please report in good faith",
-  "Open Copyright Report",
-  "Selected report category:",
-].forEach((marker) => {
-  check(`report_sheet:${marker}`, reportSheet.includes(marker), marker);
-});
+const reportSheetSemanticFindings = validateReportSheetSource(reportSheet);
+check(
+  "report_sheet:semantic_runtime_binding",
+  reportSheetSemanticFindings.length === 0,
+  reportSheetSemanticFindings.length
+    ? reportSheetSemanticFindings.join("; ")
+    : "Rendered copy, dismissal cleanup, keyboard/safe-area behavior, accessibility semantics, and the backed-category submission sink are syntax-bound.",
+);
 
 [
   "Reporting and moderation workflow: Closed",
   "Reporter identity stays private by default",
   "Reported users are not notified merely because a report was filed",
 ].forEach((marker) => {
-  check(`linked_docs:${marker}`, moderationDoc.includes(marker) && moderatorDoc.includes(marker) && commandCenterDoc.includes(marker), marker);
+  check(
+    `linked_docs:${marker}`,
+    moderationDoc.includes(marker) &&
+      moderatorDoc.includes(marker) &&
+      commandCenterDoc.includes(marker),
+    marker,
+  );
 });
 
 [
@@ -115,11 +130,23 @@ for (const marker of requiredWorkflowMarkers) {
   "cannot issue refunds",
   "No money/provider/payout behavior is activated",
 ].forEach((marker) => {
-  check(`money_boundary:${marker}`, `${workflowDoc}\n${moderatorDoc}\n${read("ROADMAP.md")}`.includes(marker), marker);
+  check(
+    `money_boundary:${marker}`,
+    `${workflowDoc}\n${moderatorDoc}\n${read("ROADMAP.md")}`.includes(marker),
+    marker,
+  );
 });
 
-check("package_script:proof", packageJson.includes("\"proof:reporting-moderation-workflow\""), "proof package script is wired");
-check("package_script:guard", packageJson.includes("\"guard:reporting-moderation-policy\""), "guard package script is wired");
+check(
+  "package_script:proof",
+  packageJson.includes('"proof:reporting-moderation-workflow"'),
+  "proof package script is wired",
+);
+check(
+  "package_script:guard",
+  packageJson.includes('"guard:reporting-moderation-policy"'),
+  "guard package script is wired",
+);
 
 const failed = checks.filter((entry) => !entry.passed);
 const summary = {
