@@ -286,6 +286,7 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
   const rawMessageBindings = new Set();
   const presentationBindings = new Set();
   const sanitizerBindings = new Set();
+  const functionDeclarations = [];
   const declarators = [];
   const assignments = [];
 
@@ -313,6 +314,9 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
         rawMessageBindings.add(binding);
       }
     },
+    FunctionDeclaration(functionPath) {
+      functionDeclarations.push(functionPath);
+    },
     ImportSpecifier(importPath) {
       const imported = importPath.get("imported");
       const importedName = imported.isIdentifier() ? imported.node.name : imported.isStringLiteral() ? imported.node.value : "";
@@ -337,6 +341,17 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
   let changed = true;
   while (changed) {
     changed = false;
+    for (const functionPath of functionDeclarations) {
+      const binding = getBinding(functionPath.get("id"));
+      if (
+        binding
+        && functionReturnsRawMessage(functionPath, rawMessageBindings, rawErrorBindings, sanitizerBindings)
+        && !rawMessageBindings.has(binding)
+      ) {
+        rawMessageBindings.add(binding);
+        changed = true;
+      }
+    }
     for (const declaratorPath of declarators) {
       const id = declaratorPath.get("id");
       const init = declaratorPath.get("init");
@@ -421,6 +436,17 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
     for (const assignmentPath of assignments) {
       const leftBindings = getPatternBindings(assignmentPath.get("left"));
       const right = assignmentPath.get("right");
+      if (assignmentPath.get("left").isIdentifier() && right.isFunction?.()) {
+        const binding = getBinding(assignmentPath.get("left"));
+        if (
+          binding
+          && functionReturnsRawMessage(right, rawMessageBindings, rawErrorBindings, sanitizerBindings)
+          && !rawMessageBindings.has(binding)
+        ) {
+          rawMessageBindings.add(binding);
+          changed = true;
+        }
+      }
       if (assignmentPath.get("left").isIdentifier() && isUntrustedResultExpression(right)) {
         const resultBinding = getBinding(assignmentPath.get("left"));
         if (resultBinding && !rawResultBindings.has(resultBinding)) {
@@ -1150,6 +1176,13 @@ for (const [label, mutatedSource, mutatedFile, analyze] of boundaryMutationCases
   if (violations.length === 0) {
     fail(`customer error-boundary proof accepted mutation: ${label}`);
   }
+}
+
+for (const [label, mutation] of [
+  ["function declaration", `${login}\nfunction __unsafeDeclaredClosure(setError) { try { throw new Error("provider"); } catch (problem) { function renderDetail() { return String(problem); } setError(renderDetail()); } }`],
+  ["assigned function", `${login}\nfunction __unsafeAssignedClosure(setError) { let renderDetail; try { throw new Error("provider"); } catch (problem) { renderDetail = function () { return String(problem); }; setError(renderDetail()); } }`],
+]) {
+  if (collectCustomerErrorBoundaryViolations(mutation, `Login ${label} mutation`).length === 0) fail(`customer error-boundary proof accepted raw ${label}`);
 }
 
 const safeSanitizerAliasSource = `${login}\nfunction __safeSanitizerAliasMutation(setError) {\n  try { throw new Error(\"provider detail\"); } catch (problem) {\n    const sanitize = getUserFacingErrorMessage;\n    setError(sanitize(problem, \"Unable to continue right now.\"));\n  }\n}`;
