@@ -38,26 +38,32 @@ const staticStringValue = (node) => {
     const right = staticStringValue(node.right);
     return left === null || right === null ? null : `${left}${right}`;
   }
-  if (["ParenthesizedExpression", "TSAsExpression", "TSTypeAssertion"].includes(node.type)) {
+  if (["ParenthesizedExpression", "TSAsExpression", "TSTypeAssertion", "TSSatisfiesExpression", "TSNonNullExpression"].includes(node.type)) {
     return staticStringValue(node.expression);
   }
   return null;
 };
 
+const staticPropertyKey = (node) => {
+  if (!node || typeof node !== "object") return null;
+  if (!node.computed && node.key?.type === "Identifier") return node.key.name;
+  return staticStringValue(node.key);
+};
+
+const parseSource = (source) => parse(source, {
+  sourceType: "unambiguous",
+  plugins: ["typescript", "jsx", "decorators-legacy", "classProperties", "classPrivateProperties", "classPrivateMethods", "importAttributes"],
+});
+
 const hasStaleStaticChannelMessage = (source) => {
-  const ast = parse(source, {
-    sourceType: "unambiguous",
-    plugins: ["typescript", "jsx", "decorators-legacy", "classProperties", "classPrivateProperties", "classPrivateMethods", "importAttributes"],
-  });
+  const ast = parseSource(source);
   const seen = new WeakSet();
   let stale = false;
   const visit = (node) => {
     if (stale || !node || typeof node !== "object" || seen.has(node)) return;
     seen.add(node);
-    if (node.type === "ObjectProperty" && !node.computed) {
-      const key = node.key?.type === "Identifier" || node.key?.type === "StringLiteral"
-        ? node.key.name ?? node.key.value
-        : null;
+    if (node.type === "ObjectProperty") {
+      const key = staticPropertyKey(node);
       const value = key === "message" ? staticStringValue(node.value) : null;
       if (value !== null && /\bchannel\b/iu.test(value)) {
         stale = true;
@@ -71,6 +77,43 @@ const hasStaleStaticChannelMessage = (source) => {
   };
   visit(ast);
   return stale;
+};
+
+const approvedCircleErrors = new Set([
+  "Chi'lly Circle status is unavailable right now.",
+  "Choose a person to update Chi'lly Circle.",
+  "Official accounts appear as pinned Chi'lly Circle connections and are not managed as normal requests.",
+  "Chi'lly Circle requires a signed-in user.",
+  "You cannot update Chi'lly Circle with yourself.",
+  "Chi'lly Circle is unavailable while a Platform audience block exists between these accounts.",
+  "Unable to update Chi'lly Circle right now.",
+  "Chi'lly Circle could not load right now.",
+  "You cannot request yourself.",
+]);
+
+const findUnsafeThrownErrors = (source) => {
+  const ast = parseSource(source);
+  const seen = new WeakSet();
+  const unsafe = [];
+  const visit = (node) => {
+    if (!node || typeof node !== "object" || seen.has(node)) return;
+    seen.add(node);
+    if (node.type === "ThrowStatement") {
+      const argument = node.argument;
+      const message = argument?.type === "NewExpression"
+        && argument.callee?.type === "Identifier"
+        && argument.callee.name === "Error"
+        ? staticStringValue(argument.arguments?.[0])
+        : null;
+      if (message === null || !approvedCircleErrors.has(message)) unsafe.push(node.type);
+    }
+    for (const child of Object.values(node)) {
+      if (Array.isArray(child)) child.forEach(visit);
+      else visit(child);
+    }
+  };
+  visit(ast);
+  return unsafe;
 };
 
 const assertStaticMessagesUsePlatformTerminology = (source, label) => {
@@ -278,6 +321,7 @@ assertIncludes(roomBlueprint, "Party Room must not hand off to Live Stage", "Par
   [friendGraph, "Chi'lly Circle status is unavailable right now.", "Chi'lly Circle safe read-error copy"],
   [friendGraph, "Unable to update Chi'lly Circle right now.", "Chi'lly Circle safe mutation-error copy"],
   [friendGraph, "Chi'lly Circle could not load right now.", "Chi'lly Circle safe list-error copy"],
+  [friendGraph, "Choose a person to update Chi'lly Circle.", "Chi'lly Circle missing-person copy"],
   [channelReadModels, "This Platform could not be identified.", "Platform read-model error copy"],
   [accessEntitlements, "The Platform owner or profile defaults are still missing.", "Platform access diagnostic copy"],
   [accessEntitlements, "No explicit Platform profile was available, so access fell back to open defaults.", "Platform access fallback copy"],
@@ -289,6 +333,9 @@ assertIncludes(roomBlueprint, "Party Room must not hand off to Live Stage", "Par
 ].forEach(([source, needle, label]) => assertIncludes(source, needle, label));
 
 assertStaticMessagesUsePlatformTerminology(channelAudience, "Platform audience copy");
+if (findUnsafeThrownErrors(friendGraph).length > 0) {
+  fail("Chi'lly Circle must throw only approved, static customer-safe errors");
+}
 
 [
   [channelAudience, "Channel follow requires a channel user id.", "Platform audience copy"],
@@ -298,9 +345,7 @@ assertStaticMessagesUsePlatformTerminology(channelAudience, "Platform audience c
   [creatorVipPasses, "for this channel only", "VIP copy"],
   [profilePrivacy, "channel audience block", "Profile privacy copy"],
   [friendGraph, "channel audience block", "Chi'lly Circle copy"],
-  [friendGraph, "if (error) throw error;", "Chi'lly Circle raw provider error forwarding"],
-  [friendGraph, "if (lowError) throw lowError;", "Chi'lly Circle raw provider error forwarding"],
-  [friendGraph, "if (highError) throw highError;", "Chi'lly Circle raw provider error forwarding"],
+  [friendGraph, "target user id", "Chi'lly Circle developer-facing identifier copy"],
   [channelReadModels, "Channel user id is required.", "Platform read-model copy"],
   [accessEntitlements, "Channel user id or profile defaults", "Platform access diagnostic copy"],
   [accessEntitlements, "No explicit channel profile row", "Platform access fallback copy"],
@@ -318,12 +363,27 @@ assertStaticMessagesUsePlatformTerminology(channelAudience, "Platform audience c
   'message: "You cannot follow your own chan" + "nel."',
   'message: "You cannot follow your own ch\\u0061nnel."',
   'message: (`This ${"chan" + "nel"} is unavailable.`)',
+  '["message"]: "This channel is unavailable."',
+  'message: ("This channel is unavailable." satisfies string)',
+  'message: ("This channel is unavailable."!)',
   'message: "Only the channel owner can review this request."',
   "message: 'Channel follow failed.'",
   "message: `This channel is unavailable.`",
 ].forEach((mutant) => {
   if (!hasStaleStaticChannelMessage(`({ ${mutant} })`)) {
     fail(`Platform audience guard accepted stale-message mutant: ${mutant}`);
+  }
+});
+
+[
+  "throw error;",
+  "if (error) { throw error; }",
+  "const providerError = error; throw providerError;",
+  "throw new Error(error.message);",
+  "throw new Error(`Provider: ${error.message}`);",
+].forEach((mutant) => {
+  if (findUnsafeThrownErrors(`const run = () => { ${mutant} };`).length === 0) {
+    fail(`Chi'lly Circle error guard accepted unsafe-throw mutant: ${mutant}`);
   }
 });
 

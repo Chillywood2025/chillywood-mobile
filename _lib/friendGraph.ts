@@ -233,10 +233,10 @@ function getFriendRelationshipAvailability(viewerUserId: string | null, otherUse
 function assertFriendTargetAllowed(otherUserId: string) {
   const normalizedOtherUserId = toText(otherUserId);
   if (!normalizedOtherUserId) {
-    throw new Error("Chi'lly Circle target user id is required.");
+    throw new Error("Choose a person to update Chi'lly Circle.");
   }
   if (isOfficialPlatformAccountUserId(normalizedOtherUserId)) {
-    throw new Error("Official platform accounts appear as pinned Chi'lly Circle connections and are not managed as normal requests.");
+    throw new Error("Official accounts appear as pinned Chi'lly Circle connections and are not managed as normal requests.");
   }
   return normalizedOtherUserId;
 }
@@ -395,7 +395,7 @@ async function readCurrentUserRelationships(): Promise<{
 export async function readFriendRelationshipState(otherUserId: string): Promise<FriendRelationshipState> {
   const normalizedOtherUserId = toText(otherUserId);
   if (!normalizedOtherUserId) {
-    throw new Error("Chi'lly Circle target user id is required.");
+    throw new Error("Choose a person to update Chi'lly Circle.");
   }
 
   const viewerUserId = await getSignedInFriendUserId();
@@ -408,7 +408,7 @@ export async function getChillyCircleStatus(
 ): Promise<FriendRelationshipState> {
   const normalizedOtherUserId = toText(profileUserId);
   if (!normalizedOtherUserId) {
-    throw new Error("Chi'lly Circle target user id is required.");
+    throw new Error("Choose a person to update Chi'lly Circle.");
   }
 
   const normalizedViewerUserId = toText(viewerUserId) || null;
