@@ -147,7 +147,7 @@ const parseOffer = (row: Record<string, unknown>): PaidCreatorEventOffer | null 
     id,
     creatorEventId,
     creatorId,
-    title: toText(row.title) || "Creator event pass",
+    title: toText(row.title) || "Event Pass",
     description: toText(row.description) || null,
     eventType: toText(row.eventType) || "live_first",
     startsAt: toText(row.startsAt) || null,
@@ -175,7 +175,7 @@ const parseTransaction = (row: Record<string, unknown>): PaidCreatorEventTransac
     id,
     eventId,
     creatorEventId,
-    eventTitle: toText(row.eventTitle) || "Creator event pass",
+    eventTitle: toText(row.eventTitle) || "Event Pass",
     buyerId: toText(row.buyerId),
     creatorId,
     amountCents: toCents(row.amountCents),
@@ -369,11 +369,11 @@ export async function savePaidCreatorEventOffer(input: {
     p_capacity_limit: input.capacityLimit == null ? null : Math.max(1, Math.trunc(input.capacityLimit)),
     p_status: input.status ?? "sandbox",
   });
-  if (error) throw new Error("Paid Event settings could not be saved.");
+  if (error) throw new Error("Event Pass settings could not be saved.");
   const offer = data && typeof data === "object" && !Array.isArray(data)
     ? parseOffer(data as Record<string, unknown>)
     : null;
-  if (!offer) throw new Error("Paid Event settings could not be read.");
+  if (!offer) throw new Error("Event Pass settings could not be read.");
   return offer;
 }
 
@@ -406,13 +406,13 @@ export async function createPaidCreatorEventPassPurchaseIntent(
   const { data, error } = await rpcClient.rpc("create_paid_creator_event_pass_purchase_intent", {
     p_event_id: offerId,
   });
-  if (error) throw new Error("Event pass checkout is not available right now.");
+  if (error) throw new Error("Event Pass checkout is not available right now.");
   if (!data || typeof data !== "object" || Array.isArray(data)) {
-    throw new Error("Event pass checkout authority could not be verified.");
+    throw new Error("Event Pass checkout authority could not be verified.");
   }
   const row = data as Record<string, unknown>;
   if (typeof row.alreadyPurchased !== "boolean") {
-    throw new Error("Event pass checkout authority could not be verified.");
+    throw new Error("Event Pass checkout authority could not be verified.");
   }
   const validated = row.alreadyPurchased
     ? validateHistoricalCreatorMoneyPurchaseIntent(data, expected)
@@ -431,7 +431,7 @@ export async function createPaidCreatorEventPassPurchaseIntent(
       : Platform.OS === "android" && expected.provider === "revenuecat_google_play"
         ? validateCreatorMoneyPurchaseIntent(data, { ...expected, status: "pending" })
         : null;
-  if (!validated) throw new Error("Event pass checkout authority could not be verified.");
+  if (!validated) throw new Error("Event Pass checkout authority could not be verified.");
   return {
     ...validated,
     alreadyPurchased: row.alreadyPurchased,
@@ -455,10 +455,10 @@ export async function purchasePaidCreatorEventPass(input: {
 }): Promise<PaidCreatorEventPurchaseResult> {
   const access = await resolvePaidCreatorEventPassAccess(input.creatorEventId);
   if (access.allowed) {
-    return { ok: true, message: "Event pass confirmed.", access };
+    return { ok: true, message: "Event Pass active. You have access to this Event.", access };
   }
   if (!access.requiresPurchase || !access.offer?.id) {
-    return { ok: false, message: "This event pass is not available right now.", access };
+    return { ok: false, message: "This Event Pass is not available right now.", access };
   }
   if (
     !access.creatorId
@@ -466,13 +466,13 @@ export async function purchasePaidCreatorEventPass(input: {
     || !access.providerProductId
     || typeof access.priceCents !== "number"
     || !access.currency
-  ) return { ok: false, message: "This event pass is not available right now.", access };
+  ) return { ok: false, message: "This Event Pass is not available right now.", access };
 
   if (Platform.OS !== "ios" && Platform.OS !== "android") {
-    return { ok: false, message: "This event pass is not available on this device.", access };
+    return { ok: false, message: "This Event Pass is not available on this device.", access };
   }
   if (Platform.OS === "android" && access.provider !== "revenuecat_google_play") {
-    return { ok: false, message: "This event pass is not available right now.", access };
+    return { ok: false, message: "This Event Pass is not available right now.", access };
   }
   if (Platform.OS === "ios" && (
     access.currency !== "usd"
@@ -518,7 +518,9 @@ export async function purchasePaidCreatorEventPass(input: {
     const verifiedAccess = await waitForPaidCreatorEventPassAccess(input.creatorEventId);
     return {
       ok: verifiedAccess.allowed,
-      message: verifiedAccess.allowed ? "Event pass confirmed." : "Event pass is still being confirmed.",
+      message: verifiedAccess.allowed
+        ? "Event Pass active. You have access to this Event."
+        : "Event Pass is still being confirmed.",
       access: verifiedAccess,
       intentId: intent.id,
     };
@@ -530,7 +532,7 @@ export async function purchasePaidCreatorEventPass(input: {
   if (!product) {
     return {
       ok: false,
-      message: "Event pass sandbox product is not available on this device yet.",
+      message: "The Event Pass sandbox product is not available on this device yet.",
       access,
       intentId: intent.id,
       productId,
@@ -563,7 +565,7 @@ export async function purchasePaidCreatorEventPass(input: {
     if (verifiedAccess.allowed) {
       return {
         ok: true,
-        message: "Event pass confirmed. Open Event.",
+        message: "Event Pass active. You have access to this Event.",
         access: verifiedAccess,
         intentId: intent.id,
         productId,
@@ -585,7 +587,7 @@ export async function purchasePaidCreatorEventPass(input: {
   if (!verifiedAccess.allowed) {
     return {
       ok: false,
-      message: "Purchase received. Waiting for the verified event pass to finish.",
+      message: "Purchase received. Waiting for the verified Event Pass to finish.",
       access: verifiedAccess,
       intentId: intent.id,
       productId,
@@ -603,7 +605,7 @@ export async function purchasePaidCreatorEventPass(input: {
 
   return {
     ok: true,
-    message: "Event pass confirmed. Open Event.",
+    message: "Event Pass active. You have access to this Event.",
     access: verifiedAccess,
     intentId: intent.id,
     productId,

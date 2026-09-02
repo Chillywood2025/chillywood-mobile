@@ -323,7 +323,7 @@ const resolveChannelLayoutPreset = (value?: UserProfile["channelLayoutPreset"] |
 };
 
 const formatChannelRoomAccessValue = (value?: ChannelAccessResolution["watchPartyAccessRule"] | null) => {
-  if (value === "party_pass") return "Seat Pass";
+  if (value === "party_pass") return "Party Room Pass";
   if (value === "premium") return "Premium";
   return "Open";
 };
@@ -496,14 +496,14 @@ const getProfileAccessBody = (resolution: ChannelAccessResolution | null, isOffi
 const getWatchPartyAccessBody = (resolution: ChannelAccessResolution | null, ready: boolean) => {
   if (!ready || !resolution) return "checking watch-party entry";
   if (resolution.joinPolicy === "locked") return "invite-led room entry by default";
-  if (resolution.watchPartyAccessRule === "party_pass") return "Seat Pass room entry by default";
+  if (resolution.watchPartyAccessRule === "party_pass") return "Party Room Pass entry by default";
   if (resolution.watchPartyAccessRule === "premium") return "Premium room entry by default";
   return "open room entry by default";
 };
 
 const getCommunicationAccessBody = (resolution: ChannelAccessResolution | null, ready: boolean) => {
   if (!ready || !resolution) return "checking Chi'lly Chat posture";
-  if (resolution.communicationAccessRule === "party_pass") return "Chi'lly Chat follow-up can stay Seat Pass-led by default";
+  if (resolution.communicationAccessRule === "party_pass") return "Chi'lly Chat follow-up can stay Party Room Pass-led by default";
   if (resolution.communicationAccessRule === "premium") return "Chi'lly Chat follow-up can stay Premium-led by default";
   return "Chi'lly Chat follow-up stays open by default";
 };

@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import type { RouteBackedMonetizationProofConfig } from "../../_lib/routeBackedMonetizationVisualProof";
+import { getCreatorAccessProductPublicName } from "../../_lib/accessProductPresentation";
 import { MoneyScopeInfoButton, type MoneyScopeKey } from "./MoneyScopeInfoButton";
 
 type Props = {
@@ -16,20 +17,20 @@ const SURFACE_COPY: Record<Props["surface"], { title: string; body: string }> = 
     body: "Open the status path for this paid-access option. Tester-safe access can run where provider setup exists; live settlement stays off.",
   },
   watch_party_ticket: {
-    title: "Watch-Party Seat Pass status",
-    body: "Open the Seat Pass status path. Speaker controls still require host approval and no payout or publish authority is granted.",
+    title: "Party Room Pass status",
+    body: "Open this exact Party Room Pass status path. It grants only Party Room entry and no Live Stage, speaker, host, moderator, camera, microphone, payout, or publish authority.",
   },
   live_access: {
-    title: "Live access pass status",
-    body: "Open the live access status path. It does not grant speaker, host, moderator, admin, or publish authority.",
+    title: "Live Stage Pass status",
+    body: "Open this exact Live Stage Pass status path. It grants viewer/listener entry only, never a speaking seat or publish authority.",
   },
   live_seat: {
-    title: "Live seat pass status",
-    body: "Open the live seat status path. Host approval is still required for mic, camera, and publish.",
+    title: "Live Stage Seat Pass status",
+    body: "Open this exact Live Stage Seat Pass status path. Host approval and current server-backed speaker membership are still required for microphone, camera, and publish.",
   },
   event_pass: {
-    title: "Event pass status",
-    body: "Open the event pass status path. Tester-safe purchase flows can run where provider setup exists; live settlement stays off.",
+    title: "Event Pass status",
+    body: "Open this exact Event Pass status path. It grants only the linked Event and no generic Party Room or Live Stage authority; live settlement stays off.",
   },
 };
 
@@ -45,6 +46,8 @@ export function RouteBackedMonetizationProofCard({ config, surface }: Props) {
   const router = useRouter();
   if (!config) return null;
   const copy = SURFACE_COPY[surface];
+  const publicProductName = getCreatorAccessProductPublicName(config.productType);
+  if (!publicProductName && surface !== "paid_content") return null;
   const safeFlags = [
     "Status flow active",
     "Tester-safe only",
@@ -74,7 +77,7 @@ export function RouteBackedMonetizationProofCard({ config, surface }: Props) {
       <View style={styles.grid}>
         <View style={styles.row}>
           <Text style={styles.label}>Product</Text>
-          <Text style={styles.value}>{config.displayName || config.productType}</Text>
+          <Text style={styles.value}>{publicProductName ?? "Paid Creator Video"}</Text>
         </View>
         <View style={styles.row}>
           <Text style={styles.label}>Tier</Text>

@@ -20,6 +20,10 @@ const chatIndex = read("app/chat/index.tsx");
 const buyerTypes = [
   "paid_video_unlocked",
   "watch_party_ticket_ready",
+  "live_watch_party_access_ready",
+  "live_watch_party_seat_eligible",
+  "live_watch_party_seat_approved",
+  "live_watch_party_seat_rejected",
   "channel_subscription_active",
   "vip_access_active",
   "event_pass_active",
@@ -28,6 +32,9 @@ const buyerTypes = [
 const creatorTypes = [
   "paid_video_sold",
   "watch_party_ticket_sold",
+  "live_watch_party_access_sold",
+  "live_watch_party_seat_sold",
+  "live_watch_party_seat_requested",
   "channel_subscription_started",
   "vip_pass_sold",
   "event_pass_sold",
@@ -90,10 +97,15 @@ add("Activity does not fake notification records", includes(bell, "No fake count
 add("Chat remains separate from money notifications", !includes(chatIndex, "creator_money_sale") && !includes(chatIndex, "creator_money_purchase"), "chat separation");
 
 [
-  "Your Seat Pass is ready",
-  "Seat Pass sold",
-  "Your Seat Pass is ready.",
-].forEach((needle) => add(`Seat Pass visible copy present ${needle}`, includes(revenuecatWebhook, needle), needle));
+  "Party Room Pass active",
+  "Party Room Pass sold",
+  "Live Stage Pass active",
+  "Live Stage Pass sold",
+  "Live Stage Seat Pass active",
+  "Live Stage Seat Pass sold",
+  "Event Pass active",
+  "Event Pass sold",
+].forEach((needle) => add(`canonical access-product notification copy present ${needle}`, includes(revenuecatWebhook, needle), needle));
 
 const forbiddenVisiblePhrases = [
   ["Watch-Party", "Ticket"].join(" "),

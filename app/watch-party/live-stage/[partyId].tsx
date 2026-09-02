@@ -84,6 +84,7 @@ import {
 import { prepareLiveKitJoinBoundary } from "../../../_lib/livekit/join-boundary";
 import { enforceLiveKitParticipantState } from "../../../_lib/livekit/participant-permissions";
 import { debugLog, reportRuntimeError } from "../../../_lib/logger";
+import { saveCreatorSandboxMonetizationConfig } from "../../../_lib/creatorMonetizationSetup";
 import { registerActiveMediaSessionStopper } from "../../../_lib/mediaSessionLifecycle";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../../_lib/moderation";
 import { isLiveKitRuntimeConfigured } from "../../../_lib/runtimeConfig";
@@ -92,10 +93,16 @@ import { supabase } from "../../../_lib/supabase";
 import { readUserProfile } from "../../../_lib/userData";
 import {
   purchaseLiveWatchPartyOffer,
+  readLiveWatchPartySeatPassStates,
   readLiveWatchPartyMoneyAccess,
+  readMyLiveWatchPartyHostOfferState,
+  rejectLiveWatchPartySeatRequest,
+  requestMyLiveWatchPartySeat,
   setMyLiveWatchPartyOffer,
+  type LiveWatchPartyHostOfferState,
   type LiveWatchPartyMoneyAccess,
   type LiveWatchPartyPassType,
+  type LiveWatchPartySeatPassState,
 } from "../../../_lib/liveWatchPartyMoney";
 import {
     getActivePartyMemberships,
@@ -233,7 +240,7 @@ const getLiveStageAccessTitle = (access: Pick<RoomAccessResolution, "reason"> | 
   if (access?.reason === "removed") return "Live room access removed";
   if (access?.reason === "identity_required") return "Sign in required";
   if (access?.reason === "premium_required") return LIVE_FIRST_PREMIUM_UPSELL_COPY.title;
-  if (access?.reason === "party_pass_required") return "Seat Pass required";
+  if (access?.reason === "party_pass_required") return "Party Room Pass required";
   return "Live room access unavailable";
 };
 
@@ -247,7 +254,7 @@ const getLiveStageAccessBody = (access: Pick<RoomAccessResolution, "reason" | "l
     return LIVE_FIRST_PREMIUM_UPSELL_COPY.message;
   }
   if (access?.reason === "party_pass_required") {
-    return "Watch-Party Seat Pass access is required before this live room can open from the direct Live Stage route.";
+    return "Party Room Pass access belongs to Party Room and cannot open this Live Stage. Return to the correct destination.";
   }
   return `${access?.label ?? "Room"} access is unavailable right now.`;
 };
@@ -294,6 +301,7 @@ type CommunicationRTCViewComponent = React.ComponentType<{
 const HYBRID_LIVEKIT_CONNECT_TIMEOUT_MILLIS = 30_000;
 const HYBRID_LIVEKIT_DISCONNECT_FALLBACK_GRACE_MILLIS = 4_500;
 const DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT = shouldAutoStartAuthorizedNativeLiveKitMedia(Platform.OS);
+const LIVE_STAGE_PASS_PURCHASE_AVAILABLE = Platform.OS === "android";
 
 type LiveKitStageFallbackReason = "connection_timeout" | "disconnected" | "room_error";
 
@@ -937,6 +945,9 @@ export default function WatchPartyLiveStageScreen({
   const [liveMoneyPurchaseBusy, setLiveMoneyPurchaseBusy] = useState<LiveWatchPartyPassType | null>(null);
   const [liveMoneyOfferBusy, setLiveMoneyOfferBusy] = useState<LiveWatchPartyPassType | null>(null);
   const [liveMoneyNotice, setLiveMoneyNotice] = useState("");
+  const [liveMoneyHostOfferState, setLiveMoneyHostOfferState] = useState<LiveWatchPartyHostOfferState | null>(null);
+  const [liveMoneyHostSetupExpanded, setLiveMoneyHostSetupExpanded] = useState(false);
+  const [liveSeatPassStateByUserId, setLiveSeatPassStateByUserId] = useState<Record<string, LiveWatchPartySeatPassState["state"]>>({});
   const [routeProofConfig, setRouteProofConfig] = useState<RouteBackedMonetizationProofConfig | null>(null);
   const [liveWatchPartyPremiumGate, setLiveWatchPartyPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
   const [liveWatchPartyAccessSheetVisible, setLiveWatchPartyAccessSheetVisible] = useState(false);
@@ -1515,11 +1526,21 @@ export default function WatchPartyLiveStageScreen({
         const exactLiveMoneyAccess = await readLiveWatchPartyMoneyAccess(partyId).catch(() => null);
         if (cancelled) return;
         if (!exactLiveMoneyAccess) {
-          setRoomEntryError("Unable to verify the exact Live Watch-Party pass for this room.");
+          setRoomEntryError("Unable to verify the exact Live Stage pass for this room.");
           setLoading(false);
           return;
         }
         setLiveMoneyAccess(exactLiveMoneyAccess);
+        setLiveMoneyNotice((current) => {
+          if (!current.includes("still being verified")) return current;
+          if (exactLiveMoneyAccess.seatOfferId && exactLiveMoneyAccess.seatEligible) {
+            return "Live Stage Seat Pass active. You're eligible for a speaking seat. Host approval is still required.";
+          }
+          if (exactLiveMoneyAccess.accessOfferId && exactLiveMoneyAccess.allowed) {
+            return "Live Stage Pass active. You can watch/listen to this Live Stage.";
+          }
+          return current;
+        });
         if (!exactLiveMoneyAccess.allowed) {
           setLoading(false);
           return;
@@ -1528,6 +1549,28 @@ export default function WatchPartyLiveStageScreen({
         syncStageSnapshot(snapshot, trackedUserId);
         const sessionMembership = currentMembership ?? membershipMapRef.current[trackedUserId] ?? null;
         const sessionIsHost = trackedUserId === snapshot.room.hostUserId;
+        let resolvedHostOfferState: LiveWatchPartyHostOfferState | null = null;
+        if (sessionIsHost) {
+          const [offerState, seatStates] = await Promise.all([
+            readMyLiveWatchPartyHostOfferState(partyId).catch(() => null),
+            readLiveWatchPartySeatPassStates(partyId).catch(() => ({})),
+          ]);
+          if (cancelled) return;
+          resolvedHostOfferState = offerState;
+          setLiveMoneyHostOfferState(offerState);
+          setLiveSeatPassStateByUserId(seatStates);
+          setSeatRequestState(() => Object.entries(seatStates).reduce(
+            (next, [participantId, state]) => applyLiveStageSeatRequestEvent(next, {
+              participantId,
+              pending: state === "requested",
+              requestVersion: `server:${participantId}`,
+            }),
+            emptyLiveStageSeatRequestState(),
+          ));
+        } else {
+          setLiveMoneyHostOfferState(null);
+          setLiveSeatPassStateByUserId({});
+        }
         const sessionCanPublishMedia = sessionIsHost || canStageMembershipPublishMedia(sessionMembership);
         const persistedSessionMembership = await joinPartyRoomSession({
           partyId,
@@ -1594,6 +1637,22 @@ export default function WatchPartyLiveStageScreen({
         const participantId = String(payload?.participantId ?? "").trim();
         if (!participantId) return;
         const pending = !!payload?.pending;
+        if (sessionIsHost && resolvedHostOfferState?.seatEnabled) {
+          void readLiveWatchPartySeatPassStates(partyId)
+            .then((seatStates) => {
+              setLiveSeatPassStateByUserId(seatStates);
+              setSeatRequestState(() => Object.entries(seatStates).reduce(
+                (next, [serverParticipantId, state]) => applyLiveStageSeatRequestEvent(next, {
+                  participantId: serverParticipantId,
+                  pending: state === "requested",
+                  requestVersion: `server:${serverParticipantId}`,
+                }),
+                emptyLiveStageSeatRequestState(),
+              ));
+            })
+            .catch(() => {});
+          return;
+        }
         setSeatRequestState((prev) => applyLiveStageSeatRequestEvent(prev, {
           participantId,
           pending,
@@ -1605,31 +1664,15 @@ export default function WatchPartyLiveStageScreen({
       channel.on("broadcast", { event: "participant:seat-state" }, ({ payload }: { payload: Record<string, unknown> }) => {
         const participantId = String(payload?.participantId ?? "").trim();
         if (!participantId) return;
-        const roleValue = String(payload?.role ?? "").trim();
-        const nextRole: SharedParticipantLocalState["role"] = roleValue === "host" || roleValue === "speaker" ? roleValue : "listener";
-        const nextIsMuted = !!payload?.isMuted;
-        const nextIsRemoved = !!payload?.isRemoved;
-        const pending = !!payload?.pending;
-
-        setParticipantStateById((prev) => ({
-          ...prev,
-          [participantId]: {
-            ...(prev[participantId] ?? {
-              isMuted: nextIsMuted,
-              role: nextRole,
-              isRemoved: nextIsRemoved,
-            }),
-            isMuted: nextIsMuted,
-            role: nextRole,
-            isRemoved: nextIsRemoved,
-          },
-        }));
-        setSeatRequestState((prev) => applyLiveStageSeatRequestEvent(prev, {
-          participantId,
-          pending: pending && nextRole === "listener" && !nextIsRemoved,
-          requestVersion: String(payload?.requestVersion ?? payload?.requestId ?? ""),
-          requestedAt: String(payload?.requestedAt ?? ""),
-        }));
+        // Broadcast payloads are refresh hints only. Persisted membership and
+        // paid-seat RPC state remain authoritative for role, removal, mute,
+        // and review UI.
+        void refreshStageSnapshot(trackedUserId);
+        if (sessionIsHost && resolvedHostOfferState?.seatEnabled) {
+          void readLiveWatchPartySeatPassStates(partyId)
+            .then(setLiveSeatPassStateByUserId)
+            .catch(() => {});
+        }
       });
 
         channel.subscribe((status) => {
@@ -2341,7 +2384,7 @@ export default function WatchPartyLiveStageScreen({
     const selfParticipantId = String(myUserId || "").trim() || "anon";
     if (!nextParticipantId || isHost || nextParticipantId !== selfParticipantId) return;
     if (!currentUserHasLiveSeatRequestEligibility) {
-      setRoomEntryError("A Live Seat Pass grants seat eligibility for this room. Live Access alone is viewer/listener access and cannot request camera or microphone.");
+      setRoomEntryError("A Live Stage Seat Pass grants eligibility only. A Live Stage Pass grants viewer/listener entry only; neither grants camera, microphone, or speaking without host approval.");
       return;
     }
     const currentState = participantStateById[nextParticipantId] ?? createDefaultParticipantState({
@@ -2366,7 +2409,19 @@ export default function WatchPartyLiveStageScreen({
       }
     }
 
+    if (liveMoneyAccess?.seatOfferId) {
+      try {
+        await requestMyLiveWatchPartySeat(partyId);
+      } catch (error) {
+        setRoomEntryError(error instanceof Error
+          ? error.message
+          : "Your Live Stage seat request could not be verified.");
+        return;
+      }
+    }
+
     setStageLocalMediaIntent(true);
+    setLiveMoneyAccess((previous) => previous ? { ...previous, seatReviewState: "requested" } : previous);
     revealStageOverlay();
     const requestVersion = createSeatRequestVersion();
     setSeatRequestState((prev) => applyLiveStageSeatRequestEvent(prev, {
@@ -2380,6 +2435,7 @@ export default function WatchPartyLiveStageScreen({
     currentUserHasLiveSeatRequestEligibility,
     isHost,
     myUserId,
+    liveMoneyAccess?.seatOfferId,
     participantStateById,
     partyId,
     revealStageOverlay,
@@ -2448,10 +2504,12 @@ export default function WatchPartyLiveStageScreen({
         : "Your camera seat is ready. Tap Start Camera & Mic when you want to publish."
       : currentStageSeatRequestPending
         ? "Camera request pending. The host can seat you when they review requests."
+        : liveMoneyAccess?.seatReviewState === "rejected"
+          ? "The host did not approve your last speaking-seat request. Your Live Stage Seat Pass remains eligibility only and never guarantees speaking."
         : currentUserHasLiveSeatRequestEligibility && canRequestSeat(currentStageParticipantState)
           ? "Watching is allowed here when the room is free or your account has the required access. Request camera and microphone when you want to join the visible feeds."
           : liveMoneyAccess?.allowed && !currentUserHasLiveSeatRequestEligibility
-            ? "Your Live Access Pass is viewer/listener access only. A separate Live Seat Pass is required before you can ask the host for camera or microphone approval."
+            ? "Your Live Stage Pass is viewer/listener access only. A separate Live Stage Seat Pass is required before you can ask the host for camera or microphone approval."
             : "Watching is allowed here when the room is free or your account has the required access. Camera requests are unavailable for your current role.";
   const liveRoomRoleLabel = isHost ? "Host" : "Viewer";
   const liveRoomModeLabel = isLiveFirstMode ? "Live-First" : branding.watchPartyLabel;
@@ -2832,6 +2890,7 @@ export default function WatchPartyLiveStageScreen({
         pending: false,
         requestVersion: approvedRequestVersion,
       });
+      setLiveSeatPassStateByUserId((previous) => ({ ...previous, [nextParticipantId]: "approved" }));
       setSeatRequestSheetParticipantId("");
       collapseHostParticipantControls(nextParticipantId);
     });
@@ -2849,6 +2908,25 @@ export default function WatchPartyLiveStageScreen({
     seatRequestVersionById,
     visibleStripParticipants,
   ]);
+  const rejectStageSeatRequest = useCallback(async (participantId: string) => {
+    const nextParticipantId = String(participantId ?? "").trim();
+    if (!nextParticipantId) return;
+    await runStageParticipantAction(nextParticipantId, async () => {
+      if (liveSeatPassStateByUserId[nextParticipantId]) {
+        try {
+          await rejectLiveWatchPartySeatRequest(partyId, nextParticipantId);
+          setLiveSeatPassStateByUserId((previous) => ({ ...previous, [nextParticipantId]: "rejected" }));
+        } catch (error) {
+          Alert.alert(
+            "Seat rejection unavailable",
+            error instanceof Error ? error.message : "The seat rejection could not be saved.",
+          );
+          return;
+        }
+      }
+      clearPendingSeatRequest(nextParticipantId);
+    });
+  }, [clearPendingSeatRequest, liveSeatPassStateByUserId, partyId, runStageParticipantAction]);
   const pendingSeatRequestParticipants = useMemo(() => {
     if (!isHost) return [];
     return visibleStripParticipants.filter((participant) => {
@@ -4679,28 +4757,56 @@ export default function WatchPartyLiveStageScreen({
     setLiveMoneyPurchaseBusy(passType);
     setLiveMoneyNotice("");
     try {
-      const result = await purchaseLiveWatchPartyOffer({ offerId, passType, priceCents });
-      setLiveMoneyNotice(result.alreadyOwned
-        ? "This exact pass is already active. Refreshing room authority."
-        : "Purchase received. Refreshing the exact room grant after provider reconciliation.");
+      const result = await purchaseLiveWatchPartyOffer({ partyId, offerId, passType, priceCents });
+      const confirmed = result.confirmed;
+      setLiveMoneyNotice(confirmed
+        ? passType === "live_watch_party_access_pass"
+          ? "Live Stage Pass active. You can watch/listen to this Live Stage."
+          : "Live Stage Seat Pass active. You're eligible for a speaking seat. Host approval is still required."
+        : passType === "live_watch_party_access_pass"
+          ? "Purchase received. Your Live Stage Pass is still being verified."
+          : "Purchase received. Your Live Stage Seat Pass is still being verified.");
       setLoading(true);
       setAccessRetryToken((value) => value + 1);
     } catch (error) {
-      setLiveMoneyNotice(error instanceof Error ? error.message : "The Live Watch-Party purchase could not complete. Nothing was charged.");
+      setLiveMoneyNotice(error instanceof Error ? error.message : "The Live Stage purchase could not complete. Nothing was charged.");
     } finally {
       setLiveMoneyPurchaseBusy(null);
     }
   };
 
-  const configureLiveMoneyOffer = async (passType: LiveWatchPartyPassType) => {
+  const configureLiveMoneyOffer = async (passType: LiveWatchPartyPassType, enabled: boolean) => {
     if (liveMoneyOfferBusy) return;
     setLiveMoneyOfferBusy(passType);
     setLiveMoneyNotice("");
     try {
-      await setMyLiveWatchPartyOffer({ partyId, passType, enabled: true });
+      const offer = await setMyLiveWatchPartyOffer({ partyId, passType, enabled });
+      if (enabled && offer.status !== "disabled" && offer.offerId) {
+        await saveCreatorSandboxMonetizationConfig({
+          displayName: passType === "live_watch_party_access_pass" ? "Live Stage Pass" : "Live Stage Seat Pass",
+          metadata: {
+            party_id: partyId,
+            setup_surface: "live_stage_host_setup",
+            viewer_route: "/watch-party/live-stage/[partyId]",
+          },
+          productKey: passType === "live_watch_party_access_pass"
+            ? "live_watch_party_access_pass_sandbox_099"
+            : "live_watch_party_seat_pass_sandbox_099",
+          sourceId: offer.offerId,
+          sourceType: passType === "live_watch_party_access_pass"
+            ? "live_watch_party_access"
+            : "live_watch_party_seat",
+        });
+      }
+      const offerState = await readMyLiveWatchPartyHostOfferState(partyId).catch(() => null);
+      setLiveMoneyHostOfferState(offerState);
       setLiveMoneyNotice(passType === "live_watch_party_access_pass"
-        ? "Exact Live Access Pass enabled for this Live Stage."
-        : "Exact Live Seat Pass enabled. Payment creates eligibility only; host approval still controls the seat.");
+        ? enabled
+          ? "Live Stage entry is Paid. Viewers need a Live Stage Pass to watch/listen to this Live Stage. The paid offer currently serves Android sandbox viewers; iPhone purchase is unavailable on this build."
+          : "Live Stage entry is Free."
+        : enabled
+          ? "Speaking-seat eligibility is Paid. The paid offer currently serves Android sandbox viewers; iPhone purchase is unavailable on this build. A Live Stage Seat Pass never guarantees approval, camera, microphone, or LiveKit publish authority."
+          : "Speaking-seat eligibility is Free. Host approval is still required.");
       setAccessRetryToken((value) => value + 1);
     } catch (error) {
       setLiveMoneyNotice(error instanceof Error ? error.message : "The exact live-room offer could not be saved.");
@@ -4839,12 +4945,14 @@ export default function WatchPartyLiveStageScreen({
         <View style={styles.routeGateCard}>
           <Text style={styles.routeGateTitle}>
             {exactLivePassRequired
-              ? "Live Watch-Party pass required"
+              ? "Live Stage Pass required"
               : blockedRoomAccess ? getLiveStageAccessTitle(blockedRoomAccess) : "Live room access unavailable"}
           </Text>
           <Text style={styles.routeGateBody}>
             {exactLivePassRequired
-              ? "This exact Live Stage requires its Live Access Pass for viewer/listener entry. A separate Live Seat Pass provides only seat eligibility and never substitutes for access or guarantees speaking, camera, microphone, or host approval."
+              ? LIVE_STAGE_PASS_PURCHASE_AVAILABLE
+                ? "A Live Stage Pass gives you viewer/listener access to this exact Live Stage. It does not include a speaking seat, camera, microphone, host, moderator, or LiveKit publish authority."
+                : "A Live Stage Pass gives you viewer/listener access to this exact Live Stage. This pass is currently available only through the verified Google Play sandbox, so it cannot be purchased on this build and nothing will be charged. It does not include a speaking seat, camera, microphone, host, moderator, or LiveKit publish authority."
               : blockedRoomAccess ? getLiveStageAccessBody(blockedRoomAccess) : roomEntryError}
           </Text>
           <RouteBackedMonetizationProofCard
@@ -4855,20 +4963,23 @@ export default function WatchPartyLiveStageScreen({
             scope={routeProofConfig?.productType === "live_watch_party_seat_pass" ? "live_watch_party_seat_pass" : "live_watch_party_access_pass"}
             label="What does this unlock?"
           />
-          {exactLivePassRequired && liveMoneyAccess?.accessOfferId && liveMoneyAccess.accessPriceCents ? (
+          {exactLivePassRequired
+            && LIVE_STAGE_PASS_PURCHASE_AVAILABLE
+            && liveMoneyAccess?.accessOfferId
+            && liveMoneyAccess.accessPriceCents ? (
             <TouchableOpacity
               style={styles.routeGatePrimaryButton}
               activeOpacity={0.86}
               disabled={liveMoneyPurchaseBusy !== null}
               onPress={() => void buyLiveMoneyOffer("live_watch_party_access_pass", liveMoneyAccess.accessOfferId, liveMoneyAccess.accessPriceCents)}
               accessibilityRole="button"
-              accessibilityLabel="Buy exact Live Watch-Party Access Pass"
+              accessibilityLabel="Watch Live with a Live Stage Pass"
               testID="live-stage-buy-access-pass"
             >
               <Text style={styles.routeGatePrimaryText}>
                 {liveMoneyPurchaseBusy === "live_watch_party_access_pass"
                   ? "Opening checkout…"
-                  : `Live Access Pass · $${(liveMoneyAccess.accessPriceCents / 100).toFixed(2)}`}
+                  : `Watch Live — $${(liveMoneyAccess.accessPriceCents / 100).toFixed(2)}`}
               </Text>
             </TouchableOpacity>
           ) : null}
@@ -4907,10 +5018,10 @@ export default function WatchPartyLiveStageScreen({
                 });
               }}
               accessibilityRole="button"
-              accessibilityLabel={exactLivePassRequired ? "Refresh exact Live Watch-Party pass" : blockedRoomAccessPrimaryLabel}
+              accessibilityLabel={exactLivePassRequired ? "Refresh Live Stage Pass" : blockedRoomAccessPrimaryLabel}
               hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
             >
-              <Text style={styles.routeGatePrimaryText}>{exactLivePassRequired ? "Refresh pass" : blockedRoomAccessPrimaryLabel}</Text>
+              <Text style={styles.routeGatePrimaryText}>{exactLivePassRequired ? "Refresh Live Stage Pass" : blockedRoomAccessPrimaryLabel}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -4999,29 +5110,63 @@ export default function WatchPartyLiveStageScreen({
         </View>
         {isHost ? (
           <View style={styles.liveMoneyHostControls} testID="live-stage-host-money-controls">
-            <Text style={styles.liveMoneyHostTitle}>Exact Live Stage passes</Text>
-            <Text style={styles.liveMoneyHostBody}>Access is viewer/listener only. Seat Pass is eligibility only and still requires your approval.</Text>
-            <View style={styles.liveMoneyHostActions}>
-              <TouchableOpacity
-                style={styles.liveMoneyHostButton}
-                disabled={liveMoneyOfferBusy !== null}
-                onPress={() => void configureLiveMoneyOffer("live_watch_party_access_pass")}
-                accessibilityRole="button"
-                accessibilityLabel="Enable exact Live Access Pass for this room"
+            <TouchableOpacity
+              style={styles.liveMoneyHostHeader}
+              onPress={() => setLiveMoneyHostSetupExpanded((value) => !value)}
+              accessibilityRole="button"
+              accessibilityLabel={`${liveMoneyHostSetupExpanded ? "Collapse" : "Expand"} Live Stage monetization setup`}
+              accessibilityState={{ expanded: liveMoneyHostSetupExpanded }}
+              testID="live-stage-host-money-controls-toggle"
+            >
+              <Text style={styles.liveMoneyHostTitle}>Live Stage monetization</Text>
+              <Text style={styles.liveMoneyHostToggleText}>{liveMoneyHostSetupExpanded ? "Close" : "Configure"}</Text>
+            </TouchableOpacity>
+            {liveMoneyHostSetupExpanded ? (
+              <ScrollView
+                style={[styles.liveMoneyHostScroller, { maxHeight: Math.max(180, Math.min(360, windowHeight - 220)) }]}
+                contentContainerStyle={styles.liveMoneyHostScrollerContent}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
               >
-                <Text style={styles.liveMoneyHostButtonText}>{liveMoneyOfferBusy === "live_watch_party_access_pass" ? "Saving…" : "Enable Access Pass"}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.liveMoneyHostButton}
-                disabled={liveMoneyOfferBusy !== null}
-                onPress={() => void configureLiveMoneyOffer("live_watch_party_seat_pass")}
-                accessibilityRole="button"
-                accessibilityLabel="Enable exact Live Seat eligibility Pass for this room"
-              >
-                <Text style={styles.liveMoneyHostButtonText}>{liveMoneyOfferBusy === "live_watch_party_seat_pass" ? "Saving…" : "Enable Seat eligibility"}</Text>
-              </TouchableOpacity>
-            </View>
-            {liveMoneyNotice ? <Text style={styles.liveMoneyHostBody}>{liveMoneyNotice}</Text> : null}
+                <Text style={styles.liveMoneyHostSectionTitle}>VIEWER ENTRY</Text>
+                <Text style={styles.liveMoneyHostBody}>Charge for Live Stage entry. A paid Live Stage Pass gives viewers watch/listen access only.</Text>
+                <View style={styles.liveMoneyHostActions}>
+                  {([false, true] as const).map((paid) => (
+                    <TouchableOpacity
+                      key={`entry-${paid ? "paid" : "free"}`}
+                      style={[styles.liveMoneyHostButton, liveMoneyHostOfferState?.accessEnabled === paid && styles.liveMoneyHostButtonSelected]}
+                      disabled={liveMoneyOfferBusy !== null}
+                      onPress={() => void configureLiveMoneyOffer("live_watch_party_access_pass", paid)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: liveMoneyHostOfferState?.accessEnabled === paid }}
+                      accessibilityLabel={`Set Live Stage viewer entry to ${paid ? "Paid" : "Free"}`}
+                    >
+                      <Text style={styles.liveMoneyHostButtonText}>{liveMoneyOfferBusy === "live_watch_party_access_pass" ? "Saving…" : paid ? "Paid · $0.99" : "Free"}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.liveMoneyHostSectionTitle}>SPEAKING-SEAT ELIGIBILITY</Text>
+                <Text style={styles.liveMoneyHostBody}>A Live Stage Seat Pass makes a viewer eligible for a speaking seat. You still decide who is approved to speak.</Text>
+                <View style={styles.liveMoneyHostActions}>
+                  {([false, true] as const).map((paid) => (
+                    <TouchableOpacity
+                      key={`seat-${paid ? "paid" : "free"}`}
+                      style={[styles.liveMoneyHostButton, liveMoneyHostOfferState?.seatEnabled === paid && styles.liveMoneyHostButtonSelected]}
+                      disabled={liveMoneyOfferBusy !== null}
+                      onPress={() => void configureLiveMoneyOffer("live_watch_party_seat_pass", paid)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: liveMoneyHostOfferState?.seatEnabled === paid }}
+                      accessibilityLabel={`Set speaking-seat eligibility to ${paid ? "Paid" : "Free"}`}
+                    >
+                      <Text style={styles.liveMoneyHostButtonText}>{liveMoneyOfferBusy === "live_watch_party_seat_pass" ? "Saving…" : paid ? "Paid · $0.99" : "Free"}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.liveMoneyHostBody} testID="live-stage-host-money-platform-note">Paid Live Stage passes currently use the verified Google Play sandbox. Android sandbox viewers can buy them; iPhone viewers cannot buy them on this build.</Text>
+                <Text style={styles.liveMoneyHostBody}>Viewer preview: {liveMoneyHostOfferState?.accessEnabled ? "Watch Live — $0.99" : "Free viewer entry"} · {liveMoneyHostOfferState?.seatEnabled ? "Live Stage Seat Pass — $0.99; host approval required" : "Free seat eligibility; host approval required"}. Payment never grants host, moderator, speaker, camera, microphone, or LiveKit publish authority.</Text>
+                {liveMoneyNotice ? <Text style={styles.liveMoneyHostBody}>{liveMoneyNotice}</Text> : null}
+              </ScrollView>
+            ) : null}
           </View>
         ) : null}
         {isLiveRoomSurface ? renderLiveRoomSurfaceShell() : null}
@@ -5169,6 +5314,54 @@ export default function WatchPartyLiveStageScreen({
             </Text>
           </View>
         ) : null}
+        {isLiveFirstMode && !isHost ? (
+          <View style={[styles.stageLiveFirstSeatControls, { bottom: liveDockBottomInset + 82 }]} pointerEvents="auto">
+            <Text style={styles.stageCommunityHint}>{stageSeatRequestHint}</Text>
+            {liveMoneyAccess?.allowed
+              && !currentUserHasLiveSeatRequestEligibility
+              && liveMoneyAccess.seatOfferId
+              && liveMoneyAccess.seatPriceCents ? (
+              <View style={styles.stageCommunityPurchaseGroup}>
+                <Text style={styles.stageCommunityHint}>Live Stage Seat Pass: eligible for a speaking seat on this Live Stage. Host approval required. This does not guarantee speaking, camera, microphone, or LiveKit publish authority.</Text>
+                {LIVE_STAGE_PASS_PURCHASE_AVAILABLE ? (
+                  <TouchableOpacity
+                    style={[styles.stageCommunityRequestButton, liveMoneyPurchaseBusy !== null && styles.stageCommunityRequestButtonDisabled]}
+                    activeOpacity={0.84}
+                    disabled={liveMoneyPurchaseBusy !== null}
+                    onPress={() => void buyLiveMoneyOffer("live_watch_party_seat_pass", liveMoneyAccess.seatOfferId, liveMoneyAccess.seatPriceCents)}
+                    testID="live-stage-buy-seat-eligibility-live-first"
+                    accessibilityRole="button"
+                    accessibilityLabel="Buy Live Stage Seat Pass; host approval required"
+                  >
+                    <Text style={styles.stageCommunityRequestButtonText}>
+                      {liveMoneyPurchaseBusy === "live_watch_party_seat_pass"
+                        ? "Opening checkout…"
+                        : `Live Stage Seat Pass — $${(liveMoneyAccess.seatPriceCents / 100).toFixed(2)}`}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={styles.stageCommunityHint} testID="live-stage-seat-pass-unavailable-live-first">This pass is currently available only through the verified Google Play sandbox. It cannot be purchased on this build, and nothing will be charged.</Text>
+                )}
+              </View>
+            ) : null}
+            {liveMoneyNotice ? <Text style={styles.stageCommunityHint}>{liveMoneyNotice}</Text> : null}
+            {!shouldRenderStageSelfMuteControl ? (
+              <TouchableOpacity
+                style={[styles.stageCommunityRequestButton, stageSeatRequestButtonDisabled && styles.stageCommunityRequestButtonDisabled]}
+                activeOpacity={0.84}
+                disabled={stageSeatRequestButtonDisabled}
+                onPress={() => void requestStageSeat(currentUserParticipantId)}
+                testID="live-stage-request-camera-button-live-first"
+                accessibilityRole="button"
+                accessibilityLabel="Request camera and microphone on Live Stage"
+              >
+                <Text style={[styles.stageCommunityRequestButtonText, stageSeatRequestButtonDisabled && styles.stageCommunityRequestButtonTextDisabled]}>
+                  {stageSeatRequestButtonLabel}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
         {isHost && pendingSeatRequestParticipant && seatRequestSheetParticipantId ? (
           <View
             pointerEvents="auto"
@@ -5213,12 +5406,14 @@ export default function WatchPartyLiveStageScreen({
                   accessible
                   focusable
                   accessibilityRole="button"
-                  accessibilityLabel="Not now for this seat request"
+                  accessibilityLabel="Reject this speaking-seat request"
                   disabled={stageParticipantActionBusyId === pendingSeatRequestParticipant.userId}
-                  onPress={() => clearPendingSeatRequest(pendingSeatRequestParticipant.userId)}
+                  onPress={() => {
+                    void rejectStageSeatRequest(pendingSeatRequestParticipant.userId);
+                  }}
                   testID="live-stage-seat-request-dismiss"
                 >
-                  <Text style={styles.stageSeatRequestSecondaryText}>Not now</Text>
+                  <Text style={styles.stageSeatRequestSecondaryText}>Reject</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
@@ -5298,28 +5493,35 @@ export default function WatchPartyLiveStageScreen({
               && !currentUserHasLiveSeatRequestEligibility
               && liveMoneyAccess.seatOfferId
               && liveMoneyAccess.seatPriceCents ? (
-              <TouchableOpacity
-                style={[
-                  styles.stageCommunityRequestButton,
-                  liveMoneyPurchaseBusy !== null && styles.stageCommunityRequestButtonDisabled,
-                ]}
-                activeOpacity={0.84}
-                disabled={liveMoneyPurchaseBusy !== null}
-                onPress={() => void buyLiveMoneyOffer(
-                  "live_watch_party_seat_pass",
-                  liveMoneyAccess.seatOfferId,
-                  liveMoneyAccess.seatPriceCents,
-                )}
-                testID="live-stage-buy-seat-eligibility"
-                accessibilityRole="button"
-                accessibilityLabel="Buy seat eligibility for this exact Live Stage"
-              >
-                <Text style={styles.stageCommunityRequestButtonText}>
-                  {liveMoneyPurchaseBusy === "live_watch_party_seat_pass"
-                    ? "Opening checkout…"
-                    : `Buy seat eligibility · $${(liveMoneyAccess.seatPriceCents / 100).toFixed(2)}`}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.stageCommunityPurchaseGroup}>
+              <Text style={styles.stageCommunityHint}>Live Stage Seat Pass: eligible for a speaking seat on this Live Stage. Host approval required. This does not guarantee speaking, camera, microphone, or LiveKit publish authority.</Text>
+              {LIVE_STAGE_PASS_PURCHASE_AVAILABLE ? (
+                <TouchableOpacity
+                  style={[
+                    styles.stageCommunityRequestButton,
+                    liveMoneyPurchaseBusy !== null && styles.stageCommunityRequestButtonDisabled,
+                  ]}
+                  activeOpacity={0.84}
+                  disabled={liveMoneyPurchaseBusy !== null}
+                  onPress={() => void buyLiveMoneyOffer(
+                    "live_watch_party_seat_pass",
+                    liveMoneyAccess.seatOfferId,
+                    liveMoneyAccess.seatPriceCents,
+                  )}
+                  testID="live-stage-buy-seat-eligibility"
+                  accessibilityRole="button"
+                  accessibilityLabel="Buy Live Stage Seat Pass; host approval required"
+                >
+                  <Text style={styles.stageCommunityRequestButtonText}>
+                    {liveMoneyPurchaseBusy === "live_watch_party_seat_pass"
+                      ? "Opening checkout…"
+                      : `Live Stage Seat Pass — $${(liveMoneyAccess.seatPriceCents / 100).toFixed(2)}`}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.stageCommunityHint} testID="live-stage-seat-pass-unavailable">This pass is currently available only through the verified Google Play sandbox. It cannot be purchased on this build, and nothing will be charged.</Text>
+              )}
+              </View>
             ) : null}
             {!isHost && liveMoneyNotice ? (
               <Text style={styles.stageCommunityHint}>{liveMoneyNotice}</Text>
@@ -5470,6 +5672,7 @@ export default function WatchPartyLiveStageScreen({
                         participant,
                         state: participantState,
                         isRequesting,
+                        seatState: liveSeatPassStateByUserId[participant.userId] ?? null,
                       });
                       const participantDisplayName = isCurrentUser ? "You" : participant.displayName;
                       const currentUserCanShowCameraTile = isHostBubble || isSpeakerRole;
@@ -6134,6 +6337,10 @@ const styles = StyleSheet.create({
   },
   stageHudTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 7 },
   liveMoneyHostControls: {
+    position: "absolute",
+    top: 88,
+    left: 0,
+    right: 0,
     zIndex: 30,
     borderRadius: 14,
     borderWidth: 1,
@@ -6143,11 +6350,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     gap: 6,
   },
+  liveMoneyHostHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   liveMoneyHostTitle: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
+  liveMoneyHostToggleText: { color: "#9ED6FF", fontSize: 11, fontWeight: "900" },
+  liveMoneyHostScroller: { flexGrow: 0 },
+  liveMoneyHostScrollerContent: { gap: 6, paddingBottom: 4 },
   liveMoneyHostBody: { color: "rgba(238,241,247,0.76)", fontSize: 11, lineHeight: 15 },
-  liveMoneyHostActions: { flexDirection: "row", gap: 8 },
+  liveMoneyHostActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  liveMoneyHostSectionTitle: { color: "#9ED6FF", fontSize: 10, fontWeight: "900", marginTop: 3 },
   liveMoneyHostButton: {
-    flex: 1,
+    minWidth: 120,
+    flexGrow: 1,
     minHeight: 34,
     borderRadius: 10,
     alignItems: "center",
@@ -6155,7 +6368,24 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(220,20,60,0.86)",
     paddingHorizontal: 8,
   },
+  liveMoneyHostButtonSelected: {
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
   liveMoneyHostButtonText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800", textAlign: "center" },
+  stageCommunityPurchaseGroup: { gap: 7 },
+  stageLiveFirstSeatControls: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    zIndex: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(5,8,14,0.92)",
+    padding: 10,
+    gap: 7,
+  },
   livePill: {
     flexDirection: "row",
     alignItems: "center",

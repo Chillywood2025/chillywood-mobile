@@ -161,7 +161,7 @@ export function resolveSpectatorAccess(
       reason: "ticket_required",
       canShowMetadata: true,
       canJoinFullRoom: false,
-      safeCopy: "Seat Pass viewing requires a backed purchase flow before full access.",
+      safeCopy: "This exact spectator target requires its contextual access pass before full access.",
     };
   }
 

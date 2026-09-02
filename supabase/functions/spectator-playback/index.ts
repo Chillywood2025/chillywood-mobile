@@ -659,7 +659,7 @@ const discoveryBlockState = (item: DiscoveryFeedItemRow | null) => {
     return baseState(
       "blocked_ticketed",
       "Spectator playback is ticketed.",
-      "Seat Pass public playback needs a backed purchase flow before it can be exposed.",
+      "This exact spectator target needs its contextual access pass before public playback can be exposed.",
     );
   }
   if (item.requires_premium_to_join || item.access_type === "premium_only") {
@@ -895,7 +895,7 @@ const blockedStateForRecord = (
     return baseState(
       "blocked_ticketed",
       "Spectator playback is ticketed.",
-      "Seat Pass public playback needs a backed purchase flow before it can be exposed.",
+      "This exact spectator target needs its contextual access pass before public playback can be exposed.",
     );
   }
   if (record.requires_premium || session?.requires_premium || record.access_type === "premium_only" || session?.access_type === "premium_only") {

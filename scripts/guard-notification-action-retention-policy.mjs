@@ -93,8 +93,14 @@ assertNotIncludes(chatIndex, "creator_money_purchase", "Chat must not become cre
 
 [
   "watch_party_live_ticket",
-  "Your Seat Pass is ready.",
-  "Seat Pass sold",
+  "Party Room Pass active",
+  "Party Room Pass sold",
+  "Live Stage Pass active",
+  "Live Stage Pass sold",
+  "Live Stage Seat Pass active",
+  "Live Stage Seat Pass sold",
+  "Event Pass active",
+  "Event Pass sold",
 ].forEach((needle) => assertIncludes(revenuecatWebhook, needle, "Seat Pass visible notification copy"));
 
 const staleSeatPassVisibleCopy = [

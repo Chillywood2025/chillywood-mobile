@@ -310,7 +310,7 @@ export function getAccessLabel(input: LabelInput): string {
   if (classification === "private") return "Private";
   if (classification === "subscriber_access") return "Subscriber Access";
   if (classification === "mixed_access") return "Mixed Access";
-  if (classification === "party_pass") return "Seat Pass";
+  if (classification === "party_pass") return "Party Room Pass";
   if (classification === "premium_only") return "Premium";
   if (classification === "unsupported_later") return "Later";
   return "Public";

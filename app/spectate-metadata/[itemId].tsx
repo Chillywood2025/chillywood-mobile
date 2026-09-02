@@ -354,7 +354,7 @@ export default function SpectatorMetadataScreen() {
             <Text style={styles.detailLabel}>Full room</Text>
             <Text style={styles.detailValue}>
               {playback.fullRoomRequiresTicket
-                ? "Seat Pass flow required later"
+                ? "Contextual access-pass flow required later"
                 : playback.fullRoomRequiresPremium
                   ? "Premium required for full room"
                   : decision.canJoinFullRoom

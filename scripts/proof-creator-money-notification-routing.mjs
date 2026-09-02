@@ -18,6 +18,7 @@ const routeTargets = read("_lib/creatorMonetizationRouteTargets.ts");
 [
   "/player/[id]",
   "/watch-party/[partyId]",
+  "/watch-party/live-stage/[partyId]",
   "/channel-subscription/[creatorId]",
   "/vip-pass/[creatorId]",
   "/event/[eventId]",
@@ -58,7 +59,13 @@ add("notification response handler sanitizes then uses router.push",
   "sanitized router.push notification path");
 add("Watch-Party money notification targets Party Room", includes(revenuecatWebhook, 'route: "/watch-party/[partyId]"'), "/watch-party/[partyId]");
 add("Watch-Party route target stays Party Room in route truth", includes(routeTargets, 'viewerTarget: "/watch-party/[partyId]"'), "Party Room viewer target");
-add("Watch-Party money notification does not deep-link to Live Stage", !includes(revenuecatWebhook, "chillywoodmobile://watch-party/live-stage"), "no money Live Stage deep link");
+add("Party Room Pass deep link stays on the exact canonical Party Room path", includes(revenuecatWebhook, "deepLink: `chillywoodmobile://watch-party/${partyId}`"), "exact Party Room deep link");
+add("Live Stage Pass and Seat Pass deep links use the exact Live Stage path", includes(revenuecatWebhook, "deepLink: `chillywoodmobile://watch-party/live-stage/${partyId}`"), "exact Live Stage deep link");
+add("Live Stage notification target is distinct from Party Room", includes(revenuecatWebhook, 'route: "/watch-party/live-stage/[partyId]"'), "distinct Live Stage route");
+add("Event Pass deep link stays on the exact canonical Event path", includes(revenuecatWebhook, "deepLink: `chillywoodmobile://event/${creatorEventId}`"), "exact Event deep link");
+add("Party Room notification target is derived from its exact canonical offer", includes(revenuecatWebhook, '.from("paid_watch_party_offers")') && includes(revenuecatWebhook, '.eq("creator_id", creatorId)'), "exact Party Room offer binding");
+add("Live Stage notification target is derived from its exact canonical offer and product", includes(revenuecatWebhook, '.from("paid_live_watch_party_offers")') && includes(revenuecatWebhook, '.eq("pass_type", input.productType)'), "exact Live Stage offer binding");
+add("Event notification target is derived from its exact creator Event", includes(revenuecatWebhook, '.from("paid_creator_events")') && includes(revenuecatWebhook, '.eq("creator_event_id", sourceId)'), "exact Event binding");
 
 const failed = checks.filter((check) => !check.passed);
 if (failed.length) {

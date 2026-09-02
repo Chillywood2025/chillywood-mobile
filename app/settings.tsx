@@ -198,7 +198,7 @@ const NOTIFICATION_GROUPS: {
       {
         key: "creatorMoneyPurchasesEnabled",
         label: "Creator purchase receipts",
-        description: "Show buyer-side receipts for creator videos, Seat Passes, subscriptions, VIP, events, and tips.",
+        description: "Show buyer-side receipts for creator videos, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, subscriptions, VIP, Events, and tips.",
       },
       {
         key: "creatorMoneySalesEnabled",

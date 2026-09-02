@@ -696,26 +696,70 @@ const resolveWatchPartyNotificationTarget = async (
   adminClient: SupabaseClientLike,
   sourceId: string | null,
   metadata: Record<string, unknown>,
+  creatorId: string | null,
 ): Promise<CreatorMoneyNotificationTarget | null> => {
+  if (!sourceId || !creatorId) return null;
   const metadataPartyId = toText(metadata.party_id);
-  if (metadataPartyId) {
-    return {
-      deepLink: `chillywoodmobile://watch-party/${metadataPartyId}`,
-      entityId: metadataPartyId,
-      route: "/watch-party/[partyId]",
-    };
-  }
-  if (!sourceId) return null;
   const { data } = await adminClient
     .from("paid_watch_party_offers")
-    .select("party_id")
+    .select("party_id,creator_id")
     .eq("id", sourceId)
+    .eq("creator_id", creatorId)
     .maybeSingle();
-  const partyId = toText(data?.party_id) || sourceId;
+  const partyId = toText(data?.party_id);
+  if (!partyId || (metadataPartyId && metadataPartyId !== partyId)) return null;
   return {
     deepLink: `chillywoodmobile://watch-party/${partyId}`,
     entityId: partyId,
     route: "/watch-party/[partyId]",
+  };
+};
+
+const resolveLiveWatchPartyNotificationTarget = async (
+  adminClient: SupabaseClientLike,
+  input: {
+    creatorId: string | null;
+    metadata: Record<string, unknown>;
+    productType: "live_watch_party_access_pass" | "live_watch_party_seat_pass";
+    sourceId: string | null;
+  },
+): Promise<CreatorMoneyNotificationTarget | null> => {
+  if (!input.sourceId || !input.creatorId) return null;
+  const { data } = await adminClient
+    .from("paid_live_watch_party_offers")
+    .select("party_id,creator_id,pass_type")
+    .eq("id", input.sourceId)
+    .eq("creator_id", input.creatorId)
+    .eq("pass_type", input.productType)
+    .maybeSingle();
+  const partyId = toText(data?.party_id);
+  const metadataPartyId = toText(input.metadata.party_id);
+  if (!partyId || (metadataPartyId && metadataPartyId !== partyId)) return null;
+  return {
+    deepLink: `chillywoodmobile://watch-party/live-stage/${partyId}`,
+    entityId: partyId,
+    route: "/watch-party/live-stage/[partyId]",
+  };
+};
+
+const resolveEventNotificationTarget = async (
+  adminClient: SupabaseClientLike,
+  sourceId: string | null,
+  creatorId: string | null,
+): Promise<CreatorMoneyNotificationTarget | null> => {
+  if (!sourceId || !creatorId) return null;
+  const { data } = await adminClient
+    .from("paid_creator_events")
+    .select("creator_event_id,creator_id")
+    .eq("creator_event_id", sourceId)
+    .eq("creator_id", creatorId)
+    .maybeSingle();
+  const creatorEventId = toText(data?.creator_event_id);
+  if (!creatorEventId || creatorEventId !== sourceId) return null;
+  return {
+    deepLink: `chillywoodmobile://event/${creatorEventId}`,
+    entityId: creatorEventId,
+    route: "/event/[eventId]",
   };
 };
 
@@ -733,16 +777,15 @@ const resolveCreatorMoneyNotificationTarget = async (
     return { deepLink: `chillywoodmobile://player/${sourceId}`, entityId: sourceId, route: "/player/[id]" };
   }
   if (input.productType === "watch_party_live_ticket") {
-    return resolveWatchPartyNotificationTarget(adminClient, sourceId, input.metadata);
+    return resolveWatchPartyNotificationTarget(adminClient, sourceId, input.metadata, input.creatorId);
   }
   if (input.productType === "live_watch_party_access_pass" || input.productType === "live_watch_party_seat_pass") {
-    const partyId = toText(input.metadata.party_id);
-    if (!partyId) return null;
-    return {
-      deepLink: `chillywoodmobile://watch-party/live-stage/${partyId}`,
-      entityId: partyId,
-      route: "/watch-party/live-stage/[partyId]",
-    };
+    return resolveLiveWatchPartyNotificationTarget(adminClient, {
+      creatorId: input.creatorId,
+      metadata: input.metadata,
+      productType: input.productType,
+      sourceId,
+    });
   }
   if (input.productType === "channel_subscription" && input.creatorId) {
     return {
@@ -759,7 +802,7 @@ const resolveCreatorMoneyNotificationTarget = async (
     };
   }
   if (input.productType === "event_pass" && sourceId) {
-    return { deepLink: `chillywoodmobile://event/${sourceId}`, entityId: sourceId, route: "/event/[eventId]" };
+    return resolveEventNotificationTarget(adminClient, sourceId, input.creatorId);
   }
   if (input.productType === "creator_tip" && input.creatorId) {
     return { deepLink: `chillywoodmobile://channel/${input.creatorId}`, entityId: input.creatorId, route: "/channel/[userId]" };
@@ -783,32 +826,32 @@ const buyerNotificationPlanForProduct = (
   }
   if (productType === "watch_party_live_ticket") {
     return {
-      body: "Your Seat Pass is ready.",
+      body: "You're cleared to enter this exact Party Room. This does not include Live Stage or any speaker, host, moderator, camera, microphone, or publish authority.",
       category: "creator_money_purchase",
       notificationType: "watch_party_ticket_ready",
       priority: 4,
       recipientUserId: buyerUserId,
-      title: "Your Seat Pass is ready",
+      title: "Party Room Pass active",
     };
   }
   if (productType === "live_watch_party_access_pass") {
     return {
-      body: "Your exact Live Stage viewer/listener access is ready. This does not include a speaking seat.",
+      body: "You can watch/listen to this exact Live Stage. This does not include a speaking seat, camera, microphone, host, moderator, or publish authority.",
       category: "creator_money_purchase",
       notificationType: "live_watch_party_access_ready",
       priority: 4,
       recipientUserId: buyerUserId,
-      title: "Live Access Pass ready",
+      title: "Live Stage Pass active",
     };
   }
   if (productType === "live_watch_party_seat_pass") {
     return {
-      body: "Seat eligibility is ready for this exact Live Stage. Host approval is still required before camera or microphone.",
+      body: "You're eligible for a speaking seat on this exact Live Stage. Host approval is still required before speaking, camera, or microphone.",
       category: "creator_money_purchase",
       notificationType: "live_watch_party_seat_eligible",
       priority: 4,
       recipientUserId: buyerUserId,
-      title: "Seat eligibility ready",
+      title: "Live Stage Seat Pass active",
     };
   }
   if (productType === "channel_subscription") {
@@ -833,12 +876,12 @@ const buyerNotificationPlanForProduct = (
   }
   if (productType === "event_pass") {
     return {
-      body: "Event Pass confirmed.",
+      body: "You have access to this exact Event. It does not generically unlock Party Room or Live Stage.",
       category: "creator_money_purchase",
       notificationType: "event_pass_active",
       priority: 4,
       recipientUserId: buyerUserId,
-      title: "Event Pass confirmed",
+      title: "Event Pass active",
     };
   }
   if (productType === "creator_tip") {
@@ -877,7 +920,7 @@ const creatorNotificationPlanForProduct = (
       notificationType: "watch_party_ticket_sold",
       priority: 4,
       recipientUserId: creatorUserId,
-      title: "Seat Pass sold",
+      title: "Party Room Pass sold",
     };
   }
   if (productType === "live_watch_party_access_pass") {
@@ -887,17 +930,17 @@ const creatorNotificationPlanForProduct = (
       notificationType: "live_watch_party_access_sold",
       priority: 4,
       recipientUserId: creatorUserId,
-      title: "Live Access Pass sold",
+      title: "Live Stage Pass sold",
     };
   }
   if (productType === "live_watch_party_seat_pass") {
     return {
-      body: "Seat eligibility sold. The viewer may submit a request in the exact Live Stage; payment did not create or approve a speaker request.",
+      body: "Live Stage Seat Pass sold. The viewer may submit a request in the exact Live Stage; payment did not create or approve a speaker request.",
       category: "creator_money_sale",
       notificationType: "live_watch_party_seat_sold",
       priority: 4,
       recipientUserId: creatorUserId,
-      title: "Seat eligibility sold",
+      title: "Live Stage Seat Pass sold",
     };
   }
   if (productType === "channel_subscription") {
@@ -1234,14 +1277,17 @@ const createLiveWatchPartyTerminalNotifications = async (
   const refunded = input.eventType === "REFUND";
   const seat = input.terminal.productType === "live_watch_party_seat_pass";
   const notificationType: MoneyNotificationType = refunded ? "creator_money_refunded" : "creator_money_revoked";
-  const label = seat ? "Live Stage seat eligibility" : "Live Stage viewer/listener access";
+  const label = seat ? "Live Stage Seat Pass" : "Live Stage Pass";
+  const buyerBody = seat
+    ? `${label} for this exact target was ${refunded ? "refunded" : "revoked"}. It no longer makes you eligible for a speaking seat and never guaranteed host approval or LiveKit publish authority.`
+    : `${label} for this exact target was ${refunded ? "refunded" : "revoked"}. It no longer grants viewer/listener entry to this Live Stage.`;
   await createCreatorMoneyNotification(adminClient, {
     actorUserId: creatorId, dedupeEventId: input.terminal.providerEventId,
     ledgerEventId: input.terminal.ledgerEventId, productKey: input.terminal.productKey,
     sourceId, sourceType, target,
-    plan: { body: `${label} for this exact target was ${refunded ? "refunded" : "revoked"}. It no longer grants authority.`,
+    plan: { body: buyerBody,
       category: "creator_money_purchase", notificationType, priority: 5,
-      recipientUserId: input.buyerUserId, title: refunded ? "Live pass refunded" : "Live pass revoked" },
+      recipientUserId: input.buyerUserId, title: refunded ? `${label} refunded` : `${label} revoked` },
   });
   if (creatorId !== input.buyerUserId) await createCreatorMoneyNotification(adminClient, {
     actorUserId: input.buyerUserId, dedupeEventId: input.terminal.providerEventId,
@@ -1250,7 +1296,7 @@ const createLiveWatchPartyTerminalNotifications = async (
     target: { deepLink: "chillywoodmobile://channel-studio?tab=monetization&focus=transactions", entityId: creatorId, route: "/channel-studio" },
     plan: { body: `${label} was ${refunded ? "refunded" : "reversed"}. Its earnings cannot become payout-ready.`,
       category: "creator_money_sale", notificationType, priority: 5,
-      recipientUserId: creatorId, title: refunded ? "Live pass refund recorded" : "Live pass reversal recorded" },
+      recipientUserId: creatorId, title: refunded ? `${label} refund recorded` : `${label} reversal recorded` },
   });
 };
 

@@ -196,7 +196,7 @@ assertIncludes(channelSettings, "Test mode - no payouts", "Money Center compact 
 assertIncludes(channelSettings, "No real charges. No creator earnings. No withdrawals.", "Money Center compact no-money copy");
 assertIncludes(channelSettings, "timed_out", "Money Center setup timeout lifecycle");
 assertIncludes(channelSettings, "Setup timed out", "Money Center setup timeout notice");
-assertIncludes(channelSettings, "Create a Party Room before testers can get a Seat Pass", "Money Center Watch-Party missing next action copy");
+assertIncludes(channelSettings, "Create a Party Room before testers can get a Party Room Pass", "Money Center Party Room Pass missing next action copy");
 assertNotIncludes(channelSettings, "Sandbox testing is complete", "Money Center misleading sandbox complete copy");
 assertIncludes(channelSettings, "Monetization", "Platform Studio Monetization tab");
 assertIncludes(channelSettings, "Paid Video", "Platform Studio paid video copy");
