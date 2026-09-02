@@ -35,19 +35,76 @@ const evaluateStringPath = (nodePath) => {
 
 const staleChannelPattern = /\bchannels?\b/iu;
 
+const getPropertyKey = (propertyPath) => {
+  const keyPath = propertyPath.get("key");
+  return !propertyPath.node.computed && keyPath.isIdentifier()
+    ? keyPath.node.name
+    : evaluateStringPath(keyPath);
+};
+
+const resolveContainerProperty = (containerPath, propertyKey, visitedBindings) => {
+  const resolvedContainer = resolveConstantPath(containerPath, visitedBindings);
+  if (resolvedContainer.isObjectExpression()) {
+    for (const propertyPath of resolvedContainer.get("properties")) {
+      if (propertyPath.isObjectProperty() && getPropertyKey(propertyPath) === propertyKey) {
+        return resolveConstantPath(propertyPath.get("value"), visitedBindings);
+      }
+    }
+  }
+  if (resolvedContainer.isArrayExpression() && /^\d+$/u.test(String(propertyKey))) {
+    const elementPath = resolvedContainer.get("elements")[Number(propertyKey)];
+    if (elementPath?.node) return resolveConstantPath(elementPath, visitedBindings);
+  }
+  return null;
+};
+
+function resolveConstantPath(nodePath, visitedBindings = new Set()) {
+  if (!nodePath?.node) return nodePath;
+  if (nodePath.isMemberExpression()) {
+    const propertyPath = nodePath.get("property");
+    const propertyKey = !nodePath.node.computed && propertyPath.isIdentifier()
+      ? propertyPath.node.name
+      : evaluateStringPath(propertyPath);
+    if (propertyKey !== null) {
+      return resolveContainerProperty(nodePath.get("object"), propertyKey, visitedBindings) ?? nodePath;
+    }
+  }
+  if (!nodePath.isIdentifier() || !nodePath.isReferencedIdentifier()) return nodePath;
+  const binding = nodePath.scope.getBinding(nodePath.node.name);
+  if (!binding?.constant || !binding.path.isVariableDeclarator() || visitedBindings.has(binding)) return nodePath;
+  const initPath = binding.path.get("init");
+  if (!initPath?.node) return nodePath;
+  const nextVisited = new Set(visitedBindings);
+  nextVisited.add(binding);
+  const idPath = binding.path.get("id");
+  if (idPath.isIdentifier()) return resolveConstantPath(initPath, nextVisited);
+  if (idPath.isObjectPattern()) {
+    for (const propertyPath of idPath.get("properties")) {
+      if (!propertyPath.isObjectProperty()) continue;
+      const valuePath = propertyPath.get("value");
+      if (!valuePath.isIdentifier({ name: nodePath.node.name })) continue;
+      const sourceKey = getPropertyKey(propertyPath);
+      if (sourceKey !== null) {
+        return resolveContainerProperty(initPath, sourceKey, nextVisited) ?? nodePath;
+      }
+    }
+  }
+  return nodePath;
+}
+
 const collectStringFragments = (nodePath, visitedBindings = new Set()) => {
+  const resolvedPath = resolveConstantPath(nodePath, visitedBindings);
+  if (resolvedPath !== nodePath) return collectStringFragments(resolvedPath, visitedBindings);
   const evaluated = evaluateStringPath(nodePath);
   if (evaluated !== null) return [evaluated];
   const fragments = [];
   const collectReferencedBinding = (identifierPath) => {
     if (!identifierPath.isReferencedIdentifier()) return;
-    const binding = identifierPath.scope.getBinding(identifierPath.node.name);
-    if (!binding?.constant || !binding.path.isVariableDeclarator() || visitedBindings.has(binding)) return;
-    const initPath = binding.path.get("init");
-    if (!initPath?.node) return;
-    const nextVisited = new Set(visitedBindings);
-    nextVisited.add(binding);
-    fragments.push(...collectStringFragments(initPath, nextVisited));
+    if (identifierPath.parentPath?.isMemberExpression() && identifierPath.key === "object") return;
+    const resolvedBindingPath = resolveConstantPath(identifierPath, visitedBindings);
+    if (resolvedBindingPath !== identifierPath) {
+      fragments.push(...collectStringFragments(resolvedBindingPath, visitedBindings));
+    }
   };
   if (nodePath.isStringLiteral()) fragments.push(nodePath.node.value);
   if (nodePath.isTemplateLiteral()) {
@@ -57,6 +114,13 @@ const collectStringFragments = (nodePath, visitedBindings = new Set()) => {
   }
   if (nodePath.isIdentifier()) collectReferencedBinding(nodePath);
   nodePath.traverse({
+    MemberExpression(memberPath) {
+      const resolvedMemberPath = resolveConstantPath(memberPath, visitedBindings);
+      if (resolvedMemberPath !== memberPath) {
+        fragments.push(...collectStringFragments(resolvedMemberPath, visitedBindings));
+        memberPath.skip();
+      }
+    },
     StringLiteral(stringPath) {
       fragments.push(stringPath.node.value);
     },
@@ -91,11 +155,27 @@ const hasStaleStaticChannelMessage = (source) => {
     },
     ObjectProperty(propertyPath) {
       if (stale) return;
-      const keyPath = propertyPath.get("key");
-      const key = !propertyPath.node.computed && keyPath.isIdentifier()
-        ? keyPath.node.name
-        : evaluateStringPath(keyPath);
+      const key = getPropertyKey(propertyPath);
       if (key === "message" && pathContainsChannelText(propertyPath.get("value"))) stale = true;
+    },
+    AssignmentExpression(assignmentPath) {
+      if (stale || assignmentPath.node.operator !== "=") return;
+      const leftPath = assignmentPath.get("left");
+      if (!leftPath.isMemberExpression()) return;
+      const propertyPath = leftPath.get("property");
+      const key = !leftPath.node.computed && propertyPath.isIdentifier()
+        ? propertyPath.node.name
+        : evaluateStringPath(propertyPath);
+      if (key === "message" && pathContainsChannelText(assignmentPath.get("right"))) stale = true;
+    },
+    ObjectMethod(methodPath) {
+      if (stale || getPropertyKey(methodPath) !== "message") return;
+      methodPath.traverse({
+        ReturnStatement(returnPath) {
+          const argumentPath = returnPath.get("argument");
+          if (argumentPath?.node && pathContainsChannelText(argumentPath)) stale = true;
+        },
+      });
     },
   });
   return stale;
@@ -403,6 +483,10 @@ if (findUnsafeThrownErrors(friendGraph).length > 0) {
   'const { stale } = { stale: "This channel is unavailable." }; ({ message: stale });',
   'const COPY = { stale: "This channel is unavailable." }; const result = {}; result.message = COPY.stale;',
   '({ get message() { return "This channel is unavailable."; } });',
+  'const left = "chan"; const right = "nel"; const result = {}; result.message = left + status + right;',
+  'const left = "chan"; const right = "nel"; ({ get message() { return left + status + right; } });',
+  'const COPY = { left: "chan", right: "nel" }; ({ message: COPY.left + status + COPY.right });',
+  'const COPY = { left: "chan", right: "nel" }; const { left, right } = COPY; ({ message: left + status + right });',
 ].forEach((mutant) => {
   if (!hasStaleStaticChannelMessage(mutant)) {
     fail(`Platform audience guard accepted binding/dynamic stale-message mutant: ${mutant}`);
