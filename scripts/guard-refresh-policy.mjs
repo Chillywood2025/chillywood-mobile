@@ -83,11 +83,21 @@ const isMemberChain = (nodePath, names) => {
   return currentPath?.isIdentifier({ name: names[0] }) ?? false;
 };
 
-const hasNamedImportBinding = (identifierPath, name, source) => {
-  if (!identifierPath?.isIdentifier({ name })) return false;
-  const binding = identifierPath.scope.getBinding(name);
+const hasNamedImportBinding = (identifierPath, localName, source, importedName = localName) => {
+  if (!identifierPath?.isIdentifier({ name: localName })) return false;
+  const binding = identifierPath.scope.getBinding(localName);
   if (!binding?.path.isImportSpecifier()
-    || !binding.path.get("imported").isIdentifier({ name })) return false;
+    || !binding.path.get("imported").isIdentifier({ name: importedName })) return false;
+  const declarationPath = binding.path.parentPath;
+  return declarationPath?.isImportDeclaration()
+    && declarationPath.get("source").isStringLiteral({ value: source });
+};
+
+const hasNamedJsxImportBinding = (jsxIdentifierPath, localName, importedName, source) => {
+  if (!jsxIdentifierPath?.isJSXIdentifier({ name: localName })) return false;
+  const binding = jsxIdentifierPath.scope.getBinding(localName);
+  if (!binding?.path.isImportSpecifier()
+    || !binding.path.get("imported").isIdentifier({ name: importedName })) return false;
   const declarationPath = binding.path.parentPath;
   return declarationPath?.isImportDeclaration()
     && declarationPath.get("source").isStringLiteral({ value: source });
@@ -139,11 +149,24 @@ const hasAppStateHookBinding = (identifierPath) => {
         return;
       }
       if (!handlerPath?.isFunction()) return;
+      const handlerParameters = handlerPath.get("params");
+      if (handlerParameters.length !== 1 || !handlerParameters[0].isIdentifier()) return;
+      const nextStatePath = handlerParameters[0];
+      const nextStateBinding = nextStatePath.scope.getBinding(nextStatePath.node.name);
       handlerPath.traverse({
         CallExpression(setterCallPath) {
           const setterCalleePath = unwrapExpression(setterCallPath.get("callee"));
-          if (setterCalleePath?.isIdentifier({ name: setterName })
-            && setterCalleePath.scope.getBinding(setterName) === setterBinding) hasChangeSubscription = true;
+          const setterArguments = setterCallPath.get("arguments");
+          if (!setterCalleePath?.isIdentifier({ name: setterName })
+            || setterCalleePath.scope.getBinding(setterName) !== setterBinding
+            || setterArguments.length !== 1) return;
+          const stateArgumentPath = unwrapExpression(setterArguments[0]);
+          if (!stateArgumentPath?.isIdentifier({ name: nextStatePath.node.name })
+            || stateArgumentPath.scope.getBinding(nextStatePath.node.name) !== nextStateBinding) return;
+          const expressionStatementPath = setterCallPath.parentPath;
+          if (setterCallPath.node === handlerPath.get("body").node
+            || (expressionStatementPath?.isExpressionStatement()
+              && expressionStatementPath.parentPath?.node === handlerPath.get("body").node)) hasChangeSubscription = true;
         },
       });
     },
@@ -178,6 +201,13 @@ const getBindingInitializer = (identifierPath, name) => {
 
 const hasParameterBinding = (identifierPath, name) => getIdentifierBinding(identifierPath, name)?.kind === "param";
 
+const isParameterMemberChain = (nodePath, names) => {
+  if (!isMemberChain(nodePath, names)) return false;
+  let rootPath = unwrapExpression(nodePath);
+  while (rootPath?.isMemberExpression()) rootPath = unwrapExpression(rootPath.get("object"));
+  return hasParameterBinding(rootPath, names[0]);
+};
+
 const isRoleGrantPublishIntent = (nodePath) => {
   const expressionPath = unwrapExpression(nodePath);
   if (!expressionPath?.isLogicalExpression({ operator: "??" })) return false;
@@ -191,10 +221,10 @@ const isRoleGrantPublishIntent = (nodePath) => {
       if (!comparisonPath?.isBinaryExpression({ operator: "!==" })) return false;
       const leftPath = unwrapExpression(comparisonPath.get("left"));
       const rightPath = unwrapExpression(comparisonPath.get("right"));
-      return (isMemberChain(leftPath, ["joinContract", "participantRole"]) && rightPath.isStringLiteral({ value: "viewer" }))
-        || (isMemberChain(rightPath, ["joinContract", "participantRole"]) && leftPath.isStringLiteral({ value: "viewer" }));
+      return (isParameterMemberChain(leftPath, ["joinContract", "participantRole"]) && rightPath.isStringLiteral({ value: "viewer" }))
+        || (isParameterMemberChain(rightPath, ["joinContract", "participantRole"]) && leftPath.isStringLiteral({ value: "viewer" }));
     },
-    (term) => isMemberChain(term, ["joinContract", "requestedGrants", "canPublish"]),
+    (term) => isParameterMemberChain(term, ["joinContract", "requestedGrants", "canPublish"]),
   ]);
 };
 
@@ -208,6 +238,9 @@ const isOperativeReturnedJsx = (elementPath) => {
     if (parentPath.isLogicalExpression({ operator: "&&" })
       && currentPath.key === "right"
       && literalTruthiness(parentPath.get("left")) === false) return false;
+    if (parentPath.isLogicalExpression({ operator: "||" })
+      && currentPath.key === "right"
+      && literalTruthiness(parentPath.get("left")) === true) return false;
     if (parentPath.isConditionalExpression()) {
       const testPath = unwrapExpression(parentPath.get("test"));
       const testTruthiness = literalTruthiness(testPath);
@@ -265,6 +298,15 @@ const hasEffectiveLiveKitCaptureGate = (source, roomComponentName) => {
     JSXOpeningElement(elementPath) {
       if (!elementPath.get("name").isJSXIdentifier({ name: roomComponentName })) return;
       hybridRoomCount += 1;
+      const liveKitModuleSource = roomComponentName === "LiveKitRoom"
+        ? "../../_lib/livekit/react-native-module"
+        : "../../../_lib/livekit/react-native-module";
+      if (!hasNamedJsxImportBinding(
+        elementPath.get("name"),
+        roomComponentName,
+        "LiveKitRoom",
+        liveKitModuleSource,
+      )) return;
       if (!isOperativeReturnedJsx(elementPath)) return;
       for (const attributePath of elementPath.get("attributes")) {
         if (!attributePath.isJSXAttribute() || !attributePath.get("name").isJSXIdentifier({ name: "video" })) continue;
@@ -273,7 +315,11 @@ const hasEffectiveLiveKitCaptureGate = (source, roomComponentName) => {
         const expressionPath = valuePath.get("expression");
         if (!expressionPath.isConditionalExpression()
           || !expressionPath.get("test").isIdentifier({ name: "effectivePublishLocalCamera" })
-          || !expressionPath.get("consequent").isIdentifier({ name: "LIVE_VIDEO_CAPTURE_OPTIONS" })
+          || !hasNamedImportBinding(
+            expressionPath.get("consequent"),
+            "LIVE_VIDEO_CAPTURE_OPTIONS",
+            roomComponentName === "LiveKitRoom" ? "../../_lib/performancePolicy" : "../../../_lib/performancePolicy",
+          )
           || !expressionPath.get("alternate").isBooleanLiteral({ value: false })) continue;
         const effectiveBinding = expressionPath.get("test").scope.getBinding("effectivePublishLocalCamera");
         const effectiveInitPath = effectiveBinding?.path.isVariableDeclarator()
@@ -377,11 +423,22 @@ for (const roomComponentName of ["LiveKitRoom", "HybridLiveKitRoom"]) {
       const shouldConnectRoom = "active" === appState;
     `;
   const fixtureParameters = roomComponentName === "LiveKitRoom"
-    ? "{ active, publishLocalVideo }"
+    ? "{ active, joinContract, publishLocalVideo }"
     : "{ publishLocalCamera }";
+  const fixtureLiveKitSource = roomComponentName === "LiveKitRoom"
+    ? "../../_lib/livekit/react-native-module"
+    : "../../../_lib/livekit/react-native-module";
+  const fixturePerformanceSource = roomComponentName === "LiveKitRoom"
+    ? "../../_lib/performancePolicy"
+    : "../../../_lib/performancePolicy";
+  const fixtureRoomImport = roomComponentName === "LiveKitRoom"
+    ? "LiveKitRoom"
+    : "LiveKitRoom as HybridLiveKitRoom";
   const validFixture = `
     import { useEffect, useState } from "react";
     import { AppState } from "react-native";
+    import { ${fixtureRoomImport} } from "${fixtureLiveKitSource}";
+    import { LIVE_VIDEO_CAPTURE_OPTIONS } from "${fixturePerformanceSource}";
     const Example = (${fixtureParameters}) => {
       ${authorityFixture}
       const effectivePublishLocalCamera = publishLocalCamera && shouldConnectRoom;
@@ -444,6 +501,35 @@ for (const roomComponentName of ["LiveKitRoom", "HybridLiveKitRoom"]) {
   );
   if (hasEffectiveLiveKitCaptureGate(disconnectedAppStateUpdates, roomComponentName)) {
     fail(`${roomComponentName} capture guard accepted AppState initialization without live change updates.`);
+  }
+  const wrongAppStateUpdate = validFixture.replace(
+    roomComponentName === "LiveKitRoom"
+      ? "setAppState(nextState)"
+      : 'AppState.addEventListener("change", setAppState)',
+    roomComponentName === "LiveKitRoom"
+      ? 'setAppState("active")'
+      : 'AppState.addEventListener("change", () => setAppState("active"))',
+  );
+  if (hasEffectiveLiveKitCaptureGate(wrongAppStateUpdate, roomComponentName)) {
+    fail(`${roomComponentName} capture guard accepted AppState updates forced to an active value.`);
+  }
+  const localRoomDecoy = validFixture.replace(
+    `import { ${fixtureRoomImport} } from "${fixtureLiveKitSource}";`,
+    `const ${roomComponentName} = () => null;`,
+  );
+  if (hasEffectiveLiveKitCaptureGate(localRoomDecoy, roomComponentName)) {
+    fail(`${roomComponentName} capture guard accepted a local room-component decoy.`);
+  }
+  const localCaptureOptionsDecoy = validFixture.replace(
+    `import { LIVE_VIDEO_CAPTURE_OPTIONS } from "${fixturePerformanceSource}";`,
+    "const LIVE_VIDEO_CAPTURE_OPTIONS = false;",
+  );
+  if (hasEffectiveLiveKitCaptureGate(localCaptureOptionsDecoy, roomComponentName)) {
+    fail(`${roomComponentName} capture guard accepted local false capture options.`);
+  }
+  const truthyOrRoom = validFixture.replace("return <", "return true || <");
+  if (hasEffectiveLiveKitCaptureGate(truthyOrRoom, roomComponentName)) {
+    fail(`${roomComponentName} capture guard accepted a room hidden behind a truthy fallback.`);
   }
 }
 

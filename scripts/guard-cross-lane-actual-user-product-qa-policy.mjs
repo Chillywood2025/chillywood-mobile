@@ -94,6 +94,26 @@ const hasParameterBinding = (identifierPath, name) => (
   identifierPath?.isIdentifier({ name }) && identifierPath.scope.getBinding(name)?.kind === "param"
 );
 
+const hasNamedImportBinding = (identifierPath, localName, importedName, source) => {
+  if (!identifierPath?.isIdentifier({ name: localName })) return false;
+  const binding = identifierPath.scope.getBinding(localName);
+  if (!binding?.path.isImportSpecifier()
+    || !binding.path.get("imported").isIdentifier({ name: importedName })) return false;
+  const declarationPath = binding.path.parentPath;
+  return declarationPath?.isImportDeclaration()
+    && declarationPath.get("source").isStringLiteral({ value: source });
+};
+
+const hasNamedJsxImportBinding = (jsxIdentifierPath, localName, importedName, source) => {
+  if (!jsxIdentifierPath?.isJSXIdentifier({ name: localName })) return false;
+  const binding = jsxIdentifierPath.scope.getBinding(localName);
+  if (!binding?.path.isImportSpecifier()
+    || !binding.path.get("imported").isIdentifier({ name: importedName })) return false;
+  const declarationPath = binding.path.parentPath;
+  return declarationPath?.isImportDeclaration()
+    && declarationPath.get("source").isStringLiteral({ value: source });
+};
+
 const isParticipantMember = (nodePath, propertyName) => {
   const expressionPath = unwrapExpression(nodePath);
   if (!expressionPath?.isMemberExpression()) return false;
@@ -105,6 +125,21 @@ const isParticipantMember = (nodePath, propertyName) => {
 const bindingInitializer = (identifierPath, name) => {
   const binding = identifierPath?.scope.getBinding(name);
   return binding?.path.isVariableDeclarator() ? binding.path.get("init") : null;
+};
+
+const isRtcViewInitializer = (nodePath) => {
+  const expressionPath = unwrapExpression(nodePath);
+  if (!(expressionPath?.isOptionalMemberExpression() || expressionPath?.isMemberExpression())
+    || expressionPath.node.computed
+    || !expressionPath.get("property").isIdentifier({ name: "RTCView" })) return false;
+  const callPath = unwrapExpression(expressionPath.get("object"));
+  if (!callPath?.isCallExpression() || callPath.get("arguments").length !== 0) return false;
+  return hasNamedImportBinding(
+    unwrapExpression(callPath.get("callee")),
+    "getCommunicationRTCModule",
+    "getCommunicationRTCModule",
+    "../../_lib/communication",
+  );
 };
 
 const isDoubleNegated = (nodePath, predicate) => {
@@ -193,6 +228,9 @@ const isOperativeReturnedExpression = (expressionPath) => {
     if (parentPath.isLogicalExpression({ operator: "&&" })
       && currentPath.key === "right"
       && literalTruthiness(parentPath.get("left")) === false) return false;
+    if (parentPath.isLogicalExpression({ operator: "||" })
+      && currentPath.key === "right"
+      && literalTruthiness(parentPath.get("left")) === true) return false;
     if (parentPath.isConditionalExpression()) {
       const testPath = unwrapExpression(parentPath.get("test"));
       const testTruthiness = literalTruthiness(testPath);
@@ -221,6 +259,9 @@ const isReachableWithin = (nodePath, boundaryPath) => {
     if (parentPath.isLogicalExpression({ operator: "&&" })
       && currentPath.key === "right"
       && literalTruthiness(parentPath.get("left")) === false) return false;
+    if (parentPath.isLogicalExpression({ operator: "||" })
+      && currentPath.key === "right"
+      && literalTruthiness(parentPath.get("left")) === true) return false;
     if (parentPath.isConditionalExpression()) {
       const testPath = unwrapExpression(parentPath.get("test"));
       const testTruthiness = literalTruthiness(testPath);
@@ -269,6 +310,12 @@ const hasBoundHybridVideoRender = (source) => {
         JSXOpeningElement(elementPath) {
           if (!elementPath.get("name").isJSXIdentifier({ name: "LiveKitVideoTrack" })) return;
           if (!isReachableWithin(elementPath, conditionalPath.get("consequent"))) return;
+          if (!hasNamedJsxImportBinding(
+            elementPath.get("name"),
+            "LiveKitVideoTrack",
+            "LiveKitVideoTrack",
+            "../../_lib/livekit/react-native-module",
+          )) return;
           for (const attributePath of elementPath.get("attributes")) {
             if (!attributePath.isJSXAttribute() || !attributePath.get("name").isJSXIdentifier({ name: "trackRef" })) continue;
             const valuePath = attributePath.get("value");
@@ -289,11 +336,18 @@ const hasBoundHybridVideoRender = (source) => {
       ])) return;
       const showLegacyIdentifierPath = fallbackTerms.find((term) => term.isIdentifier({ name: "showLegacyVideo" }));
       const showLegacyInit = bindingInitializer(showLegacyIdentifierPath, "showLegacyVideo");
+      const rtcViewIdentifierPath = fallbackTerms.find((term) => term.isIdentifier({ name: "RTCView" }));
+      const rtcViewInit = bindingInitializer(rtcViewIdentifierPath, "RTCView");
       const hasVideoStreamIdentifierPath = showLegacyInit
         ? findIdentifierPath(showLegacyInit, "hasVideoStream")
         : null;
+      const showLegacyRtcViewPath = showLegacyInit
+        ? findIdentifierPath(showLegacyInit, "RTCView")
+        : null;
       const hasVideoStreamInit = bindingInitializer(hasVideoStreamIdentifierPath, "hasVideoStream");
-      if (!showLegacyInit || !isShowLegacyVideoInitializer(showLegacyInit)
+      if (!rtcViewInit || !isRtcViewInitializer(rtcViewInit)
+        || !showLegacyInit || !isShowLegacyVideoInitializer(showLegacyInit)
+        || bindingInitializer(showLegacyRtcViewPath, "RTCView")?.node !== rtcViewInit.node
         || !hasVideoStreamInit || !isHasVideoStreamInitializer(hasVideoStreamInit)) return;
       const streamLiveKitPath = findIdentifierPath(hasVideoStreamInit, "hasLiveKitVideo");
       const streamLiveKitInit = bindingInitializer(streamLiveKitPath, "hasLiveKitVideo");
@@ -309,6 +363,7 @@ const hasBoundHybridVideoRender = (source) => {
         JSXOpeningElement(elementPath) {
           if (!elementPath.get("name").isJSXIdentifier({ name: "RTCView" })) return;
           if (!isReachableWithin(elementPath, fallbackPath.get("consequent"))) return;
+          if (elementPath.get("name").scope.getBinding("RTCView")?.path.node !== rtcViewIdentifierPath.scope.getBinding("RTCView")?.path.node) return;
           for (const attributePath of elementPath.get("attributes")) {
             if (!attributePath.isJSXAttribute() || !attributePath.get("name").isJSXIdentifier({ name: "streamURL" })) continue;
             const valuePath = attributePath.get("value");
@@ -407,7 +462,10 @@ if (!hasBoundHybridVideoRender(participantGrid)) {
 }
 
 const validHybridRenderFixture = `
+  import { getCommunicationRTCModule } from "../../_lib/communication";
+  import { LiveKitVideoTrack } from "../../_lib/livekit/react-native-module";
   const Grid = ({ callType, localCameraEnabled, participants }) => {
+    const RTCView = getCommunicationRTCModule()?.RTCView;
     const isVideoCall = callType === "video";
     return participants.map((participant) => {
     const cameraRequested = isVideoCall
@@ -510,6 +568,34 @@ const deadLegacyChild = validHybridRenderFixture.replace(
 );
 if (hasBoundHybridVideoRender(deadLegacyChild)) {
   fail("communication participant grid guard accepted a statically unreachable legacy RTC child");
+}
+const truthyOrLiveKitChild = validHybridRenderFixture.replace(
+  "<LiveKitVideoTrack trackRef={participant.liveKitVideoTrackReference as unknown} />",
+  "true || <LiveKitVideoTrack trackRef={participant.liveKitVideoTrackReference as unknown} />",
+);
+if (hasBoundHybridVideoRender(truthyOrLiveKitChild)) {
+  fail("communication participant grid guard accepted a LiveKit track hidden behind a truthy fallback");
+}
+const localLiveKitComponent = validHybridRenderFixture.replace(
+  'import { LiveKitVideoTrack } from "../../_lib/livekit/react-native-module";',
+  "const LiveKitVideoTrack = () => null;",
+);
+if (hasBoundHybridVideoRender(localLiveKitComponent)) {
+  fail("communication participant grid guard accepted a local LiveKit component decoy");
+}
+const localRtcComponent = validHybridRenderFixture.replace(
+  "const RTCView = getCommunicationRTCModule()?.RTCView;",
+  "const RTCView = () => null;",
+);
+if (hasBoundHybridVideoRender(localRtcComponent)) {
+  fail("communication participant grid guard accepted a local RTC component decoy");
+}
+const truthyOrHybridReturn = validHybridRenderFixture.replace("return hasLiveKitVideo ? (", "return true || (hasLiveKitVideo ? (").replace(
+  ") : null;\n    });",
+  ") : null);\n    });",
+);
+if (hasBoundHybridVideoRender(truthyOrHybridReturn)) {
+  fail("communication participant grid guard accepted a hybrid render hidden behind a truthy fallback");
 }
 
 forbidMatch("live stage screen", liveStage, /showHeroRemoteVideo[^\n]+cameraOn/, "hero remote Live video gated by stale cameraOn");
