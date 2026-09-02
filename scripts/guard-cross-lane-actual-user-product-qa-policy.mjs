@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parse } from "@babel/parser";
 import traverseModule from "@babel/traverse";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -32,6 +33,40 @@ const parseTsx = (source) => parse(source, {
   sourceType: "unambiguous",
   plugins: ["typescript", "jsx", "decorators-legacy", "classProperties", "classPrivateProperties", "classPrivateMethods", "importAttributes"],
 });
+
+const CRITICAL_PARTICIPANT_GRID_AST_SHA256 = "4cdd5f2fd80a17297611c8e7cfd80ec6186add291c144ba8ce11222f47d1ec22";
+const AST_METADATA_KEYS = new Set([
+  "start",
+  "end",
+  "loc",
+  "extra",
+  "leadingComments",
+  "innerComments",
+  "trailingComments",
+]);
+
+const normalizeAstValue = (value) => {
+  if (Array.isArray(value)) return value.map(normalizeAstValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !AST_METADATA_KEYS.has(key))
+      .map(([key, entry]) => [key, normalizeAstValue(entry)]),
+  );
+};
+
+const namedExportedFunctionFingerprint = (ast, functionName) => {
+  let fingerprint = null;
+  traverse(ast, {
+    FunctionDeclaration(functionPath) {
+      if (!functionPath.get("id").isIdentifier({ name: functionName })
+        || !functionPath.parentPath?.isExportNamedDeclaration()) return;
+      const canonical = JSON.stringify(normalizeAstValue(functionPath.node));
+      fingerprint = createHash("sha256").update(canonical).digest("hex");
+    },
+  });
+  return fingerprint;
+};
 
 const findIdentifierPath = (nodePath, name) => {
   if (nodePath.isIdentifier({ name })) return nodePath;
@@ -281,8 +316,10 @@ const isReachableWithin = (nodePath, boundaryPath) => {
   return false;
 };
 
-const hasBoundHybridVideoRender = (source) => {
+const hasBoundHybridVideoRender = (source, requireCriticalComponentFingerprint = false) => {
   const ast = parseTsx(source);
+  if (requireCriticalComponentFingerprint
+    && namedExportedFunctionFingerprint(ast, "CommunicationParticipantGrid") !== CRITICAL_PARTICIPANT_GRID_AST_SHA256) return false;
   let liveKitTrackElementCount = 0;
   let legacyRtcElementCount = 0;
   let boundRenderCount = 0;
@@ -457,7 +494,7 @@ forbidMatch("cross-lane QA doc", doc, /\b(?:\d{1,3}\.){3}\d{1,3}\b/, "raw IP val
 forbidMatch("communication participant grid", participantGrid, /const\s+showVideo\s*=\s*!!RTCView\s*&&\s*!!participant\.streamURL\s*&&\s*participant\.cameraOn/, "RTC video render gated by stale cameraOn");
 forbidMatch("communication participant grid", participantGrid, /remoteRenderableCount:[^\n]+participant\.cameraOn/, "remote renderability debug gated by stale cameraOn");
 requireText("communication participant grid", participantGrid, "Video connected");
-if (!hasBoundHybridVideoRender(participantGrid)) {
+if (!hasBoundHybridVideoRender(participantGrid, true)) {
   fail("communication participant grid must bind the LiveKit track and legacy RTC fallback to their operative render conditions");
 }
 

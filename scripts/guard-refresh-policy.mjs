@@ -1,5 +1,6 @@
 import { parse } from "@babel/parser";
 import traverseModule from "@babel/traverse";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -26,6 +27,50 @@ const parseTsx = (source) => parse(source, {
   sourceType: "unambiguous",
   plugins: ["typescript", "jsx", "decorators-legacy", "classProperties", "classPrivateProperties", "classPrivateMethods", "importAttributes"],
 });
+
+const CRITICAL_CAPTURE_COMPONENT_AST_SHA256 = Object.freeze({
+  HybridLiveKitRoom: Object.freeze({
+    target: "4fc8f3e033d5a5d2b43ebb59fb0e87e4d6c863411f05c7b633891eecf15a87d1",
+    owner: "7185a97e980593e296be83851c83ec6da85b1577264a4db56817ff9def98f099",
+  }),
+  LiveKitRoom: Object.freeze({
+    target: "f2957476d44fd07ed4fc63cff52d9e456d14fe99532bca29acfeb7decc424dac",
+    owner: null,
+  }),
+});
+const AST_METADATA_KEYS = new Set([
+  "start",
+  "end",
+  "loc",
+  "extra",
+  "leadingComments",
+  "innerComments",
+  "trailingComments",
+]);
+
+const normalizeAstValue = (value) => {
+  if (Array.isArray(value)) return value.map(normalizeAstValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !AST_METADATA_KEYS.has(key))
+      .map(([key, entry]) => [key, normalizeAstValue(entry)]),
+  );
+};
+
+const namedFunctionFingerprint = (ast, functionName, exportKind = null) => {
+  let fingerprint = null;
+  traverse(ast, {
+    FunctionDeclaration(functionPath) {
+      if (!functionPath.get("id").isIdentifier({ name: functionName })) return;
+      if (exportKind === "named" && !functionPath.parentPath?.isExportNamedDeclaration()) return;
+      if (exportKind === "default" && !functionPath.parentPath?.isExportDefaultDeclaration()) return;
+      const canonical = JSON.stringify(normalizeAstValue(functionPath.node));
+      fingerprint = createHash("sha256").update(canonical).digest("hex");
+    },
+  });
+  return fingerprint;
+};
 
 const unwrapExpression = (nodePath) => {
   let currentPath = nodePath;
@@ -290,8 +335,20 @@ const hasExpectedCaptureAuthority = (effectiveInitPath, roomComponentName) => {
     && isRoleGrantPublishIntent(publishIntentInit);
 };
 
-const hasEffectiveLiveKitCaptureGate = (source, roomComponentName) => {
+const hasEffectiveLiveKitCaptureGate = (source, roomComponentName, requireCriticalComponentFingerprint = false) => {
   const ast = parseTsx(source);
+  if (requireCriticalComponentFingerprint) {
+    const expectedFingerprints = CRITICAL_CAPTURE_COMPONENT_AST_SHA256[roomComponentName];
+    const targetFingerprint = roomComponentName === "LiveKitRoom"
+      ? namedFunctionFingerprint(ast, "LiveKitStageMediaSurface", "named")
+      : namedFunctionFingerprint(ast, "LiveKitHybridCommunityRoomHost");
+    const ownerFingerprint = roomComponentName === "HybridLiveKitRoom"
+      ? namedFunctionFingerprint(ast, "WatchPartyLiveStageScreen", "default")
+      : null;
+    if (!expectedFingerprints
+      || targetFingerprint !== expectedFingerprints.target
+      || ownerFingerprint !== expectedFingerprints.owner) return false;
+  }
   let hybridRoomCount = 0;
   let boundVideoPropCount = 0;
   traverse(ast, {
@@ -335,7 +392,7 @@ const hasEffectiveLiveKitCaptureGate = (source, roomComponentName) => {
 };
 
 const assertEffectiveLiveKitCaptureGate = (source, roomComponentName, label) => {
-  if (!hasEffectiveLiveKitCaptureGate(source, roomComponentName)) fail(`${label} must bind the operative LiveKit room video prop to the effective foreground publish gate.`);
+  if (!hasEffectiveLiveKitCaptureGate(source, roomComponentName, true)) fail(`${label} must bind the operative LiveKit room video prop to the effective foreground publish gate.`);
 };
 
 const readNumericConst = (source, name) => {
