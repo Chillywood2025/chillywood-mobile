@@ -66,7 +66,7 @@ const textExtensions = new Set([
 
 const canonicalBrand = "Chi" + "'llywood";
 const visibleBrandPattern = /\b[Cc][Hh][Ii](?:['\u2019\u2018`\u00b4\s-]*)[Ll]{1,3}(?:['\u2019\u2018`\u00b4\s-]*)[Yy]?(?:['\u2019\u2018`\u00b4\s-]*)[Ww][Oo][Oo][Dd]\b/gu;
-const noncanonicalProductApostrophePattern = /\bChi[\u2019\u2018`\u00b4]lly\s+(?:Chat|Circle)\b/gu;
+const noncanonicalProductApostrophePattern = /\bChi[\u2019\u2018`\u00b4]lly\s+(?:Chat|Circle)\b/giu;
 
 const technicalLowercaseContextPattern =
   /(?:com\.chillywood\.mobile|chillywood-mobile|chillywoodstream\.com|chillywood\.test|chillywood-[a-z0-9-]+\.(?:png|jpg|jpeg|webp|svg)|[./@_-]chillywood|chillywood[./@_-])/u;

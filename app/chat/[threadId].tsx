@@ -2645,7 +2645,7 @@ export default function ChillyChatThreadScreen() {
           )}
         </TouchableOpacity>
         <View style={styles.headerCopy}>
-          <Text style={styles.kicker}>CHI’LLY CHAT</Text>
+          <Text style={styles.kicker}>CHI&apos;LLY CHAT</Text>
           <Text style={styles.title}>{otherMemberDisplayName}</Text>
           {otherMemberHandle ? (
             <Text style={styles.handleText} testID="chat-thread-header-handle">
@@ -2734,7 +2734,7 @@ export default function ChillyChatThreadScreen() {
           {otherMember?.userId && friendStatusSummary ? (
             <View style={styles.friendshipCard}>
               <View style={styles.friendshipHeader}>
-                <Text style={styles.friendshipKicker}>CHI’LLY CIRCLE</Text>
+                <Text style={styles.friendshipKicker}>CHI&apos;LLY CIRCLE</Text>
                 <View style={styles.friendshipPill}>
                   <Text style={styles.friendshipPillText}>{friendStatusSummary.pill}</Text>
                 </View>

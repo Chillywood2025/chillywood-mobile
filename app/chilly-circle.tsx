@@ -579,7 +579,7 @@ export default function ChillyCircleScreen() {
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.82}>
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.kicker}>CHI’LLY CIRCLE</Text>
+        <Text style={styles.kicker}>CHI&apos;LLY CIRCLE</Text>
         <TouchableOpacity activeOpacity={0.82} onPress={() => { void loadCircle(); }}>
           <Text style={styles.refreshText}>Refresh</Text>
         </TouchableOpacity>

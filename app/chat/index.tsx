@@ -560,7 +560,7 @@ export default function ChillyChatInboxScreen() {
 
   const listHeader = useMemo(() => (
     <View style={styles.header}>
-      <Text style={styles.kicker}>CHI’LLY CHAT</Text>
+      <Text style={styles.kicker}>CHI&apos;LLY CHAT</Text>
       <Text style={styles.title}>Inbox</Text>
       <Text style={styles.body}>
         Direct threads, voice, and video live here.
