@@ -1,6 +1,10 @@
 #!/usr/bin/env node
+import { parse } from "@babel/parser";
+import traverseModule from "@babel/traverse";
 import fs from "node:fs";
 import path from "node:path";
+
+const traverse = traverseModule.default ?? traverseModule;
 
 const root = process.cwd();
 const failures = [];
@@ -22,6 +26,92 @@ const requireText = (label, content, needle) => {
 
 const forbidMatch = (label, content, pattern, description) => {
   if (pattern.test(content)) fail(`${label} contains forbidden ${description}`);
+};
+
+const parseTsx = (source) => parse(source, {
+  sourceType: "unambiguous",
+  plugins: ["typescript", "jsx", "decorators-legacy", "classProperties", "classPrivateProperties", "classPrivateMethods", "importAttributes"],
+});
+
+const pathContainsIdentifier = (nodePath, name) => {
+  if (nodePath.isIdentifier({ name })) return true;
+  let found = false;
+  nodePath.traverse({
+    Identifier(identifierPath) {
+      if (identifierPath.isIdentifier({ name })) found = true;
+    },
+  });
+  return found;
+};
+
+const unwrapExpression = (nodePath) => {
+  let currentPath = nodePath;
+  while (
+    currentPath?.isTSAsExpression?.()
+    || currentPath?.isTSTypeAssertion?.()
+    || currentPath?.isTSNonNullExpression?.()
+    || currentPath?.isParenthesizedExpression?.()
+  ) {
+    currentPath = currentPath.get("expression");
+  }
+  return currentPath;
+};
+
+const isParticipantMember = (nodePath, propertyName) => {
+  const expressionPath = unwrapExpression(nodePath);
+  if (!expressionPath?.isMemberExpression()) return false;
+  return expressionPath.get("object").isIdentifier({ name: "participant" })
+    && !expressionPath.node.computed
+    && expressionPath.get("property").isIdentifier({ name: propertyName });
+};
+
+const hasBoundHybridVideoRender = (source) => {
+  const ast = parseTsx(source);
+  let liveKitTrackElementCount = 0;
+  let legacyRtcElementCount = 0;
+  let boundRenderCount = 0;
+  traverse(ast, {
+    JSXOpeningElement(elementPath) {
+      if (elementPath.get("name").isJSXIdentifier({ name: "LiveKitVideoTrack" })) liveKitTrackElementCount += 1;
+      if (elementPath.get("name").isJSXIdentifier({ name: "RTCView" })) legacyRtcElementCount += 1;
+    },
+    ConditionalExpression(conditionalPath) {
+      if (!conditionalPath.get("test").isIdentifier({ name: "hasLiveKitVideo" })) return;
+      let hasBoundLiveKitTrack = false;
+      conditionalPath.get("consequent").traverse({
+        JSXOpeningElement(elementPath) {
+          if (!elementPath.get("name").isJSXIdentifier({ name: "LiveKitVideoTrack" })) return;
+          for (const attributePath of elementPath.get("attributes")) {
+            if (!attributePath.isJSXAttribute() || !attributePath.get("name").isJSXIdentifier({ name: "trackRef" })) continue;
+            const valuePath = attributePath.get("value");
+            if (valuePath.isJSXExpressionContainer() && isParticipantMember(valuePath.get("expression"), "liveKitVideoTrackReference")) {
+              hasBoundLiveKitTrack = true;
+            }
+          }
+        },
+      });
+
+      const fallbackPath = conditionalPath.get("alternate");
+      if (!fallbackPath.isConditionalExpression()
+        || !pathContainsIdentifier(fallbackPath.get("test"), "showLegacyVideo")
+        || !pathContainsIdentifier(fallbackPath.get("test"), "RTCView")) return;
+      let hasBoundLegacyRtc = false;
+      fallbackPath.get("consequent").traverse({
+        JSXOpeningElement(elementPath) {
+          if (!elementPath.get("name").isJSXIdentifier({ name: "RTCView" })) return;
+          for (const attributePath of elementPath.get("attributes")) {
+            if (!attributePath.isJSXAttribute() || !attributePath.get("name").isJSXIdentifier({ name: "streamURL" })) continue;
+            const valuePath = attributePath.get("value");
+            if (valuePath.isJSXExpressionContainer() && isParticipantMember(valuePath.get("expression"), "streamURL")) {
+              hasBoundLegacyRtc = true;
+            }
+          }
+        },
+      });
+      if (hasBoundLiveKitTrack && hasBoundLegacyRtc) boundRenderCount += 1;
+    },
+  });
+  return liveKitTrackElementCount === 1 && legacyRtcElementCount === 1 && boundRenderCount === 1;
 };
 
 const sentences = (content) => content
@@ -106,8 +196,15 @@ requireText("communication participant grid", participantGrid, "!!participant.li
 requireText("communication participant grid", participantGrid, "const hasVideoStream = isVideoCall");
 requireText("communication participant grid", participantGrid, "(!!participant.streamURL || hasLiveKitVideo)");
 requireText("communication participant grid", participantGrid, "const showLegacyVideo = !!RTCView && !!participant.streamURL && hasVideoStream;");
-requireText("communication participant grid", participantGrid, "<LiveKitVideoTrack");
 requireText("communication participant grid", participantGrid, "Video connected");
+if (!hasBoundHybridVideoRender(participantGrid)) {
+  fail("communication participant grid must bind the LiveKit track and legacy RTC fallback to their operative render conditions");
+}
+
+const disconnectedHybridRender = participantGrid.replace("{hasLiveKitVideo ? (", "{false ? (");
+if (hasBoundHybridVideoRender(disconnectedHybridRender)) {
+  fail("communication participant grid guard accepted a LiveKit render branch disconnected from hasLiveKitVideo");
+}
 
 forbidMatch("live stage screen", liveStage, /showHeroRemoteVideo[^\n]+cameraOn/, "hero remote Live video gated by stale cameraOn");
 forbidMatch("live stage screen", liveStage, /showRemoteLiveVideo[^\n]+cameraOn/, "remote Live video gated by stale cameraOn");

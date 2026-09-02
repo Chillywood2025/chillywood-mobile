@@ -1,5 +1,9 @@
+import { parse } from "@babel/parser";
+import traverseModule from "@babel/traverse";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+
+const traverse = traverseModule.default ?? traverseModule;
 
 const root = process.cwd();
 
@@ -16,6 +20,50 @@ const assertIncludes = (source, needle, label) => {
 
 const assertNotIncludes = (source, needle, label) => {
   if (source.includes(needle)) fail(`${label} must not be present.`);
+};
+
+const parseTsx = (source) => parse(source, {
+  sourceType: "unambiguous",
+  plugins: ["typescript", "jsx", "decorators-legacy", "classProperties", "classPrivateProperties", "classPrivateMethods", "importAttributes"],
+});
+
+const hasEffectiveLiveKitCaptureGate = (source, roomComponentName) => {
+  const ast = parseTsx(source);
+  let effectiveDeclarationCount = 0;
+  let hybridRoomCount = 0;
+  let boundVideoPropCount = 0;
+  traverse(ast, {
+    VariableDeclarator(variablePath) {
+      if (!variablePath.get("id").isIdentifier({ name: "effectivePublishLocalCamera" })) return;
+      const initPath = variablePath.get("init");
+      if (initPath.isLogicalExpression({ operator: "&&" })
+        && initPath.get("left").isIdentifier({ name: "shouldConnectRoom" })
+        && initPath.get("right").isIdentifier({ name: "publishLocalCamera" })) {
+        effectiveDeclarationCount += 1;
+      }
+    },
+    JSXOpeningElement(elementPath) {
+      if (!elementPath.get("name").isJSXIdentifier({ name: roomComponentName })) return;
+      hybridRoomCount += 1;
+      for (const attributePath of elementPath.get("attributes")) {
+        if (!attributePath.isJSXAttribute() || !attributePath.get("name").isJSXIdentifier({ name: "video" })) continue;
+        const valuePath = attributePath.get("value");
+        if (!valuePath.isJSXExpressionContainer()) continue;
+        const expressionPath = valuePath.get("expression");
+        if (expressionPath.isConditionalExpression()
+          && expressionPath.get("test").isIdentifier({ name: "effectivePublishLocalCamera" })
+          && expressionPath.get("consequent").isIdentifier({ name: "LIVE_VIDEO_CAPTURE_OPTIONS" })
+          && expressionPath.get("alternate").isBooleanLiteral({ value: false })) {
+          boundVideoPropCount += 1;
+        }
+      }
+    },
+  });
+  return effectiveDeclarationCount === 1 && hybridRoomCount === 1 && boundVideoPropCount === 1;
+};
+
+const assertEffectiveLiveKitCaptureGate = (source, roomComponentName, label) => {
+  if (!hasEffectiveLiveKitCaptureGate(source, roomComponentName)) fail(`${label} must bind the operative LiveKit room video prop to the effective foreground publish gate.`);
 };
 
 const readNumericConst = (source, name) => {
@@ -83,9 +131,19 @@ assertIncludes(communicationSession, "HEARTBEAT_INTERVAL_MILLIS = ROOM_HEARTBEAT
 assertIncludes(roomRules, "ROOM_MEMBERSHIP_ACTIVE_WINDOW_MILLIS = ROOM_MEMBERSHIP_ACTIVE_WINDOW_MS", "Room membership active window policy");
 
 assertIncludes(liveKitSurface, "createLiveKitV1RoomOptions", "Watch-Party LiveKit v1 room options");
-assertIncludes(liveKitSurface, "video={effectivePublishLocalCamera ? LIVE_VIDEO_CAPTURE_OPTIONS : false}", "Watch-Party LiveKit capture options");
+assertEffectiveLiveKitCaptureGate(liveKitSurface, "LiveKitRoom", "Watch-Party LiveKit capture options");
 assertIncludes(liveStage, "createLiveKitV1RoomOptions", "Live Stage v1 room options");
-assertIncludes(liveStage, "video={effectivePublishLocalCamera ? LIVE_VIDEO_CAPTURE_OPTIONS : false}", "Live Stage effective capture options");
+assertEffectiveLiveKitCaptureGate(liveStage, "HybridLiveKitRoom", "Live Stage effective capture options");
+
+for (const [label, source, roomComponentName] of [["Watch-Party LiveKit", liveKitSurface, "LiveKitRoom"], ["Live Stage", liveStage, "HybridLiveKitRoom"]]) {
+  const disconnectedProp = source.replace(
+    "video={effectivePublishLocalCamera ? LIVE_VIDEO_CAPTURE_OPTIONS : false}",
+    "video={publishLocalCamera ? LIVE_VIDEO_CAPTURE_OPTIONS : false}",
+  );
+  if (hasEffectiveLiveKitCaptureGate(disconnectedProp, roomComponentName)) {
+    fail(`${label} capture guard accepted a video prop disconnected from the effective foreground gate.`);
+  }
+}
 
 assertIncludes(chatThread, "READ_RECEIPT_THROTTLE_MS", "Chat read receipt throttle");
 assertIncludes(chatThread, "markThreadReadWithThrottle", "Chat throttled mark-read wrapper");
