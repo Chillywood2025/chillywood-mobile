@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import {
   KeyboardAvoidingView,
@@ -148,6 +148,11 @@ const REPORT_SHEET_CATEGORY_OPTIONS: readonly ReportSheetCategoryOption[] = [
   },
 ];
 
+const REPORT_SHEET_HELPER_TEXT =
+  "Your report goes to the moderation team. Your identity stays private from the reported person by default. A report does not remove content automatically; urgent safety concerns may be escalated for temporary action while they are reviewed.";
+const REPORT_SHEET_GOOD_FAITH_TEXT =
+  "Please report in good faith. Repeated false or abusive reports may be rate-limited or reviewed.";
+
 export function ReportSheet({
   visible,
   title,
@@ -161,13 +166,6 @@ export function ReportSheet({
   const [categoryKey, setCategoryKey] = useState<string>("harassment_bullying");
   const [note, setNote] = useState("");
 
-  const helperText = useMemo(
-    () =>
-      "Your report goes to the moderation team. Your identity stays private from the reported person by default. A report does not remove content automatically; urgent safety concerns may be escalated for temporary action while they are reviewed.",
-    [],
-  );
-  const falseReportText =
-    "Please report in good faith. Repeated false or abusive reports may be rate-limited or reviewed.";
   const categoryOption =
     REPORT_SHEET_CATEGORY_OPTIONS.find((entry) => entry.key === categoryKey) ??
     REPORT_SHEET_CATEGORY_OPTIONS[0];
@@ -180,6 +178,7 @@ export function ReportSheet({
   }, [visible]);
 
   const closeAndReset = () => {
+    if (busy) return;
     setCategoryKey("harassment_bullying");
     setNote("");
     onClose();
@@ -201,6 +200,7 @@ export function ReportSheet({
             style={StyleSheet.absoluteFillObject}
             activeOpacity={1}
             accessible={false}
+            disabled={busy}
             onPress={closeAndReset}
           />
           <View style={styles.sheet} accessibilityViewIsModal>
@@ -208,7 +208,11 @@ export function ReportSheet({
               style={styles.sheetScroller}
               contentContainerStyle={[
                 styles.sheetContent,
-                { paddingBottom: Math.max(insets.bottom, 16) },
+                {
+                  paddingBottom: Math.max(insets.bottom, 16),
+                  paddingLeft: Math.max(insets.left, 18),
+                  paddingRight: Math.max(insets.right, 18),
+                },
               ]}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
@@ -231,12 +235,17 @@ export function ReportSheet({
                     style={[
                       styles.categoryChip,
                       categoryKey === entry.key && styles.categoryChipActive,
+                      busy && styles.buttonDisabled,
                     ]}
                     activeOpacity={0.84}
+                    disabled={busy}
                     accessibilityRole="radio"
                     accessibilityLabel={entry.label}
                     accessibilityHint={entry.description}
-                    accessibilityState={{ selected: categoryKey === entry.key }}
+                    accessibilityState={{
+                      selected: categoryKey === entry.key,
+                      disabled: busy,
+                    }}
                     onPress={() => setCategoryKey(entry.key)}
                   >
                     <Text
@@ -269,11 +278,14 @@ export function ReportSheet({
                 placeholderTextColor="#7D879E"
                 accessibilityLabel="Optional report details"
                 accessibilityHint="Add information that may help the moderation team review this report."
+                editable={!busy}
                 multiline
               />
 
-              <Text style={styles.helperText}>{helperText}</Text>
-              <Text style={styles.helperText}>{falseReportText}</Text>
+              <Text style={styles.helperText}>{REPORT_SHEET_HELPER_TEXT}</Text>
+              <Text style={styles.helperText}>
+                {REPORT_SHEET_GOOD_FAITH_TEXT}
+              </Text>
 
               {categoryOption.backedCategory === "copyright" ? (
                 <View style={styles.formalNoticeBox}>
@@ -286,10 +298,15 @@ export function ReportSheet({
                     report form for that process.
                   </Text>
                   <TouchableOpacity
-                    style={styles.formalNoticeButton}
+                    style={[
+                      styles.formalNoticeButton,
+                      busy && styles.buttonDisabled,
+                    ]}
                     activeOpacity={0.86}
+                    disabled={busy}
                     accessibilityRole="button"
                     accessibilityLabel="Open Copyright Report"
+                    accessibilityState={{ disabled: busy }}
                     onPress={() => {
                       closeAndReset();
                       router.push(
@@ -330,10 +347,12 @@ export function ReportSheet({
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.secondaryButton}
+                style={[styles.secondaryButton, busy && styles.buttonDisabled]}
                 activeOpacity={0.82}
+                disabled={busy}
                 accessibilityRole="button"
                 accessibilityLabel="Cancel report"
+                accessibilityState={{ disabled: busy }}
                 onPress={closeAndReset}
               >
                 <Text style={styles.secondaryButtonText}>Cancel</Text>
@@ -369,7 +388,6 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   sheetContent: {
-    paddingHorizontal: 18,
     gap: 12,
   },
   handle: {
@@ -401,12 +419,15 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   categoryChip: {
+    minWidth: 48,
+    minHeight: 48,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.05)",
     paddingHorizontal: 12,
     paddingVertical: 8,
+    justifyContent: "center",
   },
   categoryChipActive: {
     borderColor: "rgba(220,20,60,0.4)",
@@ -479,11 +500,13 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   formalNoticeButton: {
+    minHeight: 48,
     alignSelf: "flex-start",
     borderRadius: 999,
     backgroundColor: "#DC143C",
     paddingHorizontal: 12,
     paddingVertical: 8,
+    justifyContent: "center",
   },
   formalNoticeButtonText: {
     color: "#fff",
@@ -491,6 +514,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   primaryButton: {
+    minHeight: 48,
     borderRadius: 999,
     backgroundColor: "#DC143C",
     paddingVertical: 12,
@@ -505,6 +529,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   secondaryButton: {
+    minHeight: 48,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",

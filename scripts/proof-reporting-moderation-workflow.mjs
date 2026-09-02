@@ -1,6 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { validateReportSheetSource } from "./lib/report-sheet-policy.mjs";
+
 const root = process.cwd();
 const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "");
 const artifactDir = `/tmp/app-reporting-moderation-workflow-proof-${stamp}`;
@@ -12,21 +14,13 @@ const check = (name, passed, detail) => {
   checks.push({ name, passed, detail });
 };
 
-const workflowDoc = read(
-  "docs/legal/REPORTING_MODERATION_PRODUCTION_WORKFLOW.md",
-);
+const workflowDoc = read("docs/legal/REPORTING_MODERATION_PRODUCTION_WORKFLOW.md");
 const moderationDoc = read("docs/legal/MODERATION_REPORTING_WORKFLOW.md");
-const moderatorDoc = read(
-  "docs/admin/MODERATOR_ROLE_SCOPE_AND_SUPPORT_DUTIES.md",
-);
-const commandCenterDoc = read(
-  "docs/admin/OWNER_ADMIN_COMMAND_CENTER_PRODUCTION_UI.md",
-);
+const moderatorDoc = read("docs/admin/MODERATOR_ROLE_SCOPE_AND_SUPPORT_DUTIES.md");
+const commandCenterDoc = read("docs/admin/OWNER_ADMIN_COMMAND_CENTER_PRODUCTION_UI.md");
 const reportSheet = read("components/safety/report-sheet.tsx");
 const moderationLib = read("_lib/moderation.ts");
-const duplicateMigration = read(
-  "supabase/migrations/20260625202127_reporting_moderation_duplicate_guard.sql",
-);
+const duplicateMigration = read("supabase/migrations/20260625202127_reporting_moderation_duplicate_guard.sql");
 const packageJson = read("package.json");
 const workflowDocLower = workflowDoc.toLowerCase();
 const reportSheetLower = reportSheet.toLowerCase();
@@ -108,39 +102,13 @@ for (const marker of requiredWorkflowMarkers) {
   );
 });
 
-[
-  "Your report goes to the moderation team",
-  "Your identity stays private from the reported person by default",
-  "A report does not remove content automatically",
-  "Please report in good faith",
-  "Open Copyright Report",
-  "Selected report category:",
-  "KeyboardAvoidingView",
-  'keyboardShouldPersistTaps="handled"',
-  "Math.max(insets.bottom, 16)",
-  "accessibilityViewIsModal",
-  'accessibilityRole="radio"',
-  "accessibilityState={{ selected: categoryKey === entry.key }}",
-  'accessibilityLabel="Optional report details"',
-  "accessibilityState={{ disabled: busy, busy }}",
-].forEach((marker) => {
-  check(`report_sheet:${marker}`, reportSheet.includes(marker), marker);
-});
-
+const reportSheetSemanticFindings = validateReportSheetSource(reportSheet);
 check(
-  "report_sheet:no_client_queue_claim",
-  !/scoped moderation queue|Review path:|\. Queue:|\bqueue\s*:|categoryOption\.queue/i.test(
-    reportSheet,
-  ),
-  "No client-invented queue routing is displayed or submitted",
-);
-check(
-  "report_sheet:dismiss_resets_state",
-  reportSheet.includes("onRequestClose={closeAndReset}") &&
-    reportSheet.includes("onPress={closeAndReset}") &&
-    reportSheet.includes('setCategoryKey("harassment_bullying")') &&
-    reportSheet.includes('setNote("")'),
-  "Every dismiss path clears category and note state",
+  "report_sheet:semantic_runtime_binding",
+  reportSheetSemanticFindings.length === 0,
+  reportSheetSemanticFindings.length
+    ? reportSheetSemanticFindings.join("; ")
+    : "Rendered copy, dismissal cleanup, keyboard/safe-area behavior, accessibility semantics, and the backed-category submission sink are syntax-bound.",
 );
 
 [
@@ -188,23 +156,17 @@ const summary = {
   total: checks.length,
 };
 
-writeFileSync(
-  join(artifactDir, "README.md"),
-  [
-    "# Reporting Moderation Workflow Proof",
-    "",
-    `Generated: ${new Date().toISOString()}`,
-    "",
-    "This proof is static/read-only and performs no provider, money, payout, refund, role, or report mutations.",
-    "",
-    JSON.stringify(summary, null, 2),
-    "",
-  ].join("\n"),
-);
-writeFileSync(
-  join(artifactDir, "checks.json"),
-  JSON.stringify(checks, null, 2),
-);
+writeFileSync(join(artifactDir, "README.md"), [
+  "# Reporting Moderation Workflow Proof",
+  "",
+  `Generated: ${new Date().toISOString()}`,
+  "",
+  "This proof is static/read-only and performs no provider, money, payout, refund, role, or report mutations.",
+  "",
+  JSON.stringify(summary, null, 2),
+  "",
+].join("\n"));
+writeFileSync(join(artifactDir, "checks.json"), JSON.stringify(checks, null, 2));
 
 console.log(JSON.stringify(summary, null, 2));
 if (failed.length) {

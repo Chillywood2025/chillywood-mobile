@@ -1,106 +1,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { validateReportSheetSource } from "./lib/report-sheet-policy.mjs";
+
 const root = process.cwd();
 const read = (path) => readFileSync(join(root, path), "utf8");
 const fail = (message) => {
   console.error(`Reporting moderation policy guard failed: ${message}`);
   process.exit(1);
-};
-
-const validateReportSheet = (source) => {
-  const findings = [];
-  const requireMarker = (marker, description) => {
-    if (!source.includes(marker))
-      findings.push(`missing ${description}: ${marker}`);
-  };
-
-  [
-    ["REPORT_SHEET_CATEGORY_OPTIONS", "category options"],
-    ["harassment_bullying", "harassment category"],
-    ["hate_discrimination", "hate category"],
-    ["threats_violence", "threat category"],
-    ["sexual_exploitation", "exploitation category"],
-    ["self_harm_danger", "self-harm category"],
-    ["minor_safety", "minor-safety category"],
-    ["illegal_activity", "illegal-activity category"],
-    ["spam_scam", "spam category"],
-    ["privacy_doxxing", "privacy category"],
-    ["copyright_dmca", "copyright category"],
-    ["fraud_payment", "payment-concern category"],
-    ["live_safety", "live-safety category"],
-    ["Please report in good faith", "good-faith copy"],
-    [
-      "Your report goes to the moderation team",
-      "customer-safe destination copy",
-    ],
-    [
-      "Your identity stays private from the reported person by default",
-      "reporter privacy copy",
-    ],
-    ["A report does not remove content automatically", "non-enforcement copy"],
-    ["KeyboardAvoidingView", "keyboard-aware container"],
-    [
-      'behavior={Platform.OS === "ios" ? "padding" : "height"}',
-      "cross-platform keyboard behavior",
-    ],
-    ["style={styles.sheetScroller}", "bounded vertical scroller"],
-    ['keyboardShouldPersistTaps="handled"', "keyboard-safe actions"],
-    ['maxHeight: "92%"', "small-screen sheet bound"],
-    ["useSafeAreaInsets", "safe-area binding"],
-    ["Math.max(insets.bottom, 16)", "bottom inset padding"],
-    ["if (!visible)", "dismissed-state reset"],
-    ['setCategoryKey("harassment_bullying")', "category reset"],
-    ['setNote("")', "note reset"],
-    ["accessibilityViewIsModal", "modal accessibility boundary"],
-    ['accessibilityRole="radio"', "category radio semantics"],
-    [
-      "accessibilityState={{ selected: categoryKey === entry.key }}",
-      "selected category state",
-    ],
-    [
-      'accessibilityLabel="Optional report details"',
-      "note accessibility label",
-    ],
-    [
-      "accessibilityState={{ disabled: busy, busy }}",
-      "submit accessibility state",
-    ],
-    ["Selected report category:", "backed category note"],
-  ].forEach(([marker, description]) => requireMarker(marker, description));
-
-  if ((source.match(/accessibilityRole="button"/g) ?? []).length < 3) {
-    findings.push("report actions need explicit button semantics");
-  }
-  if (
-    !/onRequestClose=\{closeAndReset\}/.test(source) ||
-    !/onPress=\{closeAndReset\}/.test(source)
-  ) {
-    findings.push("all dismiss paths must clear prior report state");
-  }
-  if (
-    /scoped moderation queue|Review path:|\. Queue:|\bqueue\s*:/i.test(source)
-  ) {
-    findings.push(
-      "client-invented moderation routing must not be user-visible or submitted as evidence",
-    );
-  }
-  if (/categoryOption\.queue/.test(source)) {
-    findings.push(
-      "client category state must not masquerade as authoritative queue routing",
-    );
-  }
-  if (
-    /raw storage paths|signed URLs|raw IPs|tokens|provider secrets|tax IDs|bank details|private provider IDs/.test(
-      source,
-    )
-  ) {
-    findings.push(
-      "user-facing report sheet must not mention private implementation details",
-    );
-  }
-
-  return findings;
 };
 
 const workflowDoc = read(
@@ -155,17 +62,23 @@ const packageJson = read("package.json");
     fail(`missing reportable surface: ${needle}`);
 });
 
-const reportSheetFindings = validateReportSheet(reportSheet);
+const reportSheetFindings = validateReportSheetSource(reportSheet);
 if (reportSheetFindings.length) fail(reportSheetFindings.join("; "));
 
 const reportSheetMutants = [
   [
     "routing jargon",
-    `${reportSheet}\nconst leakedRouting = "Review path: normal";`,
+    reportSheet.replace(
+      "Your report goes to the moderation team.",
+      "Your report goes to a scoped moderation queue.",
+    ),
   ],
   [
     "submitted queue claim",
-    `${reportSheet}\nconst leakedQueue = ". Queue: urgent";`,
+    reportSheet.replace(
+      "Selected report category: ${categoryOption.label}.",
+      "Selected report category: ${categoryOption.label}. Queue: urgent.",
+    ),
   ],
   [
     "keyboard container",
@@ -197,11 +110,94 @@ const reportSheetMutants = [
       'accessibilityRole="none"',
     ),
   ],
+  [
+    "cancel bypasses reset",
+    reportSheet.replace(
+      'accessibilityLabel="Cancel report"\n                accessibilityState={{ disabled: busy }}\n                onPress={closeAndReset}',
+      'accessibilityLabel="Cancel report"\n                accessibilityState={{ disabled: busy }}\n                onPress={onClose}',
+    ),
+  ],
+  [
+    "close handler omits resets",
+    reportSheet.replace(
+      'const closeAndReset = () => {\n    if (busy) return;\n    setCategoryKey("harassment_bullying");\n    setNote("");\n    onClose();\n  };',
+      "const closeAndReset = () => {\n    if (busy) return;\n    onClose();\n  };",
+    ),
+  ],
+  [
+    "unconditional return before resets",
+    reportSheet.replace(
+      "const closeAndReset = () => {\n    if (busy) return;",
+      "const closeAndReset = () => {\n    return;",
+    ),
+  ],
+  [
+    "unused privacy witness",
+    reportSheet.replace(
+      "{REPORT_SHEET_HELPER_TEXT}",
+      '{"Reports may be visible to the reported person."}',
+    ),
+  ],
+  [
+    "wrong submitted category",
+    reportSheet.replace(
+      "category: categoryOption.backedCategory,",
+      'category: "other",',
+    ),
+  ],
+  [
+    "split rendered routing claim",
+    reportSheet.replace(
+      'while they are reviewed.";',
+      'while they are reviewed. " + "Review " + "path: normal";',
+    ),
+  ],
+  [
+    "disabled keyboard avoidance",
+    reportSheet.replace(
+      "style={styles.keyboardAvoider}",
+      "style={styles.keyboardAvoider}\n        enabled={false}",
+    ),
+  ],
+  [
+    "overridden safe-area padding",
+    reportSheet.replace(
+      "              ]}\n              keyboardShouldPersistTaps",
+      "                { paddingBottom: 0 },\n              ]}\n              keyboardShouldPersistTaps",
+    ),
+  ],
+  ["stale reset effect", reportSheet.replace("  }, [visible]);", "  }, []);")],
+  [
+    "unreachable modal",
+    reportSheet.replace(
+      "  return (\n    <Modal",
+      "  return (\n    false && <Modal",
+    ),
+  ],
+  [
+    "permanently disabled submit",
+    reportSheet.replace("style={[styles.primaryButton, busy && styles.buttonDisabled]}\n                activeOpacity={0.86}\n                disabled={busy}", "style={[styles.primaryButton, busy && styles.buttonDisabled]}\n                activeOpacity={0.86}\n                disabled={true}"),
+  ],
+  [
+    "undersized touch targets",
+    reportSheet.replaceAll("minHeight: 48", "minHeight: 32"),
+  ],
+  [
+    "missing landscape safe area",
+    reportSheet.replace(
+      "paddingLeft: Math.max(insets.left, 18),",
+      "paddingLeft: 18,",
+    ),
+  ],
+  [
+    "busy dismissal data loss",
+    reportSheet.replace("    if (busy) return;\n", ""),
+  ],
 ];
 for (const [name, mutant] of reportSheetMutants) {
   if (mutant === reportSheet)
     fail(`mutation setup did not alter report sheet: ${name}`);
-  if (validateReportSheet(mutant).length === 0)
+  if (validateReportSheetSource(mutant).length === 0)
     fail(`report sheet mutant escaped: ${name}`);
 }
 
