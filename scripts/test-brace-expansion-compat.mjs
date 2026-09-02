@@ -66,9 +66,9 @@ const expectedNanoid = Object.freeze({
     "node_modules/postcss",
   ]),
 });
-// Exact reviewed lock graph after the bounded browserslist advisory closure.
+// Exact reviewed lock graph after the bounded browserslist and fast-uri advisory closures.
 // Any later package identity drift still fails closed at this digest.
-const expectedUnrelatedPackageGraphSha256 = "f435827fb0d29912cd3f85981cefbd283631a512ba63ec688d6fec87e99712df";
+const expectedUnrelatedPackageGraphSha256 = "48ae0b14d8141ca4de1b04611da97b9dc122fd65e2c87854017ea99b508f2280";
 const compatibilityClosurePaths = new Set([
   "node_modules/concat-map",
   "node_modules/expo/node_modules/balanced-match",
