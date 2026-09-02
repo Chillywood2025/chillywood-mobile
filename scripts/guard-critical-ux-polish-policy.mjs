@@ -11,7 +11,9 @@ const traverse = traverseModule.default ?? traverseModule;
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
-const USER_FACING_ERROR_IMPORTS = new Set(["./userFacingErrors", "../_lib/userFacingErrors", "../../_lib/userFacingErrors"]);
+const moduleResolvesTo = (specifier, sourceFile, target) => path.posix.normalize(
+  path.posix.join(path.posix.dirname(sourceFile), specifier),
+) === target;
 
 const fail = (message) => {
   console.error(`Critical UX polish policy guard failed: ${message}`);
@@ -229,18 +231,22 @@ const objectPatternMessageBindings = (patternPath, sourceIsRawErrorObject) => {
 };
 
 const isDirectPresentationExpression = (expressionPath, presentationBindings) => {
+  expressionPath = unwrapExpression(expressionPath);
   if (!expressionPath?.node) return false;
   if (expressionPath.isIdentifier()) {
     const binding = getBinding(expressionPath);
     return /^set.*(?:Error|Notice|Feedback|Status|Message)$/i.test(expressionPath.node.name)
       || (!!binding && presentationBindings.has(binding));
   }
-  return (expressionPath.isMemberExpression() || expressionPath.isOptionalMemberExpression())
-    && getPropertyName(expressionPath) === "alert"
+  if (!expressionPath.isMemberExpression() && !expressionPath.isOptionalMemberExpression()) return false;
+  if (["call", "apply"].includes(getPropertyName(expressionPath))) {
+    return isDirectPresentationExpression(expressionPath.get("object"), presentationBindings);
+  }
+  return getPropertyName(expressionPath) === "alert"
     && expressionPath.get("object").isIdentifier({ name: "Alert" });
 };
 
-const collectCustomerErrorBoundaryViolations = (source, file) => {
+const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
   const ast = parse(source, { sourceType: "unambiguous", plugins: ["typescript", "jsx"] });
   const rawErrorBindings = new Set();
   const rawResultBindings = new Set();
@@ -248,8 +254,11 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
   const presentationBindings = new Set();
   const sanitizerBindings = new Set();
   const functionDeclarations = [];
+  const classDeclarations = [];
+  const assignmentPatterns = [];
   const declarators = [];
   const assignments = [];
+  const addRawErrorBinding = (binding) => { rawErrorBindings.add(binding); rawMessageBindings.add(binding); };
 
   const isUntrustedResultExpression = (expressionPath) => {
     if (!expressionPath?.node) return false;
@@ -278,6 +287,21 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
     FunctionDeclaration(functionPath) {
       functionDeclarations.push(functionPath);
     },
+    ClassDeclaration(classPath) { classDeclarations.push(classPath); },
+    AssignmentPattern(patternPath) { assignmentPatterns.push(patternPath); },
+    CallExpression(callPath) {
+      const callee = unwrapExpression(callPath.get("callee"));
+      if (!callee?.isMemberExpression?.() && !callee?.isOptionalMemberExpression?.()) return;
+      const callback = unwrapExpression(callPath.get("arguments")[0]);
+      if (!callback?.isFunction?.()) return;
+      if (getPropertyName(callee) === "catch") for (const parameter of callback.get("params")) {
+        getPatternBindings(parameter).forEach(addRawErrorBinding);
+      }
+      if (getPropertyName(callee) === "then") for (const parameter of callback.get("params")) {
+        for (const binding of getPatternBindings(parameter)) rawResultBindings.add(binding);
+        objectPatternRawErrorBindings(parameter).forEach(addRawErrorBinding);
+      }
+    },
     ImportSpecifier(importPath) {
       const imported = importPath.get("imported");
       const importedName = imported.isIdentifier() ? imported.node.name : imported.isStringLiteral() ? imported.node.value : "";
@@ -285,7 +309,7 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
       if (
         importedName === "getUserFacingErrorMessage"
         && sourcePath?.isStringLiteral?.()
-        && USER_FACING_ERROR_IMPORTS.has(sourcePath.node.value)
+        && moduleResolvesTo(sourcePath.node.value, sourceFile, "_lib/userFacingErrors")
       ) {
         const binding = getBinding(importPath.get("local"));
         if (binding) sanitizerBindings.add(binding);
@@ -302,6 +326,12 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
   let changed = true;
   while (changed) {
     changed = false;
+    for (const patternPath of assignmentPatterns) {
+      if (!expressionContainsRawMessage(patternPath.get("right"), rawMessageBindings, rawErrorBindings, sanitizerBindings)) continue;
+      for (const binding of getPatternBindings(patternPath.get("left"))) if (!rawMessageBindings.has(binding)) {
+        rawMessageBindings.add(binding); changed = true;
+      }
+    }
     for (const functionPath of functionDeclarations) {
       const binding = getBinding(functionPath.get("id"));
       if (
@@ -311,6 +341,12 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
       ) {
         rawMessageBindings.add(binding);
         changed = true;
+      }
+    }
+    for (const classPath of classDeclarations) {
+      const binding = getBinding(classPath.get("id"));
+      if (binding && expressionContainsRawMessage(classPath, rawMessageBindings, rawErrorBindings, sanitizerBindings) && !rawMessageBindings.has(binding)) {
+        rawMessageBindings.add(binding); changed = true;
       }
     }
     for (const declaratorPath of declarators) {
@@ -398,6 +434,12 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
     for (const assignmentPath of assignments) {
       const leftBindings = getPatternBindings(assignmentPath.get("left"));
       const right = assignmentPath.get("right");
+      const leftObject = unwrapExpression(assignmentPath.get("left"))?.get?.("object");
+      if (leftObject?.isIdentifier?.() && right.isFunction?.()
+        && functionReturnsRawMessage(right, rawMessageBindings, rawErrorBindings, sanitizerBindings)) {
+        const binding = getBinding(leftObject);
+        if (binding && !rawMessageBindings.has(binding)) { rawMessageBindings.add(binding); changed = true; }
+      }
       if (assignmentPath.get("left").isIdentifier() && right.isFunction?.()) {
         const binding = getBinding(assignmentPath.get("left"));
         if (
@@ -458,8 +500,7 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
   }
 
   const violations = [];
-  traverse(ast, {
-    CallExpression(callPath) {
+  const inspectPresentationCall = (callPath) => {
       if (!isDirectPresentationExpression(callPath.get("callee"), presentationBindings)) return;
       if (callPath.get("arguments").some((argument) => expressionContainsRawMessage(
         argument,
@@ -469,7 +510,10 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
       ))) {
         violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: raw error message reaches a customer presentation call`);
       }
-    },
+  };
+  traverse(ast, {
+    CallExpression: inspectPresentationCall,
+    OptionalCallExpression: inspectPresentationCall,
     JSXExpressionContainer(expressionContainerPath) {
       if (expressionContainsRawMessage(
         expressionContainerPath.get("expression"),
@@ -493,7 +537,7 @@ const isStaticCustomerCopy = (expressionPath) => {
     && declarator.get("init").isStringLiteral();
 };
 
-const collectUserFacingErrorConstructionViolations = (source, file) => {
+const collectUserFacingErrorConstructionViolations = (source, file, sourceFile) => {
   const ast = parse(source, { sourceType: "unambiguous", plugins: ["typescript", "jsx"] });
   const approvedValidatorBindings = new Set();
   const approvedMessageBindings = new Set();
@@ -536,12 +580,12 @@ const collectUserFacingErrorConstructionViolations = (source, file) => {
       const localBinding = getBinding(importPath.get("local"));
       if (
         importedName === "getSocialAttachmentValidationMessage"
-        && source === "./socialAttachments"
+        && moduleResolvesTo(source, sourceFile, "_lib/socialAttachments")
         && localBinding
       ) approvedValidatorBindings.add(localBinding);
       if (
         importedName === "UserFacingError"
-        && USER_FACING_ERROR_IMPORTS.has(source)
+        && moduleResolvesTo(source, sourceFile, "_lib/userFacingErrors")
         && localBinding
       ) trustedErrorBindings.add(localBinding);
     },
@@ -574,6 +618,24 @@ const collectUserFacingErrorConstructionViolations = (source, file) => {
     }
     return false;
   };
+  const expressionUsesImport = (expressionPath, seen = new Set()) => {
+    expressionPath = unwrapExpression(expressionPath);
+    if (!expressionPath?.node) return false;
+    const bindingUsesImport = (binding) => {
+      if (!binding || seen.has(binding)) return false;
+      if (binding.kind === "module") return true;
+      seen.add(binding);
+      let owner = binding.path;
+      if (owner?.isIdentifier?.()) owner = owner.parentPath;
+      if (owner?.isVariableDeclarator?.()) return expressionUsesImport(owner.get("init"), seen);
+      if (owner?.isFunctionDeclaration?.() || owner?.isClassDeclaration?.()) return expressionUsesImport(owner, seen);
+      return false;
+    };
+    if (expressionPath.isIdentifier()) return bindingUsesImport(getBinding(expressionPath));
+    let found = false;
+    expressionPath.traverse({ Identifier(identifierPath) { if (bindingUsesImport(getBinding(identifierPath))) found = true; } });
+    return found;
+  };
 
   traverse(ast, {
     ImportSpecifier(importPath) {
@@ -586,18 +648,25 @@ const collectUserFacingErrorConstructionViolations = (source, file) => {
         violations.push(`${file}:${importPath.node.loc?.start.line ?? "?"}: UserFacingError must use the named app-owned import`);
       }
     },
-    ImportNamespaceSpecifier(importPath) {
-      const sourcePath = importPath.parentPath?.get("source");
-      if (sourcePath?.isStringLiteral?.() && USER_FACING_ERROR_IMPORTS.has(sourcePath.node.value)) {
-        violations.push(`${file}:${importPath.node.loc?.start.line ?? "?"}: UserFacingError must not be imported through a namespace`);
+    CallExpression(callPath) {
+      if (callPath.get("callee").isIdentifier({ name: "require" })) {
+        violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: CommonJS imports are not an app-owned customer-copy boundary`);
       }
     },
     ThrowStatement(throwPath) {
       const argument = throwPath.get("argument");
+      if (argument.isCallExpression?.() || argument.isOptionalCallExpression?.()) {
+        const callee = unwrapExpression(argument.get("callee"));
+        if (expressionUsesImport(callee)) {
+          violations.push(`${file}:${throwPath.node.loc?.start.line ?? "?"}: imported factories are not an app-owned customer-copy boundary`);
+        }
+        return;
+      }
       if (!argument.isNewExpression?.()) return;
-      const callee = argument.get("callee");
+      const callee = unwrapExpression(argument.get("callee"));
       const binding = getBinding(callee);
-      if (callee.isIdentifier() && callee.node.name !== "UserFacingError" && binding?.kind === "module") {
+      const isDirectTrustedConstructor = callee.isIdentifier({ name: "UserFacingError" }) && trustedErrorBindings.has(binding);
+      if (!isDirectTrustedConstructor && expressionUsesImport(callee)) {
         violations.push(`${file}:${throwPath.node.loc?.start.line ?? "?"}: imported error constructors are not an app-owned customer-copy boundary`);
       }
     },
@@ -636,24 +705,34 @@ const collectUserFacingErrorConstructionViolations = (source, file) => {
   return [...new Set(violations)];
 };
 
-const collectDomainErrorPolicyViolations = (source, file) => [
-  ...collectCustomerErrorBoundaryViolations(source, file),
-  ...collectUserFacingErrorConstructionViolations(source, file),
+const collectDomainErrorPolicyViolations = (source, file, sourceFile) => [
+  ...collectCustomerErrorBoundaryViolations(source, file, sourceFile),
+  ...collectUserFacingErrorConstructionViolations(source, file, sourceFile),
 ];
 
 const collectUserFacingErrorExportViolations = (source, file) => {
   const ast = parse(source, { sourceType: "unambiguous", plugins: ["typescript"] });
+  const allowed = new Set(["UserFacingErrorCode", "UserFacingError", "getUserFacingErrorMessage"]);
   const violations = [];
   traverse(ast, {
-    ExportSpecifier(exportPath) {
-      const local = exportPath.get("local");
-      const exported = exportPath.get("exported");
-      const localName = local.isIdentifier() ? local.node.name : local.isStringLiteral() ? local.node.value : "";
-      const exportedName = exported.isIdentifier() ? exported.node.name : exported.isStringLiteral() ? exported.node.value : "";
-      if (localName === "UserFacingError" && exportedName !== "UserFacingError") {
-        violations.push(`${file}:${exportPath.node.loc?.start.line ?? "?"}: UserFacingError must not be re-exported under another name`);
+    ExportNamedDeclaration(exportPath) {
+      if (exportPath.get("source")?.node) violations.push(`${file}:${exportPath.node.loc?.start.line ?? "?"}: customer-error re-exports are not allowed`);
+      const declaration = exportPath.get("declaration");
+      const names = declaration?.isVariableDeclaration?.()
+        ? declaration.get("declarations").flatMap((item) => Object.keys(item.get("id").getBindingIdentifiers()))
+        : declaration?.node
+          ? Object.keys(declaration.get("id").getBindingIdentifiers())
+        : exportPath.get("specifiers").flatMap((specifier) => {
+          const local = specifier.get("local"); const exported = specifier.get("exported");
+          const localName = local.isIdentifier() ? local.node.name : local.node.value;
+          const exportedName = exported.isIdentifier() ? exported.node.name : exported.node.value;
+          return localName === exportedName ? [localName] : [localName, exportedName];
+        });
+      for (const name of names) if (!allowed.has(name)) {
+        violations.push(`${file}:${exportPath.node.loc?.start.line ?? "?"}: unapproved customer-error export ${name}`);
       }
     },
+    ExportDefaultDeclaration(exportPath) { violations.push(`${file}:${exportPath.node.loc?.start.line ?? "?"}: default customer-error exports are not allowed`); },
   });
   return violations;
 };
@@ -829,12 +908,11 @@ for (const [label, mutate] of userFacingErrorMutations) {
   }
 }
 
-const aliasedUserFacingErrorExport = `${userFacingErrors}\nexport { UserFacingError as TrustedError };\n`;
-if (collectUserFacingErrorExportViolations(
-  aliasedUserFacingErrorExport,
-  "Shared user-facing error re-export mutation",
-).length === 0) {
-  fail("user-facing error export guard accepted an aliased constructor re-export");
+for (const [label, mutation] of [
+  ["aliased constructor", `${userFacingErrors}\nexport { UserFacingError as TrustedError };\n`],
+  ["factory", `${userFacingErrors}\nexport const buildError = (message) => new UserFacingError("chat_action", message);\n`],
+]) if (collectUserFacingErrorExportViolations(mutation, `Shared user-facing error ${label} mutation`).length === 0) {
+  fail(`user-facing error export guard accepted an ${label} export`);
 }
 
 const login = read("app/(auth)/login.tsx");
@@ -843,15 +921,15 @@ const chatThread = read("app/chat/[threadId].tsx");
 const chatInviteSheet = read("components/chat/internal-invite-sheet.tsx");
 const chillyCircle = read("app/chilly-circle.tsx");
 
-for (const [label, source] of [
-  ["Login", login],
-  ["Chi'lly Chat Inbox", chatInbox],
-  ["Chi'lly Chat Thread", chatThread],
-  ["Chi'lly Chat Invite", chatInviteSheet],
-  ["Chi'lly Circle", chillyCircle],
+for (const [label, source, sourceFile] of [
+  ["Login", login, "app/(auth)/login.tsx"],
+  ["Chi'lly Chat Inbox", chatInbox, "app/chat/index.tsx"],
+  ["Chi'lly Chat Thread", chatThread, "app/chat/[threadId].tsx"],
+  ["Chi'lly Chat Invite", chatInviteSheet, "components/chat/internal-invite-sheet.tsx"],
+  ["Chi'lly Circle", chillyCircle, "app/chilly-circle.tsx"],
 ]) {
   assertIncludes(source, "getUserFacingErrorMessage", `${label} sanitized error boundary`);
-  for (const violation of collectCustomerErrorBoundaryViolations(source, label)) fail(violation);
+  for (const violation of collectCustomerErrorBoundaryViolations(source, label, sourceFile)) fail(violation);
 }
 
 const chatDomain = read("_lib/chat.ts");
@@ -859,15 +937,15 @@ const friendGraph = read("_lib/friendGraph.ts");
 const socialAttachments = read("_lib/socialAttachments.ts");
 const socialAttachmentPicker = read("_lib/socialAttachmentPicker.ts");
 
-for (const [label, source, code] of [
-  ["Chi'lly Chat domain", chatDomain, "chat_action"],
-  ["Chi'lly Circle domain", friendGraph, "circle_action"],
-  ["Social attachments domain", socialAttachments, "attachment_action"],
-  ["Social attachment picker", socialAttachmentPicker, "attachment_action"],
+for (const [label, source, code, sourceFile] of [
+  ["Chi'lly Chat domain", chatDomain, "chat_action", "_lib/chat.ts"],
+  ["Chi'lly Circle domain", friendGraph, "circle_action", "_lib/friendGraph.ts"],
+  ["Social attachments domain", socialAttachments, "attachment_action", "_lib/socialAttachments.ts"],
+  ["Social attachment picker", socialAttachmentPicker, "attachment_action", "_lib/socialAttachmentPicker.ts"],
 ]) {
   assertIncludes(source, "UserFacingError", `${label} trusted domain error type`);
   assertIncludes(source, `\"${code}\"`, `${label} trusted domain error code`);
-  for (const violation of collectDomainErrorPolicyViolations(source, label)) fail(violation);
+  for (const violation of collectDomainErrorPolicyViolations(source, label, sourceFile)) fail(violation);
 }
 
 for (const violation of collectPlainThrownErrorViolations(socialAttachmentPicker, "Social attachment picker")) fail(violation);
@@ -1067,75 +1145,9 @@ const boundaryMutationCases = [
     collectPlainThrownErrorViolations,
   ],
   [
-    "trusted picker guidance downgraded to Error call",
-    socialAttachmentPicker.replace("throw new UserFacingError(", "throw Error("),
-    "Social attachment picker call mutation",
-    collectPlainThrownErrorViolations,
-  ],
-  [
     "trusted picker guidance downgraded through Error constructor alias",
     `${socialAttachmentPicker}\nfunction __unsafePickerConstructorAlias(validationMessage) {\n  const PickerError = Error;\n  throw new PickerError(validationMessage);\n}`,
     "Social attachment picker constructor-alias mutation",
-    collectPlainThrownErrorViolations,
-  ],
-  [
-    "trusted picker guidance downgraded through assigned Error alias",
-    `${socialAttachmentPicker}\nfunction __unsafePickerAssignedAlias(validationMessage) {\n  let PickerError;\n  PickerError = Error;\n  throw PickerError(validationMessage);\n}`,
-    "Social attachment picker assigned-alias mutation",
-    collectPlainThrownErrorViolations,
-  ],
-  [
-    "trusted picker guidance downgraded through Error object member",
-    `${socialAttachmentPicker}\nfunction __unsafePickerMemberAlias(validationMessage) {\n  const Constructors = { PickerError: Error };\n  throw new Constructors.PickerError(validationMessage);\n}`,
-    "Social attachment picker member-alias mutation",
-    collectPlainThrownErrorViolations,
-  ],
-  [
-    "trusted picker guidance downgraded through destructured Error member",
-    `${socialAttachmentPicker}\nfunction __unsafePickerDestructuredAlias(validationMessage) {\n  const Constructors = { PickerError: Error };\n  const { PickerError } = Constructors;\n  throw new PickerError(validationMessage);\n}`,
-    "Social attachment picker destructured-alias mutation",
-    collectPlainThrownErrorViolations,
-  ],
-  [
-    "trusted picker guidance downgraded through assigned Error member",
-    `${socialAttachmentPicker}\nfunction __unsafePickerAssignedMember(validationMessage) {\n  const Constructors = {};\n  Constructors.PickerError = Error;\n  throw Constructors.PickerError(validationMessage);\n}`,
-    "Social attachment picker assigned-member mutation",
-    collectPlainThrownErrorViolations,
-  ],
-  [
-    "trusted picker guidance downgraded through nested Error container",
-    `${socialAttachmentPicker}\nfunction __unsafePickerNestedContainer(validationMessage) {\n  const Constructors = { Nested: [{ PickerError: Error }] };\n  throw new Constructors.Nested[0].PickerError(validationMessage);\n}`,
-    "Social attachment picker nested-container mutation",
-    collectPlainThrownErrorViolations,
-  ],
-  [
-    "trusted picker guidance downgraded through frozen Error container",
-    `${socialAttachmentPicker}\nfunction __unsafePickerFrozenContainer(validationMessage) {\n  const Constructors = Object.freeze({ PickerError: Error });\n  throw new Constructors.PickerError(validationMessage);\n}`,
-    "Social attachment picker frozen-container mutation",
-    collectPlainThrownErrorViolations,
-  ],
-  [
-    "trusted picker guidance downgraded through assigned Error container",
-    `${socialAttachmentPicker}\nfunction __unsafePickerObjectAssignContainer(validationMessage) {\n  const Constructors = Object.assign({}, { PickerError: Error });\n  throw Constructors.PickerError(validationMessage);\n}`,
-    "Social attachment picker Object.assign mutation",
-    collectPlainThrownErrorViolations,
-  ],
-  [
-    "trusted picker guidance downgraded through global object alias",
-    `${socialAttachmentPicker}\nfunction __unsafePickerGlobalAlias(validationMessage) {\n  const Runtime = globalThis;\n  throw Runtime.Error(validationMessage);\n}`,
-    "Social attachment picker global-alias mutation",
-    collectPlainThrownErrorViolations,
-  ],
-  [
-    "trusted picker guidance downgraded through destructured global Error",
-    `${socialAttachmentPicker}\nfunction __unsafePickerGlobalDestructure(validationMessage) {\n  const { Error: PickerError } = globalThis;\n  throw new PickerError(validationMessage);\n}`,
-    "Social attachment picker global-destructure mutation",
-    collectPlainThrownErrorViolations,
-  ],
-  [
-    "trusted picker guidance downgraded through bound Error",
-    `${socialAttachmentPicker}\nfunction __unsafePickerBoundError(validationMessage) {\n  const PickerError = Error.bind(null);\n  throw new PickerError(validationMessage);\n}`,
-    "Social attachment picker bound-Error mutation",
     collectPlainThrownErrorViolations,
   ],
 ];
@@ -1146,10 +1158,13 @@ for (const [label, mutatedSource, mutatedFile, analyze] of boundaryMutationCases
     fail(`customer error-boundary mutation fixture did not apply: ${label}`);
     continue;
   }
+  const sourceFile = mutatedFile.startsWith("Chi'lly Chat") ? "_lib/chat.ts"
+    : mutatedFile.startsWith("Social attachments") ? "_lib/socialAttachments.ts"
+      : mutatedFile.startsWith("Social attachment picker") ? "_lib/socialAttachmentPicker.ts" : "app/(auth)/login.tsx";
   const violations = [
-    ...analyze(mutatedSource, mutatedFile),
+    ...analyze(mutatedSource, mutatedFile, sourceFile),
     ...(mutatedFile.startsWith("Chi'lly Chat")
-      ? collectUserFacingErrorConstructionViolations(mutatedSource, mutatedFile)
+      ? collectUserFacingErrorConstructionViolations(mutatedSource, mutatedFile, sourceFile)
       : []),
   ];
   if (violations.length === 0) {
@@ -1160,29 +1175,44 @@ for (const [label, mutatedSource, mutatedFile, analyze] of boundaryMutationCases
 for (const [label, mutation] of [
   ["function declaration", `${login}\nfunction __unsafeDeclaredClosure(setError) { try { throw new Error("provider"); } catch (problem) { function renderDetail() { return String(problem); } setError(renderDetail()); } }`],
   ["assigned function", `${login}\nfunction __unsafeAssignedClosure(setError) { let renderDetail; try { throw new Error("provider"); } catch (problem) { renderDetail = function () { return String(problem); }; setError(renderDetail()); } }`],
+  ["member-assigned closure", `${login}\nfunction __unsafeMemberAssignedClosure(setError) { const holder = {}; try { throw new Error("provider"); } catch (problem) { holder.render = () => String(problem); setError(holder.render()); } }`],
+  ["default-parameter closure", `${login}\nfunction __unsafeDefaultParameter(setError) { try { throw new Error("provider"); } catch (problem) { const render = (value = problem) => String(value); setError(render()); } }`],
+  ["class method closure", `${login}\nfunction __unsafeClassMethod(setError) { try { throw new Error("provider"); } catch (problem) { class Renderer { render(value = problem) { return String(value); } } setError(new Renderer().render()); } }`],
+  ["class static closure", `${login}\nfunction __unsafeClassStatic(setError) { try { throw new Error("provider"); } catch (problem) { class Renderer { static render() { return String(problem); } } setError(Renderer.render()); } }`],
   ["higher-order closure", `${login}\nfunction __unsafeHigherOrderClosure(setError) { try { throw new Error("provider"); } catch (problem) { const render = () => () => String(problem); setError(render()()); } }`],
   ["object-method closure", `${login}\nfunction __unsafeObjectClosure(setError) { try { throw new Error("provider"); } catch (problem) { const holder = { render() { return String(problem); } }; setError(holder.render()); } }`],
   ["satisfies-wrapped IIFE", `${login}\nfunction __unsafeSatisfiesIife(setError) { try { throw new Error("provider"); } catch (problem) { setError(((() => String(problem)) satisfies () => string)()); } }`],
   ["reassigned sanitizer alias", `${login}\nfunction __unsafeReassignedSanitizer(setError) { let sanitize = getUserFacingErrorMessage; sanitize = (value) => String(value); try { throw new Error("provider"); } catch (problem) { setError(sanitize(problem, "fallback")); } }`],
   ["assigned then replaced sanitizer alias", `${login}\nfunction __unsafeAssignedSanitizer(setError) { let sanitize; sanitize = getUserFacingErrorMessage; sanitize = (value) => String(value); try { throw new Error("provider"); } catch (problem) { setError(sanitize(problem, "fallback")); } }`],
+  ["Promise catch callback", `${login}\nfunction __unsafePromiseCatch(setError, action) { action().catch((problem) => setError(problem.message)); }`],
+  ["provider then callback", `${login}\nfunction __unsafeProviderThen(setError, action) { action().then(({ error: problem }) => setError(problem.message)); }`],
+  ["optional presentation", `${login}\nfunction __unsafeOptionalPresentation(setError) { try { throw new Error("provider"); } catch (problem) { setError?.(problem.message); } }`],
+  ["asserted presentation", `${login}\nfunction __unsafeAssertedPresentation(setError) { try { throw new Error("provider"); } catch (problem) { (setError as (value: string) => void)(problem.message); } }`],
+  ["presentation call", `${login}\nfunction __unsafePresentationCall(setError) { try { throw new Error("provider"); } catch (problem) { setError.call(null, problem.message); } }`],
 ]) {
-  if (collectCustomerErrorBoundaryViolations(mutation, `Login ${label} mutation`).length === 0) fail(`customer error-boundary proof accepted raw ${label}`);
+  if (collectCustomerErrorBoundaryViolations(mutation, `Login ${label} mutation`, "app/(auth)/login.tsx").length === 0) fail(`customer error-boundary proof accepted raw ${label}`);
 }
 
-for (const [label, mutation, analyze] of [
-  ["nested sanitizer module", `${login}\nimport { getUserFacingErrorMessage as unsafeSanitize } from "./fake/userFacingErrors";\nfunction __unsafeImportedSanitizer(setError) { try { throw new Error("provider"); } catch (problem) { setError(unsafeSanitize(problem, "fallback")); } }`, collectCustomerErrorBoundaryViolations],
-  ["re-exported constructor consumer", `${chatDomain}\nimport { TrustedError } from "./trustedErrors";\nfunction __unsafeImportedConstructor(created) { throw new TrustedError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations],
-  ["nested validator module", `${socialAttachmentPicker}\nimport { getSocialAttachmentValidationMessage as unsafeValidate } from "./fake/socialAttachments";\nfunction __unsafeImportedValidator(created) { const message = unsafeValidate(created.file); throw new UserFacingError("attachment_action", message); }`, collectUserFacingErrorConstructionViolations],
-  ["dynamic validator body", socialAttachments.replace("return null;\n};", "return String(file.uri);\n};"), collectUserFacingErrorConstructionViolations],
-  ["raw sanitizer transform", chillyCircle.replace('.replace(/friend/gi, "Chi\'lly Circle");', '.concat(String(error));'), collectCustomerErrorBoundaryViolations],
+for (const [label, mutation, analyze, sourceFile] of [
+  ["wrongly resolved sanitizer module", `${login}\nimport { getUserFacingErrorMessage as unsafeSanitize } from "./userFacingErrors";\nfunction __unsafeImportedSanitizer(setError) { try { throw new Error("provider"); } catch (problem) { setError(unsafeSanitize(problem, "fallback")); } }`, collectCustomerErrorBoundaryViolations, "app/(auth)/login.tsx"],
+  ["re-exported constructor consumer", `${chatDomain}\nimport { TrustedError } from "./trustedErrors";\nfunction __unsafeImportedConstructor(created) { throw new TrustedError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["aliased re-exported constructor", `${chatDomain}\nimport { TrustedError } from "./trustedErrors";\nfunction __unsafeAliasedImportedConstructor(created) { const LocalError = TrustedError; throw new LocalError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["wrapped and subclassed re-exported constructor", `${chatDomain}\nimport { TrustedError } from "./trustedErrors";\nfunction __unsafeWrappedConstructor(created) { const LocalError = ((...args) => new TrustedError(...args)) as typeof TrustedError; class ChildError extends LocalError {} throw new ChildError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["namespace re-exported constructor", `${chatDomain}\nimport * as TrustedErrors from "./trustedErrors";\nfunction __unsafeNamespaceImportedConstructor(created) { throw new TrustedErrors.TrustedError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["required re-exported constructor", `${chatDomain}\nfunction __unsafeRequiredConstructor(created) { const { TrustedError } = require("./trustedErrors"); throw new TrustedError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["imported error factory", `${chatDomain}\nimport { buildError } from "./trustedErrors";\nfunction __unsafeImportedFactory(created) { throw buildError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["nested validator module", `${socialAttachmentPicker}\nimport { getSocialAttachmentValidationMessage as unsafeValidate } from "./fake/socialAttachments";\nfunction __unsafeImportedValidator(created) { const message = unsafeValidate(created.file); throw new UserFacingError("attachment_action", message); }`, collectUserFacingErrorConstructionViolations, "_lib/socialAttachmentPicker.ts"],
+  ["dynamic validator body", socialAttachments.replace("return null;\n};", "return String(file.uri);\n};"), collectUserFacingErrorConstructionViolations, "_lib/socialAttachments.ts"],
+  ["raw sanitizer transform", chillyCircle.replace('.replace(/friend/gi, "Chi\'lly Circle");', '.concat(String(error));'), collectCustomerErrorBoundaryViolations, "app/chilly-circle.tsx"],
 ]) {
-  if (analyze(mutation, label).length === 0) fail(`customer error-boundary proof trusted ${label}`);
+  if (analyze(mutation, label, sourceFile).length === 0) fail(`customer error-boundary proof trusted ${label}`);
 }
 
 const safeSanitizerAliasSource = `${login}\nfunction __safeSanitizerAliasMutation(setError) {\n  try { throw new Error(\"provider detail\"); } catch (problem) {\n    const sanitize = getUserFacingErrorMessage;\n    setError(sanitize(problem, \"Unable to continue right now.\"));\n  }\n}`;
 for (const violation of collectCustomerErrorBoundaryViolations(
   safeSanitizerAliasSource,
   "Safe sanitizer alias behavior",
+  "app/(auth)/login.tsx",
 )) {
   fail(`customer error-boundary proof rejected a safe sanitizer alias: ${violation}`);
 }
