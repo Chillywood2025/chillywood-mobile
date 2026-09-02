@@ -11,6 +11,7 @@ const traverse = traverseModule.default ?? traverseModule;
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
+const USER_FACING_ERROR_IMPORTS = new Set(["./userFacingErrors", "../_lib/userFacingErrors", "../../_lib/userFacingErrors"]);
 
 const fail = (message) => {
   console.error(`Critical UX polish policy guard failed: ${message}`);
@@ -324,7 +325,7 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
       if (
         importedName === "getUserFacingErrorMessage"
         && sourcePath?.isStringLiteral?.()
-        && /(?:^|\/)userFacingErrors(?:\.[cm]?[jt]sx?)?$/u.test(sourcePath.node.value)
+        && USER_FACING_ERROR_IMPORTS.has(sourcePath.node.value)
       ) {
         const binding = getBinding(importPath.get("local"));
         if (binding) sanitizerBindings.add(binding);
@@ -397,7 +398,8 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
           }
         }
       }
-      if (isUserFacingSanitizerExpression(init, sanitizerBindings)) {
+      if (idBindings.every((binding) => binding.constant && binding.constantViolations.length === 0)
+        && isUserFacingSanitizerExpression(init, sanitizerBindings)) {
         for (const binding of idBindings) {
           if (!sanitizerBindings.has(binding)) {
             sanitizerBindings.add(binding);
@@ -458,14 +460,6 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
         for (const binding of objectPatternRawErrorBindings(assignmentPath.get("left"))) {
           if (!rawErrorBindings.has(binding)) {
             rawErrorBindings.add(binding);
-            changed = true;
-          }
-        }
-      }
-      if (isUserFacingSanitizerExpression(right, sanitizerBindings)) {
-        for (const binding of leftBindings) {
-          if (!sanitizerBindings.has(binding)) {
-            sanitizerBindings.add(binding);
             changed = true;
           }
         }
@@ -566,12 +560,12 @@ const collectUserFacingErrorConstructionViolations = (source, file) => {
       const localBinding = getBinding(importPath.get("local"));
       if (
         importedName === "getSocialAttachmentValidationMessage"
-        && /(?:^|\/)socialAttachments(?:\.[cm]?[jt]sx?)?$/u.test(source)
+        && source === "./socialAttachments"
         && localBinding
       ) approvedValidatorBindings.add(localBinding);
       if (
         importedName === "UserFacingError"
-        && /(?:^|\/)userFacingErrors(?:\.[cm]?[jt]sx?)?$/u.test(source)
+        && USER_FACING_ERROR_IMPORTS.has(source)
         && localBinding
       ) trustedErrorBindings.add(localBinding);
     },
@@ -618,8 +612,17 @@ const collectUserFacingErrorConstructionViolations = (source, file) => {
     },
     ImportNamespaceSpecifier(importPath) {
       const sourcePath = importPath.parentPath?.get("source");
-      if (sourcePath?.isStringLiteral?.() && /userFacingErrors$/u.test(sourcePath.node.value)) {
+      if (sourcePath?.isStringLiteral?.() && USER_FACING_ERROR_IMPORTS.has(sourcePath.node.value)) {
         violations.push(`${file}:${importPath.node.loc?.start.line ?? "?"}: UserFacingError must not be imported through a namespace`);
+      }
+    },
+    ThrowStatement(throwPath) {
+      const argument = throwPath.get("argument");
+      if (!argument.isNewExpression?.()) return;
+      const callee = argument.get("callee");
+      const binding = getBinding(callee);
+      if (callee.isIdentifier() && callee.node.name !== "UserFacingError" && binding?.kind === "module") {
+        violations.push(`${file}:${throwPath.node.loc?.start.line ?? "?"}: imported error constructors are not an app-owned customer-copy boundary`);
       }
     },
     Identifier(identifierPath) {
@@ -1181,8 +1184,18 @@ for (const [label, mutatedSource, mutatedFile, analyze] of boundaryMutationCases
 for (const [label, mutation] of [
   ["function declaration", `${login}\nfunction __unsafeDeclaredClosure(setError) { try { throw new Error("provider"); } catch (problem) { function renderDetail() { return String(problem); } setError(renderDetail()); } }`],
   ["assigned function", `${login}\nfunction __unsafeAssignedClosure(setError) { let renderDetail; try { throw new Error("provider"); } catch (problem) { renderDetail = function () { return String(problem); }; setError(renderDetail()); } }`],
+  ["reassigned sanitizer alias", `${login}\nfunction __unsafeReassignedSanitizer(setError) { let sanitize = getUserFacingErrorMessage; sanitize = (value) => String(value); try { throw new Error("provider"); } catch (problem) { setError(sanitize(problem, "fallback")); } }`],
+  ["assigned then replaced sanitizer alias", `${login}\nfunction __unsafeAssignedSanitizer(setError) { let sanitize; sanitize = getUserFacingErrorMessage; sanitize = (value) => String(value); try { throw new Error("provider"); } catch (problem) { setError(sanitize(problem, "fallback")); } }`],
 ]) {
   if (collectCustomerErrorBoundaryViolations(mutation, `Login ${label} mutation`).length === 0) fail(`customer error-boundary proof accepted raw ${label}`);
+}
+
+for (const [label, mutation, analyze] of [
+  ["nested sanitizer module", `${login}\nimport { getUserFacingErrorMessage as unsafeSanitize } from "./fake/userFacingErrors";\nfunction __unsafeImportedSanitizer(setError) { try { throw new Error("provider"); } catch (problem) { setError(unsafeSanitize(problem, "fallback")); } }`, collectCustomerErrorBoundaryViolations],
+  ["re-exported constructor consumer", `${chatDomain}\nimport { TrustedError } from "./trustedErrors";\nfunction __unsafeImportedConstructor(created) { throw new TrustedError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations],
+  ["nested validator module", `${socialAttachmentPicker}\nimport { getSocialAttachmentValidationMessage as unsafeValidate } from "./fake/socialAttachments";\nfunction __unsafeImportedValidator(created) { const message = unsafeValidate(created.file); throw new UserFacingError("attachment_action", message); }`, collectUserFacingErrorConstructionViolations],
+]) {
+  if (analyze(mutation, label).length === 0) fail(`customer error-boundary proof trusted ${label}`);
 }
 
 const safeSanitizerAliasSource = `${login}\nfunction __safeSanitizerAliasMutation(setError) {\n  try { throw new Error(\"provider detail\"); } catch (problem) {\n    const sanitize = getUserFacingErrorMessage;\n    setError(sanitize(problem, \"Unable to continue right now.\"));\n  }\n}`;
@@ -1191,14 +1204,6 @@ for (const violation of collectCustomerErrorBoundaryViolations(
   "Safe sanitizer alias behavior",
 )) {
   fail(`customer error-boundary proof rejected a safe sanitizer alias: ${violation}`);
-}
-
-const safeAssignedSanitizerAliasSource = `${login}\nfunction __safeAssignedSanitizerAliasMutation(setError) {\n  let sanitize;\n  sanitize = getUserFacingErrorMessage;\n  try { throw new Error(\"provider detail\"); } catch (problem) {\n    setError(sanitize(problem, \"Unable to continue right now.\"));\n  }\n}`;
-for (const violation of collectCustomerErrorBoundaryViolations(
-  safeAssignedSanitizerAliasSource,
-  "Safe assigned sanitizer alias behavior",
-)) {
-  fail(`customer error-boundary proof rejected a safe assigned sanitizer alias: ${violation}`);
 }
 
 for (const [label, source, unsafeExpression] of [
