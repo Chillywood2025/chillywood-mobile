@@ -139,6 +139,18 @@ Final ledger: BLOCKING_OPEN=0; REPAIRED_UNPROVEN=0; PROVEN=23.
 `OWNER_AUTHORIZED_PREOP_ASSURANCE_CONTINUATION`; the active-task check is never
 represented as passed.
 
+The ready-state rerun `33626684329` is also not represented as green. Eleven
+jobs passed and three assurance-bearing jobs failed only on
+`ASSURANCE_TASK_CONTEXT_UNBOUND`, the unrecognized 53-file/3,200-line task
+waiver (observed scope remained 53 files and 2,038 net lines),
+`ASSURANCE_MIXED_HIGH_RISK_SCOPE`,
+`ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN`,
+`ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND`, and the resulting
+`PHASE1_RISK_CLOSURE_PROTECTED_READY_DECISION_INVALID`. The earlier full run
+`33625959184` executed and passed every substantive step at the identical head
+and tree. No product, security, provider, database, native, or lifecycle
+failure is included in the ready-state failure set.
+
 The TAC connector was not signed in, so its advisory status was unavailable.
 Legitimate positive RevenueCat purchase/restore and signed/installed/physical
 Android/iOS proof require configured sandbox identities and attached devices;
