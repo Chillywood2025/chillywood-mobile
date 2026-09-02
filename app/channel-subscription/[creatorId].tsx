@@ -220,9 +220,9 @@ export default function ChannelSubscriptionScreen() {
                 onPress={openPublicPreview}
                 testID="subscriber-area-back-to-channel-button"
                 accessibilityRole="button"
-                accessibilityLabel="Back to creator channel"
+                accessibilityLabel="Back to creator Platform"
               >
-                <Text style={styles.secondaryButtonText}>Back to channel</Text>
+                <Text style={styles.secondaryButtonText}>Back to Platform</Text>
               </TouchableOpacity>
             </View>
           </View>

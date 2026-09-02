@@ -250,7 +250,7 @@ async function mutateFriendRelationship(otherUserId: string, action: "accept" | 
     throw new Error("You cannot update Chi'lly Circle with yourself.");
   }
   if (await readChillyCircleBlockOverride(viewerUserId, normalizedOtherUserId)) {
-    throw new Error("Chi'lly Circle is unavailable while a channel audience block exists between these accounts.");
+    throw new Error("Chi'lly Circle is unavailable while a Platform audience block exists between these accounts.");
   }
 
   const { data, error } = await supabase.rpc("respond_to_friendship", {
@@ -443,7 +443,7 @@ export async function sendFriendRequest(otherUserId: string): Promise<FriendRela
     throw new Error("You cannot request yourself.");
   }
   if (await readChillyCircleBlockOverride(viewerUserId, normalizedOtherUserId)) {
-    throw new Error("Chi'lly Circle is unavailable while a channel audience block exists between these accounts.");
+    throw new Error("Chi'lly Circle is unavailable while a Platform audience block exists between these accounts.");
   }
 
   const { data, error } = await supabase.rpc("request_friendship", {

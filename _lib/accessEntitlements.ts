@@ -393,7 +393,7 @@ export async function resolveChannelAccess(
       previewMode: preview.mode,
       unsupportedLater: CHANNEL_UNSUPPORTED_LATER,
       currentTruthSources: ["user_profiles", "creator_permissions"],
-      notes: ["Channel user id or profile defaults are still missing."],
+      notes: ["The Platform owner or profile defaults are still missing."],
       currentTruthOnly: true,
       effectiveAccessRule: "public",
       isOfficial: false,
@@ -420,7 +420,7 @@ export async function resolveChannelAccess(
   const normalizations: string[] = [];
 
   if (!profile) {
-    normalizations.push("No explicit channel profile row was available, so current helper truth fell back to open defaults.");
+    normalizations.push("No explicit Platform profile was available, so access fell back to open defaults.");
   }
   if (requestedWatchPartyAccessRule !== watchPartyAccessRule) {
     normalizations.push("Watch-party access normalized to supported creator capability truth.");

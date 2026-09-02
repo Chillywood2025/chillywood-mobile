@@ -241,9 +241,9 @@ export default function CreatorVipPassScreen() {
                 onPress={openPublicPreview}
                 testID="vip-area-back-to-channel-button"
                 accessibilityRole="button"
-                accessibilityLabel="Back to creator channel"
+                accessibilityLabel="Back to creator Platform"
               >
-                <Text style={styles.secondaryButtonText}>Back to channel</Text>
+                <Text style={styles.secondaryButtonText}>Back to Platform</Text>
               </TouchableOpacity>
             </View>
           </View>

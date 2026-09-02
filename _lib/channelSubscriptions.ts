@@ -678,7 +678,7 @@ export async function purchaseChannelSubscription(input: {
   if (!verifiedAccess.allowed) {
     return {
       ok: false,
-      message: "Subscription received. Waiting for the verified channel status to finish.",
+      message: "Platform Subscription received. Waiting for verified access to finish syncing.",
       access: verifiedAccess,
       intentId: intent.id,
       productId,

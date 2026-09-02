@@ -226,7 +226,7 @@ export const getProfilePrivacyLockedBody = (access: ProfilePrivacyAccess | null)
     return "Only the owner can see this full profile right now.";
   }
   if (access?.reason === "blocked") {
-    return "A channel audience block prevents full profile access between these accounts.";
+    return "A Platform audience block prevents full profile access between these accounts.";
   }
   if (access?.reason === "unavailable") {
     return "Profile access could not be verified right now, so private content stays hidden.";

@@ -94,7 +94,7 @@ export const DMCA_NOTIFICATION_TEMPLATES = [
   {
     key: "repeat_infringer_warning",
     label: "Repeat-infringer warning",
-    purpose: "Warn a user or channel that active copyright strikes have triggered review.",
+    purpose: "Warn a user or Platform that active copyright strikes have triggered review.",
   },
 ] as const;
 

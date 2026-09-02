@@ -29,6 +29,16 @@ const homeRoute = read("app/home.tsx");
 const libraryRoute = read("app/library.tsx");
 const player = read("app/player/[id].tsx");
 const watchPartyIndex = read("app/watch-party/index.tsx");
+const channelAudience = read("_lib/channelAudience.ts");
+const channelSubscriptions = read("_lib/channelSubscriptions.ts");
+const creatorVipPasses = read("_lib/creatorVipPasses.ts");
+const profilePrivacy = read("_lib/profilePrivacy.ts");
+const friendGraph = read("_lib/friendGraph.ts");
+const channelReadModels = read("_lib/channelReadModels.ts");
+const accessEntitlements = read("_lib/accessEntitlements.ts");
+const dmca = read("_lib/dmca.ts");
+const channelSubscriptionRoute = read("app/channel-subscription/[creatorId].tsx");
+const vipPassRoute = read("app/vip-pass/[creatorId].tsx");
 const mainTabTopBar = read("components/navigation/main-tab-top-bar.tsx");
 const iconSymbol = read("components/ui/icon-symbol.tsx");
 const masterVision = read("MASTER_VISION.md");
@@ -52,16 +62,16 @@ assertNotIncludes(tabs, "title: 'Profile'", "normal bottom navigation label");
 assertIncludes(iconSymbol, "'play.circle.fill': 'live-tv'", "Live bottom-nav icon");
 
 assertIncludes(liveTab, "heroHeader", "Live screen Hero header pattern");
-assertIncludes(liveTab, "compactActionCard", "Live screen Compact action cards pattern");
-assertIncludes(liveTab, "actionRow", "Live screen Action rows pattern");
+assertIncludes(liveTab, "quickActions", "Live screen quick actions pattern");
+assertIncludes(liveTab, "primaryButton", "Live screen primary action pattern");
+assertIncludes(liveTab, "secondaryButton", "Live screen secondary actions pattern");
 assertIncludes(liveTab, "statusPill", "Live screen Status pills pattern");
-assertIncludes(liveTab, "choiceChip", "Live screen Choice chips pattern");
 assertIncludes(liveTab, "disclosureCard", "Live screen Progressive disclosure pattern");
 assertIncludes(liveTab, "emptyState", "Live screen Empty state pattern");
-assertIncludes(liveTab, "Start or join a people-first live room.", "Live Watch-Party user copy");
-assertIncludes(liveTab, "Use a room code for an existing content-first Watch-Party Live room.", "Watch-Party Live user copy");
-assertIncludes(liveTab, "Choose a title or creator video first, then start Watch-Party Live from the player.", "Browse Titles user copy");
-assertIncludes(liveTab, "Paid Watch-Party Seat Passes stay in Party Waiting Room to Party Room, not Live Stage.", "Party Room separation");
+assertIncludes(liveTab, "Watch what is live now, see upcoming events, start a people-first room, or enter a Watch-Party code.", "Live hub user copy");
+assertIncludes(liveTab, "Start Live opens the people-first Live Watch-Party path.", "Live Watch-Party user copy");
+assertIncludes(liveTab, "Enter Code joins an existing Watch-Party Live room.", "Watch-Party Live user copy");
+assertIncludes(liveTab, "Upcoming Events opens the exact Event so viewers can see its access and schedule.", "exact Event user copy");
 assertIncludes(liveTab, "requireLiveFirstPremium", "Live tab Premium/runtime preflight");
 assertIncludes(liveTab, 'params: { mode: "live", source: "bottom-live-tab" }', "Live tab route mapping");
 assertIncludes(liveTab, "CHILLYWOOD_BACKGROUND_SOURCE", "Live tab Chi'llywood background");
@@ -196,6 +206,35 @@ assertIncludes(roomBlueprint, "Party Room must not hand off to Live Stage", "Par
     ["app/(tabs)/_layout.tsx", tabs],
   ].forEach(([label, source]) => assertNotIncludes(source, needle, label));
 });
+
+[
+  [channelAudience, "Platform followed.", "Platform follow confirmation"],
+  [channelAudience, "Only the Platform owner or an authorized admin can review this audience request.", "Platform audience authority copy"],
+  [channelSubscriptions, "Platform Subscription received. Waiting for verified access to finish syncing.", "Platform Subscription sync copy"],
+  [creatorVipPasses, "Creator-specific VIP access for this Platform only.", "VIP Platform isolation copy"],
+  [profilePrivacy, "A Platform audience block prevents full profile access between these accounts.", "Profile privacy Platform copy"],
+  [friendGraph, "Chi'lly Circle is unavailable while a Platform audience block exists between these accounts.", "Chi'lly Circle Platform copy"],
+  [channelReadModels, "This Platform could not be identified.", "Platform read-model error copy"],
+  [accessEntitlements, "The Platform owner or profile defaults are still missing.", "Platform access diagnostic copy"],
+  [dmca, "Warn a user or Platform that active copyright strikes have triggered review.", "copyright Platform copy"],
+  [channelSubscriptionRoute, "Back to Platform", "Platform Subscription return action"],
+  [vipPassRoute, "Back to Platform", "VIP return action"],
+].forEach(([source, needle, label]) => assertIncludes(source, needle, label));
+
+[
+  [channelAudience, "Channel follow requires a channel user id.", "Platform audience copy"],
+  [channelAudience, "String(error.message", "Platform audience raw provider error copy"],
+  [channelAudience, "String(error?.message", "Platform audience raw provider error copy"],
+  [channelSubscriptions, "verified channel status", "Platform Subscription copy"],
+  [creatorVipPasses, "for this channel only", "VIP copy"],
+  [profilePrivacy, "channel audience block", "Profile privacy copy"],
+  [friendGraph, "channel audience block", "Chi'lly Circle copy"],
+  [channelReadModels, "Channel user id is required.", "Platform read-model copy"],
+  [accessEntitlements, "Channel user id or profile defaults", "Platform access diagnostic copy"],
+  [dmca, "Warn a user or channel", "copyright copy"],
+  [channelSubscriptionRoute, "Back to channel", "Platform Subscription return action"],
+  [vipPassRoute, "Back to channel", "VIP return action"],
+].forEach(([source, needle, label]) => assertNotIncludes(source, needle, label));
 
 if (process.exitCode) {
   process.exit();
