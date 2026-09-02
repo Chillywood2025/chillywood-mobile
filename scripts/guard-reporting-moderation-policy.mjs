@@ -66,7 +66,7 @@ const reportSheetFindings = validateReportSheetSource(reportSheet);
 if (reportSheetFindings.length) fail(reportSheetFindings.join("; "));
 
 const reportSheetMutants = [
-  ["routing jargon", reportSheet.replace("Your report goes to the moderation team.", "Your report goes to a scoped moderation queue.")],
+  ["routing jargon", reportSheet.replace('<Text style={styles.helperText}>{REPORT_SHEET_HELPER_TEXT}</Text>', '<Text>Review</Text><Text>{title}</Text><Text>path: urgent</Text><Text style={styles.helperText}>{REPORT_SHEET_HELPER_TEXT}</Text>')],
   ["submitted queue claim", reportSheet.replace("Selected report category: ${categoryOption.label}.", "Selected report category: ${categoryOption.label}. Queue: urgent.")],
   ["keyboard container", reportSheet.replaceAll("KeyboardAvoidingView", "View")],
   ["small-screen bound", reportSheet.replace('maxHeight: "92%"', 'maxHeight: "920%"')],
@@ -82,19 +82,19 @@ const reportSheetMutants = [
   ["close handler omits resets", reportSheet.replace('const closeAndReset = () => {\n    if (busy) return;\n    setCategoryKey("harassment_bullying");\n    setNote("");\n    onClose();\n  };', "const closeAndReset = () => {\n    if (busy) return;\n    onClose();\n  };")],
   ["unconditional return before resets", reportSheet.replace("const closeAndReset = () => {\n    if (busy) return;", "const closeAndReset = () => {\n    return;")],
   ["contradictory composed privacy copy", reportSheet.replace("{REPORT_SHEET_HELPER_TEXT}", '{[REPORT_SHEET_HELPER_TEXT, "Reports are shared with the reported person."].join(" ")}')],
-  ["contradictory helper privacy copy", reportSheet.replace("Your report goes to the moderation team.", "The reported person can see your identity. Your report goes to the moderation team.")],
+  ["contradictory helper privacy copy", reportSheet.replace("Your report goes to the moderation team.", "Your identity may be disclosed to the reported user. Your report goes to the moderation team.")],
   ["wrong submitted category", reportSheet.replace("category: categoryOption.backedCategory,", 'category: "other",')],
   ["overridden submitted category", reportSheet.replace("category: categoryOption.backedCategory,", 'category: categoryOption.backedCategory,\n                    ...{ category: "other" },')],
   ["composed rendered routing claim", reportSheet.replace('while they are reviewed.";', 'while they are reviewed. " + ["Review", "path: normal"].join(" ");')],
   ["disabled keyboard avoidance", reportSheet.replace("style={styles.keyboardAvoider}", "style={styles.keyboardAvoider}\n        enabled={false}")],
-  ["noninteractive sheet", reportSheet.replace("style={styles.keyboardAvoider}", 'style={styles.keyboardAvoider}\n        pointerEvents="none"')],
+  ["noninteractive sheet", reportSheet.replace("style={styles.overlay}", 'style={styles.overlay} pointerEvents="none"')],
   ["overridden safe-area padding", reportSheet.replace("              ]}\n              keyboardShouldPersistTaps", "                { paddingBottom: 0 },\n              ]}\n              keyboardShouldPersistTaps")],
   ["stale reset effect", reportSheet.replace("  }, [visible]);", "  }, []);")],
-  ["conflicting state effect", reportSheet.replace("  const closeAndReset = () => {", '  useEffect(() => { setNote("stale"); }, [visible]);\n\n  const closeAndReset = () => {')],
-  ["unreachable modal contents", reportSheet.replace("      <KeyboardAvoidingView", "      {false && <KeyboardAvoidingView").replace("      </KeyboardAvoidingView>", "      </KeyboardAvoidingView>}")],
-  ["early runtime stop", reportSheet.replace("  const router = useRouter();", '  throw new Error("stop");\n  const router = useRouter();')],
+  ["conflicting state effect", reportSheet.replace("  const closeAndReset = () => {", "  const writeNote = setNote;\n  const closeAndReset = () => {").replace("style={styles.overlay}", 'style={styles.overlay} onLayout={() => writeNote("stale")}')],
+  ["unreachable modal contents", reportSheet.replace("  const router = useRouter();", "  const showSheet = false;\n  const router = useRouter();").replace("      <KeyboardAvoidingView", "      {showSheet && <KeyboardAvoidingView").replace("      </KeyboardAvoidingView>", "      </KeyboardAvoidingView>}")],
+  ["early runtime stop", reportSheet.replace("const router = useRouter();", 'const router = (() => { throw new Error("stop"); })();')],
   ["permanently disabled submit", reportSheet.replace("style={[styles.primaryButton, busy && styles.buttonDisabled]}\n                activeOpacity={0.86}\n                disabled={busy}", "style={[styles.primaryButton, busy && styles.buttonDisabled]}\n                activeOpacity={0.86}\n                disabled={true}")],
-  ["unbound touch target style", reportSheet.replace("style={[styles.primaryButton, busy && styles.buttonDisabled]}", "style={{ minHeight: 1 }}")],
+  ["unbound touch target style", reportSheet.replace("  primaryButton: {", "  primaryButton: {\n    width: 1,")],
   ["false modal accessibility", reportSheet.replace("accessibilityViewIsModal", "accessibilityViewIsModal={false}")],
   ["missing landscape safe area", reportSheet.replace("paddingLeft: Math.max(insets.left, 18),", "paddingLeft: 18,")],
   ["busy dismissal data loss", reportSheet.replace("    if (busy) return;\n", "")],
@@ -102,7 +102,7 @@ const reportSheetMutants = [
 for (const [name, mutant] of reportSheetMutants) {
   if (mutant === reportSheet)
     fail(`mutation setup did not alter report sheet: ${name}`);
-  if (validateReportSheetSource(mutant).length === 0)
+  if (validateReportSheetSource(mutant, { enforceReleaseHash: false }).length === 0)
     fail(`report sheet mutant escaped: ${name}`);
 }
 

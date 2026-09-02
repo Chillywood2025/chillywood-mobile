@@ -2,23 +2,22 @@ import { parse } from "@babel/parser";
 import { createHash } from "node:crypto";
 const REPORT_SHEET_RELEASE_SHA256 = "fc5e294bcaed9079f5710299ba90596ebef9665ece67fb800a3e3ee706e13df6";
 const isNode = (value) => Boolean(value && typeof value === "object" && typeof value.type === "string");
-const walk = (node, visit) => {
+const walk = (node, visit, bindings = new Map()) => {
   if (!isNode(node)) return;
   visit(node);
   if (node.type === "LogicalExpression" && node.operator === "&&" &&
     ["JSXElement", "JSXFragment"].includes(unwrap(node.right)?.type)) {
-    if (node.left?.type === "BooleanLiteral" && node.left.value)
-      walk(node.right, visit);
+    if (staticTruth(node.left, bindings) !== false) walk(node.right, visit, bindings);
     return;
   }
   if (node.type === "ConditionalExpression" && node.test?.type === "BooleanLiteral") {
-    walk(node.test.value ? node.consequent : node.alternate, visit);
+    walk(node.test.value ? node.consequent : node.alternate, visit, bindings);
     return;
   }
   for (const [key, value] of Object.entries(node)) {
     if (["loc", "start", "end", "extra", "comments"].includes(key)) continue;
-    if (Array.isArray(value)) value.forEach((entry) => walk(entry, visit));
-    else walk(value, visit);
+    if (Array.isArray(value)) value.forEach((entry) => walk(entry, visit, bindings));
+    else walk(value, visit, bindings);
   }
 };
 const unwrap = (node) => {
@@ -30,6 +29,15 @@ const unwrap = (node) => {
     current = current.expression;
   }
   return current;
+};
+const staticTruth = (node, bindings, seen = new Set()) => {
+  const value = unwrap(node);
+  if (value?.type === "BooleanLiteral") return value.value;
+  if (value?.type === "NullLiteral") return false;
+  if (value?.type === "NumericLiteral" || value?.type === "StringLiteral") return Boolean(value.value);
+  if (value?.type === "Identifier" && bindings.has(value.name) && !seen.has(value.name))
+    return staticTruth(bindings.get(value.name), bindings, new Set([...seen, value.name]));
+  return null;
 };
 const isIdentifier = (node, name) =>
   unwrap(node)?.type === "Identifier" && unwrap(node).name === name;
@@ -203,14 +211,14 @@ const stringSkeleton = (node, bindings, seen = new Set()) => {
   return " ";
 };
 const unsafeRoutingCopy = (value) => /\bqueue\b|review\s+path\s*:/i.test(value);
-const unsafePrivacyCopy = (value) => /reports? (?:are |may be )?(?:shared|visible) (?:with|to) the reported (?:person|user)|reported (?:person|user) (?:can|will|may) (?:see|receive)|reported users? (?:are|will be) notified|(?:show|share|reveal|disclose|send).{0,48}(?:identity|name).{0,48}(?:account|reported|person|user)|(?:account|reported|person|user).{0,48}(?:see|receive|view).{0,48}(?:identity|name)/i.test(value);
+const unsafePrivacyCopy = (value) => /reports? (?:are |may be )?(?:shared|visible) (?:with|to) the reported (?:person|user)|reported (?:person|user) (?:can|will|may) (?:see|receive)|reported users? (?:are|will be) notified|(?:show|share|reveal|disclose|send).{0,48}(?:identity|name).{0,48}(?:account|reported|person|user)|(?:identity|name).{0,48}(?:show|share|reveal|disclos|send).{0,48}(?:account|reported|person|user)|(?:account|reported|person|user).{0,48}(?:see|receive|view).{0,48}(?:identity|name)/i.test(value);
 const renderedTextSkeleton = (element, bindings) => {
   const parts = [];
   walk(element, (node) => {
     if (node.type === "JSXText") parts.push(node.value);
     if (node.type === "JSXExpressionContainer")
       parts.push(stringSkeleton(node.expression, bindings));
-  });
+  }, bindings);
   return parts.join(" ").replace(/\s+/g, " ").trim();
 };
 const jsxName = (element) => element?.openingElement?.name?.type === "JSXIdentifier"
@@ -240,11 +248,11 @@ const exactBusyStyle = (element, styleName) => {
     isIdentifier(busyStyle.left, "busy") &&
     memberMatches(busyStyle.right, "styles", "buttonDisabled");
 };
-const jsxElements = (node, name) => {
+const jsxElements = (node, name, bindings) => {
   const elements = [];
   walk(node, (candidate) => {
     if (candidate.type === "JSXElement" && jsxName(candidate) === name) elements.push(candidate);
-  });
+  }, bindings);
   return elements;
 };
 const literalStrings = (node) => {
@@ -255,13 +263,13 @@ const literalStrings = (node) => {
   });
   return values;
 };
-const jsxRendersIdentifier = (element, name) => {
+const jsxRendersIdentifier = (element, name, bindings) => {
   let rendered = false;
   walk(element, (candidate) => {
     if (candidate.type === "JSXExpressionContainer" &&
       candidate.expression?.type === "Identifier" && candidate.expression.name === name)
       rendered = true;
-  });
+  }, bindings);
   return rendered;
 };
 const objectProperty = (object, name) => {
@@ -320,6 +328,13 @@ const validateStyleContract = (programBindings, findings) => {
     return;
   }
   const sheetStyle = objectPropertyValue(stylesCall.arguments[0], "sheet");
+  const keyboardStyle = objectPropertyValue(stylesCall.arguments[0], "keyboardAvoider");
+  const overlayStyle = objectPropertyValue(stylesCall.arguments[0], "overlay");
+  if (keyboardStyle?.properties?.length !== 1 ||
+    objectPropertyValue(keyboardStyle, "flex")?.value !== 1 ||
+    overlayStyle?.properties?.length !== 3 || objectPropertyValue(overlayStyle, "flex")?.value !== 1 ||
+    objectPropertyValue(overlayStyle, "justifyContent")?.value !== "flex-end")
+    findings.push("report sheet ancestor styles must remain visible and full-screen");
   const maxHeight = objectPropertyValue(sheetStyle, "maxHeight");
   if (maxHeight?.type !== "StringLiteral" || maxHeight.value !== "92%") {
     findings.push(
@@ -331,7 +346,7 @@ const validateStyleContract = (programBindings, findings) => {
     "sheetScroller",
   );
   const flexGrow = objectPropertyValue(scrollerStyle, "flexGrow");
-  if (flexGrow?.type !== "NumericLiteral" || flexGrow.value !== 0) {
+  if (scrollerStyle?.properties?.length !== 1 || flexGrow?.type !== "NumericLiteral" || flexGrow.value !== 0) {
     findings.push("sheet scroller must remain content-bounded");
   }
   const sheetContentStyle = objectPropertyValue(
@@ -342,7 +357,7 @@ const validateStyleContract = (programBindings, findings) => {
   if (sheetContentStyle?.properties?.length !== 1 ||
     contentGap?.type !== "NumericLiteral" || contentGap.value !== 12)
     findings.push("sheet content must not override safe-area-aware layout");
-  if (objectProperty(sheetStyle, "display"))
+  if (sheetStyle?.properties?.length !== 8 || objectProperty(sheetStyle, "display") || objectProperty(sheetStyle, "opacity"))
     findings.push("sheet style must remain visibly rendered");
   const helperStyle = objectPropertyValue(stylesCall.arguments[0], "helperText");
   if (objectProperty(helperStyle, "display") || objectProperty(helperStyle, "opacity"))
@@ -356,7 +371,7 @@ const validateStyleContract = (programBindings, findings) => {
     const style = objectPropertyValue(stylesCall.arguments[0], styleName);
     const minHeight = objectPropertyValue(style, "minHeight");
     const minWidth = objectPropertyValue(style, "minWidth");
-    if (minHeight?.type !== "NumericLiteral" || minHeight.value < 48 ||
+    if (objectProperty(style, "width") || minHeight?.type !== "NumericLiteral" || minHeight.value < 48 ||
       minWidth?.type !== "NumericLiteral" || minWidth.value < 48)
       findings.push(`${styleName} must preserve a 48-point minimum touch target`);
   }
@@ -404,8 +419,8 @@ const validateVisibilityReset = (reportSheet, findings) => {
       "visibility effect must directly clear category and note when the sheet closes",
     );
 };
-const validateSubmitHandler = (renderRoot, findings) => {
-  const sendButtons = jsxElements(renderRoot, "TouchableOpacity").filter(
+const validateSubmitHandler = (renderRoot, findings, bindings) => {
+  const sendButtons = jsxElements(renderRoot, "TouchableOpacity", bindings).filter(
     (element) => literalStrings(element).includes("Send Report"),
   );
   if (sendButtons.length !== 1) {
@@ -514,9 +529,9 @@ const validateSubmitHandler = (renderRoot, findings) => {
     }
   }
 };
-export const validateReportSheetSource = (source) => {
+export const validateReportSheetSource = (source, { enforceReleaseHash = true } = {}) => {
   const findings = [];
-  if (createHash("sha256").update(source).digest("hex") !== REPORT_SHEET_RELEASE_SHA256)
+  if (enforceReleaseHash && createHash("sha256").update(source).digest("hex") !== REPORT_SHEET_RELEASE_SHA256)
     findings.push("report sheet differs from the exact reviewed release-candidate source");
   let ast;
   try {
@@ -581,14 +596,17 @@ export const validateReportSheetSource = (source) => {
       "good-faith guidance must remain bound to its rendered constant",
     );
   }
-  const textElements = jsxElements(renderRoot, "Text");
-  for (const copy of textElements.map((element) => renderedTextSkeleton(element, allBindings))) {
+  const textElements = jsxElements(renderRoot, "Text", allBindings);
+  const renderedCopy = textElements.map((element) => renderedTextSkeleton(element, allBindings));
+  for (const copy of renderedCopy) {
     if (unsafeRoutingCopy(copy)) findings.push("rendered copy must not claim client-owned moderation routing");
     if (unsafePrivacyCopy(copy)) findings.push("rendered copy must not contradict reporter privacy doctrine");
   }
+  if (unsafeRoutingCopy(renderedCopy.join(" ")) || unsafePrivacyCopy(renderedCopy.join(" ")))
+    findings.push("combined rendered copy must preserve moderation routing and reporter privacy");
   if (
     textElements.filter((element) =>
-      jsxRendersIdentifier(element, "REPORT_SHEET_HELPER_TEXT") &&
+      jsxRendersIdentifier(element, "REPORT_SHEET_HELPER_TEXT", allBindings) &&
       memberMatches(jsxAttributeExpression(element, "style"), "styles", "helperText"),
     ).length !== 1
   ) {
@@ -598,14 +616,15 @@ export const validateReportSheetSource = (source) => {
   }
   if (
     textElements.filter((element) =>
-      jsxRendersIdentifier(element, "REPORT_SHEET_GOOD_FAITH_TEXT") &&
+      jsxRendersIdentifier(element, "REPORT_SHEET_GOOD_FAITH_TEXT", allBindings) &&
       memberMatches(jsxAttributeExpression(element, "style"), "styles", "helperText"),
     ).length !== 1
   ) {
     findings.push("good-faith guidance must be rendered by ReportSheet");
   }
+  const router = directVariable(reportSheet.body, "router");
   const insets = directVariable(reportSheet.body, "insets");
-  if (!callMatches(insets?.init, "useSafeAreaInsets")) {
+  if (!callMatches(router?.init, "useRouter") || !callMatches(insets?.init, "useSafeAreaInsets")) {
     findings.push("ReportSheet must directly bind safe-area insets");
   }
   validateStyleContract(programBindings, findings);
@@ -631,6 +650,9 @@ export const validateReportSheetSource = (source) => {
   });
   if (stateCalls.setCategoryKey !== 3 || stateCalls.setNote !== 2)
     findings.push("report state must have only the canonical selection and reset writers");
+  if ([...functionBindings.values()].some((value) =>
+    isIdentifier(value, "setCategoryKey") || isIdentifier(value, "setNote")))
+    findings.push("report state setters must not be aliased to unreviewed writers");
   const closeAndReset = unwrap(
     directVariable(reportSheet.body, "closeAndReset")?.init,
   );
@@ -644,7 +666,7 @@ export const validateReportSheetSource = (source) => {
       "closeAndReset must ignore busy dismissal, then clear category/note before calling onClose",
     );
   }
-  const modals = jsxElements(renderRoot, "Modal");
+  const modals = jsxElements(renderRoot, "Modal", allBindings);
   if (
     modals.length !== 1 ||
     !isIdentifier(jsxAttributeExpression(modals[0], "visible"), "visible") ||
@@ -655,7 +677,7 @@ export const validateReportSheetSource = (source) => {
   ) {
     findings.push("native modal dismissal must be bound to closeAndReset");
   }
-  const touchables = jsxElements(renderRoot, "TouchableOpacity");
+  const touchables = jsxElements(renderRoot, "TouchableOpacity", allBindings);
   if (touchables.length !== 5)
     findings.push("report sheet must retain only the canonical action inventory");
   const backdrop = touchables.find((element) =>
@@ -716,7 +738,7 @@ export const validateReportSheetSource = (source) => {
     if (node.type === "ConditionalExpression" &&
       literalStrings(node.consequent).includes("Open Copyright Report"))
       copyrightConditions.push(node);
-  });
+  }, allBindings);
   const copyrightTest = unwrap(copyrightConditions[0]?.test);
   const copyrightHandler = jsxAttributeExpression(copyrightButton, "onPress");
   const copyrightGuard = copyrightHandler?.body?.body?.[0];
@@ -757,8 +779,7 @@ export const validateReportSheetSource = (source) => {
       "copyright navigation must bind its touch style and reject busy activation",
     );
   }
-
-  const keyboardViews = jsxElements(renderRoot, "KeyboardAvoidingView");
+  const keyboardViews = jsxElements(renderRoot, "KeyboardAvoidingView", allBindings);
   if (
     keyboardViews.length !== 1 ||
     !memberMatches(
@@ -776,8 +797,7 @@ export const validateReportSheetSource = (source) => {
       "rendered sheet must use exact iOS/Android keyboard avoidance",
     );
   }
-
-  const sheetViews = jsxElements(renderRoot, "View").filter((element) =>
+  const sheetViews = jsxElements(renderRoot, "View", allBindings).filter((element) =>
     memberMatches(jsxAttributeExpression(element, "style"), "styles", "sheet"),
   );
   if (
@@ -786,8 +806,7 @@ export const validateReportSheetSource = (source) => {
   ) {
     findings.push("rendered sheet must expose a modal accessibility boundary");
   }
-
-  const verticalScrollers = jsxElements(renderRoot, "ScrollView").filter(
+  const verticalScrollers = jsxElements(renderRoot, "ScrollView", allBindings).filter(
     (element) =>
       memberMatches(
         jsxAttributeExpression(element, "style"),
@@ -799,25 +818,16 @@ export const validateReportSheetSource = (source) => {
     findings.push("rendered sheet must have one bounded vertical scroller");
   } else {
     const scroller = verticalScrollers[0];
-    const contentStyle = jsxAttributeExpression(
-      scroller,
-      "contentContainerStyle",
-    );
-    const insetStyle =
-      contentStyle?.type === "ArrayExpression"
-        ? unwrap(contentStyle.elements[1])
-        : null;
+    const contentStyle = jsxAttributeExpression(scroller, "contentContainerStyle");
+    const insetStyle = contentStyle?.type === "ArrayExpression"
+      ? unwrap(contentStyle.elements[1]) : null;
     const hasExactContentStyle =
       contentStyle?.type === "ArrayExpression" &&
       contentStyle.elements.length === 2 &&
       memberMatches(contentStyle.elements[0], "styles", "sheetContent") &&
       insetStyle?.type === "ObjectExpression" &&
       insetStyle.properties.length === 3 &&
-      exactInset(
-        objectPropertyValue(insetStyle, "paddingBottom"),
-        "bottom",
-        16,
-      ) &&
+      exactInset(objectPropertyValue(insetStyle, "paddingBottom"), "bottom", 16) &&
       exactInset(objectPropertyValue(insetStyle, "paddingLeft"), "left", 18) &&
       exactInset(objectPropertyValue(insetStyle, "paddingRight"), "right", 18);
     if (
@@ -829,7 +839,6 @@ export const validateReportSheetSource = (source) => {
       );
     }
   }
-
   const categoryButtons = touchables.filter(
     (element) => jsxAttributeString(element, "accessibilityRole") === "radio",
   );
@@ -839,14 +848,9 @@ export const validateReportSheetSource = (source) => {
     );
   } else {
     const categoryButton = categoryButtons[0];
-    const selectedState = objectPropertyValue(
-      jsxAttributeExpression(categoryButton, "accessibilityState"),
-      "selected",
-    );
-    const categoryDisabledState = objectPropertyValue(
-      jsxAttributeExpression(categoryButton, "accessibilityState"),
-      "disabled",
-    );
+    const categoryState = jsxAttributeExpression(categoryButton, "accessibilityState");
+    const selectedState = objectPropertyValue(categoryState, "selected");
+    const categoryDisabledState = objectPropertyValue(categoryState, "disabled");
     const categoryStyle = jsxAttributeExpression(categoryButton, "style");
     const activeStyle = unwrap(categoryStyle?.elements?.[1]);
     const disabledStyle = unwrap(categoryStyle?.elements?.[2]);
@@ -890,17 +894,13 @@ export const validateReportSheetSource = (source) => {
       );
     }
   }
-
-  const noteInputs = jsxElements(renderRoot, "TextInput").filter(
+  const noteInputs = jsxElements(renderRoot, "TextInput", allBindings).filter(
     (element) => isIdentifier(jsxAttributeExpression(element, "value"), "note"),
   );
   const editable = jsxAttributeExpression(noteInputs[0], "editable");
   if (
     noteInputs.length !== 1 ||
-    !isIdentifier(
-      jsxAttributeExpression(noteInputs[0], "onChangeText"),
-      "setNote",
-    ) ||
+    !isIdentifier(jsxAttributeExpression(noteInputs[0], "onChangeText"), "setNote") ||
     jsxAttributeString(noteInputs[0], "accessibilityLabel") !==
       "Optional report details" ||
     !jsxAttributeString(noteInputs[0], "accessibilityHint") ||
@@ -912,9 +912,7 @@ export const validateReportSheetSource = (source) => {
       "optional report details input must bind note state, accessible guidance, and busy state",
     );
   }
-
-  validateSubmitHandler(renderRoot, findings);
-
+  validateSubmitHandler(renderRoot, findings, allBindings);
   const optionsInitializer = programBindings.get(
     "REPORT_SHEET_CATEGORY_OPTIONS",
   );
@@ -927,11 +925,15 @@ export const validateReportSheetSource = (source) => {
   if (JSON.stringify(optionTuples) !== JSON.stringify(expectedOptionTuples))
     findings.push("report options must retain the exact unique customer-to-backend mapping");
   const categoryMaps = [];
+  let pressHandlers = 0;
   walk(renderRoot, (node) => {
     if (node.type === "JSXSpreadAttribute")
       findings.push("protected report UI must not use effective-prop JSX spreads");
     if (node.type === "JSXAttribute" && node.name?.name === "pointerEvents")
       findings.push("report UI must not disable interaction through pointerEvents");
+    if (node.type === "JSXAttribute" && node.name?.name === "onPress") pressHandlers += 1;
+    if (node.type === "JSXAttribute" && ["onLongPress", "onAccessibilityTap", "onMagicTap"].includes(node.name?.name))
+      findings.push("report UI must not add unreviewed action handlers");
     const callee = unwrap(node?.callee);
     const property = callee?.computed
       ? unwrap(callee.property)?.value
@@ -939,9 +941,11 @@ export const validateReportSheetSource = (source) => {
     if (node.type === "CallExpression" && callee?.type === "MemberExpression" &&
       isIdentifier(callee.object, "REPORT_SHEET_CATEGORY_OPTIONS") && property === "map")
       categoryMaps.push(node);
-  });
+  }, allBindings);
   if (categoryMaps.length !== 1)
     findings.push("rendered category controls must map the canonical options exactly once");
+  if (pressHandlers !== 5)
+    findings.push("report UI must retain exactly five reviewed press handlers");
   walk(optionsInitializer, (node) => {
     if (node.type !== "ObjectProperty") return;
     const key = node.computed
@@ -953,7 +957,6 @@ export const validateReportSheetSource = (source) => {
       );
     }
   });
-
   walk(renderRoot, (node) => {
     if (
       (node.type === "MemberExpression" ||
@@ -995,7 +998,6 @@ export const validateReportSheetSource = (source) => {
         );
       }
     }
-  });
-
+  }, allBindings);
   return [...new Set(findings)];
 };
