@@ -33,33 +33,62 @@ const evaluateStringPath = (nodePath) => {
   return evaluated?.confident && typeof evaluated.value === "string" ? evaluated.value : null;
 };
 
-const pathContainsChannelText = (nodePath) => {
-  const evaluated = evaluateStringPath(nodePath);
-  if (evaluated !== null && /\bchannel\b/iu.test(evaluated)) return true;
+const staleChannelPattern = /\bchannels?\b/iu;
 
+const collectStringFragments = (nodePath, visitedBindings = new Set()) => {
+  const evaluated = evaluateStringPath(nodePath);
+  if (evaluated !== null) return [evaluated];
   const fragments = [];
-  const collectStringLiteral = (stringPath) => {
-    fragments.push(stringPath.node.value);
+  const collectReferencedBinding = (identifierPath) => {
+    if (!identifierPath.isReferencedIdentifier()) return;
+    const binding = identifierPath.scope.getBinding(identifierPath.node.name);
+    if (!binding?.constant || !binding.path.isVariableDeclarator() || visitedBindings.has(binding)) return;
+    const initPath = binding.path.get("init");
+    if (!initPath?.node) return;
+    const nextVisited = new Set(visitedBindings);
+    nextVisited.add(binding);
+    fragments.push(...collectStringFragments(initPath, nextVisited));
   };
-  const collectTemplateElement = (templatePath) => {
-    fragments.push(templatePath.node.value.cooked ?? templatePath.node.value.raw ?? "");
-  };
-  if (nodePath.isStringLiteral()) collectStringLiteral(nodePath);
+  if (nodePath.isStringLiteral()) fragments.push(nodePath.node.value);
   if (nodePath.isTemplateLiteral()) {
-    nodePath.get("quasis").forEach(collectTemplateElement);
+    nodePath.get("quasis").forEach((templatePath) => {
+      fragments.push(templatePath.node.value.cooked ?? templatePath.node.value.raw ?? "");
+    });
   }
+  if (nodePath.isIdentifier()) collectReferencedBinding(nodePath);
   nodePath.traverse({
-    StringLiteral: collectStringLiteral,
-    TemplateElement: collectTemplateElement,
+    StringLiteral(stringPath) {
+      fragments.push(stringPath.node.value);
+    },
+    TemplateElement(templatePath) {
+      fragments.push(templatePath.node.value.cooked ?? templatePath.node.value.raw ?? "");
+    },
+    ReferencedIdentifier: collectReferencedBinding,
   });
-  return fragments.some((fragment) => /\bchannel\b/iu.test(fragment))
-    || /\bchannel\b/iu.test(fragments.join(""));
+  return fragments;
+};
+
+const pathContainsChannelText = (nodePath) => {
+  const fragments = collectStringFragments(nodePath);
+  return fragments.some((fragment) => staleChannelPattern.test(fragment))
+    || staleChannelPattern.test(fragments.join(""));
 };
 
 const hasStaleStaticChannelMessage = (source) => {
   const ast = parseSource(source);
   let stale = false;
   traverse(ast, {
+    StringLiteral(stringPath) {
+      if (staleChannelPattern.test(stringPath.node.value)) stale = true;
+    },
+    TemplateElement(templatePath) {
+      const value = templatePath.node.value.cooked ?? templatePath.node.value.raw ?? "";
+      if (staleChannelPattern.test(value)) stale = true;
+    },
+    "BinaryExpression|TemplateLiteral"(expressionPath) {
+      const value = evaluateStringPath(expressionPath);
+      if (value !== null && staleChannelPattern.test(value)) stale = true;
+    },
     ObjectProperty(propertyPath) {
       if (stale) return;
       const keyPath = propertyPath.get("key");
@@ -349,6 +378,7 @@ if (findUnsafeThrownErrors(friendGraph).length > 0) {
   'message: "You cannot follow your own ch\\u0061nnel."',
   'message: (`This ${"chan" + "nel"} is unavailable.`)',
   '["message"]: "This channel is unavailable."',
+  'message: "Creator channels are unavailable."',
   'message: ("This channel is unavailable." satisfies string)',
   'message: ("This channel is unavailable."!)',
   'message: "Only the channel owner can review this request."',
@@ -366,6 +396,13 @@ if (findUnsafeThrownErrors(friendGraph).length > 0) {
   '({ message: `Open ${creatorName} channel.` });',
   '({ message: "This channel is " + status });',
   '({ ["message"]: `Open ${creatorName} channel.` });',
+  'const stale = "channel"; ({ message: "Open " + stale + status });',
+  'const stale = "channel"; ({ message: `Open ${stale} ${status}` });',
+  'const left = "chan"; const right = "nel"; ({ message: left + status + right });',
+  'const COPY = { stale: "This channel is unavailable." }; ({ message: COPY.stale });',
+  'const { stale } = { stale: "This channel is unavailable." }; ({ message: stale });',
+  'const COPY = { stale: "This channel is unavailable." }; const result = {}; result.message = COPY.stale;',
+  '({ get message() { return "This channel is unavailable."; } });',
 ].forEach((mutant) => {
   if (!hasStaleStaticChannelMessage(mutant)) {
     fail(`Platform audience guard accepted binding/dynamic stale-message mutant: ${mutant}`);
