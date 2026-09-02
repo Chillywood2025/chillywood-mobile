@@ -19,6 +19,25 @@
         "failed": 0
       }
     },
+    "readyStateCi": {
+      "status": "assurance_only_control_plane_blocked",
+      "runId": 33626684329,
+      "implementationHead": "21612eff31d2262d8f6454825386333325eb175e",
+      "jobs": {
+        "total": 14,
+        "passed": 11,
+        "assuranceOnlyFailed": 3
+      },
+      "findings": [
+        "ASSURANCE_TASK_CONTEXT_UNBOUND",
+        "ASSURANCE_PR_FILE_BUDGET_EXCEEDED",
+        "ASSURANCE_PR_LINE_BUDGET_EXCEEDED",
+        "ASSURANCE_MIXED_HIGH_RISK_SCOPE",
+        "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN",
+        "ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND",
+        "PHASE1_RISK_CLOSURE_PROTECTED_READY_DECISION_INVALID"
+      ]
+    },
     "database": {
       "files": 81,
       "assertions": 3023,
@@ -42,10 +61,10 @@
       "findings": 0
     }
   },
-  "testResultHash": "158ec2fe5dcdc2763a18946f2a72d0f000fdd48af12244fb24df015435f2cb48",
+  "testResultHash": "b843c276a6a2a911c88e12793c221910542a885131c9a92d50a9237d5e201320",
   "reviewLevel": "C",
-  "reviewHead": "887d4068e00d4463560ea51890dd376ace1756e9",
-  "reviewTimestamp": "2026-09-02T11:49:28Z",
+  "reviewHead": "f0f04dc67390ca01a1d84ea307ad0167b22aef3f",
+  "reviewTimestamp": "2026-09-02T11:56:12Z",
   "reviewerLanes": [
     "architecture-state",
     "security-authority",
@@ -58,7 +77,7 @@
       "severity": "P2",
       "status": "owner_authorized_preop_assurance_continuation",
       "launchImpacting": false,
-      "detail": "The pre-operation active-task check reported MANDATORY_COMMAND_DROPPED. Continuation is limited to the Owner-authorized assurance-control-plane mismatch and is not represented as a passed gate."
+      "detail": "The pre-operation active-task check reported MANDATORY_COMMAND_DROPPED. The ready-state rerun then reported only the unbound task, unrecognized waiver, mixed-risk/objective, engineering-closure, and derived protected-ready decision failures. Continuation is limited to the Owner-authorized assurance-control-plane mismatch; neither run is represented as a passed gate."
     },
     {
       "id": "RFGC-PROVIDER-PHYSICAL-LIMIT-002",
