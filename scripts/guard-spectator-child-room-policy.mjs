@@ -151,6 +151,10 @@ assertIncludes("Party Room Pass public label", discovery, 'return "Party Room Pa
 assertIncludes("Live Stage Pass public label", discovery, 'return "Live Stage Pass"');
 assertNotIncludes("generic ticketed discovery label", discovery, 'return "Ticketed"');
 assertNotIncludes("implicit Event-to-Live pass relationship", discovery, "|| item.event_id");
+assertIncludes("exact discovery target identity gate", discovery, "hasDiscoveryDestinationIdentity");
+assertIncludes("public discovery identity filtering", discovery, "data.filter(isDiscoveryFeedItemEligibleForRanking)");
+assertIncludes("Live Event destination label", live, ">Open Event</Text>");
+assertNotIncludes("stale Live Event destination label", live, ">Open Platform</Text>");
 
 const combinedUserFacing = `${spectatorEntryRoute}\n${spectatorMetadataRoute}\n${spectatorLiveRoute}\n${watchPartyRoute}\n${liveStageRoute}\n${playerRoute}`;
 assertNotIncludes("user-facing Mini Platform copy", combinedUserFacing, "Mini Platform");

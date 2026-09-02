@@ -110,22 +110,36 @@ export function isFeedItemPubliclyDiscoverable(item: Pick<
     && isPublicSpectatorSafeRightsStatus(item.rights_status);
 }
 
+export function hasDiscoveryDestinationIdentity(item: Partial<Pick<
+  DiscoveryFeedItem,
+  "channel_user_id" | "event_id" | "host_user_id" | "id" | "item_type" | "media_id" | "owner_user_id"
+>>) {
+  if (!normalizeText(item.id)) return false;
+  if (item.item_type === "creator_upload") return !!normalizeText(item.media_id);
+  if (item.item_type === "creator_event") return !!normalizeText(item.event_id);
+  if (item.item_type === "channel_update") {
+    return !!normalizeText(item.channel_user_id ?? item.owner_user_id ?? item.host_user_id);
+  }
+  return true;
+}
+
 export function isCircleSpectatorFeedItemEligibleForRanking(item: Pick<
   DiscoveryFeedItem,
   "is_publicly_discoverable" | "visibility" | "moderation_status" | "rights_status" | "is_spectator_enabled"
->) {
+> & Parameters<typeof hasDiscoveryDestinationIdentity>[0]) {
   return item.is_publicly_discoverable !== true
     && (item.visibility === "circle" || item.visibility === "chilly_circle")
     && item.moderation_status === "clean"
     && item.is_spectator_enabled === true
-    && isPublicSpectatorSafeRightsStatus(item.rights_status);
+    && isPublicSpectatorSafeRightsStatus(item.rights_status)
+    && hasDiscoveryDestinationIdentity(item);
 }
 
 export function isDiscoveryFeedItemEligibleForRanking(item: Pick<
   DiscoveryFeedItem,
   "is_publicly_discoverable" | "visibility" | "moderation_status" | "rights_status"
->) {
-  return isFeedItemPubliclyDiscoverable(item);
+> & Parameters<typeof hasDiscoveryDestinationIdentity>[0]) {
+  return isFeedItemPubliclyDiscoverable(item) && hasDiscoveryDestinationIdentity(item);
 }
 
 export function isSpectatorPlaybackBlocked(item: Pick<DiscoveryFeedItem, "is_spectator_playback_enabled">) {
@@ -525,7 +539,7 @@ export async function readPublicDiscoveryFeedItems(
 
   const { data, error } = await query.returns<DiscoveryFeedItem[]>();
   if (error || !data) return [];
-  return data.filter(isFeedItemPubliclyDiscoverable);
+  return data.filter(isDiscoveryFeedItemEligibleForRanking);
 }
 
 export async function readPublicDiscoveryFeedItem(itemId: string): Promise<DiscoveryFeedItem | null> {

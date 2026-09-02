@@ -220,7 +220,7 @@ export default function LiveTabScreen() {
                     <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>LIVE EVENT</Text></View>
                     <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
                     <Text style={styles.cardBody}>{formatEventMode(event)}</Text>
-                    <Text style={styles.cardMeta}>Open Platform</Text>
+                    <Text style={styles.cardMeta}>Open Event</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
