@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,17 +11,19 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import {
-  type SafetyReportCategory,
-} from "../../_lib/moderation";
+import { type SafetyReportCategory } from "../../_lib/moderation";
 
 type ReportSheetProps = {
   visible: boolean;
   title: string;
   description: string;
   busy?: boolean;
-  onSubmit: (input: { category: SafetyReportCategory; note: string }) => Promise<void> | void;
+  onSubmit: (input: {
+    category: SafetyReportCategory;
+    note: string;
+  }) => Promise<void> | void;
   onClose: () => void;
 };
 
@@ -28,121 +32,119 @@ type ReportSheetCategoryOption = {
   label: string;
   description: string;
   backedCategory: SafetyReportCategory;
-  queue: "normal" | "urgent" | "legal" | "security" | "money_support";
 };
 
 const REPORT_SHEET_CATEGORY_OPTIONS: readonly ReportSheetCategoryOption[] = [
   {
     key: "harassment_bullying",
     label: "Harassment or bullying",
-    description: "Targeted abuse, stalking, hostile contact, or repeated unwanted behavior.",
+    description:
+      "Targeted abuse, stalking, hostile contact, or repeated unwanted behavior.",
     backedCategory: "harassment",
-    queue: "normal",
   },
   {
     key: "hate_discrimination",
     label: "Hate or discrimination",
-    description: "Attacks or exclusion based on protected traits, identity, or community.",
+    description:
+      "Attacks or exclusion based on protected traits, identity, or community.",
     backedCategory: "abuse",
-    queue: "normal",
   },
   {
     key: "threats_violence",
     label: "Threats or violence",
-    description: "Threats, violent behavior, weapons, live danger, or immediate safety risk.",
+    description:
+      "Threats, violent behavior, weapons, live danger, or immediate safety risk.",
     backedCategory: "safety",
-    queue: "urgent",
   },
   {
     key: "sexual_exploitation",
     label: "Sexual content or exploitation",
-    description: "Non-consensual sexual content, exploitation, or sexual safety concerns.",
+    description:
+      "Non-consensual sexual content, exploitation, or sexual safety concerns.",
     backedCategory: "safety",
-    queue: "urgent",
   },
   {
     key: "self_harm_danger",
     label: "Self-harm or dangerous behavior",
-    description: "Self-harm, suicide, dangerous behavior, or a live emergency concern.",
+    description:
+      "Self-harm, suicide, dangerous behavior, or a live emergency concern.",
     backedCategory: "safety",
-    queue: "urgent",
   },
   {
     key: "minor_safety",
     label: "Minor safety",
-    description: "Child/minor safety, exploitation, grooming, or age-related risk.",
+    description:
+      "Child/minor safety, exploitation, grooming, or age-related risk.",
     backedCategory: "safety",
-    queue: "urgent",
   },
   {
     key: "illegal_activity",
     label: "Illegal activity",
-    description: "Illegal goods, criminal activity, exploitation, or severe platform abuse.",
+    description:
+      "Illegal goods, criminal activity, exploitation, or severe platform abuse.",
     backedCategory: "safety",
-    queue: "urgent",
   },
   {
     key: "spam_scam",
     label: "Spam or scam",
-    description: "Spam, phishing, malware, fake giveaways, or manipulative promotion.",
+    description:
+      "Spam, phishing, malware, fake giveaways, or manipulative promotion.",
     backedCategory: "safety",
-    queue: "security",
   },
   {
     key: "impersonation",
     label: "Impersonation",
-    description: "Fake person, creator, brand, official account, or false affiliation.",
+    description:
+      "Fake person, creator, brand, official account, or false affiliation.",
     backedCategory: "impersonation",
-    queue: "normal",
   },
   {
     key: "privacy_doxxing",
     label: "Privacy violation/doxxing",
-    description: "Private information, doxxing, unwanted personal data, or privacy invasion.",
+    description:
+      "Private information, doxxing, unwanted personal data, or privacy invasion.",
     backedCategory: "safety",
-    queue: "urgent",
   },
   {
     key: "copyright_dmca",
     label: "Copyright/DMCA",
-    description: "Copyright, stolen media, unauthorized upload, or formal rights concern.",
+    description:
+      "Copyright, stolen media, unauthorized upload, or formal rights concern.",
     backedCategory: "copyright",
-    queue: "legal",
   },
   {
     key: "deceptive_content",
     label: "Misinformation or deceptive content",
-    description: "Deceptive claims, misleading identity, or harmful false context.",
+    description:
+      "Deceptive claims, misleading identity, or harmful false context.",
     backedCategory: "other",
-    queue: "normal",
   },
   {
     key: "graphic_violent_content",
     label: "Graphic/violent content",
-    description: "Graphic injury, gore, violent imagery, or shocking unsafe content.",
+    description:
+      "Graphic injury, gore, violent imagery, or shocking unsafe content.",
     backedCategory: "safety",
-    queue: "urgent",
   },
   {
     key: "fraud_payment",
     label: "Fraud/payment concern",
-    description: "Suspicious paid access, refund/access issue, or payment-related abuse.",
+    description:
+      "Suspicious paid access, refund/access issue, or payment-related abuse.",
     backedCategory: "safety",
-    queue: "money_support",
   },
   {
     key: "live_safety",
     label: "Live safety issue",
-    description: "Unsafe live behavior, room abuse, dangerous participant, or live disruption.",
+    description:
+      "Unsafe live behavior, room abuse, dangerous participant, or live disruption.",
     backedCategory: "safety",
-    queue: "urgent",
   },
   {
     key: "other",
     label: "Other",
     description: "Something else that needs moderation review.",
     backedCategory: "other",
-    queue: "normal",
   },
 ];
 
@@ -155,120 +157,219 @@ export function ReportSheet({
   onClose,
 }: ReportSheetProps) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [categoryKey, setCategoryKey] = useState<string>("harassment_bullying");
   const [note, setNote] = useState("");
 
   const helperText = useMemo(
-    () => "Your report goes to a scoped moderation queue. Reporter identity stays private by default, and reports do not remove content automatically unless urgent safety policy requires temporary escalation.",
+    () =>
+      "Your report goes to the moderation team. Your identity stays private from the reported person by default. A report does not remove content automatically; urgent safety concerns may be escalated for temporary action while they are reviewed.",
     [],
   );
-  const falseReportText = "Please report in good faith. Repeated false or abusive reports may be rate-limited or reviewed.";
-  const categoryOption = REPORT_SHEET_CATEGORY_OPTIONS.find((entry) => entry.key === categoryKey) ?? REPORT_SHEET_CATEGORY_OPTIONS[0];
+  const falseReportText =
+    "Please report in good faith. Repeated false or abusive reports may be rate-limited or reviewed.";
+  const categoryOption =
+    REPORT_SHEET_CATEGORY_OPTIONS.find((entry) => entry.key === categoryKey) ??
+    REPORT_SHEET_CATEGORY_OPTIONS[0];
+
+  useEffect(() => {
+    if (!visible) {
+      setCategoryKey("harassment_bullying");
+      setNote("");
+    }
+  }, [visible]);
+
+  const closeAndReset = () => {
+    setCategoryKey("harassment_bullying");
+    setNote("");
+    onClose();
+  };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
-          <Text style={styles.kicker}>SAFETY REPORT</Text>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.description}>{description}</Text>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
-            {REPORT_SHEET_CATEGORY_OPTIONS.map((entry) => (
-              <TouchableOpacity
-                key={entry.key}
-                style={[styles.categoryChip, categoryKey === entry.key && styles.categoryChipActive]}
-                activeOpacity={0.84}
-                onPress={() => setCategoryKey(entry.key)}
-              >
-                <Text style={[styles.categoryChipText, categoryKey === entry.key && styles.categoryChipTextActive]}>
-                  {entry.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <View style={styles.categoryHelp}>
-            <Text style={styles.categoryHelpTitle}>{categoryOption.label}</Text>
-            <Text style={styles.categoryHelpText}>{categoryOption.description}</Text>
-            <Text style={styles.categoryHelpMeta}>
-              Review path: {categoryOption.queue.replace("_", " ")}
-            </Text>
-          </View>
-
-          <TextInput
-            value={note}
-            onChangeText={setNote}
-            style={styles.input}
-            placeholder="Optional note for the moderation team"
-            placeholderTextColor="#7D879E"
-            multiline
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={closeAndReset}
+    >
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoider}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <View style={styles.overlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            accessible={false}
+            onPress={closeAndReset}
           />
-
-          <Text style={styles.helperText}>{helperText}</Text>
-          <Text style={styles.helperText}>{falseReportText}</Text>
-
-          {categoryOption.backedCategory === "copyright" ? (
-            <View style={styles.formalNoticeBox}>
-              <Text style={styles.formalNoticeTitle}>Formal copyright notice</Text>
-              <Text style={styles.formalNoticeText}>
-                A DMCA-style copyright notice needs ownership, signature, and good-faith statements. Open the dedicated copyright report form for that process.
+          <View style={styles.sheet} accessibilityViewIsModal>
+            <ScrollView
+              style={styles.sheetScroller}
+              contentContainerStyle={[
+                styles.sheetContent,
+                { paddingBottom: Math.max(insets.bottom, 16) },
+              ]}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.handle} accessible={false} />
+              <Text style={styles.kicker}>SAFETY REPORT</Text>
+              <Text style={styles.title} accessibilityRole="header">
+                {title}
               </Text>
+              <Text style={styles.description}>{description}</Text>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryRow}
+              >
+                {REPORT_SHEET_CATEGORY_OPTIONS.map((entry) => (
+                  <TouchableOpacity
+                    key={entry.key}
+                    style={[
+                      styles.categoryChip,
+                      categoryKey === entry.key && styles.categoryChipActive,
+                    ]}
+                    activeOpacity={0.84}
+                    accessibilityRole="radio"
+                    accessibilityLabel={entry.label}
+                    accessibilityHint={entry.description}
+                    accessibilityState={{ selected: categoryKey === entry.key }}
+                    onPress={() => setCategoryKey(entry.key)}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryChipText,
+                        categoryKey === entry.key &&
+                          styles.categoryChipTextActive,
+                      ]}
+                    >
+                      {entry.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <View style={styles.categoryHelp}>
+                <Text style={styles.categoryHelpTitle}>
+                  {categoryOption.label}
+                </Text>
+                <Text style={styles.categoryHelpText}>
+                  {categoryOption.description}
+                </Text>
+              </View>
+
+              <TextInput
+                value={note}
+                onChangeText={setNote}
+                style={styles.input}
+                placeholder="Optional note for the moderation team"
+                placeholderTextColor="#7D879E"
+                accessibilityLabel="Optional report details"
+                accessibilityHint="Add information that may help the moderation team review this report."
+                multiline
+              />
+
+              <Text style={styles.helperText}>{helperText}</Text>
+              <Text style={styles.helperText}>{falseReportText}</Text>
+
+              {categoryOption.backedCategory === "copyright" ? (
+                <View style={styles.formalNoticeBox}>
+                  <Text style={styles.formalNoticeTitle}>
+                    Formal copyright notice
+                  </Text>
+                  <Text style={styles.formalNoticeText}>
+                    A DMCA-style copyright notice needs ownership, signature,
+                    and good-faith statements. Open the dedicated copyright
+                    report form for that process.
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.formalNoticeButton}
+                    activeOpacity={0.86}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open Copyright Report"
+                    onPress={() => {
+                      closeAndReset();
+                      router.push(
+                        "/copyright-report" as Parameters<
+                          typeof router.push
+                        >[0],
+                      );
+                    }}
+                  >
+                    <Text style={styles.formalNoticeButtonText}>
+                      Open Copyright Report
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
               <TouchableOpacity
-                style={styles.formalNoticeButton}
+                style={[styles.primaryButton, busy && styles.buttonDisabled]}
                 activeOpacity={0.86}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel={busy ? "Sending report" : "Send Report"}
+                accessibilityState={{ disabled: busy, busy }}
                 onPress={() => {
-                  onClose();
-                  router.push("/copyright-report" as Parameters<typeof router.push>[0]);
+                  const selectedCategoryNote = `Selected report category: ${categoryOption.label}.`;
+                  const normalizedNote = note.trim();
+                  void onSubmit({
+                    category: categoryOption.backedCategory,
+                    note: normalizedNote
+                      ? `${selectedCategoryNote}\n${normalizedNote}`
+                      : selectedCategoryNote,
+                  });
                 }}
               >
-                <Text style={styles.formalNoticeButtonText}>Open Copyright Report</Text>
+                <Text style={styles.primaryButtonText}>
+                  {busy ? "Sending…" : "Send Report"}
+                </Text>
               </TouchableOpacity>
-            </View>
-          ) : null}
 
-          <TouchableOpacity
-            style={[styles.primaryButton, busy && styles.buttonDisabled]}
-            activeOpacity={0.86}
-            disabled={busy}
-            onPress={() => {
-              const selectedCategoryNote = `Selected report category: ${categoryOption.label}. Queue: ${categoryOption.queue.replace("_", " ")}.`;
-              const normalizedNote = note.trim();
-              void onSubmit({
-                category: categoryOption.backedCategory,
-                note: normalizedNote ? `${selectedCategoryNote}\n${normalizedNote}` : selectedCategoryNote,
-              });
-            }}
-          >
-            <Text style={styles.primaryButtonText}>{busy ? "Sending…" : "Send Report"}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.82} onPress={onClose}>
-            <Text style={styles.secondaryButtonText}>Cancel</Text>
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                activeOpacity={0.82}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel report"
+                onPress={closeAndReset}
+              >
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboardAvoider: {
+    flex: 1,
+  },
   overlay: {
     flex: 1,
     justifyContent: "flex-end",
     backgroundColor: "rgba(0,0,0,0.56)",
   },
   sheet: {
+    maxHeight: "92%",
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(12,13,18,0.98)",
-    paddingHorizontal: 18,
     paddingTop: 10,
-    paddingBottom: 24,
+    overflow: "hidden",
+  },
+  sheetScroller: {
+    flexGrow: 0,
+  },
+  sheetContent: {
+    paddingHorizontal: 18,
     gap: 12,
   },
   handle: {
@@ -338,13 +439,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     fontWeight: "600",
-  },
-  categoryHelpMeta: {
-    color: "#7D879E",
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: "800",
-    textTransform: "uppercase",
   },
   input: {
     minHeight: 98,
