@@ -111,6 +111,10 @@ const expressionIsSanitizerDerived = (expressionPath, sanitizerBindings) => {
   if (!unwrappedPath.isCallExpression?.() && !unwrappedPath.isOptionalCallExpression?.()) return false;
   const callee = unwrappedPath.get("callee");
   if (!callee.isMemberExpression?.() && !callee.isOptionalMemberExpression?.()) return false;
+  if (!["replace", "replaceAll", "trim"].includes(getPropertyName(callee))) return false;
+  if (unwrappedPath.get("arguments").some((argument) => !(
+    argument.isStringLiteral?.() || argument.isRegExpLiteral?.()
+  ))) return false;
   return expressionIsSanitizerDerived(callee.get("object"), sanitizerBindings);
 };
 
@@ -120,53 +124,23 @@ const functionReturnsOnlySanitizerDerivedMessages = (functionPath, sanitizerBind
   if (!body.isBlockStatement?.()) return expressionIsSanitizerDerived(body, sanitizerBindings);
   const returnExpressions = [];
   body.traverse({
-    Function(innerPath) {
-      innerPath.skip();
-    },
-    ReturnStatement(returnPath) {
-      const argument = returnPath.get("argument");
-      if (argument?.node) returnExpressions.push(argument);
-    },
+    Function(innerPath) { innerPath.skip(); },
+    ReturnStatement(returnPath) { if (returnPath.get("argument")?.node) returnExpressions.push(returnPath.get("argument")); },
   });
   return returnExpressions.length > 0
-    && returnExpressions.every((expressionPath) => expressionIsSanitizerDerived(
-      expressionPath,
-      sanitizerBindings,
-    ));
+    && returnExpressions.every((expressionPath) => expressionIsSanitizerDerived(expressionPath, sanitizerBindings));
 };
 
-const functionReturnsRawMessage = (
-  functionPath,
-  rawMessageBindings,
-  rawErrorBindings,
-  sanitizerBindings,
-) => {
+const functionReturnsRawMessage = (functionPath, rawMessageBindings, rawErrorBindings, sanitizerBindings) => {
   if (!functionPath?.isFunction?.()) return false;
   const body = functionPath.get("body");
-  if (!body.isBlockStatement?.()) {
-    return expressionContainsRawMessage(
-      body,
-      rawMessageBindings,
-      rawErrorBindings,
-      sanitizerBindings,
-    );
-  }
+  if (!body.isBlockStatement?.()) return expressionContainsRawMessage(body, rawMessageBindings, rawErrorBindings, sanitizerBindings);
   const returnExpressions = [];
   body.traverse({
-    Function(innerPath) {
-      innerPath.skip();
-    },
-    ReturnStatement(returnPath) {
-      const argument = returnPath.get("argument");
-      if (argument?.node) returnExpressions.push(argument);
-    },
+    Function(innerPath) { innerPath.skip(); },
+    ReturnStatement(returnPath) { if (returnPath.get("argument")?.node) returnExpressions.push(returnPath.get("argument")); },
   });
-  return returnExpressions.some((expressionPath) => expressionContainsRawMessage(
-    expressionPath,
-    rawMessageBindings,
-    rawErrorBindings,
-    sanitizerBindings,
-  ));
+  return returnExpressions.some((expressionPath) => expressionContainsRawMessage(expressionPath, rawMessageBindings, rawErrorBindings, sanitizerBindings));
 };
 
 const expressionContainsRawMessage = (
@@ -176,7 +150,7 @@ const expressionContainsRawMessage = (
   sanitizerBindings,
 ) => {
   if (!expressionPath?.node) return false;
-  if (expressionPath.isFunction?.()) return false;
+  if (expressionPath.isFunction?.()) return functionReturnsRawMessage(expressionPath, rawMessageBindings, rawErrorBindings, sanitizerBindings);
   if (isUserFacingSanitizerCall(expressionPath, sanitizerBindings)) return false;
   if (isRawMessageMemberPath(expressionPath, rawErrorBindings)) return true;
   if (expressionPath.isIdentifier()) {
@@ -186,22 +160,8 @@ const expressionContainsRawMessage = (
   let found = false;
   expressionPath.traverse({
     Function(innerPath) {
-      let callablePath = innerPath;
-      while (
-        callablePath.parentPath
-        && (
-          callablePath.parentPath.isTSAsExpression?.()
-          || callablePath.parentPath.isTSNonNullExpression?.()
-          || callablePath.parentPath.isTypeCastExpression?.()
-          || callablePath.parentPath.isParenthesizedExpression?.()
-        )
-      ) callablePath = callablePath.parentPath;
-      const parentPath = callablePath.parentPath;
-      const isImmediatelyInvoked = (
-        parentPath?.isCallExpression?.()
-        || parentPath?.isOptionalCallExpression?.()
-      ) && parentPath.get("callee").node === callablePath.node;
-      if (!isImmediatelyInvoked) innerPath.skip();
+      if (functionReturnsRawMessage(innerPath, rawMessageBindings, rawErrorBindings, sanitizerBindings)) found = true;
+      innerPath.skip();
     },
     CallExpression(innerPath) {
       if (isUserFacingSanitizerCall(innerPath, sanitizerBindings)) innerPath.skip();
@@ -417,7 +377,7 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
       }
       const nextMessageBindings = id.isObjectPattern()
         ? objectPatternMessageBindings(id, isRawErrorObjectExpression(init, rawErrorBindings))
-        : expressionContainsRawMessage(init, rawMessageBindings, rawErrorBindings, sanitizerBindings)
+        : !init.isFunction?.() && expressionContainsRawMessage(init, rawMessageBindings, rawErrorBindings, sanitizerBindings)
           ? idBindings
           : [];
       for (const binding of nextMessageBindings) {
@@ -477,7 +437,7 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
         ? objectPatternMessageBindings(assignmentPath.get("left"), true)
         : assignmentPath.get("left").isObjectPattern()
           ? objectPatternMessageBindings(assignmentPath.get("left"), false)
-        : expressionContainsRawMessage(right, rawMessageBindings, rawErrorBindings, sanitizerBindings)
+        : !right.isFunction?.() && expressionContainsRawMessage(right, rawMessageBindings, rawErrorBindings, sanitizerBindings)
           ? leftBindings
           : [];
       for (const binding of nextMessageBindings) {
@@ -524,6 +484,15 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
   return [...new Set(violations)];
 };
 
+const isStaticCustomerCopy = (expressionPath) => {
+  if (expressionPath?.isStringLiteral?.() || expressionPath?.isNullLiteral?.()) return true;
+  if (!expressionPath?.isIdentifier?.()) return false;
+  const binding = getBinding(expressionPath);
+  const declarator = binding?.path?.isVariableDeclarator?.() ? binding.path : binding?.path?.parentPath;
+  return !!binding?.constant && declarator?.isVariableDeclarator?.()
+    && declarator.get("init").isStringLiteral();
+};
+
 const collectUserFacingErrorConstructionViolations = (source, file) => {
   const ast = parse(source, { sourceType: "unambiguous", plugins: ["typescript", "jsx"] });
   const approvedValidatorBindings = new Set();
@@ -545,11 +514,18 @@ const collectUserFacingErrorConstructionViolations = (source, file) => {
         : binding?.path?.parentPath?.isVariableDeclarator?.()
           ? binding.path.parentPath
           : null;
+      const returns = [];
+      declaratorPath?.get("init")?.traverse?.({
+        Function(innerPath) { innerPath.skip(); },
+        ReturnStatement(returnPath) { returns.push(returnPath.get("argument")); },
+      });
       if (
         binding?.constant
         && binding.constantViolations.length === 0
         && declaratorPath?.get("init")?.isFunction?.()
         && declaratorPath.parentPath?.parentPath?.isExportNamedDeclaration?.()
+        && returns.length > 0
+        && returns.every(isStaticCustomerCopy)
       ) approvedValidatorBindings.add(binding);
     },
     ImportSpecifier(importPath) {
@@ -1184,6 +1160,9 @@ for (const [label, mutatedSource, mutatedFile, analyze] of boundaryMutationCases
 for (const [label, mutation] of [
   ["function declaration", `${login}\nfunction __unsafeDeclaredClosure(setError) { try { throw new Error("provider"); } catch (problem) { function renderDetail() { return String(problem); } setError(renderDetail()); } }`],
   ["assigned function", `${login}\nfunction __unsafeAssignedClosure(setError) { let renderDetail; try { throw new Error("provider"); } catch (problem) { renderDetail = function () { return String(problem); }; setError(renderDetail()); } }`],
+  ["higher-order closure", `${login}\nfunction __unsafeHigherOrderClosure(setError) { try { throw new Error("provider"); } catch (problem) { const render = () => () => String(problem); setError(render()()); } }`],
+  ["object-method closure", `${login}\nfunction __unsafeObjectClosure(setError) { try { throw new Error("provider"); } catch (problem) { const holder = { render() { return String(problem); } }; setError(holder.render()); } }`],
+  ["satisfies-wrapped IIFE", `${login}\nfunction __unsafeSatisfiesIife(setError) { try { throw new Error("provider"); } catch (problem) { setError(((() => String(problem)) satisfies () => string)()); } }`],
   ["reassigned sanitizer alias", `${login}\nfunction __unsafeReassignedSanitizer(setError) { let sanitize = getUserFacingErrorMessage; sanitize = (value) => String(value); try { throw new Error("provider"); } catch (problem) { setError(sanitize(problem, "fallback")); } }`],
   ["assigned then replaced sanitizer alias", `${login}\nfunction __unsafeAssignedSanitizer(setError) { let sanitize; sanitize = getUserFacingErrorMessage; sanitize = (value) => String(value); try { throw new Error("provider"); } catch (problem) { setError(sanitize(problem, "fallback")); } }`],
 ]) {
@@ -1194,6 +1173,8 @@ for (const [label, mutation, analyze] of [
   ["nested sanitizer module", `${login}\nimport { getUserFacingErrorMessage as unsafeSanitize } from "./fake/userFacingErrors";\nfunction __unsafeImportedSanitizer(setError) { try { throw new Error("provider"); } catch (problem) { setError(unsafeSanitize(problem, "fallback")); } }`, collectCustomerErrorBoundaryViolations],
   ["re-exported constructor consumer", `${chatDomain}\nimport { TrustedError } from "./trustedErrors";\nfunction __unsafeImportedConstructor(created) { throw new TrustedError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations],
   ["nested validator module", `${socialAttachmentPicker}\nimport { getSocialAttachmentValidationMessage as unsafeValidate } from "./fake/socialAttachments";\nfunction __unsafeImportedValidator(created) { const message = unsafeValidate(created.file); throw new UserFacingError("attachment_action", message); }`, collectUserFacingErrorConstructionViolations],
+  ["dynamic validator body", socialAttachments.replace("return null;\n};", "return String(file.uri);\n};"), collectUserFacingErrorConstructionViolations],
+  ["raw sanitizer transform", chillyCircle.replace('.replace(/friend/gi, "Chi\'lly Circle");', '.concat(String(error));'), collectCustomerErrorBoundaryViolations],
 ]) {
   if (analyze(mutation, label).length === 0) fail(`customer error-boundary proof trusted ${label}`);
 }
