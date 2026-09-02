@@ -60,7 +60,8 @@ const namedExportedFunctionFingerprint = (ast, functionName) => {
   traverse(ast, {
     FunctionDeclaration(functionPath) {
       if (!functionPath.get("id").isIdentifier({ name: functionName })
-        || !functionPath.parentPath?.isExportNamedDeclaration()) return;
+        || !functionPath.parentPath?.isExportNamedDeclaration()
+        || !functionPath.parentPath.parentPath?.isProgram()) return;
       const canonical = JSON.stringify(normalizeAstValue(functionPath.node));
       fingerprint = createHash("sha256").update(canonical).digest("hex");
     },

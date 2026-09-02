@@ -63,8 +63,13 @@ const namedFunctionFingerprint = (ast, functionName, exportKind = null) => {
   traverse(ast, {
     FunctionDeclaration(functionPath) {
       if (!functionPath.get("id").isIdentifier({ name: functionName })) return;
-      if (exportKind === "named" && !functionPath.parentPath?.isExportNamedDeclaration()) return;
-      if (exportKind === "default" && !functionPath.parentPath?.isExportDefaultDeclaration()) return;
+      if (exportKind === "named"
+        && (!functionPath.parentPath?.isExportNamedDeclaration()
+          || !functionPath.parentPath.parentPath?.isProgram())) return;
+      if (exportKind === "default"
+        && (!functionPath.parentPath?.isExportDefaultDeclaration()
+          || !functionPath.parentPath.parentPath?.isProgram())) return;
+      if (exportKind === null && !functionPath.parentPath?.isProgram()) return;
       const canonical = JSON.stringify(normalizeAstValue(functionPath.node));
       fingerprint = createHash("sha256").update(canonical).digest("hex");
     },
