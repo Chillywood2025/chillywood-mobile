@@ -126,7 +126,7 @@ insert into public.creator_earnings_ledger(
     'event_pass','30000000-0000-4000-8000-000000000002',1000,1000,'usd','available',
     timezone('utc'::text,now())-interval '10 days',100,'2026-08-31-v1','{}'),
   ('10000000-0000-4000-8000-000000000003','20000000-0000-4000-8000-000000000001',
-    'watch_party_ticket','30000000-0000-4000-8000-000000000003',1000,1000,'usd','available',
+    'event_pass','30000000-0000-4000-8000-000000000003',1000,1000,'usd','available',
     timezone('utc'::text,now())-interval '10 days',100,'2026-08-31-v1','{}');
 insert into public.creator_money_obligation_completion_receipts(
   id,earnings_ledger_id,creator_id,source_type,source_id,completed_at,evidence_source,evidence_hash
@@ -135,8 +135,8 @@ insert into public.creator_money_obligation_completion_receipts(
     '20000000-0000-4000-8000-000000000001','event_pass','30000000-0000-4000-8000-000000000002',
     timezone('utc'::text,now())-interval '47 hours','canonical_event_lifecycle',repeat('b',64)),
   ('50000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000003',
-    '20000000-0000-4000-8000-000000000001','watch_party_ticket','30000000-0000-4000-8000-000000000003',
-    timezone('utc'::text,now())-interval '49 hours','canonical_watch_party_lifecycle',repeat('b',64));
+    '20000000-0000-4000-8000-000000000001','event_pass','30000000-0000-4000-8000-000000000003',
+    timezone('utc'::text,now())-interval '49 hours','canonical_event_lifecycle',repeat('b',64));
 select pass('one canonical lifecycle evidence hash may back each exact buyer earning without cross-buyer uniqueness failure');
 select is(public.creator_earnings_withdrawable_cents_internal(
   '10000000-0000-4000-8000-000000000002',timezone('utc'::text,now())),0,
@@ -144,11 +144,11 @@ select is(public.creator_earnings_withdrawable_cents_internal(
 );
 select is(public.creator_earnings_withdrawable_cents_internal(
   '10000000-0000-4000-8000-000000000003',timezone('utc'::text,now())),900,
-  'Watch-Party becomes ninety-percent available after completion plus 48 hours'
+  'a completed advance obligation becomes ninety-percent available after completion plus 48 hours'
 );
 select is(public.creator_earnings_withdrawable_cents_internal(
   '10000000-0000-4000-8000-000000000003',timezone('utc'::text,now())+interval '31 days'),1000,
-  'Watch-Party reserve releases only after its additional thirty-day period'
+  'the advance-obligation reserve releases only after its additional thirty-day period'
 );
 select throws_ok(
   $$update public.creator_money_obligation_completion_receipts

@@ -3,7 +3,7 @@
   "contractId": "watch-party-live-money-rfgc-scope-waiver-v1",
   "schemaRef": "config/assurance/schemas-v1.json#/$defs/scopeWaiver",
   "objective": "Close the exact Watch-Party Live and Live Stage paid-access graph across routes, provider reconciliation, database authority, LiveKit seat approval, settlement, reversal, lifecycle refresh, notifications, and Money Center semantics as one repair.",
-  "exactReason": "The owner-required recursive full-graph closure found one coupled authority defect group: the Live Stage had catalog concepts without an exact-room buyer path, provider projector, independent access-versus-seat admission, LiveKit eligibility boundary, completion-based settlement, reversal projection, or route-backed copy. Splitting these mutually dependent producers and consumers would permit payment to exist without admission, admission without media isolation, or settlement without exact buyer completion evidence.",
+  "exactReason": "The owner-required recursive full-graph closure found one coupled authority defect group: the Live Stage had catalog concepts without an exact-room buyer path, provider projector, independent access-versus-seat admission, LiveKit eligibility boundary, completion-based settlement, reversal projection, or route-backed copy. Splitting these mutually dependent producers and consumers would permit payment to exist without admission, admission without media isolation, or settlement without exact buyer completion evidence. Exact-head proof also discovered a current production dependency high advisory; the same closure carries only the bounded transitive lock-family refresh required to restore high and critical findings to zero.",
   "reviewer": "watch-party-live-money-four-lane-exact-head-review-set",
   "supportingDomains": [
     "Watch-Party-Live",
@@ -17,7 +17,7 @@
   "newTimeboxHours": 8,
   "fileBudget": {
     "default": 15,
-    "waivedMaximum": 15
+    "waivedMaximum": 18
   },
   "lineBudget": {
     "default": 1200,

@@ -1,5 +1,5 @@
 begin;
-select plan(51);
+select plan(59);
 
 select has_table('public','paid_live_watch_party_offers','1. exact live offers table exists');
 select has_table('public','paid_live_watch_party_passes','2. exact live passes table exists');
@@ -246,6 +246,128 @@ select ok(position('watch_party_room_memberships' in
   and position('v_offer."host_user_id" is distinct from v_room."host_user_id"' in
   pg_get_functiondef('public.record_live_watch_party_money_obligation_completion(uuid,text)'::regprocedure))>0,
   '51. current seat approval and completion remain bound to persisted room authority');
+
+-- Exact completion/economics proof. These provider, grant, earning, and room
+-- lifecycle fixtures remain inside this transaction and are rolled back.
+insert into public.provider_events(
+  id,provider_event_id,provider,product_id,product_key,user_id,app_user_id,
+  environment,event_type,status,occurred_at,idempotency_key,raw_payload_hash,metadata
+) values (
+  '91000000-0000-4000-8000-000000000001','rfgc-party-provider-event',
+  'revenuecat_google_play',
+  (select id from public.monetization_products where product_key='watch_party_live_ticket_sandbox_099'),
+  'watch_party_live_ticket_sandbox_099','b1000000-0000-4000-8000-000000000003',
+  'b1000000-0000-4000-8000-000000000003','sandbox','NON_RENEWING_PURCHASE','processed',
+  timezone('utc'::text,now()),'rfgc-party-provider-event',repeat('6',64),
+  jsonb_build_object('original_transaction_id','rfgc-party-original')
+);
+insert into public.access_grants(
+  id,user_id,grant_type,source_type,source_id,product_id,provider,provider_event_id,
+  environment,status,starts_at,metadata
+) values (
+  '92000000-0000-4000-8000-000000000001','b1000000-0000-4000-8000-000000000003',
+  'watch_party_live_ticket','provider_event','e1000000-0000-4000-8000-000000000001',
+  (select id from public.monetization_products where product_key='watch_party_live_ticket_sandbox_099'),
+  'revenuecat_google_play','91000000-0000-4000-8000-000000000001','sandbox','sandbox_only',
+  timezone('utc'::text,now())-interval '1 minute',
+  jsonb_build_object('original_transaction_id','rfgc-party-original','authority_granted',false)
+);
+update public.paid_watch_party_tickets
+set access_grant_id='92000000-0000-4000-8000-000000000001'
+where id='f1000000-0000-4000-8000-000000000001';
+insert into public.money_access_ledger_events(
+  id,user_id,creator_id,product_id,provider_event_id,event_type,amount_minor,currency,
+  environment,payable_state,status,source_type,source_id,metadata
+) values (
+  '93000000-0000-4000-8000-000000000001','b1000000-0000-4000-8000-000000000003',
+  'a1000000-0000-4000-8000-000000000001',
+  (select id from public.monetization_products where product_key='watch_party_live_ticket_sandbox_099'),
+  '91000000-0000-4000-8000-000000000001','NON_RENEWING_PURCHASE',99,'usd','sandbox',
+  'not_payable','sandbox_only','watch_party_live','e1000000-0000-4000-8000-000000000001',
+  jsonb_build_object('original_transaction_id','rfgc-party-original','payout_readiness_proved',false)
+);
+insert into public.creator_earnings_ledger(
+  id,creator_id,source_type,source_id,gross_amount_cents,net_creator_amount_cents,currency,
+  ledger_status,settlement_started_at,reserve_amount_cents,settlement_policy_version,
+  provider_event_id,money_ledger_event_id,metadata
+) values (
+  '94000000-0000-4000-8000-000000000001','a1000000-0000-4000-8000-000000000001',
+  'watch_party_ticket','e1000000-0000-4000-8000-000000000001',99,99,'usd','pending',
+  timezone('utc'::text,now()),10,'2026-08-31-v1','91000000-0000-4000-8000-000000000001',
+  '93000000-0000-4000-8000-000000000001','{}'
+);
+update public.paid_watch_party_offers
+set ends_at=timezone('utc'::text,now())-interval '1 minute'
+where id='e1000000-0000-4000-8000-000000000001';
+update public.watch_party_rooms set is_active=false where party_id='RFGC-PARTY-A';
+set local role service_role;
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+select lives_ok($$select public.record_creator_money_obligation_completion(
+  '94000000-0000-4000-8000-000000000001','canonical_watch_party_lifecycle',repeat('7',64))$$,
+  '52. ordinary Party completion accepts only the exact used provider-backed ticket chain');
+reset role;
+select is((select evidence_source from public.creator_money_obligation_completion_receipts
+  where earnings_ledger_id='94000000-0000-4000-8000-000000000001'),
+  'canonical_watch_party_lifecycle','53. ordinary Party completion appends exact canonical evidence');
+select is(public.creator_earnings_withdrawable_cents_internal(
+  '94000000-0000-4000-8000-000000000001',timezone('utc'::text,now())),0,
+  '54. ordinary Party earnings remain unavailable during the post-completion hold');
+
+set local session_replication_role=replica;
+insert into public.watch_party_room_memberships(party_id,user_id,role,stage_role,membership_state)
+values ('RFGC-LIVE-A','b1000000-0000-4000-8000-000000000002','viewer','listener','active');
+set local session_replication_role=origin;
+select set_config('app.watch_party_membership_authority','server',true);
+alter table public.watch_party_room_memberships disable trigger "enforce_watch_party_membership_identity";
+alter table public.watch_party_room_memberships disable trigger "enforce_watch_party_room_membership_authority_closeout";
+alter table public.watch_party_room_memberships disable trigger "enforce_watch_party_room_membership_block_guard";
+update public.watch_party_room_memberships set stage_role='speaker'
+where party_id='RFGC-LIVE-A' and user_id='b1000000-0000-4000-8000-000000000002';
+alter table public.watch_party_room_memberships enable trigger "enforce_watch_party_membership_identity";
+alter table public.watch_party_room_memberships enable trigger "enforce_watch_party_room_membership_authority_closeout";
+alter table public.watch_party_room_memberships enable trigger "enforce_watch_party_room_membership_block_guard";
+select ok(
+  (select meaningful_entry_at is not null from public.paid_live_watch_party_passes
+    where buyer_id='b1000000-0000-4000-8000-000000000002'
+      and pass_type='live_watch_party_access_pass')
+  and (select meaningful_entry_at is not null and approved_at is not null
+    from public.paid_live_watch_party_passes
+    where buyer_id='b1000000-0000-4000-8000-000000000002'
+      and pass_type='live_watch_party_seat_pass'),
+  '55. room lifecycle records access delivery separately from approved seat eligibility');
+insert into public.creator_earnings_ledger(
+  id,creator_id,source_type,source_id,gross_amount_cents,net_creator_amount_cents,currency,
+  ledger_status,settlement_started_at,reserve_amount_cents,settlement_policy_version,
+  provider_event_id,money_ledger_event_id,metadata
+) select
+  case money.source_type
+    when 'live_watch_party_access' then '94000000-0000-4000-8000-000000000002'::uuid
+    else '94000000-0000-4000-8000-000000000003'::uuid end,
+  money.creator_id,money.source_type,money.source_id,99,99,'usd','pending',
+  timezone('utc'::text,now()),10,'2026-09-01-live-rfgc-v1',money.provider_event_id,money.id,'{}'
+from public.money_access_ledger_events money
+where money.user_id='b1000000-0000-4000-8000-000000000002'
+  and money.source_type in ('live_watch_party_access','live_watch_party_seat')
+  and money.event_type='NON_RENEWING_PURCHASE';
+update public.watch_party_rooms set is_active=false where party_id='RFGC-LIVE-A';
+set local role service_role;
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+select lives_ok($$select public.record_live_watch_party_money_obligation_completion(
+  '94000000-0000-4000-8000-000000000002',repeat('8',64))$$,
+  '56. exact Live Access completion is server-owned and target-bound');
+select lives_ok($$select public.record_live_watch_party_money_obligation_completion(
+  '94000000-0000-4000-8000-000000000003',repeat('9',64))$$,
+  '57. exact Live Seat completion additionally requires recorded approval');
+reset role;
+select is((select count(*)::integer from public.creator_money_obligation_completion_receipts
+  where earnings_ledger_id in ('94000000-0000-4000-8000-000000000002','94000000-0000-4000-8000-000000000003')),
+  2,'58. access and seat completion append independent immutable receipts');
+select ok(
+  public.creator_earnings_withdrawable_cents_internal(
+    '94000000-0000-4000-8000-000000000002',timezone('utc'::text,now()))=0
+  and public.creator_earnings_withdrawable_cents_internal(
+    '94000000-0000-4000-8000-000000000003',timezone('utc'::text,now()))=0,
+  '59. both live products remain unavailable during their post-completion holds');
 
 select * from finish();
 rollback;

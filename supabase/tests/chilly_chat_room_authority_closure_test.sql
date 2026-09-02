@@ -1283,14 +1283,14 @@ select ok(
     'b2222222-2222-4222-8222-222222222222',
     'b2222222-2222-4222-8222-222222222201'
   ) ->> 'allowed')::boolean,
-  '86. the exact current ticket/provider/purchase/grant chain authorizes only its buyer'
+  '86. an ordinary ticket does not change independently free Live Stage viewer access'
 );
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', '{"role":"authenticated","sub":"b2222222-2222-4222-8222-222222222222","session_id":"b2222222-2222-4222-8222-222222222201"}', true);
 select lives_ok(
   $$select public.join_watch_party_room_session('CLOSURESEAT', 'Exact Buyer', null, null, true, true, false)$$,
-  '87. exact paid-seat buyer joins through the serialized RPC'
+  '87. the viewer joins the independently free Live Stage through the serialized RPC'
 );
 reset role;
 select ok(
@@ -1316,8 +1316,8 @@ select is(
     'b2222222-2222-4222-8222-222222222222',
     'b2222222-2222-4222-8222-222222222201'
   ) ->> 'reason',
-  'exact_paid_seat_viewer_authority',
-  '89. LiveKit resolves the same exact paid viewer authority'
+  'non_seat_room_authority',
+  '89. LiveKit does not reinterpret an ordinary Party ticket as Live Stage authority'
 );
 reset role;
 update auth.sessions
@@ -1346,7 +1346,7 @@ select ok(
     'b2222222-2222-4222-8222-222222222222',
     'b2222222-2222-4222-8222-222222222201'
   ) ->> 'allowed')::boolean
-  and (public.resolve_watch_party_livekit_viewer_authority(
+  and not (public.resolve_watch_party_livekit_viewer_authority(
     'CLOSURESEAT',
     'b2222222-2222-4222-8222-222222222222',
     'b2222222-2222-4222-8222-222222222201'
@@ -1360,8 +1360,8 @@ select ok(
     'CLOSURESEAT',
     'b2222222-2222-4222-8222-222222222222',
     'b2222222-2222-4222-8222-222222222201'
-  ) ->> 'expiresAt')::timestamptz <= now() + interval '31 seconds',
-  '90. paid LiveKit proof is no-host and expires within the 30-second authority window'
+  ) ->> 'expiresAt') is null,
+  '90. independently free Live Stage proof is no-host and carries no paid-pass authority window'
 );
 select ok(
   (public.resolve_watch_party_livekit_viewer_authority(
