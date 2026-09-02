@@ -79,20 +79,94 @@ const isRawMessageMemberPath = (memberPath, rawErrorBindings) => {
 };
 
 const isUserFacingSanitizerExpression = (expressionPath, sanitizerBindings) => {
-  if (!expressionPath?.node) return false;
-  if (expressionPath.isIdentifier()) {
-    const binding = getBinding(expressionPath);
-    return ["getUserFacingErrorMessage", "normalizeCircleError"].includes(expressionPath.node.name)
-      || (!!binding && sanitizerBindings.has(binding));
-  }
-  return (expressionPath.isMemberExpression() || expressionPath.isOptionalMemberExpression())
-    && getPropertyName(expressionPath) === "getUserFacingErrorMessage";
+  if (!expressionPath?.isIdentifier?.()) return false;
+  const binding = getBinding(expressionPath);
+  return !!binding && sanitizerBindings.has(binding);
 };
 
 const isUserFacingSanitizerCall = (callPath, sanitizerBindings) => (
   callPath?.isCallExpression?.()
   && isUserFacingSanitizerExpression(callPath.get("callee"), sanitizerBindings)
 );
+
+const unwrapExpression = (expressionPath) => {
+  let currentPath = expressionPath;
+  while (
+    currentPath?.node
+    && (
+      currentPath.isTSAsExpression?.()
+      || currentPath.isTSNonNullExpression?.()
+      || currentPath.isTypeCastExpression?.()
+      || currentPath.isParenthesizedExpression?.()
+    )
+  ) currentPath = currentPath.get("expression");
+  return currentPath;
+};
+
+const expressionIsSanitizerDerived = (expressionPath, sanitizerBindings) => {
+  const unwrappedPath = unwrapExpression(expressionPath);
+  if (!unwrappedPath?.node) return false;
+  if (isUserFacingSanitizerCall(unwrappedPath, sanitizerBindings)) return true;
+  if (!unwrappedPath.isCallExpression?.() && !unwrappedPath.isOptionalCallExpression?.()) return false;
+  const callee = unwrappedPath.get("callee");
+  if (!callee.isMemberExpression?.() && !callee.isOptionalMemberExpression?.()) return false;
+  return expressionIsSanitizerDerived(callee.get("object"), sanitizerBindings);
+};
+
+const functionReturnsOnlySanitizerDerivedMessages = (functionPath, sanitizerBindings) => {
+  if (!functionPath?.isFunction?.()) return false;
+  const body = functionPath.get("body");
+  if (!body.isBlockStatement?.()) return expressionIsSanitizerDerived(body, sanitizerBindings);
+  const returnExpressions = [];
+  body.traverse({
+    Function(innerPath) {
+      innerPath.skip();
+    },
+    ReturnStatement(returnPath) {
+      const argument = returnPath.get("argument");
+      if (argument?.node) returnExpressions.push(argument);
+    },
+  });
+  return returnExpressions.length > 0
+    && returnExpressions.every((expressionPath) => expressionIsSanitizerDerived(
+      expressionPath,
+      sanitizerBindings,
+    ));
+};
+
+const functionReturnsRawMessage = (
+  functionPath,
+  rawMessageBindings,
+  rawErrorBindings,
+  sanitizerBindings,
+) => {
+  if (!functionPath?.isFunction?.()) return false;
+  const body = functionPath.get("body");
+  if (!body.isBlockStatement?.()) {
+    return expressionContainsRawMessage(
+      body,
+      rawMessageBindings,
+      rawErrorBindings,
+      sanitizerBindings,
+    );
+  }
+  const returnExpressions = [];
+  body.traverse({
+    Function(innerPath) {
+      innerPath.skip();
+    },
+    ReturnStatement(returnPath) {
+      const argument = returnPath.get("argument");
+      if (argument?.node) returnExpressions.push(argument);
+    },
+  });
+  return returnExpressions.some((expressionPath) => expressionContainsRawMessage(
+    expressionPath,
+    rawMessageBindings,
+    rawErrorBindings,
+    sanitizerBindings,
+  ));
+};
 
 const expressionContainsRawMessage = (
   expressionPath,
@@ -111,11 +185,21 @@ const expressionContainsRawMessage = (
   let found = false;
   expressionPath.traverse({
     Function(innerPath) {
-      const parentPath = innerPath.parentPath;
+      let callablePath = innerPath;
+      while (
+        callablePath.parentPath
+        && (
+          callablePath.parentPath.isTSAsExpression?.()
+          || callablePath.parentPath.isTSNonNullExpression?.()
+          || callablePath.parentPath.isTypeCastExpression?.()
+          || callablePath.parentPath.isParenthesizedExpression?.()
+        )
+      ) callablePath = callablePath.parentPath;
+      const parentPath = callablePath.parentPath;
       const isImmediatelyInvoked = (
         parentPath?.isCallExpression?.()
         || parentPath?.isOptionalCallExpression?.()
-      ) && parentPath.get("callee").node === innerPath.node;
+      ) && parentPath.get("callee").node === callablePath.node;
       if (!isImmediatelyInvoked) innerPath.skip();
     },
     CallExpression(innerPath) {
@@ -232,7 +316,12 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
     ImportSpecifier(importPath) {
       const imported = importPath.get("imported");
       const importedName = imported.isIdentifier() ? imported.node.name : imported.isStringLiteral() ? imported.node.value : "";
-      if (importedName === "getUserFacingErrorMessage") {
+      const sourcePath = importPath.parentPath?.get("source");
+      if (
+        importedName === "getUserFacingErrorMessage"
+        && sourcePath?.isStringLiteral?.()
+        && /(?:^|\/)userFacingErrors(?:\.[cm]?[jt]sx?)?$/u.test(sourcePath.node.value)
+      ) {
         const binding = getBinding(importPath.get("local"));
         if (binding) sanitizerBindings.add(binding);
       }
@@ -253,6 +342,31 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
       const init = declaratorPath.get("init");
       if (!init?.node) continue;
       const idBindings = getPatternBindings(id);
+      if (id.isIdentifier() && init.isFunction?.()) {
+        const functionBinding = getBinding(id);
+        if (
+          functionBinding?.constant
+          && functionBinding.constantViolations.length === 0
+          && functionReturnsOnlySanitizerDerivedMessages(init, sanitizerBindings)
+          && !sanitizerBindings.has(functionBinding)
+        ) {
+          sanitizerBindings.add(functionBinding);
+          changed = true;
+        }
+        if (
+          functionBinding
+          && functionReturnsRawMessage(
+            init,
+            rawMessageBindings,
+            rawErrorBindings,
+            sanitizerBindings,
+          )
+          && !rawMessageBindings.has(functionBinding)
+        ) {
+          rawMessageBindings.add(functionBinding);
+          changed = true;
+        }
+      }
       if (id.isIdentifier() && isUntrustedResultExpression(init)) {
         const resultBinding = getBinding(id);
         if (resultBinding && !rawResultBindings.has(resultBinding)) {
@@ -392,7 +506,9 @@ const collectCustomerErrorBoundaryViolations = (source, file) => {
 
 const collectUserFacingErrorConstructionViolations = (source, file) => {
   const ast = parse(source, { sourceType: "unambiguous", plugins: ["typescript", "jsx"] });
+  const approvedValidatorBindings = new Set();
   const approvedMessageBindings = new Set();
+  const trustedErrorBindings = new Set();
   const violations = [];
 
   // Keep the trust boundary intentionally narrow: domain code constructs the
@@ -402,16 +518,53 @@ const collectUserFacingErrorConstructionViolations = (source, file) => {
   // silently turn a provider message into trusted customer copy.
 
   traverse(ast, {
+    Program(programPath) {
+      const binding = programPath.scope.getBinding("getSocialAttachmentValidationMessage");
+      const declaratorPath = binding?.path?.isVariableDeclarator?.()
+        ? binding.path
+        : binding?.path?.parentPath?.isVariableDeclarator?.()
+          ? binding.path.parentPath
+          : null;
+      if (
+        binding?.constant
+        && binding.constantViolations.length === 0
+        && declaratorPath?.get("init")?.isFunction?.()
+        && declaratorPath.parentPath?.parentPath?.isExportNamedDeclaration?.()
+      ) approvedValidatorBindings.add(binding);
+    },
+    ImportSpecifier(importPath) {
+      const imported = importPath.get("imported");
+      const importedName = imported.isIdentifier() ? imported.node.name : imported.isStringLiteral() ? imported.node.value : "";
+      const sourcePath = importPath.parentPath?.get("source");
+      const source = sourcePath?.isStringLiteral?.() ? sourcePath.node.value : "";
+      const localBinding = getBinding(importPath.get("local"));
+      if (
+        importedName === "getSocialAttachmentValidationMessage"
+        && /(?:^|\/)socialAttachments(?:\.[cm]?[jt]sx?)?$/u.test(source)
+        && localBinding
+      ) approvedValidatorBindings.add(localBinding);
+      if (
+        importedName === "UserFacingError"
+        && /(?:^|\/)userFacingErrors(?:\.[cm]?[jt]sx?)?$/u.test(source)
+        && localBinding
+      ) trustedErrorBindings.add(localBinding);
+    },
+  });
+
+  traverse(ast, {
     VariableDeclarator(declaratorPath) {
       const id = declaratorPath.get("id");
       const init = declaratorPath.get("init");
       if (
         !id.isIdentifier()
         || !init?.isCallExpression?.()
-        || !init.get("callee").isIdentifier({ name: "getSocialAttachmentValidationMessage" })
       ) return;
+      const validatorBinding = getBinding(init.get("callee"));
+      if (!validatorBinding || !approvedValidatorBindings.has(validatorBinding)) return;
       const binding = getBinding(id);
-      if (binding) approvedMessageBindings.add(binding);
+      if (binding?.constant && binding.constantViolations.length === 0) {
+        approvedMessageBindings.add(binding);
+      }
     },
   });
 
@@ -431,8 +584,10 @@ const collectUserFacingErrorConstructionViolations = (source, file) => {
       const imported = importPath.get("imported");
       const importedName = imported.isIdentifier() ? imported.node.name : imported.isStringLiteral() ? imported.node.value : "";
       if (importedName !== "UserFacingError") return;
-      if (!importPath.get("local").isIdentifier({ name: "UserFacingError" })) {
-        violations.push(`${file}:${importPath.node.loc?.start.line ?? "?"}: UserFacingError must not be imported through an alias`);
+      const local = importPath.get("local");
+      const binding = getBinding(local);
+      if (!local.isIdentifier({ name: "UserFacingError" }) || !binding || !trustedErrorBindings.has(binding)) {
+        violations.push(`${file}:${importPath.node.loc?.start.line ?? "?"}: UserFacingError must use the named app-owned import`);
       }
     },
     ImportNamespaceSpecifier(importPath) {
@@ -462,6 +617,11 @@ const collectUserFacingErrorConstructionViolations = (source, file) => {
     },
     NewExpression(newExpressionPath) {
       if (!newExpressionPath.get("callee").isIdentifier({ name: "UserFacingError" })) return;
+      const constructorBinding = getBinding(newExpressionPath.get("callee"));
+      if (!constructorBinding || !trustedErrorBindings.has(constructorBinding)) {
+        violations.push(`${file}:${newExpressionPath.node.loc?.start.line ?? "?"}: UserFacingError must use the app-owned constructor binding`);
+        return;
+      }
       const messageArgument = newExpressionPath.get("arguments")[1];
       if (!isApprovedMessage(messageArgument)) {
         violations.push(`${file}:${newExpressionPath.node.loc?.start.line ?? "?"}: UserFacingError copy must be static or produced by the approved attachment validator`);
@@ -475,6 +635,23 @@ const collectDomainErrorPolicyViolations = (source, file) => [
   ...collectCustomerErrorBoundaryViolations(source, file),
   ...collectUserFacingErrorConstructionViolations(source, file),
 ];
+
+const collectUserFacingErrorExportViolations = (source, file) => {
+  const ast = parse(source, { sourceType: "unambiguous", plugins: ["typescript"] });
+  const violations = [];
+  traverse(ast, {
+    ExportSpecifier(exportPath) {
+      const local = exportPath.get("local");
+      const exported = exportPath.get("exported");
+      const localName = local.isIdentifier() ? local.node.name : local.isStringLiteral() ? local.node.value : "";
+      const exportedName = exported.isIdentifier() ? exported.node.name : exported.isStringLiteral() ? exported.node.value : "";
+      if (localName === "UserFacingError" && exportedName !== "UserFacingError") {
+        violations.push(`${file}:${exportPath.node.loc?.start.line ?? "?"}: UserFacingError must not be re-exported under another name`);
+      }
+    },
+  });
+  return violations;
+};
 
 const collectPlainThrownErrorViolations = (source, file) => {
   const ast = parse(source, { sourceType: "unambiguous", plugins: ["typescript", "jsx"] });
@@ -609,6 +786,7 @@ assertIncludes(userFacingErrors, "The email or password is incorrect.", "credent
 assertIncludes(userFacingErrors, "Confirm your email", "email-confirmation-safe error copy");
 assertIncludes(userFacingErrors, "Too many attempts.", "rate-limit-safe error copy");
 assertIncludes(userFacingErrors, "Unknown messages must fail closed", "unknown-error fail-closed policy");
+for (const violation of collectUserFacingErrorExportViolations(userFacingErrors, "Shared user-facing errors")) fail(violation);
 for (const behaviorFailure of await getUserFacingBehaviorFailures(userFacingErrors, "current")) {
   fail(`shared user-facing error behavior ${behaviorFailure}`);
 }
@@ -644,6 +822,14 @@ for (const [label, mutate] of userFacingErrorMutations) {
   if (mutationFailures.length === 0) {
     fail(`user-facing error behavior guard accepted mutation: ${label}`);
   }
+}
+
+const aliasedUserFacingErrorExport = `${userFacingErrors}\nexport { UserFacingError as TrustedError };\n`;
+if (collectUserFacingErrorExportViolations(
+  aliasedUserFacingErrorExport,
+  "Shared user-facing error re-export mutation",
+).length === 0) {
+  fail("user-facing error export guard accepted an aliased constructor re-export");
 }
 
 const login = read("app/(auth)/login.tsx");
@@ -738,6 +924,30 @@ const boundaryMutationCases = [
     collectCustomerErrorBoundaryViolations,
   ],
   [
+    "raw caught error coerced through asserted IIFE",
+    `${login}\nfunction __unsafeRawErrorAssertedIifeMutation(setError) {\n  try { throw new Error(\"provider detail\"); } catch (problem) {\n    setError(((() => String(problem)) as () => string)());\n  }\n}`,
+    "Login raw-error asserted-IIFE mutation",
+    collectCustomerErrorBoundaryViolations,
+  ],
+  [
+    "raw caught error returned by named closure",
+    `${login}\nfunction __unsafeRawErrorClosureMutation(setError) {\n  try { throw new Error(\"provider detail\"); } catch (problem) {\n    const render = () => String(problem);\n    setError(render());\n  }\n}`,
+    "Login raw-error closure mutation",
+    collectCustomerErrorBoundaryViolations,
+  ],
+  [
+    "locally shadowed customer-error sanitizer",
+    `${login}\nfunction __unsafeShadowedSanitizerMutation(setError) {\n  const getUserFacingErrorMessage = (problem) => String(problem);\n  try { throw new Error("provider detail"); } catch (problem) {\n    setError(getUserFacingErrorMessage(problem, "Unable to continue right now."));\n  }\n}`,
+    "Login shadowed-sanitizer mutation",
+    collectCustomerErrorBoundaryViolations,
+  ],
+  [
+    "member-shaped fake customer-error sanitizer",
+    `${login}\nfunction __unsafeMemberSanitizerMutation(setError) {\n  const fake = { getUserFacingErrorMessage: (problem) => String(problem) };\n  try { throw new Error("provider detail"); } catch (problem) {\n    setError(fake.getUserFacingErrorMessage(problem, "Unable to continue right now."));\n  }\n}`,
+    "Login member-sanitizer mutation",
+    collectCustomerErrorBoundaryViolations,
+  ],
+  [
     "catch rest object reaches presentation",
     `${login}\nfunction __unsafeCatchRestMutation(setError) {\n  try { throw new Error(\"provider detail\"); } catch ({ ...problem }) {\n    setError(problem.message);\n  }\n}`,
     "Login catch-rest mutation",
@@ -826,6 +1036,24 @@ const boundaryMutationCases = [
     `${chatDomain}\nfunction __unsafeBoundTrustMutation(created) {\n  const TrustedAlias = UserFacingError.bind(null);\n  throw new TrustedAlias(\"chat_action\", created.error.message);\n}`,
     "Chi'lly Chat bound trust mutation",
     collectCustomerErrorBoundaryViolations,
+  ],
+  [
+    "trusted constructor shadowed by a function parameter",
+    `${chatDomain}\nfunction __unsafeParameterizedTrustMutation(UserFacingError, created) {\n  throw new UserFacingError("chat_action", created.error.message);\n}`,
+    "Chi'lly Chat constructor-parameter mutation",
+    collectCustomerErrorBoundaryViolations,
+  ],
+  [
+    "approved attachment message reassigned to provider detail",
+    `${socialAttachments}\nfunction __unsafeReassignedValidatorMutation(created) {\n  let validationMessage = getSocialAttachmentValidationMessage(created.file);\n  validationMessage = created.error.message;\n  throw new UserFacingError("attachment_action", validationMessage);\n}`,
+    "Social attachments reassigned-validator mutation",
+    collectDomainErrorPolicyViolations,
+  ],
+  [
+    "approved attachment validator shadowed locally",
+    `${socialAttachments}\nfunction __unsafeShadowedValidatorMutation(created) {\n  const getSocialAttachmentValidationMessage = () => created.error.message;\n  const validationMessage = getSocialAttachmentValidationMessage(created.file);\n  throw new UserFacingError("attachment_action", validationMessage);\n}`,
+    "Social attachments shadowed-validator mutation",
+    collectDomainErrorPolicyViolations,
   ],
   [
     "trusted picker guidance downgraded to Error",
@@ -930,6 +1158,14 @@ for (const violation of collectCustomerErrorBoundaryViolations(
   "Safe sanitizer alias behavior",
 )) {
   fail(`customer error-boundary proof rejected a safe sanitizer alias: ${violation}`);
+}
+
+const safeAssignedSanitizerAliasSource = `${login}\nfunction __safeAssignedSanitizerAliasMutation(setError) {\n  let sanitize;\n  sanitize = getUserFacingErrorMessage;\n  try { throw new Error(\"provider detail\"); } catch (problem) {\n    setError(sanitize(problem, \"Unable to continue right now.\"));\n  }\n}`;
+for (const violation of collectCustomerErrorBoundaryViolations(
+  safeAssignedSanitizerAliasSource,
+  "Safe assigned sanitizer alias behavior",
+)) {
+  fail(`customer error-boundary proof rejected a safe assigned sanitizer alias: ${violation}`);
 }
 
 for (const [label, source, unsafeExpression] of [
