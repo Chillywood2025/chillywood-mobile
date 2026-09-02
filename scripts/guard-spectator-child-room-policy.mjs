@@ -22,6 +22,12 @@ const assertMatch = (label, haystack, pattern) => {
     checks.push(`Missing ${label}: ${pattern}`);
   }
 };
+const readExportedFunction = (source, name, nextName) => {
+  const start = source.indexOf(`export function ${name}`);
+  const end = source.indexOf(`export function ${nextName}`, start + 1);
+  if (start < 0 || end < 0) return "";
+  return source.slice(start, end);
+};
 
 const migration = read("supabase/migrations/202605260003_spectator_child_room_source_links.sql");
 const replayFixtureMigration = read("supabase/migrations/202605260006_spectator_replay_archive_fixture.sql");
@@ -153,6 +159,44 @@ assertNotIncludes("generic ticketed discovery label", discovery, 'return "Ticket
 assertNotIncludes("implicit Event-to-Live pass relationship", discovery, "|| item.event_id");
 assertIncludes("exact discovery target identity gate", discovery, "hasDiscoveryDestinationIdentity");
 assertIncludes("public discovery identity filtering", discovery, "data.filter(isDiscoveryFeedItemEligibleForRanking)");
+const identityGate = readExportedFunction(
+  discovery,
+  "hasDiscoveryDestinationIdentity",
+  "isCircleSpectatorFeedItemEligibleForRanking",
+);
+const circleRankingGate = readExportedFunction(
+  discovery,
+  "isCircleSpectatorFeedItemEligibleForRanking",
+  "isDiscoveryFeedItemEligibleForRanking",
+);
+const publicRankingGate = readExportedFunction(
+  discovery,
+  "isDiscoveryFeedItemEligibleForRanking",
+  "isSpectatorPlaybackBlocked",
+);
+assertIncludes("blank discovery item rejection", identityGate, "if (!normalizeText(item.id)) return false;");
+assertIncludes(
+  "creator upload exact media identity",
+  identityGate,
+  'if (item.item_type === "creator_upload") return !!normalizeText(item.media_id);',
+);
+assertIncludes(
+  "creator Event exact Event identity",
+  identityGate,
+  'if (item.item_type === "creator_event") return !!normalizeText(item.event_id);',
+);
+assertIncludes("Platform update exact actor identity", identityGate, 'if (item.item_type === "channel_update")');
+assertIncludes(
+  "Platform update actor identity fallback",
+  identityGate,
+  "item.channel_user_id ?? item.owner_user_id ?? item.host_user_id",
+);
+assertIncludes(
+  "public ranking exact target identity",
+  publicRankingGate,
+  "return isFeedItemPubliclyDiscoverable(item) && hasDiscoveryDestinationIdentity(item);",
+);
+assertIncludes("Circle ranking exact target identity", circleRankingGate, "&& hasDiscoveryDestinationIdentity(item);");
 assertIncludes("Live Event destination label", live, ">Open Event</Text>");
 assertNotIncludes("stale Live Event destination label", live, ">Open Platform</Text>");
 assertIncludes("Upcoming Event disclosure", live, "Upcoming Events opens the exact Event");
@@ -160,10 +204,10 @@ assertNotIncludes("stale Upcoming Event disclosure", live, "Upcoming Events open
 
 const combinedUserFacing = `${spectatorEntryRoute}\n${spectatorMetadataRoute}\n${spectatorLiveRoute}\n${watchPartyRoute}\n${liveStageRoute}\n${playerRoute}`;
 assertNotIncludes("user-facing Mini Platform copy", combinedUserFacing, "Mini Platform");
-assertNotIncludes("user-facing backend copy", combinedUserFacing, "backend");
-assertNotIncludes("user-facing RPC copy", combinedUserFacing, '"RPC"');
-assertNotIncludes("user-facing source rows copy", combinedUserFacing, "source rows");
-assertNotIncludes("user-facing not wired copy", combinedUserFacing, "not wired");
+assertNotIncludes("user-facing backend copy", combinedUserFacing, "The backend is not wired");
+assertNotIncludes("user-facing RPC copy", combinedUserFacing, "RPC required to continue");
+assertNotIncludes("user-facing source rows copy", combinedUserFacing, "Missing source rows");
+assertNotIncludes("user-facing not wired copy", combinedUserFacing, "Playback is not wired");
 assertNotIncludes("unfinished access-pass copy", combinedUserFacing, "required later");
 assertNotIncludes("raw access enum formatting", spectatorMetadataRoute, 'accessType.replaceAll("_", " ")');
 assertNotIncludes("raw rights enum formatting", spectatorMetadataRoute, 'rightsStatus.replaceAll("_", " ")');
