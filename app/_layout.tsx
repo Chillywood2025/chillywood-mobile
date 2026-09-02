@@ -823,8 +823,8 @@ function IncomingCallNotificationBridge() {
           testID="room-safe-incoming-call-banner"
           accessibilityLabel="Room-safe incoming Chi'lly Chat call"
         >
-          <Text style={styles.incomingCallEyebrow}>Chi’lly Chat</Text>
-          <Text style={styles.incomingCallTitle}>Incoming Chi’lly Chat call</Text>
+          <Text style={styles.incomingCallEyebrow}>Chi&apos;lly Chat</Text>
+          <Text style={styles.incomingCallTitle}>Incoming Chi&apos;lly Chat call</Text>
           <Text style={styles.incomingCallBody}>
             Answering will leave or pause your current room media session.
           </Text>

@@ -148,7 +148,7 @@ export function InRoomCommunicationPanel({
       {isFullscreen ? (
         <View style={[styles.fullscreenHeader, fullscreenContentStyle]}>
           <View style={styles.fullscreenHeaderCopy}>
-            <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.kicker}>CHI’LLY CHAT</Text>
+            <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.kicker}>CHI&apos;LLY CHAT</Text>
             <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.fullscreenTitle}>{resolvedTitle}</Text>
             <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.fullscreenBody}>{resolvedBody}</Text>
           </View>
@@ -164,7 +164,7 @@ export function InRoomCommunicationPanel({
         </View>
       ) : (
         <View style={styles.copyBlock}>
-          <Text style={styles.kicker}>CHI’LLY CHAT</Text>
+          <Text style={styles.kicker}>CHI&apos;LLY CHAT</Text>
           <Text style={styles.title}>{resolvedTitle}</Text>
           <Text style={styles.body}>{resolvedBody}</Text>
         </View>

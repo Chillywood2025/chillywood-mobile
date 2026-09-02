@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { parse } from "@babel/parser";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -66,6 +67,9 @@ const textExtensions = new Set([
 
 const canonicalBrand = "Chi" + "'llywood";
 const visibleBrandPattern = /\b[Cc][Hh][Ii](?:['\u2019\u2018`\u00b4\s-]*)[Ll]{1,3}(?:['\u2019\u2018`\u00b4\s-]*)[Yy]?(?:['\u2019\u2018`\u00b4\s-]*)[Ww][Oo][Oo][Dd]\b/gu;
+const productNamePattern = /\bchi(['\u2019\u2018`\u00b4-]?)lly\s+(chat|circle)\b/giu;
+const productEntityPattern = /\bchi&(?:apos|rsquo|lsquo|#(?:39|8216|8217)|#x(?:27|2018|2019));lly\s+(?:chat|circle)\b/giu;
+const javascriptExtensions = new Set([".cjs", ".js", ".jsx", ".mjs", ".ts", ".tsx"]);
 
 const technicalLowercaseContextPattern =
   /(?:com\.chillywood\.mobile|chillywood-mobile|chillywoodstream\.com|chillywood\.test|chillywood-[a-z0-9-]+\.(?:png|jpg|jpeg|webp|svg)|[./@_-]chillywood|chillywood[./@_-])/u;
@@ -127,7 +131,153 @@ function isAllowedTechnicalMatch(relativePath, candidate, line) {
 }
 
 const violations = [];
+const violationKeys = new Set();
 const visitedPaths = new Set();
+
+function addViolation(relativePath, line, candidate) {
+  const key = `${relativePath}:${line}:${candidate}`;
+  if (violationKeys.has(key)) return;
+  violationKeys.add(key);
+  violations.push(key);
+}
+
+function getRenderedProductNameViolations(value, { rejectLiteralEntities = true } = {}) {
+  const text = String(value ?? "");
+  const findings = [];
+  for (const match of text.matchAll(productNamePattern)) {
+    if (match[1] === "'") continue;
+    findings.push(match[0]);
+  }
+  if (rejectLiteralEntities) {
+    for (const match of text.matchAll(productEntityPattern)) {
+      findings.push(match[0]);
+    }
+  }
+  return findings;
+}
+
+function inspectRenderedProductNames(relativePath, line, value) {
+  for (const candidate of getRenderedProductNameViolations(value)) {
+    addViolation(relativePath, line, candidate);
+  }
+}
+
+function staticStringValue(node) {
+  if (!node || typeof node !== "object") return null;
+  if (node.type === "StringLiteral" || node.type === "JSXText") return node.value;
+  if (node.type === "TemplateLiteral") {
+    let value = node.quasis[0]?.value.cooked ?? node.quasis[0]?.value.raw ?? "";
+    for (let index = 0; index < node.expressions.length; index += 1) {
+      const expression = staticStringValue(node.expressions[index]);
+      if (expression === null) return null;
+      const quasi = node.quasis[index + 1];
+      value += expression + (quasi?.value.cooked ?? quasi?.value.raw ?? "");
+    }
+    return value;
+  }
+  if (node.type === "BinaryExpression" && node.operator === "+") {
+    const left = staticStringValue(node.left);
+    const right = staticStringValue(node.right);
+    return left === null || right === null ? null : `${left}${right}`;
+  }
+  return null;
+}
+
+function getJavaScriptProductNameViolations(relativePath, text) {
+  if (!/(?:chat|circle|lly|\\[ux]|&#|&(?:apos|rsquo|lsquo);)/iu.test(text)) return [];
+  const extension = path.extname(relativePath);
+  const plugins = ["jsx", "decorators-legacy", "classProperties", "classPrivateProperties", "classPrivateMethods", "importAttributes"];
+  if (extension === ".ts" || extension === ".tsx") plugins.push("typescript");
+  const ast = parse(text, { sourceType: "unambiguous", plugins });
+  const seen = new WeakSet();
+  const findings = [];
+  const visit = (node) => {
+    if (!node || typeof node !== "object" || seen.has(node)) return;
+    seen.add(node);
+    if (["StringLiteral", "JSXText", "TemplateLiteral", "BinaryExpression"].includes(node.type)) {
+      const value = staticStringValue(node);
+      if (value !== null) {
+        for (const candidate of getRenderedProductNameViolations(value)) {
+          findings.push({ line: node.loc?.start.line ?? 1, candidate });
+        }
+      }
+    }
+    for (const child of Object.values(node)) {
+      if (Array.isArray(child)) child.forEach(visit);
+      else visit(child);
+    }
+  };
+  visit(ast);
+  return findings;
+}
+
+function inspectJavaScriptProductNames(relativePath, text) {
+  for (const finding of getJavaScriptProductNameViolations(relativePath, text)) {
+    addViolation(relativePath, finding.line, finding.candidate);
+  }
+}
+
+function decodeNonJavaScriptProductText(relativePath, value) {
+  let text = String(value ?? "")
+    .replace(/\\u\{([0-9a-f]{1,6})\}/giu, (_match, codePoint) => String.fromCodePoint(Number.parseInt(codePoint, 16)))
+    .replace(/\\u([0-9a-f]{4})/giu, (_match, codePoint) => String.fromCodePoint(Number.parseInt(codePoint, 16)))
+    .replace(/["'`]\s*\+\s*["'`]/gu, "");
+  if ([".htm", ".html"].includes(path.extname(relativePath))) {
+    text = text
+      .replace(/&(?:apos|#39|#x27);/giu, "'")
+      .replace(/&(?:rsquo|#8217|#x2019);/giu, "\u2019")
+      .replace(/&(?:lsquo|#8216|#x2018);/giu, "\u2018");
+  }
+  return text;
+}
+
+function getNonJavaScriptProductNameViolations(relativePath, value) {
+  return getRenderedProductNameViolations(
+    decodeNonJavaScriptProductText(relativePath, value),
+    { rejectLiteralEntities: ![".htm", ".html"].includes(path.extname(relativePath)) },
+  );
+}
+
+const productNameMutationCases = [
+  "const label = <Text>CHI’LLY CHAT</Text>;",
+  "const label = \"Chi\\u2019lly Chat\";",
+  "const label = \"Chi\" + \"’lly Circle\";",
+  "const label = \"Chi&rsquo;lly Chat\";",
+  "const label = \"Chi&#8217;lly Circle\";",
+  "const label = \"Chi&#x2019;lly Chat\";",
+  "const label = \"Chilly Chat\";",
+  "const label = \"Chi-lly Circle\";",
+  "const label = <Text>{\"Chi&apos;lly Chat\"}</Text>;",
+  "const label = `${\"Chi\"}\u2019lly Chat`;",
+  "const label = \"\\u0043hi\\u2019lly \\u0043hat\";",
+  "const label = \"\\x43\\x68\\x69\\x60\\x6c\\x6c\\x79\\x20\\x43\\x68\\x61\\x74\";",
+];
+for (const source of productNameMutationCases) {
+  if (getJavaScriptProductNameViolations("guard-product-name-fixture.tsx", source).length === 0) {
+    throw new Error(`Brand spelling guard self-test accepted noncanonical product source: ${source}`);
+  }
+}
+for (const source of [
+  "const label = <Text>CHI&apos;LLY CHAT</Text>;",
+  "const label = \"Chi'lly Circle\";",
+]) {
+  if (getJavaScriptProductNameViolations("guard-product-name-fixture.tsx", source).length > 0) {
+    throw new Error(`Brand spelling guard self-test rejected canonical product source: ${source}`);
+  }
+}
+for (const source of [
+  "let label = \"Chi\\u{2019}lly Circle\"",
+  "let label = \"Chi\" + \"’lly Circle\"",
+  "let label = \"Chi\" +\n  \"’lly Circle\"",
+  "let label = \"Chi&apos;lly Chat\"",
+]) {
+  if (getNonJavaScriptProductNameViolations("guard-product-name-fixture.swift", source).length === 0) {
+    throw new Error(`Brand spelling guard self-test accepted noncanonical non-JavaScript source: ${source}`);
+  }
+}
+if (getNonJavaScriptProductNameViolations("guard-product-name-fixture.html", "<p>Chi&apos;lly Chat</p>").length > 0) {
+  throw new Error("Brand spelling guard self-test rejected canonical HTML entity rendering");
+}
 
 for (const filePath of walk(repoRoot)) {
   const relativePath = path.relative(repoRoot, filePath);
@@ -140,9 +290,16 @@ for (const filePath of walk(repoRoot)) {
       if (candidate === canonicalBrand) continue;
       if (isAllowedTechnicalMatch(relativePath, candidate, line)) continue;
       if (relativePath === "scripts/guard-brand-spelling-policy.mjs") continue;
-      violations.push(`${relativePath}:${index + 1}: ${candidate}`);
+      addViolation(relativePath, index + 1, candidate);
     }
   });
+  if (javascriptExtensions.has(path.extname(relativePath))) {
+    inspectJavaScriptProductNames(relativePath, text);
+  } else {
+    for (const candidate of getNonJavaScriptProductNameViolations(relativePath, text)) {
+      addViolation(relativePath, 1, candidate);
+    }
+  }
 }
 
 const missingCoveragePaths = [...requiredCoveragePaths]
@@ -155,7 +312,7 @@ if (missingCoveragePaths.length > 0) {
 }
 
 if (violations.length > 0) {
-  console.error("Brand spelling guard failed. Canonical visible brand is Chi'llywood.");
+  console.error("Brand spelling guard failed. Canonical visible names use the straight apostrophe in Chi'llywood, Chi'lly Chat, and Chi'lly Circle.");
   console.error("Fix no-y visible brand variants; keep technical identifiers like com.chillywood.mobile unchanged.");
   for (const violation of violations) console.error(`- ${violation}`);
   process.exit(1);

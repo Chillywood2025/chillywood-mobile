@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { parse } from "@babel/parser";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -49,8 +50,24 @@ const filesToScanForEntities = [
 
 for (const file of filesToScanForEntities) {
   const source = read(file);
-  assertNotIncludes(source, "&apos;", file);
   assertNotIncludes(source, "&#39;", file);
+  const ast = parse(source, { sourceType: "unambiguous", plugins: ["typescript", "jsx"] });
+  const seen = new WeakSet();
+  const visit = (node) => {
+    if (!node || typeof node !== "object" || seen.has(node)) return;
+    seen.add(node);
+    if (node.type === "StringLiteral" && node.value.includes("&apos;")) {
+      fail(`${file} must not preserve &apos; inside a JavaScript string expression`);
+    }
+    if (node.type === "TemplateElement" && (node.value.cooked ?? node.value.raw).includes("&apos;")) {
+      fail(`${file} must not preserve &apos; inside a JavaScript template expression`);
+    }
+    for (const child of Object.values(node)) {
+      if (Array.isArray(child)) child.forEach(visit);
+      else visit(child);
+    }
+  };
+  visit(ast);
 }
 
 const userFacingErrors = read("_lib/userFacingErrors.ts");

@@ -95,7 +95,7 @@ export function CreatorContentActionSheet({
             {video?.title || "Creator content"}
           </AppText>
           <AppText scale="footnote" style={styles.body}>
-            Owner actions apply only to this content item. Drafts stay owner-only, Chi’lly Circle content stays member-only, and public content stays eligible only where backed.
+            Owner actions apply only to this content item. Drafts stay owner-only, Chi&apos;lly Circle content stays member-only, and public content stays eligible only where backed.
           </AppText>
 
           <ScrollView style={styles.actionScroll} contentContainerStyle={styles.actionList}>

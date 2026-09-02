@@ -516,7 +516,7 @@ export default function ChillyChatInboxScreen() {
                         style={[styles.suggestionActionButton, isOpening && styles.suggestionActionButtonDisabled]}
                         onPress={() => openSearchSuggestion(person)}
                       >
-                        <Text style={styles.suggestionActionButtonText}>Chi’lly Chat</Text>
+                        <Text style={styles.suggestionActionButtonText}>Chi&apos;lly Chat</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         testID={`chat-search-suggestion-voice-${index}`}
@@ -560,7 +560,7 @@ export default function ChillyChatInboxScreen() {
 
   const listHeader = useMemo(() => (
     <View style={styles.header}>
-      <Text style={styles.kicker}>CHI’LLY CHAT</Text>
+      <Text style={styles.kicker}>CHI&apos;LLY CHAT</Text>
       <Text style={styles.title}>Inbox</Text>
       <Text style={styles.body}>
         Direct threads, voice, and video live here.
@@ -746,9 +746,9 @@ export default function ChillyChatInboxScreen() {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
         <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>Sign in to open Chi’lly Chat</Text>
+          <Text style={styles.emptyTitle}>Sign in to open Chi&apos;lly Chat</Text>
           <Text style={styles.emptyBody}>
-            Chi’lly Chat inbox, direct threads, voice, and video only open on a signed-in Chi&apos;llywood identity.
+            Chi&apos;lly Chat inbox, direct threads, voice, and video only open on a signed-in Chi&apos;llywood identity.
           </Text>
           <TouchableOpacity
             style={[styles.quickActionButton, styles.quickActionAccentButton]}
@@ -772,7 +772,7 @@ export default function ChillyChatInboxScreen() {
         <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>Chat is not available for this account.</Text>
           <Text style={styles.emptyBody}>
-            This account is restricted or suspended, so Chi’lly Chat inbox, direct threads, voice, and video are denied right now.
+            This account is restricted or suspended, so Chi&apos;lly Chat inbox, direct threads, voice, and video are denied right now.
           </Text>
           <Text style={styles.emptyBody}>
             Contact support or use the account appeal path if you believe this is a mistake.
