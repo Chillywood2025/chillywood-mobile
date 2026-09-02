@@ -19,6 +19,16 @@ const assertNotIncludes = (source, needle, label) => {
   if (source.includes(needle)) fail(`${label} must not include ${needle}`);
 };
 
+const hasStaleStaticChannelMessage = (source) => source
+    .split(/\r?\n/u)
+    .some((line) => /\bmessage:\s*["'`]/u.test(line) && /\bchannel\b/iu.test(line));
+
+const assertStaticMessagesUsePlatformTerminology = (source, label) => {
+  if (hasStaleStaticChannelMessage(source)) {
+    fail(`${label} exposes stale Channel terminology in a customer-facing message`);
+  }
+};
+
 const tabs = read("app/(tabs)/_layout.tsx");
 const liveTab = read("app/(tabs)/live.tsx");
 const profileTab = read("app/(tabs)/profile.tsx");
@@ -209,6 +219,7 @@ assertIncludes(roomBlueprint, "Party Room must not hand off to Live Stage", "Par
 
 [
   [channelAudience, "Platform followed.", "Platform follow confirmation"],
+  [channelAudience, "You cannot follow your own Platform.", "Platform self-follow copy"],
   [channelAudience, "Only the Platform owner or an authorized admin can review this audience request.", "Platform audience authority copy"],
   [channelSubscriptions, "Platform Subscription received. Waiting for verified access to finish syncing.", "Platform Subscription sync copy"],
   [creatorVipPasses, "Creator-specific VIP access for this Platform only.", "VIP Platform isolation copy"],
@@ -216,10 +227,15 @@ assertIncludes(roomBlueprint, "Party Room must not hand off to Live Stage", "Par
   [friendGraph, "Chi'lly Circle is unavailable while a Platform audience block exists between these accounts.", "Chi'lly Circle Platform copy"],
   [channelReadModels, "This Platform could not be identified.", "Platform read-model error copy"],
   [accessEntitlements, "The Platform owner or profile defaults are still missing.", "Platform access diagnostic copy"],
+  [accessEntitlements, "No explicit Platform profile was available, so access fell back to open defaults.", "Platform access fallback copy"],
   [dmca, "Warn a user or Platform that active copyright strikes have triggered review.", "copyright Platform copy"],
   [channelSubscriptionRoute, "Back to Platform", "Platform Subscription return action"],
+  [channelSubscriptionRoute, "Back to creator Platform", "Platform Subscription return accessibility label"],
   [vipPassRoute, "Back to Platform", "VIP return action"],
+  [vipPassRoute, "Back to creator Platform", "VIP return accessibility label"],
 ].forEach(([source, needle, label]) => assertIncludes(source, needle, label));
+
+assertStaticMessagesUsePlatformTerminology(channelAudience, "Platform audience copy");
 
 [
   [channelAudience, "Channel follow requires a channel user id.", "Platform audience copy"],
@@ -231,10 +247,24 @@ assertIncludes(roomBlueprint, "Party Room must not hand off to Live Stage", "Par
   [friendGraph, "channel audience block", "Chi'lly Circle copy"],
   [channelReadModels, "Channel user id is required.", "Platform read-model copy"],
   [accessEntitlements, "Channel user id or profile defaults", "Platform access diagnostic copy"],
+  [accessEntitlements, "No explicit channel profile row", "Platform access fallback copy"],
   [dmca, "Warn a user or channel", "copyright copy"],
   [channelSubscriptionRoute, "Back to channel", "Platform Subscription return action"],
+  [channelSubscriptionRoute, "Back to creator channel", "Platform Subscription return accessibility label"],
   [vipPassRoute, "Back to channel", "VIP return action"],
+  [vipPassRoute, "Back to creator channel", "VIP return accessibility label"],
 ].forEach(([source, needle, label]) => assertNotIncludes(source, needle, label));
+
+[
+  'message: "You cannot follow your own channel."',
+  'message: "Only the channel owner can review this request."',
+  "message: 'Channel follow failed.'",
+  "message: `This channel is unavailable.`",
+].forEach((mutant) => {
+  if (!hasStaleStaticChannelMessage(mutant)) {
+    fail(`Platform audience guard accepted stale-message mutant: ${mutant}`);
+  }
+});
 
 if (process.exitCode) {
   process.exit();
