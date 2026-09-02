@@ -1,0 +1,78 @@
+{
+  "implementationPrNumber": 329,
+  "implementationBranch": "codex/watch-party-live-money-rfgc",
+  "implementationHead": "9bdd36eef3ddfb54bf92582017a4d4b8ddaad720",
+  "implementationTree": "832028147eb6ffb5a44a0c6740946ca62e152fd5",
+  "baseHead": "8dfa0faf388cdc05d313b971418609347ee1c229",
+  "changedFileHash": "50fe6d7333533484f757b4bf81965dd6607c78573f0f8eaab9b63ab67aaff390",
+  "migrationSetHash": "935a9933f03da3fad64878641f1683fbaae69a708ea30d15d072ee6e56797fb1",
+  "configHash": "c1bc1188b7bf22a0b4008e24a11a89121794e543af2321edd0a4ba38536a6fd5",
+  "testResults": {
+    "phase1Ci": {
+      "status": "pass",
+      "qualification": "SUBSTANTIVE_PASS_ASSURANCE_ONLY_CONTROL_PLANE_BLOCKED",
+      "runId": 33576358204,
+      "implementationHead": "9bdd36eef3ddfb54bf92582017a4d4b8ddaad720",
+      "substantiveChecks": {
+        "passed": 10,
+        "failed": 0
+      },
+      "assuranceOnlyFailures": [
+        "ASSURANCE_TASK_CONTEXT_UNBOUND",
+        "ASSURANCE_PR_FILE_BUDGET_EXCEEDED",
+        "ASSURANCE_PR_LINE_BUDGET_EXCEEDED",
+        "ASSURANCE_MIXED_HIGH_RISK_SCOPE",
+        "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN",
+        "ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND"
+      ]
+    },
+    "database": {
+      "files": 80,
+      "assertions": 2996,
+      "status": "pass"
+    },
+    "focused": {
+      "watchPartyPgTap": "59/59 pass",
+      "legacyPgTap": "176/176 pass",
+      "nodeRoutes": "7/7 pass",
+      "denoLiveKit": "10/10 pass"
+    },
+    "static": {
+      "lint": "0 errors",
+      "typecheck": "pass",
+      "nativeGuards": "pass",
+      "dependencyAudit": "critical 0 high 0 moderate 26"
+    },
+    "security": {
+      "scanId": "3a7a8ebe-ff96-4d0d-b802-8e4c15be518b",
+      "coverage": "complete",
+      "findings": 0
+    }
+  },
+  "testResultHash": "0af9fdcc52b7853eea46fe7aa817a6c4389012fa5760ab6c93cdd5970f9fe1b6",
+  "reviewLevel": "C",
+  "reviewHead": "9bdd36eef3ddfb54bf92582017a4d4b8ddaad720",
+  "reviewTimestamp": "2026-09-02T00:47:49.836Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback"
+  ],
+  "findings": [
+    {
+      "id": "RFGC-ASSURANCE-CONTROL-PLANE-001",
+      "severity": "P2",
+      "status": "owner_authorized_assurance_only_bypass",
+      "launchImpacting": false,
+      "detail": "The overall Phase 1 run concluded failure only because the Owner-directed task is unbound in the derived assurance packet and its scope waiver is not machine-recognized. Every substantive Phase 1 job passed."
+    },
+    {
+      "id": "RFGC-PROVIDER-PHYSICAL-LIMIT-002",
+      "severity": "P2",
+      "status": "provider_sandbox_limited",
+      "launchImpacting": false,
+      "detail": "No real charge, production provider mutation, fabricated entitlement, or fake role was permitted; installed positive purchase proof remains sandbox/provider limited."
+    }
+  ]
+}
