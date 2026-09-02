@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
 import { parse } from "@babel/parser";
+import traverseModule from "@babel/traverse";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+
+const traverse = traverseModule.default ?? traverseModule;
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
@@ -20,62 +23,52 @@ const assertNotIncludes = (source, needle, label) => {
   if (source.includes(needle)) fail(`${label} must not include ${needle}`);
 };
 
-const staticStringValue = (node) => {
-  if (!node || typeof node !== "object") return null;
-  if (node.type === "StringLiteral") return node.value;
-  if (node.type === "TemplateLiteral") {
-    let value = node.quasis[0]?.value.cooked ?? node.quasis[0]?.value.raw ?? "";
-    for (let index = 0; index < node.expressions.length; index += 1) {
-      const expression = staticStringValue(node.expressions[index]);
-      if (expression === null) return null;
-      const quasi = node.quasis[index + 1];
-      value += expression + (quasi?.value.cooked ?? quasi?.value.raw ?? "");
-    }
-    return value;
-  }
-  if (node.type === "BinaryExpression" && node.operator === "+") {
-    const left = staticStringValue(node.left);
-    const right = staticStringValue(node.right);
-    return left === null || right === null ? null : `${left}${right}`;
-  }
-  if (["ParenthesizedExpression", "TSAsExpression", "TSTypeAssertion", "TSSatisfiesExpression", "TSNonNullExpression"].includes(node.type)) {
-    return staticStringValue(node.expression);
-  }
-  return null;
-};
-
-const staticPropertyKey = (node) => {
-  if (!node || typeof node !== "object") return null;
-  if (!node.computed && node.key?.type === "Identifier") return node.key.name;
-  return staticStringValue(node.key);
-};
-
 const parseSource = (source) => parse(source, {
   sourceType: "unambiguous",
   plugins: ["typescript", "jsx", "decorators-legacy", "classProperties", "classPrivateProperties", "classPrivateMethods", "importAttributes"],
 });
 
+const evaluateStringPath = (nodePath) => {
+  const evaluated = nodePath?.evaluate?.();
+  return evaluated?.confident && typeof evaluated.value === "string" ? evaluated.value : null;
+};
+
+const pathContainsChannelText = (nodePath) => {
+  const evaluated = evaluateStringPath(nodePath);
+  if (evaluated !== null && /\bchannel\b/iu.test(evaluated)) return true;
+
+  const fragments = [];
+  const collectStringLiteral = (stringPath) => {
+    fragments.push(stringPath.node.value);
+  };
+  const collectTemplateElement = (templatePath) => {
+    fragments.push(templatePath.node.value.cooked ?? templatePath.node.value.raw ?? "");
+  };
+  if (nodePath.isStringLiteral()) collectStringLiteral(nodePath);
+  if (nodePath.isTemplateLiteral()) {
+    nodePath.get("quasis").forEach(collectTemplateElement);
+  }
+  nodePath.traverse({
+    StringLiteral: collectStringLiteral,
+    TemplateElement: collectTemplateElement,
+  });
+  return fragments.some((fragment) => /\bchannel\b/iu.test(fragment))
+    || /\bchannel\b/iu.test(fragments.join(""));
+};
+
 const hasStaleStaticChannelMessage = (source) => {
   const ast = parseSource(source);
-  const seen = new WeakSet();
   let stale = false;
-  const visit = (node) => {
-    if (stale || !node || typeof node !== "object" || seen.has(node)) return;
-    seen.add(node);
-    if (node.type === "ObjectProperty") {
-      const key = staticPropertyKey(node);
-      const value = key === "message" ? staticStringValue(node.value) : null;
-      if (value !== null && /\bchannel\b/iu.test(value)) {
-        stale = true;
-        return;
-      }
-    }
-    for (const child of Object.values(node)) {
-      if (Array.isArray(child)) child.forEach(visit);
-      else visit(child);
-    }
-  };
-  visit(ast);
+  traverse(ast, {
+    ObjectProperty(propertyPath) {
+      if (stale) return;
+      const keyPath = propertyPath.get("key");
+      const key = !propertyPath.node.computed && keyPath.isIdentifier()
+        ? keyPath.node.name
+        : evaluateStringPath(keyPath);
+      if (key === "message" && pathContainsChannelText(propertyPath.get("value"))) stale = true;
+    },
+  });
   return stale;
 };
 
@@ -93,26 +86,18 @@ const approvedCircleErrors = new Set([
 
 const findUnsafeThrownErrors = (source) => {
   const ast = parseSource(source);
-  const seen = new WeakSet();
   const unsafe = [];
-  const visit = (node) => {
-    if (!node || typeof node !== "object" || seen.has(node)) return;
-    seen.add(node);
-    if (node.type === "ThrowStatement") {
-      const argument = node.argument;
-      const message = argument?.type === "NewExpression"
-        && argument.callee?.type === "Identifier"
-        && argument.callee.name === "Error"
-        ? staticStringValue(argument.arguments?.[0])
+  traverse(ast, {
+    ThrowStatement(throwPath) {
+      const argumentPath = throwPath.get("argument");
+      const calleePath = argumentPath.isNewExpression() ? argumentPath.get("callee") : null;
+      const argumentPaths = argumentPath.isNewExpression() ? argumentPath.get("arguments") : [];
+      const message = calleePath?.isIdentifier({ name: "Error" })
+        ? evaluateStringPath(argumentPaths[0])
         : null;
-      if (message === null || !approvedCircleErrors.has(message)) unsafe.push(node.type);
-    }
-    for (const child of Object.values(node)) {
-      if (Array.isArray(child)) child.forEach(visit);
-      else visit(child);
-    }
-  };
-  visit(ast);
+      if (message === null || !approvedCircleErrors.has(message)) unsafe.push(throwPath.node.type);
+    },
+  });
   return unsafe;
 };
 
@@ -372,6 +357,18 @@ if (findUnsafeThrownErrors(friendGraph).length > 0) {
 ].forEach((mutant) => {
   if (!hasStaleStaticChannelMessage(`({ ${mutant} })`)) {
     fail(`Platform audience guard accepted stale-message mutant: ${mutant}`);
+  }
+});
+
+[
+  'const stale = "This channel is unavailable."; ({ message: stale });',
+  'const key = "message"; ({ [key]: "This channel is unavailable." });',
+  '({ message: `Open ${creatorName} channel.` });',
+  '({ message: "This channel is " + status });',
+  '({ ["message"]: `Open ${creatorName} channel.` });',
+].forEach((mutant) => {
+  if (!hasStaleStaticChannelMessage(mutant)) {
+    fail(`Platform audience guard accepted binding/dynamic stale-message mutant: ${mutant}`);
   }
 });
 
