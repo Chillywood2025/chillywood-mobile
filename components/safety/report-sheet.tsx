@@ -308,6 +308,7 @@ export function ReportSheet({
                     accessibilityLabel="Open Copyright Report"
                     accessibilityState={{ disabled: busy }}
                     onPress={() => {
+                      if (busy) return;
                       closeAndReset();
                       router.push(
                         "/copyright-report" as Parameters<

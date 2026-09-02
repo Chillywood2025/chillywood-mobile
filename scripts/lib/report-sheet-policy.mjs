@@ -1,117 +1,89 @@
 import { parse } from "@babel/parser";
-
-const isNode = (value) =>
-  Boolean(value && typeof value === "object" && typeof value.type === "string");
-
+const isNode = (value) => Boolean(value && typeof value === "object" && typeof value.type === "string");
 const walk = (node, visit) => {
   if (!isNode(node)) return;
   visit(node);
+  if (node.type === "LogicalExpression" && node.operator === "&&" &&
+    node.left?.type === "BooleanLiteral") {
+    if (node.left.value) walk(node.right, visit);
+    return;
+  }
+  if (node.type === "ConditionalExpression" && node.test?.type === "BooleanLiteral") {
+    walk(node.test.value ? node.consequent : node.alternate, visit);
+    return;
+  }
   for (const [key, value] of Object.entries(node)) {
     if (["loc", "start", "end", "extra", "comments"].includes(key)) continue;
     if (Array.isArray(value)) value.forEach((entry) => walk(entry, visit));
     else walk(value, visit);
   }
 };
-
 const unwrap = (node) => {
   let current = node;
-  while (
-    current?.type === "TSAsExpression" ||
+  while (current?.type === "TSAsExpression" ||
     current?.type === "TSTypeAssertion" ||
     current?.type === "TSNonNullExpression" ||
-    current?.type === "ParenthesizedExpression"
-  ) {
+    current?.type === "ParenthesizedExpression") {
     current = current.expression;
   }
   return current;
 };
-
 const isIdentifier = (node, name) =>
   unwrap(node)?.type === "Identifier" && unwrap(node).name === name;
-
 const memberMatches = (node, objectName, propertyName) => {
   const member = unwrap(node);
-  if (
-    member?.type !== "MemberExpression" &&
-    member?.type !== "OptionalMemberExpression"
-  ) {
-    return false;
-  }
+  if (member?.type !== "MemberExpression" &&
+    member?.type !== "OptionalMemberExpression") return false;
   const property = member.computed
     ? unwrap(member.property)?.value
     : unwrap(member.property)?.name;
   return isIdentifier(member.object, objectName) && property === propertyName;
 };
-
 const callMatches = (node, calleeName) => {
   const call = unwrap(node);
-  return (
-    call?.type === "CallExpression" && isIdentifier(call.callee, calleeName)
-  );
+  return call?.type === "CallExpression" && isIdentifier(call.callee, calleeName);
 };
-
 const directVariable = (block, name) => {
   if (block?.type !== "BlockStatement") return null;
   for (const statement of block.body) {
     if (statement.type !== "VariableDeclaration") continue;
-    const declaration = statement.declarations.find((entry) =>
-      isIdentifier(entry.id, name),
-    );
+    const declaration = statement.declarations.find((entry) => isIdentifier(entry.id, name));
     if (declaration) return declaration;
   }
   return null;
 };
-
 const directCall = (block, calleeName) => {
   if (block?.type !== "BlockStatement") return null;
   for (const statement of block.body) {
-    const expression =
-      statement.type === "ExpressionStatement"
-        ? unwrap(statement.expression)
-        : null;
-    const candidate =
-      expression?.type === "UnaryExpression" && expression.operator === "void"
-        ? unwrap(expression.argument)
-        : expression;
+    const expression = statement.type === "ExpressionStatement"
+      ? unwrap(statement.expression) : null;
+    const candidate = expression?.type === "UnaryExpression" &&
+      expression.operator === "void" ? unwrap(expression.argument) : expression;
     if (callMatches(candidate, calleeName)) return candidate;
   }
   return null;
 };
-
 const statementCall = (statement, calleeName, expectedValue) => {
-  const expression =
-    statement?.type === "ExpressionStatement"
-      ? unwrap(statement.expression)
-      : null;
-  const candidate =
-    expression?.type === "UnaryExpression" && expression.operator === "void"
-      ? unwrap(expression.argument)
-      : expression;
+  const expression = statement?.type === "ExpressionStatement"
+    ? unwrap(statement.expression) : null;
+  const candidate = expression?.type === "UnaryExpression" &&
+    expression.operator === "void" ? unwrap(expression.argument) : expression;
   if (!callMatches(candidate, calleeName)) return false;
   if (expectedValue === undefined) return candidate.arguments.length === 0;
   const argument = unwrap(candidate.arguments[0]);
-  return (
-    candidate.arguments.length === 1 &&
-    argument?.type === "StringLiteral" &&
-    argument.value === expectedValue
-  );
+  return candidate.arguments.length === 1 && argument?.type === "StringLiteral" &&
+    argument.value === expectedValue;
 };
-
 const exactResetBlock = (block, includeClose) => {
   const expectedLength = includeClose ? 3 : 2;
-  if (
-    block?.type !== "BlockStatement" ||
-    block.body.length !== expectedLength
-  ) {
+  if (block?.type !== "BlockStatement" || block.body.length !== expectedLength)
     return false;
-  }
   return (
     statementCall(block.body[0], "setCategoryKey", "harassment_bullying") &&
     statementCall(block.body[1], "setNote", "") &&
     (!includeClose || statementCall(block.body[2], "onClose"))
   );
 };
-
 const exactBusyCloseBlock = (block) => {
   if (block?.type !== "BlockStatement" || block.body.length !== 4) return false;
   const busyGuard = block.body[0];
@@ -126,14 +98,11 @@ const exactBusyCloseBlock = (block) => {
     statementCall(block.body[3], "onClose")
   );
 };
-
 const collectBindings = (statements) => {
   const bindings = new Map();
   for (const statement of statements ?? []) {
-    const declaration =
-      statement.type === "ExportNamedDeclaration"
-        ? statement.declaration
-        : statement;
+    const declaration = statement.type === "ExportNamedDeclaration"
+      ? statement.declaration : statement;
     if (declaration?.type !== "VariableDeclaration") continue;
     for (const entry of declaration.declarations) {
       if (entry.id?.type === "Identifier" && entry.init)
@@ -142,7 +111,6 @@ const collectBindings = (statements) => {
   }
   return bindings;
 };
-
 const staticString = (node, bindings, seen = new Set()) => {
   const value = unwrap(node);
   if (!value) return null;
@@ -169,6 +137,29 @@ const staticString = (node, bindings, seen = new Set()) => {
     const right = staticString(value.right, bindings, seen);
     return left === null || right === null ? null : `${left}${right}`;
   }
+  if (value.type === "CallExpression") {
+    const callee = unwrap(value.callee);
+    const property = callee?.computed
+      ? unwrap(callee.property)?.value
+      : unwrap(callee?.property)?.name;
+    const items = unwrap(callee?.object);
+    const separator =
+      value.arguments.length === 0
+        ? ","
+        : staticString(value.arguments[0], bindings, seen);
+    if (
+      (callee?.type === "MemberExpression" ||
+        callee?.type === "OptionalMemberExpression") &&
+      property === "join" &&
+      items?.type === "ArrayExpression" &&
+      separator !== null
+    ) {
+      const values = items.elements.map((entry) =>
+        staticString(entry, bindings, seen),
+      );
+      if (values.every((entry) => entry !== null)) return values.join(separator);
+    }
+  }
   if (
     value.type === "Identifier" &&
     bindings.has(value.name) &&
@@ -180,10 +171,11 @@ const staticString = (node, bindings, seen = new Set()) => {
   }
   return null;
 };
-
 const stringSkeleton = (node, bindings, seen = new Set()) => {
   const value = unwrap(node);
   if (!value) return "";
+  const exact = staticString(value, bindings, seen);
+  if (exact !== null) return exact;
   if (value.type === "StringLiteral") return value.value;
   if (value.type === "TemplateLiteral") {
     return value.quasis
@@ -210,12 +202,10 @@ const stringSkeleton = (node, bindings, seen = new Set()) => {
   }
   return " ";
 };
-
 const jsxName = (element) => {
   const name = element?.openingElement?.name;
   return name?.type === "JSXIdentifier" ? name.name : null;
 };
-
 const jsxAttribute = (element, name) =>
   element?.openingElement?.attributes?.find(
     (attribute) =>
@@ -223,21 +213,27 @@ const jsxAttribute = (element, name) =>
       attribute.name?.type === "JSXIdentifier" &&
       attribute.name.name === name,
   ) ?? null;
-
 const jsxAttributeExpression = (element, name) => {
   const attribute = jsxAttribute(element, name);
   return attribute?.value?.type === "JSXExpressionContainer"
     ? unwrap(attribute.value.expression)
     : null;
 };
-
 const jsxAttributeString = (element, name) => {
   const attribute = jsxAttribute(element, name);
   return attribute?.value?.type === "StringLiteral"
     ? attribute.value.value
     : null;
 };
-
+const exactBusyStyle = (element, styleName) => {
+  const value = jsxAttributeExpression(element, "style");
+  const busyStyle = unwrap(value?.elements?.[1]);
+  return value?.type === "ArrayExpression" && value.elements.length === 2 &&
+    memberMatches(value.elements[0], "styles", styleName) &&
+    busyStyle?.type === "LogicalExpression" && busyStyle.operator === "&&" &&
+    isIdentifier(busyStyle.left, "busy") &&
+    memberMatches(busyStyle.right, "styles", "buttonDisabled");
+};
 const jsxElements = (node, name) => {
   const elements = [];
   walk(node, (candidate) => {
@@ -274,15 +270,16 @@ const jsxRendersIdentifier = (element, name) => {
 const objectProperty = (object, name) => {
   const value = unwrap(object);
   if (value?.type !== "ObjectExpression") return null;
-  return (
-    value.properties.find((property) => {
+  if (value.properties.some((property) => property.type === "SpreadElement"))
+    return null;
+  const matches = value.properties.filter((property) => {
       if (property.type !== "ObjectProperty") return false;
       const key = property.computed
         ? unwrap(property.key)?.value
         : (property.key?.name ?? property.key?.value);
       return key === name;
-    }) ?? null
-  );
+    });
+  return matches.length === 1 ? matches[0] : null;
 };
 
 const objectPropertyValue = (object, name) =>
@@ -438,8 +435,8 @@ const validateVisibilityReset = (reportSheet, findings) => {
     );
 };
 
-const validateSubmitHandler = (reportSheet, findings) => {
-  const sendButtons = jsxElements(reportSheet.body, "TouchableOpacity").filter(
+const validateSubmitHandler = (renderRoot, findings) => {
+  const sendButtons = jsxElements(renderRoot, "TouchableOpacity").filter(
     (element) => literalStrings(element).includes("Send Report"),
   );
   if (sendButtons.length !== 1) {
@@ -458,6 +455,7 @@ const validateSubmitHandler = (reportSheet, findings) => {
   }
   if (
     jsxAttributeString(button, "accessibilityRole") !== "button" ||
+    !exactBusyStyle(button, "primaryButton") ||
     !isIdentifier(jsxAttributeExpression(button, "disabled"), "busy")
   ) {
     findings.push(
@@ -576,10 +574,15 @@ export const validateReportSheetSource = (source) => {
   const returnStatements = reportSheet.body.body.filter(
     (statement) => statement.type === "ReturnStatement",
   );
+  const renderRoot = unwrap(returnStatements[0]?.argument);
   if (
     returnStatements.length !== 1 ||
-    unwrap(returnStatements[0].argument)?.type !== "JSXElement" ||
-    jsxName(unwrap(returnStatements[0].argument)) !== "Modal"
+    returnStatements[0] !== reportSheet.body.body.at(-1) ||
+    reportSheet.body.body.some((statement) =>
+      ["IfStatement", "ThrowStatement"].includes(statement.type),
+    ) ||
+    renderRoot?.type !== "JSXElement" ||
+    jsxName(renderRoot) !== "Modal"
   ) {
     findings.push("ReportSheet must directly return one reachable Modal tree");
   }
@@ -617,20 +620,20 @@ export const validateReportSheetSource = (source) => {
       "good-faith guidance must remain bound to its rendered constant",
     );
   }
-  const textElements = jsxElements(reportSheet.body, "Text");
+  const textElements = jsxElements(renderRoot, "Text");
   if (
-    !textElements.some((element) =>
+    textElements.filter((element) =>
       jsxRendersIdentifier(element, "REPORT_SHEET_HELPER_TEXT"),
-    )
+    ).length !== 1
   ) {
     findings.push(
       "customer-safe report explanation must be rendered by ReportSheet",
     );
   }
   if (
-    !textElements.some((element) =>
+    textElements.filter((element) =>
       jsxRendersIdentifier(element, "REPORT_SHEET_GOOD_FAITH_TEXT"),
-    )
+    ).length !== 1
   ) {
     findings.push("good-faith guidance must be rendered by ReportSheet");
   }
@@ -641,6 +644,13 @@ export const validateReportSheetSource = (source) => {
   }
   validateStyleContract(programBindings, findings);
   validateVisibilityReset(reportSheet, findings);
+  const stateCalls = { setCategoryKey: 0, setNote: 0 };
+  walk(reportSheet.body, (node) => {
+    if (callMatches(node, "setCategoryKey")) stateCalls.setCategoryKey += 1;
+    if (callMatches(node, "setNote")) stateCalls.setNote += 1;
+  });
+  if (stateCalls.setCategoryKey !== 3 || stateCalls.setNote !== 2)
+    findings.push("report state must have only the canonical selection and reset writers");
 
   const closeAndReset = unwrap(
     directVariable(reportSheet.body, "closeAndReset")?.init,
@@ -656,7 +666,7 @@ export const validateReportSheetSource = (source) => {
     );
   }
 
-  const modals = jsxElements(reportSheet.body, "Modal");
+  const modals = jsxElements(renderRoot, "Modal");
   if (
     modals.length !== 1 ||
     !isIdentifier(jsxAttributeExpression(modals[0], "visible"), "visible") ||
@@ -668,7 +678,7 @@ export const validateReportSheetSource = (source) => {
     findings.push("native modal dismissal must be bound to closeAndReset");
   }
 
-  const touchables = jsxElements(reportSheet.body, "TouchableOpacity");
+  const touchables = jsxElements(renderRoot, "TouchableOpacity");
   const backdrop = touchables.find((element) =>
     memberMatches(
       jsxAttributeExpression(element, "style"),
@@ -699,6 +709,7 @@ export const validateReportSheetSource = (source) => {
       "closeAndReset",
     ) ||
     jsxAttributeString(cancelButtons[0], "accessibilityRole") !== "button" ||
+    !exactBusyStyle(cancelButtons[0], "secondaryButton") ||
     jsxAttributeString(cancelButtons[0], "accessibilityLabel") !==
       "Cancel report" ||
     !isIdentifier(
@@ -717,8 +728,43 @@ export const validateReportSheetSource = (source) => {
       "visible Cancel action must be accessible and bound to closeAndReset",
     );
   }
+  const copyrightButtons = touchables.filter((element) =>
+    literalStrings(element).includes("Open Copyright Report"),
+  );
+  const copyrightButton = copyrightButtons[0];
+  const copyrightHandler = jsxAttributeExpression(copyrightButton, "onPress");
+  const copyrightGuard = copyrightHandler?.body?.body?.[0];
+  if (
+    copyrightButtons.length !== 1 ||
+    !exactBusyStyle(copyrightButton, "formalNoticeButton") ||
+    !isIdentifier(jsxAttributeExpression(copyrightButton, "disabled"), "busy") ||
+    !isIdentifier(
+      objectPropertyValue(
+        jsxAttributeExpression(copyrightButton, "accessibilityState"),
+        "disabled",
+      ),
+      "busy",
+    ) ||
+    copyrightGuard?.type !== "IfStatement" ||
+    !isIdentifier(copyrightGuard.test, "busy") ||
+    copyrightGuard.consequent?.type !== "ReturnStatement" ||
+    !statementCall(copyrightHandler.body.body[1], "closeAndReset") ||
+    !memberMatches(
+      unwrap(copyrightHandler.body.body[2]?.expression)?.callee,
+      "router",
+      "push",
+    ) ||
+    staticString(
+      unwrap(copyrightHandler.body.body[2]?.expression)?.arguments?.[0],
+      new Map(),
+    ) !== "/copyright-report"
+  ) {
+    findings.push(
+      "copyright navigation must bind its touch style and reject busy activation",
+    );
+  }
 
-  const keyboardViews = jsxElements(reportSheet.body, "KeyboardAvoidingView");
+  const keyboardViews = jsxElements(renderRoot, "KeyboardAvoidingView");
   if (
     keyboardViews.length !== 1 ||
     !memberMatches(
@@ -729,24 +775,25 @@ export const validateReportSheetSource = (source) => {
     !exactPlatformKeyboardBehavior(
       jsxAttributeExpression(keyboardViews[0], "behavior"),
     ) ||
-    jsxAttribute(keyboardViews[0], "enabled")
+    jsxAttribute(keyboardViews[0], "enabled") ||
+    jsxAttribute(keyboardViews[0], "pointerEvents")
   ) {
     findings.push(
       "rendered sheet must use exact iOS/Android keyboard avoidance",
     );
   }
 
-  const sheetViews = jsxElements(reportSheet.body, "View").filter((element) =>
+  const sheetViews = jsxElements(renderRoot, "View").filter((element) =>
     memberMatches(jsxAttributeExpression(element, "style"), "styles", "sheet"),
   );
   if (
     sheetViews.length !== 1 ||
-    !jsxAttribute(sheetViews[0], "accessibilityViewIsModal")
+    jsxAttribute(sheetViews[0], "accessibilityViewIsModal")?.value !== null
   ) {
     findings.push("rendered sheet must expose a modal accessibility boundary");
   }
 
-  const verticalScrollers = jsxElements(reportSheet.body, "ScrollView").filter(
+  const verticalScrollers = jsxElements(renderRoot, "ScrollView").filter(
     (element) =>
       memberMatches(
         jsxAttributeExpression(element, "style"),
@@ -806,12 +853,26 @@ export const validateReportSheetSource = (source) => {
       jsxAttributeExpression(categoryButton, "accessibilityState"),
       "disabled",
     );
+    const categoryStyle = jsxAttributeExpression(categoryButton, "style");
+    const activeStyle = unwrap(categoryStyle?.elements?.[1]);
+    const disabledStyle = unwrap(categoryStyle?.elements?.[2]);
+    const categoryPress = jsxAttributeExpression(categoryButton, "onPress");
     if (
       !memberMatches(
         jsxAttributeExpression(categoryButton, "accessibilityLabel"),
         "entry",
         "label",
       ) ||
+      categoryStyle?.type !== "ArrayExpression" ||
+      categoryStyle.elements.length !== 3 ||
+      !memberMatches(categoryStyle.elements[0], "styles", "categoryChip") ||
+      activeStyle?.type !== "LogicalExpression" ||
+      activeStyle.operator !== "&&" ||
+      unwrap(activeStyle.left)?.operator !== "===" ||
+      !memberMatches(activeStyle.right, "styles", "categoryChipActive") ||
+      disabledStyle?.type !== "LogicalExpression" ||
+      !isIdentifier(disabledStyle.left, "busy") ||
+      !memberMatches(disabledStyle.right, "styles", "buttonDisabled") ||
       !memberMatches(
         jsxAttributeExpression(categoryButton, "accessibilityHint"),
         "entry",
@@ -825,7 +886,10 @@ export const validateReportSheetSource = (source) => {
       !isIdentifier(
         jsxAttributeExpression(categoryButton, "disabled"),
         "busy",
-      )
+      ) ||
+      categoryPress?.type !== "ArrowFunctionExpression" ||
+      !callMatches(categoryPress.body, "setCategoryKey") ||
+      !memberMatches(categoryPress.body.arguments?.[0], "entry", "key")
     ) {
       findings.push(
         "category labels, hints, and selected state must be bound to each mapped option",
@@ -833,7 +897,7 @@ export const validateReportSheetSource = (source) => {
     }
   }
 
-  const noteInputs = jsxElements(reportSheet.body, "TextInput").filter(
+  const noteInputs = jsxElements(renderRoot, "TextInput").filter(
     (element) => isIdentifier(jsxAttributeExpression(element, "value"), "note"),
   );
   const editable = jsxAttributeExpression(noteInputs[0], "editable");
@@ -855,11 +919,31 @@ export const validateReportSheetSource = (source) => {
     );
   }
 
-  validateSubmitHandler(reportSheet, findings);
+  validateSubmitHandler(renderRoot, findings);
 
   const optionsInitializer = programBindings.get(
     "REPORT_SHEET_CATEGORY_OPTIONS",
   );
+  const optionTuples = unwrap(optionsInitializer)?.elements?.map((entry) =>
+    ["key", "label", "backedCategory"].map((name) =>
+      staticString(objectPropertyValue(entry, name), programBindings),
+    ).join("|"),
+  );
+  const expectedOptionTuples = "harassment_bullying|Harassment or bullying|harassment;hate_discrimination|Hate or discrimination|abuse;threats_violence|Threats or violence|safety;sexual_exploitation|Sexual content or exploitation|safety;self_harm_danger|Self-harm or dangerous behavior|safety;minor_safety|Minor safety|safety;illegal_activity|Illegal activity|safety;spam_scam|Spam or scam|safety;impersonation|Impersonation|impersonation;privacy_doxxing|Privacy violation/doxxing|safety;copyright_dmca|Copyright/DMCA|copyright;deceptive_content|Misinformation or deceptive content|other;graphic_violent_content|Graphic/violent content|safety;fraud_payment|Fraud/payment concern|safety;live_safety|Live safety issue|safety;other|Other|other".split(";");
+  if (JSON.stringify(optionTuples) !== JSON.stringify(expectedOptionTuples))
+    findings.push("report options must retain the exact unique customer-to-backend mapping");
+  const categoryMaps = [];
+  walk(renderRoot, (node) => {
+    const callee = unwrap(node?.callee);
+    const property = callee?.computed
+      ? unwrap(callee.property)?.value
+      : unwrap(callee?.property)?.name;
+    if (node.type === "CallExpression" && callee?.type === "MemberExpression" &&
+      isIdentifier(callee.object, "REPORT_SHEET_CATEGORY_OPTIONS") && property === "map")
+      categoryMaps.push(node);
+  });
+  if (categoryMaps.length !== 1)
+    findings.push("rendered category controls must map the canonical options exactly once");
   walk(optionsInitializer, (node) => {
     if (node.type !== "ObjectProperty") return;
     const key = node.computed
@@ -872,7 +956,7 @@ export const validateReportSheetSource = (source) => {
     }
   });
 
-  walk(reportSheet.body, (node) => {
+  walk(renderRoot, (node) => {
     if (
       (node.type === "MemberExpression" ||
         node.type === "OptionalMemberExpression") &&
@@ -891,7 +975,7 @@ export const validateReportSheetSource = (source) => {
         );
     }
     if (
-      ["StringLiteral", "TemplateLiteral", "BinaryExpression"].includes(
+      ["StringLiteral", "TemplateLiteral", "BinaryExpression", "CallExpression", "Identifier"].includes(
         node.type,
       )
     ) {
@@ -905,6 +989,15 @@ export const validateReportSheetSource = (source) => {
       ) {
         findings.push(
           "ReportSheet must not render or submit client-invented moderation routing",
+        );
+      }
+      if (
+        /reports? (?:are |may be )?(?:shared|visible) (?:with|to) the reported (?:person|user)|reported (?:person|user) (?:can|will|may) (?:see|receive)|reported users? (?:are|will be) notified/i.test(
+          candidate,
+        )
+      ) {
+        findings.push(
+          "ReportSheet must not contradict reporter privacy or notification doctrine",
         );
       }
     }
