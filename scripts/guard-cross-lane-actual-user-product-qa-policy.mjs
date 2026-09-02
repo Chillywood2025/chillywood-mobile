@@ -77,10 +77,27 @@ const unwrapExpression = (nodePath) => {
   return currentPath;
 };
 
+const literalTruthiness = (nodePath) => {
+  const expressionPath = unwrapExpression(nodePath);
+  if (expressionPath?.isBooleanLiteral()) return expressionPath.node.value;
+  if (expressionPath?.isNumericLiteral()) return expressionPath.node.value !== 0;
+  if (expressionPath?.isStringLiteral()) return expressionPath.node.value.length > 0;
+  if (expressionPath?.isNullLiteral()) return false;
+  if (expressionPath?.isUnaryExpression({ operator: "!" })) {
+    const argumentTruthiness = literalTruthiness(expressionPath.get("argument"));
+    return argumentTruthiness === null ? null : !argumentTruthiness;
+  }
+  return null;
+};
+
+const hasParameterBinding = (identifierPath, name) => (
+  identifierPath?.isIdentifier({ name }) && identifierPath.scope.getBinding(name)?.kind === "param"
+);
+
 const isParticipantMember = (nodePath, propertyName) => {
   const expressionPath = unwrapExpression(nodePath);
   if (!expressionPath?.isMemberExpression()) return false;
-  return expressionPath.get("object").isIdentifier({ name: "participant" })
+  return hasParameterBinding(expressionPath.get("object"), "participant")
     && !expressionPath.node.computed
     && expressionPath.get("property").isIdentifier({ name: propertyName });
 };
@@ -113,7 +130,7 @@ const isLocalCameraTypeCheck = (nodePath) => {
   const isTypeofLocalCamera = (operandPath) => {
     const unwrappedPath = unwrapExpression(operandPath);
     return unwrappedPath?.isUnaryExpression({ operator: "typeof" })
-      && unwrapExpression(unwrappedPath.get("argument")).isIdentifier({ name: "localCameraEnabled" });
+      && hasParameterBinding(unwrapExpression(unwrappedPath.get("argument")), "localCameraEnabled");
   };
   const leftPath = unwrapExpression(expressionPath.get("left"));
   const rightPath = unwrapExpression(expressionPath.get("right"));
@@ -128,12 +145,21 @@ const isCameraRequestedInitializer = (nodePath) => {
     || !unwrapExpression(expressionPath.get("alternate")).isBooleanLiteral({ value: false })) return false;
   const localChoicePath = unwrapExpression(expressionPath.get("consequent"));
   if (!localChoicePath?.isConditionalExpression()
-    || !unwrapExpression(localChoicePath.get("consequent")).isIdentifier({ name: "localCameraEnabled" })
+    || !hasParameterBinding(unwrapExpression(localChoicePath.get("consequent")), "localCameraEnabled")
     || !isParticipantMember(localChoicePath.get("alternate"), "cameraOn")) return false;
   return matchExactTerms(flattenLogical(localChoicePath.get("test"), "&&"), [
     (term) => isParticipantMember(term, "isSelf"),
     (term) => isLocalCameraTypeCheck(term),
   ]);
+};
+
+const isVideoCallInitializer = (nodePath) => {
+  const expressionPath = unwrapExpression(nodePath);
+  if (!expressionPath?.isBinaryExpression({ operator: "===" })) return false;
+  const leftPath = unwrapExpression(expressionPath.get("left"));
+  const rightPath = unwrapExpression(expressionPath.get("right"));
+  return (hasParameterBinding(leftPath, "callType") && rightPath.isStringLiteral({ value: "video" }))
+    || (hasParameterBinding(rightPath, "callType") && leftPath.isStringLiteral({ value: "video" }));
 };
 
 const isHasLiveKitVideoInitializer = (nodePath) => matchExactTerms(flattenLogical(nodePath, "&&"), [
@@ -159,18 +185,56 @@ const isShowLegacyVideoInitializer = (nodePath) => matchExactTerms(flattenLogica
 
 const isOperativeReturnedExpression = (expressionPath) => {
   let currentPath = expressionPath;
+  let hasReturnAncestor = false;
   while (currentPath?.parentPath) {
     const parentPath = currentPath.parentPath;
-    if (parentPath.isReturnStatement()) return true;
+    if (parentPath.isReturnStatement()) hasReturnAncestor = true;
+    if (parentPath.isFunction()) return hasReturnAncestor;
+    if (parentPath.isLogicalExpression({ operator: "&&" })
+      && currentPath.key === "right"
+      && literalTruthiness(parentPath.get("left")) === false) return false;
+    if (parentPath.isConditionalExpression()) {
+      const testPath = unwrapExpression(parentPath.get("test"));
+      const testTruthiness = literalTruthiness(testPath);
+      if (currentPath.key === "consequent" && testTruthiness === false) return false;
+      if (currentPath.key === "alternate" && testTruthiness === true) return false;
+    }
+    if (parentPath.isIfStatement()) {
+      const testPath = unwrapExpression(parentPath.get("test"));
+      const testTruthiness = literalTruthiness(testPath);
+      if (currentPath.key === "consequent" && testTruthiness === false) return false;
+      if (currentPath.key === "alternate" && testTruthiness === true) return false;
+    }
+    if (parentPath.isWhileStatement()
+      && literalTruthiness(parentPath.get("test")) === false) return false;
+    currentPath = parentPath;
+  }
+  return false;
+};
+
+const isReachableWithin = (nodePath, boundaryPath) => {
+  let currentPath = nodePath;
+  while (currentPath?.parentPath) {
+    if (currentPath.node === boundaryPath.node) return true;
+    const parentPath = currentPath.parentPath;
     if (parentPath.isFunction()) return false;
     if (parentPath.isLogicalExpression({ operator: "&&" })
       && currentPath.key === "right"
-      && unwrapExpression(parentPath.get("left")).isBooleanLiteral({ value: false })) return false;
+      && literalTruthiness(parentPath.get("left")) === false) return false;
     if (parentPath.isConditionalExpression()) {
       const testPath = unwrapExpression(parentPath.get("test"));
-      if (currentPath.key === "consequent" && testPath.isBooleanLiteral({ value: false })) return false;
-      if (currentPath.key === "alternate" && testPath.isBooleanLiteral({ value: true })) return false;
+      const testTruthiness = literalTruthiness(testPath);
+      if (currentPath.key === "consequent" && testTruthiness === false) return false;
+      if (currentPath.key === "alternate" && testTruthiness === true) return false;
     }
+    if (parentPath.isIfStatement()) {
+      const testPath = unwrapExpression(parentPath.get("test"));
+      const testTruthiness = literalTruthiness(testPath);
+      if (currentPath.key === "consequent" && testTruthiness === false) return false;
+      if (currentPath.key === "alternate" && testTruthiness === true) return false;
+    }
+    if (parentPath.isWhileStatement()
+      && literalTruthiness(parentPath.get("test")) === false) return false;
     currentPath = parentPath;
   }
   return false;
@@ -192,13 +256,19 @@ const hasBoundHybridVideoRender = (source) => {
         || !isOperativeReturnedExpression(conditionalPath)) return;
       const hasLiveKitVideoInit = bindingInitializer(liveKitTestPath, "hasLiveKitVideo");
       if (!hasLiveKitVideoInit || !isHasLiveKitVideoInitializer(hasLiveKitVideoInit)) return;
+      const liveKitVideoCallPath = findIdentifierPath(hasLiveKitVideoInit, "isVideoCall");
+      const isVideoCallInit = bindingInitializer(liveKitVideoCallPath, "isVideoCall");
+      if (!isVideoCallInit || !isVideoCallInitializer(isVideoCallInit)) return;
       const liveKitCameraPath = findIdentifierPath(hasLiveKitVideoInit, "cameraRequested");
       const cameraRequestedInit = bindingInitializer(liveKitCameraPath, "cameraRequested");
-      if (!cameraRequestedInit || !isCameraRequestedInitializer(cameraRequestedInit)) return;
+      const cameraVideoCallPath = cameraRequestedInit ? findIdentifierPath(cameraRequestedInit, "isVideoCall") : null;
+      if (!cameraRequestedInit || !isCameraRequestedInitializer(cameraRequestedInit)
+        || bindingInitializer(cameraVideoCallPath, "isVideoCall")?.node !== isVideoCallInit.node) return;
       let hasBoundLiveKitTrack = false;
       conditionalPath.get("consequent").traverse({
         JSXOpeningElement(elementPath) {
           if (!elementPath.get("name").isJSXIdentifier({ name: "LiveKitVideoTrack" })) return;
+          if (!isReachableWithin(elementPath, conditionalPath.get("consequent"))) return;
           for (const attributePath of elementPath.get("attributes")) {
             if (!attributePath.isJSXAttribute() || !attributePath.get("name").isJSXIdentifier({ name: "trackRef" })) continue;
             const valuePath = attributePath.get("value");
@@ -229,12 +299,16 @@ const hasBoundHybridVideoRender = (source) => {
       const streamLiveKitInit = bindingInitializer(streamLiveKitPath, "hasLiveKitVideo");
       const streamCameraPath = findIdentifierPath(hasVideoStreamInit, "cameraRequested");
       const streamCameraInit = bindingInitializer(streamCameraPath, "cameraRequested");
+      const streamVideoCallPath = findIdentifierPath(hasVideoStreamInit, "isVideoCall");
+      const streamVideoCallInit = bindingInitializer(streamVideoCallPath, "isVideoCall");
       if (streamLiveKitInit?.node !== hasLiveKitVideoInit.node
-        || streamCameraInit?.node !== cameraRequestedInit.node) return;
+        || streamCameraInit?.node !== cameraRequestedInit.node
+        || streamVideoCallInit?.node !== isVideoCallInit.node) return;
       let hasBoundLegacyRtc = false;
       fallbackPath.get("consequent").traverse({
         JSXOpeningElement(elementPath) {
           if (!elementPath.get("name").isJSXIdentifier({ name: "RTCView" })) return;
+          if (!isReachableWithin(elementPath, fallbackPath.get("consequent"))) return;
           for (const attributePath of elementPath.get("attributes")) {
             if (!attributePath.isJSXAttribute() || !attributePath.get("name").isJSXIdentifier({ name: "streamURL" })) continue;
             const valuePath = attributePath.get("value");
@@ -333,7 +407,9 @@ if (!hasBoundHybridVideoRender(participantGrid)) {
 }
 
 const validHybridRenderFixture = `
-  const Grid = () => {
+  const Grid = ({ callType, localCameraEnabled, participants }) => {
+    const isVideoCall = callType === "video";
+    return participants.map((participant) => {
     const cameraRequested = isVideoCall
       ? participant.isSelf && typeof localCameraEnabled === "boolean"
         ? localCameraEnabled
@@ -351,6 +427,7 @@ const validHybridRenderFixture = `
     ) : showLegacyVideo && RTCView ? (
       <RTCView streamURL={participant.streamURL as string} />
     ) : null;
+    });
   };
 `;
 if (!hasBoundHybridVideoRender(validHybridRenderFixture)) {
@@ -395,12 +472,44 @@ const disconnectedCameraIntent = validHybridRenderFixture.replace(
 if (hasBoundHybridVideoRender(disconnectedCameraIntent)) {
   fail("communication participant grid guard accepted camera rendering disconnected from call intent");
 }
+const disconnectedVideoCall = validHybridRenderFixture.replace(
+  'const isVideoCall = callType === "video";',
+  "const isVideoCall = false;",
+);
+if (hasBoundHybridVideoRender(disconnectedVideoCall)) {
+  fail("communication participant grid guard accepted video rendering disconnected from the requested call type");
+}
 const deadHybridReturn = validHybridRenderFixture.replace("return hasLiveKitVideo ? (", "return false && (hasLiveKitVideo ? (").replace(
-  ") : null;\n  };",
-  ") : null);\n  };",
+  ") : null;\n    });",
+  ") : null);\n    });",
 );
 if (hasBoundHybridVideoRender(deadHybridReturn)) {
   fail("communication participant grid guard accepted a statically unreachable hybrid render chain");
+}
+const deadIfHybridReturn = validHybridRenderFixture.replace("return hasLiveKitVideo ? (", "if (false) return hasLiveKitVideo ? (");
+if (hasBoundHybridVideoRender(deadIfHybridReturn)) {
+  fail("communication participant grid guard accepted a hybrid render beneath an unreachable branch");
+}
+const numericDeadHybridReturn = validHybridRenderFixture.replace("return hasLiveKitVideo ? (", "return 0 && (hasLiveKitVideo ? (").replace(
+  ") : null;\n    });",
+  ") : null);\n    });",
+);
+if (hasBoundHybridVideoRender(numericDeadHybridReturn)) {
+  fail("communication participant grid guard accepted a hybrid render beneath a falsy numeric gate");
+}
+const deadLiveKitChild = validHybridRenderFixture.replace(
+  "<LiveKitVideoTrack trackRef={participant.liveKitVideoTrackReference as unknown} />",
+  "false && <LiveKitVideoTrack trackRef={participant.liveKitVideoTrackReference as unknown} />",
+);
+if (hasBoundHybridVideoRender(deadLiveKitChild)) {
+  fail("communication participant grid guard accepted a statically unreachable LiveKit track child");
+}
+const deadLegacyChild = validHybridRenderFixture.replace(
+  "<RTCView streamURL={participant.streamURL as string} />",
+  "false && <RTCView streamURL={participant.streamURL as string} />",
+);
+if (hasBoundHybridVideoRender(deadLegacyChild)) {
+  fail("communication participant grid guard accepted a statically unreachable legacy RTC child");
 }
 
 forbidMatch("live stage screen", liveStage, /showHeroRemoteVideo[^\n]+cameraOn/, "hero remote Live video gated by stale cameraOn");

@@ -40,6 +40,19 @@ const unwrapExpression = (nodePath) => {
   return currentPath;
 };
 
+const literalTruthiness = (nodePath) => {
+  const expressionPath = unwrapExpression(nodePath);
+  if (expressionPath?.isBooleanLiteral()) return expressionPath.node.value;
+  if (expressionPath?.isNumericLiteral()) return expressionPath.node.value !== 0;
+  if (expressionPath?.isStringLiteral()) return expressionPath.node.value.length > 0;
+  if (expressionPath?.isNullLiteral()) return false;
+  if (expressionPath?.isUnaryExpression({ operator: "!" })) {
+    const argumentTruthiness = literalTruthiness(expressionPath.get("argument"));
+    return argumentTruthiness === null ? null : !argumentTruthiness;
+  }
+  return null;
+};
+
 const flattenLogical = (nodePath, operator) => {
   const expressionPath = unwrapExpression(nodePath);
   if (!expressionPath?.isLogicalExpression({ operator })) return [expressionPath];
@@ -70,13 +83,88 @@ const isMemberChain = (nodePath, names) => {
   return currentPath?.isIdentifier({ name: names[0] }) ?? false;
 };
 
+const hasNamedImportBinding = (identifierPath, name, source) => {
+  if (!identifierPath?.isIdentifier({ name })) return false;
+  const binding = identifierPath.scope.getBinding(name);
+  if (!binding?.path.isImportSpecifier()
+    || !binding.path.get("imported").isIdentifier({ name })) return false;
+  const declarationPath = binding.path.parentPath;
+  return declarationPath?.isImportDeclaration()
+    && declarationPath.get("source").isStringLiteral({ value: source });
+};
+
+const isImportedAppStateMember = (nodePath, propertyName) => {
+  const expressionPath = unwrapExpression(nodePath);
+  return expressionPath?.isMemberExpression()
+    && !expressionPath.node.computed
+    && expressionPath.get("property").isIdentifier({ name: propertyName })
+    && hasNamedImportBinding(unwrapExpression(expressionPath.get("object")), "AppState", "react-native");
+};
+
+const hasAppStateHookBinding = (identifierPath) => {
+  const binding = identifierPath?.scope.getBinding("appState");
+  if (!binding?.path.isVariableDeclarator()) return false;
+  const idPath = binding.path.get("id");
+  if (!idPath.isArrayPattern() || !idPath.get("elements")[0]?.isIdentifier({ name: "appState" })) return false;
+  const initPath = unwrapExpression(binding.path.get("init"));
+  if (!initPath?.isCallExpression()
+    || !hasNamedImportBinding(unwrapExpression(initPath.get("callee")), "useState", "react")) return false;
+  const argumentPaths = initPath.get("arguments");
+  if (argumentPaths.length !== 1) return false;
+  const initialStatePath = unwrapExpression(argumentPaths[0]);
+  const hasCurrentStateInitializer = isImportedAppStateMember(initialStatePath, "currentState")
+    || (initialStatePath?.isArrowFunctionExpression()
+    && initialStatePath.node.params.length === 0
+    && isImportedAppStateMember(initialStatePath.get("body"), "currentState"));
+  if (!hasCurrentStateInitializer) return false;
+
+  const setterPath = idPath.get("elements")[1];
+  if (!setterPath?.isIdentifier()) return false;
+  const setterName = setterPath.node.name;
+  const setterBinding = setterPath.scope.getBinding(setterName);
+  if (!setterBinding || setterBinding.kind !== "const") return false;
+  let hasChangeSubscription = false;
+  binding.scope.path.traverse({
+    CallExpression(callPath) {
+      const calleePath = unwrapExpression(callPath.get("callee"));
+      if (!calleePath?.isMemberExpression() || calleePath.node.computed
+        || !calleePath.get("property").isIdentifier({ name: "addEventListener" })
+        || !hasNamedImportBinding(unwrapExpression(calleePath.get("object")), "AppState", "react-native")) return;
+      const callArguments = callPath.get("arguments");
+      if (!unwrapExpression(callArguments[0])?.isStringLiteral({ value: "change" })) return;
+      const handlerPath = unwrapExpression(callArguments[1]);
+      if (handlerPath?.isIdentifier({ name: setterName })
+        && handlerPath.scope.getBinding(setterName) === setterBinding) {
+        hasChangeSubscription = true;
+        return;
+      }
+      if (!handlerPath?.isFunction()) return;
+      handlerPath.traverse({
+        CallExpression(setterCallPath) {
+          const setterCalleePath = unwrapExpression(setterCallPath.get("callee"));
+          if (setterCalleePath?.isIdentifier({ name: setterName })
+            && setterCalleePath.scope.getBinding(setterName) === setterBinding) hasChangeSubscription = true;
+        },
+      });
+    },
+  });
+  return hasChangeSubscription;
+};
+
 const isAppStateActive = (nodePath) => {
   const expressionPath = unwrapExpression(nodePath);
   if (!expressionPath?.isBinaryExpression({ operator: "===" })) return false;
   const leftPath = unwrapExpression(expressionPath.get("left"));
   const rightPath = unwrapExpression(expressionPath.get("right"));
-  return (leftPath.isIdentifier({ name: "appState" }) && rightPath.isStringLiteral({ value: "active" }))
-    || (rightPath.isIdentifier({ name: "appState" }) && leftPath.isStringLiteral({ value: "active" }));
+  const appStatePath = leftPath.isIdentifier({ name: "appState" })
+    ? leftPath
+    : rightPath.isIdentifier({ name: "appState" })
+      ? rightPath
+      : null;
+  const activePath = appStatePath === leftPath ? rightPath : leftPath;
+  return !!appStatePath
+    && activePath.isStringLiteral({ value: "active" })
+    && hasAppStateHookBinding(appStatePath);
 };
 
 const getIdentifierBinding = (identifierPath, name) => (
@@ -112,18 +200,28 @@ const isRoleGrantPublishIntent = (nodePath) => {
 
 const isOperativeReturnedJsx = (elementPath) => {
   let currentPath = elementPath;
+  let hasReturnAncestor = false;
   while (currentPath?.parentPath) {
     const parentPath = currentPath.parentPath;
-    if (parentPath.isReturnStatement()) return true;
-    if (parentPath.isFunction()) return false;
+    if (parentPath.isReturnStatement()) hasReturnAncestor = true;
+    if (parentPath.isFunction()) return hasReturnAncestor;
     if (parentPath.isLogicalExpression({ operator: "&&" })
       && currentPath.key === "right"
-      && unwrapExpression(parentPath.get("left")).isBooleanLiteral({ value: false })) return false;
+      && literalTruthiness(parentPath.get("left")) === false) return false;
     if (parentPath.isConditionalExpression()) {
       const testPath = unwrapExpression(parentPath.get("test"));
-      if (currentPath.key === "consequent" && testPath.isBooleanLiteral({ value: false })) return false;
-      if (currentPath.key === "alternate" && testPath.isBooleanLiteral({ value: true })) return false;
+      const testTruthiness = literalTruthiness(testPath);
+      if (currentPath.key === "consequent" && testTruthiness === false) return false;
+      if (currentPath.key === "alternate" && testTruthiness === true) return false;
     }
+    if (parentPath.isIfStatement()) {
+      const testPath = unwrapExpression(parentPath.get("test"));
+      const testTruthiness = literalTruthiness(testPath);
+      if (currentPath.key === "consequent" && testTruthiness === false) return false;
+      if (currentPath.key === "alternate" && testTruthiness === true) return false;
+    }
+    if (parentPath.isWhileStatement()
+      && literalTruthiness(parentPath.get("test")) === false) return false;
     currentPath = parentPath;
   }
   return false;
@@ -266,18 +364,24 @@ assertEffectiveLiveKitCaptureGate(liveStage, "HybridLiveKitRoom", "Live Stage ef
 for (const roomComponentName of ["LiveKitRoom", "HybridLiveKitRoom"]) {
   const authorityFixture = roomComponentName === "LiveKitRoom"
     ? `
+      const [appState, setAppState] = useState(() => AppState.currentState);
+      useEffect(() => AppState.addEventListener("change", (nextState) => setAppState(nextState)), []);
       const publishLocalCamera = publishLocalVideo
         ?? (joinContract.participantRole !== "viewer" && joinContract.requestedGrants.canPublish);
       const appIsInteractive = appState === "active";
       const shouldConnectRoom = appIsInteractive && active;
     `
     : `
+      const [appState, setAppState] = useState(AppState.currentState);
+      useEffect(() => AppState.addEventListener("change", setAppState), []);
       const shouldConnectRoom = "active" === appState;
     `;
   const fixtureParameters = roomComponentName === "LiveKitRoom"
     ? "{ active, publishLocalVideo }"
     : "{ publishLocalCamera }";
   const validFixture = `
+    import { useEffect, useState } from "react";
+    import { AppState } from "react-native";
     const Example = (${fixtureParameters}) => {
       ${authorityFixture}
       const effectivePublishLocalCamera = publishLocalCamera && shouldConnectRoom;
@@ -311,9 +415,35 @@ for (const roomComponentName of ["LiveKitRoom", "HybridLiveKitRoom"]) {
   if (hasEffectiveLiveKitCaptureGate(unconditionalConnection, roomComponentName)) {
     fail(`${roomComponentName} capture guard accepted a room connection without the foreground lifecycle gate.`);
   }
+  const fakeAppState = validFixture.replace(
+    roomComponentName === "LiveKitRoom"
+      ? "const [appState, setAppState] = useState(() => AppState.currentState);"
+      : "const [appState, setAppState] = useState(AppState.currentState);",
+    'const [observedAppState, setAppState] = useState(() => AppState.currentState);\n      const appState = "active";',
+  );
+  if (hasEffectiveLiveKitCaptureGate(fakeAppState, roomComponentName)) {
+    fail(`${roomComponentName} capture guard accepted a same-named constant instead of the AppState hook binding.`);
+  }
   const deadReturn = validFixture.replace("return <", "return false && <");
   if (hasEffectiveLiveKitCaptureGate(deadReturn, roomComponentName)) {
     fail(`${roomComponentName} capture guard accepted a statically unreachable room render.`);
+  }
+  const deadIfReturn = validFixture.replace("return <", "if (false) return <");
+  if (hasEffectiveLiveKitCaptureGate(deadIfReturn, roomComponentName)) {
+    fail(`${roomComponentName} capture guard accepted a room render beneath an unreachable branch.`);
+  }
+  const numericDeadReturn = validFixture.replace("return <", "return 0 && <");
+  if (hasEffectiveLiveKitCaptureGate(numericDeadReturn, roomComponentName)) {
+    fail(`${roomComponentName} capture guard accepted a room render beneath a falsy numeric gate.`);
+  }
+  const disconnectedAppStateUpdates = validFixture.replace(
+    roomComponentName === "LiveKitRoom"
+      ? 'useEffect(() => AppState.addEventListener("change", (nextState) => setAppState(nextState)), []);'
+      : 'useEffect(() => AppState.addEventListener("change", setAppState), []);',
+    "useEffect(() => undefined, []);",
+  );
+  if (hasEffectiveLiveKitCaptureGate(disconnectedAppStateUpdates, roomComponentName)) {
+    fail(`${roomComponentName} capture guard accepted AppState initialization without live change updates.`);
   }
 }
 
