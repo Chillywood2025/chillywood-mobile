@@ -587,7 +587,7 @@ export default function TitleDetails() {
     return (
       <View style={styles.screenCenter}>
         <ActivityIndicator color={ACCENT} />
-        <AppText scale="footnote" style={styles.loadingText}>Loading Chi’llywood title…</AppText>
+        <AppText scale="footnote" style={styles.loadingText}>Loading Chi&apos;llywood title…</AppText>
       </View>
     );
   }

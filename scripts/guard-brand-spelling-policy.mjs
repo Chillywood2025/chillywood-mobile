@@ -20,6 +20,8 @@ const excludedDirs = new Set([
 
 const excludedPaths = new Set(["supabase/.temp"]);
 
+const userFacingRoots = new Set(["_lib", "app", "components"]);
+
 const textExtensions = new Set([
   ".cjs",
   ".css",
@@ -45,6 +47,7 @@ const technicalLowercaseContextPattern =
 
 function shouldSkip(relativePath) {
   if (excludedPaths.has(relativePath)) return true;
+  if (!userFacingRoots.has(relativePath.split(path.sep)[0])) return true;
   return relativePath.split(path.sep).some((part) => excludedDirs.has(part));
 }
 

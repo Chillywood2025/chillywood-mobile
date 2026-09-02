@@ -3446,7 +3446,7 @@ export default function WatchPartyRoomScreen() {
             style={styles.headerBackButton}
             testID="watch-party-room-back-button"
           />
-          <Text numberOfLines={1} style={[styles.kicker, styles.headerKicker]}>Chi’llywood · Watch Party</Text>
+          <Text numberOfLines={1} style={[styles.kicker, styles.headerKicker]}>Chi&apos;llywood · Watch Party</Text>
           <NotificationBellButton surface="watch-party-room" roomSafe />
           {/* Connection badge */}
           <View style={[styles.connBadge, { borderColor: connColor[connState] + "44" }]}>

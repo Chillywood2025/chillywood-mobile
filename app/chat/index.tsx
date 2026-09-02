@@ -748,7 +748,7 @@ export default function ChillyChatInboxScreen() {
         <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>Sign in to open Chi’lly Chat</Text>
           <Text style={styles.emptyBody}>
-            Chi’lly Chat inbox, direct threads, voice, and video only open on a signed-in Chi’llywood identity.
+            Chi’lly Chat inbox, direct threads, voice, and video only open on a signed-in Chi&apos;llywood identity.
           </Text>
           <TouchableOpacity
             style={[styles.quickActionButton, styles.quickActionAccentButton]}

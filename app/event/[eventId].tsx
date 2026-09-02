@@ -228,7 +228,7 @@ export default function PaidCreatorEventRoute() {
               <View style={styles.stateBox} testID="event-free-access-state">
                 <Text style={styles.stateTitle}>Open Event</Text>
                 <Text style={styles.body}>
-                  This Event is free to enter. No Event Pass is required. Chi’llywood Premium remains separate.
+                  This Event is free to enter. No Event Pass is required. Chi&apos;llywood Premium remains separate.
                 </Text>
               </View>
             ) : locked ? (
