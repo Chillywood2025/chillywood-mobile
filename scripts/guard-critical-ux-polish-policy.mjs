@@ -332,13 +332,19 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
     if (!candidatePath?.node) return [];
     if (candidatePath.isConditionalExpression?.()) return [candidatePath.get("consequent"), candidatePath.get("alternate")].flatMap((item) => resolveCallbacks(item, new Set(seen)));
     if (candidatePath.isLogicalExpression?.()) return [candidatePath.get("left"), candidatePath.get("right")].flatMap((item) => resolveCallbacks(item, new Set(seen)));
+    if (candidatePath.isAssignmentExpression?.()) return resolveCallbacks(candidatePath.get("right"), seen);
     if (candidatePath.isMemberExpression?.() || candidatePath.isOptionalMemberExpression?.()) {
       const object = unwrapExpression(candidatePath.get("object"));
-      if (object?.isConditionalExpression?.() || object?.isLogicalExpression?.()) return (object.isConditionalExpression?.() ? [object.get("consequent"), object.get("alternate")] : [object.get("left"), object.get("right")])
+      const binding = getBinding(object); const owner = binding?.path?.isVariableDeclarator?.() ? binding.path : binding?.path?.findParent?.((item) => item.isVariableDeclarator?.()); const init = unwrapExpression(owner?.get("init"));
+      const container = object?.isConditionalExpression?.() || object?.isLogicalExpression?.() ? object : init;
+      if (container?.isConditionalExpression?.() || container?.isLogicalExpression?.()) return (container.isConditionalExpression?.() ? [container.get("consequent"), container.get("alternate")] : [container.get("left"), container.get("right")])
         .flatMap((item) => resolveCallbacks(resolveContainerMember(item, getPropertyName(candidatePath), new Set(seen)), new Set(seen)));
     }
     if (candidatePath.isCallExpression?.() || candidatePath.isOptionalCallExpression?.()) {
-      const argumentCallbacks = candidatePath.get("arguments").flatMap((item) => resolveCallbacks(item, new Set(seen)));
+      const callee = unwrapExpression(candidatePath.get("callee")); const property = getPropertyName(callee); const object = unwrapExpression(callee?.get?.("object")); const args = candidatePath.get("arguments");
+      if (property === "get" && object?.isIdentifier?.({ name: "Reflect" })) return resolveCallbacks(resolveContainerMember(args[0], getStaticString(args[1]), new Set(seen)), seen);
+      if (property === "at") return resolveCallbacks(resolveContainerMember(object, args[0]?.isNumericLiteral?.() ? String(args[0].node.value) : getStaticString(args[0]), new Set(seen)), seen);
+      const argumentCallbacks = args.flatMap((item) => resolveCallbacks(item, new Set(seen)));
       if (argumentCallbacks.length) return argumentCallbacks;
       const producer = resolveCallback(candidatePath.get("callee"), new Set(seen));
       if (producer) {
@@ -363,6 +369,7 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
     if (!callee?.isMemberExpression?.() && !callee?.isOptionalMemberExpression?.()) return;
     const property = getPropertyName(callee);
     if (property === "catch") markCallbackParameters(callPath.get("arguments")[0], false);
+    if (["addEventListener", "addListener", "on", "once"].includes(property) && getStaticString(callPath.get("arguments")[0]) === "error") markCallbackParameters(callPath.get("arguments")[1], false);
     if (property === "then") {
       markCallbackParameters(callPath.get("arguments")[0], true);
       markCallbackParameters(callPath.get("arguments")[1], false);
@@ -631,24 +638,11 @@ const collectUserFacingErrorConstructionViolations = (source, file, sourceFile) 
   traverse(ast, {
     Program(programPath) {
       const binding = programPath.scope.getBinding("getSocialAttachmentValidationMessage");
-      const declaratorPath = binding?.path?.isVariableDeclarator?.()
-        ? binding.path
-        : binding?.path?.parentPath?.isVariableDeclarator?.()
-          ? binding.path.parentPath
-          : null;
+      const declaratorPath = binding?.path?.isVariableDeclarator?.() ? binding.path : binding?.path?.parentPath?.isVariableDeclarator?.() ? binding.path.parentPath : null;
       const returns = [];
-      declaratorPath?.get("init")?.traverse?.({
-        Function(innerPath) { innerPath.skip(); },
-        ReturnStatement(returnPath) { returns.push(returnPath.get("argument")); },
-      });
-      if (
-        binding?.constant
-        && binding.constantViolations.length === 0
-        && declaratorPath?.get("init")?.isFunction?.()
-        && declaratorPath.parentPath?.parentPath?.isExportNamedDeclaration?.()
-        && returns.length > 0
-        && returns.every(isStaticCustomerCopy)
-      ) approvedValidatorBindings.add(binding);
+      declaratorPath?.get("init")?.traverse?.({ Function(innerPath) { innerPath.skip(); }, ReturnStatement(returnPath) { returns.push(returnPath.get("argument")); } });
+      if (binding?.constant && binding.constantViolations.length === 0 && declaratorPath?.get("init")?.isFunction?.()
+        && declaratorPath.parentPath?.parentPath?.isExportNamedDeclaration?.() && returns.length > 0 && returns.every(isStaticCustomerCopy)) approvedValidatorBindings.add(binding);
     },
     ImportSpecifier(importPath) {
       const imported = importPath.get("imported");
@@ -656,16 +650,8 @@ const collectUserFacingErrorConstructionViolations = (source, file, sourceFile) 
       const sourcePath = importPath.parentPath?.get("source");
       const source = sourcePath?.isStringLiteral?.() ? sourcePath.node.value : "";
       const localBinding = getBinding(importPath.get("local"));
-      if (
-        importedName === "getSocialAttachmentValidationMessage"
-        && moduleResolvesTo(source, sourceFile, "_lib/socialAttachments")
-        && localBinding
-      ) approvedValidatorBindings.add(localBinding);
-      if (
-        importedName === "UserFacingError"
-        && moduleResolvesTo(source, sourceFile, "_lib/userFacingErrors")
-        && localBinding
-      ) trustedErrorBindings.add(localBinding);
+      if (importedName === "getSocialAttachmentValidationMessage" && moduleResolvesTo(source, sourceFile, "_lib/socialAttachments") && localBinding) approvedValidatorBindings.add(localBinding);
+      if (importedName === "UserFacingError" && moduleResolvesTo(source, sourceFile, "_lib/userFacingErrors") && localBinding) trustedErrorBindings.add(localBinding);
     },
     "CallExpression|OptionalCallExpression|NewExpression"(expressionPath) {
       const callee = unwrapExpression(expressionPath.get("callee"));
@@ -847,17 +833,19 @@ const collectUserFacingErrorConstructionViolations = (source, file, sourceFile) 
     CallExpression(callPath) {
       const callee = unwrapExpression(callPath.get("callee"));
       const object = callee?.isMemberExpression?.() || callee?.isOptionalMemberExpression?.() ? unwrapExpression(callee.get("object")) : null;
+      const property = getPropertyName(callee); const args = callPath.get("arguments"); const targetBinding = getBinding(unwrapExpression(args[0])); const invoked = invokedMembers.get(targetBinding);
       if (callee?.isIdentifier?.({ name: "require" }) || getPropertyName(callee) === "require"
         || (["call", "apply"].includes(getPropertyName(callee)) && object?.isIdentifier?.({ name: "require" }))) {
         violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: CommonJS imports are not an app-owned customer-copy boundary`);
       }
-      if (getPropertyName(callee) === "assign" && object?.isIdentifier?.({ name: "Object" })
-        && callPath.get("arguments").slice(1).some((argument) => expressionUsesImport(argument, new Set(), true, true))) {
+      if (property === "assign" && object?.isIdentifier?.({ name: "Object" })
+        && args.slice(1).some((argument) => expressionUsesImport(argument, new Set(), true, true))) {
         violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: imported error values must not be laundered through containers`);
       }
-      if (getPropertyName(callee) === "set" && object?.isIdentifier?.({ name: "Reflect" })
-        && invokedMembers.get(getBinding(unwrapExpression(callPath.get("arguments")[0])))?.has(getStaticString(callPath.get("arguments")[1]))
-        && expressionUsesImport(callPath.get("arguments")[2], new Set(), true, true)) violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: imported error values must not be installed through reflection`);
+      if (property === "set" && object?.isIdentifier?.({ name: "Reflect" }) && invoked?.has(getStaticString(args[1]))
+        && expressionUsesImport(args[2], new Set(), true, true)) violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: imported error values must not be installed through reflection`);
+      if (property === "defineProperty" && ["Object", "Reflect"].some((name) => object?.isIdentifier?.({ name })) && invoked?.has(getStaticString(args[1])) && expressionUsesImport(args[2], new Set(), true, true)) violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: imported error values must not be installed through property descriptors`);
+      if (property === "defineProperties" && object?.isIdentifier?.({ name: "Object" }) && invoked?.size && expressionUsesImport(args[1], new Set(), true, true)) violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: imported error values must not be installed through property descriptors`);
     },
     AssignmentExpression(assignmentPath) {
       const left = unwrapExpression(assignmentPath.get("left"));
@@ -982,8 +970,9 @@ const collectDomainFailureWrapperViolations = (source, file, functionName, fallb
           && getStaticString(copyCheck.get("right")) === requiredCopy
           && isTypedThrow(classifiedIf.get("consequent"), requiredCopy);
         if (!exactClassification) violations.push(`${file}: ${functionName} must preserve the exact measured-size classification branch`);
-        const uploadCalls = [];
-        functionPath.traverse({ CallExpression(callPath) { if (unwrapExpression(callPath.get("callee"))?.isIdentifier?.({ name: "uploadFileToMediaStorage" })) uploadCalls.push(callPath); } });
+        const uploadCalls = []; const uploadBinding = functionPath.scope.getBinding("uploadFileToMediaStorage"); let uploadAlias = false;
+        functionPath.traverse({ Identifier(pathValue) { if (pathValue.isReferencedIdentifier?.() && getBinding(pathValue) === uploadBinding && !(pathValue.key === "callee" && (pathValue.parentPath?.isCallExpression?.() || pathValue.parentPath?.isOptionalCallExpression?.()))) uploadAlias = true; }, CallExpression(callPath) { const awaited = callPath.parentPath; const owner = awaited?.isAwaitExpression?.() ? awaited.parentPath : null; const conditional = callPath.findParent((item) => item.isIfStatement?.() || item.isConditionalExpression?.() || item.isLogicalExpression?.() || item.isLoop?.() || item.isSwitchCase?.()); if (!conditional && unwrapExpression(callPath.get("callee"))?.isIdentifier?.({ name: "uploadFileToMediaStorage" }) && owner?.isVariableDeclarator?.() && owner.get("id").isIdentifier?.({ name: "uploadedObject" })) uploadCalls.push(callPath); } });
+        if (uploadAlias) violations.push(`${file}: ${functionName} must call the measured upload boundary directly`);
         const uploadConfig = uploadCalls.length === 1 ? unwrapExpression(uploadCalls[0].get("arguments")[0]) : null;
         const propertyValue = (name) => { const property = uploadConfig?.isObjectExpression?.() ? uploadConfig.get("properties").find((item) => { const key = item.get("key"); return item.isObjectProperty?.() && (item.node.computed ? getStaticString(key) : key.isIdentifier?.() ? key.node.name : getStaticString(key)) === name; }) : null; return unwrapExpression(property?.get("value")); };
         if (!propertyValue("maximumSizeBytes")?.isIdentifier?.({ name: "SOCIAL_ATTACHMENT_MAX_BYTES" })
@@ -1182,6 +1171,7 @@ for (const [label, mutation, functionName, fallback, requiredCopy] of [
   ["inverted size classification", socialAttachments.replace("error.message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE", "error.message !== SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE"), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
   ["missing upload limit binding", socialAttachments.replace("        maximumSizeBytes: SOCIAL_ATTACHMENT_MAX_BYTES,\n", ""), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
   ["wrong upload copy binding", socialAttachments.replace("        tooLargeMessage: SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,", '        tooLargeMessage: "That file is too large.",'), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
+  ["disconnected upload decoy", socialAttachments.replace("const uploadedObject = await uploadFileToMediaStorage({", "const uploadAlias = uploadFileToMediaStorage;\n        const uploadedObject = await uploadAlias({").replace("          maximumSizeBytes: SOCIAL_ATTACHMENT_MAX_BYTES,\n", "").replace("          tooLargeMessage: SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,\n", "").replace("    const preparedUpload = await (async () => {", "    if (false) { const uploadedObject = await uploadFileToMediaStorage({ maximumSizeBytes: SOCIAL_ATTACHMENT_MAX_BYTES, tooLargeMessage: SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE } as any); void uploadedObject; }\n    const preparedUpload = await (async () => {"), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
   ["nested decoy wrapper", `${socialAttachmentPicker.replace("export async function pickSocialAttachmentFile(scope: SocialAttachmentPickerScope) {", "export const pickSocialAttachmentFile = async (scope: SocialAttachmentPickerScope) => {").replace(/\n}\s*$/, "\n};")}\nfunction __decoy() { function pickSocialAttachmentFile() { try {} catch (error) { if (error instanceof UserFacingError) throw error; throw new UserFacingError(\"attachment_action\", \"Unable to choose that attachment right now. Try again.\"); } } }`, "pickSocialAttachmentFile", "Unable to choose that attachment right now. Try again.", null],
   ["shadowed global Error", socialAttachments.replace("}): Promise<SocialAttachment> {\n  try {", "}): Promise<SocialAttachment> {\n  class Error extends globalThis.Error {}\n  try {"), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
   ["disconnected first try wrapper", socialAttachmentPicker.replace("export async function pickSocialAttachmentFile(scope: SocialAttachmentPickerScope) {\n  try {", 'export async function pickSocialAttachmentFile(scope: SocialAttachmentPickerScope) {\n  try {} catch (error) { if (error instanceof UserFacingError) throw error; throw new UserFacingError("attachment_action", "Unable to choose that attachment right now. Try again."); }\n  try {').replace("if (error instanceof UserFacingError) throw error;", "throw error;"), "pickSocialAttachmentFile", "Unable to choose that attachment right now. Try again.", null],
@@ -1226,13 +1216,19 @@ for (const [label, mutation] of [
   ["computed provider error", `${login}\nasync function __unsafeComputedProvider(setError, action) { const key = "error"; const { [key]: problem } = await action(); setError(problem.message); }`],
   ["aliased asserted computed provider error", `${login}\nasync function __unsafeAliasedComputedProvider(setError, action) { const first = "error" as const; const key = first; const { [key]: problem } = await action(); setError(problem.message); }`],
   ["assigned Promise rejection", `${login}\nfunction __unsafeAssignedPromiseCatch(setError, action) { let rejected; rejected = (problem) => setError(problem.message); action().catch(rejected); }`],
+  ["inline-assigned Promise rejection", `${login}\nfunction __unsafeInlineAssignedPromiseCatch(setError, action) { let rejected; action().catch((rejected = (problem) => setError(problem.message))); }`],
   ["post-declaration member rejection", `${login}\nfunction __unsafeMemberAssignedAlias(setError, action) { const handlers = { rejected(problem) { setError(problem.message); } }; let rejected; rejected = handlers.rejected; action().catch(rejected); }`],
   ["conditional rejection", `${login}\nfunction __unsafeConditionalRejection(setError, action, flag) { const handlers = { rejected(problem) { setError(problem.message); } }; action().catch(flag ? handlers.rejected : handlers.rejected); }`],
   ["React useCallback rejection", `${login}\nfunction __unsafeReactUseCallback(setError, action) { const rejected = React.useCallback((problem) => setError(problem.message), [setError]); action().catch(rejected); }`],
   ["identity-wrapped rejection", `${login}\nfunction identity(value) { return value; } function __unsafeWrappedCallback(setError, action) { action().catch(identity((problem) => setError(problem.message))); }`],
   ["callback producer rejection", `${login}\nfunction __unsafeProducedCallback(setError, action) { const handlers = { fail(problem) { setError(problem.message); } }; const choose = () => handlers.fail; action().catch(choose()); }`],
+  ["reflected callback", `${login}\nfunction __unsafeReflectedCallback(setError, action) { const handlers = { fail(problem) { setError(problem.message); } }; action().catch(Reflect.get(handlers, "fail")); }`],
+  ["array at callback", `${login}\nfunction __unsafeArrayAtCallback(setError, action) { const fail = (problem) => setError(problem.message); action().catch([fail].at(0)); }`],
   ["Object.assign callback", `${login}\nfunction __unsafeAssignedContainer(setError, action) { const base = { fail(problem) { setError(problem.message); } }; const handlers = Object.assign({}, base); action().catch(handlers.fail); }`],
   ["conditional container callback", `${login}\nfunction __unsafeConditionalContainer(setError, action, flag) { action().catch((flag ? { run: problem => setError(problem.message) } : { run: problem => setError(problem.message) }).run); }`],
+  ["staged conditional container callback", `${login}\nfunction __unsafeStagedConditionalContainer(setError, action, flag) { const handlers = flag ? { run: problem => setError(problem.message) } : { run: problem => setError(problem.message) }; action().catch(handlers.run); }`],
+  ["error event callback", `${login}\nfunction __unsafeErrorEvent(setError, emitter) { emitter.addListener("error", problem => setError(problem.message)); }`],
+  ["destructured error event callback", `${login}\nfunction __unsafeDestructuredErrorEvent(setError, emitter) { emitter.on("error", ({ message }) => setError(message)); }`],
   ["useCallback Promise rejection", `${login}\nfunction __unsafeHookPromiseCatch(setError, action) { const rejected = useCallback((problem) => setError(problem.message), []); action().catch(rejected); }`],
   ["object Promise rejection", `${login}\nfunction __unsafeObjectPromiseCatch(setError, action) { const handlers = { rejected(problem) { setError(problem.message); } }; action().catch(handlers.rejected); }`],
   ["class Promise rejection", `${login}\nfunction __unsafeClassPromiseCatch(setError, action) { class Handlers { rejected(problem) { setError(problem.message); } } const handlers = new Handlers(); action().catch(handlers.rejected); }`],
@@ -1306,6 +1302,9 @@ for (const [label, mutation, analyze, sourceFile] of [
   ["concise array constructor callback", `${chatDomain}\nimport { DomainProblem } from "./problems";\nconst __chooseProblem = () => DomainProblem; function __unsafeArrayCallback(created) { const Ctor = [__chooseProblem].map((fn) => fn())[0]; throw new Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["member-assigned imported constructor", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeAssignedMember(created) { const box = {}; box.Ctor = DomainProblem; throw new box.Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["Reflect-installed imported constructor", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeReflectMember(created) { const box = {}; Reflect.set(box, "Ctor", DomainProblem); throw new box.Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["descriptor-installed imported constructor", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeDescriptorMember(created) { const box = {}; Object.defineProperty(box, "Ctor", { value: DomainProblem }); throw new box.Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["descriptors-installed imported constructor", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeDescriptorsMember(created) { const box = {}; Object.defineProperties(box, { Ctor: { value: DomainProblem } }); throw new box.Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["reflected descriptor-installed imported constructor", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeReflectedDescriptorMember(created) { const box = {}; Reflect.defineProperty(box, "Ctor", { value: DomainProblem }); throw new box.Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["static-field imported constructor", `${chatDomain}\nimport { DomainProblem } from "./problems";\nclass __UnsafeFactory { static Ctor = DomainProblem; } function __unsafeStaticField(created) { throw new __UnsafeFactory.Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["aliased CommonJS constructor", `${chatDomain}\nfunction __unsafeAliasedRequire(created) { const load = require; const { TrustedError } = load("./trustedErrors"); throw new TrustedError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["nested validator module", `${socialAttachmentPicker}\nimport { getSocialAttachmentValidationMessage as unsafeValidate } from "./fake/socialAttachments";\nfunction __unsafeImportedValidator(created) { const message = unsafeValidate(created.file); throw new UserFacingError("attachment_action", message); }`, collectUserFacingErrorConstructionViolations, "_lib/socialAttachmentPicker.ts"],
