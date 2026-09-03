@@ -56,8 +56,8 @@ test("applies a caller-specific limit to a filesystem-measured picker asset", as
       providedSizeBytes: undefined,
       readSizeBytes: async () => 20 * 1024 * 1024 + 1,
       maximumSizeBytes: 20 * 1024 * 1024,
-      tooLargeMessage: "This attachment is too large for comments/chat right now.",
+      tooLargeMessage: "Cover image is too large.",
     }),
-    /This attachment is too large for comments\/chat right now\./u,
+    /Cover image is too large\./u,
   );
 });

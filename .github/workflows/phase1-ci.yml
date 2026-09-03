@@ -445,7 +445,7 @@ jobs:
             command: npx tsc --noEmit
           - key: runtime
             name: Runtime Validation
-            command: npm run validate:runtime && npm run test:runtime-update-activation && npm run guard:ota-native-boundary && npm run test:image-upload-native-boundary && npm run guard:android-native-runtime-compatibility && npm run guard:chilly-chat-livekit-android-build-profile && npm run guard:android-signing-secret-policy
+            command: npm run validate:runtime && npm run test:runtime-update-activation && npm run guard:ota-native-boundary && npm run test:image-upload-native-boundary && npm run guard:critical-ux-polish-policy && npm run guard:android-native-runtime-compatibility && npm run guard:chilly-chat-livekit-android-build-profile && npm run guard:android-signing-secret-policy
           - key: routes
             name: Route Contracts
             command: npm run guard:route-contracts

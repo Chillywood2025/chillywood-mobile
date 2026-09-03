@@ -25,7 +25,7 @@ const getPropertyName = (pathValue) => {
   if (!pathValue?.isMemberExpression?.() && !pathValue?.isOptionalMemberExpression?.()) return "";
   const property = pathValue.get("property");
   if (!pathValue.node.computed && property.isIdentifier()) return property.node.name;
-  return property.isStringLiteral() ? property.node.value : "";
+  return getStaticString(property) ?? "";
 };
 const getBindingByName = (sourcePath, name) => {
   let currentPath = sourcePath;
@@ -198,6 +198,11 @@ const getPatternBindings = (patternPath) => {
 const getStaticString = (expressionPath, seen = new Set()) => {
   expressionPath = unwrapExpression(expressionPath);
   if (expressionPath?.isStringLiteral?.()) return expressionPath.node.value;
+  if (expressionPath?.isTemplateLiteral?.() && expressionPath.get("expressions").length === 0) return expressionPath.node.quasis[0]?.value.cooked ?? "";
+  if (expressionPath?.isBinaryExpression?.({ operator: "+" })) {
+    const left = getStaticString(expressionPath.get("left"), seen); const right = getStaticString(expressionPath.get("right"), seen);
+    return left === null || right === null ? null : left + right;
+  }
   if (!expressionPath?.isIdentifier?.()) return null;
   const binding = getBinding(expressionPath);
   if (!binding?.constant || seen.has(binding)) return null;
@@ -233,6 +238,7 @@ const isDirectPresentationExpression = (expressionPath, presentationBindings, se
   if (!expressionPath?.node) return false;
   if (expressionPath.isLogicalExpression?.()) return isDirectPresentationExpression(expressionPath.get("left"), presentationBindings, seen)
     || isDirectPresentationExpression(expressionPath.get("right"), presentationBindings, seen);
+  if (expressionPath.isArrayExpression?.()) return expressionPath.get("elements").some((item) => isDirectPresentationExpression(item, presentationBindings, seen));
   if (expressionPath.isObjectExpression?.()) return expressionPath.get("properties").some((property) => (
     property.isObjectMethod?.() || property.isObjectProperty?.()
   ) && isDirectPresentationExpression(property.isObjectMethod?.() ? property : property.get("value"), presentationBindings, seen));
@@ -289,26 +295,34 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
     }
     return false;
   };
-  const resolveCallback = (candidatePath) => {
+  const resolveCallback = (candidatePath, seen = new Set()) => {
     candidatePath = unwrapExpression(candidatePath);
     if (candidatePath?.isFunction?.()) return candidatePath;
+    if (candidatePath?.isSequenceExpression?.()) {
+      for (const item of candidatePath.get("expressions").toReversed()) { const resolved = resolveCallback(item, seen); if (resolved) return resolved; }
+    }
     if (candidatePath?.isMemberExpression?.() || candidatePath?.isOptionalMemberExpression?.()) {
       const propertyName = getPropertyName(candidatePath);
       const object = unwrapExpression(candidatePath.get("object"));
       const objectBinding = getBinding(object);
       const owner = objectBinding?.path?.isVariableDeclarator?.() ? objectBinding.path : objectBinding?.path?.parentPath;
       const init = owner?.isVariableDeclarator?.() ? unwrapExpression(owner.get("init")) : null;
+      const container = init?.node ? init : object;
       const definitionName = (item) => {
         const key = item?.get?.("key");
         return !item?.node?.computed && key?.isIdentifier?.() ? key.node.name : getStaticString(key);
       };
-      if (init?.isObjectExpression?.()) {
-        const property = init.get("properties").find((item) => definitionName(item) === propertyName);
+      if (container?.isObjectExpression?.()) {
+        const property = container.get("properties").find((item) => definitionName(item) === propertyName);
         const value = property?.isObjectProperty?.() ? unwrapExpression(property.get("value")) : property;
         if (value?.isFunction?.()) return value;
       }
-      if (init?.isNewExpression?.()) {
-        const classBinding = getBinding(unwrapExpression(init.get("callee")));
+      if (container?.isArrayExpression?.()) {
+        const index = Number(propertyName); const value = Number.isSafeInteger(index) ? unwrapExpression(container.get("elements")[index]) : null;
+        if (value?.isFunction?.()) return value;
+      }
+      if (container?.isNewExpression?.()) {
+        const classBinding = getBinding(unwrapExpression(container.get("callee")));
         const classOwner = classBinding?.path?.isClassDeclaration?.() ? classBinding.path : classBinding?.path?.parentPath;
         const method = classOwner?.isClassDeclaration?.() ? classOwner.get("body.body").find((item) => definitionName(item) === propertyName) : null;
         if (method?.isFunction?.()) return method;
@@ -322,12 +336,38 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
       if (assigned?.isFunction?.()) return assigned;
     }
     const binding = getBinding(candidatePath);
+    if (!binding || seen.has(binding)) return null;
+    seen.add(binding);
     let owner = binding?.path;
     if (owner?.isIdentifier?.()) owner = owner.parentPath;
+    if (!owner?.isVariableDeclarator?.()) owner = binding.path.findParent?.((item) => item.isVariableDeclarator?.()) ?? owner;
     if (owner?.isFunctionDeclaration?.()) return owner;
     let init = owner?.isVariableDeclarator?.() ? unwrapExpression(owner.get("init")) : null;
+    const pattern = owner?.isVariableDeclarator?.() ? owner.get("id") : null;
+    if (pattern?.isArrayPattern?.()) {
+      const index = pattern.get("elements").findIndex((item) => getPatternBindings(item).includes(binding));
+      const containerBinding = getBinding(init); const containerOwner = containerBinding?.path?.isVariableDeclarator?.() ? containerBinding.path : containerBinding?.path?.parentPath;
+      const container = containerOwner?.isVariableDeclarator?.() ? unwrapExpression(containerOwner.get("init")) : init;
+      if (container?.isArrayExpression?.() && index >= 0) init = unwrapExpression(container.get("elements")[index]);
+    }
+    if (pattern?.isObjectPattern?.()) {
+      const property = pattern.get("properties").find((item) => getPatternBindings(item).includes(binding));
+      const key = property?.get("key"); const propertyName = !property?.node?.computed && key?.isIdentifier?.() ? key.node.name : getStaticString(key);
+      const sourceBinding = getBinding(init); const sourceOwner = sourceBinding?.path?.isVariableDeclarator?.() ? sourceBinding.path : sourceBinding?.path?.parentPath;
+      const source = sourceOwner?.isVariableDeclarator?.() ? unwrapExpression(sourceOwner.get("init")) : init;
+      const memberAssignment = assignments.find((item) => { const left = unwrapExpression(item.get("left")); return (left?.isMemberExpression?.() || left?.isOptionalMemberExpression?.()) && getPropertyName(left) === propertyName && getBinding(unwrapExpression(left.get("object"))) === sourceBinding; });
+      if (memberAssignment) init = unwrapExpression(memberAssignment.get("right"));
+      else if (source?.isObjectExpression?.()) {
+        const sourceProperty = source.get("properties").find((item) => (!item.node.computed && item.get("key")?.isIdentifier?.({ name: propertyName })) || getStaticString(item.get("key")) === propertyName);
+        init = sourceProperty?.isObjectProperty?.() ? unwrapExpression(sourceProperty.get("value")) : sourceProperty;
+      } else if (source?.isNewExpression?.()) {
+        const classBinding = getBinding(unwrapExpression(source.get("callee"))); const classPath = classBinding?.path?.isClassDeclaration?.() ? classBinding.path : classBinding?.path?.parentPath;
+        init = classPath?.isClassDeclaration?.() ? classPath.get("body.body").find((item) => (!item.node.computed && item.get("key")?.isIdentifier?.({ name: propertyName })) || getStaticString(item.get("key")) === propertyName) : init;
+      }
+    }
     if (init?.isCallExpression?.() && unwrapExpression(init.get("callee"))?.isIdentifier?.({ name: "useCallback" })) init = unwrapExpression(init.get("arguments")[0]);
     if (init?.isFunction?.()) return init;
+    if (init?.node) { const resolved = resolveCallback(init, seen); if (resolved) return resolved; }
     const assigned = assignments.find((item) => item.get("left").isIdentifier?.() && getBinding(item.get("left")) === binding);
     return unwrapExpression(assigned?.get("right"))?.isFunction?.() ? unwrapExpression(assigned.get("right")) : null;
   };
@@ -474,8 +514,9 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
           }
         }
       }
-      const nextMessageBindings = id.isObjectPattern()
-        ? objectPatternMessageBindings(id, isRawErrorObjectExpression(init, rawErrorBindings))
+      const nextMessageBindings = id.isObjectPattern() || id.isArrayPattern?.()
+        ? expressionContainsRawMessage(init, rawMessageBindings, rawErrorBindings, sanitizerBindings)
+          ? idBindings : objectPatternMessageBindings(id, isRawErrorObjectExpression(init, rawErrorBindings))
         : !init.isFunction?.() && expressionContainsRawMessage(init, rawMessageBindings, rawErrorBindings, sanitizerBindings)
           ? idBindings
           : [];
@@ -550,8 +591,9 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
       }
       const nextMessageBindings = assignmentPath.get("left").isObjectPattern() && rightIsRawErrorObject
         ? objectPatternMessageBindings(assignmentPath.get("left"), true)
-        : assignmentPath.get("left").isObjectPattern()
-          ? objectPatternMessageBindings(assignmentPath.get("left"), false)
+        : assignmentPath.get("left").isObjectPattern() || assignmentPath.get("left").isArrayPattern?.()
+          ? expressionContainsRawMessage(right, rawMessageBindings, rawErrorBindings, sanitizerBindings)
+            ? leftBindings : objectPatternMessageBindings(assignmentPath.get("left"), false)
         : !right.isFunction?.() && expressionContainsRawMessage(right, rawMessageBindings, rawErrorBindings, sanitizerBindings)
           ? leftBindings
           : [];
@@ -741,8 +783,41 @@ const collectUserFacingErrorConstructionViolations = (source, file, sourceFile) 
     expressionPath = unwrapExpression(expressionPath);
     if (!expressionPath?.node) return false;
     if (expressionPath.isAwaitExpression?.()) return isImportedFactoryReference(expressionPath.get("argument"), seen);
-    if (expressionPath.isCallExpression?.()) return expressionPath.get("callee").isImport?.();
-    if (expressionPath.isMemberExpression?.() || expressionPath.isOptionalMemberExpression?.()) return isImportedFactoryReference(expressionPath.get("object"), seen);
+    if (expressionPath.isSequenceExpression?.()) return expressionPath.get("expressions").some((item) => isImportedFactoryReference(item, seen));
+    if (expressionPath.isLogicalExpression?.() || expressionPath.isBinaryExpression?.()) return isImportedFactoryReference(expressionPath.get("left"), seen)
+      || isImportedFactoryReference(expressionPath.get("right"), seen);
+    if (expressionPath.isConditionalExpression?.()) return isImportedFactoryReference(expressionPath.get("consequent"), seen)
+      || isImportedFactoryReference(expressionPath.get("alternate"), seen);
+    if (expressionPath.isArrayExpression?.()) return expressionPath.get("elements").some((item) => isImportedFactoryReference(item, seen));
+    if (expressionPath.isObjectExpression?.()) return expressionPath.get("properties").some((item) => isImportedFactoryReference(item.isObjectProperty?.() ? item.get("value") : item, seen));
+    if (expressionPath.isSpreadElement?.()) return isImportedFactoryReference(expressionPath.get("argument"), seen);
+    if (expressionPath.isFunction?.() || expressionPath.isClass?.()) {
+      let found = false;
+      expressionPath.traverse({
+        CallExpression(item) { if (isImportedFactoryReference(item.get("callee"), new Set(seen))) found = true; },
+        NewExpression(item) { if (isImportedFactoryReference(item.get("callee"), new Set(seen))) found = true; },
+      });
+      return found;
+    }
+    if (expressionPath.isCallExpression?.() || expressionPath.isOptionalCallExpression?.() || expressionPath.isNewExpression?.()) {
+      const callee = unwrapExpression(expressionPath.get("callee"));
+      return callee?.isImport?.() || isImportedFactoryReference(callee, seen)
+        || expressionPath.get("arguments").some((item) => isImportedFactoryReference(item, seen))
+        || (getPropertyName(callee) === "resolve" && unwrapExpression(callee.get("object"))?.isIdentifier?.({ name: "Promise" })
+          && expressionPath.get("arguments").some((item) => isImportedFactoryReference(item, seen)));
+    }
+    if (expressionPath.isMemberExpression?.() || expressionPath.isOptionalMemberExpression?.()) {
+      const object = unwrapExpression(expressionPath.get("object"));
+      if (!object?.isIdentifier?.()) return isImportedFactoryReference(object, seen);
+      const binding = getBinding(object);
+      if (binding?.kind === "module") return true;
+      const owner = binding?.path?.isVariableDeclarator?.() ? binding.path : binding?.path?.findParent?.((candidate) => candidate.isVariableDeclarator?.());
+      const init = owner?.isVariableDeclarator?.() ? unwrapExpression(owner.get("init")) : null;
+      const awaited = init?.isAwaitExpression?.() ? unwrapExpression(init.get("argument")) : null;
+      return !!init?.node && !init.isCallExpression?.() && !init.isOptionalCallExpression?.()
+        && (!awaited?.node || (awaited.isCallExpression?.() && awaited.get("callee").isImport?.()))
+        && isImportedFactoryReference(object, seen);
+    }
     if (!expressionPath.isIdentifier?.()) return false;
     const binding = getBinding(expressionPath);
     if (!binding || seen.has(binding)) return false;
@@ -751,11 +826,27 @@ const collectUserFacingErrorConstructionViolations = (source, file, sourceFile) 
     const owner = binding.path.isVariableDeclarator?.() ? binding.path : binding.path.findParent?.((candidate) => candidate.isVariableDeclarator?.());
     if (!owner?.isVariableDeclarator?.()) return false;
     const init = unwrapExpression(owner.get("init"));
-    if (owner.get("id").isObjectPattern?.()) return init?.isAwaitExpression?.()
-      && isImportedFactoryReference(init.get("argument"), seen);
-    return ((init?.isIdentifier?.() || init?.isMemberExpression?.() || init?.isOptionalMemberExpression?.() || init?.isAwaitExpression?.())
-      && isImportedFactoryReference(init, seen)) || binding.constantViolations.some((item) => item.isAssignmentExpression?.()
+    if (owner.get("id").isObjectPattern?.()) {
+      const awaited = init?.isAwaitExpression?.() ? unwrapExpression(init.get("argument")) : null;
+      return !!awaited?.isCallExpression?.() && awaited.get("callee").isImport?.();
+    }
+    return isImportedFactoryReference(init, seen) || binding.constantViolations.some((item) => item.isAssignmentExpression?.()
         && isImportedFactoryReference(item.get("right"), seen));
+  };
+  const isDirectImportedFactoryReference = (expressionPath, seen = new Set()) => {
+    expressionPath = unwrapExpression(expressionPath);
+    if (!expressionPath?.node) return false;
+    if (expressionPath.isAwaitExpression?.()) return isDirectImportedFactoryReference(expressionPath.get("argument"), seen);
+    if (expressionPath.isMemberExpression?.() || expressionPath.isOptionalMemberExpression?.()) return isDirectImportedFactoryReference(expressionPath.get("object"), seen);
+    if (!expressionPath.isIdentifier?.()) return false;
+    const binding = getBinding(expressionPath);
+    if (!binding || seen.has(binding)) return false;
+    if (binding.kind === "module") return true;
+    seen.add(binding);
+    const owner = binding.path.isVariableDeclarator?.() ? binding.path : binding.path.findParent?.((candidate) => candidate.isVariableDeclarator?.());
+    const init = owner?.isVariableDeclarator?.() ? unwrapExpression(owner.get("init")) : null;
+    return !!init?.node && (init.isIdentifier?.() || init.isMemberExpression?.() || init.isOptionalMemberExpression?.() || init.isAwaitExpression?.())
+      && isDirectImportedFactoryReference(init, seen);
   };
   const isImportedConstruction = (expressionPath, seen = new Set()) => {
     expressionPath = unwrapExpression(expressionPath);
@@ -808,7 +899,7 @@ const collectUserFacingErrorConstructionViolations = (source, file, sourceFile) 
       if (expressionUsesImport(returnPath.get("argument"), new Set(), false)) violations.push(`${file}:${returnPath.node.loc?.start.line ?? "?"}: imported error values must not be returned`);
       const argument = unwrapExpression(returnPath.get("argument"));
       if ((argument?.isCallExpression?.() || argument?.isNewExpression?.())
-        && isImportedFactoryReference(argument.get("callee"))
+        && isDirectImportedFactoryReference(argument.get("callee"))
         && argument.get("arguments").some((item) => !isStaticCustomerCopy(item))) {
         violations.push(`${file}:${returnPath.node.loc?.start.line ?? "?"}: imported factories must not return dynamic customer copy`);
       }
@@ -878,27 +969,45 @@ const collectDomainFailureWrapperViolations = (source, file, functionName, fallb
         violations.push(`${file}: ${functionName} must have an outer typed failure wrapper`);
         return;
       }
+      const statements = handler.get("body.body");
+      const isCatchIdentifier = (pathValue) => pathValue?.isIdentifier?.() && getBinding(pathValue) === catchBinding;
+      const isTypedThrow = (pathValue, copy) => {
+        if (!pathValue?.isThrowStatement?.()) return false;
+        const value = unwrapExpression(pathValue.get("argument"));
+        return value?.isNewExpression?.() && unwrapExpression(value.get("callee"))?.isIdentifier?.({ name: "UserFacingError" })
+          && getStaticString(value.get("arguments")[1]) === copy;
+      };
+      const safeIf = statements[0];
+      const safeTest = safeIf?.get("test");
+      const safeRethrow = safeIf?.get("consequent");
+      const safeExact = safeIf?.isIfStatement?.() && !safeIf.get("alternate")?.node
+        && safeTest?.isBinaryExpression?.({ operator: "instanceof" })
+        && isCatchIdentifier(unwrapExpression(safeTest.get("left")))
+        && unwrapExpression(safeTest.get("right"))?.isIdentifier?.({ name: "UserFacingError" })
+        && safeRethrow?.isThrowStatement?.() && isCatchIdentifier(unwrapExpression(safeRethrow.get("argument")));
       const throws = [];
       handler.traverse({ Function(innerPath) { innerPath.skip(); }, ThrowStatement(throwPath) { throws.push(throwPath); } });
-      const typedCopies = throws.flatMap((throwPath) => {
-        const argument = unwrapExpression(throwPath.get("argument"));
-        return argument?.isNewExpression?.() && unwrapExpression(argument.get("callee"))?.isIdentifier?.({ name: "UserFacingError" })
-          ? [getStaticString(argument.get("arguments")[1])] : [];
-      });
-      for (const throwPath of throws) {
-        const argument = unwrapExpression(throwPath.get("argument"));
-        if (!argument?.isIdentifier?.() || getBinding(argument) !== catchBinding) continue;
-        const guarded = throwPath.findParent((parent) => parent === handler ? false : parent.isIfStatement?.());
-        const test = guarded?.get("test");
-        const isTypedCheck = (binaryPath) => binaryPath?.isBinaryExpression?.({ operator: "instanceof" })
-          && getBinding(unwrapExpression(binaryPath.get("left"))) === catchBinding
-          && unwrapExpression(binaryPath.get("right"))?.isIdentifier?.({ name: "UserFacingError" });
-        let appOwnedOnly = isTypedCheck(test);
-        test?.traverse?.({ BinaryExpression(binaryPath) { if (isTypedCheck(binaryPath)) appOwnedOnly = true; } });
-        if (!appOwnedOnly) violations.push(`${file}: ${functionName} must not rethrow an unknown provider or native failure`);
+      if (!safeExact || throws.some((throwPath) => isCatchIdentifier(unwrapExpression(throwPath.get("argument"))) && throwPath.node !== safeRethrow?.node)) {
+        violations.push(`${file}: ${functionName} must rethrow only an exact app-owned UserFacingError`);
       }
-      if (!typedCopies.includes(fallback)) violations.push(`${file}: ${functionName} must preserve its static generic failure copy`);
-      if (requiredCopy && !typedCopies.includes(requiredCopy)) violations.push(`${file}: ${functionName} must preserve its static classified failure copy`);
+      if (!isTypedThrow(statements.at(-1), fallback)) violations.push(`${file}: ${functionName} must end with its static generic failure copy`);
+      if (requiredCopy) {
+        const classifiedIf = statements[1];
+        const test = classifiedIf?.isIfStatement?.() ? classifiedIf.get("test") : null;
+        const typeCheck = test?.isLogicalExpression?.({ operator: "&&" }) ? test.get("left") : null;
+        const copyCheck = test?.isLogicalExpression?.({ operator: "&&" }) ? test.get("right") : null;
+        const exactClassification = classifiedIf?.isIfStatement?.() && !classifiedIf.get("alternate")?.node
+          && test?.isLogicalExpression?.({ operator: "&&" })
+          && typeCheck?.isBinaryExpression?.({ operator: "instanceof" })
+          && isCatchIdentifier(unwrapExpression(typeCheck.get("left")))
+          && unwrapExpression(typeCheck.get("right"))?.isIdentifier?.({ name: "Error" })
+          && copyCheck?.isBinaryExpression?.({ operator: "===" })
+          && getPropertyName(unwrapExpression(copyCheck.get("left"))) === "message"
+          && isCatchIdentifier(unwrapExpression(unwrapExpression(copyCheck.get("left")).get("object")))
+          && getStaticString(copyCheck.get("right")) === requiredCopy
+          && isTypedThrow(classifiedIf.get("consequent"), requiredCopy);
+        if (!exactClassification) violations.push(`${file}: ${functionName} must preserve the exact measured-size classification branch`);
+      }
     },
   });
   return violations;
@@ -1035,18 +1144,24 @@ for (const file of filesToScanForEntities) {
   visit(ast);
 }
 const userFacingErrors = read("_lib/userFacingErrors.ts");
-assertIncludes(userFacingErrors, "getUserFacingErrorMessage", "shared user-facing error helper");
-assertIncludes(userFacingErrors, "class UserFacingError", "trusted domain error type");
-assertIncludes(userFacingErrors, "This account does not have permission", "permission-safe error copy");
-assertIncludes(userFacingErrors, "Sign in again", "auth-safe error copy");
+assertIncludes(userFacingErrors, "getUserFacingErrorMessage", "shared user-facing error helper"); assertIncludes(userFacingErrors, "class UserFacingError", "trusted domain error type");
+assertIncludes(userFacingErrors, "This account does not have permission", "permission-safe error copy"); assertIncludes(userFacingErrors, "Sign in again", "auth-safe error copy");
 assertIncludes(userFacingErrors, "Check your connection", "network-safe error copy");
 assertIncludes(userFacingErrors, "The email or password is incorrect.", "credential-safe error copy");
 assertIncludes(userFacingErrors, "Confirm your email", "email-confirmation-safe error copy");
 assertIncludes(userFacingErrors, "Too many attempts.", "rate-limit-safe error copy");
 assertIncludes(userFacingErrors, "Unknown messages must fail closed", "unknown-error fail-closed policy");
 for (const violation of collectUserFacingErrorExportViolations(userFacingErrors, "Shared user-facing errors")) fail(violation);
-for (const behaviorFailure of await getUserFacingBehaviorFailures(userFacingErrors, "current")) {
-  fail(`shared user-facing error behavior ${behaviorFailure}`);
+for (const behaviorFailure of await getUserFacingBehaviorFailures(userFacingErrors, "current")) fail(`shared user-facing error behavior ${behaviorFailure}`);
+const mediaUploadSizeModule = await loadUserFacingErrorModule(read("_lib/mediaUploadSize.ts"), "media-upload-size");
+try {
+  await mediaUploadSizeModule.resolveMediaUploadSizeBytes({
+    providedSizeBytes: undefined, readSizeBytes: async () => 250 * 1024 * 1024 + 1,
+    maximumSizeBytes: 250 * 1024 * 1024, tooLargeMessage: "This attachment is too large for comments/chat right now.",
+  });
+  fail("measured attachment over-limit behavior must reject before upload");
+} catch (error) {
+  if (error?.message !== "This attachment is too large for comments/chat right now.") fail("measured attachment over-limit behavior lost its actionable copy");
 }
 const userFacingErrorMutations = [
   ["unknown errors pass through", (source) => source.replace(/return fallback;\n}\s*$/, "return rawMessage;\n}")],
@@ -1105,23 +1220,17 @@ for (const [label, source, code, sourceFile] of [
   for (const violation of collectDomainErrorPolicyViolations(source, label, sourceFile)) fail(violation);
 }
 for (const violation of collectPlainThrownErrorViolations(socialAttachmentPicker, "Social attachment picker")) fail(violation);
-for (const violation of collectDomainFailureWrapperViolations(
-  socialAttachmentPicker,
-  "Social attachment picker",
-  "pickSocialAttachmentFile",
-  "Unable to choose that attachment right now. Try again.",
-)) fail(violation);
-for (const violation of collectDomainFailureWrapperViolations(
-  socialAttachments,
-  "Social attachments domain",
-  "createSocialAttachmentForSurface",
-  "Unable to upload that attachment right now. Try again.",
-  "This attachment is too large for comments/chat right now.",
-)) fail(violation);
+for (const violation of collectDomainFailureWrapperViolations(socialAttachmentPicker, "Social attachment picker", "pickSocialAttachmentFile", "Unable to choose that attachment right now. Try again.")) fail(violation);
+for (const violation of collectDomainFailureWrapperViolations(socialAttachments, "Social attachments domain", "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now.")) fail(violation);
 for (const [label, mutation, functionName, fallback, requiredCopy] of [
   ["picker raw rethrow", socialAttachmentPicker.replace('throw new UserFacingError("attachment_action", "Unable to choose that attachment right now. Try again.");', "throw error;"), "pickSocialAttachmentFile", "Unable to choose that attachment right now. Try again.", null],
   ["upload raw rethrow", socialAttachments.replace('throw new UserFacingError("attachment_action", "Unable to upload that attachment right now. Try again.");', "throw error;"), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
   ["late-size classification removal", socialAttachments.replace(/\n\s*if \(error instanceof Error && error\.message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE\).*\n/, "\n"), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
+  ["truthy safe rethrow", socialAttachments.replace("if (error instanceof UserFacingError) throw error;", "if (true || error instanceof UserFacingError) throw error;"), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
+  ["inverted safe rethrow", socialAttachments.replace("if (error instanceof UserFacingError) throw error;", "if (!(error instanceof UserFacingError)) {} else throw error;"), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
+  ["unreachable size classification", socialAttachments.replace("if (error instanceof Error && error.message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE)", "if (false && error instanceof Error && error.message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE)"), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
+  ["unrelated size classification", socialAttachments.replace("error.message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE", "other.message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE"), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
+  ["inverted size classification", socialAttachments.replace("error.message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE", "error.message !== SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE"), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
 ]) if (collectDomainFailureWrapperViolations(mutation, label, functionName, fallback, requiredCopy).length === 0) {
   fail(`domain failure-wrapper proof accepted mutation: ${label}`);
 }
@@ -1162,6 +1271,13 @@ for (const [label, mutation] of [
   ["useCallback Promise rejection", `${login}\nfunction __unsafeHookPromiseCatch(setError, action) { const rejected = useCallback((problem) => setError(problem.message), []); action().catch(rejected); }`],
   ["object Promise rejection", `${login}\nfunction __unsafeObjectPromiseCatch(setError, action) { const handlers = { rejected(problem) { setError(problem.message); } }; action().catch(handlers.rejected); }`],
   ["class Promise rejection", `${login}\nfunction __unsafeClassPromiseCatch(setError, action) { class Handlers { rejected(problem) { setError(problem.message); } } const handlers = new Handlers(); action().catch(handlers.rejected); }`],
+  ["member callback alias", `${login}\nfunction __unsafeMemberAlias(setError, action) { const handlers = { rejected(problem) { setError(problem.message); } }; const rejected = handlers.rejected; action().catch(rejected); }`],
+  ["object callback destructure", `${login}\nfunction __unsafeObjectDestructure(setError, action) { const handlers = { rejected(problem) { setError(problem.message); } }; const { rejected } = handlers; action().catch(rejected); }`],
+  ["class callback destructure", `${login}\nfunction __unsafeClassDestructure(setError, action) { class Handlers { rejected(problem) { setError(problem.message); } } const { rejected } = new Handlers(); action().catch(rejected); }`],
+  ["assigned callback destructure", `${login}\nfunction __unsafeAssignedDestructure(setError, action) { const handlers = {}; handlers.rejected = (problem) => setError(problem.message); const { rejected } = handlers; action().catch(rejected); }`],
+  ["array callback", `${login}\nfunction __unsafeArrayCallback(setError, action) { const handlers = [(problem) => setError(problem.message)]; action().catch(handlers[0]); }`],
+  ["array callback destructure", `${login}\nfunction __unsafeArrayDestructure(setError, action) { const handlers = [(problem) => setError(problem.message)]; const [rejected] = handlers; action().catch(rejected); }`],
+  ["sequence callback", `${login}\nfunction __unsafeSequenceCallback(setError, action) { const rejected = (problem) => setError(problem.message); action().catch((undefined, rejected)); }`],
   ["defaulted provider callback", `${login}\nfunction __unsafeDefaultedProviderThen(setError, action) { action().then(({ error: problem } = {}) => setError(problem.message)); }`],
   ["unsafe sanitizer fallback", `${login}\nfunction __unsafeSanitizerFallback(setError) { try { throw new Error("provider"); } catch (problem) { const raw = problem.message; setError(getUserFacingErrorMessage(problem, raw)); } }`],
   ["member-staged raw message", `${login}\nfunction __unsafeMemberRaw(setError) { const state = {}; try { throw new Error("provider"); } catch (problem) { state.detail = problem.message; setError(state.detail); } }`],
@@ -1172,6 +1288,9 @@ for (const [label, mutation] of [
   ["logical presentation", `${login}\nfunction __unsafeLogicalPresentation(setError, noop) { try { throw new Error("provider"); } catch (problem) { (setError || noop)(problem.message); (setError ?? noop)(problem.message); } }`],
   ["forwarded presentation", `${login}\nfunction __unsafeForwardedPresentation(setError) { const present = (sink, copy) => sink(copy); try { throw new Error("provider"); } catch (problem) { present(setError, problem.message); } }`],
   ["stored presentation", `${login}\nfunction __unsafeStoredPresentation(setError) { const holder = {}; holder.show = setError; try { throw new Error("provider"); } catch (problem) { holder.show(problem.message); } }`],
+  ["array presentation", `${login}\nfunction __unsafeArrayPresentation(setError) { const [present] = [setError]; try { throw new Error("provider"); } catch (problem) { present(problem.message); } }`],
+  ["destructured staged raw message", `${login}\nfunction __unsafeDestructuredRaw(setError) { const state = {}; try { throw new Error("provider"); } catch (problem) { state.detail = problem.message; const { detail } = state; setError(detail); } }`],
+  ["computed error and alert", `${login}\nasync function __unsafeComputedNames(action) { const { ["err" + "or"]: problem } = await action(); Alert[\`alert\`]("Error", problem.message); }`],
   ["captured bind presentation", `${login}\nfunction __unsafeCapturedBind(setError) { const present = setError.bind; try { throw new Error("provider"); } catch (problem) { present(null, problem.message); } }`],
   ["aliased Reflect presentation", `${login}\nfunction __unsafeAliasedReflect(setError) { const invoke = Reflect.apply; try { throw new Error("provider"); } catch (problem) { invoke(setError, null, [problem.message]); } }`],
 ]) {
@@ -1195,6 +1314,12 @@ for (const [label, mutation, analyze, sourceFile] of [
   ["dynamic generic constructor path", `${chatDomain}\nasync function __unsafeDynamicGenericError(created) { const modulePath = "./problems"; const { DomainProblem } = await import(modulePath); throw new DomainProblem("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["Object.assign constructor laundering", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeObjectAssignError(created) { const box = {}; Object.assign(box, { Ctor: DomainProblem }); throw new box.Ctor("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["constructor parameter factory", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeParameterizedFactory(created) { const build = (Ctor, message) => new Ctor("chat_action", message); throw build(DomainProblem, created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["array constructor laundering", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeArrayConstructor(created) { const factories = [DomainProblem]; throw new factories[0](created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["spread constructor laundering", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeSpreadConstructor(created) { const source = { Ctor: DomainProblem }; const box = { ...source }; throw new box.Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["resolved constructor laundering", `${chatDomain}\nimport { DomainProblem } from "./problems";\nasync function __unsafeResolvedConstructor(created) { const Ctor = await Promise.resolve(DomainProblem); throw new Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["arrow constructor closure", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeArrowFactory(created) { const build = () => new DomainProblem(created.error.message); throw build(); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["IIFE constructor closure", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeIifeFactory(created) { throw (() => new DomainProblem(created.error.message))(); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["neutral constructor callback", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeNeutralFactory(created) { const Ctor = ((value) => value)(DomainProblem); throw new Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["aliased CommonJS constructor", `${chatDomain}\nfunction __unsafeAliasedRequire(created) { const load = require; const { TrustedError } = load("./trustedErrors"); throw new TrustedError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["nested validator module", `${socialAttachmentPicker}\nimport { getSocialAttachmentValidationMessage as unsafeValidate } from "./fake/socialAttachments";\nfunction __unsafeImportedValidator(created) { const message = unsafeValidate(created.file); throw new UserFacingError("attachment_action", message); }`, collectUserFacingErrorConstructionViolations, "_lib/socialAttachmentPicker.ts"],
   ["dynamic validator body", socialAttachments.replace("return null;\n};", "return String(file.uri);\n};"), collectUserFacingErrorConstructionViolations, "_lib/socialAttachments.ts"],
@@ -1202,12 +1327,8 @@ for (const [label, mutation, analyze, sourceFile] of [
 ]) {
   if (analyze(mutation, label, sourceFile).length === 0) fail(`customer error-boundary proof trusted ${label}`);
 }
-const safeSanitizerAliasSource = `${login}\nfunction __safeSanitizerAliasMutation(setError) {\n  try { throw new Error(\"provider detail\"); } catch (problem) {\n    const sanitize = getUserFacingErrorMessage;\n    setError(sanitize(problem, \"Unable to continue right now.\"));\n  }\n}`;
-for (const violation of collectCustomerErrorBoundaryViolations(
-  safeSanitizerAliasSource,
-  "Safe sanitizer alias behavior",
-  "app/(auth)/login.tsx",
-)) {
+const safeSanitizerAliasSource = `${login}\nfunction __safeSanitizerAliasMutation(setError) { try { throw new Error(\"provider detail\"); } catch (problem) { const sanitize = getUserFacingErrorMessage; setError(sanitize(problem, \"Unable to continue right now.\")); } }`;
+for (const violation of collectCustomerErrorBoundaryViolations(safeSanitizerAliasSource, "Safe sanitizer alias behavior", "app/(auth)/login.tsx")) {
   fail(`customer error-boundary proof rejected a safe sanitizer alias: ${violation}`);
 }
 for (const [label, source, unsafeExpression] of [
@@ -1224,39 +1345,21 @@ for (const [label, source, unsafeExpression] of [
 ]) {
   assertNotIncludes(source, unsafeExpression, `${label} raw error presentation`);
 }
-const rootBoundary = read("components/system/root-error-boundary.tsx");
-const rootLayout = read("app/_layout.tsx");
-assertIncludes(rootBoundary, "errorName: error.name || \"Error\"", "root boundary analytics");
-assertNotIncludes(rootBoundary, "defaultSummary={`Runtime issue: ${error.message}`}", "root boundary feedback summary");
+const rootBoundary = read("components/system/root-error-boundary.tsx"); const rootLayout = read("app/_layout.tsx");
+assertIncludes(rootBoundary, "errorName: error.name || \"Error\"", "root boundary analytics"); assertNotIncludes(rootBoundary, "defaultSummary={`Runtime issue: ${error.message}`}", "root boundary feedback summary");
 assertNotIncludes(rootBoundary, "message: error.message", "root boundary analytics");
 assertIncludes(rootLayout, "SENSITIVE_ROUTE_PARAM_NAMES.has(normalizedKey)", "auth redirect sensitive param filter");
 assertIncludes(rootLayout, "normalizedKey.includes(\"token\")", "auth redirect token param filter");
-const settings = read("app/settings.tsx");
-const profile = read("app/profile/[userId].tsx");
-const support = read("components/system/support-screen.tsx");
-const copyrightReport = read("app/copyright-report.tsx");
-const platformStudio = read("app/channel-settings.tsx");
-const player = read("app/player/[id].tsx");
-const liveStage = read("app/watch-party/live-stage/[partyId].tsx");
-const liveEffectsSheet = read("components/live/live-effects-sheet.tsx");
-const nativeAdSlot = read("components/ads/NativeAdSlot.tsx");
-const communicationPreviewCard = read("components/communication/communication-preview-card.tsx");
-const monetization = read("_lib/monetization.ts");
-const premiumWatchPartyAccess = read("_lib/premiumWatchPartyAccess.ts");
-const spectatorAccess = read("_lib/spectatorAccess.ts");
-const mediaStorage = read("_lib/mediaStorage.ts");
-const creatorVideos = read("_lib/creatorVideos.ts");
-const liveKitTokenContract = read("_lib/livekit/token-contract.ts");
-const legalPolicies = read("legal/policies.mjs");
-const legalSiteBuild = read("public-site/legal-site/build.mjs");
-const usernameHelper = read("_lib/usernameHandles.ts");
-for (const [label, source] of [
-  ["Settings", settings],
-  ["Profile", profile],
-  ["Support", support],
-  ["Copyright report", copyrightReport],
-  ["Platform Studio", platformStudio],
-]) {
+const settings = read("app/settings.tsx"); const profile = read("app/profile/[userId].tsx");
+const support = read("components/system/support-screen.tsx"); const copyrightReport = read("app/copyright-report.tsx");
+const platformStudio = read("app/channel-settings.tsx"); const player = read("app/player/[id].tsx");
+const liveStage = read("app/watch-party/live-stage/[partyId].tsx"); const liveEffectsSheet = read("components/live/live-effects-sheet.tsx");
+const nativeAdSlot = read("components/ads/NativeAdSlot.tsx"); const communicationPreviewCard = read("components/communication/communication-preview-card.tsx");
+const monetization = read("_lib/monetization.ts"); const premiumWatchPartyAccess = read("_lib/premiumWatchPartyAccess.ts");
+const spectatorAccess = read("_lib/spectatorAccess.ts"); const mediaStorage = read("_lib/mediaStorage.ts");
+const creatorVideos = read("_lib/creatorVideos.ts"); const liveKitTokenContract = read("_lib/livekit/token-contract.ts");
+const legalPolicies = read("legal/policies.mjs"); const legalSiteBuild = read("public-site/legal-site/build.mjs"); const usernameHelper = read("_lib/usernameHandles.ts");
+for (const [label, source] of [["Settings", settings], ["Profile", profile], ["Support", support], ["Copyright report", copyrightReport], ["Platform Studio", platformStudio]]) {
   assertIncludes(source, "getUserFacingErrorMessage", `${label} sanitized error usage`);
 }
 assertNotIncludes(settings, "Alert.alert(\"Log Out\", error.message)", "Settings logout raw error alert");
@@ -1269,111 +1372,24 @@ assertNotIncludes(usernameHelper, "RLS", "username helper raw RLS copy");
 assertNotIncludes(usernameHelper, "unique constraint", "username helper raw unique constraint copy");
 assertNotIncludes(usernameHelper, "duplicate key value", "username helper raw duplicate key copy");
 const normalUserCopyChecks = [
-  ["Live effects sheet", liveEffectsSheet, [
-    "CHI’LLYFECTS FOUNDATION",
-    "does not process the outgoing camera track",
-    "Real processing is still a later lane",
-  ]],
-  ["Live Stage", liveStage, [
-    "LiveKit server unavailable",
-    "LiveKit join unavailable",
-    "No healthy LiveKit server heartbeat",
-    "does not process the outgoing LiveKit camera track",
-    "selectable as a foundation only",
-  ]],
-  ["Native ad slot", nativeAdSlot, [
-    "Ad placeholder",
-    "Native/feed placement foundation",
-    "No real ad is loaded",
-  ]],
-  ["Chi'lly Chat call preview", communicationPreviewCard, [
-    "development build",
-    "debug build",
-  ]],
-  ["Player", player, [
-    "provider proof",
-    "This upload could not be loaded from storage",
-    "does not process the outgoing LiveKit camera track",
-  ]],
-  ["Platform Studio creator copy", platformStudio, [
-    "creator storage",
-    "Percent progress is not backed",
-    "backed metadata",
-    "landed audience schema",
-    "schema truth",
-    "provider proof",
-    "No money rows returned",
-    "No digital sales rows yet",
-    "No tips rows yet",
-    "No Watch-Party seat rows yet",
-    "No paid content rows yet",
-    "No merch rows yet",
-    "No payout rows yet",
-    "No verified ledger rows yet",
-    "ledger rows",
-    "raw payloads",
-    "not provider-backed",
-    "not wired",
-  ]],
-  ["Premium copy", monetization, [
-    "Premium proof is being rechecked",
-    "RevenueCat proof is rechecked",
-    "trusted entitlement truth",
-  ]],
-  ["Premium live copy", premiumWatchPartyAccess, [
-    "temporarily open for proof",
-  ]],
-  ["Spectator copy", spectatorAccess, [
-    "broadcast proof exists",
-  ]],
-  ["Media upload copy", mediaStorage, [
-    "Media storage",
-    "incomplete upload contract",
-  ]],
-  ["Creator video copy", creatorVideos, [
-    "Creator storage",
-    "Storage global and bucket limits",
-    "Creator media storage",
-  ]],
-  ["LiveKit token copy", liveKitTokenContract, [
-    "backend token endpoint",
-    "token issuance failed",
-    "LiveKit token requests require",
-  ]],
+  ["Live effects sheet", liveEffectsSheet, ["CHI’LLYFECTS FOUNDATION", "does not process the outgoing camera track", "Real processing is still a later lane"]],
+  ["Live Stage", liveStage, ["LiveKit server unavailable", "LiveKit join unavailable", "No healthy LiveKit server heartbeat", "does not process the outgoing LiveKit camera track", "selectable as a foundation only"]],
+  ["Native ad slot", nativeAdSlot, ["Ad placeholder", "Native/feed placement foundation", "No real ad is loaded"]],
+  ["Chi'lly Chat call preview", communicationPreviewCard, ["development build", "debug build"]],
+  ["Player", player, ["provider proof", "This upload could not be loaded from storage", "does not process the outgoing LiveKit camera track"]],
+  ["Platform Studio creator copy", platformStudio, ["creator storage", "Percent progress is not backed", "backed metadata", "landed audience schema", "schema truth", "provider proof", "No money rows returned", "No digital sales rows yet", "No tips rows yet", "No Watch-Party seat rows yet", "No paid content rows yet", "No merch rows yet", "No payout rows yet", "No verified ledger rows yet", "ledger rows", "raw payloads", "not provider-backed", "not wired"]],
+  ["Premium copy", monetization, ["Premium proof is being rechecked", "RevenueCat proof is rechecked", "trusted entitlement truth"]],
+  ["Premium live copy", premiumWatchPartyAccess, ["temporarily open for proof"]],
+  ["Spectator copy", spectatorAccess, ["broadcast proof exists"]],
+  ["Media upload copy", mediaStorage, ["Media storage", "incomplete upload contract"]],
+  ["Creator video copy", creatorVideos, ["Creator storage", "Storage global and bucket limits", "Creator media storage"]],
+  ["LiveKit token copy", liveKitTokenContract, ["backend token endpoint", "token issuance failed", "LiveKit token requests require"]],
 ];
-for (const [label, source, forbiddenPhrases] of normalUserCopyChecks) {
-  for (const phrase of forbiddenPhrases) {
-    assertNotIncludes(source, phrase, `${label} normal-user technical copy`);
-  }
-}
-for (const phrase of [
-  "approved backend deletion",
-  "magic instant wipe",
-  "service-role credentials",
-  "Profile, Channel",
-  "channel display",
-  "Channel setup",
-  "public channel",
-  "token request metadata",
-  "Supabase",
-]) {
-  assertNotIncludes(legalPolicies, phrase, "Public legal policy normal-user technical copy");
-}
-assertIncludes(
-  legalPolicies,
-  "approved deletion or de-identification process",
-  "Account deletion production copy",
-);
+for (const [label, source, forbiddenPhrases] of normalUserCopyChecks) for (const phrase of forbiddenPhrases) assertNotIncludes(source, phrase, `${label} normal-user technical copy`);
+for (const phrase of ["approved backend deletion", "magic instant wipe", "service-role credentials", "Profile, Channel", "channel display", "Channel setup", "public channel", "token request metadata", "Supabase"]) assertNotIncludes(legalPolicies, phrase, "Public legal policy normal-user technical copy");
+assertIncludes(legalPolicies, "approved deletion or de-identification process", "Account deletion production copy");
 assertIncludes(legalSiteBuild, "[\"channel\", \"Platform\"]", "Public DMCA Platform option label");
-assertNotIncludes(
-  legalSiteBuild,
-  "Public DMCA form disabled: Supabase public URL or public anon key is not configured for this static build.",
-  "Public DMCA unavailable copy",
-);
-assertNotIncludes(
-  legalSiteBuild,
-  "Attachment upload token was not returned for this case.",
-  "Public DMCA attachment copy",
-);
+assertNotIncludes(legalSiteBuild, "Public DMCA form disabled: Supabase public URL or public anon key is not configured for this static build.", "Public DMCA unavailable copy");
+assertNotIncludes(legalSiteBuild, "Attachment upload token was not returned for this case.", "Public DMCA attachment copy");
 if (process.exitCode) process.exit(process.exitCode);
 console.log("Critical UX polish policy guard passed.");
