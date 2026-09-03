@@ -18,18 +18,14 @@ const getPropertyName = (pathValue) => {
   return !pathValue.node.computed && property.isIdentifier() ? property.node.name : getStaticString(property) ?? "";
 };
 const getBindingByName = (sourcePath, name) => {
-  for (let current = sourcePath; current; current = current.parentPath) {
-    const binding = current.scope?.getBinding(name); if (binding) return binding;
-  }
+  for (let current = sourcePath; current; current = current.parentPath) { const binding = current.scope?.getBinding(name); if (binding) return binding; }
   return null;
 };
 const getBinding = (identifierPath) => identifierPath?.isIdentifier?.() ? getBindingByName(identifierPath, identifierPath.node.name) : null;
 const isRawErrorObjectExpression = (expressionPath, rawErrorBindings, allowNameHeuristic = true) => {
   if (!expressionPath?.node) return false;
   if (expressionPath.isIdentifier()) {
-    const binding = getBinding(expressionPath);
-    return (binding && rawErrorBindings.has(binding))
-      || (allowNameHeuristic && /error/i.test(expressionPath.node.name));
+    const binding = getBinding(expressionPath); return (binding && rawErrorBindings.has(binding)) || (allowNameHeuristic && /(?:err|error|exception|failure|problem|reason)/i.test(expressionPath.node.name));
   }
   if (expressionPath.isMemberExpression() || expressionPath.isOptionalMemberExpression()) return getPropertyName(expressionPath) === "error";
   if (expressionPath.isTSAsExpression?.() || expressionPath.isTSNonNullExpression?.() || expressionPath.isTypeCastExpression?.() || expressionPath.isParenthesizedExpression?.()) return isRawErrorObjectExpression(expressionPath.get("expression"), rawErrorBindings, allowNameHeuristic);
@@ -43,6 +39,19 @@ const unwrapExpression = (expressionPath) => {
   while (currentPath?.node && (currentPath.isTSAsExpression?.() || currentPath.isTSSatisfiesExpression?.() || currentPath.isTSNonNullExpression?.() || currentPath.isTypeCastExpression?.() || currentPath.isParenthesizedExpression?.())) currentPath = currentPath.get("expression");
   return currentPath;
 };
+const getStaticStrings = (expressionPath) => {
+  expressionPath = unwrapExpression(expressionPath);
+  if (expressionPath?.isConditionalExpression?.() || expressionPath?.isLogicalExpression?.()) return (expressionPath.isConditionalExpression?.() ? [expressionPath.get("consequent"), expressionPath.get("alternate")] : [expressionPath.get("left"), expressionPath.get("right")]).flatMap(getStaticStrings);
+  if (expressionPath?.isSequenceExpression?.()) return expressionPath.get("expressions").flatMap(getStaticStrings);
+  const value = getStaticString(expressionPath); return value === null ? [] : [value];
+};
+const resolveGlobalMemberReference = (expressionPath, seen = new Set()) => {
+  expressionPath = unwrapExpression(expressionPath);
+  if (expressionPath?.isMemberExpression?.() || expressionPath?.isOptionalMemberExpression?.()) { const object = unwrapExpression(expressionPath.get("object")); return object?.isIdentifier?.() && !getBinding(object) ? `${object.node.name}.${getPropertyName(expressionPath)}` : ""; }
+  if (!expressionPath?.isIdentifier?.()) return "";
+  const binding = getBinding(expressionPath); if (!binding || seen.has(binding)) return ""; seen.add(binding);
+  const owner = binding.path.isVariableDeclarator?.() ? binding.path : binding.path.findParent?.((item) => item.isVariableDeclarator?.()); return owner?.isVariableDeclarator?.() ? resolveGlobalMemberReference(owner.get("init"), seen) : "";
+};
 const expressionIsSanitizerDerived = (expressionPath, sanitizerBindings) => {
   const unwrappedPath = unwrapExpression(expressionPath);
   if (!unwrappedPath?.node) return false;
@@ -50,24 +59,20 @@ const expressionIsSanitizerDerived = (expressionPath, sanitizerBindings) => {
   if (!unwrappedPath.isCallExpression?.() && !unwrappedPath.isOptionalCallExpression?.()) return false;
   const callee = unwrappedPath.get("callee");
   if (!callee.isMemberExpression?.() && !callee.isOptionalMemberExpression?.()) return false;
-  if (!["replace", "replaceAll", "trim"].includes(getPropertyName(callee))) return false;
-  if (unwrappedPath.get("arguments").some((argument) => !(argument.isStringLiteral?.() || argument.isRegExpLiteral?.()))) return false;
-  return expressionIsSanitizerDerived(callee.get("object"), sanitizerBindings);
+  return ["replace", "replaceAll", "trim"].includes(getPropertyName(callee)) && !unwrappedPath.get("arguments").some((argument) => !(argument.isStringLiteral?.() || argument.isRegExpLiteral?.())) && expressionIsSanitizerDerived(callee.get("object"), sanitizerBindings);
 };
 const functionReturnsOnlySanitizerDerivedMessages = (functionPath, sanitizerBindings) => {
   if (!functionPath?.isFunction?.()) return false;
   const body = functionPath.get("body");
   if (!body.isBlockStatement?.()) return expressionIsSanitizerDerived(body, sanitizerBindings);
-  const returnExpressions = [];
-  body.traverse({ Function(innerPath) { innerPath.skip(); }, ReturnStatement(returnPath) { if (returnPath.get("argument")?.node) returnExpressions.push(returnPath.get("argument")); } });
+  const returnExpressions = []; body.traverse({ Function(innerPath) { innerPath.skip(); }, ReturnStatement(returnPath) { if (returnPath.get("argument")?.node) returnExpressions.push(returnPath.get("argument")); } });
   return returnExpressions.length > 0 && returnExpressions.every((expressionPath) => expressionIsSanitizerDerived(expressionPath, sanitizerBindings));
 };
 const functionReturnsRawMessage = (functionPath, rawMessageBindings, rawErrorBindings, sanitizerBindings) => {
   if (!functionPath?.isFunction?.()) return false;
   const body = functionPath.get("body");
   if (!body.isBlockStatement?.()) return expressionContainsRawMessage(body, rawMessageBindings, rawErrorBindings, sanitizerBindings);
-  const returnExpressions = [];
-  body.traverse({ Function(innerPath) { innerPath.skip(); }, ReturnStatement(returnPath) { if (returnPath.get("argument")?.node) returnExpressions.push(returnPath.get("argument")); } });
+  const returnExpressions = []; body.traverse({ Function(innerPath) { innerPath.skip(); }, ReturnStatement(returnPath) { if (returnPath.get("argument")?.node) returnExpressions.push(returnPath.get("argument")); } });
   return returnExpressions.some((expressionPath) => expressionContainsRawMessage(expressionPath, rawMessageBindings, rawErrorBindings, sanitizerBindings));
 };
 const expressionContainsRawMessage = (expressionPath, rawMessageBindings, rawErrorBindings, sanitizerBindings) => {
@@ -76,8 +81,7 @@ const expressionContainsRawMessage = (expressionPath, rawMessageBindings, rawErr
   if (isUserFacingSanitizerCall(expressionPath, sanitizerBindings)) return expressionPath.get("arguments").slice(1).some((argument) => expressionContainsRawMessage(argument, rawMessageBindings, rawErrorBindings, sanitizerBindings));
   if (isRawMessageMemberPath(expressionPath, rawErrorBindings)) return true;
   if (expressionPath.isIdentifier()) {
-    const binding = getBinding(expressionPath);
-    return !!binding && (rawMessageBindings.has(binding) || rawErrorBindings.has(binding));
+    const binding = getBinding(expressionPath); return !!binding && (rawMessageBindings.has(binding) || rawErrorBindings.has(binding));
   }
   let found = false;
   expressionPath.traverse({
@@ -100,8 +104,7 @@ const expressionContainsRawMessage = (expressionPath, rawMessageBindings, rawErr
 const getPatternBindings = (patternPath) => {
   if (!patternPath?.node) return [];
   if (patternPath.isIdentifier()) {
-    const binding = getBinding(patternPath);
-    return binding ? [binding] : [];
+    const binding = getBinding(patternPath); return binding ? [binding] : [];
   }
   if (patternPath.isAssignmentPattern()) return getPatternBindings(patternPath.get("left"));
   if (patternPath.isRestElement()) return getPatternBindings(patternPath.get("argument"));
@@ -112,8 +115,7 @@ const getStaticString = (expressionPath, seen = new Set()) => {
   if (expressionPath?.isStringLiteral?.()) return expressionPath.node.value;
   if (expressionPath?.isTemplateLiteral?.() && expressionPath.get("expressions").length === 0) return expressionPath.node.quasis[0]?.value.cooked ?? "";
   if (expressionPath?.isBinaryExpression?.({ operator: "+" })) {
-    const left = getStaticString(expressionPath.get("left"), seen); const right = getStaticString(expressionPath.get("right"), seen);
-    return left === null || right === null ? null : left + right;
+    const left = getStaticString(expressionPath.get("left"), seen); const right = getStaticString(expressionPath.get("right"), seen); return left === null || right === null ? null : left + right;
   }
   if (!expressionPath?.isIdentifier?.()) return null;
   const binding = getBinding(expressionPath);
@@ -127,9 +129,7 @@ const objectPatternRawErrorBindings = (patternPath) => {
   if (!patternPath?.isObjectPattern?.()) return [];
   return patternPath.get("properties").flatMap((propertyPath) => {
     if (!propertyPath.isObjectProperty()) return [];
-    const key = propertyPath.get("key");
-    const keyName = propertyPath.node.computed ? getStaticString(key) : key.isIdentifier() ? key.node.name : getStaticString(key);
-    return keyName === "error" ? getPatternBindings(propertyPath.get("value")) : [];
+    const key = propertyPath.get("key"); return (propertyPath.node.computed ? getStaticString(key) : key.isIdentifier() ? key.node.name : getStaticString(key)) === "error" ? getPatternBindings(propertyPath.get("value")) : [];
   });
 };
 const objectPatternMessageBindings = (patternPath, sourceIsRawErrorObject) => {
@@ -137,9 +137,7 @@ const objectPatternMessageBindings = (patternPath, sourceIsRawErrorObject) => {
   if (!patternPath?.isObjectPattern?.()) return [];
   return patternPath.get("properties").flatMap((propertyPath) => {
     if (!propertyPath.isObjectProperty()) return [];
-    const key = propertyPath.get("key");
-    const value = propertyPath.get("value");
-    const keyName = propertyPath.node.computed ? getStaticString(key) : key.isIdentifier() ? key.node.name : getStaticString(key);
+    const key = propertyPath.get("key"); const value = propertyPath.get("value"); const keyName = propertyPath.node.computed ? getStaticString(key) : key.isIdentifier() ? key.node.name : getStaticString(key);
     if (keyName === "message" && sourceIsRawErrorObject) return getPatternBindings(value);
     if (keyName === "error" && value.isObjectPattern()) return objectPatternMessageBindings(value, true);
     return [];
@@ -148,22 +146,15 @@ const objectPatternMessageBindings = (patternPath, sourceIsRawErrorObject) => {
 const isDirectPresentationExpression = (expressionPath, presentationBindings, seen = new Set()) => {
   expressionPath = unwrapExpression(expressionPath);
   if (!expressionPath?.node) return false;
-  if (expressionPath.isLogicalExpression?.()) return isDirectPresentationExpression(expressionPath.get("left"), presentationBindings, seen)
-    || isDirectPresentationExpression(expressionPath.get("right"), presentationBindings, seen);
+  if (expressionPath.isLogicalExpression?.()) return isDirectPresentationExpression(expressionPath.get("left"), presentationBindings, seen) || isDirectPresentationExpression(expressionPath.get("right"), presentationBindings, seen);
   if (expressionPath.isArrayExpression?.()) return expressionPath.get("elements").some((item) => isDirectPresentationExpression(item, presentationBindings, seen));
-  if (expressionPath.isObjectExpression?.()) return expressionPath.get("properties").some((property) => (
-    property.isObjectMethod?.() || property.isObjectProperty?.()
-  ) && isDirectPresentationExpression(property.isObjectMethod?.() ? property : property.get("value"), presentationBindings, seen));
+  if (expressionPath.isObjectExpression?.()) return expressionPath.get("properties").some((property) => (property.isObjectMethod?.() || property.isObjectProperty?.()) && isDirectPresentationExpression(property.isObjectMethod?.() ? property : property.get("value"), presentationBindings, seen));
   if (expressionPath.isCallExpression?.() || expressionPath.isOptionalCallExpression?.() || expressionPath.isNewExpression?.()) {
     const callee = unwrapExpression(expressionPath.get("callee"));
-    if ((callee?.isMemberExpression?.() || callee?.isOptionalMemberExpression?.())
-      && getPropertyName(callee) === "bind"
-      && isDirectPresentationExpression(callee.get("object"), presentationBindings, seen)) return true;
-    return isDirectPresentationExpression(callee, presentationBindings, seen)
-      || expressionPath.get("arguments").some((item) => isDirectPresentationExpression(item, presentationBindings, seen));
+    if ((callee?.isMemberExpression?.() || callee?.isOptionalMemberExpression?.()) && getPropertyName(callee) === "bind" && isDirectPresentationExpression(callee.get("object"), presentationBindings, seen)) return true;
+    return isDirectPresentationExpression(callee, presentationBindings, seen) || expressionPath.get("arguments").some((item) => isDirectPresentationExpression(item, presentationBindings, seen));
   }
-  if (expressionPath.isConditionalExpression?.()) return isDirectPresentationExpression(expressionPath.get("consequent"), presentationBindings, seen)
-    || isDirectPresentationExpression(expressionPath.get("alternate"), presentationBindings, seen);
+  if (expressionPath.isConditionalExpression?.()) return isDirectPresentationExpression(expressionPath.get("consequent"), presentationBindings, seen) || isDirectPresentationExpression(expressionPath.get("alternate"), presentationBindings, seen);
   if (expressionPath.isSequenceExpression?.()) return expressionPath.get("expressions").some((item) => isDirectPresentationExpression(item, presentationBindings, seen));
   if (expressionPath.isIdentifier()) {
     const binding = getBinding(expressionPath);
@@ -229,6 +220,8 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
       seen.add(binding);
       const assignment = assignments.find((item) => { const left = unwrapExpression(item.get("left")); return (left?.isMemberExpression?.() || left?.isOptionalMemberExpression?.()) && getBinding(unwrapExpression(left.get("object"))) === binding && getPropertyName(left) === propertyName; });
       if (assignment) return unwrapExpression(assignment.get("right"));
+      const setter = promiseCalls.find((item) => { const callee = unwrapExpression(item.get("callee")); return getPropertyName(callee) === "set" && getBinding(unwrapExpression(callee?.get?.("object"))) === binding && getStaticString(item.get("arguments")[0]) === propertyName; });
+      if (setter) return unwrapExpression(setter.get("arguments")[1]);
       const owner = binding.path.isVariableDeclarator?.() || binding.path.isClassDeclaration?.() ? binding.path : binding.path.findParent?.((item) => item.isVariableDeclarator?.() || item.isClassDeclaration?.());
       if (owner?.isClassDeclaration?.()) return owner.get("body.body").find((item) => definitionName(item) === propertyName) ?? null;
       return owner?.isVariableDeclarator?.() ? resolveContainerMember(owner.get("init"), propertyName, seen) : null;
@@ -245,7 +238,10 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
       }
     }
     if (containerPath.isArrayExpression?.()) { const index = Number(propertyName); return Number.isSafeInteger(index) ? unwrapExpression(containerPath.get("elements")[index]) : null; }
+    if (containerPath.isMemberExpression?.() || containerPath.isOptionalMemberExpression?.()) return resolveContainerMember(resolveContainerMember(containerPath.get("object"), getPropertyName(containerPath), seen), propertyName, seen);
     if (containerPath.isNewExpression?.()) {
+      const callee = unwrapExpression(containerPath.get("callee")); const entries = unwrapExpression(containerPath.get("arguments")[0]);
+      if (callee?.isIdentifier?.({ name: "Map" }) && !getBinding(callee) && entries?.isArrayExpression?.()) { const entry = entries.get("elements").find((item) => item?.isArrayExpression?.() && getStaticString(item.get("elements")[0]) === propertyName); return unwrapExpression(entry?.get("elements")[1]); }
       const classBinding = getBinding(unwrapExpression(containerPath.get("callee")));
       const owner = classBinding?.path?.isClassDeclaration?.() ? classBinding.path : classBinding?.path?.findParent?.((item) => item.isClassDeclaration?.());
       return owner?.get("body.body").find((item) => definitionName(item) === propertyName) ?? null;
@@ -335,15 +331,18 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
     if (candidatePath.isAssignmentExpression?.()) return resolveCallbacks(candidatePath.get("right"), seen);
     if (candidatePath.isMemberExpression?.() || candidatePath.isOptionalMemberExpression?.()) {
       const object = unwrapExpression(candidatePath.get("object"));
-      const binding = getBinding(object); const owner = binding?.path?.isVariableDeclarator?.() ? binding.path : binding?.path?.findParent?.((item) => item.isVariableDeclarator?.()); const init = unwrapExpression(owner?.get("init"));
-      const container = object?.isConditionalExpression?.() || object?.isLogicalExpression?.() ? object : init;
+      const properties = candidatePath.node.computed ? getStaticStrings(candidatePath.get("property")) : [getPropertyName(candidatePath)];
+      if (properties.length > 1) return properties.flatMap((name) => resolveCallbacks(resolveContainerMember(object, name, new Set(seen)), new Set(seen)));
+      const binding = getBinding(object); const owner = binding?.path?.isVariableDeclarator?.() ? binding.path : binding?.path?.findParent?.((item) => item.isVariableDeclarator?.()); const init = unwrapExpression(owner?.get("init")); const assigned = assignments.find((item) => item.get("left").isIdentifier?.() && getBinding(item.get("left")) === binding);
+      const nested = object?.isMemberExpression?.() || object?.isOptionalMemberExpression?.() ? resolveContainerMember(object.get("object"), getPropertyName(object), new Set(seen)) : null;
+      const container = [object, init, unwrapExpression(assigned?.get("right")), nested].find((item) => item?.isConditionalExpression?.() || item?.isLogicalExpression?.());
       if (container?.isConditionalExpression?.() || container?.isLogicalExpression?.()) return (container.isConditionalExpression?.() ? [container.get("consequent"), container.get("alternate")] : [container.get("left"), container.get("right")])
         .flatMap((item) => resolveCallbacks(resolveContainerMember(item, getPropertyName(candidatePath), new Set(seen)), new Set(seen)));
     }
     if (candidatePath.isCallExpression?.() || candidatePath.isOptionalCallExpression?.()) {
-      const callee = unwrapExpression(candidatePath.get("callee")); const property = getPropertyName(callee); const object = unwrapExpression(callee?.get?.("object")); const args = candidatePath.get("arguments");
-      if (property === "get" && object?.isIdentifier?.({ name: "Reflect" })) return resolveCallbacks(resolveContainerMember(args[0], getStaticString(args[1]), new Set(seen)), seen);
-      if (property === "at") return resolveCallbacks(resolveContainerMember(object, args[0]?.isNumericLiteral?.() ? String(args[0].node.value) : getStaticString(args[0]), new Set(seen)), seen);
+      const callee = unwrapExpression(candidatePath.get("callee")); const property = getPropertyName(callee); const object = unwrapExpression(callee?.get?.("object")); const args = candidatePath.get("arguments"); const globalMember = resolveGlobalMemberReference(callee);
+      if (globalMember === "Reflect.get") return resolveCallbacks(resolveContainerMember(args[0], getStaticString(args[1]), new Set(seen)), seen);
+      if (property === "get" || property === "at") return resolveCallbacks(resolveContainerMember(object, property === "at" && args[0]?.isNumericLiteral?.() ? String(args[0].node.value) : getStaticString(args[0]), new Set(seen)), seen);
       const argumentCallbacks = args.flatMap((item) => resolveCallbacks(item, new Set(seen)));
       if (argumentCallbacks.length) return argumentCallbacks;
       const producer = resolveCallback(candidatePath.get("callee"), new Set(seen));
@@ -370,6 +369,7 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
     const property = getPropertyName(callee);
     if (property === "catch") markCallbackParameters(callPath.get("arguments")[0], false);
     if (["addEventListener", "addListener", "on", "once"].includes(property) && getStaticString(callPath.get("arguments")[0]) === "error") markCallbackParameters(callPath.get("arguments")[1], false);
+    if (/^(?:addErrorListener|onError)$/i.test(property)) markCallbackParameters(callPath.get("arguments")[0], false);
     if (property === "then") {
       markCallbackParameters(callPath.get("arguments")[0], true);
       markCallbackParameters(callPath.get("arguments")[1], false);
@@ -833,7 +833,9 @@ const collectUserFacingErrorConstructionViolations = (source, file, sourceFile) 
     CallExpression(callPath) {
       const callee = unwrapExpression(callPath.get("callee"));
       const object = callee?.isMemberExpression?.() || callee?.isOptionalMemberExpression?.() ? unwrapExpression(callee.get("object")) : null;
-      const property = getPropertyName(callee); const args = callPath.get("arguments"); const targetBinding = getBinding(unwrapExpression(args[0])); const invoked = invokedMembers.get(targetBinding);
+      const property = getPropertyName(callee); let args = callPath.get("arguments"); let globalMember = resolveGlobalMemberReference(callee);
+      if (["call", "apply"].includes(property)) { globalMember = resolveGlobalMemberReference(object); args = property === "call" ? args.slice(1) : unwrapExpression(args[1])?.isArrayExpression?.() ? unwrapExpression(args[1]).get("elements") : []; }
+      const targetBinding = getBinding(unwrapExpression(args[0])); const invoked = invokedMembers.get(targetBinding); const objectBinding = getBinding(object);
       if (callee?.isIdentifier?.({ name: "require" }) || getPropertyName(callee) === "require"
         || (["call", "apply"].includes(getPropertyName(callee)) && object?.isIdentifier?.({ name: "require" }))) {
         violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: CommonJS imports are not an app-owned customer-copy boundary`);
@@ -844,8 +846,9 @@ const collectUserFacingErrorConstructionViolations = (source, file, sourceFile) 
       }
       if (property === "set" && object?.isIdentifier?.({ name: "Reflect" }) && invoked?.has(getStaticString(args[1]))
         && expressionUsesImport(args[2], new Set(), true, true)) violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: imported error values must not be installed through reflection`);
-      if (property === "defineProperty" && ["Object", "Reflect"].some((name) => object?.isIdentifier?.({ name })) && invoked?.has(getStaticString(args[1])) && expressionUsesImport(args[2], new Set(), true, true)) violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: imported error values must not be installed through property descriptors`);
-      if (property === "defineProperties" && object?.isIdentifier?.({ name: "Object" }) && invoked?.size && expressionUsesImport(args[1], new Set(), true, true)) violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: imported error values must not be installed through property descriptors`);
+      if (["Object.defineProperty", "Reflect.defineProperty"].includes(globalMember) && invoked?.has(getStaticString(args[1])) && expressionUsesImport(args[2], new Set(), true, true)) violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: imported error values must not be installed through property descriptors`);
+      if (globalMember === "Object.defineProperties" && invoked?.size && expressionUsesImport(args[1], new Set(), true, true)) violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: imported error values must not be installed through property descriptors`);
+      if (property === "set" && objectBinding && invokedMembers.get(objectBinding)?.has("get") && expressionUsesImport(callPath.get("arguments")[1], new Set(), true, true)) violations.push(`${file}:${callPath.node.loc?.start.line ?? "?"}: imported error values must not be installed in a retrieved map entry`);
     },
     AssignmentExpression(assignmentPath) {
       const left = unwrapExpression(assignmentPath.get("left"));
@@ -918,7 +921,9 @@ const collectDomainFailureWrapperViolations = (source, file, functionName, fallb
   const ast = parse(source, { sourceType: "unambiguous", plugins: ["typescript", "jsx"] });
   const violations = [];
   let exportedMatches = 0;
+  let uploadBinding = null;
   traverse(ast, {
+    ImportSpecifier(importPath) { const imported = importPath.get("imported"); if ((imported.node.name ?? imported.node.value) === "uploadFileToMediaStorage") uploadBinding = getBinding(importPath.get("local")); },
     FunctionDeclaration(functionPath) {
       if (!functionPath.get("id").isIdentifier({ name: functionName })) return;
       if (!functionPath.parentPath?.isExportNamedDeclaration?.() || !functionPath.parentPath.parentPath?.isProgram?.()) return;
@@ -970,8 +975,8 @@ const collectDomainFailureWrapperViolations = (source, file, functionName, fallb
           && getStaticString(copyCheck.get("right")) === requiredCopy
           && isTypedThrow(classifiedIf.get("consequent"), requiredCopy);
         if (!exactClassification) violations.push(`${file}: ${functionName} must preserve the exact measured-size classification branch`);
-        const uploadCalls = []; const uploadBinding = functionPath.scope.getBinding("uploadFileToMediaStorage"); let uploadAlias = false;
-        functionPath.traverse({ Identifier(pathValue) { if (pathValue.isReferencedIdentifier?.() && getBinding(pathValue) === uploadBinding && !(pathValue.key === "callee" && (pathValue.parentPath?.isCallExpression?.() || pathValue.parentPath?.isOptionalCallExpression?.()))) uploadAlias = true; }, CallExpression(callPath) { const awaited = callPath.parentPath; const owner = awaited?.isAwaitExpression?.() ? awaited.parentPath : null; const conditional = callPath.findParent((item) => item.isIfStatement?.() || item.isConditionalExpression?.() || item.isLogicalExpression?.() || item.isLoop?.() || item.isSwitchCase?.()); if (!conditional && unwrapExpression(callPath.get("callee"))?.isIdentifier?.({ name: "uploadFileToMediaStorage" }) && owner?.isVariableDeclarator?.() && owner.get("id").isIdentifier?.({ name: "uploadedObject" })) uploadCalls.push(callPath); } });
+        const uploadCalls = []; let uploadAlias = false;
+        functionPath.traverse({ Function(pathValue) { const parent = pathValue.parentPath; if (!(parent?.isCallExpression?.() || parent?.isOptionalCallExpression?.()) || unwrapExpression(parent.get("callee"))?.node !== pathValue.node) pathValue.skip(); }, Identifier(pathValue) { if (pathValue.isReferencedIdentifier?.() && getBinding(pathValue) === uploadBinding && !(pathValue.key === "callee" && (pathValue.parentPath?.isCallExpression?.() || pathValue.parentPath?.isOptionalCallExpression?.()))) uploadAlias = true; }, CallExpression(callPath) { const callee = unwrapExpression(callPath.get("callee")); const awaited = callPath.parentPath; const owner = awaited?.isAwaitExpression?.() ? awaited.parentPath : null; const conditional = callPath.findParent((item) => item.isIfStatement?.() || item.isConditionalExpression?.() || item.isLogicalExpression?.() || item.isLoop?.() || item.isSwitchCase?.()); if (!conditional && getBinding(callee) === uploadBinding && owner?.isVariableDeclarator?.() && owner.get("id").isIdentifier?.({ name: "uploadedObject" })) uploadCalls.push(callPath); } });
         if (uploadAlias) violations.push(`${file}: ${functionName} must call the measured upload boundary directly`);
         const uploadConfig = uploadCalls.length === 1 ? unwrapExpression(uploadCalls[0].get("arguments")[0]) : null;
         const propertyValue = (name) => { const property = uploadConfig?.isObjectExpression?.() ? uploadConfig.get("properties").find((item) => { const key = item.get("key"); return item.isObjectProperty?.() && (item.node.computed ? getStaticString(key) : key.isIdentifier?.() ? key.node.name : getStaticString(key)) === name; }) : null; return unwrapExpression(property?.get("value")); };
@@ -1172,6 +1177,7 @@ for (const [label, mutation, functionName, fallback, requiredCopy] of [
   ["missing upload limit binding", socialAttachments.replace("        maximumSizeBytes: SOCIAL_ATTACHMENT_MAX_BYTES,\n", ""), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
   ["wrong upload copy binding", socialAttachments.replace("        tooLargeMessage: SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,", '        tooLargeMessage: "That file is too large.",'), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
   ["disconnected upload decoy", socialAttachments.replace("const uploadedObject = await uploadFileToMediaStorage({", "const uploadAlias = uploadFileToMediaStorage;\n        const uploadedObject = await uploadAlias({").replace("          maximumSizeBytes: SOCIAL_ATTACHMENT_MAX_BYTES,\n", "").replace("          tooLargeMessage: SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,\n", "").replace("    const preparedUpload = await (async () => {", "    if (false) { const uploadedObject = await uploadFileToMediaStorage({ maximumSizeBytes: SOCIAL_ATTACHMENT_MAX_BYTES, tooLargeMessage: SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE } as any); void uploadedObject; }\n    const preparedUpload = await (async () => {"), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
+  ["shadowed nested upload decoy", socialAttachments.replace("  uploadFileToMediaStorage,\n", "  uploadFileToMediaStorage as upload,\n").replace("const uploadedObject = await uploadFileToMediaStorage({", "const uploadedObject = await upload({").replace("          maximumSizeBytes: SOCIAL_ATTACHMENT_MAX_BYTES,\n", "").replace("          tooLargeMessage: SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,\n", "").replace("export async function createSocialAttachmentForSurface", "async function proofDecoy(uploadFileToMediaStorage: any) { const uploadedObject = await uploadFileToMediaStorage({ maximumSizeBytes: SOCIAL_ATTACHMENT_MAX_BYTES, tooLargeMessage: SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE }); return uploadedObject; }\nexport async function createSocialAttachmentForSurface"), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
   ["nested decoy wrapper", `${socialAttachmentPicker.replace("export async function pickSocialAttachmentFile(scope: SocialAttachmentPickerScope) {", "export const pickSocialAttachmentFile = async (scope: SocialAttachmentPickerScope) => {").replace(/\n}\s*$/, "\n};")}\nfunction __decoy() { function pickSocialAttachmentFile() { try {} catch (error) { if (error instanceof UserFacingError) throw error; throw new UserFacingError(\"attachment_action\", \"Unable to choose that attachment right now. Try again.\"); } } }`, "pickSocialAttachmentFile", "Unable to choose that attachment right now. Try again.", null],
   ["shadowed global Error", socialAttachments.replace("}): Promise<SocialAttachment> {\n  try {", "}): Promise<SocialAttachment> {\n  class Error extends globalThis.Error {}\n  try {"), "createSocialAttachmentForSurface", "Unable to upload that attachment right now. Try again.", "This attachment is too large for comments/chat right now."],
   ["disconnected first try wrapper", socialAttachmentPicker.replace("export async function pickSocialAttachmentFile(scope: SocialAttachmentPickerScope) {\n  try {", 'export async function pickSocialAttachmentFile(scope: SocialAttachmentPickerScope) {\n  try {} catch (error) { if (error instanceof UserFacingError) throw error; throw new UserFacingError("attachment_action", "Unable to choose that attachment right now. Try again."); }\n  try {').replace("if (error instanceof UserFacingError) throw error;", "throw error;"), "pickSocialAttachmentFile", "Unable to choose that attachment right now. Try again.", null],
@@ -1223,12 +1229,18 @@ for (const [label, mutation] of [
   ["identity-wrapped rejection", `${login}\nfunction identity(value) { return value; } function __unsafeWrappedCallback(setError, action) { action().catch(identity((problem) => setError(problem.message))); }`],
   ["callback producer rejection", `${login}\nfunction __unsafeProducedCallback(setError, action) { const handlers = { fail(problem) { setError(problem.message); } }; const choose = () => handlers.fail; action().catch(choose()); }`],
   ["reflected callback", `${login}\nfunction __unsafeReflectedCallback(setError, action) { const handlers = { fail(problem) { setError(problem.message); } }; action().catch(Reflect.get(handlers, "fail")); }`],
+  ["aliased reflected callback", `${login}\nfunction __unsafeAliasedReflectedCallback(setError, action) { const handlers = { fail(problem) { setError(problem.message); } }; const pick = Reflect.get; action().catch(pick(handlers, "fail")); }`],
+  ["Map callback", `${login}\nfunction __unsafeMapCallback(setError, action) { const handlers = new Map([["fail", problem => setError(problem.message)]]); action().catch(handlers.get("fail")); }`],
   ["array at callback", `${login}\nfunction __unsafeArrayAtCallback(setError, action) { const fail = (problem) => setError(problem.message); action().catch([fail].at(0)); }`],
   ["Object.assign callback", `${login}\nfunction __unsafeAssignedContainer(setError, action) { const base = { fail(problem) { setError(problem.message); } }; const handlers = Object.assign({}, base); action().catch(handlers.fail); }`],
   ["conditional container callback", `${login}\nfunction __unsafeConditionalContainer(setError, action, flag) { action().catch((flag ? { run: problem => setError(problem.message) } : { run: problem => setError(problem.message) }).run); }`],
   ["staged conditional container callback", `${login}\nfunction __unsafeStagedConditionalContainer(setError, action, flag) { const handlers = flag ? { run: problem => setError(problem.message) } : { run: problem => setError(problem.message) }; action().catch(handlers.run); }`],
+  ["post-assigned conditional container", `${login}\nfunction __unsafePostAssignedContainer(setError, action, flag) { let handlers; handlers = flag ? { run: problem => setError(problem.message) } : { run: problem => setError(problem.message) }; action().catch(handlers.run); }`],
+  ["nested conditional container", `${login}\nfunction __unsafeNestedConditionalContainer(setError, action, flag) { const box = { handlers: flag ? { run: problem => setError(problem.message) } : { run: problem => setError(problem.message) } }; action().catch(box.handlers.run); }`],
+  ["conditional computed callback", `${login}\nfunction __unsafeComputedConditional(setError, action, flag) { const handlers = { first: problem => setError(problem.message), second: problem => setError(problem.message) }; action().catch(handlers[flag ? "first" : "second"]); }`],
   ["error event callback", `${login}\nfunction __unsafeErrorEvent(setError, emitter) { emitter.addListener("error", problem => setError(problem.message)); }`],
   ["destructured error event callback", `${login}\nfunction __unsafeDestructuredErrorEvent(setError, emitter) { emitter.on("error", ({ message }) => setError(message)); }`],
+  ["callback-first error method", `${login}\nfunction __unsafeOnError(setError, request) { request.onError(problem => setError(problem.message)); }`],
   ["useCallback Promise rejection", `${login}\nfunction __unsafeHookPromiseCatch(setError, action) { const rejected = useCallback((problem) => setError(problem.message), []); action().catch(rejected); }`],
   ["object Promise rejection", `${login}\nfunction __unsafeObjectPromiseCatch(setError, action) { const handlers = { rejected(problem) { setError(problem.message); } }; action().catch(handlers.rejected); }`],
   ["class Promise rejection", `${login}\nfunction __unsafeClassPromiseCatch(setError, action) { class Handlers { rejected(problem) { setError(problem.message); } } const handlers = new Handlers(); action().catch(handlers.rejected); }`],
@@ -1305,6 +1317,9 @@ for (const [label, mutation, analyze, sourceFile] of [
   ["descriptor-installed imported constructor", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeDescriptorMember(created) { const box = {}; Object.defineProperty(box, "Ctor", { value: DomainProblem }); throw new box.Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["descriptors-installed imported constructor", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeDescriptorsMember(created) { const box = {}; Object.defineProperties(box, { Ctor: { value: DomainProblem } }); throw new box.Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["reflected descriptor-installed imported constructor", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeReflectedDescriptorMember(created) { const box = {}; Reflect.defineProperty(box, "Ctor", { value: DomainProblem }); throw new box.Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["aliased descriptor-installed imported constructor", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeAliasedDescriptorMember(created) { const box = {}; const install = Object.defineProperty; install(box, "Ctor", { value: DomainProblem }); throw new box.Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["call descriptor-installed imported constructor", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeCallDescriptorMember(created) { const box = {}; Object.defineProperty.call(Object, box, "Ctor", { value: DomainProblem }); throw new box.Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
+  ["Map-installed imported constructor", `${chatDomain}\nimport { DomainProblem } from "./problems";\nfunction __unsafeMapInstalled(created) { const types = new Map(); types.set("problem", DomainProblem); const Ctor = types.get("problem"); throw new Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["static-field imported constructor", `${chatDomain}\nimport { DomainProblem } from "./problems";\nclass __UnsafeFactory { static Ctor = DomainProblem; } function __unsafeStaticField(created) { throw new __UnsafeFactory.Ctor(created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["aliased CommonJS constructor", `${chatDomain}\nfunction __unsafeAliasedRequire(created) { const load = require; const { TrustedError } = load("./trustedErrors"); throw new TrustedError("chat_action", created.error.message); }`, collectUserFacingErrorConstructionViolations, "_lib/chat.ts"],
   ["nested validator module", `${socialAttachmentPicker}\nimport { getSocialAttachmentValidationMessage as unsafeValidate } from "./fake/socialAttachments";\nfunction __unsafeImportedValidator(created) { const message = unsafeValidate(created.file); throw new UserFacingError("attachment_action", message); }`, collectUserFacingErrorConstructionViolations, "_lib/socialAttachmentPicker.ts"],
