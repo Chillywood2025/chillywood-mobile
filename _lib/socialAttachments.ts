@@ -475,6 +475,7 @@ export async function createSocialAttachmentForSurface(input: {
     return parseSocialAttachment(data);
   } catch (error) {
     if (error instanceof UserFacingError) throw error;
+    if (error instanceof Error && error.message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE) throw new UserFacingError("attachment_action", SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE);
     throw new UserFacingError("attachment_action", "Unable to upload that attachment right now. Try again.");
   }
 }
