@@ -95,6 +95,7 @@ import {
   type PaidWatchPartyTicketAccess,
 } from "../../_lib/paidWatchPartyTickets";
 import { useSession } from "../../_lib/session";
+import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
 import { supabase } from "../../_lib/supabase";
 import { buildUserChannelProfile, readUserProfile, saveLastPartySession, type UserProfile } from "../../_lib/userData";
 import {
@@ -1795,7 +1796,7 @@ export default function WatchPartyRoomScreen() {
     } catch (error) {
       Alert.alert(
         "Could not end room",
-        error instanceof Error ? error.message : "Try again or leave the room view.",
+        getUserFacingErrorMessage(error, "Try again or leave the room view."),
       );
     } finally {
       setSaveReplayEnding(false);
@@ -1818,8 +1819,8 @@ export default function WatchPartyRoomScreen() {
         [{ text: "OK", onPress: returnToWatchPartyEntry }],
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Replay could not be saved right now.";
-      if (message.includes("Replay was not recording")) {
+      const rawMessage = error instanceof Error ? error.message : "";
+      if (rawMessage.includes("Replay was not recording")) {
         Alert.alert(
           "Replay was not recording for this session. End without saving?",
           "This session does not have a saveable replay recording.",
@@ -1829,7 +1830,7 @@ export default function WatchPartyRoomScreen() {
           ],
         );
       } else {
-        Alert.alert("Save Replay unavailable", message);
+        Alert.alert("Save Replay unavailable", getUserFacingErrorMessage(error, "Replay could not be saved right now."));
       }
     } finally {
       setSaveReplayEnding(false);
@@ -2171,7 +2172,7 @@ export default function WatchPartyRoomScreen() {
       setChatAttachmentFile(file);
     } catch (error) {
       setChatAttachmentFile(null);
-      setChatError(error instanceof Error ? error.message : "Unable to choose this attachment right now.");
+      setChatError(getUserFacingErrorMessage(error, "Unable to choose this attachment right now."));
     }
   }, []);
 
@@ -2235,9 +2236,7 @@ export default function WatchPartyRoomScreen() {
       reportRuntimeError("watch-party-room-comment-send", error, {
         partyId,
       });
-      setChatError(error instanceof Error && error.message
-        ? error.message
-        : "Comment could not be sent. Try again.");
+      setChatError(getUserFacingErrorMessage(error, "Comment could not be sent. Try again."));
     } finally {
       setChatSending(false);
     }
@@ -2619,7 +2618,7 @@ export default function WatchPartyRoomScreen() {
     } catch (error) {
       Alert.alert(
         "Chi'lly Chat",
-        error instanceof Error && error.message ? error.message : "Unable to open Chi'lly Chat right now.",
+        getUserFacingErrorMessage(error, "Unable to open Chi'lly Chat right now."),
       );
     }
   }, [closeParticipantModal, router, selectedParticipantProfile]);
