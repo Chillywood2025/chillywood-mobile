@@ -331,9 +331,6 @@ export default function PublicChannelScreen() {
     const withoutFeatured = standardVideos.filter((video) => video.id !== featuredVideo.id);
     return withoutFeatured.length ? withoutFeatured : standardVideos;
   }, [featuredVideo, videos]);
-  const platformVideoVisibilityLabel = (video: CreatorVideo) => (
-    video.visibility === "public" ? "Public" : video.visibility === "circle" ? "Chi'lly Circle" : "Draft"
-  );
   const liveNowEvents = useMemo(() => events.filter((event) => event.isLiveNow), [events]);
   const upcomingEvents = useMemo(() => events.filter((event) => event.isUpcoming), [events]);
   const isOfficialChannel = channel?.identityKind === "official_platform";
@@ -1019,7 +1016,7 @@ export default function PublicChannelScreen() {
   );
 
   const renderFeatured = () => (
-    <AppSection title="Featured" statusLabel={featuredVideo ? platformVideoVisibilityLabel(featuredVideo) : "Empty"} statusTone={featuredVideo ? "success" : "muted"}>
+    <AppSection title="Featured">
       {featuredVideo ? (
         <ScrollView
           horizontal
@@ -1041,7 +1038,7 @@ export default function PublicChannelScreen() {
   );
 
   const renderLatestUploads = () => (
-    <AppSection title="Latest Uploads" statusLabel={latestUploadVideos.length ? "Backed" : "Empty"} statusTone={latestUploadVideos.length ? "success" : "muted"}>
+    <AppSection title="Latest Uploads">
       {latestUploadVideos.length ? (
         <ScrollView
           horizontal
@@ -1065,7 +1062,7 @@ export default function PublicChannelScreen() {
       onPress={() => router.push(`/event/${event.id}` as Parameters<typeof router.push>[0])}
       testID={event.isLiveNow ? "platform-live-event-open-button" : "platform-upcoming-event-open-button"}
       accessibilityRole="button"
-      accessibilityLabel={`Open ${event.eventTitle}`}
+      accessibilityLabel={`${event.eventTitle}. ${event.isLiveNow ? "Live" : "Upcoming"} public Event. ${formatEventDate(event.startsAt)}. Open Event`}
     >
       <Text style={styles.cardKicker}>{formatEventStatus(event)}</Text>
       <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
@@ -1088,7 +1085,7 @@ export default function PublicChannelScreen() {
   );
 
   const renderLiveNow = () => (
-    <AppSection title="Live Now" statusLabel={liveNowEvents.length ? "Live" : "Empty"} statusTone={liveNowEvents.length ? "accent" : "muted"}>
+    <AppSection title="Live Now">
       {liveNowEvents.length ? (
         <View style={styles.listStack}>
           {liveNowEvents.map((event) => renderEventCard(event))}
@@ -1100,7 +1097,7 @@ export default function PublicChannelScreen() {
   );
 
   const renderUpcomingEvents = () => (
-    <AppSection title="Upcoming Events" statusLabel={upcomingEvents.length ? "Scheduled" : "Empty"} statusTone={upcomingEvents.length ? "default" : "muted"}>
+    <AppSection title="Upcoming Events">
       {upcomingEvents.length ? (
         <View style={styles.listStack}>
           {upcomingEvents.map((event) => renderEventCard(event))}
@@ -1674,7 +1671,7 @@ export default function PublicChannelScreen() {
   };
 
   const renderAbout = () => (
-    <AppSection title="About" statusLabel={aboutItems.length ? "Public" : "Empty"} statusTone={aboutItems.length ? "success" : "muted"}>
+    <AppSection title="About">
       {aboutItems.length ? (
         <View style={styles.aboutCard}>
           {aboutItems.map((item, index) => (

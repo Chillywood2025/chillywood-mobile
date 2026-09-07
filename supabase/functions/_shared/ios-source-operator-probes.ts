@@ -1,4 +1,4 @@
-import { IOS_QA_RELEASE_EXPECTATION, sanitizeAutonomousReadback } from "./ios-autonomous-operator-policy.mjs";
+import { IOS_INTERNAL_V2_RELEASE_EXPECTATION, sanitizeAutonomousReadback } from "./ios-autonomous-operator-policy.mjs";
 import type { ScopedOperatorHandler } from "./scoped-operator.ts";
 
 const nowWindow = () => {
@@ -108,8 +108,8 @@ export const runIosRecoverySourceProbe: ScopedOperatorHandler = async ({ client 
   if (recoveryError) throw recoveryError;
   const readback = recovery && typeof recovery === "object" ? recovery as Record<string, unknown> : {};
   const expectedIdentity = release?.readback_complete === true
-    && release?.runtime_version === IOS_QA_RELEASE_EXPECTATION.runtimeVersion
-    && release?.channel === IOS_QA_RELEASE_EXPECTATION.channel;
+    && release?.runtime_version === IOS_INTERNAL_V2_RELEASE_EXPECTATION.runtimeVersion
+    && release?.channel === IOS_INTERNAL_V2_RELEASE_EXPECTATION.channel;
   const complete = readback.readbackComplete === true && expectedIdentity;
   const identity = safeIdentity(release);
   const { error } = await client.from("backup_health_snapshots").insert({
@@ -118,7 +118,7 @@ export const runIosRecoverySourceProbe: ScopedOperatorHandler = async ({ client 
     user_rights_changed: false, money_moved: false, high_risk_executed: false,
     ...identity, data_source: "database_migration_function_retry_and_release_readback", readback_complete: complete,
     window_start: window.start, window_end: window.end,
-    metadata: sanitizeAutonomousReadback({ ...readback, expectedIdentity: IOS_QA_RELEASE_EXPECTATION, releaseIdentityMatches: expectedIdentity, variablePresence: { eas: present("EXPO_TOKEN"), apns: present("APNS_KEY_ID") || present("APNS_PRIVATE_KEY"), revenueCatPublicKey: present("EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY") }, valuesReturned: false, restoreExecuted: false, secretRotated: false }),
+    metadata: sanitizeAutonomousReadback({ ...readback, expectedIdentity: IOS_INTERNAL_V2_RELEASE_EXPECTATION, releaseIdentityMatches: expectedIdentity, variablePresence: { eas: present("EXPO_TOKEN"), apns: present("APNS_KEY_ID") || present("APNS_PRIVATE_KEY"), revenueCatPublicKey: present("EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY") }, valuesReturned: false, restoreExecuted: false, secretRotated: false }),
   });
   if (error) throw error;
   return { readbackComplete: complete, platform: "ios", source: "database_migration_function_retry_and_release_readback", dataWindow: window, healthState: complete ? "healthy" : "blocked", reasons: complete ? [] : ["ios_release_or_retry_recovery_readback_blocked"], readback: sanitizeAutonomousReadback(readback), restoreExecuted: false, moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };

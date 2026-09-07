@@ -176,7 +176,7 @@ export function getDiscoveryAccessLabel(item: Pick<
 
 export function getDiscoveryItemDestination(item: Pick<
   DiscoveryFeedItem,
-  "channel_user_id" | "event_id" | "host_user_id" | "id" | "item_type" | "media_id" | "owner_user_id"
+  "channel_user_id" | "event_id" | "host_user_id" | "id" | "item_type" | "media_id" | "owner_user_id" | "room_id" | "source_type"
 >) {
   const mediaId = normalizeText(item.media_id);
   if (item.item_type === "creator_upload" && mediaId) {
@@ -186,6 +186,12 @@ export function getDiscoveryItemDestination(item: Pick<
   const eventId = normalizeText(item.event_id);
   if (item.item_type === "creator_event" && eventId) {
     return `/event/${encodeURIComponent(eventId)}`;
+  }
+
+  const roomId = normalizeText(item.room_id);
+  if (item.item_type === "live_room" && roomId
+    && (item.source_type === "live_stage_room" || item.source_type === "watch_party_room")) {
+    return `/watch-party/live-stage/${encodeURIComponent(roomId)}`;
   }
 
   const platformUserId = normalizeText(item.channel_user_id ?? item.owner_user_id ?? item.host_user_id);

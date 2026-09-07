@@ -1,6 +1,6 @@
 import {
   classifyIosObservabilityAutonomy,
-  IOS_QA_RELEASE_EXPECTATION,
+  IOS_INTERNAL_V2_RELEASE_EXPECTATION,
   sanitizeAutonomousReadback,
 } from "../_shared/ios-autonomous-operator-policy.mjs";
 import type { ScopedOperatorHandler } from "../_shared/scoped-operator.ts";
@@ -65,8 +65,8 @@ export const runIosObservabilityProbe: ScopedOperatorHandler = async ({ client, 
     performanceRegressionCount: numberValue(firebase.performanceRegressionCount),
     analyticsDeliveryFailureCount: numberValue(firebase.analyticsDeliveryFailureCount),
     backendErrorRatePercent: numberValue(edge.errorRatePercent),
-    runtimeMismatch: Boolean(releaseSnapshot?.readback_complete === true && releaseSnapshot.runtime_version !== IOS_QA_RELEASE_EXPECTATION.runtimeVersion),
-    channelMismatch: Boolean(releaseSnapshot?.readback_complete === true && releaseSnapshot.channel !== IOS_QA_RELEASE_EXPECTATION.channel),
+    runtimeMismatch: Boolean(releaseSnapshot?.readback_complete === true && releaseSnapshot.runtime_version !== IOS_INTERNAL_V2_RELEASE_EXPECTATION.runtimeVersion),
+    channelMismatch: Boolean(releaseSnapshot?.readback_complete === true && releaseSnapshot.channel !== IOS_INTERNAL_V2_RELEASE_EXPECTATION.channel),
     updateMismatch: false,
     embeddedLaunch: releaseSnapshot?.embedded_launch === true,
     emergencyLaunch: releaseSnapshot?.emergency_launch === true,

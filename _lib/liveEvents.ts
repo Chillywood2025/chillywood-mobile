@@ -5,6 +5,7 @@ import { supabase } from "./supabase";
 export const CREATOR_EVENTS_TABLE = "creator_events";
 
 export type CreatorEventType = "live_first" | "live_watch_party" | "watch_party_live";
+export type CreatorEventVisibility = "public" | "circle" | "private";
 export type CreatorEventStatus =
   | "draft"
   | "scheduled"
@@ -22,6 +23,7 @@ export type CreatorEventRecord = {
   hostUserId: string;
   eventTitle: string;
   eventType: CreatorEventType;
+  visibility: CreatorEventVisibility;
   status: CreatorEventStatus;
   startsAt: string | null;
   endsAt: string | null;
@@ -66,6 +68,7 @@ export type CreateCreatorEventInput = {
   hostUserId: string;
   eventTitle: string;
   eventType: CreatorEventType;
+  visibility?: CreatorEventVisibility;
   status?: CreatorEventStatus;
   startsAt?: string | null;
   endsAt?: string | null;
@@ -80,6 +83,7 @@ export type UpdateCreatorEventInput = {
   hostUserId: string;
   eventTitle?: string;
   eventType?: CreatorEventType;
+  visibility?: CreatorEventVisibility;
   status?: CreatorEventStatus;
   startsAt?: string | null;
   endsAt?: string | null;
@@ -90,12 +94,12 @@ export type UpdateCreatorEventInput = {
   reminderReady?: boolean;
 };
 
-type CreatorEventRow = Tables<"creator_events">;
-type CreatorEventInsert = TablesInsert<"creator_events">;
-type CreatorEventUpdate = TablesUpdate<"creator_events">;
+type CreatorEventRow = Tables<"creator_events"> & { visibility?: string | null };
+type CreatorEventInsert = TablesInsert<"creator_events"> & { visibility?: CreatorEventVisibility };
+type CreatorEventUpdate = TablesUpdate<"creator_events"> & { visibility?: CreatorEventVisibility };
 
 const CREATOR_EVENT_SELECT =
-  "id,host_user_id,event_title,event_type,status,starts_at,ends_at,linked_title_id,replay_policy,replay_available_at,replay_expires_at,reminder_ready,created_at,updated_at";
+  "id,host_user_id,event_title,event_type,visibility,status,starts_at,ends_at,linked_title_id,replay_policy,replay_available_at,replay_expires_at,reminder_ready,created_at,updated_at";
 
 const isDefined = <T>(value: T | null): value is T => value !== null;
 
@@ -105,6 +109,12 @@ const normalizeCreatorEventType = (value: unknown): CreatorEventType => {
     return normalized;
   }
   return "live_first";
+};
+
+const normalizeCreatorEventVisibility = (value: unknown): CreatorEventVisibility => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "public" || normalized === "circle") return normalized;
+  return "private";
 };
 
 const normalizeCreatorEventStatus = (value: unknown): CreatorEventStatus => {
@@ -151,6 +161,7 @@ export const parseCreatorEventRow = (row: CreatorEventRow | null): CreatorEventR
     hostUserId,
     eventTitle,
     eventType: normalizeCreatorEventType(row.event_type),
+    visibility: normalizeCreatorEventVisibility(row.visibility),
     status: normalizeCreatorEventStatus(row.status),
     startsAt: normalizeIsoTimestamp(row.starts_at),
     endsAt: normalizeIsoTimestamp(row.ends_at),
@@ -263,6 +274,7 @@ const buildValidatedEventWriteShape = (
   const hostUserId = String(value.hostUserId ?? "").trim();
   const eventTitle = String(value.eventTitle ?? "").trim();
   const eventType = normalizeCreatorEventType(value.eventType);
+  const visibility = normalizeCreatorEventVisibility(value.visibility);
   const status = normalizeCreatorEventStatus(value.status);
   const startsAt = normalizeIsoTimestamp(value.startsAt);
   const endsAt = normalizeIsoTimestamp(value.endsAt);
@@ -314,6 +326,7 @@ const buildValidatedEventWriteShape = (
       host_user_id: hostUserId,
       event_title: eventTitle,
       event_type: eventType,
+      visibility,
       status,
       starts_at: startsAt,
       ends_at: endsAt,
@@ -358,6 +371,7 @@ export async function createCreatorEvent(
     host_user_id: String(validatedPayload.host_user_id ?? "").trim(),
     event_title: String(validatedPayload.event_title ?? "").trim(),
     event_type: String(validatedPayload.event_type ?? "live_first").trim(),
+    visibility: normalizeCreatorEventVisibility(validatedPayload.visibility),
     status: String(validatedPayload.status ?? "draft").trim(),
     starts_at: validatedPayload.starts_at ?? null,
     ends_at: validatedPayload.ends_at ?? null,
@@ -411,6 +425,7 @@ export async function updateCreatorEvent(
     hostUserId: current.hostUserId,
     eventTitle: input.eventTitle ?? current.eventTitle,
     eventType: input.eventType ?? current.eventType,
+    visibility: input.visibility ?? current.visibility,
     status: input.status ?? current.status,
     startsAt: input.startsAt ?? current.startsAt,
     endsAt: input.endsAt ?? current.endsAt,
@@ -478,6 +493,7 @@ export async function readPublicEventSummaries(
     .from(CREATOR_EVENTS_TABLE)
     .select(CREATOR_EVENT_SELECT)
     .eq("host_user_id", normalizedHostUserId)
+    .eq("visibility", "public")
     .neq("status", "draft")
     .order("starts_at", { ascending: true, nullsFirst: false })
     .returns<CreatorEventRow[]>();
@@ -503,6 +519,7 @@ export async function readLatestPublicEventSummaries(options?: {
   let query = supabase
     .from(CREATOR_EVENTS_TABLE)
     .select(CREATOR_EVENT_SELECT)
+    .eq("visibility", "public")
     .neq("status", "draft")
     .order("starts_at", { ascending: true, nullsFirst: false })
     .limit(limit);

@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     buildUserChannelProfile,
     readCachedUserProfile,
@@ -34,6 +34,8 @@ import {
     View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 import { titles as localTitles } from "../../_data/titles";
 import type { Tables } from "../../supabase/database.types";
 import { supabase } from "../../_lib/supabase";
@@ -209,6 +211,8 @@ const formatCreatorEventMode = (event: CreatorEventSummary) => {
 
 export default function HomeScreen() {
   const safeAreaInsets = useSafeAreaInsets();
+  const bottomTabBarHeight = useBottomTabBarHeight();
+  const homeDiscoveryLoadGenerationRef = useRef(0);
   const { height: viewportHeight } = useWindowDimensions();
   const brandRevealHeight = Math.max(120, Math.min(160, viewportHeight * 0.16));
   const [loading, setLoading] = useState(true);
@@ -342,12 +346,13 @@ export default function HomeScreen() {
   }
 
   async function fetchDiscoveryFeedV1() {
+    const generation = ++homeDiscoveryLoadGenerationRef.current;
     setHomeDiscoveryLoading(true);
     setHomeDiscoveryError(null);
 
     try {
       const [publicEvents, rankedDiscovery, rankedCircleSpectator, officialPosts, officialOriginals, officialProfile] = await Promise.all([
-        readLatestPublicEventSummaries({ limit: 24 }),
+        readLatestPublicEventSummaries({ limit: 24 }).catch(() => [] as CreatorEventSummary[]),
         readRankedPublicDiscoveryFeedItems({ surface: "home", limit: 24 }).catch(() => ({
           items: [] as DiscoveryFeedItem[],
           signals: {} as DiscoveryFeedRankingSignals,
@@ -369,6 +374,8 @@ export default function HomeScreen() {
         readCreatorRelationshipFeedVideos("circle", { limit: 12 }).catch(() => null),
       ]);
 
+      if (generation !== homeDiscoveryLoadGenerationRef.current) return;
+
       setHomeLiveEvents(publicEvents.filter((event) => event.isLiveNow).slice(0, 8));
       setHomeUpcomingEvents(publicEvents.filter((event) => event.isUpcoming).slice(0, 8));
       setRachiOfficialPosts(officialPosts);
@@ -383,6 +390,7 @@ export default function HomeScreen() {
       setCircleSpectatorSignals(rankedCircleSpectator.signals);
       setHomeDiscoveryItems(rankDiscoveryFeedItems(rankedDiscovery.items, rankedDiscovery.signals));
     } catch {
+      if (generation !== homeDiscoveryLoadGenerationRef.current) return;
       setHomeLiveEvents([]);
       setHomeUpcomingEvents([]);
       setRachiOfficialPosts([]);
@@ -398,7 +406,7 @@ export default function HomeScreen() {
       setCircleSpectatorSignals({});
       setHomeDiscoveryError("Discovery feed is unavailable right now.");
     } finally {
-      setHomeDiscoveryLoading(false);
+      if (generation === homeDiscoveryLoadGenerationRef.current) setHomeDiscoveryLoading(false);
     }
   }
 
@@ -428,6 +436,8 @@ export default function HomeScreen() {
       ]).catch(() => {});
     }, []),
   );
+
+  useRefreshOnForeground(fetchDiscoveryFeedV1);
 
   async function onRefresh() {
     setRefreshing(true);
@@ -562,11 +572,20 @@ export default function HomeScreen() {
     [homeDiscoveryItems],
   );
   const circleLiveSpectatorItems = useMemo(
-    () => circleSpectatorItems.filter((item) => item.live_state === "live").slice(0, 8),
+    () => circleSpectatorItems.filter((item) => (
+      item.live_state === "live"
+      && (item.item_type === "live_room" || item.item_type === "creator_event")
+    )).slice(0, 8),
     [circleSpectatorItems],
   );
   const circleWatchPartySpectatorItems = useMemo(
-    () => circleSpectatorItems.filter((item) => item.live_state !== "live").slice(0, 8),
+    () => circleSpectatorItems.filter((item) => item.item_type === "watch_party").slice(0, 8),
+    [circleSpectatorItems],
+  );
+  const circleUpcomingEventItems = useMemo(
+    () => circleSpectatorItems.filter((item) => (
+      item.item_type === "creator_event" && item.live_state === "scheduled"
+    )).slice(0, 8),
     [circleSpectatorItems],
   );
 
@@ -604,7 +623,7 @@ export default function HomeScreen() {
               <Text style={styles.homeHeroKicker}>Chi&apos;llywood</Text>
               <Text style={styles.homeHeroTitle} numberOfLines={2}>Stream the city</Text>
               <Text style={styles.homeHeroMeta} numberOfLines={2}>
-                Official updates, Originals, and live moments appear here when they are ready.
+                Official updates, Originals, and live moments appear here when they are published.
               </Text>
             </View>
           )}
@@ -648,7 +667,7 @@ export default function HomeScreen() {
         activeOpacity={0.9}
         onPress={() => openDiscoveryFeedItem(item)}
         accessibilityRole="button"
-        accessibilityLabel={`Open ${title}`}
+        accessibilityLabel={`${title}. ${liveLabel}. ${accessLabel}. Open ${item.item_type === "live_room" ? "Live" : item.item_type === "watch_party" ? "Watch-Party" : "content"}`}
       >
         <View style={styles.feedActivityThumb}>
           <StableImage
@@ -680,7 +699,7 @@ export default function HomeScreen() {
         activeOpacity={0.9}
         onPress={() => openEvent(event.id)}
         accessibilityRole="button"
-        accessibilityLabel={`Open ${event.eventTitle}`}
+        accessibilityLabel={`${event.eventTitle}. ${event.isLiveNow ? "Live" : "Upcoming"}. ${event.visibility === "circle" ? "Chi'lly Circle" : event.visibility}. ${formatCreatorEventMode(event)}. Open Event`}
       >
         <View style={styles.feedEventBadgeRow}>
           <AppText scale="caption" style={[styles.feedEventBadge, event.isLiveNow ? styles.feedActivityLiveBadge : null]}>{event.isLiveNow ? "Live" : "Upcoming"}</AppText>
@@ -702,12 +721,12 @@ export default function HomeScreen() {
     emptyTitle: string;
     emptyText: string;
   }) {
-    const hasRows = input.feedItems.length > 0 || input.events.length > 0;
+    const feedEventIds = new Set(input.feedItems.map((item) => String(item.event_id ?? "").trim()).filter(Boolean));
+    const uniqueEvents = input.events.filter((event) => !feedEventIds.has(event.id));
+    const hasRows = input.feedItems.length > 0 || uniqueEvents.length > 0;
 
     return (
       <AppSection
-        statusLabel={homeDiscoveryLoading ? "Loading" : hasRows ? "Ready" : "Empty"}
-        statusTone={homeDiscoveryLoading ? "muted" : hasRows ? "success" : "muted"}
         subtitle={input.subtitle}
         title={input.title}
       >
@@ -721,7 +740,7 @@ export default function HomeScreen() {
             contentContainerStyle={styles.feedActivityRow}
           >
             {input.feedItems.map(renderFeedItemCard)}
-            {input.events.map(renderEventCard)}
+            {uniqueEvents.map(renderEventCard)}
           </ScrollView>
         ) : (
           <AppEmptyState title={input.emptyTitle} body={input.emptyText} />
@@ -743,8 +762,6 @@ export default function HomeScreen() {
   }) {
     return (
       <AppSection
-        statusLabel={input.loading ? "Loading" : input.videos.length ? "Ready" : "Empty"}
-        statusTone={input.loading ? "muted" : input.videos.length ? "success" : "muted"}
         subtitle={input.subtitle}
         title={input.title}
       >
@@ -824,8 +841,6 @@ export default function HomeScreen() {
     const hasRows = input.videos.length > 0 || input.posts.length > 0;
     return (
       <AppSection
-        statusLabel={input.loading ? "Loading" : hasRows ? "Ready" : "Empty"}
-        statusTone={input.loading ? "muted" : hasRows ? "success" : "muted"}
         subtitle={input.subtitle}
         title={input.title}
       >
@@ -861,8 +876,6 @@ export default function HomeScreen() {
   function renderRachiOfficialUpdates() {
     return (
       <AppSection
-        statusLabel={homeDiscoveryLoading ? "Loading" : rachiOfficialPosts.length ? "Official" : "Empty"}
-        statusTone={rachiOfficialPosts.length ? "premium" : "muted"}
         subtitle="Rachi shares official Chi'llywood tips, announcements, and Originals notes."
         title="Rachi Official Updates"
       >
@@ -878,7 +891,7 @@ export default function HomeScreen() {
                 activeOpacity={0.86}
                 onPress={openRachiProfile}
                 accessibilityRole="button"
-                accessibilityLabel="Open Rachi official Profile"
+                accessibilityLabel={`Rachi, official Chi'llywood update: ${post.body.slice(0, 140)}. Open Rachi Profile`}
               >
                 <View style={styles.rachiIdentityRow}>
                   <View style={styles.rachiAvatar}>
@@ -938,7 +951,7 @@ export default function HomeScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomTabBarHeight + 24 }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#E50914" />}
           showsVerticalScrollIndicator={false}
         >
@@ -1042,7 +1055,7 @@ export default function HomeScreen() {
           })}
 
           {renderHomeEventRail({
-            title: "Circle Watch-Party Ready",
+            title: "Circle Watch-Party",
             subtitle: "Watch-only spectator sources available to your Chi'lly Circle.",
             feedItems: circleWatchPartySpectatorItems,
             events: [],
@@ -1052,11 +1065,11 @@ export default function HomeScreen() {
 
           {renderHomeEventRail({
             title: "Upcoming Events",
-            subtitle: "Public creator events scheduled for later.",
-            feedItems: upcomingDiscoveryItems,
+            subtitle: "Public and authorized Chi'lly Circle creator events scheduled for later.",
+            feedItems: [...upcomingDiscoveryItems, ...circleUpcomingEventItems],
             events: homeUpcomingEvents,
-            emptyTitle: "No upcoming public events yet",
-            emptyText: "Scheduled public creator events will appear here when available.",
+            emptyTitle: "No upcoming events yet",
+            emptyText: "Scheduled public and Circle creator events will appear here when available.",
           })}
 
           <NativeAdSlot
@@ -1081,7 +1094,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: 8,
-    paddingBottom: 28,
     backgroundColor: "transparent",
   },
   utilityRow: {

@@ -1,19 +1,17 @@
-// Generated from config/release/ios-internal-v2.json and config/release/android-production.json.
-// Run npm run generate:release-manifest-contract; CI fails when these values drift.
-export const IOS_INTERNAL_V2_RELEASE_MANIFEST = Object.freeze({
+{
   "manifestVersion": 2,
   "platform": "ios",
   "releaseLane": "internal-v2",
   "environment": "production",
   "buildProfile": "ios-internal-v2",
-  "appId": "6791217176",
+  "appStoreAppId": "6791217176",
   "bundleIdentifier": "com.chillywood.mobile",
   "appVersion": "1.0.0",
   "nativeBuild": "13",
   "runtimeVersion": "1.0.0-ios-production-v2",
   "channel": "ios-internal-v2",
   "distributionSource": "testflight_internal",
-  "binarySourceCommit": "13c4eb8a20680c0d97cfe53d0c55b1533334c269",
+  "expectedBinarySourceCommit": "13c4eb8a20680c0d97cfe53d0c55b1533334c269",
   "currentOtaSourceCommit": "c36762173f9f6ca513c2bd27a97766266a2ab548",
   "currentOtaUpdateGroup": "7f6f0edd-0659-40af-acde-5b55323d6b65",
   "binarySha256": "80e60ea36e32d3aac9e2b1295c599000f90e04f2a6500e86d98360f4539a95d2",
@@ -26,17 +24,4 @@ export const IOS_INTERNAL_V2_RELEASE_MANIFEST = Object.freeze({
     "ordinaryPushEnabled": true,
     "revenueCatAppStoreEnabled": true
   }
-});
-
-export const ANDROID_PRODUCTION_RELEASE_MANIFEST = Object.freeze({
-  "manifestVersion": 3,
-  "platform": "android",
-  "packageIdentifier": "com.chillywood.mobile",
-  "appVersion": "1.0.0",
-  "nativeBuild": "84",
-  "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
-  "channel": "production",
-  "distributionSource": "google_play_internal",
-  "sourceCommit": "8c426f4e74de61de7d4529d32d124744833912dc",
-  "nativeCompatibilityDigest": "4abe7acf4df511520c4645be55ea01b0c5762f8184c76a4f48ed6ab31a47a50a"
-});
+}

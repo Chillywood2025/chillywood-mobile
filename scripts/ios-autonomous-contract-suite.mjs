@@ -9,7 +9,7 @@ import {
   classifyIosObservabilityAutonomy,
   classifyIosReleaseAutonomy,
   classifyNotificationAutonomy,
-  IOS_QA_RELEASE_EXPECTATION,
+  IOS_INTERNAL_V2_RELEASE_EXPECTATION,
   sanitizeAutonomousReadback,
 } from "../supabase/functions/_shared/ios-autonomous-operator-policy.mjs";
 
@@ -65,10 +65,18 @@ const runNotification = () => {
 const releaseInput = (overrides = {}) => ({
   eas: { readbackComplete: true },
   appStoreConnect: { readbackComplete: true, externalGroupCount: 0, publicSubmissionPresent: false, publicReleasePresent: false },
-  release: { ...IOS_QA_RELEASE_EXPECTATION, rollbackTargetAvailable: true, embeddedLaunch: false, emergencyLaunch: false, sourceChangedAfterBuild: false, ...overrides },
+  release: {
+    ...IOS_INTERNAL_V2_RELEASE_EXPECTATION,
+    sourceCommit: IOS_INTERNAL_V2_RELEASE_EXPECTATION.binarySourceCommit,
+    rollbackTargetAvailable: true,
+    embeddedLaunch: false,
+    emergencyLaunch: false,
+    sourceChangedAfterBuild: false,
+    ...overrides,
+  },
 });
 const runRelease = () => {
-  check(classifyIosReleaseAutonomy(releaseInput()).healthState === "healthy", "correct build 8 fixture");
+  check(classifyIosReleaseAutonomy(releaseInput()).healthState === "healthy", "correct internal-v2 build 13 fixture");
   check(classifyIosReleaseAutonomy(releaseInput({ channel: "production" })).reasons.includes("channel_mismatch"), "wrong channel fixture");
   check(classifyIosReleaseAutonomy(releaseInput({ runtimeVersion: "1.0.0" })).reasons.includes("runtimeVersion_mismatch"), "wrong runtime fixture");
   check(classifyIosReleaseAutonomy(releaseInput({ sourceCommit: "stale" })).reasons.includes("sourceCommit_mismatch"), "stale source fixture");
@@ -79,7 +87,7 @@ const runRelease = () => {
   const unavailable = releaseInput(); unavailable.eas.readbackComplete = false;
   check(classifyIosReleaseAutonomy(unavailable).healthState === "blocked", "provider unavailable fixture");
   check(classifyIosReleaseAutonomy(releaseInput({ embeddedLaunch: true })).reasons.includes("embedded_launch"), "embedded launch fixture");
-  const androidExpected = { ...IOS_QA_RELEASE_EXPECTATION, platform: "android" };
+  const androidExpected = { ...IOS_INTERNAL_V2_RELEASE_EXPECTATION, platform: "android" };
   check(classifyIosReleaseAutonomy({ ...releaseInput(), release: { ...releaseInput().release, platform: "android" } }, androidExpected).healthState === "healthy", "Android release parity fixture");
   const adapter = read("scripts/ios-release-provider-readback.mjs");
   const probe = read("supabase/functions/release-operator/probe.ts");
@@ -87,8 +95,8 @@ const runRelease = () => {
   check(adapter.includes("api.appstoreconnect.apple.com"), "release adapter must independently read App Store Connect");
   check(adapter.includes("local_ios_build_absent_from_eas_cloud_build_history"), "local build must not be invented in EAS cloud history");
   check(adapter.includes(`/builds/\${attestedBuild.id}/betaGroups`) && adapter.includes(`/builds/\${attestedBuild.id}/individualTesters`), "App Store readback must inspect exact attested-build assignments");
-  check(!adapter.includes("build?.channel ?? IOS_QA_RELEASE_EXPECTATION.channel"), "missing EAS channel must not default to expected");
-  check(!adapter.includes("build?.runtimeVersion ?? IOS_QA_RELEASE_EXPECTATION.runtimeVersion"), "missing EAS runtime must not default to expected");
+  check(!adapter.includes("build?.channel ?? IOS_INTERNAL_V2_RELEASE_EXPECTATION.channel"), "missing EAS channel must not default to expected");
+  check(!adapter.includes("build?.runtimeVersion ?? IOS_INTERNAL_V2_RELEASE_EXPECTATION.runtimeVersion"), "missing EAS runtime must not default to expected");
   check(!adapter.includes("artifact.url"), "release adapter must not output signed artifact URL");
   check(probe.includes("provider_readback_unavailable") || probe.includes("providerReadbackUnavailable"), "provider failure must be explicit");
   for (const forbidden of ["eas update", "update:rollback", "submit", "change TestFlight"]) check(!probe.includes(forbidden), `release probe cannot execute ${forbidden}`);
@@ -114,22 +122,22 @@ const readyInstalled = (overrides = {}) => ({
   providerReadbackComplete: true,
   release: {
     internalBuildAvailable: true,
-    runtimeVersion: IOS_QA_RELEASE_EXPECTATION.runtimeVersion,
-    channel: IOS_QA_RELEASE_EXPECTATION.channel,
-    sourceCommit: IOS_QA_RELEASE_EXPECTATION.sourceCommit,
-    bundleIdentifier: IOS_QA_RELEASE_EXPECTATION.bundleIdentifier,
-    nativeBuild: IOS_QA_RELEASE_EXPECTATION.nativeBuild,
+    runtimeVersion: IOS_INTERNAL_V2_RELEASE_EXPECTATION.runtimeVersion,
+    channel: IOS_INTERNAL_V2_RELEASE_EXPECTATION.channel,
+    sourceCommit: IOS_INTERNAL_V2_RELEASE_EXPECTATION.binarySourceCommit,
+    bundleIdentifier: IOS_INTERNAL_V2_RELEASE_EXPECTATION.bundleIdentifier,
+    nativeBuild: IOS_INTERNAL_V2_RELEASE_EXPECTATION.nativeBuild,
     externalGroupCount: 0,
     publicSubmissionPresent: false,
     ...overrides,
   },
-  clientCapabilities: IOS_QA_RELEASE_EXPECTATION.clientCapabilities,
+  clientCapabilities: IOS_INTERNAL_V2_RELEASE_EXPECTATION.clientCapabilities,
   physicalEvidenceAvailable: false,
   availablePhysicalDeviceCount: 0,
 });
 const runInstalled = () => {
   const current = classifyIosInstalledQaReadiness(readyInstalled());
-  check(current.sourceReady === true && current.readinessState === "physical_proof_required", "correct internal build 8 stays physical-proof-required");
+  check(current.sourceReady === true && current.readinessState === "physical_proof_required", "correct internal-v2 build 13 stays physical-proof-required");
   check(classifyIosInstalledQaReadiness(readyInstalled({ runtimeVersion: "wrong" })).blockers.includes("ios_runtime_mismatch"), "wrong runtime fixture");
   check(classifyIosInstalledQaReadiness(readyInstalled({ channel: "production" })).blockers.includes("ios_channel_mismatch"), "wrong channel fixture");
   check(classifyIosInstalledQaReadiness(readyInstalled({ sourceCommit: "wrong" })).blockers.includes("ios_source_commit_mismatch"), "wrong source fixture");

@@ -96,7 +96,8 @@ assertIncludes(spectateLiveRoute, "readRankedCircleSpectatorFeedItems", "/specta
 assertIncludes(spectateLiveRoute, "Chi'lly Circle", "/spectate live public copy");
 assertIncludes(home, "readRankedCircleSpectatorFeedItems", "Home");
 assertIncludes(home, "Circle Live Now", "Home");
-assertIncludes(home, "Circle Watch-Party Ready", "Home");
+assertIncludes(home, "Circle Watch-Party", "Home");
+assertNotIncludes(home, "Circle Watch-Party Ready", "Home");
 assertNotIncludes(explore, "readRankedCircleSpectatorFeedItems", "Explore public-only surface");
 assertNotIncludes(explore, "circle_spectator_feed_items", "Explore public-only surface");
 

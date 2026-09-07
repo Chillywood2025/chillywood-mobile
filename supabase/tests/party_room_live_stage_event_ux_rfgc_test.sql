@@ -122,8 +122,11 @@ select ok(
   and position('speakerEligible' in pg_get_functiondef(
     'public.set_watch_party_participant_authority(text,text,text,boolean,text)'::regprocedure
   ))>0
-  and position('resolve_live_watch_party_livekit_authority_internal' in pg_get_functiondef(
+  and position('resolve_watch_party_livekit_authority_pre_discovery_rfgc' in pg_get_functiondef(
     'public.resolve_watch_party_livekit_viewer_authority(text,uuid,uuid)'::regprocedure
+  ))>0
+  and position('resolve_live_watch_party_livekit_authority_internal' in pg_get_functiondef(
+    'public.resolve_watch_party_livekit_authority_pre_discovery_rfgc(text,uuid,uuid)'::regprocedure
   ))>0,
   'speaker mutation still consumes exact paid eligibility before server LiveKit membership resolution'
 );

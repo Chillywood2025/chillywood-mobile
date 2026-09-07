@@ -1,6 +1,6 @@
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -17,6 +17,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 
 import { titles as localTitles } from "../../_data/titles";
 import {
@@ -28,7 +30,6 @@ import {
   getDiscoveryAccessLabel,
   getDiscoveryItemDestination,
   getDiscoveryLiveLabel,
-  getDiscoveryRankingReasonLabel,
   rankDiscoveryFeedItems,
   readRankedPublicDiscoveryFeedItems,
   scoreDiscoveryFeedItem,
@@ -265,6 +266,8 @@ const fetchBackedTitles = async () => {
 };
 
 export default function ExploreScreen() {
+  const bottomTabBarHeight = useBottomTabBarHeight();
+  const exploreLoadGenerationRef = useRef(0);
   const [titles, setTitles] = useState<TitleRow[]>([]);
   const [sections, setSections] = useState<ExploreBackedSections>(emptyBackedSections);
   const [loading, setLoading] = useState(true);
@@ -545,10 +548,10 @@ export default function ExploreScreen() {
     showPlatformScope,
   ]);
 
-  async function fetchTitleLiveMetadata(nextTitles: TitleRow[]) {
+  const fetchTitleLiveMetadata = useCallback(async (nextTitles: TitleRow[], generation: number) => {
     const titleIds = nextTitles.map((item) => String(item.id)).filter(Boolean);
     if (!titleIds.length) {
-      setTitleLiveMetadataById({});
+      if (generation === exploreLoadGenerationRef.current) setTitleLiveMetadataById({});
       return;
     }
 
@@ -562,7 +565,7 @@ export default function ExploreScreen() {
         .returns<WatchPartyRoomRow[]>();
 
       if (roomError || !roomData) {
-        setTitleLiveMetadataById({});
+        if (generation === exploreLoadGenerationRef.current) setTitleLiveMetadataById({});
         return;
       }
 
@@ -584,13 +587,14 @@ export default function ExploreScreen() {
         nextMetadata[titleId] = current;
       });
 
-      setTitleLiveMetadataById(nextMetadata);
+      if (generation === exploreLoadGenerationRef.current) setTitleLiveMetadataById(nextMetadata);
     } catch {
-      setTitleLiveMetadataById({});
+      if (generation === exploreLoadGenerationRef.current) setTitleLiveMetadataById({});
     }
-  }
+  }, []);
 
-  async function loadExplore(options?: { refresh?: boolean }) {
+  const loadExplore = useCallback(async (options?: { refresh?: boolean }) => {
+    const generation = ++exploreLoadGenerationRef.current;
     if (options?.refresh) {
       setRefreshing(true);
     } else {
@@ -617,6 +621,8 @@ export default function ExploreScreen() {
       readLatestPublicEventSummaries({ limit: 24 }).catch(() => [] as CreatorEventSummary[]),
     ]);
 
+    if (generation !== exploreLoadGenerationRef.current) return;
+
     setTitles(titleResult.titles);
     setErrorMsg(titleResult.error);
     setSections({
@@ -626,14 +632,19 @@ export default function ExploreScreen() {
       rachiOriginals,
       publicEvents,
     });
-    await fetchTitleLiveMetadata(titleResult.titles);
+    await fetchTitleLiveMetadata(titleResult.titles, generation);
+    if (generation !== exploreLoadGenerationRef.current) return;
     setLoading(false);
     setRefreshing(false);
-  }
+  }, [fetchTitleLiveMetadata]);
 
-  useEffect(() => {
-    void loadExplore();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      void loadExplore();
+    }, [loadExplore]),
+  );
+
+  useRefreshOnForeground(() => loadExplore());
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -779,7 +790,7 @@ export default function ExploreScreen() {
         activeOpacity={0.9}
         onPress={() => openDiscoveryFeedItem(item)}
         accessibilityRole="button"
-        accessibilityLabel={`Open ${title}`}
+        accessibilityLabel={`${title}. ${label}. ${accessLabel}. Open ${item.item_type === "live_room" ? "Live" : item.item_type === "watch_party" ? "Watch-Party" : "content"}`}
       >
         <View style={styles.discoveryThumb}>
           {thumbnail ? (
@@ -817,7 +828,7 @@ export default function ExploreScreen() {
       activeOpacity={0.9}
       onPress={() => openEvent(event.id)}
       accessibilityRole="button"
-      accessibilityLabel={`Open ${event.eventTitle}`}
+      accessibilityLabel={`${event.eventTitle}. ${event.isLiveNow ? "Live" : replay ? "Replay" : "Upcoming"} public Event. ${formatEventMode(event)}. Open Event`}
     >
       <View style={[styles.discoveryThumb, styles.eventThumb, event.isLiveNow && styles.eventThumbLive]}>
         <Text style={styles.eventThumbText}>{event.isLiveNow ? "LIVE" : replay ? "REPLAY" : "EVENT"}</Text>
@@ -1075,7 +1086,7 @@ export default function ExploreScreen() {
             data={filteredTitles}
             keyExtractor={(item) => item.id}
             style={styles.list}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[styles.listContent, { paddingBottom: bottomTabBarHeight + 24 }]}
             renderItem={renderTitleItem}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadExplore({ refresh: true })} tintColor="#E50914" />}
             ListHeaderComponent={
@@ -1780,7 +1791,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 24,
     backgroundColor: "transparent",
   },
   titleCard: {

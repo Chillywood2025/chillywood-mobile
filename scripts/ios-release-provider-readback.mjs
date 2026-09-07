@@ -3,7 +3,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
-import { IOS_QA_RELEASE_EXPECTATION, sanitizeAutonomousReadback } from "../supabase/functions/_shared/ios-autonomous-operator-policy.mjs";
+import { IOS_INTERNAL_V2_RELEASE_EXPECTATION, sanitizeAutonomousReadback } from "../supabase/functions/_shared/ios-autonomous-operator-policy.mjs";
 
 const args = new Set(process.argv.slice(2));
 const toText = (value) => String(value ?? "").trim();
@@ -33,7 +33,7 @@ const runProviderJson = (command, commandArgs) => {
 const readEas = () => {
   const command = firstPresent("EAS_CLI_BIN") || "eas";
   const builds = runProviderJson(command, ["build:list", "--platform", "ios", "--limit", "20", "--json", "--non-interactive"]);
-  const channel = runProviderJson(command, ["channel:view", IOS_QA_RELEASE_EXPECTATION.channel, "--json", "--non-interactive"]);
+  const channel = runProviderJson(command, ["channel:view", IOS_INTERNAL_V2_RELEASE_EXPECTATION.channel, "--json", "--non-interactive"]);
   if (!builds.ok || !channel.ok) {
     return {
       readbackComplete: false,
@@ -44,14 +44,14 @@ const readEas = () => {
 
   const rows = Array.isArray(builds.data) ? builds.data : [];
   const build = rows.find((row) => (
-    String(row?.appBuildVersion ?? row?.buildNumber ?? "") === IOS_QA_RELEASE_EXPECTATION.nativeBuild
-    && String(row?.appVersion ?? "") === IOS_QA_RELEASE_EXPECTATION.appVersion
-    && String(row?.platform ?? "").toLowerCase() === IOS_QA_RELEASE_EXPECTATION.platform
+    String(row?.appBuildVersion ?? row?.buildNumber ?? "") === IOS_INTERNAL_V2_RELEASE_EXPECTATION.nativeBuild
+    && String(row?.appVersion ?? "") === IOS_INTERNAL_V2_RELEASE_EXPECTATION.appVersion
+    && String(row?.platform ?? "").toLowerCase() === IOS_INTERNAL_V2_RELEASE_EXPECTATION.platform
   )) ?? null;
   const updateRows = Array.isArray(channel.data?.branches)
     ? channel.data.branches.flatMap((branch) => Array.isArray(branch?.updates) ? branch.updates : [])
     : Array.isArray(channel.data?.updates) ? channel.data.updates : [];
-  const compatible = updateRows.filter((row) => String(row?.runtimeVersion ?? "") === IOS_QA_RELEASE_EXPECTATION.runtimeVersion);
+  const compatible = updateRows.filter((row) => String(row?.runtimeVersion ?? "") === IOS_INTERNAL_V2_RELEASE_EXPECTATION.runtimeVersion);
   if (!build) {
     const observedChannel = toText(channel.data?.name ?? channel.data?.channel?.name) || null;
     return {
@@ -123,9 +123,9 @@ const readAppStoreConnect = async () => {
     return response.ok ? { ok: true, data: await response.json() } : { ok: false, data: null };
   };
   const [app, builds, versions] = await Promise.all([
-    asc(`/v1/apps/${IOS_QA_RELEASE_EXPECTATION.appId}?fields[apps]=bundleId,name`),
-    asc(`/v1/builds?filter[app]=${IOS_QA_RELEASE_EXPECTATION.appId}&sort=-uploadedDate&limit=20&fields[builds]=version,processingState,uploadedDate,expired&include=preReleaseVersion&fields[preReleaseVersions]=version,platform`),
-    asc(`/v1/apps/${IOS_QA_RELEASE_EXPECTATION.appId}/appStoreVersions?filter[platform]=IOS&limit=50&fields[appStoreVersions]=versionString,appStoreState`),
+    asc(`/v1/apps/${IOS_INTERNAL_V2_RELEASE_EXPECTATION.appId}?fields[apps]=bundleId,name`),
+    asc(`/v1/builds?filter[app]=${IOS_INTERNAL_V2_RELEASE_EXPECTATION.appId}&sort=-uploadedDate&limit=20&fields[builds]=version,processingState,uploadedDate,expired&include=preReleaseVersion&fields[preReleaseVersions]=version,platform`),
+    asc(`/v1/apps/${IOS_INTERNAL_V2_RELEASE_EXPECTATION.appId}/appStoreVersions?filter[platform]=IOS&limit=50&fields[appStoreVersions]=versionString,appStoreState`),
   ]);
   if (![app, builds, versions].every((result) => result.ok)) {
     return { readbackComplete: false, capability: "app_store_connect_api", reason: "provider_query_failed" };
@@ -136,13 +136,13 @@ const readAppStoreConnect = async () => {
   const publicSubmissionPresent = versionRows.some((row) => submissionStates.has(row?.attributes?.appStoreState));
   const publicReleasePresent = versionRows.some((row) => row?.attributes?.appStoreState === "READY_FOR_SALE");
   const latest = buildRows[0] ?? null;
-  const attestedBuild = buildRows.find((row) => String(row?.attributes?.version ?? "") === IOS_QA_RELEASE_EXPECTATION.nativeBuild) ?? null;
+  const attestedBuild = buildRows.find((row) => String(row?.attributes?.version ?? "") === IOS_INTERNAL_V2_RELEASE_EXPECTATION.nativeBuild) ?? null;
   if (!attestedBuild?.id) {
     return {
       readbackComplete: false,
       capability: "app_store_connect_api",
       reason: "expected_ios_build_not_found",
-      appId: IOS_QA_RELEASE_EXPECTATION.appId,
+      appId: IOS_INTERNAL_V2_RELEASE_EXPECTATION.appId,
       bundleIdentifier: app.data?.data?.attributes?.bundleId ?? null,
       latestBuildId: latest?.id ?? null,
       latestNativeBuild: latest?.attributes?.version ?? null,
@@ -166,7 +166,7 @@ const readAppStoreConnect = async () => {
   return {
     readbackComplete: true,
     capability: "app_store_connect_api",
-    appId: IOS_QA_RELEASE_EXPECTATION.appId,
+    appId: IOS_INTERNAL_V2_RELEASE_EXPECTATION.appId,
     bundleIdentifier: app.data?.data?.attributes?.bundleId ?? null,
     latestBuildId: latest?.id ?? null,
     appVersion: preReleaseVersion?.attributes?.version ?? null,

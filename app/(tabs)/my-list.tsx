@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 
 import { titles as localTitles } from "../../_data/titles";
 import { readFollowedChannelUserIds } from "../../_lib/channelAudience";
@@ -93,6 +94,7 @@ const formatProgressLabel = (entry: WatchProgressEntry) => {
 };
 
 export default function MyListScreen() {
+  const bottomTabBarHeight = useBottomTabBarHeight();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [savedTitles, setSavedTitles] = useState<TitleRow[]>([]);
@@ -254,7 +256,7 @@ export default function MyListScreen() {
         ) : (
           <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.content}
+            contentContainerStyle={[styles.content, { paddingBottom: bottomTabBarHeight + 24 }]}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#E50914" />}
           >
             <MainTabTopBar surface="library" label="SAVED" style={styles.mainTabTopBar} />
@@ -346,7 +348,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "transparent" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
   loadingText: { color: "#b7b7b7", marginTop: 10, fontSize: 13 },
-  content: { paddingHorizontal: 16, paddingBottom: 96, paddingTop: 10, gap: 14 },
+  content: { paddingHorizontal: 16, paddingTop: 10, gap: 14 },
   mainTabTopBar: { marginBottom: 2 },
   headerBlock: { gap: 9 },
   header: { color: "#fff", fontSize: 34, fontWeight: "900" },

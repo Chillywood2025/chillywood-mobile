@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -14,6 +14,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 
 import {
   getDiscoveryAccessLabel,
@@ -52,6 +54,8 @@ const formatEventMode = (event: CreatorEventSummary) => {
 };
 
 export default function LiveTabScreen() {
+  const bottomTabBarHeight = useBottomTabBarHeight();
+  const liveLoadGenerationRef = useRef(0);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [premiumGate, setPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
   const [premiumGateVisible, setPremiumGateVisible] = useState(false);
@@ -65,28 +69,48 @@ export default function LiveTabScreen() {
     () => discoveryItems.filter((item) => item.live_state === "live").slice(0, 10),
     [discoveryItems],
   );
-  const liveEvents = useMemo(() => events.filter((event) => event.isLiveNow).slice(0, 8), [events]);
-  const upcomingEvents = useMemo(() => events.filter((event) => event.isUpcoming).slice(0, 10), [events]);
+  const projectedEventIds = useMemo(
+    () => new Set(discoveryItems.map((item) => String(item.event_id ?? "").trim()).filter(Boolean)),
+    [discoveryItems],
+  );
+  const liveEvents = useMemo(
+    () => events.filter((event) => event.isLiveNow && !projectedEventIds.has(event.id)).slice(0, 8),
+    [events, projectedEventIds],
+  );
+  const upcomingEvents = useMemo(
+    () => events.filter((event) => event.isUpcoming && !projectedEventIds.has(event.id)).slice(0, 10),
+    [events, projectedEventIds],
+  );
 
   const loadLive = useCallback(async (refresh = false) => {
+    const generation = ++liveLoadGenerationRef.current;
     if (refresh) setRefreshing(true);
     else setLoading(true);
     setErrorMsg(null);
 
     try {
       const [rankedDiscovery, publicEvents] = await Promise.all([
-        readRankedPublicDiscoveryFeedItems({ surface: "home", limit: 40 }),
-        readLatestPublicEventSummaries({ limit: 32 }),
+        readRankedPublicDiscoveryFeedItems({ surface: "home", limit: 40 }).catch(() => ({
+          items: [] as DiscoveryFeedItem[],
+          signals: {},
+          generatedAt: new Date().toISOString(),
+          viewerSpecific: false,
+        })),
+        readLatestPublicEventSummaries({ limit: 32 }).catch(() => [] as CreatorEventSummary[]),
       ]);
+      if (generation !== liveLoadGenerationRef.current) return;
       setDiscoveryItems(rankedDiscovery.items);
       setEvents(publicEvents);
     } catch {
+      if (generation !== liveLoadGenerationRef.current) return;
       setDiscoveryItems([]);
       setEvents([]);
       setErrorMsg("Live discovery could not refresh right now. Pull down to try again.");
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (generation === liveLoadGenerationRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
@@ -95,6 +119,8 @@ export default function LiveTabScreen() {
       void loadLive(false);
     }, [loadLive]),
   );
+
+  useRefreshOnForeground(() => loadLive(false));
 
   const openLiveWatchParty = async () => {
     const access = await requireLiveFirstPremium({ accessKey: "bottom-live-tab" }).catch(() => null);
@@ -148,7 +174,7 @@ export default function LiveTabScreen() {
       <View style={styles.backgroundOverlay} pointerEvents="none" />
       <SafeAreaView style={styles.safe}>
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: bottomTabBarHeight + 24 }]}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadLive(true)} tintColor="#E50914" />}
         >
@@ -207,7 +233,7 @@ export default function LiveTabScreen() {
                 {liveItems.map((item) => {
                   const title = String(item.title ?? "").trim() || "Live Now";
                   return (
-                    <TouchableOpacity key={`live-${item.id}`} style={styles.discoveryCard} activeOpacity={0.88} onPress={() => openDiscoveryItem(item)} accessibilityRole="button" accessibilityLabel={`Open ${title}`}>
+                    <TouchableOpacity key={`live-${item.id}`} style={styles.discoveryCard} activeOpacity={0.88} onPress={() => openDiscoveryItem(item)} accessibilityRole="button" accessibilityLabel={`${title}. Live. ${getDiscoveryAccessLabel(item)}. Open ${item.item_type === "live_room" ? "Live" : "Watch-Party"}`}>
                       <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>LIVE</Text></View>
                       <Text style={styles.cardTitle} numberOfLines={2}>{title}</Text>
                       <Text style={styles.cardBody} numberOfLines={2}>{String(item.subtitle ?? "").trim() || "Public live experience"}</Text>
@@ -216,7 +242,7 @@ export default function LiveTabScreen() {
                   );
                 })}
                 {liveEvents.map((event) => (
-                  <TouchableOpacity key={`event-${event.id}`} style={styles.discoveryCard} activeOpacity={0.88} onPress={() => openEvent(event.id)} accessibilityRole="button" accessibilityLabel={`Open ${event.eventTitle}`}>
+                  <TouchableOpacity key={`event-${event.id}`} style={styles.discoveryCard} activeOpacity={0.88} onPress={() => openEvent(event.id)} accessibilityRole="button" accessibilityLabel={`${event.eventTitle}. Live public Event. ${formatEventMode(event)}. Open Event`}>
                     <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>LIVE EVENT</Text></View>
                     <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
                     <Text style={styles.cardBody}>{formatEventMode(event)}</Text>
@@ -240,7 +266,7 @@ export default function LiveTabScreen() {
             {upcomingEvents.length ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
                 {upcomingEvents.map((event) => (
-                  <TouchableOpacity key={`upcoming-${event.id}`} style={styles.discoveryCard} activeOpacity={0.88} onPress={() => openEvent(event.id)} accessibilityRole="button" accessibilityLabel={`Open ${event.eventTitle}`}>
+                  <TouchableOpacity key={`upcoming-${event.id}`} style={styles.discoveryCard} activeOpacity={0.88} onPress={() => openEvent(event.id)} accessibilityRole="button" accessibilityLabel={`${event.eventTitle}. Upcoming public Event. ${formatDateTime(event.startsAt)}. Open Event`}>
                     <View style={styles.upcomingBadge}><Text style={styles.upcomingBadgeText}>UPCOMING</Text></View>
                     <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
                     <Text style={styles.cardBody}>{formatEventMode(event)}</Text>
@@ -306,7 +332,7 @@ const styles = StyleSheet.create({
   screenBackground: { flex: 1, backgroundColor: "#050505" },
   backgroundOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.66)" },
   safe: { flex: 1, backgroundColor: "transparent" },
-  content: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 112, gap: 14 },
+  content: { paddingHorizontal: 16, paddingTop: 10, gap: 14 },
   mainTabTopBar: { marginBottom: 2 },
   heroHeader: { gap: 8 },
   heroTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },

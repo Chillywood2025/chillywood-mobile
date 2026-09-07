@@ -68,6 +68,7 @@ import {
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../../_lib/betaProgram";
 import {
   isLiveKitParticipantTokenExpired,
+  markLiveStageRoomConnectedForDiscovery,
   type LiveKitTokenUnavailable,
   type LiveKitTokenReady,
 } from "../../../_lib/livekit/token-contract";
@@ -585,12 +586,14 @@ function LiveKitHybridHeroVideo({
 function LiveKitHybridCommunityRoomHost({
   joinContract,
   onFallback,
+  onConnectedAuthoritative,
   publishLocalAudio,
   publishLocalCamera,
   children,
 }: {
   joinContract: LiveKitTokenReady;
   onFallback: (reason: LiveKitStageFallbackReason) => void;
+  onConnectedAuthoritative?: () => void;
   publishLocalAudio: boolean;
   publishLocalCamera: boolean;
   children: React.ReactNode;
@@ -814,7 +817,8 @@ function LiveKitHybridCommunityRoomHost({
       participantRole: joinContract.participantRole,
       publishLocalCamera,
     });
-  }, [clearDisconnectFallbackTimeout, joinContract.participantRole, joinContract.roomName, publishLocalCamera, room]);
+    onConnectedAuthoritative?.();
+  }, [clearDisconnectFallbackTimeout, joinContract.participantRole, joinContract.roomName, onConnectedAuthoritative, publishLocalCamera, room]);
 
   const handleDisconnected = useCallback((reason?: unknown) => {
     if (tearingDownRoomsRef.current.has(room) || !shouldConnectRoomRef.current || isHybridLiveKitClientDisconnectReason(reason)) {
@@ -3435,6 +3439,16 @@ export default function WatchPartyLiveStageScreen({
     setLiveKitJoinContract(null);
   }, [liveKitJoinContract?.roomName, liveKitStageSurfaceContract, partyId]);
 
+  const onLiveKitStageConnectedAuthoritative = useCallback(() => {
+    if (!isHost || !partyId) return;
+    void markLiveStageRoomConnectedForDiscovery(partyId).then((published) => {
+      debugLog("livekit", "canonical live discovery publication", {
+        partyId,
+        published,
+      });
+    });
+  }, [isHost, partyId]);
+
   const resolveLiveKitStageEntryRole = useCallback(async (): Promise<LiveKitTokenReady["participantRole"]> => {
     if (
       isHost
@@ -5175,6 +5189,7 @@ export default function WatchPartyLiveStageScreen({
             <LiveKitHybridCommunityRoomHost
               joinContract={liveKitStageSurfaceContract as LiveKitTokenReady}
               onFallback={onLiveKitStageFallback}
+              onConnectedAuthoritative={onLiveKitStageConnectedAuthoritative}
               publishLocalAudio={publishLocalStageAudio}
               publishLocalCamera={publishLocalStageCamera}
             >
