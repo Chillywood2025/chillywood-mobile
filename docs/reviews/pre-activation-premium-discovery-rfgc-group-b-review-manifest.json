@@ -58,7 +58,7 @@
   },
   "testResultHash": "533c3f1902b8c1c34890958450127a2725f373f8722e265fff6b3ed460cf1de8",
   "reviewLevel": "C",
-  "reviewHead": "0000000000000000000000000000000000000000",
+  "reviewHead": "8f688c3652296a4923648400a4a5ec4feea9caa0",
   "reviewTimestamp": "2026-09-07T17:10:22Z",
   "reviewerLanes": [
     "architecture-state",
