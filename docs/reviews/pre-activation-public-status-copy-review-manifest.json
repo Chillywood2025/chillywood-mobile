@@ -1,0 +1,77 @@
+{
+  "implementationPrNumber": 357,
+  "implementationBranch": "codex/pre-activation-public-status-copy-closure",
+  "implementationHead": "3c3409384b6466c1650aea045af30d2db79038a5",
+  "implementationTree": "185f7a7f8f2cec312903ca0685f38041d5353fdc",
+  "baseHead": "6a8084b1359174c8de28aa77fe8c685c21911343",
+  "changedFileHash": "72a3f6b9f2391788ac064bce16b9a34dc01618d2716e80109dafe89d5b1c7c7f",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "bf0933f584b5e44a0159ae237dcb99714821f78ffd98702e50bb77d986cacc58",
+  "testResults": {
+    "phase1Ci": {
+      "status": "blocked_assurance_only",
+      "qualification": "EXACT_FROZEN_HEAD_SUBSTANTIVE_LANES_PASS_ASSURANCE_CONTEXT_UNBOUND",
+      "runId": 34154973083,
+      "implementationHead": "3c3409384b6466c1650aea045af30d2db79038a5",
+      "jobs": {
+        "total": 14,
+        "passed": 11,
+        "failedAssuranceOnly": 3,
+        "failedSubstantive": 0
+      },
+      "assuranceOnlyFindings": [
+        "ASSURANCE_TASK_CONTEXT_UNBOUND",
+        "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN",
+        "ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND",
+        "PHASE1_RISK_CLOSURE_PROTECTED_READY_DECISION_INVALID"
+      ]
+    },
+    "focused": {
+      "preActivationDiscoveryHome": "pass",
+      "contentCardDensity": "pass",
+      "rachiOfficial": "pass",
+      "circleSpectator": "pass",
+      "routeContracts": "pass",
+      "runtimeAndInternalV2Compatibility": "pass"
+    },
+    "static": {
+      "typescript": "pass",
+      "lint": "0 errors; 104 pre-existing warnings",
+      "androidAndIosGuards": "pass",
+      "assuranceContracts": "pass",
+      "gitDiffCheck": "pass"
+    },
+    "security": {
+      "scanId": "16d9a67c-adb4-4dea-b32c-a6ff5ac805ea",
+      "targetRevision": "3c3409384b6466c1650aea045af30d2db79038a5",
+      "coverage": "complete 6/6 changed files",
+      "findings": 0
+    }
+  },
+  "testResultHash": "fdee1968ede40aac2de2cd8706d6eab95d762312291fe1766451b83267c44e23",
+  "reviewLevel": "C",
+  "reviewHead": "3c3409384b6466c1650aea045af30d2db79038a5",
+  "reviewTimestamp": "2026-09-07T19:22:17Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback"
+  ],
+  "findings": [
+    {
+      "id": "RFGC-ASSURANCE-CONTROL-PLANE-PUBLIC-COPY-001",
+      "severity": "P2",
+      "status": "owner_authorized_preop_assurance_continuation",
+      "launchImpacting": false,
+      "detail": "Eleven Phase 1 jobs passed and three failed only after substantive suites passed at the historical unbound assurance/admission boundary. The run is not represented as passed."
+    },
+    {
+      "id": "RFGC-INSTALLED-PUBLIC-COPY-PENDING-002",
+      "severity": "P2",
+      "status": "postdeployment_tier_pending",
+      "launchImpacting": false,
+      "detail": "Installed Android and iOS presentation evidence requires the exact merged internal-v2 OTA. Source and integration evidence do not substitute for installed physical proof."
+    }
+  ]
+}
