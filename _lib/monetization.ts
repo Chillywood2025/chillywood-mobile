@@ -48,6 +48,7 @@ import {
 export type PlanTier = "free" | "premium";
 export const PREMIUM_PURCHASE_AUTHORITY_POLL_ATTEMPTS = 12;
 export const PREMIUM_PURCHASE_AUTHORITY_POLL_DELAY_MS = 1250;
+const PREMIUM_RECONCILIATION_FUNCTION = "revenuecat-premium-reconcile";
 export type MonetizationAccessRule = "open" | "party_pass" | "premium";
 export type TitleAccessRule = "open" | "premium";
 export type SponsorPlacement = "none" | "detail_banner" | "player_banner";
@@ -1193,6 +1194,21 @@ export async function bootstrapMonetizationFoundation(userId?: string | null) {
   return readMonetizationSnapshot({ userId });
 }
 
+async function reconcileActivePremiumProviderSnapshot(
+  authority: AccountSessionAuthorityBinding,
+  customerInfo: CustomerInfo,
+) {
+  if (!customerInfo.entitlements.active.premium) return false;
+  if (!sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())) return false;
+
+  const { data, error } = await supabase.functions.invoke(PREMIUM_RECONCILIATION_FUNCTION, {
+    body: { action: "reconcile_current_customer" },
+  });
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) return false;
+  if (!sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())) return false;
+  return (data as Record<string, unknown>).entitlementActive === true;
+}
+
 export async function purchaseMonetizationTarget(
   targetId: MonetizationTargetId,
   options?: {
@@ -1320,6 +1336,9 @@ export async function purchaseMonetizationTarget(
       return { ok: false, target: targetId, snapshot: getCachedMonetizationSnapshot(), customerInfo: null,
         message: "Account changed before the purchase result returned. Recheck the current account." };
     }
+    if (targetId === "premium_subscription" && result.customerInfo.entitlements.active.premium) {
+      await reconcileActivePremiumProviderSnapshot(operationAuthority, result.customerInfo).catch(() => false);
+    }
     notifyPhase("verifying_authority");
     const refreshedSnapshot = await waitForPremiumAuthority();
     if (!refreshedSnapshot) {
@@ -1351,7 +1370,13 @@ export async function purchaseMonetizationTarget(
     if (isRevenueCatExistingPurchase(error)) {
       notifyPhase("restoring_existing");
       const reconciliation = await reconcileRevenueCatExistingPurchase<CustomerInfo, MonetizationSnapshot>({
-        restore: () => restoreRevenueCatPurchases({ authority: operationAuthority }),
+        restore: async () => {
+          const customerInfo = await restoreRevenueCatPurchases({ authority: operationAuthority });
+          if (customerInfo.entitlements.active.premium) {
+            await reconcileActivePremiumProviderSnapshot(operationAuthority, customerInfo).catch(() => false);
+          }
+          return customerInfo;
+        },
         authorityCurrent: async () => sameAccountSessionAuthority(
           operationAuthority,
           await readCurrentAccountSessionAuthority(),
@@ -1469,6 +1494,9 @@ export async function restoreMonetizationAccess(options?: {
         message: "Account changed before the restore result returned. Recheck the current account." };
     }
     const providerPremiumActive = !!customerInfo.entitlements.active.premium;
+    if (providerPremiumActive) {
+      await reconcileActivePremiumProviderSnapshot(operationAuthority, customerInfo).catch(() => false);
+    }
     const readRefreshedSnapshot = () => readMonetizationSnapshot({
       forceRefresh: true,
       purchaseMode,

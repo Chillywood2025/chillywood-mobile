@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "artifactId": "PRE_ACTIVATION_PREMIUM_DISCOVERY_RFGC_CLOSURE_V1",
+  "taskId": "pre-activation-premium-discovery-rfgc-closure-v1",
+  "repository": "Chillywood2025/chillywood-mobile",
+  "waveId": "PRE_ACTIVATION_RFGC",
+  "status": "DEFECT_LEDGER_STABLE",
+  "authorizationStatus": "PRODUCT_SOURCE_EDITING_NOT_YET_AUTHORIZED",
+  "primaryDomain": "revenuecat-premium",
+  "implementation": {
+    "branch": "codex/pre-activation-premium-discovery-rfgc-closure-v1",
+    "pullRequest": 348,
+    "seedHead": "1dfea7511c23712b225e1dee70c7e52eee91cdf5",
+    "seedTree": "b74b55cdaaf06852405c1ba237da8a9ede242d1b"
+  },
+  "rootDefects": [
+    "PREACT-RFGC-001-PREMIUM-PROVIDER-BACKEND-CONVERGENCE",
+    "PREACT-RFGC-002-CANONICAL-LIVE-DISCOVERY-PRODUCER",
+    "PREACT-RFGC-003-EVENT-VISIBILITY-AUTHORITY",
+    "PREACT-RFGC-004-RELEASE-DISCOVERY-QA-FIXTURES",
+    "PREACT-RFGC-005-HOME-PUBLIC-READINESS",
+    "PREACT-RFGC-006-RACHI-ANDROID-IOS-PARITY",
+    "PREACT-RFGC-007-IOS-INTERNAL-V2-MANIFEST-BINDING"
+  ],
+  "provisionalConnectedDomains": [
+    "creator-money-ledger",
+    "eas-build-update-release",
+    "live-stage",
+    "notifications-fcm",
+    "revenuecat-premium",
+    "storekit-google-play-billing",
+    "supabase-migrations-rls",
+    "watch-party-live"
+  ],
+  "provisionalPathBudget": {
+    "maximumFiles": 30,
+    "maximumHandAuthoredNetLines": 3600,
+    "packageChanges": false,
+    "partitionRule": "Each implementation PR remains within the repository default 15-file and 1200-line budget; source and deployment boundaries may use successor PRs under this one task."
+  },
+  "ownerIntent": {
+    "requestedOutcome": "Close the seven evidence-backed pre-activation blockers as one finite RFGC program with Premium authority and discovery/event/Home repair groups.",
+    "authorization": "Level C source and test work plus bounded Level D forward migrations, exact affected Edge deployment, positively identified fixture quarantine, internal-v2 OTA, and sandbox-only provider correction when proven necessary.",
+    "ownerAuthorizedPreopAssuranceContinuation": true,
+    "prohibitedOutcomes": [
+      "production money activation",
+      "production payout or cashout activation",
+      "real charge, payout, or transfer",
+      "production SKU activation",
+      "production-v2 publication",
+      "public rollout or store submission",
+      "fabricated entitlement, role, Live, Event, pass, Circle relationship, balance, or provider transaction",
+      "weakened authentication, provider identity binding, RLS, or privacy authority"
+    ]
+  },
+  "stableDefectLedger": {
+    "status": "STABLE",
+    "startingBlockingOpen": 7,
+    "startingRepairedUnproven": 0,
+    "allowedFinalDispositions": [
+      "PROVEN",
+      "NONBLOCKING_DEBT",
+      "PROVIDER_SANDBOX_LIMITED",
+      "EXTERNAL_BLOCKED",
+      "NOT_A_DEFECT"
+    ]
+  },
+  "implementationPlan": {
+    "groups": [
+      {
+        "id": "GROUP_A",
+        "name": "PREMIUM_PROVIDER_BACKEND_AUTHORITY_CONVERGENCE",
+        "boundary": "Signed Apple and RevenueCat current-owner authority through idempotent backend projection and every Premium consumer without cross-user transfer."
+      },
+      {
+        "id": "GROUP_B",
+        "name": "DISCOVERY_EVENT_HOME_RELEASE_READINESS",
+        "boundary": "Server-authoritative Live, Circle, Watch-Party and Event discovery, lifecycle and privacy; release-facing Home parity, polish, accessibility and internal-v2 manifest correctness."
+      }
+    ],
+    "tests": [
+      "supabase/tests/pre_activation_premium_authority_test.sql",
+      "supabase/tests/pre_activation_discovery_event_authority_test.sql",
+      "tests/guards/pre-activation-premium-discovery-contract.guard.mjs"
+    ],
+    "deploymentSequence": [
+      "merge exact validated source",
+      "apply only exact forward successor migrations",
+      "deploy only exact affected merged Edge Functions",
+      "publish one coherent compatible internal-v2 OTA per affected platform when required",
+      "restart the affected physical matrix from the beginning"
+    ]
+  },
+  "proofTiers": {
+    "T0_REQUIREMENT": "CLEAR_FOR_FROZEN_PLAN",
+    "T1_SOURCE": "PLANNED_PENDING_IMPLEMENTATION",
+    "T2_MODEL": "CLEAR_FOR_FROZEN_MODEL",
+    "T3_INTEGRATION": "PLANNED_PENDING_IMPLEMENTATION",
+    "T4_NATIVE_PROVIDER": "PLANNED_SANDBOX_ONLY",
+    "T5_SIGNED_ARTIFACT": "NOT_CURRENT",
+    "T6_INSTALLED_PHYSICAL": "NOT_CURRENT",
+    "T7_PUBLIC_CANARY": "NOT_AUTHORIZED"
+  },
+  "nonGoals": [
+    "restart Production Polish or previously closed programs",
+    "change unrelated hardened commerce, call, settlement, reserve, or payout systems",
+    "rewrite deployed migration history",
+    "native build unless compatibility proves one is required"
+  ],
+  "invariants": [
+    "Provider entitlement projection binds the exact authenticated RevenueCat App User ID and current signed store authority.",
+    "TRANSFER is never a generic entitlement grant and RENEWAL never bypasses conflicting current-owner authority.",
+    "Only server-authoritative lifecycle transitions publish or retire discovery state.",
+    "Public, Circle, private, draft, canceled and ended visibility is enforced at the database boundary.",
+    "Clients cannot forge creator, room, event, target, visibility or active state.",
+    "Production-facing discovery excludes positively identified QA fixtures without deleting immutable financial or provider evidence.",
+    "Money, payouts and cashout remain fail-closed throughout this task."
+  ],
+  "rollback": {
+    "forwardOnlyMigration": true,
+    "strategy": "Forward-only corrections, exact Edge version rollback, internal-v2 OTA rollback compatibility, and reversible fixture quarantine where supported.",
+    "productionCommerceActivation": false
+  },
+  "cleanup": {
+    "strategy": "Quarantine or unpublish only exact positively identified QA/proof records after reference and ownership readback.",
+    "deleteFinancialOrProviderEvidence": false
+  },
+  "observability": {
+    "strategy": "Redacted exact-source, deployment and lifecycle receipts; no secrets, raw provider payloads, private screenshots, signed URLs, account IDs or device IDs in Git.",
+    "rawSecretsAllowed": false
+  }
+}
