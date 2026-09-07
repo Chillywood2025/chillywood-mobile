@@ -1,7 +1,7 @@
-import { IOS_QA_RELEASE_MANIFEST } from "./release-manifest-contract.generated.mjs";
+import { IOS_INTERNAL_V2_RELEASE_MANIFEST } from "./release-manifest-contract.generated.mjs";
 
 export const AUTONOMOUS_PLATFORMS = Object.freeze(["shared", "ios", "android", "web", "unknown"]);
-export const IOS_QA_RELEASE_EXPECTATION = IOS_QA_RELEASE_MANIFEST;
+export const IOS_INTERNAL_V2_RELEASE_EXPECTATION = IOS_INTERNAL_V2_RELEASE_MANIFEST;
 
 const SECRET_KEY = /(secret|token|password|credential|authorization|api[_-]?key|service[_-]?role|private[_-]?key|signed[_-]?url|receipt|session[_-]?cookie|p12|p8)/i;
 const SAFE_AGGREGATE_KEY = /^(activeTokenCount|revokedTokenCount|invalidTokenCount)$/;
@@ -40,8 +40,11 @@ export const containsForbiddenAutonomousEvidence = (value) => {
   return typeof value === "string" && LONG_CREDENTIAL_TEST.test(value);
 };
 
-export const matchesIosBinaryAttestation = (attestation, appStoreConnect, expected = IOS_QA_RELEASE_EXPECTATION) => {
+export const matchesIosBinaryAttestation = (attestation, appStoreConnect, expected = IOS_INTERNAL_V2_RELEASE_EXPECTATION) => {
   if (appStoreConnect?.readbackComplete !== true || !attestation) return false;
+  if (!String(expected?.appStoreConnectBuildId ?? "").trim()
+    || !String(attestation?.app_store_connect_build_id ?? "").trim()
+    || !String(appStoreConnect?.attestedBuildId ?? "").trim()) return false;
   return [
     [attestation.platform, expected.platform],
     [attestation.bundle_identifier, expected.bundleIdentifier],
@@ -50,7 +53,7 @@ export const matchesIosBinaryAttestation = (attestation, appStoreConnect, expect
     [attestation.runtime_version, expected.runtimeVersion],
     [attestation.channel, expected.channel],
     [attestation.distribution_source, expected.distributionSource],
-    [attestation.source_commit, expected.sourceCommit],
+    [attestation.source_commit, expected.binarySourceCommit],
     [attestation.binary_sha256, expected.binarySha256],
     [attestation.app_store_connect_build_id, expected.appStoreConnectBuildId],
     [appStoreConnect.bundleIdentifier, attestation.bundle_identifier],
@@ -133,7 +136,7 @@ export const classifyNotificationAutonomy = (input) => {
   };
 };
 
-export const classifyIosReleaseAutonomy = (input, expected = IOS_QA_RELEASE_EXPECTATION) => {
+export const classifyIosReleaseAutonomy = (input, expected = IOS_INTERNAL_V2_RELEASE_EXPECTATION) => {
   const easAvailable = input?.eas?.readbackComplete === true;
   const ascAvailable = input?.appStoreConnect?.readbackComplete === true;
   const binaryIdentityComplete = input?.binaryIdentityComplete === undefined
@@ -153,7 +156,7 @@ export const classifyIosReleaseAutonomy = (input, expected = IOS_QA_RELEASE_EXPE
       ["appVersion", expected.appVersion],
       ["nativeBuild", expected.nativeBuild],
       ["distributionSource", expected.distributionSource],
-      ["sourceCommit", expected.sourceCommit],
+      ["sourceCommit", expected.binarySourceCommit],
     ] : []),
     ...(channelReadbackComplete ? [
       ["channel", expected.channel],
@@ -232,7 +235,7 @@ export const IOS_PHYSICAL_PROOF_BLOCKERS = Object.freeze([
   "ios_storekit_proof_pending",
 ]);
 
-export const classifyIosInstalledQaReadiness = (input, expected = IOS_QA_RELEASE_EXPECTATION) => {
+export const classifyIosInstalledQaReadiness = (input, expected = IOS_INTERNAL_V2_RELEASE_EXPECTATION) => {
   const release = input?.release ?? {};
   const blockers = [];
   const providerReadbackComplete = input?.providerReadbackComplete === true;
@@ -242,7 +245,7 @@ export const classifyIosInstalledQaReadiness = (input, expected = IOS_QA_RELEASE
     if (release?.internalBuildAvailable !== true) blockers.push("ios_testflight_build_unavailable");
     if (String(release?.runtimeVersion ?? "") !== expected.runtimeVersion) blockers.push("ios_runtime_mismatch");
     if (String(release?.channel ?? "") !== expected.channel) blockers.push("ios_channel_mismatch");
-    if (String(release?.sourceCommit ?? "") !== expected.sourceCommit) blockers.push("ios_source_commit_mismatch");
+    if (String(release?.sourceCommit ?? "") !== expected.binarySourceCommit) blockers.push("ios_source_commit_mismatch");
     if (String(release?.bundleIdentifier ?? "") !== expected.bundleIdentifier || String(release?.nativeBuild ?? "") !== expected.nativeBuild) blockers.push("ios_native_capability_missing");
     if (release?.externalGroupCount > 0 || release?.publicSubmissionPresent === true) blockers.push("ios_provider_readback_blocked");
   }

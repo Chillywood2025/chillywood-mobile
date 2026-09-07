@@ -59,8 +59,10 @@ import {
   getPartyRoom,
   getSafePartyUserId,
   paidWatchPartyResolutionIsExactFreeRoom,
+  setPartyRoomPolicies,
   touchOwnedPartyRoomActivity,
   type WatchPartyContentSourceType,
+  type WatchPartyDiscoveryVisibility,
   type WatchPartyRoomType,
   type WatchPartyState,
 } from "../../_lib/watchParty";
@@ -236,6 +238,8 @@ export default function WatchPartyIndexScreen() {
   const [paidTicketNotice, setPaidTicketNotice] = useState<string | null>(null);
   const [paidTicketSeatLimit, setPaidTicketSeatLimit] = useState("12");
   const [partyRoomEntryPaid, setPartyRoomEntryPaid] = useState<boolean | null>(null);
+  const [liveDiscoveryVisibility, setLiveDiscoveryVisibility] = useState<WatchPartyDiscoveryVisibility>("private");
+  const [liveDiscoveryTitle, setLiveDiscoveryTitle] = useState("");
   const handoffLoadedRef = useRef(false);
   const liveWaitingRoomLoadedRef = useRef(false);
   const lastEntryLaneKeyRef = useRef(entryLaneKey);
@@ -457,6 +461,8 @@ export default function WatchPartyIndexScreen() {
       roomType,
       sourceType: sourceOptions?.sourceType,
       sourceId: sourceOptions?.sourceId,
+      discoveryVisibility: roomType === "live" ? liveDiscoveryVisibility : "private",
+      discoveryTitle: roomType === "live" ? liveDiscoveryTitle : null,
     });
     if (!room || "error" in room) return null;
 
@@ -471,7 +477,14 @@ export default function WatchPartyIndexScreen() {
     });
     setHostLabel("You are hosting");
     return nextPreparedRoom;
-  }, [buildRoomPreview, canUseBetaRooms, requirePremiumRoomEntry]);
+  }, [buildRoomPreview, canUseBetaRooms, liveDiscoveryTitle, liveDiscoveryVisibility, requirePremiumRoomEntry]);
+
+  useEffect(() => {
+    const liveRoom = preparedRoom?.room;
+    if (!liveRoom || liveRoom.roomType !== "live") return;
+    setLiveDiscoveryVisibility(liveRoom.discoveryVisibility);
+    setLiveDiscoveryTitle(liveRoom.discoveryTitle ?? "");
+  }, [preparedRoom?.room]);
 
   useEffect(() => {
     const liveRoom = preparedRoom?.room;
@@ -1279,6 +1292,8 @@ export default function WatchPartyIndexScreen() {
         roomType,
         sourceType: effectiveSourceType,
         sourceId: effectiveSourceId,
+        discoveryVisibility: roomType === "live" ? liveDiscoveryVisibility : "private",
+        discoveryTitle: roomType === "live" ? liveDiscoveryTitle : null,
       });
 
       if (!room || "error" in room) {
@@ -1329,6 +1344,35 @@ export default function WatchPartyIndexScreen() {
   const onBrowseTitles = useCallback(() => {
     router.push("/(tabs)/explore");
   }, [router]);
+
+  const onSelectLiveDiscoveryVisibility = useCallback(async (
+    visibility: WatchPartyDiscoveryVisibility,
+  ) => {
+    setLiveDiscoveryVisibility(visibility);
+    const room = preparedRoom?.room;
+    if (!room || room.roomType !== "live") return;
+    const currentUserId = await getSafePartyUserId().catch(() => "");
+    if (!currentUserId || room.hostUserId !== currentUserId) return;
+    const updated = await setPartyRoomPolicies(room.partyId, {
+      discoveryVisibility: visibility,
+      discoveryTitle: liveDiscoveryTitle,
+    }).catch(() => null);
+    if (!updated) return;
+    setPreparedRoom((current) => current ? { ...current, room: updated } : current);
+  }, [liveDiscoveryTitle, preparedRoom?.room]);
+
+  const onSaveLiveDiscoveryTitle = useCallback(async () => {
+    const room = preparedRoom?.room;
+    if (!room || room.roomType !== "live") return;
+    const currentUserId = await getSafePartyUserId().catch(() => "");
+    if (!currentUserId || room.hostUserId !== currentUserId) return;
+    const updated = await setPartyRoomPolicies(room.partyId, {
+      discoveryTitle: liveDiscoveryTitle,
+      discoveryVisibility: liveDiscoveryVisibility,
+    }).catch(() => null);
+    if (!updated) return;
+    setPreparedRoom((current) => current ? { ...current, room: updated } : current);
+  }, [liveDiscoveryTitle, liveDiscoveryVisibility, preparedRoom?.room]);
 
   if (authLoading || betaLoading) {
     return (
@@ -1641,6 +1685,43 @@ export default function WatchPartyIndexScreen() {
             </View>
           ))}
         </View>
+
+        {isLiveWaitingRoom && hostLabel === "You are hosting" ? (
+          <View style={styles.permissionsCard}>
+            <AppText scale="caption" style={styles.permissionsLabel}>LIVE DISCOVERY</AppText>
+            <AppText scale="footnote" style={styles.permissionsBody}>
+              Choose who can discover this session after your LiveKit room connects. Private sessions remain room-code only.
+            </AppText>
+            <View style={styles.discoveryChoiceRow}>
+              {(["public", "circle", "private"] as const).map((visibility) => (
+                <Pressable
+                  key={visibility}
+                  style={[
+                    styles.discoveryChoice,
+                    liveDiscoveryVisibility === visibility && styles.discoveryChoiceSelected,
+                  ]}
+                  onPress={() => { void onSelectLiveDiscoveryVisibility(visibility); }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: liveDiscoveryVisibility === visibility }}
+                  accessibilityLabel={`Set Live discovery to ${visibility === "circle" ? "Chi'lly Circle" : visibility}`}
+                >
+                  <AppText scale="footnote" style={styles.discoveryChoiceText}>
+                    {visibility === "circle" ? "Circle" : visibility === "public" ? "Public" : "Private"}
+                  </AppText>
+                </Pressable>
+              ))}
+            </View>
+            <TextInput
+              value={liveDiscoveryTitle}
+              onChangeText={setLiveDiscoveryTitle}
+              onBlur={() => { void onSaveLiveDiscoveryTitle(); }}
+              placeholder="Live title (optional)"
+              placeholderTextColor="#6F7788"
+              style={styles.input}
+              accessibilityLabel="Live discovery title"
+            />
+          </View>
+        ) : null}
 
         <View style={styles.permissionsCard}>
           <AppText scale="caption" style={styles.permissionsLabel}>ROOM ACCESS</AppText>
@@ -2576,6 +2657,19 @@ const styles = StyleSheet.create({
   },
   permissionsLabel: { color: "#666", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
   permissionsBody: { color: "#A7B0C3", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  discoveryChoiceRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  discoveryChoice: {
+    minHeight: 44,
+    minWidth: 76,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    paddingHorizontal: 12,
+  },
+  discoveryChoiceSelected: { borderColor: "#DC143C", backgroundColor: "rgba(220,20,60,0.2)" },
+  discoveryChoiceText: { color: "#F4F7FF", fontWeight: "800" },
 
   smartHelperCard: {
     backgroundColor: "rgba(220,20,60,0.12)",

@@ -19,6 +19,7 @@ type EventRow = {
   id: string;
   event_title: string | null;
   event_type: string | null;
+  visibility: string | null;
   status: string | null;
   starts_at: string | null;
   ends_at: string | null;
@@ -81,7 +82,7 @@ export default function PaidCreatorEventRoute() {
     const [{ data: eventRow, error: eventError }, accessResult] = await Promise.all([
       (supabase as any)
         .from("creator_events")
-        .select("id,event_title,event_type,status,starts_at,ends_at,host_user_id")
+        .select("id,event_title,event_type,visibility,status,starts_at,ends_at,host_user_id")
         .eq("id", eventId)
         .maybeSingle(),
       resolvePaidCreatorEventPassAccess(eventId),
@@ -195,6 +196,9 @@ export default function PaidCreatorEventRoute() {
             </Text>
             <View style={styles.detailGrid}>
               <Text style={styles.detail}>Status: {event?.status || offer?.status || "Unavailable"}</Text>
+              <Text style={styles.detail} accessibilityLabel={`Event audience: ${event?.visibility === "circle" ? "Chi'lly Circle" : event?.visibility || "Unavailable"}`}>
+                Audience: {event?.visibility === "circle" ? "Chi'lly Circle" : event?.visibility || "Unavailable"}
+              </Text>
               <Text style={styles.detail}>Ends: {formatDate(event?.ends_at ?? offer?.endsAt ?? null)}</Text>
               {offer ? (
                 <>

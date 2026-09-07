@@ -8,7 +8,7 @@ import {
   classifyIosInstalledQaReadiness,
   classifyIosReleaseAutonomy,
   classifyNotificationAutonomy,
-  IOS_QA_RELEASE_EXPECTATION,
+  IOS_INTERNAL_V2_RELEASE_EXPECTATION,
   matchesIosBinaryAttestation,
   sanitizeAutonomousReadback,
 } from "../supabase/functions/_shared/ios-autonomous-operator-policy.mjs";
@@ -151,7 +151,7 @@ const runAllPlatform = async () => {
   const notificationProbe = read("supabase/functions/notification-operator/probe.ts");
   check(notificationProbe.includes("SENDER_ID_MISMATCH") && notificationProbe.includes("UNREGISTERED"), "Android FCM invalid-token parity must remain");
 
-  const installed = classifyIosInstalledQaReadiness({ providerReadbackComplete: false, release: {}, clientCapabilities: IOS_QA_RELEASE_EXPECTATION.clientCapabilities, physicalEvidenceAvailable: false, availablePhysicalDeviceCount: 0 });
+  const installed = classifyIosInstalledQaReadiness({ providerReadbackComplete: false, release: {}, clientCapabilities: IOS_INTERNAL_V2_RELEASE_EXPECTATION.clientCapabilities, physicalEvidenceAvailable: false, availablePhysicalDeviceCount: 0 });
   check(installed.blockers.includes("ios_provider_readback_blocked") && installed.fakePhysicalProof === false, "missing iOS provider truth must be blocked without physical proof");
   check(!installed.blockers.some((blocker) => blocker.endsWith("_mismatch") || blocker === "ios_testflight_build_unavailable"), "missing installed-provider evidence must not be relabeled as an observed identity mismatch");
   const missingRelease = classifyIosReleaseAutonomy({ eas: { readbackComplete: false }, appStoreConnect: { readbackComplete: false }, binaryIdentityComplete: false, channelReadbackComplete: false, release: {} });
@@ -201,28 +201,34 @@ const runAllPlatform = async () => {
 
   const releaseProbe = read("supabase/functions/release-operator/probe.ts");
   check(releaseProbe.includes("release_binary_attestations") && releaseProbe.includes("app_store_connect_readback+reviewed_local_binary_manifest"), "local iOS build attestation must require App Store readback");
-  check(releaseProbe.includes("const observed = (complete") && !releaseProbe.includes("observedIdentity = IOS_QA_RELEASE_MANIFEST"), "expected identity must never become observed identity");
+  check(releaseProbe.includes("const observed = (complete") && !releaseProbe.includes("observedIdentity = IOS_INTERNAL_V2_RELEASE_MANIFEST"), "expected identity must never become observed identity");
+  const syntheticAppStoreBuildId = "synthetic-app-store-build-13";
+  const fullyBoundExpectation = {
+    ...IOS_INTERNAL_V2_RELEASE_EXPECTATION,
+    appStoreConnectBuildId: syntheticAppStoreBuildId,
+  };
   const validAttestation = {
-    platform: "ios", bundle_identifier: IOS_QA_RELEASE_EXPECTATION.bundleIdentifier, app_version: IOS_QA_RELEASE_EXPECTATION.appVersion,
-    native_build: IOS_QA_RELEASE_EXPECTATION.nativeBuild, runtime_version: IOS_QA_RELEASE_EXPECTATION.runtimeVersion,
-    channel: IOS_QA_RELEASE_EXPECTATION.channel, distribution_source: IOS_QA_RELEASE_EXPECTATION.distributionSource,
-    source_commit: IOS_QA_RELEASE_EXPECTATION.sourceCommit, binary_sha256: IOS_QA_RELEASE_EXPECTATION.binarySha256,
-    app_store_connect_build_id: IOS_QA_RELEASE_EXPECTATION.appStoreConnectBuildId,
+    platform: "ios", bundle_identifier: IOS_INTERNAL_V2_RELEASE_EXPECTATION.bundleIdentifier, app_version: IOS_INTERNAL_V2_RELEASE_EXPECTATION.appVersion,
+    native_build: IOS_INTERNAL_V2_RELEASE_EXPECTATION.nativeBuild, runtime_version: IOS_INTERNAL_V2_RELEASE_EXPECTATION.runtimeVersion,
+    channel: IOS_INTERNAL_V2_RELEASE_EXPECTATION.channel, distribution_source: IOS_INTERNAL_V2_RELEASE_EXPECTATION.distributionSource,
+    source_commit: IOS_INTERNAL_V2_RELEASE_EXPECTATION.binarySourceCommit, binary_sha256: IOS_INTERNAL_V2_RELEASE_EXPECTATION.binarySha256,
+    app_store_connect_build_id: syntheticAppStoreBuildId,
   };
   const validAsc = {
     readbackComplete: true,
-    bundleIdentifier: IOS_QA_RELEASE_EXPECTATION.bundleIdentifier,
-    appVersion: IOS_QA_RELEASE_EXPECTATION.appVersion,
-    latestNativeBuild: IOS_QA_RELEASE_EXPECTATION.nativeBuild,
-    latestBuildId: IOS_QA_RELEASE_EXPECTATION.appStoreConnectBuildId,
-    attestedAppVersion: IOS_QA_RELEASE_EXPECTATION.appVersion,
-    attestedNativeBuild: IOS_QA_RELEASE_EXPECTATION.nativeBuild,
-    attestedBuildId: IOS_QA_RELEASE_EXPECTATION.appStoreConnectBuildId,
+    bundleIdentifier: IOS_INTERNAL_V2_RELEASE_EXPECTATION.bundleIdentifier,
+    appVersion: IOS_INTERNAL_V2_RELEASE_EXPECTATION.appVersion,
+    latestNativeBuild: IOS_INTERNAL_V2_RELEASE_EXPECTATION.nativeBuild,
+    latestBuildId: syntheticAppStoreBuildId,
+    attestedAppVersion: IOS_INTERNAL_V2_RELEASE_EXPECTATION.appVersion,
+    attestedNativeBuild: IOS_INTERNAL_V2_RELEASE_EXPECTATION.nativeBuild,
+    attestedBuildId: syntheticAppStoreBuildId,
   };
-  check(matchesIosBinaryAttestation(validAttestation, validAsc), "reviewed local binary must match every App Store and manifest identity field");
-  check(!matchesIosBinaryAttestation(validAttestation, { ...validAsc, attestedAppVersion: "9.9.9" }), "App Store version mismatch must block local binary verification");
-  check(matchesIosBinaryAttestation(validAttestation, { ...validAsc, latestNativeBuild: "9", latestBuildId: "later-build" }), "a later build must not erase exact attested-binary verification");
-  check(releaseProbe.includes("newer_app_store_build_observed") && releaseProbe.includes("latestAppStoreBuild !== IOS_QA_RELEASE_MANIFEST.nativeBuild"), "a later App Store build must create release drift without corrupting exact attestation identity");
+  check(!matchesIosBinaryAttestation(validAttestation, validAsc), "a manifest without an observed App Store build ID must remain unverified");
+  check(matchesIosBinaryAttestation(validAttestation, validAsc, fullyBoundExpectation), "reviewed local binary must match every App Store and manifest identity field");
+  check(!matchesIosBinaryAttestation(validAttestation, { ...validAsc, attestedAppVersion: "9.9.9" }, fullyBoundExpectation), "App Store version mismatch must block local binary verification");
+  check(matchesIosBinaryAttestation(validAttestation, { ...validAsc, latestNativeBuild: "9", latestBuildId: "later-build" }, fullyBoundExpectation), "a later build must not erase exact attested-binary verification");
+  check(releaseProbe.includes("newer_app_store_build_observed") && releaseProbe.includes("latestAppStoreBuild !== IOS_INTERNAL_V2_RELEASE_MANIFEST.nativeBuild"), "a later App Store build must create release drift without corrupting exact attestation identity");
   const releaseAdapter = read("scripts/ios-release-provider-readback.mjs");
   check(releaseAdapter.includes("include=preReleaseVersion") && releaseAdapter.includes("attestedAppVersion: attestedPreReleaseVersion") && releaseAdapter.includes("attestedBuildId: attestedBuild"), "App Store readback must separate latest drift from exact attested build identity");
   check(read("scripts/ios-release-provider-readback.mjs").includes("local_ios_build_absent_from_eas_cloud_build_history"), "local binary absence from EAS cloud history must be truthful");
@@ -234,7 +240,7 @@ const runAllPlatform = async () => {
   const observabilityDedupeMigration = read("supabase/migrations/20260718142000_dedupe_open_observability_findings.sql");
   const installedQa = read("supabase/functions/installed-product-qa-operator/index.ts");
   const deviceDedupeMigration = read("supabase/migrations/20260718143000_dedupe_device_availability_findings.sql");
-  check(iosSourceProbes.includes("release?.readback_complete === true") && iosSourceProbes.includes("release?.runtime_version === IOS_QA_RELEASE_EXPECTATION.runtimeVersion"), "iOS recovery cannot treat expected values in an incomplete row as observed identity");
+  check(iosSourceProbes.includes("release?.readback_complete === true") && iosSourceProbes.includes("release?.runtime_version === IOS_INTERNAL_V2_RELEASE_EXPECTATION.runtimeVersion"), "iOS recovery cannot treat expected values in an incomplete row as observed identity");
   for (const reason of ["signing_certificate_status_unavailable", "ios_release_or_retry_recovery_readback_blocked", "ios_release_identity_readback_unavailable"]) {
     check(iosSourceProbes.includes(reason), `iOS source probe must expose lifecycle reason: ${reason}`);
   }

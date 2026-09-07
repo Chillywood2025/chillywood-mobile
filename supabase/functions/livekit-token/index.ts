@@ -23,7 +23,7 @@ import {
 
 type LiveKitJoinSurface = "live-stage" | "watch-party-live" | "chat-call";
 type LiveKitParticipantRole = "host" | "speaker" | "viewer";
-type LiveKitTokenAction = "mint-token" | "enforce-participant-state";
+type LiveKitTokenAction = "mint-token" | "enforce-participant-state" | "mark-room-live";
 type SupabaseClientLike = any;
 
 type LiveKitRequestedGrants = {
@@ -216,6 +216,7 @@ const normalizeAction = (value: unknown): LiveKitTokenAction | null => {
   const normalized = sanitizeText(value || "mint-token").toLowerCase();
   if (!normalized || normalized === "mint-token" || normalized === "token") return "mint-token";
   if (normalized === "enforce-participant-state") return "enforce-participant-state";
+  if (normalized === "mark-room-live") return "mark-room-live";
   return null;
 };
 
@@ -1238,7 +1239,7 @@ Deno.serve(async (req): Promise<Response> => {
     const participantRole = normalizeRole(payload);
 
     if (!action) {
-      return await auditAndJson(400, { error: "invalid_action", message: "action must be mint-token or enforce-participant-state." }, {
+      return await auditAndJson(400, { error: "invalid_action", message: "action must be mint-token, mark-room-live, or enforce-participant-state." }, {
         action: "unknown",
         requestedParticipantRole: participantRole,
         roomName,
@@ -1278,6 +1279,101 @@ Deno.serve(async (req): Promise<Response> => {
       }, {
         action,
         requestedParticipantRole: participantRole,
+        roomName,
+        surface,
+      });
+    }
+
+    if (action === "mark-room-live") {
+      if (
+        surface !== "live-stage"
+        || room.kind !== "watch-party"
+        || sanitizeText(room.roomType).toLowerCase() !== "live"
+        || !isWatchPartyRoomCurrentlyActive(room)
+        || sanitizeText(room.hostUserId) !== userId
+      ) {
+        return await auditAndJson(403, {
+          error: "live_discovery_host_authority_required",
+          message: "Only the exact host of this active Live Stage room can publish it to discovery.",
+        }, {
+          action,
+          room,
+          roomName,
+          surface,
+        });
+      }
+
+      const assignmentEndpoint = await fetchExistingLiveKitAssignmentEndpoint(adminClient, room.roomName);
+      if (!assignmentEndpoint?.apiUrl) {
+        return await auditAndJson(409, {
+          error: "live_discovery_provider_room_unconfirmed",
+          message: "The LiveKit room is not connected yet, so it cannot enter discovery.",
+        }, {
+          action,
+          room,
+          roomName,
+          surface,
+        });
+      }
+
+      try {
+        const roomService = new RoomServiceClient(
+          assignmentEndpoint.apiUrl,
+          livekitApiKey,
+          livekitApiSecret,
+        );
+        const participants = await roomService.listParticipants(room.roomName);
+        const exactHostIsConnected = participants.some((participant) => (
+          sanitizeText(participant.identity) === userId
+        ));
+        if (!exactHostIsConnected) {
+          return await auditAndJson(409, {
+            error: "live_discovery_provider_host_unconfirmed",
+            message: "The exact host is not connected to the LiveKit room yet.",
+          }, {
+            action,
+            room,
+            roomName,
+            surface,
+          });
+        }
+      } catch (error) {
+        console.error("live discovery provider confirmation failure", error);
+        return await auditAndJson(502, {
+          error: "live_discovery_provider_confirmation_failed",
+          message: "Chi'llywood could not confirm the LiveKit room before publishing discovery.",
+        }, {
+          action,
+          room,
+          roomName,
+          surface,
+        });
+      }
+
+      const publication = await adminClient.rpc("publish_live_stage_discovery", {
+        p_actor_user_id: userId,
+        p_party_id: room.roomName,
+      });
+      if (publication.error || publication.data !== true) {
+        return await auditAndJson(409, {
+          error: "live_discovery_not_published",
+          message: "This room is private or no longer eligible for Live discovery.",
+        }, {
+          action,
+          room,
+          roomName,
+          surface,
+        });
+      }
+
+      return await auditAndJson(200, {
+        published: true,
+        roomName: room.roomName,
+      }, {
+        action,
+        canPublish: true,
+        effectiveParticipantRole: "host",
+        room,
         roomName,
         surface,
       });

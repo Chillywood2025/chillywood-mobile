@@ -269,6 +269,12 @@ const buildChannelTarget = (userId: string) => ({
   route: "/channel/[userId]",
 });
 
+const buildEventTarget = (eventId: string) => ({
+  deepLink: `chillywoodmobile://event/${eventId}`,
+  entityId: eventId,
+  route: "/event/[eventId]",
+});
+
 async function readFollowerRecipients(adminClient: SupabaseClientLike, channelUserId: string) {
   const { data } = await adminClient
     .from("channel_followers")
@@ -301,17 +307,15 @@ async function readCircleRecipients(adminClient: SupabaseClientLike, hostUserId:
 }
 
 async function readReminderRecipients(adminClient: SupabaseClientLike, eventId: string, hostUserId: string) {
-  const { data } = await adminClient
-    .from("event_reminders")
-    .select("user_id")
-    .eq("event_id", eventId)
-    .eq("status", "active");
+  const { data } = await adminClient.rpc("read_authorized_event_reminder_recipients", {
+    p_event_id: eventId,
+  });
 
   return (data ?? [])
-    .map((row) => toText(row.user_id))
+    .map((row: Record<string, unknown>) => toText(row.recipient_user_id))
     .filter(Boolean)
-    .filter((id) => id !== hostUserId)
-    .map((id) => ({ id, reason: "event_reminder_active" }));
+    .filter((id: string) => id !== hostUserId)
+    .map((id: string) => ({ id, reason: "event_reminder_active" }));
 }
 
 async function filterBlockedRecipients(adminClient: SupabaseClientLike, channelUserId: string, recipients: Recipient[]) {
@@ -453,7 +457,7 @@ async function buildDispatchPlan(adminClient: SupabaseClientLike, triggerType: T
       eligibilityReason: "event_reminder_15_minutes_before_start",
       recipients,
       sourceType: "creator_event",
-      target: buildChannelTarget(hostUserId),
+      target: buildEventTarget(event.id),
       title: toText(event.event_title),
     };
   }

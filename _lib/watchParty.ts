@@ -59,6 +59,7 @@ export {
 export type WatchPartyRole = "host" | "viewer";
 export type WatchPartyPlaybackState = "playing" | "paused" | "buffering";
 export type WatchPartyRoomType = "live" | "title";
+export type WatchPartyDiscoveryVisibility = "public" | "circle" | "private";
 export type WatchPartyContentSourceType = "platform_title" | "creator_video" | "spectator_playback";
 export type WatchPartyStageRole = "host" | "speaker" | "listener";
 
@@ -69,6 +70,9 @@ export type WatchPartyState = {
   titleId: string | null;
   sourceType: WatchPartyContentSourceType | null;
   sourceId: string | null;
+  discoveryVisibility: WatchPartyDiscoveryVisibility;
+  discoveryTitle: string | null;
+  discoveryStartedAt: string | null;
   hostUserId: string;
   playbackPositionMillis: number;
   playbackState: WatchPartyPlaybackState;
@@ -190,6 +194,8 @@ type WatchPartyRoomCreateOptions = {
   reactionsPolicy?: ReactionsPolicy;
   contentAccessRule?: ContentAccessRule;
   capturePolicy?: CapturePolicy;
+  discoveryVisibility?: WatchPartyDiscoveryVisibility;
+  discoveryTitle?: string | null;
 };
 
 type SetPartyRoomPoliciesOptions = {
@@ -197,6 +203,8 @@ type SetPartyRoomPoliciesOptions = {
   reactionsPolicy?: ReactionsPolicy;
   contentAccessRule?: ContentAccessRule;
   capturePolicy?: CapturePolicy;
+  discoveryVisibility?: WatchPartyDiscoveryVisibility;
+  discoveryTitle?: string | null;
 };
 
 type SetPartyParticipantStateOptions = {
@@ -244,7 +252,10 @@ type WatchPartyMessageRow = Pick<
   Tables<"watch_party_room_messages">,
   "id" | "party_id" | "user_id" | "username" | "text" | "created_at"
 >;
-type PartyRoomInsert = TablesInsert<"watch_party_rooms">;
+type PartyRoomInsert = TablesInsert<"watch_party_rooms"> & {
+  discovery_visibility?: WatchPartyDiscoveryVisibility;
+  discovery_title?: string | null;
+};
 type PartyRoomBaseInsert = Pick<
   PartyRoomInsert,
   | "party_id"
@@ -259,7 +270,10 @@ type PartyRoomBaseInsert = Pick<
   | "started_at"
   | "updated_at"
 >;
-type PartyRoomUpdate = TablesUpdate<"watch_party_rooms">;
+type PartyRoomUpdate = TablesUpdate<"watch_party_rooms"> & {
+  discovery_visibility?: WatchPartyDiscoveryVisibility;
+  discovery_title?: string | null;
+};
 
 type PartyRoomBaseRow = Pick<
   Tables<"watch_party_rooms">,
@@ -291,7 +305,11 @@ type PartyRoomLegacyBaseRow = Pick<
 type PartyRoomFullRow = PartyRoomBaseRow & Pick<
   Tables<"watch_party_rooms">,
   "join_policy" | "reactions_policy" | "content_access_rule" | "capture_policy" | "last_activity_at"
->;
+> & {
+  discovery_visibility?: string | null;
+  discovery_title?: string | null;
+  discovery_started_at?: string | null;
+};
 
 export type PartyRoomRow = PartyRoomLegacyBaseRow | PartyRoomBaseRow | PartyRoomFullRow;
 
@@ -323,7 +341,7 @@ const PARTY_ROOMS_LEGACY_BASE_SELECT =
 const PARTY_ROOMS_BASE_SELECT =
   `${PARTY_ROOMS_LEGACY_BASE_SELECT},source_type,source_id`;
 const PARTY_ROOMS_POLICY_SELECT =
-  `${PARTY_ROOMS_BASE_SELECT},join_policy,reactions_policy,content_access_rule,capture_policy,last_activity_at`;
+  `${PARTY_ROOMS_BASE_SELECT},join_policy,reactions_policy,content_access_rule,capture_policy,last_activity_at,discovery_visibility,discovery_title,discovery_started_at`;
 const PARTY_ROOM_MEMBERSHIP_SELECT =
   "party_id,user_id,role,stage_role,can_speak,is_muted,host_muted,self_muted,membership_state,camera_enabled,mic_enabled,display_name,avatar_url,camera_preview_url,joined_at,last_seen_at,left_at,updated_at";
 
@@ -346,6 +364,14 @@ const normalizeWatchPartyContentSourceType = (
   if (normalized === "platform_title") return "platform_title";
   if (normalized === "spectator_playback") return "spectator_playback";
   return null;
+};
+
+const normalizeWatchPartyDiscoveryVisibility = (
+  value: unknown,
+): WatchPartyDiscoveryVisibility => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "public" || normalized === "circle") return normalized;
+  return "private";
 };
 
 export const createPartyId = () => {
@@ -661,6 +687,9 @@ export const createWatchPartyDraft = (draft: WatchPartyRoomDraft): WatchPartySta
     titleId,
     sourceType,
     sourceId,
+    discoveryVisibility: "private",
+    discoveryTitle: null,
+    discoveryStartedAt: null,
     hostUserId: draft.hostUserId,
     playbackPositionMillis: Math.max(0, Math.floor(draft.playbackPositionMillis ?? 0)),
     playbackState: draft.playbackState ?? "paused",
@@ -724,6 +753,15 @@ function rowToState(row: PartyRoomRow): WatchPartyState | null {
   const capturePolicy = "capture_policy" in row ? row.capture_policy : undefined;
   const isActive = !("is_active" in row) || row.is_active !== false;
   const lastActivityAt = "last_activity_at" in row ? row.last_activity_at : undefined;
+  const discoveryVisibility = "discovery_visibility" in row
+    ? normalizeWatchPartyDiscoveryVisibility(row.discovery_visibility)
+    : "private";
+  const discoveryTitle = "discovery_title" in row
+    ? String(row.discovery_title ?? "").trim() || null
+    : null;
+  const discoveryStartedAt = "discovery_started_at" in row
+    ? String(row.discovery_started_at ?? "").trim() || null
+    : null;
 
   if (!primaryId || !hostUserId) return null;
   if (roomType === "title" && !titleIdRaw && !sourceId) return null;
@@ -738,6 +776,9 @@ function rowToState(row: PartyRoomRow): WatchPartyState | null {
     titleId: titleIdRaw || null,
     sourceType,
     sourceId,
+    discoveryVisibility,
+    discoveryTitle,
+    discoveryStartedAt,
     playbackPositionMillis: Math.max(0, Number(row.playback_position_millis ?? 0)),
     playbackState: row.playback_state === "playing" ? "playing" : "paused",
     joinPolicy: normalizeJoinPolicy(joinPolicy),
@@ -1089,6 +1130,12 @@ export async function createPartyRoom(
             reactions_policy: reactionsPolicy,
             content_access_rule: contentAccessRule,
             capture_policy: capturePolicy,
+            discovery_visibility: requestedRoomType === "live"
+              ? normalizeWatchPartyDiscoveryVisibility(options?.discoveryVisibility)
+              : "private",
+            discovery_title: requestedRoomType === "live"
+              ? String(options?.discoveryTitle ?? "").trim() || null
+              : null,
             started_at: now,
             updated_at: now,
             last_activity_at: now,
@@ -1465,6 +1512,12 @@ export async function setPartyRoomPolicies(
     );
   }
   if (policies.capturePolicy) updates.capture_policy = normalizeCapturePolicy(policies.capturePolicy);
+  if (policies.discoveryVisibility && room.roomType === "live") {
+    updates.discovery_visibility = normalizeWatchPartyDiscoveryVisibility(policies.discoveryVisibility);
+  }
+  if (policies.discoveryTitle !== undefined && room.roomType === "live") {
+    updates.discovery_title = String(policies.discoveryTitle ?? "").trim() || null;
+  }
 
   const { data, error } = await supabase
     .from(PARTY_ROOMS_TABLE)

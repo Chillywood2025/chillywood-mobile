@@ -203,7 +203,18 @@ assert.equal(
   generatedContract.ANDROID_PRODUCTION_RELEASE_MANIFEST.nativeCompatibilityDigest,
   manifest.nativeCompatibility.digest,
 );
-assert.equal(generatedContract.IOS_QA_RELEASE_MANIFEST.runtimeVersion, "1.0.0-iosqa1");
-assert.equal(generatedContract.IOS_QA_RELEASE_MANIFEST.nativeBuild, "8");
+assert.equal(generatedContract.IOS_INTERNAL_V2_RELEASE_MANIFEST.platform, "ios");
+assert.equal(generatedContract.IOS_INTERNAL_V2_RELEASE_MANIFEST.releaseLane, "internal-v2");
+assert.equal(generatedContract.IOS_INTERNAL_V2_RELEASE_MANIFEST.environment, "production");
+assert.equal(generatedContract.IOS_INTERNAL_V2_RELEASE_MANIFEST.buildProfile, "ios-internal-v2");
+assert.equal(generatedContract.IOS_INTERNAL_V2_RELEASE_MANIFEST.runtimeVersion,
+  productionOtaGeneration.iosRuntimeVersion);
+assert.equal(generatedContract.IOS_INTERNAL_V2_RELEASE_MANIFEST.channel, "ios-internal-v2");
+assert.equal(generatedContract.IOS_INTERNAL_V2_RELEASE_MANIFEST.nativeBuild, "13");
+assert.match(generatedContract.IOS_INTERNAL_V2_RELEASE_MANIFEST.binarySourceCommit, /^[0-9a-f]{40}$/u);
+assert.match(generatedContract.IOS_INTERNAL_V2_RELEASE_MANIFEST.currentOtaSourceCommit, /^[0-9a-f]{40}$/u);
+assert.match(generatedContract.IOS_INTERNAL_V2_RELEASE_MANIFEST.currentOtaUpdateGroup, /^[0-9a-f-]{36}$/u);
+assert.doesNotMatch(JSON.stringify(generatedContract.IOS_INTERNAL_V2_RELEASE_MANIFEST), /ios-qa|iosqa1/u,
+  "the internal-v2 candidate manifest must reject obsolete iOS QA identity");
 
 console.log(`Android native runtime compatibility guard passed (${compatibility.summary.nativePackageCount} native packages; production OTA generation ${productionOtaGeneration.generation}; digest ${compatibility.digest.slice(0, 12)}…).`);

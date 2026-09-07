@@ -844,6 +844,9 @@ select ok(
   )
   and pg_get_functiondef(
     'public.join_watch_party_room_session(text,text,text,text,boolean,boolean,boolean)'::regprocedure
+  ) like '%join_watch_party_room_session_pre_discovery_rfgc%'
+  and pg_get_functiondef(
+    'public.join_watch_party_room_session_pre_discovery_rfgc(text,text,text,text,boolean,boolean,boolean)'::regprocedure
   ) like '%watch_party_room_self_access_allowed_internal%',
   '39. Premium/content access is enforced inside the RPC-only membership boundary'
 );

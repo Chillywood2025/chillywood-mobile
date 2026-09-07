@@ -201,6 +201,7 @@ import {
   type CreatorEventStatus,
   type CreatorEventSummary,
   type CreatorEventType,
+  type CreatorEventVisibility,
 } from "../_lib/liveEvents";
 import {
   deleteCreatorVideo,
@@ -411,6 +412,7 @@ type ChannelEventEditorState = {
   editingEventId: string | null;
   eventTitle: string;
   eventType: CreatorEventType;
+  visibility: CreatorEventVisibility;
   status: CreatorEventStatus;
   startsAt: string;
   endsAt: string;
@@ -457,6 +459,7 @@ const createEmptyEventEditorState = (): ChannelEventEditorState => ({
   editingEventId: null,
   eventTitle: "",
   eventType: "live_first",
+  visibility: "private",
   status: "draft",
   startsAt: "",
   endsAt: "",
@@ -4510,6 +4513,7 @@ export function ChannelStudioScreen() {
       editingEventId: event.id,
       eventTitle: event.eventTitle,
       eventType: event.eventType,
+      visibility: event.visibility,
       status: event.status,
       startsAt: toDatetimeLocalValue(event.startsAt),
       endsAt: toDatetimeLocalValue(event.endsAt),
@@ -4542,6 +4546,7 @@ export function ChannelStudioScreen() {
         hostUserId: String(user.id),
         eventTitle: eventEditor.eventTitle,
         eventType: eventEditor.eventType,
+        visibility: eventEditor.visibility,
         status: eventEditor.status,
         startsAt: fromDatetimeLocalValue(eventEditor.startsAt),
         endsAt: fromDatetimeLocalValue(eventEditor.endsAt),
@@ -9942,6 +9947,24 @@ export function ChannelStudioScreen() {
                   >
                     <Text style={[styles.chipText, eventEditor.status === value && styles.chipTextActive]}>
                       {formatEventStatusLabel(value)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.sectionLabel}>Audience</Text>
+              <View style={styles.chipRow}>
+                {(["public", "circle", "private"] as const).map((value) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[styles.chip, eventEditor.visibility === value && styles.chipActive]}
+                    onPress={() => updateEventEditor({ visibility: value })}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: eventEditor.visibility === value }}
+                    accessibilityLabel={`Set Event audience to ${value === "circle" ? "Chi'lly Circle" : value}`}
+                  >
+                    <Text style={[styles.chipText, eventEditor.visibility === value && styles.chipTextActive]}>
+                      {value === "circle" ? "Chi'lly Circle" : value === "public" ? "Public" : "Private"}
                     </Text>
                   </TouchableOpacity>
                 ))}

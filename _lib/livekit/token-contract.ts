@@ -407,6 +407,44 @@ const requestLiveKitTokenResponse = async (
   }
 };
 
+export async function markLiveStageRoomConnectedForDiscovery(
+  roomNameValue: string,
+): Promise<boolean> {
+  const config = getRuntimeLiveKitConfig();
+  const roomName = String(roomNameValue ?? "").trim().toUpperCase();
+  if (!roomName || !isLiveKitRuntimeConfigured()) return false;
+
+  const authSession = await supabase.auth.getSession().catch(() => null);
+  const accessToken = String(authSession?.data.session?.access_token ?? "").trim();
+  if (!accessToken) return false;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await requestLiveKitTokenResponse(config.tokenEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          action: "mark-room-live",
+          surface: "live-stage",
+          roomName,
+        }),
+      });
+      if (response.ok) {
+        const payload = await response.json().catch(() => null) as { published?: unknown } | null;
+        return payload?.published === true;
+      }
+      if (response.status !== 409 || attempt === 2) return false;
+    } catch {
+      if (attempt === 2) return false;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 750 * (attempt + 1)));
+  }
+  return false;
+}
+
 // The mobile app never mints LiveKit credentials. It only requests them from a backend endpoint.
 export async function requestLiveKitParticipantToken(
   request: LiveKitTokenRequest,

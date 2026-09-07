@@ -1,6 +1,6 @@
 import {
   ANDROID_PRODUCTION_RELEASE_MANIFEST,
-  IOS_QA_RELEASE_MANIFEST,
+  IOS_INTERNAL_V2_RELEASE_MANIFEST,
 } from "../_shared/release-manifest-contract.generated.mjs";
 import { classifyIosReleaseAutonomy, matchesIosBinaryAttestation, sanitizeAutonomousReadback } from "../_shared/ios-autonomous-operator-policy.mjs";
 import type { ScopedOperatorHandler } from "../_shared/scoped-operator.ts";
@@ -51,10 +51,10 @@ export const runIosReleaseAutonomyProbe: ScopedOperatorHandler = async ({ client
 
   const { data: attestation, error: attestationError } = await client.from("release_binary_attestations")
     .select("id,platform,bundle_identifier,app_version,native_build,runtime_version,channel,distribution_source,source_commit,binary_sha256,app_store_connect_build_id,attestation_status,verified_at")
-    .eq("platform", "ios").eq("binary_sha256", IOS_QA_RELEASE_MANIFEST.binarySha256).limit(1).maybeSingle();
+    .eq("platform", "ios").eq("binary_sha256", IOS_INTERNAL_V2_RELEASE_MANIFEST.binarySha256).limit(1).maybeSingle();
   if (attestationError) throw attestationError;
   const attestationId = text(attestation?.id);
-  const attestationMatchesAsc = Boolean(attestationId) && matchesIosBinaryAttestation(attestation, asc, IOS_QA_RELEASE_MANIFEST);
+  const attestationMatchesAsc = Boolean(attestationId) && matchesIosBinaryAttestation(attestation, asc, IOS_INTERNAL_V2_RELEASE_MANIFEST);
   if (attestationMatchesAsc && attestation?.attestation_status !== "verified") {
     const { error } = await client.from("release_binary_attestations").update({
       attestation_status: "verified", verified_at: windowEnd, verification_source: "app_store_connect_readback+reviewed_local_binary_manifest",
@@ -87,10 +87,10 @@ export const runIosReleaseAutonomyProbe: ScopedOperatorHandler = async ({ client
     binaryIdentityComplete,
     channelReadbackComplete: easChannelComplete,
     release,
-  }, IOS_QA_RELEASE_MANIFEST);
+  }, IOS_INTERNAL_V2_RELEASE_MANIFEST);
   if (!binaryIdentityComplete && !classification.reasons.includes("local_binary_attestation_unverified")) classification.reasons.push("local_binary_attestation_unverified");
   const latestAppStoreBuild = text(asc.latestNativeBuild);
-  if (ascComplete && latestAppStoreBuild && latestAppStoreBuild !== IOS_QA_RELEASE_MANIFEST.nativeBuild) {
+  if (ascComplete && latestAppStoreBuild && latestAppStoreBuild !== IOS_INTERNAL_V2_RELEASE_MANIFEST.nativeBuild) {
     if (!classification.reasons.includes("newer_app_store_build_observed")) classification.reasons.push("newer_app_store_build_observed");
     if (classification.healthState === "healthy") classification.healthState = "blocked";
   }
@@ -109,7 +109,7 @@ export const runIosReleaseAutonomyProbe: ScopedOperatorHandler = async ({ client
       app_version: release.appVersion, native_build: release.nativeBuild, bundle_identifier: release.bundleIdentifier,
       runtime_version: release.runtimeVersion, channel: release.channel, update_id: release.updateId,
       distribution_source: release.distributionSource, provider_environment: null,
-      metadata: { expectedIdentity: IOS_QA_RELEASE_MANIFEST, observedIdentityAvailable: capability.complete },
+      metadata: { expectedIdentity: IOS_INTERNAL_V2_RELEASE_MANIFEST, observedIdentityAvailable: capability.complete },
     });
   }
 
@@ -124,7 +124,7 @@ export const runIosReleaseAutonomyProbe: ScopedOperatorHandler = async ({ client
   const { error: snapshotError } = await client.from("release_health_snapshots").insert({
     system_id: "release_ota_operator", health_state: healthState, embedded_launch: release.embeddedLaunch,
     emergency_launch: release.emergencyLaunch, environment_mode: "production", ...identity,
-    metadata: sanitizeAutonomousReadback({ reasons: classification.reasons, expectedIdentity: IOS_QA_RELEASE_MANIFEST, observedIdentity: release, processingStatus: release.processingStatus, updateGroup: release.updateGroup, internalGroupAssigned: ascComplete ? asc.internalGroupAssigned === true : null, externalGroupCount: ascComplete ? Number(asc.externalGroupCount ?? 0) : null, publicSubmissionPresent: ascComplete ? asc.publicSubmissionPresent === true : null, publicReleasePresent: ascComplete ? asc.publicReleasePresent === true : null, rollbackTargetAvailable: release.rollbackTargetAvailable, releaseActionExecuted: false }),
+    metadata: sanitizeAutonomousReadback({ reasons: classification.reasons, expectedIdentity: IOS_INTERNAL_V2_RELEASE_MANIFEST, observedIdentity: release, processingStatus: release.processingStatus, updateGroup: release.updateGroup, internalGroupAssigned: ascComplete ? asc.internalGroupAssigned === true : null, externalGroupCount: ascComplete ? Number(asc.externalGroupCount ?? 0) : null, publicSubmissionPresent: ascComplete ? asc.publicSubmissionPresent === true : null, publicReleasePresent: ascComplete ? asc.publicReleasePresent === true : null, rollbackTargetAvailable: release.rollbackTargetAvailable, releaseActionExecuted: false }),
   });
   if (snapshotError) throw snapshotError;
 
@@ -149,7 +149,7 @@ export const runIosReleaseAutonomyProbe: ScopedOperatorHandler = async ({ client
     metadata: sanitizeAutonomousReadback({ scheduler: metadata.scheduler, source: metadata.source, readbackComplete: classification.readbackComplete && binaryIdentityComplete }),
   });
   if (eventError) throw eventError;
-  return { readbackComplete: classification.readbackComplete && binaryIdentityComplete, platform: "ios", source: "eas+app_store_connect+local_binary_attestation", dataWindow: { start: null, end: windowEnd }, healthState, reasons: classification.reasons, expectedIdentity: IOS_QA_RELEASE_MANIFEST, observedIdentity: sanitizeAutonomousReadback(release), providerReadbackUnavailable: classification.providerReadbackUnavailable, releaseActionExecuted: false, moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };
+  return { readbackComplete: classification.readbackComplete && binaryIdentityComplete, platform: "ios", source: "eas+app_store_connect+local_binary_attestation", dataWindow: { start: null, end: windowEnd }, healthState, reasons: classification.reasons, expectedIdentity: IOS_INTERNAL_V2_RELEASE_MANIFEST, observedIdentity: sanitizeAutonomousReadback(release), providerReadbackUnavailable: classification.providerReadbackUnavailable, releaseActionExecuted: false, moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };
 };
 
 export const runAndroidReleaseAutonomyProbe: ScopedOperatorHandler = async ({ client, payload }) => {

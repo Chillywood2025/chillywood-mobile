@@ -3,7 +3,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   classifyIosInstalledQaReadiness,
-  IOS_QA_RELEASE_EXPECTATION,
+  IOS_INTERNAL_V2_RELEASE_EXPECTATION,
   sanitizeAutonomousReadback,
 } from "../_shared/ios-autonomous-operator-policy.mjs";
 import { normalizeInstalledQaPlatform } from "../_shared/installed-qa-platform-policy.mjs";
@@ -519,7 +519,7 @@ const runWatchOnce = async (client: SupabaseClientLike, payload: JsonObject) => 
     .from("release_binary_attestations")
     .select("attestation_status,verified_at,source_commit,binary_sha256,app_store_connect_build_id")
     .eq("platform", "ios")
-    .eq("binary_sha256", IOS_QA_RELEASE_EXPECTATION.binarySha256)
+    .eq("binary_sha256", IOS_INTERNAL_V2_RELEASE_EXPECTATION.binarySha256)
     .limit(1)
     .maybeSingle();
   if (attestationError) throw attestationError;
@@ -529,7 +529,7 @@ const runWatchOnce = async (client: SupabaseClientLike, payload: JsonObject) => 
   const release = {
     internalBuildAvailable: providerReadbackComplete
       && releaseSnapshot?.distribution_source === "testflight_internal"
-      && releaseSnapshot?.native_build === IOS_QA_RELEASE_EXPECTATION.nativeBuild,
+      && releaseSnapshot?.native_build === IOS_INTERNAL_V2_RELEASE_EXPECTATION.nativeBuild,
     appVersion: providerReadbackComplete ? releaseSnapshot?.app_version : null,
     nativeBuild: providerReadbackComplete ? releaseSnapshot?.native_build : null,
     bundleIdentifier: providerReadbackComplete ? releaseSnapshot?.bundle_identifier : null,
@@ -544,7 +544,7 @@ const runWatchOnce = async (client: SupabaseClientLike, payload: JsonObject) => 
   const classification = classifyIosInstalledQaReadiness({
     providerReadbackComplete,
     release,
-    clientCapabilities: IOS_QA_RELEASE_EXPECTATION.clientCapabilities,
+    clientCapabilities: IOS_INTERNAL_V2_RELEASE_EXPECTATION.clientCapabilities,
     physicalEvidenceAvailable: false,
     availablePhysicalDeviceCount: 0,
   });
@@ -571,7 +571,7 @@ const runWatchOnce = async (client: SupabaseClientLike, payload: JsonObject) => 
       discoveredBy,
       releaseSnapshotCreatedAt: releaseSnapshot?.created_at ?? null,
       binaryAttestationVerified: attestation?.attestation_status === "verified",
-      clientCapabilities: IOS_QA_RELEASE_EXPECTATION.clientCapabilities,
+      clientCapabilities: IOS_INTERNAL_V2_RELEASE_EXPECTATION.clientCapabilities,
       physicalProofClaimed: false,
       blockers: classification.blockers,
     },
