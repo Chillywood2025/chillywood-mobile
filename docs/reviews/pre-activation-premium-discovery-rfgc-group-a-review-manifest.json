@@ -5,8 +5,8 @@
   "implementationTree": "67ec1b8603a8a4118319c9637040d816c889e72e",
   "baseHead": "03e701e37d58e7b4018e2787ba0f15f54f36182e",
   "changedFileHash": "865a4f7b3ff337742d72ad5b6dd2ea595aec68308000ca796127875e1cb1d491",
-  "migrationSetHash": "fa1987415ed7e09645b8ed420441907345ed43c3cf8a310cccbed43ea42d0a06",
-  "configHash": "1f4acfe15bb6d2b1ea44d7d45ae2e958e8f95f9edc4c33438e9cc04c9e58bf67",
+  "migrationSetHash": "845ae0b5c16ba3fef05e0c090e1b1b2c5a35e669862e32e61ab2ddc07ac6fc38",
+  "configHash": "bf0933f584b5e44a0159ae237dcb99714821f78ffd98702e50bb77d986cacc58",
   "testResults": {
     "phase1Ci": {
       "status": "pass",
@@ -46,7 +46,7 @@
   },
   "testResultHash": "afb57873f5e0213da0a44606aaa36d87c7edae8ee548e602b65d02a4a0308e63",
   "reviewLevel": "C",
-  "reviewHead": "c4599354cc562aca13b1ae97173d578fb16c70ab",
+  "reviewHead": "08746864452f97b0903989f7624c11a2b0eefd81",
   "reviewTimestamp": "2026-09-07T14:35:21Z",
   "reviewerLanes": [
     "architecture-state",
