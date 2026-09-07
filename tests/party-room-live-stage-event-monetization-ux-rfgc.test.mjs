@@ -81,6 +81,17 @@ test("Party Room presents exact public content identity without exposing its int
   assert.match(partyContentSources, /displayName: publicMetadataVideo\?\.title \?\? video\?\.title \?\? null/u);
   assert.match(partyContentSources, /playbackUrl: video\?\.playbackUrl \?\? null/u);
   assert.match(partyContentSources, /isPlayable: !unavailableReason/u);
+
+  assert.match(partySetup, /resolveWatchPartyContentDisplayByParts/u);
+  assert.match(partySetup, /resolveWatchPartyContentDisplay\(room\)/u);
+  assert.match(partyRoom, /resolveWatchPartyContentDisplay\(snapshot\.room\)/u);
+  assert.doesNotMatch(partyRoom, /resolveWatchPartyContentSource\(snapshot\.room\)/u);
+  const displayResolverStart = partyContentSources.indexOf("export async function resolveWatchPartyContentDisplayByParts");
+  const playbackResolverStart = partyContentSources.indexOf("export async function resolveWatchPartyContentSourceByParts");
+  const displayResolver = partyContentSources.slice(displayResolverStart, playbackResolverStart);
+  assert.ok(displayResolverStart >= 0 && playbackResolverStart > displayResolverStart);
+  assert.match(displayResolver, /readPublicCreatorVideoMetadata\(sourceId\)/u);
+  assert.doesNotMatch(displayResolver, /readCreatorVideoForPlayer|resolveSignedVideoPlaybackSource|readSpectatorPlaybackReadout/u);
 });
 
 test("Live Stage creator setup separates viewer entry from speaking-seat eligibility", () => {

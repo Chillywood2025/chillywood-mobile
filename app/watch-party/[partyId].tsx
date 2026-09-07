@@ -133,7 +133,7 @@ import {
 } from "../../_lib/socialAttachments";
 import { pickSocialAttachmentFile } from "../../_lib/socialAttachmentPicker";
 import {
-  resolveWatchPartyContentSource,
+  resolveWatchPartyContentDisplay,
   resolveWatchPartySourceId,
   resolveWatchPartySourceType,
 } from "../../_lib/watchPartyContentSources";
@@ -984,7 +984,7 @@ export default function WatchPartyRoomScreen() {
           setTitleName("Live Room");
           setSourceAttribution(null);
         } else {
-          resolveWatchPartyContentSource(snapshot.room)
+          resolveWatchPartyContentDisplay(snapshot.room)
             .then((contentSource) => {
               if (cancelled) return;
               if (contentSource.displayName) setTitleName(contentSource.displayName);

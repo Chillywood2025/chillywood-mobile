@@ -279,6 +279,15 @@
       "repair": "Render the resolved public content title instead of an internal identifier and add an exact, public, moderation-safe metadata fallback when playback authority resolution is temporarily unavailable; playback and content-access authority remain unchanged.",
       "proof": "A focused executable RFGC test and the navigation/media/spectator guards enforce exact-id lookup, public visibility, allowed moderation states, title-only presentation, removal of the raw id and unchanged playback-authority sinks; TypeScript, lint and affected route/native/money guards pass.",
       "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-031",
+      "class": "party_room_content_identity_convergence",
+      "firstFailedBoundary": "Party Room display metadata resolution",
+      "finding": "Final Android smoke proved that the waiting room eventually rendered the exact public creator-video title, but the Party Room remained on Shared content because its display-only title lookup was coupled to the heavier playback-and-entitlement source resolver.",
+      "repair": "Separate exact public display metadata resolution from playback authority resolution and use the display-only resolver in both Party Waiting Room and Party Room; playback, access, Premium, pass and media authority remain unchanged.",
+      "proof": "The focused executable RFGC contract requires both Party surfaces to use the exact public display resolver and rejects playback, signed-source and entitlement work inside that resolver; TypeScript, lint and affected media, route, LiveKit and monetization guards pass.",
+      "disposition": "PROVEN"
     }
   ],
   "limitations": [
@@ -301,7 +310,7 @@
   "counts": {
     "BLOCKING_OPEN": 0,
     "REPAIRED_UNPROVEN": 0,
-    "PROVEN": 30,
+    "PROVEN": 31,
     "NONBLOCKING_DEBT": 0,
     "PROVIDER_SANDBOX_LIMITED": 2,
     "EXTERNAL_BLOCKED": 1,

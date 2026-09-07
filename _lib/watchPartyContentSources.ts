@@ -36,6 +36,11 @@ export type WatchPartyResolvedContentSource = {
   sourceEnded?: boolean;
 };
 
+export type WatchPartyResolvedContentDisplay = Pick<
+  WatchPartyResolvedContentSource,
+  "sourceType" | "sourceId" | "displayName" | "thumbnailUrl" | "attributionLabel" | "sourceEnded"
+>;
+
 const toText = (value: unknown) => String(value ?? "").trim();
 
 const readPublicCreatorVideoMetadata = async (sourceId: string) => {
@@ -134,6 +139,83 @@ export async function resolveWatchPartyContentSource(
   const sourceType = resolveWatchPartySourceType(room);
   const sourceId = resolveWatchPartySourceId(room);
   return resolveWatchPartyContentSourceByParts({ sourceType, sourceId });
+}
+
+export async function resolveWatchPartyContentDisplay(
+  room: WatchPartyState,
+): Promise<WatchPartyResolvedContentDisplay> {
+  const sourceType = resolveWatchPartySourceType(room);
+  const sourceId = resolveWatchPartySourceId(room);
+  return resolveWatchPartyContentDisplayByParts({ sourceType, sourceId });
+}
+
+export async function resolveWatchPartyContentDisplayByParts(input: {
+  sourceType: WatchPartyContentSourceType | null;
+  sourceId: string | null;
+}): Promise<WatchPartyResolvedContentDisplay> {
+  const sourceType = input.sourceType;
+  const sourceId = toText(input.sourceId) || null;
+
+  if (sourceType === "creator_video" && sourceId) {
+    const video = await readPublicCreatorVideoMetadata(sourceId).catch(() => null);
+    return {
+      sourceType,
+      sourceId,
+      displayName: video?.title ?? null,
+      thumbnailUrl: null,
+      attributionLabel: null,
+      sourceEnded: false,
+    };
+  }
+
+  if (sourceType === "spectator_playback" && sourceId) {
+    const item = await readPublicDiscoveryFeedItem(sourceId).catch(() => null);
+    const displayName = toText(item?.title) || null;
+    const platformName = item
+      ? readMetadataText(item.metadata, [
+        "platformName",
+        "platform_name",
+        "channelName",
+        "channel_name",
+        "creatorName",
+        "creator_name",
+      ]) || "this Platform"
+      : null;
+    return {
+      sourceType,
+      sourceId,
+      displayName,
+      thumbnailUrl: item?.thumbnail_url ?? null,
+      attributionLabel: displayName && platformName ? `Watching ${displayName} from ${platformName}` : null,
+      sourceEnded: item?.live_state === "ended",
+    };
+  }
+
+  if (sourceType === "platform_title" && sourceId) {
+    const result = await supabase
+      .from("titles")
+      .select("id,title,poster_url")
+      .eq("id", sourceId)
+      .maybeSingle();
+    const data = result.data as Pick<TitleSourceRow, "id" | "title" | "poster_url"> | null;
+    return {
+      sourceType,
+      sourceId,
+      displayName: data?.title ? String(data.title) : null,
+      thumbnailUrl: data?.poster_url ? String(data.poster_url) : null,
+      attributionLabel: null,
+      sourceEnded: false,
+    };
+  }
+
+  return {
+    sourceType,
+    sourceId,
+    displayName: null,
+    thumbnailUrl: null,
+    attributionLabel: null,
+    sourceEnded: false,
+  };
 }
 
 export async function resolveWatchPartyContentSourceByParts(input: {
