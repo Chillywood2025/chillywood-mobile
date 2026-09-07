@@ -1,0 +1,77 @@
+{
+  "implementationPrNumber": 355,
+  "implementationBranch": "codex/pre-activation-rachi-authority-closure",
+  "implementationHead": "0414587f16c508f041bbd29a867c89f7a6a358e0",
+  "implementationTree": "ad11ad8f14067effd656fe8f95e935acefece617",
+  "baseHead": "21352e9bf9fd24b872c850fe636942e01ee96659",
+  "changedFileHash": "c66a1b8aa3c6fd342ebc7199b7dd46f2270a974076965293d5f98085bd952316",
+  "migrationSetHash": "b77f65ff10b7c30f7b1105335d65acc581b6967466fd6e67e9144b7a73dab147",
+  "configHash": "bf0933f584b5e44a0159ae237dcb99714821f78ffd98702e50bb77d986cacc58",
+  "testResults": {
+    "phase1Ci": {
+      "status": "blocked_assurance_only",
+      "qualification": "EXACT_FROZEN_HEAD_SUBSTANTIVE_LANES_PASS_ASSURANCE_CONTEXT_UNBOUND",
+      "runId": 34152314732,
+      "implementationHead": "0414587f16c508f041bbd29a867c89f7a6a358e0",
+      "jobs": {
+        "total": 14,
+        "passed": 11,
+        "failedAssuranceOnly": 3,
+        "failedSubstantive": 0
+      },
+      "assuranceOnlyFindings": [
+        "ASSURANCE_TASK_CONTEXT_UNBOUND",
+        "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN",
+        "PHASE1_RISK_CLOSURE_PROTECTED_READY_DECISION_INVALID"
+      ]
+    },
+    "database": {
+      "reset": "pass",
+      "focusedRachiAuthority": "16/16 pass",
+      "adjacentVisibilityAuthority": "368/368 pass",
+      "phase1SupabaseIntegration": "pass",
+      "lint": "pass with historical warnings only"
+    },
+    "static": {
+      "typescript": "pass",
+      "eslint": "pass with 104 historical warnings and zero errors",
+      "runtime": "pass",
+      "routeContracts": "pass",
+      "androidGuards": "pass",
+      "rachiPolicyGuard": "pass",
+      "gitDiffCheck": "pass"
+    },
+    "security": {
+      "scanId": "65448e43-0b76-44b6-a4b0-786d6ee94af9",
+      "coverage": "complete 2/2 source items plus changed tests",
+      "findings": 0,
+      "snapshotDigest": "codex-security-snapshot/v1:sha256:40ba029d9f8dddf3e24532bea85664e4bbcfac457e9ed6954b7457e6d0db99e3"
+    }
+  },
+  "testResultHash": "a6d8488f3c8c4196e09dc3a0efe78fe877f757cfc1a292ef50b96f440504d021",
+  "reviewLevel": "C",
+  "reviewHead": "fd1d7847e6364c6b7316926f5369b99b4b0a9e18",
+  "reviewTimestamp": "2026-09-07T18:45:16Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback"
+  ],
+  "findings": [
+    {
+      "id": "RFGC-ASSURANCE-CONTROL-PLANE-RACHI-001",
+      "severity": "P2",
+      "status": "owner_authorized_preop_assurance_continuation",
+      "launchImpacting": false,
+      "detail": "Phase 1 executed at the exact implementation head. Eleven jobs passed and three failed only at the enumerated historical assurance/admission boundary. The run is not claimed as passed."
+    },
+    {
+      "id": "RFGC-PHYSICAL-RACHI-PARITY-PENDING-002",
+      "severity": "P2",
+      "status": "postdeployment_tier_pending",
+      "launchImpacting": false,
+      "detail": "Installed Android Home parity proof remains downstream of exact merge and migration deployment; source, database integration, and API evidence do not substitute for that tier."
+    }
+  ]
+}
