@@ -313,8 +313,8 @@
       "firstFailedBoundary": "Party Room creation to canonical room-session membership",
       "finding": "Exact-main Android replay created a valid free title Party Room but its creator transaction persisted no host membership. Party Room bootstrap then returned before content display and Realtime startup, rendering the exact title as Shared content and the connection as Offline. The shared Spectator child-room producer had the adjacent defect because its service-role insert could not carry the authenticated caller into the existing exact-session membership trigger.",
       "repair": "Extend the existing same-transaction exact-host membership bootstrap to title Party Rooms while retaining authenticated current-session and exact host binding. Make Spectator child-room insertion use the already-verified request-bearer actor client, retaining service authority only for eligibility, exact source-link and audit work. No viewer, pass, payment, creator-money, payout, speaker, moderator or LiveKit authority is created.",
-      "proof": "A clean local database reset and the complete 83-file/3,052-assertion pgTAP suite pass, including atomic exact host membership, trigger ACL and no-unrelated-member proofs. Source contracts cover direct app creation and authenticated Spectator creation. Exact merged migration/Edge deployment and physical title/Live/host-end readback remain required.",
-      "disposition": "REPAIRED_UNPROVEN"
+      "proof": "A clean local database reset and the complete 83-file/3,052-assertion pgTAP suite pass, including atomic exact host membership, trigger ACL and no-unrelated-member proofs. Protected-main migration 20260907080000 is deployed as remote version 20260907082801, spectator-start-room version 33 matches exact merged source, and Android internal-v2 update 01a07b02-c706-7e8a-baf9-47608dbf76ac physically created an exact free creator-video Party Room that rendered its public title, Host and Live states and ended through canonical server authority.",
+      "disposition": "PROVEN"
     },
     {
       "id": "RFGC-UX-035",
@@ -322,7 +322,16 @@
       "firstFailedBoundary": "authoritative entitlement projection to an already-visible Premium gate",
       "finding": "Physical Android replay showed the Premium screen authoritative-active while a previously mounted Watch-Party Live access sheet still presented Premium required. The sheet loaded only when its visible flag changed, so returning from Premium, foreground resume, or a slightly delayed sandbox renewal projection could leave the original strict gate stale even though backend authority had converged.",
       "repair": "Re-read exact provider/backend state on route focus and foreground resume, reject stale overlapping reads by generation, and run only six delayed 1.25-second Premium-gate projection checks before leaving an actionable retry/restore path. Premium and every access product remain server-authoritative; unknown is never active and no local, Owner or sandbox grant is introduced.",
-      "proof": "The focused RFGC and Premium sandbox Live proof execute the focus/resume, finite retry, stale-response rejection and original strict-gate recheck contracts; TypeScript, route, Android/iOS native, provider, notification and money guards pass. Exact merged OTA and physical focus/resume replay remain required.",
+      "proof": "The focused RFGC and Premium sandbox Live proof execute the focus/resume, finite retry, stale-response rejection and original strict-gate recheck contracts; TypeScript, route, Android/iOS native, provider, notification and money guards pass. Android internal-v2 update 01a07b02-c706-7e8a-baf9-47608dbf76ac was physically installed, a legitimate no-charge Google Play sandbox renewal converged to authoritative Premium active, and returning to Live allowed Start Live without the stale Premium-required sheet.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-036",
+      "class": "party_room_end_destination_convergence",
+      "firstFailedBoundary": "canonical host end completion to post-room navigation",
+      "finding": "Exact-main Android proof showed that a successfully ended Party Room returned to the Waiting Room with the ended party id and room code. The Waiting Room correctly refused to resolve the inactive room, but its preserved handoff stayed on Connecting room, lost the creator-video selection and still displayed a create action, leaving a stale, misleading post-end state.",
+      "repair": "After canonical exact-host end readback, route to the exact server-resolved content Player (including the creator-video source marker where applicable), or Live only when the ended room has no content source. Ordinary leave still preserves the current room handoff for legitimate re-entry. No room, membership, content, pass, payment or provider authority moves to route state.",
+      "proof": "The focused executable RFGC contract requires both end-without-saving and successful replay completion to use the exact room source destination, forbids the ended-room handoff on the end path, and preserves the existing leave/re-entry path. TypeScript, lint, route, navigation, money, Premium, Android/iOS and notification guards pass. Exact merged OTA and physical end-to-Player replay remain required.",
       "disposition": "REPAIRED_UNPROVEN"
     }
   ],
@@ -345,8 +354,8 @@
   ],
   "counts": {
     "BLOCKING_OPEN": 0,
-    "REPAIRED_UNPROVEN": 2,
-    "PROVEN": 33,
+    "REPAIRED_UNPROVEN": 1,
+    "PROVEN": 35,
     "NONBLOCKING_DEBT": 0,
     "PROVIDER_SANDBOX_LIMITED": 2,
     "EXTERNAL_BLOCKED": 1,
