@@ -65,8 +65,8 @@ import {
   type WatchPartyState,
 } from "../../_lib/watchParty";
 import {
-  resolveWatchPartyContentSource,
-  resolveWatchPartyContentSourceByParts,
+  resolveWatchPartyContentDisplay,
+  resolveWatchPartyContentDisplayByParts,
   resolveWatchPartySourceId,
   resolveWatchPartySourceType,
 } from "../../_lib/watchPartyContentSources";
@@ -295,7 +295,7 @@ export default function WatchPartyIndexScreen() {
     sourceId: string | null;
   }) => {
     try {
-      const source = await resolveWatchPartyContentSourceByParts(input);
+      const source = await resolveWatchPartyContentDisplayByParts(input);
       return source.displayName;
     } catch {
       return null;
@@ -303,7 +303,7 @@ export default function WatchPartyIndexScreen() {
   }, []);
 
   const buildRoomPreview = useCallback(async (room: WatchPartyState): Promise<RoomPreview> => {
-    const source = await resolveWatchPartyContentSource(room).catch(() => null);
+    const source = await resolveWatchPartyContentDisplay(room).catch(() => null);
     const titleName = source?.displayName ?? null;
     return { room, titleName };
   }, []);
