@@ -1,0 +1,92 @@
+{
+  "implementationPrNumber": 350,
+  "implementationBranch": "codex/pre-activation-discovery-home-group-b",
+  "implementationHead": "e14f0b8e71dd9ad2adc358cfb82b8423accc6653",
+  "implementationTree": "8155bdd95f25a9f1622e3e6dc11e614fa6ecdfef",
+  "baseHead": "8922e4537a7e2bbb92fb0b14ec927ac874f56335",
+  "changedFileHash": "25b824e3a34ae0e5b84f1862d435d0197ca8c5a411b13bae5584d2f7725d89a5",
+  "migrationSetHash": "9093886a5421e706a339b5a86ddc139842eb734f0a978053a310c2aecd8d5bc4",
+  "configHash": "bf0933f584b5e44a0159ae237dcb99714821f78ffd98702e50bb77d986cacc58",
+  "testResults": {
+    "phase1Ci": {
+      "status": "blocked_assurance_only",
+      "qualification": "EXACT_FROZEN_HEAD_SUBSTANTIVE_LANES_PASS_ASSURANCE_CONTEXT_UNBOUND",
+      "runId": 34146055314,
+      "implementationHead": "e14f0b8e71dd9ad2adc358cfb82b8423accc6653",
+      "jobs": {
+        "total": 14,
+        "passed": 11,
+        "failedAssuranceOnly": 3,
+        "failedSubstantive": 0
+      },
+      "assuranceOnlyFindings": [
+        "ASSURANCE_TASK_CONTEXT_UNBOUND",
+        "ASSURANCE_PR_FILE_BUDGET_EXCEEDED",
+        "ASSURANCE_PR_LINE_BUDGET_EXCEEDED",
+        "ASSURANCE_MIXED_HIGH_RISK_SCOPE",
+        "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN",
+        "ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND",
+        "PHASE1_RISK_CLOSURE_PROTECTED_READY_DECISION_INVALID"
+      ]
+    },
+    "database": {
+      "reset": "pass",
+      "focusedPremiumDiscoveryEventCircleWatchParty": "453/453 pass",
+      "phase1SupabaseIntegration": "pass"
+    },
+    "focused": {
+      "preActivationDiscoveryHome": "pass",
+      "circleSpectator": "pass",
+      "routes": "pass",
+      "notifications": "pass",
+      "runtimeAndInternalV2Compatibility": "pass",
+      "iosReleaseContract": "21/21 guard, proof, and test pass",
+      "allPlatformContract": "94/94 local deterministic assertions pass"
+    },
+    "static": {
+      "lint": "0 errors; 104 pre-existing warnings",
+      "typecheck": "pass",
+      "affectedEdgeFunctionDenoCheck": "pass",
+      "gitDiffCheckAndCredentialScan": "pass"
+    },
+    "security": {
+      "scanId": "9fc7a2b7-a35f-4c9e-9682-27fdcb67188b",
+      "coverage": "complete 32/32 runtime review items plus changed tests",
+      "findings": 0,
+      "snapshotDigest": "codex-security-snapshot/v1:sha256:4b4a9bcf00f116bf092c353803ac8e963e5fe42d33b5411abaec9839eb0fd343"
+    }
+  },
+  "testResultHash": "533c3f1902b8c1c34890958450127a2725f373f8722e265fff6b3ed460cf1de8",
+  "reviewLevel": "C",
+  "reviewHead": "8f688c3652296a4923648400a4a5ec4feea9caa0",
+  "reviewTimestamp": "2026-09-07T17:10:22Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback"
+  ],
+  "findings": [
+    {
+      "id": "RFGC-ASSURANCE-CONTROL-PLANE-GROUP-B-001",
+      "severity": "P2",
+      "status": "owner_authorized_preop_assurance_continuation",
+      "launchImpacting": false,
+      "detail": "The existing canonical task artifact records the successor program, but GitHub admission remains unbound to Group B and rejects the Owner-authorized cross-layer scope. All three failed Phase 1 jobs reached only assurance/admission failure after their substantive suites passed. No failed check is represented as passed."
+    },
+    {
+      "id": "RFGC-PHYSICAL-MATRIX-PENDING-GROUP-B-002",
+      "severity": "P2",
+      "status": "postdeployment_tier_pending",
+      "launchImpacting": false,
+      "detail": "Two-device Live, Circle, Watch-Party and Event lifecycle proof, Rachi parity, installed layout/accessibility, and iOS Premium replay require the exact merged migration, Edge deployment, and internal-v2 OTA. Source and integration evidence do not substitute for physical proof."
+    },
+    {
+      "id": "RFGC-APP-STORE-CONNECT-READBACK-GROUP-B-003",
+      "severity": "P2",
+      "status": "provider_sandbox_limited",
+      "launchImpacting": false,
+      "detail": "The installed internal-v2 EAS build, runtime, channel, binary hash, and OTA source are exact. App Store Connect build identity remains null because authenticated provider readback is unavailable to current tooling; the manifest now fails closed instead of claiming equivalence."
+    }
+  ]
+}
