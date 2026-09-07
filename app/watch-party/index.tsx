@@ -104,7 +104,7 @@ type EmbeddedLiveStageEntry = {
 
 const getWaitingRoomPreviewTitle = (preview: RoomPreview) => {
   if (preview.titleName) return preview.titleName;
-  return preview.room.roomType === "title" ? "Selected Title" : "Live Room";
+  return preview.room.roomType === "title" ? "Shared content" : "Live Room";
 };
 
 const getJoinPolicyCopy = (joinPolicy: WatchPartyState["joinPolicy"] | null | undefined) =>
@@ -1407,7 +1407,7 @@ export default function WatchPartyIndexScreen() {
     ?? (partySourceType === "creator_video"
       ? "Creator Video"
       : partyTitleId
-        ? "Selected Title"
+        ? "Shared content"
         : "Title selection needed");
   const partyTitleLocked = !isLiveWaitingRoom && !!(partyTitleId || partySourceId);
   const topRoomCode = preparedRoom?.room.roomCode ?? incomingHandoff?.roomCode ?? initialRouteRoomCode ?? "";

@@ -317,7 +317,7 @@ const getBlockedRoomTitle = (access: Pick<RoomAccessResolution, "reason"> | null
 const getSafeRoomTitleLabel = (titleName: string | null, room: WatchPartyState, fallbackLabel: string) => {
   const resolvedTitle = String(titleName ?? "").trim();
   if (resolvedTitle) return resolvedTitle;
-  return room.roomType === "title" ? "Selected Title" : fallbackLabel;
+  return room.roomType === "title" ? "Shared content" : fallbackLabel;
 };
 
 export default function WatchPartyRoomScreen() {
@@ -2902,9 +2902,8 @@ export default function WatchPartyRoomScreen() {
     : accessGate?.source === "watch_party_live"
       ? WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY
       : null;
-  const partyRoomTitleContext = getSafeRoomTitleLabel(titleName, room, "Selected Title");
+  const partyRoomTitleContext = getSafeRoomTitleLabel(titleName, room, "Shared content");
   const partyRoomSourceType = resolveWatchPartySourceType(room);
-  const partyRoomSourceId = resolveWatchPartySourceId(room);
   const partyRoomSourceLabel = partyRoomSourceType === "creator_video"
     ? "Creator video"
     : partyRoomSourceType === "spectator_playback"
@@ -3068,8 +3067,8 @@ export default function WatchPartyRoomScreen() {
           </View>
           <View style={styles.watchPartyScreenMetaRow}>
             <View style={styles.watchPartyScreenMetaPill}>
-              <Text style={styles.watchPartyScreenMetaLabel}>Source</Text>
-              <Text numberOfLines={1} style={styles.watchPartyScreenMetaValue}>{partyRoomSourceId || "Resolving"}</Text>
+              <Text style={styles.watchPartyScreenMetaLabel}>Content</Text>
+              <Text numberOfLines={1} style={styles.watchPartyScreenMetaValue}>{partyRoomTitleContext}</Text>
             </View>
             <View style={styles.watchPartyScreenMetaPill}>
               <Text style={styles.watchPartyScreenMetaLabel}>Room</Text>

@@ -12,6 +12,11 @@ type TitleSourceRow = {
   video_url: string | null;
 };
 
+type PublicCreatorVideoMetadataRow = {
+  id: string;
+  title: string | null;
+};
+
 export type CreatorVideoWatchPartyBlockReason =
   | "unavailable"
   | "draft"
@@ -32,6 +37,19 @@ export type WatchPartyResolvedContentSource = {
 };
 
 const toText = (value: unknown) => String(value ?? "").trim();
+
+const readPublicCreatorVideoMetadata = async (sourceId: string) => {
+  const { data: rawData, error } = await supabase
+    .from("videos")
+    .select("id,title")
+    .eq("id", sourceId)
+    .eq("visibility", "public")
+    .in("moderation_status", ["clean", "pending_review", "reported"])
+    .maybeSingle();
+  const data = rawData as PublicCreatorVideoMetadataRow | null;
+  if (error || !data) return null;
+  return data;
+};
 
 export const resolveWatchPartySourceType = (
   room: Pick<WatchPartyState, "sourceType" | "titleId"> | null | undefined,
@@ -125,12 +143,17 @@ export async function resolveWatchPartyContentSourceByParts(input: {
   const sourceType = input.sourceType;
   const sourceId = toText(input.sourceId) || null;
   if (sourceType === "creator_video") {
-    const video = sourceId ? await readCreatorVideoForPlayer(sourceId) : null;
+    const [video, publicMetadataVideo] = sourceId
+      ? await Promise.all([
+        readCreatorVideoForPlayer(sourceId).catch(() => null),
+        readPublicCreatorVideoMetadata(sourceId).catch(() => null),
+      ])
+      : [null, null];
     const unavailableReason = getCreatorVideoWatchPartyBlockReason(video);
     return {
       sourceType,
       sourceId,
-      displayName: video?.title ?? null,
+      displayName: publicMetadataVideo?.title ?? video?.title ?? null,
       playbackUrl: video?.playbackUrl ?? null,
       thumbnailUrl: video?.thumbnailUrl ?? null,
       isPlayable: !unavailableReason,

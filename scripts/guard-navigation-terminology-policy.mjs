@@ -263,6 +263,8 @@ const homeRoute = read("app/home.tsx");
 const libraryRoute = read("app/library.tsx");
 const player = read("app/player/[id].tsx");
 const watchPartyIndex = read("app/watch-party/index.tsx");
+const watchPartyRoom = read("app/watch-party/[partyId].tsx");
+const watchPartyContentSources = read("_lib/watchPartyContentSources.ts");
 const channelAudience = read("_lib/channelAudience.ts");
 const channelSubscriptions = read("_lib/channelSubscriptions.ts");
 const creatorVipPasses = read("_lib/creatorVipPasses.ts");
@@ -404,6 +406,15 @@ assertIncludes(player, "Open Party Room", "Player Party Room compatibility actio
 assertIncludes(watchPartyIndex, "HOST PREFLIGHT", "Watch-Party host preflight");
 assertIncludes(watchPartyIndex, "Live Watch-Party", "Watch-Party Live/Live Watch-Party label split");
 assertIncludes(watchPartyIndex, "Watch-Party Live", "Watch-Party Live label");
+assertNotIncludes(watchPartyIndex, "Selected Title", "Watch-Party unresolved content placeholder");
+assertIncludes(watchPartyRoom, ">Content</Text>", "Party Room public content metadata label");
+assertIncludes(watchPartyRoom, "{partyRoomTitleContext}</Text>", "Party Room public content title");
+assertNotIncludes(watchPartyRoom, "{partyRoomSourceId || \"Resolving\"}", "Party Room raw source identifier");
+assertNotIncludes(watchPartyRoom, "Selected Title", "Party Room unresolved content placeholder");
+assertIncludes(watchPartyContentSources, "readPublicCreatorVideoMetadata(sourceId)", "Party Room public creator-video metadata fallback");
+assertIncludes(watchPartyContentSources, '.eq("visibility", "public")', "Party Room public metadata visibility filter");
+assertIncludes(watchPartyContentSources, '.in("moderation_status", ["clean", "pending_review", "reported"])', "Party Room public metadata moderation filter");
+assertIncludes(watchPartyContentSources, "displayName: publicMetadataVideo?.title ?? video?.title ?? null", "Party Room exact public title precedence");
 
 assertIncludes(masterVision, "Watch-Party Live", "locked Watch-Party Live label");
 assertIncludes(masterVision, "Live Watch-Party", "locked Live Watch-Party label");
