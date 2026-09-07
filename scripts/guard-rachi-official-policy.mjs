@@ -34,6 +34,7 @@ const originalsMigration = read("supabase/migrations/202605260011_rachi_original
 const originalsPlaybackMigration = read("supabase/migrations/202605260012_rachi_originals_fixture_playback_mp4.sql");
 const originalsSelectHardeningMigration = read("supabase/migrations/202605260013_rachi_originals_public_link_select_hardening.sql");
 const usernameMigration = read("supabase/migrations/20260602032030_modern_username_handle_system.sql");
+const visibilityAuthorityMigration = read("supabase/migrations/20260907183000_pre_activation_rachi_official_visibility_authority.sql");
 const publicCreatorVideoCardsFunction = read("supabase/functions/public-creator-video-cards/index.ts");
 
 const userFacingSource = [
@@ -58,12 +59,12 @@ assertIncludes(usernameMigration, "normalized_username = 'chillywood.rachi'", "R
 assertIncludes(usernameMigration, "not public.is_username_reserved(input.username)", "normal users cannot claim Rachi reserved handles");
 
 assertIncludes(chillyCircle, "Official connection", "pinned official Chi'lly Circle section");
-assertIncludes(chillyCircle, "Your first Chi'lly Circle connection", "first official Circle copy");
+assertIncludes(chillyCircle, "Your first Chi&apos;lly Circle connection", "first official Circle copy");
 assertIncludes(chillyCircle, "Rachi does not read your private chats.", "Circle privacy copy");
 assertIncludes(chatInbox, "setThreads(nextThreads.filter((thread) => !getOfficialPlatformAccount(thread.otherMember?.userId)))", "Chat inbox hides official/Rachi threads");
 assertIncludes(profile, "official_account_chilly_circle_only", "Profile blocks Rachi-to-chat handoff");
 assertIncludes(profile, "Rachi stays pinned first in Chi'lly Circle.", "Profile points Rachi to Chi'lly Circle");
-assertIncludes(chatThread, "Rachi now lives in Chi'lly Circle.", "Legacy Rachi chat thread redirects to Circle");
+assertIncludes(chatThread, "Rachi now lives in Chi&apos;lly Circle.", "Legacy Rachi chat thread redirects to Circle");
 assertNotIncludes(chatInbox, "RACHI_OFFICIAL_ACCOUNT", "Rachi starter card in Chat inbox");
 assertNotIncludes(chatInbox, "Ask Rachi", "Ask Rachi Chat inbox action");
 assertNotIncludes(chatInbox, "Rachi Help", "Rachi Help Chat inbox copy");
@@ -74,6 +75,10 @@ assertIncludes(migration, 'admin_create_official_rachi_post', "official post RPC
 assertIncludes(migration, 'public."admin_content_assert_operator"()', "owner/operator assertion");
 assertIncludes(migration, 'public."admin_content_write_audit"', "admin audit write");
 assertIncludes(migration, "'platform_rachi_official'", "official account target");
+assertIncludes(visibilityAuthorityMigration, "official_public_allowed", "official visibility authority reason");
+assertIncludes(visibilityAuthorityMigration, "resolve_profile_platform_visibility_access_profile_backed_v1", "ordinary profile-backed delegation");
+assertIncludes(visibilityAuthorityMigration, "official_rachi_operator_required", "official post write authority guard");
+assertIncludes(visibilityAuthorityMigration, "auth.uid() is not null", "official access authenticated identity binding");
 assertIncludes(profileImageMigration, "admin_update_official_rachi_profile_image", "official profile image RPC");
 assertIncludes(profileImageMigration, 'public."admin_content_assert_operator"()', "profile image owner/operator assertion");
 assertIncludes(profileImageMigration, "official_rachi_profile_image_updated", "profile image audit action");
@@ -112,7 +117,7 @@ assertIncludes(home, "Chi'llywood Originals", "Home Originals rail");
 assertIncludes(home, "Rachi Official Updates", "Home Rachi updates rail");
 assertIncludes(home, "rachiIdentityRow", "Home Rachi identity row");
 assertIncludes(home, "rachiOfficialAvatarUrl", "Home Rachi avatar or official fallback");
-assertIncludes(home, "Official Chi'llywood", "Home Rachi official identity label");
+assertIncludes(home, "Official Chi&apos;llywood", "Home Rachi official identity label");
 assertIncludes(home, "Public Rachi posts appear here after they are published.", "no fake Rachi posts copy");
 assertIncludes(creatorVideoCard, "isOfficialRachiInternalProofFixture", "Rachi public fixture display cleanup");
 assertIncludes(creatorVideoCard, "Official Chi'llywood Original from Rachi.", "Rachi public fixture production copy");
