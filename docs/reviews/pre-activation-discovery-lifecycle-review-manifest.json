@@ -1,0 +1,86 @@
+{
+  "implementationPrNumber": 359,
+  "implementationBranch": "codex/pre-activation-discovery-lifecycle-fixture-closure",
+  "implementationHead": "5bae2afc633e9482baa8f508376adbf90f1cbde8",
+  "implementationTree": "a1270f3dd60a9aee6cbd9b4ccf1a03720bab5aa1",
+  "baseHead": "e44bd48a448694658b490ad0ba51b9d3ff75d750",
+  "changedFileHash": "a8c4cacef3b0839af926746a070ba184f325e847df5d7307e547ae7f5f8d6929",
+  "migrationSetHash": "b03241038756e6a0948de2c96bb163f0d7bf1d46eed951214266731bb3496c86",
+  "configHash": "bf0933f584b5e44a0159ae237dcb99714821f78ffd98702e50bb77d986cacc58",
+  "testResults": {
+    "phase1Ci": {
+      "status": "blocked_assurance_only",
+      "qualification": "EXACT_FROZEN_HEAD_SUBSTANTIVE_LANES_PASS_ASSURANCE_CONTEXT_UNBOUND",
+      "runId": 34159398528,
+      "implementationHead": "5bae2afc633e9482baa8f508376adbf90f1cbde8",
+      "jobs": {
+        "total": 14,
+        "passed": 11,
+        "failedAssuranceOnly": 3,
+        "failedSubstantive": 0
+      },
+      "assuranceOnlyFindings": [
+        "ASSURANCE_TASK_CONTEXT_UNBOUND",
+        "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN",
+        "ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND",
+        "PHASE1_RISK_CLOSURE_PROTECTED_READY_DECISION_INVALID"
+      ]
+    },
+    "focused": {
+      "preActivationDiscoveryHome": "pass",
+      "creatorFeedFanout": "pass",
+      "malwareScanning": "pass",
+      "circleSpectator": "pass",
+      "mediaAutomationDiscovery": "pass",
+      "securityDefiner": "pass",
+      "algorithmRanking": "pass",
+      "creatorVideoCircle": "pass",
+      "spectatorChildRoom": "pass",
+      "databaseReset": "pass",
+      "databasePgTap": "77/77 pass"
+    },
+    "static": {
+      "typescript": "pass",
+      "lint": "0 errors; 104 pre-existing warnings",
+      "androidAndIosGuards": "pass",
+      "assuranceContracts": "28 contracts; 22 features; pass",
+      "currentTruth": "pass with Owner-authorized historical successor-binding continuation",
+      "gitDiffCheck": "pass"
+    },
+    "security": {
+      "scanId": "40578724-43fa-40fa-b7a0-3721ec48a5b6",
+      "targetRevision": "5bae2afc633e9482baa8f508376adbf90f1cbde8",
+      "coverage": "complete six generated review items plus focused pgTAP coverage for the seventh changed path",
+      "findings": 0,
+      "p0": 0,
+      "p1": 0,
+      "launchImpactingP2": 0
+    }
+  },
+  "testResultHash": "140c19b6206fe5925de7b828cbc4a6006253f85d70da87d58f7c77ca7a130bd0",
+  "reviewLevel": "C",
+  "reviewHead": "5bae2afc633e9482baa8f508376adbf90f1cbde8",
+  "reviewTimestamp": "2026-09-07T20:33:23Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback"
+  ],
+  "findings": [
+    {
+      "id": "RFGC-ASSURANCE-CONTROL-PLANE-DISCOVERY-LIFECYCLE-001",
+      "severity": "P2",
+      "status": "owner_authorized_preop_assurance_continuation",
+      "launchImpacting": false,
+      "detail": "Eleven Phase 1 jobs passed and three failed only after substantive suites passed at the historical unbound assurance/admission boundary. The run is not represented as passed."
+    },
+    {
+      "id": "RFGC-DEPLOYED-INSTALLED-DISCOVERY-LIFECYCLE-PENDING-002",
+      "severity": "P2",
+      "status": "postmerge_deployment_tiers_pending",
+      "launchImpacting": false,
+      "detail": "Remote database readback and installed Android/iOS presentation evidence require exact merge, the authorized forward migration, and exact merged internal-v2 OTAs. Source and integration evidence do not substitute for those tiers."
+    }
+  ]
+}
