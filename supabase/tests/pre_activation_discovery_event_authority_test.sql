@@ -57,10 +57,10 @@ select ok(
 );
 select ok(
   position('d7f_public_safe_approved' in pg_get_functiondef(
-    'public.sync_spectator_broadcast_discovery(uuid)'::regprocedure
+    'public.sync_spectator_broadcast_discovery_pre_fixture_quarantine(uuid)'::regprocedure
   )) > 0
   and position('circle_spectator_approved' in pg_get_functiondef(
-    'public.sync_spectator_broadcast_discovery(uuid)'::regprocedure
+    'public.sync_spectator_broadcast_discovery_pre_fixture_quarantine(uuid)'::regprocedure
   )) > 0,
   'ordinary invite/code Watch-Parties cannot enter discovery without provider-safe publication evidence'
 );
@@ -286,6 +286,26 @@ select ok((select not is_publicly_discoverable and moderation_status='hidden'
   from public.discovery_feed_items
   where source_type='watch_party_room' and source_id='RFGC-SPECTATOR-WP'),
   'moving a spectator-safe Watch-Party to Circle retires its public projection');
+
+update public.room_broadcast_sessions
+set metadata=metadata || jsonb_build_object('proof_fixture',true),
+    updated_at=timezone('utc'::text,now())
+where id='f1000000-0000-4000-8000-000000000001';
+select ok((select status='hidden' and moderation_status='hidden'
+    and not is_spectator_enabled and not allow_spectator_view
+    and metadata->>'release_quarantine'='pre_activation_fixture_producer_quarantine_v1'
+  from public.circle_spectator_feed_items
+  where source_type='watch_party_room' and source_id='RFGC-SPECTATOR-WP'),
+  'a proof-marked provider source is quarantined instead of republished into Circle discovery');
+
+update public.room_broadcast_sessions
+set metadata=metadata - 'proof_fixture',updated_at=timezone('utc'::text,now())
+where id='f1000000-0000-4000-8000-000000000001';
+select ok((select status='active' and moderation_status='clean'
+    and is_spectator_enabled and allow_spectator_view
+  from public.circle_spectator_feed_items
+  where source_type='watch_party_room' and source_id='RFGC-SPECTATOR-WP'),
+  'removing the fixture marker re-enables only the otherwise valid authoritative provider source');
 
 insert into public.watch_party_rooms(
   party_id,host_user_id,room_type,is_active,discovery_visibility,discovery_title
