@@ -15,6 +15,7 @@ import {
   formatChannelSubscriptionPrice,
   purchaseChannelSubscription,
   resolveChannelSubscriptionAccess,
+  restoreChannelSubscription,
   type ChannelSubscriptionAccess,
 } from "../../_lib/channelSubscriptions";
 import { CREATOR_MONEY_ROUTE_TARGETS } from "../../_lib/creatorMonetizationRouteTargets";
@@ -96,6 +97,26 @@ export default function ChannelSubscriptionScreen() {
           : "Platform Subscription checkout is not available right now.",
       );
       await loadAccess();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    if (!creatorId || busy || isOwner) return;
+    if (!viewerUserId) {
+      Alert.alert("Restore", "Sign in before restoring a Platform Subscription.");
+      return;
+    }
+    try {
+      setBusy(true);
+      setNotice("Restoring subscriptions for this account…");
+      const result = await restoreChannelSubscription(creatorId);
+      setAccess(result.access);
+      setNotice(result.message);
+      if (!result.ok) Alert.alert("Restore", result.message);
+    } catch {
+      setNotice("Platform Subscription restore is not available right now.");
     } finally {
       setBusy(false);
     }
@@ -214,6 +235,20 @@ export default function ChannelSubscriptionScreen() {
               >
                 {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{needsPurchase ? "Start Platform Subscription" : "Refresh status"}</Text>}
               </TouchableOpacity>
+              {!isOwner ? (
+                <TouchableOpacity
+                  style={[styles.secondaryButton, busy && styles.buttonDisabled]}
+                  activeOpacity={0.86}
+                  disabled={busy}
+                  onPress={handleRestore}
+                  testID="subscriber-area-restore-button"
+                  accessibilityRole="button"
+                  accessibilityLabel="Restore Platform Subscription"
+                  accessibilityState={{ disabled: busy, busy }}
+                >
+                  <Text style={styles.secondaryButtonText}>Already subscribed? Restore</Text>
+                </TouchableOpacity>
+              ) : null}
               <TouchableOpacity
                 style={styles.secondaryButton}
                 activeOpacity={0.86}

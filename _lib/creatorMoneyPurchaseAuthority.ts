@@ -3,8 +3,12 @@ import {
   sameAccountSessionAuthority,
   type AccountSessionAuthorityBinding,
 } from "./accountSessionAuthority";
-import { syncRevenueCatCustomerIdentity } from "./revenuecat";
+import { getAppMonetizationRuntimeFeatures } from "./featureFlags";
+import { getRevenueCatConfigurationState, syncRevenueCatCustomerIdentity } from "./revenuecat";
+import { isCreatorDigitalCheckoutShellAvailable as resolveCreatorDigitalCheckoutShell } from "./revenuecatPurchaseClosure";
+import { getRuntimeConfig } from "./runtimeConfig";
 import { supabase } from "./supabase";
+import { Platform } from "react-native";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -44,6 +48,21 @@ const readAuthenticatedUserId = async () => {
     return null;
   }
 };
+
+export function isCreatorDigitalCheckoutShellAvailable() {
+  const runtime = getAppMonetizationRuntimeFeatures();
+  const runtimeConfig = getRuntimeConfig();
+  return resolveCreatorDigitalCheckoutShell({
+    betaEnvironment: runtimeConfig.betaEnvironment,
+    liveMoneyEnabled: runtime.liveMoneyEnabled,
+    paidContentCheckoutEnabled: runtime.paidContentCheckoutEnabled,
+    payoutsEnabled: runtime.payoutsEnabled,
+    cashoutEnabled: runtime.cashoutEnabled,
+    platform: Platform.OS,
+    providerConfigured: getRevenueCatConfigurationState().shouldConfigure,
+    appStorePurchasesEnabled: runtimeConfig.revenueCat.appStorePurchasesEnabled,
+  });
+}
 
 export async function prepareCreatorMoneyPurchaseSubject(): Promise<CreatorMoneyPurchaseSubject | null> {
   const userId = await readAuthenticatedUserId();

@@ -12,6 +12,7 @@ import {
   purchaseRevenueCatStoreProduct,
   readRevenueCatOfferings,
   readRevenueCatSubscriptionProducts,
+  restoreRevenueCatPurchases,
   type PurchasesPackage,
 } from "./revenuecat";
 import { Platform } from "react-native";
@@ -20,6 +21,11 @@ import {
   IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY,
 } from "./iosAppStoreCommerce";
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
+import {
+  isRevenueCatExistingPurchase,
+  isRevenueCatUserCancellation,
+  reconcileRevenueCatExistingPurchase,
+} from "./revenuecatPurchaseClosure";
 import { supabase } from "./supabase";
 
 export const CHANNEL_SUBSCRIPTION_SANDBOX_PRODUCT_KEY = "channel_subscription_sandbox_monthly_499";
@@ -327,24 +333,6 @@ const normalizeAccess = (value: unknown, expectedCreatorId: string): ChannelSubs
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const purchaseErrorText = (error: unknown, key: string) => {
-  if (!error || typeof error !== "object") return "";
-  return toText((error as Record<string, unknown>)[key]);
-};
-
-const isRevenueCatUserCancellation = (error: unknown) => {
-  if (error && typeof error === "object" && (error as Record<string, unknown>).userCancelled === true) {
-    return true;
-  }
-  const combined = [
-    purchaseErrorText(error, "code"),
-    purchaseErrorText(error, "codeName"),
-    purchaseErrorText(error, "message"),
-    purchaseErrorText(error, "underlyingErrorMessage"),
-  ].join(" ").toLowerCase();
-  return combined.includes("cancel");
-};
-
 const extractPackages = (offerings: unknown): PurchasesPackage[] => {
   const typed = offerings as OfferingsWithPackages | null;
   const packages: PurchasesPackage[] = [];
@@ -541,6 +529,42 @@ export async function waitForChannelSubscriptionAccess(creatorId: string): Promi
   return latest;
 }
 
+export async function restoreChannelSubscription(creatorId: string): Promise<ChannelSubscriptionPurchaseResult> {
+  const access = await resolveChannelSubscriptionAccess(creatorId);
+  if (access.allowed) return { ok: true, message: "Platform Subscription active.", access };
+  if (Platform.OS !== "ios" && Platform.OS !== "android") {
+    return { ok: false, message: "Restore is not available on this device.", access };
+  }
+  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject();
+  if (!purchaseSubject) {
+    return { ok: false, message: "Sign in again before restoring this Platform Subscription.", access };
+  }
+  try {
+    await restoreRevenueCatPurchases({ authority: purchaseSubject.authority });
+  } catch {
+    return {
+      ok: false,
+      message: "The store could not restore this Platform Subscription to the current Chi'llywood account.",
+      access,
+    };
+  }
+  if (!await revalidateCreatorMoneyPurchaseSubject(purchaseSubject)) {
+    return {
+      ok: false,
+      message: "Account changed while subscriptions were being restored. Recheck the current account.",
+      access,
+    };
+  }
+  const verifiedAccess = await waitForChannelSubscriptionAccess(creatorId);
+  return {
+    ok: verifiedAccess.allowed,
+    message: verifiedAccess.allowed
+      ? "Platform Subscription active."
+      : "The store restore finished, but this exact Platform Subscription is still being verified. Refresh shortly.",
+    access: verifiedAccess,
+  };
+}
+
 export async function purchaseChannelSubscription(input: {
   creatorId: string;
   sourceSurface: string;
@@ -652,6 +676,46 @@ export async function purchaseChannelSubscription(input: {
       await purchaseRevenueCatStoreProduct(storeProduct, { authority: purchaseSubject.authority });
     }
   } catch (error) {
+    if (isRevenueCatExistingPurchase(error)) {
+      const reconciliation = await reconcileRevenueCatExistingPurchase({
+        restore: () => restoreRevenueCatPurchases({ authority: purchaseSubject.authority }),
+        authorityCurrent: () => revalidateCreatorMoneyPurchaseSubject(purchaseSubject),
+        waitForAuthority: async () => {
+          const verified = await waitForChannelSubscriptionAccess(input.creatorId);
+          return verified.allowed ? verified : null;
+        },
+      });
+      if (reconciliation.status === "restore_failed") {
+        return {
+          ok: false,
+          message: "The existing store subscription could not be restored to this Chi'llywood account. Use Restore on the Platform Subscription screen.",
+          access,
+          intentId: intent.id,
+          productId,
+        };
+      }
+      if (reconciliation.status === "authority_changed") {
+        return {
+          ok: false,
+          message: "Account changed while the existing Platform Subscription was being restored.",
+          access,
+          intentId: intent.id,
+          productId,
+        };
+      }
+      const restoredAccess = reconciliation.status === "verified"
+        ? reconciliation.authority
+        : await resolveChannelSubscriptionAccess(input.creatorId);
+      return {
+        ok: restoredAccess.allowed,
+        message: restoredAccess.allowed
+          ? "Subscribed."
+          : "The store found an existing Platform Subscription, but exact app access is still being verified. Open the Platform Subscription screen to Restore or refresh.",
+        access: restoredAccess,
+        intentId: intent.id,
+        productId,
+      };
+    }
     const verifiedAccess = await waitForChannelSubscriptionAccess(input.creatorId);
     if (verifiedAccess.allowed) {
       return {

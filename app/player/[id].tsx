@@ -57,7 +57,7 @@ import {
 import { trackEvent } from "../../_lib/analytics";
 import { getMonetizationAccessSheetPresentation } from "../../_lib/monetization";
 import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
-import { getAppMonetizationRuntimeFeatures } from "../../_lib/featureFlags";
+import { isCreatorDigitalCheckoutShellAvailable } from "../../_lib/creatorMoneyPurchaseAuthority";
 import { purchasePaidVideoAccess } from "../../_lib/creatorPaidVideos";
 import {
     getRuntimeControlBlockedCopy,
@@ -7086,8 +7086,7 @@ export default function PlayerScreen() {
     )
     : "";
   const paidVideoCheckoutAvailable = useMemo(() => {
-    const runtime = getAppMonetizationRuntimeFeatures();
-    return runtime.liveMoneyEnabled && runtime.paidContentCheckoutEnabled;
+    return isCreatorDigitalCheckoutShellAvailable();
   }, []);
   const handlePaidVideoUnlock = useCallback(async () => {
     debugLog("paid-video", "paid_video_unlock_pressed", {

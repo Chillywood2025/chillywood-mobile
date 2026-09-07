@@ -9,6 +9,7 @@ import {
   purchaseRevenueCatStoreProduct,
   readRevenueCatNonSubscriptionProducts,
 } from "./revenuecat";
+import { isRevenueCatUserCancellation } from "./revenuecatPurchaseClosure";
 import { supabase } from "./supabase";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -373,15 +374,39 @@ export async function purchaseLiveWatchPartyOffer(input: {
       throw new Error("A Live Stage Pass is required before a Live Stage Seat Pass can be purchased for this paid Live Stage. Nothing was charged.");
     }
   }
-  const purchase = await purchaseRevenueCatStoreProduct(storeProduct, { authority: subject.authority });
-  if (!await revalidateCreatorMoneyPurchaseSubject(subject)) throw new Error("Account changed while checkout completed.");
-  let access = await readLiveWatchPartyMoneyAccess(input.partyId).catch(() => null);
-  for (let attempt = 0; attempt < LIVE_WATCH_PARTY_PURCHASE_POLL_ATTEMPTS; attempt += 1) {
-    const confirmed = isLiveWatchPartyPassConfirmed(access, input.passType, input.offerId);
-    if (confirmed) break;
-    await delay(LIVE_WATCH_PARTY_PURCHASE_POLL_DELAY_MS);
-    access = await readLiveWatchPartyMoneyAccess(input.partyId).catch(() => null);
+  const waitForExactPass = async () => {
+    let access: LiveWatchPartyMoneyAccess | null = null;
+    for (let attempt = 0; attempt < LIVE_WATCH_PARTY_PURCHASE_POLL_ATTEMPTS; attempt += 1) {
+      if (!await revalidateCreatorMoneyPurchaseSubject(subject)) return null;
+      access = await readLiveWatchPartyMoneyAccess(input.partyId).catch(() => null);
+      if (isLiveWatchPartyPassConfirmed(access, input.passType, input.offerId)) return access;
+      if (attempt + 1 < LIVE_WATCH_PARTY_PURCHASE_POLL_ATTEMPTS) {
+        await delay(LIVE_WATCH_PARTY_PURCHASE_POLL_DELAY_MS);
+      }
+    }
+    return access;
+  };
+  let purchase;
+  try {
+    purchase = await purchaseRevenueCatStoreProduct(storeProduct, { authority: subject.authority });
+  } catch (error) {
+    if (isRevenueCatUserCancellation(error)) {
+      throw new Error("Live Stage checkout was canceled. Nothing changed.");
+    }
+    const recoveredAccess = await waitForExactPass();
+    if (isLiveWatchPartyPassConfirmed(recoveredAccess, input.passType, input.offerId)) {
+      return {
+        alreadyOwned: false,
+        intentId: intent.id,
+        productId: intent.providerProductId,
+        access: recoveredAccess,
+        confirmed: true,
+      };
+    }
+    throw new Error("Live Stage checkout could not be verified. Check your access before trying again.");
   }
+  if (!await revalidateCreatorMoneyPurchaseSubject(subject)) throw new Error("Account changed while checkout completed.");
+  const access = await waitForExactPass();
   return {
     alreadyOwned: false,
     intentId: intent.id,

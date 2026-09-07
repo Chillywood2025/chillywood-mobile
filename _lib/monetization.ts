@@ -39,8 +39,10 @@ import { hasPlatformRoleMembership, readMyPlatformRoleMemberships } from "./mode
 import { getRuntimeConfig, isBetaOperatorIdentity } from "./runtimeConfig";
 import { supabase } from "./supabase";
 import {
+  isRevenueCatExistingPurchase,
   isRevenueCatUserCancellation,
   pollProviderAuthority,
+  reconcileRevenueCatExistingPurchase,
 } from "./revenuecatPurchaseClosure";
 
 export type PlanTier = "free" | "premium";
@@ -159,6 +161,11 @@ export type MonetizationPurchaseOutcome = {
   packageId?: string;
   productId?: string;
 };
+
+export type MonetizationPurchasePhase =
+  | "store_processing"
+  | "restoring_existing"
+  | "verifying_authority";
 
 export type MonetizationRestoreOutcome = {
   ok: boolean;
@@ -1188,7 +1195,12 @@ export async function bootstrapMonetizationFoundation(userId?: string | null) {
 
 export async function purchaseMonetizationTarget(
   targetId: MonetizationTargetId,
-  options?: { packageId?: string | null; userId?: string | null; purchaseMode?: MonetizationPurchaseMode | null },
+  options?: {
+    packageId?: string | null;
+    userId?: string | null;
+    purchaseMode?: MonetizationPurchaseMode | null;
+    onPhase?: (phase: MonetizationPurchasePhase) => void;
+  },
 ): Promise<MonetizationPurchaseOutcome> {
   const target = MONETIZATION_TARGETS[targetId];
   const purchaseMode = getPurchaseModeFromOption(options?.purchaseMode);
@@ -1293,13 +1305,22 @@ export async function purchaseMonetizationTarget(
     accepts: (candidate) => candidate.targets[targetId].entitlementAuthoritative
       && candidate.targets[targetId].hasEntitlement,
   });
+  const notifyPhase = (phase: MonetizationPurchasePhase) => {
+    try {
+      options?.onPhase?.(phase);
+    } catch {
+      // UI progress reporting can never change purchase authority.
+    }
+  };
 
   try {
+    notifyPhase("store_processing");
     const result = await purchaseRevenueCatPackage(selectedPackage, { authority: operationAuthority });
     if (!sameAccountSessionAuthority(operationAuthority, await readCurrentAccountSessionAuthority())) {
       return { ok: false, target: targetId, snapshot: getCachedMonetizationSnapshot(), customerInfo: null,
         message: "Account changed before the purchase result returned. Recheck the current account." };
     }
+    notifyPhase("verifying_authority");
     const refreshedSnapshot = await waitForPremiumAuthority();
     if (!refreshedSnapshot) {
       return {
@@ -1327,7 +1348,58 @@ export async function purchaseMonetizationTarget(
       target: targetId,
     });
 
+    if (isRevenueCatExistingPurchase(error)) {
+      notifyPhase("restoring_existing");
+      const reconciliation = await reconcileRevenueCatExistingPurchase<CustomerInfo, MonetizationSnapshot>({
+        restore: () => restoreRevenueCatPurchases({ authority: operationAuthority }),
+        authorityCurrent: async () => sameAccountSessionAuthority(
+          operationAuthority,
+          await readCurrentAccountSessionAuthority(),
+        ),
+        waitForAuthority: () => {
+          notifyPhase("verifying_authority");
+          return waitForPremiumAuthority();
+        },
+      });
+      if (reconciliation.status === "restore_failed") {
+        return {
+          ok: false,
+          target: targetId,
+          snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId }),
+          customerInfo: null,
+          message: "The existing store subscription could not be restored to this Chi'llywood account. Check the signed-in account, then use Restore purchases.",
+          packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
+        };
+      }
+      if (reconciliation.status === "authority_changed") {
+        return { ok: false, target: targetId, snapshot: getCachedMonetizationSnapshot(), customerInfo: null,
+          message: "Account changed while the existing subscription was being restored. Recheck the current account." };
+      }
+      if (reconciliation.status === "verified") {
+        return {
+          ok: true,
+          target: targetId,
+          snapshot: reconciliation.authority,
+          customerInfo: reconciliation.customerInfo,
+          message: `${target.label} is active.`,
+          packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
+        };
+      }
+      const providerPremiumActive = !!reconciliation.customerInfo.entitlements.active.premium;
+      return {
+        ok: false,
+        target: targetId,
+        snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId }),
+        customerInfo: reconciliation.customerInfo,
+        message: providerPremiumActive
+          ? "The store restored Premium, but verified app access is still reconciling. Recheck or Restore purchases shortly."
+          : "The store subscription is not verified for this Chi'llywood account. Check the signed-in store account, then use Restore purchases.",
+        packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
+      };
+    }
+
     if (!isRevenueCatUserCancellation(error)) {
+      notifyPhase("verifying_authority");
       const reconciledSnapshot = await waitForPremiumAuthority();
       if (reconciledSnapshot) {
         return {
@@ -1357,6 +1429,7 @@ export async function purchaseMonetizationTarget(
 export async function restoreMonetizationAccess(options?: {
   userId?: string | null;
   purchaseMode?: MonetizationPurchaseMode | null;
+  onPhase?: (phase: MonetizationPurchasePhase) => void;
 }): Promise<MonetizationRestoreOutcome> {
   const purchaseMode = getPurchaseModeFromOption(options?.purchaseMode);
   const operationAuthority = await readCurrentAccountSessionAuthority();
@@ -1365,6 +1438,13 @@ export async function restoreMonetizationAccess(options?: {
     purchaseMode,
     userId: options?.userId,
   });
+  const notifyPhase = (phase: MonetizationPurchasePhase) => {
+    try {
+      options?.onPhase?.(phase);
+    } catch {
+      // UI progress reporting can never change restore authority.
+    }
+  };
 
   if (!operationAuthority || operationAuthority.restoreOnly
     || !sameAccountSessionAuthority(operationAuthority, await readCurrentAccountSessionAuthority())) {
@@ -1382,6 +1462,7 @@ export async function restoreMonetizationAccess(options?: {
   }
 
   try {
+    notifyPhase("restoring_existing");
     const customerInfo = await restoreRevenueCatPurchases({ authority: operationAuthority });
     if (!sameAccountSessionAuthority(operationAuthority, await readCurrentAccountSessionAuthority())) {
       return { ok: false, snapshot: getCachedMonetizationSnapshot(), customerInfo: null,
@@ -1393,6 +1474,7 @@ export async function restoreMonetizationAccess(options?: {
       purchaseMode,
       userId: options?.userId,
     });
+    notifyPhase("verifying_authority");
     const refreshedSnapshot = providerPremiumActive
       ? await pollProviderAuthority({
           attempts: PREMIUM_PURCHASE_AUTHORITY_POLL_ATTEMPTS,
@@ -1417,6 +1499,14 @@ export async function restoreMonetizationAccess(options?: {
     if (!refreshedSnapshot.targets.premium_subscription.entitlementAuthoritative) {
       return { ok: false, snapshot: refreshedSnapshot, customerInfo: null,
         message: "Purchases were restored, but Premium status is unavailable and unverified. Recheck before continuing." };
+    }
+    if (!refreshedSnapshot.targets.premium_subscription.hasEntitlement) {
+      return {
+        ok: false,
+        snapshot: refreshedSnapshot,
+        customerInfo,
+        message: "The store did not verify an active Premium subscription for this Chi'llywood account. Check the signed-in store account, then try Restore purchases again.",
+      };
     }
 
     return {

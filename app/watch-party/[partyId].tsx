@@ -49,7 +49,7 @@ import {
     resolveBrandingConfig,
     resolveMonetizationConfig,
 } from "../../_lib/appConfig";
-import { getAppMonetizationRuntimeFeatures } from "../../_lib/featureFlags";
+import { isCreatorDigitalCheckoutShellAvailable } from "../../_lib/creatorMoneyPurchaseAuthority";
 import {
     resolveRoomAccess,
     type RoomAccessResolution,
@@ -494,8 +494,7 @@ export default function WatchPartyRoomScreen() {
   const branding = resolveBrandingConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
   const paidWatchPartyCheckoutAvailable = useMemo(() => {
-    const runtime = getAppMonetizationRuntimeFeatures();
-    return runtime.liveMoneyEnabled && runtime.paidContentCheckoutEnabled;
+    return isCreatorDigitalCheckoutShellAvailable();
   }, []);
   useEffect(() => {
     if (Platform.OS === "android" && !isReactNativeNewArchitecture() && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -2802,7 +2801,7 @@ export default function WatchPartyRoomScreen() {
     const offer = paidTicketGate.offer;
     const priceLabel = offer
       ? `${(offer.priceCents / 100).toLocaleString(undefined, { style: "currency", currency: offer.currency.toUpperCase() })}`
-      : "$0.99";
+      : null;
     return (
       <View style={styles.center} testID="screen-party-room">
         <View style={styles.errorCard} testID="watch-party-ticket-lock-card">
@@ -2812,9 +2811,9 @@ export default function WatchPartyRoomScreen() {
             </Text>
             <MoneyStatusChip label={paidTicketGate.requiresPurchase ? "Party Room Pass" : "Unavailable"} tone={paidTicketGate.requiresPurchase ? "premium" : "warning"} />
           </View>
-          <Text style={styles.ticketPrice}>{priceLabel}</Text>
+          {priceLabel ? <Text style={styles.ticketPrice}>{priceLabel}</Text> : null}
           <Text style={styles.errorBody}>
-            {paidTicketGate.requiresPurchase && paidWatchPartyCheckoutAvailable
+            {paidTicketGate.requiresPurchase && paidWatchPartyCheckoutAvailable && priceLabel
               ? `A Party Room Pass gives you entry to this exact Party Room for ${priceLabel}. It does not include Live Stage, speaking, camera, microphone, host, moderator, LiveKit publish authority, Premium, subscriptions, VIP, paid videos, other rooms, or Events.`
               : "Party Room Pass purchases are temporarily unavailable while setup is being finalized. This room stays locked until access is verified."}
           </Text>
@@ -2824,7 +2823,7 @@ export default function WatchPartyRoomScreen() {
           />
           <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this Party Room Pass unlock?" />
           <RouteBackedMonetizationProofCard config={routeProofConfig} surface="watch_party_ticket" />
-          {paidTicketGate.requiresPurchase ? (
+          {paidTicketGate.requiresPurchase && priceLabel ? (
             <TouchableOpacity
               style={[styles.secondaryBtn, styles.accessPrimaryButton, paidTicketBusy && styles.secondaryBtnDisabled]}
               onPress={onBuyPaidTicketFromRoomGate}
