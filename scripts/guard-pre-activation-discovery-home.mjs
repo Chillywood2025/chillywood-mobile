@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 const read = (path) => readFileSync(path, "utf8");
 const migration = read("supabase/migrations/20260907163000_pre_activation_discovery_event_authority.sql");
 const lifecycleClosure = read("supabase/migrations/20260907195000_pre_activation_discovery_lifecycle_fixture_closure.sql");
+const physicalFixtureClosure = read("supabase/migrations/20260907230000_pre_activation_physical_feed_fixture_quarantine.sql");
 const home = read("app/(tabs)/index.tsx");
 const live = read("app/(tabs)/live.tsx");
 const explore = read("app/(tabs)/explore.tsx");
@@ -97,6 +98,19 @@ for (const required of [
   "v_event.\"starts_at\" <= v_now",
   "v_event.\"ends_at\" <= v_now",
 ]) assert.ok(lifecycleClosure.includes(required), `lifecycle/fixture closure missing ${required}`);
+
+for (const required of [
+  "4a75de25-b1c9-48b3-b45c-90ccbffc7449",
+  "Supabase Fallback Runtime Proof 2026-04-30T21-47-33-462Z",
+  "pre_activation_physical_proof_fixture_quarantine_v1",
+  '"visibility" = \'draft\'',
+  '"moderation_status" = \'hidden\'',
+  '"quarantined_at" = coalesce',
+  '"status" = \'hidden\'',
+  "canonical_projection_active",
+]) assert.ok(physicalFixtureClosure.includes(required), `physical fixture closure missing ${required}`);
+assert.ok(!physicalFixtureClosure.includes("delete from"),
+  "physical fixture closure must preserve source, comment, audit, and provider evidence");
 
 assert.ok(livekitClient.includes('action: "mark-room-live"'), "the connected host must request the exact server publication transition");
 assert.ok(livekitClient.includes("attempt < 3") && livekitClient.includes("response.status !== 409"),
