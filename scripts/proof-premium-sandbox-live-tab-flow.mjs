@@ -73,6 +73,22 @@ const checks = [
     detail: "A stale Premium denial that refreshes to active rechecks the original strict Live gate instead of detouring through Subscribe.",
   },
   {
+    id: "focused_or_resumed_gate_refreshes_authority",
+    ok: accessSheet.includes("useFocusEffect(refreshVisibleSheetState)")
+      && accessSheet.includes('AppState.addEventListener("change"')
+      && subscribe.includes("useFocusEffect(")
+      && subscribe.includes('AppState.addEventListener("change"'),
+    detail: "Returning from Premium or resuming the app refreshes provider and backend authority on both the Premium screen and the original gate.",
+  },
+  {
+    id: "delayed_projection_poll_is_bounded",
+    ok: accessSheet.includes("PREMIUM_GATE_BACKGROUND_CONVERGENCE_ATTEMPTS = 6")
+      && accessSheet.includes("PREMIUM_GATE_BACKGROUND_CONVERGENCE_DELAY_MS = 1250")
+      && accessSheet.includes("premiumConvergenceAttemptRef.current += 1")
+      && accessSheet.includes("generation === sheetLoadGenerationRef.current"),
+    detail: "A visible Premium gate retries delayed provider/backend projection for a finite window and rejects stale overlapping responses.",
+  },
+  {
     id: "current_store_management_is_separate_from_account_entitlement",
     ok: subscribe.includes("hasCurrentStorePremiumSubscription")
       && subscribe.includes("currentStorePremiumActive")

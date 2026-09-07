@@ -124,6 +124,11 @@ assertIncludes(adminSandboxRoute, "Start physical merch sandbox checkout", "sand
 assertIncludes(adminSandboxRoute, "Payout readiness", "sandbox tester payout readiness section");
 assertIncludes(adminSandboxRoute, "cannot request, trigger, simulate, cash out", "sandbox tester payout execution blocked");
 assertIncludes(accessSheet, "const renderDeferredUnavailable = deferredMonetization && !isPremiumGateSheet", "Premium gates ignore deferred unavailable dead-end mode");
+assertIncludes(accessSheet, "useFocusEffect(refreshVisibleSheetState)", "visible Premium and pass gates re-read authority after route focus returns");
+assertIncludes(accessSheet, "AppState.addEventListener(\"change\"", "visible Premium and pass gates re-read authority after foreground resume");
+assertIncludes(accessSheet, "sheetLoadGenerationRef", "overlapping focus/resume authority reads cannot commit stale sheet state");
+assertIncludes(accessSheet, "PREMIUM_GATE_BACKGROUND_CONVERGENCE_ATTEMPTS = 6", "Premium gate backend convergence is bounded");
+assertIncludes(accessSheet, "premiumConvergenceAttemptRef.current += 1", "visible Premium gate retries delayed provider/backend projection");
 assertIncludes(accessSheet, "if (renderDeferredUnavailable)", "deferred unavailable close path is bounded away from Premium gates");
 assertIncludes(accessSheet, "if (isPremiumGateSheet && sheetState?.primaryAction !== \"purchase\")", "Premium gate routes to subscribe only when sandbox purchase is not ready");
 assertIncludes(accessSheet, "sheetState?.primaryAction === \"purchase\"", "Premium gate sheet can directly launch provider-backed sandbox purchase");
@@ -133,6 +138,8 @@ assertIncludes(monetization, "storePurchaseRailReadback.readbackComplete", "miss
 assertIncludes(subscribe, "disabled={busy}", "purchase CTA remains actionable for exact readiness explanation");
 assertIncludes(subscribe, "premium-purchase-blocked-reason", "visible purchase readiness blocker");
 assertIncludes(subscribe, '"testing-details": true', "purchase readiness failure opens diagnostics");
+assertIncludes(subscribe, "useFocusEffect(", "Premium screen refreshes provider/backend authority after route focus returns");
+assertIncludes(subscribe, "AppState.addEventListener(\"change\"", "Premium screen refreshes provider/backend authority after foreground resume");
 assertNotIncludes(subscribe, "disabled={busy || (!hasPremium && !canPurchase)}", "purchase explanation hidden behind disabled CTA");
 const liveTab = read("app/(tabs)/live.tsx");
 assertIncludes(liveTab, "requireLiveFirstPremium({ accessKey: \"bottom-live-tab\" })", "Live tab keeps strict Premium access check");

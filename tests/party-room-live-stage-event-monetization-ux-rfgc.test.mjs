@@ -8,6 +8,8 @@ const presentation = read("_lib/accessProductPresentation.ts");
 const partySetup = read("app/watch-party/index.tsx");
 const partyRoom = read("app/watch-party/[partyId].tsx");
 const partyContentSources = read("_lib/watchPartyContentSources.ts");
+const accessSheet = read("components/monetization/access-sheet.tsx");
+const subscribe = read("app/subscribe.tsx");
 const partyMoney = read("_lib/paidWatchPartyTickets.ts");
 const setupCatalog = read("_lib/creatorMonetizationSetup.ts");
 const adminSandbox = read("app/admin-money-sandbox-purchases.tsx");
@@ -24,7 +26,9 @@ const liveKit = read("supabase/functions/livekit-token/index.ts");
 const migration = read("supabase/migrations/20260902091803_party_room_live_stage_event_ux_rfgc.sql");
 const authorityMigration = read("supabase/migrations/20260901010000_watch_party_live_money_rfgc_closure.sql");
 const replayFunction = read("supabase/functions/request-save-replay/index.ts");
+const spectatorStartRoom = read("supabase/functions/spectator-start-room/index.ts");
 const supabaseConfig = read("supabase/config.toml");
+const hostBootstrapMigration = read("supabase/migrations/20260907080000_party_room_host_membership_bootstrap_closure.sql");
 
 test("display-layer product names map onto unchanged internal authority identifiers", () => {
   const expected = [
@@ -114,6 +118,29 @@ test("Party Room presents exact public content identity without exposing its int
   assert.ok(displayResolverStart >= 0 && playbackResolverStart > displayResolverStart);
   assert.match(displayResolver, /readPublicCreatorVideoMetadata\(sourceId\)/u);
   assert.doesNotMatch(displayResolver, /readCreatorVideoForPlayer|resolveSignedVideoPlaybackSource|readSpectatorPlaybackReadout/u);
+});
+
+test("Party Room creation atomically persists exact host membership on every producer", () => {
+  assert.match(hostBootstrapMigration, /new\."room_type" not in \('live', 'title'\)/u);
+  assert.match(hostBootstrapMigration, /whole_app_exact_current_session_authority_internal/u);
+  assert.match(hostBootstrapMigration, /auth\.uid\(\) is distinct from new\."host_user_id"/u);
+  assert.match(hostBootstrapMigration, /join_watch_party_room_session/u);
+  assert.doesNotMatch(hostBootstrapMigration, /grant execute/u);
+  assert.match(spectatorStartRoom, /const createActorClient = \(authorization: string\)/u);
+  assert.match(spectatorStartRoom, /insertChildRoom\(authResult\.actorClient, action, user\.id, itemId\)/u);
+  assert.doesNotMatch(spectatorStartRoom, /insertChildRoom\(adminClient, action, user\.id, itemId\)/u);
+});
+
+test("Premium and access-pass gates refresh exact authority after focus, resume, and delayed projection", () => {
+  assert.match(accessSheet, /useFocusEffect\(refreshVisibleSheetState\)/u);
+  assert.match(accessSheet, /AppState\.addEventListener\("change"/u);
+  assert.match(accessSheet, /PREMIUM_GATE_BACKGROUND_CONVERGENCE_ATTEMPTS = 6/u);
+  assert.match(accessSheet, /premiumConvergenceAttemptRef\.current \+= 1/u);
+  assert.match(accessSheet, /generation === sheetLoadGenerationRef\.current/u);
+  assert.match(subscribe, /useFocusEffect\(/u);
+  assert.match(subscribe, /AppState\.addEventListener\("change"/u);
+  assert.match(subscribe, /refreshSnapshot\(true, activePurchaseMode\)/u);
+  assert.doesNotMatch(accessSheet, /setPremium.*true|manual.*premium|owner.*premium.*allow/iu);
 });
 
 test("Party Room and Live Stage host ending use an explicitly deployed, self-authenticating exact-room function", () => {
