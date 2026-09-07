@@ -7,6 +7,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 const presentation = read("_lib/accessProductPresentation.ts");
 const partySetup = read("app/watch-party/index.tsx");
 const partyRoom = read("app/watch-party/[partyId].tsx");
+const partyContentSources = read("_lib/watchPartyContentSources.ts");
 const partyMoney = read("_lib/paidWatchPartyTickets.ts");
 const setupCatalog = read("_lib/creatorMonetizationSetup.ts");
 const adminSandbox = read("app/admin-money-sandbox-purchases.tsx");
@@ -64,6 +65,22 @@ test("paid Party Room viewer copy identifies exact authority before and after ch
   assert.match(partyRoom, /does not include Live Stage, speaking, camera, microphone, host, moderator, LiveKit publish authority/u);
   assert.match(partyMoney, /Party Room Pass active\. You're cleared to enter this Party Room\./u);
   assert.doesNotMatch(partyRoom, /live-stage/u);
+});
+
+test("Party Room presents exact public content identity without exposing its internal source id", () => {
+  assert.match(partyRoom, />Content<\/Text>/u);
+  assert.match(partyRoom, /\{partyRoomTitleContext\}<\/Text>/u);
+  assert.doesNotMatch(partyRoom, /\{partyRoomSourceId \|\| "Resolving"\}/u);
+  assert.doesNotMatch(partyRoom, /Selected Title/u);
+  assert.doesNotMatch(partySetup, /Selected Title/u);
+
+  assert.match(partyContentSources, /\.select\("id,title"\)/u);
+  assert.match(partyContentSources, /\.eq\("id", sourceId\)/u);
+  assert.match(partyContentSources, /\.eq\("visibility", "public"\)/u);
+  assert.match(partyContentSources, /\.in\("moderation_status", \["clean", "pending_review", "reported"\]\)/u);
+  assert.match(partyContentSources, /displayName: publicMetadataVideo\?\.title \?\? video\?\.title \?\? null/u);
+  assert.match(partyContentSources, /playbackUrl: video\?\.playbackUrl \?\? null/u);
+  assert.match(partyContentSources, /isPlayable: !unavailableReason/u);
 });
 
 test("Live Stage creator setup separates viewer entry from speaking-seat eligibility", () => {

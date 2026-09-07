@@ -28,7 +28,15 @@
     },
     "sourceAndModel": "Exact provider-existing-purchase recovery, sandbox checkout-shell, Party Waiting Room/Room, Paid Video, Platform Subscription, Live Stage and account-generation adversarial coverage plus TypeScript, lint and focused route/money/native guards",
     "databaseAndIntegration": "Clean local Supabase reset followed by 82 pgTAP files and 3,042 tests, including 19 free-room/default/host/block/session/route-separation proofs, all passing",
-    "productionSafety": "Live production money, payouts and cashout remain off; the repair does not change provider product identity, grants, settlements, reserves or LiveKit authority"
+    "productionSafety": "Live production money, payouts and cashout remain off; the repair does not change provider product identity, grants, settlements, reserves or LiveKit authority",
+    "mergedRepair": {
+      "pullRequest": 341,
+      "head": "3c04e57ac4fd102da69910d66bf68ab378985882",
+      "merge": "1eeea8206fa63ea3677e712bc7615c139d137973",
+      "tree": "d61694d5d5f70c3b343ed82891b7012c045ac253"
+    },
+    "deployment": "The exact merged Party Room successor migration is live with unchanged restricted execution; no Edge Function changed. Android and iOS internal-v2 received exact-main OTA updates while production-v2 remained untouched.",
+    "physical": "A legitimate Android Play test purchase converged Premium to authoritative active state, Live re-read that state without restart, and a fresh creator-video Party Room entered as an exact free room without a Party Room Pass gate. Both physical platforms loaded their exact internal-v2 OTA; iOS interactive StoreKit replay remains separately limited below."
   },
   "entries": [
     {
@@ -262,6 +270,15 @@
       "finding": "The navigation terminology guard understood approved static Error messages but not #340's typed UserFacingError(message) constructor, creating a false launch-check failure on unchanged safe Chi'lly Circle copy.",
       "repair": "Teach the AST guard to evaluate the typed customer-safe message argument while continuing to reject dynamic, missing, unapproved or other thrown values.",
       "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-030",
+      "class": "party_room_public_content_metadata",
+      "firstFailedBoundary": "Party Room customer-facing content identity",
+      "finding": "Physical Android proof of a correctly free creator-video Party Room exposed the raw exact source identifier and retained a Selected Title placeholder after the waiting room had already shown the public title.",
+      "repair": "Render the resolved public content title instead of an internal identifier and add an exact, public, moderation-safe metadata fallback when playback authority resolution is temporarily unavailable; playback and content-access authority remain unchanged.",
+      "proof": "A focused executable RFGC test and the navigation/media/spectator guards enforce exact-id lookup, public visibility, allowed moderation states, title-only presentation, removal of the raw id and unchanged playback-authority sinks; TypeScript, lint and affected route/native/money guards pass.",
+      "disposition": "PROVEN"
     }
   ],
   "limitations": [
@@ -284,7 +301,7 @@
   "counts": {
     "BLOCKING_OPEN": 0,
     "REPAIRED_UNPROVEN": 0,
-    "PROVEN": 29,
+    "PROVEN": 30,
     "NONBLOCKING_DEBT": 0,
     "PROVIDER_SANDBOX_LIMITED": 2,
     "EXTERNAL_BLOCKED": 1,
