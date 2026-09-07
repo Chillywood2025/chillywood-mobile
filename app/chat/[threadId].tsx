@@ -110,9 +110,9 @@ import {
   READ_RECEIPT_THROTTLE_MS,
 } from "../../_lib/performancePolicy";
 import { useSession } from "../../_lib/session";
+import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
 import { formatUsernameHandle } from "../../_lib/usernameHandles";
 import {
-  SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
   type SocialAttachmentPickerScope,
   type SocialAttachmentFile,
 } from "../../_lib/socialAttachments";
@@ -807,7 +807,7 @@ export default function ChillyChatThreadScreen() {
         threadId,
         message: loadError?.message ?? "unknown_error",
       });
-      setError(loadError?.message ?? "Unable to load this Chi'lly Chat thread.");
+      setError(getUserFacingErrorMessage(loadError, "Unable to load this Chi'lly Chat thread."));
       setLoading(false);
     }
   }, [applyAcceptedIncomingInviteState, currentUserId, isSignedIn, markThreadReadWithThrottle, reconcileEndedCallState, stopOutgoingRingback, threadId]);
@@ -1567,7 +1567,7 @@ export default function ChillyChatThreadScreen() {
       setAttachmentFile(file);
     } catch (error) {
       setAttachmentFile(null);
-      setError(error instanceof Error ? error.message : "Unable to attach that file right now.");
+      setError(getUserFacingErrorMessage(error, "Unable to attach that file right now."));
     }
   }, []);
 
@@ -1619,11 +1619,7 @@ export default function ChillyChatThreadScreen() {
     } catch (sendError) {
       setMessages((prev) => prev.filter((message) => message.id !== tempId));
       if (selectedAttachment) setAttachmentFile(selectedAttachment);
-      const message = sendError instanceof Error && sendError.message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE
-        ? SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE
-        : sendError instanceof Error
-          ? sendError.message
-          : "Unable to send Chi'lly Chat message.";
+      const message = getUserFacingErrorMessage(sendError, "Unable to send Chi'lly Chat message.");
       setError(message);
       reportRuntimeError("chat-thread-send-message", sendError, {
         threadId,
@@ -1713,7 +1709,7 @@ export default function ChillyChatThreadScreen() {
         mode,
         message: callStartError instanceof Error ? callStartError.message : "unknown_error",
       });
-      const message = callStartError instanceof Error ? callStartError.message : "Unable to start Chi'lly Chat call.";
+      const message = getUserFacingErrorMessage(callStartError, "Unable to start Chi'lly Chat call.");
       setError(message);
       setCallDeliveryStatus("Delivery status: invite failed. Call was not started and receiver notification was not sent.");
       reportRuntimeError("chat-thread-start-call", callStartError, {
@@ -1811,7 +1807,7 @@ export default function ChillyChatThreadScreen() {
       await loadThreadState();
       return true;
     } catch (resumeError) {
-      setError(resumeError instanceof Error ? resumeError.message : "Unable to resume this Chi'lly Chat call.");
+      setError(getUserFacingErrorMessage(resumeError, "Unable to resume this Chi'lly Chat call."));
       return false;
     } finally {
       setCallBusy(false);
@@ -1872,7 +1868,7 @@ export default function ChillyChatThreadScreen() {
       await loadThreadState();
       return true;
     } catch (acceptError) {
-      setError(acceptError instanceof Error ? acceptError.message : "Unable to accept this Chi'lly Chat call.");
+      setError(getUserFacingErrorMessage(acceptError, "Unable to accept this Chi'lly Chat call."));
       return false;
     } finally {
       setCallBusy(false);
@@ -1944,7 +1940,7 @@ export default function ChillyChatThreadScreen() {
       });
       await loadThreadState();
     } catch (declineError) {
-      setError(declineError instanceof Error ? declineError.message : "Unable to decline this Chi'lly Chat call.");
+      setError(getUserFacingErrorMessage(declineError, "Unable to decline this Chi'lly Chat call."));
     } finally {
       setCallBusy(false);
     }
@@ -2305,9 +2301,10 @@ export default function ChillyChatThreadScreen() {
       setCallDeliveryStatus("The call ended and both participants' active call state was cleared.");
       await loadThreadState();
     } catch (leaveError) {
-      const leaveMessage = leaveError instanceof Error
-        ? leaveError.message
-        : "Unable to end this Chi'lly Chat call safely.";
+      const leaveMessage = getUserFacingErrorMessage(
+        leaveError,
+        "Unable to end this Chi'lly Chat call safely.",
+      );
       setError(leaveMessage);
       setCallDeliveryStatus(leaveMessage);
       logChatCall("handle_join_or_close_failed", {
@@ -2527,12 +2524,10 @@ export default function ChillyChatThreadScreen() {
               : await removeFromChillyCircle(targetUserId);
       setFriendState(nextState);
     } catch (friendError) {
-      const message = friendError instanceof Error
-        ? friendError.message
-            .replace(/friendship/gi, "Chi'lly Circle")
-            .replace(/friends/gi, "Chi'lly Circle")
-            .replace(/friend/gi, "Chi'lly Circle")
-        : "Unable to update Chi'lly Circle right now.";
+      const message = getUserFacingErrorMessage(
+        friendError,
+        "Unable to update Chi'lly Circle right now.",
+      );
       Alert.alert("Chi'lly Circle unavailable", message);
     } finally {
       setFriendBusy(null);

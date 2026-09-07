@@ -2,6 +2,7 @@ import type { Tables } from "../supabase/database.types";
 
 import { isOfficialPlatformAccountUserId } from "./officialAccounts";
 import { supabase } from "./supabase";
+import { UserFacingError } from "./userFacingErrors";
 import {
   buildUserChannelProfile,
   readUserProfileByUserId,
@@ -154,7 +155,7 @@ async function readFriendRelationshipRow(
     .maybeSingle();
 
   if (error) {
-    throw new Error("Chi'lly Circle status is unavailable right now.");
+    throw new UserFacingError("circle_action", "Chi'lly Circle status is unavailable right now.");
   }
 
   return parseFriendRelationshipRow(data);
@@ -233,10 +234,10 @@ function getFriendRelationshipAvailability(viewerUserId: string | null, otherUse
 function assertFriendTargetAllowed(otherUserId: string) {
   const normalizedOtherUserId = toText(otherUserId);
   if (!normalizedOtherUserId) {
-    throw new Error("Choose a person to update Chi'lly Circle.");
+    throw new UserFacingError("circle_action", "Choose a person to update Chi'lly Circle.");
   }
   if (isOfficialPlatformAccountUserId(normalizedOtherUserId)) {
-    throw new Error("Official accounts appear as pinned Chi'lly Circle connections and are not managed as normal requests.");
+    throw new UserFacingError("circle_action", "Official accounts appear as pinned Chi'lly Circle connections and are not managed as normal requests.");
   }
   return normalizedOtherUserId;
 }
@@ -244,15 +245,15 @@ function assertFriendTargetAllowed(otherUserId: string) {
 async function mutateFriendRelationship(otherUserId: string, action: "accept" | "decline" | "cancel" | "remove") {
   const viewerUserId = await getSignedInFriendUserId();
   if (!viewerUserId) {
-    throw new Error("Chi'lly Circle requires a signed-in user.");
+    throw new UserFacingError("circle_action", "Chi'lly Circle requires a signed-in user.");
   }
 
   const normalizedOtherUserId = assertFriendTargetAllowed(otherUserId);
   if (normalizedOtherUserId === viewerUserId) {
-    throw new Error("You cannot update Chi'lly Circle with yourself.");
+    throw new UserFacingError("circle_action", "You cannot update Chi'lly Circle with yourself.");
   }
   if (await readChillyCircleBlockOverride(viewerUserId, normalizedOtherUserId)) {
-    throw new Error("Chi'lly Circle is unavailable while a Platform audience block exists between these accounts.");
+    throw new UserFacingError("circle_action", "Chi'lly Circle is unavailable while a Platform audience block exists between these accounts.");
   }
 
   const { data, error } = await supabase.rpc("respond_to_friendship", {
@@ -261,7 +262,7 @@ async function mutateFriendRelationship(otherUserId: string, action: "accept" | 
   });
 
   if (error) {
-    throw new Error("Unable to update Chi'lly Circle right now.");
+    throw new UserFacingError("circle_action", "Unable to update Chi'lly Circle right now.");
   }
 
   const relationship = parseFriendRelationshipRow(unwrapMaybeSingle(data as FriendRelationshipRow | FriendRelationshipRow[] | null));
@@ -354,7 +355,7 @@ async function readCurrentUserRelationships(): Promise<{
 }> {
   const viewerUserId = await getSignedInFriendUserId();
   if (!viewerUserId) {
-    throw new Error("Chi'lly Circle requires a signed-in user.");
+    throw new UserFacingError("circle_action", "Chi'lly Circle requires a signed-in user.");
   }
 
   const [
@@ -376,7 +377,7 @@ async function readCurrentUserRelationships(): Promise<{
   ]);
 
   if (lowError || highError) {
-    throw new Error("Chi'lly Circle could not load right now.");
+    throw new UserFacingError("circle_action", "Chi'lly Circle could not load right now.");
   }
 
   const relationshipMap = new Map<string, FriendRelationshipRecord>();
@@ -395,7 +396,7 @@ async function readCurrentUserRelationships(): Promise<{
 export async function readFriendRelationshipState(otherUserId: string): Promise<FriendRelationshipState> {
   const normalizedOtherUserId = toText(otherUserId);
   if (!normalizedOtherUserId) {
-    throw new Error("Choose a person to update Chi'lly Circle.");
+    throw new UserFacingError("circle_action", "Choose a person to update Chi'lly Circle.");
   }
 
   const viewerUserId = await getSignedInFriendUserId();
@@ -408,7 +409,7 @@ export async function getChillyCircleStatus(
 ): Promise<FriendRelationshipState> {
   const normalizedOtherUserId = toText(profileUserId);
   if (!normalizedOtherUserId) {
-    throw new Error("Choose a person to update Chi'lly Circle.");
+    throw new UserFacingError("circle_action", "Choose a person to update Chi'lly Circle.");
   }
 
   const normalizedViewerUserId = toText(viewerUserId) || null;
@@ -440,15 +441,15 @@ export async function getChillyCircleStatus(
 export async function sendFriendRequest(otherUserId: string): Promise<FriendRelationshipState> {
   const viewerUserId = await getSignedInFriendUserId();
   if (!viewerUserId) {
-    throw new Error("Chi'lly Circle requires a signed-in user.");
+    throw new UserFacingError("circle_action", "Chi'lly Circle requires a signed-in user.");
   }
 
   const normalizedOtherUserId = assertFriendTargetAllowed(otherUserId);
   if (normalizedOtherUserId === viewerUserId) {
-    throw new Error("You cannot request yourself.");
+    throw new UserFacingError("circle_action", "You cannot request yourself.");
   }
   if (await readChillyCircleBlockOverride(viewerUserId, normalizedOtherUserId)) {
-    throw new Error("Chi'lly Circle is unavailable while a Platform audience block exists between these accounts.");
+    throw new UserFacingError("circle_action", "Chi'lly Circle is unavailable while a Platform audience block exists between these accounts.");
   }
 
   const { data, error } = await supabase.rpc("request_friendship", {
@@ -456,7 +457,7 @@ export async function sendFriendRequest(otherUserId: string): Promise<FriendRela
   });
 
   if (error) {
-    throw new Error("Unable to update Chi'lly Circle right now.");
+    throw new UserFacingError("circle_action", "Unable to update Chi'lly Circle right now.");
   }
 
   const relationship = parseFriendRelationshipRow(unwrapMaybeSingle(data as FriendRelationshipRow | FriendRelationshipRow[] | null));
@@ -602,7 +603,7 @@ export async function readActiveFriendUserIds(): Promise<string[]> {
   ]);
 
   if (lowError || highError) {
-    throw new Error("Chi'lly Circle could not load right now.");
+    throw new UserFacingError("circle_action", "Chi'lly Circle could not load right now.");
   }
 
   const friendUserIds = new Set<string>();

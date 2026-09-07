@@ -10,6 +10,7 @@ import {
   type MediaStorageProvider,
 } from "./mediaStorage";
 import { supabase } from "./supabase";
+import { UserFacingError } from "./userFacingErrors";
 
 export const SOCIAL_ATTACHMENT_BUCKET = "social-attachments";
 export const SOCIAL_ATTACHMENT_SIGNED_URL_SECONDS = 60 * 60;
@@ -263,7 +264,7 @@ async function getSignedInUserSession() {
   const { data, error } = await supabase.auth.getSession();
   const userId = toText(data.session?.user?.id);
   if (error || !userId) {
-    throw new Error("Sign in before adding attachments.");
+    throw new UserFacingError("attachment_action", "Sign in before adding attachments.");
   }
   return { userId };
 }
@@ -395,82 +396,88 @@ export async function createSocialAttachmentForSurface(input: {
   surfaceId: string;
   file: SocialAttachmentFile;
 }): Promise<SocialAttachment> {
-  const surfaceId = toText(input.surfaceId);
-  if (!surfaceId) throw new Error("Attachment target is missing.");
+  try {
+    const surfaceId = toText(input.surfaceId);
+    if (!surfaceId) throw new UserFacingError("attachment_action", "Attachment target is missing.");
 
-  const { userId } = await getSignedInUserSession();
-  const id = createClientId();
-  const normalized = await normalizeImageUploadFile(input.file);
-  const preparedUpload = await (async () => {
-    try {
-      const validationMessage = getSocialAttachmentValidationMessage(normalized.file);
-      if (validationMessage) throw new Error(validationMessage);
+    const { userId } = await getSignedInUserSession();
+    const id = createClientId();
+    const normalized = await normalizeImageUploadFile(input.file);
+    const preparedUpload = await (async () => {
+      try {
+        const validationMessage = getSocialAttachmentValidationMessage(normalized.file);
+        if (validationMessage) throw new UserFacingError("attachment_action", validationMessage);
 
-      const mimeType = inferMimeType(normalized.file);
-      const fileName = getReadableSocialAttachmentName({ name: normalized.file.name });
-      const storagePath = `${userId}/${input.surfaceType}/${surfaceId}/${id}.${getFileExtension(normalized.file)}`;
-      const uploadedObject = await uploadFileToMediaStorage({
+        const mimeType = inferMimeType(normalized.file);
+        const fileName = getReadableSocialAttachmentName({ name: normalized.file.name });
+        const storagePath = `${userId}/${input.surfaceType}/${surfaceId}/${id}.${getFileExtension(normalized.file)}`;
+        const uploadedObject = await uploadFileToMediaStorage({
+          surfaceType: "social_attachment",
+          uri: toText(normalized.file.uri),
+          objectKey: storagePath,
+          mimeType,
+          fileName,
+          sizeBytes: normalized.file.size,
+          maximumSizeBytes: SOCIAL_ATTACHMENT_MAX_BYTES,
+          tooLargeMessage: SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
+        });
+
+        return {
+          file: normalized.file,
+          fileName,
+          mimeType,
+          uploadedObject,
+        };
+      } finally {
+        await normalized.cleanup();
+      }
+    })();
+    const { fileName, mimeType, uploadedObject } = preparedUpload;
+
+    const payload: SocialAttachmentInsert & Record<string, unknown> = {
+      id,
+      owner_user_id: userId,
+      surface_type: input.surfaceType,
+      surface_id: surfaceId,
+      storage_provider: uploadedObject.provider,
+      storage_bucket: uploadedObject.bucket,
+      storage_object_key: uploadedObject.objectKey,
+      storage_path: uploadedObject.objectKey,
+      mime_type: mimeType,
+      size_bytes: uploadedObject.sizeBytes,
+      original_file_name: fileName,
+      moderation_status: "clean",
+      scan_status: "pending_scan",
+      scan_provider: "clamav",
+      scan_result: null,
+      scanned_at: null,
+      scan_error: null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from("social_attachments")
+      .insert(payload)
+      .select(SOCIAL_ATTACHMENT_SELECT)
+      .returns<SocialAttachmentRow>()
+      .single();
+
+    if (error || !data) {
+      await deleteStoredMediaObject({
         surfaceType: "social_attachment",
-        uri: toText(normalized.file.uri),
-        objectKey: storagePath,
-        mimeType,
-        fileName,
-        sizeBytes: normalized.file.size,
-        maximumSizeBytes: SOCIAL_ATTACHMENT_MAX_BYTES,
-        tooLargeMessage: SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
-      });
-
-      return {
-        file: normalized.file,
-        fileName,
-        mimeType,
-        uploadedObject,
-      };
-    } finally {
-      await normalized.cleanup();
+        provider: uploadedObject.provider,
+        bucket: uploadedObject.bucket,
+        objectKey: uploadedObject.objectKey,
+      }).catch(() => undefined);
+      throw error ?? new Error("Unable to save this attachment right now.");
     }
-  })();
-  const { fileName, mimeType, uploadedObject } = preparedUpload;
 
-  const payload: SocialAttachmentInsert & Record<string, unknown> = {
-    id,
-    owner_user_id: userId,
-    surface_type: input.surfaceType,
-    surface_id: surfaceId,
-    storage_provider: uploadedObject.provider,
-    storage_bucket: uploadedObject.bucket,
-    storage_object_key: uploadedObject.objectKey,
-    storage_path: uploadedObject.objectKey,
-    mime_type: mimeType,
-    size_bytes: uploadedObject.sizeBytes,
-    original_file_name: fileName,
-    moderation_status: "clean",
-    scan_status: "pending_scan",
-    scan_provider: "clamav",
-    scan_result: null,
-    scanned_at: null,
-    scan_error: null,
-    updated_at: new Date().toISOString(),
-  };
-
-  const { data, error } = await supabase
-    .from("social_attachments")
-    .insert(payload)
-    .select(SOCIAL_ATTACHMENT_SELECT)
-    .returns<SocialAttachmentRow>()
-    .single();
-
-  if (error || !data) {
-    await deleteStoredMediaObject({
-      surfaceType: "social_attachment",
-      provider: uploadedObject.provider,
-      bucket: uploadedObject.bucket,
-      objectKey: uploadedObject.objectKey,
-    }).catch(() => undefined);
-    throw error ?? new Error("Unable to save this attachment right now.");
+    return parseSocialAttachment(data);
+  } catch (error) {
+    if (error instanceof UserFacingError) throw error;
+    if (error instanceof Error && error.message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE) throw new UserFacingError("attachment_action", SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE);
+    throw new UserFacingError("attachment_action", "Unable to upload that attachment right now. Try again.");
   }
-
-  return parseSocialAttachment(data);
 }
 
 export async function deleteSocialAttachment(

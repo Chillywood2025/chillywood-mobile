@@ -31,6 +31,7 @@ import {
 } from "../_lib/peopleSearchNormalization";
 import { searchPublicPeople, type PublicPeopleSearchResult } from "../_lib/publicPeopleSearch";
 import { useSession } from "../_lib/session";
+import { getUserFacingErrorMessage } from "../_lib/userFacingErrors";
 import { ProfileMediaImage as Image } from "../components/ui/ProfileMediaImage";
 
 type CircleAction = "accept" | "decline" | "cancel" | "remove";
@@ -76,13 +77,11 @@ const formatUpdatedAt = (value: string) => {
   });
 };
 
-const normalizeCircleError = (error: unknown) => {
-  const message = error instanceof Error ? error.message : "Unable to update Chi'lly Circle right now.";
-  return message
+const normalizeCircleError = (error: unknown) =>
+  getUserFacingErrorMessage(error, "Unable to update Chi'lly Circle right now.")
     .replace(/friendship/gi, "Chi'lly Circle")
     .replace(/friends/gi, "Chi'lly Circle")
     .replace(/friend/gi, "Chi'lly Circle");
-};
 
 const includesNeedle = (value: unknown, needle: string) => {
   return matchesPeopleSearchValues([value], needle);

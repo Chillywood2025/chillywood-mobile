@@ -17,6 +17,7 @@ import { reportRuntimeError } from "../../_lib/logger";
 import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
 import { completePendingSignupProfile } from "../../_lib/signupProfileCompletion";
 import { supabase } from "../../_lib/supabase";
+import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
 import { AppActionButton, AppStatusPill } from "../../components/ui/app-surface";
 
 const LOGIN_BACKGROUND_SOURCE = require("../../assets/images/chicago-skyline.jpg");
@@ -49,7 +50,10 @@ export default function Login() {
         trackEvent("auth_sign_in_failure", {
           reason: error.code ?? error.name ?? "auth_error",
         });
-        Alert.alert("Login Error", error.message);
+        Alert.alert(
+          "Login Error",
+          getUserFacingErrorMessage(error, "Unable to sign in right now."),
+        );
         return;
       }
 

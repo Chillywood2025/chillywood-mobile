@@ -126,6 +126,7 @@ import {
     type SocialAttachmentFile,
 } from "../../../_lib/socialAttachments";
 import { pickSocialAttachmentFile } from "../../../_lib/socialAttachmentPicker";
+import { getUserFacingErrorMessage } from "../../../_lib/userFacingErrors";
 import { resolveWatchPartyContentSource } from "../../../_lib/watchPartyContentSources";
 import {
     getCommunicationRTCModule,
@@ -2413,9 +2414,7 @@ export default function WatchPartyLiveStageScreen({
       try {
         await requestMyLiveWatchPartySeat(partyId);
       } catch (error) {
-        setRoomEntryError(error instanceof Error
-          ? error.message
-          : "Your Live Stage seat request could not be verified.");
+        setRoomEntryError(getUserFacingErrorMessage(error, "Your Live Stage seat request could not be verified."));
         return;
       }
     }
@@ -2919,7 +2918,7 @@ export default function WatchPartyLiveStageScreen({
         } catch (error) {
           Alert.alert(
             "Seat rejection unavailable",
-            error instanceof Error ? error.message : "The seat rejection could not be saved.",
+            getUserFacingErrorMessage(error, "The seat rejection could not be saved."),
           );
           return;
         }
@@ -3321,7 +3320,7 @@ export default function WatchPartyLiveStageScreen({
     } catch (error) {
       Alert.alert(
         "Could not end room",
-        error instanceof Error ? error.message : "Try again or leave the room view.",
+        getUserFacingErrorMessage(error, "Try again or leave the room view."),
       );
     } finally {
       setSaveReplayEnding(false);
@@ -3344,8 +3343,8 @@ export default function WatchPartyLiveStageScreen({
         [{ text: "OK", onPress: leaveLiveRoom }],
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Replay could not be saved right now.";
-      if (message.includes("Replay was not recording")) {
+      const rawMessage = error instanceof Error ? error.message : "";
+      if (rawMessage.includes("Replay was not recording")) {
         Alert.alert(
           "Replay was not recording for this session. End without saving?",
           "This session does not have a saveable replay recording.",
@@ -3355,7 +3354,7 @@ export default function WatchPartyLiveStageScreen({
           ],
         );
       } else {
-        Alert.alert("Save Replay unavailable", message);
+        Alert.alert("Save Replay unavailable", getUserFacingErrorMessage(error, "Replay could not be saved right now."));
       }
     } finally {
       setSaveReplayEnding(false);
@@ -3869,7 +3868,7 @@ export default function WatchPartyLiveStageScreen({
       revealStageOverlay();
     } catch (error) {
       setHybridCommentAttachmentFile(null);
-      setHybridCommentError(error instanceof Error ? error.message : "Unable to choose this attachment right now.");
+      setHybridCommentError(getUserFacingErrorMessage(error, "Unable to choose this attachment right now."));
     }
   }, [revealStageOverlay]);
 
@@ -3950,9 +3949,7 @@ export default function WatchPartyLiveStageScreen({
         hybridCommentsScrollRef.current?.scrollToEnd({ animated: true });
       }, 40);
     } catch (error) {
-      setHybridCommentError(error instanceof Error && error.message
-        ? error.message
-        : "Comment did not appear in the room yet. Try sending it again.");
+      setHybridCommentError(getUserFacingErrorMessage(error, "Comment did not appear in the room yet. Try sending it again."));
     } finally {
       setHybridCommentSending(false);
     }
@@ -4769,7 +4766,7 @@ export default function WatchPartyLiveStageScreen({
       setLoading(true);
       setAccessRetryToken((value) => value + 1);
     } catch (error) {
-      setLiveMoneyNotice(error instanceof Error ? error.message : "The Live Stage purchase could not complete. Nothing was charged.");
+      setLiveMoneyNotice(getUserFacingErrorMessage(error, "The Live Stage purchase could not complete. Check your access before trying again."));
     } finally {
       setLiveMoneyPurchaseBusy(null);
     }
@@ -4809,7 +4806,7 @@ export default function WatchPartyLiveStageScreen({
           : "Speaking-seat eligibility is Free. Host approval is still required.");
       setAccessRetryToken((value) => value + 1);
     } catch (error) {
-      setLiveMoneyNotice(error instanceof Error ? error.message : "The exact live-room offer could not be saved.");
+      setLiveMoneyNotice(getUserFacingErrorMessage(error, "The exact Live Stage offer could not be saved."));
     } finally {
       setLiveMoneyOfferBusy(null);
     }

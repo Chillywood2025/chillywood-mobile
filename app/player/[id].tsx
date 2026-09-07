@@ -86,7 +86,6 @@ import {
     type CreatorVideoComment,
 } from "../../_lib/creatorVideoComments";
 import {
-    SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
     type SocialAttachmentPickerScope,
     type SocialAttachmentFile,
 } from "../../_lib/socialAttachments";
@@ -100,6 +99,7 @@ import {
     resolveWatchPartySourceType,
 } from "../../_lib/watchPartyContentSources";
 import { useSession } from "../../_lib/session";
+import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
 import { supabase } from "../../_lib/supabase";
 import type { Tables } from "../../supabase/database.types";
 import {
@@ -4628,11 +4628,7 @@ export default function PlayerScreen() {
           return;
         }
 
-        const rawMessage = room && "error" in room ? room.error.message : "";
-        const message = /source_(type|id)|column/i.test(rawMessage)
-          ? "Watch-Party is unavailable for this video until the creator-video room source model is available."
-          : "Watch-Party is unavailable for this video.";
-        Alert.alert("Watch-Party unavailable", message);
+        Alert.alert("Watch-Party unavailable", "Watch-Party is unavailable for this video right now.");
       } catch {
         Alert.alert("Watch-Party unavailable", "Unable to create a Watch-Party room for this creator video right now.");
       }
@@ -4768,7 +4764,7 @@ export default function PlayerScreen() {
     } catch (error) {
       Alert.alert(
         "Report unavailable",
-        error instanceof Error ? error.message : "Unable to send this report right now.",
+        getUserFacingErrorMessage(error, "Unable to send this report right now."),
       );
     } finally {
       setTitleReportBusy(false);
@@ -4807,7 +4803,7 @@ export default function PlayerScreen() {
     } catch (error) {
       Alert.alert(
         "Report unavailable",
-        error instanceof Error ? error.message : "Unable to send this report right now.",
+        getUserFacingErrorMessage(error, "Unable to send this report right now."),
       );
     } finally {
       setCreatorVideoReportBusy(false);
@@ -4844,7 +4840,7 @@ export default function PlayerScreen() {
       setCreatorVideoCommentAttachmentFile(file);
     } catch (error) {
       setCreatorVideoCommentAttachmentFile(null);
-      setCreatorVideoCommentsError(error instanceof Error ? error.message : "Unable to attach that file right now.");
+      setCreatorVideoCommentsError(getUserFacingErrorMessage(error, "Unable to attach that file right now."));
     }
   }, []);
 
@@ -4895,10 +4891,7 @@ export default function PlayerScreen() {
       setCreatorVideoCommentAttachmentFile(null);
       setCreatorVideoCommentReplyTargetId(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      setCreatorVideoCommentsError(message === SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE
-        ? SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE
-        : "Unable to post this comment right now.");
+      setCreatorVideoCommentsError(getUserFacingErrorMessage(error, "Unable to post this comment right now."));
     } finally {
       setCreatorVideoCommentBusy(false);
     }

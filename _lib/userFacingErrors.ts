@@ -7,11 +7,47 @@ const normalizeErrorText = (error: unknown) => {
   return String(error ?? "").trim();
 };
 
+export type UserFacingErrorCode =
+  | "attachment_action"
+  | "chat_action"
+  | "circle_action";
+
+export class UserFacingError extends Error {
+  readonly code: UserFacingErrorCode;
+
+  constructor(code: UserFacingErrorCode, message: string) {
+    super(message);
+    this.name = "UserFacingError";
+    this.code = code;
+  }
+}
+
 export function getUserFacingErrorMessage(error: unknown, fallback: string) {
   const rawMessage = normalizeErrorText(error);
   const message = rawMessage.toLowerCase();
 
   if (!message) return fallback;
+  if (error instanceof UserFacingError) return rawMessage;
+
+  if (
+    message.includes("invalid login credentials")
+    || message.includes("invalid credentials")
+    || message.includes("incorrect password")
+  ) {
+    return "The email or password is incorrect.";
+  }
+
+  if (message.includes("email not confirmed") || message.includes("email is not confirmed")) {
+    return "Confirm your email, then try signing in again.";
+  }
+
+  if (
+    message.includes("too many requests")
+    || message.includes("rate limit")
+    || message.includes("too many attempts")
+  ) {
+    return "Too many attempts. Wait a moment, then try again.";
+  }
 
   if (
     message.includes("network")
@@ -23,17 +59,6 @@ export function getUserFacingErrorMessage(error: unknown, fallback: string) {
     || message.includes("timed out")
   ) {
     return "Check your connection and try again.";
-  }
-
-  if (
-    message.includes("jwt")
-    || message.includes("auth")
-    || message.includes("session")
-    || message.includes("sign in")
-    || message.includes("not authenticated")
-    || message.includes("invalid login")
-  ) {
-    return "Sign in again, then try that action one more time.";
   }
 
   if (
@@ -50,31 +75,44 @@ export function getUserFacingErrorMessage(error: unknown, fallback: string) {
   }
 
   if (
-    message.includes("storage")
-    || message.includes("bucket")
-    || message.includes("object")
-    || message.includes("signed url")
-    || message.includes("upload")
+    message.includes("jwt")
+    || message.includes("auth session")
+    || message.includes("authentication")
+    || message.includes("session expired")
+    || message.includes("sign in")
+    || message.includes("not authenticated")
+    || message.includes("invalid login")
   ) {
-    return "The file could not be saved right now. Try again in a moment.";
+    return "Sign in again, then try that action one more time.";
   }
 
   if (
     message.includes("too large")
     || message.includes("file size")
-    || message.includes("maximum")
-    || message.includes("exceeded")
+    || message.includes("payload too large")
+    || ((message.includes("file") || message.includes("upload"))
+      && (message.includes("maximum") || message.includes("exceeded")))
   ) {
     return "That file is too large for this upload.";
   }
 
   if (
     message.includes("mime")
-    || message.includes("unsupported")
     || message.includes("file type")
     || message.includes("extension")
+    || (message.includes("unsupported") && message.includes("file"))
   ) {
     return "That file type is not supported here.";
+  }
+
+  if (
+    message.includes("storage bucket")
+    || message.includes("object storage")
+    || message.includes("bucket")
+    || message.includes("signed url")
+    || message.includes("upload")
+  ) {
+    return "The file could not be saved right now. Try again in a moment.";
   }
 
   if (
@@ -90,5 +128,7 @@ export function getUserFacingErrorMessage(error: unknown, fallback: string) {
     return fallback;
   }
 
-  return rawMessage.length <= 140 ? rawMessage : fallback;
+  // Provider, database, and runtime error text is not a customer-facing copy
+  // contract. Unknown messages must fail closed to the action-specific fallback.
+  return fallback;
 }
