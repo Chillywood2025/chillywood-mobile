@@ -1,7 +1,8 @@
-import { router } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   Modal,
   Pressable,
   StyleSheet,
@@ -36,6 +37,9 @@ export type AccessSheetActionFeedback = {
   message?: string;
   tone?: AccessSheetStatusTone;
 };
+
+const PREMIUM_GATE_BACKGROUND_CONVERGENCE_ATTEMPTS = 6;
+const PREMIUM_GATE_BACKGROUND_CONVERGENCE_DELAY_MS = 1250;
 
 type AccessSheetGate = {
   reason?: string | null;
@@ -123,6 +127,8 @@ export function AccessSheet({
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [manageBusy, setManageBusy] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const sheetLoadGenerationRef = useRef(0);
+  const premiumConvergenceAttemptRef = useRef(0);
   const [statusTone, setStatusTone] = useState<AccessSheetStatusTone>("neutral");
   const { user } = useSession();
   const betaProgram = useOptionalBetaProgram();
@@ -151,6 +157,8 @@ export function AccessSheet({
   }, [betaProgram?.isActive, user?.email, user?.id]);
 
   const loadSheetState = useCallback(async () => {
+    const generation = sheetLoadGenerationRef.current + 1;
+    sheetLoadGenerationRef.current = generation;
     const purchaseMode = await resolvePurchaseMode();
     const nextState = await readMonetizationAccessSheetState({
       gate,
@@ -160,14 +168,17 @@ export function AccessSheet({
       premiumUpsellTitle,
       premiumUpsellBody,
     });
-    setSheetState(nextState);
+    if (generation === sheetLoadGenerationRef.current) {
+      setSheetState(nextState);
+    }
     return nextState;
   }, [appDisplayName, gate, premiumUpsellBody, premiumUpsellTitle, resolvePurchaseMode, user?.id]);
 
-  useEffect(() => {
+  const refreshVisibleSheetState = useCallback(() => {
     if (!visible) return;
 
     let active = true;
+    premiumConvergenceAttemptRef.current = 0;
     setLoadingState(true);
 
     loadSheetState()
@@ -189,6 +200,19 @@ export function AccessSheet({
       active = false;
     };
   }, [deferredMonetization, loadSheetState, visible]);
+
+  useFocusEffect(refreshVisibleSheetState);
+
+  useEffect(() => {
+    if (!visible) return undefined;
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active") return;
+      // Overlapping route-focus and foreground reads are bounded by the
+      // generation owned inside loadSheetState.
+      refreshVisibleSheetState();
+    });
+    return () => subscription.remove();
+  }, [refreshVisibleSheetState, visible]);
 
   useEffect(() => {
     if (visible) return;
@@ -214,6 +238,22 @@ export function AccessSheet({
     ))
   ), [gate?.monetization?.qualifyingTargetIds, sheetState?.snapshot.targets]);
   const freshGateEntitled = !!freshGateEntitledTargetId;
+
+  useEffect(() => {
+    if (!visible || !isPremiumGateSheet || freshGateEntitled) {
+      premiumConvergenceAttemptRef.current = 0;
+      return undefined;
+    }
+    if (premiumConvergenceAttemptRef.current >= PREMIUM_GATE_BACKGROUND_CONVERGENCE_ATTEMPTS) {
+      return undefined;
+    }
+
+    const timeout = setTimeout(() => {
+      premiumConvergenceAttemptRef.current += 1;
+      void loadSheetState().catch(() => undefined);
+    }, PREMIUM_GATE_BACKGROUND_CONVERGENCE_DELAY_MS);
+    return () => clearTimeout(timeout);
+  }, [freshGateEntitled, isPremiumGateSheet, loadSheetState, sheetState, visible]);
 
   const copy = {
     kicker: renderDeferredUnavailable

@@ -208,7 +208,25 @@ const createAdminClient = () => createClient(
   },
 );
 
-const authenticateRequest = async (req: Request): Promise<{ user: AuthenticatedUser } | { error: Response }> => {
+const createActorClient = (authorization: string) => createClient(
+  readRequiredEnv("SUPABASE_URL"),
+  readRequiredEnv("SUPABASE_ANON_KEY"),
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    global: {
+      headers: {
+        Authorization: authorization,
+      },
+    },
+  },
+);
+
+const authenticateRequest = async (
+  req: Request,
+): Promise<{ actorClient: SupabaseClientLike; user: AuthenticatedUser } | { error: Response }> => {
   const authorization = toText(req.headers.get("Authorization"));
   if (!authorization.toLowerCase().startsWith("bearer ")) {
     return {
@@ -219,19 +237,9 @@ const authenticateRequest = async (req: Request): Promise<{ user: AuthenticatedU
     };
   }
 
-  const authClient = createClient(readRequiredEnv("SUPABASE_URL"), readRequiredEnv("SUPABASE_ANON_KEY"), {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-    global: {
-      headers: {
-        Authorization: authorization,
-      },
-    },
-  });
+  const actorClient = createActorClient(authorization);
 
-  const { data, error } = await authClient.auth.getUser();
+  const { data, error } = await actorClient.auth.getUser();
   const userId = toText(data.user?.id);
   if (error || !userId) {
     return {
@@ -243,6 +251,7 @@ const authenticateRequest = async (req: Request): Promise<{ user: AuthenticatedU
   }
 
   return {
+    actorClient,
     user: {
       email: data.user?.email ?? null,
       id: userId,
@@ -1001,7 +1010,7 @@ Deno.serve(async (req): Promise<Response> => {
       });
     }
 
-    const childRoom = await insertChildRoom(adminClient, action, user.id, itemId);
+    const childRoom = await insertChildRoom(authResult.actorClient, action, user.id, itemId);
     if (item) {
       await insertSourceLink(adminClient, {
         childRoomId: childRoom.partyId,

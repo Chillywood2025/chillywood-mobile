@@ -1,6 +1,6 @@
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, ImageBackground, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, AppState, ImageBackground, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
@@ -243,9 +243,22 @@ export default function SubscribeScreen() {
     };
   }, [betaProgram?.isActive, isSignedIn, refreshSnapshot, sessionLoading, user?.email, user?.id]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (sessionLoading) return undefined;
+      void refreshSnapshot(true, activePurchaseMode);
+      return undefined;
+    }, [activePurchaseMode, refreshSnapshot, sessionLoading]),
+  );
+
   useEffect(() => {
-    if (sessionLoading) return;
-    void refreshSnapshot(false, activePurchaseMode);
+    if (sessionLoading) return undefined;
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        void refreshSnapshot(true, activePurchaseMode);
+      }
+    });
+    return () => subscription.remove();
   }, [activePurchaseMode, refreshSnapshot, sessionLoading]);
 
   const toggleAccordion = useCallback((id: string) => {

@@ -306,6 +306,24 @@
       "repair": "After exact source merge, redeploy only those four affected functions from protected main and read back each exact route/version/digest. No provider, room, replay, content, money, or LiveKit authority is moved to the client.",
       "proof": "Existing provider-readiness, spectator child-room, replay request/playback and security guards remain the source contracts. Exact post-deployment route probes must return their contract-owned auth/input result rather than NOT_FOUND_FUNCTION_BLOB, and the physical Party Room host-end path must make the exact room inactive.",
       "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-034",
+      "class": "party_room_exact_host_membership_bootstrap",
+      "firstFailedBoundary": "Party Room creation to canonical room-session membership",
+      "finding": "Exact-main Android replay created a valid free title Party Room but its creator transaction persisted no host membership. Party Room bootstrap then returned before content display and Realtime startup, rendering the exact title as Shared content and the connection as Offline. The shared Spectator child-room producer had the adjacent defect because its service-role insert could not carry the authenticated caller into the existing exact-session membership trigger.",
+      "repair": "Extend the existing same-transaction exact-host membership bootstrap to title Party Rooms while retaining authenticated current-session and exact host binding. Make Spectator child-room insertion use the already-verified request-bearer actor client, retaining service authority only for eligibility, exact source-link and audit work. No viewer, pass, payment, creator-money, payout, speaker, moderator or LiveKit authority is created.",
+      "proof": "A clean local database reset and the complete 83-file/3,052-assertion pgTAP suite pass, including atomic exact host membership, trigger ACL and no-unrelated-member proofs. Source contracts cover direct app creation and authenticated Spectator creation. Exact merged migration/Edge deployment and physical title/Live/host-end readback remain required.",
+      "disposition": "REPAIRED_UNPROVEN"
+    },
+    {
+      "id": "RFGC-UX-035",
+      "class": "premium_gate_focus_resume_projection_convergence",
+      "firstFailedBoundary": "authoritative entitlement projection to an already-visible Premium gate",
+      "finding": "Physical Android replay showed the Premium screen authoritative-active while a previously mounted Watch-Party Live access sheet still presented Premium required. The sheet loaded only when its visible flag changed, so returning from Premium, foreground resume, or a slightly delayed sandbox renewal projection could leave the original strict gate stale even though backend authority had converged.",
+      "repair": "Re-read exact provider/backend state on route focus and foreground resume, reject stale overlapping reads by generation, and run only six delayed 1.25-second Premium-gate projection checks before leaving an actionable retry/restore path. Premium and every access product remain server-authoritative; unknown is never active and no local, Owner or sandbox grant is introduced.",
+      "proof": "The focused RFGC and Premium sandbox Live proof execute the focus/resume, finite retry, stale-response rejection and original strict-gate recheck contracts; TypeScript, route, Android/iOS native, provider, notification and money guards pass. Exact merged OTA and physical focus/resume replay remain required.",
+      "disposition": "REPAIRED_UNPROVEN"
     }
   ],
   "limitations": [
@@ -327,7 +345,7 @@
   ],
   "counts": {
     "BLOCKING_OPEN": 0,
-    "REPAIRED_UNPROVEN": 0,
+    "REPAIRED_UNPROVEN": 2,
     "PROVEN": 33,
     "NONBLOCKING_DEBT": 0,
     "PROVIDER_SANDBOX_LIMITED": 2,

@@ -90,6 +90,9 @@ const launchHelper = read("_lib/spectatorChildRooms.ts");
 ].forEach((needle) => assertIncludes("server-side eligibility", startRoomFunction, needle));
 
 assertNotIncludes("Premium proof-hold bypass", startRoomFunction, "PREMIUM_LIVE_GATE_PROOF_HOLD");
+assertIncludes("authenticated child-room insert", startRoomFunction, "insertChildRoom(authResult.actorClient, action, user.id, itemId)");
+assertIncludes("request bearer actor client", startRoomFunction, "const createActorClient = (authorization: string)");
+assertNotIncludes("service-role child-room insert", startRoomFunction, "insertChildRoom(adminClient, action, user.id, itemId)");
 assertIncludes("no full original token response", startRoomFunction, "fullRoomTokenForSpectators: false");
 assertIncludes("no original room token response", startRoomFunction, "originalRoomTokenReturned: false");
 assertIncludes("no original publish response", startRoomFunction, "originalRoomPublishPermission: false");
