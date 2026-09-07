@@ -579,6 +579,9 @@ export async function readCreatorVideosByIds(
     .from("videos")
     .select(CREATOR_VIDEO_SELECT)
     .in("id", normalizedVideoIds)
+    .in("moderation_status", ["clean", "reported"])
+    .eq("scan_status", "clean")
+    .is("quarantined_at", null)
     .returns<CreatorVideoRow[]>();
 
   if (error || !data) return [];

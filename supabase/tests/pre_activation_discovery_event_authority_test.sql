@@ -16,6 +16,9 @@ select has_function('public','sync_spectator_broadcast_discovery',array['uuid'],
   'provider-approved spectator broadcasts have a canonical producer');
 select has_function('public','read_authorized_event_reminder_recipients',array['uuid'],
   'Event reminders resolve recipients through Event authority');
+select ok(not has_function_privilege(
+  'anon','public.can_read_circle_spectator_feed_item(uuid,text)','EXECUTE'
+), 'anonymous clients cannot invoke Circle discovery authority');
 
 select ok(has_function_privilege('service_role','public.publish_live_stage_discovery(text,uuid)','EXECUTE'),
   'the service role can publish an exact connected Live Stage');
@@ -442,6 +445,113 @@ select is((select count(*)::integer from public.discovery_feed_items
 select is((select count(*)::integer from public.circle_spectator_feed_items
   where coalesce(metadata->>'proof_fixture','')='true' and status='active'),0,
   'positively identified Circle proof fixtures are quarantined');
+
+select ok(
+  position('v_event."starts_at" <= v_now' in pg_get_functiondef(
+    'public.sync_creator_event_discovery(uuid)'::regprocedure
+  )) > 0
+  and position('v_event."ends_at" <= v_now' in pg_get_functiondef(
+    'public.sync_creator_event_discovery(uuid)'::regprocedure
+  )) > 0,
+  'the canonical Event producer rejects past scheduled and ended live authority'
+);
+select ok(
+  position('media_scan_public_safe' in pg_get_functiondef(
+    'public.sync_creator_video_feed_items(text)'::regprocedure
+  )) > 0
+  and position('v_video."quarantined_at" is null' in lower(pg_get_functiondef(
+    'public.sync_creator_video_feed_items_trigger()'::regprocedure
+  ))) > 0,
+  'creator-video fanout requires current scan and quarantine authority'
+);
+select ok(
+  position('media_scan_public_safe' in pg_get_functiondef(
+    'public.can_read_creator_feed_item(text,text,text,text,text,text,text)'::regprocedure
+  )) > 0
+  and position('v_video."quarantined_at" is not null' in lower(pg_get_functiondef(
+    'public.can_read_creator_feed_item(text,text,text,text,text,text,text)'::regprocedure
+  ))) > 0,
+  'relationship feed reads fail closed for unsafe video sources even for the creator'
+);
+select ok(
+  (
+    select bool_and(qual like '%starts_at%now()%')
+    from pg_policies
+    where schemaname='public'
+      and tablename='discovery_feed_items'
+      and policyname in (
+        'discovery_feed_items_select_public_safe_authenticated',
+        'discovery_feed_items_select_spectator_public_safe_anon'
+      )
+  ),
+  'public discovery RLS independently enforces the scheduled time boundary'
+);
+
+insert into public.creator_events(
+  id,host_user_id,event_title,event_type,status,starts_at,ends_at,visibility,reminder_ready
+) values (
+  'e8000000-0000-4000-8000-000000000008',
+  'a1000000-0000-4000-8000-000000000001',
+  'Past scheduled negative control','live_first','scheduled',
+  now()-interval '2 hours',now()-interval '1 hour','public',false
+);
+select is((select count(*)::integer from public.discovery_feed_items
+  where source_type='creator_event'
+    and source_id='e8000000-0000-4000-8000-000000000008'
+    and is_publicly_discoverable),0,
+  'a past scheduled Event cannot be produced as Upcoming discovery');
+
+insert into public.videos(
+  id,owner_id,title,visibility,moderation_status,scan_status,
+  storage_provider,storage_bucket,storage_object_key,storage_path,
+  mime_type,file_size_bytes
+) values (
+  'e9000000-0000-4000-8000-000000000009',
+  'a1000000-0000-4000-8000-000000000001',
+  'Relationship feed scan lifecycle control','public','clean','clean',
+  'cloudflare_r2','chillywood-media-origin',
+  'a1000000-0000-4000-8000-000000000001/e9000000-0000-4000-8000-000000000009/source.mp4',
+  'a1000000-0000-4000-8000-000000000001/e9000000-0000-4000-8000-000000000009/source.mp4',
+  'video/mp4',1024
+);
+select is((select count(*)::integer from public.creator_feed_items
+  where source_type='creator_video'
+    and source_id='e9000000-0000-4000-8000-000000000009'
+    and status='active'),0,
+  'a newly uploaded video remains absent while its authoritative scan is pending');
+
+update public.videos
+set scan_status='clean',scanned_at=timezone('utc'::text,now())
+where id='e9000000-0000-4000-8000-000000000009';
+select is((select count(*)::integer from public.creator_feed_items
+  where source_type='creator_video'
+    and source_id='e9000000-0000-4000-8000-000000000009'
+    and status='active'),2,
+  'an authoritatively clean public video creates its follower and Circle fanout rows');
+
+update public.videos
+set scan_status='quarantined',quarantined_at=now(),updated_at=now()
+where id='e9000000-0000-4000-8000-000000000009';
+select is((select count(*)::integer from public.creator_feed_items
+  where source_type='creator_video'
+    and source_id='e9000000-0000-4000-8000-000000000009'
+    and status='active'),0,
+  'quarantine immediately retires every relationship fanout row');
+
+update public.creator_feed_items
+set status='active'
+where source_type='creator_video'
+  and source_id='e9000000-0000-4000-8000-000000000009';
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.jwt.claims',
+  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000001"}',true);
+set local role authenticated;
+select ok(not public.can_read_creator_feed_item(
+  'creator_video','e9000000-0000-4000-8000-000000000009',
+  'a1000000-0000-4000-8000-000000000001','public','followers','active',
+  'a1000000-0000-4000-8000-000000000001'
+), 'creator ownership cannot make a quarantined video release-discoverable');
+reset role;
 
 select * from finish();
 rollback;
