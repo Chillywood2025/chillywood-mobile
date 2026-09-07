@@ -72,9 +72,9 @@ requireAll(profile, [
 ], "Profile creator content density");
 
 requireAll(library, [
-  'titleCard: {\n    width: 132',
-  'posterWrap: {\n    width: "100%",\n    height: 150',
-  'platformCard: {\n    width: 150',
+  'titleCard: { width: 132',
+  'posterWrap: { width: "100%", height: 150',
+  'platformCard: { width: 150',
 ], "Saved Library compact rows");
 
 for (const forbidden of [

@@ -181,6 +181,9 @@ export function CreatorVideoCard({
   const publicDescription = isOfficialRachiInternalProofFixture
     ? "Official Chi'llywood Original from Rachi."
     : (video.description || "Open this creator video in the Chi'llywood Player.");
+  const cardAccessibilityLabel = ownerMode
+    ? `${displayTitle}. ${formatVisibilityLabel(video, true)} creator video. ${playable ? "Open video. Hold for content actions." : "Media unavailable. Hold for content actions."}`
+    : `${publicDisplayTitle}. ${formatVisibilityLabel(video, false)} creator video. ${playable ? "Open in Chi'llywood Player." : "Media unavailable."}`;
 
   if (variant === "compact") {
     const compactStatus = accessLabel
@@ -197,7 +200,8 @@ export function CreatorVideoCard({
           onLongPress={ownerMode ? onOpenActions : onShare}
           disabled={!playable && !ownerMode}
           accessibilityRole="button"
-          accessibilityLabel={ownerMode ? `Open ${displayTitle}. Hold for content actions.` : `Open ${publicDisplayTitle}`}
+          accessibilityLabel={cardAccessibilityLabel}
+          accessibilityState={{ disabled: !playable && !ownerMode }}
           testID={testID}
         >
           <StableImage
@@ -252,7 +256,9 @@ export function CreatorVideoCard({
         onPress={playable ? onOpen : ownerMode ? onOpenActions : undefined}
         onLongPress={ownerMode ? onOpenActions : undefined}
         disabled={!playable && !ownerMode}
-        accessibilityLabel={ownerMode ? `Open ${displayTitle}. Hold for content actions.` : `Open ${publicDisplayTitle}`}
+        accessibilityRole="button"
+        accessibilityLabel={cardAccessibilityLabel}
+        accessibilityState={{ disabled: !playable && !ownerMode }}
       >
         <StableImage
           expectedWidth="100%"
@@ -289,9 +295,11 @@ export function CreatorVideoCard({
           <View style={[styles.badge, video.visibility === "public" ? styles.badgePublic : video.visibility === "circle" ? styles.badgeCircle : styles.badgeDraft]}>
             <AppText scale="caption" style={styles.badgeText}>{formatVisibilityLabel(video, ownerMode)}</AppText>
           </View>
-          <View style={[styles.badge, playable ? styles.badgeMediaReady : styles.badgeMediaUnavailable]}>
-            <AppText scale="caption" style={styles.badgeText}>{playable ? "Media Ready" : "Media Unavailable"}</AppText>
-          </View>
+          {ownerMode || !playable ? (
+            <View style={[styles.badge, playable ? styles.badgeMediaReady : styles.badgeMediaUnavailable]}>
+              <AppText scale="caption" style={styles.badgeText}>{playable ? "Playable" : "Media Unavailable"}</AppText>
+            </View>
+          ) : null}
           {moderationLabel ? (
             <View style={[styles.badge, styles.badgeModeration]}>
               <AppText scale="caption" style={styles.badgeText}>{moderationLabel}</AppText>

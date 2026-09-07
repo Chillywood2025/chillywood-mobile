@@ -287,7 +287,7 @@ export default function MyListScreen() {
             ) : null}
 
             {renderSection("Saved", `${savedTitleCount} saved`, savedTitleCount > 0, "No saved titles yet", "Save a title from Home or Explore and it will appear here.", renderTitleRail(savedTitles, openTitleDetails, (item) => item.runtime || item.category || "Saved"))}
-            {renderSection("Continue Watching", `${continueWatchingCount} ready`, continueWatchingCount > 0, "No watch progress yet", "Titles appear here after playback writes progress for your account or this device.", renderTitleRail(continueWatching, openPlayer, (item) => formatProgressLabel(item.progress)))}
+            {renderSection("Continue Watching", `${continueWatchingCount} in progress`, continueWatchingCount > 0, "No watch progress yet", "Titles appear here after playback writes progress for your account or this device.", renderTitleRail(continueWatching, openPlayer, (item) => formatProgressLabel(item.progress)))}
 
             {renderSection(
               "Saved Replays",
