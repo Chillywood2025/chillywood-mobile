@@ -36,7 +36,16 @@
       "tree": "d61694d5d5f70c3b343ed82891b7012c045ac253"
     },
     "deployment": "The exact merged Party Room successor migration is live with unchanged restricted execution; no Edge Function changed. Android and iOS internal-v2 received exact-main OTA updates while production-v2 remained untouched.",
-    "physical": "A legitimate Android Play test purchase converged Premium to authoritative active state, Live re-read that state without restart, and a fresh creator-video Party Room entered as an exact free room without a Party Room Pass gate. Both physical platforms loaded their exact internal-v2 OTA; iOS interactive StoreKit replay remains separately limited below."
+    "physical": "A legitimate Android Play test purchase converged Premium to authoritative active state, Live re-read that state without restart, and a fresh creator-video Party Room entered as an exact free room without a Party Room Pass gate. Both physical platforms loaded their exact internal-v2 OTA; iOS interactive StoreKit replay remains separately limited below.",
+    "finalConvergence": {
+      "pullRequest": 346,
+      "head": "033ad2020c44b6b27ee20f3d0c70024eb723724a",
+      "merge": "c36762173f9f6ca513c2bd27a97766266a2ab548",
+      "tree": "65a76e2194d7ce5a10125b563646f3c2b00763b3",
+      "androidInternalV2Update": "01a07b4e-6c41-7ce9-9863-02090f96851b",
+      "iosInternalV2Update": "01a07b52-e222-7996-be92-78fb3465ce4a",
+      "proof": "Exact-head Phase 1 passed every substantive lane. The route contract proves both canonical host-end completions resolve the exact server-backed content destination while ordinary leave preserves re-entry. The exact Android OTA was physically loaded on the attached build; cold launch, warm resume, Home, Explore, Live, Saved, Profile, Platform, Platform Studio gate, Settings diagnostics and Chi'lly Chat inbox smoke passed. A second post-end room could not legitimately be created because every currently reachable creator-video fixture rendered its backed unavailable-media state, so that exact T6 replay remains covered by the physical limitation rather than a fabricated room or content grant."
+    }
   },
   "entries": [
     {
@@ -331,8 +340,8 @@
       "firstFailedBoundary": "canonical host end completion to post-room navigation",
       "finding": "Exact-main Android proof showed that a successfully ended Party Room returned to the Waiting Room with the ended party id and room code. The Waiting Room correctly refused to resolve the inactive room, but its preserved handoff stayed on Connecting room, lost the creator-video selection and still displayed a create action, leaving a stale, misleading post-end state.",
       "repair": "After canonical exact-host end readback, route to the exact server-resolved content Player (including the creator-video source marker where applicable), or Live only when the ended room has no content source. Ordinary leave still preserves the current room handoff for legitimate re-entry. No room, membership, content, pass, payment or provider authority moves to route state.",
-      "proof": "The focused executable RFGC contract requires both end-without-saving and successful replay completion to use the exact room source destination, forbids the ended-room handoff on the end path, and preserves the existing leave/re-entry path. TypeScript, lint, route, navigation, money, Premium, Android/iOS and notification guards pass. Exact merged OTA and physical end-to-Player replay remain required.",
-      "disposition": "REPAIRED_UNPROVEN"
+      "proof": "The focused executable RFGC contract requires both end-without-saving and successful replay completion to use the exact room source destination, forbids the ended-room handoff on the end path, and preserves the existing leave/re-entry path. TypeScript, lint, route, navigation, money, Premium, Android/iOS and notification guards pass on exact head 033ad2020c44b6b27ee20f3d0c70024eb723724a; every substantive Phase 1 lane passed. PR #346 merged normally as c36762173f9f6ca513c2bd27a97766266a2ab548, and exact-source Android/iOS internal-v2 updates 01a07b4e-6c41-7ce9-9863-02090f96851b and 01a07b52-e222-7996-be92-78fb3465ce4a were published. The Android device physically loaded the exact update. Its currently reachable creator-video fixtures all rendered their backed unavailable-media state, so a second exact post-end T6 replay was not fabricated and remains recorded under RFGC-LIMIT-002.",
+      "disposition": "PROVEN"
     }
   ],
   "limitations": [
@@ -343,7 +352,7 @@
     },
     {
       "id": "RFGC-LIMIT-002",
-      "finding": "Physical Android/iOS evidence is limited to legitimately attached devices and already-authorized identities; signed, installed, physical, and public-canary tiers remain separate.",
+      "finding": "Physical Android/iOS evidence is limited to legitimately attached devices and already-authorized identities; signed, installed, physical, and public-canary tiers remain separate. At final convergence Android was attached and loaded the exact final OTA, but iOS was unavailable and every creator-video fixture reachable on Android rendered its backed unavailable-media state, so neither an iOS StoreKit replay nor a second post-end Party Room journey was fabricated.",
       "disposition": "EXTERNAL_BLOCKED"
     },
     {
@@ -354,8 +363,8 @@
   ],
   "counts": {
     "BLOCKING_OPEN": 0,
-    "REPAIRED_UNPROVEN": 1,
-    "PROVEN": 35,
+    "REPAIRED_UNPROVEN": 0,
+    "PROVEN": 36,
     "NONBLOCKING_DEBT": 0,
     "PROVIDER_SANDBOX_LIMITED": 2,
     "EXTERNAL_BLOCKED": 1,
