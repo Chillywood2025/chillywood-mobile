@@ -1,0 +1,71 @@
+{
+  "implementationPrNumber": 352,
+  "implementationBranch": "codex/pre-activation-group-b-fixture-producer-closure",
+  "implementationHead": "545bc04d6e596ec36d44c611400d97b839008d30",
+  "implementationTree": "fa8c0ebbf43965b6a74c86364cdc1dfbec0731b5",
+  "baseHead": "2c6244e888f83252ab0ea8dc0480ef7c23fe5445",
+  "changedFileHash": "70d79a3fe8849a4883a36d4ea3b51c9b853c28b137e660ff9f60dea105f63a80",
+  "migrationSetHash": "b11b8d992b56bc8120fd89023e8ef6e894735c3cb06e44097563862ddd4fafed",
+  "configHash": "bf0933f584b5e44a0159ae237dcb99714821f78ffd98702e50bb77d986cacc58",
+  "testResults": {
+    "phase1Ci": {
+      "status": "blocked_assurance_only",
+      "qualification": "EXACT_FROZEN_HEAD_SUBSTANTIVE_LANES_PASS_ASSURANCE_CONTEXT_UNBOUND",
+      "runId": 34147534763,
+      "implementationHead": "545bc04d6e596ec36d44c611400d97b839008d30",
+      "jobs": {
+        "total": 14,
+        "passed": 11,
+        "failedAssuranceOnly": 3,
+        "failedSubstantive": 0
+      },
+      "assuranceOnlyFindings": [
+        "ASSURANCE_TASK_CONTEXT_UNBOUND",
+        "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN",
+        "ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND",
+        "PHASE1_RISK_CLOSURE_PROTECTED_READY_DECISION_INVALID"
+      ]
+    },
+    "database": {
+      "reset": "pass",
+      "focusedPremiumDiscoveryEventCircleWatchParty": "455/455 pass",
+      "phase1SupabaseIntegration": "pass",
+      "lint": "pass with historical warnings only"
+    },
+    "static": {
+      "gitDiffCheck": "pass"
+    },
+    "security": {
+      "scanId": "6fa702bb-ddc6-4051-a536-cb4784045092",
+      "coverage": "complete 1/1 runtime review item plus changed tests",
+      "findings": 0,
+      "snapshotDigest": "codex-security-snapshot/v1:sha256:3c43fd1828eb664b54cbe7e38e9b3f894ad82a00beebf59eb20bafc4643125af"
+    }
+  },
+  "testResultHash": "3d06bbe18867c97bf7edf2f9529a7ebcf8c436d00508f68dea1ba8e9ff392988",
+  "reviewLevel": "C",
+  "reviewHead": "9b3dc95725002f00e42d6200aade2cd13b5d7969",
+  "reviewTimestamp": "2026-09-07T17:30:40Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback"
+  ],
+  "findings": [
+    {
+      "id": "RFGC-ASSURANCE-CONTROL-PLANE-FIXTURE-001",
+      "severity": "P2",
+      "status": "owner_authorized_preop_assurance_continuation",
+      "launchImpacting": false,
+      "detail": "Phase 1 executed at the exact implementation head. Eleven jobs passed and three failed only at the enumerated historical assurance/admission boundary after substantive suites passed. The run is not claimed as passed."
+    },
+    {
+      "id": "RFGC-PHYSICAL-MATRIX-PENDING-FIXTURE-002",
+      "severity": "P2",
+      "status": "postdeployment_tier_pending",
+      "launchImpacting": false,
+      "detail": "Installed discovery proof remains downstream of exact merge, migration deployment, affected Edge deployment, and internal-v2 OTA; source and integration evidence do not substitute for that tier."
+    }
+  ]
+}
