@@ -88,9 +88,15 @@ test("Party Room presents exact public content identity without exposing its int
   assert.match(partySetup, /resolveWatchPartyContentDisplay\(room\)/u);
   assert.match(partySetup, /contentTitle: nextPreview\.titleName/u);
   assert.match(partySetup, /contentTitle: entryTitleName/u);
-  assert.match(partyRoom, /contentTitle: contentTitleParam/u);
-  assert.match(partyRoom, /const routeDisplayHintMatchesExactSource = !!initialContentTitle[\s\S]{0,220}sourceTypeHint === exactSourceType[\s\S]{0,100}sourceIdHint === exactSourceId/u);
-  assert.match(partyRoom, /contentDisplay\?\.displayName \?\? \(routeDisplayHintMatchesExactSource \? initialContentTitle : null\)/u);
+  assert.match(partySetup, /rememberWatchPartyContentDisplayHandoff\(/u);
+  assert.doesNotMatch(partySetup, /contentTitle: nextContentTitle/u);
+  assert.doesNotMatch(partyRoom, /contentTitleParam|routeDisplayHintMatchesExactSource/u);
+  assert.match(partyContentSources, /contentDisplayHandoffs = new Map<string, WatchPartyContentDisplayHandoff>/u);
+  assert.match(partyContentSources, /DISPLAY_HANDOFF_TTL_MS = 5 \* 60 \* 1000/u);
+  assert.match(partyContentSources, /DISPLAY_HANDOFF_MAX_ENTRIES = 20/u);
+  assert.match(partyContentSources, /handoff\.sourceType !== input\.sourceType \|\| handoff\.sourceId !== sourceId/u);
+  assert.match(partyRoom, /readWatchPartyContentDisplayHandoff\(\{[\s\S]{0,180}partyId: snapshot\.room\.partyId[\s\S]{0,180}sourceId: exactSourceId/u);
+  assert.match(partyRoom, /contentDisplay\?\.displayName \?\? exactDisplayHandoff/u);
   assert.match(partyRoom, /setTitleName\(null\);[\s\S]{0,100}\[partyId\]/u);
   assert.match(
     partyRoom,

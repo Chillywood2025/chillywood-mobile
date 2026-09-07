@@ -67,6 +67,7 @@ import {
 import {
   resolveWatchPartyContentDisplay,
   resolveWatchPartyContentDisplayByParts,
+  rememberWatchPartyContentDisplayHandoff,
   resolveWatchPartySourceId,
   resolveWatchPartySourceType,
 } from "../../_lib/watchPartyContentSources";
@@ -668,13 +669,11 @@ export default function WatchPartyIndexScreen() {
     titleId?: string | null;
     sourceType?: WatchPartyContentSourceType | null;
     sourceId?: string | null;
-    contentTitle?: string | null;
   }) => {
     const nextRoomCode = String(options?.roomCode ?? "").trim().toUpperCase();
     const nextTitleId = String(options?.titleId ?? "").trim();
     const nextSourceType = options?.sourceType ?? (nextTitleId ? "platform_title" : null);
     const nextSourceId = String(options?.sourceId ?? nextTitleId ?? "").trim();
-    const nextContentTitle = String(options?.contentTitle ?? "").trim().slice(0, 140);
 
     return {
       partyId: nextPartyId,
@@ -682,7 +681,6 @@ export default function WatchPartyIndexScreen() {
       ...(nextTitleId ? { titleId: nextTitleId } : {}),
       ...(nextSourceType ? { sourceType: nextSourceType } : {}),
       ...(nextSourceId ? { sourceId: nextSourceId } : {}),
-      ...(nextContentTitle ? { contentTitle: nextContentTitle } : {}),
       ...(isPlayerWatchPartyLiveFlow ? { source: PLAYER_WATCH_PARTY_SOURCE } : {}),
     };
   }, [isPlayerWatchPartyLiveFlow]);
@@ -696,12 +694,19 @@ export default function WatchPartyIndexScreen() {
 	    sourceId?: string | null;
 	    contentTitle?: string | null;
 	  }) => {
+	    if (options.roomType !== "live") {
+	      rememberWatchPartyContentDisplayHandoff({
+	        partyId: options.partyId,
+	        sourceType: options.sourceType ?? (options.titleId ? "platform_title" : null),
+	        sourceId: options.sourceId ?? options.titleId ?? null,
+	        displayName: options.contentTitle ?? null,
+	      });
+	    }
 	    const params = buildRoomEntryParams(options.partyId, {
 	      roomCode: options.roomCode,
 	      titleId: options.titleId,
 	      sourceType: options.sourceType,
 	      sourceId: options.sourceId,
-	      contentTitle: options.contentTitle,
 	    });
 
     if (options.roomType === "live") {
