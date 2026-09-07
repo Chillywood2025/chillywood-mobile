@@ -152,6 +152,10 @@ test("Party Room and Live Stage host ending use an explicitly deployed, self-aut
   assert.match(replayFunction, /if \(!data\?\.party_id\) throw new Error\("party_room_end_failed:room_not_found"\)/u);
   assert.match(partyRoom, /action: "end_without_saving"[\s\S]{0,120}sourceType: "watch_party_live"/u);
   assert.match(liveStage, /action: "end_without_saving"[\s\S]{0,120}sourceType: "live_stage"/u);
+  assert.match(partyRoom, /const returnAfterPartyRoomEnd = useCallback\(\(\) => \{[\s\S]*?room\?\.sourceId[\s\S]*?pathname: "\/player\/\[id\]"[\s\S]*?exactSourceType === "creator_video"[\s\S]*?router\.replace\("\/\(tabs\)\/live"\)/u);
+  assert.match(partyRoom, /action: "end_without_saving"[\s\S]{0,180}returnAfterPartyRoomEnd\(\)/u);
+  assert.match(partyRoom, /"Replay is processing"[\s\S]{0,240}onPress: returnAfterPartyRoomEnd/u);
+  assert.doesNotMatch(partyRoom, /action: "end_without_saving"[\s\S]{0,180}returnToWatchPartyEntry\(\)/u);
 });
 
 test("Live Stage creator setup separates viewer entry from speaking-seat eligibility", () => {

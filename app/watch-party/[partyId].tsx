@@ -369,6 +369,23 @@ export default function WatchPartyRoomScreen() {
   const [notFound, setNotFound] = useState(false);
   const [titleName, setTitleName] = useState<string | null>(null);
   const [sourceAttribution, setSourceAttribution] = useState<string | null>(null);
+  const returnAfterPartyRoomEnd = useCallback(() => {
+    const exactSourceType = room?.sourceType ?? (room?.titleId ? "platform_title" : null);
+    const exactSourceId = String(room?.sourceId ?? room?.titleId ?? "").trim();
+
+    if (exactSourceId) {
+      router.replace({
+        pathname: "/player/[id]",
+        params: {
+          id: exactSourceId,
+          ...(exactSourceType === "creator_video" ? { source: "creator-video" } : {}),
+        },
+      });
+      return;
+    }
+
+    router.replace("/(tabs)/live");
+  }, [room?.sourceId, room?.sourceType, room?.titleId, router]);
 
   useEffect(() => {
     setTitleName(null);
@@ -1811,7 +1828,7 @@ export default function WatchPartyRoomScreen() {
         partyId,
         sourceType: "watch_party_live",
       });
-      returnToWatchPartyEntry();
+      returnAfterPartyRoomEnd();
     } catch (error) {
       Alert.alert(
         "Could not end room",
@@ -1820,7 +1837,7 @@ export default function WatchPartyRoomScreen() {
     } finally {
       setSaveReplayEnding(false);
     }
-  }, [partyId, returnToWatchPartyEntry, saveReplayEnding]);
+  }, [partyId, returnAfterPartyRoomEnd, saveReplayEnding]);
 
   const endPartyRoomAndSaveReplay = useCallback(async () => {
     if (!partyId || saveReplayEnding) return;
@@ -1835,7 +1852,7 @@ export default function WatchPartyRoomScreen() {
       Alert.alert(
         "Replay is processing",
         result.message || "Replay is processing. You'll see it in Content Library when it's ready.",
-        [{ text: "OK", onPress: returnToWatchPartyEntry }],
+        [{ text: "OK", onPress: returnAfterPartyRoomEnd }],
       );
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : "";
@@ -1854,7 +1871,7 @@ export default function WatchPartyRoomScreen() {
     } finally {
       setSaveReplayEnding(false);
     }
-  }, [endPartyRoomWithoutSaving, partyId, returnToWatchPartyEntry, room?.titleId, saveReplayEnding]);
+  }, [endPartyRoomWithoutSaving, partyId, returnAfterPartyRoomEnd, room?.titleId, saveReplayEnding]);
 
   const onEndPartyRoomAsHost = useCallback(() => {
     if (myRoleRef.current !== "host") {
