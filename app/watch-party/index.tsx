@@ -7,7 +7,7 @@ import {
     resolveFeatureConfig,
     resolveMonetizationConfig,
 } from "../../_lib/appConfig";
-import { getAppMonetizationRuntimeFeatures } from "../../_lib/featureFlags";
+import { isCreatorDigitalCheckoutShellAvailable } from "../../_lib/creatorMoneyPurchaseAuthority";
 import {
   resolveRoomAccess,
   type RoomAccessResolution,
@@ -352,8 +352,7 @@ export default function WatchPartyIndexScreen() {
   }, []);
 
   const paidWatchPartyCheckoutAvailable = useMemo(() => {
-    const runtime = getAppMonetizationRuntimeFeatures();
-    return runtime.liveMoneyEnabled && runtime.paidContentCheckoutEnabled;
+    return isCreatorDigitalCheckoutShellAvailable();
   }, []);
 
   useEffect(() => {
@@ -1573,6 +1572,12 @@ export default function WatchPartyIndexScreen() {
     activeRoomContext || topRoomCode || partyTitleId || partySourceId || isPreparingInitialCode || didInitialCodePrepFail,
   );
   const shouldShowWaitingRoomInviteSection = Boolean(topRoomCode || isPreparingInitialCode || didInitialCodePrepFail);
+  const paidTicketPriceLabel = paidTicketGate?.requiresPurchase
+    && typeof paidTicketGate.priceCents === "number"
+    && !!paidTicketGate.currency
+    ? formatPaidWatchPartyTicketPrice(paidTicketGate.priceCents, paidTicketGate.currency)
+    : null;
+  const paidTicketCheckoutReady = paidWatchPartyCheckoutAvailable && !!paidTicketPriceLabel;
   const roomCodeButtonLabel = topRoomCode ? "Generate New Code" : "Generate Room Code";
   const watchPartyPremiumGatePresentation = watchPartyPremiumGate
     ? getMonetizationAccessSheetPresentation({
@@ -1688,20 +1693,20 @@ export default function WatchPartyIndexScreen() {
             ) : paidTicketGate?.requiresPurchase ? (
               <>
                 <TouchableOpacity
-                  style={[styles.generateCodeButton, (paidTicketBusy || !paidWatchPartyCheckoutAvailable) && styles.generateCodeButtonDisabled]}
+                  style={[styles.generateCodeButton, (paidTicketBusy || !paidTicketCheckoutReady) && styles.generateCodeButtonDisabled]}
                   onPress={onBuyPaidTicketAndJoin}
                   activeOpacity={0.85}
-                  disabled={paidTicketBusy || !paidWatchPartyCheckoutAvailable}
+                  disabled={paidTicketBusy || !paidTicketCheckoutReady}
                   testID="tester-watch-party-ticket-button"
                   accessibilityRole="button"
-                  accessibilityLabel={paidWatchPartyCheckoutAvailable ? "Join Party Room with Party Room Pass" : "Party Room Pass unavailable"}
-                  accessibilityState={{ disabled: paidTicketBusy || !paidWatchPartyCheckoutAvailable, busy: paidTicketBusy }}
+                  accessibilityLabel={paidTicketCheckoutReady ? `Join Party Room for ${paidTicketPriceLabel}` : "Party Room Pass unavailable"}
+                  accessibilityState={{ disabled: paidTicketBusy || !paidTicketCheckoutReady, busy: paidTicketBusy }}
                 >
                   <AppText scale="footnote" style={styles.generateCodeButtonText}>
-                    {paidTicketBusy ? "Opening Store" : paidWatchPartyCheckoutAvailable ? "Join Party Room" : "Party Room Pass unavailable"}
+                    {paidTicketBusy ? "Opening Store" : paidTicketCheckoutReady ? `Join Party Room — ${paidTicketPriceLabel}` : "Party Room Pass unavailable"}
                   </AppText>
                 </TouchableOpacity>
-                {!paidWatchPartyCheckoutAvailable ? (
+                {!paidTicketCheckoutReady ? (
                   <AppText scale="footnote" style={styles.errorText}>
                     Party Room Pass is not available right now. Nothing was charged.
                   </AppText>
@@ -1961,26 +1966,26 @@ export default function WatchPartyIndexScreen() {
                     <Pressable
                       style={({ pressed }) => [
                         styles.joinNowBtn,
-                        (paidTicketBusy || !paidWatchPartyCheckoutAvailable) && styles.primaryButtonDisabled,
+                        (paidTicketBusy || !paidTicketCheckoutReady) && styles.primaryButtonDisabled,
                         pressed && styles.previewActionPressed,
                       ]}
                       onPress={onBuyPaidTicketAndJoin}
-                      disabled={paidTicketBusy || !paidWatchPartyCheckoutAvailable}
+                      disabled={paidTicketBusy || !paidTicketCheckoutReady}
                       accessibilityRole="button"
-                      accessibilityLabel={paidWatchPartyCheckoutAvailable ? "Join Party Room with Party Room Pass" : "Party Room Pass unavailable"}
-                      accessibilityState={{ disabled: paidTicketBusy || !paidWatchPartyCheckoutAvailable, busy: paidTicketBusy }}
+                      accessibilityLabel={paidTicketCheckoutReady ? `Join Party Room for ${paidTicketPriceLabel}` : "Party Room Pass unavailable"}
+                      accessibilityState={{ disabled: paidTicketBusy || !paidTicketCheckoutReady, busy: paidTicketBusy }}
                       hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                       testID="tester-watch-party-ticket-button"
                     >
                       <AppText scale="body" style={styles.joinNowBtnText}>
                         {paidTicketBusy
                           ? "Opening Store"
-                          : paidWatchPartyCheckoutAvailable
-                            ? `Join Party Room — ${formatPaidWatchPartyTicketPrice(paidTicketGate.priceCents ?? 99, paidTicketGate.currency ?? "usd")}`
+                          : paidTicketCheckoutReady
+                            ? `Join Party Room — ${paidTicketPriceLabel}`
                             : "Party Room Pass unavailable"}
                       </AppText>
                     </Pressable>
-                    {!paidWatchPartyCheckoutAvailable ? (
+                    {!paidTicketCheckoutReady ? (
                       <AppText scale="footnote" style={styles.errorText}>
                         Party Room Pass is not available right now. Nothing was charged.
                       </AppText>

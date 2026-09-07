@@ -235,9 +235,12 @@ const findUnsafeThrownErrors = (source) => {
       const argumentPath = throwPath.get("argument");
       const calleePath = argumentPath.isNewExpression() ? argumentPath.get("callee") : null;
       const argumentPaths = argumentPath.isNewExpression() ? argumentPath.get("arguments") : [];
-      const message = calleePath?.isIdentifier({ name: "Error" })
-        ? evaluateStringPath(argumentPaths[0])
-        : null;
+      const messagePath = calleePath?.isIdentifier({ name: "Error" })
+        ? argumentPaths[0]
+        : calleePath?.isIdentifier({ name: "UserFacingError" })
+          ? argumentPaths[1]
+          : null;
+      const message = messagePath ? evaluateStringPath(messagePath) : null;
       if (message === null || !approvedCircleErrors.has(message)) unsafe.push(throwPath.node.type);
     },
   });

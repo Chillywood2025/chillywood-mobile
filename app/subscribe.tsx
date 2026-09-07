@@ -347,7 +347,7 @@ export default function SubscribeScreen() {
     }
 
     setPurchaseBusy(true);
-    setNotice("Opening Premium...");
+    setNotice(`Opening ${STORE_PROVIDER_NAME}…`);
     trackEvent("premium_subscribe_purchase_requested", {
       source: "subscribe",
       snapshotStatus: snapshot.status,
@@ -360,8 +360,15 @@ export default function SubscribeScreen() {
         userId: user?.id ?? null,
         packageId: requestedPackageId,
         purchaseMode: requestedPurchaseMode,
+        onPhase: (phase) => {
+          setNotice(phase === "store_processing"
+            ? `${STORE_PROVIDER_NAME} is processing the subscription…`
+            : phase === "restoring_existing"
+              ? "Existing subscription found. Restoring it to this account…"
+              : "Verifying Premium access…");
+        },
       });
-      setNotice(result.ok ? result.message : FRIENDLY_UNAVAILABLE_MESSAGE);
+      setNotice(result.message);
       setSnapshot(result.snapshot);
     } catch {
       setNotice("Unable to start Premium purchase right now.");
@@ -400,9 +407,18 @@ export default function SubscribeScreen() {
     });
 
     try {
-      const result = await restoreMonetizationAccess({ purchaseMode: activePurchaseMode, userId: user?.id ?? null });
-      const restoredPremium = !!result.snapshot.targets.premium_subscription.hasEntitlement;
-      setNotice(restoredPremium ? "Purchases restored. Premium is active." : "Restore complete. Premium is not active.");
+      const result = await restoreMonetizationAccess({
+        purchaseMode: activePurchaseMode,
+        userId: user?.id ?? null,
+        onPhase: (phase) => {
+          setNotice(phase === "verifying_authority"
+            ? "Verifying restored Premium access…"
+            : "Restoring purchases for this account…");
+        },
+      });
+      setNotice(result.snapshot.targets.premium_subscription.hasEntitlement
+        ? "Purchases restored. Premium is active."
+        : result.message);
       setSnapshot(result.snapshot);
     } catch {
       setNotice("Unable to restore purchases right now.");
@@ -563,7 +579,7 @@ export default function SubscribeScreen() {
           </View>
 
           {notice ? (
-            <View style={styles.noticeCard}>
+            <View style={styles.noticeCard} accessibilityLiveRegion="polite">
               <Text style={styles.noticeText}>{notice}</Text>
             </View>
           ) : null}

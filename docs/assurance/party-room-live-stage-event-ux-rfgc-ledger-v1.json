@@ -21,6 +21,15 @@
     "databaseAndIntegration": "Clean local Supabase reset followed by 81 pgTAP files and 3,023 tests, including the new entry-first and seat-state closure test, all passing",
     "providerAndPhysicalLimits": "Positive store and physical-device states remain separately classified below; no receipt, role, pass, transaction, approval, balance, or device identity was fabricated"
   },
+  "continuationProof": {
+    "resumeProtectedMain": {
+      "sha": "63988b08364cce8905f536b0805a07b18f0fa87c",
+      "tree": "374058b8398e0e59ec15513397551f8d186c6a01"
+    },
+    "sourceAndModel": "Exact provider-existing-purchase recovery, sandbox checkout-shell, Party Waiting Room/Room, Paid Video, Platform Subscription, Live Stage and account-generation adversarial coverage plus TypeScript, lint and focused route/money/native guards",
+    "databaseAndIntegration": "Clean local Supabase reset followed by 82 pgTAP files and 3,042 tests, including 19 free-room/default/host/block/session/route-separation proofs, all passing",
+    "productionSafety": "Live production money, payouts and cashout remain off; the repair does not change provider product identity, grants, settlements, reserves or LiveKit authority"
+  },
   "entries": [
     {
       "id": "RFGC-UX-001",
@@ -205,6 +214,54 @@
       "finding": "Generic creator setup could describe Live Stage products as App Store-backed on iOS even though #329 binds those exact sandbox products to Google Play, while iPhone viewer surfaces still rendered purchase CTAs that could only fail after a tap.",
       "repair": "Keep both Live Stage product tiers bound to Google Play, disclose the Android-only sandbox reach in creator setup and confirmation copy, suppress unavailable viewer purchase controls on iPhone/non-Android builds, and make the internal diagnostic explain the same provider boundary without changing product identity.",
       "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-024",
+      "class": "party_room_sandbox_checkout_shell",
+      "firstFailedBoundary": "Party Waiting Room and Party Room checkout availability",
+      "finding": "The customer checkout shell treated live production-money activation as the authority for an otherwise valid closed-beta provider sandbox purchase, so an exact paid Party Room could be shown as unavailable while production money correctly remained off.",
+      "repair": "Use one bounded mobile/provider checkout-shell policy that admits either the existing production switch pair or closed-beta sandbox with live money, payouts and cashout all off; exact account, tester, intent, provider, product, buyer, creator, target, receipt and grant checks remain unchanged downstream.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-025",
+      "class": "party_room_free_default_and_price_identity",
+      "firstFailedBoundary": "exact Party Room access resolution",
+      "finding": "A later authority wrapper replaced no-exact-offer free_room with seat_pass_not_available, and the Room UI then invented a $0.99 fallback, making a fresh free room appear paid. Owner status and underlying content monetization were not the cause.",
+      "repair": "Restore free_room only for one exact active title room with no current paid offer, retain authentication/current-session/restriction/host-block checks, delegate every paid or historical case to hardened authority, and remove invented price/currency fallbacks from both Party surfaces.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-026",
+      "class": "premium_existing_subscription_convergence",
+      "firstFailedBoundary": "RevenueCat purchase-error recovery",
+      "finding": "When the App Store reported an already-owned Premium subscription, the app polled backend authority without first running exact-account RevenueCat restore/reconciliation, then replaced the actionable result with generic inactive copy.",
+      "repair": "Recognize only the provider's exact already-owned signal, restore under the unchanged current account/session binding, poll authoritative backend Premium on a bounded state machine, preserve actionable delayed/different-account outcomes, and never treat provider state alone as entitlement authority.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-027",
+      "class": "platform_subscription_existing_subscription_convergence",
+      "firstFailedBoundary": "recurring creator-subscription recovery",
+      "finding": "The same recurring-subscription class lacked existing-purchase reconciliation and a visible exact-target Restore action.",
+      "repair": "Add current-account provider restore, exact creator subscription authority polling, bounded actionable states and an accessible Restore control without merging Platform Subscription with Premium or any room/Event pass.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-028",
+      "class": "live_stage_provider_client_race_convergence",
+      "firstFailedBoundary": "provider completion error path",
+      "finding": "Live Stage entry and seat purchases polled exact backend authority after a normal provider return but not after a non-cancellation provider/client race, allowing a completed exact grant to leave stale purchase UI.",
+      "repair": "Poll current-account, exact live target, exact offer and exact pass type after non-cancellation provider errors; confirm only server-backed entry or seat eligibility and preserve host approval and LiveKit publish separation.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-029",
+      "class": "customer_error_guard_composition",
+      "firstFailedBoundary": "post-#340 navigation terminology proof",
+      "finding": "The navigation terminology guard understood approved static Error messages but not #340's typed UserFacingError(message) constructor, creating a false launch-check failure on unchanged safe Chi'lly Circle copy.",
+      "repair": "Teach the AST guard to evaluate the typed customer-safe message argument while continuing to reject dynamic, missing, unapproved or other thrown values.",
+      "disposition": "PROVEN"
     }
   ],
   "limitations": [
@@ -217,14 +274,19 @@
       "id": "RFGC-LIMIT-002",
       "finding": "Physical Android/iOS evidence is limited to legitimately attached devices and already-authorized identities; signed, installed, physical, and public-canary tiers remain separate.",
       "disposition": "EXTERNAL_BLOCKED"
+    },
+    {
+      "id": "RFGC-LIMIT-003",
+      "finding": "Signed-in RevenueCat dashboard readback was unavailable to current tooling, so the private Apple sandbox account and provider subscriber identifier are not asserted from source or Apple UI alone; reconciliation remains exact-account and fail-closed.",
+      "disposition": "PROVIDER_SANDBOX_LIMITED"
     }
   ],
   "counts": {
     "BLOCKING_OPEN": 0,
     "REPAIRED_UNPROVEN": 0,
-    "PROVEN": 23,
+    "PROVEN": 29,
     "NONBLOCKING_DEBT": 0,
-    "PROVIDER_SANDBOX_LIMITED": 1,
+    "PROVIDER_SANDBOX_LIMITED": 2,
     "EXTERNAL_BLOCKED": 1,
     "NOT_A_DEFECT": 0
   }
