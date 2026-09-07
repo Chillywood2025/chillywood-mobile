@@ -67,6 +67,7 @@ import {
 import {
   resolveWatchPartyContentDisplay,
   resolveWatchPartyContentDisplayByParts,
+  rememberWatchPartyContentDisplayHandoff,
   resolveWatchPartySourceId,
   resolveWatchPartySourceType,
 } from "../../_lib/watchPartyContentSources";
@@ -691,7 +692,16 @@ export default function WatchPartyIndexScreen() {
 	    titleId?: string | null;
 	    sourceType?: WatchPartyContentSourceType | null;
 	    sourceId?: string | null;
+	    contentTitle?: string | null;
 	  }) => {
+	    if (options.roomType !== "live") {
+	      rememberWatchPartyContentDisplayHandoff({
+	        partyId: options.partyId,
+	        sourceType: options.sourceType ?? (options.titleId ? "platform_title" : null),
+	        sourceId: options.sourceId ?? options.titleId ?? null,
+	        displayName: options.contentTitle ?? null,
+	      });
+	    }
 	    const params = buildRoomEntryParams(options.partyId, {
 	      roomCode: options.roomCode,
 	      titleId: options.titleId,
@@ -727,7 +737,7 @@ export default function WatchPartyIndexScreen() {
       pathname: "/watch-party/[partyId]",
       params,
     });
-  }, [buildRoomEntryParams, router]);
+  }, [buildRoomEntryParams, isPlayerWatchPartyLiveFlow, router]);
 
   const navigateToPreviewRoom = useCallback((nextPreview: RoomPreview) => {
     const nextPartyId = String(nextPreview.room.partyId ?? "").trim();
@@ -743,6 +753,7 @@ export default function WatchPartyIndexScreen() {
       titleId: nextPreview.room.titleId,
       sourceType: nextPreview.room.sourceType,
       sourceId: nextPreview.room.sourceId,
+      contentTitle: nextPreview.titleName,
     });
   }, [navigateToRoom]);
 
@@ -1255,6 +1266,7 @@ export default function WatchPartyIndexScreen() {
               titleId: preparedTargetTitleId,
               sourceType: defaultSourceType,
               sourceId: defaultSourceId || null,
+              contentTitle: entryTitleName,
             });
             return;
           }
@@ -1296,6 +1308,7 @@ export default function WatchPartyIndexScreen() {
         titleId: room.titleId,
         sourceType: room.sourceType,
         sourceId: room.sourceId,
+        contentTitle: entryTitleName,
       });
     } catch (error) {
       reportRuntimeError("watch-party-create", error, {

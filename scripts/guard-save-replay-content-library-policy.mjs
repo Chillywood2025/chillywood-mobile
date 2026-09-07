@@ -23,12 +23,13 @@ const migration = read("supabase/migrations/20260623025334_save_replay_content_l
 const saveReplayFunction = read("supabase/functions/request-save-replay/index.ts");
 const replayPlayerRoute = read("app/player/replay/[replayId].tsx");
 const replayPlaybackFunction = read("supabase/functions/creator-replay-playback/index.ts");
+const supabaseConfig = read("supabase/config.toml");
 
 assertIncludes(tabLayout, "title: 'Saved'", "bottom tab viewer Library label");
 assertIncludes(viewerLibrary, "My Library", "viewer Library screen header");
 assertIncludes(viewerLibrary, "Saved titles, watch progress, followed Platforms, and saved replays live here.", "viewer Library scope copy");
 assertIncludes(studio, "Content Library", "Platform Studio Content Library copy");
-assertIncludes(studio, "Save Replay sends host replays here first.", "Save Replay Content Library destination copy");
+assertIncludes(studio, "A clean library of your uploads, drafts, paid videos, Circle media, replays, and events.", "Save Replay Content Library destination copy");
 assertIncludes(studio, 'pathname: "/player/replay/[replayId]"', "Content Library replay Open route");
 
 [watchParty, liveStage].forEach((source, index) => {
@@ -65,6 +66,11 @@ assertIncludes(studio, 'pathname: "/player/replay/[replayId]"', "Content Library
   "fullRoomTokenForSpectators: false",
   "liveKitPublishAuthorityGranted: false",
 ].forEach((needle) => assertIncludes(saveReplayFunction, needle, "request-save-replay function"));
+
+assertIncludes(supabaseConfig, "[functions.request-save-replay]\nverify_jwt = false", "request-save-replay explicit deployment/auth config");
+assertIncludes(saveReplayFunction, "authenticateRequest(req)", "request-save-replay self-authentication");
+assertIncludes(saveReplayFunction, '.select("party_id")', "exact room end write readback");
+assertIncludes(saveReplayFunction, "party_room_end_failed:room_not_found", "exact room end missing-target failure");
 
 assertIncludes(saveReplayFunction, 'sourceType === "watch_party_live" && toText(room.source_type) === "platform_title"', "Watch-Party Live protected title replay block");
 assertIncludes(replayLib, "CREATOR_REPLAY_LIBRARY_ITEMS_TABLE", "creator replay helper");

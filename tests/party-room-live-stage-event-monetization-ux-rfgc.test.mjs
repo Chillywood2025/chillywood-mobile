@@ -23,6 +23,8 @@ const webhook = read("supabase/functions/revenuecat-webhook/index.ts");
 const liveKit = read("supabase/functions/livekit-token/index.ts");
 const migration = read("supabase/migrations/20260902091803_party_room_live_stage_event_ux_rfgc.sql");
 const authorityMigration = read("supabase/migrations/20260901010000_watch_party_live_money_rfgc_closure.sql");
+const replayFunction = read("supabase/functions/request-save-replay/index.ts");
+const supabaseConfig = read("supabase/config.toml");
 
 test("display-layer product names map onto unchanged internal authority identifiers", () => {
   const expected = [
@@ -84,7 +86,27 @@ test("Party Room presents exact public content identity without exposing its int
 
   assert.match(partySetup, /resolveWatchPartyContentDisplayByParts/u);
   assert.match(partySetup, /resolveWatchPartyContentDisplay\(room\)/u);
-  assert.match(partyRoom, /resolveWatchPartyContentDisplay\(snapshot\.room\)/u);
+  assert.match(partySetup, /contentTitle: nextPreview\.titleName/u);
+  assert.match(partySetup, /contentTitle: entryTitleName/u);
+  assert.match(partySetup, /rememberWatchPartyContentDisplayHandoff\(/u);
+  assert.doesNotMatch(partySetup, /contentTitle: nextContentTitle/u);
+  assert.doesNotMatch(partyRoom, /contentTitleParam|routeDisplayHintMatchesExactSource/u);
+  assert.match(partyContentSources, /contentDisplayHandoffs = new Map<string, WatchPartyContentDisplayHandoff>/u);
+  assert.match(partyContentSources, /DISPLAY_HANDOFF_TTL_MS = 5 \* 60 \* 1000/u);
+  assert.match(partyContentSources, /DISPLAY_HANDOFF_MAX_ENTRIES = 20/u);
+  assert.match(partyContentSources, /handoff\.sourceType !== input\.sourceType \|\| handoff\.sourceId !== sourceId/u);
+  assert.match(partyRoom, /readWatchPartyContentDisplayHandoff\(\{[\s\S]{0,180}partyId: snapshot\.room\.partyId[\s\S]{0,180}sourceId: exactSourceId/u);
+  assert.match(partyRoom, /contentDisplay\?\.displayName \?\? exactDisplayHandoff/u);
+  assert.match(partyRoom, /setTitleName\(null\);[\s\S]{0,100}\[partyId\]/u);
+  assert.match(
+    partyRoom,
+    /const contentDisplay = snapshot\.room\.roomType === "live"[\s\S]{0,180}await resolveWatchPartyContentDisplay\(snapshot\.room\)\.catch\(\(\) => null\);/u,
+  );
+  assert.match(partyRoom, /if \(cancelled\) return;[\s\S]{0,620}contentDisplay\?\.displayName/u);
+  assert.doesNotMatch(
+    partyRoom,
+    /resolveWatchPartyContentDisplay\(snapshot\.room\)[\s\S]{0,80}\.then\(/u,
+  );
   assert.doesNotMatch(partyRoom, /resolveWatchPartyContentSource\(snapshot\.room\)/u);
   const displayResolverStart = partyContentSources.indexOf("export async function resolveWatchPartyContentDisplayByParts");
   const playbackResolverStart = partyContentSources.indexOf("export async function resolveWatchPartyContentSourceByParts");
@@ -92,6 +114,17 @@ test("Party Room presents exact public content identity without exposing its int
   assert.ok(displayResolverStart >= 0 && playbackResolverStart > displayResolverStart);
   assert.match(displayResolver, /readPublicCreatorVideoMetadata\(sourceId\)/u);
   assert.doesNotMatch(displayResolver, /readCreatorVideoForPlayer|resolveSignedVideoPlaybackSource|readSpectatorPlaybackReadout/u);
+});
+
+test("Party Room and Live Stage host ending use an explicitly deployed, self-authenticating exact-room function", () => {
+  assert.match(supabaseConfig, /\[functions\.request-save-replay\]\s+verify_jwt = false/u);
+  assert.match(replayFunction, /authenticateRequest\(req\)/u);
+  assert.match(replayFunction, /toText\(room\.host_user_id\) !== authResult\.user\.id/u);
+  assert.match(replayFunction, /\.eq\("party_id", partyId\)\s+\.select\("party_id"\)\s+\.maybeSingle\(\)/u);
+  assert.match(replayFunction, /if \(error\) throw new Error\(`party_room_end_failed:/u);
+  assert.match(replayFunction, /if \(!data\?\.party_id\) throw new Error\("party_room_end_failed:room_not_found"\)/u);
+  assert.match(partyRoom, /action: "end_without_saving"[\s\S]{0,120}sourceType: "watch_party_live"/u);
+  assert.match(liveStage, /action: "end_without_saving"[\s\S]{0,120}sourceType: "live_stage"/u);
 });
 
 test("Live Stage creator setup separates viewer entry from speaking-seat eligibility", () => {

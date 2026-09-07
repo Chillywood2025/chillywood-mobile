@@ -227,14 +227,18 @@ const safeTitle = (payload: ReplayPayload, sourceType: string, partyId: string) 
 };
 
 const markRoomEnded = async (adminClient: SupabaseClientLike, partyId: string) => {
-  await adminClient
+  const { data, error } = await adminClient
     .from("watch_party_rooms")
     .update({
       is_active: false,
       last_activity_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
-    .eq("party_id", partyId);
+    .eq("party_id", partyId)
+    .select("party_id")
+    .maybeSingle();
+  if (error) throw new Error(`party_room_end_failed:${error.message}`);
+  if (!data?.party_id) throw new Error("party_room_end_failed:room_not_found");
 };
 
 const endWithoutSaving = async (adminClient: SupabaseClientLike, partyId: string) => {

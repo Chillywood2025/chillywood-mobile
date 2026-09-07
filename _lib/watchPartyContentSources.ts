@@ -17,6 +17,13 @@ type PublicCreatorVideoMetadataRow = {
   title: string | null;
 };
 
+type WatchPartyContentDisplayHandoff = {
+  createdAt: number;
+  displayName: string;
+  sourceId: string;
+  sourceType: WatchPartyContentSourceType;
+};
+
 export type CreatorVideoWatchPartyBlockReason =
   | "unavailable"
   | "draft"
@@ -42,6 +49,58 @@ export type WatchPartyResolvedContentDisplay = Pick<
 >;
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const DISPLAY_HANDOFF_TTL_MS = 5 * 60 * 1000;
+const DISPLAY_HANDOFF_MAX_ENTRIES = 20;
+const contentDisplayHandoffs = new Map<string, WatchPartyContentDisplayHandoff>();
+
+const normalizePartyId = (value: unknown) => toText(value).toUpperCase();
+
+const pruneContentDisplayHandoffs = (now: number) => {
+  for (const [partyId, handoff] of contentDisplayHandoffs) {
+    if (now - handoff.createdAt > DISPLAY_HANDOFF_TTL_MS) contentDisplayHandoffs.delete(partyId);
+  }
+  while (contentDisplayHandoffs.size > DISPLAY_HANDOFF_MAX_ENTRIES) {
+    const oldestPartyId = contentDisplayHandoffs.keys().next().value;
+    if (typeof oldestPartyId !== "string") break;
+    contentDisplayHandoffs.delete(oldestPartyId);
+  }
+};
+
+export const rememberWatchPartyContentDisplayHandoff = (input: {
+  partyId: string;
+  sourceType: WatchPartyContentSourceType | null;
+  sourceId: string | null;
+  displayName: string | null;
+}) => {
+  const partyId = normalizePartyId(input.partyId);
+  const sourceId = toText(input.sourceId);
+  const displayName = toText(input.displayName).slice(0, 140);
+  if (!partyId || !input.sourceType || !sourceId || !displayName) return;
+  const now = Date.now();
+  pruneContentDisplayHandoffs(now);
+  contentDisplayHandoffs.delete(partyId);
+  contentDisplayHandoffs.set(partyId, {
+    createdAt: now,
+    displayName,
+    sourceId,
+    sourceType: input.sourceType,
+  });
+  pruneContentDisplayHandoffs(now);
+};
+
+export const readWatchPartyContentDisplayHandoff = (input: {
+  partyId: string;
+  sourceType: WatchPartyContentSourceType | null;
+  sourceId: string | null;
+}) => {
+  const partyId = normalizePartyId(input.partyId);
+  const sourceId = toText(input.sourceId);
+  const now = Date.now();
+  pruneContentDisplayHandoffs(now);
+  const handoff = contentDisplayHandoffs.get(partyId);
+  if (!handoff || handoff.sourceType !== input.sourceType || handoff.sourceId !== sourceId) return null;
+  return handoff.displayName;
+};
 
 const readPublicCreatorVideoMetadata = async (sourceId: string) => {
   const { data: rawData, error } = await supabase

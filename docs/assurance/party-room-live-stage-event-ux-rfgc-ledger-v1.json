@@ -283,10 +283,28 @@
     {
       "id": "RFGC-UX-031",
       "class": "party_room_content_identity_convergence",
-      "firstFailedBoundary": "Party Room display metadata resolution",
-      "finding": "Final Android smoke proved that the waiting room eventually rendered the exact public creator-video title, but the Party Room remained on Shared content because its display-only title lookup was coupled to the heavier playback-and-entitlement source resolver.",
-      "repair": "Separate exact public display metadata resolution from playback authority resolution and use the display-only resolver in both Party Waiting Room and Party Room; playback, access, Premium, pass and media authority remain unchanged.",
-      "proof": "The focused executable RFGC contract requires both Party surfaces to use the exact public display resolver and rejects playback, signed-source and entitlement work inside that resolver; TypeScript, lint and affected media, route, LiveKit and monetization guards pass.",
+      "firstFailedBoundary": "Waiting Room to Party Room display-context handoff",
+      "finding": "Final Android smoke first proved that the Party Room display lookup was coupled to the heavier playback-and-entitlement resolver. After that was separated, exact-main physical replay showed the remaining consumer defect: the Waiting Room resolved the exact public creator-video title but discarded it when routing, while Party Room launched a new display read as an unawaited, failure-swallowing side task and remained on Shared content despite the exact room/source row and public title being present.",
+      "repair": "Keep exact public display metadata separate from playback authority, carry the title resolved for the exact room source through a bounded in-process handoff keyed by exact party/source identity, and make Party Room bootstrap await its exact-target server refresh. User-controlled route parameters cannot supply the title fallback; cold/deep-link entry resolves from the exact server source. Playback, access, Premium, pass and media authority remain unchanged.",
+      "proof": "The focused executable RFGC contract requires the exact source-aware Waiting Room handoff, exact party/source matching at Party Room consumption, bounded expiry/entry count, and an awaited exact-target server refresh; it rejects a route title parameter, floating .then consumer, and playback, signed-source or entitlement work inside the display resolver. TypeScript, lint and affected media, route, LiveKit and monetization guards pass. Exact-main physical replay remains required after merge/OTA.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-032",
+      "class": "party_room_live_stage_host_end_edge_availability",
+      "firstFailedBoundary": "request-save-replay Edge gateway routing",
+      "finding": "Final Android Party Room cleanup displayed Could not end room and the exact room remained active. Readback proved the shared request-save-replay deployment registry claimed ACTIVE while its HTTPS route returned function_not_found and its bundle could not be retrieved; the source also lacked explicit function config, and both Party Room and Live Stage depend on this same host-ending boundary.",
+      "repair": "Register request-save-replay explicitly as a self-authenticating Edge function, preserve exact signed-in host verification inside the function, require exact-room update readback instead of silently ignoring write failure, and redeploy only the exact merged function. The same repair closes Party Room and Live Stage end-without-saving and save-replay entry availability without weakening room, replay or LiveKit authority.",
+      "proof": "The replay policy guard and focused RFGC contract require explicit function deployment/auth config, in-function session and exact-host validation, exact-room end write readback, failure on missing targets, and both Party Room and Live Stage consumers. Exact deployed route and physical host end readback remain required after merge/deployment.",
+      "disposition": "PROVEN"
+    },
+    {
+      "id": "RFGC-UX-033",
+      "class": "customer_edge_function_blob_availability",
+      "firstFailedBoundary": "deployed Edge Function artifact routing",
+      "finding": "A read-only OPTIONS sweep of every active Edge Function found four registry-active routes returning NOT_FOUND_FUNCTION_BLOB: provider-readiness, spectator-start-room, request-save-replay, and creator-replay-playback. This joined provider readiness, spectator child-room creation, host ending/save-replay, and controlled replay playback in one deployment-artifact drift class; the remaining active function routes did not show the same missing-blob result.",
+      "repair": "After exact source merge, redeploy only those four affected functions from protected main and read back each exact route/version/digest. No provider, room, replay, content, money, or LiveKit authority is moved to the client.",
+      "proof": "Existing provider-readiness, spectator child-room, replay request/playback and security guards remain the source contracts. Exact post-deployment route probes must return their contract-owned auth/input result rather than NOT_FOUND_FUNCTION_BLOB, and the physical Party Room host-end path must make the exact room inactive.",
       "disposition": "PROVEN"
     }
   ],
@@ -310,7 +328,7 @@
   "counts": {
     "BLOCKING_OPEN": 0,
     "REPAIRED_UNPROVEN": 0,
-    "PROVEN": 31,
+    "PROVEN": 33,
     "NONBLOCKING_DEBT": 0,
     "PROVIDER_SANDBOX_LIMITED": 2,
     "EXTERNAL_BLOCKED": 1,

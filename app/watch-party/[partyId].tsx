@@ -134,6 +134,7 @@ import {
 import { pickSocialAttachmentFile } from "../../_lib/socialAttachmentPicker";
 import {
   resolveWatchPartyContentDisplay,
+  readWatchPartyContentDisplayHandoff,
   resolveWatchPartySourceId,
   resolveWatchPartySourceType,
 } from "../../_lib/watchPartyContentSources";
@@ -325,7 +326,13 @@ export default function WatchPartyRoomScreen() {
   const isFocused = useIsFocused();
   const { isLoading: authLoading, isSignedIn } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
-  const { partyId: partyIdParam, titleId: titleIdParam, roomCode: roomCodeParam, mode: modeParam, source: sourceParam } = useLocalSearchParams<{
+  const {
+    partyId: partyIdParam,
+    titleId: titleIdParam,
+    roomCode: roomCodeParam,
+    mode: modeParam,
+    source: sourceParam,
+  } = useLocalSearchParams<{
     partyId?: string;
     titleId?: string;
     roomCode?: string;
@@ -362,6 +369,11 @@ export default function WatchPartyRoomScreen() {
   const [notFound, setNotFound] = useState(false);
   const [titleName, setTitleName] = useState<string | null>(null);
   const [sourceAttribution, setSourceAttribution] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTitleName(null);
+    setSourceAttribution(null);
+  }, [partyId]);
 
   // ── Connection ───────────────────────────────────────────────────────────────
   const [connState, setConnState] = useState<ConnState>("loading");
@@ -980,17 +992,25 @@ export default function WatchPartyRoomScreen() {
           }
         }
 
+        const contentDisplay = snapshot.room.roomType === "live"
+          ? null
+          : await resolveWatchPartyContentDisplay(snapshot.room).catch(() => null);
+        if (cancelled) return;
+
+        const exactSourceType = resolveWatchPartySourceType(snapshot.room);
+        const exactSourceId = String(resolveWatchPartySourceId(snapshot.room) ?? "").trim();
+        const exactDisplayHandoff = readWatchPartyContentDisplayHandoff({
+          partyId: snapshot.room.partyId,
+          sourceType: exactSourceType,
+          sourceId: exactSourceId,
+        });
+
         if (snapshot.room.roomType === "live") {
           setTitleName("Live Room");
           setSourceAttribution(null);
         } else {
-          resolveWatchPartyContentDisplay(snapshot.room)
-            .then((contentSource) => {
-              if (cancelled) return;
-              if (contentSource.displayName) setTitleName(contentSource.displayName);
-              setSourceAttribution(contentSource.attributionLabel ?? null);
-            })
-            .catch(() => {});
+          setTitleName(contentDisplay?.displayName ?? exactDisplayHandoff);
+          setSourceAttribution(contentDisplay?.attributionLabel ?? null);
         }
 
         const { data: recentRows } = await supabase
