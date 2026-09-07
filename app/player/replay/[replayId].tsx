@@ -72,7 +72,7 @@ export default function CreatorReplayPlayerScreen() {
   });
 
   const stateLabel = readout.state === "ready"
-    ? "Ready Replay"
+    ? "Available"
     : readout.state === "processing"
       ? "Processing"
       : readout.state === "failed"

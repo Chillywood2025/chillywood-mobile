@@ -1184,7 +1184,7 @@ export default function ExploreScreen() {
 
                 {showLiveScope ? renderBackedSection(
                   "Live Now",
-                  `${liveDiscoveryItems.length + liveEvents.length} ready`,
+                  `${liveDiscoveryItems.length + liveEvents.length} live`,
                   liveDiscoveryItems.length + liveEvents.length > 0,
                   "No public live rooms right now",
                   "Live rooms appear here when current public sources say they are live.",
@@ -1196,7 +1196,7 @@ export default function ExploreScreen() {
 
                 {showPlatformScope ? renderBackedSection(
                   "Platforms",
-                  `${platformDiscoveryItems.length} ready`,
+                  `${platformDiscoveryItems.length} ${platformDiscoveryItems.length === 1 ? "Platform" : "Platforms"}`,
                   platformDiscoveryItems.length > 0,
                   "No public Platforms yet",
                   "Platform cards appear after public discovery identifies a public Platform update.",
@@ -1205,7 +1205,7 @@ export default function ExploreScreen() {
 
                 {showContentScope ? renderBackedSection(
                   "Creator Videos",
-                  `${creatorDiscoveryVideos.length} ready`,
+                  `${creatorDiscoveryVideos.length} ${creatorDiscoveryVideos.length === 1 ? "video" : "videos"}`,
                   creatorDiscoveryVideos.length > 0,
                   "No public creator videos yet",
                   "Public creator videos appear here when available.",
@@ -1214,7 +1214,7 @@ export default function ExploreScreen() {
 
                 {showOriginalsScope ? renderBackedSection(
                   "Chi'llywood Originals",
-                  `${rachiOriginals.length} ready`,
+                  `${rachiOriginals.length} ${rachiOriginals.length === 1 ? "Original" : "Originals"}`,
                   rachiOriginals.length > 0,
                   "No public Originals yet",
                   "Rachi Originals appear here only from the official public-safe creator video list.",
@@ -1223,7 +1223,7 @@ export default function ExploreScreen() {
 
                 {showEventScope ? renderBackedSection(
                   "Events",
-                  `${scheduledEvents.length} ready`,
+                  `${scheduledEvents.length} upcoming`,
                   scheduledEvents.length > 0,
                   "No scheduled public events",
                   "Events appear here after creator event summaries are public and scheduled.",
@@ -1232,7 +1232,7 @@ export default function ExploreScreen() {
 
                 {showContentScope ? renderBackedSection(
                   "Replays",
-                  `${replayDiscoveryItems.length + replayEvents.length} ready`,
+                  `${replayDiscoveryItems.length + replayEvents.length} ${replayDiscoveryItems.length + replayEvents.length === 1 ? "replay" : "replays"}`,
                   replayDiscoveryItems.length + replayEvents.length > 0,
                   "No public replays yet",
                   "Replays appear here after public replay content or event replays are available.",

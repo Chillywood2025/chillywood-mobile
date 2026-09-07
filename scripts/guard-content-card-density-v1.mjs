@@ -18,6 +18,14 @@ const requireAll = (source, needles, label) => {
   }
 };
 
+const requirePatterns = (source, patterns, label) => {
+  for (const pattern of patterns) {
+    if (!pattern.test(source)) {
+      throw new Error(`${label}: missing ${String(pattern)}`);
+    }
+  }
+};
+
 requireAll(card, [
   'type CreatorVideoCardVariant = "compact" | "detail";',
   'variant = "compact"',
@@ -71,10 +79,10 @@ requireAll(profile, [
   '<CreatorVideoCard',
 ], "Profile creator content density");
 
-requireAll(library, [
-  'titleCard: {\n    width: 132',
-  'posterWrap: {\n    width: "100%",\n    height: 150',
-  'platformCard: {\n    width: 150',
+requirePatterns(library, [
+  /titleCard:\s*\{\s*width:\s*132(?:\s*[,}])/u,
+  /posterWrap:\s*\{\s*width:\s*"100%"\s*,\s*height:\s*150(?:\s*[,}])/u,
+  /platformCard:\s*\{\s*width:\s*150(?:\s*[,}])/u,
 ], "Saved Library compact rows");
 
 for (const forbidden of [

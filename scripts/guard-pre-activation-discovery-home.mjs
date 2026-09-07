@@ -11,6 +11,8 @@ const explore = read("app/(tabs)/explore.tsx");
 const saved = read("app/(tabs)/my-list.tsx");
 const channel = read("app/channel/[userId].tsx");
 const event = read("app/event/[eventId].tsx");
+const creatorVideoCard = read("components/creator-media/creator-video-card.tsx");
+const replayPlayer = read("app/player/replay/[replayId].tsx");
 const eventSource = read("_lib/liveEvents.ts");
 const discoverySource = read("_lib/discoveryFeed.ts");
 const liveStage = read("app/watch-party/live-stage/[partyId].tsx");
@@ -26,6 +28,17 @@ for (const [label, source] of [["Home", home], ["creator Platform", channel]]) {
     assert.ok(!source.includes(forbidden), `${label} exposes release-facing status copy: ${forbidden}`);
   }
 }
+for (const [label, source] of [["Explore", explore], ["Saved", saved]]) {
+  assert.ok(!/\$\{[^}]+\}\s+ready\b/iu.test(source), `${label} exposes a release-facing ready count`);
+}
+assert.ok(!creatorVideoCard.includes('"Media Ready"'), "public creator cards must not expose a generic Media Ready status");
+assert.ok(creatorVideoCard.includes("ownerMode || !playable"), "public playable creator cards must omit redundant media-status pills");
+assert.ok((creatorVideoCard.match(/accessibilityRole="button"/gu) ?? []).length >= 2,
+  "compact and detail creator cards must expose button semantics");
+assert.ok(creatorVideoCard.includes("accessibilityState={{ disabled: !playable && !ownerMode }}"),
+  "creator cards must expose unavailable state accessibly");
+assert.ok(creatorVideoCard.includes("creator video."), "creator card labels must identify the content type and visibility");
+assert.ok(!replayPlayer.includes('"Ready Replay"'), "the public replay route must use customer-facing availability copy");
 assert.ok(home.includes('title: "Circle Watch-Party"'), "Home must use the customer-facing Circle Watch-Party heading");
 assert.ok(home.includes("Official Chi&apos;llywood"), "Rachi official identity must remain creator-tied rather than a section status");
 assert.ok(home.includes("readLatestPublicEventSummaries({ limit: 24 }).catch"), "Home Event failure must not erase independent public creator rails");
