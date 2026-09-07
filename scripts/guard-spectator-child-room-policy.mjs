@@ -224,7 +224,12 @@ assertIncludes(
 assertIncludes(
   "public ranking exact target identity",
   publicRankingGate,
-  "return isFeedItemPubliclyDiscoverable(item) && hasDiscoveryDestinationIdentity(item);",
+  "&& hasDiscoveryDestinationIdentity(item);",
+);
+assertIncludes(
+  "public ranking exact lifecycle authority",
+  publicRankingGate,
+  "&& isDiscoveryFeedLifecycleCurrent(item)",
 );
 assertIncludes("Circle ranking exact target identity", circleRankingGate, "&& hasDiscoveryDestinationIdentity(item);");
 assertIncludes("Live Event destination label", live, ">Open Event</Text>");
