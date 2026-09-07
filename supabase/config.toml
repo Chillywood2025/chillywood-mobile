@@ -108,6 +108,9 @@ verify_jwt = false
 [functions.creator-replay-playback]
 verify_jwt = false
 
+[functions.request-save-replay]
+verify_jwt = false
+
 [functions.spectator-start-room]
 verify_jwt = false
 

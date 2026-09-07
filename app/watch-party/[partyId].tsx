@@ -325,12 +325,24 @@ export default function WatchPartyRoomScreen() {
   const isFocused = useIsFocused();
   const { isLoading: authLoading, isSignedIn } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
-  const { partyId: partyIdParam, titleId: titleIdParam, roomCode: roomCodeParam, mode: modeParam, source: sourceParam } = useLocalSearchParams<{
+  const {
+    partyId: partyIdParam,
+    titleId: titleIdParam,
+    roomCode: roomCodeParam,
+    mode: modeParam,
+    source: sourceParam,
+    sourceType: sourceTypeParam,
+    sourceId: sourceIdParam,
+    contentTitle: contentTitleParam,
+  } = useLocalSearchParams<{
     partyId?: string;
     titleId?: string;
     roomCode?: string;
     mode?: string;
     source?: string;
+    sourceType?: string;
+    sourceId?: string;
+    contentTitle?: string;
   }>();
   const router = useRouter();
 
@@ -339,6 +351,8 @@ export default function WatchPartyRoomScreen() {
   const roomCodeHint = String(Array.isArray(roomCodeParam) ? roomCodeParam[0] : roomCodeParam ?? "").trim().toUpperCase();
   const roomModeParam = Array.isArray(modeParam) ? modeParam[0] : modeParam;
   const source = String(Array.isArray(sourceParam) ? sourceParam[0] : sourceParam ?? "").trim().toLowerCase();
+  const sourceTypeHint = String(Array.isArray(sourceTypeParam) ? sourceTypeParam[0] : sourceTypeParam ?? "").trim().toLowerCase();
+  const sourceIdHint = String(Array.isArray(sourceIdParam) ? sourceIdParam[0] : sourceIdParam ?? "").trim();
   const sharedRoomMode = normalizeSharedRoomMode(roomModeParam, "live");
   const returnToWatchPartyEntry = useCallback(() => {
     router.replace({
@@ -360,8 +374,14 @@ export default function WatchPartyRoomScreen() {
   const [myRole, setMyRole] = useState<"host" | "viewer" | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const initialContentTitle = String(Array.isArray(contentTitleParam) ? contentTitleParam[0] : contentTitleParam ?? "").trim().slice(0, 140);
   const [titleName, setTitleName] = useState<string | null>(null);
   const [sourceAttribution, setSourceAttribution] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTitleName(null);
+    setSourceAttribution(null);
+  }, [partyId]);
 
   // ── Connection ───────────────────────────────────────────────────────────────
   const [connState, setConnState] = useState<ConnState>("loading");
@@ -980,17 +1000,24 @@ export default function WatchPartyRoomScreen() {
           }
         }
 
+        const contentDisplay = snapshot.room.roomType === "live"
+          ? null
+          : await resolveWatchPartyContentDisplay(snapshot.room).catch(() => null);
+        if (cancelled) return;
+
+        const exactSourceType = resolveWatchPartySourceType(snapshot.room);
+        const exactSourceId = String(resolveWatchPartySourceId(snapshot.room) ?? "").trim();
+        const routeDisplayHintMatchesExactSource = !!initialContentTitle
+          && !!exactSourceId
+          && sourceTypeHint === exactSourceType
+          && sourceIdHint === exactSourceId;
+
         if (snapshot.room.roomType === "live") {
           setTitleName("Live Room");
           setSourceAttribution(null);
         } else {
-          resolveWatchPartyContentDisplay(snapshot.room)
-            .then((contentSource) => {
-              if (cancelled) return;
-              if (contentSource.displayName) setTitleName(contentSource.displayName);
-              setSourceAttribution(contentSource.attributionLabel ?? null);
-            })
-            .catch(() => {});
+          setTitleName(contentDisplay?.displayName ?? (routeDisplayHintMatchesExactSource ? initialContentTitle : null));
+          setSourceAttribution(contentDisplay?.attributionLabel ?? null);
         }
 
         const { data: recentRows } = await supabase

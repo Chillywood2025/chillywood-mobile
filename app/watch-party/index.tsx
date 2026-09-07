@@ -668,11 +668,13 @@ export default function WatchPartyIndexScreen() {
     titleId?: string | null;
     sourceType?: WatchPartyContentSourceType | null;
     sourceId?: string | null;
+    contentTitle?: string | null;
   }) => {
     const nextRoomCode = String(options?.roomCode ?? "").trim().toUpperCase();
     const nextTitleId = String(options?.titleId ?? "").trim();
     const nextSourceType = options?.sourceType ?? (nextTitleId ? "platform_title" : null);
     const nextSourceId = String(options?.sourceId ?? nextTitleId ?? "").trim();
+    const nextContentTitle = String(options?.contentTitle ?? "").trim().slice(0, 140);
 
     return {
       partyId: nextPartyId,
@@ -680,6 +682,7 @@ export default function WatchPartyIndexScreen() {
       ...(nextTitleId ? { titleId: nextTitleId } : {}),
       ...(nextSourceType ? { sourceType: nextSourceType } : {}),
       ...(nextSourceId ? { sourceId: nextSourceId } : {}),
+      ...(nextContentTitle ? { contentTitle: nextContentTitle } : {}),
       ...(isPlayerWatchPartyLiveFlow ? { source: PLAYER_WATCH_PARTY_SOURCE } : {}),
     };
   }, [isPlayerWatchPartyLiveFlow]);
@@ -691,12 +694,14 @@ export default function WatchPartyIndexScreen() {
 	    titleId?: string | null;
 	    sourceType?: WatchPartyContentSourceType | null;
 	    sourceId?: string | null;
+	    contentTitle?: string | null;
 	  }) => {
 	    const params = buildRoomEntryParams(options.partyId, {
 	      roomCode: options.roomCode,
 	      titleId: options.titleId,
 	      sourceType: options.sourceType,
 	      sourceId: options.sourceId,
+	      contentTitle: options.contentTitle,
 	    });
 
     if (options.roomType === "live") {
@@ -727,7 +732,7 @@ export default function WatchPartyIndexScreen() {
       pathname: "/watch-party/[partyId]",
       params,
     });
-  }, [buildRoomEntryParams, router]);
+  }, [buildRoomEntryParams, isPlayerWatchPartyLiveFlow, router]);
 
   const navigateToPreviewRoom = useCallback((nextPreview: RoomPreview) => {
     const nextPartyId = String(nextPreview.room.partyId ?? "").trim();
@@ -743,6 +748,7 @@ export default function WatchPartyIndexScreen() {
       titleId: nextPreview.room.titleId,
       sourceType: nextPreview.room.sourceType,
       sourceId: nextPreview.room.sourceId,
+      contentTitle: nextPreview.titleName,
     });
   }, [navigateToRoom]);
 
@@ -1255,6 +1261,7 @@ export default function WatchPartyIndexScreen() {
               titleId: preparedTargetTitleId,
               sourceType: defaultSourceType,
               sourceId: defaultSourceId || null,
+              contentTitle: entryTitleName,
             });
             return;
           }
@@ -1296,6 +1303,7 @@ export default function WatchPartyIndexScreen() {
         titleId: room.titleId,
         sourceType: room.sourceType,
         sourceId: room.sourceId,
+        contentTitle: entryTitleName,
       });
     } catch (error) {
       reportRuntimeError("watch-party-create", error, {
