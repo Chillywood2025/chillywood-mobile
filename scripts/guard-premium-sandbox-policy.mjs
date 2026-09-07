@@ -59,6 +59,8 @@ const accessSheet = read("components/monetization/access-sheet.tsx");
 const subscribe = read("app/subscribe.tsx");
 const watchPartyRoute = read("app/watch-party/[partyId].tsx");
 const liveStageRoute = read("app/watch-party/live-stage/[partyId].tsx");
+const premiumReconciler = read("supabase/functions/revenuecat-premium-reconcile/index.ts");
+const premiumReconciliationMigration = read("supabase/migrations/20260907135900_pre_activation_premium_authority_reconciliation.sql");
 
 assertIncludes(appConfig, "EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY || existingRevenueCat.androidPublicSdkKey", "Expo production RevenueCat public key wiring");
 assertIncludes(appConfig, "EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV || existingRevenueCat.androidDebugPublicSdkKey", "Expo debug RevenueCat public key wiring");
@@ -150,6 +152,17 @@ assertIncludes(watchPartyRoute, "accessGateSheetReason === \"premium_required\" 
 assertIncludes(liveStageRoute, "blockedRoomAccessSheetReason === \"premium_required\"", "Live Stage blocked Premium access gets a Premium-specific action");
 assertIncludes(liveStageRoute, "? \"View Premium\"", "Live Stage blocked Premium primary label");
 assertIncludes(liveStageRoute, "if (blockedRoomAccessSheetReason) {\n                  setLiveWatchPartyAccessSheetVisible(true);", "Live Stage blocked access opens the access sheet instead of Open Party Room");
+const reconciliationAuthBoundary = premiumReconciler.indexOf("authenticateBearerUser(");
+const reconciliationRateLimitBoundary = premiumReconciler.indexOf("await enforceReconciliationRateLimit(", reconciliationAuthBoundary);
+const reconciliationProviderBoundary = premiumReconciler.indexOf('readOptionalEnv("REVENUECAT_SECRET_API_KEY")', reconciliationRateLimitBoundary);
+if (!(reconciliationAuthBoundary >= 0
+  && reconciliationRateLimitBoundary > reconciliationAuthBoundary
+  && reconciliationProviderBoundary > reconciliationRateLimitBoundary)) {
+  fail("Premium current-customer reconciliation must rate-limit the exact authenticated user before provider access");
+}
+assertIncludes(premiumReconciler, "return jsonResponse(429,", "Premium reconciliation rate-limit response");
+assertIncludes(premiumReconciliationMigration, "pg_advisory_xact_lock", "Premium reconciliation rate-limit serialization");
+assertIncludes(premiumReconciliationMigration, "enforce_revenuecat_premium_reconciliation_rate_limit", "Premium reconciliation service limiter");
 
 assertIncludes(moneyFeatureFlags, "live_money_enabled: \"off\"", "live money default off");
 for (const key of ["live_money_enabled", "watch_party_seats_enabled", "tips_enabled", "paid_content_enabled", "payouts_enabled"]) {

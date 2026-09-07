@@ -8,6 +8,7 @@ import {
   optionsResponse,
   readOptionalEnv,
   sanitizeErrorMessage,
+  type SupabaseClientLike,
   toText,
   writeProviderReadinessAudit,
 } from "../_shared/provider-readiness.ts";
@@ -162,6 +163,15 @@ const readOriginalTransactionId = async (
   return valid[0].id;
 };
 
+const enforceReconciliationRateLimit = async (adminClient: SupabaseClientLike, userId: string) => {
+  const { error } = await adminClient.rpc("enforce_revenuecat_premium_reconciliation_rate_limit", {
+    p_user_id: userId,
+  });
+  if (!error) return true;
+  if (toText(error.message).toLowerCase().includes("rate_limited")) return false;
+  throw new Error("premium_reconciliation_rate_limit_failed");
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return optionsResponse();
   if (req.method !== "POST") {
@@ -182,6 +192,14 @@ Deno.serve(async (req) => {
   const userId = toText(auth.user?.id);
 
   try {
+    if (!await enforceReconciliationRateLimit(adminConfig.client, userId)) {
+      return jsonResponse(429, {
+        status: "blocked",
+        entitlementActive: false,
+        liveMoneyAction: false,
+        message: "Please wait a moment before checking Premium again.",
+      });
+    }
     const apiKey = toText(readOptionalEnv("REVENUECAT_SECRET_API_KEY"));
     if (!apiKey) throw new Error("revenuecat_api_key_missing");
     const projectId = await readRevenueCatProjectId(apiKey);

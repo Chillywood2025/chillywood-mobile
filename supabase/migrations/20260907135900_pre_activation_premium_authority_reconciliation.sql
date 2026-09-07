@@ -5,6 +5,39 @@
 -- provider transaction: it records a typed reconciliation snapshot and reuses
 -- the deployed atomic Premium projector only inside this transaction.
 
+create or replace function public."enforce_revenuecat_premium_reconciliation_rate_limit"(
+  p_user_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if p_user_id is null then
+    raise exception 'premium_reconciliation_rate_limit_subject_required';
+  end if;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    'revenuecat-premium-reconciliation-rate-limit:' || p_user_id::text, 0
+  ));
+  perform public."enforce_abuse_rate_limit"(
+    p_user_id::text,
+    'revenuecat_premium_reconciliation',
+    'current_customer',
+    6,
+    300,
+    jsonb_build_object('source', 'revenuecat-premium-reconcile')
+  );
+end;
+$$;
+
+revoke all on function public."enforce_revenuecat_premium_reconciliation_rate_limit"(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public."enforce_revenuecat_premium_reconciliation_rate_limit"(uuid)
+  to service_role;
+comment on function public."enforce_revenuecat_premium_reconciliation_rate_limit"(uuid)
+  is 'Service-only, per-user atomic limiter for RevenueCat Premium current-customer reads. It grants no entitlement, provider, money, payout, or room authority.';
+
 create or replace function public."reconcile_revenuecat_premium_snapshot_atomic"(
   p_snapshot_id text,
   p_user_id uuid,

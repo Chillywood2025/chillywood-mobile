@@ -1,5 +1,5 @@
 begin;
-select plan(16);
+select plan(21);
 
 insert into auth.users (id, is_sso_user, is_anonymous)
 values
@@ -43,6 +43,41 @@ as $$
     repeat('a', 64)
   );
 $$;
+
+select is(
+  has_function_privilege('anon',
+    'public.enforce_revenuecat_premium_reconciliation_rate_limit(uuid)', 'EXECUTE'),
+  false,
+  'anonymous callers cannot invoke the provider-read limiter'
+);
+select is(
+  has_function_privilege('authenticated',
+    'public.enforce_revenuecat_premium_reconciliation_rate_limit(uuid)', 'EXECUTE'),
+  false,
+  'authenticated clients cannot invoke the service limiter directly'
+);
+select is(
+  has_function_privilege('service_role',
+    'public.enforce_revenuecat_premium_reconciliation_rate_limit(uuid)', 'EXECUTE'),
+  true,
+  'the provider reconciler can invoke the service limiter'
+);
+select lives_ok(
+  $$select public.enforce_revenuecat_premium_reconciliation_rate_limit(
+    'ad100000-0000-4000-8000-000000000001'
+  )$$,
+  'the first exact-user provider-read attempt is allowed'
+);
+select public.enforce_revenuecat_premium_reconciliation_rate_limit(
+  'ad100000-0000-4000-8000-000000000001'
+) from generate_series(1, 5);
+select throws_ok(
+  $$select public.enforce_revenuecat_premium_reconciliation_rate_limit(
+    'ad100000-0000-4000-8000-000000000001'
+  )$$,
+  'rate_limited',
+  'the seventh attempt is rejected before another provider read'
+);
 
 select is(
   has_function_privilege('anon',
