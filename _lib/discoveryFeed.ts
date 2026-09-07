@@ -123,23 +123,56 @@ export function hasDiscoveryDestinationIdentity(item: Partial<Pick<
   return true;
 }
 
+export function isDiscoveryFeedLifecycleCurrent(item: Pick<
+  DiscoveryFeedItem,
+  "ended_at" | "live_state" | "starts_at"
+>, nowMillis = Date.now()) {
+  if (item.live_state === "scheduled") {
+    const startsAtMillis = Date.parse(normalizeText(item.starts_at));
+    return Number.isFinite(startsAtMillis) && startsAtMillis > nowMillis;
+  }
+
+  if (item.live_state === "live" && item.ended_at) {
+    const endedAtMillis = Date.parse(normalizeText(item.ended_at));
+    return Number.isFinite(endedAtMillis) && endedAtMillis > nowMillis;
+  }
+
+  return true;
+}
+
 export function isCircleSpectatorFeedItemEligibleForRanking(item: Pick<
   DiscoveryFeedItem,
-  "is_publicly_discoverable" | "visibility" | "moderation_status" | "rights_status" | "is_spectator_enabled"
+  | "ended_at"
+  | "is_publicly_discoverable"
+  | "is_spectator_enabled"
+  | "live_state"
+  | "moderation_status"
+  | "rights_status"
+  | "starts_at"
+  | "visibility"
 > & Parameters<typeof hasDiscoveryDestinationIdentity>[0]) {
   return item.is_publicly_discoverable !== true
     && (item.visibility === "circle" || item.visibility === "chilly_circle")
     && item.moderation_status === "clean"
     && item.is_spectator_enabled === true
     && isPublicSpectatorSafeRightsStatus(item.rights_status)
+    && isDiscoveryFeedLifecycleCurrent(item)
     && hasDiscoveryDestinationIdentity(item);
 }
 
 export function isDiscoveryFeedItemEligibleForRanking(item: Pick<
   DiscoveryFeedItem,
-  "is_publicly_discoverable" | "visibility" | "moderation_status" | "rights_status"
+  | "ended_at"
+  | "is_publicly_discoverable"
+  | "live_state"
+  | "moderation_status"
+  | "rights_status"
+  | "starts_at"
+  | "visibility"
 > & Parameters<typeof hasDiscoveryDestinationIdentity>[0]) {
-  return isFeedItemPubliclyDiscoverable(item) && hasDiscoveryDestinationIdentity(item);
+  return isFeedItemPubliclyDiscoverable(item)
+    && isDiscoveryFeedLifecycleCurrent(item)
+    && hasDiscoveryDestinationIdentity(item);
 }
 
 export function isSpectatorPlaybackBlocked(item: Pick<DiscoveryFeedItem, "is_spectator_playback_enabled">) {
@@ -355,6 +388,7 @@ export function scoreDiscoveryFeedItem(
     | "owner_user_id"
     | "host_user_id"
     | "category_key"
+    | "ended_at"
     | "published_at"
     | "starts_at"
     | "created_at"
@@ -411,6 +445,7 @@ export function scoreCircleSpectatorFeedItem(
     | "owner_user_id"
     | "host_user_id"
     | "category_key"
+    | "ended_at"
     | "published_at"
     | "starts_at"
     | "created_at"

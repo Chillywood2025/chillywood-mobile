@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(path, "utf8");
 const migration = read("supabase/migrations/20260907163000_pre_activation_discovery_event_authority.sql");
+const lifecycleClosure = read("supabase/migrations/20260907195000_pre_activation_discovery_lifecycle_fixture_closure.sql");
 const home = read("app/(tabs)/index.tsx");
 const live = read("app/(tabs)/live.tsx");
 const explore = read("app/(tabs)/explore.tsx");
@@ -15,6 +16,7 @@ const creatorVideoCard = read("components/creator-media/creator-video-card.tsx")
 const replayPlayer = read("app/player/replay/[replayId].tsx");
 const eventSource = read("_lib/liveEvents.ts");
 const discoverySource = read("_lib/discoveryFeed.ts");
+const creatorVideoSource = read("_lib/creatorVideos.ts");
 const liveStage = read("app/watch-party/live-stage/[partyId].tsx");
 const livekitClient = read("_lib/livekit/token-contract.ts");
 const livekitEdge = read("supabase/functions/livekit-token/index.ts");
@@ -58,6 +60,15 @@ assert.ok(foregroundRefresh.includes('nextState === "active"') && foregroundRefr
   "foreground refresh must run once on a real inactive-to-active transition");
 assert.ok(event.includes("Audience") && event.includes("accessibilityLabel"), "Event detail must expose its authoritative audience accessibly");
 assert.ok(eventSource.includes('.eq("visibility", "public")'), "public Event queries must request only public authoritative rows");
+assert.ok(discoverySource.includes('item.live_state === "scheduled"')
+  && discoverySource.includes("startsAtMillis > nowMillis")
+  && discoverySource.includes('item.live_state === "live" && item.ended_at')
+  && discoverySource.includes("endedAtMillis > nowMillis"),
+"public and Circle discovery hydration must reject stale schedule/end boundaries");
+assert.ok(creatorVideoSource.includes('.in("moderation_status", ["clean", "reported"])')
+  && creatorVideoSource.includes('.eq("scan_status", "clean")')
+  && creatorVideoSource.includes('.is("quarantined_at", null)'),
+"relationship video hydration must not re-expose unsafe or quarantined sources");
 
 for (const required of [
   'add column if not exists "visibility"',
@@ -74,6 +85,18 @@ for (const required of [
   "circle_spectator_approved",
   "positively_identified_qa_fixture",
 ]) assert.ok(migration.includes(required), `canonical discovery migration missing ${required}`);
+
+for (const required of [
+  'sync_creator_event_discovery_lifecycle_boundary_not_found',
+  'media_scan_public_safe',
+  'sync_creator_video_feed_items_after_change',
+  'can_read_creator_feed_item',
+  'can_read_circle_spectator_feed_item',
+  'discovery_feed_items_select_public_safe_authenticated',
+  'pre_activation_discovery_lifecycle_fixture_closure_v1',
+  "v_event.\"starts_at\" <= v_now",
+  "v_event.\"ends_at\" <= v_now",
+]) assert.ok(lifecycleClosure.includes(required), `lifecycle/fixture closure missing ${required}`);
 
 assert.ok(livekitClient.includes('action: "mark-room-live"'), "the connected host must request the exact server publication transition");
 assert.ok(livekitClient.includes("attempt < 3") && livekitClient.includes("response.status !== 409"),
