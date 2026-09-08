@@ -22,6 +22,7 @@ import {
   ROOM_HEARTBEAT_MS,
   ROOM_MEMBERSHIP_ACTIVE_WINDOW_MS,
 } from "./performancePolicy";
+import { isPubliclyReleasedTitle } from "./publicTitles";
 import {
   resolvePaidWatchPartyTicketAccess,
   type PaidWatchPartyTicketAccess,
@@ -847,8 +848,14 @@ async function resolvePartyTitleId(inputTitleId: string): Promise<string | null>
   if (!raw) return null;
 
   try {
-    const direct = await supabase.from("titles").select("id").eq("id", raw).maybeSingle();
-    if (!direct.error && direct.data?.id) return String(direct.data.id);
+    const direct = await supabase
+      .from("titles")
+      .select("id,is_published,status,release_at,release_date")
+      .eq("id", raw)
+      .maybeSingle();
+    if (!direct.error && direct.data?.id && isPubliclyReleasedTitle(direct.data)) {
+      return String(direct.data.id);
+    }
   } catch {
     // noop
   }

@@ -64,6 +64,7 @@ import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
 import { NativeAdSlot } from "../../components/ads/NativeAdSlot";
 import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
+import { filterPubliclyReleasedTitles } from "../../_lib/publicTitles";
 import { AppEmptyState, AppSection } from "../../components/ui/app-surface";
 import { StableImage } from "../../components/ui/StableImage";
 import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
@@ -91,6 +92,8 @@ type TitleRow = Omit<
     | "pin_to_top_row"
     | "sort_order"
     | "status"
+    | "release_at"
+    | "release_date"
   >,
   "created_at"
 > & {
@@ -253,8 +256,10 @@ export default function HomeScreen() {
     const { data, error } = await supabase
       .from("titles")
       .select(
-        "id, title, category, year, runtime, synopsis, poster_url, content_access_rule, created_at, featured, is_hero, is_trending, is_published, pin_to_top_row, sort_order, status",
+        "id, title, category, year, runtime, synopsis, poster_url, content_access_rule, created_at, featured, is_hero, is_trending, is_published, pin_to_top_row, sort_order, status, release_at, release_date",
       )
+      .eq("is_published", true)
+      .eq("status", "published")
       .order("created_at", { ascending: false })
       .returns<TitleRow[]>();
 
@@ -264,7 +269,7 @@ export default function HomeScreen() {
       return;
     }
 
-    const nextTitles = data ?? [];
+    const nextTitles = filterPubliclyReleasedTitles(data ?? []);
     setTitles(nextTitles);
   }
 

@@ -101,6 +101,7 @@ import {
 import { useSession } from "../../_lib/session";
 import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
 import { supabase } from "../../_lib/supabase";
+import { isPubliclyReleasedTitle } from "../../_lib/publicTitles";
 import type { Tables } from "../../supabase/database.types";
 import {
     clearProgressForTitle,
@@ -1485,11 +1486,12 @@ export default function PlayerScreen() {
           .maybeSingle();
 
         if (primary.data && !primary.error) {
-          if (active) {
+          if (active && isPubliclyReleasedTitle(primary.data)) {
             debugLog("player", "match source resolved", { source: "db:advanced:id" });
             setItem(primary.data);
             setTitleLoading(false);
           }
+          if (active) setTitleLoading(false);
           return;
         }
 

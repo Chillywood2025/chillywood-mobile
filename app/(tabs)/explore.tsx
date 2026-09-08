@@ -39,6 +39,7 @@ import {
 import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
 import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
+import { filterPubliclyReleasedTitles } from "../../_lib/publicTitles";
 import {
   getPrimaryPeopleSearchCandidate,
   matchesPeopleSearchValues,
@@ -71,6 +72,10 @@ type TitleRow = Pick<
   | "is_hero"
   | "pin_to_top_row"
   | "sort_order"
+  | "is_published"
+  | "status"
+  | "release_at"
+  | "release_date"
 > & {
   slug?: string | null;
 };
@@ -247,8 +252,10 @@ const fetchBackedTitles = async () => {
   const { data, error } = await supabase
     .from("titles")
     .select(
-      "id, created_at, title, category, year, runtime, synopsis, poster_url, video_url, featured, is_hero, pin_to_top_row, sort_order",
+      "id, created_at, title, category, year, runtime, synopsis, poster_url, video_url, featured, is_hero, pin_to_top_row, sort_order, is_published, status, release_at, release_date",
     )
+    .eq("is_published", true)
+    .eq("status", "published")
     .order("created_at", { ascending: false })
     .returns<TitleRow[]>();
 
@@ -260,7 +267,7 @@ const fetchBackedTitles = async () => {
   }
 
   return {
-    titles: data || [],
+    titles: filterPubliclyReleasedTitles(data || []),
     error: null,
   };
 };

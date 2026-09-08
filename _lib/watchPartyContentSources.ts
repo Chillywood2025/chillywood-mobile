@@ -1,5 +1,6 @@
 import { readCreatorVideoForPlayer, type CreatorVideo } from "./creatorVideos";
 import { readPublicDiscoveryFeedItem } from "./discoveryFeed";
+import { isPubliclyReleasedTitle } from "./publicTitles";
 import { resolveSpectatorAccess } from "./spectatorAccess";
 import { readSpectatorPlaybackReadout } from "./spectatorPlayback";
 import { supabase } from "./supabase";
@@ -10,6 +11,10 @@ type TitleSourceRow = {
   title: string | null;
   poster_url: string | null;
   video_url: string | null;
+  is_published: boolean | null;
+  status: string | null;
+  release_at: string | null;
+  release_date: string | null;
 };
 
 type PublicCreatorVideoMetadataRow = {
@@ -253,10 +258,11 @@ export async function resolveWatchPartyContentDisplayByParts(input: {
   if (sourceType === "platform_title" && sourceId) {
     const result = await supabase
       .from("titles")
-      .select("id,title,poster_url")
+      .select("id,title,poster_url,is_published,status,release_at,release_date")
       .eq("id", sourceId)
       .maybeSingle();
-    const data = result.data as Pick<TitleSourceRow, "id" | "title" | "poster_url"> | null;
+    const candidate = result.data as Omit<TitleSourceRow, "video_url"> | null;
+    const data = candidate && isPubliclyReleasedTitle(candidate) ? candidate : null;
     return {
       sourceType,
       sourceId,
@@ -348,10 +354,11 @@ export async function resolveWatchPartyContentSourceByParts(input: {
   if (sourceType === "platform_title" && sourceId) {
     const result = await supabase
       .from("titles")
-      .select("id,title,poster_url,video_url")
+      .select("id,title,poster_url,video_url,is_published,status,release_at,release_date")
       .eq("id", sourceId)
       .maybeSingle();
-    const data = result.data as TitleSourceRow | null;
+    const candidate = result.data as TitleSourceRow | null;
+    const data = candidate && isPubliclyReleasedTitle(candidate) ? candidate : null;
 
     return {
       sourceType,

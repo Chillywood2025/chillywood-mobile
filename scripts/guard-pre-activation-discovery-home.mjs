@@ -11,6 +11,8 @@ const read = (path) => readFileSync(path, "utf8");
 const migration = read("supabase/migrations/20260907163000_pre_activation_discovery_event_authority.sql");
 const lifecycleClosure = read("supabase/migrations/20260907195000_pre_activation_discovery_lifecycle_fixture_closure.sql");
 const physicalFixtureClosure = read("supabase/migrations/20260907230000_pre_activation_physical_feed_fixture_quarantine.sql");
+const titleReleaseClosure = read("supabase/migrations/20260908040000_pre_activation_title_release_visibility_closure.sql");
+const titleReleaseTest = read("supabase/tests/pre_activation_title_release_visibility_closure_test.sql");
 const home = read("app/(tabs)/index.tsx");
 const live = read("app/(tabs)/live.tsx");
 const liveTabDiscoveryBuckets = read("_lib/liveTabDiscoveryBuckets.ts");
@@ -21,14 +23,19 @@ const channelSettings = read("app/channel-settings.tsx");
 const event = read("app/event/[eventId].tsx");
 const creatorVideoCard = read("components/creator-media/creator-video-card.tsx");
 const replayPlayer = read("app/player/replay/[replayId].tsx");
+const titleDetail = read("app/title/[id].tsx");
+const titlePlayer = read("app/player/[id].tsx");
 const eventSource = read("_lib/liveEvents.ts");
 const discoverySource = read("_lib/discoveryFeed.ts");
+const watchPartySource = read("_lib/watchParty.ts");
+const watchPartyContentSource = read("_lib/watchPartyContentSources.ts");
 const creatorVideoSource = read("_lib/creatorVideos.ts");
 const liveStage = read("app/watch-party/live-stage/[partyId].tsx");
 const livekitClient = read("_lib/livekit/token-contract.ts");
 const livekitEdge = read("supabase/functions/livekit-token/index.ts");
 const notifications = read("supabase/functions/notification-dispatch/index.ts");
 const foregroundRefresh = read("hooks/useRefreshOnForeground.ts");
+const publicTitleSource = read("_lib/publicTitles.ts");
 const releaseSource = read("config/release/ios-internal-v2.json");
 const generatedRelease = read("supabase/functions/_shared/release-manifest-contract.generated.mjs");
 
@@ -39,6 +46,55 @@ for (const [label, source] of [["Home", home], ["creator Platform", channel]]) {
 }
 for (const [label, source] of [["Explore", explore], ["Saved", saved]]) {
   assert.ok(!/\$\{[^}]+\}\s+ready\b/iu.test(source), `${label} exposes a release-facing ready count`);
+}
+for (const [label, source] of [["Home", home], ["Explore", explore], ["Saved", saved]]) {
+  assert.ok(source.includes("filterPubliclyReleasedTitles"),
+    `${label} must share the fail-closed public title release predicate`);
+  assert.ok(source.includes('.eq("is_published", true)') && source.includes('.eq("status", "published")'),
+    `${label} must request only explicitly published title rows`);
+  for (const field of ["release_at", "release_date"]) {
+    assert.ok(source.includes(field), `${label} must hydrate the ${field} release boundary`);
+  }
+}
+
+const compiledPublicTitleSource = ts.transpileModule(publicTitleSource, {
+  compilerOptions: {
+    module: ts.ModuleKind.CommonJS,
+    target: ts.ScriptTarget.ES2022,
+    strict: true,
+  },
+}).outputText;
+const publicTitleModule = { exports: {} };
+new Function("exports", "module", "require", compiledPublicTitleSource)(
+  publicTitleModule.exports,
+  publicTitleModule,
+  require,
+);
+const { filterPubliclyReleasedTitles } = publicTitleModule.exports;
+const titleBoundaryNow = Date.parse("2026-09-08T04:00:00.000Z");
+const publicTitleCases = [
+  { id: "released", is_published: true, status: "published", release_at: null, release_date: "2026-09-08T03:59:59.000Z" },
+  { id: "draft", is_published: false, status: "draft", release_at: null, release_date: null },
+  { id: "archived", is_published: false, status: "archived", release_at: null, release_date: null },
+  { id: "future", is_published: true, status: "published", release_at: "2026-09-08T04:00:01.000Z", release_date: null },
+  { id: "invalid", is_published: true, status: "published", release_at: "not-a-date", release_date: null },
+];
+assert.deepEqual(
+  filterPubliclyReleasedTitles(publicTitleCases, titleBoundaryNow).map(({ id }) => id),
+  ["released"],
+  "public title hydration must fail closed for draft, archived, future, and malformed release state",
+);
+for (const [label, source] of [
+  ["Title detail", titleDetail],
+  ["Title player", titlePlayer],
+  ["Watch-Party room creation", watchPartySource],
+  ["Watch-Party content resolver", watchPartyContentSource],
+]) {
+  assert.ok(source.includes("isPubliclyReleasedTitle"),
+    `${label} must reject non-release title state even for a programming identity`);
+  for (const field of ["is_published", "status", "release_at", "release_date"]) {
+    assert.ok(source.includes(field), `${label} must hydrate the ${field} release boundary`);
+  }
 }
 assert.ok(!creatorVideoCard.includes('"Media Ready"'), "public creator cards must not expose a generic Media Ready status");
 assert.ok(creatorVideoCard.includes("ownerMode || !playable"), "public playable creator cards must omit redundant media-status pills");
@@ -187,6 +243,27 @@ for (const required of [
 ]) assert.ok(physicalFixtureClosure.includes(required), `physical fixture closure missing ${required}`);
 assert.ok(!physicalFixtureClosure.includes("delete from"),
   "physical fixture closure must preserve source, comment, audit, and provider evidence");
+
+for (const required of [
+  'drop policy if exists "Enable read access for all users"',
+  'create policy "titles_public_release_select"',
+  '"is_published" is true',
+  "= 'published'",
+  '"release_at" is null or "release_at" <= now()',
+  '"release_date" is null or "release_date" <= now()',
+  'create policy "titles_programming_select"',
+  'public."has_platform_role"',
+]) assert.ok(titleReleaseClosure.includes(required), `title release RLS closure missing ${required}`);
+assert.ok(!titleReleaseClosure.includes("delete from public.\"titles\"") && !titleReleaseClosure.includes("update public.\"titles\""),
+  "the RLS migration must not mutate or delete production title records");
+for (const required of [
+  "anonymous release discovery sees only the released published title",
+  "ordinary signed-in viewer cannot read draft, archived, future, or unpublished titles",
+  "ordinary viewer cannot publish a title directly",
+  "canonical programming identity can read every lifecycle state",
+  "audited programming RPC can quarantine an exact title without deletion",
+  "immutable canonical admin audit evidence",
+]) assert.ok(titleReleaseTest.includes(required), `title release pgTAP missing ${required}`);
 
 assert.ok(livekitClient.includes('action: "mark-room-live"'), "the connected host must request the exact server publication transition");
 assert.ok(livekitClient.includes("attempt < 3") && livekitClient.includes("response.status !== 409"),
