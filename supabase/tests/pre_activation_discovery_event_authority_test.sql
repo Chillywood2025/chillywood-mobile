@@ -86,6 +86,49 @@ insert into public.user_friendships(
   'a1000000-0000-4000-8000-000000000001'
 );
 
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.jwt.claims',
+  '{"role":"authenticated","sub":"a1000000-0000-4000-8000-000000000001"}',true);
+set local role authenticated;
+select lives_ok(
+  $$insert into public.creator_events(
+      id,host_user_id,event_title,event_type,status,starts_at,ends_at,visibility,reminder_ready
+    ) values (
+      'ef000000-0000-4000-8000-000000000009','a1000000-0000-4000-8000-000000000001',
+      'Authenticated host future Event','live_first','scheduled',
+      now()+interval '6 hours',now()+interval '7 hours','public',false
+    ) returning id,event_title,status,visibility$$,
+  'an authenticated host can create an Event through the app INSERT ... RETURNING contract'
+);
+select lives_ok(
+  $$update public.creator_events
+    set starts_at=now()+interval '8 hours',ends_at=now()+interval '9 hours'
+    where id='ef000000-0000-4000-8000-000000000009'
+    returning id,starts_at,ends_at$$,
+  'the owning host can reschedule through the app UPDATE ... RETURNING contract'
+);
+reset role;
+select is((select count(*)::integer from public.discovery_feed_items
+  where source_type='creator_event' and source_id='ef000000-0000-4000-8000-000000000009'
+    and live_state='scheduled' and is_publicly_discoverable),1,
+  'authenticated host creation and reschedule retain one canonical Upcoming projection');
+
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.jwt.claims',
+  '{"role":"authenticated","sub":"c3000000-0000-4000-8000-000000000003"}',true);
+set local role authenticated;
+select throws_like(
+  $$insert into public.creator_events(
+      host_user_id,event_title,event_type,status,starts_at,ends_at,visibility,reminder_ready
+    ) values (
+      'a1000000-0000-4000-8000-000000000001','Wrong-host Event','live_first','scheduled',
+      now()+interval '6 hours',now()+interval '7 hours','public',false
+    ) returning id$$,
+  '%row-level security policy%',
+  'an authenticated user cannot create an Event for another host'
+);
+reset role;
+
 select set_config('request.jwt.claim.role','service_role',true);
 select set_config('request.jwt.claims','{"role":"service_role"}',true);
 
