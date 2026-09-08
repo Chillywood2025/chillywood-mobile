@@ -31,6 +31,7 @@ import {
   requireLiveFirstPremium,
   type PremiumWatchPartyFeatureAccessDecision,
 } from "../../_lib/premiumWatchPartyAccess";
+import { buildLiveTabDiscoveryBuckets } from "../../_lib/liveTabDiscoveryBuckets";
 import { AccessSheet, type AccessSheetActionFeedback } from "../../components/monetization/access-sheet";
 import { MainTabTopBar } from "../../components/navigation/main-tab-top-bar";
 
@@ -65,21 +66,9 @@ export default function LiveTabScreen() {
   const [discoveryItems, setDiscoveryItems] = useState<DiscoveryFeedItem[]>([]);
   const [events, setEvents] = useState<CreatorEventSummary[]>([]);
 
-  const liveItems = useMemo(
-    () => discoveryItems.filter((item) => item.live_state === "live").slice(0, 10),
-    [discoveryItems],
-  );
-  const projectedEventIds = useMemo(
-    () => new Set(discoveryItems.map((item) => String(item.event_id ?? "").trim()).filter(Boolean)),
-    [discoveryItems],
-  );
-  const liveEvents = useMemo(
-    () => events.filter((event) => event.isLiveNow && !projectedEventIds.has(event.id)).slice(0, 8),
-    [events, projectedEventIds],
-  );
-  const upcomingEvents = useMemo(
-    () => events.filter((event) => event.isUpcoming && !projectedEventIds.has(event.id)).slice(0, 10),
-    [events, projectedEventIds],
+  const { liveItems, liveEvents, upcomingEvents } = useMemo(
+    () => buildLiveTabDiscoveryBuckets(discoveryItems, events),
+    [discoveryItems, events],
   );
 
   const loadLive = useCallback(async (refresh = false) => {
