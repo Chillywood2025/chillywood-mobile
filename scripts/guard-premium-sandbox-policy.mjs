@@ -60,6 +60,7 @@ const subscribe = read("app/subscribe.tsx");
 const watchPartyRoute = read("app/watch-party/[partyId].tsx");
 const liveStageRoute = read("app/watch-party/live-stage/[partyId].tsx");
 const premiumReconciler = read("supabase/functions/revenuecat-premium-reconcile/index.ts");
+const premiumReconciliationAuthority = read("supabase/functions/revenuecat-premium-reconcile/authority.ts");
 const premiumReconciliationMigration = read("supabase/migrations/20260907135900_pre_activation_premium_authority_reconciliation.sql");
 
 assertIncludes(appConfig, "EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY || existingRevenueCat.androidPublicSdkKey", "Expo production RevenueCat public key wiring");
@@ -161,6 +162,20 @@ if (!(reconciliationAuthBoundary >= 0
   fail("Premium current-customer reconciliation must rate-limit the exact authenticated user before provider access");
 }
 assertIncludes(premiumReconciler, "return jsonResponse(429,", "Premium reconciliation rate-limit response");
+assertIncludes(premiumReconciliationAuthority, "subscription.product_id", "RevenueCat v2 subscription product identity");
+assertIncludes(
+  premiumReconciler,
+  "/products/${encodeURIComponent(productId)}",
+  "RevenueCat v2 project-scoped product lookup",
+);
+assertIncludes(premiumReconciliationAuthority, "toText(product.id) !== productId", "RevenueCat product response identity binding");
+assertIncludes(premiumReconciliationAuthority, 'toText(product.type) !== "subscription"', "RevenueCat subscription product-type binding");
+assertIncludes(premiumReconciler, "PREMIUM_PRODUCT_IDS.has(providerProductId)", "RevenueCat exact Premium store-product allowlist");
+assertNotIncludes(
+  premiumReconciler,
+  "isRecord(subscription.product)",
+  "obsolete RevenueCat v2 embedded subscription product assumption",
+);
 assertIncludes(premiumReconciliationMigration, "pg_advisory_xact_lock", "Premium reconciliation rate-limit serialization");
 assertIncludes(premiumReconciliationMigration, "enforce_revenuecat_premium_reconciliation_rate_limit", "Premium reconciliation service limiter");
 
