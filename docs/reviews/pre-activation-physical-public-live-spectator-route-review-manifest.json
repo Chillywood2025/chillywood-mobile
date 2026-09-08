@@ -1,0 +1,89 @@
+{
+  "implementationPrNumber": 371,
+  "implementationBranch": "codex/physical-public-live-viewer-route-rfgc-v1",
+  "implementationHead": "c0f1cbe669b681f7be49aa6fecb363643818e2ce",
+  "implementationTree": "f54d2b830b5a04800465ded478c8657b445dc778",
+  "baseHead": "44e7608d76fdc7b1c64764237b13ed6a24a1a5c4",
+  "changedFileHash": "57b444e3dbcffdf2ed3e17fed0c8f6f071bf01aa7fc752cdc374dad580b9a6c4",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "bf0933f584b5e44a0159ae237dcb99714821f78ffd98702e50bb77d986cacc58",
+  "testResults": {
+    "phase1Ci": {
+      "status": "pass",
+      "qualification": "EXACT_FROZEN_HEAD_ALL_PHASE1_LANES_PASS",
+      "runId": 34214204414,
+      "implementationHead": "c0f1cbe669b681f7be49aa6fecb363643818e2ce",
+      "jobs": {
+        "total": 14,
+        "passed": 14,
+        "failedAssuranceOnly": 0,
+        "failedSubstantive": 0
+      }
+    },
+    "focused": {
+      "preActivationDiscoveryHome": "pass with executable live-stage and Watch-Party spectator-route regressions",
+      "partyRoomLiveStageEvent": "25/25 pass",
+      "routeContracts": "pass",
+      "circleSpectatorPolicy": "pass",
+      "notificationAndDeepLinks": "pass"
+    },
+    "static": {
+      "lint": "0 errors; repository warnings pre-existing",
+      "typecheck": "pass",
+      "gitDiffCheck": "pass",
+      "assuranceContracts": "28 contracts, 22 features and 25 escaped defects pass"
+    },
+    "platform": {
+      "androidAppLinks": "pass",
+      "androidNativeRuntimeCompatibility": "pass",
+      "otaNativeBoundary": "pass",
+      "iosCommerceReleaseConfiguration": "pass"
+    },
+    "security": {
+      "scanId": "15e847cf-a6ba-446a-84e0-94c2e7f72ed6",
+      "coverage": "complete exact two-file implementation diff",
+      "findings": 0,
+      "severity": "P0=0 P1=0 launch-impacting-P2=0"
+    }
+  },
+  "testResultHash": "59038a63b06d1d7ad1bbd17ab87d3d315704a046c09a4d722bf4fdd313d1616d",
+  "reviewLevel": "C",
+  "reviewHead": "c0f1cbe669b681f7be49aa6fecb363643818e2ce",
+  "reviewTimestamp": "2026-09-08T10:20:49Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback"
+  ],
+  "findings": [
+    {
+      "id": "PHYSICAL-PUBLIC-LIVE-SPECTATOR-ROUTE-ARCH-001",
+      "severity": "P1",
+      "status": "resolved",
+      "launchImpacting": true,
+      "detail": "Physical Android proof found the shared Home/Live/Explore destination helper bypassing the existing server-authoritative spectator resolver and routing public-free discovery directly to a host-capable Live Stage room path. Live and Watch-Party discovery cards now route by discovery item identity through /spectate, while upload, Event and channel destinations remain exact."
+    },
+    {
+      "id": "PHYSICAL-PUBLIC-LIVE-SPECTATOR-ROUTE-SECURITY-002",
+      "severity": "P1",
+      "status": "resolved",
+      "launchImpacting": true,
+      "detail": "The repair passes only the discovery item ID to the existing resolver, which re-reads authoritative lifecycle, visibility, target and access state before choosing a spectator destination. It grants no room identity, host role, speaker role or publish capability. Exact-range Codex Security review found no vulnerabilities."
+    },
+    {
+      "id": "PHYSICAL-PUBLIC-LIVE-SPECTATOR-ROUTE-PROVIDER-NATIVE-003",
+      "severity": "P2",
+      "status": "not_applicable_to_source_change",
+      "launchImpacting": false,
+      "detail": "This is OTA-compatible shared React Native routing code plus an executable source guard. It changes no native capability, provider catalog, database schema, Edge Function, runtime or channel."
+    },
+    {
+      "id": "PHYSICAL-PUBLIC-LIVE-SPECTATOR-ROUTE-PRIVACY-ROLLBACK-004",
+      "severity": "P1",
+      "status": "resolved",
+      "launchImpacting": true,
+      "detail": "Public and Circle reads remain server-authoritative and ended or unauthorized discovery items fail closed in the spectator resolver. The prior internal-v2 OTA is retained only as emergency rollback material because it contains the known misroute; using it would re-freeze release proof until a safe forward successor is published."
+    }
+  ]
+}
