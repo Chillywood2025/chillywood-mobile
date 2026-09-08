@@ -685,8 +685,9 @@
   },
   "overrides": {
     "@istanbuljs/load-nyc-config": {
-      "js-yaml": "3.15.1"
+      "js-yaml": "3.15.2"
     },
+    "@xmldom/xmldom": "0.8.15",
     "@expo/fingerprint@0.15.5": {
       "minimatch@10.2.5": {
         "brace-expansion": "5.0.9"
@@ -704,7 +705,7 @@
       }
     },
     "image-size": "$image-size",
-    "js-yaml": "4.3.1",
+    "js-yaml": "4.3.2",
     "minimatch@3.1.5": {
       "brace-expansion": "1.1.18"
     },
