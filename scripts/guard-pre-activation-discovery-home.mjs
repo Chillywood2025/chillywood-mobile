@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
+
+const require = createRequire(import.meta.url);
+const ts = require("typescript");
 
 const read = (path) => readFileSync(path, "utf8");
 const migration = read("supabase/migrations/20260907163000_pre_activation_discovery_event_authority.sql");
@@ -9,6 +13,7 @@ const lifecycleClosure = read("supabase/migrations/20260907195000_pre_activation
 const physicalFixtureClosure = read("supabase/migrations/20260907230000_pre_activation_physical_feed_fixture_quarantine.sql");
 const home = read("app/(tabs)/index.tsx");
 const live = read("app/(tabs)/live.tsx");
+const liveTabDiscoveryBuckets = read("_lib/liveTabDiscoveryBuckets.ts");
 const explore = read("app/(tabs)/explore.tsx");
 const saved = read("app/(tabs)/my-list.tsx");
 const channel = read("app/channel/[userId].tsx");
@@ -46,6 +51,35 @@ assert.ok(home.includes('title: "Circle Watch-Party"'), "Home must use the custo
 assert.ok(home.includes("Official Chi&apos;llywood"), "Rachi official identity must remain creator-tied rather than a section status");
 assert.ok(home.includes("readLatestPublicEventSummaries({ limit: 24 }).catch"), "Home Event failure must not erase independent public creator rails");
 assert.ok(live.includes("readLatestPublicEventSummaries({ limit: 32 }).catch"), "Live Event failure must not erase active discovery");
+assert.ok(live.includes("buildLiveTabDiscoveryBuckets(discoveryItems, events)"),
+  "Live must use the tested lifecycle-aware discovery buckets");
+
+const compiledLiveTabDiscoveryBuckets = ts.transpileModule(liveTabDiscoveryBuckets, {
+  compilerOptions: {
+    module: ts.ModuleKind.CommonJS,
+    target: ts.ScriptTarget.ES2022,
+    strict: true,
+  },
+}).outputText;
+const liveTabDiscoveryBucketModule = { exports: {} };
+new Function("exports", "module", "require", compiledLiveTabDiscoveryBuckets)(
+  liveTabDiscoveryBucketModule.exports,
+  liveTabDiscoveryBucketModule,
+  require,
+);
+const { buildLiveTabDiscoveryBuckets } = liveTabDiscoveryBucketModule.exports;
+const futureEvent = { id: "future-event", isLiveNow: false, isUpcoming: true };
+const scheduledProjection = { id: "scheduled-projection", event_id: "future-event", live_state: "scheduled" };
+const futureBuckets = buildLiveTabDiscoveryBuckets([scheduledProjection], [futureEvent]);
+assert.deepEqual(futureBuckets.upcomingEvents.map(({ id }) => id), ["future-event"],
+  "a canonical scheduled projection must not suppress its Upcoming Event card");
+const activeEvent = { id: "active-event", isLiveNow: true, isUpcoming: false };
+const liveProjection = { id: "live-projection", event_id: "active-event", live_state: "live" };
+const activeBuckets = buildLiveTabDiscoveryBuckets([liveProjection], [activeEvent]);
+assert.equal(activeBuckets.liveItems.length, 1,
+  "a canonical live projection must remain in Live Now");
+assert.equal(activeBuckets.liveEvents.length, 0,
+  "a rendered live projection must de-duplicate its active Event summary");
 
 for (const [label, source] of [["Home", home], ["Live", live], ["Explore", explore], ["Saved", saved]]) {
   assert.ok(source.includes("useBottomTabBarHeight"), `${label} must derive final scroll clearance from the actual tab bar`);
