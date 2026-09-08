@@ -1,0 +1,103 @@
+{
+  "implementationPrNumber": 373,
+  "implementationBranch": "codex/physical-explore-fixture-visibility-rfgc-v1",
+  "implementationHead": "c05212889485e72f8b858bbc3557b77705f6c0e7",
+  "implementationTree": "c5a98d29eca179497ee3ce687aa6b7ad206cc5c0",
+  "baseHead": "5ab9bbad3fd6aae0051dd33fc2fe953d680c81fd",
+  "changedFileHash": "bbbc5a0d0c227a3605392672ae3f2fdad40549d817e4dd8ea85f1debf7da0c14",
+  "migrationSetHash": "e4413f8ec3386f1feb05640423a83c8f94cb2c14b023eb0db1c8b3970bde3929",
+  "configHash": "bf0933f584b5e44a0159ae237dcb99714821f78ffd98702e50bb77d986cacc58",
+  "testResults": {
+    "phase1Ci": {
+      "status": "pass",
+      "qualification": "EXACT_FROZEN_HEAD_SUBSTANTIVE_PHASE1_PASS_ASSURANCE_ONLY_CONTEXT_DRIFT",
+      "runId": 34220473093,
+      "implementationHead": "c05212889485e72f8b858bbc3557b77705f6c0e7",
+      "jobs": {
+        "total": 14,
+        "passed": 11,
+        "failedAssuranceOnly": 3,
+        "failedSubstantive": 0
+      },
+      "assuranceOnlyFindings": [
+        "ASSURANCE_TASK_CONTEXT_UNBOUND",
+        "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN",
+        "ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND",
+        "PHASE1_RISK_CLOSURE_PROTECTED_READY_DECISION_INVALID"
+      ]
+    },
+    "focused": {
+      "preActivationDiscoveryHome": "pass",
+      "titleReleasePredicate": "pass with malformed, future, archived, unpublished and released cases",
+      "titleReleaseRls": "focused plus adjacent pgTAP 174/174 pass",
+      "supabaseFullDatabase": "87 files, 3182 tests pass",
+      "routeContracts": "pass",
+      "playerOverlay": "pass"
+    },
+    "static": {
+      "lint": "0 errors; 104 pre-existing warnings",
+      "typecheck": "pass",
+      "gitDiffCheck": "pass"
+    },
+    "platform": {
+      "androidRegressionGuards": "pass",
+      "androidNativeRuntimeCompatibility": "pass",
+      "runtimeValidation": "pass",
+      "otaNativeBoundary": "pass",
+      "iosConfiguration": "pass"
+    },
+    "security": {
+      "scanId": "1d5aba09-c5f4-4050-bc69-777d550c2c6e",
+      "coverage": "complete exact eleven-file implementation diff",
+      "findings": 0,
+      "severity": "P0=0 P1=0 launch-impacting-P2=0"
+    }
+  },
+  "testResultHash": "c8046d4ec81d48528b8be0c8c8c4606f6f3c249e80a0b32cbe2945b7456d6c0d",
+  "reviewLevel": "C",
+  "reviewHead": "c05212889485e72f8b858bbc3557b77705f6c0e7",
+  "reviewTimestamp": "2026-09-08T11:30:18Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback"
+  ],
+  "findings": [
+    {
+      "id": "PHYSICAL-TITLE-RELEASE-VISIBILITY-RLS-001",
+      "severity": "P1",
+      "status": "resolved",
+      "launchImpacting": true,
+      "detail": "Physical Android proof found archived and QA fixture titles publicly readable through an unconditional titles SELECT policy. A forward-only migration replaces that policy with a server-clocked fail-closed release predicate for anon and ordinary authenticated users while preserving exact owner/operator programming inspection through the existing platform-role authority function."
+    },
+    {
+      "id": "PHYSICAL-TITLE-RELEASE-VISIBILITY-CONSUMERS-002",
+      "severity": "P1",
+      "status": "resolved",
+      "launchImpacting": true,
+      "detail": "Home, Explore, Saved, title detail, player and Watch-Party title resolution previously disagreed about release eligibility. They now use one shared fail-closed predicate and explicit published query filters, preventing future, malformed, unpublished or archived records from entering ordinary discovery or direct playback paths."
+    },
+    {
+      "id": "PHYSICAL-TITLE-FIXTURE-QUARANTINE-003",
+      "severity": "P2",
+      "status": "resolved",
+      "launchImpacting": true,
+      "detail": "The two positively identified Sandbox QA title records remain eligible for canonical owner-authenticated archive/unpublish through the existing audited programming RPC. No row or immutable sandbox purchase, ledger, intent, watch-history or provider evidence is deleted; deployment performs no data mutation automatically."
+    },
+    {
+      "id": "PHYSICAL-TITLE-RELEASE-VISIBILITY-PROVIDER-NATIVE-004",
+      "severity": "P2",
+      "status": "not_applicable_to_source_change",
+      "launchImpacting": false,
+      "detail": "The client repair is OTA-compatible shared React Native query and predicate code. The database repair changes only title SELECT policies. It changes no native capability, Edge Function, provider catalog, money switch, runtime identity or production commerce configuration."
+    },
+    {
+      "id": "PHYSICAL-TITLE-RELEASE-VISIBILITY-PRIVACY-ROLLBACK-005",
+      "severity": "P1",
+      "status": "resolved",
+      "launchImpacting": true,
+      "detail": "Ordinary users can read only authoritative released titles; direct insert and update authority remains unchanged and denied. Exact owner/operator programming reads stay explicit. Rollback is a forward successor restoring the prior named policies plus a prior internal-v2 OTA, with physical proof re-frozen because rollback would reintroduce known public fixture visibility."
+    }
+  ]
+}
