@@ -23,6 +23,7 @@ import {
   type CreatorReplayLibraryItem,
 } from "../../_lib/creatorReplays";
 import { supabase } from "../../_lib/supabase";
+import { filterPubliclyReleasedTitles } from "../../_lib/publicTitles";
 import {
   buildUserChannelProfile,
   readMergedWatchProgress,
@@ -37,7 +38,17 @@ import type { Tables } from "../../supabase/database.types";
 
 type TitleRow = Pick<
   Tables<"titles">,
-  "id" | "title" | "category" | "year" | "runtime" | "synopsis" | "poster_url"
+  | "id"
+  | "title"
+  | "category"
+  | "year"
+  | "runtime"
+  | "synopsis"
+  | "poster_url"
+  | "is_published"
+  | "status"
+  | "release_at"
+  | "release_date"
 >;
 
 type ContinueWatchingTitle = TitleRow & { progress: WatchProgressEntry };
@@ -56,11 +67,13 @@ async function readTitlesByIds(ids: string[]): Promise<TitleRow[]> {
   try {
     const { data, error } = await supabase
       .from("titles")
-      .select("id,title,category,year,runtime,synopsis,poster_url")
+      .select("id,title,category,year,runtime,synopsis,poster_url,is_published,status,release_at,release_date")
       .in("id", normalizedIds)
+      .eq("is_published", true)
+      .eq("status", "published")
       .returns<TitleRow[]>();
     if (!error && data) {
-      const byId = new Map(data.map((item) => [String(item.id), item]));
+      const byId = new Map(filterPubliclyReleasedTitles(data).map((item) => [String(item.id), item]));
       return normalizedIds.map((id) => byId.get(id)).filter((item): item is TitleRow => !!item);
     }
   } catch {
@@ -79,6 +92,10 @@ async function readTitlesByIds(ids: string[]): Promise<TitleRow[]> {
         runtime: (localMatch as any).runtime ?? null,
         synopsis: (localMatch as any).description ?? null,
         poster_url: null,
+        is_published: true,
+        status: "published",
+        release_at: null,
+        release_date: null,
       };
     })
     .filter((item): item is TitleRow => !!item);

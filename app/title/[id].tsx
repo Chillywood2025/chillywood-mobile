@@ -36,6 +36,7 @@ import {
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
+import { isPubliclyReleasedTitle } from "../../_lib/publicTitles";
 import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
 import { readMyListIds, toggleMyListTitle } from "../../_lib/userData";
 import { AccessSheet, getAccessSheetEntryLabel } from "../../components/monetization/access-sheet";
@@ -60,6 +61,10 @@ type TitleDbRow = Pick<
   | "ads_enabled"
   | "sponsor_placement"
   | "sponsor_label"
+  | "is_published"
+  | "status"
+  | "release_at"
+  | "release_date"
 >;
 
 type TitleRow = Omit<TitleDbRow, "created_at" | "content_access_rule" | "sponsor_placement"> & {
@@ -100,6 +105,10 @@ const buildLocalFallbackTitle = (localMatch: any): TitleRow => ({
   ads_enabled: false,
   sponsor_placement: "none",
   sponsor_label: null,
+  is_published: true,
+  status: "published",
+  release_at: null,
+  release_date: null,
 });
 
 const formatAddedDate = (value?: string | null) => {
@@ -174,7 +183,7 @@ export default function TitleDetails() {
       setLoading(true);
 
       try {
-        const baseSelect = "id,title,category,year,runtime,synopsis,poster_url,created_at,content_access_rule,ads_enabled,sponsor_placement,sponsor_label";
+        const baseSelect = "id,title,category,year,runtime,synopsis,poster_url,created_at,content_access_rule,ads_enabled,sponsor_placement,sponsor_label,is_published,status,release_at,release_date";
         const { data: exactIdMatch } = await supabase
           .from("titles")
           .select(baseSelect)
@@ -182,7 +191,7 @@ export default function TitleDetails() {
           .returns<TitleDbRow>()
           .maybeSingle();
 
-        if (active && exactIdMatch) {
+        if (active && exactIdMatch && isPubliclyReleasedTitle(exactIdMatch)) {
           setItem(toTitleRow(exactIdMatch));
         } else if (active && cleanId) {
           const { data: exactTitleMatch } = await supabase
@@ -192,7 +201,7 @@ export default function TitleDetails() {
             .returns<TitleDbRow>()
             .maybeSingle();
 
-          if (active && exactTitleMatch) {
+          if (active && exactTitleMatch && isPubliclyReleasedTitle(exactTitleMatch)) {
             setItem(toTitleRow(exactTitleMatch));
           }
         }
