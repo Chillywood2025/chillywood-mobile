@@ -35,6 +35,9 @@ const livekitClient = read("_lib/livekit/token-contract.ts");
 const livekitEdge = read("supabase/functions/livekit-token/index.ts");
 const notifications = read("supabase/functions/notification-dispatch/index.ts");
 const foregroundRefresh = read("hooks/useRefreshOnForeground.ts");
+const spectatorLive = read("app/spectate-live/[itemId].tsx");
+const spectatorMetadata = read("app/spectate-metadata/[itemId].tsx");
+const performancePolicy = read("_lib/performancePolicy.ts");
 const publicTitleSource = read("_lib/publicTitles.ts");
 const releaseSource = read("config/release/ios-internal-v2.json");
 const generatedRelease = read("supabase/functions/_shared/release-manifest-contract.generated.mjs");
@@ -191,6 +194,23 @@ for (const [label, source] of [["Home", home], ["Live", live], ["Explore", explo
 }
 assert.ok(foregroundRefresh.includes('nextState === "active"') && foregroundRefresh.includes('appStateRef.current !== "active"'),
   "foreground refresh must run once on a real inactive-to-active transition");
+assert.ok(performancePolicy.includes("SPECTATOR_LIFECYCLE_REFRESH_MS = 15_000"),
+  "an open spectator route must use a bounded lifecycle refresh contract");
+for (const [label, source, generationRef] of [
+  ["immersive spectator Live", spectatorLive, "liveLoadGenerationRef"],
+  ["spectator metadata", spectatorMetadata, "metadataLoadGenerationRef"],
+]) {
+  assert.ok(source.includes("useFocusEffect") && source.includes("useRefreshOnForeground"),
+    `${label} must refresh authoritative state on focus and foreground resume`);
+  assert.ok(source.includes("setInterval") && source.includes("SPECTATOR_LIFECYCLE_REFRESH_MS"),
+    `${label} must bound stale lifecycle state while it remains open`);
+  assert.ok(source.includes(generationRef) && source.includes(`generation !== ${generationRef}.current`),
+    `${label} must reject older lifecycle reads after a newer refresh`);
+}
+assert.ok(spectatorLive.includes("setItems([])") && spectatorLive.includes("setUnavailable(true)"),
+  "an ended immersive Live must clear its active cards and become unavailable");
+assert.ok(spectatorLive.includes("setSheetItem(null)") && spectatorLive.includes("setReportItem(null)"),
+  "an ended immersive Live must clear stale action surfaces");
 assert.ok(event.includes("Audience") && event.includes("accessibilityLabel"), "Event detail must expose its authoritative audience accessibly");
 assert.ok(eventSource.includes('.eq("visibility", "public")'), "public Event queries must request only public authoritative rows");
 assert.ok(discoverySource.includes('item.live_state === "scheduled"')
