@@ -66,9 +66,15 @@ const expectedNanoid = Object.freeze({
     "node_modules/postcss",
   ]),
 });
-// Exact reviewed lock graph after the bounded browserslist and fast-uri advisory closures.
+const expectedDependencyAdvisoryClosure = Object.freeze({
+  "node_modules/@istanbuljs/load-nyc-config/node_modules/js-yaml": "3.15.2",
+  "node_modules/@xmldom/xmldom": "0.8.15",
+  "node_modules/js-yaml": "4.3.2",
+});
+// Exact reviewed lock graph after the bounded browserslist, fast-uri, js-yaml,
+// and xmldom advisory closures.
 // Any later package identity drift still fails closed at this digest.
-const expectedUnrelatedPackageGraphSha256 = "48ae0b14d8141ca4de1b04611da97b9dc122fd65e2c87854017ea99b508f2280";
+const expectedUnrelatedPackageGraphSha256 = "354c3444473937496ed19ab7da34aabe60ce73a192eae727e19bb6703d317c18";
 const compatibilityClosurePaths = new Set([
   "node_modules/concat-map",
   "node_modules/expo/node_modules/balanced-match",
@@ -135,6 +141,11 @@ function validatePolicy(model) {
     && model.nanoid.integrity === expectedNanoid.integrity,
   "NANOID_VERSION_VULNERABLE", "Every production nanoid consumer must resolve the reviewed 3.3.18 zero-size fix");
   gate(JSON.stringify(model.nanoid.parents) === JSON.stringify(expectedNanoid.parents), "NANOID_PARENT_SET_CHANGED", "The reviewed nanoid production parent set changed");
+  gate(model.overrides["@xmldom/xmldom"] === expectedDependencyAdvisoryClosure["node_modules/@xmldom/xmldom"]
+    && model.overrides["@istanbuljs/load-nyc-config"]?.["js-yaml"] === expectedDependencyAdvisoryClosure["node_modules/@istanbuljs/load-nyc-config/node_modules/js-yaml"]
+    && model.overrides["js-yaml"] === expectedDependencyAdvisoryClosure["node_modules/js-yaml"]
+    && JSON.stringify(model.dependencyAdvisoryClosure) === JSON.stringify(expectedDependencyAdvisoryClosure),
+  "DEPENDENCY_ADVISORY_CLOSURE_INVALID", "The reviewed js-yaml and xmldom advisory closure must remain exact");
   gate(model.unrelatedPackageGraphSha256 === expectedUnrelatedPackageGraphSha256, "UNRELATED_PACKAGE_VERSION_CHANGED", "An unrelated package identity changed");
   return true;
 }
@@ -190,6 +201,9 @@ function actualModel() {
         .map(([entryPath]) => entryPath)
         .sort(),
     },
+    dependencyAdvisoryClosure: Object.fromEntries(
+      Object.keys(expectedDependencyAdvisoryClosure).map((entryPath) => [entryPath, packages[entryPath]?.version ?? null]),
+    ),
     unrelatedPackageGraphSha256: unrelatedPackageGraphSha256(),
   };
 }
@@ -310,6 +324,9 @@ function killNegativeControls(base) {
     ["CHANGE_IMAGE_SIZE_SAFE", "IMAGE_SIZE_SAFE_IDENTITY_CHANGED", (m) => { m.imageSize.version = "1.2.1"; }],
     ["RESTORE_NANOID_3_3_17", "NANOID_VERSION_VULNERABLE", (m) => { m.overrides.nanoid = "3.3.17"; m.nanoid.version = "3.3.17"; }],
     ["CHANGE_NANOID_PARENT_SET", "NANOID_PARENT_SET_CHANGED", (m) => { m.nanoid.parents = m.nanoid.parents.slice(1); }],
+    ["RESTORE_XMLDOM_0_8_13", "DEPENDENCY_ADVISORY_CLOSURE_INVALID", (m) => { m.dependencyAdvisoryClosure["node_modules/@xmldom/xmldom"] = "0.8.13"; }],
+    ["RESTORE_JS_YAML_3_15_1", "DEPENDENCY_ADVISORY_CLOSURE_INVALID", (m) => { m.dependencyAdvisoryClosure["node_modules/@istanbuljs/load-nyc-config/node_modules/js-yaml"] = "3.15.1"; }],
+    ["RESTORE_JS_YAML_4_3_1", "DEPENDENCY_ADVISORY_CLOSURE_INVALID", (m) => { m.dependencyAdvisoryClosure["node_modules/js-yaml"] = "4.3.1"; }],
     ["CHANGE_UNRELATED_PACKAGE", "UNRELATED_PACKAGE_VERSION_CHANGED", (m) => { m.unrelatedPackageGraphSha256 = "0".repeat(64); }],
   ];
   return controls.map(([id, expectedCode, mutate]) => {
@@ -339,6 +356,7 @@ const output = {
   graphSha256: sha256(JSON.stringify({ minimatch: model.minimatch, braceExpansion: model.braceExpansion })),
   apiObservations,
   nanoidObservation,
+  dependencyAdvisoryClosure: model.dependencyAdvisoryClosure,
   relevantSourceHashes: relevantSourceHashes(),
   npmLsProblems: model.npmProblems.length,
   negativeControls: { required: negativeControls.length, killed: negativeControls.length, results: negativeControls },
