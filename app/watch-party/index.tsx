@@ -1265,8 +1265,27 @@ export default function WatchPartyIndexScreen() {
         } else {
           const nextPartyId = preparedTargetPartyId;
           if (nextPartyId) {
+            let preparedRoomForNavigation = preparedRoom?.room ?? null;
+            if (preparedRoomForNavigation?.roomType === "live") {
+              const persistedLiveRoom = await setPartyRoomPolicies(nextPartyId, {
+                discoveryVisibility: liveDiscoveryVisibility,
+                discoveryTitle: liveDiscoveryTitle,
+              }).catch(() => null);
+              const persistedPreparedRoomMatches = Boolean(
+                persistedLiveRoom
+                && persistedLiveRoom.partyId === nextPartyId
+                && persistedLiveRoom.hostUserId === hostUserId
+                && persistedLiveRoom.roomType === "live",
+              );
+              if (!persistedPreparedRoomMatches || !persistedLiveRoom) {
+                setCreateError("Unable to save Live discovery settings. Check your connection and try again.");
+                return;
+              }
+              preparedRoomForNavigation = persistedLiveRoom;
+              setPreparedRoom((current) => current ? { ...current, room: persistedLiveRoom } : current);
+            }
             debugLog("watch-party", "watch_party_navigate_prepared_room", {
-              roomType: preparedRoom?.room.roomType ?? activeWaitingRoomType,
+              roomType: preparedRoomForNavigation?.roomType ?? activeWaitingRoomType,
               hasPartyId: Boolean(nextPartyId),
               hasRoomCode: Boolean(preparedTargetRoomCode),
               hasTitleId: Boolean(preparedTargetTitleId),
@@ -1274,7 +1293,7 @@ export default function WatchPartyIndexScreen() {
             });
             navigateToRoom({
               partyId: nextPartyId,
-              roomType: preparedRoom?.room.roomType ?? activeWaitingRoomType,
+              roomType: preparedRoomForNavigation?.roomType ?? activeWaitingRoomType,
               roomCode: preparedTargetRoomCode,
               titleId: preparedTargetTitleId,
               sourceType: defaultSourceType,

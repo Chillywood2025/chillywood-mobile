@@ -916,6 +916,32 @@ assertBefore(
   "Live Watch-Party lobby must check prepared-room ownership before navigation.",
 );
 assertIncludes(
+  liveWatchPartyCreateHandler,
+  "const persistedLiveRoom = await setPartyRoomPolicies(nextPartyId, {",
+  "Live Watch-Party lobby must persist the latest discovery fields at the entry boundary instead of relying on input blur.",
+);
+assertIncludes(
+  liveWatchPartyCreateHandler,
+  "discoveryVisibility: liveDiscoveryVisibility,\n                discoveryTitle: liveDiscoveryTitle,",
+  "Live Watch-Party entry persistence must bind both visibility and title to the prepared room update.",
+);
+assertIncludes(
+  liveWatchPartyCreateHandler,
+  "persistedLiveRoom.hostUserId === hostUserId",
+  "Live Watch-Party entry persistence must retain exact host ownership before navigation.",
+);
+assertIncludes(
+  liveWatchPartyCreateHandler,
+  "persistedLiveRoom.roomType === \"live\"",
+  "Live Watch-Party entry persistence must accept only the exact Live room response.",
+);
+assertBefore(
+  liveWatchPartyCreateHandler,
+  "const persistedLiveRoom = await setPartyRoomPolicies(nextPartyId, {",
+  "navigateToRoom({",
+  "Live Watch-Party lobby must finish discovery persistence before navigation.",
+);
+assertIncludes(
   partyRoom,
   "partyRoomCameraPreviewSuppressed",
   "Party Room handoff camera-preview suppression state",
