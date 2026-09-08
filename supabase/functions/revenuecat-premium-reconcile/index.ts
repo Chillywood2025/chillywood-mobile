@@ -12,6 +12,10 @@ import {
   toText,
   writeProviderReadinessAudit,
 } from "../_shared/provider-readiness.ts";
+import {
+  resolveRevenueCatStoreProductIdentifier,
+  revenueCatProductId,
+} from "./authority.ts";
 
 const FUNCTION_NAME = "revenuecat-premium-reconcile";
 const REVENUECAT_API_BASE = "https://api.revenuecat.com";
@@ -110,16 +114,10 @@ const entitlementIsPremium = (subscription: JsonObject) => {
   ));
 };
 
-const productIdentifier = (subscription: JsonObject) => {
-  const product = isRecord(subscription.product) ? subscription.product : null;
-  return toText(product?.store_identifier);
-};
-
 const eligibleSubscription = (subscription: JsonObject, userId: string, now: number) => {
   const startsAt = finiteMillis(subscription.current_period_starts_at);
   const expiresAt = finiteMillis(subscription.current_period_ends_at ?? subscription.ends_at);
   const status = toText(subscription.status).toLowerCase();
-  const productId = productIdentifier(subscription);
   return subscription.object === "subscription"
     && toText(subscription.customer_id) === userId
     && toText(subscription.environment).toLowerCase() === "sandbox"
@@ -129,7 +127,6 @@ const eligibleSubscription = (subscription: JsonObject, userId: string, now: num
     && ["active", "trialing", "in_grace_period"].includes(status)
     && !!startsAt && startsAt <= now + 5 * 60_000
     && !!expiresAt && expiresAt > now && expiresAt > startsAt
-    && PREMIUM_PRODUCT_IDS.has(productId)
     && entitlementIsPremium(subscription);
 };
 
@@ -237,7 +234,17 @@ Deno.serve(async (req) => {
 
     const subscription = eligible[0];
     const subscriptionId = toText(subscription.id);
-    const providerProductId = productIdentifier(subscription);
+    const productId = revenueCatProductId(subscription);
+    if (!SAFE_ID.test(productId)) throw new Error("revenuecat_product_id_invalid");
+    const product = await revenueCatGet(
+      apiKey,
+      `/v2/projects/${encodeURIComponent(projectId)}/products/${encodeURIComponent(productId)}`,
+      projectId,
+    );
+    const providerProductId = resolveRevenueCatStoreProductIdentifier(subscription, product);
+    if (!PREMIUM_PRODUCT_IDS.has(providerProductId)) {
+      throw new Error("revenuecat_subscription_product_invalid");
+    }
     const startsAt = finiteMillis(subscription.current_period_starts_at);
     const expiresAt = finiteMillis(subscription.current_period_ends_at ?? subscription.ends_at);
     if (!startsAt || !expiresAt) throw new Error("revenuecat_subscription_period_invalid");
