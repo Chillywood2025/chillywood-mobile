@@ -91,6 +91,38 @@ assert.equal(activeBuckets.liveItems.length, 1,
 assert.equal(activeBuckets.liveEvents.length, 0,
   "a rendered live projection must de-duplicate its active Event summary");
 
+const compiledDiscoverySource = ts.transpileModule(discoverySource, {
+  compilerOptions: {
+    module: ts.ModuleKind.CommonJS,
+    target: ts.ScriptTarget.ES2022,
+    strict: true,
+  },
+}).outputText;
+const discoverySourceModule = { exports: {} };
+new Function("exports", "module", "require", compiledDiscoverySource)(
+  discoverySourceModule.exports,
+  discoverySourceModule,
+  (specifier) => {
+    if (specifier === "./channelAudience") return { readFollowedChannelUserIds: async () => [] };
+    if (specifier === "./friendGraph") return { readActiveFriendUserIds: async () => [] };
+    if (specifier === "./supabase") return { supabase: {} };
+    return {};
+  },
+);
+const { getDiscoveryItemDestination } = discoverySourceModule.exports;
+for (const sourceType of ["live_stage_room", "watch_party_room"]) {
+  assert.equal(
+    getDiscoveryItemDestination({
+      id: `${sourceType}-item`,
+      item_type: "live_room",
+      room_id: `${sourceType}-room`,
+      source_type: sourceType,
+    }),
+    `/spectate/${sourceType}-item`,
+    `${sourceType} discovery must resolve audience authority before entering a room route`,
+  );
+}
+
 for (const [label, source] of [["Home", home], ["Live", live], ["Explore", explore], ["Saved", saved]]) {
   assert.ok(source.includes("useBottomTabBarHeight"), `${label} must derive final scroll clearance from the actual tab bar`);
   assert.ok(source.includes("bottomTabBarHeight"), `${label} must apply the measured bottom inset`);
@@ -167,9 +199,14 @@ assert.ok(livekitEdge.includes("fetchExistingLiveKitAssignmentEndpoint")
   && livekitEdge.includes("listParticipants(room.roomName)")
   && livekitEdge.includes("live_discovery_provider_host_unconfirmed"),
 "the server must confirm the exact host in the assigned LiveKit room before discovery publication");
-assert.ok(discoverySource.includes('item.source_type === "live_stage_room"')
-  && discoverySource.includes('/watch-party/live-stage/${encodeURIComponent(roomId)}'),
-"Live discovery cards must route the exact Live Stage source without Party Room crossover");
+assert.ok(discoverySource.includes('return `/spectate/${encodeURIComponent(item.id)}`'),
+  "discovery cards must enter the authority-resolving Spectator route");
+assert.ok(!discoverySource.includes('/watch-party/live-stage/${encodeURIComponent(roomId)}'),
+"Live discovery cards must never enter the host-capable Live Stage route directly");
+for (const surface of [home, live, explore]) {
+  assert.ok(surface.includes("getDiscoveryItemDestination(item)"),
+    "Home, Live, and Explore must share the spectator-safe discovery destination boundary");
+}
 assert.ok(notifications.includes("read_authorized_event_reminder_recipients")
   && notifications.includes("chillywoodmobile://event/"),
 "Event notifications must reuse Event authority and exact Event deep links");
