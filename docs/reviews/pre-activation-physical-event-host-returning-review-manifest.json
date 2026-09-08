@@ -1,0 +1,101 @@
+{
+  "implementationPrNumber": 365,
+  "implementationBranch": "codex/physical-event-host-returning-rfgc-v1",
+  "implementationHead": "4b30023e041f333708eda1ce4f718696ec288222",
+  "implementationTree": "b2552ce50f1d58a88303148f37590d69ed3f920b",
+  "baseHead": "1a0ca8840aa2f46a8d6e323ce3a5a6d89f2e3a31",
+  "changedFileHash": "0267eec569292aa3c72863d3b5167f989485a4a89bad03780973d63edf9e5d26",
+  "migrationSetHash": "5103fa8c8fcad3a4b42c4ef1a156b62e2d2e5bf9cc8ba8b60fd0aa7a48c2e739",
+  "configHash": "bf0933f584b5e44a0159ae237dcb99714821f78ffd98702e50bb77d986cacc58",
+  "testResults": {
+    "phase1Ci": {
+      "status": "blocked_assurance_only",
+      "qualification": "EXACT_FROZEN_HEAD_SUBSTANTIVE_LANES_PASS_ASSURANCE_CONTEXT_UNBOUND",
+      "runId": 34183255583,
+      "implementationHead": "4b30023e041f333708eda1ce4f718696ec288222",
+      "jobs": {
+        "total": 14,
+        "passed": 11,
+        "failedAssuranceOnly": 3,
+        "failedSubstantive": 0
+      },
+      "assuranceOnlyFindings": [
+        "ASSURANCE_TASK_CONTEXT_UNBOUND",
+        "ASSURANCE_OBJECTIVE_OMITS_AFFECTED_DOMAIN",
+        "ENGINEERING_CLOSURE_TASK_CONTEXT_UNBOUND",
+        "PHASE1_RISK_CLOSURE_PROTECTED_READY_DECISION_INVALID"
+      ]
+    },
+    "database": {
+      "cleanResetMigrationApplication": "pass through exact 20260908001000 head",
+      "localStorageEmulatorRestart": "nonblocking_unrelated_health_timeout",
+      "focusedPremiumDiscoveryEventCircleWatchParty": "145/145 pass",
+      "phase1SupabaseIntegration": "pass"
+    },
+    "focused": {
+      "preActivationDiscoveryHome": "pass",
+      "partyRoomLiveStageEvent": "19/19 pass",
+      "assuranceContracts": "28 contracts, 22 features, 25 escaped defects pass",
+      "wrongHostReturningDenied": "pass",
+      "ownHostCreateAndRescheduleReturning": "pass"
+    },
+    "static": {
+      "lint": "0 errors; 104 pre-existing warnings",
+      "typecheck": "pass",
+      "gitDiffCheck": "pass"
+    },
+    "security": {
+      "scanId": "0722f647-547a-4760-a19d-b009528df436",
+      "coverage": "complete exact two-file implementation diff",
+      "findings": 0,
+      "severity": "P0=0 P1=0 launch-impacting-P2=0"
+    }
+  },
+  "testResultHash": "6c6f832771f0e78757727a944276d7a5e47dd5340e929e847636207360fdb426",
+  "reviewLevel": "C",
+  "reviewHead": "7cc45cd3eff90a03e0c26344bd6000a70fd9c211",
+  "reviewTimestamp": "2026-09-08T03:24:54Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback"
+  ],
+  "findings": [
+    {
+      "id": "PHYSICAL-EVENT-HOST-RETURNING-ARCH-001",
+      "severity": "P2",
+      "status": "resolved_source_integration",
+      "launchImpacting": true,
+      "detail": "The failed boundary was PostgreSQL same-command visibility: can_read_creator_event could not observe a just-inserted row while INSERT RETURNING evaluated SELECT RLS. The direct owning-host predicate restores the existing authorized self-read without bypassing canonical authority for any other reader."
+    },
+    {
+      "id": "PHYSICAL-EVENT-HOST-RETURNING-SECURITY-002",
+      "severity": "P2",
+      "status": "resolved_source_integration",
+      "launchImpacting": true,
+      "detail": "The new branch is limited to authenticated auth.uid() equality with host_user_id. Wrong-host INSERT RETURNING remains denied, anonymous users cannot enter the branch, and public, Circle, private, draft, block, and Event Pass reads continue through can_read_creator_event."
+    },
+    {
+      "id": "PHYSICAL-EVENT-HOST-RETURNING-PROVIDER-NATIVE-003",
+      "severity": "P2",
+      "status": "not_applicable_to_source_change",
+      "launchImpacting": false,
+      "detail": "The implementation changes only a forward PostgreSQL RLS policy and pgTAP proof. It changes no native capability, provider catalog, Edge function, app bundle, runtime, channel, or OTA source."
+    },
+    {
+      "id": "PHYSICAL-EVENT-HOST-RETURNING-PRIVACY-ROLLBACK-004",
+      "severity": "P2",
+      "status": "resolved_source_integration",
+      "launchImpacting": true,
+      "detail": "The migration is forward-only and preserves the prior resolver as the complete non-host branch. Rollback is a policy-only forward successor if needed; discovery writes remain server-authoritative, while physical postdeployment Event lifecycle proof is still required."
+    },
+    {
+      "id": "PHYSICAL-EVENT-HOST-RETURNING-ASSURANCE-005",
+      "severity": "P2",
+      "status": "owner_authorized_preop_assurance_continuation",
+      "launchImpacting": false,
+      "detail": "Three Phase 1 jobs failed only because the GitHub event task is unbound to the Owner-authorized database-RLS successor scope. Their substantive suites passed before assurance finalization. No failed check is represented as passed."
+    }
+  ]
+}
