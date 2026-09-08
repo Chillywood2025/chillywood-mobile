@@ -1,0 +1,80 @@
+{
+  "implementationPrNumber": 367,
+  "implementationBranch": "codex/physical-live-tab-event-bucketing-rfgc-v1",
+  "implementationHead": "f2eb74bca3bee9f1b44bb47a447c309bd5176244",
+  "implementationTree": "497e4a1ebde924eabcdc1205f45138d1ea650887",
+  "baseHead": "8ab557d9f67f9c526ee302e01dff860f5df244d9",
+  "changedFileHash": "29f519b90ae9bb8a0028913d9df9febd64504bb36e36bdd9b13e29060d661c00",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "bf0933f584b5e44a0159ae237dcb99714821f78ffd98702e50bb77d986cacc58",
+  "testResults": {
+    "phase1Ci": {
+      "status": "pass",
+      "qualification": "EXACT_FROZEN_HEAD_ALL_PHASE1_LANES_PASS",
+      "runId": 34184525732,
+      "implementationHead": "f2eb74bca3bee9f1b44bb47a447c309bd5176244",
+      "jobs": {
+        "total": 14,
+        "passed": 14,
+        "failedAssuranceOnly": 0,
+        "failedSubstantive": 0
+      }
+    },
+    "focused": {
+      "preActivationDiscoveryHome": "pass including scheduled-projection and active-projection bucket regressions",
+      "partyRoomLiveStageEvent": "19/19 pass",
+      "routeContracts": "pass"
+    },
+    "static": {
+      "lint": "0 errors; 104 pre-existing warnings",
+      "typecheck": "pass",
+      "gitDiffCheck": "pass"
+    },
+    "security": {
+      "scanId": "592a34f4-99d8-48b3-a3c3-41565f04c9c5",
+      "coverage": "complete exact three-file implementation diff",
+      "findings": 0,
+      "severity": "P0=0 P1=0 launch-impacting-P2=0"
+    }
+  },
+  "testResultHash": "467813f555938e62512551c8353190cc6ba537ace0d4bdb8b46f64aa3c8edc98",
+  "reviewLevel": "C",
+  "reviewHead": "f2eb74bca3bee9f1b44bb47a447c309bd5176244",
+  "reviewTimestamp": "2026-09-08T03:48:58Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback"
+  ],
+  "findings": [
+    {
+      "id": "PHYSICAL-LIVE-TAB-EVENT-BUCKET-ARCH-001",
+      "severity": "P2",
+      "status": "resolved_source_integration",
+      "launchImpacting": true,
+      "detail": "The failed boundary was presentation bucketing: a scheduled canonical discovery projection suppressed the matching Event summary even though the Live lane rendered only active projections. The helper now partitions lifecycle first and only de-duplicates summaries against items actually rendered in the active lane."
+    },
+    {
+      "id": "PHYSICAL-LIVE-TAB-EVENT-BUCKET-SECURITY-002",
+      "severity": "P2",
+      "status": "resolved_source_integration",
+      "launchImpacting": true,
+      "detail": "The patch changes no query, RLS, creator binding, Event access, entitlement or route authority. Public, Circle and private visibility remain server-authoritative; the client only chooses the correct presentation lane for already-authorized records."
+    },
+    {
+      "id": "PHYSICAL-LIVE-TAB-EVENT-BUCKET-PROVIDER-NATIVE-003",
+      "severity": "P2",
+      "status": "not_applicable_to_source_change",
+      "launchImpacting": false,
+      "detail": "The implementation is JavaScript presentation logic plus a deterministic guard. It changes no native capability, provider catalog, Edge Function, database schema, migration, runtime or channel."
+    },
+    {
+      "id": "PHYSICAL-LIVE-TAB-EVENT-BUCKET-PRIVACY-ROLLBACK-004",
+      "severity": "P2",
+      "status": "resolved_source_integration",
+      "launchImpacting": true,
+      "detail": "The repair retains the same authorized payloads and routes, preserves active Event de-duplication, and adds executable scheduled-versus-live lifecycle proof. Rollback is an internal-v2 OTA to the prior compatible source if physical proof exposes regression."
+    }
+  ]
+}
