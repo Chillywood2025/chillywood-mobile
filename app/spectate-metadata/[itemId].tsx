@@ -1,6 +1,6 @@
 import { ResizeMode, Video } from "expo-av";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -36,8 +36,10 @@ import {
   type SpectatorLaunchAction,
 } from "../../_lib/spectatorChildRooms";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
+import { SPECTATOR_LIFECYCLE_REFRESH_MS } from "../../_lib/performancePolicy";
 import { useSession } from "../../_lib/session";
 import { ReportSheet } from "../../components/safety/report-sheet";
+import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 
 type LoadState = "loading" | "ready" | "unavailable";
 type SpectatorAccessLane = "public" | "circle";
@@ -106,18 +108,24 @@ export default function SpectatorMetadataScreen() {
   const [startingAction, setStartingAction] = useState<SpectatorLaunchAction | null>(null);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
+  const metadataLoadGenerationRef = useRef(0);
+  const screenFocusedRef = useRef(false);
+  const lifecyclePollingActiveRef = useRef(false);
 
-  useEffect(() => {
-    let active = true;
-
-    const load = async () => {
+  const loadMetadata = useCallback(async (showLoading = false) => {
+    const generation = ++metadataLoadGenerationRef.current;
+    if (showLoading) {
       setLoadState("loading");
-      setItem(null);
-      setDecision(null);
-      setPlayback(null);
-      setAccessLane("public");
+    }
 
+    try {
       if (!itemId) {
+        if (generation !== metadataLoadGenerationRef.current) return;
+        lifecyclePollingActiveRef.current = false;
+        setItem(null);
+        setDecision(null);
+        setPlayback(null);
+        setAccessLane("public");
         setLoadState("unavailable");
         return;
       }
@@ -126,9 +134,14 @@ export default function SpectatorMetadataScreen() {
       const circleItem = publicItem ? null : await readCircleSpectatorFeedItem(itemId).catch(() => null);
       const nextItem = publicItem ?? circleItem;
       const nextLane: SpectatorAccessLane = circleItem ? "circle" : "public";
-      if (!active) return;
+      if (generation !== metadataLoadGenerationRef.current) return;
 
       if (!nextItem) {
+        lifecyclePollingActiveRef.current = false;
+        setItem(null);
+        setDecision(null);
+        setPlayback(null);
+        setAccessLane("public");
         setLoadState("unavailable");
         return;
       }
@@ -138,20 +151,44 @@ export default function SpectatorMetadataScreen() {
       });
       const fallbackPlayback = resolveSpectatorPlaybackState(nextItem, nextDecision);
       const nextPlayback = await readSpectatorPlaybackReadout(nextItem, nextDecision).catch(() => fallbackPlayback);
-      if (!active) return;
+      if (generation !== metadataLoadGenerationRef.current) return;
+      lifecyclePollingActiveRef.current = nextItem.live_state === "live" || nextItem.live_state === "scheduled";
       setItem(nextItem);
       setDecision(nextDecision);
       setPlayback(nextPlayback);
       setAccessLane(nextLane);
       setLoadState(nextDecision.canShowMetadata ? "ready" : "unavailable");
-    };
-
-    void load();
-
-    return () => {
-      active = false;
-    };
+    } catch {
+      if (generation !== metadataLoadGenerationRef.current) return;
+      lifecyclePollingActiveRef.current = false;
+      setItem(null);
+      setDecision(null);
+      setPlayback(null);
+      setAccessLane("public");
+      setLoadState("unavailable");
+    }
   }, [itemId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      screenFocusedRef.current = true;
+      void loadMetadata(true);
+      const interval = setInterval(() => {
+        if (lifecyclePollingActiveRef.current) void loadMetadata(false);
+      }, SPECTATOR_LIFECYCLE_REFRESH_MS);
+
+      return () => {
+        screenFocusedRef.current = false;
+        clearInterval(interval);
+        metadataLoadGenerationRef.current += 1;
+      };
+    }, [loadMetadata]),
+  );
+
+  useRefreshOnForeground(() => {
+    if (!screenFocusedRef.current) return;
+    return loadMetadata(false);
+  });
 
   const openChannel = () => {
     if (!item) return;

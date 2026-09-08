@@ -1,6 +1,6 @@
 import { ResizeMode, Video } from "expo-av";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -39,8 +39,10 @@ import {
   startSpectatorChildRoom,
 } from "../../_lib/spectatorChildRooms";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
+import { SPECTATOR_LIFECYCLE_REFRESH_MS } from "../../_lib/performancePolicy";
 import { useSession } from "../../_lib/session";
 import { ReportSheet } from "../../components/safety/report-sheet";
+import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 
 type AccessLane = "public" | "circle";
 type PagePlayback = {
@@ -181,49 +183,76 @@ export default function ImmersiveLiveSpectatorScreen() {
   const [sheetBusy, setSheetBusy] = useState(false);
   const [reportItem, setReportItem] = useState<DiscoveryFeedItem | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
+  const liveLoadGenerationRef = useRef(0);
+  const screenFocusedRef = useRef(false);
 
   const pageHeight = Math.max(1, height);
 
-  useEffect(() => {
-    let mounted = true;
-    setLoading(true);
+  const loadLiveItems = useCallback(async (showLoading = false) => {
+    const generation = ++liveLoadGenerationRef.current;
+    if (showLoading) setLoading(true);
     setUnavailable(false);
 
-    const load = async () => {
+    try {
       if (!initialItemId) {
-        if (mounted) {
-          setUnavailable(true);
-          setLoading(false);
-        }
+        if (generation !== liveLoadGenerationRef.current) return;
+        setItems([]);
+        setActiveIndex(0);
+        setSheetItem(null);
+        setReportItem(null);
+        setUnavailable(true);
         return;
       }
 
       const initial = lane === "circle"
         ? await readCircleSpectatorFeedItem(initialItemId).catch(() => null)
         : await readPublicDiscoveryFeedItem(initialItemId).catch(() => null);
-      if (!mounted) return;
+      if (generation !== liveLoadGenerationRef.current) return;
 
       if (!initial || initial.live_state !== "live" || (lane === "circle") !== isCircleItem(initial)) {
+        setItems([]);
+        setActiveIndex(0);
+        setSheetItem(null);
+        setReportItem(null);
         setUnavailable(true);
-        setLoading(false);
         return;
       }
 
       const ranked = lane === "circle"
         ? await readRankedCircleSpectatorFeedItems({ limit: 50 }).catch(() => ({ items: [] }))
         : await readRankedPublicDiscoveryFeedItems({ limit: 50, surface: "home" }).catch(() => ({ items: [] }));
-      if (!mounted) return;
+      if (generation !== liveLoadGenerationRef.current) return;
 
-      setItems(uniqueLiveItems(initial, ranked.items));
-      setActiveIndex(0);
-      setLoading(false);
-    };
-
-    void load();
-    return () => {
-      mounted = false;
-    };
+      const nextItems = uniqueLiveItems(initial, ranked.items);
+      setItems(nextItems);
+      setActiveIndex((current) => Math.min(current, Math.max(0, nextItems.length - 1)));
+      setSheetItem((current) => current ? nextItems.find((item) => item.id === current.id) ?? null : null);
+      setUnavailable(nextItems.length === 0);
+    } finally {
+      if (generation === liveLoadGenerationRef.current) setLoading(false);
+    }
   }, [initialItemId, lane]);
+
+  useFocusEffect(
+    useCallback(() => {
+      screenFocusedRef.current = true;
+      void loadLiveItems(true);
+      const interval = setInterval(() => {
+        void loadLiveItems(false);
+      }, SPECTATOR_LIFECYCLE_REFRESH_MS);
+
+      return () => {
+        screenFocusedRef.current = false;
+        clearInterval(interval);
+        liveLoadGenerationRef.current += 1;
+      };
+    }, [loadLiveItems]),
+  );
+
+  useRefreshOnForeground(() => {
+    if (!screenFocusedRef.current) return;
+    return loadLiveItems(false);
+  });
 
   useEffect(() => {
     let mounted = true;
