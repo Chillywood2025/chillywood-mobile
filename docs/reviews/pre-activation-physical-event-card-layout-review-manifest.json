@@ -1,0 +1,80 @@
+{
+  "implementationPrNumber": 369,
+  "implementationBranch": "codex/physical-event-card-action-layout-rfgc-v1",
+  "implementationHead": "9577543f461cdf6f3fc0ebc44ad8115bba1b7b4a",
+  "implementationTree": "b1ce1bf20929d1f21a7c4c61d7bc4f876f567a2f",
+  "baseHead": "080f0fd51c548544b3b30be7d589a0b8bcdf2294",
+  "changedFileHash": "6943638ba4be42945c506b1c9d9bef3e71e0d6b05fee6d136c0041998a74fde0",
+  "migrationSetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "configHash": "bf0933f584b5e44a0159ae237dcb99714821f78ffd98702e50bb77d986cacc58",
+  "testResults": {
+    "phase1Ci": {
+      "status": "pass",
+      "qualification": "EXACT_FROZEN_HEAD_ALL_PHASE1_LANES_PASS",
+      "runId": 34187165589,
+      "implementationHead": "9577543f461cdf6f3fc0ebc44ad8115bba1b7b4a",
+      "jobs": {
+        "total": 14,
+        "passed": 14,
+        "failedAssuranceOnly": 0,
+        "failedSubstantive": 0
+      }
+    },
+    "focused": {
+      "preActivationDiscoveryHome": "pass including narrow Event-card row-layout and accessibility regression",
+      "partyRoomLiveStageEvent": "28/28 pass",
+      "routeContracts": "pass"
+    },
+    "static": {
+      "lint": "0 errors; repository warnings pre-existing",
+      "typecheck": "pass",
+      "gitDiffCheck": "pass"
+    },
+    "security": {
+      "scanId": "de325729-2a5c-4d5d-b84a-8f1790a8a5ca",
+      "coverage": "complete exact two-file implementation diff",
+      "findings": 0,
+      "severity": "P0=0 P1=0 launch-impacting-P2=0"
+    }
+  },
+  "testResultHash": "ec9f1f42ebf49854dcff002088a3dc75f9bd828d6e0861bc5955c1b3ddbbdc99",
+  "reviewLevel": "C",
+  "reviewHead": "9577543f461cdf6f3fc0ebc44ad8115bba1b7b4a",
+  "reviewTimestamp": "2026-09-08T04:35:17Z",
+  "reviewerLanes": [
+    "architecture-state",
+    "security-authority",
+    "provider-native",
+    "privacy-rollback"
+  ],
+  "findings": [
+    {
+      "id": "PHYSICAL-EVENT-CARD-LAYOUT-ARCH-001",
+      "severity": "P2",
+      "status": "resolved_source_integration",
+      "launchImpacting": true,
+      "detail": "The first failed boundary was one wrapping row containing three minimum-width controls. On narrow Android layouts the wrapped Paid control did not reserve reliable vertical space and overlapped the viewer preview. Navigation now occupies one measured row and monetization controls occupy a separate wrapping row."
+    },
+    {
+      "id": "PHYSICAL-EVENT-CARD-LAYOUT-SECURITY-002",
+      "severity": "P2",
+      "status": "resolved_source_integration",
+      "launchImpacting": true,
+      "detail": "The patch preserves the exact Event route, existing paid/free handlers, price, creator authority, Event Pass isolation, and server-side authorization. Exact-range Codex Security review found no vulnerabilities."
+    },
+    {
+      "id": "PHYSICAL-EVENT-CARD-LAYOUT-PROVIDER-NATIVE-003",
+      "severity": "P2",
+      "status": "not_applicable_to_source_change",
+      "launchImpacting": false,
+      "detail": "This is OTA-compatible React Native presentation code plus a deterministic source guard. It changes no native capability, provider catalog, database schema, Edge Function, runtime, or channel."
+    },
+    {
+      "id": "PHYSICAL-EVENT-CARD-LAYOUT-PRIVACY-ROLLBACK-004",
+      "severity": "P2",
+      "status": "resolved_source_integration",
+      "launchImpacting": true,
+      "detail": "The repair does not change Event visibility or record selection. It adds an exact Event-title accessibility label and keeps Free and Paid controls individually labeled. Rollback is an internal-v2 OTA to the prior compatible source if physical proof exposes a regression."
+    }
+  ]
+}
