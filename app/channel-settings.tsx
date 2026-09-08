@@ -9650,44 +9650,48 @@ export function ChannelStudioScreen() {
             : ""}
           {event.linkedTitleId ? `\nLinked title: ${event.linkedTitleId}` : ""}
         </Text>
-        <View style={styles.eventActionRow}>
+        <View style={styles.eventCardActionStack}>
           <TouchableOpacity
-            style={styles.eventSecondaryButton}
+            style={[styles.eventSecondaryButton, styles.eventCardOpenButton]}
             activeOpacity={0.86}
             onPress={() => router.push(`/event/${event.id}`)}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${event.eventTitle} Event`}
           >
             <Text style={styles.eventSecondaryButtonText}>Open Event</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.eventSecondaryButton, !paidEventOffer && styles.eventMonetizationChoiceSelected, paidEventBusy && styles.eventPrimaryButtonDisabled]}
-            activeOpacity={0.86}
-            onPress={() => onSavePaidEventOffer(event, false)}
-            disabled={paidEventBusy}
-            accessibilityRole="button"
-            accessibilityState={{ selected: !paidEventOffer, disabled: paidEventBusy }}
-            accessibilityLabel={`Make ${event.eventTitle} free to enter`}
-          >
-            {paidEventBusy ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.eventSecondaryButtonText}>Free</Text>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.eventPrimaryButton, paidEventOffer && styles.eventMonetizationChoiceSelected, paidEventBusy && styles.eventPrimaryButtonDisabled]}
-            activeOpacity={0.86}
-            onPress={() => onSavePaidEventOffer(event, true)}
-            disabled={paidEventBusy}
-            accessibilityRole="button"
-            accessibilityState={{ selected: !!paidEventOffer, disabled: paidEventBusy }}
-            accessibilityLabel={`Charge for ${event.eventTitle} entry with an Event Pass for 99 cents`}
-          >
-            {paidEventBusy ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.eventPrimaryButtonText}>Paid · $0.99</Text>
-            )}
-          </TouchableOpacity>
+          <View style={styles.eventCardMonetizationRow}>
+            <TouchableOpacity
+              style={[styles.eventSecondaryButton, styles.eventCardMonetizationButton, !paidEventOffer && styles.eventMonetizationChoiceSelected, paidEventBusy && styles.eventPrimaryButtonDisabled]}
+              activeOpacity={0.86}
+              onPress={() => onSavePaidEventOffer(event, false)}
+              disabled={paidEventBusy}
+              accessibilityRole="button"
+              accessibilityState={{ selected: !paidEventOffer, disabled: paidEventBusy }}
+              accessibilityLabel={`Make ${event.eventTitle} free to enter`}
+            >
+              {paidEventBusy ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.eventSecondaryButtonText}>Free</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.eventPrimaryButton, styles.eventCardMonetizationButton, paidEventOffer && styles.eventMonetizationChoiceSelected, paidEventBusy && styles.eventPrimaryButtonDisabled]}
+              activeOpacity={0.86}
+              onPress={() => onSavePaidEventOffer(event, true)}
+              disabled={paidEventBusy}
+              accessibilityRole="button"
+              accessibilityState={{ selected: !!paidEventOffer, disabled: paidEventBusy }}
+              accessibilityLabel={`Charge for ${event.eventTitle} entry with an Event Pass for 99 cents`}
+            >
+              {paidEventBusy ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.eventPrimaryButtonText}>Paid · $0.99</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
         {paidEventOffer ? (
           <Text style={styles.eventCardBody}>
@@ -12306,6 +12310,26 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 10,
     marginTop: 4,
+  },
+  eventCardActionStack: {
+    gap: 10,
+    marginTop: 4,
+  },
+  eventCardOpenButton: {
+    flex: 0,
+    width: "100%",
+  },
+  eventCardMonetizationRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  eventCardMonetizationButton: {
+    flex: 0,
+    flexBasis: 132,
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 132,
   },
   eventMonetizationChoiceSelected: {
     borderColor: "#D4AF37",
