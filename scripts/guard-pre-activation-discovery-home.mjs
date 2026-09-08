@@ -17,6 +17,7 @@ const liveTabDiscoveryBuckets = read("_lib/liveTabDiscoveryBuckets.ts");
 const explore = read("app/(tabs)/explore.tsx");
 const saved = read("app/(tabs)/my-list.tsx");
 const channel = read("app/channel/[userId].tsx");
+const channelSettings = read("app/channel-settings.tsx");
 const event = read("app/event/[eventId].tsx");
 const creatorVideoCard = read("components/creator-media/creator-video-card.tsx");
 const replayPlayer = read("app/player/replay/[replayId].tsx");
@@ -53,6 +54,15 @@ assert.ok(home.includes("readLatestPublicEventSummaries({ limit: 24 }).catch"), 
 assert.ok(live.includes("readLatestPublicEventSummaries({ limit: 32 }).catch"), "Live Event failure must not erase active discovery");
 assert.ok(live.includes("buildLiveTabDiscoveryBuckets(discoveryItems, events)"),
   "Live must use the tested lifecycle-aware discovery buckets");
+assert.ok(channelSettings.includes("styles.eventCardActionStack")
+  && channelSettings.includes("styles.eventCardMonetizationRow")
+  && channelSettings.includes("styles.eventCardMonetizationButton"),
+"creator Event cards must separate navigation from monetization controls on small screens");
+assert.ok(channelSettings.includes('eventCardOpenButton: {\n    flex: 0,\n    width: "100%"')
+  && channelSettings.includes("eventCardMonetizationButton: {\n    flex: 0,\n    flexBasis: 132,\n    flexGrow: 1,\n    flexShrink: 1,\n    minWidth: 132"),
+"creator Event actions must reserve measured rows instead of overlapping following content");
+assert.ok(channelSettings.includes('accessibilityLabel={`Open ${event.eventTitle} Event`}'),
+  "creator Event navigation must expose the exact Event title accessibly");
 
 const compiledLiveTabDiscoveryBuckets = ts.transpileModule(liveTabDiscoveryBuckets, {
   compilerOptions: {
