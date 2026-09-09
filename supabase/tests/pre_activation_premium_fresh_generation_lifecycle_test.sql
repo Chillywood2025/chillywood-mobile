@@ -1,5 +1,5 @@
 begin;
-select plan(66);
+select plan(68);
 insert into auth.users(id,is_sso_user,is_anonymous) values
   ('af200000-0000-4000-8000-000000000001',false,false), ('af200000-0000-4000-8000-000000000002',false,false), ('af200000-0000-4000-8000-000000000003',false,false),
   ('af200000-0000-4000-8000-000000000004',false,false), ('af200000-0000-4000-8000-000000000005',false,false) on conflict(id) do nothing;
@@ -213,6 +213,22 @@ select is((select (result->>'status')||':'||(result->>'entitlementActive') from 
 select is((select latest_event_id from public.revenuecat_premium_transaction_authority
   where provider='revenuecat_app_store' and original_transaction_id='restore-generation-original'),'restore-generation-product-change',
   'the historical Restore duplicate cannot regress the product-change watermark');
+select throws_ok(
+  $sql$select public.reconcile_revenuecat_premium_snapshot_atomic(
+    'restore-generation-second','af200000-0000-4000-8000-000000000005','restore-generation-subscription','restore-generation-original',
+    mapping.provider_product_id,'active',clock_timestamp()-interval '1 day',clock_timestamp()+interval '29 days',clock_timestamp(),repeat('6',64)
+  ) from public.monetization_product_store_mappings mapping where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox'
+    and mapping.concept='premium' and mapping.provider_product_id='com.chillywood.premium.monthly'$sql$,
+  'premium_reconciliation_duplicate_identity_mismatch','an old-SKU Restore ID cannot be replayed after product change with a different immutable payload hash');
+select ok((select current_provider_product_id='com.chillywood.premium.yearly' and latest_event_id='restore-generation-product-change' and latest_event_hash=repeat('4',64)
+    and authority_state='active' from public.revenuecat_premium_transaction_authority where provider='revenuecat_app_store'
+      and original_transaction_id='restore-generation-original') and
+  (select count(*)=1 from public.provider_events where provider_event_id='restore-generation-second') and
+  (select count(*)=1 from public.access_grants grant_row join public.provider_events event on event.id=grant_row.provider_event_id
+    where event.provider_event_id='restore-generation-product-change') and
+  (select count(*)=1 from public.money_access_ledger_events ledger join public.provider_events event on event.id=ledger.provider_event_id
+    where event.provider_event_id='restore-generation-product-change'),
+  'the changed-hash Restore rejection preserves the product-change watermark and grant/ledger cardinality');
 create temporary table stale_restore_result on commit drop as
 select public.reconcile_revenuecat_premium_snapshot_atomic( 'restore-generation-stale','af200000-0000-4000-8000-000000000005',
   'restore-generation-subscription','restore-generation-original', mapping.provider_product_id,'active',clock_timestamp()-interval '3 days',
