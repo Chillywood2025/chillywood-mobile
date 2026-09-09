@@ -12,6 +12,7 @@ assert.match(container, /^supabase_db_[A-Za-z0-9_.-]{1,200}$/u);
 const sourceDatabase = "postgres";
 const transientDatabase = `codex_premium_${process.pid}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
 assert.match(transientDatabase, /^codex_premium_[0-9]+_[a-f0-9]{12}$/u);
+let transientDatabaseCreated = false;
 const psql = (database) => [
   "exec", "-i", container, "psql", "-X", "-q", "-A", "-t",
   "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", database,
@@ -71,6 +72,7 @@ function runDocker(args, options = {}) {
 function createTransientDatabase() {
   const created = runDocker(["exec", container, "createdb", "-U", "postgres", "-T", "template0", transientDatabase]);
   assert.equal(created.status, 0, "could not create isolated Premium concurrency database");
+  transientDatabaseCreated = true;
   const dump = runDocker(["exec", container, "pg_dump", "-U", "postgres", "--no-owner", "--no-privileges", sourceDatabase], { encoding: null });
   assert.equal(dump.status, 0, "could not export the local reset database for isolated concurrency proof");
   const restored = runDocker(["exec", "-i", container, "psql", "-X", "-q", "-U", "postgres", "-d", transientDatabase], {
@@ -82,8 +84,10 @@ function createTransientDatabase() {
 }
 
 function dropTransientDatabase() {
+  if (!transientDatabaseCreated) return;
   const dropped = runDocker(["exec", container, "dropdb", "-U", "postgres", "--if-exists", "--force", transientDatabase]);
   assert.equal(dropped.status, 0, "could not remove isolated Premium concurrency database");
+  transientDatabaseCreated = false;
 }
 
 async function raceExactCall(id, sql, expectedFirst, expectedSecond) {
@@ -119,8 +123,8 @@ assert.equal(started.status, 0, `local Supabase database container unavailable: 
 assert.equal(started.stdout.trim(), "true", "local Supabase database container is not running");
 
 const sourceFingerprint = query(`select (select count(*) from auth.users)::text||':'||(select count(*) from public.revenuecat_terminal_authority_quarantines)::text;`, sourceDatabase);
-createTransientDatabase();
 try {
+createTransientDatabase();
 const subject = randomUUID();
 const scenarios = [
   { id: "exact", provider: "revenuecat_app_store", user: `${literal(subject)}::uuid`, environment: "sandbox" },
