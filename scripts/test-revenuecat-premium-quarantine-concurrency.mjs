@@ -76,6 +76,12 @@ for (const scenario of scenarios) {
   let holder;
   let quarantine;
   try {
+    if (scenario.id === "exact") {
+      query(`insert into auth.users(id,is_sso_user,is_anonymous) values (${literal(subject)}::uuid,false,false) on conflict(id) do nothing;`);
+      query(`select public.quarantine_revenuecat_terminal_authority(
+        ${literal(scenario.provider)},${literal(`race-${scenario.id}`)},'TRANSFER',${scenario.user},${literal(scenario.environment)},${literal(rawHash)},
+        'terminal_identity_invalid:transfer_store_identity_missing_or_unsupported');`);
+    }
     holder = openSession(holderName, `
 begin;
 set local statement_timeout='10s';
@@ -106,7 +112,7 @@ where application_name=${literal(quarantineName)}
     const [holderResult, quarantineResult] = await Promise.all([holder.done, quarantine.done]);
     assert.equal(holderResult.code, 0, holderResult.stderr);
     assert.equal(quarantineResult.code, 0, quarantineResult.stderr);
-    assert.equal(Number(query(`select count(*) from public.revenuecat_terminal_authority_quarantines where raw_payload_hash=${literal(rawHash)};`)), 0);
+    assert.equal(Number(query(`select count(*) from public.revenuecat_terminal_authority_quarantines where raw_payload_hash=${literal(rawHash)};`)), scenario.id === "exact" ? 1 : 0);
   } catch (error) {
     await terminate(holderName, holder);
     await terminate(quarantineName, quarantine);
