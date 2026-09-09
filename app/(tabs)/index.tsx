@@ -50,6 +50,7 @@ import { readProfilePosts, type ProfilePost } from "../../_lib/profilePosts";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import {
     getDiscoveryAccessLabel,
+    getDiscoveryItemActionLabel,
     getDiscoveryItemDestination,
     getDiscoveryLiveLabel,
     getDiscoveryRankingReasonLabel,
@@ -672,7 +673,7 @@ export default function HomeScreen() {
         activeOpacity={0.9}
         onPress={() => openDiscoveryFeedItem(item)}
         accessibilityRole="button"
-        accessibilityLabel={`${title}. ${liveLabel}. ${accessLabel}. Open ${item.item_type === "live_room" ? "Live" : item.item_type === "watch_party" ? "Watch-Party" : "content"}`}
+        accessibilityLabel={`${title}. ${liveLabel}. ${accessLabel}. Open ${getDiscoveryItemActionLabel(item)}`}
       >
         <View style={styles.feedActivityThumb}>
           <StableImage
