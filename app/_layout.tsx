@@ -1295,6 +1295,20 @@ function DefaultOrientationLock() {
   return null;
 }
 
+const getWatchPartyWaitingRoomSingularId = (
+  name: string,
+  params?: Record<string, unknown>,
+) => {
+  const exactTarget = [
+    params?.mode,
+    params?.roomId ?? params?.partyId ?? params?.roomCode,
+    params?.source,
+    params?.sourceType,
+    params?.sourceId ?? params?.titleId,
+  ].map((value) => String(value ?? "").trim()).join(":");
+  return `${name}:${exactTarget}`;
+};
+
 function RootNavigator() {
   const params = useGlobalSearchParams<Record<string, string | string[]>>();
   const hideDebugOverlay = containsSensitiveNativeCallClaimRouteParams(params);
@@ -1310,10 +1324,11 @@ function RootNavigator() {
         <Stack.Screen name="player/[id]" />
         <Stack.Screen name="player/replay/[replayId]" />
         <Stack.Screen name="title/[id]" />
-        <Stack.Screen name="watch-party/index" />
-        <Stack.Screen name="watch-party/[partyId]" />
+        <Stack.Screen name="watch-party/index" dangerouslySingular={getWatchPartyWaitingRoomSingularId} />
+        <Stack.Screen name="watch-party/[partyId]" dangerouslySingular />
         <Stack.Screen name="watch-party/live-stage/index" />
         <Stack.Screen name="watch-party/live-stage/[partyId]" />
+        <Stack.Screen name="event/[eventId]" dangerouslySingular />
         <Stack.Screen name="communication/index" />
         <Stack.Screen name="communication/[roomId]" />
         <Stack.Screen name="chat/index" />

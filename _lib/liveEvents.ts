@@ -1,5 +1,6 @@
 import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 
+import { runKeyedSingleFlight } from "./actionSingleFlight.mjs";
 import { supabase } from "./supabase";
 
 export const CREATOR_EVENTS_TABLE = "creator_events";
@@ -355,7 +356,24 @@ async function readCreatorEventRowById(eventId: string): Promise<CreatorEventRec
   return parseCreatorEventRow(data);
 }
 
-export async function createCreatorEvent(
+const creatorEventCreateFlights = new Map<string, Promise<unknown>>();
+
+const getCreatorEventCreateFlightKey = (input: CreateCreatorEventInput) => JSON.stringify([
+  String(input.hostUserId ?? "").trim(),
+  String(input.eventTitle ?? "").trim(),
+  input.eventType ?? "live_first",
+  input.visibility ?? "private",
+  input.status ?? "draft",
+  input.startsAt ?? null,
+  input.endsAt ?? null,
+  input.linkedTitleId ?? null,
+  input.replayPolicy ?? "none",
+  input.replayAvailableAt ?? null,
+  input.replayExpiresAt ?? null,
+  input.reminderReady ?? false,
+]);
+
+async function createCreatorEventOnce(
   input: CreateCreatorEventInput,
 ): Promise<CreatorEventSummary | { error: CreatorEventWriteError }> {
   const validated = buildValidatedEventWriteShape({
@@ -404,6 +422,16 @@ export async function createCreatorEvent(
 
   const parsed = parseCreatorEventRow(data);
   return parsed ? buildCreatorEventSummary(parsed) : { error: { message: "Creator event returned an unreadable payload." } };
+}
+
+export function createCreatorEvent(
+  input: CreateCreatorEventInput,
+): Promise<CreatorEventSummary | { error: CreatorEventWriteError }> {
+  return runKeyedSingleFlight(
+    creatorEventCreateFlights,
+    getCreatorEventCreateFlightKey(input),
+    () => createCreatorEventOnce(input),
+  );
 }
 
 export async function updateCreatorEvent(

@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { titles as localTitles } from "../../_data/titles";
@@ -26,6 +26,7 @@ import {
   type PremiumWatchPartyFeatureAccessDecision,
 } from "../../_lib/premiumWatchPartyAccess";
 import { trackEvent } from "../../_lib/analytics";
+import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import {
   clearTitleShare,
   markTitleShared,
@@ -143,12 +144,21 @@ export default function TitleDetails() {
   const [accessError, setAccessError] = useState<string | null>(null);
   const [watchPartyAccessSheetVisible, setWatchPartyAccessSheetVisible] = useState(false);
   const [watchPartyPremiumGate, setWatchPartyPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
+  const watchPartyTransitionLatchRef = useRef(createActionSingleFlightLatch());
+  const [watchPartyTransitionInFlight, setWatchPartyTransitionInFlight] = useState(false);
   const [liveMetadata, setLiveMetadata] = useState<TitleLiveMetadata | null>(null);
   const [engagementState, setEngagementState] = useState<TitleEngagementState | null>(null);
   const [engagementLoading, setEngagementLoading] = useState(true);
   const [engagementBusy, setEngagementBusy] = useState<"like" | "share" | null>(null);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      watchPartyTransitionLatchRef.current.release();
+      setWatchPartyTransitionInFlight(false);
+    }, []),
+  );
 
   const localMatch = useMemo(
     () => localTitles.find((t: any) => String(t.id) === cleanId || String(t.title ?? "").toLowerCase() === cleanId.toLowerCase()) ?? null,
@@ -557,39 +567,50 @@ export default function TitleDetails() {
   const onOpenWatchPartyLive = async () => {
     const nextTitleId = String(title?.id ?? titleId).trim();
     if (!nextTitleId) return;
+    if (!watchPartyTransitionLatchRef.current.tryAcquire()) return;
+    setWatchPartyTransitionInFlight(true);
+    let navigationAccepted = false;
 
-    const access = await requireWatchPartyLivePremium({ accessKey: nextTitleId }).catch(() => null);
-    if (!access?.allowed) {
-      if (isRuntimeControlBlockedAccess(access)) {
-        const blockedCopy = getRuntimeControlBlockedCopy(access);
-        setWatchPartyPremiumGate(null);
-        setWatchPartyAccessSheetVisible(false);
-        Alert.alert(blockedCopy.title, blockedCopy.message);
-        trackEvent("runtime_control_blocked", {
+    try {
+      const access = await requireWatchPartyLivePremium({ accessKey: nextTitleId }).catch(() => null);
+      if (!access?.allowed) {
+        if (isRuntimeControlBlockedAccess(access)) {
+          const blockedCopy = getRuntimeControlBlockedCopy(access);
+          setWatchPartyPremiumGate(null);
+          setWatchPartyAccessSheetVisible(false);
+          Alert.alert(blockedCopy.title, blockedCopy.message);
+          trackEvent("runtime_control_blocked", {
+            surface: "title-detail-watch-party-live",
+            controlKey: access?.runtimeControlKey ?? "watch_party_live_enabled",
+            titleId: nextTitleId,
+          });
+          return;
+        }
+        const gate = access ?? watchPartyPremiumGate;
+        if (gate) setWatchPartyPremiumGate(gate);
+        trackEvent("monetization_gate_shown", {
           surface: "title-detail-watch-party-live",
-          controlKey: access?.runtimeControlKey ?? "watch_party_live_enabled",
+          reason: gate?.reason ?? "premium_required",
           titleId: nextTitleId,
         });
+        setWatchPartyAccessSheetVisible(true);
         return;
       }
-      const gate = access ?? watchPartyPremiumGate;
-      if (gate) setWatchPartyPremiumGate(gate);
-      trackEvent("monetization_gate_shown", {
-        surface: "title-detail-watch-party-live",
-        reason: gate?.reason ?? "premium_required",
-        titleId: nextTitleId,
-      });
-      setWatchPartyAccessSheetVisible(true);
-      return;
-    }
 
-    setWatchPartyPremiumGate(null);
-    router.push({
-      pathname: "/watch-party",
-      params: {
-        titleId: nextTitleId,
-      },
-    });
+      setWatchPartyPremiumGate(null);
+      router.push({
+        pathname: "/watch-party",
+        params: {
+          titleId: nextTitleId,
+        },
+      });
+      navigationAccepted = true;
+    } finally {
+      if (!navigationAccepted) {
+        watchPartyTransitionLatchRef.current.release();
+        setWatchPartyTransitionInFlight(false);
+      }
+    }
   };
 
   if (loading) {
@@ -745,7 +766,18 @@ export default function TitleDetails() {
                   <AppText scale="caption" weight="800" style={styles.liveActivityMetaText}>Reactions live</AppText>
                 ) : null}
               </View>
-              <Pressable style={[styles.btnGhost, styles.liveActivityActionButton]} onPress={onOpenWatchPartyLive}>
+              <Pressable
+                style={[
+                  styles.btnGhost,
+                  styles.liveActivityActionButton,
+                  watchPartyTransitionInFlight && styles.btnDisabled,
+                ]}
+                onPress={onOpenWatchPartyLive}
+                disabled={watchPartyTransitionInFlight}
+                accessibilityRole="button"
+                accessibilityLabel={watchPartyTransitionInFlight ? "Opening Party Waiting Room" : "Open Watch-Party Live"}
+                accessibilityState={{ disabled: watchPartyTransitionInFlight, busy: watchPartyTransitionInFlight }}
+              >
                 <AppText scale="title2" weight="900" style={styles.btnText}>Open Watch-Party Live</AppText>
               </Pressable>
             </View>

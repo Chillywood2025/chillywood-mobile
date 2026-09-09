@@ -4,7 +4,7 @@ import { useEventListener } from "expo";
 import { Asset } from "expo-asset";
 import { Audio, ResizeMode, Video, type AVPlaybackStatus } from "expo-av";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { VideoView, useVideoPlayer } from "expo-video";
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
@@ -55,6 +55,7 @@ import {
     resolveMonetizationConfig,
 } from "../../_lib/appConfig";
 import { trackEvent } from "../../_lib/analytics";
+import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import { getMonetizationAccessSheetPresentation } from "../../_lib/monetization";
 import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
 import { isCreatorDigitalCheckoutShellAvailable } from "../../_lib/creatorMoneyPurchaseAuthority";
@@ -747,6 +748,7 @@ type StandalonePlayerTopChromeProps = {
   followCreatorBusy: boolean;
   onFollowCreator: () => void;
   canStartWatchPartyLive: boolean;
+  watchPartyTransitionInFlight: boolean;
   onWatchParty: () => void;
   canReport: boolean;
   reportBusy: boolean;
@@ -767,6 +769,7 @@ function StandalonePlayerTopChrome({
   followCreatorBusy,
   onFollowCreator,
   canStartWatchPartyLive,
+  watchPartyTransitionInFlight,
   onWatchParty,
   canReport,
   reportBusy,
@@ -847,11 +850,23 @@ function StandalonePlayerTopChrome({
             <View style={styles.standaloneTopRightActions}>
               {canStartWatchPartyLive ? (
                 <TouchableOpacity
-                  style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, styles.standaloneSocialHandoffBtn]}
+                  style={[
+                    styles.partyOverlayChip,
+                    styles.partyOverlayChipWatchPartyTitle,
+                    styles.standaloneSocialHandoffBtn,
+                    watchPartyTransitionInFlight && styles.secondaryBtnDisabled,
+                  ]}
                   onPress={onWatchParty}
+                  disabled={watchPartyTransitionInFlight}
                   activeOpacity={0.85}
                   accessibilityRole="button"
-                  accessibilityLabel="Start Watch-Party Live from Player"
+                  accessibilityLabel={watchPartyTransitionInFlight
+                    ? "Opening Party Waiting Room"
+                    : "Start Watch-Party Live from Player"}
+                  accessibilityState={{
+                    disabled: watchPartyTransitionInFlight,
+                    busy: watchPartyTransitionInFlight,
+                  }}
                   hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                 >
                   <Text style={styles.partyOverlayChipText}>Watch-Party Live</Text>
@@ -1082,6 +1097,8 @@ export default function PlayerScreen() {
   const [standaloneAccessSheetVisible, setStandaloneAccessSheetVisible] = useState(false);
   const [watchPartyPremiumGate, setWatchPartyPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
   const [watchPartyPremiumSheetVisible, setWatchPartyPremiumSheetVisible] = useState(false);
+  const watchPartyTransitionLatchRef = useRef(createActionSingleFlightLatch());
+  const [watchPartyTransitionInFlight, setWatchPartyTransitionInFlight] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [watchPartyEntryLoading, setWatchPartyEntryLoading] = useState(inWatchParty);
   const [watchPartyEntryMissing, setWatchPartyEntryMissing] = useState(false);
@@ -1094,6 +1111,13 @@ export default function PlayerScreen() {
     && !watchPartyEntryError
     && !watchPartyPremiumGate
     && !!watchPartyAccess?.isAllowed
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      watchPartyTransitionLatchRef.current.release();
+      setWatchPartyTransitionInFlight(false);
+    }, []),
   );
 
   useEffect(() => {
@@ -4576,10 +4600,15 @@ export default function PlayerScreen() {
   }, [cleanId, titleId]);
 
   const onWatchParty = useCallback(async () => {
-    if (playbackSourceKind === "spectator-playback") {
-      Alert.alert("Watch-Party unavailable", "Start a watch party from the Spectator page for this source.");
-      return;
-    }
+    if (!watchPartyTransitionLatchRef.current.tryAcquire()) return;
+    setWatchPartyTransitionInFlight(true);
+    let navigationAccepted = false;
+
+    try {
+      if (playbackSourceKind === "spectator-playback") {
+        Alert.alert("Watch-Party unavailable", "Start a watch party from the Spectator page for this source.");
+        return;
+      }
 
     if (playbackSourceKind === "creator-video") {
       if (!isSignedIn) {
@@ -4627,6 +4656,7 @@ export default function PlayerScreen() {
               sourceId: creatorVideoId,
             },
           });
+          navigationAccepted = true;
           return;
         }
 
@@ -4712,6 +4742,7 @@ export default function PlayerScreen() {
           sourceId: roomSourceId,
         });
         router.push({ pathname: "/watch-party", params: navParams });
+        navigationAccepted = true;
         return;
       }
     } catch {
@@ -4731,6 +4762,13 @@ export default function PlayerScreen() {
         } : {}),
       },
     });
+    navigationAccepted = true;
+    } finally {
+      if (!navigationAccepted) {
+        watchPartyTransitionLatchRef.current.release();
+        setWatchPartyTransitionInFlight(false);
+      }
+    }
   }, [cleanId, creatorVideo, ensureWatchPartyLivePremium, hasResolvedPlatformTitle, isPlaying, isSignedIn, playbackSourceKind, titleId, titleLoading, item?.id, item?.title, localTitle]);
 
   const onSubmitTitleReport = useCallback(async (input: { category: SafetyReportCategory; note: string }) => {
@@ -10534,6 +10572,7 @@ export default function PlayerScreen() {
                 followCreatorBusy={creatorVideoFollowAction.busy}
                 onFollowCreator={creatorVideoFollowAction.toggle}
                 canStartWatchPartyLive={canStartStandaloneWatchPartyLive}
+                watchPartyTransitionInFlight={watchPartyTransitionInFlight}
                 onWatchParty={onWatchParty}
                 canReport={isCreatorVideoPlayback || canReportStandaloneTitle}
                 reportBusy={isCreatorVideoPlayback ? creatorVideoReportBusy : titleReportBusy}

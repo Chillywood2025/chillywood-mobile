@@ -81,8 +81,8 @@ const visibilityRlsMigration = read("supabase/migrations/20260618000942_profile_
 const settings = read("app/settings.tsx");
 const routeDoc = read("docs/NAVIGATION_TERMINOLOGY_MAP.md");
 
-assertIncludes(appLayout, '<Stack.Screen name="watch-party/index" />', "Waiting Room route registration");
-assertIncludes(appLayout, '<Stack.Screen name="watch-party/[partyId]" />', "Party Room route registration");
+assertIncludes(appLayout, '<Stack.Screen name="watch-party/index" dangerouslySingular={getWatchPartyWaitingRoomSingularId} />', "Waiting Room singular route registration");
+assertIncludes(appLayout, '<Stack.Screen name="watch-party/[partyId]" dangerouslySingular />', "Party Room singular route registration");
 assertIncludes(appLayout, '<Stack.Screen name="watch-party/live-stage/[partyId]" />', "Live Stage route registration");
 assertIncludes(appLayout, '<Stack.Screen name="chat/index" />', "Chi'lly Chat inbox route registration");
 assertIncludes(appLayout, '<Stack.Screen name="chat/[threadId]" />', "Chi'lly Chat thread route registration");

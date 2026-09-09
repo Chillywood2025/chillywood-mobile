@@ -35,6 +35,7 @@ import {
   startSpectatorChildRoom,
   type SpectatorLaunchAction,
 } from "../../_lib/spectatorChildRooms";
+import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { SPECTATOR_LIFECYCLE_REFRESH_MS } from "../../_lib/performancePolicy";
 import { useSession } from "../../_lib/session";
@@ -106,6 +107,7 @@ export default function SpectatorMetadataScreen() {
   const [playback, setPlayback] = useState<SpectatorPlaybackReadout | null>(null);
   const [accessLane, setAccessLane] = useState<SpectatorAccessLane>("public");
   const [startingAction, setStartingAction] = useState<SpectatorLaunchAction | null>(null);
+  const startRoomLatchRef = useRef(createActionSingleFlightLatch());
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const metadataLoadGenerationRef = useRef(0);
@@ -171,6 +173,8 @@ export default function SpectatorMetadataScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      startRoomLatchRef.current.release();
+      setStartingAction(null);
       screenFocusedRef.current = true;
       void loadMetadata(true);
       const interval = setInterval(() => {
@@ -202,16 +206,19 @@ export default function SpectatorMetadataScreen() {
 
   const handleStart = async (action: SpectatorLaunchAction) => {
     if (!item) return;
-    if (!isSignedIn) {
-      router.push({
-        pathname: "/(auth)/login",
-        params: { redirectTo: `/spectate/${item.id}` },
-      });
-      return;
-    }
-
+    if (!startRoomLatchRef.current.tryAcquire()) return;
     setStartingAction(action);
+    let navigationAccepted = false;
     try {
+      if (!isSignedIn) {
+        router.push({
+          pathname: "/(auth)/login",
+          params: { redirectTo: `/spectate/${item.id}` },
+        });
+        navigationAccepted = true;
+        return;
+      }
+
       const created = await startSpectatorChildRoom(action, item.id);
       if (created.roomType === "live") {
         router.push({
@@ -224,13 +231,17 @@ export default function SpectatorMetadataScreen() {
           params: { partyId: created.childRoomId, source: "spectator" },
         });
       }
+      navigationAccepted = true;
     } catch (error) {
       Alert.alert(
         "Watch party unavailable",
         error instanceof Error && error.message ? error.message : "This live can’t be used for a watch party",
       );
     } finally {
-      setStartingAction(null);
+      if (!navigationAccepted) {
+        startRoomLatchRef.current.release();
+        setStartingAction(null);
+      }
     }
   };
 
