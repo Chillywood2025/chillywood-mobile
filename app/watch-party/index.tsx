@@ -15,6 +15,7 @@ import {
 import { trackEvent } from "../../_lib/analytics";
 import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import { resolvePreparedWatchPartyRoomReuse } from "../../_lib/watchPartyPreparedRoomReuse.mjs";
+import { WATCH_PARTY_WAITING_ROOM_ENTRY_SOURCE } from "../../_lib/watchPartyReturnNavigation.mjs";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../_lib/betaProgram";
 import {
     ActivityIndicator,
@@ -707,6 +708,7 @@ export default function WatchPartyIndexScreen() {
 
     return {
       partyId: nextPartyId,
+      entrySource: WATCH_PARTY_WAITING_ROOM_ENTRY_SOURCE,
       ...(nextRoomCode ? { roomCode: nextRoomCode } : {}),
       ...(nextTitleId ? { titleId: nextTitleId } : {}),
       ...(nextSourceType ? { sourceType: nextSourceType } : {}),

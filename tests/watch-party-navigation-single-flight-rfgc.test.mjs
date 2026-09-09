@@ -7,6 +7,10 @@ import {
   runKeyedSingleFlight,
 } from "../_lib/actionSingleFlight.mjs";
 import { resolvePreparedWatchPartyRoomReuse } from "../_lib/watchPartyPreparedRoomReuse.mjs";
+import {
+  resolveWatchPartyReturnNavigation,
+  WATCH_PARTY_WAITING_ROOM_ENTRY_SOURCE,
+} from "../_lib/watchPartyReturnNavigation.mjs";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -14,6 +18,7 @@ const player = read("app/player/[id].tsx");
 const titleDetail = read("app/title/[id].tsx");
 const liveTab = read("app/(tabs)/live.tsx");
 const waitingRoom = read("app/watch-party/index.tsx");
+const partyRoomRoute = read("app/watch-party/[partyId].tsx");
 const spectatorLive = read("app/spectate-live/[itemId].tsx");
 const spectatorMetadata = read("app/spectate-metadata/[itemId].tsx");
 const spectatorChildRooms = read("_lib/spectatorChildRooms.ts");
@@ -150,7 +155,35 @@ test("identical waiting rooms and canonical destination routes are singular in t
   assert.match(rootLayout, /name="watch-party\/live-stage\/\[partyId\]" \/>/u);
   assert.match(rootLayout, /name="event\/\[eventId\]" dangerouslySingular/u);
   assert.match(waitingRoom, /pathname: "\/watch-party\/\[partyId\]"/u);
+  assert.match(waitingRoom, /entrySource: WATCH_PARTY_WAITING_ROOM_ENTRY_SOURCE/u);
   assert.doesNotMatch(waitingRoom, /pathname: "\/watch-party\/live-stage\/\[partyId\]"/u);
+});
+
+test("Party Room returns to the existing Waiting Room instead of replacing itself with a duplicate", () => {
+  assert.equal(resolveWatchPartyReturnNavigation({
+    canGoBack: true,
+    entrySource: WATCH_PARTY_WAITING_ROOM_ENTRY_SOURCE,
+  }), "back");
+  assert.equal(resolveWatchPartyReturnNavigation({
+    canGoBack: false,
+    entrySource: WATCH_PARTY_WAITING_ROOM_ENTRY_SOURCE,
+  }), "replace");
+  assert.equal(resolveWatchPartyReturnNavigation({
+    canGoBack: true,
+    entrySource: "direct-link",
+  }), "replace");
+
+  const canonicalStack = ["player", "waiting-room", "party-room"];
+  if (resolveWatchPartyReturnNavigation({
+    canGoBack: true,
+    entrySource: WATCH_PARTY_WAITING_ROOM_ENTRY_SOURCE,
+  }) === "back") {
+    canonicalStack.pop();
+  }
+  assert.deepEqual(canonicalStack, ["player", "waiting-room"]);
+  canonicalStack.pop();
+  assert.deepEqual(canonicalStack, ["player"]);
+  assert.match(partyRoomRoute, /resolveWatchPartyReturnNavigation\(\{[\s\S]{0,180}router\.canGoBack\(\)[\s\S]{0,240}router\.back\(\)/u);
 });
 
 test("same-class async room entry and creation actions use synchronous latches", () => {
