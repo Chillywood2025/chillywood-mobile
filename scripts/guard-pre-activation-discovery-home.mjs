@@ -168,7 +168,7 @@ new Function("exports", "module", "require", compiledDiscoverySource)(
     return {};
   },
 );
-const { getDiscoveryItemDestination } = discoverySourceModule.exports;
+const { getDiscoveryItemActionLabel, getDiscoveryItemDestination } = discoverySourceModule.exports;
 for (const sourceType of ["live_stage_room", "watch_party_room"]) {
   assert.equal(
     getDiscoveryItemDestination({
@@ -182,12 +182,30 @@ for (const sourceType of ["live_stage_room", "watch_party_room"]) {
   );
 }
 
+for (const [itemType, expectedAction] of [
+  ["live_room", "Live"],
+  ["watch_party", "Watch-Party"],
+  ["creator_event", "Event"],
+  ["creator_upload", "Video"],
+  ["channel_update", "Creator Channel"],
+  ["replay_later", "Replay"],
+  ["unknown", "Content"],
+]) {
+  assert.equal(
+    getDiscoveryItemActionLabel({ item_type: itemType }),
+    expectedAction,
+    `${itemType} discovery must announce its exact customer destination type`,
+  );
+}
+
 for (const [label, source] of [["Home", home], ["Live", live], ["Explore", explore], ["Saved", saved]]) {
   assert.ok(source.includes("useBottomTabBarHeight"), `${label} must derive final scroll clearance from the actual tab bar`);
   assert.ok(source.includes("bottomTabBarHeight"), `${label} must apply the measured bottom inset`);
 }
 for (const [label, source] of [["Home", home], ["Live", live], ["Explore", explore]]) {
   assert.ok(source.includes("accessibilityLabel"), `${label} discovery cards need deterministic accessibility meaning`);
+  assert.ok(source.includes("getDiscoveryItemActionLabel(item)"),
+    `${label} must share the exact discovery destination accessibility label`);
   assert.ok(source.includes("useRefreshOnForeground"), `${label} must refresh canonical discovery after foreground resume`);
   assert.ok(source.includes("LoadGenerationRef") && source.includes("generation !=="),
     `${label} must prevent an older discovery request from overwriting newer authoritative state`);

@@ -28,6 +28,7 @@ import {
 } from "../../_lib/creatorVideos";
 import {
   getDiscoveryAccessLabel,
+  getDiscoveryItemActionLabel,
   getDiscoveryItemDestination,
   getDiscoveryLiveLabel,
   rankDiscoveryFeedItems,
@@ -797,7 +798,7 @@ export default function ExploreScreen() {
         activeOpacity={0.9}
         onPress={() => openDiscoveryFeedItem(item)}
         accessibilityRole="button"
-        accessibilityLabel={`${title}. ${label}. ${accessLabel}. Open ${item.item_type === "live_room" ? "Live" : item.item_type === "watch_party" ? "Watch-Party" : "content"}`}
+        accessibilityLabel={`${title}. ${label}. ${accessLabel}. Open ${getDiscoveryItemActionLabel(item)}`}
       >
         <View style={styles.discoveryThumb}>
           {thumbnail ? (

@@ -229,6 +229,25 @@ export function getDiscoveryItemDestination(item: Pick<
   return `/spectate/${encodeURIComponent(item.id)}`;
 }
 
+export function getDiscoveryItemActionLabel(item: Pick<DiscoveryFeedItem, "item_type">) {
+  switch (item.item_type) {
+    case "live_room":
+      return "Live";
+    case "watch_party":
+      return "Watch-Party";
+    case "creator_event":
+      return "Event";
+    case "creator_upload":
+      return "Video";
+    case "channel_update":
+      return "Creator Channel";
+    case "replay_later":
+      return "Replay";
+    default:
+      return "Content";
+  }
+}
+
 export function getDiscoveryLiveLabel(item: Pick<DiscoveryFeedItem, "live_state" | "item_type">) {
   if (item.live_state === "live") return "Live";
   if (item.live_state === "scheduled") return "Upcoming";

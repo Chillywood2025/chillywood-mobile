@@ -19,6 +19,7 @@ import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 
 import {
   getDiscoveryAccessLabel,
+  getDiscoveryItemActionLabel,
   getDiscoveryItemDestination,
   readRankedPublicDiscoveryFeedItems,
   type DiscoveryFeedItem,
@@ -222,7 +223,7 @@ export default function LiveTabScreen() {
                 {liveItems.map((item) => {
                   const title = String(item.title ?? "").trim() || "Live Now";
                   return (
-                    <TouchableOpacity key={`live-${item.id}`} style={styles.discoveryCard} activeOpacity={0.88} onPress={() => openDiscoveryItem(item)} accessibilityRole="button" accessibilityLabel={`${title}. Live. ${getDiscoveryAccessLabel(item)}. Open ${item.item_type === "live_room" ? "Live" : "Watch-Party"}`}>
+                    <TouchableOpacity key={`live-${item.id}`} style={styles.discoveryCard} activeOpacity={0.88} onPress={() => openDiscoveryItem(item)} accessibilityRole="button" accessibilityLabel={`${title}. Live. ${getDiscoveryAccessLabel(item)}. Open ${getDiscoveryItemActionLabel(item)}`}>
                       <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>LIVE</Text></View>
                       <Text style={styles.cardTitle} numberOfLines={2}>{title}</Text>
                       <Text style={styles.cardBody} numberOfLines={2}>{String(item.subtitle ?? "").trim() || "Public live experience"}</Text>
