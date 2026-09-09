@@ -14,6 +14,7 @@ import {
 } from "../../_lib/accessEntitlements";
 import { trackEvent } from "../../_lib/analytics";
 import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
+import { resolvePreparedWatchPartyRoomReuse } from "../../_lib/watchPartyPreparedRoomReuse.mjs";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../_lib/betaProgram";
 import {
     ActivityIndicator,
@@ -1253,8 +1254,6 @@ export default function WatchPartyIndexScreen() {
       ? null
       : (defaultSourceId || effectiveTitleId || null);
     const preparedTargetPartyId = String(preparedRoom?.room.partyId ?? incomingHandoff?.partyId ?? initialRoutePartyId ?? "").trim();
-    const preparedTargetRoomCode = String(preparedRoom?.room.roomCode ?? incomingHandoff?.roomCode ?? initialRouteRoomCode ?? "").trim().toUpperCase();
-    const preparedTargetTitleId = String(preparedRoom?.room.titleId ?? incomingHandoff?.titleId ?? initialRouteTitleId ?? "").trim();
     const shouldGuardCreateDuringInitialPrep = !effectiveTitleId && isPreparingInitialCode && !preparedTargetPartyId;
 
     if (creating || shouldGuardCreateDuringInitialPrep) return;
@@ -1278,59 +1277,72 @@ export default function WatchPartyIndexScreen() {
       }
 
       const hostUserId = await getSafePartyUserId();
-      if (!effectiveTitleId && preparedTargetPartyId) {
-        const preparedHostUserId = String(preparedRoom?.room.hostUserId ?? "").trim();
-        const preparedRoomBelongsToCurrentUser = !!preparedHostUserId && preparedHostUserId === hostUserId;
+      if (preparedTargetPartyId) {
+        let preparedRoomForNavigation = await getPartyRoom(preparedTargetPartyId).catch(() => null);
+        const reuse = resolvePreparedWatchPartyRoomReuse({
+          expectedPartyId: preparedTargetPartyId,
+          expectedRoomType: activeWaitingRoomType,
+          expectedSourceId: effectiveSourceId,
+          expectedTitleId: effectiveTitleId,
+          room: preparedRoomForNavigation,
+          userId: hostUserId,
+        });
+        const preparedRoomBelongsToCurrentUser = reuse.allowed;
 
-        if (!preparedRoomBelongsToCurrentUser) {
+        if (!preparedRoomBelongsToCurrentUser || !preparedRoomForNavigation) {
           debugLog("watch-party", "watch_party_prepared_room_ignored", {
-            roomType: preparedRoom?.room.roomType ?? activeWaitingRoomType,
-            hasPartyId: Boolean(preparedTargetPartyId),
-            hostMatchesCurrentUser: false,
+            hasPartyId: true,
+            reason: reuse.reason,
+            roomType: preparedRoomForNavigation?.roomType ?? activeWaitingRoomType,
           });
-          setPreparedRoom(null);
-          setIncomingHandoff(null);
-        } else {
-          const nextPartyId = preparedTargetPartyId;
-          if (nextPartyId) {
-            let preparedRoomForNavigation = preparedRoom?.room ?? null;
-            if (preparedRoomForNavigation?.roomType === "live") {
-              const persistedLiveRoom = await setPartyRoomPolicies(nextPartyId, {
+          setCreateError("This prepared room is no longer available. Return to the Player and try again.");
+          return;
+        }
+
+        const nextPartyId = preparedRoomForNavigation.partyId;
+        if (preparedRoomForNavigation.roomType === "live") {
+          const persistedLiveRoom = await setPartyRoomPolicies(nextPartyId, {
                 discoveryVisibility: liveDiscoveryVisibility,
                 discoveryTitle: liveDiscoveryTitle,
-              }).catch(() => null);
-              const persistedPreparedRoomMatches = Boolean(
-                persistedLiveRoom
-                && persistedLiveRoom.partyId === nextPartyId
-                && persistedLiveRoom.hostUserId === hostUserId
-                && persistedLiveRoom.roomType === "live",
-              );
-              if (!persistedPreparedRoomMatches || !persistedLiveRoom) {
-                setCreateError("Unable to save Live discovery settings. Check your connection and try again.");
-                return;
-              }
-              preparedRoomForNavigation = persistedLiveRoom;
-              setPreparedRoom((current) => current ? { ...current, room: persistedLiveRoom } : current);
-            }
-            debugLog("watch-party", "watch_party_navigate_prepared_room", {
-              roomType: preparedRoomForNavigation?.roomType ?? activeWaitingRoomType,
-              hasPartyId: Boolean(nextPartyId),
-              hasRoomCode: Boolean(preparedTargetRoomCode),
-              hasTitleId: Boolean(preparedTargetTitleId),
-              sourceType: defaultSourceType ?? null,
-            });
-            navigationAccepted = navigateToRoom({
-              partyId: nextPartyId,
-              roomType: preparedRoomForNavigation?.roomType ?? activeWaitingRoomType,
-              roomCode: preparedTargetRoomCode,
-              titleId: preparedTargetTitleId,
-              sourceType: defaultSourceType,
-              sourceId: defaultSourceId || null,
-              contentTitle: entryTitleName,
-            });
+          }).catch(() => null);
+          const persistedPreparedRoomMatches = Boolean(
+            persistedLiveRoom
+            && persistedLiveRoom.partyId === nextPartyId
+            && persistedLiveRoom.hostUserId === hostUserId
+            && persistedLiveRoom.roomType === "live",
+          );
+          if (!persistedPreparedRoomMatches || !persistedLiveRoom) {
+            setCreateError("Unable to save Live discovery settings. Check your connection and try again.");
             return;
           }
+          preparedRoomForNavigation = persistedLiveRoom;
         }
+        const nextPreview = await buildRoomPreview(preparedRoomForNavigation);
+        setPreparedRoom(nextPreview);
+        setIncomingHandoff({
+          roomCode: preparedRoomForNavigation.roomCode,
+          partyId: nextPartyId,
+          titleId: preparedRoomForNavigation.titleId,
+          sourceType: preparedRoomForNavigation.sourceType,
+          sourceId: preparedRoomForNavigation.sourceId,
+        });
+        debugLog("watch-party", "watch_party_navigate_prepared_room", {
+          roomType: preparedRoomForNavigation.roomType,
+          hasPartyId: true,
+          hasRoomCode: Boolean(preparedRoomForNavigation.roomCode),
+          hasTitleId: Boolean(preparedRoomForNavigation.titleId),
+          sourceType: preparedRoomForNavigation.sourceType ?? null,
+        });
+        navigationAccepted = navigateToRoom({
+          partyId: nextPartyId,
+          roomType: preparedRoomForNavigation.roomType,
+          roomCode: preparedRoomForNavigation.roomCode,
+          titleId: preparedRoomForNavigation.titleId,
+          sourceType: preparedRoomForNavigation.sourceType,
+          sourceId: preparedRoomForNavigation.sourceId,
+          contentTitle: nextPreview.titleName,
+        });
+        return;
       }
 
       const roomType = effectiveTitleId ? "title" : activeWaitingRoomType;
