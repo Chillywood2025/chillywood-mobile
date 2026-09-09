@@ -152,6 +152,7 @@ import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { ParticipantDetailSheet } from "../../components/room/participant-detail-sheet";
 import { RoomParticipantTile } from "../../components/room/participant-tile";
 import { AppBackButton } from "../../components/navigation/app-back-button";
+import { resolveWatchPartyReturnNavigation } from "../../_lib/watchPartyReturnNavigation.mjs";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
 import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
 import { useChannelFollowAction } from "../../hooks/use-channel-follow-action";
@@ -332,12 +333,14 @@ export default function WatchPartyRoomScreen() {
     roomCode: roomCodeParam,
     mode: modeParam,
     source: sourceParam,
+    entrySource: entrySourceParam,
   } = useLocalSearchParams<{
     partyId?: string;
     titleId?: string;
     roomCode?: string;
     mode?: string;
     source?: string;
+    entrySource?: string;
   }>();
   const router = useRouter();
 
@@ -346,8 +349,19 @@ export default function WatchPartyRoomScreen() {
   const roomCodeHint = String(Array.isArray(roomCodeParam) ? roomCodeParam[0] : roomCodeParam ?? "").trim().toUpperCase();
   const roomModeParam = Array.isArray(modeParam) ? modeParam[0] : modeParam;
   const source = String(Array.isArray(sourceParam) ? sourceParam[0] : sourceParam ?? "").trim().toLowerCase();
+  const entrySource = String(
+    Array.isArray(entrySourceParam) ? entrySourceParam[0] : entrySourceParam ?? "",
+  ).trim().toLowerCase();
   const sharedRoomMode = normalizeSharedRoomMode(roomModeParam, "live");
   const returnToWatchPartyEntry = useCallback(() => {
+    const returnAction = resolveWatchPartyReturnNavigation({
+      canGoBack: router.canGoBack(),
+      entrySource,
+    });
+    if (returnAction === "back") {
+      router.back();
+      return;
+    }
     router.replace({
       pathname: "/watch-party",
       params: {
@@ -358,7 +372,7 @@ export default function WatchPartyRoomScreen() {
         ...(source ? { source } : {}),
       },
     });
-  }, [partyId, roomCodeHint, router, sharedRoomMode, source, titleIdHint]);
+  }, [entrySource, partyId, roomCodeHint, router, sharedRoomMode, source, titleIdHint]);
   const canUseBetaRoom = isSignedIn && isActive;
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Watch-party rooms");
 
