@@ -33,8 +33,8 @@ function query(sql, database = transientDatabase) {
   return result.stdout.trim();
 }
 
-function openSession(applicationName, sql) {
-  const child = spawn("docker", psql(transientDatabase), { cwd: root, stdio: ["pipe", "pipe", "pipe"] });
+function openSession(applicationName, sql, database = transientDatabase) {
+  const child = spawn("docker", psql(database), { cwd: root, stdio: ["pipe", "pipe", "pipe"] });
   let stdout = "";
   let stderr = "";
   child.stdout.setEncoding("utf8");
@@ -71,57 +71,56 @@ function runDocker(args, options = {}) {
   });
 }
 
-function runAdmin(args) {
+function runAdmin(args, options = {}) {
   return runDocker([
-    "exec", container, "sh", "-lc",
+    "exec", ...(options.input === undefined ? [] : ["-i"]), container, "sh", "-lc",
     'PGPASSWORD="$POSTGRES_PASSWORD" exec "$@"', "codex-premium-admin", ...args,
-  ]);
+  ], options);
 }
 
-function setSourceDatabaseConnections(enabled) {
-  const result = runDocker([
-    "exec", container, "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1",
-    "-U", "postgres", "-d", "template1", "-c",
-    `alter database ${sourceDatabase} with allow_connections ${enabled ? "true" : "false"};`,
-  ]);
-  assert.equal(result.status, 0, `could not ${enabled ? "restore" : "suspend"} local reset database connections`);
-}
-
-function cloneSourceDatabase(target) {
+function createEmptyDatabase(target) {
   assert.match(target, /^codex_premium_[0-9]+_[a-f0-9]{12}(?:_failed)?$/u);
-  let sourceConnectionsSuspended = false;
-  try {
-    setSourceDatabaseConnections(false);
-    sourceConnectionsSuspended = true;
-    const terminated = runAdmin([
-      "psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1",
-      "-U", "supabase_admin", "-d", "template1", "-c",
-      `select pg_terminate_backend(pid) from pg_stat_activity where datname='${sourceDatabase}';`,
-    ]);
-    assert.equal(terminated.status, 0, "could not quiesce the local reset database for exact cloning");
-    const cloned = runAdmin(["createdb", "-U", "supabase_admin", "-T", sourceDatabase, target]);
-    assert.equal(cloned.status, 0, "could not clone the exact local reset database for isolated Premium concurrency proof");
-  } finally {
-    if (sourceConnectionsSuspended) setSourceDatabaseConnections(true);
-  }
+  const created = runDocker(["exec", container, "createdb", "-U", "postgres", "-T", "template0", target]);
+  assert.equal(created.status, 0, "could not create isolated Premium concurrency database");
 }
 
-function proveCloneFailureCleanup() {
-  let failedCloneDatabaseCreated = false;
+function restoreSourceSnapshot(target) {
+  const initialized = runDocker([
+    "exec", container, "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1",
+    "-U", "postgres", "-d", target, "-c",
+    "create schema vault; create extension supabase_vault with schema vault;",
+  ]);
+  assert.equal(initialized.status, 0, "could not initialize isolated Supabase extension dependencies");
+  const dump = runAdmin([
+    "pg_dump", "-U", "supabase_admin",
+    "--exclude-extension=pg_cron", "--exclude-extension=supabase_vault", "--exclude-extension=pg_graphql",
+    "--exclude-schema=cron", "--exclude-schema=realtime", "--exclude-schema=_realtime",
+    "--exclude-schema=vault", "--exclude-schema=graphql", "--exclude-schema=graphql_public",
+    sourceDatabase,
+  ], { encoding: null });
+  assert.equal(dump.status, 0, "could not export the read-only local reset snapshot");
+  const restored = runAdmin([
+    "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-U", "supabase_admin", "-d", target,
+  ], { encoding: null, input: dump.stdout });
+  assert.equal(restored.status, 0, "could not restore the isolated Premium concurrency database");
+}
+
+function proveRestoreFailureCleanup(sourcePolicyFingerprint, sentinelName) {
+  let failedRestoreDatabaseCreated = false;
   try {
-    const prepared = runAdmin(["createdb", "-U", "supabase_admin", "-T", "template0", failedCloneDatabase]);
-    assert.equal(prepared.status, 0, "could not prepare forced clone-failure proof");
-    failedCloneDatabaseCreated = true;
-    assert.throws(
-      () => cloneSourceDatabase(failedCloneDatabase),
-      /could not clone the exact local reset database/u,
-      "exact clone must fail closed rather than reuse a pre-existing database",
-    );
-    assert.equal(query(`select datallowconn::text from pg_database where datname=${literal(sourceDatabase)};`, "template1"), "true");
+    createEmptyDatabase(failedCloneDatabase);
+    failedRestoreDatabaseCreated = true;
+    const failedRestore = runDocker([
+      "exec", "-i", container, "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1",
+      "-U", "postgres", "-d", failedCloneDatabase,
+    ], { input: "select from;" });
+    assert.notEqual(failedRestore.status, 0, "invalid restore input must fail closed");
+    assert.equal(query(`select count(*)::text from pg_stat_activity where application_name=${literal(sentinelName)};`, sourceDatabase), "1");
+    assert.equal(query("select datallowconn::text||':'||datistemplate::text||':'||datconnlimit::text from pg_database where datname=current_database();", sourceDatabase), sourcePolicyFingerprint);
   } finally {
-    if (failedCloneDatabaseCreated) {
-      const dropped = runAdmin(["dropdb", "-U", "supabase_admin", "--if-exists", "--force", failedCloneDatabase]);
-      assert.equal(dropped.status, 0, "could not clean forced clone-failure database");
+    if (failedRestoreDatabaseCreated) {
+      const dropped = runDocker(["exec", container, "dropdb", "-U", "postgres", "--if-exists", "--force", failedCloneDatabase]);
+      assert.equal(dropped.status, 0, "could not clean forced restore-failure database");
     }
   }
   assert.equal(query(`select count(*)::text from pg_database where datname=${literal(failedCloneDatabase)};`, "template1"), "0");
@@ -164,14 +163,15 @@ select (
 }
 
 function createTransientDatabase() {
-  cloneSourceDatabase(transientDatabase);
+  createEmptyDatabase(transientDatabase);
   transientDatabaseCreated = true;
+  restoreSourceSnapshot(transientDatabase);
   assertTransientAuthorityGraph();
 }
 
 function dropTransientDatabase() {
   if (!transientDatabaseCreated) return;
-  const dropped = runAdmin(["dropdb", "-U", "supabase_admin", "--if-exists", "--force", transientDatabase]);
+  const dropped = runDocker(["exec", container, "dropdb", "-U", "postgres", "--if-exists", "--force", transientDatabase]);
   assert.equal(dropped.status, 0, "could not remove isolated Premium concurrency database");
   transientDatabaseCreated = false;
 }
@@ -209,8 +209,13 @@ assert.equal(started.status, 0, `local Supabase database container unavailable: 
 assert.equal(started.stdout.trim(), "true", "local Supabase database container is not running");
 
 const sourceFingerprint = query(`select (select count(*) from auth.users)::text||':'||(select count(*) from public.revenuecat_terminal_authority_quarantines)::text;`, sourceDatabase);
+const sourcePolicyFingerprint = query("select datallowconn::text||':'||datistemplate::text||':'||datconnlimit::text from pg_database where datname=current_database();", sourceDatabase);
+const sourceSentinelName = `premium-source-sentinel-${process.pid}`;
+let sourceSentinel;
 try {
-proveCloneFailureCleanup();
+sourceSentinel = openSession(sourceSentinelName, "begin; select 'SOURCE_SENTINEL_READY';", sourceDatabase);
+await waitUntil(() => sourceSentinel.output().includes("SOURCE_SENTINEL_READY"), "source sentinel session");
+proveRestoreFailureCleanup(sourcePolicyFingerprint, sourceSentinelName);
 createTransientDatabase();
 const subject = randomUUID();
 const scenarios = [
@@ -311,9 +316,17 @@ const restoreHash = hash(restoreId);
 const restoreCall = `select result->>'status'||':'||coalesce(result->>'duplicateEvent','false') from (select public.reconcile_revenuecat_premium_snapshot_atomic(${literal(restoreId)},${literal(appStoreUser)}::uuid,${literal(`subscription-${appStoreOriginal}`)},${literal(appStoreOriginal)},mapping.provider_product_id,'active',clock_timestamp()-interval '1 day',clock_timestamp()+interval '29 days',clock_timestamp(),${literal(restoreHash)}) result from public.monetization_product_store_mappings mapping where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox' and mapping.concept='premium' and mapping.provider_product_id='com.chillywood.premium.monthly') projected`;
 await raceExactCall("restore", restoreCall, "processed:false", "duplicate_ignored:true");
 assert.equal(query(`select (select count(*) from public.provider_events where provider_event_id=${literal(restoreId)})::text||':'||(select latest_event_id from public.revenuecat_premium_transaction_authority where provider='revenuecat_app_store' and original_transaction_id=${literal(appStoreOriginal)})||':'||(select current_provider_product_id from public.revenuecat_premium_transaction_authority where provider='revenuecat_app_store' and original_transaction_id=${literal(appStoreOriginal)})||':'||(select count(*) from public.access_grants grant_row join public.provider_events event on event.id=grant_row.provider_event_id where event.provider_event_id=${literal(restoreId)})::text||':'||(select count(*) from public.money_access_ledger_events ledger join public.provider_events event on event.id=ledger.provider_event_id where event.provider_event_id=${literal(restoreId)})::text||':'||public.premium_subject_has_finite_authority_internal(${literal(appStoreUser)})::text;`), `1:${restoreId}:com.chillywood.premium.monthly:1:1:true`);
+assert.equal(query(`select count(*)::text from pg_stat_activity where application_name=${literal(sourceSentinelName)};`, sourceDatabase), "1", "read-only source sentinel did not survive isolated proof");
 
 process.stdout.write(`RevenueCat Premium/quarantine concurrency: ${scenarios.length} scope + 3 lifecycle races passed\n`);
 } finally {
   dropTransientDatabase();
+  if (sourceSentinel) {
+    if (sourceSentinel.child.exitCode === null) sourceSentinel.child.stdin.end("rollback;\n\\q\n");
+    const sourceSentinelResult = await sourceSentinel.done;
+    assert.equal(sourceSentinelResult.code, 0, sourceSentinelResult.stderr);
+  }
   assert.equal(query(`select (select count(*) from auth.users)::text||':'||(select count(*) from public.revenuecat_terminal_authority_quarantines)::text;`, sourceDatabase), sourceFingerprint, "isolated concurrency proof mutated the local reset database");
+  assert.equal(query("select datallowconn::text||':'||datistemplate::text||':'||datconnlimit::text from pg_database where datname=current_database();", sourceDatabase), sourcePolicyFingerprint, "isolated concurrency proof mutated the local reset database policy");
+  assert.equal(query(`select count(*)::text from pg_stat_activity where application_name=${literal(sourceSentinelName)};`, sourceDatabase), "0", "read-only source sentinel session remained after proof");
 }
