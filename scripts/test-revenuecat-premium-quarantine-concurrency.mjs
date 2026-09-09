@@ -104,7 +104,7 @@ async function raceExactCall(id, sql, expectedFirst, expectedSecond) {
     const firstResult = await first.done;
     assert.equal(firstResult.code, 0, firstResult.stderr);
     await waitUntil(() => second.output().includes("SECOND_READY"), `${id} duplicate completion`);
-    second.child.stdin.end("rollback;\n\\q\n");
+    second.child.stdin.end("commit;\n\\q\n");
     const secondResult = await second.done;
     assert.equal(secondResult.code, 0, secondResult.stderr);
     const firstObserved = firstResult.stdout.match(/FIRST_RESULT:([a-z_]+:(?:true|false))/u)?.[1] ?? "missing";
