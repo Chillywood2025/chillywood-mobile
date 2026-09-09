@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
+import { createActionSingleFlightLatch } from "../_lib/actionSingleFlight.mjs";
 import { clearExactLocalAuthSession, isCurrentAccountSessionAuthority, readCurrentAccountSessionAuthority, sameAccountSessionAuthority, type AccountSessionAuthorityBinding, type LockedLocalAuthClient } from "../_lib/accountSessionAuthority";
 import { consumeApplicationAuthInput, parseApplicationLink, registerVerifiedApplicationAuthInput } from "../_lib/appLinks";
 import { reportRuntimeError } from "../_lib/logger";
@@ -204,6 +205,7 @@ export default function ResetPasswordScreen() {
   >();
   const insets = useSafeAreaInsets();
   const expiredActionPendingRef = useRef(false);
+  const passwordUpdateLatchRef = useRef(createActionSingleFlightLatch());
   const recoveryInputConsumedRef = useRef(false);
   const recoverySessionRef = useRef<CapturedRecoverySession | null>(null);
   const recoveryProofRef = useRef<AccountSessionAuthorityBinding | null>(null);
@@ -475,13 +477,6 @@ export default function ResetPasswordScreen() {
       return;
     }
 
-    const captured = recoverySessionRef.current;
-    if (!captured || !recoveryAuthority || !sameAccountSessionAuthority(captured, recoveryAuthority)
-      || !sameAccountSessionAuthority(recoveryProofRef.current, recoveryAuthority)
-      || !(await isCurrentAccountSessionAuthority(recoveryAuthority))) {
-      setStatus("failed"); setStatusMessage("This recovery session changed. Request a fresh reset link."); return;
-    }
-
     if (newPassword.length < PASSWORD_MIN_LENGTH) {
       Alert.alert("Reset password", "Use at least 8 characters for your new password.");
       return;
@@ -492,9 +487,16 @@ export default function ResetPasswordScreen() {
       return;
     }
 
+    if (!passwordUpdateLatchRef.current.tryAcquire()) return;
     setSaving(true);
 
     try {
+    const captured = recoverySessionRef.current;
+    if (!captured || !recoveryAuthority || !sameAccountSessionAuthority(captured, recoveryAuthority)
+      || !sameAccountSessionAuthority(recoveryProofRef.current, recoveryAuthority)
+      || !(await isCurrentAccountSessionAuthority(recoveryAuthority))) {
+      setStatus("failed"); setStatusMessage("This recovery session changed. Request a fresh reset link."); return;
+    }
       try {
         const cleanupConfirmed = await updateCapturedRecoveryPassword(captured, newPassword);
         if (!cleanupConfirmed) {
@@ -532,6 +534,7 @@ export default function ResetPasswordScreen() {
       });
       Alert.alert("Reset password", "Unable to update your password right now.");
     } finally {
+      passwordUpdateLatchRef.current.release();
       setSaving(false);
     }
   }, [confirmPassword, newPassword, recoveryAuthority, router, saving, status]);

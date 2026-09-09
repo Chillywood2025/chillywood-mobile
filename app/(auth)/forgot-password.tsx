@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import { trackEvent } from "../../_lib/analytics";
 import { reportRuntimeError } from "../../_lib/logger";
 import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
@@ -53,6 +54,7 @@ export default function ForgotPassword() {
   const params = useLocalSearchParams<{ email?: string; redirectId?: string }>();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
+  const passwordResetRequestLatchRef = useRef(createActionSingleFlightLatch());
   const redirectId = String(params.redirectId ?? "").trim();
   const [email, setEmail] = useState(String(params.email ?? "").trim());
   const [loading, setLoading] = useState(false);
@@ -66,6 +68,7 @@ export default function ForgotPassword() {
       return;
     }
 
+    if (!passwordResetRequestLatchRef.current.tryAcquire()) return;
     setLoading(true);
 
     try {
@@ -84,6 +87,7 @@ export default function ForgotPassword() {
       });
       Alert.alert("Reset password", getPasswordResetErrorMessage(error));
     } finally {
+      passwordResetRequestLatchRef.current.release();
       setLoading(false);
     }
   };

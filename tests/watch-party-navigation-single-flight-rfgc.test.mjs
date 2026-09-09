@@ -28,6 +28,10 @@ const liveEvents = read("_lib/liveEvents.ts");
 const revenueCat = read("_lib/revenuecat.ts");
 const moneyAuthority = read("supabase/migrations/20260824034109_creator_money_authority_integrity_closeout.sql");
 const eventAndSeatAuthority = read("supabase/migrations/20260902091803_party_room_live_stage_event_ux_rfgc.sql");
+const login = read("app/(auth)/login.tsx");
+const signup = read("app/(auth)/signup.tsx");
+const forgotPassword = read("app/(auth)/forgot-password.tsx");
+const resetPassword = read("app/reset-password.tsx");
 
 test("ten rapid accepted Watch-Party Live presses execute one asynchronous navigation", async () => {
   const latch = createActionSingleFlightLatch();
@@ -214,6 +218,28 @@ test("purchase and Restore calls coalesce before the provider mutation and remai
   assert.match(moneyAuthority, /pooled_provider_product_intent_already_pending/u);
 });
 
+test("auth submissions close the same-frame gap before asynchronous provider or authority work", () => {
+  const loginStart = login.indexOf("const signIn = async () =>");
+  const signupStart = signup.indexOf("const signUp = async () =>");
+  const forgotStart = forgotPassword.indexOf("const sendPasswordReset = async () =>");
+  const resetStart = resetPassword.indexOf("const updatePassword = useCallback(async () =>");
+  const loginHandler = login.slice(loginStart, login.indexOf("return (", loginStart));
+  const signupHandler = signup.slice(signupStart, signup.indexOf("return (", signupStart));
+  const forgotHandler = forgotPassword.slice(forgotStart, forgotPassword.indexOf("return (", forgotStart));
+  const resetHandler = resetPassword.slice(resetStart, resetPassword.indexOf("return (", resetStart));
+
+  for (const [name, handler, latch, asyncBoundary] of [
+    ["login", loginHandler, "signInLatchRef.current.tryAcquire()", "supabase.auth.signInWithPassword"],
+    ["signup", signupHandler, "signUpLatchRef.current.tryAcquire()", "await readAppConfig()"],
+    ["forgot password", forgotHandler, "passwordResetRequestLatchRef.current.tryAcquire()", "await requestPasswordResetEmail"],
+    ["reset password", resetHandler, "passwordUpdateLatchRef.current.tryAcquire()", "await isCurrentAccountSessionAuthority"],
+  ]) {
+    assert.ok(handler.indexOf(latch) >= 0, `${name} must acquire its synchronous latch`);
+    assert.ok(handler.indexOf(latch) < handler.indexOf(asyncBoundary), `${name} must latch before asynchronous work`);
+    assert.match(handler, /finally \{[\s\S]*LatchRef\.current\.release\(\)[\s\S]*set(?:Loading|Saving)\(false\)/u);
+  }
+});
+
 test("seat requests and financial grants retain server-side idempotency", () => {
   assert.match(eventAndSeatAuthority, /request_my_live_watch_party_seat/u);
   assert.match(eventAndSeatAuthority, /for update/u);
@@ -231,8 +257,9 @@ test("regression covers the repeated-input condition omitted by prior single-tap
     eventCreate: "SAME_CLASS_DEFECT_REPAIRED",
     purchaseAndRestore: "SAME_CLASS_DEFECT_REPAIRED_AT_PROVIDER_BOUNDARY",
     requestSeat: "CORRECT_SERVER_IDEMPOTENT",
+    authSubmissions: "SAME_CLASS_DEFECT_REPAIRED",
     synchronousNonMutatingRouteActions: "CORRECT_ROUTE_SINGULAR_OR_NOT_APPLICABLE",
   };
   assert.equal(Object.values(inspectedCriticalActions).some((value) => !value), false);
-  assert.equal(Object.keys(inspectedCriticalActions).length, 9);
+  assert.equal(Object.keys(inspectedCriticalActions).length, 10);
 });

@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import { trackEvent } from "../../_lib/analytics";
 import { reportRuntimeError } from "../../_lib/logger";
 import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
@@ -27,6 +28,7 @@ export default function Login() {
   const params = useLocalSearchParams<{ redirectId?: string }>();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
+  const signInLatchRef = useRef(createActionSingleFlightLatch());
   const redirectId = String(params.redirectId ?? "").trim();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,6 +40,7 @@ export default function Login() {
       return;
     }
 
+    if (!signInLatchRef.current.tryAcquire()) return;
     setLoading(true);
 
     try {
@@ -76,6 +79,7 @@ export default function Login() {
       });
       Alert.alert("Login Error", "Unable to sign in right now.");
     } finally {
+      signInLatchRef.current.release();
       setLoading(false);
     }
   };
