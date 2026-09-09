@@ -12,6 +12,8 @@ assert.match(container, /^supabase_db_[A-Za-z0-9_.-]{1,200}$/u);
 const sourceDatabase = "postgres";
 const transientDatabase = `codex_premium_${process.pid}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
 assert.match(transientDatabase, /^codex_premium_[0-9]+_[a-f0-9]{12}$/u);
+const failedCloneDatabase = `${transientDatabase}_failed`;
+assert.match(failedCloneDatabase, /^codex_premium_[0-9]+_[a-f0-9]{12}_failed$/u);
 let transientDatabaseCreated = false;
 const psql = (database) => [
   "exec", "-i", container, "psql", "-X", "-q", "-A", "-t",
@@ -69,23 +71,107 @@ function runDocker(args, options = {}) {
   });
 }
 
+function runAdmin(args) {
+  return runDocker([
+    "exec", container, "sh", "-lc",
+    'PGPASSWORD="$POSTGRES_PASSWORD" exec "$@"', "codex-premium-admin", ...args,
+  ]);
+}
+
+function setSourceDatabaseConnections(enabled) {
+  const result = runDocker([
+    "exec", container, "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1",
+    "-U", "postgres", "-d", "template1", "-c",
+    `alter database ${sourceDatabase} with allow_connections ${enabled ? "true" : "false"};`,
+  ]);
+  assert.equal(result.status, 0, `could not ${enabled ? "restore" : "suspend"} local reset database connections`);
+}
+
+function cloneSourceDatabase(target) {
+  assert.match(target, /^codex_premium_[0-9]+_[a-f0-9]{12}(?:_failed)?$/u);
+  let sourceConnectionsSuspended = false;
+  try {
+    setSourceDatabaseConnections(false);
+    sourceConnectionsSuspended = true;
+    const terminated = runAdmin([
+      "psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1",
+      "-U", "supabase_admin", "-d", "template1", "-c",
+      `select pg_terminate_backend(pid) from pg_stat_activity where datname='${sourceDatabase}';`,
+    ]);
+    assert.equal(terminated.status, 0, "could not quiesce the local reset database for exact cloning");
+    const cloned = runAdmin(["createdb", "-U", "supabase_admin", "-T", sourceDatabase, target]);
+    assert.equal(cloned.status, 0, "could not clone the exact local reset database for isolated Premium concurrency proof");
+  } finally {
+    if (sourceConnectionsSuspended) setSourceDatabaseConnections(true);
+  }
+}
+
+function proveCloneFailureCleanup() {
+  let failedCloneDatabaseCreated = false;
+  try {
+    const prepared = runAdmin(["createdb", "-U", "supabase_admin", "-T", "template0", failedCloneDatabase]);
+    assert.equal(prepared.status, 0, "could not prepare forced clone-failure proof");
+    failedCloneDatabaseCreated = true;
+    assert.throws(
+      () => cloneSourceDatabase(failedCloneDatabase),
+      /could not clone the exact local reset database/u,
+      "exact clone must fail closed rather than reuse a pre-existing database",
+    );
+    assert.equal(query(`select datallowconn::text from pg_database where datname=${literal(sourceDatabase)};`, "template1"), "true");
+  } finally {
+    if (failedCloneDatabaseCreated) {
+      const dropped = runAdmin(["dropdb", "-U", "supabase_admin", "--if-exists", "--force", failedCloneDatabase]);
+      assert.equal(dropped.status, 0, "could not clean forced clone-failure database");
+    }
+  }
+  assert.equal(query(`select count(*)::text from pg_database where datname=${literal(failedCloneDatabase)};`, "template1"), "0");
+}
+
+function assertTransientAuthorityGraph() {
+  assert.equal(query(`
+select (
+  to_regprocedure('public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)') is not null
+  and to_regprocedure('public.reconcile_revenuecat_premium_snapshot_atomic(text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,text)') is not null
+  and to_regprocedure('public.quarantine_revenuecat_terminal_authority(text,text,text,uuid,text,text,text)') is not null
+  and to_regprocedure('public.lock_revenuecat_premium_quarantine_scopes_internal(text,uuid,text)') is not null
+  and to_regprocedure('public.premium_subject_has_finite_authority_internal(text)') is not null
+  and to_regclass('public.provider_events') is not null
+  and to_regclass('public.access_grants') is not null
+  and to_regclass('public.user_entitlements') is not null
+  and to_regclass('public.money_access_ledger_events') is not null
+  and to_regclass('public.platform_money_kill_switches') is not null
+  and to_regclass('public.monetization_products') is not null
+  and to_regclass('public.monetization_product_store_mappings') is not null
+  and to_regclass('public.revenuecat_premium_transaction_authority') is not null
+  and to_regclass('public.revenuecat_terminal_authority_quarantines') is not null
+  and exists (select 1 from pg_constraint where conrelid='public.revenuecat_premium_transaction_authority'::regclass and conname='revenuecat_premium_product_change_projection_event_shape')
+  and (select relforcerowsecurity from pg_class where oid='public.revenuecat_premium_transaction_authority'::regclass)
+  and (select relforcerowsecurity from pg_class where oid='public.revenuecat_terminal_authority_quarantines'::regclass)
+  and exists (select 1 from pg_trigger where tgrelid='public.revenuecat_terminal_authority_quarantines'::regclass and tgname='serialize_revenuecat_terminal_quarantine_insert' and tgenabled='O')
+  and exists (select 1 from pg_trigger where tgrelid='public.revenuecat_terminal_authority_quarantines'::regclass and tgname='block_revenuecat_terminal_quarantine_mutation' and tgenabled='O')
+  and not has_function_privilege('anon','public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)','execute')
+  and not has_function_privilege('authenticated','public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)','execute')
+  and has_function_privilege('service_role','public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)','execute')
+  and not has_function_privilege('anon','public.reconcile_revenuecat_premium_snapshot_atomic(text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,text)','execute')
+  and not has_function_privilege('authenticated','public.reconcile_revenuecat_premium_snapshot_atomic(text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,text)','execute')
+  and has_function_privilege('service_role','public.reconcile_revenuecat_premium_snapshot_atomic(text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,text)','execute')
+  and not has_function_privilege('anon','public.quarantine_revenuecat_terminal_authority(text,text,text,uuid,text,text,text)','execute')
+  and not has_function_privilege('authenticated','public.quarantine_revenuecat_terminal_authority(text,text,text,uuid,text,text,text)','execute')
+  and has_function_privilege('service_role','public.quarantine_revenuecat_terminal_authority(text,text,text,uuid,text,text,text)','execute')
+  and (select count(*) from public.monetization_product_store_mappings where provider='revenuecat_app_store' and environment='sandbox' and concept='premium' and provider_product_id in ('com.chillywood.premium.monthly','com.chillywood.premium.yearly'))=2
+  and exists (select 1 from public.monetization_products where provider='revenuecat_google_play' and environment='sandbox' and product_type='premium_subscription' and status='sandbox')
+)::text;`), "true", "isolated clone is missing required Premium authority graph state");
+}
+
 function createTransientDatabase() {
-  const created = runDocker(["exec", container, "createdb", "-U", "postgres", "-T", "template0", transientDatabase]);
-  assert.equal(created.status, 0, "could not create isolated Premium concurrency database");
+  cloneSourceDatabase(transientDatabase);
   transientDatabaseCreated = true;
-  const dump = runDocker(["exec", container, "pg_dump", "-U", "postgres", "--no-owner", "--no-privileges", sourceDatabase], { encoding: null });
-  assert.equal(dump.status, 0, "could not export the local reset database for isolated concurrency proof");
-  const restored = runDocker(["exec", "-i", container, "psql", "-X", "-q", "-U", "postgres", "-d", transientDatabase], {
-    encoding: null,
-    input: dump.stdout,
-  });
-  assert.equal(restored.status, 0, "could not restore the isolated Premium concurrency database");
-  assert.equal(query(`select (to_regprocedure('public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)') is not null and to_regprocedure('public.reconcile_revenuecat_premium_snapshot_atomic(text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,text)') is not null and to_regclass('public.revenuecat_terminal_authority_quarantines') is not null)::text;`), "true");
+  assertTransientAuthorityGraph();
 }
 
 function dropTransientDatabase() {
   if (!transientDatabaseCreated) return;
-  const dropped = runDocker(["exec", container, "dropdb", "-U", "postgres", "--if-exists", "--force", transientDatabase]);
+  const dropped = runAdmin(["dropdb", "-U", "supabase_admin", "--if-exists", "--force", transientDatabase]);
   assert.equal(dropped.status, 0, "could not remove isolated Premium concurrency database");
   transientDatabaseCreated = false;
 }
@@ -124,6 +210,7 @@ assert.equal(started.stdout.trim(), "true", "local Supabase database container i
 
 const sourceFingerprint = query(`select (select count(*) from auth.users)::text||':'||(select count(*) from public.revenuecat_terminal_authority_quarantines)::text;`, sourceDatabase);
 try {
+proveCloneFailureCleanup();
 createTransientDatabase();
 const subject = randomUUID();
 const scenarios = [
