@@ -1,7 +1,5 @@
 begin;
-
-select plan(33);
-
+select plan(52);
 insert into auth.users(id,is_sso_user,is_anonymous)
 values
   ('af200000-0000-4000-8000-000000000001',false,false),
@@ -10,7 +8,6 @@ values
   ('af200000-0000-4000-8000-000000000004',false,false),
   ('af200000-0000-4000-8000-000000000005',false,false)
 on conflict(id) do nothing;
-
 update public.platform_money_kill_switches
 set state=case
   when key in ('revenuecat_google_play_enabled','revenuecat_app_store_enabled','provider_webhooks_enabled')
@@ -22,7 +19,6 @@ where key in (
   'revenuecat_google_play_enabled','revenuecat_app_store_enabled','provider_webhooks_enabled',
   'live_money_enabled','payouts_enabled','cashout_enabled'
 );
-
 create function pg_temp.apply_google_premium_lifecycle(
   p_event_id text,
   p_event_type text,
@@ -46,14 +42,10 @@ as $$
     p_original_transaction_id
   )
   from public.monetization_products product
-  where product.provider='revenuecat_google_play'
-    and product.environment='sandbox'
-    and product.product_type='premium_subscription'
-    and product.status='sandbox'
+  where product.provider='revenuecat_google_play' and product.environment='sandbox' and product.product_type='premium_subscription' and product.status='sandbox'
   order by product.created_at,product.id
   limit 1;
 $$;
-
 select lives_ok(
   $$insert into public.revenuecat_terminal_authority_quarantines(
       provider_scope,environment_scope,user_id,reported_provider_event_id,
@@ -93,6 +85,22 @@ select is(
   'processed',
   'the first legitimate renewal continues the exact admitted generation'
 );
+create temporary table duplicate_renewal_result on commit drop as
+select pg_temp.apply_google_premium_lifecycle(
+  'generation-lifecycle-renewal','RENEWAL',
+  'af200000-0000-4000-8000-000000000001','generation-lifecycle-original',
+  'active',clock_timestamp()-interval '7 hours',clock_timestamp()+interval '30 days',
+  clock_timestamp()-interval '6 hours',repeat('3',64)
+) result;
+select is((select result->>'status' from duplicate_renewal_result),'processed',
+  'an exact processed renewal retry remains a successful idempotent acknowledgement');
+select is((select result->>'duplicateEvent' from duplicate_renewal_result),'true',
+  'the exact renewal retry is identified as a duplicate without reapplying authority');
+select is(
+  (select count(*)::text||':'||(select latest_event_id from public.revenuecat_premium_transaction_authority
+    where provider='revenuecat_google_play' and original_transaction_id='generation-lifecycle-original')
+   from public.provider_events where provider_event_id='generation-lifecycle-renewal'),
+  '1:generation-lifecycle-renewal','the duplicate renewal creates no row and preserves the watermark');
 select ok(
   public.premium_subject_has_finite_authority_internal(
     'af200000-0000-4000-8000-000000000001'
@@ -102,16 +110,14 @@ select ok(
 select is(
   (select authority_state
    from public.revenuecat_premium_transaction_authority
-   where provider='revenuecat_google_play'
-     and original_transaction_id='generation-lifecycle-original'),
+   where provider='revenuecat_google_play' and original_transaction_id='generation-lifecycle-original'),
   'active',
   'the renewed transaction authority remains active'
 );
 select is(
   (select latest_event_id
    from public.revenuecat_premium_transaction_authority
-   where provider='revenuecat_google_play'
-     and original_transaction_id='generation-lifecycle-original'),
+   where provider='revenuecat_google_play' and original_transaction_id='generation-lifecycle-original'),
   'generation-lifecycle-renewal',
   'the exact renewal becomes the transaction watermark'
 );
@@ -125,18 +131,31 @@ select is(
 select is(
   (select count(*)::integer
    from public.user_entitlements
-   where user_id='af200000-0000-4000-8000-000000000002'
-     and entitlement_key='premium'),
+   where user_id='af200000-0000-4000-8000-000000000002' and entitlement_key='premium'),
   0,
   'the renewal grants no authority to an unrelated user'
 );
+select throws_ok(
+  $$select pg_temp.apply_google_premium_lifecycle(
+    'generation-lifecycle-cross-user','RENEWAL',
+    'af200000-0000-4000-8000-000000000002','generation-lifecycle-original',
+    'active',clock_timestamp()-interval '5 hours',clock_timestamp()+interval '30 days',
+    clock_timestamp()-interval '4 hours',repeat('a',64)
+  )$$,'revenuecat_premium_original_transaction_subject_mismatch',
+  'the public lifecycle wrapper rejects a different user for the bound transaction');
 select ok(
   public.revenuecat_authority_quarantined_internal(
     'revenuecat_google_play','af200000-0000-4000-8000-000000000001','sandbox'
   ),
   'the general RevenueCat quarantine remains preserved after renewal'
 );
-
+select is(
+  pg_temp.apply_google_premium_lifecycle(
+    'generation-lifecycle-uncancellation','UNCANCELLATION',
+    'af200000-0000-4000-8000-000000000001','generation-lifecycle-original',
+    'active',clock_timestamp()-interval '6 hours',clock_timestamp()+interval '30 days',
+    clock_timestamp()-interval '5 hours',repeat('f',64)
+  )->>'status','processed','uncancellation continues the exact admitted generation');
 create temporary table expiration_result on commit drop as
 select pg_temp.apply_google_premium_lifecycle(
     'generation-lifecycle-expiration','EXPIRATION',
@@ -165,7 +184,6 @@ select is(
   'revenuecat_terminal_authority_quarantined',
   'a renewal cannot reopen a terminal generation through the lifecycle exception'
 );
-
 select lives_ok(
   $$select public.quarantine_revenuecat_terminal_authority(
     'revenuecat_google_play','recoverable-generation-quarantine','TRANSFER',
@@ -184,7 +202,6 @@ select is(
   'processed',
   'the recovery fixture starts from a real admitted Premium generation'
 );
-
 do $$
 declare
   v_product public.monetization_products%rowtype;
@@ -193,15 +210,11 @@ declare
 begin
   select product.* into strict v_product
   from public.monetization_products product
-  where product.provider='revenuecat_google_play'
-    and product.environment='sandbox'
-    and product.product_type='premium_subscription'
-    and product.status='sandbox'
+  where product.provider='revenuecat_google_play' and product.environment='sandbox' and product.product_type='premium_subscription' and product.status='sandbox'
   order by product.created_at,product.id limit 1;
   select authority.id into strict v_binding_id
   from public.revenuecat_premium_transaction_authority authority
-  where authority.provider='revenuecat_google_play'
-    and authority.original_transaction_id='recoverable-generation-original';
+  where authority.provider='revenuecat_google_play' and authority.original_transaction_id='recoverable-generation-original';
   perform public.record_revenuecat_premium_ignored_internal(
     'revenuecat_google_play','recoverable-generation-rejected-renewal','RENEWAL',
     'af200000-0000-4000-8000-000000000003',v_product.provider_product_id,
@@ -256,6 +269,38 @@ select ok(
   ),
   'an active generation is no longer classified as bug-blocked recovery'
 );
+insert into public.monetization_products(
+  id,product_key,product_type,display_name,provider,provider_product_id,
+  provider_base_plan_id,revenuecat_entitlement,environment,status,is_android_digital,metadata
+) values (
+  'af210000-0000-4000-8000-000000000001','test_premium_product_change',
+  'premium_subscription','Test Premium Product Change','revenuecat_google_play',
+  'test.premium.changed','test-base-plan','premium','sandbox','sandbox',true,
+  '{"test_only":true}'::jsonb
+);
+select is(
+  (select public.process_revenuecat_premium_event_atomic(
+    'revenuecat_google_play','generation-lifecycle-product-change','PRODUCT_CHANGE',
+    'af200000-0000-4000-8000-000000000003',product.provider_product_id,
+    product.provider_base_plan_id,'sandbox','active',clock_timestamp()-interval '1 minute',
+    clock_timestamp()+interval '30 days',clock_timestamp(),999,'usd',repeat('0',64),
+    'NORMAL','google_play','android',null,product.id,'recoverable-generation-original'
+  )->>'status' from public.monetization_products product
+  where product.id='af210000-0000-4000-8000-000000000001'),
+  'processed','product change preserves the admitted generation while changing exact catalog identity');
+select is(
+  (select current_provider_product_id||':'||coalesce(product_change_projection_event_id,'clear')
+   from public.revenuecat_premium_transaction_authority
+   where provider='revenuecat_google_play' and original_transaction_id='recoverable-generation-original'),
+  'test.premium.changed:clear','the product-change marker clears and the new provider product becomes current');
+select is(
+  (select count(*)::integer from public.money_access_ledger_events ledger
+   join public.provider_events event on event.id=ledger.provider_event_id
+   where event.provider_event_id in (
+     'generation-lifecycle-renewal','generation-lifecycle-uncancellation',
+     'generation-lifecycle-product-change'
+   ) and ledger.payable_state<>'not_payable'),
+  0,'continued sandbox lifecycle authority creates no payable money');
 select ok(
   not public.revenuecat_premium_post_quarantine_generation_internal(
     'revenuecat_google_play','af200000-0000-4000-8000-000000000002',
@@ -263,7 +308,6 @@ select ok(
   ),
   'the immutable generation cannot be rebound to another user'
 );
-
 select lives_ok(
   $$select public.quarantine_revenuecat_terminal_authority(
     'revenuecat_google_play','different-reason-generation-quarantine','TRANSFER',
@@ -289,7 +333,6 @@ select ok(
   ),
   'no immutable admitted-generation proof exists for another quarantine class'
 );
-
 select lives_ok(
   $$select public.quarantine_revenuecat_terminal_authority(
     'revenuecat_app_store','restore-generation-quarantine','TRANSFER',
@@ -306,8 +349,7 @@ select is(
     clock_timestamp()+interval '29 days',clock_timestamp(),repeat('d',64)
   )->>'status'
   from public.monetization_product_store_mappings mapping
-  where mapping.provider='revenuecat_app_store'
-    and mapping.environment='sandbox' and mapping.concept='premium'
+  where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox' and mapping.concept='premium'
   order by mapping.created_at,mapping.id limit 1),
   'processed',
   'an exact current-customer snapshot admits the App Store Premium generation'
@@ -320,12 +362,49 @@ select is(
     clock_timestamp()+interval '29 days',clock_timestamp(),repeat('e',64)
   )->>'status'
   from public.monetization_product_store_mappings mapping
-  where mapping.provider='revenuecat_app_store'
-    and mapping.environment='sandbox' and mapping.concept='premium'
+  where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox' and mapping.concept='premium'
   order by mapping.created_at,mapping.id limit 1),
   'processed',
   'a later exact Restore snapshot continues the already-admitted App Store generation'
 );
+create temporary table duplicate_restore_result on commit drop as
+select public.reconcile_revenuecat_premium_snapshot_atomic(
+  'restore-generation-second','af200000-0000-4000-8000-000000000005',
+  'restore-generation-subscription','restore-generation-original',
+  mapping.provider_product_id,'active',clock_timestamp()-interval '1 day',
+  clock_timestamp()+interval '29 days',clock_timestamp(),repeat('e',64)
+) result
+from public.monetization_product_store_mappings mapping
+where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox' and mapping.concept='premium' order by mapping.created_at,mapping.id limit 1;
+select is((select result->>'status' from duplicate_restore_result),'duplicate_ignored',
+  'an exact Restore retry acknowledges the previously processed snapshot');
+select is(
+  (select (result->>'duplicateEvent')||':'||(result->>'entitlementActive')
+   from duplicate_restore_result),'true:true','the Restore retry is idempotent and retains Premium');
+select is(
+  (select count(*)::text||':'||(select latest_event_id from public.revenuecat_premium_transaction_authority
+    where provider='revenuecat_app_store' and original_transaction_id='restore-generation-original')
+   from public.provider_events where provider_event_id='restore-generation-second'),
+  '1:restore-generation-second','the duplicate Restore creates no row and preserves the watermark');
+create temporary table stale_restore_result on commit drop as
+select public.reconcile_revenuecat_premium_snapshot_atomic(
+  'restore-generation-stale','af200000-0000-4000-8000-000000000005',
+  'restore-generation-subscription','restore-generation-original',
+  mapping.provider_product_id,'active',clock_timestamp()-interval '3 days',
+  clock_timestamp()+interval '28 days',clock_timestamp(),repeat('1',64)
+) result
+from public.monetization_product_store_mappings mapping
+where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox' and mapping.concept='premium' order by mapping.created_at,mapping.id limit 1;
+select is((select result->>'reason' from stale_restore_result),
+  'premium_reconciliation_snapshot_stale','an unseen older Restore snapshot is ignored by authority ordering');
+select is(
+  (select (result->>'duplicateEvent')||':'||(result->>'entitlementActive')
+   from stale_restore_result),'true:true','the stale Restore is a no-op while current Premium remains active');
+select is(
+  (select count(*)::text||':'||(select latest_event_id from public.revenuecat_premium_transaction_authority
+    where provider='revenuecat_app_store' and original_transaction_id='restore-generation-original')
+   from public.provider_events where provider_event_id='restore-generation-stale'),
+  '0:restore-generation-second','the stale Restore creates no event and cannot regress the watermark');
 select ok(
   public.premium_subject_has_finite_authority_internal(
     'af200000-0000-4000-8000-000000000005'
@@ -338,7 +417,29 @@ select is(
   'true',
   'the repeated Restore records the bounded generation-lifecycle decision'
 );
-
+select is(
+  (select public.process_revenuecat_premium_event_atomic(
+    'revenuecat_app_store','restore-generation-revocation','REVOCATION',
+    'af200000-0000-4000-8000-000000000005',mapping.provider_product_id,null,
+    'sandbox','revoked',clock_timestamp()-interval '1 day',
+    clock_timestamp()+interval '29 days',clock_timestamp(),0,'usd',repeat('2',64),
+    'NORMAL','app_store','ios',mapping.id,mapping.product_id,'restore-generation-original'
+  )->>'status' from public.monetization_product_store_mappings mapping
+  where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox' and mapping.concept='premium' order by mapping.created_at,mapping.id limit 1),
+  'reversed','a provider-signed revocation terminates the restored generation');
+select ok(not public.premium_subject_has_finite_authority_internal(
+  'af200000-0000-4000-8000-000000000005'),
+  'revocation removes authoritative Premium for the restored generation');
+select throws_ok(
+  $sql$select public.reconcile_revenuecat_premium_snapshot_atomic(
+    'restore-generation-after-revocation','af200000-0000-4000-8000-000000000005',
+    'restore-generation-subscription','restore-generation-original',
+    mapping.provider_product_id,'active',clock_timestamp(),clock_timestamp()+interval '30 days',
+    clock_timestamp(),repeat('3',64)
+  ) from public.monetization_product_store_mappings mapping
+  where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox' and mapping.concept='premium' order by mapping.created_at,mapping.id limit 1$sql$,
+  'premium_reconciliation_subject_restricted',
+  'Restore cannot resurrect a provider-revoked post-quarantine generation');
 select ok(
   not has_function_privilege(
     'authenticated',
@@ -371,6 +472,18 @@ select ok(
   ),
   'only the final Premium lifecycle wrapper remains service-callable'
 );
-
+select ok(
+  not has_table_privilege('authenticated',
+    'public.revenuecat_premium_transaction_authority','UPDATE'),
+  'authenticated callers cannot mutate the transaction-local product-change marker'
+);
+select ok(
+  not has_function_privilege(
+    'service_role',
+    'public.reconcile_revenuecat_premium_snapshot_pre_generation_lifecycle(text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,text)',
+    'EXECUTE'
+  ),
+  'the prior reconciliation implementation is not directly service-callable'
+);
 select * from finish();
 rollback;
