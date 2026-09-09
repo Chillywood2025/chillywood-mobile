@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import { recordAccountLegalAcceptance } from "../../_lib/accountLegalAcceptance";
 import { trackEvent } from "../../_lib/analytics";
 import { readAppConfig } from "../../_lib/appConfig";
@@ -78,6 +79,7 @@ export default function Signup() {
   const params = useLocalSearchParams<{ redirectId?: string }>();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
+  const signUpLatchRef = useRef(createActionSingleFlightLatch());
   const redirectId = String(params.redirectId ?? "").trim();
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
@@ -213,6 +215,7 @@ export default function Signup() {
       return;
     }
 
+    if (!signUpLatchRef.current.tryAcquire()) return;
     setLoading(true);
 
     try {
@@ -318,6 +321,7 @@ export default function Signup() {
       }
       Alert.alert("Signup Error", getSignupErrorMessage(error));
     } finally {
+      signUpLatchRef.current.release();
       setLoading(false);
     }
   };
