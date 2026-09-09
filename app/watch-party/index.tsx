@@ -787,10 +787,7 @@ export default function WatchPartyIndexScreen() {
     });
   }, [navigateToRoom]);
 
-  const attemptJoinRoom = useCallback(async (
-    nextPreview: RoomPreview,
-    onNavigationAccepted?: () => void,
-  ) => {
+  const attemptJoinRoom = useCallback(async (nextPreview: RoomPreview) => {
     setJoinError(null);
     setPaidTicketNotice(null);
     const nextPartyId = String(nextPreview.room.partyId ?? "").trim();
@@ -939,9 +936,7 @@ export default function WatchPartyIndexScreen() {
         surface: "watch-party-lobby",
         roomId: nextPartyId,
       });
-      navigateToPreviewRoom(currentPreview);
-      onNavigationAccepted?.();
-      return;
+      return navigateToPreviewRoom(currentPreview);
     }
 
     if (isAccessSheetReason(access.reason)) {
@@ -984,9 +979,7 @@ export default function WatchPartyIndexScreen() {
     setJoinActionBusy(true);
     let navigationAccepted = false;
     try {
-      await attemptJoinRoom(preview, () => {
-        navigationAccepted = true;
-      });
+      navigationAccepted = (await attemptJoinRoom(preview)) === true;
     } finally {
       if (!navigationAccepted) {
         joinRoomLatchRef.current.release();
