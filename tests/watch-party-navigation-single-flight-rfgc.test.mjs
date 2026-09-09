@@ -6,6 +6,7 @@ import {
   createActionSingleFlightLatch,
   runKeyedSingleFlight,
 } from "../_lib/actionSingleFlight.mjs";
+import { resolvePreparedWatchPartyRoomReuse } from "../_lib/watchPartyPreparedRoomReuse.mjs";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -93,6 +94,46 @@ test("failed navigation or mutation releases both latch forms for a safe retry",
   assert.equal(attempts, 2);
 });
 
+test("an exact prepared title room is reused instead of creating a second room", () => {
+  const room = {
+    hostUserId: "host-a",
+    partyId: "room-a",
+    roomType: "title",
+    sourceId: "title-a",
+    titleId: "title-a",
+  };
+  assert.deepEqual(resolvePreparedWatchPartyRoomReuse({
+    expectedPartyId: "ROOM-A",
+    expectedRoomType: "title",
+    expectedSourceId: "title-a",
+    expectedTitleId: "title-a",
+    room,
+    userId: "HOST-A",
+  }), { allowed: true, reason: "exact_prepared_room" });
+});
+
+test("prepared-room reuse fails closed across host, target, type, and content boundaries", () => {
+  const base = {
+    expectedPartyId: "room-a",
+    expectedRoomType: "title",
+    expectedSourceId: "title-a",
+    expectedTitleId: "title-a",
+    room: {
+      hostUserId: "host-a",
+      partyId: "room-a",
+      roomType: "title",
+      sourceId: "title-a",
+      titleId: "title-a",
+    },
+    userId: "host-a",
+  };
+  assert.equal(resolvePreparedWatchPartyRoomReuse({ ...base, userId: "host-b" }).allowed, false);
+  assert.equal(resolvePreparedWatchPartyRoomReuse({ ...base, expectedPartyId: "room-b" }).allowed, false);
+  assert.equal(resolvePreparedWatchPartyRoomReuse({ ...base, expectedRoomType: "live" }).allowed, false);
+  assert.equal(resolvePreparedWatchPartyRoomReuse({ ...base, expectedSourceId: "title-b" }).allowed, false);
+  assert.equal(resolvePreparedWatchPartyRoomReuse({ ...base, room: null }).allowed, false);
+});
+
 test("Player closes the same-frame tap window before Premium and route work", () => {
   const handlerStart = player.indexOf("const onWatchParty = useCallback(async () =>");
   const handler = player.slice(handlerStart, player.indexOf("const onSubmitTitleReport", handlerStart));
@@ -123,6 +164,10 @@ test("same-class async room entry and creation actions use synchronous latches",
   assert.match(spectatorLive, /startReactionLatchRef\.current\.tryAcquire\(\)/u);
   assert.match(spectatorMetadata, /startRoomLatchRef\.current\.tryAcquire\(\)/u);
   assert.match(spectatorChildRooms, /spectatorChildRoomFlights[\s\S]*runKeyedSingleFlight\([\s\S]*startSpectatorChildRoomOnce/u);
+  const createHandler = waitingRoom.slice(waitingRoom.indexOf("const onCreateRoom"), waitingRoom.indexOf("const onBrowseTitles"));
+  assert.ok(createHandler.indexOf("getPartyRoom(preparedTargetPartyId)") < createHandler.indexOf("resolvePreparedWatchPartyRoomReuse"));
+  assert.ok(createHandler.indexOf("resolvePreparedWatchPartyRoomReuse") < createHandler.indexOf("createPartyRoom(effectiveTitleId"));
+  assert.match(createHandler, /if \(preparedTargetPartyId\)[\s\S]*navigationAccepted = navigateToRoom\([\s\S]*return;/u);
 });
 
 test("purchase and Restore calls coalesce before the provider mutation and remain authority-bound", () => {
