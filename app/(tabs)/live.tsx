@@ -120,6 +120,7 @@ export default function LiveTabScreen() {
   const openLiveWatchParty = async () => {
     if (!liveTransitionLatchRef.current.tryAcquire()) return;
     setLiveTransitionInFlight(true);
+    let navigationAccepted = false;
 
     try {
       const access = await requireLiveFirstPremium({ accessKey: "bottom-live-tab" }).catch(() => null);
@@ -134,13 +135,17 @@ export default function LiveTabScreen() {
           setPremiumGateVisible(true);
         } else {
           router.push({ pathname: "/subscribe", params: { source: "bottom-live-tab" } });
+          navigationAccepted = true;
         }
         return;
       }
       router.push({ pathname: "/watch-party", params: { mode: "live", source: "bottom-live-tab" } });
+      navigationAccepted = true;
     } finally {
-      liveTransitionLatchRef.current.release();
-      setLiveTransitionInFlight(false);
+      if (!navigationAccepted) {
+        liveTransitionLatchRef.current.release();
+        setLiveTransitionInFlight(false);
+      }
     }
   };
 
@@ -149,6 +154,7 @@ export default function LiveTabScreen() {
       return { message: "Live is already opening.", tone: "success" };
     }
     setLiveTransitionInFlight(true);
+    let navigationAccepted = false;
 
     try {
       const access = await requireLiveFirstPremium({ accessKey: "bottom-live-tab" }).catch(() => null);
@@ -156,6 +162,7 @@ export default function LiveTabScreen() {
         setPremiumGate(null);
         setPremiumGateVisible(false);
         router.push({ pathname: "/watch-party", params: { mode: "live", source: "bottom-live-tab" } });
+        navigationAccepted = true;
         return { message: "Premium is active. Opening Live...", tone: "success" };
       }
       if (access) setPremiumGate(access);
@@ -165,8 +172,10 @@ export default function LiveTabScreen() {
         tone: "error",
       };
     } finally {
-      liveTransitionLatchRef.current.release();
-      setLiveTransitionInFlight(false);
+      if (!navigationAccepted) {
+        liveTransitionLatchRef.current.release();
+        setLiveTransitionInFlight(false);
+      }
     }
   };
 

@@ -31,11 +31,13 @@ test("ten rapid accepted Watch-Party Live presses execute one asynchronous navig
 
   const action = async () => {
     if (!latch.tryAcquire()) return;
+    let navigationAccepted = false;
     try {
       await authority;
       navigations += 1;
+      navigationAccepted = true;
     } finally {
-      latch.release();
+      if (!navigationAccepted) latch.release();
     }
   };
 
@@ -43,6 +45,10 @@ test("ten rapid accepted Watch-Party Live presses execute one asynchronous navig
   releaseAuthority();
   await Promise.all(presses);
   assert.equal(navigations, 1);
+  assert.equal(latch.tryAcquire(), false, "accepted navigation remains latched until focus leaves and returns");
+  latch.release();
+  assert.equal(latch.tryAcquire(), true, "focus re-entry releases the transition latch");
+  latch.release();
 });
 
 test("duplicate asynchronous completions share one keyed creation/provider operation", async () => {
@@ -91,7 +97,8 @@ test("Player closes the same-frame tap window before Premium and route work", ()
   const handlerStart = player.indexOf("const onWatchParty = useCallback(async () =>");
   const handler = player.slice(handlerStart, player.indexOf("const onSubmitTitleReport", handlerStart));
   assert.ok(handler.indexOf("watchPartyTransitionLatchRef.current.tryAcquire()") < handler.indexOf("ensureWatchPartyLivePremium"));
-  assert.match(handler, /finally[\s\S]*watchPartyTransitionLatchRef\.current\.release\(\)/u);
+  assert.match(handler, /navigationAccepted = true;[\s\S]*finally[\s\S]*if \(!navigationAccepted\)[\s\S]*watchPartyTransitionLatchRef\.current\.release\(\)/u);
+  assert.match(player, /useFocusEffect\([\s\S]{0,220}watchPartyTransitionLatchRef\.current\.release\(\)/u);
   assert.match(player, /accessibilityState=\{\{[\s\S]{0,120}busy: watchPartyTransitionInFlight/u);
   assert.match(player, /disabled=\{watchPartyTransitionInFlight\}/u);
 });

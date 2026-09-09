@@ -4,7 +4,7 @@ import { useEventListener } from "expo";
 import { Asset } from "expo-asset";
 import { Audio, ResizeMode, Video, type AVPlaybackStatus } from "expo-av";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { VideoView, useVideoPlayer } from "expo-video";
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
@@ -1111,6 +1111,13 @@ export default function PlayerScreen() {
     && !watchPartyEntryError
     && !watchPartyPremiumGate
     && !!watchPartyAccess?.isAllowed
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      watchPartyTransitionLatchRef.current.release();
+      setWatchPartyTransitionInFlight(false);
+    }, []),
   );
 
   useEffect(() => {
@@ -4595,12 +4602,13 @@ export default function PlayerScreen() {
   const onWatchParty = useCallback(async () => {
     if (!watchPartyTransitionLatchRef.current.tryAcquire()) return;
     setWatchPartyTransitionInFlight(true);
+    let navigationAccepted = false;
 
     try {
-    if (playbackSourceKind === "spectator-playback") {
-      Alert.alert("Watch-Party unavailable", "Start a watch party from the Spectator page for this source.");
-      return;
-    }
+      if (playbackSourceKind === "spectator-playback") {
+        Alert.alert("Watch-Party unavailable", "Start a watch party from the Spectator page for this source.");
+        return;
+      }
 
     if (playbackSourceKind === "creator-video") {
       if (!isSignedIn) {
@@ -4648,6 +4656,7 @@ export default function PlayerScreen() {
               sourceId: creatorVideoId,
             },
           });
+          navigationAccepted = true;
           return;
         }
 
@@ -4733,6 +4742,7 @@ export default function PlayerScreen() {
           sourceId: roomSourceId,
         });
         router.push({ pathname: "/watch-party", params: navParams });
+        navigationAccepted = true;
         return;
       }
     } catch {
@@ -4752,9 +4762,12 @@ export default function PlayerScreen() {
         } : {}),
       },
     });
+    navigationAccepted = true;
     } finally {
-      watchPartyTransitionLatchRef.current.release();
-      setWatchPartyTransitionInFlight(false);
+      if (!navigationAccepted) {
+        watchPartyTransitionLatchRef.current.release();
+        setWatchPartyTransitionInFlight(false);
+      }
     }
   }, [cleanId, creatorVideo, ensureWatchPartyLivePremium, hasResolvedPlatformTitle, isPlaying, isSignedIn, playbackSourceKind, titleId, titleLoading, item?.id, item?.title, localTitle]);
 

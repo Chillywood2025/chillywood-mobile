@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { titles as localTitles } from "../../_data/titles";
@@ -152,6 +152,13 @@ export default function TitleDetails() {
   const [engagementBusy, setEngagementBusy] = useState<"like" | "share" | null>(null);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      watchPartyTransitionLatchRef.current.release();
+      setWatchPartyTransitionInFlight(false);
+    }, []),
+  );
 
   const localMatch = useMemo(
     () => localTitles.find((t: any) => String(t.id) === cleanId || String(t.title ?? "").toLowerCase() === cleanId.toLowerCase()) ?? null,
@@ -562,6 +569,7 @@ export default function TitleDetails() {
     if (!nextTitleId) return;
     if (!watchPartyTransitionLatchRef.current.tryAcquire()) return;
     setWatchPartyTransitionInFlight(true);
+    let navigationAccepted = false;
 
     try {
       const access = await requireWatchPartyLivePremium({ accessKey: nextTitleId }).catch(() => null);
@@ -596,9 +604,12 @@ export default function TitleDetails() {
           titleId: nextTitleId,
         },
       });
+      navigationAccepted = true;
     } finally {
-      watchPartyTransitionLatchRef.current.release();
-      setWatchPartyTransitionInFlight(false);
+      if (!navigationAccepted) {
+        watchPartyTransitionLatchRef.current.release();
+        setWatchPartyTransitionInFlight(false);
+      }
     }
   };
 

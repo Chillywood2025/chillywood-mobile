@@ -237,6 +237,8 @@ export default function ImmersiveLiveSpectatorScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      startReactionLatchRef.current.release();
+      setSheetBusy(false);
       screenFocusedRef.current = true;
       void loadLiveItems(true);
       const interval = setInterval(() => {
@@ -300,11 +302,13 @@ export default function ImmersiveLiveSpectatorScreen() {
     }
     if (!startReactionLatchRef.current.tryAcquire()) return;
     setSheetBusy(true);
+    let navigationAccepted = false;
     try {
       if (!isSignedIn) {
         const redirectTo = `/spectate-live/${encodeURIComponent(sheetItem.id)}?lane=${lane}`;
         setSheetItem(null);
         router.push({ pathname: "/(auth)/login", params: { redirectTo } });
+        navigationAccepted = true;
         return;
       }
 
@@ -314,14 +318,17 @@ export default function ImmersiveLiveSpectatorScreen() {
         pathname: "/watch-party/live-stage/[partyId]",
         params: { partyId: created.childRoomId, source: "spectator" },
       });
+      navigationAccepted = true;
     } catch (error) {
       Alert.alert(
         "Reaction unavailable",
         error instanceof Error && error.message ? error.message : "This live can’t start a reaction room.",
       );
     } finally {
-      startReactionLatchRef.current.release();
-      setSheetBusy(false);
+      if (!navigationAccepted) {
+        startReactionLatchRef.current.release();
+        setSheetBusy(false);
+      }
     }
   };
 

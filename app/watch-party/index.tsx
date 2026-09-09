@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     DEFAULT_APP_CONFIG,
@@ -223,6 +223,15 @@ export default function WatchPartyIndexScreen() {
       : null,
   );
   const [preparedRoom, setPreparedRoom] = useState<RoomPreview | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      createRoomLatchRef.current.release();
+      joinRoomLatchRef.current.release();
+      setCreating(false);
+      setJoinActionBusy(false);
+    }, []),
+  );
   const [initialCodeStatus, setInitialCodeStatus] = useState<"idle" | "preparing" | "failed">(() =>
     isLiveEntryMode && !isPlayerWatchPartyLiveFlow && !initialRouteRoomCode ? "preparing" : "idle",
   );
@@ -750,23 +759,24 @@ export default function WatchPartyIndexScreen() {
         partyId: options.partyId,
         source: isPlayerWatchPartyLiveFlow ? PLAYER_WATCH_PARTY_SOURCE : "watch-party-index-proof",
       });
-      return;
+      return true;
     }
 
     router.push({
       pathname: "/watch-party/[partyId]",
       params,
     });
+    return true;
   }, [buildRoomEntryParams, isPlayerWatchPartyLiveFlow, router]);
 
   const navigateToPreviewRoom = useCallback((nextPreview: RoomPreview) => {
     const nextPartyId = String(nextPreview.room.partyId ?? "").trim();
     if (!nextPartyId) {
       setJoinError("Room is missing an id. Try another code.");
-      return;
+      return false;
     }
 
-    navigateToRoom({
+    return navigateToRoom({
       partyId: nextPartyId,
       roomType: nextPreview.room.roomType,
       roomCode: nextPreview.room.roomCode,
@@ -777,7 +787,10 @@ export default function WatchPartyIndexScreen() {
     });
   }, [navigateToRoom]);
 
-  const attemptJoinRoom = useCallback(async (nextPreview: RoomPreview) => {
+  const attemptJoinRoom = useCallback(async (
+    nextPreview: RoomPreview,
+    onNavigationAccepted?: () => void,
+  ) => {
     setJoinError(null);
     setPaidTicketNotice(null);
     const nextPartyId = String(nextPreview.room.partyId ?? "").trim();
@@ -927,6 +940,7 @@ export default function WatchPartyIndexScreen() {
         roomId: nextPartyId,
       });
       navigateToPreviewRoom(currentPreview);
+      onNavigationAccepted?.();
       return;
     }
 
@@ -968,11 +982,16 @@ export default function WatchPartyIndexScreen() {
     }
     if (!joinRoomLatchRef.current.tryAcquire()) return;
     setJoinActionBusy(true);
+    let navigationAccepted = false;
     try {
-      await attemptJoinRoom(preview);
+      await attemptJoinRoom(preview, () => {
+        navigationAccepted = true;
+      });
     } finally {
-      joinRoomLatchRef.current.release();
-      setJoinActionBusy(false);
+      if (!navigationAccepted) {
+        joinRoomLatchRef.current.release();
+        setJoinActionBusy(false);
+      }
     }
   };
 
@@ -1255,6 +1274,7 @@ export default function WatchPartyIndexScreen() {
     if (!createRoomLatchRef.current.tryAcquire()) return;
     setCreateError(null);
     setCreating(true);
+    let navigationAccepted = false;
 
     try {
       if (!(await requirePremiumRoomEntry(
@@ -1306,7 +1326,7 @@ export default function WatchPartyIndexScreen() {
               hasTitleId: Boolean(preparedTargetTitleId),
               sourceType: defaultSourceType ?? null,
             });
-            navigateToRoom({
+            navigationAccepted = navigateToRoom({
               partyId: nextPartyId,
               roomType: preparedRoomForNavigation?.roomType ?? activeWaitingRoomType,
               roomCode: preparedTargetRoomCode,
@@ -1350,7 +1370,7 @@ export default function WatchPartyIndexScreen() {
         roomId: nextPartyId,
         roomType,
       });
-      navigateToRoom({
+      navigationAccepted = navigateToRoom({
         partyId: nextPartyId,
         roomType: room.roomType,
         roomCode: room.roomCode,
@@ -1371,8 +1391,10 @@ export default function WatchPartyIndexScreen() {
       });
       setCreateError("Unable to create room right now.");
     } finally {
-      createRoomLatchRef.current.release();
-      setCreating(false);
+      if (!navigationAccepted) {
+        createRoomLatchRef.current.release();
+        setCreating(false);
+      }
     }
   };
 

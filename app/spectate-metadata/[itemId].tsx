@@ -173,6 +173,8 @@ export default function SpectatorMetadataScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      startRoomLatchRef.current.release();
+      setStartingAction(null);
       screenFocusedRef.current = true;
       void loadMetadata(true);
       const interval = setInterval(() => {
@@ -206,12 +208,14 @@ export default function SpectatorMetadataScreen() {
     if (!item) return;
     if (!startRoomLatchRef.current.tryAcquire()) return;
     setStartingAction(action);
+    let navigationAccepted = false;
     try {
       if (!isSignedIn) {
         router.push({
           pathname: "/(auth)/login",
           params: { redirectTo: `/spectate/${item.id}` },
         });
+        navigationAccepted = true;
         return;
       }
 
@@ -227,14 +231,17 @@ export default function SpectatorMetadataScreen() {
           params: { partyId: created.childRoomId, source: "spectator" },
         });
       }
+      navigationAccepted = true;
     } catch (error) {
       Alert.alert(
         "Watch party unavailable",
         error instanceof Error && error.message ? error.message : "This live can’t be used for a watch party",
       );
     } finally {
-      startRoomLatchRef.current.release();
-      setStartingAction(null);
+      if (!navigationAccepted) {
+        startRoomLatchRef.current.release();
+        setStartingAction(null);
+      }
     }
   };
 
