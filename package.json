@@ -557,6 +557,7 @@
     "guard:cognitive-credential-path-policy-parity": "node ./scripts/guard-cognitive-network-path-policy-parity.mjs",
     "guard:cognitive-dependency-advisories": "node ./scripts/guard-cognitive-dependency-advisories.mjs",
     "test:brace-expansion-compat": "node ./scripts/test-brace-expansion-compat.mjs",
+    "test:revenuecat-premium-quarantine-concurrency": "node ./scripts/test-revenuecat-premium-quarantine-concurrency.mjs",
     "test:image-size-safe-compat": "node ./scripts/test-image-size-safe-compat.mjs",
     "test:cognitive-collective-governance": "node ./scripts/test-cognitive-collective-governance.mjs",
     "test:cognitive-governance-adversarial": "node ./scripts/test-cognitive-governance-adversarial.mjs",

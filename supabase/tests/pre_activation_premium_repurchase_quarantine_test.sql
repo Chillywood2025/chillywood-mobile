@@ -1,5 +1,5 @@
 begin;
-select plan(20);
+select plan(26);
 
 insert into auth.users(id,is_sso_user,is_anonymous)
 values
@@ -203,6 +203,49 @@ select is(
    where provider_event_id='repurchase-reconciliation-snapshot'),
   'true',
   'the reconciliation event records the narrow Premium-generation decision'
+);
+
+select ok(
+  to_regprocedure('public.lock_revenuecat_premium_quarantine_scopes_internal(text,uuid,text)') is not null,
+  'the Premium projector has a canonical covering-scope serialization helper'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.lock_revenuecat_premium_quarantine_scopes_internal(text,uuid,text)',
+    'EXECUTE'
+  ),
+  'authenticated callers cannot acquire or steer internal provider scope locks'
+);
+select is(
+  (select tgenabled::text
+   from pg_trigger
+   where tgrelid='public.revenuecat_terminal_authority_quarantines'::regclass
+     and tgname='serialize_revenuecat_terminal_quarantine_insert'
+     and not tgisinternal),
+  'O',
+  'every new terminal quarantine takes its exclusive covering-scope lock'
+);
+select ok(
+  pg_get_functiondef(
+    'public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)'::regprocedure
+  ) like '%lock_revenuecat_premium_quarantine_scopes_internal%',
+  'INITIAL_PURCHASE takes shared covering-scope locks before quarantine readback'
+);
+select ok(
+  pg_get_functiondef(
+    'public.reconcile_revenuecat_premium_snapshot_atomic(text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,text)'::regprocedure
+  ) like '%lock_revenuecat_premium_quarantine_scopes_internal%',
+  'current-customer reconciliation takes the same shared covering-scope locks'
+);
+select ok(
+  pg_get_functiondef(
+    'public.serialize_revenuecat_terminal_quarantine_insert_internal()'::regprocedure
+  ) like '%pg_advisory_xact_lock%'
+  and pg_get_functiondef(
+    'public.serialize_revenuecat_terminal_quarantine_insert_internal()'::regprocedure
+  ) like '%revenuecat-terminal-scope:%',
+  'the quarantine insert uses an exclusive advisory lock in the identical key namespace'
 );
 
 select * from finish();

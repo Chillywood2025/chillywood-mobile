@@ -5,6 +5,87 @@
 -- transaction. Keep that exception Premium-specific: unrelated RevenueCat
 -- grants remain quarantined until their own exact authority is reconciled.
 
+-- Quarantine admission and a fresh Premium generation must observe one another
+-- in commit order. Premium calls take shared locks at every scope that can
+-- cover their exact provider/subject/environment; quarantine inserts take the
+-- matching exclusive scope lock in the trigger below. Shared locks preserve
+-- concurrency between unrelated Premium subjects while a covering quarantine
+-- remains an exclusive fail-closed boundary.
+create or replace function public."lock_revenuecat_premium_quarantine_scopes_internal"(
+  p_provider text,
+  p_user_id uuid,
+  p_environment text
+)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  v_provider text:=lower(trim(coalesce(p_provider,'')));
+  v_environment text:=lower(trim(coalesce(p_environment,'')));
+begin
+  if v_provider not in ('revenuecat_app_store','revenuecat_google_play')
+    or p_user_id is null
+    or v_environment not in ('sandbox','production')
+  then
+    raise exception 'revenuecat_premium_quarantine_lock_scope_invalid';
+  end if;
+  perform pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(
+    'revenuecat-terminal-scope:global',0
+  ));
+  perform pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(
+    'revenuecat-terminal-scope:provider:'||v_provider,0
+  ));
+  perform pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(
+    'revenuecat-terminal-scope:provider-environment:'||v_provider||':'||v_environment,0
+  ));
+  perform pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(
+    'revenuecat-terminal-scope:provider-user:'||v_provider||':'||p_user_id::text,0
+  ));
+  perform pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(
+    'revenuecat-terminal-scope:exact:'||v_provider||':'||p_user_id::text||':'||v_environment,0
+  ));
+end;
+$$;
+revoke all on function public."lock_revenuecat_premium_quarantine_scopes_internal"(
+  text,uuid,text
+) from public,anon,authenticated,service_role;
+
+create or replace function public."serialize_revenuecat_terminal_quarantine_insert_internal"()
+returns trigger
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  v_lock_key text;
+begin
+  v_lock_key:=case
+    when new."provider_scope"='revenuecat_global'
+      then 'revenuecat-terminal-scope:global'
+    when new."user_id" is null and new."environment_scope" is null
+      then 'revenuecat-terminal-scope:provider:'||new."provider_scope"
+    when new."user_id" is null
+      then 'revenuecat-terminal-scope:provider-environment:'||new."provider_scope"||':'||new."environment_scope"
+    when new."environment_scope" is null
+      then 'revenuecat-terminal-scope:provider-user:'||new."provider_scope"||':'||new."user_id"::text
+    else 'revenuecat-terminal-scope:exact:'||new."provider_scope"||':'||new."user_id"::text||':'||new."environment_scope"
+  end;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_lock_key,0));
+  return new;
+end;
+$$;
+revoke all on function public."serialize_revenuecat_terminal_quarantine_insert_internal"()
+  from public,anon,authenticated,service_role;
+drop trigger if exists "serialize_revenuecat_terminal_quarantine_insert"
+  on public."revenuecat_terminal_authority_quarantines";
+create trigger "serialize_revenuecat_terminal_quarantine_insert"
+before insert on public."revenuecat_terminal_authority_quarantines"
+for each row execute function public."serialize_revenuecat_terminal_quarantine_insert_internal"();
+
 create or replace function public."revenuecat_premium_fresh_authority_allowed_internal"(
   p_provider text,
   p_user_id uuid,
@@ -214,6 +295,14 @@ begin
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
     'revenuecat-premium-original:'||v_provider||':'||v_original_transaction_id,0
   ));
+  if v_provider in ('revenuecat_app_store','revenuecat_google_play')
+    and p_user_id is not null
+    and v_environment in ('sandbox','production')
+  then
+    perform public."lock_revenuecat_premium_quarantine_scopes_internal"(
+      v_provider,p_user_id,v_environment
+    );
+  end if;
 
   select transaction_authority."id" into v_binding_id
   from public."revenuecat_premium_transaction_authority" transaction_authority
@@ -412,6 +501,11 @@ begin
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
     'revenuecat-premium-original:revenuecat_app_store:'||v_original_transaction_id,0
   ));
+  if p_user_id is not null then
+    perform public."lock_revenuecat_premium_quarantine_scopes_internal"(
+      'revenuecat_app_store',p_user_id,'sandbox'
+    );
+  end if;
 
   select transaction_authority."id" into v_binding_id
   from public."revenuecat_premium_transaction_authority" transaction_authority
