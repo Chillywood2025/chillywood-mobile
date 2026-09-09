@@ -62,6 +62,7 @@ const liveStageRoute = read("app/watch-party/live-stage/[partyId].tsx");
 const premiumReconciler = read("supabase/functions/revenuecat-premium-reconcile/index.ts");
 const premiumReconciliationAuthority = read("supabase/functions/revenuecat-premium-reconcile/authority.ts");
 const premiumReconciliationMigration = read("supabase/migrations/20260907135900_pre_activation_premium_authority_reconciliation.sql");
+const premiumCurrentOwnerMigration = read("supabase/migrations/20260909062344_pre_activation_premium_verified_current_owner_transfer.sql");
 
 assertIncludes(appConfig, "EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY || existingRevenueCat.androidPublicSdkKey", "Expo production RevenueCat public key wiring");
 assertIncludes(appConfig, "EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV || existingRevenueCat.androidDebugPublicSdkKey", "Expo debug RevenueCat public key wiring");
@@ -163,6 +164,7 @@ if (!(reconciliationAuthBoundary >= 0
 }
 assertIncludes(premiumReconciler, "return jsonResponse(429,", "Premium reconciliation rate-limit response");
 assertIncludes(premiumReconciliationAuthority, "subscription.product_id", "RevenueCat v2 subscription product identity");
+assertIncludes(premiumReconciliationAuthority, "subscription.original_customer_id", "RevenueCat v2 original-customer identity");
 assertIncludes(
   premiumReconciler,
   "/products/${encodeURIComponent(productId)}",
@@ -171,6 +173,8 @@ assertIncludes(
 assertIncludes(premiumReconciliationAuthority, "toText(product.id) !== productId", "RevenueCat product response identity binding");
 assertIncludes(premiumReconciliationAuthority, 'toText(product.type) !== "subscription"', "RevenueCat subscription product-type binding");
 assertIncludes(premiumReconciler, "PREMIUM_PRODUCT_IDS.has(providerProductId)", "RevenueCat exact Premium store-product allowlist");
+assertIncludes(premiumReconciler, "originalCustomerId", "RevenueCat current-owner snapshot identity");
+assertIncludes(premiumReconciler, '"reconcile_revenuecat_premium_current_owner_snapshot_atomic"', "current-owner service-only reconciliation RPC");
 assertNotIncludes(
   premiumReconciler,
   "isRecord(subscription.product)",
@@ -178,6 +182,17 @@ assertNotIncludes(
 );
 assertIncludes(premiumReconciliationMigration, "pg_advisory_xact_lock", "Premium reconciliation rate-limit serialization");
 assertIncludes(premiumReconciliationMigration, "enforce_revenuecat_premium_reconciliation_rate_limit", "Premium reconciliation service limiter");
+assertIncludes(premiumCurrentOwnerMigration, "premium_current_owner_transfer_evidence_missing", "missing signed transfer fail-closed guard");
+assertIncludes(premiumCurrentOwnerMigration, "premium_current_owner_transfer_source_still_active", "active source cannot use expired-source successor");
+assertIncludes(premiumCurrentOwnerMigration, "premium_transfer_current_customer_reconciled", "signed transfer consumption disposition");
+assertIncludes(premiumCurrentOwnerMigration, "lock_revenuecat_premium_owner_users_internal", "shared current-owner/transfer serialization helper");
+assertIncludes(premiumCurrentOwnerMigration, "revenuecat-premium-owner-user:", "stable per-user Premium owner lock namespace");
+assertIncludes(premiumCurrentOwnerMigration, "process_revenuecat_premium_event_pre_owner_serialization", "provider-event projector serialization wrapper");
+assertIncludes(premiumCurrentOwnerMigration, "reconcile_revenuecat_premium_snapshot_pre_owner_serialization", "snapshot projector serialization wrapper");
+assertIncludes(premiumCurrentOwnerMigration, "process_revenuecat_premium_transfer_pre_owner_serialization", "signed transfer serialization wrapper");
+assertIncludes(premiumCurrentOwnerMigration, "premium_current_owner_transfer_binding_changed", "binding re-read fail-closed guard");
+assertIncludes(premiumCurrentOwnerMigration, "from public, anon, authenticated, service_role", "current-owner function default privilege revocation");
+assertIncludes(premiumCurrentOwnerMigration, "to service_role", "current-owner service-only execute grant");
 
 assertIncludes(moneyFeatureFlags, "live_money_enabled: \"off\"", "live money default off");
 for (const key of ["live_money_enabled", "watch_party_seats_enabled", "tips_enabled", "paid_content_enabled", "payouts_enabled"]) {

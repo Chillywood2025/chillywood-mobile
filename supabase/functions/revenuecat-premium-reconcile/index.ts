@@ -13,6 +13,7 @@ import {
   writeProviderReadinessAudit,
 } from "../_shared/provider-readiness.ts";
 import {
+  revenueCatOriginalCustomerId,
   resolveRevenueCatStoreProductIdentifier,
   revenueCatProductId,
 } from "./authority.ts";
@@ -120,6 +121,7 @@ const eligibleSubscription = (subscription: JsonObject, userId: string, now: num
   const status = toText(subscription.status).toLowerCase();
   return subscription.object === "subscription"
     && toText(subscription.customer_id) === userId
+    && !!revenueCatOriginalCustomerId(subscription)
     && toText(subscription.environment).toLowerCase() === "sandbox"
     && toText(subscription.store).toLowerCase() === "app_store"
     && toText(subscription.ownership).toLowerCase() === "purchased"
@@ -234,6 +236,8 @@ Deno.serve(async (req) => {
 
     const subscription = eligible[0];
     const subscriptionId = toText(subscription.id);
+    const originalCustomerId = revenueCatOriginalCustomerId(subscription);
+    if (!originalCustomerId) throw new Error("revenuecat_original_customer_id_invalid");
     const productId = revenueCatProductId(subscription);
     if (!SAFE_ID.test(productId)) throw new Error("revenuecat_product_id_invalid");
     const product = await revenueCatGet(
@@ -255,6 +259,7 @@ Deno.serve(async (req) => {
       entitlement: PREMIUM_LOOKUP_KEY,
       expiresAt,
       givesAccess: true,
+      originalCustomerId,
       originalTransactionId,
       ownership: "purchased",
       productIdentifier: providerProductId,
@@ -268,11 +273,12 @@ Deno.serve(async (req) => {
     if (!SAFE_ID.test(snapshotId)) throw new Error("revenuecat_snapshot_id_invalid");
 
     const { data, error } = await adminConfig.client.rpc(
-      "reconcile_revenuecat_premium_snapshot_atomic",
+      "reconcile_revenuecat_premium_current_owner_snapshot_atomic",
       {
         p_entitlement_status: normalizedEntitlementStatus(subscription.status),
         p_expires_at: new Date(expiresAt).toISOString(),
         p_observed_at: new Date(now).toISOString(),
+        p_original_customer_id: originalCustomerId,
         p_original_transaction_id: originalTransactionId,
         p_provider_product_id: providerProductId,
         p_raw_payload_hash: payloadHash,

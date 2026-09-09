@@ -1176,7 +1176,15 @@ select ok(
 select ok(
   pg_get_functiondef(
     'public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)'::regprocedure
-  ) like '%revenuecat_premium_transaction_authority%',
+  ) like '%process_revenuecat_premium_event_pre_owner_serialization%'
+  and pg_get_functiondef(
+    'public.process_revenuecat_premium_event_pre_owner_serialization(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)'::regprocedure
+  ) like '%revenuecat_premium_transaction_authority%'
+  and not has_function_privilege(
+    'service_role',
+    'public.process_revenuecat_premium_event_pre_owner_serialization(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)',
+    'EXECUTE'
+  ),
   'service-accessible Premium RPC binds exact original-transaction authority'
 );
 select ok(

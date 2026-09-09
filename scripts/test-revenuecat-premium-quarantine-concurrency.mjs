@@ -131,6 +131,8 @@ function assertTransientAuthorityGraph() {
 select (
   to_regprocedure('public.process_revenuecat_premium_event_atomic(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)') is not null
   and to_regprocedure('public.reconcile_revenuecat_premium_snapshot_atomic(text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,text)') is not null
+  and to_regprocedure('public.reconcile_revenuecat_premium_current_owner_snapshot_atomic(text,uuid,text,text,text,text,text,timestamptz,timestamptz,timestamptz,text)') is not null
+  and to_regprocedure('public.lock_revenuecat_premium_owner_users_internal(uuid,uuid)') is not null
   and to_regprocedure('public.quarantine_revenuecat_terminal_authority(text,text,text,uuid,text,text,text)') is not null
   and to_regprocedure('public.lock_revenuecat_premium_quarantine_scopes_internal(text,uuid,text)') is not null
   and to_regprocedure('public.premium_subject_has_finite_authority_internal(text)') is not null
@@ -154,6 +156,14 @@ select (
   and not has_function_privilege('anon','public.reconcile_revenuecat_premium_snapshot_atomic(text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,text)','execute')
   and not has_function_privilege('authenticated','public.reconcile_revenuecat_premium_snapshot_atomic(text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,text)','execute')
   and has_function_privilege('service_role','public.reconcile_revenuecat_premium_snapshot_atomic(text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,text)','execute')
+  and not has_function_privilege('anon','public.reconcile_revenuecat_premium_current_owner_snapshot_atomic(text,uuid,text,text,text,text,text,timestamptz,timestamptz,timestamptz,text)','execute')
+  and not has_function_privilege('authenticated','public.reconcile_revenuecat_premium_current_owner_snapshot_atomic(text,uuid,text,text,text,text,text,timestamptz,timestamptz,timestamptz,text)','execute')
+  and has_function_privilege('service_role','public.reconcile_revenuecat_premium_current_owner_snapshot_atomic(text,uuid,text,text,text,text,text,timestamptz,timestamptz,timestamptz,text)','execute')
+  and not has_function_privilege('service_role','public.lock_revenuecat_premium_owner_users_internal(uuid,uuid)','execute')
+  and not has_function_privilege('service_role','public.process_revenuecat_premium_event_pre_owner_serialization(text,text,text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,integer,text,text,text,text,text,uuid,uuid,text)','execute')
+  and not has_function_privilege('service_role','public.reconcile_revenuecat_premium_snapshot_pre_owner_serialization(text,uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,text)','execute')
+  and not has_function_privilege('service_role','public.process_revenuecat_premium_transfer_pre_owner_serialization(text,uuid,uuid,text,timestamptz,text)','execute')
+  and has_function_privilege('service_role','public.process_revenuecat_premium_transfer_atomic(text,uuid,uuid,text,timestamptz,text)','execute')
   and not has_function_privilege('anon','public.quarantine_revenuecat_terminal_authority(text,text,text,uuid,text,text,text)','execute')
   and not has_function_privilege('authenticated','public.quarantine_revenuecat_terminal_authority(text,text,text,uuid,text,text,text)','execute')
   and has_function_privilege('service_role','public.quarantine_revenuecat_terminal_authority(text,text,text,uuid,text,text,text)','execute')
@@ -316,9 +326,182 @@ const restoreHash = hash(restoreId);
 const restoreCall = `select result->>'status'||':'||coalesce(result->>'duplicateEvent','false') from (select public.reconcile_revenuecat_premium_snapshot_atomic(${literal(restoreId)},${literal(appStoreUser)}::uuid,${literal(`subscription-${appStoreOriginal}`)},${literal(appStoreOriginal)},mapping.provider_product_id,'active',clock_timestamp()-interval '1 day',clock_timestamp()+interval '29 days',clock_timestamp(),${literal(restoreHash)}) result from public.monetization_product_store_mappings mapping where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox' and mapping.concept='premium' and mapping.provider_product_id='com.chillywood.premium.monthly') projected`;
 await raceExactCall("restore", restoreCall, "processed:false", "duplicate_ignored:true");
 assert.equal(query(`select (select count(*) from public.provider_events where provider_event_id=${literal(restoreId)})::text||':'||(select latest_event_id from public.revenuecat_premium_transaction_authority where provider='revenuecat_app_store' and original_transaction_id=${literal(appStoreOriginal)})||':'||(select current_provider_product_id from public.revenuecat_premium_transaction_authority where provider='revenuecat_app_store' and original_transaction_id=${literal(appStoreOriginal)})||':'||(select count(*) from public.access_grants grant_row join public.provider_events event on event.id=grant_row.provider_event_id where event.provider_event_id=${literal(restoreId)})::text||':'||(select count(*) from public.money_access_ledger_events ledger join public.provider_events event on event.id=ledger.provider_event_id where event.provider_event_id=${literal(restoreId)})::text||':'||public.premium_subject_has_finite_authority_internal(${literal(appStoreUser)})::text;`), `1:${restoreId}:com.chillywood.premium.monthly:1:1:true`);
+
+const transferSource = randomUUID();
+const transferTarget = randomUUID();
+const currentOwnerOriginal = `current-owner-${randomUUID()}`;
+const currentOwnerSourceSnapshot = `current-owner-source-${randomUUID()}`;
+const currentOwnerTransfer = `current-owner-transfer-${randomUUID()}`;
+const currentOwnerSnapshot = `current-owner-target-${randomUUID()}`;
+const currentOwnerHash = hash(currentOwnerSnapshot);
+query(`
+insert into auth.users(id,is_sso_user,is_anonymous) values
+  (${literal(transferSource)}::uuid,false,false),
+  (${literal(transferTarget)}::uuid,false,false);
+select public.reconcile_revenuecat_premium_snapshot_atomic(
+  ${literal(currentOwnerSourceSnapshot)},${literal(transferSource)}::uuid,
+  ${literal(`subscription-${currentOwnerOriginal}`)},${literal(currentOwnerOriginal)},
+  mapping.provider_product_id,'active',clock_timestamp()-interval '2 days',
+  clock_timestamp()+interval '1 day',clock_timestamp()-interval '1 day',
+  ${literal(hash(currentOwnerSourceSnapshot))}
+) from public.monetization_product_store_mappings mapping
+where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox'
+  and mapping.concept='premium'
+  and mapping.provider_product_id='com.chillywood.premium.monthly';
+update public.user_entitlements set expires_at=clock_timestamp()-interval '1 minute'
+where user_id=${literal(transferSource)} and entitlement_key='premium';
+update public.access_grants set expires_at=clock_timestamp()-interval '1 minute'
+where user_id=${literal(transferSource)}::uuid and grant_type='premium';
+insert into public.provider_events(
+  provider_event_id,provider,product_id,product_key,user_id,app_user_id,
+  environment,event_type,status,occurred_at,idempotency_key,raw_payload_hash,metadata
+) values (
+  ${literal(currentOwnerTransfer)},'revenuecat_app_store',null,null,
+  ${literal(transferTarget)}::uuid,${literal(transferTarget)},'sandbox','TRANSFER','ignored',
+  clock_timestamp()-interval '30 seconds',${literal(`TRANSFER:${currentOwnerTransfer}`)},
+  ${literal(hash(currentOwnerTransfer))},jsonb_build_object(
+    'source_user_id',${literal(transferSource)},'target_user_id',${literal(transferTarget)},
+    'reported_occurred_at',clock_timestamp()-interval '30 seconds',
+    'transfer_time_valid',true,'transfer_applied',false,
+    'final_reason','premium_transfer_source_transaction_authority_missing',
+    'provider_payload_stored',false,'money_action',false
+  )
+);
+`);
+const currentOwnerCall = `select result->>'status'||':'||coalesce(result->>'duplicateEvent','false') from (
+  select public.reconcile_revenuecat_premium_current_owner_snapshot_atomic(
+    ${literal(currentOwnerSnapshot)},${literal(transferTarget)}::uuid,${literal(transferSource)},
+    ${literal(`subscription-${currentOwnerOriginal}`)},${literal(currentOwnerOriginal)},
+    mapping.provider_product_id,'active',clock_timestamp()-interval '10 minutes',
+    clock_timestamp()+interval '30 days',clock_timestamp(),${literal(currentOwnerHash)}
+  ) result from public.monetization_product_store_mappings mapping
+  where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox'
+    and mapping.concept='premium'
+    and mapping.provider_product_id='com.chillywood.premium.monthly'
+) projected`;
+await raceExactCall("current-owner", currentOwnerCall, "processed:false", "duplicate_ignored:true");
+assert.equal(query(`select
+  (select count(*) from public.provider_events where provider_event_id=${literal(currentOwnerSnapshot)})::text||':'||
+  (select metadata->>'transfer_applied' from public.provider_events where provider_event_id=${literal(currentOwnerTransfer)})||':'||
+  (select user_id::text from public.revenuecat_premium_transaction_authority where provider='revenuecat_app_store' and original_transaction_id=${literal(currentOwnerOriginal)})||':'||
+  public.premium_subject_has_finite_authority_internal(${literal(transferSource)})::text||':'||
+  public.premium_subject_has_finite_authority_internal(${literal(transferTarget)})::text||':'||
+  (select count(*) from public.money_access_ledger_events ledger join public.provider_events event on event.id=ledger.provider_event_id where event.provider_event_id=${literal(currentOwnerSnapshot)} and ledger.payable_state='not_payable')::text;
+`), `1:true:${transferTarget}:false:true:1`);
+
+// Exact three-user ordering proof. While S -> T current-owner reconciliation
+// is still uncommitted, a newer signed T -> U transfer must wait on T's shared
+// owner lock. After S -> T commits, the transfer re-observes T as authoritative
+// and moves the exact binding to U instead of durably ignoring the newer event.
+const chainSource = randomUUID();
+const chainTarget = randomUUID();
+const chainNextTarget = randomUUID();
+const chainOriginal = `current-owner-chain-${randomUUID()}`;
+const chainSourceSnapshot = `current-owner-chain-source-${randomUUID()}`;
+const chainFirstTransfer = `current-owner-chain-first-transfer-${randomUUID()}`;
+const chainSnapshot = `current-owner-chain-target-${randomUUID()}`;
+const chainNextTransfer = `current-owner-chain-next-transfer-${randomUUID()}`;
+query(`
+insert into auth.users(id,is_sso_user,is_anonymous) values
+  (${literal(chainSource)}::uuid,false,false),
+  (${literal(chainTarget)}::uuid,false,false),
+  (${literal(chainNextTarget)}::uuid,false,false);
+select public.reconcile_revenuecat_premium_snapshot_atomic(
+  ${literal(chainSourceSnapshot)},${literal(chainSource)}::uuid,
+  ${literal(`subscription-${chainOriginal}`)},${literal(chainOriginal)},
+  mapping.provider_product_id,'active',clock_timestamp()-interval '2 days',
+  clock_timestamp()+interval '1 day',clock_timestamp()-interval '1 day',
+  ${literal(hash(chainSourceSnapshot))}
+) from public.monetization_product_store_mappings mapping
+where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox'
+  and mapping.concept='premium'
+  and mapping.provider_product_id='com.chillywood.premium.monthly';
+update public.user_entitlements set expires_at=clock_timestamp()-interval '1 minute'
+where user_id=${literal(chainSource)} and entitlement_key='premium';
+update public.access_grants set expires_at=clock_timestamp()-interval '1 minute'
+where user_id=${literal(chainSource)}::uuid and grant_type='premium';
+insert into public.provider_events(
+  provider_event_id,provider,product_id,product_key,user_id,app_user_id,
+  environment,event_type,status,occurred_at,idempotency_key,raw_payload_hash,metadata
+) values (
+  ${literal(chainFirstTransfer)},'revenuecat_app_store',null,null,
+  ${literal(chainTarget)}::uuid,${literal(chainTarget)},'sandbox','TRANSFER','ignored',
+  clock_timestamp()-interval '30 seconds',${literal(`TRANSFER:${chainFirstTransfer}`)},
+  ${literal(hash(chainFirstTransfer))},jsonb_build_object(
+    'source_user_id',${literal(chainSource)},'target_user_id',${literal(chainTarget)},
+    'reported_occurred_at',clock_timestamp()-interval '30 seconds',
+    'transfer_time_valid',true,'transfer_applied',false,
+    'final_reason','premium_transfer_source_transaction_authority_missing',
+    'provider_payload_stored',false,'money_action',false
+  )
+);
+`);
+
+const chainHolderName = "premium-current-owner-chain-holder";
+const chainTransferName = "premium-current-owner-chain-transfer";
+let chainHolder;
+let chainTransfer;
+try {
+  chainHolder = openSession(chainHolderName, `
+begin;
+set local statement_timeout='15s';
+select 'CHAIN_OWNER_RESULT:'||(result->>'status') from (
+  select public.reconcile_revenuecat_premium_current_owner_snapshot_atomic(
+    ${literal(chainSnapshot)},${literal(chainTarget)}::uuid,${literal(chainSource)},
+    ${literal(`subscription-${chainOriginal}`)},${literal(chainOriginal)},
+    mapping.provider_product_id,'active',clock_timestamp()-interval '10 minutes',
+    clock_timestamp()+interval '30 days',clock_timestamp(),${literal(hash(chainSnapshot))}
+  ) result from public.monetization_product_store_mappings mapping
+  where mapping.provider='revenuecat_app_store' and mapping.environment='sandbox'
+    and mapping.concept='premium'
+    and mapping.provider_product_id='com.chillywood.premium.monthly'
+) projected;
+select 'CHAIN_OWNER_READY';`);
+  await waitUntil(() => chainHolder.output().includes("CHAIN_OWNER_READY"), "current-owner chain projection");
+
+  chainTransfer = openSession(chainTransferName, `
+begin;
+set local statement_timeout='15s';
+select 'CHAIN_TRANSFER_RESULT:'||(public.process_revenuecat_premium_transfer_atomic(
+  ${literal(chainNextTransfer)},${literal(chainTarget)}::uuid,
+  ${literal(chainNextTarget)}::uuid,'sandbox',clock_timestamp(),
+  ${literal(hash(chainNextTransfer))}
+)->>'status');
+commit;
+\\q`);
+  chainTransfer.child.stdin.end();
+  await waitUntil(() => Number(query(`
+select count(*) from pg_stat_activity
+where application_name=${literal(chainTransferName)}
+  and wait_event_type='Lock' and wait_event='advisory';`)) === 1, "newer transfer waits for current-owner projection");
+
+  chainHolder.child.stdin.end("commit;\n\\q\n");
+  const [chainHolderResult, chainTransferResult] = await Promise.all([
+    chainHolder.done, chainTransfer.done,
+  ]);
+  assert.equal(chainHolderResult.code, 0, chainHolderResult.stderr);
+  assert.equal(chainTransferResult.code, 0, chainTransferResult.stderr);
+  assert.match(chainHolderResult.stdout, /CHAIN_OWNER_RESULT:processed/u);
+  assert.match(chainTransferResult.stdout, /CHAIN_TRANSFER_RESULT:processed/u);
+} catch (error) {
+  await terminate(chainHolderName, chainHolder);
+  await terminate(chainTransferName, chainTransfer);
+  throw error;
+}
+assert.equal(query(`select
+  (select user_id::text from public.revenuecat_premium_transaction_authority
+    where provider='revenuecat_app_store' and original_transaction_id=${literal(chainOriginal)})||':'||
+  public.premium_subject_has_finite_authority_internal(${literal(chainSource)})::text||':'||
+  public.premium_subject_has_finite_authority_internal(${literal(chainTarget)})::text||':'||
+  public.premium_subject_has_finite_authority_internal(${literal(chainNextTarget)})::text||':'||
+  (select metadata->>'transfer_applied' from public.provider_events
+    where provider_event_id=${literal(chainFirstTransfer)})||':'||
+  (select metadata->>'transfer_applied' from public.provider_events
+    where provider_event_id=${literal(chainNextTransfer)});
+`), `${chainNextTarget}:false:false:true:true:true`);
 assert.equal(query(`select count(*)::text from pg_stat_activity where application_name=${literal(sourceSentinelName)};`, sourceDatabase), "1", "read-only source sentinel did not survive isolated proof");
 
-process.stdout.write(`RevenueCat Premium/quarantine concurrency: ${scenarios.length} scope + 3 lifecycle races passed\n`);
+process.stdout.write(`RevenueCat Premium/quarantine concurrency: ${scenarios.length} scope + 5 lifecycle races passed\n`);
 } finally {
   dropTransientDatabase();
   if (sourceSentinel) {
