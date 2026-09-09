@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 
 import { readAppConfig, resolveRoomDefaultConfig } from "./appConfig";
+import { runKeyedSingleFlight } from "./actionSingleFlight.mjs";
 import { debugLog, reportRuntimeError } from "./logger";
 import {
   createEmptyMonetizationGateResolution,
@@ -980,7 +981,27 @@ async function upsertMembership(options: MembershipUpsertOptions): Promise<Watch
   return rowToMembership(row);
 }
 
-export async function createPartyRoom(
+const partyRoomCreateFlights = new Map<string, Promise<unknown>>();
+
+const getPartyRoomCreateFlightKey = (
+  titleId: string | null | undefined,
+  hostUserId: string,
+  options?: WatchPartyRoomCreateOptions,
+) => JSON.stringify([
+  String(hostUserId ?? "").trim(),
+  String(titleId ?? "").trim(),
+  options?.roomType ?? "",
+  options?.sourceType ?? "",
+  String(options?.sourceId ?? "").trim(),
+  options?.joinPolicy ?? "",
+  options?.reactionsPolicy ?? "",
+  options?.contentAccessRule ?? "",
+  options?.capturePolicy ?? "",
+  options?.discoveryVisibility ?? "",
+  String(options?.discoveryTitle ?? "").trim(),
+]);
+
+async function createPartyRoomOnce(
   titleId: string | null | undefined,
   hostUserId: string,
   positionMillis: number,
@@ -1279,6 +1300,20 @@ export async function createPartyRoom(
     });
     return { error: explicitError };
   }
+}
+
+export function createPartyRoom(
+  titleId: string | null | undefined,
+  hostUserId: string,
+  positionMillis: number,
+  state: "playing" | "paused",
+  options?: WatchPartyRoomCreateOptions,
+): Promise<WatchPartyCreateResult> {
+  return runKeyedSingleFlight(
+    partyRoomCreateFlights,
+    getPartyRoomCreateFlightKey(titleId, hostUserId, options),
+    () => createPartyRoomOnce(titleId, hostUserId, positionMillis, state, options),
+  );
 }
 
 async function touchActivePartyRoomHeartbeat(room: WatchPartyState, userId?: string | null): Promise<void> {

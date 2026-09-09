@@ -13,6 +13,7 @@ import {
   type RoomAccessResolution,
 } from "../../_lib/accessEntitlements";
 import { trackEvent } from "../../_lib/analytics";
+import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../_lib/betaProgram";
 import {
     ActivityIndicator,
@@ -199,10 +200,14 @@ export default function WatchPartyIndexScreen() {
   }, [router]);
   const [joinCode, setJoinCode] = useState(() => (!isPlayerWatchPartyLiveFlow ? initialRouteRoomCode : ""));
   const [joinLookupBusy, setJoinLookupBusy] = useState(false);
+  const joinLookupLatchRef = useRef(createActionSingleFlightLatch());
   const [joinError, setJoinError] = useState<string | null>(null);
   const createTitleId = "";
   const [entryTitleName, setEntryTitleName] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const createRoomLatchRef = useRef(createActionSingleFlightLatch());
+  const joinRoomLatchRef = useRef(createActionSingleFlightLatch());
+  const [joinActionBusy, setJoinActionBusy] = useState(false);
   const [refreshingCode, setRefreshingCode] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [preview, setPreview] = useState<RoomPreview | null>(null);
@@ -623,6 +628,7 @@ export default function WatchPartyIndexScreen() {
       setJoinError("Enter a room code to find a Watch-Party room.");
       return;
     }
+    if (!joinLookupLatchRef.current.tryAcquire()) return;
 
     setJoinLookupBusy(true);
     setJoinError(null);
@@ -673,6 +679,7 @@ export default function WatchPartyIndexScreen() {
       });
       setJoinError("Couldn't reach the server. Check your connection.");
     } finally {
+      joinLookupLatchRef.current.release();
       setJoinLookupBusy(false);
     }
   };
@@ -959,7 +966,14 @@ export default function WatchPartyIndexScreen() {
       setJoinError("Find the room again before joining.");
       return;
     }
-    await attemptJoinRoom(preview);
+    if (!joinRoomLatchRef.current.tryAcquire()) return;
+    setJoinActionBusy(true);
+    try {
+      await attemptJoinRoom(preview);
+    } finally {
+      joinRoomLatchRef.current.release();
+      setJoinActionBusy(false);
+    }
   };
 
   const onSavePaidTicketOffer = useCallback(async (paid: boolean) => {
@@ -1238,17 +1252,18 @@ export default function WatchPartyIndexScreen() {
       return;
     }
 
-    if (!(await requirePremiumRoomEntry(
-      activeWaitingRoomType,
-      effectiveSourceId ?? effectiveTitleId ?? preparedTargetPartyId,
-    ))) {
-      return;
-    }
-
+    if (!createRoomLatchRef.current.tryAcquire()) return;
     setCreateError(null);
     setCreating(true);
 
     try {
+      if (!(await requirePremiumRoomEntry(
+        activeWaitingRoomType,
+        effectiveSourceId ?? effectiveTitleId ?? preparedTargetPartyId,
+      ))) {
+        return;
+      }
+
       const hostUserId = await getSafePartyUserId();
       if (!effectiveTitleId && preparedTargetPartyId) {
         const preparedHostUserId = String(preparedRoom?.room.hostUserId ?? "").trim();
@@ -1356,6 +1371,7 @@ export default function WatchPartyIndexScreen() {
       });
       setCreateError("Unable to create room right now.");
     } finally {
+      createRoomLatchRef.current.release();
       setCreating(false);
     }
   };
@@ -2047,10 +2063,16 @@ export default function WatchPartyIndexScreen() {
                 <AppText scale="caption" style={styles.previewCode}>Room  {preview.room.roomCode}</AppText>
                 <View style={styles.previewActions}>
                   <Pressable
-                    style={({ pressed }) => [styles.joinNowBtn, pressed && styles.previewActionPressed]}
+                    style={({ pressed }) => [
+                      styles.joinNowBtn,
+                      joinActionBusy && styles.primaryButtonDisabled,
+                      pressed && styles.previewActionPressed,
+                    ]}
                     onPress={onConfirmJoin}
+                    disabled={joinActionBusy}
                     accessibilityRole="button"
-                    accessibilityLabel="Join Now"
+                    accessibilityLabel={joinActionBusy ? "Joining Party Room" : "Join Now"}
+                    accessibilityState={{ disabled: joinActionBusy, busy: joinActionBusy }}
                     hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                     testID="watch-party-preview-join"
                   >

@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
+import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 
 import {
   getDiscoveryAccessLabel,
@@ -58,6 +59,8 @@ const formatEventMode = (event: CreatorEventSummary) => {
 export default function LiveTabScreen() {
   const bottomTabBarHeight = useBottomTabBarHeight();
   const liveLoadGenerationRef = useRef(0);
+  const liveTransitionLatchRef = useRef(createActionSingleFlightLatch());
+  const [liveTransitionInFlight, setLiveTransitionInFlight] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [premiumGate, setPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
   const [premiumGateVisible, setPremiumGateVisible] = useState(false);
@@ -106,6 +109,8 @@ export default function LiveTabScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      liveTransitionLatchRef.current.release();
+      setLiveTransitionInFlight(false);
       void loadLive(false);
     }, [loadLive]),
   );
@@ -113,38 +118,56 @@ export default function LiveTabScreen() {
   useRefreshOnForeground(() => loadLive(false));
 
   const openLiveWatchParty = async () => {
-    const access = await requireLiveFirstPremium({ accessKey: "bottom-live-tab" }).catch(() => null);
-    if (!access?.allowed) {
-      if (isRuntimeControlBlockedAccess(access)) {
-        const copy = getRuntimeControlBlockedCopy(access);
-        Alert.alert(copy.title, copy.message);
+    if (!liveTransitionLatchRef.current.tryAcquire()) return;
+    setLiveTransitionInFlight(true);
+
+    try {
+      const access = await requireLiveFirstPremium({ accessKey: "bottom-live-tab" }).catch(() => null);
+      if (!access?.allowed) {
+        if (isRuntimeControlBlockedAccess(access)) {
+          const copy = getRuntimeControlBlockedCopy(access);
+          Alert.alert(copy.title, copy.message);
+          return;
+        }
+        if (access) {
+          setPremiumGate(access);
+          setPremiumGateVisible(true);
+        } else {
+          router.push({ pathname: "/subscribe", params: { source: "bottom-live-tab" } });
+        }
         return;
       }
-      if (access) {
-        setPremiumGate(access);
-        setPremiumGateVisible(true);
-      } else {
-        router.push({ pathname: "/subscribe", params: { source: "bottom-live-tab" } });
-      }
-      return;
+      router.push({ pathname: "/watch-party", params: { mode: "live", source: "bottom-live-tab" } });
+    } finally {
+      liveTransitionLatchRef.current.release();
+      setLiveTransitionInFlight(false);
     }
-    router.push({ pathname: "/watch-party", params: { mode: "live", source: "bottom-live-tab" } });
   };
 
   const recheckLiveAccessAfterPremiumAction = async (): Promise<AccessSheetActionFeedback> => {
-    const access = await requireLiveFirstPremium({ accessKey: "bottom-live-tab" }).catch(() => null);
-    if (access?.allowed) {
-      setPremiumGate(null);
-      setPremiumGateVisible(false);
-      router.push({ pathname: "/watch-party", params: { mode: "live", source: "bottom-live-tab" } });
-      return { message: "Premium is active. Opening Live...", tone: "success" };
+    if (!liveTransitionLatchRef.current.tryAcquire()) {
+      return { message: "Live is already opening.", tone: "success" };
     }
-    if (access) setPremiumGate(access);
-    return {
-      message: access?.monetization.issues[0]
-        ?? "Premium purchase was checked, but entitlement readback is not active yet. Recheck access after sync completes.",
-      tone: "error",
-    };
+    setLiveTransitionInFlight(true);
+
+    try {
+      const access = await requireLiveFirstPremium({ accessKey: "bottom-live-tab" }).catch(() => null);
+      if (access?.allowed) {
+        setPremiumGate(null);
+        setPremiumGateVisible(false);
+        router.push({ pathname: "/watch-party", params: { mode: "live", source: "bottom-live-tab" } });
+        return { message: "Premium is active. Opening Live...", tone: "success" };
+      }
+      if (access) setPremiumGate(access);
+      return {
+        message: access?.monetization.issues[0]
+          ?? "Premium purchase was checked, but entitlement readback is not active yet. Recheck access after sync completes.",
+        tone: "error",
+      };
+    } finally {
+      liveTransitionLatchRef.current.release();
+      setLiveTransitionInFlight(false);
+    }
   };
 
   const openEvent = (eventId?: string | null) => {
@@ -192,7 +215,15 @@ export default function LiveTabScreen() {
           ) : null}
 
           <View style={styles.quickActions}>
-            <Pressable style={styles.primaryButton} onPress={() => void openLiveWatchParty()} accessibilityRole="button" testID="live-tab-open-live-button">
+            <Pressable
+              style={[styles.primaryButton, liveTransitionInFlight && styles.primaryButtonDisabled]}
+              onPress={() => void openLiveWatchParty()}
+              disabled={liveTransitionInFlight}
+              accessibilityRole="button"
+              accessibilityLabel={liveTransitionInFlight ? "Opening Live" : "Start Live"}
+              accessibilityState={{ disabled: liveTransitionInFlight, busy: liveTransitionInFlight }}
+              testID="live-tab-open-live-button"
+            >
               <MaterialIcons name="videocam" size={19} color="#FFFFFF" />
               <Text style={styles.buttonText}>Start Live</Text>
             </Pressable>
@@ -334,6 +365,7 @@ const styles = StyleSheet.create({
   statusPillText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
   quickActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   primaryButton: { minHeight: 42, borderRadius: 12, backgroundColor: "#E50914", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 14 },
+  primaryButtonDisabled: { opacity: 0.55 },
   secondaryButton: { minHeight: 42, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.13)", backgroundColor: "rgba(255,255,255,0.08)", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 14, alignSelf: "flex-start" },
   buttonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
   section: { gap: 9 },

@@ -10,10 +10,12 @@ import Purchases, {
   type PurchasesStoreProduct,
 } from "react-native-purchases";
 import {
+  getCurrentAccountSessionAuthoritySnapshot,
   readCurrentAccountSessionAuthority,
   sameAccountSessionAuthority,
   type AccountSessionAuthorityBinding,
 } from "./accountSessionAuthority";
+import { runKeyedSingleFlight } from "./actionSingleFlight.mjs";
 import { withAuthorityReadDeadline } from "./entitlementAuthority";
 import { debugLog, reportRuntimeError } from "./logger";
 import { getRuntimeConfig } from "./runtimeConfig";
@@ -61,6 +63,7 @@ let configuredApiKey = "";
 let customerInfoListenerInstalled = false;
 let logHandlerInstalled = false;
 let revenueCatIdentityQueue: Promise<void> = Promise.resolve();
+const revenueCatMutationFlights = new Map<string, Promise<unknown>>();
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 const appStorePurchasesEnabled = () => (
@@ -498,15 +501,35 @@ const requireRevenueCatMutationAuthority = async (options?: RevenueCatMutationOp
   }
   return expected;
 };
-const runRevenueCatMutation = <T>(options: RevenueCatMutationOptions | undefined, operation: () => Promise<unknown>, valid: (value: unknown) => value is T) => (
-  serializeRevenueCatIdentityOperation(async () => {
-    const authority = await requireRevenueCatMutationAuthority(options);
-    const result = await operation();
-    if (!valid(result)) throw new Error("RevenueCat returned a malformed mutation result.");
-    await requireRevenueCatMutationAuthority({ authority });
-    return result;
-  })
-);
+const runRevenueCatMutation = <T>(
+  mutationKey: string,
+  options: RevenueCatMutationOptions | undefined,
+  operation: () => Promise<unknown>,
+  valid: (value: unknown) => value is T,
+) => {
+  const authorityHint = options?.authority ?? getCurrentAccountSessionAuthoritySnapshot();
+  const exactFlightKey = JSON.stringify([
+    mutationKey,
+    authorityHint?.userId ?? "read-current-authority",
+    authorityHint?.accountId ?? "",
+    authorityHint?.sessionGeneration ?? "",
+    authorityHint?.restoreOnly ?? false,
+  ]);
+
+  return runKeyedSingleFlight(revenueCatMutationFlights, exactFlightKey, async () => {
+    const expectedAuthority = options?.authority ?? await readCurrentAccountSessionAuthority();
+    if (!expectedAuthority) {
+      throw new Error("RevenueCat mutation authority is unavailable for the current account.");
+    }
+    return serializeRevenueCatIdentityOperation(async () => {
+      const authority = await requireRevenueCatMutationAuthority({ authority: expectedAuthority });
+      const result = await operation();
+      if (!valid(result)) throw new Error("RevenueCat returned a malformed mutation result.");
+      await requireRevenueCatMutationAuthority({ authority });
+      return result;
+    });
+  });
+};
 
 export function purchaseRevenueCatPackage(pkg: PurchasesPackage, options?: RevenueCatMutationOptions): Promise<MakePurchaseResult> {
   const state = configureRevenueCatOnce();
@@ -518,6 +541,7 @@ export function purchaseRevenueCatPackage(pkg: PurchasesPackage, options?: Reven
     return Promise.reject(new Error("RevenueCat package product identity is malformed."));
   }
   return runRevenueCatMutation(
+    `purchase-package:${expectedProductIdentifier}`,
     options,
     () => Purchases.purchasePackage(pkg),
     (value): value is MakePurchaseResult => isPurchaseResultForProduct(value, expectedProductIdentifier),
@@ -534,6 +558,7 @@ export function purchaseRevenueCatStoreProduct(product: PurchasesStoreProduct, o
     return Promise.reject(new Error("RevenueCat product identity is malformed."));
   }
   return runRevenueCatMutation(
+    `purchase-product:${expectedProductIdentifier}`,
     options,
     () => Purchases.purchaseStoreProduct(product),
     (value): value is MakePurchaseResult => isPurchaseResultForProduct(value, expectedProductIdentifier),
@@ -543,7 +568,7 @@ export function purchaseRevenueCatStoreProduct(product: PurchasesStoreProduct, o
 export function restoreRevenueCatPurchases(options?: RevenueCatMutationOptions): Promise<CustomerInfo> {
   const state = configureRevenueCatOnce();
   if (!state.shouldConfigure) return Promise.reject(new Error(state.reason ?? "RevenueCat is not configured."));
-  return runRevenueCatMutation(options, () => Purchases.restorePurchases(), isCustomerInfo);
+  return runRevenueCatMutation("restore", options, () => Purchases.restorePurchases(), isCustomerInfo);
 }
 
 export async function openRevenueCatManageSubscriptions() {

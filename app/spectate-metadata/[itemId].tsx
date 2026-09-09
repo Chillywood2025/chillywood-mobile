@@ -35,6 +35,7 @@ import {
   startSpectatorChildRoom,
   type SpectatorLaunchAction,
 } from "../../_lib/spectatorChildRooms";
+import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { SPECTATOR_LIFECYCLE_REFRESH_MS } from "../../_lib/performancePolicy";
 import { useSession } from "../../_lib/session";
@@ -106,6 +107,7 @@ export default function SpectatorMetadataScreen() {
   const [playback, setPlayback] = useState<SpectatorPlaybackReadout | null>(null);
   const [accessLane, setAccessLane] = useState<SpectatorAccessLane>("public");
   const [startingAction, setStartingAction] = useState<SpectatorLaunchAction | null>(null);
+  const startRoomLatchRef = useRef(createActionSingleFlightLatch());
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const metadataLoadGenerationRef = useRef(0);
@@ -202,16 +204,17 @@ export default function SpectatorMetadataScreen() {
 
   const handleStart = async (action: SpectatorLaunchAction) => {
     if (!item) return;
-    if (!isSignedIn) {
-      router.push({
-        pathname: "/(auth)/login",
-        params: { redirectTo: `/spectate/${item.id}` },
-      });
-      return;
-    }
-
+    if (!startRoomLatchRef.current.tryAcquire()) return;
     setStartingAction(action);
     try {
+      if (!isSignedIn) {
+        router.push({
+          pathname: "/(auth)/login",
+          params: { redirectTo: `/spectate/${item.id}` },
+        });
+        return;
+      }
+
       const created = await startSpectatorChildRoom(action, item.id);
       if (created.roomType === "live") {
         router.push({
@@ -230,6 +233,7 @@ export default function SpectatorMetadataScreen() {
         error instanceof Error && error.message ? error.message : "This live can’t be used for a watch party",
       );
     } finally {
+      startRoomLatchRef.current.release();
       setStartingAction(null);
     }
   };

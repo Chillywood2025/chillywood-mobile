@@ -38,6 +38,7 @@ import {
   resolveSpectatorLaunchEligibility,
   startSpectatorChildRoom,
 } from "../../_lib/spectatorChildRooms";
+import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { SPECTATOR_LIFECYCLE_REFRESH_MS } from "../../_lib/performancePolicy";
 import { useSession } from "../../_lib/session";
@@ -181,6 +182,7 @@ export default function ImmersiveLiveSpectatorScreen() {
   const [sheetItem, setSheetItem] = useState<DiscoveryFeedItem | null>(null);
   const [sheetPlayback, setSheetPlayback] = useState<SpectatorPlaybackReadout | null>(null);
   const [sheetBusy, setSheetBusy] = useState(false);
+  const startReactionLatchRef = useRef(createActionSingleFlightLatch());
   const [reportItem, setReportItem] = useState<DiscoveryFeedItem | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
   const liveLoadGenerationRef = useRef(0);
@@ -296,15 +298,16 @@ export default function ImmersiveLiveSpectatorScreen() {
       Alert.alert("Reaction unavailable", launchEligibility.disabledReason || "This live can’t start a reaction room.");
       return;
     }
-    if (!isSignedIn) {
-      const redirectTo = `/spectate-live/${encodeURIComponent(sheetItem.id)}?lane=${lane}`;
-      setSheetItem(null);
-      router.push({ pathname: "/(auth)/login", params: { redirectTo } });
-      return;
-    }
-
+    if (!startReactionLatchRef.current.tryAcquire()) return;
     setSheetBusy(true);
     try {
+      if (!isSignedIn) {
+        const redirectTo = `/spectate-live/${encodeURIComponent(sheetItem.id)}?lane=${lane}`;
+        setSheetItem(null);
+        router.push({ pathname: "/(auth)/login", params: { redirectTo } });
+        return;
+      }
+
       const created = await startSpectatorChildRoom("start_live_reaction", sheetItem.id);
       setSheetItem(null);
       router.push({
@@ -317,6 +320,7 @@ export default function ImmersiveLiveSpectatorScreen() {
         error instanceof Error && error.message ? error.message : "This live can’t start a reaction room.",
       );
     } finally {
+      startReactionLatchRef.current.release();
       setSheetBusy(false);
     }
   };

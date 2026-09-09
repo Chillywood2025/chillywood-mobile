@@ -1,6 +1,7 @@
 import type { DiscoveryFeedItem } from "./discoveryFeed";
 import { isFeedItemPubliclyDiscoverable } from "./discoveryFeed";
 import type { SpectatorPlaybackReadout } from "./spectatorPlayback";
+import { runKeyedSingleFlight } from "./actionSingleFlight.mjs";
 import { supabase } from "./supabase";
 
 export type SpectatorLaunchAction = "start_watch_party" | "start_live_reaction";
@@ -132,7 +133,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   source_reuse_disabled: WATCH_PARTY_REUSE_DISABLED_COPY,
 };
 
-export async function startSpectatorChildRoom(
+const spectatorChildRoomFlights = new Map<string, Promise<unknown>>();
+
+async function startSpectatorChildRoomOnce(
   action: SpectatorLaunchAction,
   itemId: string,
 ): Promise<SpectatorStartRoomResponse> {
@@ -175,6 +178,17 @@ export async function startSpectatorChildRoom(
     roomType: payload.roomType === "live" ? "live" : "title",
     source: payload.source,
   };
+}
+
+export function startSpectatorChildRoom(
+  action: SpectatorLaunchAction,
+  itemId: string,
+): Promise<SpectatorStartRoomResponse> {
+  return runKeyedSingleFlight(
+    spectatorChildRoomFlights,
+    `${action}:${toText(itemId)}`,
+    () => startSpectatorChildRoomOnce(action, itemId),
+  );
 }
 
 export const buildSpectatorDeepLink = (itemId: string) => (
