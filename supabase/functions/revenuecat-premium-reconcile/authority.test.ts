@@ -1,4 +1,5 @@
 import {
+  revenueCatOriginalCustomerId,
   resolveRevenueCatStoreProductIdentifier,
   revenueCatProductId,
 } from "./authority.ts";
@@ -68,5 +69,34 @@ Deno.test("RevenueCat non-subscription products cannot satisfy Premium reconcili
     ),
     "",
     "non-subscription product",
+  );
+});
+
+Deno.test("RevenueCat current-owner identity accepts exact provider customer identities", () => {
+  assertEquals(
+    revenueCatOriginalCustomerId({
+      original_customer_id: "ae300000-0000-4000-8000-000000000001",
+    }),
+    "ae300000-0000-4000-8000-000000000001",
+    "UUID provider origin",
+  );
+  assertEquals(
+    revenueCatOriginalCustomerId({ original_customer_id: "$RCAnonymousID:provider-origin" }),
+    "$RCAnonymousID:provider-origin",
+    "anonymous provider origin",
+  );
+});
+
+Deno.test("RevenueCat current-owner identity rejects missing or control-character values", () => {
+  assertEquals(revenueCatOriginalCustomerId({}), "", "missing provider origin");
+  assertEquals(
+    revenueCatOriginalCustomerId({ original_customer_id: "" }),
+    "",
+    "empty provider origin",
+  );
+  assertEquals(
+    revenueCatOriginalCustomerId({ original_customer_id: "owner\nother" }),
+    "",
+    "control-character provider origin",
   );
 });
