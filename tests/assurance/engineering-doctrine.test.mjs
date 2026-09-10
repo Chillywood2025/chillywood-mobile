@@ -188,18 +188,17 @@ const controls = [
   ["37 Provider Codex Review remains optional advisory", () => { const truth = json("config/assurance/current-truth-v1.json"); assert.equal(truth.reviewPolicy.classification, "OPTIONAL_ADVISORY"); assert.equal(truth.reviewPolicy.blocksMerge, false); }],
   ["38 all 13 Phase 1 lanes execute under fail-closed aggregate admission", () => { const merge = json("config/assurance/engineering-doctrine-v1.json").mergeEligibility; assert.equal(json("config/assurance/current-truth-contract-v1.json").reviewPolicy.requiredPhase1Checks, 13); assert.equal(merge.requiredPhase1LaneExecutions, 13); assert.equal(merge.phase1AdmissionRule, "NO_BLOCKING_FINDINGS"); assert.equal(merge.unknownPhase1Finding, "BLOCKING"); assert.equal(merge.draftSourceReadinessGrantsMergeAuthority, false); }],
   ["39 build release authority remains false", () => { const authority = json("config/assurance/engineering-doctrine-v1.json").authority; assert.deepEqual(Object.values(authority), [false, false, false, false, false, false, false, false, false, 0]); }],
-  ["40 D2A terminal history remains intact when a later finite task is current", () => {
+  ["40 D2A terminal history remains intact while the active task advances independently", () => {
     const truth = json("config/assurance/current-truth-v1.json");
     const latest = truth.latestMergedImplementationPr;
     const d2aLease = truth.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === 212);
     const currentLeases = truth.finiteTaskLeases.tasks.filter(({ implementationPr, taskState }) => implementationPr === truth.activeTaskBinding.implementationPr && !["MERGED_VERIFIED", "ABANDONED_BY_OWNER"].includes(taskState));
     assert.deepEqual({ number: latest.number, state: latest.state, head: latest.head, mergeSha: latest.mergeSha }, { number: 229, state: "merged", head: "698871780a7610f677fdec1929d85389594d080a", mergeSha: "5e595e684f4dcc9454eee5065066e1b48d20e3eb" });
-    assert.equal(truth.activeTaskBinding.implementationPr, 229);
     assert.equal(d2aLease?.leaseId, "d2a-release-critical-pr-212-v1");
     assert.equal(d2aLease?.taskState, "MERGED_VERIFIED");
     assert.notEqual(d2aLease?.implementationPr, latest.number);
     assert.equal(currentLeases.length, 1);
-    assert.equal(currentLeases[0]?.implementationPr, latest.number);
+    assert.equal(currentLeases[0]?.implementationPr, truth.activeTaskBinding.implementationPr);
   }]
 ];
 
