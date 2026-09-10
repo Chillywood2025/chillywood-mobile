@@ -56,6 +56,21 @@ export function accountLegalCheckIsPending(options: {
     || options.settledVerificationKey !== options.currentVerificationKey;
 }
 
+export function shouldBlockAccountLegalGate(options: {
+  applicable: boolean;
+  checkPending: boolean;
+  status: "idle" | "checking" | "accepted" | "required" | "error";
+  acceptedVerificationKey: string;
+  currentVerificationKey: string;
+}) {
+  if (!options.applicable) return false;
+  const acceptedCurrentAuthority = options.status === "accepted"
+    && !!options.currentVerificationKey
+    && options.acceptedVerificationKey === options.currentVerificationKey;
+  if (acceptedCurrentAuthority) return false;
+  return options.checkPending || options.status !== "accepted";
+}
+
 export function isCurrentAccountLegalRequest(options: {
   requestGeneration: number;
   currentGeneration: number;

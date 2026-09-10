@@ -10,6 +10,9 @@ test("same-session foreground checks preserve the mounted navigator", () => {
   assert.match(layout, /<RootNavigator \/>[\s\S]{0,500}navigation-blocking-overlay/u);
   assert.doesNotMatch(layout, /if \(legalGateBlocking\)[\s\S]{0,300}return <AuthBootScreen/u);
   assert.match(layout, /StyleSheet\.absoluteFillObject[\s\S]{0,160}zIndex: 100/u);
+  assert.match(layout, /preserveAcceptedRender = acceptedLegalVerificationKeyRef\.current === requestVerificationKey/u);
+  assert.match(layout, /if \(!preserveAcceptedRender\) \{[\s\S]{0,160}setLegalStatus\("checking"\)/u);
+  assert.match(layout, /shouldBlockAccountLegalGate/u);
 });
 
 test("same-user auth revalidation does not blank rendered identity before verification", () => {
@@ -20,7 +23,8 @@ test("same-user auth revalidation does not blank rendered identity before verifi
   assert.match(session, /clearRenderedAuthority\("restricted"\)/u);
 });
 
-test("resume restoration can re-arm after a real rendered sign-in loss", () => {
+test("short native interruptions do not trigger a runtime update pseudo-restart", () => {
   const updates = read("_lib/runtimeUpdates.tsx");
-  assert.match(updates, /if \(isSignedIn\) return;[\s\S]{0,160}restoreAttemptedUserRef\.current = null;[\s\S]{0,120}restoreSettledUserRef\.current = null;/u);
+  assert.match(updates, /MIN_BACKGROUND_BEFORE_RESUME_CHECK_MS = 10 \* 60 \* 1000/u);
+  assert.match(updates, /backgroundDurationMs < MIN_BACKGROUND_BEFORE_RESUME_CHECK_MS[\s\S]{0,320}return;/u);
 });

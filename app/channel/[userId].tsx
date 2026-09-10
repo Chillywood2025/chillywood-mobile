@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { resolvePlatformVisibilityAccess, type VisibilityAccessResolution } from "../../_lib/accessVisibility";
+import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import {
   followChannel,
   readPublicChannelAudienceState,
@@ -65,6 +66,7 @@ import { resolveSandboxMonetizationTester } from "../../_lib/sandboxMonetization
 import { useSession } from "../../_lib/session";
 import { buildUserChannelProfile, readUserProfileByUserId, type UserChannelProfile, type UserProfile } from "../../_lib/userData";
 import { ReportSheet } from "../../components/safety/report-sheet";
+import { resolvePlatformViewerOfferKeys } from "../../_lib/customerExperiencePresentation";
 import { MoneyScopeInfoButton, type MoneyScopeKey } from "../../components/monetization/MoneyScopeInfoButton";
 import { TipSheet } from "../../components/monetization/tip-sheet";
 import { CreatorContentActionSheet, type CreatorContentActionSheetVisibilityAction } from "../../components/creator-media/CreatorContentActionSheet";
@@ -112,18 +114,6 @@ const buildBrandOverlayColor = (strength?: number | null) => {
   const parsed = Number(strength);
   const alpha = Number.isFinite(parsed) ? Math.max(0.42, Math.min(0.84, parsed)) : 0.7;
   return `rgba(3,6,12,${alpha})`;
-};
-
-const formatDate = (value?: string | null) => {
-  const normalized = String(value ?? "").trim();
-  if (!normalized) return "";
-  const parsed = new Date(normalized);
-  if (Number.isNaN(parsed.getTime())) return normalized;
-  return parsed.toLocaleDateString([], {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 };
 
 const formatEventDate = (value?: string | null) => {
@@ -191,8 +181,11 @@ export default function PublicChannelScreen() {
   const [selectedVideoAction, setSelectedVideoAction] = useState<CreatorVideo | null>(null);
   const [videoActionBusy, setVideoActionBusy] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
+  const followLatchRef = useRef(createActionSingleFlightLatch());
+  const shareLatchRef = useRef(createActionSingleFlightLatch());
   const openTipSheet = useCallback(() => {
     setTipSheetVisible(true);
   }, []);
@@ -348,6 +341,7 @@ export default function PublicChannelScreen() {
   const platformHandle = platformIdentity.handle;
   const followerCount = audienceState?.followerCount ?? null;
   const viewerFollowState = audienceState?.viewerFollowState ?? "unavailable";
+  const followUnavailableReason = audienceState?.followUnavailableReason ?? "unavailable";
   const visibleStats = useMemo(() => {
     return [
       { label: "Followers", value: formatStatValue(followerCount) },
@@ -355,20 +349,6 @@ export default function PublicChannelScreen() {
       { label: "Events", value: String(liveNowEvents.length + upcomingEvents.length) },
     ];
   }, [followerCount, liveNowEvents.length, upcomingEvents.length, videos.length]);
-  const channelPulseCards = useMemo(() => {
-    const cards: { label: string; value: string }[] = [
-      { label: "Followers", value: formatStatValue(followerCount) },
-      { label: "Videos", value: String(videos.length) },
-      { label: "Events", value: String(liveNowEvents.length + upcomingEvents.length) },
-    ];
-    if (featuredVideo) {
-      cards.push({
-        label: formatDate(featuredVideo.createdAt) || "Published",
-        value: spotlightVideoId ? "Featured" : "Latest Upload",
-      });
-    }
-    return cards;
-  }, [featuredVideo, followerCount, liveNowEvents.length, spotlightVideoId, upcomingEvents.length, videos.length]);
   const canShowDraftAsset = (asset?: PlatformBrandAsset | null) => {
     if (!asset) return null;
     if (!showDraftBranding) return asset;
@@ -559,13 +539,6 @@ export default function PublicChannelScreen() {
     } as unknown as Parameters<typeof router.push>[0]);
   };
 
-  const openCreatorMoneyResolution = (title: string, message: string) => {
-    Alert.alert(title, message, [
-      { text: "Open support", onPress: () => router.push("/support" as Parameters<typeof router.push>[0]) },
-      { text: "OK", style: "cancel" },
-    ]);
-  };
-
   const handleSubscribe = async () => {
     if (!routeUserId || subscriptionBusy || isOwner) return;
     if (!viewerUserId) {
@@ -591,7 +564,7 @@ export default function PublicChannelScreen() {
       setSubscriptionAccess(result.access);
       setSubscriptionNotice(
         result.ok && sandboxTesterActive
-          ? `Sandbox subscription complete. ${new Date().toLocaleString()}`
+          ? `Subscription updated. ${new Date().toLocaleString()}`
           : result.message,
       );
       if (result.ok) {
@@ -637,7 +610,7 @@ export default function PublicChannelScreen() {
       setVipAccess(result.access);
       setVipNotice(
         result.ok && sandboxTesterActive
-          ? `Sandbox VIP complete. ${new Date().toLocaleString()}`
+          ? `VIP access updated. ${new Date().toLocaleString()}`
           : result.message,
       );
       if (result.ok) {
@@ -659,17 +632,22 @@ export default function PublicChannelScreen() {
   };
 
   const shareChannel = async () => {
-    if (!channel?.id) {
+    if (!channel?.id || !shareLatchRef.current.tryAcquire()) {
+      if (channel?.id) return;
       Alert.alert("Share unavailable", "This Platform is missing the identity needed to share it.");
       return;
     }
 
     try {
+      setShareBusy(true);
       await Share.share({
         message: `View ${platformDisplayName} on Chi'llywood: ${buildChannelDeepLink(channel.id)}`,
       });
     } catch {
       Alert.alert("Share unavailable", "Unable to open the share sheet right now.");
+    } finally {
+      shareLatchRef.current.release();
+      setShareBusy(false);
     }
   };
 
@@ -680,9 +658,10 @@ export default function PublicChannelScreen() {
   };
 
   const toggleFollow = async () => {
-    if (!routeUserId || followBusy || isOwner) return;
+    if (!routeUserId || isOwner || !followLatchRef.current.tryAcquire()) return;
 
     if (viewerFollowState === "signed_out") {
+      followLatchRef.current.release();
       Alert.alert("Follow Platform", "Sign in to follow this Platform.");
       return;
     }
@@ -703,10 +682,11 @@ export default function PublicChannelScreen() {
         return;
       }
 
-      Alert.alert("Follow Platform", "Unable to update this follow relationship right now.");
+      Alert.alert("Follow Platform", result.message);
     } catch {
       Alert.alert("Follow Platform", "Unable to update this follow relationship right now.");
     } finally {
+      followLatchRef.current.release();
       setFollowBusy(false);
     }
   };
@@ -873,7 +853,7 @@ export default function PublicChannelScreen() {
           ) : null}
           {canRenderTip ? (
             <AppActionButton
-              label={sandboxTesterActive ? "Sandbox Tip" : "Tip"}
+              label="Tip"
               onPress={openTipSheet}
               style={styles.actionButtonWide}
               testID={sandboxTesterActive ? "platform-sandbox-tip-button" : "platform-tip-button"}
@@ -889,7 +869,14 @@ export default function PublicChannelScreen() {
               variant={subscriptionAccess?.allowed ? "secondary" : "primary"}
             />
           ) : null}
-          <AppActionButton label="Share" onPress={shareChannel} />
+          {viewerPurchaseMode && followUnavailableReason === "protected_platform" ? (
+            <Text style={styles.followUnavailableCopy}>Following is not available for this protected Platform.</Text>
+          ) : null}
+          <AppActionButton
+            label={shareBusy ? "Opening Share" : "Share"}
+            loading={shareBusy}
+            onPress={shareChannel}
+          />
           {viewerPurchaseMode ? (
             <AppActionButton label="Report" onPress={openReport} variant="danger" />
           ) : null}
@@ -901,22 +888,6 @@ export default function PublicChannelScreen() {
       </View>
     );
   };
-
-  const renderChannelPulse = () => (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={styles.pulseScroll}
-      contentContainerStyle={styles.pulseRow}
-    >
-      {channelPulseCards.map((card) => (
-        <View key={`${card.value}-${card.label}`} style={styles.pulseCard}>
-          <Text style={styles.pulseValue}>{card.value}</Text>
-          <Text style={styles.pulseLabel}>{card.label}</Text>
-        </View>
-      ))}
-    </ScrollView>
-  );
 
   const getPublicClipCardTitle = (video: CreatorVideo) => (
     getPublicClipMetadata(video)?.titleText || video.title
@@ -1396,252 +1367,104 @@ export default function PublicChannelScreen() {
   };
 
   const renderPlatformMonetization = () => {
-    const firstVideo = videos.find(hasPlayableVideo) ?? null;
-    const firstEvent = events[0] ?? null;
     const subscriptionOffer = subscriptionAccess?.offer ?? null;
     const vipOffer = vipAccess?.offer ?? null;
-    const subscriptionAvailable = !!subscriptionOffer && (subscriptionAccess?.requiresPurchase || subscriptionAccess?.allowed);
-    const vipAvailable = !!vipOffer && (vipAccess?.requiresPurchase || vipAccess?.allowed);
 
-    if (isOwnerPlatformMode(platformMode)) {
-      const ownerOffers = [
-        {
-          title: "Tips",
-          scopeKey: "creator_tip" as MoneyScopeKey,
-          body: "Manage contribution settings and test readback. Tips do not unlock content.",
-          status: tipStatus?.canTip ? "Ready" : "Setup",
-          actions: [
-            {
-              label: "Manage tip settings",
-              onPress: () => router.push(CREATOR_MONEY_ROUTE_TARGETS.tips.ownerTarget as unknown as Parameters<typeof router.push>[0]),
-            },
-          ],
-        },
-        {
-          title: "Paid videos",
-          scopeKey: "paid_creator_video" as MoneyScopeKey,
-          body: "Set prices from Content. Each unlock applies to one video only.",
-          status: firstVideo ? "Content ready" : "Needs video",
-          actions: [
-            { label: "Manage Content", onPress: () => openStudio({ tab: "content" }) },
-            {
-              label: "Manage paid offers",
-              onPress: () => router.push(CREATOR_MONEY_ROUTE_TARGETS.paidVideo.ownerTarget as unknown as Parameters<typeof router.push>[0]),
-            },
-          ],
-        },
-        {
-          title: "Party Room Passes",
-          scopeKey: "watch_party_ticket" as MoneyScopeKey,
-          body: "Choose a Party Room target. A Party Room Pass grants entry to that exact room only and never Live Stage, host, speaker, moderator, or LiveKit authority.",
-          status: watchPartyTicketOffer?.partyId ? "Target ready" : "Needs target",
-          actions: [
-            {
-              label: watchPartyTicketOffer?.partyId ? "Manage Party Room entry" : "Choose Party Room target",
-              onPress: () => router.push(CREATOR_MONEY_ROUTE_TARGETS.watchPartyTicket.ownerTarget as unknown as Parameters<typeof router.push>[0]),
-            },
-          ],
-        },
-        {
-          title: "Event Passes",
-          scopeKey: "event_pass" as MoneyScopeKey,
-          body: "Manage event access. Each pass is for one creator event only.",
-          status: firstEvent ? "Event ready" : "Needs event",
-          actions: [
-            {
-              label: "Manage Event Pass",
-              onPress: () => router.push(CREATOR_MONEY_ROUTE_TARGETS.eventPass.ownerTarget as unknown as Parameters<typeof router.push>[0]),
-            },
-          ],
-        },
-        {
-          title: "Subscription",
-          scopeKey: "channel_subscription" as MoneyScopeKey,
-          body: "Monthly creator Platform membership. This is not Chi'llywood Premium.",
-          status: subscriptionOffer ? "Manage" : "Not set",
-          actions: [
-            {
-              label: "Manage subscription offer",
-              onPress: () => router.push(CREATOR_MONEY_ROUTE_TARGETS.platformSubscription.ownerTarget as unknown as Parameters<typeof router.push>[0]),
-            },
-            { label: "View Subscriber Area", onPress: openSubscriberArea },
-          ],
-        },
-        {
-          title: "VIP",
-          scopeKey: "vip_pass" as MoneyScopeKey,
-          body: "Creator-specific VIP only. Does not unlock Premium, paid videos, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, or Events.",
-          status: vipOffer ? "Manage" : "Not set",
-          actions: [
-            {
-              label: "Manage VIP offer",
-              onPress: () => router.push(CREATOR_MONEY_ROUTE_TARGETS.vipPass.ownerTarget as unknown as Parameters<typeof router.push>[0]),
-            },
-            { label: "View VIP Area", onPress: openVipArea },
-          ],
-        },
-      ];
-
-      return (
-        <AppSection title="Creator Offers" statusLabel="Manage" statusTone="success">
-          <View testID="platform-creator-offers-section">
-          <View style={styles.creatorOffersIntro}>
-            <Text style={styles.cardKicker}>Owner management</Text>
-            <Text style={styles.cardTitle}>Manage offers. Do not buy your own.</Text>
-            <Text style={styles.cardBody}>
-              Premium is app-wide and separate. Live money and payouts remain off unless a future launch lane explicitly enables them.
-            </Text>
-          </View>
-          <View style={styles.offerGrid}>
-            {ownerOffers.map((offer) => (
-              <View key={offer.title} style={styles.ownerOfferCard}>
-                <View style={styles.offerHeaderRow}>
-                  <Text style={styles.offerTitle}>{offer.title}</Text>
-                  <Text style={styles.offerStatusPill}>{offer.status}</Text>
-                  <MoneyScopeInfoButton scope={offer.scopeKey} compact label="What does this unlock?" />
-                </View>
-                <Text style={styles.offerBody}>{offer.body}</Text>
-                <View style={styles.offerActionRow}>
-                  {offer.actions.map((action, index) => (
-                    <TouchableOpacity
-                      key={`${offer.title}-${action.label}`}
-                      style={[styles.offerActionButton, index > 0 && styles.offerActionButtonSecondary]}
-                      activeOpacity={0.86}
-                      onPress={action.onPress}
-                      testID={
-                        action.label === "Manage subscription offer"
-                          ? "platform-owner-manage-subscription-button"
-                          : action.label === "Manage VIP offer"
-                            ? "platform-owner-manage-vip-button"
-                            : action.label.toLowerCase().includes("paid")
-                              ? "owner-paid-video-manage-price-button"
-                              : action.label.toLowerCase().includes("ticket") || action.label.toLowerCase().includes("party room")
-                                ? "owner-ticket-manage-target-button"
-                                : action.label.toLowerCase().includes("event")
-                                  ? "owner-event-pass-manage-button"
-                                  : undefined
-                      }
-                      accessibilityRole="button"
-                      accessibilityLabel={action.label}
-                    >
-                      <Text style={styles.offerActionText}>{action.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            ))}
-          </View>
-          </View>
-        </AppSection>
-      );
-    }
-
+    if (isOwnerPlatformMode(platformMode)) return null;
     if (!isViewerPurchasePlatformMode(platformMode)) return null;
 
-    const supportItems = [
-      {
+    const offerKeys = resolvePlatformViewerOfferKeys({
+      canTip: tipStatus?.canTip === true,
+      canPurchaseSubscription: !!subscriptionOffer && subscriptionAccess?.requiresPurchase === true,
+      hasSubscriptionAccess: subscriptionAccess?.allowed === true,
+      canPurchaseVip: !!vipOffer && vipAccess?.requiresPurchase === true,
+      hasVipAccess: vipAccess?.allowed === true,
+      hasPartyRoomOffer: !!watchPartyTicketOffer?.partyId,
+    });
+    type SupportItem = {
+      title: string;
+      scopeKey: MoneyScopeKey;
+      body: string;
+      price: string | null;
+      button: string;
+      testID: string;
+      busy?: boolean;
+      onPress: () => void | Promise<void>;
+    };
+    const supportItems: SupportItem[] = [];
+
+    if (offerKeys.includes("tip")) {
+      supportItems.push({
         title: "Tip",
-        scopeKey: "creator_tip" as MoneyScopeKey,
-        body: "Send a contribution. Does not unlock content.",
-        price: sandboxTesterActive ? "Sandbox test" : null,
-        button: sandboxTesterActive ? "Test tip" : "Tip",
-        testID: sandboxTesterActive ? "tester-tip-creator-button" : "platform-support-tip-button",
-        available: tipStatus?.canTip === true,
+        scopeKey: "creator_tip",
+        body: "Send a contribution. It does not unlock content.",
+        price: null,
+        button: `Tip ${platformDisplayName}`,
+        testID: "platform-support-tip-button",
         onPress: openTipSheet,
-      },
-      {
-        title: "Subscribe",
-        scopeKey: "channel_subscription" as MoneyScopeKey,
-        body: "Support this Platform monthly. Does not include Premium.",
+      });
+    }
+
+    if (offerKeys.includes("subscription")) {
+      supportItems.push({
+        title: subscriptionOffer?.title || `${platformDisplayName} membership`,
+        scopeKey: "channel_subscription",
+        body: subscriptionOffer?.description || "A monthly membership for this creator's Platform. It does not include Chi'llywood Premium.",
         price: subscriptionOffer ? formatChannelSubscriptionPrice(subscriptionOffer.priceCents, subscriptionOffer.currency) : null,
-        button: subscriptionAccess?.allowed ? "Open Subscriber Area" : subscriptionOffer ? sandboxTesterActive ? "Subscribe in test mode" : "Subscribe" : "Subscription status",
-        testID: sandboxTesterActive ? "tester-channel-subscribe-button" : "platform-support-subscribe-button",
-        available: subscriptionAvailable,
+        button: subscriptionAccess?.allowed ? "Open Member Area" : "Subscribe",
+        testID: "platform-support-subscribe-button",
         busy: subscriptionBusy,
-        onPress: subscriptionAccess?.allowed || !subscriptionOffer ? openSubscriberArea : handleSubscribe,
-      },
-      {
-        title: "VIP",
-        scopeKey: "vip_pass" as MoneyScopeKey,
-        body: "Creator-specific VIP. Does not unlock Premium or paid videos.",
+        onPress: subscriptionAccess?.allowed ? openSubscriberArea : handleSubscribe,
+      });
+    }
+
+    if (offerKeys.includes("vip")) {
+      supportItems.push({
+        title: vipOffer?.title || `${platformDisplayName} VIP`,
+        scopeKey: "vip_pass",
+        body: vipOffer?.description || "Creator-specific VIP access. It does not include Chi'llywood Premium or paid videos.",
         price: vipOffer ? formatCreatorVipPassPrice(vipOffer.priceCents, vipOffer.currency) : null,
-        button: vipAccess?.allowed ? "Open VIP Area" : sandboxTesterActive ? "Get test VIP" : "Get VIP",
-        testID: sandboxTesterActive ? "tester-vip-pass-button" : "platform-support-vip-button",
-        available: vipAvailable,
+        button: vipAccess?.allowed ? "Open VIP Area" : "Get VIP",
+        testID: "platform-support-vip-button",
         busy: vipBusy,
         onPress: vipAccess?.allowed ? openVipArea : handleGetVip,
-      },
-      {
-        title: "Paid video",
-        scopeKey: "paid_creator_video" as MoneyScopeKey,
-        body: firstVideo ? "Unlock this video only." : "Paid video status and setup path for this Platform.",
-        price: sandboxTesterActive ? "Sandbox unlock" : null,
-        button: "Unlock video",
-        testID: sandboxTesterActive ? "tester-paid-video-unlock-button" : "platform-support-paid-video-button",
-        available: !!firstVideo,
+      });
+    }
+
+    if (offerKeys.includes("party_room") && watchPartyTicketOffer?.partyId) {
+      supportItems.push({
+        title: watchPartyTicketOffer.title || "Party Room Pass",
+        scopeKey: "watch_party_ticket",
+        body: watchPartyTicketOffer.description || "Entry to this exact Party Room. Live Stage and Live Stage Seat Passes remain separate.",
+        price: formatPaidWatchPartyTicketPrice(watchPartyTicketOffer.priceCents, watchPartyTicketOffer.currency),
+        button: "View Party Room",
+        testID: "platform-support-ticket-button",
         onPress: () => {
-          if (firstVideo) {
-            router.push({ pathname: "/player/[id]", params: { id: firstVideo.id, source: "creator-video" } });
-            return;
-          }
-          openCreatorMoneyResolution("Paid video status", "This Platform does not have a public paid video target yet. Creators manage paid-video setup from Platform Studio; viewers can open support if this looks wrong.");
-        },
-      },
-      {
-        title: "Party Room",
-        scopeKey: "watch_party_ticket" as MoneyScopeKey,
-        body: "Open this exact Party Room to see whether entry is Free or requires its Party Room Pass.",
-        price: watchPartyTicketOffer ? formatPaidWatchPartyTicketPrice(watchPartyTicketOffer.priceCents, watchPartyTicketOffer.currency) : null,
-        button: watchPartyTicketOffer?.partyId ? "Open Party Room" : "Party Room status",
-        testID: sandboxTesterActive ? "tester-watch-party-ticket-button" : "platform-support-ticket-button",
-        available: !!watchPartyTicketOffer?.partyId,
-        onPress: () => {
-          if (!watchPartyTicketOffer?.partyId) {
-            openCreatorMoneyResolution("Party Room status", "No backed Party Room target is attached yet. Creators manage Party Room entry from its contextual setup; viewers can open support if this looks wrong.");
-            return;
-          }
           router.push({
             pathname: "/watch-party/[partyId]",
             params: { partyId: watchPartyTicketOffer.partyId },
           } as unknown as Parameters<typeof router.push>[0]);
         },
-      },
-      {
-        title: "Event Pass",
-        scopeKey: "event_pass" as MoneyScopeKey,
-        body: firstEvent ? "Access this event only." : "Paid event status and setup path for this Platform.",
-        price: sandboxTesterActive ? "Sandbox pass" : null,
-        button: firstEvent ? "Open Event" : "Event Pass status",
-        testID: sandboxTesterActive ? "tester-event-pass-button" : "platform-support-event-pass-button",
-        available: !!firstEvent,
-        onPress: () => {
-          if (firstEvent) {
-            router.push(`/event/${firstEvent.id}` as Parameters<typeof router.push>[0]);
-            return;
-          }
-          openCreatorMoneyResolution("Event Pass status", "This Platform does not have a backed Event target yet. Creators manage Event Pass setup from Platform Studio; viewers can open support if this looks wrong.");
-        },
-      },
-    ];
+      });
+    }
 
     if (!supportItems.length) return null;
 
     return (
-      <AppSection title="Support this Platform" statusLabel={sandboxTesterActive ? "Sandbox" : "Available"} statusTone={sandboxTesterActive ? "warning" : "success"}>
+      <AppSection title="Support this Platform">
         <View testID="platform-support-this-platform-section">
         <View style={styles.supportIntro}>
-          <Text style={styles.cardKicker}>{sandboxTesterActive ? "Sandbox tester" : "Creator support"}</Text>
-          <Text style={styles.cardTitle}>{sandboxTesterActive ? "Test purchases. No real money moves." : "Choose exactly what you want to support."}</Text>
+          <Text style={styles.cardKicker}>Offers from {platformDisplayName}</Text>
+          <Text style={styles.cardTitle}>Choose an offer tied to this creator.</Text>
           <Text style={styles.cardBody}>
-            Premium, subscriptions, VIP, tips, videos, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, and Event Passes are separate.
+            Each offer below names what it unlocks. Chi&apos;llywood Premium, paid videos, Event Passes, Party Room Passes, and Live Stage Seat Passes remain separate.
           </Text>
         </View>
         <View style={styles.supportList}>
           {supportItems.map((item) => (
-            <View key={item.title} style={styles.supportItemCard}>
+            <View key={item.testID} style={styles.supportItemCard}>
               <View style={styles.offerHeaderRow}>
                 <Text style={styles.offerTitle}>{item.title}</Text>
-                {sandboxTesterActive ? <Text style={styles.sandboxBadge}>Sandbox</Text> : null}
                 <MoneyScopeInfoButton scope={item.scopeKey} compact label="What does this unlock?" />
               </View>
               <Text style={styles.offerBody}>{item.body}</Text>
@@ -1738,7 +1561,6 @@ export default function PublicChannelScreen() {
       >
         {renderBackHeader()}
         {renderHero()}
-        {renderChannelPulse()}
         {renderFeatured()}
         {renderLatestUploads()}
         {renderVipVideos()}
@@ -2033,6 +1855,13 @@ const styles = StyleSheet.create({
   },
   actionButtonWide: {
     flexBasis: "100%",
+  },
+  followUnavailableCopy: {
+    flexBasis: "100%",
+    color: "#B7C1D2",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "700",
   },
   actionButtonPrimary: {
     backgroundColor: "#DC143C",

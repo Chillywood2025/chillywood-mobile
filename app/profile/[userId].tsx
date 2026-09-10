@@ -13,6 +13,7 @@ import {
     resolveMonetizationConfig,
 } from "../../_lib/appConfig";
 import { trackEvent } from "../../_lib/analytics";
+import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import { getOrCreateDirectThread } from "../../_lib/chat";
 import {
   acceptChillyCircleRequest,
@@ -549,6 +550,7 @@ export default function ProfileScreen() {
   const scrollViewRef = useRef<ScrollView | null>(null);
   const profilePostComposerYRef = useRef(0);
   const profilePostInputRef = useRef<TextInput | null>(null);
+  const followActionLatchRef = useRef(createActionSingleFlightLatch());
   const [currentUserId, setCurrentUserId] = useState("");
   const [friendState, setFriendState] = useState<FriendRelationshipState | null>(null);
   const [chillyCircleLoading, setChillyCircleLoading] = useState(false);
@@ -1411,8 +1413,8 @@ export default function ProfileScreen() {
   const canOpenWatchPartyEntry = hasLiveRouteContext || !!scheduledWatchPartyTitleId;
   const liveActionTitle = hasLiveRouteContext ? liveActionLabel : "Live Events";
   const officialGuidanceTopics = officialAccount?.guidanceTopics ?? [];
-  const liveStateLabel = isOfficialProfile ? "OFFICIAL READY" : profile.isLive ? "LIVE NOW" : "OFF AIR";
-  const routeContextLabel = isOfficialProfile ? "PROTECTED" : hasLiveRouteContext ? "ROOM LINKED" : "CONTEXT NEEDED";
+  const liveStateLabel = profile.isLive ? "LIVE NOW" : "OFF AIR";
+  const routeContextLabel = isOfficialProfile ? "OFFICIAL PROFILE" : hasLiveRouteContext ? "ROOM LINKED" : "PROFILE";
   const channelHomeBody = isOfficialProfile
     ? officialAccount?.trustSummary
       ?? "Chi'llywood's official profile for updates, tips, Originals, and auditable follow-up."
@@ -1420,7 +1422,7 @@ export default function ProfileScreen() {
       ? "Share updates, connect with people, and guide fans to your Platform."
       : "Read public updates, connect through Chi'lly Chat, and visit the Platform for creator videos.";
   const liveStatusTitle = isOfficialProfile
-    ? "Rachi is ready"
+    ? "Official updates"
     : profile.isLive
       ? "Platform is live now"
       : "Platform is off air";
@@ -2009,9 +2011,10 @@ export default function ProfileScreen() {
     }
   };
   const onToggleFollowChannel = async () => {
-    if (!userId || isSelfProfile || isOfficialProfile || followActionBusy) return;
+    if (!userId || isSelfProfile || isOfficialProfile || !followActionLatchRef.current.tryAcquire()) return;
 
     if (viewerFollowState === "signed_out") {
+      followActionLatchRef.current.release();
       Alert.alert("Follow Platform", "Sign in to follow this creator Platform.");
       return;
     }
@@ -2032,10 +2035,11 @@ export default function ProfileScreen() {
         return;
       }
 
-      Alert.alert("Follow Platform", "Unable to update this follow relationship right now.");
+      Alert.alert("Follow Platform", result.message);
     } catch {
       Alert.alert("Follow Platform", "Unable to update this follow relationship right now.");
     } finally {
+      followActionLatchRef.current.release();
       setFollowActionBusy(false);
     }
   };
@@ -2896,7 +2900,7 @@ export default function ProfileScreen() {
     ? [
         {
           title: "Official Identity",
-          kicker: profile.platformOwnershipLabel ?? "PLATFORM OWNED",
+          kicker: "CHI'LLYWOOD OFFICIAL",
           body: officialAccount?.conciergeHeadline
             ? `${officialAccount.conciergeHeadline} ${profile.displayName} is Chi'llywood's verified public account.`
             : `${profile.displayName} is Chi'llywood's verified public account.`,
@@ -3983,9 +3987,11 @@ export default function ProfileScreen() {
                       </Text>
                     </View>
                   ) : null}
-                  <View style={[styles.heroBadge, profile.isLive ? styles.heroBadgeLive : styles.heroBadgeDefault]}>
-                    <Text style={[styles.heroBadgeText, profile.isLive && styles.heroBadgeTextLive]}>{liveStateLabel}</Text>
-                  </View>
+                  {!isOfficialProfile ? (
+                    <View style={[styles.heroBadge, profile.isLive ? styles.heroBadgeLive : styles.heroBadgeDefault]}>
+                      <Text style={[styles.heroBadgeText, profile.isLive && styles.heroBadgeTextLive]}>{liveStateLabel}</Text>
+                    </View>
+                  ) : null}
                 </View>
               ) : null}
             </View>
@@ -4045,7 +4051,7 @@ export default function ProfileScreen() {
                   {isOfficialProfile ? (
                     <View style={[styles.metaPill, styles.metaPillOfficial]}>
                       <AppText scale="caption" style={[styles.metaPillText, styles.metaPillTextOfficial]}>
-                        {profile.platformOwnershipLabel ?? officialAccount?.platformOwnershipLabel ?? "PLATFORM OWNED"}
+                        {officialAccount?.officialBadgeLabel ?? "OFFICIAL"}
                       </AppText>
                     </View>
                   ) : null}
@@ -4145,6 +4151,9 @@ export default function ProfileScreen() {
                         activeOpacity={0.86}
                         disabled={followActionBusy || viewerFollowState === "loading"}
                         onPress={onToggleFollowChannel}
+                        accessibilityRole="button"
+                        accessibilityLabel={followActionLabel}
+                        accessibilityState={{ disabled: followActionBusy || viewerFollowState === "loading", busy: followActionBusy }}
                       >
                         <Text
                           style={[

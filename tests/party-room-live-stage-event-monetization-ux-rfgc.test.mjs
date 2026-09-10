@@ -5,6 +5,7 @@ import test from "node:test";
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
 const presentation = read("_lib/accessProductPresentation.ts");
+const customerPresentation = read("_lib/customerExperiencePresentation.ts");
 const partySetup = read("app/watch-party/index.tsx");
 const partyRoom = read("app/watch-party/[partyId].tsx");
 const partyContentSources = read("_lib/watchPartyContentSources.ts");
@@ -235,11 +236,11 @@ test("seat lifecycle labels distinguish eligibility, request, rejection, approva
 });
 
 test("Event Pass stays on the exact Event route and does not inherit generic Live Stage authority", () => {
-  assert.match(eventRoute, /Event Pass required/u);
-  assert.match(eventRoute, /Join Event —/u);
+  assert.match(customerPresentation, /statusLabel: input\.soldOut \? "Sold out" : "Event Pass required"/u);
+  assert.match(customerPresentation, /`Get Event Pass — \$\{input\.priceLabel\}`/u);
   assert.match(eventRoute, /An Event Pass gives access to this exact Event only/u);
   assert.match(eventMoney, /Event Pass active\. You have access to this Event\./u);
-  assert.match(eventRoute, /This Event is free to enter\. No Event Pass is required/u);
+  assert.match(customerPresentation, /This Event is free\. No Event Pass is required/u);
   assert.match(eventRoute, /access\.reason === "event_pass_confirmed"/u);
   assert.match(eventRoute, /access\.reason === "creator_or_admin"/u);
   assert.match(eventRoute, /access\.reason === "free_event"/u);
@@ -251,9 +252,11 @@ test("Event Pass stays on the exact Event route and does not inherit generic Liv
 
 test("viewer discovery opens exact Party Room and Event destinations instead of buying from a generic catalog", () => {
   assert.match(channel, /pathname: "\/watch-party\/\[partyId\]"/u);
-  assert.match(channel, /button: watchPartyTicketOffer\?\.partyId \? "Open Party Room"/u);
-  assert.match(channel, /router\.push\(`\/event\/\$\{firstEvent\.id\}`/u);
-  assert.match(channel, /button: firstEvent \? "Open Event"/u);
+  assert.match(channel, /if \(offerKeys\.includes\("party_room"\) && watchPartyTicketOffer\?\.partyId\)/u);
+  assert.match(channel, /button: "View Party Room"/u);
+  assert.match(channel, /router\.push\(`\/event\/\$\{event\.id\}`/u);
+  const storefront = channel.slice(channel.indexOf("const renderPlatformMonetization"), channel.indexOf("const renderAbout"));
+  assert.doesNotMatch(storefront, /Paid video status|Event Pass status/u);
   assert.doesNotMatch(channel, /purchasePaidWatchPartyTicket/u);
   assert.doesNotMatch(channel, /purchasePaidCreatorEventPass/u);
 });
@@ -289,7 +292,8 @@ test("purchase UI is duplicate-aware, lifecycle-aware, and accessible on narrow 
   assert.match(liveStage, /minWidth: 120/u);
   assert.match(partySetup, /accessibilityState=/u);
   assert.match(liveStage, /accessibilityLabel="Buy Live Stage Seat Pass; host approval required"/u);
-  assert.match(eventRoute, /accessibilityLabel=.*Join Event with Event Pass/u);
+  assert.match(eventRoute, /accessibilityLabel=\{customerState\.actionLabel \?\? "Get Event Pass"\}/u);
+  assert.match(eventRoute, /accessibilityState=\{\{ disabled: purchaseLoading \|\| soldOut, busy: purchaseLoading \}\}/u);
 });
 
 test("Party Room admission resolves contextual paid authority before the free-room Premium prerequisite", () => {
