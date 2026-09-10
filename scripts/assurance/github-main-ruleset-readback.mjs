@@ -217,6 +217,7 @@ const phase1RulesetRecoveryPaths = Object.freeze([
   "scripts/assurance/github-main-ruleset-readback.mjs",
   "tests/assurance/github-main-ruleset-readback.test.mjs",
 ].sort());
+// The Level D successor PR is bound here after GitHub assigns its immutable PR number.
 export const phase1RulesetRecoveryPolicy = Object.freeze({
   schemaVersion: 1,
   contract: "PHASE1_RULESET_OWNER_PR_ONLY_RECOVERY_V1",
