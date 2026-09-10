@@ -21,7 +21,7 @@ const eventStartLabel = (startsAt?: string | null) => {
   });
 };
 
-export function resolveHomeBrandRevealHeight(viewportHeight: number) {
+export function resolveMainTabBrandRevealHeight(viewportHeight: number) {
   const height = Number.isFinite(viewportHeight) ? viewportHeight : 0;
   return Math.round(Math.max(188, Math.min(224, height * 0.24)));
 }

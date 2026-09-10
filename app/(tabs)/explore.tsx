@@ -14,11 +14,13 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
+import { resolveMainTabBrandRevealHeight } from "../../_lib/customerExperiencePresentation";
 
 import { titles as localTitles } from "../../_data/titles";
 import {
@@ -275,6 +277,8 @@ const fetchBackedTitles = async () => {
 
 export default function ExploreScreen() {
   const bottomTabBarHeight = useBottomTabBarHeight();
+  const { height: viewportHeight } = useWindowDimensions();
+  const brandRevealHeight = resolveMainTabBrandRevealHeight(viewportHeight);
   const exploreLoadGenerationRef = useRef(0);
   const [titles, setTitles] = useState<TitleRow[]>([]);
   const [sections, setSections] = useState<ExploreBackedSections>(emptyBackedSections);
@@ -312,12 +316,6 @@ export default function ExploreScreen() {
     : hasSearchQuery
       ? `Showing ${visibleTitlesCount} of ${titlesCount} titles`
       : `Titles: ${titlesCount}`;
-  const heroItem = useMemo(() => {
-    const heroFlagItem = programmedTitles.find((item) => item.is_hero === true) ?? null;
-    const featuredItem = programmedTitles.find((item) => item.featured === true) ?? null;
-    const topRowItem = programmedTitles.find((item) => item.pin_to_top_row === true) ?? null;
-    return heroFlagItem ?? featuredItem ?? topRowItem ?? programmedTitles[0] ?? null;
-  }, [programmedTitles]);
   const featuredCount = programmedTitles.filter((item) => item.featured === true).length;
   const topRowCount = programmedTitles.filter((item) => item.pin_to_top_row === true).length;
   const liveTitleCount = Object.values(titleLiveMetadataById).filter((item) => item.liveRoomCount > 0).length;
@@ -713,8 +711,6 @@ export default function ExploreScreen() {
     return localSource || remoteImageSource(item.poster_url);
   }
 
-  const backgroundSource = getExploreImageSource(heroItem) ?? CHILLYWOOD_BACKGROUND_SOURCE;
-
   function openCreatorVideo(video: CreatorVideo) {
     router.push({
       pathname: "/player/[id]",
@@ -1076,7 +1072,7 @@ export default function ExploreScreen() {
     <View style={styles.container}>
       <View style={styles.fullBackground} pointerEvents="none">
         <ImageBackground
-          source={backgroundSource}
+          source={CHILLYWOOD_BACKGROUND_SOURCE}
           style={styles.fullBackground}
           resizeMode="cover"
         />
@@ -1100,6 +1096,10 @@ export default function ExploreScreen() {
             ListHeaderComponent={
               <View style={styles.headerBlock}>
                 <MainTabTopBar surface="explore" label="EXPLORE" style={styles.mainTabTopBar} />
+                <View
+                  testID="main-tab-explore-brand-reveal"
+                  style={[styles.brandRevealSpacer, { height: brandRevealHeight }]}
+                />
                 <Text style={styles.exploreTitle}>Explore</Text>
                 <Text style={styles.count}>{exploreCountLabel}</Text>
                 <Text style={styles.headerBody}>
@@ -1307,6 +1307,9 @@ const styles = StyleSheet.create({
   },
   mainTabTopBar: {
     marginBottom: 2,
+  },
+  brandRevealSpacer: {
+    backgroundColor: "transparent",
   },
   exploreTitle: {
     color: "#fff",

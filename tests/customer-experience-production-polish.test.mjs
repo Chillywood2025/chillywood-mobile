@@ -17,11 +17,28 @@ const load = (path) => {
 
 const presentation = load("_lib/customerExperiencePresentation.ts");
 
-test("Home reserves a bounded brand-safe region on narrow phone heights", () => {
-  assert.equal(presentation.resolveHomeBrandRevealHeight(700), 188);
-  assert.equal(presentation.resolveHomeBrandRevealHeight(852), 204);
-  assert.equal(presentation.resolveHomeBrandRevealHeight(1200), 224);
-  assert.match(read("app/(tabs)/index.tsx"), /resolveHomeBrandRevealHeight\(viewportHeight\)/u);
+test("every customer-facing main tab reserves the same bounded brand-safe region", () => {
+  assert.equal(presentation.resolveMainTabBrandRevealHeight(700), 188);
+  assert.equal(presentation.resolveMainTabBrandRevealHeight(852), 204);
+  assert.equal(presentation.resolveMainTabBrandRevealHeight(1200), 224);
+
+  const tabs = [
+    ["app/(tabs)/index.tsx", "home-brand-reveal", "renderHomeEventRail({"],
+    ["app/(tabs)/explore.tsx", "main-tab-explore-brand-reveal", "<Text style={styles.exploreTitle}>Explore</Text>"],
+    ["app/(tabs)/live.tsx", "main-tab-live-brand-reveal", "<View style={styles.heroHeader}>"],
+    ["app/(tabs)/my-list.tsx", "main-tab-library-brand-reveal", "<View style={styles.headerBlock}>"],
+  ];
+  for (const [path, testId, firstContent] of tabs) {
+    const source = read(path);
+    assert.match(source, /resolveMainTabBrandRevealHeight\(viewportHeight\)/u, path);
+    assert.match(source, new RegExp(`testID=["']${testId}["']`, "u"), path);
+    const revealIndex = source.indexOf(testId);
+    assert.ok(source.indexOf(firstContent, revealIndex) > revealIndex, `${path} keeps content below the brand reveal`);
+  }
+
+  assert.match(read("app/(tabs)/explore.tsx"), /source=\{CHILLYWOOD_BACKGROUND_SOURCE\}/u);
+  assert.match(read("app/(tabs)/live.tsx"), /source=\{CHILLYWOOD_BACKGROUND_SOURCE\}/u);
+  assert.match(read("app/(tabs)/my-list.tsx"), /source=\{CHILLYWOOD_BACKGROUND_SOURCE\}/u);
 });
 
 test("Live Hub cards remain useful with populated rails and the page stays vertically scrollable", () => {

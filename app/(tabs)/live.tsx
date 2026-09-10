@@ -18,7 +18,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
-import { resolveLiveHubCardWidth } from "../../_lib/customerExperiencePresentation";
+import {
+  resolveLiveHubCardWidth,
+  resolveMainTabBrandRevealHeight,
+} from "../../_lib/customerExperiencePresentation";
 
 import {
   getDiscoveryAccessLabel,
@@ -60,7 +63,8 @@ const formatEventMode = (event: CreatorEventSummary) => {
 
 export default function LiveTabScreen() {
   const bottomTabBarHeight = useBottomTabBarHeight();
-  const { width: viewportWidth } = useWindowDimensions();
+  const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
+  const brandRevealHeight = resolveMainTabBrandRevealHeight(viewportHeight);
   const discoveryCardWidth = resolveLiveHubCardWidth(viewportWidth);
   const liveLoadGenerationRef = useRef(0);
   const liveTransitionLatchRef = useRef(createActionSingleFlightLatch());
@@ -208,6 +212,10 @@ export default function LiveTabScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadLive(true)} tintColor="#E50914" />}
         >
           <MainTabTopBar surface="live" label="LIVE" style={styles.mainTabTopBar} />
+          <View
+            testID="main-tab-live-brand-reveal"
+            style={[styles.brandRevealSpacer, { height: brandRevealHeight }]}
+          />
           <View style={styles.heroHeader}>
             <View style={styles.heroTopRow}>
               <Text style={styles.kicker}>LIVE HUB</Text>
@@ -371,6 +379,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "transparent" },
   content: { paddingHorizontal: 16, paddingTop: 10, gap: 14 },
   mainTabTopBar: { marginBottom: 2 },
+  brandRevealSpacer: { backgroundColor: "transparent" },
   heroHeader: { gap: 8 },
   heroTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   kicker: { color: "#FF9AA2", fontSize: 11, fontWeight: "900", letterSpacing: 1 },

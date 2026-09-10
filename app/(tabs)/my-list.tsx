@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   ImageBackground,
@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,6 +17,7 @@ import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 
 import { titles as localTitles } from "../../_data/titles";
 import { readFollowedChannelUserIds } from "../../_lib/channelAudience";
+import { resolveMainTabBrandRevealHeight } from "../../_lib/customerExperiencePresentation";
 import {
   formatCreatorReplaySourceLabel,
   formatCreatorReplayStatusLabel,
@@ -112,6 +114,8 @@ const formatProgressLabel = (entry: WatchProgressEntry) => {
 
 export default function MyListScreen() {
   const bottomTabBarHeight = useBottomTabBarHeight();
+  const { height: viewportHeight } = useWindowDimensions();
+  const brandRevealHeight = resolveMainTabBrandRevealHeight(viewportHeight);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [savedTitles, setSavedTitles] = useState<TitleRow[]>([]);
@@ -134,11 +138,6 @@ export default function MyListScreen() {
     );
     return (localMatch as any)?.image || localMatch?.poster || remoteImageSource(item.poster_url);
   }, []);
-
-  const backgroundSource = useMemo(
-    () => getImageSource(savedTitles[0] ?? continueWatching[0] ?? null) ?? CHILLYWOOD_BACKGROUND_SOURCE,
-    [continueWatching, getImageSource, savedTitles],
-  );
 
   const loadLibrary = useCallback(async () => {
     setErrorMsg(null);
@@ -262,7 +261,7 @@ export default function MyListScreen() {
   );
 
   return (
-    <ImageBackground source={backgroundSource} style={styles.screenBackground} resizeMode="cover">
+    <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.screenBackground} resizeMode="cover">
       <View style={styles.backgroundOverlay} pointerEvents="none" />
       <SafeAreaView style={styles.safe}>
         {loading ? (
@@ -277,6 +276,10 @@ export default function MyListScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#E50914" />}
           >
             <MainTabTopBar surface="library" label="SAVED" style={styles.mainTabTopBar} />
+            <View
+              testID="main-tab-library-brand-reveal"
+              style={[styles.brandRevealSpacer, { height: brandRevealHeight }]}
+            />
             <View style={styles.headerBlock}>
               <Text style={styles.header}>My Library</Text>
               <Text style={styles.headerBody}>Saved titles, watch progress, followed Platforms, and saved replays live here.</Text>
@@ -367,6 +370,7 @@ const styles = StyleSheet.create({
   loadingText: { color: "#b7b7b7", marginTop: 10, fontSize: 13 },
   content: { paddingHorizontal: 16, paddingTop: 10, gap: 14 },
   mainTabTopBar: { marginBottom: 2 },
+  brandRevealSpacer: { backgroundColor: "transparent" },
   headerBlock: { gap: 9 },
   header: { color: "#fff", fontSize: 34, fontWeight: "900" },
   headerBody: { color: "#bfc6d4", fontSize: 13, lineHeight: 19, fontWeight: "600" },
