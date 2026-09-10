@@ -56,7 +56,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
 - Contract `OWNER_JURISDICTION_CANONICAL_MODEL_V2` is `ACTIVE`; standing policy may be reused: `true`; domain coverage may be reused: `false`. Every task must enumerate exact domains: `true`.
 - Legacy receipts retain their original semantics. External proof is never inherited, operational ownership is preserved, and this capability grants no product, provider, database-deployment, build, submission, OTA, or public-release authority.
-- Current immutable policy source: comment #5624325526, standing-policy hash `16772f5aa32d6c2ba4d8a465ae447519ab5ff7219882ddcd614176410bcc817f`, status `ACTIVE_UNTIL_OWNER_SUPERSESSION_OR_REVOCATION`; task binding `afe3b880a366f5713d1463b897ece938e6602aef6b39ff0582f7f1836a6424c9` covers `10/10` exact domains.
+- Current immutable policy source: comment #5296932596, standing-policy hash `16772f5aa32d6c2ba4d8a465ae447519ab5ff7219882ddcd614176410bcc817f`, status `ACTIVE_UNTIL_OWNER_SUPERSESSION_OR_REVOCATION`; task binding `14925a3b1f022468f6b6b472d370495ebec7a62d3203c04d6e0b039c76b5e029` covers `10/10` exact domains.
 
 ## Assurance receipt lifecycle
 
