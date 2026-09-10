@@ -247,6 +247,18 @@ export const phase1RulesetRecoveryPolicy = Object.freeze({
     ruleSuiteDetailHash: "1b099bae2752e24391eb40ccd99a141420df4c2dec79f503c1b5b754f3745993",
     archiveHash: "0d72184ddb3ac92d05285216438caaeaba33bb6ee2483d68b6b83b22f4d6a7ea",
   }),
+  abortedNoWriteWindows: Object.freeze([
+    Object.freeze({
+      ordinal: 1,
+      kind: "SELF_BOOTSTRAP_ABORTED_NO_WRITE",
+      sourcePr: 392,
+      insertAfterWindowOrdinal: 5,
+      openedVersionId: 49333890,
+      openedAt: "2026-09-10T17:02:35.997-05:00",
+      restoredVersionId: 49333897,
+      restoredAt: "2026-09-10T17:02:38.123-05:00",
+    }),
+  ]),
   candidateWritableStateHash: "8033733a5057046b5cd031e9606d0c25a11cd05596176c7a26cb16de5a2b2abe",
   restoredWritableStateHash: "8edf290e70141cfe0b3a371f958e8add21f997de1c87e99cbe2c927b9a90904a",
   initialFinal: Object.freeze({
@@ -695,8 +707,10 @@ function evaluateRulesetRecoveryReceipt({ observation, current } = {}) {
     || providerArchive.historyDetailCount < (receipt?.postGenesisHistory?.length ?? Number.POSITIVE_INFINITY)
     || providerArchive.ruleSuiteSummaryCount < (receipt?.ruleSuiteSummaries?.length ?? Number.POSITIVE_INFINITY)
     || providerArchive.ruleSuiteDetailCount < (receipt?.ruleSuiteDetails?.length ?? Number.POSITIVE_INFINITY)
-    || providerArchive.historySummaryCount !== phase1RulesetRecoveryPolicy.providerArchiveBaseline.historySummaryCount + 2
-    || providerArchive.historyDetailCount !== phase1RulesetRecoveryPolicy.providerArchiveBaseline.historyDetailCount + 2
+    || providerArchive.historySummaryCount !== phase1RulesetRecoveryPolicy.providerArchiveBaseline.historySummaryCount
+      + 2 + phase1RulesetRecoveryPolicy.abortedNoWriteWindows.length * 2
+    || providerArchive.historyDetailCount !== phase1RulesetRecoveryPolicy.providerArchiveBaseline.historyDetailCount
+      + 2 + phase1RulesetRecoveryPolicy.abortedNoWriteWindows.length * 2
     || providerArchive.ruleSuiteSummaryCount !== phase1RulesetRecoveryPolicy.providerArchiveBaseline.ruleSuiteSummaryCount + 1
     || providerArchive.ruleSuiteDetailCount !== phase1RulesetRecoveryPolicy.providerArchiveBaseline.ruleSuiteDetailCount + 1) {
     findings.push("PHASE1_RULESET_RECOVERY_PROVIDER_ARCHIVE_INVALID");
@@ -791,7 +805,7 @@ function evaluateRulesetRecoveryWindows({ chain, canonicalFinalState, observatio
     && sameRecoveryTimestamp(chain[2]?.updated_at, policy.initialFinal.historyUpdatedAt)
     && sameRecoveryTimestamp(observation?.current?.updated_at, policy.initialFinal.currentRulesetUpdatedAt);
   if (initialFinal) return { ok: true, findings: [], ledger: [] };
-  const expectedSuffixLength = policy.windows.length * 2;
+  const expectedSuffixLength = policy.windows.length * 2 + policy.abortedNoWriteWindows.length * 2;
   if (suffix.length !== expectedSuffixLength) findings.push("PHASE1_RULESET_RECOVERY_WINDOW_CARDINALITY_INVALID");
   const receiptEvaluation = evaluateRulesetRecoveryReceipt({ observation, current: observation?.current });
   findings.push(...receiptEvaluation.findings);
@@ -815,11 +829,13 @@ function evaluateRulesetRecoveryWindows({ chain, canonicalFinalState, observatio
     || candidateWritableHash !== policy.candidateWritableStateHash) {
     findings.push("PHASE1_RULESET_RECOVERY_POLICY_HASH_INVALID");
   }
+  const abortedVersionIds = new Set(policy.abortedNoWriteWindows.flatMap((window) => [window.openedVersionId, window.restoredVersionId]));
+  const mergedSuffix = suffix.filter((entry) => !abortedVersionIds.has(entry?.version_id));
   const ledger = [];
   for (let index = 0; index < policy.windows.length; index += 1) {
     const window = policy.windows[index];
-    const opened = suffix[index * 2];
-    const restored = suffix[index * 2 + 1];
+    const opened = mergedSuffix[index * 2];
+    const restored = mergedSuffix[index * 2 + 1];
     const proof = Array.isArray(evidence) ? evidence[index] : null;
     const pullRequest = proof?.pullRequest;
     const ruleSuite = proof?.ruleSuite;
@@ -950,6 +966,61 @@ function evaluateRulesetRecoveryWindows({ chain, canonicalFinalState, observatio
       ruleSuiteId: ruleSuite?.id ?? null,
       intervalRuleSuiteIds: intervalRuleSuites.map((entry) => entry?.id),
       evidenceHash: sha256(stableJson(recoveryEvidenceProjection(proof))),
+      recoveryReceiptHash: observation?.recoveryReceipt?.receiptHash ?? null,
+      recoveryReceiptCommentId: observation?.recoveryReceiptComment?.id ?? null,
+      recoveryReceiptCommentCreatedAt: canonicalRecoveryTimestamp(observation?.recoveryReceiptComment?.created_at),
+    });
+  }
+  for (const aborted of policy.abortedNoWriteWindows) {
+    const openedIndex = suffix.findIndex((entry) => entry?.version_id === aborted.openedVersionId);
+    const restoredIndex = suffix.findIndex((entry) => entry?.version_id === aborted.restoredVersionId);
+    const opened = suffix[openedIndex];
+    const restored = suffix[restoredIndex];
+    const openedAt = recoveryTimestamp(opened?.updated_at);
+    const restoredAt = recoveryTimestamp(restored?.updated_at);
+    const intervalRuleSuites = (Array.isArray(observation?.ruleSuites) ? observation.ruleSuites : []).filter((entry) => {
+      const pushed = recoveryTimestamp(entry?.pushed_at);
+      return entry?.ref === "refs/heads/main" && Number.isFinite(pushed)
+        && Number.isFinite(openedAt) && Number.isFinite(restoredAt)
+        && openedAt <= pushed && pushed <= restoredAt;
+    });
+    const previousWindow = policy.windows.find((window) => window.ordinal === aborted.insertAfterWindowOrdinal);
+    const nextWindow = policy.windows.find((window) => window.ordinal === aborted.insertAfterWindowOrdinal + 1);
+    const previousRestoredAt = recoveryTimestamp(previousWindow?.restoredAt);
+    const nextOpened = nextWindow ? mergedSuffix[nextWindow.ordinal * 2 - 2] : null;
+    const nextOpenedAt = recoveryTimestamp(nextOpened?.updated_at);
+    const abortedValid = Boolean(openedIndex >= 0 && restoredIndex === openedIndex + 1
+      && same(opened?.actor, { id: policy.owner.id, type: policy.owner.type })
+      && same(restored?.actor, { id: policy.owner.id, type: policy.owner.type })
+      && same(rulesetState(opened?.state), candidateState)
+      && same(rulesetState(restored?.state), canonicalFinal)
+      && rulesetWritableStateHash(opened?.state) === policy.candidateWritableStateHash
+      && rulesetWritableStateHash(restored?.state) === policy.restoredWritableStateHash
+      && sameRecoveryTimestamp(opened?.updated_at, aborted.openedAt)
+      && sameRecoveryTimestamp(restored?.updated_at, aborted.restoredAt)
+      && Number.isFinite(openedAt) && Number.isFinite(restoredAt) && openedAt < restoredAt
+      && restoredAt - openedAt <= 5 * 60 * 1_000
+      && Number.isFinite(previousRestoredAt) && previousRestoredAt < openedAt
+      && Number.isFinite(nextOpenedAt) && restoredAt < nextOpenedAt
+      && intervalRuleSuites.length === 0);
+    if (!abortedValid) findings.push("PHASE1_RULESET_RECOVERY_ABORTED_WINDOW_INVALID");
+    ledger.splice(aborted.insertAfterWindowOrdinal, 0, {
+      schemaVersion: 1,
+      contract: "PHASE1_RULESET_OWNER_PR_ONLY_ABORTED_NO_WRITE_RECEIPT_V1",
+      policyContract: policy.contract,
+      policyHash: phase1RulesetRecoveryPolicyHash,
+      ordinal: aborted.ordinal,
+      kind: aborted.kind,
+      candidateVersionId: opened?.version_id ?? null,
+      candidateUpdatedAt: canonicalRecoveryTimestamp(opened?.updated_at),
+      candidateWritableStateHash: rulesetWritableStateHash(opened?.state),
+      candidateProviderStateHash: sha256(stableJson(rulesetState(opened?.state))),
+      restoredVersionId: restored?.version_id ?? null,
+      restoredUpdatedAt: canonicalRecoveryTimestamp(restored?.updated_at),
+      restoredWritableStateHash: rulesetWritableStateHash(restored?.state),
+      restoredProviderStateHash: sha256(stableJson(rulesetState(restored?.state))),
+      sourcePr: aborted.sourcePr,
+      intervalRuleSuiteIds: intervalRuleSuites.map((entry) => entry?.id),
       recoveryReceiptHash: observation?.recoveryReceipt?.receiptHash ?? null,
       recoveryReceiptCommentId: observation?.recoveryReceiptComment?.id ?? null,
       recoveryReceiptCommentCreatedAt: canonicalRecoveryTimestamp(observation?.recoveryReceiptComment?.created_at),
