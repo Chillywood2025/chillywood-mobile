@@ -217,14 +217,36 @@ const phase1RulesetRecoveryPaths = Object.freeze([
   "scripts/assurance/github-main-ruleset-readback.mjs",
   "tests/assurance/github-main-ruleset-readback.test.mjs",
 ].sort());
-// The Level D successor PR is bound here after GitHub assigns its immutable PR number.
 export const phase1RulesetRecoveryPolicy = Object.freeze({
-  schemaVersion: 1,
-  contract: "PHASE1_RULESET_OWNER_PR_ONLY_RECOVERY_V1",
+  schemaVersion: 2,
+  contract: "PHASE1_RULESET_OWNER_PR_ONLY_RECOVERY_V2",
   repository: "Chillywood2025/chillywood-mobile",
   repositoryId: 1159469393,
   rulesetId: 18940814,
   owner: phase1RulesetRecoveryOwner,
+  previousReceipt: Object.freeze({
+    pr: 267,
+    commentId: 5418899804,
+    createdAt: "2026-08-26T00:31:46Z",
+    updatedAt: "2026-08-26T00:31:46Z",
+    authorId: 210200794,
+    authorLogin: "Chillywood2025",
+    authorType: "User",
+    authorAssociation: "OWNER",
+    bodySha256: "d1cfb52a3b0f5ce4d2cb426cae02ab37adec5ab94c7cfb4618677773ab7cd95c",
+    receiptHash: "0bed1588ff7bc0fa782f9a1f2618b5a0559f0517276eb37745f0cd7c3252f399",
+  }),
+  providerArchiveBaseline: Object.freeze({
+    historySummaryCount: 208,
+    historySummaryHash: "ac5fcb9693ac6fd30398bc5f25be6d4b0d3326e162e658c36dbe337bd9efa9c6",
+    historyDetailCount: 208,
+    historyDetailHash: "cd39915102289ab49adf6c451a9f12497123c324749b6504ba0dadad78c5f34e",
+    ruleSuiteSummaryCount: 152,
+    ruleSuiteSummaryHash: "f7abc4920340807de2dc2c453d34b7a64c1c8c1f5e9b00e682ec1bec6900fa4c",
+    ruleSuiteDetailCount: 152,
+    ruleSuiteDetailHash: "1b099bae2752e24391eb40ccd99a141420df4c2dec79f503c1b5b754f3745993",
+    archiveHash: "0d72184ddb3ac92d05285216438caaeaba33bb6ee2483d68b6b83b22f4d6a7ea",
+  }),
   candidateWritableStateHash: "8033733a5057046b5cd031e9606d0c25a11cd05596176c7a26cb16de5a2b2abe",
   restoredWritableStateHash: "8edf290e70141cfe0b3a371f958e8add21f997de1c87e99cbe2c927b9a90904a",
   initialFinal: Object.freeze({
@@ -292,10 +314,36 @@ export const phase1RulesetRecoveryPolicy = Object.freeze({
       headRef: "codex/ruleset-recovery-provider-chronology-v1",
       allowedPaths: phase1RulesetRecoveryPaths,
     }),
+    Object.freeze({
+      ordinal: 5,
+      kind: "HISTORICAL_EXACT",
+      pr: 388,
+      baseSha: "ef8b86713e7c99163c4d4f47d4efed9b3b125b93",
+      headSha: "b35e7b78abfb8c5662f192a11d3f8500e306c432",
+      headRef: "codex/main-tabs-brand-safe-region-v1",
+      mergeSha: "b8e2a145f7e5821ddf32150e33d1c6b656ad7059",
+      mergeCommittedAt: "2026-09-09T22:13:09.000-05:00",
+      mergedAt: "2026-09-10T03:13:09.000Z",
+      openedVersionId: 49221707,
+      openedAt: "2026-09-09T22:13:06.695-05:00",
+      restoredVersionId: 49221711,
+      restoredAt: "2026-09-09T22:13:11.309-05:00",
+      ruleSuiteId: 4013675751,
+      ruleSuitePushedAt: "2026-09-09T22:13:09.000-05:00",
+    }),
+    Object.freeze({
+      ordinal: 6,
+      kind: "SELF_BOOTSTRAP_EXACT_PR",
+      pr: 392,
+      baseSha: "b8e2a145f7e5821ddf32150e33d1c6b656ad7059",
+      headRef: "codex/ruleset-recovery-pr388-chronology-v2",
+      allowedPaths: phase1RulesetRecoveryPaths,
+    }),
   ]),
 });
 export const phase1RulesetRecoveryPolicyHash = sha256(stableJson(phase1RulesetRecoveryPolicy));
-export const phase1RulesetRecoveryReceiptMarker = "<!-- PHASE1_RULESET_OWNER_PR_ONLY_RECOVERY_RECEIPT_V1 -->";
+const phase1RulesetPreviousRecoveryReceiptMarker = "<!-- PHASE1_RULESET_OWNER_PR_ONLY_RECOVERY_RECEIPT_V1 -->";
+export const phase1RulesetRecoveryReceiptMarker = "<!-- PHASE1_RULESET_OWNER_PR_ONLY_RECOVERY_RECEIPT_V2 -->";
 export const phase1PublisherAnchorFields = Object.freeze([
   "schemaVersion", "contract", "sourcePr", "sourceBranch", "sourceHead", "sourceTree", "sourceBase", "sourceMergeSha", "sourceMergeTree",
   "originalIntentCommentId", "originalIntentBodyHash", "originalIntentSubjectHash", "finalSourceCommentId", "finalSourceBodyHash", "finalSourceSubjectHash",
@@ -535,7 +583,25 @@ const recoveryReceiptEvidenceHashes = ({ historySummaries, postGenesisHistory, r
   ruleSuiteDetailsHash: sha256(stableJson(ruleSuiteDetails)),
 });
 
-export function buildPhase1RulesetRecoveryReceipt({ historySummaries, historyDetails, ruleSuiteSummaries, ruleSuiteDetails, currentRuleset } = {}) {
+const recoveryProviderArchive = ({ historySummaries, historyDetails, ruleSuiteSummaries, ruleSuiteDetails }) => {
+  const canonicalHistorySummaries = canonicalRecoveryHistorySummaries(historySummaries);
+  const canonicalHistoryDetails = canonicalRecoveryHistoryDetails(historyDetails);
+  const canonicalRuleSuiteSummaries = canonicalRecoveryRuleSuiteSummaries(ruleSuiteSummaries);
+  const canonicalRuleSuiteDetails = canonicalRecoveryRuleSuiteDetails(ruleSuiteDetails);
+  const body = {
+    historySummaryCount: canonicalHistorySummaries.length,
+    historySummaryHash: sha256(stableJson(canonicalHistorySummaries)),
+    historyDetailCount: canonicalHistoryDetails.length,
+    historyDetailHash: sha256(stableJson(canonicalHistoryDetails)),
+    ruleSuiteSummaryCount: canonicalRuleSuiteSummaries.length,
+    ruleSuiteSummaryHash: sha256(stableJson(canonicalRuleSuiteSummaries)),
+    ruleSuiteDetailCount: canonicalRuleSuiteDetails.length,
+    ruleSuiteDetailHash: sha256(stableJson(canonicalRuleSuiteDetails)),
+  };
+  return { ...body, archiveHash: sha256(stableJson(body)) };
+};
+
+export function buildPhase1RulesetRecoveryReceipt({ historySummaries, historyDetails, ruleSuiteSummaries, ruleSuiteDetails, currentRuleset, archiveHistorySummaries = historySummaries, archiveHistoryDetails = historyDetails, archiveRuleSuiteSummaries = ruleSuiteSummaries, archiveRuleSuiteDetails = ruleSuiteDetails } = {}) {
   const canonicalHistorySummaries = canonicalRecoveryHistorySummaries(historySummaries);
   const allHistoryDetails = canonicalRecoveryHistoryDetails(historyDetails);
   const genesisIndex = allHistoryDetails.findIndex((entry) => entry.version_id === phase1RulesetGenesis.versionId);
@@ -544,12 +610,13 @@ export function buildPhase1RulesetRecoveryReceipt({ historySummaries, historyDet
   const canonicalRuleSuiteDetails = canonicalRecoveryRuleSuiteDetails(ruleSuiteDetails);
   const finalHistoryEntry = postGenesisHistory.at(-1);
   const body = {
-    schemaVersion: 1,
-    contract: "PHASE1_RULESET_OWNER_PR_ONLY_RECOVERY_RECEIPT_V1",
+    schemaVersion: 2,
+    contract: "PHASE1_RULESET_OWNER_PR_ONLY_RECOVERY_RECEIPT_V2",
     policyHash: phase1RulesetRecoveryPolicyHash,
     repository: phase1RulesetRecoveryPolicy.repository,
     rulesetId: phase1RulesetRecoveryPolicy.rulesetId,
     sourcePr: phase1RulesetRecoveryPolicy.windows.at(-1).pr,
+    previousReceipt: phase1RulesetRecoveryPolicy.previousReceipt,
     historyPaginationComplete: true,
     historySummaries: canonicalHistorySummaries,
     postGenesisHistory,
@@ -561,6 +628,12 @@ export function buildPhase1RulesetRecoveryReceipt({ historySummaries, historyDet
       postGenesisHistory,
       ruleSuiteSummaries: canonicalRuleSuiteSummaries,
       ruleSuiteDetails: canonicalRuleSuiteDetails,
+    }),
+    providerArchive: recoveryProviderArchive({
+      historySummaries: archiveHistorySummaries,
+      historyDetails: archiveHistoryDetails,
+      ruleSuiteSummaries: archiveRuleSuiteSummaries,
+      ruleSuiteDetails: archiveRuleSuiteDetails,
     }),
     finalRestoration: {
       historyVersionId: finalHistoryEntry?.version_id,
@@ -585,7 +658,7 @@ function evaluateRulesetRecoveryReceipt({ observation, current } = {}) {
   const expectedReceiptFields = [
     "schemaVersion", "contract", "policyHash", "repository", "rulesetId", "sourcePr", "historyPaginationComplete",
     "historySummaries", "postGenesisHistory", "ruleSuitesPaginationComplete", "ruleSuiteSummaries", "ruleSuiteDetails",
-    "evidenceHashes", "finalRestoration", "receiptHash",
+    "evidenceHashes", "finalRestoration", "previousReceipt", "providerArchive", "receiptHash",
   ];
   const expectedEvidenceHashFields = ["historySummariesHash", "postGenesisHistoryHash", "ruleSuiteSummariesHash", "ruleSuiteDetailsHash"];
   const expectedFinalRestorationFields = [
@@ -594,16 +667,42 @@ function evaluateRulesetRecoveryReceipt({ observation, current } = {}) {
   ];
   if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)
     || !same(Object.keys(receipt).sort(), expectedReceiptFields.sort())
-    || receipt.schemaVersion !== 1 || receipt.contract !== "PHASE1_RULESET_OWNER_PR_ONLY_RECOVERY_RECEIPT_V1"
+    || receipt.schemaVersion !== 2 || receipt.contract !== "PHASE1_RULESET_OWNER_PR_ONLY_RECOVERY_RECEIPT_V2"
     || receipt.policyHash !== phase1RulesetRecoveryPolicyHash
     || receipt.repository !== phase1RulesetRecoveryPolicy.repository
     || receipt.rulesetId !== phase1RulesetRecoveryPolicy.rulesetId
     || receipt.sourcePr !== phase1RulesetRecoveryPolicy.windows.at(-1).pr
+    || !same(receipt.previousReceipt, phase1RulesetRecoveryPolicy.previousReceipt)
     || receipt.historyPaginationComplete !== true || receipt.ruleSuitesPaginationComplete !== true
     || !digest(receipt.receiptHash) || receipt.receiptHash !== sha256(stableJson(withoutHash(receipt, "receiptHash")))
     || !same(Object.keys(receipt.evidenceHashes ?? {}).sort(), expectedEvidenceHashFields.sort())
     || !same(Object.keys(receipt.finalRestoration ?? {}).sort(), expectedFinalRestorationFields.sort())) {
     findings.push("PHASE1_RULESET_RECOVERY_RECEIPT_INVALID");
+  }
+  const providerArchive = receipt?.providerArchive;
+  const expectedProviderArchiveFields = [
+    "historySummaryCount", "historySummaryHash", "historyDetailCount", "historyDetailHash",
+    "ruleSuiteSummaryCount", "ruleSuiteSummaryHash", "ruleSuiteDetailCount", "ruleSuiteDetailHash", "archiveHash",
+  ];
+  const archiveBody = withoutHash(providerArchive, "archiveHash");
+  if (!providerArchive || !same(Object.keys(providerArchive).sort(), expectedProviderArchiveFields.sort())
+    || ![providerArchive.historySummaryCount, providerArchive.historyDetailCount, providerArchive.ruleSuiteSummaryCount, providerArchive.ruleSuiteDetailCount]
+      .every((value) => Number.isSafeInteger(value) && value > 0)
+    || ![providerArchive.historySummaryHash, providerArchive.historyDetailHash, providerArchive.ruleSuiteSummaryHash,
+      providerArchive.ruleSuiteDetailHash, providerArchive.archiveHash].every(digest)
+    || providerArchive.archiveHash !== sha256(stableJson(archiveBody))
+    || providerArchive.historySummaryCount < (receipt?.historySummaries?.length ?? Number.POSITIVE_INFINITY)
+    || providerArchive.historyDetailCount < (receipt?.postGenesisHistory?.length ?? Number.POSITIVE_INFINITY)
+    || providerArchive.ruleSuiteSummaryCount < (receipt?.ruleSuiteSummaries?.length ?? Number.POSITIVE_INFINITY)
+    || providerArchive.ruleSuiteDetailCount < (receipt?.ruleSuiteDetails?.length ?? Number.POSITIVE_INFINITY)
+    || providerArchive.historySummaryCount !== phase1RulesetRecoveryPolicy.providerArchiveBaseline.historySummaryCount + 2
+    || providerArchive.historyDetailCount !== phase1RulesetRecoveryPolicy.providerArchiveBaseline.historyDetailCount + 2
+    || providerArchive.ruleSuiteSummaryCount !== phase1RulesetRecoveryPolicy.providerArchiveBaseline.ruleSuiteSummaryCount + 1
+    || providerArchive.ruleSuiteDetailCount !== phase1RulesetRecoveryPolicy.providerArchiveBaseline.ruleSuiteDetailCount + 1) {
+    findings.push("PHASE1_RULESET_RECOVERY_PROVIDER_ARCHIVE_INVALID");
+  }
+  if (!same(observation?.previousReceiptReadback, phase1RulesetRecoveryPolicy.previousReceipt)) {
+    findings.push("PHASE1_RULESET_RECOVERY_PREVIOUS_RECEIPT_INVALID");
   }
   const canonicalBody = receipt && typeof receipt === "object" && !Array.isArray(receipt)
     ? formatPhase1RulesetRecoveryReceiptComment(receipt)
@@ -1101,11 +1200,11 @@ const readRecoveryMergeIdentity = (mergeSha, currentBase) => {
   }
 };
 
-const parseRulesetRecoveryReceiptComment = (comments) => {
+const parseRulesetRecoveryReceiptComment = (comments, marker = phase1RulesetRecoveryReceiptMarker) => {
   const markerComments = (Array.isArray(comments) ? comments : []).filter((comment) =>
-    String(comment?.body ?? "").split(/\r?\n/u, 1)[0] === phase1RulesetRecoveryReceiptMarker);
+    String(comment?.body ?? "").split(/\r?\n/u, 1)[0] === marker);
   const comment = markerComments.length === 1 ? markerComments[0] : null;
-  const prefix = `${phase1RulesetRecoveryReceiptMarker}\n`;
+  const prefix = `${marker}\n`;
   let receipt = null;
   if (comment && String(comment.body).startsWith(prefix)) {
     try { receipt = JSON.parse(String(comment.body).slice(prefix.length)); } catch {}
@@ -1118,6 +1217,21 @@ const observeRulesetRecoveryEvidence = (repository, identity) => {
   const recoveryPr = policy.windows.at(-1).pr;
   const commentsRead = readPaginatedGitHubArray(`repos/${repository}/issues/${recoveryPr}/comments?per_page=100`);
   const parsed = parseRulesetRecoveryReceiptComment(commentsRead.values);
+  const previousCommentsRead = readPaginatedGitHubArray(`repos/${repository}/issues/${policy.previousReceipt.pr}/comments?per_page=100`);
+  const previousParsed = parseRulesetRecoveryReceiptComment(previousCommentsRead.values, phase1RulesetPreviousRecoveryReceiptMarker);
+  const previousComment = previousParsed.comment;
+  const previousReceiptReadback = previousParsed.markerCommentCount === 1 && previousComment ? {
+    pr: policy.previousReceipt.pr,
+    commentId: previousComment.id,
+    createdAt: previousComment.created_at,
+    updatedAt: previousComment.updated_at,
+    authorId: previousComment.user?.id,
+    authorLogin: previousComment.user?.login,
+    authorType: previousComment.user?.type,
+    authorAssociation: previousComment.author_association,
+    bodySha256: sha256(previousComment.body ?? ""),
+    receiptHash: previousParsed.receipt?.receiptHash ?? null,
+  } : null;
   const history = Array.isArray(parsed.receipt?.postGenesisHistory) ? parsed.receipt.postGenesisHistory : [];
   const ruleSuites = Array.isArray(parsed.receipt?.ruleSuiteSummaries) ? parsed.receipt.ruleSuiteSummaries : [];
   const ruleSuiteDetails = Array.isArray(parsed.receipt?.ruleSuiteDetails) ? parsed.receipt.ruleSuiteDetails : [];
@@ -1143,7 +1257,8 @@ const observeRulesetRecoveryEvidence = (repository, identity) => {
       mergeIdentity: readRecoveryMergeIdentity(mergeSha, identity?.baseSha),
     };
   });
-  const recoveryPaginationComplete = commentsRead.complete && parsed.markerCommentCount === 1
+  const recoveryPaginationComplete = commentsRead.complete && previousCommentsRead.complete
+    && parsed.markerCommentCount === 1 && previousParsed.markerCommentCount === 1
     && recoveryEvidence.every((entry) => entry.pullRequest && entry.ruleSuite && entry.ruleSuiteDetail
       && entry.mergeIdentity && entry.filesPaginationComplete === true);
   return {
@@ -1155,6 +1270,7 @@ const observeRulesetRecoveryEvidence = (repository, identity) => {
     recoveryReceipt: parsed.receipt,
     recoveryReceiptComment: parsed.comment,
     recoveryReceiptMarkerCommentCount: parsed.markerCommentCount,
+    previousReceiptReadback,
   };
 };
 
