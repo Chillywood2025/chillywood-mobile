@@ -72,7 +72,7 @@ import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImag
 import { AppText } from "../../components/ui/typography";
 import { setMainTabHeaderProfileSnapshot } from "../../components/navigation/main-tab-profile-cache";
 import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
-import { resolveHomeBrandRevealHeight } from "../../_lib/customerExperiencePresentation";
+import { resolveMainTabBrandRevealHeight } from "../../_lib/customerExperiencePresentation";
 
 type TitleRow = Omit<
   Pick<
@@ -219,7 +219,7 @@ export default function HomeScreen() {
   const bottomTabBarHeight = useBottomTabBarHeight();
   const homeDiscoveryLoadGenerationRef = useRef(0);
   const { height: viewportHeight } = useWindowDimensions();
-  const brandRevealHeight = resolveHomeBrandRevealHeight(viewportHeight);
+  const brandRevealHeight = resolveMainTabBrandRevealHeight(viewportHeight);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
