@@ -58,21 +58,29 @@ const recoveryCandidateState = () => {
   return state;
 };
 const recoveryEntry = (state, versionId, updatedAt) => ({ version_id: versionId, updated_at: updatedAt, actor: cutoverActor, state: structuredClone(state) });
-const bootstrapOpenedAt = "2026-08-25T23:40:01.000Z";
-const bootstrapCommittedAt = "2026-08-25T23:40:02.000Z";
-const bootstrapSuitePushedAt = "2026-08-25T23:40:03.000Z";
-const bootstrapMergedAt = "2026-08-25T23:40:03.000Z";
-const bootstrapRestoredAt = "2026-08-25T23:40:05.000Z";
+const bootstrapOpenedAt = "2026-09-10T22:03:01.000Z";
+const bootstrapCommittedAt = "2026-09-10T22:03:02.000Z";
+const bootstrapSuitePushedAt = "2026-09-10T22:03:03.000Z";
+const bootstrapMergedAt = "2026-09-10T22:03:03.000Z";
+const bootstrapRestoredAt = "2026-09-10T22:03:05.000Z";
 const bootstrapHeadSha = "f".repeat(40);
 const bootstrapMergeSha = "e".repeat(40);
 const historicalRecoveryWindows = phase1RulesetRecoveryPolicy.windows.filter(({ kind }) => kind === "HISTORICAL_EXACT");
+const priorBootstrapWindow = phase1RulesetRecoveryPolicy.windows.find(({ pr }) => pr === 267);
+const currentBootstrapWindow = phase1RulesetRecoveryPolicy.windows.at(-1);
 const recoveryHistory = [
-  ...historicalRecoveryWindows.flatMap((window) => [
+  ...phase1RulesetRecoveryPolicy.windows.slice(0, 3).flatMap((window) => [
     recoveryEntry(recoveryCandidateState(), window.openedVersionId, window.openedAt),
     recoveryEntry(finalEntry.state, window.restoredVersionId, window.restoredAt),
   ]),
-  recoveryEntry(recoveryCandidateState(), 47660001, bootstrapOpenedAt),
-  recoveryEntry(finalEntry.state, 47660002, bootstrapRestoredAt),
+  recoveryEntry(recoveryCandidateState(), 47661708, "2026-08-26T00:21:42.744Z"),
+  recoveryEntry(finalEntry.state, 47661733, "2026-08-26T00:21:52.695Z"),
+  recoveryEntry(recoveryCandidateState(), phase1RulesetRecoveryPolicy.windows[4].openedVersionId, phase1RulesetRecoveryPolicy.windows[4].openedAt),
+  recoveryEntry(finalEntry.state, phase1RulesetRecoveryPolicy.windows[4].restoredVersionId, phase1RulesetRecoveryPolicy.windows[4].restoredAt),
+  recoveryEntry(recoveryCandidateState(), phase1RulesetRecoveryPolicy.abortedNoWriteWindows[0].openedVersionId, phase1RulesetRecoveryPolicy.abortedNoWriteWindows[0].openedAt),
+  recoveryEntry(finalEntry.state, phase1RulesetRecoveryPolicy.abortedNoWriteWindows[0].restoredVersionId, phase1RulesetRecoveryPolicy.abortedNoWriteWindows[0].restoredAt),
+  recoveryEntry(recoveryCandidateState(), 49333901, bootstrapOpenedAt),
+  recoveryEntry(finalEntry.state, 49333902, bootstrapRestoredAt),
 ];
 const recoveryPullRequest = (window, { headSha = window.headSha, mergeSha = window.mergeSha, mergedAt = window.mergedAt, changedFiles = 0 } = {}) => ({
   number: window.pr,
@@ -132,10 +140,39 @@ const historicalRecoveryEvidence = historicalRecoveryWindows.map((window) => {
     mergeIdentity: recoveryMergeIdentity(window),
   };
 });
-const bootstrapWindow = phase1RulesetRecoveryPolicy.windows.at(-1);
+const priorBootstrapRuleSuite = recoveryRuleSuite(priorBootstrapWindow, {
+  mergeSha: "4749eb9e56c2c60b35cf52ced525de60b46bb6f6",
+  id: 3820650993,
+  pushedAt: "2026-08-26T00:21:50.000Z",
+});
+const priorBootstrapEvidence = {
+  pr: priorBootstrapWindow.pr,
+  pullRequest: recoveryPullRequest(priorBootstrapWindow, {
+    headSha: "51d7b8a5a9820c28bdab8fbfda159640b684dd89",
+    mergeSha: "4749eb9e56c2c60b35cf52ced525de60b46bb6f6",
+    mergedAt: "2026-08-26T00:21:50.000Z",
+    changedFiles: priorBootstrapWindow.allowedPaths.length,
+  }),
+  files: priorBootstrapWindow.allowedPaths.map((filename) => ({ filename, status: "modified" })),
+  filesPaginationComplete: true,
+  matchingRuleSuiteCount: 1,
+  ruleSuite: priorBootstrapRuleSuite,
+  ruleSuiteDetail: recoveryRuleSuiteDetail(priorBootstrapRuleSuite),
+  mergeIdentity: {
+    ...recoveryMergeIdentity(priorBootstrapWindow, {
+      headSha: "51d7b8a5a9820c28bdab8fbfda159640b684dd89",
+      mergeSha: "4749eb9e56c2c60b35cf52ced525de60b46bb6f6",
+      committedAt: "2026-08-26T00:21:49.000Z",
+      changedPaths: priorBootstrapWindow.allowedPaths,
+    }),
+    tree: "4fd9136bcc7511257a840125fd980dc65d132623",
+    headTree: "4fd9136bcc7511257a840125fd980dc65d132623",
+  },
+};
+const bootstrapWindow = currentBootstrapWindow;
 const bootstrapEvidenceIndex = phase1RulesetRecoveryPolicy.windows.length - 1;
 const pr266EvidenceIndex = phase1RulesetRecoveryPolicy.windows.findIndex(({ pr }) => pr === 266);
-const bootstrapOpenHistoryIndex = 3 + bootstrapEvidenceIndex * 2;
+const bootstrapOpenHistoryIndex = 3 + bootstrapEvidenceIndex * 2 + phase1RulesetRecoveryPolicy.abortedNoWriteWindows.length * 2;
 const bootstrapRestoreHistoryIndex = bootstrapOpenHistoryIndex + 1;
 const bootstrapFiles = bootstrapWindow.allowedPaths.map((filename) => ({ filename, status: "modified" }));
 const bootstrapRecoveryEvidence = {
@@ -148,8 +185,13 @@ const bootstrapRecoveryEvidence = {
   mergeIdentity: recoveryMergeIdentity(bootstrapWindow, { headSha: bootstrapHeadSha, mergeSha: bootstrapMergeSha, committedAt: bootstrapCommittedAt, changedPaths: bootstrapWindow.allowedPaths }),
 };
 bootstrapRecoveryEvidence.ruleSuiteDetail = recoveryRuleSuiteDetail(bootstrapRecoveryEvidence.ruleSuite);
-const exactRecoveryEvidence = [...historicalRecoveryEvidence, bootstrapRecoveryEvidence];
-const exactRecoveryRuleSuites = exactRecoveryEvidence.map(({ ruleSuite }) => structuredClone(ruleSuite));
+const exactRecoveryEvidence = [
+  ...historicalRecoveryEvidence.slice(0, 3),
+  priorBootstrapEvidence,
+  historicalRecoveryEvidence.at(-1),
+  bootstrapRecoveryEvidence,
+];
+const recoveryRuleSuiteInputs = exactRecoveryEvidence.map(({ ruleSuite }) => structuredClone(ruleSuite));
 const finalProviderUpdatedAt = "2026-08-24T23:00:33.629-05:00";
 const liveProvisioning = (stage, providerUpdatedAt) => {
   const value = structuredClone(publisherAnchor.provisioningReadback);
@@ -164,30 +206,47 @@ const liveProvisioning = (stage, providerUpdatedAt) => {
 };
 const currentRuleset = (entry, providerUpdatedAt) => ({ ...structuredClone(entry.state), node_id: publisherAnchor.rulesetNodeId, updated_at: providerUpdatedAt, current_user_can_bypass: "never" });
 const receiptSourceHistory = [preEntry, stage1Entry, finalEntry, ...recoveryHistory];
+const archiveHistoryInputs = [
+  ...Array.from({ length: phase1RulesetRecoveryPolicy.providerArchiveBaseline.historyDetailCount + 2 + phase1RulesetRecoveryPolicy.abortedNoWriteWindows.length * 2 - receiptSourceHistory.length }, (_, index) => recoveryEntry(finalEntry.state, 45_000_000 + index, new Date(Date.UTC(2026, 6, 1, 0, index)).toISOString())),
+  ...receiptSourceHistory,
+];
+const archiveRuleSuiteInputs = [
+  ...Array.from({ length: phase1RulesetRecoveryPolicy.providerArchiveBaseline.ruleSuiteDetailCount + 1 - recoveryRuleSuiteInputs.length }, (_, index) => ({
+    ...recoveryRuleSuite(phase1RulesetRecoveryPolicy.windows[0], { id: 3_000_000_000 + index, pushedAt: new Date(Date.UTC(2026, 6, 1, 0, index)).toISOString() }),
+    after_sha: `${(index % 9) + 1}`.repeat(40),
+  })),
+  ...recoveryRuleSuiteInputs,
+];
+const archiveRuleSuiteDetailInputs = archiveRuleSuiteInputs.map(recoveryRuleSuiteDetail);
 const exactRecoveryReceipt = buildPhase1RulesetRecoveryReceipt({
   historySummaries: receiptSourceHistory,
   historyDetails: receiptSourceHistory,
-  ruleSuiteSummaries: exactRecoveryRuleSuites,
+  ruleSuiteSummaries: recoveryRuleSuiteInputs,
   ruleSuiteDetails: exactRecoveryEvidence.map(({ ruleSuiteDetail }) => ruleSuiteDetail),
   currentRuleset: currentRuleset(finalEntry, bootstrapRestoredAt),
+  archiveHistorySummaries: archiveHistoryInputs,
+  archiveHistoryDetails: archiveHistoryInputs,
+  archiveRuleSuiteSummaries: archiveRuleSuiteInputs,
+  archiveRuleSuiteDetails: archiveRuleSuiteDetailInputs,
 });
 const exactRecoveredEntries = exactRecoveryReceipt.postGenesisHistory;
+const exactRecoveryRuleSuites = exactRecoveryReceipt.ruleSuiteSummaries;
 const exactRecoveryReceiptComment = {
   id: 5237000000,
   user: { id: phase1RulesetRecoveryPolicy.owner.id, login: phase1RulesetRecoveryPolicy.owner.login, type: phase1RulesetRecoveryPolicy.owner.type },
   author_association: "OWNER",
-  created_at: "2026-08-25T23:40:06Z",
-  updated_at: "2026-08-25T23:40:06Z",
+  created_at: "2026-09-10T22:03:06Z",
+  updated_at: "2026-09-10T22:03:06Z",
   body: formatPhase1RulesetRecoveryReceiptComment(exactRecoveryReceipt),
 };
-const evaluateCutover = ({ stage = "PRE_CUTOVER_13_RAW", entries = [preEntry], currentEntry = entries.at(-1), paginationComplete = true, recoveryEvidence = [], recoveryPaginationComplete = true, ruleSuites = [], recoveryReceipt = null, recoveryReceiptComment = null, recoveryReceiptMarkerCommentCount = 0, currentUserCanBypass = "never", currentOverrides = {}, anchor = publisherAnchor, live = null, providerUpdatedAt = stage === "PRE_CUTOVER_13_RAW" ? publisherAnchor.rulesetProviderUpdatedAt : currentEntry.updated_at } = {}) => {
+const evaluateCutover = ({ stage = "PRE_CUTOVER_13_RAW", entries = [preEntry], currentEntry = entries.at(-1), paginationComplete = true, recoveryEvidence = [], recoveryPaginationComplete = true, ruleSuites = [], recoveryReceipt = null, recoveryReceiptComment = null, recoveryReceiptMarkerCommentCount = 0, previousReceiptReadback = phase1RulesetRecoveryPolicy.previousReceipt, currentUserCanBypass = "never", currentOverrides = {}, anchor = publisherAnchor, live = null, providerUpdatedAt = stage === "PRE_CUTOVER_13_RAW" ? publisherAnchor.rulesetProviderUpdatedAt : currentEntry.updated_at } = {}) => {
   return evaluatePhase1AdmissionRulesetCutoverState({
     repository: contract.repository,
     identity: cutoverIdentity,
     anchor,
     liveProvisioningReadback: live ?? liveProvisioning(stage, providerUpdatedAt),
     contract: { ...contract, phase1AdmissionPublisherImmutableAnchor: anchor },
-    observation: { current: { ...currentRuleset(currentEntry, providerUpdatedAt), current_user_can_bypass: currentUserCanBypass, ...currentOverrides }, history: entries, paginationComplete, recoveryEvidence, recoveryPaginationComplete, ruleSuites, recoveryReceipt, recoveryReceiptComment, recoveryReceiptMarkerCommentCount },
+    observation: { current: { ...currentRuleset(currentEntry, providerUpdatedAt), current_user_can_bypass: currentUserCanBypass, ...currentOverrides }, history: entries, paginationComplete, recoveryEvidence, recoveryPaginationComplete, ruleSuites, recoveryReceipt, recoveryReceiptComment, recoveryReceiptMarkerCommentCount, previousReceiptReadback },
     protectedSourceVerified: true,
   });
 };
@@ -519,8 +578,8 @@ test("ruleset recovery receipt is canonical, policy-bound, immutable, and below 
   assert.equal(exactRecoveryReceipt.policyHash, phase1RulesetRecoveryPolicyHash);
   assert.equal(exactRecoveryReceipt.receiptHash, sha256(stableJson(Object.fromEntries(Object.entries(exactRecoveryReceipt).filter(([key]) => key !== "receiptHash")))));
   assert.ok(Object.values(exactRecoveryReceipt.evidenceHashes).every((value) => /^[0-9a-f]{64}$/u.test(value)));
-  assert.deepEqual(phase1RulesetRecoveryPolicy.windows.map(({ pr }) => pr), [262, 263, 266, 267]);
-  assert.deepEqual(phase1RulesetRecoveryPolicy.windows.map(({ kind }) => kind), ["HISTORICAL_EXACT", "HISTORICAL_EXACT", "HISTORICAL_EXACT", "SELF_BOOTSTRAP_EXACT_PR"]);
+  assert.deepEqual(phase1RulesetRecoveryPolicy.windows.map(({ pr }) => pr), [262, 263, 266, 267, 388, 392]);
+  assert.deepEqual(phase1RulesetRecoveryPolicy.windows.map(({ kind }) => kind), ["HISTORICAL_EXACT", "HISTORICAL_EXACT", "HISTORICAL_EXACT", "SELF_BOOTSTRAP_EXACT_PR", "HISTORICAL_EXACT", "SELF_BOOTSTRAP_EXACT_PR"]);
   assert.deepEqual(phase1RulesetRecoveryPolicy.windows[2], {
     ordinal: 3,
     kind: "HISTORICAL_EXACT",
@@ -538,14 +597,20 @@ test("ruleset recovery receipt is canonical, policy-bound, immutable, and below 
     ruleSuiteId: 3820215667,
     ruleSuitePushedAt: "2026-08-25T23:26:29.000Z",
   });
-  assert.equal(bootstrapWindow.baseSha, "c751c2689f440f50b6dce096252318c050e07046");
-  assert.equal(bootstrapWindow.headRef, "codex/ruleset-recovery-provider-chronology-v1");
+  assert.equal(phase1RulesetRecoveryPolicy.windows[4].mergeSha, "b8e2a145f7e5821ddf32150e33d1c6b656ad7059");
+  assert.equal(phase1RulesetRecoveryPolicy.windows[4].ruleSuiteId, 4013675751);
+  assert.equal(bootstrapWindow.baseSha, "b8e2a145f7e5821ddf32150e33d1c6b656ad7059");
+  assert.equal(bootstrapWindow.headRef, "codex/ruleset-recovery-pr388-chronology-v2");
   assert.deepEqual(bootstrapWindow.allowedPaths, [
     "scripts/assurance/github-main-ruleset-readback.mjs",
     "tests/assurance/github-main-ruleset-readback.test.mjs",
   ]);
-  assert.equal(exactRecoveryReceipt.sourcePr, 267);
-  assert.equal(exactRecoveryReceipt.ruleSuiteDetails.length, 4);
+  assert.equal(exactRecoveryReceipt.schemaVersion, 2);
+  assert.equal(exactRecoveryReceipt.contract, "PHASE1_RULESET_OWNER_PR_ONLY_RECOVERY_RECEIPT_V2");
+  assert.deepEqual(exactRecoveryReceipt.previousReceipt, phase1RulesetRecoveryPolicy.previousReceipt);
+  assert.equal(exactRecoveryReceipt.sourcePr, 392);
+  assert.equal(exactRecoveryReceipt.ruleSuiteDetails.length, 6);
+  assert.equal(exactRecoveryReceipt.providerArchive.archiveHash, sha256(stableJson(Object.fromEntries(Object.entries(exactRecoveryReceipt.providerArchive).filter(([key]) => key !== "archiveHash")))));
   assert.equal(evaluateRecoveredCutover().cutoverLock, "OPEN");
 });
 
@@ -571,6 +636,10 @@ test("ruleset recovery canonicalizes equivalent provider timestamps and accepts 
     ruleSuiteSummaries: offsetSuiteSummaries,
     ruleSuiteDetails: offsetSuiteDetails,
     currentRuleset: offsetCurrent,
+    archiveHistorySummaries: archiveHistoryInputs,
+    archiveHistoryDetails: archiveHistoryInputs,
+    archiveRuleSuiteSummaries: archiveRuleSuiteInputs,
+    archiveRuleSuiteDetails: archiveRuleSuiteDetailInputs,
   }), exactRecoveryReceipt);
   const offsetPublicEvidence = structuredClone(exactRecoveryEvidence);
   for (const proof of offsetPublicEvidence) {
@@ -592,6 +661,7 @@ test("ruleset recovery rejects omission, truncation, replay, drift, extra writes
       recoveryReceipt: structuredClone(exactRecoveryReceipt),
       recoveryReceiptComment: structuredClone(exactRecoveryReceiptComment),
       recoveryReceiptMarkerCommentCount: 1,
+      previousReceiptReadback: structuredClone(phase1RulesetRecoveryPolicy.previousReceipt),
       providerUpdatedAt: bootstrapRestoredAt,
       currentUserCanBypass: "never",
     };
@@ -621,6 +691,7 @@ test("ruleset recovery rejects omission, truncation, replay, drift, extra writes
       recoveryReceipt: candidate.recoveryReceipt,
       recoveryReceiptComment: candidate.recoveryReceiptComment,
       recoveryReceiptMarkerCommentCount: candidate.recoveryReceiptMarkerCommentCount,
+      previousReceiptReadback: candidate.previousReceiptReadback,
       currentUserCanBypass: candidate.currentUserCanBypass,
       providerUpdatedAt: candidate.providerUpdatedAt,
     });
@@ -630,9 +701,9 @@ test("ruleset recovery rejects omission, truncation, replay, drift, extra writes
     ["two historical pairs only", (value) => { value.entries = value.entries.slice(0, 7); }, "PHASE1_RULESET_RECOVERY_WINDOW_CARDINALITY_INVALID"],
     ["three historical pairs only", (value) => { value.entries = value.entries.slice(0, 9); }, "PHASE1_RULESET_RECOVERY_WINDOW_CARDINALITY_INVALID"],
     ["missing final restoration", (value) => { value.entries.pop(); }, "PHASE1_RULESET_RECOVERY_WINDOW_CARDINALITY_INVALID"],
-    ["future fifth pair", (value) => {
-      value.entries.push(recoveryEntry(recoveryCandidateState(), 47660003, "2026-08-25T23:41:01.000Z"));
-      value.entries.push(recoveryEntry(finalEntry.state, 47660004, "2026-08-25T23:41:05.000Z"));
+    ["future unreceipted pair", (value) => {
+      value.entries.push(recoveryEntry(recoveryCandidateState(), 49230003, "2026-09-10T21:31:01.000Z"));
+      value.entries.push(recoveryEntry(finalEntry.state, 49230004, "2026-09-10T21:31:05.000Z"));
     }, "PHASE1_RULESET_RECOVERY_WINDOW_CARDINALITY_INVALID"],
     ["candidate policy drift", (value) => { value.entries[3].state.enforcement = "evaluate"; }, "PHASE1_RULESET_RECOVERY_STATE_INVALID"],
     ["restoration policy drift", (value) => { value.entries[4].state.bypass_actors.push({ actor_id: 1, actor_type: "User", bypass_mode: "pull_request" }); }, "PHASE1_RULESET_RECOVERY_STATE_INVALID"],
@@ -659,17 +730,17 @@ test("ruleset recovery rejects omission, truncation, replay, drift, extra writes
     ["duplicate matching suite", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].matchingRuleSuiteCount = 2; }, "PHASE1_RULESET_RECOVERY_RULE_SUITE_INVALID"],
     ["wrong detailed rule source", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].ruleSuiteDetail.rule_evaluations[0].rule_source.id = 1; }, "PHASE1_RULESET_RECOVERY_RULE_SUITE_DETAIL_INVALID"],
     ["required status check did not fail", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].ruleSuiteDetail.rule_evaluations[0].result = "pass"; }, "PHASE1_RULESET_RECOVERY_RULE_SUITE_DETAIL_INVALID"],
-    ["second main write in open window", (value) => { value.ruleSuites.push({ ...structuredClone(value.ruleSuites[bootstrapEvidenceIndex]), id: 3821000001, pushed_at: "2026-08-25T23:40:04.000Z" }); }, "PHASE1_RULESET_RECOVERY_INTERVAL_WRITE_CARDINALITY_INVALID"],
+    ["second main write in open window", (value) => { value.ruleSuites.push({ ...structuredClone(value.ruleSuites[bootstrapEvidenceIndex]), id: 4014000001, pushed_at: "2026-09-10T22:03:04.000Z" }); }, "PHASE1_RULESET_RECOVERY_INTERVAL_WRITE_CARDINALITY_INVALID"],
     ["second main write at open boundary", (value) => {
-      value.ruleSuites.push({ ...structuredClone(value.ruleSuites[bootstrapEvidenceIndex]), id: 3821000002, pushed_at: bootstrapOpenedAt });
+      value.ruleSuites.push({ ...structuredClone(value.ruleSuites[bootstrapEvidenceIndex]), id: 4014000002, pushed_at: bootstrapOpenedAt });
       value.rebuildReceipt = true;
     }, "PHASE1_RULESET_RECOVERY_INTERVAL_WRITE_CARDINALITY_INVALID"],
     ["second main write at restore boundary", (value) => {
-      value.ruleSuites.push({ ...structuredClone(value.ruleSuites[bootstrapEvidenceIndex]), id: 3821000003, pushed_at: bootstrapRestoredAt });
+      value.ruleSuites.push({ ...structuredClone(value.ruleSuites[bootstrapEvidenceIndex]), id: 4014000003, pushed_at: bootstrapRestoredAt });
       value.rebuildReceipt = true;
     }, "PHASE1_RULESET_RECOVERY_INTERVAL_WRITE_CARDINALITY_INVALID"],
     ["malformed main write timestamp", (value) => {
-      value.ruleSuites.push({ ...structuredClone(value.ruleSuites[bootstrapEvidenceIndex]), id: 3821000004, pushed_at: "not-a-date" });
+      value.ruleSuites.push({ ...structuredClone(value.ruleSuites[bootstrapEvidenceIndex]), id: 4014000004, pushed_at: "not-a-date" });
       value.rebuildReceipt = true;
     }, "PHASE1_RULESET_RECOVERY_RECEIPT_EVIDENCE_INVALID"],
     ["missing provider file", (value) => { value.recoveryEvidence[bootstrapEvidenceIndex].files.pop(); }, "PHASE1_RULESET_RECOVERY_SELF_BOOTSTRAP_SCOPE_INVALID"],
@@ -686,6 +757,9 @@ test("ruleset recovery rejects omission, truncation, replay, drift, extra writes
     ["edited receipt comment", (value) => { value.recoveryReceiptComment.updated_at = "2026-08-25T23:40:07Z"; }, "PHASE1_RULESET_RECOVERY_RECEIPT_COMMENT_INVALID"],
     ["noncanonical receipt body", (value) => { value.recoveryReceiptComment.body += "\n"; }, "PHASE1_RULESET_RECOVERY_RECEIPT_COMMENT_INVALID"],
     ["wrong receipt policy hash", (value) => { value.recoveryReceipt.policyHash = "0".repeat(64); }, "PHASE1_RULESET_RECOVERY_RECEIPT_INVALID"],
+    ["missing previous receipt", (value) => { value.previousReceiptReadback = null; }, "PHASE1_RULESET_RECOVERY_PREVIOUS_RECEIPT_INVALID"],
+    ["tampered aborted no-write window", (value) => { value.entries[bootstrapOpenHistoryIndex - 2].updated_at = "2026-09-10T22:02:34.000Z"; }, "PHASE1_RULESET_RECOVERY_ABORTED_WINDOW_INVALID"],
+    ["tampered provider archive", (value) => { value.recoveryReceipt.providerArchive.historyDetailHash = "0".repeat(64); }, "PHASE1_RULESET_RECOVERY_PROVIDER_ARCHIVE_INVALID"],
     ["tampered receipt evidence hash", (value) => { value.recoveryReceipt.evidenceHashes.ruleSuiteDetailsHash = "0".repeat(64); }, "PHASE1_RULESET_RECOVERY_RECEIPT_EVIDENCE_INVALID"],
     ["future restored current timestamp", (value) => { value.providerUpdatedAt = "2026-08-25T23:41:05.000Z"; }, "PHASE1_RULESET_RECOVERY_RECEIPT_FINAL_RESTORATION_INVALID"],
   ];
