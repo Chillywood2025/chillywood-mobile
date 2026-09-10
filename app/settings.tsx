@@ -1684,7 +1684,7 @@ export default function SettingsScreen() {
         kicker="PROFILE"
         title="Profile Appearance"
         summary="Personal Profile photo and background"
-        value={myProfile ? "Ready" : "Loading"}
+        value={myProfile ? "Customize" : "Loading"}
         expandedSections={expandedSections}
         onToggle={toggleSection}
       >
@@ -2370,7 +2370,7 @@ export default function SettingsScreen() {
             <View style={styles.releaseDiagnosticsCopy}>
               <Text style={styles.releaseDiagnosticsTitle}>App diagnostics</Text>
               <Text style={styles.releaseDiagnosticsBody}>
-                Non-secret release identity for support and installed OTA proof.
+                Release details you can share with support.
               </Text>
             </View>
             <StatusPill label={releaseDiagnostics.isEmergencyLaunch ? "Emergency" : "Release"} tone={releaseDiagnostics.isEmergencyLaunch ? "danger" : "muted"} />

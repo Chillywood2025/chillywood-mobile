@@ -114,3 +114,11 @@ test("Follow capability mirrors protected-target RLS and repeated presses are si
   assert.match(profile, /followActionLatchRef\.current\.release\(\)/u);
   assert.match(profile, /Alert\.alert\("Follow Platform", result\.message\)/u);
 });
+
+test("Settings uses customer language for profile controls and support diagnostics", () => {
+  const settings = read("app/settings.tsx");
+  assert.match(settings, /value=\{myProfile \? "Customize" : "Loading"\}/u);
+  assert.match(settings, /Release details you can share with support\./u);
+  assert.doesNotMatch(settings, /value=\{myProfile \? "Ready" : "Loading"\}/u);
+  assert.doesNotMatch(settings, /installed OTA proof/u);
+});
