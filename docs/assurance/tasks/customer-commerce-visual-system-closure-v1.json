@@ -1,1 +1,119 @@
-{"artifactId":"CUSTOMER_COMMERCE_VISUAL_SYSTEM_CLOSURE_V1","authorizationStatus":"PRODUCT_SOURCE_EDITING_NOT_YET_AUTHORIZED","certificate":null,"closure":null,"implementation":{"branch":"codex/customer-commerce-visual-system-closure-v1","protectedBase":{"head":"b8e2a145f7e5821ddf32150e33d1c6b656ad7059","tree":"32b2226e6038b9445155eecddf6874616a6312ad"},"pullRequest":null,"seedHead":null,"seedTree":null},"nonGoals":["backend monetization redesign","provider or production database mutation","production money payout or cashout activation","native architecture rewrite","public rollout or store submission","fabricated production-visible inventory entitlement relationship or transaction","Responsive Layout V2 or AppLovin work"],"ownerIntent":{"globalRule":"Make Chi'llywood's creator economy and overlapping access concepts understandable across the existing customer app while preserving all server-backed security, privacy, money, purchase, block, RLS, LiveKit, navigation, and single-flight authority.","provisionalIntent":"Admit one finite customer-facing visual, interaction, commerce, and canonical access-language closure covering Tip, conditional creator VIP, exact-item commerce, purchased return paths, Platform viewer/owner behavior, Home, Live, Event, Library, navigation continuity, accessibility, and same-class adjacent defects.","sourceAuthority":"OWNER_SUPERSEDING_CUSTOMER_EXPERIENCE_COMMERCE_VISUAL_SYSTEM_CLOSURE"},"primaryDomain":"auth-session-password-recovery","proofTiers":{"T0_REQUIREMENT":"BLOCKED_INTERNAL","T1_SOURCE":"BLOCKED_INTERNAL","T2_MODEL":"BLOCKED_INTERNAL","T3_INTEGRATION":"BLOCKED_INTERNAL","T4_NATIVE_PROVIDER":"BLOCKED_EXTERNAL","T5_SIGNED_ARTIFACT":"NOT_CURRENT","T6_INSTALLED_PHYSICAL":"NOT_CURRENT","T7_PUBLIC_CANARY":"BLOCKED_EXTERNAL"},"provisionalConnectedDomains":["creator-money-ledger","live-stage","moderation-reporting","notifications-fcm","protected-media-playback","revenuecat-premium","storekit-google-play-billing","supabase-migrations-rls","watch-party-live"],"provisionalPathBudget":{"amendmentsPermitted":1,"maximumAmendedFiles":50,"maximumAmendedHandAuthoredNetLines":9500,"maximumFiles":44,"maximumHandAuthoredNetLines":8000,"packageDependencyChangePermitted":false},"provisionalProofPlan":{"database":"READ_ONLY_AUTHORITY_VALIDATION_AND_EXISTING_RLS_TESTS_ONLY_UNLESS_A_SEPARATELY_ADMITTED_FORWARD_MIGRATION_BECOMES_REQUIRED","discovery":["PASS_A","PASS_B","OPTIONAL_RECONCILIATION_PASS_C"],"externalTiers":"PHYSICAL_AND_PROVIDER_PROOF_REMAIN_EXACTLY_CLASSIFIED; MISSING LEGITIMATE STATE IS EXTERNAL_BLOCKED AND NEVER FABRICATED","finalPhase1":"EXACTLY_ONE_RUN_REQUIRING_13_OF_13_PASS_AT_FROZEN_HEAD","regressions":["canonical-access-language","Tip","conditional-VIP","exact-item-commerce","privacy-plus-commerce","Purchased-Restore","account-switch","rapid-input","navigation-native-return","accessibility-layout"],"repositoryReview":["LANE_A","LANE_B","SECURITY_DIFF","ADVERSARIAL_EXACT_DIFF"],"targetedMutantCoverage":"ONE_PER_APPLICABLE AUTHORITY OR PRESENTATION INVARIANT","verificationPasses":2},"repository":"Chillywood2025/chillywood-mobile","rootDefects":["CXCVS-P1-ACCESS-LANGUAGE-001","CXCVS-P1-UNKNOWN-AUTHORITY-002","CXCVS-P1-SINGLE-FLIGHT-003","CXCVS-P2-TIP-SUPPORT-004","CXCVS-P2-CONDITIONAL-VIP-005","CXCVS-P2-EXACT-COMMERCE-006","CXCVS-P2-PURCHASED-LIBRARY-007","CXCVS-P2-PLATFORM-VIEWER-OWNER-008","CXCVS-P2-HOME-LIVE-EVENT-009","CXCVS-P2-FOLLOW-NATIVE-RETURN-010","CXCVS-P2-ACCESSIBILITY-LAYOUT-011","CXCVS-P2-SAME-CLASS-AUDIT-012"],"schemaVersion":1,"scopeWaiver":{"authorizedReviewer":"Owner Chillywood2025","coherentObjective":"One cross-surface customer access and commerce presentation system consuming existing authority without changing backend, provider, native, payout, or release authority.","expiresAfterActiveHours":8,"maximumFiles":44,"maximumHandAuthoredNetLines":8000,"reason":"The same access meanings and interaction states are rendered by shared presentation helpers, money sheets, five top-level destinations, creator Platform, exact content/Event/room/Stage routes, and their regression suites; splitting those meanings would make the closure internally inconsistent.","secondHighRiskMutationDomain":false,"status":"OWNER_REQUESTED_MACHINE_READABLE_SCOPE_WAIVER"},"status":"INTENT_CAPTURED","taskId":"customer-commerce-visual-system-closure-v1","waveId":"FINAL_CUSTOMER_COMMERCE_VISUAL_SYSTEM_CLOSURE"}
+{
+  "artifactId": "CUSTOMER_COMMERCE_VISUAL_SYSTEM_CLOSURE_V1",
+  "authorizationStatus": "PRODUCT_SOURCE_EDITING_NOT_YET_AUTHORIZED",
+  "certificate": null,
+  "closure": null,
+  "implementation": {
+    "branch": "codex/customer-commerce-visual-system-closure-v1",
+    "protectedBase": {
+      "head": "b8e2a145f7e5821ddf32150e33d1c6b656ad7059",
+      "tree": "32b2226e6038b9445155eecddf6874616a6312ad"
+    },
+    "pullRequest": 389,
+    "seedHead": "6bf4e76f88cad98ea19a3fc05e1ac2ba037906af",
+    "seedTree": "94f2b3c20a663f5130ea11a21379da8c4eb3151c"
+  },
+  "nonGoals": [
+    "backend monetization redesign",
+    "provider or production database mutation",
+    "production money payout or cashout activation",
+    "native architecture rewrite",
+    "public rollout or store submission",
+    "fabricated production-visible inventory entitlement relationship or transaction",
+    "Responsive Layout V2 or AppLovin work"
+  ],
+  "ownerIntent": {
+    "globalRule": "Make Chi'llywood's creator economy and overlapping access concepts understandable across the existing customer app while preserving all server-backed security, privacy, money, purchase, block, RLS, LiveKit, navigation, and single-flight authority.",
+    "provisionalIntent": "Admit one finite customer-facing visual, interaction, commerce, and canonical access-language closure covering Tip, conditional creator VIP, exact-item commerce, purchased return paths, Platform viewer/owner behavior, Home, Live, Event, Library, navigation continuity, accessibility, and same-class adjacent defects.",
+    "sourceAuthority": "OWNER_SUPERSEDING_CUSTOMER_EXPERIENCE_COMMERCE_VISUAL_SYSTEM_CLOSURE"
+  },
+  "primaryDomain": "auth-session-password-recovery",
+  "proofTiers": {
+    "T0_REQUIREMENT": "BLOCKED_INTERNAL",
+    "T1_SOURCE": "BLOCKED_INTERNAL",
+    "T2_MODEL": "BLOCKED_INTERNAL",
+    "T3_INTEGRATION": "BLOCKED_INTERNAL",
+    "T4_NATIVE_PROVIDER": "BLOCKED_EXTERNAL",
+    "T5_SIGNED_ARTIFACT": "NOT_CURRENT",
+    "T6_INSTALLED_PHYSICAL": "NOT_CURRENT",
+    "T7_PUBLIC_CANARY": "BLOCKED_EXTERNAL"
+  },
+  "provisionalConnectedDomains": [
+    "creator-money-ledger",
+    "live-stage",
+    "moderation-reporting",
+    "notifications-fcm",
+    "protected-media-playback",
+    "revenuecat-premium",
+    "storekit-google-play-billing",
+    "supabase-migrations-rls",
+    "watch-party-live"
+  ],
+  "provisionalPathBudget": {
+    "amendmentsPermitted": 1,
+    "maximumAmendedFiles": 50,
+    "maximumAmendedHandAuthoredNetLines": 9500,
+    "maximumFiles": 44,
+    "maximumHandAuthoredNetLines": 8000,
+    "packageDependencyChangePermitted": false
+  },
+  "provisionalProofPlan": {
+    "database": "READ_ONLY_AUTHORITY_VALIDATION_AND_EXISTING_RLS_TESTS_ONLY_UNLESS_A_SEPARATELY_ADMITTED_FORWARD_MIGRATION_BECOMES_REQUIRED",
+    "discovery": [
+      "PASS_A",
+      "PASS_B",
+      "OPTIONAL_RECONCILIATION_PASS_C"
+    ],
+    "externalTiers": "PHYSICAL_AND_PROVIDER_PROOF_REMAIN_EXACTLY_CLASSIFIED; MISSING LEGITIMATE STATE IS EXTERNAL_BLOCKED AND NEVER FABRICATED",
+    "finalPhase1": "EXACTLY_ONE_RUN_REQUIRING_13_OF_13_PASS_AT_FROZEN_HEAD",
+    "regressions": [
+      "canonical-access-language",
+      "Tip",
+      "conditional-VIP",
+      "exact-item-commerce",
+      "privacy-plus-commerce",
+      "Purchased-Restore",
+      "account-switch",
+      "rapid-input",
+      "navigation-native-return",
+      "accessibility-layout"
+    ],
+    "repositoryReview": [
+      "LANE_A",
+      "LANE_B",
+      "SECURITY_DIFF",
+      "ADVERSARIAL_EXACT_DIFF"
+    ],
+    "targetedMutantCoverage": "ONE_PER_APPLICABLE AUTHORITY OR PRESENTATION INVARIANT",
+    "verificationPasses": 2
+  },
+  "repository": "Chillywood2025/chillywood-mobile",
+  "rootDefects": [
+    "CXCVS-P1-ACCESS-LANGUAGE-001",
+    "CXCVS-P1-UNKNOWN-AUTHORITY-002",
+    "CXCVS-P1-SINGLE-FLIGHT-003",
+    "CXCVS-P2-TIP-SUPPORT-004",
+    "CXCVS-P2-CONDITIONAL-VIP-005",
+    "CXCVS-P2-EXACT-COMMERCE-006",
+    "CXCVS-P2-PURCHASED-LIBRARY-007",
+    "CXCVS-P2-PLATFORM-VIEWER-OWNER-008",
+    "CXCVS-P2-HOME-LIVE-EVENT-009",
+    "CXCVS-P2-FOLLOW-NATIVE-RETURN-010",
+    "CXCVS-P2-ACCESSIBILITY-LAYOUT-011",
+    "CXCVS-P2-SAME-CLASS-AUDIT-012"
+  ],
+  "schemaVersion": 1,
+  "scopeWaiver": {
+    "authorizedReviewer": "Owner Chillywood2025",
+    "coherentObjective": "One cross-surface customer access and commerce presentation system consuming existing authority without changing backend, provider, native, payout, or release authority.",
+    "expiresAfterActiveHours": 8,
+    "maximumFiles": 44,
+    "maximumHandAuthoredNetLines": 8000,
+    "reason": "The same access meanings and interaction states are rendered by shared presentation helpers, money sheets, five top-level destinations, creator Platform, exact content/Event/room/Stage routes, and their regression suites; splitting those meanings would make the closure internally inconsistent.",
+    "secondHighRiskMutationDomain": false,
+    "status": "OWNER_REQUESTED_MACHINE_READABLE_SCOPE_WAIVER"
+  },
+  "status": "INTENT_CAPTURED",
+  "taskId": "customer-commerce-visual-system-closure-v1",
+  "waveId": "FINAL_CUSTOMER_COMMERCE_VISUAL_SYSTEM_CLOSURE"
+}
