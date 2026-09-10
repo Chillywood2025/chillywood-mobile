@@ -150,10 +150,8 @@ assertIncludes(publicPlatform, "isOwnerPlatformMode", "Public Platform owner mod
 assertIncludes(creatorMoneyRouteTargets, "platformSubscription", "Creator subscription route target");
 assertIncludes(creatorMoneyRouteTargets, "vipPass", "Creator VIP route target");
 assertIncludes(creatorMoneyRouteTargets, 'pathname: "/channel-studio"', "Creator offer owner management target");
-assertIncludes(publicPlatform, "CREATOR_MONEY_ROUTE_TARGETS.platformSubscription.ownerTarget", "Public Platform subscription manage target");
-assertIncludes(publicPlatform, "CREATOR_MONEY_ROUTE_TARGETS.vipPass.ownerTarget", "Public Platform VIP manage target");
-assertIncludes(publicPlatform, "Creator Offers", "Public Platform owner creator-offers surface");
-assertIncludes(publicPlatform, "Manage offers. Do not buy your own.", "Public Platform owner self-purchase copy");
+assertIncludes(publicPlatform, "if (isOwnerPlatformMode(platformMode)) return null", "Public Platform owner self-purchase surface suppression");
+assertIncludes(publicPlatform, "resolvePlatformViewerOfferKeys", "Public Platform offer-backed viewer storefront resolver");
 assertIncludes(publicPlatform, "Support this Platform", "Public Platform viewer support surface");
 assertIncludes(publicPlatform, 'router.push(\`/event/\${event.id}\` as Parameters<typeof router.push>[0])', "Public Platform event card navigation");
 assertIncludes(publicPlatform, 'testID={event.isLiveNow ? "platform-live-event-open-button" : "platform-upcoming-event-open-button"}', "Public Platform event navigation selectors");
@@ -164,9 +162,7 @@ assertNotIncludes(publicPlatform, 'accessibilityLabel="Sandbox Test Subscribe to
   "platform-support-tip-button",
   "platform-support-subscribe-button",
   "platform-support-vip-button",
-  "platform-support-paid-video-button",
   "platform-support-ticket-button",
-  "platform-support-event-pass-button",
   "platform-content-open-button",
 ].forEach((needle) => assertIncludes(publicPlatform, needle, "Public Platform stable selector"));
 assertIncludes(channelSubscriptionRoute, "Owners cannot buy their own creator subscription", "Subscriber Area owner self-purchase guard");

@@ -11,6 +11,7 @@ import {
   isCurrentAccountLegalRequest,
   recordAccountLegalAcceptance,
   resolveAccountLegalRequirements,
+  shouldBlockAccountLegalGate,
   shouldRefreshAccountLegalRequirements,
   type LegalRequirementsReadback,
 } from "../_lib/accountLegalAcceptance";
@@ -1483,6 +1484,7 @@ function AuthRouteGate() {
   const authNavigationStartedRef = useRef(false);
   const legalAppStateRef = useRef(AppState.currentState);
   const legalRequestGenerationRef = useRef(0);
+  const acceptedLegalVerificationKeyRef = useRef("");
 
   const redirectTo = serializeRedirectTarget(pathname, params as Record<string, unknown>);
   const authRedirectId = String(params.redirectId ?? "").trim();
@@ -1525,12 +1527,18 @@ function AuthRouteGate() {
     settledVerificationKey: settledLegalVerificationKey,
     currentVerificationKey: legalVerificationKey,
   });
-  const legalGateBlocking = legalGateApplicable
-    && (legalCheckPending || legalStatus !== "accepted" || acceptedLegalVerificationKey !== legalVerificationKey);
+  const legalGateBlocking = shouldBlockAccountLegalGate({
+    applicable: legalGateApplicable,
+    checkPending: legalCheckPending,
+    status: legalStatus,
+    acceptedVerificationKey: acceptedLegalVerificationKey,
+    currentVerificationKey: legalVerificationKey,
+  });
 
   useEffect(() => {
     if (!legalGateApplicable || !legalAuthority || !legalVerificationKey) {
       legalRequestGenerationRef.current += 1;
+      acceptedLegalVerificationKeyRef.current = "";
       setLegalReadback(null); setLegalStatus("idle"); setAcceptedLegalVerificationKey("");
       setSettledLegalRetry(-1); setSettledLegalVerificationKey("");
       return;
@@ -1539,7 +1547,10 @@ function AuthRouteGate() {
     legalRequestGenerationRef.current = requestGeneration;
     const requestVerificationKey = legalVerificationKey;
     const requestRetry = legalRetry;
-    setLegalReadback(null); setLegalStatus("checking"); setAcceptedLegalVerificationKey("");
+    const preserveAcceptedRender = acceptedLegalVerificationKeyRef.current === requestVerificationKey;
+    if (!preserveAcceptedRender) {
+      setLegalReadback(null); setLegalStatus("checking"); setAcceptedLegalVerificationKey("");
+    }
     void resolveAccountLegalRequirements(supabase, legalAuthority)
       .then((resolution) => {
         if (!isCurrentAccountLegalRequest({
@@ -1550,7 +1561,9 @@ function AuthRouteGate() {
         })) return;
         setLegalReadback(resolution.readback); setLegalStatus(resolution.status);
         setSettledLegalRetry(requestRetry); setSettledLegalVerificationKey(requestVerificationKey);
-        setAcceptedLegalVerificationKey(resolution.status === "accepted" ? requestVerificationKey : "");
+        const acceptedKey = resolution.status === "accepted" ? requestVerificationKey : "";
+        acceptedLegalVerificationKeyRef.current = acceptedKey;
+        setAcceptedLegalVerificationKey(acceptedKey);
       })
       .catch(() => {
         if (isCurrentAccountLegalRequest({
@@ -1559,6 +1572,7 @@ function AuthRouteGate() {
           requestVerificationKey,
           currentVerificationKey: legalVerificationKeyRef.current,
         })) {
+          acceptedLegalVerificationKeyRef.current = "";
           setLegalReadback(null); setLegalStatus("error"); setAcceptedLegalVerificationKey("");
           setSettledLegalRetry(requestRetry); setSettledLegalVerificationKey(requestVerificationKey);
         }
@@ -1651,6 +1665,7 @@ function AuthRouteGate() {
         <LegalAcceptanceScreen
           readback={legalStatus === "required" ? legalReadback : null}
           onAccepted={(next) => {
+            acceptedLegalVerificationKeyRef.current = legalVerificationKey;
             setLegalReadback(next); setLegalStatus("accepted"); setAcceptedLegalVerificationKey(legalVerificationKey);
           }}
           onRetry={() => setLegalRetry((value) => value + 1)}

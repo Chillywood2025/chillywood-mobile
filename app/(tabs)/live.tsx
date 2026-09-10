@@ -11,12 +11,14 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
+import { resolveLiveHubCardWidth } from "../../_lib/customerExperiencePresentation";
 
 import {
   getDiscoveryAccessLabel,
@@ -58,6 +60,8 @@ const formatEventMode = (event: CreatorEventSummary) => {
 
 export default function LiveTabScreen() {
   const bottomTabBarHeight = useBottomTabBarHeight();
+  const { width: viewportWidth } = useWindowDimensions();
+  const discoveryCardWidth = resolveLiveHubCardWidth(viewportWidth);
   const liveLoadGenerationRef = useRef(0);
   const liveTransitionLatchRef = useRef(createActionSingleFlightLatch());
   const [liveTransitionInFlight, setLiveTransitionInFlight] = useState(false);
@@ -115,7 +119,7 @@ export default function LiveTabScreen() {
     }, [loadLive]),
   );
 
-  useRefreshOnForeground(() => loadLive(false));
+  useRefreshOnForeground(() => loadLive(true));
 
   const openLiveWatchParty = async () => {
     if (!liveTransitionLatchRef.current.tryAcquire()) return;
@@ -196,8 +200,11 @@ export default function LiveTabScreen() {
       <View style={styles.backgroundOverlay} pointerEvents="none" />
       <SafeAreaView style={styles.safe}>
         <ScrollView
+          testID="live-hub-scroll"
           contentContainerStyle={[styles.content, { paddingBottom: bottomTabBarHeight + 24 }]}
           showsVerticalScrollIndicator={false}
+          alwaysBounceVertical
+          nestedScrollEnabled
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadLive(true)} tintColor="#E50914" />}
         >
           <MainTabTopBar surface="live" label="LIVE" style={styles.mainTabTopBar} />
@@ -237,7 +244,7 @@ export default function LiveTabScreen() {
               <Text style={styles.buttonText}>Start Live</Text>
             </Pressable>
             <Pressable
-              style={styles.secondaryButton}
+              style={[styles.secondaryButton, styles.quickActionSecondary]}
               onPress={() => router.push({ pathname: "/watch-party", params: { source: "bottom-live-tab" } })}
               accessibilityRole="button"
               testID="live-tab-enter-code-button"
@@ -245,7 +252,7 @@ export default function LiveTabScreen() {
               <MaterialIcons name="confirmation-number" size={18} color="#FFFFFF" />
               <Text style={styles.buttonText}>Enter Code</Text>
             </Pressable>
-            <Pressable style={styles.secondaryButton} onPress={() => router.push("/(tabs)/explore")} accessibilityRole="button">
+            <Pressable style={[styles.secondaryButton, styles.quickActionSecondary]} onPress={() => router.push("/(tabs)/explore")} accessibilityRole="button">
               <MaterialIcons name="explore" size={18} color="#FFFFFF" />
               <Text style={styles.buttonText}>Explore</Text>
             </Pressable>
@@ -263,7 +270,7 @@ export default function LiveTabScreen() {
                 {liveItems.map((item) => {
                   const title = String(item.title ?? "").trim() || "Live Now";
                   return (
-                    <TouchableOpacity key={`live-${item.id}`} style={styles.discoveryCard} activeOpacity={0.88} onPress={() => openDiscoveryItem(item)} accessibilityRole="button" accessibilityLabel={`${title}. Live. ${getDiscoveryAccessLabel(item)}. Open ${getDiscoveryItemActionLabel(item)}`}>
+                    <TouchableOpacity key={`live-${item.id}`} style={[styles.discoveryCard, { width: discoveryCardWidth }]} activeOpacity={0.88} onPress={() => openDiscoveryItem(item)} accessibilityRole="button" accessibilityLabel={`${title}. Live. ${getDiscoveryAccessLabel(item)}. Open ${getDiscoveryItemActionLabel(item)}`}>
                       <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>LIVE</Text></View>
                       <Text style={styles.cardTitle} numberOfLines={2}>{title}</Text>
                       <Text style={styles.cardBody} numberOfLines={2}>{String(item.subtitle ?? "").trim() || "Public live experience"}</Text>
@@ -272,7 +279,7 @@ export default function LiveTabScreen() {
                   );
                 })}
                 {liveEvents.map((event) => (
-                  <TouchableOpacity key={`event-${event.id}`} style={styles.discoveryCard} activeOpacity={0.88} onPress={() => openEvent(event.id)} accessibilityRole="button" accessibilityLabel={`${event.eventTitle}. Live public Event. ${formatEventMode(event)}. Open Event`}>
+                  <TouchableOpacity key={`event-${event.id}`} style={[styles.discoveryCard, { width: discoveryCardWidth }]} activeOpacity={0.88} onPress={() => openEvent(event.id)} accessibilityRole="button" accessibilityLabel={`${event.eventTitle}. Live public Event. ${formatEventMode(event)}. Open Event`}>
                     <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>LIVE EVENT</Text></View>
                     <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
                     <Text style={styles.cardBody}>{formatEventMode(event)}</Text>
@@ -296,7 +303,7 @@ export default function LiveTabScreen() {
             {upcomingEvents.length ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
                 {upcomingEvents.map((event) => (
-                  <TouchableOpacity key={`upcoming-${event.id}`} style={styles.discoveryCard} activeOpacity={0.88} onPress={() => openEvent(event.id)} accessibilityRole="button" accessibilityLabel={`${event.eventTitle}. Upcoming public Event. ${formatDateTime(event.startsAt)}. Open Event`}>
+                  <TouchableOpacity key={`upcoming-${event.id}`} style={[styles.discoveryCard, { width: discoveryCardWidth }]} activeOpacity={0.88} onPress={() => openEvent(event.id)} accessibilityRole="button" accessibilityLabel={`${event.eventTitle}. Upcoming public Event. ${formatDateTime(event.startsAt)}. Open Event`}>
                     <View style={styles.upcomingBadge}><Text style={styles.upcomingBadgeText}>UPCOMING</Text></View>
                     <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
                     <Text style={styles.cardBody}>{formatEventMode(event)}</Text>
@@ -373,16 +380,17 @@ const styles = StyleSheet.create({
   statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#59E6A9" },
   statusPillText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
   quickActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  primaryButton: { minHeight: 42, borderRadius: 12, backgroundColor: "#E50914", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 14 },
+  primaryButton: { minHeight: 48, borderRadius: 12, backgroundColor: "#E50914", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 14, flexBasis: "100%" },
   primaryButtonDisabled: { opacity: 0.55 },
-  secondaryButton: { minHeight: 42, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.13)", backgroundColor: "rgba(255,255,255,0.08)", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 14, alignSelf: "flex-start" },
+  secondaryButton: { minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.13)", backgroundColor: "rgba(255,255,255,0.08)", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 14, alignSelf: "flex-start" },
+  quickActionSecondary: { flexGrow: 1, flexBasis: 132, alignSelf: "stretch" },
   buttonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
   section: { gap: 9 },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   sectionTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "900" },
   sectionMeta: { color: "#9DA7BB", fontSize: 10, fontWeight: "900", letterSpacing: 0.5, textTransform: "uppercase" },
   rail: { gap: 10, paddingRight: 4 },
-  discoveryCard: { width: 180, minHeight: 156, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.11)", backgroundColor: "rgba(10,12,18,0.9)", padding: 12, gap: 8 },
+  discoveryCard: { minHeight: 184, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.11)", backgroundColor: "rgba(10,12,18,0.9)", padding: 16, gap: 10 },
   liveBadge: { alignSelf: "flex-start", borderRadius: 999, backgroundColor: "#E50914", paddingHorizontal: 8, paddingVertical: 4 },
   liveBadgeText: { color: "#FFFFFF", fontSize: 9, fontWeight: "900", letterSpacing: 0.5 },
   upcomingBadge: { alignSelf: "flex-start", borderRadius: 999, backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 8, paddingVertical: 4 },

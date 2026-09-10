@@ -138,6 +138,38 @@ test("the first foreground render is fail-closed before the request effect runs"
   }), true);
 });
 
+test("same-authority foreground revalidation preserves accepted content but new or rejected authority blocks", () => {
+  const verificationKey = legal.accountLegalVerificationKey(binding);
+  assert.equal(legal.shouldBlockAccountLegalGate({
+    applicable: true,
+    checkPending: true,
+    status: "accepted",
+    acceptedVerificationKey: verificationKey,
+    currentVerificationKey: verificationKey,
+  }), false);
+  assert.equal(legal.shouldBlockAccountLegalGate({
+    applicable: true,
+    checkPending: true,
+    status: "accepted",
+    acceptedVerificationKey: verificationKey,
+    currentVerificationKey: `${verificationKey}-replacement`,
+  }), true);
+  assert.equal(legal.shouldBlockAccountLegalGate({
+    applicable: true,
+    checkPending: false,
+    status: "required",
+    acceptedVerificationKey: "",
+    currentVerificationKey: verificationKey,
+  }), true);
+  assert.equal(legal.shouldBlockAccountLegalGate({
+    applicable: true,
+    checkPending: false,
+    status: "error",
+    acceptedVerificationKey: "",
+    currentVerificationKey: verificationKey,
+  }), true);
+});
+
 test("same-session route changes do not change legal authority or restart the request key", () => {
   const before = legal.accountLegalVerificationKey(binding);
   const after = legal.accountLegalVerificationKey({ ...binding });
@@ -178,8 +210,9 @@ test("only the newest exact-session request may commit a result", () => {
 
 test("layout keeps fail-closed status ownership inside the bounded request effect", () => {
   const layout = read("app/_layout.tsx");
-  assert.match(layout, /setLegalReadback\(null\); setLegalStatus\("checking"\); setAcceptedLegalVerificationKey\(""\);/u);
+  assert.match(layout, /if \(!preserveAcceptedRender\) \{[\s\S]{0,160}setLegalStatus\("checking"\)/u);
   assert.match(layout, /shouldRefreshAccountLegalRequirements\(previousState, state\)[\s\S]{0,120}setLegalRetry/u);
   assert.match(layout, /legalCheckPending \|\| legalStatus === "checking"/u);
   assert.match(layout, /isCurrentAccountLegalRequest/u);
+  assert.match(layout, /acceptedLegalVerificationKeyRef\.current = "";[\s\S]{0,140}setLegalStatus\("error"\)/u);
 });

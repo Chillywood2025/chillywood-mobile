@@ -35,6 +35,8 @@ export type ChannelAudienceActionReason =
   | "missing_target_user_id"
   | "self_target"
   | "blocked_relationship"
+  | "protected_platform"
+  | "authority_unavailable"
   | "already_following"
   | "not_following"
   | "request_pending"
@@ -83,6 +85,7 @@ export type PublicChannelAudienceState = {
   followerCount: number | null;
   viewerFollowState: ChannelViewerFollowState;
   isViewerBlocked: boolean;
+  followUnavailableReason: "none" | "signed_out" | "self" | "blocked_relationship" | "protected_platform" | "unavailable";
 };
 
 type ChannelFollowerRow = Tables<"channel_followers">;
@@ -215,6 +218,16 @@ async function readFollowerRow(
     .maybeSingle();
 
   if (error || !data) return null;
+  return data;
+}
+
+async function isProtectedPlatformOwnerTarget(channelUserId: string) {
+  const targetUserId = normalizeText(channelUserId);
+  if (!targetUserId) return null;
+  const { data, error } = await supabase.rpc("is_platform_owner_user", {
+    target_user_id: targetUserId,
+  });
+  if (error || typeof data !== "boolean") return null;
   return data;
 }
 
@@ -452,6 +465,35 @@ export async function followChannel(channelUserId: string): Promise<ChannelAudie
     });
   }
 
+  const protectedPlatformTarget = await isProtectedPlatformOwnerTarget(context.channelUserId);
+  if (protectedPlatformTarget === null) {
+    return buildActionResult({
+      action: "follow",
+      status: "error",
+      reason: "authority_unavailable",
+      message: "Following availability could not be verified right now. Try again later.",
+      actorScope: context.actorScope,
+      requiredScope: "viewer",
+      channelUserId: context.channelUserId,
+      viewerUserId: context.viewerUserId,
+      targetUserId: context.viewerUserId,
+    });
+  }
+
+  if (protectedPlatformTarget) {
+    return buildActionResult({
+      action: "follow",
+      status: "blocked",
+      reason: "protected_platform",
+      message: "Following is not available for this protected Platform.",
+      actorScope: context.actorScope,
+      requiredScope: "viewer",
+      channelUserId: context.channelUserId,
+      viewerUserId: context.viewerUserId,
+      targetUserId: context.viewerUserId,
+    });
+  }
+
   const blockedRow = await readBlockRow(context.channelUserId, context.viewerUserId).catch(() => null);
   if (blockedRow) {
     return buildActionResult({
@@ -521,6 +563,7 @@ export async function readMyChannelFollowState(channelUserId: string): Promise<C
   if (!context.channelUserId) return "unavailable";
   if (!context.viewerUserId) return "signed_out";
   if (context.viewerUserId === context.channelUserId) return "self";
+  if (await isProtectedPlatformOwnerTarget(context.channelUserId) !== false) return "unavailable";
 
   const blockedRow = await readBlockRow(context.channelUserId, context.viewerUserId).catch(() => null);
   if (blockedRow) return "unavailable";
@@ -536,6 +579,7 @@ export async function readPublicChannelAudienceState(channelUserId: string): Pro
       followerCount: null,
       viewerFollowState: "unavailable",
       isViewerBlocked: false,
+      followUnavailableReason: "unavailable",
     };
   }
 
@@ -558,6 +602,7 @@ export async function readPublicChannelAudienceState(channelUserId: string): Pro
       followerCount,
       viewerFollowState: "signed_out",
       isViewerBlocked: false,
+      followUnavailableReason: "signed_out",
     };
   }
 
@@ -566,6 +611,7 @@ export async function readPublicChannelAudienceState(channelUserId: string): Pro
       followerCount,
       viewerFollowState: "self",
       isViewerBlocked: false,
+      followUnavailableReason: "self",
     };
   }
 
@@ -574,6 +620,26 @@ export async function readPublicChannelAudienceState(channelUserId: string): Pro
       followerCount,
       viewerFollowState: "unavailable",
       isViewerBlocked: true,
+      followUnavailableReason: "blocked_relationship",
+    };
+  }
+
+  const protectedPlatformTarget = await isProtectedPlatformOwnerTarget(context.channelUserId);
+  if (protectedPlatformTarget === null) {
+    return {
+      followerCount,
+      viewerFollowState: "unavailable",
+      isViewerBlocked: false,
+      followUnavailableReason: "unavailable",
+    };
+  }
+
+  if (protectedPlatformTarget) {
+    return {
+      followerCount,
+      viewerFollowState: "unavailable",
+      isViewerBlocked: false,
+      followUnavailableReason: "protected_platform",
     };
   }
 
@@ -582,6 +648,7 @@ export async function readPublicChannelAudienceState(channelUserId: string): Pro
     followerCount,
     viewerFollowState: existing ? "following" : "not_following",
     isViewerBlocked: false,
+    followUnavailableReason: "none",
   };
 }
 

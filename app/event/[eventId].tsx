@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, AppState, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Alert, AppState, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
@@ -10,6 +10,10 @@ import {
   type PaidCreatorEventAccess,
 } from "../../_lib/paidCreatorEvents";
 import { buildSafetyReportContext, submitSafetyReport } from "../../_lib/moderation";
+import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
+import { readCircleSpectatorFeedItems } from "../../_lib/circleSpectatorFeed";
+import { resolveEventCustomerPresentation } from "../../_lib/customerExperiencePresentation";
+import { readPublicDiscoveryFeedItems, type DiscoveryFeedItem } from "../../_lib/discoveryFeed";
 import { supabase } from "../../_lib/supabase";
 import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
 import { MoneyOfferCard, MoneyScopeStrip, MoneyStatusChip, MoneySuccessReceipt } from "../../components/monetization/money-ui";
@@ -24,6 +28,11 @@ type EventRow = {
   starts_at: string | null;
   ends_at: string | null;
   host_user_id: string | null;
+};
+
+type EventDestination = {
+  itemId: string;
+  kind: "live" | "replay";
 };
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
@@ -68,6 +77,7 @@ export default function PaidCreatorEventRoute() {
   const { eventId: eventIdParam } = useLocalSearchParams<{ eventId?: string }>();
   const eventId = normalizeText(Array.isArray(eventIdParam) ? eventIdParam[0] : eventIdParam);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [purchaseLoading, setPurchaseLoading] = useState(false);
   const [event, setEvent] = useState<EventRow | null>(null);
   const [access, setAccess] = useState<PaidCreatorEventAccess | null>(null);
@@ -75,22 +85,50 @@ export default function PaidCreatorEventRoute() {
   const [error, setError] = useState("");
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
+  const [destination, setDestination] = useState<EventDestination | null>(null);
+  const loadGenerationRef = useRef(0);
+  const purchaseLatchRef = useRef(createActionSingleFlightLatch());
 
-  const load = React.useCallback(async () => {
-    setLoading(true);
+  const load = React.useCallback(async (options?: { preserveRendered?: boolean }) => {
+    const generation = ++loadGenerationRef.current;
+    if (options?.preserveRendered) setRefreshing(true);
+    else setLoading(true);
     setError("");
-    const [{ data: eventRow, error: eventError }, accessResult] = await Promise.all([
-      (supabase as any)
-        .from("creator_events")
-        .select("id,event_title,event_type,visibility,status,starts_at,ends_at,host_user_id")
-        .eq("id", eventId)
-        .maybeSingle(),
-      resolvePaidCreatorEventPassAccess(eventId),
-    ]);
-    if (eventError) setError("Unable to load this event right now.");
-    setEvent((eventRow as EventRow | null) ?? null);
-    setAccess(accessResult);
-    setLoading(false);
+    try {
+      const [{ data: eventRow, error: eventError }, accessResult, publicItems, circleItems] = await Promise.all([
+        (supabase as any)
+          .from("creator_events")
+          .select("id,event_title,event_type,visibility,status,starts_at,ends_at,host_user_id")
+          .eq("id", eventId)
+          .maybeSingle(),
+        resolvePaidCreatorEventPassAccess(eventId),
+        readPublicDiscoveryFeedItems({ limit: 50 }).catch(() => [] as DiscoveryFeedItem[]),
+        readCircleSpectatorFeedItems({ limit: 50 }).catch(() => [] as DiscoveryFeedItem[]),
+      ]);
+      if (generation !== loadGenerationRef.current) return;
+      if (eventError) setError("Unable to load this Event right now.");
+      const nextEvent = (eventRow as EventRow | null) ?? null;
+      const eventItems = [...publicItems, ...circleItems]
+        .filter((item) => normalizeText(item.event_id) === eventId);
+      const liveItem = eventItems.find((item) => item.live_state === "live") ?? null;
+      const replayItem = eventItems.find((item) => item.item_type === "replay_later") ?? null;
+      setEvent(nextEvent);
+      setAccess(accessResult);
+      setDestination(liveItem
+        ? { itemId: liveItem.id, kind: "live" }
+        : replayItem
+          ? { itemId: replayItem.id, kind: "replay" }
+          : null);
+    } catch {
+      if (generation === loadGenerationRef.current) {
+        setError("Unable to load this Event right now. Pull down to try again.");
+      }
+    } finally {
+      if (generation === loadGenerationRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
   }, [eventId]);
 
   useEffect(() => {
@@ -107,18 +145,19 @@ export default function PaidCreatorEventRoute() {
     void run();
     return () => {
       active = false;
+      loadGenerationRef.current += 1;
     };
   }, [eventId, load]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState === "active" && eventId) void load();
+      if (nextState === "active" && eventId) void load({ preserveRendered: true });
     });
     return () => subscription.remove();
   }, [eventId, load]);
 
   const onBuyEventPass = async () => {
-    if (!eventId || purchaseLoading) return;
+    if (!eventId || !purchaseLatchRef.current.tryAcquire()) return;
     setPurchaseLoading(true);
     setNotice("");
     setError("");
@@ -133,6 +172,7 @@ export default function PaidCreatorEventRoute() {
     } catch {
       setError("Event Pass checkout is not available right now.");
     } finally {
+      purchaseLatchRef.current.release();
       setPurchaseLoading(false);
     }
   };
@@ -147,6 +187,31 @@ export default function PaidCreatorEventRoute() {
   const creatorPreview = !!access?.allowed && access.reason === "creator_or_admin";
   const freeEvent = !!access?.allowed && access.reason === "free_event";
   const title = event?.event_title || offer?.title || "Creator event";
+  const normalizedEventStatus = normalizeText(event?.status ?? offer?.status).toLowerCase();
+  const terminalEventState = ["canceled", "cancelled", "ended", "replay_available", "expired"].includes(normalizedEventStatus);
+  const accessUnavailable = unavailable && !terminalEventState;
+  const hasEventAccess = confirmedEventPass || creatorPreview || freeEvent;
+  const priceLabel = offer ? formatPaidCreatorEventPrice(offer.priceCents, offer.currency) : null;
+  const customerState = resolveEventCustomerPresentation({
+    status: event?.status ?? offer?.status,
+    startsAt: event?.starts_at ?? offer?.startsAt,
+    isPaid: !!offer,
+    accessAllowed: hasEventAccess,
+    requiresPurchase: locked,
+    soldOut,
+    priceLabel,
+    hasLiveDestination: destination?.kind === "live",
+    hasReplayDestination: destination?.kind === "replay",
+  });
+  const audienceLabel = event?.visibility === "circle"
+    ? "Chi'lly Circle Event"
+    : event?.visibility === "private"
+      ? "Private Event"
+      : "Public Event";
+  const openAuthorizedDestination = () => {
+    if (!destination?.itemId) return;
+    router.push(`/spectate/${encodeURIComponent(destination.itemId)}` as Parameters<typeof router.push>[0]);
+  };
 
   const onSubmitEventReport = async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
     if (!eventId || reportBusy) return;
@@ -181,7 +246,10 @@ export default function PaidCreatorEventRoute() {
 
   return (
     <SafeAreaView style={styles.safe} testID="screen-event">
-      <ScrollView contentContainerStyle={styles.wrap}>
+      <ScrollView
+        contentContainerStyle={styles.wrap}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load({ preserveRendered: true })} tintColor="#DC143C" />}
+      >
         {loading ? (
           <View style={styles.card}>
             <ActivityIndicator color="#DC143C" />
@@ -191,21 +259,14 @@ export default function PaidCreatorEventRoute() {
           <View style={styles.card}>
             <Text style={styles.kicker}>EVENT</Text>
             <Text style={styles.title}>{title}</Text>
-            <Text style={styles.body}>
-              {formatEventType(event?.event_type ?? offer?.eventType ?? null)} · Starts {formatDate(event?.starts_at ?? offer?.startsAt ?? null)}
-            </Text>
+            <Text style={styles.body}>{formatEventType(event?.event_type ?? offer?.eventType ?? null)}</Text>
             <View style={styles.detailGrid}>
-              <Text style={styles.detail}>Status: {event?.status || offer?.status || "Unavailable"}</Text>
-              <Text style={styles.detail} accessibilityLabel={`Event audience: ${event?.visibility === "circle" ? "Chi'lly Circle" : event?.visibility || "Unavailable"}`}>
-                Audience: {event?.visibility === "circle" ? "Chi'lly Circle" : event?.visibility || "Unavailable"}
-              </Text>
+              <Text style={styles.detail}>{audienceLabel}</Text>
+              <Text style={styles.detail}>Starts {formatDate(event?.starts_at ?? offer?.startsAt ?? null)}</Text>
               <Text style={styles.detail}>Ends: {formatDate(event?.ends_at ?? offer?.endsAt ?? null)}</Text>
               {offer ? (
                 <>
-                  <Text style={styles.detail}>Price: {formatPaidCreatorEventPrice(offer.priceCents, offer.currency)}</Text>
-                  <Text style={styles.detail}>
-                    Passes: {offer.passesSold}{offer.capacityLimit ? ` / ${offer.capacityLimit}` : ""}
-                  </Text>
+                  <Text style={styles.detail}>Event Pass · {priceLabel}</Text>
                 </>
               ) : null}
             </View>
@@ -217,32 +278,17 @@ export default function PaidCreatorEventRoute() {
                   body="You have access to this Event. It does not grant generic Party Room or Live Stage access, speaking, host, moderator, camera, microphone, or LiveKit publish authority."
                   testID="event-pass-success-receipt"
                 />
-                <Text style={styles.detail}>Access reason: {access.reason}</Text>
               </View>
-            ) : creatorPreview ? (
-              <View style={styles.stateBox} testID="event-creator-preview-state">
-                <Text style={styles.stateTitle}>Creator preview</Text>
-                <Text style={styles.body}>
-                  {offer
-                    ? "This Event is Paid for viewers. They need the exact Event Pass shown here before entry. Your creator authority is separate from a purchase."
-                    : "This Event is free for viewers. No Event Pass is required."}
-                </Text>
-              </View>
-            ) : freeEvent ? (
-              <View style={styles.stateBox} testID="event-free-access-state">
-                <Text style={styles.stateTitle}>Open Event</Text>
-                <Text style={styles.body}>
-                  This Event is free to enter. No Event Pass is required. Chi&apos;llywood Premium remains separate.
-                </Text>
-              </View>
-            ) : locked ? (
+            ) : null}
+
+            {locked ? (
               <MoneyOfferCard
                 testID="event-pass-lock-card"
                 kicker="Event Pass"
-                title="Event Pass required"
-                price={offer ? formatPaidCreatorEventPrice(offer.priceCents, offer.currency) : null}
-                body={LOCKED_COPY}
-                statusLabel={soldOut ? "Sold out" : "Locked"}
+                title={customerState.headline}
+                price={priceLabel}
+                body={`${customerState.body} ${LOCKED_COPY}`}
+                statusLabel={customerState.statusLabel}
                 statusTone={soldOut ? "warning" : "premium"}
               >
                 <MoneyScopeStrip
@@ -252,7 +298,8 @@ export default function PaidCreatorEventRoute() {
                 <MoneyScopeInfoButton scope="event_pass" label="What does this unlock?" />
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={offer ? `Join Event with Event Pass for ${formatPaidCreatorEventPrice(offer.priceCents, offer.currency)}` : "Get Event Pass"}
+                  accessibilityLabel={customerState.actionLabel ?? "Get Event Pass"}
+                  accessibilityState={{ disabled: purchaseLoading || soldOut, busy: purchaseLoading }}
                   testID="event-pass-purchase-button"
                   onPress={onBuyEventPass}
                   style={[styles.primaryButton, purchaseLoading && styles.buttonDisabled]}
@@ -266,11 +313,11 @@ export default function PaidCreatorEventRoute() {
                       </Text>
                     </View>
                   ) : (
-                    <Text style={styles.primaryButtonText}>{soldOut ? "Sold Out" : offer ? `Join Event — ${formatPaidCreatorEventPrice(offer.priceCents, offer.currency)}` : "Get Event Pass"}</Text>
+                    <Text style={styles.primaryButtonText}>{soldOut ? "Sold Out" : customerState.actionLabel ?? "Get Event Pass"}</Text>
                   )}
                 </Pressable>
               </MoneyOfferCard>
-            ) : unavailable ? (
+            ) : accessUnavailable ? (
               <View style={styles.stateBox} testID="event-pass-access-denied-state">
                 <View style={styles.stateHeaderRow}>
                   <Text style={styles.stateTitle}>Event Pass Not Available</Text>
@@ -280,7 +327,31 @@ export default function PaidCreatorEventRoute() {
                   {unavailableEventPassCopy(event?.status || offer?.status || access?.reason)}
                 </Text>
               </View>
-            ) : null}
+            ) : event ? (
+              <View style={styles.stateBox} testID={creatorPreview ? "event-creator-preview-state" : "event-customer-state"}>
+                <View style={styles.stateHeaderRow}>
+                  <Text style={styles.stateTitle}>{customerState.headline}</Text>
+                  <MoneyStatusChip label={customerState.statusLabel} tone={customerState.action === "open_live" ? "success" : "neutral"} />
+                </View>
+                <Text style={styles.body}>{customerState.body}</Text>
+                {customerState.action === "open_live" || customerState.action === "open_replay" ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={customerState.actionLabel ?? "Open Event"}
+                    testID={customerState.action === "open_live" ? "event-open-live-button" : "event-open-replay-button"}
+                    onPress={openAuthorizedDestination}
+                    style={styles.primaryButton}
+                  >
+                    <Text style={styles.primaryButtonText}>{customerState.actionLabel}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : (
+              <View style={styles.stateBox} testID="event-unavailable-state">
+                <Text style={styles.stateTitle}>Event unavailable</Text>
+                <Text style={styles.body}>This Event could not be found or is not available to this account.</Text>
+              </View>
+            )}
 
             {notice ? <Text style={styles.notice}>{notice}</Text> : null}
             {error ? <Text style={styles.error}>{error}</Text> : null}
