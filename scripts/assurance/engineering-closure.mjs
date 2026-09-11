@@ -2046,12 +2046,19 @@ export const PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS = Object.free
 ]);
 export const PHASE1_ADMISSION_RULESET_CUTOVER_ARCHITECTURE_PATHS = Object.freeze(["config/assurance/github-main-ruleset-codex-review-v1.json", "config/assurance/schemas-v1.json", "scripts/assurance/active-task.mjs", "scripts/assurance/current-truth.mjs", "scripts/assurance/github-main-ruleset-readback.mjs", "tests/assurance/github-main-ruleset-readback.test.mjs"]);
 export const PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_ARCHITECTURE_PATHS = Object.freeze(["scripts/assurance/phase1-admission.mjs", "tests/assurance/phase1-admission.test.mjs"]);
+export const PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1 = "PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1";
+export const PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_ARCHITECTURE_PATHS = Object.freeze([
+  ".github/workflows/phase1-ci.yml",
+  "tests/assurance/source-readiness-wrapper.test.mjs",
+]);
 const phase1ControlProfile = (objective) => objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1
   ? { paths: PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS, maximumFiles: 14, maximumChangedLines: 4200 }
   : objective === PHASE1_ADMISSION_RULESET_CUTOVER_V1
   ? { paths: PHASE1_ADMISSION_RULESET_CUTOVER_ARCHITECTURE_PATHS, maximumFiles: 6, maximumChangedLines: 1800 }
   : objective === PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1
   ? { paths: PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_ARCHITECTURE_PATHS, maximumFiles: 2, maximumChangedLines: 80 }
+  : objective === PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1
+  ? { paths: PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_ARCHITECTURE_PATHS, maximumFiles: 2, maximumChangedLines: 80 }
   : null;
 export const TERMINAL_TRUTH_PATHS = Object.freeze(["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"]);
 export const FINITE_TASK_ADMISSION_LEASE_STATE = "ACTIVE_IMPLEMENTATION";
@@ -3654,6 +3661,7 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
   const phase1RiskBasedAdmissionReform = originalSubject.objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1;
   const phase1AdmissionRulesetCutover = originalSubject.objective === PHASE1_ADMISSION_RULESET_CUTOVER_V1;
   const phase1PublisherMetadataCompatibilityRepair = originalSubject.objective === PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1;
+  const phase1SourceAuthorityTokenWiring = originalSubject.objective === PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1;
   const terminalReceiptLifecycleCorrection = originalSubject.objective === FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION;
   const lifecycleSuccessor = terminalReceiptLifecycleCorrection ? normalizeGitHubCommentIdentity(historicalRaw, { repository: identity?.repository, pr: identity?.pr, commentId: historicalRaw?.id }) : null;
   const lifecycleSuccessorPayload = parseExactOwnerBody(lifecycleSuccessor, ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER);
@@ -3668,10 +3676,11 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
     PHASE1_RISK_BASED_ADMISSION_REFORM_V1,
     PHASE1_ADMISSION_RULESET_CUTOVER_V1,
     PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1,
+    PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1,
     FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION,
   ].includes(originalSubject.objective)) {
     const observed = exactScope(scope);
-    const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : fixedPointSynchronization || terminalReceiptLifecycleCorrection || phase1RiskBasedAdmissionReform || phase1AdmissionRulesetCutover || phase1PublisherMetadataCompatibilityRepair ? originalSubject.objective : null;
+    const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : fixedPointSynchronization || terminalReceiptLifecycleCorrection || phase1RiskBasedAdmissionReform || phase1AdmissionRulesetCutover || phase1PublisherMetadataCompatibilityRepair || phase1SourceAuthorityTokenWiring ? originalSubject.objective : null;
     const dependencyAmendment = dependencyAmendmentProjection(dependencyAmendmentResolution);
     const historicalRepositoryReviews = dependencyAmendment ? historicalArchitectureReviewProjection(historicalRepositoryReviewRaws, identity) : [];
     const review = verifyArchitectureRepositoryReview({ raw: repositoryReviewRaw, identity, tree, scope, profile: reviewProfile, dependencyAmendmentResolution });
@@ -3724,7 +3733,7 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
       phase1: phase1Evidence ? projectPhase1AdmissionFinalSourceEvidence({ phase1Evidence, identity, tree, root }) : null,
       ...(phase1RiskBasedAdmissionReform ? { admissionPublisherProvisioningReadback: structuredClone(admissionPublisherProvisioningReadback) } : {}),
       historicalAttestations,
-      currentTruthCompanionIncluded: !(fixedPointSynchronization || phase1RiskBasedAdmissionReform || phase1AdmissionRulesetCutover || phase1PublisherMetadataCompatibilityRepair),
+      currentTruthCompanionIncluded: !(fixedPointSynchronization || phase1RiskBasedAdmissionReform || phase1AdmissionRulesetCutover || phase1PublisherMetadataCompatibilityRepair || phase1SourceAuthorityTokenWiring),
       ...(originalSubject.currentTruthCompanion ? { currentTruthCompanion: originalSubject.currentTruthCompanion } : {}),
       terminalTruthRequired: false,
       authority: originalSubject.authority,
@@ -4527,6 +4536,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     PHASE1_RISK_BASED_ADMISSION_REFORM_V1,
     PHASE1_ADMISSION_RULESET_CUTOVER_V1,
     PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1,
+    PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1,
     FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION,
   ].includes(originalSubject?.objective)) {
     const jurisdictionModel = originalSubject?.objective === "install versioned standing Owner jurisdiction policy with exact task bindings and append-only admission supersession";
