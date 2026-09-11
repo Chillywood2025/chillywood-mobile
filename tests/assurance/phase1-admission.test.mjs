@@ -29,6 +29,7 @@ import {
   selectDurablePhase1PullRequest,
   verifyPhase1AggregateEvidence,
   verifyPhase1SourceAuthorityProof,
+  verifyPhase1SourceAuthorityTokenWorkflowTransition,
   verifyProtectedPhase1PublisherProvisioningReadback,
   validGitHubAppClientId,
   validPhase1CandidateRemoteIdentity,
@@ -472,6 +473,27 @@ test("missing, duplicate, wrong-job, incomplete, and workflow-substituted eviden
   const substituted = fixture();
   substituted.workflowIntegrity.protectedBlobSha = "9".repeat(40);
   assert.equal(evaluatePhase1Admission(substituted).acceptable, false);
+});
+
+test("only the exact source-authority token workflow transition is structurally eligible", () => {
+  const step = "          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}";
+  const token = "          GH_TOKEN: ${{ github.token }}\n";
+  const protectedWorkflow = [step, step, step].join("\n");
+  const anchor = "test(\"draft source readiness rejects deletion of a protected-base test\", () => {";
+  const block = `test("all source-authority lanes receive the exact workflow token and protected base", () => {
+  const steps = workflow.match(/      - name: Validate assurance authority and source correctness[\\s\\S]*?(?=\\n      - name:|\\n  [a-z][a-z-]*:|$)/gu) ?? [];
+  assert.equal(steps.length, 3);
+  for (const step of steps) {
+    assert.match(step, /env:\\s*\\n\\s*GH_TOKEN: \\$\\{\\{ github\\.token \\}\\}\\s*\\n\\s*PHASE1_PROTECTED_BASE_SHA: \\$\\{\\{ github\\.event\\.pull_request\\.base\\.sha \\|\\| github\\.sha \\}\\}/u);
+  }
+});
+
+`;
+  const exact = { protectedWorkflow, candidateWorkflow: protectedWorkflow.replaceAll(step, `${token}${step}`), protectedTest: anchor, candidateTest: `${block}${anchor}` };
+  assert.equal(verifyPhase1SourceAuthorityTokenWorkflowTransition(exact), true);
+  assert.equal(verifyPhase1SourceAuthorityTokenWorkflowTransition({ ...exact, candidateWorkflow: `${exact.candidateWorkflow}\npermissions: write-all` }), false);
+  const forged = fixture(); forged.workflowIntegrity = { ...forged.workflowIntegrity, candidateBlobSha: "9".repeat(40), transitionProof: exact };
+  assert.equal(evaluatePhase1Admission(forged).acceptable, false);
 });
 
 test("caller-crafted merge eligibility and evaluator output cannot gain authority", () => {
