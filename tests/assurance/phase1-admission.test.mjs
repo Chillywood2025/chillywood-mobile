@@ -478,7 +478,7 @@ test("missing, duplicate, wrong-job, incomplete, and workflow-substituted eviden
 test("only the exact source-authority token workflow transition is structurally eligible", () => {
   const step = "          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}";
   const token = "          GH_TOKEN: ${{ github.token }}\n";
-  const protectedWorkflow = [step, step, step].join("\n");
+  const protectedWorkflow = Array.from({ length: 6 }, () => step).join("\n");
   const anchor = "test(\"draft source readiness rejects deletion of a protected-base test\", () => {";
   const block = `test("all source-authority lanes receive the exact workflow token and protected base", () => {
   const steps = workflow.match(/      - name: Validate assurance authority and source correctness[\\s\\S]*?(?=\\n      - name:|\\n  [a-z][a-z-]*:|$)/gu) ?? [];
