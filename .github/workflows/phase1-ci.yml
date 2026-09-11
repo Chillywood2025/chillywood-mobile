@@ -150,6 +150,7 @@ jobs:
 
       - name: Validate non-authoritative assurance display projection
         env:
+          GH_TOKEN: ${{ github.token }}
           PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
         run: |
           if git cat-file -e "$PHASE1_PROTECTED_BASE_SHA":.github/workflows/phase1-admission.yml 2>/dev/null; then
@@ -223,6 +224,7 @@ jobs:
 
       - name: Validate non-authoritative assurance display projection
         env:
+          GH_TOKEN: ${{ github.token }}
           PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
         run: |
           if git cat-file -e "$PHASE1_PROTECTED_BASE_SHA":.github/workflows/phase1-admission.yml 2>/dev/null; then
@@ -285,6 +287,7 @@ jobs:
 
       - name: Validate non-authoritative assurance display projection
         env:
+          GH_TOKEN: ${{ github.token }}
           PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
         run: |
           if git cat-file -e "$PHASE1_PROTECTED_BASE_SHA":.github/workflows/phase1-admission.yml 2>/dev/null; then
