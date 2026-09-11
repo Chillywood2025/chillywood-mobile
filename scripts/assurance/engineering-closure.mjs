@@ -5760,7 +5760,14 @@ export function verifyTerminalTruthSuccessorAuthority({ raw, allComments = [], p
 }
 
 export function readGitHubApi({ root = REPOSITORY_ROOT, args = [], run = spawnSync } = {}) {
-  const options = { cwd: root, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 };
+  const inheritedToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+  const options = {
+    cwd: root,
+    encoding: "utf8",
+    shell: false,
+    maxBuffer: 32 * 1024 * 1024,
+    ...(inheritedToken ? { env: { ...process.env, GH_TOKEN: inheritedToken } } : {}),
+  };
   const authenticated = run("gh", ["api", "--method=GET", ...args], options);
   if (authenticated.status === 0) return authenticated;
   const endpoint = args.at(-1);
