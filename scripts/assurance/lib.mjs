@@ -2440,7 +2440,8 @@ export function evaluateFiniteTaskLeaseRuntime({
       claim,
       source,
       factRegistry: contract?.freshness?.factRegistry,
-      head: checkoutHead ?? "HEAD"
+      head: checkoutHead ?? "HEAD",
+      gitCommand
     })
   });
   const scopedFreshness = (requirements) => {
@@ -5243,18 +5244,18 @@ export function resolveFiniteTaskEffectiveReservation({
   return result;
 }
 
-export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head = "HEAD" }) {
+export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head = "HEAD", gitCommand = git }) {
   if (!/^[0-9a-f]{40}$/u.test(source?.sourceCommit ?? "") || !Array.isArray(factRegistry)) return false;
   try {
-    git(["merge-base", "--is-ancestor", source.sourceCommit, head]);
-    const sourceTree = git(["rev-parse", `${source.sourceCommit}^{tree}`]);
+    gitCommand(["merge-base", "--is-ancestor", source.sourceCommit, head]);
+    const sourceTree = gitCommand(["rev-parse", `${source.sourceCommit}^{tree}`]);
     if (claim?.freshnessClass === "REPOSITORY_TASK_LEASE") {
       if (source.subjectHead !== source.sourceCommit
         || source.subjectTree !== sourceTree
         || source.leaseId !== claim.leaseId
         || source.leaseHash !== claim.leaseHash
         || !sha256Pattern.test(source.leaseHash ?? "")) return false;
-      const committedRecord = JSON.parse(git(["show", `${source.sourceCommit}:config/assurance/current-truth-v1.json`]));
+      const committedRecord = JSON.parse(gitCommand(["show", `${source.sourceCommit}:config/assurance/current-truth-v1.json`]));
       const committedLease = (committedRecord.finiteTaskLeases?.tasks ?? []).find(({ leaseId }) => leaseId === source.leaseId);
       const factsBound = Array.isArray(source.covers)
         && claim.factsCovered.every((factId) => {
@@ -5279,9 +5280,9 @@ export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head
         || source.sourceCommit !== claim.subjectHead
         || source.subjectHead !== claim.subjectHead
         || source.subjectTree !== claim.subjectTree
-        || git(["rev-parse", `${claim.subjectHead}^{tree}`]) !== claim.subjectTree) return false;
+        || gitCommand(["rev-parse", `${claim.subjectHead}^{tree}`]) !== claim.subjectTree) return false;
     }
-    const committedRecord = JSON.parse(git(["show", `${source.sourceCommit}:config/assurance/current-truth-v1.json`]));
+    const committedRecord = JSON.parse(gitCommand(["show", `${source.sourceCommit}:config/assurance/current-truth-v1.json`]));
     const committedSources = (committedRecord.evidenceSources ?? []).filter(({ id }) => id === source.id);
     const committedSource = committedSources[0];
     const factsBound = Array.isArray(source.covers)
@@ -5294,10 +5295,10 @@ export function verifyCommittedClaimEvidence({ claim, source, factRegistry, head
       });
     const readbackHashRequired = claim.factsCovered.some((factId) => factRegistry.find(({ factId: registered }) => registered === factId)?.requiresReadbackHash === true);
     const readbackHashBound = repositoryReadbackEvidenceBound({ claim, source, committedSource, required: readbackHashRequired });
-    const parents = git(["show", "-s", "--format=%P", source.sourceCommit]).split(/\s+/u).filter(Boolean);
+    const parents = gitCommand(["show", "-s", "--format=%P", source.sourceCommit]).split(/\s+/u).filter(Boolean);
     const introducedHere = parents.every((parent) => {
       try {
-        const parentRecord = JSON.parse(git(["show", `${parent}:config/assurance/current-truth-v1.json`]));
+        const parentRecord = JSON.parse(gitCommand(["show", `${parent}:config/assurance/current-truth-v1.json`]));
         return !(parentRecord.evidenceSources ?? []).some(({ id }) => id === source.id);
       } catch {
         return true;
