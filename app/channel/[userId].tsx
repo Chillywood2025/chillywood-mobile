@@ -48,6 +48,7 @@ import {
   readPublicPaidWatchPartyTicketOfferForCreator,
   type PaidWatchPartyOffer,
 } from "../../_lib/paidWatchPartyTickets";
+import { getPartyRoom } from "../../_lib/watchParty";
 import { formatClipStudioTemplateLabel, type ClipStudioTemplatePreset } from "../../_lib/clipStudio";
 import { CREATOR_MONEY_ROUTE_TARGETS } from "../../_lib/creatorMonetizationRouteTargets";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
@@ -68,7 +69,11 @@ import { resolveSandboxMonetizationTester } from "../../_lib/sandboxMonetization
 import { useSession } from "../../_lib/session";
 import { buildUserChannelProfile, readUserProfileByUserId, type UserChannelProfile, type UserProfile } from "../../_lib/userData";
 import { ReportSheet } from "../../components/safety/report-sheet";
-import { formatOneTimePrice, resolvePlatformViewerOfferKeys } from "../../_lib/customerExperiencePresentation";
+import {
+  formatOneTimePrice,
+  isCurrentExactPartyRoomOffer,
+  resolvePlatformViewerOfferKeys,
+} from "../../_lib/customerExperiencePresentation";
 import { MoneyScopeInfoButton, type MoneyScopeKey } from "../../components/monetization/MoneyScopeInfoButton";
 import { TipSheet } from "../../components/monetization/tip-sheet";
 import { CreatorContentActionSheet, type CreatorContentActionSheetVisibilityAction } from "../../components/creator-media/CreatorContentActionSheet";
@@ -147,6 +152,20 @@ const formatPublicClipTemplateLabel = (
 ) => (
   preset ? formatClipStudioTemplateLabel(preset as ClipStudioTemplatePreset) : ""
 );
+
+const readCurrentPublicPartyRoomOffer = async (creatorId: string) => {
+  const offer = await readPublicPaidWatchPartyTicketOfferForCreator(creatorId);
+  if (!offer?.partyId) return null;
+  const room = await getPartyRoom(offer.partyId).catch(() => null);
+  return isCurrentExactPartyRoomOffer({
+    offerPartyId: offer.partyId,
+    offerHostId: offer.hostId,
+    offerEndsAt: offer.endsAt,
+    roomPartyId: room?.partyId,
+    roomHostId: room?.hostUserId,
+    roomActive: !!room,
+  }) ? offer : null;
+};
 
 export default function PublicChannelScreen() {
   const router = useRouter();
@@ -289,7 +308,7 @@ export default function PublicChannelScreen() {
         readCreatorTipPublicStatus(routeUserId).catch(() => null),
         resolveChannelSubscriptionAccess(routeUserId).catch(() => null),
         resolveCreatorVipPassAccess(routeUserId).catch(() => null),
-        readPublicPaidWatchPartyTicketOfferForCreator(routeUserId).catch(() => null),
+        readCurrentPublicPartyRoomOffer(routeUserId).catch(() => null),
         resolveSandboxMonetizationTester(viewerUserId, String(user?.email ?? "")).catch(() => false),
         brandPromise,
       ]);

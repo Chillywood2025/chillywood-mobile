@@ -182,6 +182,34 @@ export function resolvePlatformViewerOfferKeys(input: {
   return keys;
 }
 
+export function isCurrentExactPartyRoomOffer(input: {
+  offerPartyId?: string | null;
+  offerHostId?: string | null;
+  offerEndsAt?: string | null;
+  roomPartyId?: string | null;
+  roomHostId?: string | null;
+  roomActive: boolean;
+  nowMillis?: number;
+}) {
+  const offerPartyId = clean(input.offerPartyId).toUpperCase();
+  const roomPartyId = clean(input.roomPartyId).toUpperCase();
+  const offerHostId = clean(input.offerHostId);
+  const roomHostId = clean(input.roomHostId);
+  if (
+    !input.roomActive
+    || !offerPartyId
+    || offerPartyId !== roomPartyId
+    || !offerHostId
+    || offerHostId !== roomHostId
+  ) return false;
+
+  const endsAt = clean(input.offerEndsAt);
+  if (!endsAt) return true;
+  const endsAtMillis = Date.parse(endsAt);
+  const nowMillis = Number.isFinite(input.nowMillis) ? Number(input.nowMillis) : Date.now();
+  return Number.isFinite(endsAtMillis) && endsAtMillis > nowMillis;
+}
+
 export function resolveEventCustomerPresentation(input: {
   status?: string | null;
   startsAt?: string | null;

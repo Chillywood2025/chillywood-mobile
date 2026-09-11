@@ -99,6 +99,25 @@ test("Platform storefront contains only backed creator offers", () => {
     canPurchaseVip: false, hasVipAccess: true, hasPartyRoomOffer: false,
   }), ["subscription", "vip"]);
 
+  const currentRoom = {
+    offerPartyId: "party-123",
+    offerHostId: "host-123",
+    offerEndsAt: "2030-01-02T18:00:00.000Z",
+    roomPartyId: "PARTY-123",
+    roomHostId: "host-123",
+    roomActive: true,
+    nowMillis: Date.parse("2030-01-01T18:00:00.000Z"),
+  };
+  assert.equal(presentation.isCurrentExactPartyRoomOffer(currentRoom), true);
+  assert.equal(presentation.isCurrentExactPartyRoomOffer({ ...currentRoom, roomActive: false }), false);
+  assert.equal(presentation.isCurrentExactPartyRoomOffer({ ...currentRoom, roomPartyId: "another-room" }), false);
+  assert.equal(presentation.isCurrentExactPartyRoomOffer({ ...currentRoom, roomHostId: "another-host" }), false);
+  assert.equal(presentation.isCurrentExactPartyRoomOffer({
+    ...currentRoom,
+    offerEndsAt: "2029-12-31T18:00:00.000Z",
+  }), false);
+  assert.equal(presentation.isCurrentExactPartyRoomOffer({ ...currentRoom, offerEndsAt: "not-a-date" }), false);
+
   const channel = read("app/channel/[userId].tsx");
   const renderedStorefront = channel.slice(
     channel.indexOf("const renderPlatformMonetization"),
@@ -109,6 +128,8 @@ test("Platform storefront contains only backed creator offers", () => {
   const renderedHero = channel.slice(channel.indexOf("const renderHero"), channel.indexOf("const getPublicClipCardTitle"));
   assert.doesNotMatch(renderedHero, /Sandbox Tip|Sandbox subscription complete|Sandbox VIP complete/u);
   assert.match(renderedStorefront, /watchPartyTicketOffer\.title/u);
+  assert.match(channel, /readCurrentPublicPartyRoomOffer\(routeUserId\)/u);
+  assert.match(channel, /getPartyRoom\(offer\.partyId\)/u);
   assert.match(read("app/player/[id].tsx"), /paid-video-purchase-success-receipt/u);
   assert.doesNotMatch(read("app/profile/[userId].tsx"), /OFFICIAL READY|Rachi is ready|CONTEXT NEEDED/u);
   assert.match(read("app/profile/[userId].tsx"), /kicker: "CHI'LLYWOOD OFFICIAL"/u);
