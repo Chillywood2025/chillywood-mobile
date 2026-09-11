@@ -69,8 +69,7 @@ const REPOSITORY = "Chillywood2025/chillywood-mobile";
 const WORKFLOW_PATH = ".github/workflows/phase1-ci.yml";
 const WORKFLOW_FILE = "phase1-ci.yml";
 const WORKFLOW_NAME = "Phase 1 CI";
-const SOURCE_AUTHORITY_TEST_PATH = "tests/assurance/source-readiness-wrapper.test.mjs";
-const SOURCE_AUTHORITY_STEP = "          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}";
+const SOURCE_AUTHORITY_TEST_PATH = "tests/assurance/source-readiness-wrapper.test.mjs", SOURCE_AUTHORITY_STEP = "          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}";
 const SOURCE_AUTHORITY_TOKEN_STEP = "          GH_TOKEN: ${{ github.token }}\n";
 const SOURCE_AUTHORITY_TEST_ANCHOR = "test(\"draft source readiness rejects deletion of a protected-base test\", () => {";
 const SOURCE_AUTHORITY_TEST_BLOCK = `test("all source-authority lanes receive the exact workflow token and protected base", () => {
