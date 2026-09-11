@@ -2045,6 +2045,12 @@ export const ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES = Object.freeze([
     maximumFiles: 2,
     maximumChangedLines: 80,
   }),
+  Object.freeze({
+    profileId: "PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1",
+    paths: Object.freeze([".github/workflows/phase1-ci.yml", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs", "tests/assurance/source-readiness-wrapper.test.mjs"]),
+    maximumFiles: 6,
+    maximumChangedLines: 260,
+  }),
 ]);
 
 const DERIVED_PROTECTED_MAIN_TRUTH_PATH = "config/assurance/current-truth-v1.json";

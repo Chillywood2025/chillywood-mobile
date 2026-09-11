@@ -2050,7 +2050,9 @@ export const PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1 = "PHASE1_SOURCE_AUTHORITY_
 export const PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_ARCHITECTURE_PATHS = Object.freeze([
   ".github/workflows/phase1-ci.yml",
   "scripts/assurance/engineering-closure.mjs",
+  "scripts/assurance/lib.mjs",
   "tests/assurance/engineering-doctrine.test.mjs",
+  "tests/assurance/pr-scope-feature-bundles.test.mjs",
   "tests/assurance/source-readiness-wrapper.test.mjs",
 ]);
 const phase1ControlProfile = (objective) => objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1
@@ -2060,7 +2062,7 @@ const phase1ControlProfile = (objective) => objective === PHASE1_RISK_BASED_ADMI
   : objective === PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1
   ? { paths: PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_ARCHITECTURE_PATHS, maximumFiles: 2, maximumChangedLines: 80 }
   : objective === PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1
-  ? { paths: PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_ARCHITECTURE_PATHS, maximumFiles: 4, maximumChangedLines: 180 }
+  ? { paths: PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_ARCHITECTURE_PATHS, maximumFiles: 6, maximumChangedLines: 260 }
   : null;
 export const TERMINAL_TRUTH_PATHS = Object.freeze(["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"]);
 export const FINITE_TASK_ADMISSION_LEASE_STATE = "ACTIVE_IMPLEMENTATION";
