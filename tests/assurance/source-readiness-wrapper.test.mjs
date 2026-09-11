@@ -259,6 +259,17 @@ test("all raw autonomous contract lanes preserve protected workflow bytes and ro
   assert.doesNotMatch(workflow, /PHASE1_AUTONOMOUS_CONTRACT_CORE_PATH/u);
 });
 
+test("every protected source-authority guard receives the read-only GitHub token", () => {
+  const guardedSteps = workflow.match(
+    /- name: Validate assurance authority and source correctness\n\s+env:\n(?:\s+[^\n]+\n)*?\s+run: \|/gu,
+  ) ?? [];
+  assert.equal(guardedSteps.length, 3);
+  for (const step of guardedSteps) {
+    assert.match(step, /\n\s+GH_TOKEN: \$\{\{ github\.token \}\}\n/u);
+    assert.match(step, /\n\s+PHASE1_PROTECTED_BASE_SHA:/u);
+  }
+});
+
 test("draft source readiness rejects deletion of a protected-base test", () => {
   const result = runStubbedWrapper({
     coreStderr: JSON.stringify(allowedFailure),
