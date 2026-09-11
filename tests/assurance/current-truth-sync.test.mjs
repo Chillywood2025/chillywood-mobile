@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { evaluateProtectedMainAdvancement, finiteTaskEffectiveReservationAuthorityValid, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, stableJson, validateEngineeringDoctrineTruth, validateFiniteTaskLeaseRegistry, validateOwnerJurisdictionPolicyTruth, verifyCurrentTruthSynchronization, verifyDerivedProtectedMainTruthSynchronization } from "../../scripts/assurance/lib.mjs";
+import { evaluateProtectedMainAdvancement, finiteTaskEffectiveReservationAuthorityValid, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, stableJson, validateEngineeringDoctrineTruth, validateFiniteTaskLeaseRegistry, validateOwnerJurisdictionPolicyTruth, verifyCommittedClaimEvidence, verifyCurrentTruthSynchronization, verifyDerivedProtectedMainTruthSynchronization } from "../../scripts/assurance/lib.mjs";
 import { architectureDependencyBaselinePolicyV1 } from "../../scripts/assurance/engineering-closure.mjs";
 import { STANDING_POLICY_INHERITANCE_ALLOWLIST, STANDING_POLICY_INHERITANCE_DENYLIST } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
@@ -52,6 +52,7 @@ assert.equal(validateEngineeringDoctrineTruth({}, truthContract, { currentMain: 
 assert.equal(validateEngineeringDoctrineTruth({ engineeringDoctrine: { status: "ACTIVE", boundedDefinition: "COMPLETE" } }, truthContract).some(({ id }) => id === "ASSURANCE_UNIVERSAL_COMPLETENESS_CLAIM_REJECTED"), true);
 assert.deepEqual(truthContract.engineeringDoctrinePolicy.postMergeTruthPaths, requiredChangedPaths);
 assert.equal(truthContract.engineeringDoctrinePolicy.postMergeNextTask, "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE");
+assert.match(String(verifyCommittedClaimEvidence), /gitCommand = git/u);
 
 assert.deepEqual(validateOwnerJurisdictionPolicyTruth(truthRecord, truthContract), []);
 const capabilityMutation = structuredClone(truthRecord);

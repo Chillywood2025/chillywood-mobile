@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureMaintenanceSuccessorOwnerCommentBody, architectureMaintenanceSuccessorSubject, canonicalGitDiffArgs, canonicalGitDiffHash, createImplementationIdentityObservation, createTaskLocalEdgeDisposition, deriveFiniteTaskRuntimeState, evaluateAdmissionClearanceState, evaluateFiniteTaskAdmissionSuccessor, finiteTaskAdmissionOwnerCommentBody, finiteTaskAdmissionSubject, hashValue, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, verifyArchitectureMaintenanceAuthority, verifyTaskLocalGoverningEdgeClosure, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
 import { classifyPrScopePaths, deriveFiniteTaskPrRiskAuthority, deriveTaskScopeContext, evaluateHighRiskScope, validateFeatureDomainBundles, validateStaticBindingRecursion } from "../../scripts/assurance/pr-scope-lib.mjs";
-import { args, ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES, assuranceControlTaskContextValid, canonicalGitText, classifyGitHubExecutionIdentity, createTerminalVerifierRepairInstance, evaluateProtectedMainAdvancement, evaluateTerminalVerifierRepairHistory, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, observeLiveTerminalRepairTaskContext, renderCurrentState, renderNextTask, resolveAssuranceControlSourceOnlyProfile, resolveFiniteTaskEffectiveReservation, sha256, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateUntrustedAssuranceControlTaskContextObservation } from "../../scripts/assurance/lib.mjs";
+import { args, ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES, assuranceControlTaskContextValid, canonicalGitText, classifyGitHubExecutionIdentity, createTerminalVerifierRepairInstance, evaluateProtectedMainAdvancement, evaluateTerminalVerifierRepairHistory, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, observeLiveTerminalRepairTaskContext, renderCurrentState, renderNextTask, resolveAssuranceControlSourceOnlyProfile, resolveFiniteTaskEffectiveReservation, sha256, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateUntrustedAssuranceControlTaskContextObservation, verifyCommittedClaimEvidence } from "../../scripts/assurance/lib.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const policy = JSON.parse(fs.readFileSync(`${root}/config/assurance/pr-scope-policy-v1.json`, "utf8"));
@@ -1132,6 +1132,58 @@ test("terminal repair runtime context reuses only exact canonical PR-scope succe
   assert.equal(observe({ ok: true, taskContext, executionIdentity }), null);
   assert.equal(observe({ ok: true, taskContext: { ...taskContext, budget: { maximumFiles: 9, maximumHandAuthoredNetLines: 1801 } }, executionIdentity }), null);
   assert.equal(observe({ ok: true, taskContext, executionIdentity }, { repository: undefined, pr: 999, branch: undefined, headSha: taskContext.identity.headSha, baseSha: undefined, baseRef: undefined }), null);
+});
+
+test("committed finite-task evidence uses the caller's candidate-scoped git authority", () => {
+  const lease = { leaseId: "candidate-only-lease", taskState: "ACTIVE_IMPLEMENTATION" };
+  const leaseHash = sha256(lease);
+  const sourceCommit = "c".repeat(40);
+  const subjectTree = "d".repeat(40);
+  const factId = "repository.active-task.finite-lease-authority";
+  const claim = {
+    freshnessClass: "REPOSITORY_TASK_LEASE",
+    leaseId: lease.leaseId,
+    leaseHash,
+    factsCovered: [factId],
+    observedAt: "2026-09-11T12:00:00Z",
+    evidenceMode: "IMMUTABLE_REPOSITORY",
+    authorityAllowed: "REPOSITORY_ONLY",
+    platform: "NONE",
+    provider: "NONE",
+  };
+  const source = {
+    sourceCommit,
+    subjectHead: sourceCommit,
+    subjectTree,
+    leaseId: lease.leaseId,
+    leaseHash,
+    covers: [factId],
+    observedAt: claim.observedAt,
+    mode: claim.evidenceMode,
+    freshnessClass: claim.freshnessClass,
+    authorityAllowed: claim.authorityAllowed,
+    platform: claim.platform,
+    provider: claim.provider,
+  };
+  const calls = [];
+  const result = verifyCommittedClaimEvidence({
+    claim,
+    source,
+    factRegistry: [{ factId, freshnessClass: claim.freshnessClass, authorityAllowed: claim.authorityAllowed, platform: claim.platform, provider: claim.provider }],
+    gitCommand: (argv) => {
+      calls.push(argv);
+      if (argv[0] === "merge-base") return "";
+      if (argv[0] === "rev-parse") return subjectTree;
+      if (argv[0] === "show") return JSON.stringify({ finiteTaskLeases: { tasks: [lease] } });
+      throw new Error(`unexpected git invocation: ${argv.join(" ")}`);
+    },
+  });
+  assert.equal(result, true);
+  assert.deepEqual(calls, [
+    ["merge-base", "--is-ancestor", sourceCommit, "HEAD"],
+    ["rev-parse", `${sourceCommit}^{tree}`],
+    ["show", `${sourceCommit}:config/assurance/current-truth-v1.json`],
+  ]);
 });
 
 test("assurance-control observer accepts only exact protected source-only profiles and strips authority claims", () => {

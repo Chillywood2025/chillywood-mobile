@@ -1835,6 +1835,7 @@ export const FINITE_TASK_TERMINAL_TRUTH_FINAL_SOURCE_V1 = "FINITE_TASK_TERMINAL_
 export const IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 = "IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1";
 export const PHASE1_RISK_BASED_ADMISSION_REFORM_V1 = "PHASE1_RISK_BASED_ADMISSION_REFORM_V1";
 export const ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1 = "ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1";
+export const CALLER_INJECTED_CANDIDATE_GIT_READER_V1 = "CALLER_INJECTED_CANDIDATE_GIT_READER_V1";
 export const ASSURANCE_CONTROL_PLANE_FIXED_POINT_PATHS = Object.freeze(["config/assurance/current-truth-contract-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "tests/assurance/current-truth-sync.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]);
 export const ASSURANCE_CONTROL_PLANE_FIXED_POINT_EFFECTIVE_PATHS = Object.freeze([...ASSURANCE_CONTROL_PLANE_FIXED_POINT_PATHS, "config/assurance/current-truth-v1.json"].sort());
 export const PHASE1_ADMISSION_RULESET_CUTOVER_V1 = "PHASE1_ADMISSION_RULESET_CUTOVER_V1";

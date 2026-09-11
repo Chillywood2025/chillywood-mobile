@@ -338,8 +338,8 @@
     }
   },
   "implementationHeadBinding": {
-    "required": true,
     "networkAccess": "forbidden",
+    "required": true,
     "refNamespace": "refs/remotes/origin/",
     "missingRef": "BLOCKED_INTERNAL",
     "malformedSha": "BLOCKED_INTERNAL",
