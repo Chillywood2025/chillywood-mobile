@@ -260,6 +260,8 @@ test("all raw autonomous contract lanes preserve protected workflow bytes and ro
 });
 
 test("all source-authority lanes receive the exact workflow token and protected base", () => {
+  assert.match(workflow,
+    /permissions:\s*\n\s*actions: read\s*\n\s*contents: read\s*\n\s*issues: read\s*\n\s*pull-requests: read/u);
   const steps = workflow.match(/      - name: Validate assurance authority and source correctness[\s\S]*?(?=\n      - name:|\n  [a-z][a-z-]*:|$)/gu) ?? [];
   assert.equal(steps.length, 3);
   for (const step of steps) {
