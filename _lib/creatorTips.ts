@@ -420,7 +420,7 @@ export async function purchaseCreatorTipWithStore(input: {
       ok: false,
       intentId: null,
       productId,
-      message: "Sign in again before sending a sandbox tip.",
+      message: "Sign in again before sending a tip.",
     };
   }
 
@@ -456,7 +456,7 @@ export async function purchaseCreatorTipWithStore(input: {
         ok: false,
         intentId: null,
         productId,
-        message: "App Store sandbox tips are disabled for this build. Nothing was charged.",
+        message: "Tips are unavailable on this build right now. Nothing was charged.",
       };
     }
   } else if (amountCents !== CREATOR_TIP_SANDBOX_REFERENCE_PRICE_MINOR) {
@@ -464,7 +464,7 @@ export async function purchaseCreatorTipWithStore(input: {
       ok: false,
       intentId: null,
       productId,
-      message: "This sandbox tip amount does not match the configured store tier. Nothing was charged.",
+      message: "This tip amount is unavailable on this build. Nothing was charged.",
     };
   }
 
@@ -477,7 +477,7 @@ export async function purchaseCreatorTipWithStore(input: {
       ok: false,
       intentId: null,
       productId,
-      message: "Sign in again before sending a sandbox tip.",
+      message: "Sign in again before sending a tip.",
     };
   }
 
@@ -523,7 +523,7 @@ export async function purchaseCreatorTipWithStore(input: {
       ok: false,
       intentId: null,
       productId,
-      message: "Sandbox tip could not be started right now.",
+      message: "Tip checkout could not be started right now.",
     };
   }
   const validatedIntent = validateCreatorMoneyPurchaseIntent(intent, {
@@ -543,7 +543,7 @@ export async function purchaseCreatorTipWithStore(input: {
       ok: false,
       intentId: null,
       productId,
-      message: "Sandbox tip authority could not be verified. Nothing was charged.",
+      message: "This tip recipient and amount could not be verified. Nothing was charged.",
     };
   }
   const intentId = validatedIntent.id;
@@ -556,8 +556,8 @@ export async function purchaseCreatorTipWithStore(input: {
       intentId,
       productId,
       message: Platform.OS === "ios"
-        ? "App Store sandbox tip product is not available on this device yet."
-        : "Google Play sandbox tip product is not available on this device yet.",
+        ? "This App Store tip amount is not available on this device yet."
+        : "This Google Play tip amount is not available on this device yet.",
     };
   }
 
@@ -590,7 +590,7 @@ export async function purchaseCreatorTipWithStore(input: {
       ok: false,
       intentId,
       productId,
-      message: "The store response did not match the verified tip intent. No tip credit was claimed.",
+      message: "The store response did not match this tip. No tip was recorded.",
     };
   }
   return {

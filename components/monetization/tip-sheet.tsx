@@ -2,9 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,6 +15,7 @@ import {
 } from "react-native";
 
 import { trackEvent } from "../../_lib/analytics";
+import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import { createBoundedVisibleReadGate } from "../../_lib/boundedVisibleReadGate";
 import {
   listIosStoreProductsForConcept,
@@ -71,6 +74,7 @@ export function TipSheet({
 
   const providerReadGateRef = useRef(createBoundedVisibleReadGate());
   const openingResetGateRef = useRef(createBoundedVisibleReadGate());
+  const checkoutLatchRef = useRef(createActionSingleFlightLatch());
 
   const iosTipCatalog = useMemo(() => {
     if (Platform.OS !== "ios") return [] as Omit<IosTipOption, "priceLabel">[];
@@ -204,6 +208,7 @@ export function TipSheet({
       setNotice(`Choose an amount from ${formatMonetizationCurrency(minAmount)} to ${formatMonetizationCurrency(maxAmount)}.`);
       return;
     }
+    if (!checkoutLatchRef.current.tryAcquire()) return;
 
     setBusy(true);
     setNotice("");
@@ -232,23 +237,30 @@ export function TipSheet({
         return;
       }
 
-      setNotice(
-        showSandboxCopy
-          ? `Sandbox tip complete. ${new Date().toLocaleString()}`
-          : result.message,
-      );
+      setNotice("Tip received. Support will be confirmed after the store finishes processing. It did not unlock access.");
     } catch {
       setNotice(`${STORE_NAME} tip could not be started. Try again later.`);
     } finally {
+      checkoutLatchRef.current.release();
       setBusy(false);
     }
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={busy ? () => {} : onClose}>
+      <KeyboardAvoidingView
+        style={styles.backdrop}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
         <Pressable style={StyleSheet.absoluteFill} onPress={busy ? undefined : onClose} />
-        <View style={styles.sheet} testID="tip-sheet">
+        <ScrollView
+          style={styles.sheet}
+          contentContainerStyle={styles.sheetContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          accessibilityViewIsModal
+          testID="tip-sheet"
+        >
           <View style={styles.handle} />
           <CreatorMoneyHeader
             kicker="Creator support"
@@ -259,7 +271,7 @@ export function TipSheet({
             tone="premium"
           />
 
-          {showSandboxCopy ? <MoneyStatusChip label={`Sandbox Test · ${STORE_NAME}`} tone="warning" /> : null}
+          {showSandboxCopy ? <MoneyStatusChip label={`No real charge · ${STORE_NAME}`} tone="warning" /> : null}
 
           <View style={styles.amountGrid}>
             {Platform.OS === "ios" ? (
@@ -333,7 +345,7 @@ export function TipSheet({
             excludes="Tips do not unlock videos, events, rooms, VIP, subscriptions, badges, public rewards, or merchandise."
             excludesTestID="tip-no-content-unlock-copy"
           />
-          <MoneyScopeInfoButton scope="creator_tip" label="What am I buying?" />
+          <MoneyScopeInfoButton scope="creator_tip" label="What does a tip do?" />
 
           {notice ? <MoneySuccessReceipt title="Tip status" body={notice} testID="tip-success-receipt" /> : null}
 
@@ -344,7 +356,8 @@ export function TipSheet({
             onPress={startCheckout}
             testID="tip-confirm-button"
             accessibilityRole="button"
-            accessibilityLabel={showSandboxCopy ? "Sandbox Test Tip Creator" : "Send creator tip"}
+            accessibilityLabel={`Tip ${creatorName || "creator"} ${formatMonetizationCurrency(amountCents, tipStatus?.currency ?? "usd")}. This supports the creator and does not unlock access.`}
+            accessibilityState={{ disabled: busy, busy }}
           >
             {busy ? (
               <View style={styles.busyRow}>
@@ -352,7 +365,7 @@ export function TipSheet({
                 <Text style={styles.primaryButtonText}>{`Opening ${STORE_NAME}`}</Text>
               </View>
             ) : (
-              <Text style={styles.primaryButtonText}>{showSandboxCopy ? "Sandbox Test Tip" : "Continue to tip"}</Text>
+              <Text style={styles.primaryButtonText}>Continue to tip</Text>
             )}
           </TouchableOpacity>
           <TouchableOpacity
@@ -365,8 +378,8 @@ export function TipSheet({
           >
             <Text style={styles.secondaryButtonText}>Not now</Text>
           </TouchableOpacity>
-        </View>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -378,13 +391,16 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(2,4,10,0.62)",
   },
   sheet: {
+    maxHeight: "92%",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: 20,
-    paddingBottom: 30,
     backgroundColor: "#111722",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.10)",
+  },
+  sheetContent: {
+    padding: 20,
+    paddingBottom: 30,
     gap: 14,
   },
   handle: {

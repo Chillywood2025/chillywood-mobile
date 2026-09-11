@@ -31,10 +31,12 @@ import {
 } from "../../_lib/creatorTips";
 import {
   formatCreatorVipPassPrice,
+  isPublishedCreatorVipOffer,
   purchaseCreatorVipPass,
   resolveCreatorVipPassAccess,
   type CreatorVipPassAccess,
 } from "../../_lib/creatorVipPasses";
+import { resolvePaidVideoAccess, type PaidVideoAccessResolution } from "../../_lib/creatorPaidVideos";
 import {
   formatChannelSubscriptionPrice,
   purchaseChannelSubscription,
@@ -66,7 +68,7 @@ import { resolveSandboxMonetizationTester } from "../../_lib/sandboxMonetization
 import { useSession } from "../../_lib/session";
 import { buildUserChannelProfile, readUserProfileByUserId, type UserChannelProfile, type UserProfile } from "../../_lib/userData";
 import { ReportSheet } from "../../components/safety/report-sheet";
-import { resolvePlatformViewerOfferKeys } from "../../_lib/customerExperiencePresentation";
+import { formatOneTimePrice, resolvePlatformViewerOfferKeys } from "../../_lib/customerExperiencePresentation";
 import { MoneyScopeInfoButton, type MoneyScopeKey } from "../../components/monetization/MoneyScopeInfoButton";
 import { TipSheet } from "../../components/monetization/tip-sheet";
 import { CreatorContentActionSheet, type CreatorContentActionSheetVisibilityAction } from "../../components/creator-media/CreatorContentActionSheet";
@@ -176,6 +178,7 @@ export default function PublicChannelScreen() {
   const [vipAccess, setVipAccess] = useState<CreatorVipPassAccess | null>(null);
   const [vipBusy, setVipBusy] = useState(false);
   const [vipNotice, setVipNotice] = useState<string | null>(null);
+  const [paidVideoAccessById, setPaidVideoAccessById] = useState<Record<string, PaidVideoAccessResolution>>({});
   const [watchPartyTicketOffer, setWatchPartyTicketOffer] = useState<PaidWatchPartyOffer | null>(null);
   const [platformBranding, setPlatformBranding] = useState<PlatformBrandingBundle | null>(null);
   const [selectedVideoAction, setSelectedVideoAction] = useState<CreatorVideo | null>(null);
@@ -212,6 +215,7 @@ export default function PublicChannelScreen() {
       setSubscriptionNotice(null);
       setVipAccess(null);
       setVipNotice(null);
+      setPaidVideoAccessById({});
       setWatchPartyTicketOffer(null);
       setPlatformBranding(null);
 
@@ -302,6 +306,13 @@ export default function PublicChannelScreen() {
       setWatchPartyTicketOffer(nextWatchPartyTicketOffer);
       setPlatformBranding(nextPlatformBranding);
       setLoadState("ready");
+
+      if (!showOwnerControls) {
+        const paidVideoEntries = await Promise.all(publicVideos
+          .filter((video) => video.paidAccessRequired && !video.vipAccessRequired)
+          .map(async (video) => [video.id, await resolvePaidVideoAccess(video.id)] as const));
+        if (active) setPaidVideoAccessById(Object.fromEntries(paidVideoEntries));
+      }
     };
 
     void loadChannel();
@@ -309,7 +320,7 @@ export default function PublicChannelScreen() {
     return () => {
       active = false;
     };
-  }, [routeUserId, sessionLoading, showDraftBranding, user?.email, viewerUserId]);
+  }, [isOwner, routeUserId, sessionLoading, showDraftBranding, showOwnerControls, user?.email, viewerUserId]);
 
   const spotlightVideoId = platformBranding?.profile.spotlightVideoId ?? null;
   const featuredVideo = useMemo(() => (
@@ -395,6 +406,30 @@ export default function PublicChannelScreen() {
         source: "creator-video",
       },
     });
+  };
+
+  const resolveVideoAccessLabel = (video: CreatorVideo) => {
+    if (showOwnerControls) return undefined;
+    if (video.vipAccessRequired) {
+      return vipAccess?.allowed && vipAccess.reason === "vip_active" ? "Unlocked" : "Creator VIP";
+    }
+    if (!video.paidAccessRequired) return undefined;
+    const paidAccess = paidVideoAccessById[video.id];
+    if (!paidAccess) return "Checking access";
+    if (paidAccess?.allowed && paidAccess.reason === "active_creator_subscription") {
+      return "Included with subscription";
+    }
+    if (paidAccess?.allowed) return "Unlocked";
+    if (paidAccess?.requiresPurchase && paidAccess.priceCents) {
+      return formatOneTimePrice(formatMonetizationCurrency(
+        paidAccess.priceCents,
+        paidAccess.currency ?? "usd",
+      ));
+    }
+    if (paidAccess && (paidAccess.reason === "access_check_failed" || paidAccess.reason === "malformed_access_response")) {
+      return "Access unavailable";
+    }
+    return "Paid video";
   };
 
   const openStudio = (params?: Record<string, string>) => {
@@ -856,7 +891,7 @@ export default function PublicChannelScreen() {
               label="Tip"
               onPress={openTipSheet}
               style={styles.actionButtonWide}
-              testID={sandboxTesterActive ? "platform-sandbox-tip-button" : "platform-tip-button"}
+              testID={sandboxTesterActive ? "platform-sandbox-tip-button" : "platform-support-tip-button"}
               variant="success"
             />
           ) : null}
@@ -954,11 +989,7 @@ export default function PublicChannelScreen() {
       <CreatorVideoCard
         video={video}
         mode={showOwnerControls ? "owner" : "public"}
-        accessLabel={video.vipAccessRequired
-          ? (vipAccess?.allowed ? "VIP" : "VIP · Locked")
-          : video.paidAccessRequired
-            ? (subscriptionAccess?.allowed ? "Included with subscription" : "Paid Video")
-            : undefined}
+        accessLabel={resolveVideoAccessLabel(video)}
         testID="platform-content-open-button"
         featured
         onOpen={() => openPlayer(video)}
@@ -973,11 +1004,7 @@ export default function PublicChannelScreen() {
       <CreatorVideoCard
         video={video}
         mode={showOwnerControls ? "owner" : "public"}
-        accessLabel={video.vipAccessRequired
-          ? (vipAccess?.allowed ? "VIP" : "VIP · Locked")
-          : video.paidAccessRequired
-            ? (subscriptionAccess?.allowed ? "Included with subscription" : "Paid Video")
-            : undefined}
+        accessLabel={resolveVideoAccessLabel(video)}
         testID="platform-content-open-button"
         onOpen={() => openPlayer(video)}
         onShare={() => { void shareSelectedVideo(video); }}
@@ -1039,14 +1066,17 @@ export default function PublicChannelScreen() {
       <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
       <Text style={styles.cardBody}>{formatEventDate(event.startsAt)}</Text>
       {event.reminder.canSetReminder ? (
-        <Text style={styles.metaText}>Reminder ready</Text>
+        <Text style={styles.metaText}>Reminder available</Text>
       ) : null}
       <Text style={styles.metaText}>{event.isLiveNow ? "Open live event" : "View event details"}</Text>
     </TouchableOpacity>
   );
 
+  const publicVipDestinationAvailable = isPublishedCreatorVipOffer(vipAccess?.offer)
+    || (vipAccess?.allowed === true && vipAccess.reason === "vip_active");
+
   const renderVipVideos = () => (
-    vipVideos.length ? (
+    vipVideos.length && (showOwnerControls || publicVipDestinationAvailable) ? (
       <AppSection title="VIP" statusLabel={vipAccess?.allowed ? "Unlocked" : "VIP"} statusTone={vipAccess?.allowed ? "success" : "warning"}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.shelfScroll} contentContainerStyle={styles.shelfRow}>
           {vipVideos.map((video) => renderLatestUploadCard(video))}
@@ -1366,6 +1396,7 @@ export default function PublicChannelScreen() {
     );
   };
 
+
   const renderPlatformMonetization = () => {
     const subscriptionOffer = subscriptionAccess?.offer ?? null;
     const vipOffer = vipAccess?.offer ?? null;
@@ -1374,11 +1405,11 @@ export default function PublicChannelScreen() {
     if (!isViewerPurchasePlatformMode(platformMode)) return null;
 
     const offerKeys = resolvePlatformViewerOfferKeys({
-      canTip: tipStatus?.canTip === true,
+      canTip: false,
       canPurchaseSubscription: !!subscriptionOffer && subscriptionAccess?.requiresPurchase === true,
       hasSubscriptionAccess: subscriptionAccess?.allowed === true,
-      canPurchaseVip: !!vipOffer && vipAccess?.requiresPurchase === true,
-      hasVipAccess: vipAccess?.allowed === true,
+      canPurchaseVip: isPublishedCreatorVipOffer(vipOffer) && vipAccess?.requiresPurchase === true,
+      hasVipAccess: vipAccess?.allowed === true && vipAccess.reason === "vip_active",
       hasPartyRoomOffer: !!watchPartyTicketOffer?.partyId,
     });
     type SupportItem = {
@@ -1392,18 +1423,6 @@ export default function PublicChannelScreen() {
       onPress: () => void | Promise<void>;
     };
     const supportItems: SupportItem[] = [];
-
-    if (offerKeys.includes("tip")) {
-      supportItems.push({
-        title: "Tip",
-        scopeKey: "creator_tip",
-        body: "Send a contribution. It does not unlock content.",
-        price: null,
-        button: `Tip ${platformDisplayName}`,
-        testID: "platform-support-tip-button",
-        onPress: openTipSheet,
-      });
-    }
 
     if (offerKeys.includes("subscription")) {
       supportItems.push({
@@ -1422,12 +1441,11 @@ export default function PublicChannelScreen() {
       supportItems.push({
         title: vipOffer?.title || `${platformDisplayName} VIP`,
         scopeKey: "vip_pass",
-        body: vipOffer?.description || "Creator-specific VIP access. It does not include Chi'llywood Premium or paid videos.",
-        price: vipOffer ? formatCreatorVipPassPrice(vipOffer.priceCents, vipOffer.currency) : null,
-        button: vipAccess?.allowed ? "Open VIP Area" : "Get VIP",
+        body: vipOffer?.description || "See this creator's published VIP offer, benefits, and current membership status. Creator VIP is not Chi'llywood Premium.",
+        price: vipOffer ? `${formatOneTimePrice(formatCreatorVipPassPrice(vipOffer.priceCents, vipOffer.currency))} · 30 days` : null,
+        button: vipAccess?.allowed && vipAccess.reason === "vip_active" ? "VIP Active" : "View VIP",
         testID: "platform-support-vip-button",
-        busy: vipBusy,
-        onPress: vipAccess?.allowed ? openVipArea : handleGetVip,
+        onPress: openVipArea,
       });
     }
 
@@ -1436,7 +1454,7 @@ export default function PublicChannelScreen() {
         title: watchPartyTicketOffer.title || "Party Room Pass",
         scopeKey: "watch_party_ticket",
         body: watchPartyTicketOffer.description || "Entry to this exact Party Room. Live Stage and Live Stage Seat Passes remain separate.",
-        price: formatPaidWatchPartyTicketPrice(watchPartyTicketOffer.priceCents, watchPartyTicketOffer.currency),
+        price: formatOneTimePrice(formatPaidWatchPartyTicketPrice(watchPartyTicketOffer.priceCents, watchPartyTicketOffer.currency)),
         button: "View Party Room",
         testID: "platform-support-ticket-button",
         onPress: () => {
@@ -1469,8 +1487,8 @@ export default function PublicChannelScreen() {
               </View>
               <Text style={styles.offerBody}>{item.body}</Text>
               {item.price ? <Text style={styles.offerMeta}>{item.price}</Text> : null}
-              {(subscriptionNotice && item.title === "Subscribe") || (vipNotice && item.title === "VIP") ? (
-                <Text style={styles.offerMeta}>{item.title === "Subscribe" ? subscriptionNotice : vipNotice}</Text>
+              {subscriptionNotice && item.testID === "platform-support-subscribe-button" ? (
+                <Text style={styles.offerMeta}>{subscriptionNotice}</Text>
               ) : null}
               <View collapsable={false}>
                 <TouchableOpacity

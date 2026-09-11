@@ -55,8 +55,11 @@ test("client presentation uses server-authorized access and truthful product cop
   assert.match(publicCards, /paidAccessRequired/);
   assert.match(publicCards, /creator_content_prices/);
   assert.match(platform, /Included with subscription/);
-  assert.match(vipScreen, /one-time 30-day VIP Pass/);
+  assert.match(vipScreen, /formatOneTimePrice/);
+  assert.match(vipScreen, /30 days/);
   assert.match(vipScreen, /VIP-only video shelf/);
+  assert.match(vipScreen, /isActiveMember/);
+  assert.match(vipScreen, /isManagementPreview/);
   assert.match(subscriptionScreen, /ordinary Paid Videos/);
   assert.match(subscriptionScreen, /Included video access ends when the subscription becomes inactive/);
   assert.doesNotMatch(vipScreen, /No VIP perks yet|VIP perks coming later/);

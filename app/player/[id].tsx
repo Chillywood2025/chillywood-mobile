@@ -58,8 +58,10 @@ import { trackEvent } from "../../_lib/analytics";
 import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import { getMonetizationAccessSheetPresentation } from "../../_lib/monetization";
 import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
+import { formatOneTimePrice } from "../../_lib/customerExperiencePresentation";
 import { isCreatorDigitalCheckoutShellAvailable } from "../../_lib/creatorMoneyPurchaseAuthority";
 import { purchasePaidVideoAccess } from "../../_lib/creatorPaidVideos";
+import { readCreatorTipPublicStatus, type CreatorTipPublicStatus } from "../../_lib/creatorTips";
 import {
     getRuntimeControlBlockedCopy,
     isRuntimeControlBlockedAccess,
@@ -78,7 +80,7 @@ import {
 import { emitLiveKitRenderTelemetryEvent } from "../../_lib/livekit/livekitRenderTelemetry";
 import { debugLog } from "../../_lib/logger";
 import { getVideoSource } from "../../_lib/mediaSources";
-import { readCreatorVideoForPlayer, type CreatorVideo } from "../../_lib/creatorVideos";
+import { readCreatorVideoForPlayer, readCreatorVideosByIds, type CreatorVideo } from "../../_lib/creatorVideos";
 import {
     createCreatorVideoComment,
     deleteCreatorVideoComment,
@@ -108,14 +110,11 @@ import {
     clearProgressForTitle,
     readMergedWatchProgress,
     readMyListIds,
+    readUserProfileByUserId,
     toggleMyListTitle,
     writeProgressForTitle,
 } from "../../_lib/userData";
 import { isReactNativeNewArchitecture } from "../../_lib/reactNativeRuntime";
-import {
-  readRouteBackedMonetizationProofConfig,
-  type RouteBackedMonetizationProofConfig,
-} from "../../_lib/routeBackedMonetizationVisualProof";
 import {
     createPartyRoom,
     decodePartySeatRequestMessage,
@@ -142,7 +141,7 @@ import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../compo
 import { AccessSheet, getAccessSheetEntryLabel } from "../../components/monetization/access-sheet";
 import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
 import { MoneyScopeStrip, MoneyStatusChip } from "../../components/monetization/money-ui";
-import { RouteBackedMonetizationProofCard } from "../../components/monetization/route-backed-monetization-proof-card";
+import { TipSheet } from "../../components/monetization/tip-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { LinkedText } from "../../components/social/linked-text";
 import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
@@ -747,6 +746,8 @@ type StandalonePlayerTopChromeProps = {
   followCreatorLabel: string;
   followCreatorBusy: boolean;
   onFollowCreator: () => void;
+  canTipCreator: boolean;
+  onTipCreator: () => void;
   canStartWatchPartyLive: boolean;
   watchPartyTransitionInFlight: boolean;
   onWatchParty: () => void;
@@ -768,6 +769,8 @@ function StandalonePlayerTopChrome({
   followCreatorLabel,
   followCreatorBusy,
   onFollowCreator,
+  canTipCreator,
+  onTipCreator,
   canStartWatchPartyLive,
   watchPartyTransitionInFlight,
   onWatchParty,
@@ -775,7 +778,7 @@ function StandalonePlayerTopChrome({
   reportBusy,
   onReport,
 }: StandalonePlayerTopChromeProps) {
-  const hasTopLeftActions = canShare || canFollowCreator || canReport || !!playbackRateLabel;
+  const hasTopLeftActions = canShare || canFollowCreator || canTipCreator || canReport || !!playbackRateLabel;
 
   return (
     <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
@@ -831,6 +834,19 @@ function StandalonePlayerTopChrome({
                   hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                 >
                   <Text style={styles.compactChipText}>{followCreatorLabel}</Text>
+                </TouchableOpacity>
+              ) : null}
+              {canTipCreator ? (
+                <TouchableOpacity
+                  style={styles.compactChip}
+                  onPress={onTipCreator}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Tip this creator. A tip supports the creator and does not unlock access."
+                  testID="player-tip-creator-button"
+                  hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+                >
+                  <Text style={styles.compactChipText}>Tip</Text>
                 </TouchableOpacity>
               ) : null}
               {playbackRateLabel ? (
@@ -1030,7 +1046,8 @@ const clampZoomTranslation = (translation: ZoomTranslation, scale: number, layou
 };
 
 export default function PlayerScreen() {
-  const { isSignedIn } = useSession();
+  const { isSignedIn, user: sessionUser } = useSession();
+  const sessionUserId = String(sessionUser?.id ?? "").trim();
   const { width: viewportWidth } = useWindowDimensions();
   const {
     id,
@@ -1091,7 +1108,6 @@ export default function PlayerScreen() {
   const [titleLoading, setTitleLoading] = useState(true);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [standaloneAccess, setStandaloneAccess] = useState<ContentAccessResolution | null>(null);
-  const [standaloneRouteProofConfig, setStandaloneRouteProofConfig] = useState<RouteBackedMonetizationProofConfig | null>(null);
   const [standaloneAccessLoading, setStandaloneAccessLoading] = useState(true);
   const [standaloneAccessRetryToken, setStandaloneAccessRetryToken] = useState(0);
   const [standaloneAccessSheetVisible, setStandaloneAccessSheetVisible] = useState(false);
@@ -1157,7 +1173,11 @@ export default function PlayerScreen() {
   const [creatorVideoCommentUserId, setCreatorVideoCommentUserId] = useState("");
   const [creatorVideoCommentKeyboardOpen, setCreatorVideoCommentKeyboardOpen] = useState(false);
   const [paidVideoUnlockBusy, setPaidVideoUnlockBusy] = useState(false);
+  const paidVideoUnlockLatchRef = useRef(createActionSingleFlightLatch());
   const [paidVideoUnlockMessage, setPaidVideoUnlockMessage] = useState<string | null>(null);
+  const [creatorVideoTipStatus, setCreatorVideoTipStatus] = useState<CreatorTipPublicStatus | null>(null);
+  const [creatorVideoTipSheetVisible, setCreatorVideoTipSheetVisible] = useState(false);
+  const [creatorVideoTipRecipient, setCreatorVideoTipRecipient] = useState({ name: "Creator", avatarUrl: "" });
   const [watchPartyCommentKeyboardOpen, setWatchPartyCommentKeyboardOpen] = useState(false);
   const [playbackLoadError, setPlaybackLoadError] = useState<string | null>(null);
   const [sharedAndroidVideoRemountIndex, setSharedAndroidVideoRemountIndex] = useState(0);
@@ -1468,7 +1488,20 @@ export default function PlayerScreen() {
 
       try {
         if (expectsCreatorVideo) {
-          const video = await readCreatorVideoForPlayer(routeId);
+          const [resolvedVideo, safeCards] = await Promise.all([
+            readCreatorVideoForPlayer(routeId),
+            readCreatorVideosByIds([routeId], { limit: 1 }).catch(() => []),
+          ]);
+          const safeCard = safeCards.find((entry) => entry.id === routeId) ?? null;
+          const video = resolvedVideo && safeCard
+            ? {
+              ...resolvedVideo,
+              ownerId: resolvedVideo.ownerId || safeCard.ownerId,
+              title: safeCard.title || resolvedVideo.title,
+              description: safeCard.description || resolvedVideo.description,
+              thumbnailUrl: safeCard.thumbnailUrl || resolvedVideo.thumbnailUrl,
+            }
+            : resolvedVideo;
           if (video && active) {
             debugLog("player", "match source resolved", { source: "creator-video:id" });
             logCreatorVideoPlaybackResolution(video);
@@ -7076,6 +7109,34 @@ export default function PlayerScreen() {
     enabled: isCreatorVideoPlayback && !!creatorVideo?.ownerId,
     signedOutMessage: "Sign in to follow this creator Platform.",
   });
+  useEffect(() => {
+    let active = true;
+    const creatorId = String(creatorVideo?.ownerId ?? "").trim();
+    setCreatorVideoTipSheetVisible(false);
+    setCreatorVideoTipStatus(null);
+    setCreatorVideoTipRecipient({ name: "Creator", avatarUrl: "" });
+    if (!isCreatorStandalonePlaybackSurface || !creatorId) {
+      return () => {
+        active = false;
+      };
+    }
+
+    void Promise.all([
+      readCreatorTipPublicStatus(creatorId).catch(() => null),
+      readUserProfileByUserId(creatorId).catch(() => null),
+    ]).then(([tipStatus, profile]) => {
+      if (!active) return;
+      setCreatorVideoTipStatus(tipStatus);
+      setCreatorVideoTipRecipient({
+        name: String(profile?.displayName || profile?.username || "Creator").trim(),
+        avatarUrl: String(profile?.avatarUrl || "").trim(),
+      });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [creatorVideo?.ownerId, isCreatorStandalonePlaybackSurface, sessionUserId]);
   const playerSurfaceMode = resolvePlayerSurfaceMode({
     inWatchParty,
     isLiveModeFlag,
@@ -7125,6 +7186,9 @@ export default function PlayerScreen() {
       creatorVideo.paidContentAccess.currency ?? "usd",
     )
     : "";
+  const creatorVideoPaidContentOneTimePriceLabel = creatorVideoPaidContentPriceLabel
+    ? formatOneTimePrice(creatorVideoPaidContentPriceLabel)
+    : "";
   const paidVideoCheckoutAvailable = useMemo(() => {
     return isCreatorDigitalCheckoutShellAvailable();
   }, []);
@@ -7160,6 +7224,7 @@ export default function PlayerScreen() {
       setPaidVideoUnlockMessage("This paid video offer is not ready yet.");
       return;
     }
+    if (!paidVideoUnlockLatchRef.current.tryAcquire()) return;
 
     setPaidVideoUnlockBusy(true);
     setPaidVideoUnlockMessage(
@@ -7194,9 +7259,10 @@ export default function PlayerScreen() {
       });
       setPaidVideoUnlockMessage("Unable to unlock this video right now.");
     } finally {
+      paidVideoUnlockLatchRef.current.release();
       setPaidVideoUnlockBusy(false);
     }
-  }, [creatorVideo, isSignedIn, paidVideoCheckoutAvailable, paidVideoUnlockBusy]);
+  }, [creatorVideo, creatorVideoPaidContentPriceLabel, isSignedIn, paidVideoCheckoutAvailable, paidVideoUnlockBusy]);
   const source = useMemo(() => {
     if (displayItem?.video_url && displayItem.video_url.trim()) return { uri: displayItem.video_url.trim() };
     if (isCreatorVideoPlayback) return null;
@@ -7573,35 +7639,6 @@ export default function PlayerScreen() {
       active = false;
     };
   }, [cleanId, displayItem?.content_access_rule, displayItem?.id, isStandalonePlayer, playbackSourceKind, standaloneAccessRetryToken]);
-
-  useEffect(() => {
-    let active = true;
-    if (!isStandalonePlayer) {
-      setStandaloneRouteProofConfig(null);
-      return () => {
-        active = false;
-      };
-    }
-    const safeTitleId = String(displayItem?.id ?? cleanId).trim();
-    const loadProofConfig = () => {
-      readRouteBackedMonetizationProofConfig({
-        sourceId: safeTitleId,
-        sourceTypes: ["paid_content"],
-      })
-        .then((config) => {
-          if (active) setStandaloneRouteProofConfig(config);
-        })
-        .catch(() => {
-          if (active) setStandaloneRouteProofConfig(null);
-        });
-    };
-    loadProofConfig();
-    const retry = setTimeout(loadProofConfig, 1500);
-    return () => {
-      active = false;
-      clearTimeout(retry);
-    };
-  }, [cleanId, displayItem?.id, isStandalonePlayer]);
 
   const standalonePlaybackBlocked = isStandalonePlayer && !!standaloneAccess && !standaloneAccess.isAllowed;
   const standalonePlaybackUnknown = isStandalonePlayer && !standaloneAccessLoading && !standaloneAccess && !!accessError;
@@ -10066,7 +10103,7 @@ export default function PlayerScreen() {
                     />
                   </View>
                   {creatorVideoPaidContentPriceLabel ? (
-                    <Text style={styles.paidVideoLockPrice}>{creatorVideoPaidContentPriceLabel}</Text>
+                    <Text style={styles.paidVideoLockPrice}>{creatorVideoPaidContentOneTimePriceLabel}</Text>
                   ) : null}
                   {creatorVideoPaidContentPurchaseRequired ? (
                     <>
@@ -10088,14 +10125,14 @@ export default function PlayerScreen() {
                         }}
                         testID="tester-paid-video-unlock-button"
                         accessibilityRole="button"
-                        accessibilityLabel="Unlock paid creator video"
+                        accessibilityLabel={`Unlock ${creatorVideo?.title ?? "this creator video"}${creatorVideoPaidContentOneTimePriceLabel ? ` for ${creatorVideoPaidContentOneTimePriceLabel}` : ""}. This purchase applies only to this video.`}
                         accessibilityState={{ disabled: paidVideoUnlockBusy, busy: paidVideoUnlockBusy }}
                       >
                         {paidVideoUnlockBusy ? (
                           <ActivityIndicator color="#fff" size="small" />
                         ) : (
                           <Text style={styles.playerAccessPrimaryText}>
-                            Unlock Video
+                            {`Unlock Video${creatorVideoPaidContentOneTimePriceLabel ? ` — ${creatorVideoPaidContentOneTimePriceLabel}` : ""}`}
                           </Text>
                         )}
                       </TouchableOpacity>
@@ -10178,7 +10215,7 @@ export default function PlayerScreen() {
                   {isCreatorVideoPlaybackUnavailable ? (
                     <Text style={styles.videoLoadingSubtext}>
                       {creatorVideoPaidContentPurchaseRequired
-                        ? `Unlock ${creatorVideo?.title ?? "this creator video"}${creatorVideoPaidContentPriceLabel ? ` for ${creatorVideoPaidContentPriceLabel}` : ""}. This purchase unlocks this creator video only. It does not include Premium, subscriptions, VIP, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, or other creator content.`
+                        ? `Unlock ${creatorVideo?.title ?? "this creator video"}${creatorVideoPaidContentOneTimePriceLabel ? ` for ${creatorVideoPaidContentOneTimePriceLabel}` : ""}. This purchase unlocks this creator video only. It does not include Premium, subscriptions, VIP, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, or other creator content.`
                         : creatorVideoPaidContentLocked
                           ? "Playback is blocked because paid-content access could not be verified."
                         : creatorVideoVipLocked
@@ -10256,7 +10293,6 @@ export default function PlayerScreen() {
                   <Text style={styles.playerAccessKicker}>STANDALONE PLAYER</Text>
                   <Text style={styles.playerAccessTitle}>{standaloneAccessPresentation.title}</Text>
                   <Text style={styles.playerAccessBody}>{standaloneAccessPresentation.body}</Text>
-                  <RouteBackedMonetizationProofCard config={standaloneRouteProofConfig} surface="paid_content" />
                   <View style={styles.playerAccessActions}>
                     <TouchableOpacity style={styles.playerAccessSecondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
                       <Text style={styles.playerAccessSecondaryText}>Back</Text>
@@ -10384,6 +10420,18 @@ export default function PlayerScreen() {
                 if (!creatorVideoCommentReportBusy) setCreatorVideoCommentReportTarget(null);
               }}
             />
+
+            {creatorVideo?.ownerId ? (
+              <TipSheet
+                visible={creatorVideoTipSheetVisible}
+                creatorId={creatorVideo.ownerId}
+                creatorName={creatorVideoTipRecipient.name}
+                creatorAvatarUrl={creatorVideoTipRecipient.avatarUrl}
+                sourceSurface="creator_video_player"
+                tipStatus={creatorVideoTipStatus}
+                onClose={() => setCreatorVideoTipSheetVisible(false)}
+              />
+            ) : null}
 
             <SocialAttachmentActionSheet
               visible={creatorVideoCommentAttachmentSheetVisible}
@@ -10571,6 +10619,8 @@ export default function PlayerScreen() {
                 followCreatorLabel={creatorVideoFollowAction.label}
                 followCreatorBusy={creatorVideoFollowAction.busy}
                 onFollowCreator={creatorVideoFollowAction.toggle}
+                canTipCreator={isCreatorVideoPlayback && creatorVideoTipStatus?.canTip === true}
+                onTipCreator={() => setCreatorVideoTipSheetVisible(true)}
                 canStartWatchPartyLive={canStartStandaloneWatchPartyLive}
                 watchPartyTransitionInFlight={watchPartyTransitionInFlight}
                 onWatchParty={onWatchParty}

@@ -183,7 +183,7 @@ export function CreatorVideoCard({
     : (video.description || "Open this creator video in the Chi'llywood Player.");
   const cardAccessibilityLabel = ownerMode
     ? `${displayTitle}. ${formatVisibilityLabel(video, true)} creator video. ${playable ? "Open video. Hold for content actions." : "Media unavailable. Hold for content actions."}`
-    : `${publicDisplayTitle}. ${formatVisibilityLabel(video, false)} creator video. ${playable ? "Open in Chi'llywood Player." : "Media unavailable."}`;
+    : `${publicDisplayTitle}. ${formatVisibilityLabel(video, false)} creator video.${accessLabel ? ` ${accessLabel}.` : ""} ${playable ? "Open in Chi'llywood Player." : "Media unavailable."}`;
 
   if (variant === "compact") {
     const compactStatus = accessLabel

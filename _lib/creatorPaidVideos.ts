@@ -21,6 +21,7 @@ import {
 } from "./iosAppStoreCommerce";
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { supabase } from "./supabase";
+import { readCreatorVideosByIds } from "./creatorVideos";
 
 export const PAID_VIDEO_SANDBOX_PRODUCT_KEY = "paid_content_access_sandbox_099";
 export const PAID_VIDEO_SANDBOX_PROVIDER_PRODUCT_ID = "cw_paid_content_access_sandbox_099";
@@ -84,6 +85,21 @@ export type PaidVideoPurchaseResult = {
   access: PaidVideoAccessResolution;
   intentId?: string;
   productId?: string;
+};
+
+export type UnlockedPaidVideoLibraryItem = {
+  id: string;
+  creatorId: string;
+  title: string;
+  thumbnailUrl: string | null;
+  unlockedAt: string;
+  accessLabel: "Unlocked";
+};
+
+export type UnlockedPaidVideoLibraryResult = {
+  status: "resolved" | "unavailable";
+  subjectUserId: string | null;
+  items: UnlockedPaidVideoLibraryItem[];
 };
 
 type RpcClient = {
@@ -316,6 +332,71 @@ export async function resolvePaidVideoAccess(videoId: string): Promise<PaidVideo
     };
   }
   return normalizeAccess(data);
+}
+
+export async function readMyUnlockedPaidVideoLibraryItems(limit = 24): Promise<UnlockedPaidVideoLibraryResult> {
+  const boundedLimit = Math.max(1, Math.min(50, Math.trunc(limit || 24)));
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const userId = toText(authData.user?.id);
+  if (authError) return { status: "unavailable", subjectUserId: null, items: [] };
+  if (!userId) return { status: "resolved", subjectUserId: null, items: [] };
+
+  const { data, error } = await supabase
+    .from("access_grants")
+    .select("source_id,created_at,starts_at,expires_at,status,environment")
+    .eq("user_id", userId)
+    .eq("grant_type", "paid_content_access")
+    .eq("source_type", "provider_event")
+    .in("status", ["active", "sandbox_only"])
+    .is("refunded_at", null)
+    .is("revoked_at", null)
+    .order("created_at", { ascending: false })
+    .limit(boundedLimit * 2);
+  if (error || !data) return { status: "unavailable", subjectUserId: userId, items: [] };
+
+  const now = Date.now();
+  const candidates = data.filter((row) => {
+    const sourceId = toText(row.source_id);
+    const startsAt = Date.parse(toText(row.starts_at));
+    const expiresAt = row.expires_at ? Date.parse(toText(row.expires_at)) : Number.POSITIVE_INFINITY;
+    const validStatus = (row.status === "active" && row.environment === "production")
+      || (row.status === "sandbox_only" && row.environment === "sandbox");
+    return !!sourceId
+      && validStatus
+      && Number.isFinite(startsAt)
+      && startsAt <= now
+      && expiresAt > now;
+  });
+  const uniqueCandidates = Array.from(new Map(candidates.map((row) => [toText(row.source_id), row])).values())
+    .slice(0, boundedLimit);
+
+  const verifiedEntries = (await Promise.all(uniqueCandidates.map(async (row) => {
+    const videoId = toText(row.source_id);
+    const access = await resolvePaidVideoAccess(videoId);
+    return access.allowed && (access.reason === "active_grant" || access.reason === "sandbox_grant")
+      ? { videoId, unlockedAt: toText(row.created_at) }
+      : null;
+  }))).filter((entry): entry is { videoId: string; unlockedAt: string } => !!entry);
+  const videos = await readCreatorVideosByIds(verifiedEntries.map((entry) => entry.videoId), {
+    limit: boundedLimit,
+  });
+  const videosById = new Map(videos.map((video) => [video.id, video]));
+
+  return {
+    status: "resolved",
+    subjectUserId: userId,
+    items: verifiedEntries.map((entry) => {
+      const video = videosById.get(entry.videoId);
+      return video ? {
+        id: video.id,
+        creatorId: video.ownerId,
+        title: video.title || "Creator video",
+        thumbnailUrl: video.thumbnailUrl || null,
+        unlockedAt: entry.unlockedAt,
+        accessLabel: "Unlocked" as const,
+      } : null;
+    }).filter((entry): entry is UnlockedPaidVideoLibraryItem => !!entry),
+  };
 }
 
 export async function createPaidVideoPurchaseIntent(input: {

@@ -587,11 +587,11 @@ export function AccessSheet({
           {!renderDeferredUnavailable && sandboxMode.enabled ? (
             <View style={isPremiumGateSheet ? styles.sandboxNotice : styles.sandboxCard}>
               {isPremiumGateSheet ? (
-                <Text style={styles.sandboxNoticeText}>Sandbox test mode — no real money is charged.</Text>
+                <Text style={styles.sandboxNoticeText}>No real charge will be made on this build.</Text>
               ) : (
                 <>
-                  <Text style={styles.sandboxKicker}>SANDBOX TEST MODE</Text>
-                  <Text style={styles.sandboxText}>Sandbox test mode — no real money is charged.</Text>
+                  <Text style={styles.sandboxKicker}>NO REAL CHARGE</Text>
+                  <Text style={styles.sandboxText}>This build can demonstrate checkout without moving real money.</Text>
                 </>
               )}
             </View>

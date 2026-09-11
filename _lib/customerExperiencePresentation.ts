@@ -8,7 +8,142 @@ export type EventCustomerPresentation = {
   actionLabel: string | null;
 };
 
+export type CustomerAudience = "public" | "circle" | "private";
+export type CustomerEntitlement = "free" | "premium" | "creator_vip" | null;
+export type CustomerOwnership = "not_owned" | "unlocked" | "active" | "unknown" | "unavailable";
+export type ExactAccessProduct =
+  | "paid_video"
+  | "party_room_pass"
+  | "event_pass"
+  | "live_stage_pass"
+  | "live_stage_seat_pass";
+
+export type CustomerAccessSummary = {
+  audienceLabel: "Public" | "Chi'lly Circle" | "Private";
+  accessLabel: string | null;
+  detail: string | null;
+  canPurchase: boolean;
+};
+
+export const EXACT_ACCESS_PRODUCT_LABELS: Record<ExactAccessProduct, string> = {
+  paid_video: "Paid Video",
+  party_room_pass: "Party Room Pass",
+  event_pass: "Event Pass",
+  live_stage_pass: "Live Stage Pass",
+  live_stage_seat_pass: "Live Stage Seat Pass",
+};
+
+export const TIP_SUPPORT_DOCTRINE =
+  "A tip supports one exact creator. It grants no content, Premium, VIP, Circle, pass, seat, room, or LiveKit authority.";
+
 const clean = (value: unknown) => String(value ?? "").trim();
+
+export const isCurrentAuthorityRequest = (input: {
+  generation: number;
+  currentGeneration: number;
+  requestedAuthorityKey: string;
+  currentAuthorityKey: string;
+}) => (
+  Number.isInteger(input.generation)
+  && input.generation >= 0
+  && input.generation === input.currentGeneration
+  && clean(input.requestedAuthorityKey) === clean(input.currentAuthorityKey)
+);
+
+export const formatOneTimePrice = (priceLabel?: string | null) => {
+  const price = clean(priceLabel);
+  return price ? `${price} one-time` : "One-time purchase";
+};
+
+export const formatRecurringPrice = (
+  priceLabel?: string | null,
+  period: "month" | "year" = "month",
+) => {
+  const price = clean(priceLabel);
+  return price ? `${price} per ${period}` : `Renews every ${period}`;
+};
+
+export const resolveAudienceLabel = (audience: CustomerAudience) => (
+  audience === "circle" ? "Chi'lly Circle" : audience === "private" ? "Private" : "Public"
+);
+
+export function resolveCustomerAccessSummary(input: {
+  audience: CustomerAudience;
+  entitlement?: CustomerEntitlement;
+  paid?: boolean;
+  ownership?: CustomerOwnership;
+  exactProduct?: ExactAccessProduct | null;
+  priceLabel?: string | null;
+  audienceAuthorized?: boolean;
+}): CustomerAccessSummary {
+  const audienceLabel = resolveAudienceLabel(input.audience);
+  const ownership = input.ownership ?? "not_owned";
+
+  if (input.audience !== "public" && input.audienceAuthorized === false) {
+    return {
+      audienceLabel,
+      accessLabel: input.audience === "circle" ? "Circle access required" : "Private access required",
+      detail: "Audience access must be approved before any separate purchase can be used.",
+      canPurchase: false,
+    };
+  }
+
+  if (ownership === "unknown") {
+    return {
+      audienceLabel,
+      accessLabel: "Access unavailable",
+      detail: "Your current access could not be verified. Try again before purchasing.",
+      canPurchase: false,
+    };
+  }
+  if (ownership === "unavailable") {
+    return {
+      audienceLabel,
+      accessLabel: "Unavailable",
+      detail: "This item is not currently available.",
+      canPurchase: false,
+    };
+  }
+  if (ownership === "unlocked") {
+    return { audienceLabel, accessLabel: "Unlocked", detail: null, canPurchase: false };
+  }
+  if (ownership === "active") {
+    return {
+      audienceLabel,
+      accessLabel: input.entitlement === "creator_vip" ? "VIP Active" : "Pass Active",
+      detail: null,
+      canPurchase: false,
+    };
+  }
+
+  if (input.entitlement === "premium") {
+    return {
+      audienceLabel,
+      accessLabel: "Chi'llywood Premium",
+      detail: "Premium is platform access. It does not include creator VIP or separate paid items.",
+      canPurchase: false,
+    };
+  }
+  if (input.entitlement === "creator_vip") {
+    return {
+      audienceLabel,
+      accessLabel: "Creator VIP",
+      detail: "VIP applies only to this creator and does not include Chi'llywood Premium.",
+      canPurchase: false,
+    };
+  }
+  if (input.paid) {
+    return {
+      audienceLabel,
+      accessLabel: input.priceLabel ? formatOneTimePrice(input.priceLabel) : "Paid",
+      detail: input.exactProduct
+        ? "Purchase applies only to this exact item. Audience restrictions still apply."
+        : null,
+      canPurchase: !!input.exactProduct,
+    };
+  }
+  return { audienceLabel, accessLabel: null, detail: null, canPurchase: false };
+}
 
 const eventStartLabel = (startsAt?: string | null) => {
   const parsed = Date.parse(clean(startsAt));
@@ -104,6 +239,19 @@ export function resolveEventCustomerPresentation(input: {
         : "No replay is currently available.",
       action: "none",
       actionLabel: null,
+    };
+  }
+
+  if (status === "rescheduled") {
+    const canBuyPass = input.requiresPurchase && !input.soldOut;
+    return {
+      statusLabel: "Rescheduled",
+      headline: `New time: ${starts}`,
+      body: `${accessCopy} ${input.requiresPurchase ? "Access can be confirmed for the new time." : "Your access remains tied to this Event."}`,
+      action: canBuyPass ? "buy_pass" : "none",
+      actionLabel: canBuyPass
+        ? input.priceLabel ? `Get Event Pass — ${input.priceLabel}` : "Get Event Pass"
+        : null,
     };
   }
 
