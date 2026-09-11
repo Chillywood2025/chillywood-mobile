@@ -259,6 +259,14 @@ test("all raw autonomous contract lanes preserve protected workflow bytes and ro
   assert.doesNotMatch(workflow, /PHASE1_AUTONOMOUS_CONTRACT_CORE_PATH/u);
 });
 
+test("all source-authority lanes receive the exact workflow token and protected base", () => {
+  const steps = workflow.match(/      - name: Validate assurance authority and source correctness[\s\S]*?(?=\n      - name:|\n  [a-z][a-z-]*:|$)/gu) ?? [];
+  assert.equal(steps.length, 3);
+  for (const step of steps) {
+    assert.match(step, /env:\s*\n\s*GH_TOKEN: \$\{\{ github\.token \}\}\s*\n\s*PHASE1_PROTECTED_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.sha \}\}/u);
+  }
+});
+
 test("draft source readiness rejects deletion of a protected-base test", () => {
   const result = runStubbedWrapper({
     coreStderr: JSON.stringify(allowedFailure),
