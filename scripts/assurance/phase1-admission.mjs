@@ -454,7 +454,7 @@ function brandSourceAuthority(proof, { identity, lifecycle } = {}) {
 
 export function verifyPhase1SourceAuthorityTokenWorkflowTransition({ candidateWorkflow, protectedWorkflow, candidateTest, protectedTest } = {}) {
   const stepCount = typeof protectedWorkflow === "string" ? protectedWorkflow.split(SOURCE_AUTHORITY_STEP).length - 1 : 0;
-  return stepCount === 3
+  return stepCount === 6
     && candidateWorkflow === protectedWorkflow.replaceAll(SOURCE_AUTHORITY_STEP, `${SOURCE_AUTHORITY_TOKEN_STEP}${SOURCE_AUTHORITY_STEP}`)
     && typeof protectedTest === "string" && protectedTest.split(SOURCE_AUTHORITY_TEST_ANCHOR).length === 2
     && candidateTest === protectedTest.replace(SOURCE_AUTHORITY_TEST_ANCHOR, `${SOURCE_AUTHORITY_TEST_BLOCK}${SOURCE_AUTHORITY_TEST_ANCHOR}`);
