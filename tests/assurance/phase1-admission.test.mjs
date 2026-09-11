@@ -492,6 +492,20 @@ test("only the exact source-authority token workflow transition is structurally 
   const exact = { protectedWorkflow, candidateWorkflow: protectedWorkflow.replaceAll(step, `${token}${step}`), protectedTest: anchor, candidateTest: `${block}${anchor}` };
   assert.equal(verifyPhase1SourceAuthorityTokenWorkflowTransition(exact), true);
   assert.equal(verifyPhase1SourceAuthorityTokenWorkflowTransition({ ...exact, candidateWorkflow: `${exact.candidateWorkflow}\npermissions: write-all` }), false);
+  const protectedPermissionWorkflow = "permissions:\n  actions: read\n  contents: read\n  pull-requests: read";
+  const candidatePermissionWorkflow = "permissions:\n  actions: read\n  contents: read\n  issues: read\n  pull-requests: read";
+  const permissionTestAnchor = 'test("all source-authority lanes receive the exact workflow token and protected base", () => {\n';
+  const permissionTestBlock = `  assert.match(workflow,
+    /permissions:\\s*\\n\\s*actions: read\\s*\\n\\s*contents: read\\s*\\n\\s*issues: read\\s*\\n\\s*pull-requests: read/u);
+`;
+  const permissionSuccessor = {
+    protectedWorkflow: protectedPermissionWorkflow,
+    candidateWorkflow: candidatePermissionWorkflow,
+    protectedTest: permissionTestAnchor,
+    candidateTest: `${permissionTestAnchor}${permissionTestBlock}`,
+  };
+  assert.equal(verifyPhase1SourceAuthorityTokenWorkflowTransition(permissionSuccessor), true);
+  assert.equal(verifyPhase1SourceAuthorityTokenWorkflowTransition({ ...permissionSuccessor, candidateWorkflow: `${candidatePermissionWorkflow}\n  checks: write` }), false);
   const forged = fixture(); forged.workflowIntegrity = { ...forged.workflowIntegrity, candidateBlobSha: "9".repeat(40), transitionProof: exact };
   assert.equal(evaluatePhase1Admission(forged).acceptable, false);
 });
