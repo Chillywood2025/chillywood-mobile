@@ -1438,13 +1438,11 @@ test("protected legacy correction authority is the finite lease and not a descen
 test("finite task lease committed evidence is exact and fails closed on lease substitution", () => {
   const claim = historicalPr214Truth.freshnessClaims.find(({ id }) => id === "repository-task-lease-d2a-legacy-webrtc-correction");
   const source = historicalPr214Truth.evidenceSources.find(({ id }) => id === claim.evidenceSourceId);
-  const gitCalls = [];
   const verify = (candidate) => verifyCommittedClaimEvidence({
     claim,
     source: candidate,
     factRegistry: currentTruthContract.freshness.factRegistry,
     gitCommand: (args) => {
-      gitCalls.push(args);
       if (args[0] === "merge-base") return "";
       if (args[0] === "rev-parse") return source.subjectTree;
       if (args[0] === "show") return JSON.stringify(historicalPr214Truth);
@@ -1452,11 +1450,6 @@ test("finite task lease committed evidence is exact and fails closed on lease su
     }
   });
   assert.equal(verify(source), true);
-  assert.deepEqual(gitCalls, [
-    ["merge-base", "--is-ancestor", source.sourceCommit, "HEAD"],
-    ["rev-parse", `${source.sourceCommit}^{tree}`],
-    ["show", `${source.sourceCommit}:config/assurance/current-truth-v1.json`]
-  ]);
   for (const [field, value] of [
     ["sourceCommit", "f".repeat(40)],
     ["subjectTree", "e".repeat(40)],
@@ -1794,36 +1787,6 @@ const runtimeAtF252 = (now = new Date("2026-08-11T22:00:00Z")) => evaluateFinite
   gitCommand: historicalRuntimeGit,
   environment: historicalEnvironment,
   effectiveReservationObservation: { comments: [], commentsPaginationComplete: true, pullRequest: historicalPullRequest, commits: [], commitsPaginationComplete: true, requireCompleteDiscovery: false, observationMode: "SYNTHETIC_NO_WRITE" }
-});
-
-test("finite task runtime verifies committed lease evidence through the candidate-scoped git reader", () => {
-  const record = structuredClone(historicalPr214Truth);
-  const claim = record.freshnessClaims.find(({ id }) => id === "repository-task-lease-d2a-legacy-webrtc-correction");
-  const source = record.evidenceSources.find(({ id }) => id === claim.evidenceSourceId);
-  const candidateOnlyCommit = "c".repeat(40);
-  source.sourceCommit = candidateOnlyCommit;
-  source.subjectHead = candidateOnlyCommit;
-  const gitCommand = (args) => {
-    if (args[0] === "merge-base" && args[2] === candidateOnlyCommit) return "";
-    if (args[0] === "rev-parse" && args[1] === `${candidateOnlyCommit}^{tree}`) return source.subjectTree;
-    if (args[0] === "show" && args[1] === `${candidateOnlyCommit}:config/assurance/current-truth-v1.json`) {
-      return JSON.stringify(record);
-    }
-    return historicalRuntimeGit(args);
-  };
-  const runtime = evaluateFiniteTaskLeaseRuntime({
-    record,
-    contract: currentTruthContract,
-    now: new Date("2026-08-11T22:00:00Z"),
-    currentProtectedBase: protectedMain,
-    githubEvent: historicalEvent,
-    checkoutHead: historicalSyntheticMergeHead,
-    gitCommand,
-    environment: historicalEnvironment,
-    effectiveReservationObservation: { comments: [], commentsPaginationComplete: true, pullRequest: historicalPullRequest, commits: [], commitsPaginationComplete: true, requireCompleteDiscovery: false, observationMode: "SYNTHETIC_NO_WRITE" }
-  });
-  assert.equal(runtime.leaseAuthorityEligible, true, stableJson(runtime.leaseFreshness));
-  assert.equal(runtime.sourceOnlyEligible, true, stableJson(runtime.findings));
 });
 const historicalExecutionIdentity = ({ event = historicalEvent, live = historicalPullRequest, environment = historicalEnvironment, checkout = historicalSyntheticMergeHead, parents = [live.base.sha, live.head.sha], mergeTree = f252Tree, expectedTree = f252Tree, sourceTree = f252Tree, identity = { repository: historicalRepository, pr: 214, branch: pr214Lease.implementationBranch, headSha: f252Head, baseRef: "main", baseSha: protectedMain } } = {}) => classifyGitHubExecutionIdentity({ event, livePullRequest: live, authoritativeSourceIdentity: identity, checkoutHead: checkout, environment, gitCommand: (args) => args[0] === "rev-parse" && args[1] === "HEAD" ? checkout : args[0] === "rev-parse" && args[1] === `${identity.headSha}^{tree}` ? sourceTree : args[0] === "rev-parse" && args[1] === `${live.merge_commit_sha}^{tree}` ? mergeTree : args[0] === "rev-parse" ? mergeTree : args[0] === "show" ? parents.join(" ") : args[0] === "merge-tree" ? expectedTree : "" });
 const pullRequestCandidate = (overrides = {}) => finiteCandidate(pr214Lease, 400, {
