@@ -4324,6 +4324,7 @@ export function evaluateFiniteTaskAdmissionSuccessorV2({ raw, allComments = [], 
   const ok = Object.values(checks).every(Boolean);
   const result = {
     ok,
+    authorizationOk: ok,
     type: "FINITE_TASK_ADMISSION_SUCCESSOR",
     classification: FINITE_TASK_ADMISSION_V2,
     repository: identity?.repository,
