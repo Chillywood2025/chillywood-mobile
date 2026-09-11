@@ -81,6 +81,12 @@ const SOURCE_AUTHORITY_TEST_BLOCK = `test("all source-authority lanes receive th
 });
 
 `;
+const SOURCE_AUTHORITY_PERMISSION_BLOCK = "permissions:\n  actions: read\n  contents: read\n  pull-requests: read";
+const SOURCE_AUTHORITY_ISSUE_PERMISSION_BLOCK = "permissions:\n  actions: read\n  contents: read\n  issues: read\n  pull-requests: read";
+const SOURCE_AUTHORITY_PERMISSION_TEST_ANCHOR = "test(\"all source-authority lanes receive the exact workflow token and protected base\", () => {\n";
+const SOURCE_AUTHORITY_PERMISSION_TEST_BLOCK = `  assert.match(workflow,
+    /permissions:\\s*\\n\\s*actions: read\\s*\\n\\s*contents: read\\s*\\n\\s*issues: read\\s*\\n\\s*pull-requests: read/u);
+`;
 
 export function selectAuthoritativePhase1WorkflowIdentity({ run, workflow } = {}) {
   const workflowId = run?.workflow_id;
@@ -454,10 +460,16 @@ function brandSourceAuthority(proof, { identity, lifecycle } = {}) {
 
 export function verifyPhase1SourceAuthorityTokenWorkflowTransition({ candidateWorkflow, protectedWorkflow, candidateTest, protectedTest } = {}) {
   const stepCount = typeof protectedWorkflow === "string" ? protectedWorkflow.split(SOURCE_AUTHORITY_STEP).length - 1 : 0;
-  return stepCount === 6
+  const tokenWiringTransition = stepCount === 6
     && candidateWorkflow === protectedWorkflow.replaceAll(SOURCE_AUTHORITY_STEP, `${SOURCE_AUTHORITY_TOKEN_STEP}${SOURCE_AUTHORITY_STEP}`)
     && typeof protectedTest === "string" && protectedTest.split(SOURCE_AUTHORITY_TEST_ANCHOR).length === 2
     && candidateTest === protectedTest.replace(SOURCE_AUTHORITY_TEST_ANCHOR, `${SOURCE_AUTHORITY_TEST_BLOCK}${SOURCE_AUTHORITY_TEST_ANCHOR}`);
+  const issuePermissionTransition = typeof protectedWorkflow === "string"
+    && protectedWorkflow.split(SOURCE_AUTHORITY_PERMISSION_BLOCK).length === 2
+    && candidateWorkflow === protectedWorkflow.replace(SOURCE_AUTHORITY_PERMISSION_BLOCK, SOURCE_AUTHORITY_ISSUE_PERMISSION_BLOCK)
+    && typeof protectedTest === "string" && protectedTest.split(SOURCE_AUTHORITY_PERMISSION_TEST_ANCHOR).length === 2
+    && candidateTest === protectedTest.replace(SOURCE_AUTHORITY_PERMISSION_TEST_ANCHOR, `${SOURCE_AUTHORITY_PERMISSION_TEST_ANCHOR}${SOURCE_AUTHORITY_PERMISSION_TEST_BLOCK}`);
+  return tokenWiringTransition || issuePermissionTransition;
 }
 
 export function evaluatePhase1Admission(input = {}) {
