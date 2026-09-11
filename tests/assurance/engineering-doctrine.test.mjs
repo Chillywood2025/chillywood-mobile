@@ -19,7 +19,7 @@ import {
   doctrineScopeAmendmentOwnerCommentBody, doctrineScopeAmendmentSubject,
   doctrineVerificationDependencyCorrectionOwnerCommentBody, doctrineVerificationDependencyCorrectionSubject,
   createTaskLocalDomainGraphDelta, createTaskLocalEdgeDisposition,
-  evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, evaluateTaskAdmission, generateDomainGraph, hashValue,
+  evaluateAutonomousEngineeringRequest, evaluateFiniteTaskAdmissionSuccessorV2, evaluatePreimplementationGate, evaluateTaskAdmission, generateDomainGraph, hashValue,
   inventoryMappingFindings, makeBootstrapPacket, makeTaskPacket, normalizeGitHubCommentIdentity, normalizeReceiptEvidenceSemantics, observeCandidateScopeFromGit,
   observeGitHubTaskIdentity, observeGroundedRuntimeEvidence, observeOfficialPublicContract, observeRepositoryOwnedReview, resolveEngineeringClosureTaskContext, runAuthoritativeReplay, stableJson,
   verifyArchitectureDependencyAmendment, verifyArchitectureDependencyWitnessAmendment, verifyArchitectureMaintenanceAuthority, verifyArchitectureRepositoryReview, verifyDoctrineScopeAmendment, verifyDoctrineVerificationDependencyCorrection, verifyExternalTrustRootReceipt, verifyInventoryNonVacuity,
@@ -789,6 +789,26 @@ test("Phase 1 risk-based admission reform has one exact churn-bounded assurance-
   const metadataRepair = architectureMaintenanceSubject({ identity: { ...identity, pr: 250, branch: "codex/phase1-metadata-compat-fix-v1" }, tree, scope: metadataScope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1 });
   assert.deepEqual([metadataRepair.changedPaths, metadataRepair.budget, metadataRepair.capabilities, metadataRepair.currentTruthCompanionIncluded, metadataRepair.reusableByAnotherPr], [PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_ARCHITECTURE_PATHS, { maximumFiles: 2, maximumChangedLines: 80, maximumHandAuthoredNetLines: 80 }, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1], false, false]);
   assert.throws(() => architectureMaintenanceSubject({ identity, tree, scope: { ...metadataScope, additions: 73 }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1 }), /OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE/u);
+});
+
+test("finite-task admission V2 exposes the authorization contract consumed by protected Phase 1", () => {
+  const result = evaluateFiniteTaskAdmissionSuccessorV2({
+    raw: {},
+    allComments: [],
+    paginationComplete: false,
+    identity: { repository: "Chillywood2025/chillywood-mobile", pr: 1, branch: "fixture", headSha: "0".repeat(40), baseRef: "main", baseSha: "1".repeat(40) },
+    tree: "2".repeat(40),
+    scope: { files: [], additions: 0, deletions: 0, netChangedLines: 0, diffHash: "3".repeat(64) },
+    implementation: {},
+    taskArtifact: {},
+    truthRecord: {},
+    priorTruth: {},
+    ownerJurisdictionAuthority: {},
+    registry: {},
+    phase1EvidenceResolver: () => null,
+  });
+  assert.equal(result.authorizationOk, result.ok);
+  assert.equal(result.authorizationOk, false);
 });
 
 test("Phase 1 aggregate final-source compactor preserves only the exact maintenance-aware projection", () => {
