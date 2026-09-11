@@ -225,6 +225,14 @@ const parseAuthoritativeVipOffer = (
     : null;
 };
 
+export const isPublishedCreatorVipOffer = (offer?: CreatorVipPassOffer | null) => (
+  !!offer
+  && (offer.status === "sandbox" || offer.status === "active")
+  && offer.priceCents > 0
+  && !!offer.providerProductId
+  && !!offer.providerProductKey
+);
+
 const normalizeAccess = (value: unknown, expectedCreatorId: string): CreatorVipPassAccess => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return unavailableVipAccess();
   const row = value && typeof value === "object" && !Array.isArray(value)
@@ -276,6 +284,24 @@ const normalizeAccess = (value: unknown, expectedCreatorId: string): CreatorVipP
     return unavailableVipAccess();
   }
 
+  if (reason === "auth_required" && offer && isPublishedCreatorVipOffer(offer)) {
+    return {
+      ...unavailableVipAccess(reason),
+      creatorId: offer.creatorId,
+      priceCents: offer.priceCents,
+      currency: offer.currency,
+      provider: offer.provider,
+      providerProductId: offer.providerProductId,
+      providerProductKey: offer.providerProductKey,
+      offer,
+    };
+  }
+  if (
+    reason === "offer_paused"
+    && offer
+  ) {
+    return { ...unavailableVipAccess(reason), creatorId: offer.creatorId, offer };
+  }
   if (reason !== "vip_required") return unavailableVipAccess(reason);
   const priceCents = row.priceCents;
   const currency = accessText(row.currency);

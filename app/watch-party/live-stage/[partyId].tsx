@@ -37,6 +37,8 @@ import {
   type RoomAccessResolution,
 } from "../../../_lib/accessEntitlements";
 import { trackEvent } from "../../../_lib/analytics";
+import { createActionSingleFlightLatch } from "../../../_lib/actionSingleFlight.mjs";
+import { formatOneTimePrice } from "../../../_lib/customerExperiencePresentation";
 import {
     DEFAULT_APP_CONFIG,
     readAppConfig,
@@ -46,10 +48,6 @@ import {
 import {
   getMonetizationAccessSheetPresentation,
 } from "../../../_lib/monetization";
-import {
-  readRouteBackedMonetizationProofConfig,
-  type RouteBackedMonetizationProofConfig,
-} from "../../../_lib/routeBackedMonetizationVisualProof";
 import {
   LIVE_COMMENT_FALLBACK_REFRESH_MS,
   LIVE_VIDEO_CAPTURE_OPTIONS,
@@ -139,7 +137,6 @@ import { useCommunicationRoomSession } from "../../../hooks/use-communication-ro
 import { InternalInviteSheet } from "../../../components/chat/internal-invite-sheet";
 import { AccessSheet, type AccessSheetReason } from "../../../components/monetization/access-sheet";
 import { MoneyScopeInfoButton } from "../../../components/monetization/MoneyScopeInfoButton";
-import { RouteBackedMonetizationProofCard } from "../../../components/monetization/route-backed-monetization-proof-card";
 import { ParticipantDetailSheet } from "../../../components/room/participant-detail-sheet";
 import { NotificationBellButton } from "../../../components/notifications/notification-bell-button";
 import { RoomReactionPicker, pushRecentReaction } from "../../../components/room/reaction-picker";
@@ -948,12 +945,12 @@ export default function WatchPartyLiveStageScreen({
   const [blockedRoomAccess, setBlockedRoomAccess] = useState<RoomAccessResolution | null>(null);
   const [liveMoneyAccess, setLiveMoneyAccess] = useState<LiveWatchPartyMoneyAccess | null>(null);
   const [liveMoneyPurchaseBusy, setLiveMoneyPurchaseBusy] = useState<LiveWatchPartyPassType | null>(null);
+  const liveMoneyPurchaseLatchRef = useRef(createActionSingleFlightLatch());
   const [liveMoneyOfferBusy, setLiveMoneyOfferBusy] = useState<LiveWatchPartyPassType | null>(null);
   const [liveMoneyNotice, setLiveMoneyNotice] = useState("");
   const [liveMoneyHostOfferState, setLiveMoneyHostOfferState] = useState<LiveWatchPartyHostOfferState | null>(null);
   const [liveMoneyHostSetupExpanded, setLiveMoneyHostSetupExpanded] = useState(false);
   const [liveSeatPassStateByUserId, setLiveSeatPassStateByUserId] = useState<Record<string, LiveWatchPartySeatPassState["state"]>>({});
-  const [routeProofConfig, setRouteProofConfig] = useState<RouteBackedMonetizationProofConfig | null>(null);
   const [liveWatchPartyPremiumGate, setLiveWatchPartyPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
   const [liveWatchPartyAccessSheetVisible, setLiveWatchPartyAccessSheetVisible] = useState(false);
   const [livePremiumGateKind, setLivePremiumGateKind] = useState<"live_first" | "live_watch_party">("live_watch_party");
@@ -1055,23 +1052,6 @@ export default function WatchPartyLiveStageScreen({
   const stripOrderRef = useRef<string>("");
   const branding = resolveBrandingConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
-
-  useEffect(() => {
-    let active = true;
-    readRouteBackedMonetizationProofConfig({
-      sourceId: partyId,
-      sourceTypes: ["live_watch_party_access", "live_watch_party_seat"],
-    })
-      .then((config) => {
-        if (active) setRouteProofConfig(config);
-      })
-      .catch(() => {
-        if (active) setRouteProofConfig(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, [partyId]);
 
   useEffect(() => {
     stageLocalMediaIntentRef.current = stageLocalMediaIntent;
@@ -4765,6 +4745,7 @@ export default function WatchPartyLiveStageScreen({
     priceCents: number | null,
   ) => {
     if (!offerId || !priceCents || liveMoneyPurchaseBusy) return;
+    if (!liveMoneyPurchaseLatchRef.current.tryAcquire()) return;
     setLiveMoneyPurchaseBusy(passType);
     setLiveMoneyNotice("");
     try {
@@ -4782,6 +4763,7 @@ export default function WatchPartyLiveStageScreen({
     } catch (error) {
       setLiveMoneyNotice(getUserFacingErrorMessage(error, "The Live Stage purchase could not complete. Check your access before trying again."));
     } finally {
+      liveMoneyPurchaseLatchRef.current.release();
       setLiveMoneyPurchaseBusy(null);
     }
   };
@@ -4912,14 +4894,6 @@ export default function WatchPartyLiveStageScreen({
           <Text style={styles.routeGateBody}>
             This live room could not be found anymore. Return Home and reopen Live when you are ready.
           </Text>
-          <RouteBackedMonetizationProofCard
-            config={routeProofConfig}
-            surface={routeProofConfig?.productType === "live_watch_party_seat_pass" ? "live_seat" : "live_access"}
-          />
-          <MoneyScopeInfoButton
-            scope={routeProofConfig?.productType === "live_watch_party_seat_pass" ? "live_watch_party_seat_pass" : "live_watch_party_access_pass"}
-            label="What does this unlock?"
-          />
           <View style={styles.routeGateActions}>
             <TouchableOpacity
               style={styles.routeGateSecondaryButton}
@@ -4966,14 +4940,12 @@ export default function WatchPartyLiveStageScreen({
                 : "A Live Stage Pass gives you viewer/listener access to this exact Live Stage. This pass is currently available only through the verified Google Play sandbox, so it cannot be purchased on this build and nothing will be charged. It does not include a speaking seat, camera, microphone, host, moderator, or LiveKit publish authority."
               : blockedRoomAccess ? getLiveStageAccessBody(blockedRoomAccess) : roomEntryError}
           </Text>
-          <RouteBackedMonetizationProofCard
-            config={routeProofConfig}
-            surface={routeProofConfig?.productType === "live_watch_party_seat_pass" ? "live_seat" : "live_access"}
-          />
-          <MoneyScopeInfoButton
-            scope={routeProofConfig?.productType === "live_watch_party_seat_pass" ? "live_watch_party_seat_pass" : "live_watch_party_access_pass"}
-            label="What does this unlock?"
-          />
+          {exactLivePassRequired ? (
+            <MoneyScopeInfoButton
+              scope="live_watch_party_access_pass"
+              label="What does this pass include?"
+            />
+          ) : null}
           {exactLivePassRequired
             && LIVE_STAGE_PASS_PURCHASE_AVAILABLE
             && liveMoneyAccess?.accessOfferId
@@ -4984,13 +4956,14 @@ export default function WatchPartyLiveStageScreen({
               disabled={liveMoneyPurchaseBusy !== null}
               onPress={() => void buyLiveMoneyOffer("live_watch_party_access_pass", liveMoneyAccess.accessOfferId, liveMoneyAccess.accessPriceCents)}
               accessibilityRole="button"
-              accessibilityLabel="Watch Live with a Live Stage Pass"
+              accessibilityLabel={`Get Live Stage Pass for this Stage for ${formatOneTimePrice(`$${(liveMoneyAccess.accessPriceCents / 100).toFixed(2)}`)}. Viewer and listener entry only.`}
+              accessibilityState={{ disabled: liveMoneyPurchaseBusy !== null, busy: liveMoneyPurchaseBusy !== null }}
               testID="live-stage-buy-access-pass"
             >
               <Text style={styles.routeGatePrimaryText}>
                 {liveMoneyPurchaseBusy === "live_watch_party_access_pass"
                   ? "Opening checkout…"
-                  : `Watch Live — $${(liveMoneyAccess.accessPriceCents / 100).toFixed(2)}`}
+                  : `Get Live Stage Pass — ${formatOneTimePrice(`$${(liveMoneyAccess.accessPriceCents / 100).toFixed(2)}`)}`}
               </Text>
             </TouchableOpacity>
           ) : null}
@@ -5343,12 +5316,13 @@ export default function WatchPartyLiveStageScreen({
                     onPress={() => void buyLiveMoneyOffer("live_watch_party_seat_pass", liveMoneyAccess.seatOfferId, liveMoneyAccess.seatPriceCents)}
                     testID="live-stage-buy-seat-eligibility-live-first"
                     accessibilityRole="button"
-                    accessibilityLabel="Buy Live Stage Seat Pass; host approval required"
+                    accessibilityLabel={`Get Live Stage Seat Pass for ${formatOneTimePrice(`$${(liveMoneyAccess.seatPriceCents / 100).toFixed(2)}`)}. Seat eligibility only; host approval required.`}
+                    accessibilityState={{ disabled: liveMoneyPurchaseBusy !== null, busy: liveMoneyPurchaseBusy !== null }}
                   >
                     <Text style={styles.stageCommunityRequestButtonText}>
                       {liveMoneyPurchaseBusy === "live_watch_party_seat_pass"
                         ? "Opening checkout…"
-                        : `Live Stage Seat Pass — $${(liveMoneyAccess.seatPriceCents / 100).toFixed(2)}`}
+                        : `Live Stage Seat Pass — ${formatOneTimePrice(`$${(liveMoneyAccess.seatPriceCents / 100).toFixed(2)}`)}`}
                     </Text>
                   </TouchableOpacity>
                 ) : (
@@ -5522,12 +5496,13 @@ export default function WatchPartyLiveStageScreen({
                   )}
                   testID="live-stage-buy-seat-eligibility"
                   accessibilityRole="button"
-                  accessibilityLabel="Buy Live Stage Seat Pass; host approval required"
+                  accessibilityLabel={`Get Live Stage Seat Pass for ${formatOneTimePrice(`$${(liveMoneyAccess.seatPriceCents / 100).toFixed(2)}`)}. Seat eligibility only; host approval required.`}
+                  accessibilityState={{ disabled: liveMoneyPurchaseBusy !== null, busy: liveMoneyPurchaseBusy !== null }}
                 >
                   <Text style={styles.stageCommunityRequestButtonText}>
                     {liveMoneyPurchaseBusy === "live_watch_party_seat_pass"
                       ? "Opening checkout…"
-                      : `Live Stage Seat Pass — $${(liveMoneyAccess.seatPriceCents / 100).toFixed(2)}`}
+                      : `Live Stage Seat Pass — ${formatOneTimePrice(`$${(liveMoneyAccess.seatPriceCents / 100).toFixed(2)}`)}`}
                   </Text>
                 </TouchableOpacity>
               ) : (

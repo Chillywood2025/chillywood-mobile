@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ImageBackground,
@@ -17,7 +17,11 @@ import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 
 import { titles as localTitles } from "../../_data/titles";
 import { readFollowedChannelUserIds } from "../../_lib/channelAudience";
-import { resolveMainTabBrandRevealHeight } from "../../_lib/customerExperiencePresentation";
+import { isCurrentAuthorityRequest, resolveMainTabBrandRevealHeight } from "../../_lib/customerExperiencePresentation";
+import {
+  readMyUnlockedPaidVideoLibraryItems,
+  type UnlockedPaidVideoLibraryItem,
+} from "../../_lib/creatorPaidVideos";
 import {
   formatCreatorReplaySourceLabel,
   formatCreatorReplayStatusLabel,
@@ -25,6 +29,7 @@ import {
   type CreatorReplayLibraryItem,
 } from "../../_lib/creatorReplays";
 import { supabase } from "../../_lib/supabase";
+import { useSession } from "../../_lib/session";
 import { filterPubliclyReleasedTitles } from "../../_lib/publicTitles";
 import {
   buildUserChannelProfile,
@@ -116,19 +121,34 @@ export default function MyListScreen() {
   const bottomTabBarHeight = useBottomTabBarHeight();
   const { height: viewportHeight } = useWindowDimensions();
   const brandRevealHeight = resolveMainTabBrandRevealHeight(viewportHeight);
+  const { isLoading: sessionLoading, user } = useSession();
+  const viewerUserId = String(user?.id ?? "").trim();
+  const hasLoadedRef = useRef(false);
+  const loadGenerationRef = useRef(0);
+  const currentViewerUserIdRef = useRef(viewerUserId);
+  currentViewerUserIdRef.current = viewerUserId;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [savedTitles, setSavedTitles] = useState<TitleRow[]>([]);
   const [continueWatching, setContinueWatching] = useState<ContinueWatchingTitle[]>([]);
   const [followedPlatforms, setFollowedPlatforms] = useState<UserChannelProfile[]>([]);
   const [savedReplays, setSavedReplays] = useState<CreatorReplayLibraryItem[]>([]);
+  const [unlockedVideos, setUnlockedVideos] = useState<UnlockedPaidVideoLibraryItem[]>([]);
+  const [librarySubjectUserId, setLibrarySubjectUserId] = useState("__unresolved__");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const savedTitleCount = savedTitles.length;
-  const continueWatchingCount = continueWatching.length;
-  const followedPlatformCount = followedPlatforms.length;
-  const savedReplayCount = savedReplays.length;
-  const hasLibraryRows = savedTitleCount + continueWatchingCount + followedPlatformCount + savedReplayCount > 0;
+  const libraryIdentityPending = librarySubjectUserId !== viewerUserId;
+  const visibleSavedTitles = libraryIdentityPending ? [] : savedTitles;
+  const visibleContinueWatching = libraryIdentityPending ? [] : continueWatching;
+  const visibleFollowedPlatforms = libraryIdentityPending ? [] : followedPlatforms;
+  const visibleSavedReplays = libraryIdentityPending ? [] : savedReplays;
+  const visibleUnlockedVideos = libraryIdentityPending ? [] : unlockedVideos;
+  const savedTitleCount = visibleSavedTitles.length;
+  const continueWatchingCount = visibleContinueWatching.length;
+  const followedPlatformCount = visibleFollowedPlatforms.length;
+  const savedReplayCount = visibleSavedReplays.length;
+  const unlockedVideoCount = visibleUnlockedVideos.length;
+  const hasLibraryRows = savedTitleCount + continueWatchingCount + followedPlatformCount + savedReplayCount + unlockedVideoCount > 0;
 
   const getImageSource = useCallback((item?: TitleRow | null): ImageSourcePropType | null => {
     if (!item) return null;
@@ -140,15 +160,29 @@ export default function MyListScreen() {
   }, []);
 
   const loadLibrary = useCallback(async () => {
+    const requestedViewerUserId = viewerUserId;
+    const generation = ++loadGenerationRef.current;
     setErrorMsg(null);
     try {
-      const [{ data: authData }, savedIds, progressMap, followedIds] = await Promise.all([
+      const [{ data: authData }, savedIds, progressMap, followedIds, unlockedResult] = await Promise.all([
         supabase.auth.getUser(),
         readMyListIds().catch(() => [] as string[]),
         readMergedWatchProgress().catch(() => ({})),
         readFollowedChannelUserIds({ limit: 24 }).catch(() => [] as string[]),
+        readMyUnlockedPaidVideoLibraryItems(24).catch(() => ({ status: "unavailable" as const, subjectUserId: null, items: [] })),
       ]);
       const userId = String(authData.user?.id ?? "").trim();
+      if (!isCurrentAuthorityRequest({
+        generation,
+        currentGeneration: loadGenerationRef.current,
+        requestedAuthorityKey: requestedViewerUserId,
+        currentAuthorityKey: currentViewerUserIdRef.current,
+      })
+        || userId !== requestedViewerUserId
+        || String(unlockedResult.subjectUserId ?? "").trim() !== requestedViewerUserId
+      ) {
+        return false;
+      }
       const progressEntries = Object.entries(progressMap)
         .filter(([, entry]) => Number(entry?.positionMillis ?? 0) > 0)
         .sort(([, left], [, right]) => Number(right?.updatedAt ?? 0) - Number(left?.updatedAt ?? 0))
@@ -165,6 +199,14 @@ export default function MyListScreen() {
         })),
         userId ? readCreatorReplayLibraryItems(userId).catch(() => [] as CreatorReplayLibraryItem[]) : Promise.resolve([]),
       ]);
+      if (!isCurrentAuthorityRequest({
+        generation,
+        currentGeneration: loadGenerationRef.current,
+        requestedAuthorityKey: requestedViewerUserId,
+        currentAuthorityKey: currentViewerUserIdRef.current,
+      })) {
+        return false;
+      }
 
       setSavedTitles(nextSavedTitles);
       setContinueWatching(nextContinueTitles
@@ -175,24 +217,52 @@ export default function MyListScreen() {
         .filter((item): item is ContinueWatchingTitle => !!item));
       setFollowedPlatforms(nextPlatformProfiles.filter((item): item is UserChannelProfile => !!item));
       setSavedReplays(nextReplays);
+      if (unlockedResult.status === "resolved") {
+        setUnlockedVideos(unlockedResult.items);
+      }
+      setLibrarySubjectUserId(requestedViewerUserId);
 
-      const expectedRows = savedIds.length + progressIds.length + followedIds.length + nextReplays.length;
-      const resolvedRows = nextSavedTitles.length + nextContinueTitles.length + nextPlatformProfiles.filter(Boolean).length + nextReplays.length;
-      setErrorMsg(expectedRows > 0 && resolvedRows === 0 ? "Some Library items could not be shown right now." : null);
+      const expectedRows = savedIds.length + progressIds.length + followedIds.length + nextReplays.length + unlockedResult.items.length;
+      const resolvedRows = nextSavedTitles.length + nextContinueTitles.length + nextPlatformProfiles.filter(Boolean).length + nextReplays.length + unlockedResult.items.length;
+      setErrorMsg(unlockedResult.status === "unavailable"
+        ? "Unlocked content could not be verified. Your current Library is preserved; try again before purchasing anything again."
+        : expectedRows > 0 && resolvedRows === 0 ? "Some Library items could not be shown right now." : null);
+      return true;
     } catch {
-      setSavedTitles([]);
-      setContinueWatching([]);
-      setFollowedPlatforms([]);
-      setSavedReplays([]);
-      setErrorMsg("Unable to refresh Library right now. Check your connection and try again.");
+      if (!isCurrentAuthorityRequest({
+        generation,
+        currentGeneration: loadGenerationRef.current,
+        requestedAuthorityKey: requestedViewerUserId,
+        currentAuthorityKey: currentViewerUserIdRef.current,
+      })) {
+        return false;
+      }
+      setErrorMsg("Unable to refresh Library right now. Current items remain visible; check your connection and try again.");
+      return true;
     }
-  }, []);
+  }, [viewerUserId]);
 
   const bootstrap = useCallback(async () => {
-    setLoading(true);
-    await loadLibrary();
+    if (sessionLoading) return;
+    if (!hasLoadedRef.current) setLoading(true);
+    const loadedCurrentAccount = await loadLibrary();
+    if (!loadedCurrentAccount) return;
+    hasLoadedRef.current = true;
     setLoading(false);
-  }, [loadLibrary]);
+  }, [loadLibrary, sessionLoading]);
+
+  useEffect(() => {
+    loadGenerationRef.current += 1;
+    hasLoadedRef.current = false;
+    setSavedTitles([]);
+    setContinueWatching([]);
+    setFollowedPlatforms([]);
+    setSavedReplays([]);
+    setUnlockedVideos([]);
+    setLibrarySubjectUserId("__unresolved__");
+    setErrorMsg(null);
+    setLoading(true);
+  }, [viewerUserId]);
 
   useFocusEffect(useCallback(() => {
     void bootstrap();
@@ -219,6 +289,9 @@ export default function MyListScreen() {
   const openReplay = (replay: CreatorReplayLibraryItem) => {
     const replayId = String(replay.id).trim();
     if (replayId) router.push({ pathname: "/player/replay/[replayId]", params: { replayId } });
+  };
+  const openUnlockedVideo = (video: UnlockedPaidVideoLibraryItem) => {
+    if (video.id) router.push({ pathname: "/player/[id]", params: { id: video.id, source: "creator-video" } });
   };
 
   const renderSection = (
@@ -264,7 +337,7 @@ export default function MyListScreen() {
     <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.screenBackground} resizeMode="cover">
       <View style={styles.backgroundOverlay} pointerEvents="none" />
       <SafeAreaView style={styles.safe}>
-        {loading ? (
+        {loading || libraryIdentityPending ? (
           <View style={styles.center}>
             <ActivityIndicator color="#E50914" />
             <Text style={styles.loadingText}>Loading Library...</Text>
@@ -282,10 +355,11 @@ export default function MyListScreen() {
             />
             <View style={styles.headerBlock}>
               <Text style={styles.header}>My Library</Text>
-              <Text style={styles.headerBody}>Saved titles, watch progress, followed Platforms, and saved replays live here.</Text>
+              <Text style={styles.headerBody}>Saved titles, unlocked creator videos, watch progress, followed Platforms, and saved replays live here.</Text>
               <View style={styles.libraryScopeRow}>
                 {[
                   [savedTitleCount, "Saved"],
+                  [unlockedVideoCount, "Unlocked"],
                   [continueWatchingCount, "Continue"],
                   [followedPlatformCount, "Platforms"],
                   [savedReplayCount, "Replays"],
@@ -306,8 +380,36 @@ export default function MyListScreen() {
               </View>
             ) : null}
 
-            {renderSection("Saved", `${savedTitleCount} saved`, savedTitleCount > 0, "No saved titles yet", "Save a title from Home or Explore and it will appear here.", renderTitleRail(savedTitles, openTitleDetails, (item) => item.runtime || item.category || "Saved"))}
-            {renderSection("Continue Watching", `${continueWatchingCount} in progress`, continueWatchingCount > 0, "No watch progress yet", "Titles appear here after playback writes progress for your account or this device.", renderTitleRail(continueWatching, openPlayer, (item) => formatProgressLabel(item.progress)))}
+            {renderSection("Saved", `${savedTitleCount} saved`, savedTitleCount > 0, "No saved titles yet", "Save a title from Home or Explore and it will appear here.", renderTitleRail(visibleSavedTitles, openTitleDetails, (item) => item.runtime || item.category || "Saved"))}
+            {renderSection(
+              "Unlocked Creator Videos",
+              `${unlockedVideoCount} unlocked`,
+              unlockedVideoCount > 0,
+              "No unlocked creator videos",
+              "Creator videos you purchase appear here while current access remains valid.",
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+                {visibleUnlockedVideos.map((video) => (
+                  <TouchableOpacity
+                    key={video.id}
+                    style={styles.unlockedCard}
+                    activeOpacity={0.88}
+                    onPress={() => openUnlockedVideo(video)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${video.title}. Unlocked creator video. Open in Chi'llywood Player.`}
+                    testID="library-unlocked-video-open-button"
+                  >
+                    <View style={styles.unlockedThumb}>
+                      {remoteImageSource(video.thumbnailUrl)
+                        ? <Image source={remoteImageSource(video.thumbnailUrl)!} style={styles.poster} />
+                        : <Text style={styles.posterInitial}>{String(video.title || "U").slice(0, 1).toUpperCase()}</Text>}
+                    </View>
+                    <Text style={styles.itemTitle} numberOfLines={2}>{video.title}</Text>
+                    <Text style={styles.unlockedStatus}>Unlocked</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>,
+            )}
+            {renderSection("Continue Watching", `${continueWatchingCount} in progress`, continueWatchingCount > 0, "No watch progress yet", "Titles appear here after playback writes progress for your account or this device.", renderTitleRail(visibleContinueWatching, openPlayer, (item) => formatProgressLabel(item.progress)))}
 
             {renderSection(
               "Saved Replays",
@@ -316,7 +418,7 @@ export default function MyListScreen() {
               "No saved replays yet",
               "Replays you save from Live Stage or Watch-Party Live will appear here.",
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
-                {savedReplays.map((replay) => (
+                {visibleSavedReplays.map((replay) => (
                   <TouchableOpacity key={replay.id} style={styles.replayCard} activeOpacity={0.88} onPress={() => openReplay(replay)} accessibilityRole="button" accessibilityLabel={`Open replay ${replay.title}`}>
                     <View style={styles.replayThumb}>
                       {remoteImageSource(replay.thumbnailUrl) ? <Image source={remoteImageSource(replay.thumbnailUrl)!} style={styles.poster} /> : <Text style={styles.replayIcon}>▶</Text>}
@@ -336,7 +438,7 @@ export default function MyListScreen() {
               "No followed Platforms yet",
               "Follow a public Platform and it will appear here.",
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
-                {followedPlatforms.map((platform) => (
+                {visibleFollowedPlatforms.map((platform) => (
                   <TouchableOpacity key={platform.id} style={styles.platformCard} activeOpacity={0.88} onPress={() => openPlatform(platform)} accessibilityRole="button" accessibilityLabel={`Open Platform ${platform.displayName}`}>
                     <View style={styles.platformAvatar}>
                       {platform.avatarUrl ? <Image source={{ uri: platform.avatarUrl }} style={styles.platformAvatarImage} /> : <Text style={styles.platformAvatarInitial}>{String(platform.displayName ?? "P").slice(0, 1).toUpperCase()}</Text>}
@@ -351,7 +453,7 @@ export default function MyListScreen() {
             {!hasLibraryRows ? (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyTitle}>Nothing saved yet</Text>
-                <Text style={styles.emptyText}>Saved titles, progress, replays, and followed Platforms will appear here.</Text>
+                <Text style={styles.emptyText}>Saved titles, unlocked creator videos, progress, replays, and followed Platforms will appear here.</Text>
                 <TouchableOpacity style={styles.emptyButton} activeOpacity={0.86} onPress={() => router.push("/(tabs)/explore")}><Text style={styles.emptyButtonText}>Explore</Text></TouchableOpacity>
               </View>
             ) : null}
@@ -393,6 +495,9 @@ const styles = StyleSheet.create({
   replayThumb: { height: 92, borderRadius: 8, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: "#171A22" },
   replayIcon: { color: "#FFFFFF", fontSize: 28, fontWeight: "900" },
   replayStatus: { color: "#FF9AA2", fontSize: 10, fontWeight: "900", textTransform: "uppercase" },
+  unlockedCard: { width: 156, borderRadius: 8, borderWidth: 1, borderColor: "rgba(124,224,163,0.28)", backgroundColor: "rgba(12,30,22,0.9)", padding: 9, gap: 7 },
+  unlockedThumb: { height: 92, borderRadius: 8, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: "#171A22" },
+  unlockedStatus: { color: "#9AF2BC", fontSize: 10, fontWeight: "900", textTransform: "uppercase" },
   platformCard: { width: 150, minHeight: 166, borderRadius: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", backgroundColor: "rgba(10,12,18,0.88)", padding: 10, gap: 8 },
   platformAvatar: { width: 58, height: 58, borderRadius: 29, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(229,9,20,0.2)" },
   platformAvatarImage: { width: "100%", height: "100%" },

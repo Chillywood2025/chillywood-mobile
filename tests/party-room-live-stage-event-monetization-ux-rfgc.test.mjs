@@ -68,7 +68,8 @@ test("Party Room creator setup is contextual Free or Paid entry with an exact vi
 test("paid Party Room viewer copy identifies exact authority before and after checkout", () => {
   assert.match(partyRoom, /Party Room Pass required/u);
   assert.match(partyRoom, /gives you entry to this exact Party Room/u);
-  assert.match(partyRoom, /Join Party Room —/u);
+  assert.match(partyRoom, /Get Party Room Pass —/u);
+  assert.match(partyRoom, /formatOneTimePrice/u);
   assert.match(partyRoom, /does not include Live Stage, speaking, camera, microphone, host, moderator, LiveKit publish authority/u);
   assert.match(partyMoney, /Party Room Pass active\. You're cleared to enter this Party Room\./u);
   assert.doesNotMatch(partyRoom, /live-stage/u);
@@ -291,7 +292,9 @@ test("purchase UI is duplicate-aware, lifecycle-aware, and accessible on narrow 
   assert.match(liveStage, /flexWrap: "wrap"/u);
   assert.match(liveStage, /minWidth: 120/u);
   assert.match(partySetup, /accessibilityState=/u);
-  assert.match(liveStage, /accessibilityLabel="Buy Live Stage Seat Pass; host approval required"/u);
+  assert.match(liveStage, /Seat eligibility only; host approval required/u);
+  assert.match(liveStage, /liveMoneyPurchaseLatchRef\.current\.tryAcquire\(\)/u);
+  assert.match(liveStage, /liveMoneyPurchaseLatchRef\.current\.release\(\)/u);
   assert.match(eventRoute, /accessibilityLabel=\{customerState\.actionLabel \?\? "Get Event Pass"\}/u);
   assert.match(eventRoute, /accessibilityState=\{\{ disabled: purchaseLoading \|\| soldOut, busy: purchaseLoading \}\}/u);
 });

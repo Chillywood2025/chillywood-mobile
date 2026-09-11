@@ -55,6 +55,8 @@ import {
     type RoomAccessResolution,
 } from "../../_lib/accessEntitlements";
 import { trackEvent } from "../../_lib/analytics";
+import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
+import { formatOneTimePrice } from "../../_lib/customerExperiencePresentation";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../_lib/betaProgram";
 import { getOrCreateDirectThread } from "../../_lib/chat";
 import {
@@ -72,10 +74,6 @@ import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed
 import {
     getMonetizationAccessSheetPresentation,
 } from "../../_lib/monetization";
-import {
-  readRouteBackedMonetizationProofConfig,
-  type RouteBackedMonetizationProofConfig,
-} from "../../_lib/routeBackedMonetizationVisualProof";
 import {
   ROOM_HEARTBEAT_MS,
   ROOM_SNAPSHOT_REFRESH_MS,
@@ -144,7 +142,6 @@ import { LiveBottomStrip, type LiveBottomStripParticipant } from "../../componen
 import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
 import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
 import { MoneyScopeStrip, MoneyStatusChip } from "../../components/monetization/money-ui";
-import { RouteBackedMonetizationProofCard } from "../../components/monetization/route-backed-monetization-proof-card";
 import { TipSheet } from "../../components/monetization/tip-sheet";
 import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
@@ -443,10 +440,10 @@ export default function WatchPartyRoomScreen() {
   const [presenceSynced, setPresenceSynced] = useState(false);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [accessGate, setAccessGate] = useState<MonetizationGate | null>(null);
-  const [routeProofConfig, setRouteProofConfig] = useState<RouteBackedMonetizationProofConfig | null>(null);
   const [blockedRoomAccess, setBlockedRoomAccess] = useState<RoomAccessResolution | null>(null);
   const [paidTicketGate, setPaidTicketGate] = useState<PaidWatchPartyTicketAccess | null>(null);
   const [paidTicketBusy, setPaidTicketBusy] = useState(false);
+  const paidTicketPurchaseLatchRef = useRef(createActionSingleFlightLatch());
   const [paidTicketNotice, setPaidTicketNotice] = useState<string | null>(null);
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
   const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
@@ -455,22 +452,6 @@ export default function WatchPartyRoomScreen() {
   const [reportTarget, setReportTarget] = useState<{ type: "room" | "participant"; targetId: string; label: string } | null>(null);
   // Watch-Party Live controls are intentionally persistent and must not auto-hide.
 
-  useEffect(() => {
-    let active = true;
-    readRouteBackedMonetizationProofConfig({
-      sourceId: partyId,
-      sourceTypes: ["watch_party_live"],
-    })
-      .then((config) => {
-        if (active) setRouteProofConfig(config);
-      })
-      .catch(() => {
-        if (active) setRouteProofConfig(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, [partyId]);
   const [watchPartyLiveControlsVisible] = useState(true);
   const [watchPartyLiveOpening, setWatchPartyLiveOpening] = useState(false);
   const [joinRetryToken, setJoinRetryToken] = useState(0);
@@ -2031,6 +2012,7 @@ export default function WatchPartyRoomScreen() {
       setPaidTicketNotice("Party Room Pass purchases are temporarily unavailable while setup is being finalized. This room stays locked until access is verified.");
       return;
     }
+    if (!paidTicketPurchaseLatchRef.current.tryAcquire()) return;
     setPaidTicketBusy(true);
     setPaidTicketNotice(null);
     try {
@@ -2049,6 +2031,7 @@ export default function WatchPartyRoomScreen() {
     } catch {
       setPaidTicketNotice("Party Room Pass checkout could not start. Try again later.");
     } finally {
+      paidTicketPurchaseLatchRef.current.release();
       setPaidTicketBusy(false);
     }
   }, [paidTicketBusy, paidWatchPartyCheckoutAvailable, partyId, room?.partyId]);
@@ -2776,7 +2759,6 @@ export default function WatchPartyRoomScreen() {
             <Text style={styles.errorBody}>
             {getAccessGateBody(accessGate)}
             </Text>
-          <RouteBackedMonetizationProofCard config={routeProofConfig} surface="watch_party_ticket" />
           <ProtectedSessionNote
             {...getProtectedSessionCopy(sharedRoomMode === "live" ? "live-room" : "party-room", {
               contentAccessRule: room.contentAccessRule,
@@ -2853,6 +2835,7 @@ export default function WatchPartyRoomScreen() {
     const priceLabel = offer
       ? `${(offer.priceCents / 100).toLocaleString(undefined, { style: "currency", currency: offer.currency.toUpperCase() })}`
       : null;
+    const oneTimePriceLabel = formatOneTimePrice(priceLabel);
     return (
       <View style={styles.center} testID="screen-party-room">
         <View style={styles.errorCard} testID="watch-party-ticket-lock-card">
@@ -2862,10 +2845,10 @@ export default function WatchPartyRoomScreen() {
             </Text>
             <MoneyStatusChip label={paidTicketGate.requiresPurchase ? "Party Room Pass" : "Unavailable"} tone={paidTicketGate.requiresPurchase ? "premium" : "warning"} />
           </View>
-          {priceLabel ? <Text style={styles.ticketPrice}>{priceLabel}</Text> : null}
+          {priceLabel ? <Text style={styles.ticketPrice}>{oneTimePriceLabel}</Text> : null}
           <Text style={styles.errorBody}>
             {paidTicketGate.requiresPurchase && paidWatchPartyCheckoutAvailable && priceLabel
-              ? `A Party Room Pass gives you entry to this exact Party Room for ${priceLabel}. It does not include Live Stage, speaking, camera, microphone, host, moderator, LiveKit publish authority, Premium, subscriptions, VIP, paid videos, other rooms, or Events.`
+              ? `A Party Room Pass gives you entry to this exact Party Room for ${oneTimePriceLabel}. It does not include Live Stage, speaking, camera, microphone, host, moderator, LiveKit publish authority, Premium, subscriptions, VIP, paid videos, other rooms, or Events.`
               : "Party Room Pass purchases are temporarily unavailable while setup is being finalized. This room stays locked until access is verified."}
           </Text>
           <MoneyScopeStrip
@@ -2873,7 +2856,6 @@ export default function WatchPartyRoomScreen() {
             excludes="Chi'llywood Premium, subscriptions, VIP, paid videos, Event Passes, LiveKit publish authority, host controls, and other rooms stay separate."
           />
           <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this Party Room Pass unlock?" />
-          <RouteBackedMonetizationProofCard config={routeProofConfig} surface="watch_party_ticket" />
           {paidTicketGate.requiresPurchase && priceLabel ? (
             <TouchableOpacity
               style={[styles.secondaryBtn, styles.accessPrimaryButton, paidTicketBusy && styles.secondaryBtnDisabled]}
@@ -2882,11 +2864,11 @@ export default function WatchPartyRoomScreen() {
               disabled={paidTicketBusy}
               testID="watch-party-ticket-purchase-button"
               accessibilityRole="button"
-              accessibilityLabel={`Join Party Room with Party Room Pass for ${priceLabel}`}
+              accessibilityLabel={`Join Party Room — get the Party Room Pass for this room for ${oneTimePriceLabel}`}
               accessibilityState={{ disabled: paidTicketBusy, busy: paidTicketBusy }}
             >
               <Text style={[styles.secondaryBtnText, styles.accessPrimaryButtonText]}>
-                {paidTicketBusy ? "Opening Store" : `Join Party Room — ${priceLabel}`}
+                {paidTicketBusy ? "Opening Store" : `Get Party Room Pass — ${oneTimePriceLabel}`}
               </Text>
             </TouchableOpacity>
           ) : null}
@@ -2920,7 +2902,6 @@ export default function WatchPartyRoomScreen() {
         <View style={styles.errorCard}>
           <Text style={styles.errorTitle}>Room not found</Text>
           <Text style={styles.errorBody}>This party may have ended or the code is incorrect.</Text>
-          <RouteBackedMonetizationProofCard config={routeProofConfig} surface="watch_party_ticket" />
           <TouchableOpacity style={styles.secondaryBtn} onPress={returnToWatchPartyEntry} activeOpacity={0.85}>
             <Text style={styles.secondaryBtnText}>← Go Back</Text>
           </TouchableOpacity>

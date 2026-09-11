@@ -12,7 +12,7 @@ import {
 import { buildSafetyReportContext, submitSafetyReport } from "../../_lib/moderation";
 import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import { readCircleSpectatorFeedItems } from "../../_lib/circleSpectatorFeed";
-import { resolveEventCustomerPresentation } from "../../_lib/customerExperiencePresentation";
+import { formatOneTimePrice, resolveEventCustomerPresentation } from "../../_lib/customerExperiencePresentation";
 import { readPublicDiscoveryFeedItems, type DiscoveryFeedItem } from "../../_lib/discoveryFeed";
 import { supabase } from "../../_lib/supabase";
 import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
@@ -192,6 +192,7 @@ export default function PaidCreatorEventRoute() {
   const accessUnavailable = unavailable && !terminalEventState;
   const hasEventAccess = confirmedEventPass || creatorPreview || freeEvent;
   const priceLabel = offer ? formatPaidCreatorEventPrice(offer.priceCents, offer.currency) : null;
+  const oneTimePriceLabel = priceLabel ? formatOneTimePrice(priceLabel) : null;
   const customerState = resolveEventCustomerPresentation({
     status: event?.status ?? offer?.status,
     startsAt: event?.starts_at ?? offer?.startsAt,
@@ -199,10 +200,13 @@ export default function PaidCreatorEventRoute() {
     accessAllowed: hasEventAccess,
     requiresPurchase: locked,
     soldOut,
-    priceLabel,
+    priceLabel: oneTimePriceLabel,
     hasLiveDestination: destination?.kind === "live",
     hasReplayDestination: destination?.kind === "replay",
   });
+  const canPurchaseEventPass = locked
+    && !terminalEventState
+    && customerState.action === "buy_pass";
   const audienceLabel = event?.visibility === "circle"
     ? "Chi'lly Circle Event"
     : event?.visibility === "private"
@@ -266,7 +270,7 @@ export default function PaidCreatorEventRoute() {
               <Text style={styles.detail}>Ends: {formatDate(event?.ends_at ?? offer?.endsAt ?? null)}</Text>
               {offer ? (
                 <>
-                  <Text style={styles.detail}>Event Pass · {priceLabel}</Text>
+                  <Text style={styles.detail}>Event Pass · {oneTimePriceLabel}</Text>
                 </>
               ) : null}
             </View>
@@ -281,12 +285,12 @@ export default function PaidCreatorEventRoute() {
               </View>
             ) : null}
 
-            {locked ? (
+            {canPurchaseEventPass ? (
               <MoneyOfferCard
                 testID="event-pass-lock-card"
                 kicker="Event Pass"
                 title={customerState.headline}
-                price={priceLabel}
+                price={oneTimePriceLabel}
                 body={`${customerState.body} ${LOCKED_COPY}`}
                 statusLabel={customerState.statusLabel}
                 statusTone={soldOut ? "warning" : "premium"}
