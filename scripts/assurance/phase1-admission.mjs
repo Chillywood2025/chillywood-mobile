@@ -69,6 +69,18 @@ const REPOSITORY = "Chillywood2025/chillywood-mobile";
 const WORKFLOW_PATH = ".github/workflows/phase1-ci.yml";
 const WORKFLOW_FILE = "phase1-ci.yml";
 const WORKFLOW_NAME = "Phase 1 CI";
+const SOURCE_AUTHORITY_TEST_PATH = "tests/assurance/source-readiness-wrapper.test.mjs", SOURCE_AUTHORITY_STEP = "          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}";
+const SOURCE_AUTHORITY_TOKEN_STEP = "          GH_TOKEN: ${{ github.token }}\n";
+const SOURCE_AUTHORITY_TEST_ANCHOR = "test(\"draft source readiness rejects deletion of a protected-base test\", () => {";
+const SOURCE_AUTHORITY_TEST_BLOCK = `test("all source-authority lanes receive the exact workflow token and protected base", () => {
+  const steps = workflow.match(/      - name: Validate assurance authority and source correctness[\\s\\S]*?(?=\\n      - name:|\\n  [a-z][a-z-]*:|$)/gu) ?? [];
+  assert.equal(steps.length, 3);
+  for (const step of steps) {
+    assert.match(step, /env:\\s*\\n\\s*GH_TOKEN: \\$\\{\\{ github\\.token \\}\\}\\s*\\n\\s*PHASE1_PROTECTED_BASE_SHA: \\$\\{\\{ github\\.event\\.pull_request\\.base\\.sha \\|\\| github\\.sha \\}\\}/u);
+  }
+});
+
+`;
 
 export function selectAuthoritativePhase1WorkflowIdentity({ run, workflow } = {}) {
   const workflowId = run?.workflow_id;
@@ -96,6 +108,7 @@ const publisherProvisioningBrand = new WeakSet();
 const publisherAppPrivacyBrand = new WeakSet();
 const publisherAnchorBrand = new WeakSet();
 const sourceAuthorityBrand = new WeakSet();
+const workflowTransitionBrand = new WeakSet();
 const lifecycleActions = new Set(["opened", "synchronize", "reopened", "edited", "ready_for_review", "converted_to_draft"]);
 
 const knownBlockingCodes = new Set([
@@ -439,6 +452,14 @@ function brandSourceAuthority(proof, { identity, lifecycle } = {}) {
   sourceAuthorityBrand.add(proof); return proof;
 }
 
+export function verifyPhase1SourceAuthorityTokenWorkflowTransition({ candidateWorkflow, protectedWorkflow, candidateTest, protectedTest } = {}) {
+  const stepCount = typeof protectedWorkflow === "string" ? protectedWorkflow.split(SOURCE_AUTHORITY_STEP).length - 1 : 0;
+  return stepCount === 6
+    && candidateWorkflow === protectedWorkflow.replaceAll(SOURCE_AUTHORITY_STEP, `${SOURCE_AUTHORITY_TOKEN_STEP}${SOURCE_AUTHORITY_STEP}`)
+    && typeof protectedTest === "string" && protectedTest.split(SOURCE_AUTHORITY_TEST_ANCHOR).length === 2
+    && candidateTest === protectedTest.replace(SOURCE_AUTHORITY_TEST_ANCHOR, `${SOURCE_AUTHORITY_TEST_BLOCK}${SOURCE_AUTHORITY_TEST_ANCHOR}`);
+}
+
 export function evaluatePhase1Admission(input = {}) {
   const identity = input.identity ?? {};
   const lifecycle = input.lifecycle ?? {};
@@ -481,11 +502,18 @@ export function evaluatePhase1Admission(input = {}) {
   const evaluatorValid = evaluatorIdentity.sha === identity.baseSha
     && validSha(evaluatorIdentity.sha)
     && evaluatorIdentity.workflowBlobSha === workflowIntegrity.protectedBlobSha;
+  const transitionValid = workflowTransitionBrand.has(workflowIntegrity.transitionProof)
+    && workflowIntegrity.transitionProof?.repository === identity.repository
+    && workflowIntegrity.transitionProof?.pr === identity.pr
+    && workflowIntegrity.transitionProof?.headSha === identity.headSha
+    && workflowIntegrity.transitionProof?.candidateBlobSha === workflowIntegrity.candidateBlobSha
+    && workflowIntegrity.transitionProof?.protectedBlobSha === workflowIntegrity.protectedBlobSha;
+  const workflowValid = workflowIntegrity.trusted === true && workflowIntegrity.complete === true
+    && typeof workflowIntegrity.candidateBlobSha === "string"
+    && (workflowIntegrity.candidateBlobSha === workflowIntegrity.protectedBlobSha || transitionValid);
   const trustedContext = identityValid && lifecycleValid && runValid && evaluatorValid
     && input.evidenceComplete === true && input.paginationComplete === true
-    && workflowIntegrity.trusted === true && workflowIntegrity.complete === true
-    && typeof workflowIntegrity.candidateBlobSha === "string"
-    && workflowIntegrity.candidateBlobSha === workflowIntegrity.protectedBlobSha;
+    && workflowValid;
   const publisherAnchorValid = publisherAnchorBrand.has(publisherAnchor)
     && publisherAnchor.repository === identity.repository
     && DIGEST_RE.test(publisherAnchor.anchorHash ?? "")
@@ -501,8 +529,7 @@ export function evaluatePhase1Admission(input = {}) {
   if (input.evidenceComplete !== true || input.paginationComplete !== true) preflight.push(finding("PHASE1_EVIDENCE_INCOMPLETE", null));
   const jobIds = suppliedJobs.map(({ id }) => id);
   if (jobIds.some((id) => !Number.isInteger(id) || id < 1) || jobIds.length !== new Set(jobIds).size) preflight.push(finding("PHASE1_EVIDENCE_INCOMPLETE", null));
-  if (workflowIntegrity.trusted !== true || workflowIntegrity.complete !== true
-    || !workflowIntegrity.candidateBlobSha || workflowIntegrity.candidateBlobSha !== workflowIntegrity.protectedBlobSha) {
+  if (!workflowValid) {
     preflight.push(finding("PHASE1_WORKFLOW_INTEGRITY_INVALID", null));
   }
   const lanes = [];
@@ -1011,6 +1038,24 @@ async function readWorkflowBlob(repository, sha, token) {
   return value.sha;
 }
 
+async function readRepositoryText(repository, file, sha, token) {
+  const value = await githubRequest(`/repos/${repository}/contents/${file}?ref=${sha}`, token);
+  if (value?.type !== "file" || value?.encoding !== "base64" || typeof value?.content !== "string") throw new Error("PHASE1_WORKFLOW_TRANSITION_SOURCE_UNAVAILABLE");
+  return Buffer.from(value.content.replace(/\s/gu, ""), "base64").toString("utf8");
+}
+
+async function resolveWorkflowTransitionProof({ repository, identity, token, sourceAuthorityProof, candidateBlobSha, protectedBlobSha }) {
+  if (!sourceAuthorityBrand.has(sourceAuthorityProof) || sourceAuthorityProof.authorityType !== "ARCHITECTURE") throw new Error("PHASE1_WORKFLOW_TRANSITION_AUTHORITY_INVALID");
+  const [candidateWorkflow, protectedWorkflow, candidateTest, protectedTest] = await Promise.all([
+    readRepositoryText(repository, WORKFLOW_PATH, identity.headSha, token), readRepositoryText(repository, WORKFLOW_PATH, identity.baseSha, token),
+    readRepositoryText(repository, SOURCE_AUTHORITY_TEST_PATH, identity.headSha, token), readRepositoryText(repository, SOURCE_AUTHORITY_TEST_PATH, identity.baseSha, token),
+  ]);
+  if (!verifyPhase1SourceAuthorityTokenWorkflowTransition({ candidateWorkflow, protectedWorkflow, candidateTest, protectedTest })) throw new Error("PHASE1_WORKFLOW_TRANSITION_INVALID");
+  const proof = { repository, pr: identity.pr, headSha: identity.headSha, candidateBlobSha, protectedBlobSha };
+  workflowTransitionBrand.add(proof);
+  return proof;
+}
+
 async function readAssociatedPullRequests(repository, sha, token) {
   const pulls = [];
   for (let page = 1; page <= 20; page += 1) {
@@ -1380,6 +1425,7 @@ async function finalizeAdmission({ repository, prNumber, readToken, publisher, s
   })), { repository, identity, provisioningReadback: publisher.provisioningReadback });
   if (typeof engine.resolvePhase1SourceAuthorityEligibility !== "function") throw new Error("PHASE1_SOURCE_AUTHORITY_RESOLVER_MISSING");
   const sourceAuthorityProof = brandSourceAuthority(await withCandidateWorktree(identity, (root) => engine.resolvePhase1SourceAuthorityEligibility({ repository, identity, lifecycle, root })), { identity, lifecycle });
+  const transitionProof = candidateBlobSha === protectedBlobSha ? null : await resolveWorkflowTransitionProof({ repository, identity, token: readToken, sourceAuthorityProof, candidateBlobSha, protectedBlobSha });
   const input = {
     identity,
     lifecycle,
@@ -1387,7 +1433,7 @@ async function finalizeAdmission({ repository, prNumber, readToken, publisher, s
     jobs: jobRead.jobs,
     evidenceComplete: true,
     paginationComplete: jobRead.complete,
-    workflowIntegrity: { trusted: true, complete: true, candidateBlobSha, protectedBlobSha },
+    workflowIntegrity: { trusted: true, complete: true, candidateBlobSha, protectedBlobSha, transitionProof },
     evaluatorIdentity: { sha: evaluatorSha, workflowBlobSha: protectedBlobSha },
     maintenanceProof,
     publisherAnchor,
