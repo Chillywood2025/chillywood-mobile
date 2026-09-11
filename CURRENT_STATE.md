@@ -23,7 +23,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - Current freshness claims: `repository-task-lease-customer-commerce-visual-system` (REPOSITORY_TASK_LEASE, expires `2036-09-07T19:35:00.000Z`), `repository-task-lease-pre-release-wave1` (REPOSITORY_TASK_LEASE, expires `2036-08-11T18:43:16.000Z`), `repository-task-lease-d2a-release-critical` (REPOSITORY_TASK_LEASE, expires `2036-08-09T00:04:54.000Z`), `repository-source-s0-exact-closure-reuse-final` (REPOSITORY_SOURCE, expires `2026-08-12T04:34:00Z`).
 - Blocked freshness claims: `repository-source-a1-exact-carrier-full-history` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T04:07:31Z`), `repository-source-a1-complete-late-sentinel-inventory` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T03:25:40Z`), `repository-source-a1-post-merge-control-readback` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T03:16:55Z`), `repository-source-a1-late-review-owner-registry-bootstrap` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T02:48:20Z`), `repository-source-a1-assurance-control-final` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T02:37:45Z`), `provider-critical-b3-linked-readback` (PROVIDER_CRITICAL, STALE_BLOCKED, expired `2026-08-02T14:00:44Z`).
 - Internally validated historical review sentinels: PR #195 reviewed `605039a1eec08e153f33380a2998ee1c4cef2a90` after merge with 3 unresolved findings; successor `codex/assurance-active-task-and-claim-freshness-a1`; PR #194 reviewed `c15a58039b67d65eabdcaa03a9422ebc8d6dd95e` after merge with 5 unresolved findings; successor `codex/d2a-livekit-mic-post-merge-review-correction`. Only protected-main registered finding sets block post-merge completion claims, unrelated successor work, release, and proof-tier promotion; unvalidated Codex commentary remains advisory triage.
-- Document rendered at `2026-09-11T15:35:00Z`; document deadline `2026-08-13T18:46:27Z` is diagnostic only and grants no universal implementation authority. Claim-scoped freshness remains mandatory. Derived live provider readback: false.
+- Document rendered at `2026-09-11T15:56:30Z`; document deadline `2026-08-13T18:46:27Z` is diagnostic only and grants no universal implementation authority. Claim-scoped freshness remains mandatory. Derived live provider readback: false.
 
 ## Engineering doctrine
 
@@ -56,7 +56,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
 - Contract `OWNER_JURISDICTION_CANONICAL_MODEL_V2` is `ACTIVE`; standing policy may be reused: `true`; domain coverage may be reused: `false`. Every task must enumerate exact domains: `true`.
 - Legacy receipts retain their original semantics. External proof is never inherited, operational ownership is preserved, and this capability grants no product, provider, database-deployment, build, submission, OTA, or public-release authority.
-- Current immutable policy source: comment #5296932596, standing-policy hash `16772f5aa32d6c2ba4d8a465ae447519ab5ff7219882ddcd614176410bcc817f`, status `ACTIVE_UNTIL_OWNER_SUPERSESSION_OR_REVOCATION`; task binding `cc051d5bf58df85f9ee59e07a12f472915547fcc0b06ff5e1dda7c5d16ac08b8` covers `10/10` exact domains.
+- Current immutable policy source: comment #5296932596, standing-policy hash `16772f5aa32d6c2ba4d8a465ae447519ab5ff7219882ddcd614176410bcc817f`, status `ACTIVE_UNTIL_OWNER_SUPERSESSION_OR_REVOCATION`; task binding `246d7d17a0a02ddc50a782fe234f05cc9c345d46695efdcb91447f1570fe05a6` covers `10/10` exact domains.
 
 ## Assurance receipt lifecycle
 
