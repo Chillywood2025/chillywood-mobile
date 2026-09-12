@@ -28,6 +28,13 @@ const allowedFailure = {
   ],
 };
 
+const eligibleTaskFailure = {
+  ok: false,
+  failures: [
+    "source-only autonomous contract requires shared evaluator eligibility",
+  ],
+};
+
 const rollingAuthorityFailure = {
   ok: false,
   failures: [
@@ -186,6 +193,15 @@ test("draft source readiness accepts only the core's exact structured stderr rec
   assert.deepEqual(receipt.deferredFinalAdmissionFailures, allowedFailure.failures);
 });
 
+test("draft source readiness accepts the exact final-admission marker after the finite task is already eligible", () => {
+  const result = runStubbedWrapper({ coreStderr: JSON.stringify(eligibleTaskFailure) });
+  assert.equal(result.status, 0, result.stderr);
+  const receipt = JSON.parse(result.stdout);
+  assert.equal(receipt.mode, "DRAFT_SOURCE_READINESS");
+  assert.equal(receipt.mergeAuthorityGranted, false);
+  assert.deepEqual(receipt.deferredFinalAdmissionFailures, eligibleTaskFailure.failures);
+});
+
 test("draft source readiness classifies the exact post-R2 authority-control drift without provider or merge authority", () => {
   const result = runStubbedWrapper({ coreStderr: JSON.stringify(rollingAuthorityFailure) });
   assert.equal(result.status, 0, result.stderr);
@@ -237,6 +253,9 @@ test("draft source readiness never converts current provider proof into a source
 test("a ready PR cannot defer the same final-admission failure", () => {
   const result = runStubbedWrapper({ coreStderr: JSON.stringify(allowedFailure), draft: false });
   assert.equal(result.status, 1);
+
+  const eligibleTask = runStubbedWrapper({ coreStderr: JSON.stringify(eligibleTaskFailure), draft: false });
+  assert.equal(eligibleTask.status, 1);
 });
 
 test("draft source readiness rejects non-Actions, impossible lifecycle, and foreign event identity", () => {
