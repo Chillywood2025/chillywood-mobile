@@ -283,8 +283,9 @@ assert.equal(schemas.$defs.finiteTaskTerminalOutcome.allOf[0].else.else.not.anyO
 assert.ok(schemas.$defs.finiteTaskTerminalOutcome.properties.classification.enum.includes("FINITE_TASK_BASE_ONLY_POST_MERGE_TERMINAL_EVIDENCE_V1"));
 assert.ok(schemas.$defs.finiteTaskTerminalOutcome.properties.amendmentReceipt.oneOf.some(({ type }) => type === "null"));
 assert.ok(schemas.$defs.finiteTaskTerminalOutcome.properties.finalSourceReceipt.properties.amendmentCommentId.oneOf.some(({ type }) => type === "null"));
-assert.ok(schemas.$defs.finiteTaskTerminalOutcome.allOf[1].if.properties.classification.enum.includes("FINITE_TASK_BASE_ONLY_POST_MERGE_TERMINAL_EVIDENCE_V1"));
-assert.ok(schemas.$defs.finiteTaskTerminalOutcome.allOf[1].if.properties.classification.enum.includes("FINITE_TASK_IMPLEMENTATION_CHAIN_TERMINAL_EVIDENCE_V3"));
+assert.equal(schemas.$defs.finiteTaskTerminalOutcome.allOf[1].if.properties.classification.const, "FINITE_TASK_BASE_ONLY_POST_MERGE_TERMINAL_EVIDENCE_V1");
+assert.deepEqual(schemas.$defs.finiteTaskTerminalOutcome.allOf[1].else.if.properties.schemaVersion.enum, [1, 2]);
+assert.equal(schemas.$defs.finiteTaskTerminalOutcome.allOf[0].else.then.properties.amendmentReceipt, undefined);
 const finiteTaskLeaseSchema = schemas.$defs.currentTruthRecord.properties.finiteTaskLeases.properties.tasks.items;
 assert.deepEqual(finiteTaskLeaseSchema.allOf[0].if, { required: ["amendmentMaximum"] });
 assert.ok(finiteTaskLeaseSchema.allOf[0].then.required.includes("artifactReservation"));

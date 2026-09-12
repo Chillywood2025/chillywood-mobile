@@ -28,7 +28,7 @@ import {
 } from "../../scripts/assurance/engineering-closure.mjs";
 import { compareReplayOutputs, verifyAuthoritativeOutput, verifySerializedEdgeModel, verifySerializedTransitionModel, verifyTaskLocalGoverningEdgeClosure as independentlyVerifyTaskLocalGoverningEdgeClosure } from "../../scripts/assurance/engineering-evidence-verifier.mjs";
 import { validateEngineeringTaskAuthority } from "../../scripts/assurance/active-task.mjs";
-import { finiteTaskLeaseFor, finiteTaskReservationProjection, parseProtectedPullRequestMergeSubject, projectFiniteTaskTerminalTruth, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
+import { finiteTaskLeaseFor, finiteTaskReservationProjection, observeLiveFiniteTaskEffectiveReservation, parseProtectedPullRequestMergeSubject, projectFiniteTaskTerminalTruth, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
 import { classifyPrScopePaths, deriveTaskScopeContext, evaluateHighRiskScope } from "../../scripts/assurance/pr-scope-lib.mjs";
 
 const root = new URL("../../", import.meta.url);
@@ -104,16 +104,26 @@ test("fixed-point Owner authority is the immutable planned-scope receipt and gra
 });
 
 test("V2 assurance self-maintenance is exact-path bounded, single-PR, and grants no product authority", () => {
+  const maintenanceContract = json("config/assurance/current-truth-contract-v1.json").synchronizationMerge.assuranceMaintenanceV2;
+  const maintenanceWaiver = json("config/assurance/efficiency-e0-v1.json");
+  assert.equal(maintenanceContract.maximumFiles, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS.length);
+  assert.equal(maintenanceWaiver.fileBudget.waivedMaximum, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS.length);
   const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 500, branch: "codex/assurance-control-plane-consolidation-v2", baseSha: "1".repeat(40), headSha: "2".repeat(40) };
   const subject = architectureMaintenanceSubject({ identity, tree: "3".repeat(40), scope: { files: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS, additions: 3000, deletions: 400 }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2 });
-  assert.deepEqual(subject.budget, { maximumFiles: 25, maximumChangedLines: 6500, maximumHandAuthoredNetLines: 6500 });
+  assert.deepEqual(subject.budget, { maximumFiles: 28, maximumChangedLines: 6500, maximumHandAuthoredNetLines: 6500 });
   assert.deepEqual(subject.capabilities, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2]);
   assert.equal(subject.reusableByAnotherPr, false);
   assert.equal(Object.values(subject.authority).every((value) => value === false), true);
   assert.throws(() => architectureMaintenanceSubject({ identity, tree: "3".repeat(40), scope: { files: [...ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS, "app/index.tsx"], additions: 1, deletions: 0 }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2 }));
   const review = architectureRepositoryReviewSubject({ identity, tree: "3".repeat(40), scope: { files: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS, additions: 3000, deletions: 400, diffHash: "4".repeat(64) }, profile: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2 });
+  assert.equal(review.reviewProfile, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2);
   assert.match(review.lanes.join(" "), /candidate checkout/u);
   assert.match(review.lanes.join(" "), /persistent|temporary/u);
+  const originalRaw = taskLocalArchitectureComment({ id: 700000, pr: identity.pr, body: architectureMaintenanceOwnerCommentBody(subject) });
+  const reviewRaw = taskLocalArchitectureComment({ id: 700001, pr: identity.pr, body: architectureRepositoryReviewCommentBody(review) });
+  const final = architectureFinalSourceSubject({ identity, tree: "3".repeat(40), scope: { files: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS, additions: 3000, deletions: 400, diffHash: "4".repeat(64) }, originalRaw, repositoryReviewRaw: reviewRaw });
+  assert.equal(final.repositoryReview.profile, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2);
+  assert.equal(final.repositoryReview.valid, true);
 });
 const ownerComment = ({ id, type, subject, task, leaseId, pr = 301, currentHead = "a".repeat(40) }) => { const payload = { authorizationId: `github-comment-${id}`, repository: "Chillywood2025/chillywood-mobile", pr: String(pr), task, leaseId: String(leaseId), currentHead, type, subject, subjectHash: hashValue(subject) }; payload.bodyHash = hashValue(payload); return { id, url: `https://github.com/Chillywood2025/chillywood-mobile/issues/comments/${id}`, author: { login: "Chillywood2025" }, authorAssociation: "OWNER", createdAt: "2026-08-12T12:00:00Z", updatedAt: "2026-08-12T12:00:00Z", body: `<!-- chillywood-engineering-owner-authorization-v1 -->\n${JSON.stringify(payload)}` }; };
 const rebindPacketFacts = (packet) => { packet.sections.L_COMPLETENESS_CERTIFICATE.packetFactsHash = hashValue(Object.fromEntries(Object.entries(packet.sections).filter(([name]) => name !== "L_COMPLETENESS_CERTIFICATE"))); return packet; };
@@ -1145,24 +1155,29 @@ test("finite-task implementation exact-head review binds the effective reservati
   assert.equal(result.valid, false);
 });
 
-test("finite-task implementation exact-head review accepts only an exact zero-amendment BASE_ONLY reservation", () => {
+test("finite-task implementation exact-head review accepts an exact unused optional-amendment BASE_ONLY reservation", () => {
   const registry = structuredClone(json("config/assurance/current-truth-v1.json").finiteTaskLeases);
   registry.completedLeaseOutcomes = [];
   const lease = registry.tasks.find(({ implementationPr }) => implementationPr === 229);
-  lease.amendmentMaximum = { maximumAmendments: 0, maximumChangedLines: lease.scopeBudget.maximumChangedLines, maximumFiles: lease.scopeBudget.maximumFiles };
+  lease.amendmentMaximum = { maximumAmendments: 1, maximumChangedLines: 4500, maximumFiles: 36 };
   const identity = { repository: "Chillywood2025/chillywood-mobile", pr: lease.implementationPr, branch: lease.implementationBranch, headSha: "8".repeat(40), baseSha: "9".repeat(40) };
   const tree = "a".repeat(40);
   const scope = { files: ["_lib/session.tsx"], additions: 20, deletions: 2, netChangedLines: 18, diffHash: "b".repeat(64) };
-  const resolution = resolveFiniteTaskEffectiveReservation({
-    registry,
-    lease,
-    candidate: { head: identity.headSha, tree },
-    comments: [],
-    commentsPaginationComplete: true,
+  const pull = { number: identity.pr, head: { sha: identity.headSha, ref: identity.branch, repo: { full_name: identity.repository } }, base: { sha: identity.baseSha, ref: "main", repo: { full_name: identity.repository } } };
+  const gh = `#!/usr/bin/env node\nconst a=process.argv.join(' ');process.stdout.write(a.includes('--paginate')?'[[]]':JSON.stringify(${JSON.stringify(pull)}));\n`;
+  const resolution = withFakeExecutables({ gh }, () => {
+    const liveObservation = observeLiveFiniteTaskEffectiveReservation({ repository: identity.repository, pr: identity.pr });
+    return resolveFiniteTaskEffectiveReservation({
+      registry,
+      lease,
+      candidate: { head: identity.headSha, tree },
+      liveObservation,
+    });
   });
   const subject = architectureRepositoryReviewSubject({ identity, tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: resolution });
   const raw = taskLocalArchitectureComment({ id: 700042, pr: identity.pr, body: architectureRepositoryReviewCommentBody(subject) });
   assert.equal(subject.finiteTaskEffectiveReservation.status, "BASE_ONLY");
+  assert.equal(resolution.baseLease.amendmentMaximum.maximumAmendments, 1);
   assert.equal(subject.finiteTaskEffectiveReservation.amendmentsConsumed, 0);
   assert.equal(subject.finiteTaskEffectiveReservation.amendmentReceipt, null);
   assert.equal(subject.finiteTaskEffectiveReservation.finiteTaskPrRiskAuthority.ok, true, stableJson(subject.finiteTaskEffectiveReservation.finiteTaskPrRiskAuthority.findings));

@@ -6,7 +6,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { inspectPhase1AggregateEvidence, PHASE1_EVIDENCE_STAGES, PHASE1_MODES, verifyPhase1AggregateEvidence } from "./phase1-admission.mjs";
-import { ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE, readGitHubJsonSync, validateImplementationChain } from "./control-plane-v2.mjs";
+import { ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE, readGitHubJsonSync, resolveTerminalAmendmentState, validateImplementationChain } from "./control-plane-v2.mjs";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const rel = (...parts) => path.join(ROOT, ...parts);
@@ -3434,7 +3434,19 @@ export function evaluateProtectedMainAdvancement({
   const aggregateChangedPaths = [...new Set(advancements.flatMap(({ changedPaths }) => changedPaths))].sort();
   let aggregateDiffHash = sha256("");
   if (identityValid && ancestor === true && checkpointSha !== observedSha) {
-    try { aggregateDiffHash = sha256(gitCommand(["diff", "--binary", checkpointSha, observedSha], { maxBuffer: 128 * 1024 * 1024 })); } catch { findings.push("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID"); }
+    aggregateDiffHash = sha256({
+      schemaVersion: 2,
+      algorithm: "PROTECTED_MAIN_OBJECT_METADATA_NO_PATCH_BODY_V2",
+      checkpointSha,
+      observedSha,
+      advancements: advancements.map(({ mergeSha, tree, firstParent, secondParent, changedPathHash }) => ({
+        mergeSha,
+        tree,
+        firstParent,
+        secondParent,
+        changedPathHash,
+      })),
+    });
   }
   const authorityControlEligible = !findings.includes("CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT")
     && !findings.includes("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID")
@@ -4025,46 +4037,23 @@ function readCompleteGitHubApiPages(endpoint) {
     ? { complete: true, items: result.items, classification: result.classification, attempts: result.attempts }
     : { complete: false, items: [], classification: result.classification, attempts: result.attempts };
 }
-const decodeGitHubHtml = (value) => value.replace(/&#x([0-9a-f]+);/giu, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16))).replace(/&#(\d+);/gu, (_, decimal) => String.fromCodePoint(Number(decimal))).replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&#39;", "'").replaceAll("&amp;", "&");
 const finiteTaskGitValue = (args) => { try { return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 16 * 1024 * 1024 }).trim(); } catch { return null; } };
-const finiteTaskRemoteRef = (ref) => { try { const rows = execFileSync("git", ["ls-remote", "--refs", "https://github.com/Chillywood2025/chillywood-mobile.git", ref], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 16 * 1024 * 1024 }).trim().split(/\r?\n/gu).filter(Boolean); return rows.length === 1 && rows[0] === `${rows[0].slice(0, 40)}\t${ref}` && gitShaPattern.test(rows[0].slice(0, 40)) ? rows[0].slice(0, 40) : null; } catch { return null; } };
 export function observePublicGitHubPullRequest({ repository = "Chillywood2025/chillywood-mobile", pr } = {}) {
   const invalid = { comments: [], commentsPaginationComplete: false, commits: [], commitsPaginationComplete: false, pullRequest: null };
   if (repository !== "Chillywood2025/chillywood-mobile" || !Number.isInteger(pr) || pr < 1) return invalid;
-  let html;
-  try { html = execFileSync("curl", ["--fail", "--silent", "--show-error", "--connect-timeout", "5", "--max-time", "20", "--header", "User-Agent: chillywood-assurance-readonly", `https://github.com/${repository}/pull/${pr}`], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024 }); } catch { return invalid; }
-  let pull;
-  for (const match of html.matchAll(/<script type="application\/json" data-target="react-app\.embeddedData">([\s\S]*?)<\/script>/gu)) {
-    try { const payload = JSON.parse(match[1])?.payload; pull = payload?.pullRequestsLayoutRoute?.pullRequest ?? payload?.pullRequestsConversationsRoute?.pullRequestsLayoutRoute?.pullRequest; } catch {}
-    if (pull?.number === pr) break;
-  }
-  if (pull?.number !== pr || pull.headRepositoryOwnerLogin !== "Chillywood2025" || pull.headRepositoryName !== "chillywood-mobile") return invalid;
-  let mergeCommitSha = null;
-  let baseSha = finiteTaskGitValue(["rev-parse", `origin/${pull.baseBranch}`]);
-  if (["OPEN", "DRAFT"].includes(pull.state)) { if (finiteTaskRemoteRef(`refs/heads/${pull.headBranch}`) !== pull.headSha || !gitShaPattern.test(mergeCommitSha = finiteTaskRemoteRef(`refs/pull/${pr}/merge`) ?? "")) return invalid; }
-  if (pull.state === "MERGED") for (const candidate of new Set([...html.matchAll(/href="\/Chillywood2025\/chillywood-mobile\/commit\/([0-9a-f]{40})"/gu)].map((match) => match[1]))) {
-    const parents = finiteTaskGitValue(["rev-list", "--parents", "-n", "1", candidate])?.split(/\s+/u) ?? [];
-    if (parents.length === 3 && parents[2] === pull.headSha) { [mergeCommitSha, baseSha] = [candidate, parents[1]]; break; }
-  }
-  const starts = [...html.matchAll(/data-url="\/Chillywood2025\/chillywood-mobile\/comments\/([^/"?]+)\/partials\/timeline_issue_comment"[\s\S]*?<div class=" timeline-comment-group[^>]*id="issuecomment-(\d+)">/gu)];
-  const comments = starts.map((start, index) => {
-    const block = html.slice(start.index, starts[index + 1]?.index ?? html.length);
-    const bodyMatch = /<clipboard-copy role="menuitem" value="([\s\S]*?)" data-view-component/gu.exec(block);
-    const time = /<relative-time datetime="([^"]+)"/gu.exec(block)?.[1];
-    const login = /data-hovercard-url="\/users\/([^/"?]+)\/hovercard"/gu.exec(block)?.[1];
-    const body = bodyMatch ? decodeGitHubHtml(bodyMatch[1]) : null;
-    const version = /data-body-version="([0-9a-f]{64})"/gu.exec(block)?.[1];
-    if (!body || !time || !login || version !== sha256(body)) return null;
-    return { id: Number(start[2]), node_id: start[1], user: { login }, author_association: block.includes("This user is the owner of the chillywood-mobile repository.") ? "OWNER" : "NONE", body, created_at: time, updated_at: block.includes("js-comment-edit-history") ? "EDITED" : time, issue_url: `https://api.github.com/repos/${repository}/issues/${pr}`, html_url: `https://github.com/${repository}/pull/${pr}#issuecomment-${start[2]}` };
-  }).filter(Boolean);
-  const commentsPaginationComplete = html.includes('id="partial-timeline"') && html.includes("</html>") && !html.includes("ajax-pagination-btn") && comments.length === starts.length && new Set(comments.flatMap(({ id, node_id }) => [id, node_id])).size === comments.length * 2;
-  const rangeBase = finiteTaskGitValue(["merge-base", baseSha ?? `origin/${pull.baseBranch}`, pull.headSha]);
-  const commitShas = finiteTaskGitValue(["rev-list", "--reverse", `${rangeBase}..${pull.headSha}`])?.split(/\r?\n/gu).filter(Boolean) ?? [];
-  const commits = commitShas.map((sha) => ({ sha, commit: { tree: { sha: finiteTaskGitValue(["rev-parse", `${sha}^{tree}`]) } } }));
-  const commitsPaginationComplete = commitShas.length === pull.commitsCount && commitShas.at(-1) === pull.headSha && commits.every(({ commit }) => gitShaPattern.test(commit.tree.sha ?? ""));
-  const state = ["MERGED", "CLOSED"].includes(pull.state) ? "closed" : ["OPEN", "DRAFT"].includes(pull.state) ? "open" : null;
-  const pullRequest = state && gitShaPattern.test(baseSha ?? "") ? { number: pr, state, draft: pull.state === "DRAFT", merged: pull.state === "MERGED", merged_at: pull.mergedTime, merge_commit_sha: mergeCommitSha, head: { ref: pull.headBranch, sha: pull.headSha, repo: { full_name: `${pull.headRepositoryOwnerLogin}/${pull.headRepositoryName}` } }, base: { ref: pull.baseBranch, sha: baseSha, repo: { full_name: repository } } } : null;
-  return { comments, commentsPaginationComplete, commits, commitsPaginationComplete, pullRequest };
+  const comments = readCompleteGitHubApiPages(`repos/${repository}/issues/${pr}/comments?per_page=100`);
+  const commits = readCompleteGitHubApiPages(`repos/${repository}/pulls/${pr}/commits?per_page=100`);
+  const pull = readGitHubJsonSync({ root: ROOT, endpoint: `repos/${repository}/pulls/${pr}` });
+  if (!comments.complete || !commits.complete || !pull.ok || pull.value?.number !== pr
+    || pull.value?.head?.repo?.full_name !== repository || pull.value?.base?.repo?.full_name !== repository) return invalid;
+  return {
+    comments: comments.items,
+    commentsPaginationComplete: true,
+    commits: commits.items,
+    commitsPaginationComplete: true,
+    pullRequest: pull.value,
+    providerClassification: "PROVIDER_READ_COMPLETE",
+  };
 }
 export function observeLiveFiniteTaskEffectiveReservation({ repository = "Chillywood2025/chillywood-mobile", pr, authorityEvidence = null } = {}) {
   const invalid = {
@@ -4442,6 +4431,12 @@ function finiteTaskTerminalOutcomeMatchesLease(registry, lease, outcome) {
       ));
     const finalSource = outcome.finalSourceEvidence;
     const finalSourceUnhashed = Object.fromEntries(Object.entries(finalSource ?? {}).filter(([key]) => key !== "evidenceHash"));
+    const amendment = resolveTerminalAmendmentState({
+      lease,
+      baseReservation: outcome.baseReservation,
+      effectiveReservation: outcome.effectiveReservation,
+      amendmentReceipt: receipt,
+    });
     return chain.ok
       && Array.isArray(outcome.implementationChain) && outcome.implementationChain.length >= 1
       && outcome.implementationChain.every(validation)
@@ -4451,8 +4446,7 @@ function finiteTaskTerminalOutcomeMatchesLease(registry, lease, outcome) {
       && outcome.implementationPr === lease?.implementationPr && outcome.implementationBranch === lease?.implementationBranch
       && outcome.baseLeaseHash === sha256(lease)
       && stableJson(outcome.baseReservation) === stableJson(finiteTaskReservationProjection(lease))
-      && stableJson(outcome.effectiveReservation) === stableJson(outcome.baseReservation)
-      && receipt === null
+      && amendment.ok
       && final === undefined
       && finalSource?.schemaVersion === 1
       && finalSource?.classification === "EXACT_SOURCE_PHASE1_REVIEW_AND_BOUNDED_RECOVERY_EVIDENCE_V1"

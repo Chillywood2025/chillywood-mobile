@@ -8,9 +8,14 @@ control-plane repair is not part of an ordinary product lifecycle.
 
 All candidate-scoped decisions use the candidate Git context in
 `control-plane-v2.mjs`. The context reads commit/tree identities, full-index
-object metadata, NUL-delimited paths, and numstat without materializing binary
-patch bodies. Candidate-only evidence is read from the candidate commit, never
-from the evaluator checkout.
+object metadata, NUL-delimited paths, and numstat for its patch-independent
+source identity. It also preserves the canonical legacy patch hash through one
+explicitly bounded 32 MiB compatibility read, eliminating the implicit 1 MiB
+child-process ceiling without creating an unbounded read. Candidate-only
+evidence is read from the candidate commit, never from the evaluator checkout.
+Protected-main advancement uses the exact commit, tree, parent, and changed-path
+hash chain for its aggregate identity; it does not materialize a repository-wide
+binary patch merely to synchronize current truth.
 
 ## Finite-task and amendment semantics
 
@@ -57,7 +62,7 @@ conflicts and semantic changes require fresh evidence.
 ## Bounded self-maintenance and recovery
 
 `ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2` is the bootstrappable maintenance
-profile. It is limited to 25 named assurance contracts, scripts, tests, and
+profile. It is limited to 28 named assurance contracts, scripts, tests, and
 this runbook, with a 6,500 changed-line ceiling and one implementation PR.
 Immutable Owner authority and exact review remain required. The profile grants
 no product, provider, database, native, money, build, OTA, submission, or public
@@ -78,8 +83,9 @@ an already-terminal task is rejected rather than rewriting history.
 
 ## Qualification
 
-`control-plane-qualification.mjs` runs all 28 required adversarial variants plus
-two explicit source-shape variants,
+`control-plane-qualification.mjs` runs 31 adversarial variants: all 28 required
+variants plus explicit small/mixed source-shape and consumed-amendment terminal
+synchronization variants,
 including optional amendments, large and binary diffs, candidate-only evidence,
 provider/pagination failures, multi-PR tasks, recovery, and double terminal
 synchronization. Negative controls prove unauthorized paths and product,

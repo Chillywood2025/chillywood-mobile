@@ -8,7 +8,7 @@ import { git, packet, privateArtifactDirectory, sha256, sha40, sha64, strictOpti
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
 import { deriveFiniteTaskPrRiskAuthority } from "./pr-scope-lib.mjs";
 import { phase1AdmissionRulesetCutoverAggregateValid } from "./github-main-ruleset-readback.mjs";
-import { createCandidateGitContext } from "./control-plane-v2.mjs";
+import { createCandidateGitContext, readGitHubJsonSync } from "./control-plane-v2.mjs";
 import { DOCTRINE_BASE, DOCTRINE_BRANCH, affectedDomainClosure, createImplementationIdentityObservation, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, generateDomainGraph, hashValue, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit, observeGitHubTaskIdentity, readTaskArtifactAtGitHead, resolveFiniteTaskAdmissionTaskBindingV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2, verifyTaskLocalGoverningEdgeClosure } from "./engineering-closure.mjs";
 import {
   ACTIVE_POLICY_STATUS,
@@ -185,14 +185,12 @@ export function evaluatePreAdmissionEngineeringSeed(facts = {}) {
 }
 
 const ghJson = (endpoint) => {
-  const run = spawnSync("gh", ["api", "--method=GET", endpoint], { cwd: ROOT, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
-  if (run.status !== 0) return null;
-  try { return JSON.parse(run.stdout); } catch { return null; }
+  const result = readGitHubJsonSync({ root: ROOT, endpoint });
+  return result.ok ? result.value : null;
 };
 const ghPages = (endpoint) => {
-  const run = spawnSync("gh", ["api", "--paginate", "--slurp", endpoint], { cwd: ROOT, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
-  if (run.status !== 0) return null;
-  try { const pages = JSON.parse(run.stdout); return Array.isArray(pages) && pages.every(Array.isArray) ? pages.flat() : null; } catch { return null; }
+  const result = readGitHubJsonSync({ root: ROOT, endpoint, paginate: true });
+  return result.ok && result.complete ? result.items : null;
 };
 
 function finiteTaskAuthorityEvidence(truth, lease) {
@@ -711,23 +709,16 @@ export function ownerBootstrapAuthorizationCommentBody(binding) {
 
 function readOwnerBootstrapAuthorizationObservation(authorization) {
   if (!Number.isInteger(authorization?.commentId) || authorization.commentId < 1) return null;
-  const response = spawnSync("gh", [
-    "api",
-    `repos/${ownerBootstrapRepository}/issues/comments/${authorization.commentId}`
-  ], { cwd: ROOT, encoding: "utf8", shell: false });
-  if (response.status !== 0) return null;
-  try {
-    const comment = JSON.parse(response.stdout);
-    return {
-      commentId: comment.id,
-      author: comment.user?.login,
-      authorAssociation: comment.author_association,
-      body: comment.body,
-      createdAt: comment.created_at,
-      updatedAt: comment.updated_at,
-      issueUrl: comment.issue_url
-    };
-  } catch { return null; }
+  const comment = ghJson(`repos/${ownerBootstrapRepository}/issues/comments/${authorization.commentId}`);
+  return comment ? {
+    commentId: comment.id,
+    author: comment.user?.login,
+    authorAssociation: comment.author_association,
+    body: comment.body,
+    createdAt: comment.created_at,
+    updatedAt: comment.updated_at,
+    issueUrl: comment.issue_url
+  } : null;
 }
 
 export function verifyOwnerBootstrapAuthorization(binding, observation) {
@@ -905,6 +896,7 @@ function resolveFeature(truth, facts, registry) {
     const binding = truth.activeTaskBinding;
     const findings = validateStructuredBinding(binding, facts.gateCatalog ?? readJson("config/assurance/gate-catalog-v1.json"), registry, truth.openImplementationPrs, truth.latestMergedImplementationPr);
     if (findings.length) return { ok: false, findings };
+    if (binding === null) return { ok: false, findings: ["ACTIVE_TASK_NONE"] };
     if (["COMPLETE", "TERMINAL"].includes(binding.phase) && unresolvedLateReviewSentinels(truth).some((sentinel) => {
       const allowedOwners = lateReviewAllowedOwners(sentinel);
       return lateReviewSuccessorCorrectionOwner(sentinel) === binding.implementationBranch
@@ -1340,7 +1332,7 @@ export function activeTask(facts = {}) {
           originMainTree: git(["rev-parse", "origin/main^{tree}"]),
           baseHead: candidateContext.baseHead,
           baseTree: candidateContext.baseTree,
-          diffHash: candidateContext.objectDeltaHash,
+          diffHash: candidateContext.diffHash,
           pathHash: candidateContext.changedPathHash,
           changedFiles: candidateContext.changedPaths,
           sourceIdentityHash: candidateContext.sourceIdentityHash,
@@ -1382,20 +1374,35 @@ export function activeTask(facts = {}) {
       && terminalOutcome?.classification === "FINITE_TASK_IMPLEMENTATION_CHAIN_TERMINAL_EVIDENCE_V3"
       && resolution.binding?.phase === "TERMINAL";
     if (implementationChainTerminal) {
+      const amended = terminalOutcome.amendmentReceipt !== null;
+      const terminalEffectiveLease = amended ? {
+        ...structuredClone(baseFiniteTaskLease),
+        allowedPaths: [...terminalOutcome.effectiveReservation.allowedPaths],
+        ...(baseFiniteTaskLease.artifactReservation ? { artifactReservation: {
+          ...structuredClone(baseFiniteTaskLease.artifactReservation),
+          pathGlobs: [...terminalOutcome.effectiveReservation.allowedPaths],
+          maximumFiles: terminalOutcome.effectiveReservation.maximumFiles,
+          maximumLines: terminalOutcome.effectiveReservation.maximumLines,
+        } } : {}),
+        scopeBudget: {
+          maximumFiles: terminalOutcome.effectiveReservation.maximumFiles,
+          maximumChangedLines: terminalOutcome.effectiveReservation.maximumLines,
+        },
+      } : baseFiniteTaskLease;
       finiteTaskEffectiveReservationResolution = {
         ok: true,
-        status: "BASE_ONLY",
+        status: amended ? "AMENDED" : "BASE_ONLY",
         findings: [],
         baseLeaseHash: terminalOutcome.baseLeaseHash,
         baseLease: baseFiniteTaskLease,
-        effectiveLease: baseFiniteTaskLease,
+        effectiveLease: terminalEffectiveLease,
         baseReservation: terminalOutcome.baseReservation,
         effectiveReservation: terminalOutcome.effectiveReservation,
-        amendmentsConsumed: 0,
-        amendmentReceipt: null,
+        amendmentsConsumed: amended ? 1 : 0,
+        amendmentReceipt: terminalOutcome.amendmentReceipt,
         candidateHead: identity.head,
         candidateTree: identity.tree,
-        authority: { amendmentEffective: false, liveReceipt: false, productMutation: false, providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false },
+        authority: { amendmentEffective: amended, liveReceipt: amended, productMutation: false, providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false },
       };
     } else {
     const suppliedObservation = facts.finiteTaskEffectiveReservationObservation;

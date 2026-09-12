@@ -103,11 +103,35 @@ function implementationChain() {
   }];
 }
 
-export function terminalFixture() {
+export function terminalFixture({ amended = false } = {}) {
   const implementations = implementationChain();
-  const baseLease = { leaseId: "synthetic-task-v2", taskState: "ACTIVE_IMPLEMENTATION", domainOwnership: "ACTIVE" };
+  const baseLease = {
+    leaseId: "synthetic-task-v2",
+    taskState: "ACTIVE_IMPLEMENTATION",
+    domainOwnership: "ACTIVE",
+    domain: "ci-test-infrastructure",
+    allowedPaths: ["a"],
+    scopeBudget: { maximumFiles: 1, maximumChangedLines: 10 },
+    amendmentMaximum: { maximumAmendments: 1, maximumFiles: 2, maximumChangedLines: 20 },
+  };
   const baseReservationWithoutHash = { allowedPaths: ["a"], pathGlobs: ["a"], maximumFiles: 1, maximumLines: 10, eligiblePathCount: 1 };
   const baseReservation = { ...baseReservationWithoutHash, reservationHash: controlPlaneHash(baseReservationWithoutHash) };
+  const effectiveReservationWithoutHash = amended
+    ? { allowedPaths: ["a", "b"], pathGlobs: ["a", "b"], maximumFiles: 2, maximumLines: 20, eligiblePathCount: 2 }
+    : baseReservationWithoutHash;
+  const effectiveReservation = { ...effectiveReservationWithoutHash, reservationHash: controlPlaneHash(effectiveReservationWithoutHash) };
+  const amendmentReceipt = amended ? {
+    commentId: 9001,
+    createdAt: "2026-09-11T00:00:00.000Z",
+    subjectHash: hash("a"),
+    bodyHash: hash("b"),
+    rawBodyHash: hash("c"),
+    boundStartingHead: sha("2"),
+    boundStartingTree: sha("3"),
+    addedPaths: ["b"],
+    domain: baseLease.domain,
+    authorityClassification: "LIVE_IMMUTABLE_OWNER_RECEIPT",
+  } : null;
   const finalSourceWithoutHash = {
     schemaVersion: 1,
     classification: "EXACT_SOURCE_PHASE1_REVIEW_AND_BOUNDED_RECOVERY_EVIDENCE_V1",
@@ -126,7 +150,7 @@ export function terminalFixture() {
       latestMergedImplementationPr: { number: 800 },
       openImplementationPrs: [{ number: 901 }, { number: 902 }],
       activeTaskBinding: { implementationPr: 901 },
-      finiteTaskLeases: { tasks: [{ leaseId: "synthetic-task-v2", taskState: "ACTIVE_IMPLEMENTATION", domainOwnership: "ACTIVE" }], completedLeaseOutcomes: [] },
+      finiteTaskLeases: { tasks: [structuredClone(baseLease)], completedLeaseOutcomes: [] },
       finiteTaskRuntime: { historicalCandidates: [] },
       engineeringDoctrine: { taskLeaseState: "ACTIVE", nextPermittedAction: "IMPLEMENT" },
       assuranceProgram: { nextActions: [] },
@@ -140,8 +164,8 @@ export function terminalFixture() {
       baseLease,
       baseLeaseHash: controlPlaneHash(baseLease),
       baseReservation,
-      effectiveReservation: structuredClone(baseReservation),
-      amendmentReceipt: null,
+      effectiveReservation,
+      amendmentReceipt,
       finalSourceEvidence: { ...finalSourceWithoutHash, evidenceHash: controlPlaneHash(finalSourceWithoutHash) },
       noActiveEngineeringDoctrine: {
         activeTaskSentinel: "NO_ACTIVE_PRODUCT_IMPLEMENTATION",
@@ -219,21 +243,27 @@ async function runAdversarialVariants() {
     changedPaths: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE.paths,
     authority: { product: false, provider: false, database: false, native: false, money: false, ota: false, release: false },
   });
-  variants.push(result("29 assurance maintenance task repairs assurance itself", maintenance.ok && ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE.maximumFiles === 25));
+  variants.push(result("29 assurance maintenance task repairs assurance itself", maintenance.ok && ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE.maximumFiles === ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE.paths.length));
   const terminal = terminalFixture();
   const fixedPoint = terminalSynchronizationIdempotent(terminal);
   variants.push(result("30 terminal synchronization executed twice", fixedPoint.ok && fixedPoint.firstMutation && fixedPoint.secondMutation === false));
+  const amendedTerminal = terminalSynchronizationIdempotent(terminalFixture({ amended: true }));
+  variants.push(result("31 consumed amendment terminal synchronization executed twice", amendedTerminal.ok && amendedTerminal.firstMutation && amendedTerminal.secondMutation === false));
   return variants;
 }
 
 function runNegativeControls() {
   const cases = [
     ["unauthorized product path", { allowedPaths: ["a"], changedPaths: ["product.ts"] }],
+    ["unauthorized product authority", { authority: { product: true } }],
     ["unauthorized database mutation", { authority: { database: true } }],
     ["unauthorized provider mutation", { authority: { provider: true } }],
     ["unauthorized money authority", { authority: { money: true } }],
     ["unauthorized native mutation", { authority: { native: true } }],
+    ["unauthorized build", { authority: { build: true } }],
     ["unauthorized OTA", { authority: { ota: true } }],
+    ["unauthorized submission", { authority: { submission: true } }],
+    ["unauthorized public release", { authority: { publicRelease: true } }],
     ["unauthorized release", { authority: { release: true } }],
     ["wildcard lease expansion", { allowedPaths: ["*"], changedPaths: ["*"] }],
     ["forged Owner evidence", { evidence: { forgedOwner: true } }],

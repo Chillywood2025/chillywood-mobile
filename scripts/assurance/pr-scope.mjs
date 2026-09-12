@@ -3,7 +3,8 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 
 import { args, classifyGitHubExecutionIdentity, emit, evaluateProtectedMainAdvancement, git, readJson, resolveAssuranceControlSourceOnlyProfile, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE } from "./lib.mjs";
-import { canonicalGitDiffArgs, canonicalGitDiffHash, observeTypedTaskAuthorities } from "./engineering-closure.mjs";
+import { observeTypedTaskAuthorities } from "./engineering-closure.mjs";
+import { createCandidateGitContext, readGitHubJsonSync } from "./control-plane-v2.mjs";
 import { classifyPrScopePaths, deriveTaskScopeContext, evaluateDraftSourceReadinessScope, evaluateHighRiskScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 
 const options = args();
@@ -14,25 +15,22 @@ const currentTruthContract = readJson("config/assurance/current-truth-contract-v
 const protectedMainRuntime = evaluateProtectedMainAdvancement({ record: currentTruth, contract: currentTruthContract });
 
 const readGitScope = (base, head) => {
-  const range = `${base}...${head}`;
-  const files = git(["diff", "--name-only", range]).split(/\r?\n/gu).filter(Boolean).sort();
-  const numstat = git(["diff", "--numstat", range]).split(/\r?\n/gu).filter(Boolean);
-  if (numstat.some((line) => line.split("\t", 2).some((value) => value === "-"))) throw new Error("ASSURANCE_GIT_DIFF_BINARY_SCOPE_UNREADABLE");
-  const additions = numstat.reduce((sum, line) => sum + (Number(line.split("\t")[0]) || 0), 0);
-  const deletions = numstat.reduce((sum, line) => sum + (Number(line.split("\t")[1]) || 0), 0);
-  const diff = git(canonicalGitDiffArgs(`${base}...${head}`));
-  return { files, additions, deletions, diffHash: canonicalGitDiffHash(diff) };
+  const context = createCandidateGitContext({ root: process.cwd(), base, head, expectedHead: head });
+  if (!context.ok) throw new Error(context.classification);
+  return {
+    files: context.changedPaths,
+    additions: context.additions,
+    deletions: context.deletions,
+    diffHash: context.diffHash,
+    sourceIdentityHash: context.sourceIdentityHash,
+    binaryPaths: context.binaryPaths,
+  };
 };
 const readPull = (repository, pr) => {
   if (repository !== "Chillywood2025/chillywood-mobile" || !Number.isInteger(pr) || pr < 1) return null;
-  const options = { encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 }; const authenticated = spawnSync("gh", ["api", "--method=GET", `repos/${repository}/pulls/${pr}`], options); const result = authenticated.status === 0 ? authenticated : spawnSync("curl", ["--fail", "--silent", "--show-error", "--connect-timeout", "5", "--max-time", "20", "--header", "Accept: application/vnd.github+json", "--header", "X-GitHub-Api-Version: 2022-11-28", "--header", "User-Agent: chillywood-assurance-readonly", `https://api.github.com/repos/${repository}/pulls/${pr}`], options);
-  if (result.status !== 0) return null;
-  try {
-    const pull = JSON.parse(result.stdout);
-    return { number: pull.number, repository: pull.base?.repo?.full_name, baseRepository: pull.base?.repo?.full_name, baseRef: pull.base?.ref, baseSha: pull.base?.sha, headRepository: pull.head?.repo?.full_name, headRef: pull.head?.ref, headSha: pull.head?.sha, mergeCommitSha: pull.merge_commit_sha, authorLogin: pull.user?.login, draft: pull.draft, updatedAt: pull.updated_at, htmlUrl: pull.html_url, state: pull.state };
-  } catch {
-    return null;
-  }
+  const result = readGitHubJsonSync({ root: process.cwd(), endpoint: `repos/${repository}/pulls/${pr}` });
+  const pull = result.ok ? result.value : null;
+  return pull ? { number: pull.number, repository: pull.base?.repo?.full_name, baseRepository: pull.base?.repo?.full_name, baseRef: pull.base?.ref, baseSha: pull.base?.sha, headRepository: pull.head?.repo?.full_name, headRef: pull.head?.ref, headSha: pull.head?.sha, mergeCommitSha: pull.merge_commit_sha, authorLogin: pull.user?.login, draft: pull.draft, updatedAt: pull.updated_at, htmlUrl: pull.html_url, state: pull.state } : null;
 };
 
 const riskBasedReadyActions = new Set(["opened", "synchronize", "reopened", "edited", "ready_for_review"]);

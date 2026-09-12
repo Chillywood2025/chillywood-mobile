@@ -1,5 +1,5 @@
-import { spawnSync } from "node:child_process";
 import { ROOT, git, sha256, stableJson } from "./lib.mjs";
+import { readGitHubJsonSync } from "./control-plane-v2.mjs";
 
 export const exactHeadCheck = "Chi'llywood / Codex Review Exact Head";
 export const phase1Checks = [
@@ -1237,9 +1237,10 @@ export function phase1AdmissionRulesetCutoverAggregateValid(value) {
 }
 
 function readGitHubJson(args) {
-  const run = spawnSync("gh", ["api", "--method=GET", ...args], { cwd: ROOT, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
-  if (run.status !== 0) return null;
-  try { return JSON.parse(run.stdout); } catch { return null; }
+  const paginated = args.includes("--paginate") && args.includes("--slurp");
+  const endpoint = args.at(-1);
+  const result = readGitHubJsonSync({ root: ROOT, endpoint, paginate: paginated });
+  return result.ok ? (paginated ? [result.items] : result.value) : null;
 }
 
 const readPaginatedGitHubArray = (endpoint) => {

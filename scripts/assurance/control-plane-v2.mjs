@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 
 const GIT_SHA = /^[0-9a-f]{40}$/u;
 const SHA256 = /^[0-9a-f]{64}$/u;
-const DEFAULT_GIT_OUTPUT_LIMIT = 16 * 1024 * 1024;
+const DEFAULT_GIT_OUTPUT_LIMIT = 32 * 1024 * 1024;
 
 export const ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2 = "ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2";
 export const ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS = Object.freeze([
@@ -22,13 +22,16 @@ export const ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS = Object.freeze([
   "scripts/assurance/efficiency-lib.mjs",
   "scripts/assurance/engineering-closure.mjs",
   "scripts/assurance/evidence-index.mjs",
+  "scripts/assurance/github-main-ruleset-readback.mjs",
   "scripts/assurance/lib.mjs",
   "scripts/assurance/phase1-admission.mjs",
+  "scripts/assurance/pr-scope.mjs",
   "scripts/assurance/review-history.mjs",
   "scripts/assurance/terminal-sync.mjs",
   "tests/assurance/control-plane-v2.test.mjs",
   "tests/assurance/current-truth-sync.test.mjs",
   "tests/assurance/engineering-doctrine.test.mjs",
+  "tests/assurance/github-main-ruleset-readback.test.mjs",
   "tests/assurance/phase1-admission.test.mjs",
   "tests/assurance/pr-scope-feature-bundles.test.mjs",
   "tests/assurance/terminal-sync.test.mjs",
@@ -119,10 +122,16 @@ function canonicalRawDiff(value) {
   return tokens.map((token) => token.replace(/^:+/u, (prefix) => ":".repeat(prefix.length))).join("\0");
 }
 
+function canonicalPatchText(value) {
+  return String(value).replace(/\r\n?|\n/gu, "\n").trim();
+}
+
 /**
  * Resolves candidate identity from Git object metadata, path names and numstat.
- * File bodies and binary patches are never materialized, so identity does not
- * depend on Node's historical 1 MiB execFileSync buffer.
+ * Object identity never depends on patch contents. A separate compatibility
+ * hash is calculated with a deliberate 32 MiB bound for immutable legacy
+ * receipts that already bind the canonical Git patch hash; this removes the
+ * historical implicit 1 MiB child-process ceiling without becoming unbounded.
  */
 export function createCandidateGitContext({ root, base, head = "HEAD", expectedHead = null } = {}) {
   if (typeof root !== "string" || !root || typeof base !== "string" || !base) {
@@ -141,6 +150,7 @@ export function createCandidateGitContext({ root, base, head = "HEAD", expectedH
     const paths = uniqueSorted(nulValues(runGit(root, ["diff", "--name-only", "-z", "--no-renames", range])));
     const raw = canonicalRawDiff(runGit(root, ["diff", "--raw", "-z", "--full-index", "--no-renames", range]));
     const numstat = parseNumstatZ(runGit(root, ["diff", "--numstat", "-z", "--no-renames", range]));
+    const canonicalPatch = canonicalPatchText(runGit(root, ["diff", "--full-index", "--binary", "--no-ext-diff", range]));
     const rowPaths = uniqueSorted(numstat.map(({ path }) => path));
     if (!exactObject(paths, rowPaths)) {
       return { ok: false, classification: "SOURCE_IDENTITY_UNRESOLVED", findings: ["CANDIDATE_GIT_PATH_ENUMERATION_MISMATCH"] };
@@ -162,6 +172,7 @@ export function createCandidateGitContext({ root, base, head = "HEAD", expectedH
       changedPaths: paths,
       changedPathHash: controlPlaneHash(paths),
       objectDeltaHash: controlPlaneHash({ raw, numstat }),
+      diffHash: controlPlaneHash(canonicalPatch),
       additions,
       deletions,
       canonicalChangedLines: additions + deletions,
@@ -174,7 +185,7 @@ export function createCandidateGitContext({ root, base, head = "HEAD", expectedH
 }
 
 export function readCandidatePath({ root, candidateHead, path }) {
-  if (!GIT_SHA.test(candidateHead ?? "") || typeof path !== "string" || !path || path.startsWith("/") || path.includes("..")) {
+  if (!GIT_SHA.test(candidateHead ?? "") || typeof path !== "string" || !path || path.startsWith("/") || path.split("/").includes("..")) {
     return { ok: false, finding: "CANDIDATE_PATH_READ_INVALID" };
   }
   try {
@@ -223,7 +234,11 @@ export function exactEvidenceIdentity(value) {
   const missing = EVIDENCE_KEY_FIELDS.filter((field) => value?.[field] === undefined || value?.[field] === null || value?.[field] === "");
   if (missing.length) return { ok: false, findings: missing.map((field) => `EVIDENCE_IDENTITY_${field.toUpperCase()}_REQUIRED`) };
   const identity = Object.fromEntries(EVIDENCE_KEY_FIELDS.map((field) => [field, value[field]]));
-  if (!GIT_SHA.test(identity.headSha) || !GIT_SHA.test(identity.tree) || !GIT_SHA.test(identity.baseSha)
+  if (identity.repository !== "Chillywood2025/chillywood-mobile"
+    || !Number.isSafeInteger(identity.pr) || identity.pr < 1
+    || typeof identity.taskId !== "string" || !identity.taskId
+    || ![identity.lifecycleGeneration, identity.rulesetStage, identity.reviewIdentity].every((item) => typeof item === "string" && item)
+    || !GIT_SHA.test(identity.headSha) || !GIT_SHA.test(identity.tree) || !GIT_SHA.test(identity.baseSha)
     || !SHA256.test(identity.leaseHash) || !SHA256.test(identity.changedPathHash) || !SHA256.test(identity.sourceIdentityHash)) {
     return { ok: false, findings: ["EVIDENCE_IDENTITY_HASH_INVALID"] };
   }
@@ -237,7 +252,10 @@ export function canReuseEvidence({ evidence, request }) {
 }
 
 export function classifyProviderFailure(value, { operation = "read" } = {}) {
-  const status = Number(value?.status ?? value?.statusCode ?? value?.response?.status);
+  // `gh` exits with status 1 for every HTTP failure. Prefer the parsed HTTP
+  // status so an external 500 is not mislabeled as a repository validation
+  // failure (and a 403 is not retried as if it were transient).
+  const status = Number(value?.statusCode ?? value?.response?.status ?? value?.status);
   const code = String(value?.code ?? "").toUpperCase();
   const message = String(value?.message ?? value ?? "").toLowerCase();
   if (status === 401 || status === 403 || code === "EACCES" || /permission|credential|token|unauthori[sz]ed/u.test(message)) {
@@ -248,6 +266,9 @@ export function classifyProviderFailure(value, { operation = "read" } = {}) {
   }
   if (status === 408 || status === 429 || status >= 500 || ["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN"].includes(code)) {
     return { classification: PROVIDER_CLASSIFICATIONS.TRANSIENT_FAILURE, retryable: true };
+  }
+  if (value instanceof SyntaxError || code === "ENOBUFS" || /unexpected (?:end|token)|invalid json|response.*truncated/u.test(message)) {
+    return { classification: PROVIDER_CLASSIFICATIONS.READ_INCOMPLETE, retryable: false };
   }
   if (/pagination|incomplete|missing page|cursor/u.test(message)) {
     return { classification: PROVIDER_CLASSIFICATIONS.READ_INCOMPLETE, retryable: false };
@@ -304,6 +325,9 @@ export async function enumerateCompletePages({ fetchPage, pageSize = 100, maximu
 }
 
 function synchronousProviderAttempt({ invoke, operation = "read", attempts = 3 }) {
+  if (!Number.isSafeInteger(attempts) || attempts < 1 || attempts > 3 || typeof invoke !== "function") {
+    return { ok: false, classification: PROVIDER_CLASSIFICATIONS.VALIDATION_FAILURE, attempts: 0, retryable: false };
+  }
   let last;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try { return { ok: true, classification: "PROVIDER_OPERATION_COMPLETE", attempts: attempt, value: invoke(attempt) }; }
@@ -352,12 +376,103 @@ export function readGitHubJsonSync({ root, endpoint, paginate = false, attempts 
   if (!operation.ok) return { ...operation, complete: false, items: [] };
   if (paginate) {
     const pages = operation.value;
-    const complete = Array.isArray(pages) && pages.every(Array.isArray);
+    const complete = Array.isArray(pages) && pages.length > 0 && pages.every(Array.isArray);
     return complete
       ? { ok: true, complete: true, classification: "PROVIDER_READ_COMPLETE", attempts: operation.attempts, items: pages.flat(), pages: pages.length }
       : { ok: false, complete: false, classification: PROVIDER_CLASSIFICATIONS.READ_INCOMPLETE, attempts: operation.attempts, items: [] };
   }
   return { ok: true, complete: true, classification: "PROVIDER_READ_COMPLETE", attempts: operation.attempts, value: operation.value };
+}
+
+export function readGitHubTextSync({ root, endpoint, attempts = 3, run = spawnSync } = {}) {
+  if (typeof root !== "string" || !root || typeof endpoint !== "string" || !endpoint) {
+    return { ok: false, classification: PROVIDER_CLASSIFICATIONS.VALIDATION_FAILURE, attempts: 0 };
+  }
+  const operation = synchronousProviderAttempt({
+    attempts,
+    invoke: () => {
+      const result = run("gh", ["api", "--method=GET", endpoint], {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        maxBuffer: DEFAULT_GIT_OUTPUT_LIMIT,
+        env: {
+          ...process.env,
+          ...(!process.env.GH_TOKEN && process.env.GITHUB_TOKEN ? { GH_TOKEN: process.env.GITHUB_TOKEN } : {}),
+        },
+      });
+      if (result.status !== 0 || result.error) throw ghFailure(result);
+      return String(result.stdout ?? "");
+    },
+  });
+  return operation.ok
+    ? { ok: true, complete: true, classification: "PROVIDER_READ_COMPLETE", attempts: operation.attempts, value: operation.value }
+    : { ...operation, complete: false, value: null };
+}
+
+function reservationSelfValid(reservation) {
+  const paths = uniqueSorted(reservation?.allowedPaths ?? []);
+  const unhashed = Object.fromEntries(Object.entries(reservation ?? {}).filter(([key]) => key !== "reservationHash"));
+  return paths.length > 0
+    && exactObject(reservation?.allowedPaths, paths)
+    && exactObject(reservation?.pathGlobs, paths)
+    && paths.every((path) => typeof path === "string" && path && !path.startsWith("/") && !path.includes("..") && !path.includes("*"))
+    && Number.isSafeInteger(reservation?.maximumFiles) && reservation.maximumFiles >= paths.length
+    && Number.isSafeInteger(reservation?.maximumLines) && reservation.maximumLines > 0
+    && reservation?.eligiblePathCount === paths.length
+    && reservation?.reservationHash === controlPlaneHash(unhashed);
+}
+
+/**
+ * Validates the amendment projection carried into terminal synchronization.
+ * Optional amendment capacity and consumed amendment authority are separate:
+ * an unused reservation is BASE_ONLY even when maximumAmendments is one.
+ */
+export function resolveTerminalAmendmentState({ lease, baseReservation, effectiveReservation, amendmentReceipt = null } = {}) {
+  const findings = [];
+  const maximumAmendments = lease?.amendmentMaximum?.maximumAmendments ?? 0;
+  const amendmentsConsumed = amendmentReceipt === null ? 0 : 1;
+  const semantic = resolveFiniteTaskAmendmentState({
+    maximumAmendments,
+    amendmentsConsumed,
+    amendmentReceipt,
+    baseLease: baseReservation,
+    effectiveLease: effectiveReservation,
+  });
+  findings.push(...semantic.findings);
+  if (!reservationSelfValid(baseReservation) || !reservationSelfValid(effectiveReservation)) findings.push("TERMINAL_RESERVATION_INVALID");
+  if (Array.isArray(lease?.allowedPaths) && !exactObject(baseReservation?.allowedPaths, uniqueSorted(lease.allowedPaths))) findings.push("TERMINAL_BASE_RESERVATION_PATHS_INVALID");
+  if (Number.isSafeInteger(lease?.scopeBudget?.maximumFiles) && baseReservation?.maximumFiles !== lease.scopeBudget.maximumFiles) findings.push("TERMINAL_BASE_RESERVATION_FILE_BUDGET_INVALID");
+  if (Number.isSafeInteger(lease?.scopeBudget?.maximumChangedLines) && baseReservation?.maximumLines !== lease.scopeBudget.maximumChangedLines) findings.push("TERMINAL_BASE_RESERVATION_LINE_BUDGET_INVALID");
+  if (semantic.status === "AMENDED") {
+    const addedPaths = uniqueSorted(amendmentReceipt?.addedPaths ?? []);
+    const effectivePaths = uniqueSorted([...(baseReservation?.allowedPaths ?? []), ...addedPaths]);
+    const maximum = lease?.amendmentMaximum ?? {};
+    if (!Number.isSafeInteger(amendmentReceipt?.commentId) || amendmentReceipt.commentId < 1
+      || !Number.isFinite(Date.parse(amendmentReceipt?.createdAt ?? ""))
+      || ![amendmentReceipt?.subjectHash, amendmentReceipt?.bodyHash, amendmentReceipt?.rawBodyHash].every((value) => SHA256.test(value ?? ""))
+      || !GIT_SHA.test(amendmentReceipt?.boundStartingHead ?? "")
+      || !GIT_SHA.test(amendmentReceipt?.boundStartingTree ?? "")
+      || amendmentReceipt?.authorityClassification !== "LIVE_IMMUTABLE_OWNER_RECEIPT"
+      || amendmentReceipt?.domain !== lease?.domain
+      || !exactObject(amendmentReceipt?.addedPaths, addedPaths)
+      || addedPaths.length < 1
+      || addedPaths.some((path) => typeof path !== "string" || !path || path.startsWith("/") || path.includes("..") || path.includes("*"))
+      || !exactObject(effectiveReservation?.allowedPaths, effectivePaths)
+      || effectiveReservation?.maximumFiles > maximum.maximumFiles
+      || effectiveReservation?.maximumLines > maximum.maximumChangedLines
+      || effectiveReservation?.maximumFiles < baseReservation?.maximumFiles
+      || effectiveReservation?.maximumLines < baseReservation?.maximumLines) {
+      findings.push("TERMINAL_AMENDMENT_RECEIPT_INVALID");
+    }
+  }
+  return {
+    ok: findings.length === 0,
+    status: findings.length ? "INVALID" : semantic.status,
+    maximumAmendments,
+    amendmentsConsumed,
+    findings: uniqueSorted(findings),
+  };
 }
 
 export function resolveLifecycle({ state, event, identity, evidence = null } = {}) {
@@ -369,6 +484,7 @@ export function resolveLifecycle({ state, event, identity, evidence = null } = {
   if (event === "MERGE" && state !== "READY") findings.push("DRAFT_MERGE_FORBIDDEN");
   if (event === "MERGE" && (!evidence?.reviewCurrent || !evidence?.phase1Current || !evidence?.finalSourceCurrent)) findings.push("MERGE_EVIDENCE_INCOMPLETE");
   if (event === "MERGE" && evidence?.headSha !== identity?.headSha) findings.push("MERGE_HEAD_STALE");
+  if (event === "MERGE" && evidence?.tree !== identity?.tree) findings.push("MERGE_TREE_STALE");
   if (event === "MERGE" && evidence?.baseSha !== identity?.baseSha) findings.push("MERGE_BASE_STALE");
   return {
     ok: findings.length === 0,
@@ -395,12 +511,29 @@ export function validateImplementationChain({ taskId, implementations, finalProt
   const seenPrs = new Set();
   for (let index = 0; index < (implementations ?? []).length; index += 1) {
     const entry = implementations[index];
+    const validation = entry?.validation;
     if (!Number.isSafeInteger(entry?.pr) || entry.pr < 1 || seenPrs.has(entry.pr)) findings.push("IMPLEMENTATION_CHAIN_PR_INVALID");
     seenPrs.add(entry?.pr);
     if (![entry?.baseSha, entry?.headSha, entry?.tree, entry?.mergeSha, entry?.mergeTree].every((value) => GIT_SHA.test(value ?? ""))) findings.push("IMPLEMENTATION_CHAIN_GIT_IDENTITY_INVALID");
+    if (typeof entry?.branch !== "string" || !/^codex\/[a-z0-9][a-z0-9._/-]*$/u.test(entry.branch)
+      || typeof entry?.title !== "string" || !entry.title) findings.push("IMPLEMENTATION_CHAIN_METADATA_INVALID");
     if (entry?.tree !== entry?.mergeTree) findings.push("IMPLEMENTATION_CHAIN_TREE_MISMATCH");
     if (!Array.isArray(entry?.mergeParents) || entry.mergeParents.length !== 2 || entry.mergeParents[0] !== entry.baseSha || entry.mergeParents[1] !== entry.headSha) findings.push("IMPLEMENTATION_CHAIN_PARENT_MISMATCH");
     if (index > 0 && entry.baseSha !== implementations[index - 1].mergeSha) findings.push("IMPLEMENTATION_CHAIN_DISCONTIGUOUS");
+    const passDisposition = validation?.assuranceDisposition === "PASS"
+      && validation?.ownerRecoveryCommentId === null
+      && validation?.ownerRecoveryRawBodyHash === null
+      && Array.isArray(validation?.bypassedChecks) && validation.bypassedChecks.length === 0;
+    const boundedRecoveryDisposition = validation?.assuranceDisposition === "OWNER_AUTHORIZED_BOUNDED_ASSURANCE_OVERRIDE"
+      && Number.isSafeInteger(validation?.ownerRecoveryCommentId) && validation.ownerRecoveryCommentId > 0
+      && SHA256.test(validation?.ownerRecoveryRawBodyHash ?? "")
+      && Array.isArray(validation?.bypassedChecks) && validation.bypassedChecks.length > 0
+      && validation.bypassedChecks.every((check) => typeof check === "string" && check);
+    if (!Number.isSafeInteger(validation?.phase1RunId) || validation.phase1RunId < 1
+      || !Number.isSafeInteger(validation?.reviewRunId) || validation.reviewRunId < 1
+      || validation?.phase1RawLanesPassed !== 13 || validation?.phase1RawLanesRequired !== 13
+      || validation?.securityFindings !== 0 || validation?.P0 !== 0 || validation?.P1 !== 0 || validation?.launchImpactingP2 !== 0
+      || (!passDisposition && !boundedRecoveryDisposition)) findings.push("IMPLEMENTATION_CHAIN_VALIDATION_INVALID");
   }
   if (implementations?.at(-1)?.mergeSha !== finalProtectedMain) findings.push("IMPLEMENTATION_CHAIN_FINAL_MAIN_MISMATCH");
   return { ok: findings.length === 0, findings: uniqueSorted(findings), taskId, implementations, finalProtectedMain };
@@ -429,20 +562,40 @@ export function projectTerminalSynchronization({ record, transition } = {}) {
   const final = implementations.at(-1);
   const leaseIndex = (next?.finiteTaskLeases?.tasks ?? []).findIndex(({ leaseId }) => leaseId === transition.taskId);
   if (leaseIndex < 0) return { ok: false, mutated: false, findings: ["TERMINAL_SYNCHRONIZATION_LEASE_MISSING"] };
+  const amendment = resolveTerminalAmendmentState({
+    lease: transition.baseLease,
+    baseReservation: transition.baseReservation,
+    effectiveReservation: transition.effectiveReservation,
+    amendmentReceipt: transition.amendmentReceipt,
+  });
+  const finalSource = transition.finalSourceEvidence;
+  const finalSourceUnhashed = Object.fromEntries(Object.entries(finalSource ?? {}).filter(([key]) => key !== "evidenceHash"));
+  const expectedImplementationEvidence = implementations.map(({ pr, headSha, tree, validation }) => ({ pr, headSha, tree, validation }));
   if (!transition.baseLease
     || transition.baseLease?.leaseId !== transition.taskId
+    || !exactObject(next.finiteTaskLeases.tasks[leaseIndex], transition.baseLease)
     || !SHA256.test(transition.baseLeaseHash ?? "")
     || transition.baseLeaseHash !== controlPlaneHash(transition.baseLease)
     || !transition.baseReservation
-    || !exactObject(transition.baseReservation, transition.effectiveReservation)
-    || transition.amendmentReceipt !== null
-    || !transition.finalSourceEvidence
-    || !SHA256.test(transition.finalSourceEvidence.evidenceHash ?? "")
-    || transition.finalSourceEvidence.evidenceHash !== controlPlaneHash(Object.fromEntries(Object.entries(transition.finalSourceEvidence).filter(([key]) => key !== "evidenceHash")))
+    || !amendment.ok
+    || finalSource?.schemaVersion !== 1
+    || finalSource?.classification !== "EXACT_SOURCE_PHASE1_REVIEW_AND_BOUNDED_RECOVERY_EVIDENCE_V1"
+    || finalSource?.repository !== "Chillywood2025/chillywood-mobile"
+    || finalSource?.taskId !== transition.taskId
+    || finalSource?.source !== "LIVE_GITHUB_READBACK"
+    || !Number.isFinite(Date.parse(finalSource?.observedAt ?? ""))
+    || finalSource?.finalHead !== final?.headSha
+    || finalSource?.finalTree !== final?.tree
+    || !exactObject(finalSource?.implementationEvidence, expectedImplementationEvidence)
+    || !SHA256.test(finalSource?.evidenceHash ?? "")
+    || finalSource.evidenceHash !== controlPlaneHash(finalSourceUnhashed)
+    || !Number.isFinite(Date.parse(transition.observedAt ?? ""))
+    || typeof transition.nextTask !== "string" || !transition.nextTask
     || transition.noActiveEngineeringDoctrine?.activeTaskSentinel !== "NO_ACTIVE_PRODUCT_IMPLEMENTATION"
     || transition.noActiveEngineeringDoctrine?.taskLeaseState !== "NO_ACTIVE_TASK"
     || !Array.isArray(transition.noActiveEngineeringDoctrine?.affectedDomains)
-    || transition.noActiveEngineeringDoctrine.affectedDomains.length !== 0) {
+    || transition.noActiveEngineeringDoctrine.affectedDomains.length !== 0
+    || transition.noActiveEngineeringDoctrine?.nextPermittedAction !== transition.nextTask) {
     return { ok: false, mutated: false, findings: ["TERMINAL_SYNCHRONIZATION_EVIDENCE_INVALID"] };
   }
   const existing = record?.finiteTaskRuntime?.terminalOutcome;
@@ -452,7 +605,7 @@ export function projectTerminalSynchronization({ record, transition } = {}) {
     && existing.baseLeaseHash === transition.baseLeaseHash
     && exactObject(existing.baseReservation, transition.baseReservation)
     && exactObject(existing.effectiveReservation, transition.effectiveReservation)
-    && existing.amendmentReceipt === null
+    && exactObject(existing.amendmentReceipt, transition.amendmentReceipt)
     && exactObject(existing.finalSourceEvidence, transition.finalSourceEvidence)
     && exactObject(existing.implementationChain, implementations)
     && existing.mergeSha === transition.finalProtectedMain
@@ -476,7 +629,7 @@ export function projectTerminalSynchronization({ record, transition } = {}) {
     baseLeaseHash: transition.baseLeaseHash,
     baseReservation: structuredClone(transition.baseReservation),
     effectiveReservation: structuredClone(transition.effectiveReservation),
-    amendmentReceipt: null,
+    amendmentReceipt: structuredClone(transition.amendmentReceipt),
     finalSourceEvidence: structuredClone(transition.finalSourceEvidence),
     sourceHead: final.headSha,
     sourceTree: final.tree,
@@ -548,7 +701,7 @@ export function validateNegativeAuthority({ allowedPaths = [], changedPaths = []
   const findings = [];
   const allowed = new Set(allowedPaths);
   if (changedPaths.some((path) => path === "*" || path.includes("**") || !allowed.has(path))) findings.push("UNAUTHORIZED_PATH");
-  for (const boundary of ["database", "provider", "money", "native", "ota", "release"]) {
+  for (const boundary of ["product", "database", "provider", "money", "native", "build", "ota", "submission", "publicRelease", "release"]) {
     if (authority?.[boundary] === true) findings.push(`UNAUTHORIZED_${boundary.toUpperCase()}_AUTHORITY`);
   }
   if (evidence?.forgedOwner || evidence?.editedImmutable || evidence?.wrongTask || evidence?.wrongHead || evidence?.wrongTree || evidence?.staleReview || evidence?.staleFinalSource || evidence?.unknownSecurity || evidence?.fabricatedProvider) findings.push("EVIDENCE_INVALID");

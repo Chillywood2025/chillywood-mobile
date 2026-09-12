@@ -7,7 +7,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
-import { ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS, createCandidateGitContext, readGitHubJsonSync } from "./control-plane-v2.mjs";
+import { ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS, createCandidateGitContext, readGitHubJsonSync, readGitHubTextSync } from "./control-plane-v2.mjs";
 import { canonicalGitText, canonicalReceiptEvidenceWireProjection, classifyGitHubExecutionIdentity, compareReceiptEvidenceSemantics, evaluateTerminalVerifierRepairHistory, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, normalizeReceiptEvidenceSemantics, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, parseProtectedPullRequestMergeSubject, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, phase1FinalSourceSemanticEnvelope, RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS, RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
 import { derivePhase1LifecycleGeneration, inspectPhase1AggregateEvidence, PHASE1_EVIDENCE_STAGES, PHASE1_MODES, resolveProtectedPhase1AdmissionEvidence, verifyPhase1AggregateEvidence, verifyProtectedPhase1PublisherProvisioningReadback } from "./phase1-admission.mjs";
 import { deriveFiniteTaskPrRiskAuthority, evaluateDraftSourceReadinessScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
@@ -3690,7 +3690,7 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
     FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION,
   ].includes(originalSubject.objective)) {
     const observed = exactScope(scope);
-    const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : fixedPointSynchronization || terminalReceiptLifecycleCorrection || phase1RiskBasedAdmissionReform || phase1AdmissionRulesetCutover || phase1PublisherMetadataCompatibilityRepair || phase1SourceAuthorityTokenWiring ? originalSubject.objective : null;
+    const reviewProfile = amendmentControlRepair ? FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1 : testAdaptationOverlay ? FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1 : immutableEvidenceLifecycleConvergence ? IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 : phase1ControlProfile(originalSubject.objective) || fixedPointSynchronization || terminalReceiptLifecycleCorrection || phase1RiskBasedAdmissionReform || phase1AdmissionRulesetCutover || phase1PublisherMetadataCompatibilityRepair || phase1SourceAuthorityTokenWiring ? originalSubject.objective : null;
     const dependencyAmendment = dependencyAmendmentProjection(dependencyAmendmentResolution);
     const historicalRepositoryReviews = dependencyAmendment ? historicalArchitectureReviewProjection(historicalRepositoryReviewRaws, identity) : [];
     const review = verifyArchitectureRepositoryReview({ raw: repositoryReviewRaw, identity, tree, scope, profile: reviewProfile, dependencyAmendmentResolution });
@@ -5770,14 +5770,16 @@ export function verifyTerminalTruthSuccessorAuthority({ raw, allComments = [], p
   return { ok, type: "TERMINAL_TRUTH_SUCCESSOR", repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, currentHead: identity?.headSha, currentTree: tree, featureId: "assurance-efficiency-e0", objectiveDomains: [], supportingDomains: ["CI-test-infrastructure"], historicalWaiverPath: null, authoritySource: repairMode ? "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1" : "TERMINAL_TRUTH_SUCCESSOR_V1", bindingId: `terminal-truth-successor-pr-${identity?.pr}`, budget: { maximumFiles: expectedPaths.length, maximumHandAuthoredNetLines: maximumLines }, commentId: current?.normalized?.id ?? null, commentBodyHash: current?.normalized?.bodyHash ?? null, subjectHash: hashValue(subject), subject, currentTerminalReceiptId: current?.normalized?.id ?? null, historicalTerminalReceiptIds: receipts.filter(({ status }) => status === "HISTORICAL_STALE_TERMINAL_RECEIPT").map(({ normalized }) => normalized.id).sort((left, right) => left - right), terminalReceiptClassifications: receiptSelection.classifications.map((classification) => ({ commentId: matches[classification.index]?.id ?? null, status: classification.disposition, valid: classification.valid, current: classification.current, key: classification.key })).sort((left, right) => (left.commentId ?? 0) - (right.commentId ?? 0)), checks, findings: ok ? [] : Object.entries(checks).filter(([, value]) => !value).map(([key]) => `TERMINAL_TRUTH_SUCCESSOR_INVALID:${key}`) };
 }
 
-export function readGitHubApi({ root = REPOSITORY_ROOT, args = [], run = spawnSync } = {}) {
+export function readGitHubApi({ root = REPOSITORY_ROOT, args = [], run = spawnSync, raw = false } = {}) {
   const endpoint = args.at(-1);
   const paginated = args.includes("--paginate") && args.includes("--slurp");
   const result = typeof endpoint === "string"
-    ? readGitHubJsonSync({ root, endpoint, paginate: paginated, run })
+    ? raw
+      ? readGitHubTextSync({ root, endpoint, run })
+      : readGitHubJsonSync({ root, endpoint, paginate: paginated, run })
     : { ok: false, classification: "VALIDATION_FAILURE" };
   return result.ok
-    ? { status: 0, stdout: JSON.stringify(paginated ? [result.items] : result.value), stderr: "", providerClassification: result.classification, providerAttempts: result.attempts }
+    ? { status: 0, stdout: raw ? result.value : JSON.stringify(paginated ? [result.items] : result.value), stderr: "", providerClassification: result.classification, providerAttempts: result.attempts }
     : { status: 1, stdout: "", stderr: result.classification, providerClassification: result.classification, providerAttempts: result.attempts };
 }
 const typedGh = (root, args) => readGitHubApi({ root, args });
@@ -6244,15 +6246,16 @@ export async function resolvePhase1AdmissionMergeEligibility({ repository, pr, i
   return { schemaVersion: "PHASE1_MERGE_ELIGIBILITY_V1", producer: "PROTECTED_MAIN_ENGINEERING_CLOSURE_V1", repository, pr, headSha: identity?.headSha, sourceTree: tree, baseSha: identity?.baseSha, phase1SourceDecisionHash: phase1Evidence?.phase1SourceDecisionHash, publisherAnchorHash: publisherAnchor.anchorHash, publisherProvisioningReadbackHash: publisherAnchor.provisioningReadbackHash, currentRulesetStage: publisherAnchor.currentRulesetStage, ownerScopeValid, exactHeadReviewValid, finalSourceValid, lifecycleValid, paginationComplete: unique.length === 0, ambiguous, findings: unique };
 }
 export const observeFiniteTaskGitScope = (root, base, head) => {
-  const pathsRun = typedGit(root, ["diff", "--name-only", `${base}...${head}`]);
-  const linesRun = typedGit(root, ["diff", "--numstat", `${base}...${head}`]);
-  if (pathsRun.status !== 0 || linesRun.status !== 0) return null;
-  const files = pathsRun.stdout.split(/\r?\n/gu).filter(Boolean).sort();
-  const rows = linesRun.stdout.split(/\r?\n/gu).filter(Boolean).map((line) => line.split("\t"));
-  const additions = rows.reduce((sum, [value]) => sum + (Number(value) || 0), 0);
-  const deletions = rows.reduce((sum, [, value]) => sum + (Number(value) || 0), 0);
-  const diffRun = typedGit(root, canonicalGitDiffArgs(`${base}...${head}`));
-  return { files, additions, deletions, netChangedLines: Math.max(0, additions - deletions), diffHash: diffRun.status === 0 ? canonicalGitDiffHash(diffRun.stdout) : null };
+  const context = createCandidateGitContext({ root, base, head, expectedHead: head });
+  return context.ok ? {
+    files: context.changedPaths,
+    additions: context.additions,
+    deletions: context.deletions,
+    netChangedLines: Math.max(0, context.additions - context.deletions),
+    diffHash: context.diffHash,
+    sourceIdentityHash: context.sourceIdentityHash,
+    binaryPaths: context.binaryPaths,
+  } : null;
 };
 const gitScope = observeFiniteTaskGitScope;
 export function observeTypedTaskAuthorities({ identity, tree, scope, currentTruth, phase1EvidenceResolver = observePhase1RunEvidence, publisherProvisioningReadbackResolver = () => null, root = REPOSITORY_ROOT } = {}) {
@@ -6931,7 +6934,7 @@ function readOwnerAuthorizations(authoritativeLease, context = {}, root = REPOSI
   const ids = Array.isArray(authoritativeLease?.engineeringOwnerAuthorizationCommentIds) ? authoritativeLease.engineeringOwnerAuthorizationCommentIds : [];
   for (const id of ids) {
     if (!Number.isInteger(id) || id < 1) continue;
-    const response = spawnSync("gh", ["api", "--method=GET", `repos/Chillywood2025/chillywood-mobile/issues/comments/${id}`], { cwd: root, encoding: "utf8", shell: false });
+    const response = readGitHubApi({ root, args: [`repos/Chillywood2025/chillywood-mobile/issues/comments/${id}`] });
     let raw;
     try {
       raw = response.status === 0 ? JSON.parse(response.stdout) : null;
@@ -7519,7 +7522,7 @@ export function verifyDoctrineVerificationDependencyCorrection({
 }
 
 export function observeDoctrineOwnerAuthority({ currentHead, currentBranch = DOCTRINE_BRANCH, currentPr = 226, root = REPOSITORY_ROOT } = {}) {
-  const gh = (endpoint) => spawnSync("gh", ["api", "--method=GET", endpoint], { cwd: root, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
+  const gh = (endpoint) => readGitHubApi({ root, args: [endpoint], raw: endpoint.endsWith("/logs") });
   const originalResponse = gh(`repos/Chillywood2025/chillywood-mobile/issues/comments/${DOCTRINE_BOOTSTRAP_COMMENT_ID}`);
   const amendmentResponse = gh(`repos/Chillywood2025/chillywood-mobile/issues/comments/${DOCTRINE_SCOPE_AMENDMENT_COMMENT_ID}`);
   const correctionResponse = gh(`repos/Chillywood2025/chillywood-mobile/issues/comments/${DOCTRINE_VERIFICATION_DEPENDENCY_COMMENT_ID}`);
@@ -7548,7 +7551,7 @@ export function observeDoctrineOwnerAuthority({ currentHead, currentBranch = DOC
 
 export function observeGitHubTaskIdentity({ repository = "Chillywood2025/chillywood-mobile", pr, branch, admittedSeedHead, protectedBase = DOCTRINE_BASE, leaseId, commentId, amendmentCommentId = DOCTRINE_SCOPE_AMENDMENT_COMMENT_ID, verificationCorrectionCommentId = DOCTRINE_VERIFICATION_DEPENDENCY_COMMENT_ID, maximumFiles = 32, maximumLines = 7000, root = REPOSITORY_ROOT } = {}) {
   if (!Number.isInteger(pr) || pr < 1 || !textValue(branch) || !/^[0-9a-f]{40}$/u.test(admittedSeedHead ?? "") || !/^[0-9a-f]{40}$/u.test(protectedBase ?? "") || !textValue(leaseId) || !Number.isInteger(commentId) || commentId < 1) return null;
-  const gh = (endpoint) => spawnSync("gh", ["api", "--method=GET", endpoint], { cwd: root, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
+  const gh = (endpoint) => readGitHubApi({ root, args: [endpoint] });
   const gitRun = (args) => spawnSync("git", args, { cwd: root, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
   const pullResponse = gh(`repos/${repository}/pulls/${pr}`);
   const commentResponse = gh(`repos/${repository}/issues/comments/${commentId}`);
@@ -7701,17 +7704,6 @@ export function observeCandidateScopeFromGit(base, head, root = REPOSITORY_ROOT)
   if (!/^[0-9a-f]{40}$/u.test(base ?? "") || !/^[0-9a-f]{40}$/u.test(head ?? "")) return null;
   const context = createCandidateGitContext({ root, base, head, expectedHead: head });
   if (!context.ok) return null;
-  // Preserve the existing immutable receipt hash while removing the historical
-  // 1 MiB child-process ceiling. The V2 source identity above is patch-body
-  // independent; this bounded compatibility read exists only for legacy
-  // receipts that already bind the canonical patch hash.
-  const diffRun = spawnSync("git", canonicalGitDiffArgs(`${context.baseHead}...${context.sourceHead}`), {
-    cwd: root,
-    encoding: "utf8",
-    maxBuffer: 16 * 1024 * 1024,
-    shell: false,
-  });
-  if (diffRun.status !== 0 || diffRun.error) return null;
   const paths = context.changedPaths;
   const additions = context.additions;
   const deletions = context.deletions;
@@ -7728,7 +7720,7 @@ export function observeCandidateScopeFromGit(base, head, root = REPOSITORY_ROOT)
     netChangedLines: Math.max(0, additions - deletions),
     generatedGraphLines: 0,
     pathHash: hashValue(paths),
-    diffHash: canonicalGitDiffHash(diffRun.stdout),
+    diffHash: context.diffHash,
     sourceIdentityHash: context.sourceIdentityHash,
     exactPlan: true,
     observationSource: "CANDIDATE_GIT_OBJECT_METADATA_NO_PATCH_BODY_V2",
@@ -8392,7 +8384,7 @@ export function evaluatePreimplementationGate(packet, supplied = {}) {
 const trustedRepositoryReviews = new WeakSet();
 export function observeRepositoryOwnedReview({ repository = "Chillywood2025/chillywood-mobile", pr, reviewId, head, root = REPOSITORY_ROOT } = {}) {
   if (!Number.isInteger(pr) || pr < 1 || !Number.isInteger(reviewId) || reviewId < 1 || !/^[0-9a-f]{40}$/u.test(head ?? "")) return null;
-  const get = (endpoint) => spawnSync("gh", ["api", "--method=GET", endpoint], { cwd: root, encoding: "utf8", shell: false });
+  const get = (endpoint) => readGitHubApi({ root, args: [endpoint] });
   const pullResponse = get(`repos/${repository}/pulls/${pr}`);
   const reviewResponse = get(`repos/${repository}/pulls/${pr}/reviews/${reviewId}`);
   let pull;

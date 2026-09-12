@@ -498,6 +498,21 @@ test("only the exact source-authority token workflow transition is structurally 
   assert.equal(verifyPhase1SourceAuthorityTokenWorkflowTransition(exact), true);
   assert.equal(verifyPhase1SourceAuthorityTokenWorkflowTransition({ ...exact, candidateWorkflow: `${exact.candidateWorkflow}\npermissions: write-all` }), false);
   assert.equal(verifyPhase1SourceAuthorityTokenWorkflowTransition({ ...exact, candidateWorkflow: exact.candidateWorkflow.replace(/  cognitive:[\s\S]*$/u, "") }), false);
+  assert.equal(verifyPhase1SourceAuthorityTokenWorkflowTransition({
+    ...exact,
+    candidateWorkflow: exact.candidateWorkflow.replace(
+      /  cognitive:[\s\S]*$/u,
+      "  cognitive:\n    name: Phase 1 / cognitive\n    steps:\n      - name: Harmless successor step\n        run: true\n",
+    ),
+  }), false);
+  assert.equal(verifyPhase1SourceAuthorityTokenWorkflowTransition({
+    ...exact,
+    candidateWorkflow: `${exact.candidateWorkflow}\n  added-safe-job:\n    name: Phase 1 / added-safe-job\n    steps:\n      - name: Harmless successor step\n        run: true\n`,
+  }), true);
+  assert.equal(verifyPhase1SourceAuthorityTokenWorkflowTransition({
+    ...exact,
+    candidateWorkflow: `${exact.candidateWorkflow}\n  added-unsafe-source-job:\n    name: Phase 1 / added-unsafe-source-job\n    steps:\n${namedStep}\n`,
+  }), false);
   const authorizedStep = namedStep.replace(step, `${token}${step}`);
   const protectedPermissionWorkflow = `${lifecycle}permissions:\n  actions: read\n  contents: read\n  pull-requests: read\njobs:\n  one:\n    name: Phase 1 / one\n    steps:\n${authorizedStep}`;
   const candidatePermissionWorkflow = `${lifecycle}permissions:\n  actions: read\n  contents: read\n  issues: read\n  pull-requests: read\njobs:\n  one:\n    name: Phase 1 / one\n    steps:\n${authorizedStep}`;
