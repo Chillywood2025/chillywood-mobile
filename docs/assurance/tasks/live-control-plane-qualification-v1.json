@@ -1,0 +1,27 @@
+{
+  "authorizationStatus": "PRODUCT_SOURCE_EDITING_NOT_YET_AUTHORIZED",
+  "implementation": {
+    "branch": "codex/live-control-plane-qualification-v1",
+    "protectedBase": {
+      "head": "06461ba3cabdb2985140e101a0a4bf23fb5179d9",
+      "tree": "c3428abbe4cba66b57192e9ae0b9c2fd463edd00"
+    },
+    "pullRequest": null,
+    "seedHead": null,
+    "seedTree": null
+  },
+  "primaryDomain": "codex-security-scan-reliability-s0",
+  "provisionalPathBudget": {
+    "amendmentsPermitted": 0,
+    "maximumAmendedFiles": 0,
+    "maximumAmendedHandAuthoredNetLines": 0,
+    "maximumFiles": 3,
+    "maximumHandAuthoredNetLines": 500,
+    "packageDependencyChangePermitted": false
+  },
+  "repository": "Chillywood2025/chillywood-mobile",
+  "rootDefects": [
+    "LIVE-QUALIFICATION-FIXED-POINT-001"
+  ],
+  "taskId": "live-control-plane-qualification-v1"
+}
