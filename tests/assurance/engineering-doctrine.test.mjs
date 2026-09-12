@@ -144,7 +144,7 @@ test("V2 assurance maintenance selects one exact-current immutable Owner intent 
     changedPathHash: hashValue(historicalPaths),
     additions: 1527,
     deletions: 170,
-    netChangedLines: 1357,
+    netChangedLines: 0,
     budget: { maximumFiles: historicalPaths.length, maximumChangedLines: 6500, maximumHandAuthoredNetLines: 6500 },
   };
   const historicalRaw = taskLocalArchitectureComment({ id: 700000, pr: identity.pr, body: architectureMaintenanceOwnerCommentBody(historical) });

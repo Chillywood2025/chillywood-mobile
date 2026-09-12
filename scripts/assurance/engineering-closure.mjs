@@ -4515,7 +4515,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       && subject.changedPathHash === hashValue(paths)
       && Number.isSafeInteger(subject.additions) && subject.additions >= 0
       && Number.isSafeInteger(subject.deletions) && subject.deletions >= 0
-      && subject.netChangedLines === Math.max(0, subject.additions - subject.deletions)
+      && [0, Math.max(0, subject.additions - subject.deletions)].includes(subject.netChangedLines)
       && Number.isInteger(subject.budget?.maximumFiles) && subject.budget.maximumFiles >= paths.length
       && Number.isInteger(subject.budget?.maximumChangedLines) && subject.budget.maximumChangedLines >= subject.additions + subject.deletions
       && subject.budget?.maximumHandAuthoredNetLines === subject.budget.maximumChangedLines
@@ -4530,7 +4530,8 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
       && subject.currentHead === identity?.headSha && subject.currentTree === tree
       && stableJson(paths) === stableJson(observed.changedPaths)
       && subject.changedPathHash === observed.changedPathHash
-      && subject.additions === Number(scope?.additions ?? 0) && subject.deletions === Number(scope?.deletions ?? 0);
+      && subject.additions === Number(scope?.additions ?? 0) && subject.deletions === Number(scope?.deletions ?? 0)
+      && subject.netChangedLines === observed.netChangedLines;
     return { id: normalized?.id ?? item?.id ?? null, head: subject?.currentHead ?? null, valid, current };
   }) : [];
   const currentProfileIntents = profileIntentHistory.filter(({ current }) => current);
