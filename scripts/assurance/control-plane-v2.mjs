@@ -29,6 +29,7 @@ export const ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS = Object.freeze([
   "scripts/assurance/review-history.mjs",
   "scripts/assurance/terminal-sync.mjs",
   "tests/assurance/control-plane-v2.test.mjs",
+  "tests/assurance/codex-review-exact-head.test.mjs",
   "tests/assurance/current-truth-sync.test.mjs",
   "tests/assurance/engineering-doctrine.test.mjs",
   "tests/assurance/github-main-ruleset-readback.test.mjs",
