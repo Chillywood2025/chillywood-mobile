@@ -29,7 +29,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
 - `WHOLE_APP_ENGINEERING_BEFORE_IMPLEMENTATION_DOCTRINE_V1` is `ACTIVE`; bounded definition `BOUND_COMPLETE_SOURCE_ONLY`.
 - Graph `accaddf9c51ee6f8190cb1921cbf0ec3c992d3c4a0011afd8c34b2327b3d6b9d`; active packet `3843b22577a2230d5db5b712c1311487528af3698d938ef57e8185d2615d0591`; task lease `NO_ACTIVE_TASK`.
-- Next permitted action: `AWAIT_OWNER_FINITE_TASK`. No domain readiness entry is a universal app-completion claim.
+- Next permitted action: `WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE`. No domain readiness entry is a universal app-completion claim.
 
 ## Typed task-context architecture
 
