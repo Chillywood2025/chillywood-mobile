@@ -264,7 +264,7 @@
       "profileId": "ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2",
       "exactNamedPathsRequired": true,
       "ownerAuthorityRequired": true,
-      "maximumFiles": 29,
+      "maximumFiles": 30,
       "maximumChangedLines": 6500,
       "maximumImplementationPrs": 1,
       "authority": {

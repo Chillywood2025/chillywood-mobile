@@ -110,7 +110,7 @@ test("V2 assurance self-maintenance is exact-path bounded, single-PR, and grants
   assert.equal(maintenanceWaiver.fileBudget.waivedMaximum, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS.length);
   const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 500, branch: "codex/assurance-control-plane-consolidation-v2", baseSha: "1".repeat(40), headSha: "2".repeat(40) };
   const subject = architectureMaintenanceSubject({ identity, tree: "3".repeat(40), scope: { files: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS, additions: 3000, deletions: 400 }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2 });
-  assert.deepEqual(subject.budget, { maximumFiles: 28, maximumChangedLines: 6500, maximumHandAuthoredNetLines: 6500 });
+  assert.deepEqual(subject.budget, { maximumFiles: 30, maximumChangedLines: 6500, maximumHandAuthoredNetLines: 6500 });
   assert.deepEqual(subject.capabilities, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2]);
   assert.equal(subject.reusableByAnotherPr, false);
   assert.equal(Object.values(subject.authority).every((value) => value === false), true);

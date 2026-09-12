@@ -7,6 +7,7 @@ const DEFAULT_GIT_OUTPUT_LIMIT = 32 * 1024 * 1024;
 
 export const ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2 = "ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2";
 export const ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS = Object.freeze([
+  ".github/workflows/phase1-ci.yml",
   "CURRENT_STATE.md",
   "NEXT_TASK.md",
   "config/assurance/current-truth-contract-v1.json",

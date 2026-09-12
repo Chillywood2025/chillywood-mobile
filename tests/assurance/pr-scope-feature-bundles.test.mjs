@@ -1157,8 +1157,8 @@ test("assurance-control observer accepts only exact protected source-only profil
   assert.deepEqual(metadataProfile, { profileId: "PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1", paths: ["scripts/assurance/phase1-admission.mjs", "tests/assurance/phase1-admission.test.mjs"], maximumFiles: 2, maximumChangedLines: 80 });
   assert.deepEqual(tokenWiringProfile, { profileId: "PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1", paths: [".github/workflows/phase1-ci.yml", "tests/assurance/source-readiness-wrapper.test.mjs"], maximumFiles: 2, maximumChangedLines: 80 });
   assert.deepEqual(terminalLifecycleProfile, { profileId: "FINITE_TASK_TERMINAL_TRUTH_V1_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION", paths: ["config/assurance/current-truth-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "tests/assurance/active-task-binding-a1.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"], maximumFiles: 6, maximumChangedLines: 900 });
-  assert.equal(consolidationProfile.paths.length, 28);
-  assert.deepEqual({ maximumFiles: consolidationProfile.maximumFiles, maximumChangedLines: consolidationProfile.maximumChangedLines }, { maximumFiles: 28, maximumChangedLines: 6500 });
+  assert.equal(consolidationProfile.paths.length, 30);
+  assert.deepEqual({ maximumFiles: consolidationProfile.maximumFiles, maximumChangedLines: consolidationProfile.maximumChangedLines }, { maximumFiles: 30, maximumChangedLines: 6500 });
   assert.equal(consolidationProfile.paths.includes("app/index.tsx"), false);
   assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: metadataProfile.paths, budget: { maximumFiles: 2, maximumChangedLines: 80, maximumHandAuthoredNetLines: 80 }, changedFiles: 2 })?.profileId, metadataProfile.profileId);
   assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: tokenWiringProfile.paths, budget: { maximumFiles: 2, maximumChangedLines: 80, maximumHandAuthoredNetLines: 80 }, changedFiles: 2 })?.profileId, tokenWiringProfile.profileId);

@@ -80,6 +80,8 @@ jobs:
           node --test tests/assurance/codex-security-reliability-s0.test.mjs
 
       - name: Validate all-platform autonomous safety and product contracts
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           npm run guard:autonomous-component-inventory
           npm run proof:autonomous-component-inventory
@@ -184,6 +186,8 @@ jobs:
         run: npm ci
 
       - name: Validate autonomous iOS safety and product contracts
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           npm run proof:autonomous-systems-contract
           npm run guard:autonomous-operating-model
@@ -257,6 +261,7 @@ jobs:
       - name: Validate cognitive registry and architecture safety
         env:
           COGNITIVE_EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           npm run guard:autonomous-component-inventory
           npm run proof:autonomous-component-inventory

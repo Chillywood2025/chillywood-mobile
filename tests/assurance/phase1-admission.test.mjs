@@ -733,6 +733,16 @@ test("raw Phase 1 deterministically cuts over its three narrow maintenance proje
   assert.match(library, /const candidateRoot = process\.cwd\(\);[\s\S]*validateUntrustedAssuranceControlTaskContextObservation/u);
 });
 
+test("every Phase 1 step that invokes the authenticated source resolver receives the read-only GitHub token", () => {
+  const workflow = fs.readFileSync(new URL("../../.github/workflows/phase1-ci.yml", import.meta.url), "utf8");
+  const steps = workflow.match(/^      - name: [^\n]+\n[\s\S]*?(?=^      - name: |^  [a-z][a-z0-9-]*:|(?![\s\S]))/gmu) ?? [];
+  const resolverConsumers = steps.filter((step) => step.includes("npm run proof:autonomous-systems-contract"));
+  assert.ok(resolverConsumers.length > 0);
+  for (const step of resolverConsumers) {
+    assert.match(step, /\n        env:\n(?:          [^\n]+\n)*          GH_TOKEN: \$\{\{ github\.token \}\}/u);
+  }
+});
+
 test("immutable publisher anchor requires exact R1 Owner receipts and exact separately observed provisioning", () => {
   const sourcePr = 900;
   const sourceBranch = "codex/phase1-risk-based-admission-r1";
