@@ -22,7 +22,7 @@ function validEntry(entry) {
 function defaultReadArtifact(locator) {
   const match = /^git:([0-9a-f]{40}):(config\/assurance\/current-truth-v1\.json)$/u.exec(locator);
   if (!match) throw new Error("unsupported artifact locator");
-  return execFileSync("git", ["show", `${match[1]}:${match[2]}`], { cwd: ROOT, encoding: "utf8" });
+  return execFileSync("git", ["show", `${match[1]}:${match[2]}`], { cwd: ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
 }
 
 function artifactMatches(raw, entry) {

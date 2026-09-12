@@ -459,17 +459,29 @@ function brandSourceAuthority(proof, { identity, lifecycle } = {}) {
 }
 
 export function verifyPhase1SourceAuthorityTokenWorkflowTransition({ candidateWorkflow, protectedWorkflow, candidateTest, protectedTest } = {}) {
-  const stepCount = typeof protectedWorkflow === "string" ? protectedWorkflow.split(SOURCE_AUTHORITY_STEP).length - 1 : 0;
-  const tokenWiringTransition = stepCount === 6
-    && candidateWorkflow === protectedWorkflow.replaceAll(SOURCE_AUTHORITY_STEP, `${SOURCE_AUTHORITY_TOKEN_STEP}${SOURCE_AUTHORITY_STEP}`)
-    && typeof protectedTest === "string" && protectedTest.split(SOURCE_AUTHORITY_TEST_ANCHOR).length === 2
-    && candidateTest === protectedTest.replace(SOURCE_AUTHORITY_TEST_ANCHOR, `${SOURCE_AUTHORITY_TEST_BLOCK}${SOURCE_AUTHORITY_TEST_ANCHOR}`);
-  const issuePermissionTransition = typeof protectedWorkflow === "string"
-    && protectedWorkflow.split(SOURCE_AUTHORITY_PERMISSION_BLOCK).length === 2
-    && candidateWorkflow === protectedWorkflow.replace(SOURCE_AUTHORITY_PERMISSION_BLOCK, SOURCE_AUTHORITY_ISSUE_PERMISSION_BLOCK)
-    && typeof protectedTest === "string" && protectedTest.split(SOURCE_AUTHORITY_PERMISSION_TEST_ANCHOR).length === 2
-    && candidateTest === protectedTest.replace(SOURCE_AUTHORITY_PERMISSION_TEST_ANCHOR, `${SOURCE_AUTHORITY_PERMISSION_TEST_ANCHOR}${SOURCE_AUTHORITY_PERMISSION_TEST_BLOCK}`);
-  return tokenWiringTransition || issuePermissionTransition;
+  if (![candidateWorkflow, protectedWorkflow, candidateTest, protectedTest].every((value) => typeof value === "string")) return false;
+  const permissionBlock = /^permissions:\s*\n((?: {2}[a-z-]+:\s*(?:read|none)\s*\n)+)/mu.exec(candidateWorkflow)?.[1] ?? "";
+  const permissions = Object.fromEntries([...permissionBlock.matchAll(/^ {2}([a-z-]+):\s*(read|none)\s*$/gmu)].map((match) => [match[1], match[2]]));
+  const minimumReadAuthority = ["actions", "contents", "issues", "pull-requests"].every((name) => permissions[name] === "read")
+    && Object.values(permissions).every((value) => value === "read" || value === "none");
+  const unsafePermissionAuthority = /^\s*permissions:\s*write-all\s*$|^\s*[a-z-]+:\s*write\s*$/mu.test(candidateWorkflow);
+  const sourceAuthoritySteps = candidateWorkflow.match(/      - name: Validate assurance authority and source correctness[\s\S]*?(?=\n      - name:|\n  [a-z][a-z-]*:|$)/gu) ?? [];
+  const exactStepAuthority = sourceAuthoritySteps.length > 0 && sourceAuthoritySteps.every((step) => (
+    /env:\s*\n(?:\s*[A-Z0-9_]+:.*\n)*\s*GH_TOKEN: \$\{\{ github\.token \}\}/u.test(step)
+    && /PHASE1_PROTECTED_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.sha \}\}/u.test(step)
+  ));
+  const regressionPresent = candidateTest.includes("all source-authority lanes receive the exact workflow token and protected base")
+    && candidateTest.includes("issues: read");
+  const protectedJobIds = [...protectedWorkflow.matchAll(/^  ([a-z][a-z0-9-]+):\s*$/gmu)].map((match) => match[1]);
+  const candidateJobIds = new Set([...candidateWorkflow.matchAll(/^  ([a-z][a-z0-9-]+):\s*$/gmu)].map((match) => match[1]));
+  const protectedRequiredNames = [...protectedWorkflow.matchAll(/^    name: (Phase 1 \/ .+)$/gmu)].map((match) => match[1]);
+  const lifecycleInvariant = /types: \[opened, synchronize, reopened, edited, ready_for_review, converted_to_draft\]/u.test(candidateWorkflow)
+    && /push:\s*\n\s*branches:\s*\n\s*- main/u.test(candidateWorkflow);
+  const protectedInvariantsPreserved = protectedJobIds.every((job) => candidateJobIds.has(job))
+    && protectedRequiredNames.every((name) => candidateWorkflow.includes(`    name: ${name}`))
+    && lifecycleInvariant;
+  const changed = candidateWorkflow !== protectedWorkflow || candidateTest !== protectedTest;
+  return changed && minimumReadAuthority && !unsafePermissionAuthority && exactStepAuthority && regressionPresent && protectedInvariantsPreserved;
 }
 
 export function evaluatePhase1Admission(input = {}) {

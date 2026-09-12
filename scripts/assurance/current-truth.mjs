@@ -36,6 +36,7 @@ import { validateStructuredBinding } from "./active-task.mjs";
 import { architectureDependencyBaselinePolicyV1, observeFiniteTaskGitScope, observeFiniteTaskImplementationLifecycle, observeFiniteTaskPostMergeTransition } from "./engineering-closure.mjs";
 import { phase1AdmissionRulesetCutoverStateValid, resolvePhase1AdmissionRulesetCutoverState } from "./github-main-ruleset-readback.mjs";
 import { validateLateReviewSentinelState } from "./late-review-sentinel.mjs";
+import { createCandidateGitContext } from "./control-plane-v2.mjs";
 
 function safeGit(gitArgs, fallback = null) {
   try {
@@ -128,8 +129,8 @@ function inspectBaseSynchronization({ entry, observedHead, currentMain, reviewEv
     canonicalTree = null;
     mergeConflict = true;
   }
-  const reviewedSourceDelta = mergeBase ? safeGit(["diff", "--binary", "--no-renames", mergeBase, entry.head]) : null;
-  const synchronizedSourceDelta = safeGit(["diff", "--binary", "--no-renames", currentMain, observedHead]);
+  const reviewedSourceIdentity = mergeBase ? createCandidateGitContext({ root: ROOT, base: mergeBase, head: entry.head }) : null;
+  const synchronizedSourceIdentity = createCandidateGitContext({ root: ROOT, base: currentMain, head: observedHead });
   const reviewedChangedFileBytes = mergeBase ? safeGit(["diff", "--name-status", "-z", "--no-renames", mergeBase, entry.head]) : null;
   const synchronizedChangedFileBytes = safeGit(["diff", "--name-status", "-z", "--no-renames", currentMain, observedHead]);
   const reviewedChangedPaths = mergeBase ? splitNullTerminated(safeGit(["diff", "--name-only", "-z", "--no-renames", mergeBase, entry.head], "")) : null;
@@ -142,8 +143,8 @@ function inspectBaseSynchronization({ entry, observedHead, currentMain, reviewEv
     observedTree,
     canonicalTree,
     mergeConflict,
-    reviewedSourceDeltaHash: reviewedSourceDelta === null ? null : sha256(reviewedSourceDelta),
-    synchronizedSourceDeltaHash: synchronizedSourceDelta === null ? null : sha256(synchronizedSourceDelta),
+    reviewedSourceDeltaHash: reviewedSourceIdentity?.ok ? reviewedSourceIdentity.objectDeltaHash : null,
+    synchronizedSourceDeltaHash: synchronizedSourceIdentity.ok ? synchronizedSourceIdentity.objectDeltaHash : null,
     reviewedChangedFileHash: reviewedChangedFileBytes === null ? null : sha256(reviewedChangedFileBytes),
     synchronizedChangedFileHash: synchronizedChangedFileBytes === null ? null : sha256(synchronizedChangedFileBytes),
     reviewedChangedPaths,
@@ -222,12 +223,14 @@ if (mode) {
   const explicitImplementationBranch = typeof options.implementationBranch === "string" ? options.implementationBranch : "";
   const explicitImplementationHead = typeof options.implementationHead === "string" ? options.implementationHead : "";
   const effectiveReservationObservation = observeFiniteTaskEffectiveReservation(record);
-  const finiteTaskPostMergeTransition = observeFiniteTaskPostMergeTransition({
-    record,
-    currentProtectedMain: remoteMain,
-    root: ROOT,
-    liveObservation: effectiveReservationObservation,
-  });
+  const finiteTaskPostMergeTransition = record.activeTaskBinding
+    ? observeFiniteTaskPostMergeTransition({
+        record,
+        currentProtectedMain: remoteMain,
+        root: ROOT,
+        liveObservation: effectiveReservationObservation,
+      })
+    : { applicable: false, ok: true, findings: [] };
   const finiteTaskRuntime = evaluateFiniteTaskLeaseRuntime({
     record,
     contract: currentTruthContract,

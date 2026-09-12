@@ -478,9 +478,14 @@ test("missing, duplicate, wrong-job, incomplete, and workflow-substituted eviden
 test("only the exact source-authority token workflow transition is structurally eligible", () => {
   const step = "          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}";
   const token = "          GH_TOKEN: ${{ github.token }}\n";
-  const protectedWorkflow = Array.from({ length: 6 }, () => step).join("\n");
+  const permissions = "permissions:\n  actions: read\n  contents: read\n  issues: read\n  pull-requests: read\n";
+  const lifecycle = "on:\n  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft]\n  push:\n    branches:\n      - main\n";
+  const namedStep = `      - name: Validate assurance authority and source correctness\n        env:\n${step}`;
+  const jobs = ["all-platform", "ios", "cognitive"].map((id) => `  ${id}:\n    name: Phase 1 / ${id}\n    steps:\n${namedStep}`).join("\n");
+  const protectedWorkflow = `${lifecycle}${permissions}jobs:\n${jobs}`;
   const anchor = "test(\"draft source readiness rejects deletion of a protected-base test\", () => {";
   const block = `test("all source-authority lanes receive the exact workflow token and protected base", () => {
+  assert.match(workflow, /issues: read/u);
   const steps = workflow.match(/      - name: Validate assurance authority and source correctness[\\s\\S]*?(?=\\n      - name:|\\n  [a-z][a-z-]*:|$)/gu) ?? [];
   assert.equal(steps.length, 3);
   for (const step of steps) {
@@ -492,8 +497,10 @@ test("only the exact source-authority token workflow transition is structurally 
   const exact = { protectedWorkflow, candidateWorkflow: protectedWorkflow.replaceAll(step, `${token}${step}`), protectedTest: anchor, candidateTest: `${block}${anchor}` };
   assert.equal(verifyPhase1SourceAuthorityTokenWorkflowTransition(exact), true);
   assert.equal(verifyPhase1SourceAuthorityTokenWorkflowTransition({ ...exact, candidateWorkflow: `${exact.candidateWorkflow}\npermissions: write-all` }), false);
-  const protectedPermissionWorkflow = "permissions:\n  actions: read\n  contents: read\n  pull-requests: read";
-  const candidatePermissionWorkflow = "permissions:\n  actions: read\n  contents: read\n  issues: read\n  pull-requests: read";
+  assert.equal(verifyPhase1SourceAuthorityTokenWorkflowTransition({ ...exact, candidateWorkflow: exact.candidateWorkflow.replace(/  cognitive:[\s\S]*$/u, "") }), false);
+  const authorizedStep = namedStep.replace(step, `${token}${step}`);
+  const protectedPermissionWorkflow = `${lifecycle}permissions:\n  actions: read\n  contents: read\n  pull-requests: read\njobs:\n  one:\n    name: Phase 1 / one\n    steps:\n${authorizedStep}`;
+  const candidatePermissionWorkflow = `${lifecycle}permissions:\n  actions: read\n  contents: read\n  issues: read\n  pull-requests: read\njobs:\n  one:\n    name: Phase 1 / one\n    steps:\n${authorizedStep}`;
   const permissionTestAnchor = 'test("all source-authority lanes receive the exact workflow token and protected base", () => {\n';
   const permissionTestBlock = `  assert.match(workflow,
     /permissions:\\s*\\n\\s*actions: read\\s*\\n\\s*contents: read\\s*\\n\\s*issues: read\\s*\\n\\s*pull-requests: read/u);

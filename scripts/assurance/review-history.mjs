@@ -28,7 +28,7 @@ function unresolvedFindingCounts(findings) {
 
 function gitEvidence(review, dependencies) {
   const runGit = dependencies.git ?? git;
-  const readObject = dependencies.readObject ?? ((head, file) => execFileSync("git", ["show", `${head}:${file}`], { cwd: ROOT, encoding: "utf8" }));
+  const readObject = dependencies.readObject ?? ((head, file) => execFileSync("git", ["show", `${head}:${file}`], { cwd: ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }));
   let paths; let content; let remoteHead;
   try {
     paths = runGit(["show", "--format=", "--name-only", review.head]).split("\n").filter(Boolean);

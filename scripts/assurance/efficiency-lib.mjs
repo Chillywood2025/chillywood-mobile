@@ -48,7 +48,8 @@ export function git(argv) {
   return execFileSync("git", argv, {
     cwd: ROOT,
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 16 * 1024 * 1024,
   }).trim();
 }
 

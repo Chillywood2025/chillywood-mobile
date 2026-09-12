@@ -37,7 +37,7 @@ const baselineContracts = {
 };
 
 function committedEvidence(row, dependencies) {
-  const read = dependencies.readEvidence ?? ((head, file) => execFileSync("git", ["show", `${head}:${file}`], { cwd: ROOT, encoding: "utf8" }));
+  const read = dependencies.readEvidence ?? ((head, file) => execFileSync("git", ["show", `${head}:${file}`], { cwd: ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }));
   try {
     const value = read(row.head, row.evidence.path);
     return sha256(value) === row.evidence.sha256 && Buffer.byteLength(value) === row.evidence.bytes;
@@ -45,7 +45,7 @@ function committedEvidence(row, dependencies) {
 }
 
 function committedTree(row, dependencies) {
-  const run = dependencies.git ?? ((args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim());
+  const run = dependencies.git ?? ((args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }).trim());
   try { return run(["rev-parse", `${row.head}^{tree}`]) === row.tree; } catch { return false; }
 }
 
