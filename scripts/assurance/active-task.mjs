@@ -8,6 +8,7 @@ import { git, packet, privateArtifactDirectory, sha256, sha40, sha64, strictOpti
 import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
 import { deriveFiniteTaskPrRiskAuthority } from "./pr-scope-lib.mjs";
 import { phase1AdmissionRulesetCutoverAggregateValid } from "./github-main-ruleset-readback.mjs";
+import { createCandidateGitContext, readGitHubJsonSync } from "./control-plane-v2.mjs";
 import { DOCTRINE_BASE, DOCTRINE_BRANCH, affectedDomainClosure, createImplementationIdentityObservation, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, generateDomainGraph, hashValue, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit, observeGitHubTaskIdentity, readTaskArtifactAtGitHead, resolveFiniteTaskAdmissionTaskBindingV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2, verifyTaskLocalGoverningEdgeClosure } from "./engineering-closure.mjs";
 import {
   ACTIVE_POLICY_STATUS,
@@ -184,14 +185,12 @@ export function evaluatePreAdmissionEngineeringSeed(facts = {}) {
 }
 
 const ghJson = (endpoint) => {
-  const run = spawnSync("gh", ["api", "--method=GET", endpoint], { cwd: ROOT, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
-  if (run.status !== 0) return null;
-  try { return JSON.parse(run.stdout); } catch { return null; }
+  const result = readGitHubJsonSync({ root: ROOT, endpoint });
+  return result.ok ? result.value : null;
 };
 const ghPages = (endpoint) => {
-  const run = spawnSync("gh", ["api", "--paginate", "--slurp", endpoint], { cwd: ROOT, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
-  if (run.status !== 0) return null;
-  try { const pages = JSON.parse(run.stdout); return Array.isArray(pages) && pages.every(Array.isArray) ? pages.flat() : null; } catch { return null; }
+  const result = readGitHubJsonSync({ root: ROOT, endpoint, paginate: true });
+  return result.ok && result.complete ? result.items : null;
 };
 
 function finiteTaskAuthorityEvidence(truth, lease) {
@@ -710,23 +709,16 @@ export function ownerBootstrapAuthorizationCommentBody(binding) {
 
 function readOwnerBootstrapAuthorizationObservation(authorization) {
   if (!Number.isInteger(authorization?.commentId) || authorization.commentId < 1) return null;
-  const response = spawnSync("gh", [
-    "api",
-    `repos/${ownerBootstrapRepository}/issues/comments/${authorization.commentId}`
-  ], { cwd: ROOT, encoding: "utf8", shell: false });
-  if (response.status !== 0) return null;
-  try {
-    const comment = JSON.parse(response.stdout);
-    return {
-      commentId: comment.id,
-      author: comment.user?.login,
-      authorAssociation: comment.author_association,
-      body: comment.body,
-      createdAt: comment.created_at,
-      updatedAt: comment.updated_at,
-      issueUrl: comment.issue_url
-    };
-  } catch { return null; }
+  const comment = ghJson(`repos/${ownerBootstrapRepository}/issues/comments/${authorization.commentId}`);
+  return comment ? {
+    commentId: comment.id,
+    author: comment.user?.login,
+    authorAssociation: comment.author_association,
+    body: comment.body,
+    createdAt: comment.created_at,
+    updatedAt: comment.updated_at,
+    issueUrl: comment.issue_url
+  } : null;
 }
 
 export function verifyOwnerBootstrapAuthorization(binding, observation) {
@@ -801,6 +793,7 @@ function structuredBindingAuthority(truth, facts) {
 
 export function validateStructuredBinding(value, gateCatalog, registry, openImplementationPrs, latestMergedImplementationPr) {
   const findings = [];
+  if (value === null && Array.isArray(openImplementationPrs) && openImplementationPrs.length === 0) return [];
   if (!value || typeof value !== "object" || Array.isArray(value)) return ["ACTIVE_TASK_BINDING_MALFORMED"];
   if (requiredStructuredBindingFields.some((field) => !Object.hasOwn(value, field))) findings.push("ACTIVE_TASK_BINDING_MALFORMED");
   const requiredFreshnessClaimsValid = Array.isArray(value.requiredFreshnessClaims)
@@ -885,8 +878,11 @@ export function validateStructuredBinding(value, gateCatalog, registry, openImpl
   if (["COMPLETE", "TERMINAL"].includes(value.phase)) {
     if (!Array.isArray(openImplementationPrs)) findings.push("IMPLEMENTATION_INVENTORY_MALFORMED");
     else if (openImplementationPrs.length) findings.push("COMPLETED_IMPLEMENTATION_COMPETING_OPEN_IMPLEMENTATION");
+    const terminalChainLast = value?.terminalEvidence?.schemaVersion === 3
+      ? value.terminalEvidence.implementationChain?.at(-1)
+      : null;
     if (latestMergedImplementationPr?.state !== "merged"
-      || latestMergedImplementationPr.number !== value.implementationPr
+      || latestMergedImplementationPr.number !== (terminalChainLast?.pr ?? value.implementationPr)
       || latestMergedImplementationPr.head !== value.currentImplementationHead
       || !sha40(latestMergedImplementationPr.mergeSha)) {
       findings.push("COMPLETED_IMPLEMENTATION_MERGE_IDENTITY_MISMATCH");
@@ -900,6 +896,7 @@ function resolveFeature(truth, facts, registry) {
     const binding = truth.activeTaskBinding;
     const findings = validateStructuredBinding(binding, facts.gateCatalog ?? readJson("config/assurance/gate-catalog-v1.json"), registry, truth.openImplementationPrs, truth.latestMergedImplementationPr);
     if (findings.length) return { ok: false, findings };
+    if (binding === null) return { ok: false, findings: ["ACTIVE_TASK_NONE"] };
     if (["COMPLETE", "TERMINAL"].includes(binding.phase) && unresolvedLateReviewSentinels(truth).some((sentinel) => {
       const allowedOwners = lateReviewAllowedOwners(sentinel);
       return lateReviewSuccessorCorrectionOwner(sentinel) === binding.implementationBranch
@@ -1016,10 +1013,14 @@ function collectFiniteTaskCandidate(lease, facts) {
 export function resolveFiniteTaskImplementation(truth, identity, facts, binding, lease) {
   const effectiveResolution = facts.finiteTaskEffectiveReservationResolution;
   const terminalOutcome = truth?.finiteTaskRuntime?.terminalOutcome;
+  const implementationChainTerminal = binding.phase === "TERMINAL"
+    && terminalOutcome?.schemaVersion === 3
+    && terminalOutcome?.classification === "FINITE_TASK_IMPLEMENTATION_CHAIN_TERMINAL_EVIDENCE_V3"
+    && finiteTaskLeaseEffectivelyTerminal(truth.finiteTaskLeases, lease);
   const amendedTerminalProjection = binding.phase === "TERMINAL"
-    && ["FINITE_TASK_BASE_ONLY_POST_MERGE_TERMINAL_EVIDENCE_V1", "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1", "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2"].includes(terminalOutcome?.classification)
+    && ["FINITE_TASK_BASE_ONLY_POST_MERGE_TERMINAL_EVIDENCE_V1", "FINITE_TASK_AMENDED_POST_MERGE_TERMINAL_EVIDENCE_V1", "FINITE_TASK_AMENDED_TEST_ADAPTATION_POST_MERGE_TERMINAL_EVIDENCE_V2", "FINITE_TASK_IMPLEMENTATION_CHAIN_TERMINAL_EVIDENCE_V3"].includes(terminalOutcome?.classification)
     && finiteTaskLeaseEffectivelyTerminal(truth.finiteTaskLeases, lease)
-    && finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome, reservationResolution: effectiveResolution });
+    && (implementationChainTerminal || finiteTaskTerminalReservationMatchesOutcome({ terminalOutcome, reservationResolution: effectiveResolution }));
   const reservationProjection = effectiveResolution ? {
     reservationStatus: effectiveResolution.status,
     baseLeaseHash: effectiveResolution.baseLeaseHash,
@@ -1252,6 +1253,21 @@ export function activeTask(facts = {}) {
     : { schemaVersion: 1, contract: "PHASE1_ADMISSION_RULESET_CUTOVER_CURRENT_TRUTH_V1", producer: "CURRENT_TRUTH_DIAGNOSTIC_ONLY", live: false, cutoverLock: "CLOSED", mergeAuthority: false };
 
   const registry = facts.registry ?? readJson("config/assurance/feature-registry-v1.json");
+  if (truth?.activeTaskBinding === null
+    && Array.isArray(truth?.openImplementationPrs) && truth.openImplementationPrs.length === 0
+    && truth?.engineeringDoctrine?.taskLeaseState === "NO_ACTIVE_TASK") {
+    return {
+      ok: true,
+      packet: {
+        schemaVersion: 2,
+        classification: "NO_ACTIVE_TASK",
+        activeTask: null,
+        implementationAuthority: "CLOSED_UNTIL_FINITE_TASK_ADMISSION",
+        protectedMainRuntime: checked.protectedMainRuntime ?? null,
+        phase1AdmissionRulesetCutover,
+      },
+    };
+  }
   const resolution = resolveFeature(truth, facts, registry);
   if (!resolution.ok) return { ok: false, findings: resolution.findings };
   const matches = registry.features?.filter(({ featureId }) => featureId === resolution.featureId) ?? [];
@@ -1306,18 +1322,20 @@ export function activeTask(facts = {}) {
         };
         }
       } else {
-        const changedFiles = git(["diff", "--no-ext-diff", "--name-only", `${baseHead}..HEAD`]).split("\n").filter(Boolean).sort();
+        const candidateContext = createCandidateGitContext({ root: ROOT, base: baseHead, head: "HEAD" });
+        if (!candidateContext.ok) return { ok: false, findings: candidateContext.findings };
         identity = {
           branch: checkoutBranch,
-          head: git(["rev-parse", "HEAD"]),
-          tree: git(["rev-parse", "HEAD^{tree}"]),
+          head: candidateContext.sourceHead,
+          tree: candidateContext.sourceTree,
           originMainHead: git(["rev-parse", "origin/main^{commit}"]),
           originMainTree: git(["rev-parse", "origin/main^{tree}"]),
-          baseHead,
-          baseTree: git(["rev-parse", `${baseHead}^{tree}`]),
-          diffHash: sha256(git(["diff", "--no-ext-diff", "--binary", `${baseHead}..HEAD`])),
-          pathHash: sha256(changedFiles),
-          changedFiles
+          baseHead: candidateContext.baseHead,
+          baseTree: candidateContext.baseTree,
+          diffHash: candidateContext.diffHash,
+          pathHash: candidateContext.changedPathHash,
+          changedFiles: candidateContext.changedPaths,
+          sourceIdentityHash: candidateContext.sourceIdentityHash,
         };
       }
     }
@@ -1352,6 +1370,41 @@ export function activeTask(facts = {}) {
             } : {})
         }
       : collectFiniteTaskCandidate(baseFiniteTaskLease, { ...facts, currentTruth: truth, identity });
+    const implementationChainTerminal = terminalOutcome?.schemaVersion === 3
+      && terminalOutcome?.classification === "FINITE_TASK_IMPLEMENTATION_CHAIN_TERMINAL_EVIDENCE_V3"
+      && resolution.binding?.phase === "TERMINAL";
+    if (implementationChainTerminal) {
+      const amended = terminalOutcome.amendmentReceipt !== null;
+      const terminalEffectiveLease = amended ? {
+        ...structuredClone(baseFiniteTaskLease),
+        allowedPaths: [...terminalOutcome.effectiveReservation.allowedPaths],
+        ...(baseFiniteTaskLease.artifactReservation ? { artifactReservation: {
+          ...structuredClone(baseFiniteTaskLease.artifactReservation),
+          pathGlobs: [...terminalOutcome.effectiveReservation.allowedPaths],
+          maximumFiles: terminalOutcome.effectiveReservation.maximumFiles,
+          maximumLines: terminalOutcome.effectiveReservation.maximumLines,
+        } } : {}),
+        scopeBudget: {
+          maximumFiles: terminalOutcome.effectiveReservation.maximumFiles,
+          maximumChangedLines: terminalOutcome.effectiveReservation.maximumLines,
+        },
+      } : baseFiniteTaskLease;
+      finiteTaskEffectiveReservationResolution = {
+        ok: true,
+        status: amended ? "AMENDED" : "BASE_ONLY",
+        findings: [],
+        baseLeaseHash: terminalOutcome.baseLeaseHash,
+        baseLease: baseFiniteTaskLease,
+        effectiveLease: terminalEffectiveLease,
+        baseReservation: terminalOutcome.baseReservation,
+        effectiveReservation: terminalOutcome.effectiveReservation,
+        amendmentsConsumed: amended ? 1 : 0,
+        amendmentReceipt: terminalOutcome.amendmentReceipt,
+        candidateHead: identity.head,
+        candidateTree: identity.tree,
+        authority: { amendmentEffective: amended, liveReceipt: amended, productMutation: false, providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false },
+      };
+    } else {
     const suppliedObservation = facts.finiteTaskEffectiveReservationObservation;
     const syntheticInvocation = suppliedObservation !== undefined
       || facts.finiteTaskCandidateObservation !== undefined
@@ -1395,6 +1448,7 @@ export function activeTask(facts = {}) {
       observedCanonicalChangedLines: finiteTaskCandidate?.changedLines,
     });
     if (!finiteTaskPrRiskAuthority.ok) return { ok: false, findings: finiteTaskPrRiskAuthority.findings };
+    }
   }
 
   const implementation = resolveImplementation(truth, identity, {

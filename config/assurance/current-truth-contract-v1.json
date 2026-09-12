@@ -258,6 +258,27 @@
       "nestedControlDependency": false,
       "secondMaintenancePrAllowed": false
     },
+    "assuranceMaintenanceV2": {
+      "policyId": "ASSURANCE_CONTROL_PLANE_SELF_MAINTENANCE_V2",
+      "featureId": "assurance-efficiency-e0",
+      "profileId": "ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2",
+      "exactNamedPathsRequired": true,
+      "ownerAuthorityRequired": true,
+      "maximumFiles": 30,
+      "maximumChangedLines": 6500,
+      "maximumImplementationPrs": 1,
+      "authority": {
+        "product": false,
+        "provider": false,
+        "database": false,
+        "native": false,
+        "money": false,
+        "build": false,
+        "ota": false,
+        "submission": false,
+        "publicRelease": false
+      }
+    },
     "bootstrapMerge": {
       "mergeSha": "ebefdd26a278533b51a5a2e5b981640b6518a777",
       "firstParent": "2f3b0d1cc4765c4196cd831ab782417a0f000c23",

@@ -837,7 +837,10 @@ test("R2 live aggregate plumbing remains protected-source, explicit-provider, an
   assert.match(currentTruthSource, /CURRENT_TRUTH_PROTECTED_LIVE_AGGREGATE_V1/u);
   assert.match(activeTaskSource, /phase1AdmissionRulesetCutoverAggregateValid/u);
   assert.match(activeTaskSource, /--provider-snapshot/u);
+  assert.match(activeTaskSource, /readGitHubJsonSync/u);
   assert.match(rulesetReadbackSource, /issues\/\$\{recoveryPr\}\/comments\?per_page=100/u);
+  assert.match(rulesetReadbackSource, /readGitHubJsonSync/u);
+  assert.doesNotMatch(rulesetReadbackSource, /spawnSync\("gh"/u);
   assert.doesNotMatch(rulesetReadbackSource, /rulesets\/rule-suites|rulesets\/18940814\/history|\$\{endpoint\}\/history/u);
   assert.equal(schema.$defs.githubMainRulesetReadbackContract.required.includes("phase1AdmissionPublisherImmutableAnchor"), true);
   assert.equal(schema.$defs.githubMainRulesetReadbackContract.properties.phase1AdmissionPublisherImmutableAnchor.$ref, "#/$defs/phase1AdmissionPublisherImmutableAnchor");

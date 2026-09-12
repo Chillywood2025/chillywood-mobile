@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { evaluateProtectedMainAdvancement, finiteTaskEffectiveReservationAuthorityValid, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, stableJson, validateEngineeringDoctrineTruth, validateFiniteTaskLeaseRegistry, validateOwnerJurisdictionPolicyTruth, verifyCurrentTruthSynchronization, verifyDerivedProtectedMainTruthSynchronization } from "../../scripts/assurance/lib.mjs";
-import { architectureDependencyBaselinePolicyV1 } from "../../scripts/assurance/engineering-closure.mjs";
+import { ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES, evaluateProtectedMainAdvancement, finiteTaskEffectiveReservationAuthorityValid, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, stableJson, validateEngineeringDoctrineTruth, validateFiniteTaskLeaseRegistry, validateOwnerJurisdictionPolicyTruth, verifyCurrentTruthSynchronization, verifyDerivedProtectedMainTruthSynchronization } from "../../scripts/assurance/lib.mjs";
+import { ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1, architectureDependencyBaselinePolicyV1 } from "../../scripts/assurance/engineering-closure.mjs";
 import { STANDING_POLICY_INHERITANCE_ALLOWLIST, STANDING_POLICY_INHERITANCE_DENYLIST } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const recordedMain = "a".repeat(40);
@@ -278,11 +278,14 @@ assert.equal(schemas.$defs.finiteTaskPrRiskAuthority.properties.currentDiffCreat
 assert.equal(schemas.$defs.finiteTaskPrRiskAuthority.properties.unauthorizedObservedPrRiskDomains.maxItems, 0);
 assert.equal(schemas.$defs.finiteTaskTerminalOutcome.properties.finiteTaskPrRiskAuthority.$ref, "#/$defs/finiteTaskPrRiskAuthority");
 assert.equal(schemas.$defs.finiteTaskTerminalOutcome.allOf[0].then.required.includes("finiteTaskPrRiskAuthority"), true);
-assert.equal(schemas.$defs.finiteTaskTerminalOutcome.allOf[0].else.not.anyOf.some(({ required }) => required?.includes("finiteTaskPrRiskAuthority")), true);
+assert.equal(schemas.$defs.finiteTaskTerminalOutcome.allOf[0].else.then.not.anyOf.some(({ required }) => required?.includes("finiteTaskPrRiskAuthority")), true);
+assert.equal(schemas.$defs.finiteTaskTerminalOutcome.allOf[0].else.else.not.anyOf.some(({ required }) => required?.includes("finiteTaskPrRiskAuthority")), true);
 assert.ok(schemas.$defs.finiteTaskTerminalOutcome.properties.classification.enum.includes("FINITE_TASK_BASE_ONLY_POST_MERGE_TERMINAL_EVIDENCE_V1"));
 assert.ok(schemas.$defs.finiteTaskTerminalOutcome.properties.amendmentReceipt.oneOf.some(({ type }) => type === "null"));
 assert.ok(schemas.$defs.finiteTaskTerminalOutcome.properties.finalSourceReceipt.properties.amendmentCommentId.oneOf.some(({ type }) => type === "null"));
 assert.equal(schemas.$defs.finiteTaskTerminalOutcome.allOf[1].if.properties.classification.const, "FINITE_TASK_BASE_ONLY_POST_MERGE_TERMINAL_EVIDENCE_V1");
+assert.deepEqual(schemas.$defs.finiteTaskTerminalOutcome.allOf[1].else.if.properties.schemaVersion.enum, [1, 2]);
+assert.equal(schemas.$defs.finiteTaskTerminalOutcome.allOf[0].else.then.properties.amendmentReceipt, undefined);
 const finiteTaskLeaseSchema = schemas.$defs.currentTruthRecord.properties.finiteTaskLeases.properties.tasks.items;
 assert.deepEqual(finiteTaskLeaseSchema.allOf[0].if, { required: ["amendmentMaximum"] });
 assert.ok(finiteTaskLeaseSchema.allOf[0].then.required.includes("artifactReservation"));
@@ -384,10 +387,23 @@ const checkpointObservation = { changedPaths: ["config/assurance/current-truth-v
 assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: checkpointObservation, gitCommand }), true);
 assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: { ...checkpointObservation, changedPaths: [...checkpointObservation.changedPaths, "app/index.tsx"] }, gitCommand }), false);
 assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: checkpointObservation, gitCommand: (argv) => argv[0] === "rev-parse" ? "0".repeat(40) : gitCommand(argv) }), false);
-const fixedPointHead = gitCommand(["rev-parse", "HEAD"]);
-const fixedPointPaths = gitCommand(["diff", "--name-only", `${truthRecord.mainSha}...${fixedPointHead}`]).split("\n").filter(Boolean).sort();
-const fixedPointObservation = { changedPaths: fixedPointPaths, parents: [truthRecord.mainSha, fixedPointHead] };
-assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: fixedPointObservation, gitCommand }), true);
+const fixedPointProfile = ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES.find(({ profileId }) => profileId === ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1);
+const fixedPointPrior = structuredClone(truthRecord);
+const fixedPointSource = structuredClone(truthRecord);
+const fixedPointPriorHead = "4".repeat(40); const fixedPointSourceHead = "5".repeat(40); const fixedPointPriorTree = "6".repeat(40);
+fixedPointSource.mainSha = fixedPointPriorHead;
+fixedPointSource.protectedMainAuthority.checkpointSha = fixedPointPriorHead;
+fixedPointSource.protectedMainAuthority.checkpointTree = fixedPointPriorTree;
+const fixedPointObservation = { changedPaths: fixedPointProfile.paths, parents: [fixedPointPriorHead, fixedPointSourceHead] };
+const fixedPointGit = (argv) => argv[0] === "rev-parse"
+  ? fixedPointPriorTree
+  : argv[0] === "show" && argv[1].startsWith(`${fixedPointPriorHead}:`)
+    ? JSON.stringify(fixedPointPrior)
+    : argv[0] === "show" && argv[1].startsWith(`${fixedPointSourceHead}:`)
+      ? JSON.stringify(fixedPointSource)
+      : "";
+assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: fixedPointObservation, gitCommand: fixedPointGit }), true);
+const fixedPointPaths = fixedPointProfile.paths;
 assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: { ...fixedPointObservation, changedPaths: [...fixedPointPaths, "app/index.tsx"].sort() }, gitCommand }), false);
 const rolling = evaluateProtectedMainAdvancement({ record: truthRecord, contract: truthContract, observedProtectedMainSha: gitCommand(["rev-parse", "origin/main"]), gitCommand });
 assert.equal(rolling.findings.includes("CURRENT_TRUTH_TERMINAL_SYNCHRONIZATION_INCOMPLETE"), false, stableJson(rolling.findings));

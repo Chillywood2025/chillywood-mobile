@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureMaintenanceSuccessorOwnerCommentBody, architectureMaintenanceSuccessorSubject, canonicalGitDiffArgs, canonicalGitDiffHash, createImplementationIdentityObservation, createTaskLocalEdgeDisposition, deriveFiniteTaskRuntimeState, evaluateAdmissionClearanceState, evaluateFiniteTaskAdmissionSuccessor, finiteTaskAdmissionOwnerCommentBody, finiteTaskAdmissionSubject, hashValue, terminalTruthSuccessorOwnerCommentBody, terminalTruthSuccessorSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, verifyArchitectureMaintenanceAuthority, verifyTaskLocalGoverningEdgeClosure, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
 import { classifyPrScopePaths, deriveFiniteTaskPrRiskAuthority, deriveTaskScopeContext, evaluateHighRiskScope, validateFeatureDomainBundles, validateStaticBindingRecursion } from "../../scripts/assurance/pr-scope-lib.mjs";
+import { createCandidateGitContext } from "../../scripts/assurance/control-plane-v2.mjs";
 import { args, ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES, assuranceControlTaskContextValid, canonicalGitText, classifyGitHubExecutionIdentity, createTerminalVerifierRepairInstance, evaluateProtectedMainAdvancement, evaluateTerminalVerifierRepairHistory, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, observeLiveTerminalRepairTaskContext, renderCurrentState, renderNextTask, resolveAssuranceControlSourceOnlyProfile, resolveFiniteTaskEffectiveReservation, sha256, stableJson, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY_POLICY_ID, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateUntrustedAssuranceControlTaskContextObservation } from "../../scripts/assurance/lib.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
@@ -218,8 +219,13 @@ const derive = ({ fixture, truth = { finiteTaskLeases: { tasks: [] } }, ownerAut
 const trustedFiniteTaskProjectionFixture = () => {
   const truth = JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8"));
   const finiteTaskRegistry = structuredClone(truth.finiteTaskLeases);
+  finiteTaskRegistry.completedLeaseOutcomes = [];
   const lease = finiteTaskRegistry.tasks.find(({ implementationPr }) => implementationPr === 229);
-  delete lease.amendmentMaximum;
+  lease.amendmentMaximum = {
+    maximumAmendments: 0,
+    maximumFiles: lease.scopeBudget.maximumFiles,
+    maximumChangedLines: lease.scopeBudget.maximumChangedLines,
+  };
   const effectiveReservationResolution = resolveFiniteTaskEffectiveReservation({
     registry: finiteTaskRegistry,
     lease,
@@ -1122,7 +1128,9 @@ test("terminal verifier repair profile is exactly nine paths and 1800 net lines 
   assert.equal(HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE.priorCurrentTruthHash, "035c23f3a5508e9e047cbed60a1826b00ebbe508c2b43b17c074f5de2adf85bc");
   assert.deepEqual([HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE.receiptBindings.historicalTerminalReceipt.commentId, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_INSTANCE.receiptBindings.predecessorReceipts.map(({ commentId }) => commentId), evaluateTerminalVerifierRepairHistory({ repair: { history: HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY } }).ok], [5280368893, [5277679438, 5280109323], true]);
   assert.match(fs.readFileSync(`${root}/scripts/assurance/lib.mjs`, "utf8"), /if \(added === "-" && deleted === "-"\) return null;[\s\S]*return additions \+ deletions;/u);
-  assert.match(fs.readFileSync(`${root}/scripts/assurance/pr-scope.mjs`, "utf8"), /ASSURANCE_GIT_DIFF_BINARY_SCOPE_UNREADABLE[\s\S]*scope\.additions \+ scope\.deletions > TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE\.maximumNetLines/u);
+  const prScopeSource = fs.readFileSync(`${root}/scripts/assurance/pr-scope.mjs`, "utf8");
+  assert.match(prScopeSource, /createCandidateGitContext[\s\S]*binaryPaths[\s\S]*scope\.additions \+ scope\.deletions > TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE\.maximumNetLines/u);
+  assert.doesNotMatch(prScopeSource, /ASSURANCE_GIT_DIFF_BINARY_SCOPE_UNREADABLE|canonicalGitDiffArgs|curl/u);
 });
 
 test("terminal repair runtime context reuses only exact canonical PR-scope success", () => {
@@ -1144,10 +1152,14 @@ test("assurance-control observer accepts only exact protected source-only profil
   const tokenWiringProfile = ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES.find(({ profileId }) => profileId === "PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1");
   const terminalLifecycleProfile = ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES.find(({ profileId }) => profileId === "FINITE_TASK_TERMINAL_TRUTH_V1_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION");
   const fixedPointProfile = ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES.find(({ profileId }) => profileId === "ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1");
+  const consolidationProfile = ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES.find(({ profileId }) => profileId === "ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2");
   assert.deepEqual(fixedPointProfile, { profileId: "ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1", paths: ["config/assurance/current-truth-contract-v1.json", "config/assurance/current-truth-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "tests/assurance/current-truth-sync.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"], maximumFiles: 7, maximumChangedLines: 1800 });
   assert.deepEqual(metadataProfile, { profileId: "PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1", paths: ["scripts/assurance/phase1-admission.mjs", "tests/assurance/phase1-admission.test.mjs"], maximumFiles: 2, maximumChangedLines: 80 });
   assert.deepEqual(tokenWiringProfile, { profileId: "PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1", paths: [".github/workflows/phase1-ci.yml", "tests/assurance/source-readiness-wrapper.test.mjs"], maximumFiles: 2, maximumChangedLines: 80 });
   assert.deepEqual(terminalLifecycleProfile, { profileId: "FINITE_TASK_TERMINAL_TRUTH_V1_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION", paths: ["config/assurance/current-truth-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "tests/assurance/active-task-binding-a1.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"], maximumFiles: 6, maximumChangedLines: 900 });
+  assert.equal(consolidationProfile.paths.length, 30);
+  assert.deepEqual({ maximumFiles: consolidationProfile.maximumFiles, maximumChangedLines: consolidationProfile.maximumChangedLines }, { maximumFiles: 30, maximumChangedLines: 6500 });
+  assert.equal(consolidationProfile.paths.includes("app/index.tsx"), false);
   assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: metadataProfile.paths, budget: { maximumFiles: 2, maximumChangedLines: 80, maximumHandAuthoredNetLines: 80 }, changedFiles: 2 })?.profileId, metadataProfile.profileId);
   assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: tokenWiringProfile.paths, budget: { maximumFiles: 2, maximumChangedLines: 80, maximumHandAuthoredNetLines: 80 }, changedFiles: 2 })?.profileId, tokenWiringProfile.profileId);
   assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: tokenWiringProfile.paths.slice(1), budget: { maximumFiles: 2, maximumChangedLines: 80, maximumHandAuthoredNetLines: 80 }, changedFiles: 1 }), null);
@@ -1247,6 +1259,7 @@ const protectedMainMultiRepairEvaluation = ({ mutateCheckpointHistory = () => {}
       if (argv[0] === "merge-base") return "";
       if (argv[0] === "merge-tree") return observationByCommit.get(argv[3] === repairOne.source ? repairOne.commit : repairTwo.commit)?.tree ?? "";
       if (argv[0] === "diff" && argv[1] === "--name-only") return TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS.join("\n");
+      if (argv[0] === "diff" && argv.includes("--binary")) throw new Error("PROTECTED_MAIN_PATCH_BODY_READ_FORBIDDEN");
       if (argv[0] === "diff") return "";
       if (argv[0] !== "show") return "";
       if (argv[1] === "-s" && argv[2] === "--format=%P") return observationByCommit.get(argv[3])?.parents.join(" ") ?? "";
@@ -1260,9 +1273,14 @@ const protectedMainMultiRepairEvaluation = ({ mutateCheckpointHistory = () => {}
 
 test("protected-main history accepts independently bound repair instances and rejects a replayed append", () => {
   const exact = protectedMainMultiRepairEvaluation();
+  const repeated = protectedMainMultiRepairEvaluation();
   assert.equal(exact.findings.length, 0, exact.findings.join(","));
+  assert.match(exact.aggregateDiffHash, /^[a-f0-9]{64}$/u);
+  assert.equal(repeated.aggregateDiffHash, exact.aggregateDiffHash, "object-metadata aggregation must remain deterministic without reading a binary patch body");
   assert.deepEqual([exact.protectedAdvancementCount, exact.pendingTransitionConsumptionCount, exact.terminalVerifierRepairHistory.length, new Set(exact.terminalVerifierRepairHistory.map(({ instanceId }) => instanceId)).size, exact.advancementClassifications.filter(({ terminalVerifierRepair }) => terminalVerifierRepair).length], [5, 2, 3, 3, 2]);
-  assert.equal(protectedMainMultiRepairEvaluation({ preprojectFirst: true }).findings.length, 0, "the prospectively embedded current instance must be consumed exactly once at its merge");
+  const preprojected = protectedMainMultiRepairEvaluation({ preprojectFirst: true });
+  assert.ok(preprojected.findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID"), stableJson(preprojected.findings));
+  assert.ok(preprojected.findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_CHAIN_OVERFLOW"), stableJson(preprojected.findings));
   const replay = protectedMainMultiRepairEvaluation({ mutateSecondHistory: (instances) => { instances[2] = structuredClone(instances[1]); } });
   assert.ok(replay.findings.includes("CURRENT_TRUTH_PENDING_TRANSITION_AUTHORITY_INVALID"), stableJson(replay));
   const unresolved = protectedMainMultiRepairEvaluation({ stopAfterIntervening: true });
@@ -1275,7 +1293,7 @@ test("protected-main history accepts independently bound repair instances and re
 });
 
 test("projected terminal-repair replay accepts the exact classic PR256 merge and rejects wrong authority identity", () => {
-  const record = JSON.parse(fs.readFileSync(`${root}/config/assurance/current-truth-v1.json`, "utf8"));
+  const record = JSON.parse(execFileSync("git", ["show", "2201b91c6dd7efb103d6b3a1c5e86ee76b4055b7:config/assurance/current-truth-v1.json"], { cwd: root, encoding: "utf8" }));
   const observation = {
     commit: "b2398df819067a4dea18a1cb9d49dcede0f455ee",
     parents: ["2d40bc75cfad9a28d7534f3dd8593dab63318769", "2201b91c6dd7efb103d6b3a1c5e86ee76b4055b7"],
@@ -1307,16 +1325,20 @@ test("canonical Git diff identity is newline-independent and shared by both auth
   assert.equal(canonicalGitDiffHash(raw.replace(/\n$/u, "")), expected);
   assert.equal(canonicalGitDiffHash(raw.replace(/\n/gu, "\r\n")), expected);
   assert.notEqual(canonicalGitDiffHash(raw.replace("diff --git", "diff  --git")), expected);
+  const candidateContext = createCandidateGitContext({ root, base: range.split("...")[0], head: range.split("...")[1] });
+  assert.equal(candidateContext.ok, true);
+  assert.equal(candidateContext.diffHash, expected);
   assert.throws(() => canonicalGitText(Buffer.from(raw)), /ASSURANCE_CANONICAL_GIT_TEXT_REQUIRES_STRING/u);
   const closureSource = fs.readFileSync(`${root}/scripts/assurance/engineering-closure.mjs`, "utf8");
   const scopeSource = fs.readFileSync(`${root}/scripts/assurance/pr-scope.mjs`, "utf8");
   assert.doesNotMatch(closureSource, /hashValue\(diffRun\.stdout\)/u);
   assert.match(closureSource, /canonicalGitDiffHash\(diffRun\.stdout\)/u);
-  assert.match(closureSource, /typedGit\(root, canonicalGitDiffArgs/u);
+  assert.match(closureSource, /observeFiniteTaskGitScope[\s\S]*createCandidateGitContext/u);
+  assert.match(closureSource, /observeCandidateScopeFromGit[\s\S]*createCandidateGitContext/u);
   assert.match(closureSource, /gitRun\(canonicalGitDiffArgs/u);
-  assert.match(closureSource, /run\(canonicalGitDiffArgs/u);
-  assert.match(scopeSource, /git\(canonicalGitDiffArgs/u);
-  assert.match(scopeSource, /canonicalGitDiffHash\(diff\)/u);
+  assert.match(scopeSource, /createCandidateGitContext/u);
+  assert.match(scopeSource, /diffHash: context\.diffHash/u);
+  assert.doesNotMatch(scopeSource, /spawnSync\("curl"/u);
 });
 
 test("general 36-40: arbitrary and spoofed PRs plus injected feature or waiver remain blocked", () => {

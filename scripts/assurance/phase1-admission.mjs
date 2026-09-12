@@ -459,17 +459,48 @@ function brandSourceAuthority(proof, { identity, lifecycle } = {}) {
 }
 
 export function verifyPhase1SourceAuthorityTokenWorkflowTransition({ candidateWorkflow, protectedWorkflow, candidateTest, protectedTest } = {}) {
-  const stepCount = typeof protectedWorkflow === "string" ? protectedWorkflow.split(SOURCE_AUTHORITY_STEP).length - 1 : 0;
-  const tokenWiringTransition = stepCount === 6
-    && candidateWorkflow === protectedWorkflow.replaceAll(SOURCE_AUTHORITY_STEP, `${SOURCE_AUTHORITY_TOKEN_STEP}${SOURCE_AUTHORITY_STEP}`)
-    && typeof protectedTest === "string" && protectedTest.split(SOURCE_AUTHORITY_TEST_ANCHOR).length === 2
-    && candidateTest === protectedTest.replace(SOURCE_AUTHORITY_TEST_ANCHOR, `${SOURCE_AUTHORITY_TEST_BLOCK}${SOURCE_AUTHORITY_TEST_ANCHOR}`);
-  const issuePermissionTransition = typeof protectedWorkflow === "string"
-    && protectedWorkflow.split(SOURCE_AUTHORITY_PERMISSION_BLOCK).length === 2
-    && candidateWorkflow === protectedWorkflow.replace(SOURCE_AUTHORITY_PERMISSION_BLOCK, SOURCE_AUTHORITY_ISSUE_PERMISSION_BLOCK)
-    && typeof protectedTest === "string" && protectedTest.split(SOURCE_AUTHORITY_PERMISSION_TEST_ANCHOR).length === 2
-    && candidateTest === protectedTest.replace(SOURCE_AUTHORITY_PERMISSION_TEST_ANCHOR, `${SOURCE_AUTHORITY_PERMISSION_TEST_ANCHOR}${SOURCE_AUTHORITY_PERMISSION_TEST_BLOCK}`);
-  return tokenWiringTransition || issuePermissionTransition;
+  if (![candidateWorkflow, protectedWorkflow, candidateTest, protectedTest].every((value) => typeof value === "string")) return false;
+  const jobBlocks = (workflow) => {
+    const starts = [...workflow.matchAll(/^  ([a-z][a-z0-9-]+):\s*$/gmu)];
+    return new Map(starts.map((match, index) => [
+      match[1],
+      workflow.slice(match.index, starts[index + 1]?.index ?? workflow.length),
+    ]));
+  };
+  const permissionBlock = /^permissions:\s*\n((?: {2}[a-z-]+:\s*(?:read|none)\s*\n)+)/mu.exec(candidateWorkflow)?.[1] ?? "";
+  const permissions = Object.fromEntries([...permissionBlock.matchAll(/^ {2}([a-z-]+):\s*(read|none)\s*$/gmu)].map((match) => [match[1], match[2]]));
+  const minimumReadAuthority = ["actions", "contents", "issues", "pull-requests"].every((name) => permissions[name] === "read")
+    && Object.values(permissions).every((value) => value === "read" || value === "none");
+  const unsafePermissionAuthority = /^\s*permissions:\s*write-all\s*$|^\s*[a-z-]+:\s*write\s*$/mu.test(candidateWorkflow);
+  const protectedJobs = jobBlocks(protectedWorkflow);
+  const candidateJobs = jobBlocks(candidateWorkflow);
+  const sourceAuthorityJobIds = [...protectedJobs]
+    .filter(([, block]) => block.includes("      - name: Validate assurance authority and source correctness"))
+    .map(([id]) => id);
+  const sourceAuthorityStepValid = (block) => {
+    const steps = block?.match(/      - name: Validate assurance authority and source correctness[\s\S]*?(?=\n      - name:|$)/gu) ?? [];
+    return steps.length === 1 && steps.every((step) => (
+      /env:\s*\n(?:\s*[A-Z0-9_]+:.*\n)*\s*GH_TOKEN: \$\{\{ github\.token \}\}/u.test(step)
+      && /PHASE1_PROTECTED_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.sha \}\}/u.test(step)
+    ));
+  };
+  const exactStepAuthority = sourceAuthorityJobIds.length > 0
+    && sourceAuthorityJobIds.every((id) => sourceAuthorityStepValid(candidateJobs.get(id)))
+    && [...candidateJobs.values()]
+      .filter((block) => block.includes("      - name: Validate assurance authority and source correctness"))
+      .every(sourceAuthorityStepValid);
+  const regressionPresent = candidateTest.includes("all source-authority lanes receive the exact workflow token and protected base")
+    && candidateTest.includes("issues: read");
+  const protectedJobIds = [...protectedJobs.keys()];
+  const candidateJobIds = new Set(candidateJobs.keys());
+  const protectedRequiredNames = [...protectedWorkflow.matchAll(/^    name: (Phase 1 \/ .+)$/gmu)].map((match) => match[1]);
+  const lifecycleInvariant = /types: \[opened, synchronize, reopened, edited, ready_for_review, converted_to_draft\]/u.test(candidateWorkflow)
+    && /push:\s*\n\s*branches:\s*\n\s*- main/u.test(candidateWorkflow);
+  const protectedInvariantsPreserved = protectedJobIds.every((job) => candidateJobIds.has(job))
+    && protectedRequiredNames.every((name) => candidateWorkflow.includes(`    name: ${name}`))
+    && lifecycleInvariant;
+  const changed = candidateWorkflow !== protectedWorkflow || candidateTest !== protectedTest;
+  return changed && minimumReadAuthority && !unsafePermissionAuthority && exactStepAuthority && regressionPresent && protectedInvariantsPreserved;
 }
 
 export function evaluatePhase1Admission(input = {}) {

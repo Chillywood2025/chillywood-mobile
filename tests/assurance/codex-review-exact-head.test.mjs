@@ -39,6 +39,12 @@ const treeA = "c".repeat(40);
 const treeB = "d".repeat(40);
 function historicalBlockedTruth() {
   const truth = JSON.parse(fs.readFileSync("config/assurance/current-truth-v1.json", "utf8"));
+  // This fixture models the historical pre-terminal state independently of
+  // today's protected NO_ACTIVE_TASK projection.
+  truth.activeTaskBinding = {
+    phase: "IMPLEMENTATION",
+    implementationBranch: "codex/historical-late-review-fixture",
+  };
   truth.lateReviewResolutionTombstones = [];
   truth.defectiveCurrentTruthPr195Binding.state = "MERGED_WITH_UNRESOLVED_EXACT_HEAD_REVIEW";
   truth.defectiveCurrentTruthPr195Binding.mayProceed = {

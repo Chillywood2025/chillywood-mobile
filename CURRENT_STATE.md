@@ -2,12 +2,11 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-- Protected authority checkpoint: `1f889de9736c167dfe155659e4b19fe374485417` / tree `f1c16caaeb763202530f94322bda16c747a937ed`.
+- Protected authority checkpoint: `bca44d60d3456cc777c4fe9eadb426021a2cbb3b` / tree `ee65a14eff23a9f6d7f982c79bf3bdd7e19a88c7`.
 - Protected-main advancement is evaluated dynamically from exact Git history; the runtime-observed protected main is derived at execution and is not committed as authority after every merge.
 - Ordinary protected advancement invalidates only affected task evidence. Terminal task or authority transitions require canonical synchronization.
-- Latest merged implementation: PR #229, `698871780a7610f677fdec1929d85389594d080a`; merge `5e595e684f4dcc9454eee5065066e1b48d20e3eb`.
-- Structured task-lease binding: feature `auth-session-password-recovery`, PR #389, admitted seed `6bf4e76f88cad98ea19a3fc05e1ac2ba037906af` / `94f2b3c20a663f5130ea11a21379da8c4eb3151c`, phase `PREIMPLEMENTATION_ENGINEERING_CLEAR`, execution `CUSTOMER_COMMERCE_VISUAL_SYSTEM_IMPLEMENTATION_AUTHORIZED`. Current candidate `3703321f1b424246b6407f248414693d681dac23` / `6f155d54438ee2e3add2907ec588a03d9a31ec87` is a non-authoritative read-only observation; final receipt, review, Phase 1, and merge provenance bind the frozen final head.
-- Finite task lease: `ASSURANCE_FINITE_TASK_LEASE_V1`, admitted seed `6bf4e76f88cad98ea19a3fc05e1ac2ba037906af` / `94f2b3c20a663f5130ea11a21379da8c4eb3151c`, protected admission PR #390, state `ACTIVE_IMPLEMENTATION`; descendant heads do not require another admission, source binding, or merge-provenance PR.
+- Latest merged implementation: PR #411, `b17417fb5c45010b22c520f864c71e7bcad9051d`; merge `bca44d60d3456cc777c4fe9eadb426021a2cbb3b`.
+- Structured active task: `NO_ACTIVE_TASK`; implementation authority is closed until the next finite admission.
 - Review policy: provider Codex Review is `OPTIONAL_ADVISORY`; all 13 Phase 1 lanes still execute, while canonical admission is decided by the protected aggregate's fail-closed blocking classification and repository-owned exact-head review. Unknown findings block, and draft source-readiness never grants merge authority.
 - Assurance program display text: WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE; completed: PR-A, CURRENT-TRUTH-SYNCHRONIZATION-PR-56, CURRENT-TRUTH-GUARD-CORRECTION-PR-58, CURRENT-TRUTH-SYNCHRONIZATION-PR-60, FEATURE-DOMAIN-SCOPE-GUARD-PR-62, CURRENT-TRUTH-SYNCHRONIZATION-PR-67, CURRENT-TRUTH-SYNCHRONIZATION-PR-86, CURRENT-TRUTH-HEAD-BINDING-PR-90, CURRENT-TRUTH-SYNCHRONIZATION-PR-97, CURRENT-TRUTH-SYNCHRONIZATION-PR-103, CURRENT-TRUTH-SYNCHRONIZATION-PR-109, PR-C-MODELS-PR-64, MIGRATION-READBACK-METADATA-PR-113, CURRENT-TRUTH-SYNCHRONIZATION-PR-123, BASE-SYNC-HEAD-BINDING-PR-125, BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127, DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129, PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116, CURRENT-TRUTH-SYNCHRONIZATION-PR-131, CURRENT-TRUTH-SYNCHRONIZATION-PR-132, CURRENT-TRUTH-SYNCHRONIZATION-PR-135, PR-B1-LIVEKIT-SOURCE-BINDING-PR-70, CURRENT-TRUTH-SYNCHRONIZATION-PR-137, PR-B2-REVENUECAT-TRANSFER-PR-69, CURRENT-TRUTH-SYNCHRONIZATION-PR-139, CURRENT-TRUTH-SYNCHRONIZATION-PR-140, PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75, CURRENT-TRUTH-SYNCHRONIZATION-PR-142, PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION, PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143, CURRENT-TRUTH-SYNCHRONIZATION-PR-151, CURRENT-TRUTH-SYNCHRONIZATION-PR-156, CURRENT-TRUTH-SYNCHRONIZATION-PR-161, CURRENT-TRUTH-SYNCHRONIZATION-PR-162, PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152, BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170, D2B-CURRENT-TRUTH-BINDING-PR-169, D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181, PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164, E0-CURRENT-TRUTH-BINDING-PR-190, PR-E0-ASSURANCE-EFFICIENCY-PR-185, D2A-MICROPHONE-CORRECTION-PR-194, ASSURANCE-CONTROL-A1-PR-201, ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205, ASSURANCE-CONTROL-RULESET-READBACK-PR-207, ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208, CODEX-SECURITY-SCAN-RELIABILITY-S0-PR-206, LIVEKIT-MIC-POST-MERGE-CORRECTION-PR-210, FINITE-TASK-LEASE-RUNTIME-CORRECTION-PR-218, PR-D2A-LEGACY-WEBRTC-CORRECTION-PR-214, BRACE-EXPANSION-VERSION-LINE-CORRECTION-PR-220, FINITE-TASK-TERMINAL-HANDOFF-PR-223, PR-D2A-NATIVE-LIFECYCLE-PR-212, TERMINAL-PROTECTED-BASE-RESOLUTION-PR-225, WHOLE-APP-ENGINEERING-DOCTRINE-PR-226, TYPED-TASK-CONTEXT-TERMINAL-SUCCESSOR-PR-227.
 - Android internal: build 86, runtime `1.0.0-android-chat-call-action-v1`, channel `android-chat-livekit-qa`, update `e3379ac9-61f0-40db-a014-81975be123e5`.
@@ -75,7 +74,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
 ## Open implementation PRs
 
-- PR #389 at `3703321f1b424246b6407f248414693d681dac23`: open-draft-current; implementation.
+- None.
 
 ## Open review-only PRs
 

@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
-  ASSURANCE_CONTROL_PLANE_FIXED_POINT_PATHS, ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1, CLEAR_CHECKS, affectedDomainClosure, applyAssuranceEfficiencyTransition, applyAutonomousGovernanceTransition, applyCodexSecurityTransition,
+  ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS, ASSURANCE_CONTROL_PLANE_FIXED_POINT_PATHS, ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1, CLEAR_CHECKS, affectedDomainClosure, applyAssuranceEfficiencyTransition, applyAutonomousGovernanceTransition, applyCodexSecurityTransition,
   ARCHITECTURE_DEPENDENCY_AMENDMENT_MARKER, ARCHITECTURE_DEPENDENCY_WITNESS_AMENDMENT_MARKER, ARCHITECTURE_FINAL_SOURCE_MARKER, ARCHITECTURE_REPOSITORY_REVIEW_MARKER, ASSURANCE_DESCENDANT_DEPENDENCY_BASELINE_AMENDMENT_V1, ASSURANCE_DESCENDANT_DEPENDENCY_COMPATIBILITY_WITNESS_AMENDMENT_V1, ASSURANCE_RECEIPT_LIFECYCLE_V2, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_LEASE_AMENDMENT_CONTROL_PLANE_REPAIR_V1, FINITE_TASK_TEST_ADAPTATION_OVERLAY_ARCHITECTURE_PATHS, FINITE_TASK_TEST_ADAPTATION_OVERLAY_V1, FINITE_TASK_TERMINAL_TRUTH_V1, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS, IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1, PHASE1_ADMISSION_RULESET_CUTOVER_ARCHITECTURE_PATHS, PHASE1_ADMISSION_RULESET_CUTOVER_V1, PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_ARCHITECTURE_PATHS, PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1, PHASE1_REQUIRED_JOB_NAMES, PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS, PHASE1_RISK_BASED_ADMISSION_REFORM_V1, PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_ARCHITECTURE_PATHS, PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1, RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS, RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1,
   architectureDependencyAmendmentOwnerCommentBody, architectureDependencyAmendmentSubject, architectureDependencyBaselinePolicyV1,
   architectureDependencyWitnessAmendmentOwnerCommentBody, architectureDependencyWitnessAmendmentSubject,
@@ -28,12 +28,14 @@ import {
 } from "../../scripts/assurance/engineering-closure.mjs";
 import { compareReplayOutputs, verifyAuthoritativeOutput, verifySerializedEdgeModel, verifySerializedTransitionModel, verifyTaskLocalGoverningEdgeClosure as independentlyVerifyTaskLocalGoverningEdgeClosure } from "../../scripts/assurance/engineering-evidence-verifier.mjs";
 import { validateEngineeringTaskAuthority } from "../../scripts/assurance/active-task.mjs";
-import { finiteTaskLeaseFor, finiteTaskReservationProjection, parseProtectedPullRequestMergeSubject, projectFiniteTaskTerminalTruth, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
+import { finiteTaskLeaseFor, finiteTaskReservationProjection, observeLiveFiniteTaskEffectiveReservation, parseProtectedPullRequestMergeSubject, projectFiniteTaskTerminalTruth, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, validateEngineeringDoctrineTruth } from "../../scripts/assurance/lib.mjs";
 import { classifyPrScopePaths, deriveTaskScopeContext, evaluateHighRiskScope } from "../../scripts/assurance/pr-scope-lib.mjs";
 
 const root = new URL("../../", import.meta.url);
 const PHASE1_LEGACY_PRE_CUTOVER_BASE = "8aa74d0442eb9797900005d3c2dca9709b43c0c8";
 const json = (name) => JSON.parse(fs.readFileSync(new URL(name, root), "utf8"));
+const historicalJson = (commit, name) => JSON.parse(execFileSync("git", ["show", `${commit}:${name}`], { encoding: "utf8" }));
+const WAVE1_TERMINAL_TRUTH_COMMIT = "4b0dd833e103d8a32966e0685b8683415ade3183";
 const sourceEvidenceSha = (name) => createHash("sha256").update(fs.readFileSync(new URL(name, root))).digest("hex");
 const semanticEvidence = (name, token, testId = token) => { const text = fs.readFileSync(new URL(name, root), "utf8"); return { enforcingSource: name, enforcingSourceSha256: sourceEvidenceSha(name), line: text.split("\n").findIndex((value) => value.includes(token)) + 1, expectedSemanticToken: token, negativeWitnessTestPath: name, negativeWitnessTestSha256: sourceEvidenceSha(name), negativeWitnessTestId: testId }; };
 const bootstrapFixture = makeBootstrapPacket();
@@ -99,6 +101,62 @@ test("fixed-point Owner authority is the immutable planned-scope receipt and gra
   assert.deepEqual(review.disposition, { P0: 0, P1: 0, launchImpactingP2: 0 });
   assert.match(review.lanes.join(" "), /exact-head Phase 1/u);
   assert.match(review.lanes.join(" "), /release, OTA/u);
+});
+
+test("V2 assurance self-maintenance is exact-path bounded, single-PR, and grants no product authority", () => {
+  const maintenanceContract = json("config/assurance/current-truth-contract-v1.json").synchronizationMerge.assuranceMaintenanceV2;
+  const maintenanceWaiver = json("config/assurance/efficiency-e0-v1.json");
+  assert.equal(maintenanceContract.maximumFiles, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS.length);
+  assert.equal(maintenanceWaiver.fileBudget.waivedMaximum, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS.length);
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 500, branch: "codex/assurance-control-plane-consolidation-v2", baseSha: "1".repeat(40), headSha: "2".repeat(40) };
+  const subject = architectureMaintenanceSubject({ identity, tree: "3".repeat(40), scope: { files: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS, additions: 3000, deletions: 400 }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2 });
+  assert.deepEqual(subject.budget, { maximumFiles: 30, maximumChangedLines: 6500, maximumHandAuthoredNetLines: 6500 });
+  assert.deepEqual(subject.capabilities, ["OWNER_JURISDICTION_CANONICAL_MODEL_V2", ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2]);
+  assert.equal(subject.reusableByAnotherPr, false);
+  assert.equal(Object.values(subject.authority).every((value) => value === false), true);
+  assert.throws(() => architectureMaintenanceSubject({ identity, tree: "3".repeat(40), scope: { files: [...ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS, "app/index.tsx"], additions: 1, deletions: 0 }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2 }));
+  const review = architectureRepositoryReviewSubject({ identity, tree: "3".repeat(40), scope: { files: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS, additions: 3000, deletions: 400, diffHash: "4".repeat(64) }, profile: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2 });
+  assert.equal(review.reviewProfile, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2);
+  assert.match(review.lanes.join(" "), /candidate checkout/u);
+  assert.match(review.lanes.join(" "), /persistent|temporary/u);
+  const originalRaw = taskLocalArchitectureComment({ id: 700000, pr: identity.pr, body: architectureMaintenanceOwnerCommentBody(subject) });
+  const reviewRaw = taskLocalArchitectureComment({ id: 700001, pr: identity.pr, body: architectureRepositoryReviewCommentBody(review) });
+  const final = architectureFinalSourceSubject({ identity, tree: "3".repeat(40), scope: { files: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS, additions: 3000, deletions: 400, diffHash: "4".repeat(64) }, originalRaw, repositoryReviewRaw: reviewRaw });
+  assert.equal(final.repositoryReview.profile, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2);
+  assert.equal(final.repositoryReview.valid, true);
+});
+
+test("V2 assurance maintenance selects one exact-current immutable Owner intent and retains earlier intents as history", () => {
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 500, branch: "codex/assurance-control-plane-consolidation-v2", baseSha: "1".repeat(40), headSha: "2".repeat(40) };
+  const tree = "3".repeat(40);
+  const scope = { files: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS, additions: 3000, deletions: 400, netChangedLines: 2600 };
+  const current = architectureMaintenanceSubject({ identity, tree, scope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2 });
+  const historicalPaths = ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS.filter((file) => ![
+    "scripts/assurance/github-main-ruleset-readback.mjs",
+    "scripts/assurance/pr-scope.mjs",
+    "tests/assurance/github-main-ruleset-readback.test.mjs",
+  ].includes(file));
+  const historical = {
+    ...current,
+    currentHead: "4".repeat(40),
+    currentTree: "5".repeat(40),
+    changedPaths: historicalPaths,
+    changedPathHash: hashValue(historicalPaths),
+    additions: 1527,
+    deletions: 170,
+    netChangedLines: 0,
+    budget: { maximumFiles: historicalPaths.length, maximumChangedLines: 6500, maximumHandAuthoredNetLines: 6500 },
+  };
+  const historicalRaw = taskLocalArchitectureComment({ id: 700000, pr: identity.pr, body: architectureMaintenanceOwnerCommentBody(historical) });
+  const currentRaw = taskLocalArchitectureComment({ id: 700001, pr: identity.pr, body: architectureMaintenanceOwnerCommentBody(current) });
+  const exact = verifyArchitectureMaintenanceAuthority({ raw: currentRaw, allComments: [historicalRaw, currentRaw], paginationComplete: true, identity, tree, scope, noCompetingDomainOwner: true, ancestryVerified: true });
+  assert.equal(exact.authorizationOk, true, exact.findings.join(","));
+  assert.equal(exact.mergeEligible, false, "final exact-head review and Phase 1 evidence are still mandatory");
+  assert.equal(exact.checks.cardinality, true);
+  const duplicateCurrent = taskLocalArchitectureComment({ id: 700002, pr: identity.pr, body: architectureMaintenanceOwnerCommentBody(current) });
+  const ambiguous = verifyArchitectureMaintenanceAuthority({ raw: currentRaw, allComments: [historicalRaw, currentRaw, duplicateCurrent], paginationComplete: true, identity, tree, scope, noCompetingDomainOwner: true, ancestryVerified: true });
+  assert.equal(ambiguous.authorizationOk, false);
+  assert.equal(ambiguous.checks.cardinality, false);
 });
 const ownerComment = ({ id, type, subject, task, leaseId, pr = 301, currentHead = "a".repeat(40) }) => { const payload = { authorizationId: `github-comment-${id}`, repository: "Chillywood2025/chillywood-mobile", pr: String(pr), task, leaseId: String(leaseId), currentHead, type, subject, subjectHash: hashValue(subject) }; payload.bodyHash = hashValue(payload); return { id, url: `https://github.com/Chillywood2025/chillywood-mobile/issues/comments/${id}`, author: { login: "Chillywood2025" }, authorAssociation: "OWNER", createdAt: "2026-08-12T12:00:00Z", updatedAt: "2026-08-12T12:00:00Z", body: `<!-- chillywood-engineering-owner-authorization-v1 -->\n${JSON.stringify(payload)}` }; };
 const rebindPacketFacts = (packet) => { packet.sections.L_COMPLETENESS_CERTIFICATE.packetFactsHash = hashValue(Object.fromEntries(Object.entries(packet.sections).filter(([name]) => name !== "L_COMPLETENESS_CERTIFICATE"))); return packet; };
@@ -219,7 +277,7 @@ const controls = [
   ["38 all 13 Phase 1 lanes execute under fail-closed aggregate admission", () => { const merge = json("config/assurance/engineering-doctrine-v1.json").mergeEligibility; assert.equal(json("config/assurance/current-truth-contract-v1.json").reviewPolicy.requiredPhase1Checks, 13); assert.equal(merge.requiredPhase1LaneExecutions, 13); assert.equal(merge.phase1AdmissionRule, "NO_BLOCKING_FINDINGS"); assert.equal(merge.unknownPhase1Finding, "BLOCKING"); assert.equal(merge.draftSourceReadinessGrantsMergeAuthority, false); }],
   ["39 build release authority remains false", () => { const authority = json("config/assurance/engineering-doctrine-v1.json").authority; assert.deepEqual(Object.values(authority), [false, false, false, false, false, false, false, false, false, 0]); }],
   ["40 D2A terminal history remains intact while the active task advances independently", () => {
-    const truth = json("config/assurance/current-truth-v1.json");
+    const truth = historicalJson(WAVE1_TERMINAL_TRUTH_COMMIT, "config/assurance/current-truth-v1.json");
     const latest = truth.latestMergedImplementationPr;
     const d2aLease = truth.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === 212);
     const currentLeases = truth.finiteTaskLeases.tasks.filter(({ implementationPr, taskState }) => implementationPr === truth.activeTaskBinding.implementationPr && !["MERGED_VERIFIED", "ABANDONED_BY_OWNER"].includes(taskState));
@@ -356,7 +414,7 @@ test("future product packets default incomplete and cannot inject raw authority 
 
 test("only fixed git observation can establish source scope and caller cannot underreport", () => {
   const original = process.env.PATH; const dir = fs.mkdtempSync(path.join(os.tmpdir(), "doctrine-git-")); const executable = path.join(dir, "git");
-  fs.writeFileSync(executable, `#!/bin/sh\ncase "$*" in\n*--name-only*) printf 'app/chat/a.tsx\\n';;\n*--numstat*) printf '10000\\t0\\tapp/chat/a.tsx\\n';;\n*rev-parse*) printf '${"3".repeat(40)}\\n';;\n*) printf 'fixed diff';;\nesac\n`); fs.chmodSync(executable, 0o755); process.env.PATH = `${dir}:${original}`;
+  fs.writeFileSync(executable, `#!/bin/sh\ncase "$*" in\n*"${"2".repeat(40)}^{tree}"*) printf '${"3".repeat(40)}\\n';;\n*"${"1".repeat(40)}^{tree}"*) printf '${"4".repeat(40)}\\n';;\n*"${"2".repeat(40)}^{commit}"*) printf '${"2".repeat(40)}\\n';;\n*"${"1".repeat(40)}^{commit}"*) printf '${"1".repeat(40)}\\n';;\n*--name-only*) printf 'app/chat/a.tsx\\0';;\n*--numstat*) printf '10000\\t0\\tapp/chat/a.tsx\\0';;\n*--raw*) printf ':100644 100644 ${"a".repeat(40)} ${"b".repeat(40)} M\\0app/chat/a.tsx\\0';;\n*) printf 'fixed diff';;\nesac\n`); fs.chmodSync(executable, 0o755); process.env.PATH = `${dir}:${original}`;
   try { const observed = observeCandidateScopeFromGit("1".repeat(40), "2".repeat(40)); assert.equal(observed.changedLines, 10000); assert.deepEqual(observed.paths, ["app/chat/a.tsx"]); } finally { process.env.PATH = original; fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -771,6 +829,8 @@ test("Phase 1 risk-based admission reform has one exact churn-bounded assurance-
   const proofSource = fs.readFileSync("scripts/proof-autonomous-systems-contract.mjs", "utf8");
   assert.match(proofSource, /resolvePhase1SourceAuthorityEligibility/u);
   assert.match(proofSource, /evaluateFiniteTaskLeaseRuntime\(\{[^}]*assuranceControlAuthorityProof/u);
+  const runtimeSource = fs.readFileSync("scripts/assurance/lib.mjs", "utf8");
+  assert.match(runtimeSource, /if \(!binding\) \{[\s\S]*return assuranceControlEligible \? \{[\s\S]*evaluationType: "ASSURANCE_CONTROL_SOURCE_ONLY"[\s\S]*productAuthorityGranted: false,[\s\S]*mergeAuthorityGranted: false,/u);
   const closureSource = fs.readFileSync("scripts/assurance/engineering-closure.mjs", "utf8");
   assert.match(closureSource, /import \{[^;]*parseProtectedPullRequestMergeSubject[^;]*\} from "\.\/lib\.mjs";/u);
   assert.deepEqual(parseProtectedPullRequestMergeSubject("Merge pull request #251 from Chillywood2025/codex/phase1-risk-based-admission-v5"), { ok: true, format: "GITHUB_CLASSIC_MERGE_PULL_REQUEST", variant: "GITHUB_CLASSIC_MERGE_PULL_REQUEST", prNumber: 251, sourceBranch: "codex/phase1-risk-based-admission-v5" });
@@ -1130,24 +1190,29 @@ test("finite-task implementation exact-head review binds the effective reservati
   assert.equal(result.valid, false);
 });
 
-test("finite-task implementation exact-head review accepts only an exact zero-amendment BASE_ONLY reservation", () => {
+test("finite-task implementation exact-head review accepts an exact unused optional-amendment BASE_ONLY reservation", () => {
   const registry = structuredClone(json("config/assurance/current-truth-v1.json").finiteTaskLeases);
   registry.completedLeaseOutcomes = [];
   const lease = registry.tasks.find(({ implementationPr }) => implementationPr === 229);
-  lease.amendmentMaximum = { maximumAmendments: 0, maximumChangedLines: lease.scopeBudget.maximumChangedLines, maximumFiles: lease.scopeBudget.maximumFiles };
+  lease.amendmentMaximum = { maximumAmendments: 1, maximumChangedLines: 4500, maximumFiles: 36 };
   const identity = { repository: "Chillywood2025/chillywood-mobile", pr: lease.implementationPr, branch: lease.implementationBranch, headSha: "8".repeat(40), baseSha: "9".repeat(40) };
   const tree = "a".repeat(40);
   const scope = { files: ["_lib/session.tsx"], additions: 20, deletions: 2, netChangedLines: 18, diffHash: "b".repeat(64) };
-  const resolution = resolveFiniteTaskEffectiveReservation({
-    registry,
-    lease,
-    candidate: { head: identity.headSha, tree },
-    comments: [],
-    commentsPaginationComplete: true,
+  const pull = { number: identity.pr, head: { sha: identity.headSha, ref: identity.branch, repo: { full_name: identity.repository } }, base: { sha: identity.baseSha, ref: "main", repo: { full_name: identity.repository } } };
+  const gh = `#!/usr/bin/env node\nconst a=process.argv.join(' ');process.stdout.write(a.includes('--paginate')?'[[]]':JSON.stringify(${JSON.stringify(pull)}));\n`;
+  const resolution = withFakeExecutables({ gh }, () => {
+    const liveObservation = observeLiveFiniteTaskEffectiveReservation({ repository: identity.repository, pr: identity.pr });
+    return resolveFiniteTaskEffectiveReservation({
+      registry,
+      lease,
+      candidate: { head: identity.headSha, tree },
+      liveObservation,
+    });
   });
   const subject = architectureRepositoryReviewSubject({ identity, tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: resolution });
   const raw = taskLocalArchitectureComment({ id: 700042, pr: identity.pr, body: architectureRepositoryReviewCommentBody(subject) });
   assert.equal(subject.finiteTaskEffectiveReservation.status, "BASE_ONLY");
+  assert.equal(resolution.baseLease.amendmentMaximum.maximumAmendments, 1);
   assert.equal(subject.finiteTaskEffectiveReservation.amendmentsConsumed, 0);
   assert.equal(subject.finiteTaskEffectiveReservation.amendmentReceipt, null);
   assert.equal(subject.finiteTaskEffectiveReservation.finiteTaskPrRiskAuthority.ok, true, stableJson(subject.finiteTaskEffectiveReservation.finiteTaskPrRiskAuthority.findings));
@@ -1162,7 +1227,7 @@ test("finite-task implementation exact-head review accepts only an exact zero-am
 });
 
 test("finite-task terminal truth projection preserves the base lease but synthetic transition authority fails closed", () => {
-  const priorTruth = structuredClone(json("config/assurance/current-truth-v1.json"));
+  const priorTruth = structuredClone(historicalJson(WAVE1_TERMINAL_TRUTH_COMMIT, "config/assurance/current-truth-v1.json"));
   const terminalLeaseId = "pre-release-identity-entitlement-authority-v1";
   priorTruth.finiteTaskLeases.completedLeaseOutcomes = (priorTruth.finiteTaskLeases.completedLeaseOutcomes ?? [])
     .filter(({ leaseId }) => leaseId !== terminalLeaseId);
