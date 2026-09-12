@@ -125,6 +125,39 @@ test("V2 assurance self-maintenance is exact-path bounded, single-PR, and grants
   assert.equal(final.repositoryReview.profile, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2);
   assert.equal(final.repositoryReview.valid, true);
 });
+
+test("V2 assurance maintenance selects one exact-current immutable Owner intent and retains earlier intents as history", () => {
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 500, branch: "codex/assurance-control-plane-consolidation-v2", baseSha: "1".repeat(40), headSha: "2".repeat(40) };
+  const tree = "3".repeat(40);
+  const scope = { files: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS, additions: 3000, deletions: 400, netChangedLines: 2600 };
+  const current = architectureMaintenanceSubject({ identity, tree, scope, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2 });
+  const historicalPaths = ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS.filter((file) => ![
+    "scripts/assurance/github-main-ruleset-readback.mjs",
+    "scripts/assurance/pr-scope.mjs",
+    "tests/assurance/github-main-ruleset-readback.test.mjs",
+  ].includes(file));
+  const historical = {
+    ...current,
+    currentHead: "4".repeat(40),
+    currentTree: "5".repeat(40),
+    changedPaths: historicalPaths,
+    changedPathHash: hashValue(historicalPaths),
+    additions: 1527,
+    deletions: 170,
+    netChangedLines: 1357,
+    budget: { maximumFiles: historicalPaths.length, maximumChangedLines: 6500, maximumHandAuthoredNetLines: 6500 },
+  };
+  const historicalRaw = taskLocalArchitectureComment({ id: 700000, pr: identity.pr, body: architectureMaintenanceOwnerCommentBody(historical) });
+  const currentRaw = taskLocalArchitectureComment({ id: 700001, pr: identity.pr, body: architectureMaintenanceOwnerCommentBody(current) });
+  const exact = verifyArchitectureMaintenanceAuthority({ raw: currentRaw, allComments: [historicalRaw, currentRaw], paginationComplete: true, identity, tree, scope, noCompetingDomainOwner: true, ancestryVerified: true });
+  assert.equal(exact.authorizationOk, true, exact.findings.join(","));
+  assert.equal(exact.mergeEligible, false, "final exact-head review and Phase 1 evidence are still mandatory");
+  assert.equal(exact.checks.cardinality, true);
+  const duplicateCurrent = taskLocalArchitectureComment({ id: 700002, pr: identity.pr, body: architectureMaintenanceOwnerCommentBody(current) });
+  const ambiguous = verifyArchitectureMaintenanceAuthority({ raw: currentRaw, allComments: [historicalRaw, currentRaw, duplicateCurrent], paginationComplete: true, identity, tree, scope, noCompetingDomainOwner: true, ancestryVerified: true });
+  assert.equal(ambiguous.authorizationOk, false);
+  assert.equal(ambiguous.checks.cardinality, false);
+});
 const ownerComment = ({ id, type, subject, task, leaseId, pr = 301, currentHead = "a".repeat(40) }) => { const payload = { authorizationId: `github-comment-${id}`, repository: "Chillywood2025/chillywood-mobile", pr: String(pr), task, leaseId: String(leaseId), currentHead, type, subject, subjectHash: hashValue(subject) }; payload.bodyHash = hashValue(payload); return { id, url: `https://github.com/Chillywood2025/chillywood-mobile/issues/comments/${id}`, author: { login: "Chillywood2025" }, authorAssociation: "OWNER", createdAt: "2026-08-12T12:00:00Z", updatedAt: "2026-08-12T12:00:00Z", body: `<!-- chillywood-engineering-owner-authorization-v1 -->\n${JSON.stringify(payload)}` }; };
 const rebindPacketFacts = (packet) => { packet.sections.L_COMPLETENESS_CERTIFICATE.packetFactsHash = hashValue(Object.fromEntries(Object.entries(packet.sections).filter(([name]) => name !== "L_COMPLETENESS_CERTIFICATE"))); return packet; };
 const rebindContracts = (packet, contracts) => { const copy = structuredClone(packet); const B = copy.sections.B_BOUNDED_COMPLETENESS; B.contractVersions.platformProviderContractHash = hashValue(contracts); B.contractClassifications = contracts.contracts.map(({ id, freshnessClass, affectedDomains }) => ({ id, status: freshnessClass, obligation: ["BLOCKED_EXTERNAL", "HISTORICAL"].includes(freshnessClass) && affectedDomains.some((domain) => ["assurance-efficiency-e0", "autonomous-cognitive-governance", "codex-security-scan-reliability-s0"].includes(domain)) ? "BLOCKED_EXTERNAL" : "SOURCE_ONLY_OR_UNRELATED", implementationAuthorized: false, constraint: "source only; external implementation blocked" })); const cert = copy.sections.L_COMPLETENESS_CERTIFICATE; cert.platformProviderVersions = hashValue(contracts); const facts = Object.fromEntries(Object.entries(copy.sections).filter(([name]) => name !== "L_COMPLETENESS_CERTIFICATE")); cert.packetFactsHash = hashValue(facts); return copy; };

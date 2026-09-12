@@ -4453,6 +4453,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
   const terminalReceiptLifecycleCorrection = originalSubject?.objective === FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION;
   const originalMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_MARKER}\n`));
   const suppliedOriginalIsSoleDiscoveredAuthority = originalMatches.length === 1 && originalMatches[0]?.id === raw?.id;
+  const phase1ControlAuthority = phase1ControlProfile(originalSubject?.objective);
   const successorMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER}\n`));
   const normalizedTerminalSuccessor = terminalReceiptLifecycleCorrection && successorMatches.length === 1 ? normalizeGitHubCommentIdentity(successorMatches[0], { repository: identity?.repository, pr: identity?.pr, commentId: successorMatches[0]?.id }) : null;
   const terminalSuccessorPayload = parseExactOwnerBody(normalizedTerminalSuccessor, ARCHITECTURE_MAINTENANCE_SUCCESSOR_MARKER);
@@ -4490,13 +4491,62 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
   const finalSourceCorrectionMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_FINAL_SOURCE_CORRECTION_MARKER}\n`));
   const repositoryReviewMatches = allComments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_REPOSITORY_REVIEW_MARKER}\n`));
   const observed = exactScope(scope);
+  const profileIntentHistory = phase1ControlAuthority ? originalMatches.map((item) => {
+    const normalized = normalizeGitHubCommentIdentity(item, { repository: identity?.repository, pr: identity?.pr, commentId: item?.id });
+    const payload = parseExactOwnerBody(normalized, ARCHITECTURE_MAINTENANCE_MARKER);
+    const subject = payload?.subject;
+    const paths = [...new Set(subject?.changedPaths ?? [])].sort();
+    const payloadWithoutHash = Object.fromEntries(Object.entries(payload ?? {}).filter(([key]) => key !== "bodyHash"));
+    const historicalScope = ancestryVerified === true || !subject ? null : observeFiniteTaskGitScope(root, subject.protectedBase, subject.currentHead);
+    const sourceBindingValid = ancestryVerified === true || Boolean(historicalScope
+      && gitAncestor(root, subject.protectedBase, subject.currentHead)
+      && gitAncestor(root, subject.currentHead, identity?.headSha)
+      && typedGit(root, ["rev-parse", `${subject.currentHead}^{tree}`]).stdout.trim() === subject.currentTree
+      && stableJson(historicalScope.files) === stableJson(paths)
+      && historicalScope.additions === subject.additions
+      && historicalScope.deletions === subject.deletions);
+    const valid = Boolean(normalized && subject
+      && subject.type === "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_V1"
+      && subject.repository === identity?.repository && subject.pr === identity?.pr && subject.branch === identity?.branch
+      && subject.objective === originalSubject?.objective && subject.protectedBase === identity?.baseSha
+      && /^[0-9a-f]{40}$/u.test(subject.currentHead ?? "") && /^[0-9a-f]{40}$/u.test(subject.currentTree ?? "")
+      && paths.length > 0 && stableJson(paths) === stableJson(subject.changedPaths)
+      && paths.every((file) => phase1ControlAuthority.paths.includes(file))
+      && subject.changedPathHash === hashValue(paths)
+      && Number.isSafeInteger(subject.additions) && subject.additions >= 0
+      && Number.isSafeInteger(subject.deletions) && subject.deletions >= 0
+      && subject.netChangedLines === Math.max(0, subject.additions - subject.deletions)
+      && Number.isInteger(subject.budget?.maximumFiles) && subject.budget.maximumFiles >= paths.length
+      && Number.isInteger(subject.budget?.maximumChangedLines) && subject.budget.maximumChangedLines >= subject.additions + subject.deletions
+      && subject.budget?.maximumHandAuthoredNetLines === subject.budget.maximumChangedLines
+      && stableJson(subject.capabilities) === stableJson(["OWNER_JURISDICTION_CANONICAL_MODEL_V2", originalSubject.objective])
+      && subject.authorityLevel === "LEVEL_0_1_REPOSITORY_ARCHITECTURE_MAINTENANCE"
+      && Object.values(subject.authority ?? {}).every((value) => value === false)
+      && subject.terminalTruthRequired === false && subject.reusableByAnotherPr === false
+      && payload?.subjectHash === hashValue(subject) && payload?.bodyHash === hashValue(payloadWithoutHash)
+      && normalized.body === architectureMaintenanceOwnerCommentBody(subject)
+      && sourceBindingValid);
+    const current = valid
+      && subject.currentHead === identity?.headSha && subject.currentTree === tree
+      && stableJson(paths) === stableJson(observed.changedPaths)
+      && subject.changedPathHash === observed.changedPathHash
+      && subject.additions === Number(scope?.additions ?? 0) && subject.deletions === Number(scope?.deletions ?? 0);
+    return { id: normalized?.id ?? item?.id ?? null, head: subject?.currentHead ?? null, valid, current };
+  }) : [];
+  const currentProfileIntents = profileIntentHistory.filter(({ current }) => current);
+  const profileIntentHistoryValid = Boolean(phase1ControlAuthority
+    && profileIntentHistory.length === originalMatches.length
+    && profileIntentHistory.every(({ valid }) => valid)
+    && new Set(profileIntentHistory.map(({ id }) => id)).size === profileIntentHistory.length
+    && new Set(profileIntentHistory.map(({ head }) => head)).size === profileIntentHistory.length
+    && currentProfileIntents.length === 1
+    && currentProfileIntents[0].id === normalizedOriginal?.id);
   const architectureDependencyAmendment = architectureDependencyAmendmentMatches[0]
     ? verifyArchitectureDependencyAmendment({ raw: architectureDependencyAmendmentMatches[0], originalRaw: raw, allComments, paginationComplete, allCommits, commitsPaginationComplete, identity, tree, scope, root })
     : null;
   const architectureDependencyAmendmentActive = architectureDependencyAmendment?.valid === true;
   const architectureDependencyProjection = dependencyAmendmentProjection(architectureDependencyAmendment);
   const fixedPointSynchronization = originalSubject?.objective === ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1;
-  const phase1ControlAuthority = phase1ControlProfile(originalSubject?.objective);
   const companionRequired = !fixedPointSynchronization && (!phase1ControlAuthority || terminalReceiptLifecycleCorrection) && authorityControlCurrentTruthCompanionV2Required({ identity, root });
   let expectedCompanion = null;
   try { expectedCompanion = authorityControlCurrentTruthCompanionV2({ identity, root, terminalBaseAdvancement: terminalReceiptLifecycleCorrection }); } catch { expectedCompanion = null; }
@@ -4718,7 +4768,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
         ? originalSubject?.budget?.maximumChangedLines === originalMaximumNetLines && originalSubject?.budget?.maximumHandAuthoredNetLines === originalMaximumNetLines
         : originalSubject?.budget?.maximumNetLines === originalMaximumNetLines),
       ancestry: terminalReceiptLifecycleCorrection ? terminalSuccessorValid : ancestry,
-      cardinality: paginationComplete && suppliedOriginalIsSoleDiscoveredAuthority && successorMatches.length === (terminalReceiptLifecycleCorrection ? 1 : 0) && architectureDependencyAmendmentMatches.length <= 1 && architectureDependencyWitnessAmendmentMatches.length <= 1,
+      cardinality: paginationComplete && (phase1ControlAuthority ? profileIntentHistoryValid : suppliedOriginalIsSoleDiscoveredAuthority) && successorMatches.length === (terminalReceiptLifecycleCorrection ? 1 : 0) && architectureDependencyAmendmentMatches.length <= 1 && architectureDependencyWitnessAmendmentMatches.length <= 1,
       dependencyAmendment: immutableEvidenceLifecycleConvergence
         ? architectureDependencyAmendmentMatches.length === 0 && architectureDependencyWitnessAmendmentMatches.length === 0
         : architectureDependencyAmendmentMatches.length === 0
@@ -6263,9 +6313,15 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
   const commentsRead = paginatedIssueComments(root, identity.repository, identity.pr);
   const commitsRead = paginatedPullCommits(root, identity.repository, identity.pr);
   const architectureComments = commentsRead.comments.filter((item) => typeof item?.body === "string" && item.body.startsWith(`${ARCHITECTURE_MAINTENANCE_MARKER}\n`));
+  const exactCurrentArchitectureComments = architectureComments.filter((item) => {
+    const normalized = normalizeGitHubCommentIdentity(item, { repository: identity.repository, pr: identity.pr, commentId: item?.id });
+    const subject = parseExactOwnerBody(normalized, ARCHITECTURE_MAINTENANCE_MARKER)?.subject;
+    return subject?.currentHead === identity.headSha && subject?.currentTree === tree;
+  });
+  const architectureComment = exactCurrentArchitectureComments.length === 1 ? exactCurrentArchitectureComments[0] : architectureComments[0];
   const noCompetingDomainOwner = Array.isArray(currentTruth?.openImplementationPrs) && currentTruth.openImplementationPrs.length === 0;
   const architectureAuthority = architectureComments.length
-    ? verifyArchitectureMaintenanceAuthority({ raw: architectureComments[0], allComments: commentsRead.comments, paginationComplete: commentsRead.complete, allCommits: commitsRead.commits, commitsPaginationComplete: commitsRead.complete, identity, tree, scope, noCompetingDomainOwner, phase1EvidenceResolver, publisherProvisioningReadbackResolver, root })
+    ? verifyArchitectureMaintenanceAuthority({ raw: architectureComment, allComments: commentsRead.comments, paginationComplete: commentsRead.complete, allCommits: commitsRead.commits, commitsPaginationComplete: commitsRead.complete, identity, tree, scope, noCompetingDomainOwner, phase1EvidenceResolver, publisherProvisioningReadbackResolver, root })
     : null;
 
   const activeLeaseStates = new Set(["INTENT_CAPTURED", "DOMAIN_DISCOVERY", "ARCHITECTURE_DESIGNED", "DEFECT_LEDGER_STABLE", "PREIMPLEMENTATION_ENGINEERING_CLEAR", "IMPLEMENTATION", "VERIFY", "NATIVE_PROVIDER_PROOF", "MERGE_ELIGIBLE", "ACTIVE_IMPLEMENTATION"]);
