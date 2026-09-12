@@ -291,7 +291,6 @@ const providerProof = sourceReadiness ? blockedExternalProviderProof() : null;
 const mayDeferFinalAdmission = sourceReadiness
   && payload?.ok === false
   && failures.includes(sourceEligibilityFailure)
-  && failures.some((failure) => finiteTaskAdmissionFailure(failure) || rollingProtectedMainAdmissionFailure(failure))
   && failures.every(admissionOnlyFailure)
   && sourceScope !== null
   && providerProof !== null
