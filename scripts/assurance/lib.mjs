@@ -2458,9 +2458,34 @@ export function evaluateFiniteTaskLeaseRuntime({
   };
   const leaseFreshness = scopedFreshness(binding?.requiredFreshnessClaims ?? []);
   const providerFreshness = scopedFreshness(providerCriticalRuntimeRequirement);
+  const liveContextEligible = githubEvent === undefined
+    && suppliedObservation === undefined
+    && effectiveReservationResolution === null
+    && (checkoutHead === undefined || checkoutHead === safeRuntimeGit(gitCommand, ["rev-parse", "HEAD"]));
+  const assuranceControlContext = currentProtectedBaseResolution.ok && liveContextEligible
+    ? observeLiveAssuranceControlTaskContext({
+      environment,
+      gitCommand,
+      authorityProof: assuranceControlAuthorityProof,
+      expectedIdentity: {
+        repository: event?.repository?.full_name,
+        pr: event?.pull_request?.number ?? event?.number,
+        branch: event?.pull_request?.head?.ref,
+        headSha: event?.pull_request?.head?.sha,
+        headTree: safeRuntimeGit(gitCommand, ["rev-parse", `${event?.pull_request?.head?.sha}^{tree}`]),
+        baseSha: currentProtectedBaseResolution.protectedBase,
+        baseRef: event?.pull_request?.base?.ref,
+      },
+    })
+    : null;
+  const assuranceControlEligible = Boolean(
+    assuranceControlContext
+    && assuranceControlTaskContextValid(assuranceControlContext)
+    && githubExecutionIdentityValid(assuranceControlContext.executionIdentity)
+  );
   if (!binding) {
     const terminalOutcome = record?.finiteTaskRuntime?.terminalOutcome ?? null;
-    return {
+    const noActiveTask = {
       leaseAuthorityEligible: false,
       candidateEligible: false,
       candidateHead: null,
@@ -2485,6 +2510,34 @@ export function evaluateFiniteTaskLeaseRuntime({
       terminalProjectionVerified: terminalOutcome?.schemaVersion === 3
         && terminalOutcome?.classification === finiteTaskImplementationChainTerminalClassification,
     };
+    return assuranceControlEligible ? {
+      ...noActiveTask,
+      evaluationType: "ASSURANCE_CONTROL_SOURCE_ONLY",
+      candidateKind: "ASSURANCE_CONTROL_SOURCE_ONLY",
+      candidateEligible: true,
+      candidateHead: assuranceControlContext.identity.headSha,
+      candidateTree: assuranceControlContext.sourceTree,
+      candidate: { ...assuranceControlContext.identity, tree: assuranceControlContext.sourceTree },
+      candidateEvaluation: {
+        ok: true,
+        evaluationType: "ASSURANCE_CONTROL_SOURCE_ONLY",
+        sourceOnly: true,
+        productAuthorityGranted: false,
+        providerAuthorityGranted: false,
+        finiteTaskAuthorityGranted: false,
+        terminalAuthorityGranted: false,
+        mergeAuthorityGranted: false,
+        findings: [],
+        taskState: "MERGED_VERIFIED",
+      },
+      terminal: false,
+      assuranceControlTaskContext: assuranceControlContext,
+      productAuthorityGranted: false,
+      providerAuthorityGranted: false,
+      finiteTaskAuthorityGranted: false,
+      terminalAuthorityGranted: false,
+      mergeAuthorityGranted: false,
+    } : noActiveTask;
   }
   const declaredAuthorityEvidence = effectiveReservationObservation?.authorityEvidence ?? {
     taskArtifactHash: lease?.closure?.artifactHash,
@@ -2723,12 +2776,9 @@ export function evaluateFiniteTaskLeaseRuntime({
     && finiteTaskEffectiveReservationAuthorityValid(reservationResolution)
     && candidateEvaluation.ok;
   const terminalRepairHistory = evaluateTerminalVerifierRepairHistory({ repair: record?.taskContextArchitecture?.terminalVerifierRepair });
-  const liveContextEligible = githubEvent === undefined && suppliedObservation === undefined && effectiveReservationResolution === null && (checkoutHead === undefined || checkoutHead === safeRuntimeGit(gitCommand, ["rev-parse", "HEAD"]));
   const terminalRepairContext = liveContextEligible && terminalRepairHistory.ok ? observeLiveTerminalRepairTaskContext({ environment, gitCommand, expectedIdentity: { repository: event?.repository?.full_name, pr: event?.pull_request?.number ?? event?.number, branch: event?.pull_request?.head?.ref, headSha: event?.pull_request?.head?.sha, baseSha: currentProtectedBaseResolution.protectedBase, baseRef: event?.pull_request?.base?.ref } }) : null;
   const terminalRepairTree = terminalRepairContext?.executionIdentity?.authoritativeSource?.headTree ?? null;
   const terminalRepairEligible = Boolean(terminalRepairContext && githubExecutionIdentityValid(terminalRepairContext.executionIdentity) && terminalRepairHistory.current?.repository === terminalRepairContext.identity.repository && terminalRepairHistory.current?.pullRequest === terminalRepairContext.identity.pr && terminalRepairHistory.current?.branch === terminalRepairContext.identity.branch && terminalRepairHistory.current?.protectedBase === terminalRepairContext.identity.baseSha && terminalRepairContext.executionIdentity.authoritativeSource.headSha === terminalRepairContext.identity.headSha);
-  const assuranceControlContext = liveContextEligible ? observeLiveAssuranceControlTaskContext({ environment, gitCommand, authorityProof: assuranceControlAuthorityProof, expectedIdentity: { repository: event?.repository?.full_name, pr: event?.pull_request?.number ?? event?.number, branch: event?.pull_request?.head?.ref, headSha: event?.pull_request?.head?.sha, headTree: safeRuntimeGit(gitCommand, ["rev-parse", `${event?.pull_request?.head?.sha}^{tree}`]), baseSha: currentProtectedBaseResolution.protectedBase, baseRef: event?.pull_request?.base?.ref } }) : null;
-  const assuranceControlEligible = Boolean(assuranceControlContext && assuranceControlTaskContextValid(assuranceControlContext) && githubExecutionIdentityValid(assuranceControlContext.executionIdentity));
   const result = {
     leaseAuthorityEligible: leaseFreshness.eligible,
     candidateEligible: derived.ok && candidateEvaluation.ok && finiteTaskEffectiveReservationAuthorityValid(reservationResolution),

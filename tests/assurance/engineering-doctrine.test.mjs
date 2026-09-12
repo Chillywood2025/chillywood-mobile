@@ -829,6 +829,8 @@ test("Phase 1 risk-based admission reform has one exact churn-bounded assurance-
   const proofSource = fs.readFileSync("scripts/proof-autonomous-systems-contract.mjs", "utf8");
   assert.match(proofSource, /resolvePhase1SourceAuthorityEligibility/u);
   assert.match(proofSource, /evaluateFiniteTaskLeaseRuntime\(\{[^}]*assuranceControlAuthorityProof/u);
+  const runtimeSource = fs.readFileSync("scripts/assurance/lib.mjs", "utf8");
+  assert.match(runtimeSource, /if \(!binding\) \{[\s\S]*return assuranceControlEligible \? \{[\s\S]*evaluationType: "ASSURANCE_CONTROL_SOURCE_ONLY"[\s\S]*productAuthorityGranted: false,[\s\S]*mergeAuthorityGranted: false,/u);
   const closureSource = fs.readFileSync("scripts/assurance/engineering-closure.mjs", "utf8");
   assert.match(closureSource, /import \{[^;]*parseProtectedPullRequestMergeSubject[^;]*\} from "\.\/lib\.mjs";/u);
   assert.deepEqual(parseProtectedPullRequestMergeSubject("Merge pull request #251 from Chillywood2025/codex/phase1-risk-based-admission-v5"), { ok: true, format: "GITHUB_CLASSIC_MERGE_PULL_REQUEST", variant: "GITHUB_CLASSIC_MERGE_PULL_REQUEST", prNumber: 251, sourceBranch: "codex/phase1-risk-based-admission-v5" });
