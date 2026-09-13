@@ -5,6 +5,7 @@ import { ActivityIndicator, Alert, AppState, Linking, Platform, StyleSheet, Text
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
 import { restoreScheduledAccountDeletion } from "../_lib/accountDeletionRequests";
+import { getAccountNavigationTreeKey } from "../_lib/accountSessionAuthority";
 import {
   accountLegalCheckIsPending,
   accountLegalVerificationKey,
@@ -1502,6 +1503,7 @@ function AuthRouteGate() {
   const authoritySessionGeneration = authority?.sessionGeneration ?? "";
   const authorityState = authority?.state;
   const authorityRestoreOnly = authority?.restoreOnly;
+  const navigationTreeKey = getAccountNavigationTreeKey(authority);
   const legalAuthority = useMemo(() => (
     legalGateApplicable
     && authorityUserId
@@ -1682,7 +1684,7 @@ function AuthRouteGate() {
 
   return (
     <View style={styles.appRootReady} testID="app-root-ready">
-      <RootNavigator />
+      <RootNavigator key={navigationTreeKey} />
       {navigationBlocker ? (
         <View
           pointerEvents="auto"

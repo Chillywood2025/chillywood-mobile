@@ -197,7 +197,8 @@ assertIncludes(chillyChatNativeCallRoutes, "UUID_PATTERN", "cold-start replay mu
 assertNotIncludes(chillyChatNativeCallRoutes, "access_token", "cold-start call routes must not carry authentication credentials");
 assertIncludes(nativeIntent, "redirectSystemPath", "Expo Router must normalize Android native call actions before initial route caching");
 assertIncludes(nativeIntent, 'Platform.OS === "ios"', "native-intent handling must apply the iOS route-provenance sanitizer only on iOS");
-assertIncludes(nativeIntent, "sanitizeExternalIosNativeCallPath(path)", "external iOS paths must remain navigation-only after sensitive call parameters are stripped");
+assertIncludes(nativeIntent, "sanitizeExternalNavigationInput(path) ?? \"/\"", "external paths must reject malformed encoded input before route parsing");
+assertIncludes(nativeIntent, "sanitizeExternalIosNativeCallPath(safePath)", "external iOS paths must remain navigation-only after sensitive call parameters are stripped");
 assertIncludes(nativeIntent, "redirectEarlyAndroidNativeCallSystemPath", "Expo Router native-intent handling must sanitize Android external routes to navigation-only paths");
 assertNotIncludes(nativeIntent, "console.", "native call system-path normalization must not log private action URLs");
 assertIncludes(chillyChatNativeCallRouteBuffer, 'Platform.OS !== "android"', "native-store consumption must remain Android-only");

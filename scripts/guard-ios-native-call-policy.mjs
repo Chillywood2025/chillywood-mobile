@@ -238,7 +238,8 @@ requireText(chatThread, 'authority: trustedNativeCallClaim ? "trusted_native_cla
 rejectText(chatThread, "requestedOpenCall", "openCall route text must not open or join call media.");
 rejectText(chatThread, "requestedCallMode", "startCall route text must not create a call.");
 rejectText(chatThread, "nativeCallAction: nativeCallActionParam", "The thread must not read route action text as native authority.");
-requireText(nativeIntent, "sanitizeExternalIosNativeCallPath(path)", "iOS system paths must strip native action, UUID, claim, openCall, and startCall parameters.");
+requireText(nativeIntent, "sanitizeExternalNavigationInput(path) ?? \"/\"", "iOS system paths must reject malformed external navigation input before route parsing.");
+requireText(nativeIntent, "sanitizeExternalIosNativeCallPath(safePath)", "iOS system paths must strip native action, UUID, claim, openCall, and startCall parameters.");
 requireText(provenance, "fragmentParameters", "External iOS paths must remove only native-call authority from fragments.");
 requireText(provenance, "safeFragment", "Authentication and recovery fragment fields must survive native-call sanitization.");
 requireText(provenance, "containsSensitiveNativeCallClaimRouteParams", "Debug surfaces must fail closed while an opaque claim handle is routed.");

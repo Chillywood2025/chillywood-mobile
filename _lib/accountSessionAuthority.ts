@@ -35,6 +35,11 @@ export const recoverySessionIsQuarantined = (
 export function getCurrentAccountSessionAuthoritySnapshot() {
   return currentSnapshot ? { ...currentSnapshot } : null;
 }
+export function getAccountNavigationTreeKey(authority?: AccountSessionAuthorityBinding | null) {
+  return authority
+    ? `account:${authority.userId}:${authority.accountId}:${authority.sessionGeneration}`
+    : "account:none";
+}
 export function publishAccountSessionAuthoritySnapshot(value: AccountSessionAuthorityBinding | null) {
   currentSnapshot = value ? { ...value } : null;
   snapshotListeners.forEach((listener) => listener(getCurrentAccountSessionAuthoritySnapshot()));

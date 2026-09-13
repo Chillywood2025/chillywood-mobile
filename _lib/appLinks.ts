@@ -195,6 +195,11 @@ const readParsedInput = (value: unknown): ParsedInput | null => {
   ) {
     return null;
   }
+  try {
+    decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
 
   if (raw.startsWith("/")) {
     if (raw.startsWith("//")) return null;

@@ -383,7 +383,8 @@ for (const sensitiveName of ["#", "nativecallaction", "nativecallclaim", "native
 assert.ok(sources["app/_layout.tsx"].includes('normalizedValue.includes("#")'), "fragment-bearing route values are excluded from analytics");
 assert.ok(sources["app/_layout.tsx"].includes('pathname.split("#", 1)'), "auth redirects cannot retain a route fragment");
 assert.ok(sources["app/_layout.tsx"].includes("sanitizeExternalIosNativeCallPath(path)"), "ordinary notification responses are sanitized");
-assert.ok(sources["app/+native-intent.tsx"].includes("sanitizeExternalIosNativeCallPath(path)"), "iOS system paths are sanitized");
+assert.ok(sources["app/+native-intent.tsx"].includes("sanitizeExternalNavigationInput(path) ?? \"/\""), "malformed external system paths are rejected before route parsing");
+assert.ok(sources["app/+native-intent.tsx"].includes("sanitizeExternalIosNativeCallPath(safePath)"), "iOS system paths are sanitized");
 assert.ok(sources["app/chat/[threadId].tsx"].includes("consumeMountedIosNativeCallRoute"), "the mounted thread consumes the shared native claim after auth readiness");
 assert.ok(sources["app/chat/[threadId].tsx"].includes("consumeMountedForegroundAuthenticatedUiCallRoute"), "the mounted thread consumes one-time foreground UI intent");
 assert.ok(sources["app/chat/index.tsx"].includes("createForegroundAuthenticatedUiCallIntent"), "chat-inbox Voice and Video controls create a foreground UI intent");
