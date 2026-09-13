@@ -2,17 +2,16 @@
 
 Status date: 2026-09-13 America/Chicago
 
-Recommendation: `PRE_PRODUCTION_APP_QUALIFICATION_BLOCKED`
+Recommendation: `PRE_PRODUCTION_APP_QUALIFICATION_PASS`
 
 App-controlled product result: `PASS`
 
-The authorized product, database, automated, security, Android OTA, and
-Android physical work reached a fixed point with no known reproducible P0,
+The authorized product, database, automated, security, Android/iOS OTA, and
+Android/iOS physical work reached a fixed point with no known reproducible P0,
 P1, launch-impacting P2, internal `BLOCKING_OPEN`, or internally provable
-launch-impacting `REPAIRED_UNPROVEN`. The overall recommendation remains
-blocked because Apple's passcode-only XCTest authorization prompt prevents
-the required final iPhone interaction sweep. The passcode was not requested,
-entered, or retained.
+launch-impacting `REPAIRED_UNPROVEN`. Legitimately unavailable provider or
+multi-identity states remain classified separately as `EXTERNAL_BLOCKED` and
+were not fabricated.
 
 This is a sanitized product qualification record. It does not authorize a
 public rollout, store submission, production money, payout, cashout, Stripe
@@ -22,11 +21,11 @@ production processing, or production SKU activation.
 
 - Starting protected `main`: `5503c352ad73acf022aa9a0005a2a8818d5e7fec`
 - Starting protected tree: `e81786f5044ee753d13afae62bf763ed9d12b9ac`
-- Qualified executable source: `72a0bc4684df8eb5499afe49a2e3f56e2db98287`
-- Qualified executable source tree: `cf599c865a253a3cdda29e5308a760614c890e56`
+- Qualified executable source: `34535233b1985f777cb174225842dac518f63222`
+- Qualified executable source tree: `5184e8ad2f989beda85a5fcae2d3a360182feeb1`
 - PR #389 was already terminally merged before this qualification began.
 - The qualification stack was merged in dependency order: #416, #424, #417,
-  #418, #420, #419, #421, #423, #425, #422, #426.
+  #418, #420, #419, #421, #423, #425, #422, #426, #428.
 - No required product PR from this stack remains open.
 - The remaining open PRs observed after merge are historical draft review-only
   branches and were not altered or merged.
@@ -46,6 +45,12 @@ The exact product merges were:
 9. #425 — `13220e69fbaab314722162014af06d9001695011`
 10. #422 — `e4c71abe046dd11ffed676886585a3d44c89f71d`
 11. #426 — `72a0bc4684df8eb5499afe49a2e3f56e2db98287`
+12. #428 — `34535233b1985f777cb174225842dac518f63222`
+
+PR #427 preserved the earlier qualification ledger checkpoint; it contained
+documentation only. PR #428 is the final product/test repair. A final
+documentation-only ledger publication may advance protected `main` without
+changing the executable source and tree qualified above.
 
 ## 2. Defects found
 
@@ -67,6 +72,9 @@ The exact product merges were:
 - Official account/provider setup work could cross account replacement.
 - Ordinary commerce/activity copy had paths that could expose internal
   qualification language.
+- Eight icon-only Back controls across seven customer surfaces omitted the
+  accessibility role/label contract and were absent from the iOS accessibility
+  tree even though coordinate interaction remained possible.
 
 ## 3. Defects repaired
 
@@ -89,6 +97,10 @@ The exact product merges were:
   identity across provider work.
 - A surface-aware customer-copy regression preserves separated support
   diagnostics while rejecting inappropriate ordinary-surface terminology.
+- Profile, Platform, Platform Subscription, Platform Studio, Chi'lly Circle,
+  Content Library replay, and Support Back controls are now accessible,
+  focusable buttons with static test IDs, route-specific labels, bounded hit
+  slop, and the original `router.back()` behavior.
 
 ## 4. Unlisted defects discovered
 
@@ -101,6 +113,9 @@ The exact product merges were:
 - Neighboring account-bound caches, official-account setup, and privileged
   retry surfaces were found through the required same-class search and repaired
   in the coherent root-cause stack rather than separate one-off PRs.
+- The final iPhone Profile smoke exposed the unlabeled icon-only Back control.
+  A same-class audit found all eight occurrences across seven surfaces and
+  repaired the class rather than only the observed Profile instance.
 
 ## 5. Permanent test coverage added or extended
 
@@ -127,6 +142,8 @@ Permanent coverage includes:
 - malformed and oversized external inputs;
 - ambiguous privileged retry and exact-session deletion restore;
 - surface-aware customer-facing language.
+- exact iOS-visible Back-button occurrence counts and accessibility semantics
+  across every conditional render branch.
 
 ## 6. Automated adversarial results
 
@@ -140,10 +157,12 @@ Permanent coverage includes:
 - `git diff --check`: `PASS`.
 - Every exact-head Phase 1 substantive product/security job passed before its
   PR merged.
+- Final exact-source iOS-visible Back navigation guard: `PASS`.
 
 The only Phase 1 failures were the accepted assurance/control-plane lanes:
-Autonomous Systems All-Platform, Autonomous Systems iOS, and Cognitive
-Intelligence. No failed assurance lane is represented as passing.
+Initialize exact-head admission, Autonomous Systems All-Platform, Autonomous
+Systems iOS, and Cognitive Intelligence. No failed assurance lane is
+represented as passing.
 
 ## 7. High-volume and pagination results
 
@@ -217,24 +236,26 @@ physical call lane: `EXTERNAL_BLOCKED`.
 ## 14. Navigation and native-return results
 
 Deterministic route-stack, direct-route, malformed-input, stale-authority,
-foreground preservation, and duplicate transition tests passed. On final
-Android source, Home, Explore, Live, Library, profile, Settings, title detail,
-and Player rendered; Back remained coherent; the native Share sheet opened,
-cancelled, and returned to the same Player; a subsequent background/foreground
-resume was a hot launch into that same valid context. Rapid Watch-Party input
-produced one Premium gate. Android final log observation found zero fatal or
-unhandled events and one resumed MainActivity. Result: `PASS` on Android;
-iPhone interaction is covered by the external blocker below.
+foreground preservation, and duplicate-transition tests passed. On final
+Android source, primary tabs, profile, Platform, and Settings rendered; Back
+remained coherent; native Share opened, cancelled, and returned to the same
+Platform; background/foreground retained the same valid context; and rapid
+Watch-Party input produced one waiting room and one Back transition. On final
+iOS source, Home, Explore, Live, Library, Profile, Platform, and Settings
+rendered; Profile and Settings Back controls were accessible buttons; native
+Share cancelled back to Platform/Profile; background/foreground retained
+Profile without an auth/policy pseudo-restart; and triple Watch-Party input
+produced one waiting room. Result: `PASS` on both platforms.
 
 ## 15. Accessibility and layout results
 
 Deterministic accessibility, label, busy/disabled-state, exact commerce target,
 seat-eligibility communication, safe-area, keyboard, long-copy, and layout
-guards passed. Android physical screens kept primary actions and bottom
-navigation reachable on the final OTA. The required final iPhone interactive
-accessibility/keyboard/safe-area sweep could not run because XCTest was blocked
-by Apple's passcode-only authorization prompt. Overall lane:
-`EXTERNAL_BLOCKED`.
+guards passed. Android and iPhone physical screens kept primary actions and
+bottom navigation reachable on the final OTAs. On iPhone, Profile and Settings
+Back controls appeared as named Button elements; Explore search remained
+visible and enabled with the keyboard open; background/foreground retained the
+same Explore context. Overall result: `PASS`.
 
 ## 16. Release-facing language results
 
@@ -252,17 +273,20 @@ production customer content. Result: `PASS`.
 - Installer readback: Google Play package installer.
 - Runtime/channel: `1.0.0-android-production-v2` /
   `android-internal-v2`.
-- Final OTA group: `14d1702b-f9a1-4eac-a69b-561ca5a8b952`.
-- Final update: `01a09999-05fd-701f-85f5-89d1e8922a14`.
+- Final OTA group: `fb0d0b44-96c0-4b46-8f9e-f0fa170c7240`.
+- Final update: `01a09a11-7d09-7957-8847-8681e781d757`.
 - EAS update source: exact qualified executable source
-  `72a0bc4684df8eb5499afe49a2e3f56e2db98287`.
+  `34535233b1985f777cb174225842dac518f63222`.
 - Installed release diagnostics read back the exact update, runtime, channel,
   native build, non-embedded launch, and no emergency launch.
 - OTA log sequence completed check, availability, download, restart, and final
   unavailable/no-newer-update readback.
-- Customer navigation, Library, profile/Settings, Player/media, native Share
-  return, background/foreground, rapid-input gating, crash observation, safe
-  areas, and primary-action reachability passed.
+- Customer navigation, Library/Saved, Profile Back, Platform native Share
+  return, background/foreground, rapid Watch-Party entry, Settings diagnostics,
+  crash observation, safe areas, and primary-action reachability passed.
+- The affected final sweep passed 11/11 grouped cases. Two observed fatal
+  records belonged to colliding standalone UI-automation launcher processes;
+  the Chi'llywood fatal, unhandled, and ANR count was zero.
 
 Android exact-source physical result: `PASS`.
 
@@ -271,21 +295,29 @@ Android exact-source physical result: `PASS`.
 - Signed binary: EAS build `291ebe2d-59d1-4531-ab7c-8709dd64dc27`.
 - App version/build: `1.0.0` / `13`.
 - Runtime/channel: `1.0.0-ios-production-v2` / `ios-internal-v2`.
-- Final OTA group: `32a2f51d-5470-44ed-bb43-fb0fbb44c9b8`.
-- Final update: `01a0999f-4da0-79bd-9765-0d30c8f3db92`.
+- Final OTA group: `e78a8349-4370-4839-a6a3-1a3b8a35358a`.
+- Final update: `01a09a0c-7ef3-7cef-adc4-427b220fde88`.
 - EAS update source: exact qualified executable source
-  `72a0bc4684df8eb5499afe49a2e3f56e2db98287`.
+  `34535233b1985f777cb174225842dac518f63222`.
 - The on-device Expo update database recorded the exact final update with
-  status/keep set, one successful launch, and zero failed launches.
+  status/keep set, three successful launches, and zero failed launches.
 - App version/build installation and launch were independently read back.
-- Appium/XCUITest/WebDriverAgent could not regain interaction because Apple
-  presented the full-screen passcode-only “Enable UI Automation” authorization
-  prompt. Bounded signing alternatives also lacked an available valid
-  provisioning/profile path. No passcode was requested, entered, or retained.
+- The device owner completed Apple's local UI Automation authorization without
+  sharing a passcode. The passcode was never requested or retained.
+- Profile Back appeared as a Button labeled “Go back from Profile”; Settings
+  Back appeared as a Button labeled “Go back from Settings”; both navigated
+  correctly.
+- Home, Explore, Live, and Library tabs rendered. Native Share opened and
+  cancelled back to the same Platform/Profile route. Background/foreground
+  retained valid Profile context without an auth/policy pseudo-restart.
+- Triple Watch-Party entry produced exactly one waiting room. Explore search
+  remained reachable with the keyboard open. The affected final sweep passed
+  12/12 grouped cases, and the bounded app log contained zero fatal or
+  unhandled signatures.
 
 iOS exact OTA installation/activation: `PASS`.
 
-iOS final interactive physical journey: `EXTERNAL_BLOCKED`.
+iOS final interactive physical journey: `PASS`.
 
 ## 19. Provider and backend readback
 
@@ -348,12 +380,11 @@ authority, LiveKit escalation, RLS regression, unsafe retry, provider callback
 confusion, stuck busy state, and customer-facing internal language. Result:
 `PASS`.
 
+The immutable final PR #428 diff also completed with zero findings across all
+8 changed files (scan `850cd5d1-024f-4f80-bc8d-4399f07f3d97`).
+
 ## 21. External blocked items
 
-- iPhone interaction, native-return, account switching, accessibility,
-  keyboard, and route smoke after exact OTA: Apple's passcode-only UI Automation
-  authorization prompt cannot be satisfied within the prohibition on requesting
-  or entering a device passcode.
 - Final physical A to B to A sweep: no second legitimate credentialed customer
   identity was available on the devices.
 - Live multi-participant, Event lifecycle, and two-party Chat call physical
@@ -385,6 +416,8 @@ after every merge with the same writable-state hash. Final readback showed:
 - strict required status check `Phase 1 / Admission Decision` still enforced;
 - pull-request, non-fast-forward, deletion, required-status-check, and update
   rules present.
+- normalized writable-state hash
+  `8edf290e70141cfe0b3a371f958e8add21f997de1c87e99cbe2c927b9a90904a`.
 
 Normal assurance contract validation passed. Current-truth generation still
 reports the accepted `CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT`; the accepted
@@ -408,15 +441,15 @@ bypassed as a substantive product defect, or claimed as passing.
 | Live Stage Seat | `EXTERNAL_BLOCKED` — app/backend pass; no legitimate final Stage/seat transaction state |
 | Watch-Party | `EXTERNAL_BLOCKED` — app/backend pass; no legitimate multi-participant final room |
 | Chi'lly Chat | `EXTERNAL_BLOCKED` — app/backend pass; no legitimate second-party final call |
-| Notifications | `EXTERNAL_BLOCKED` — app/backend pass; no legitimate final push payload and iOS interaction blocked |
+| Notifications | `EXTERNAL_BLOCKED` — app/backend pass; no legitimate final push payload |
 | Deep links | `PASS` |
 | Library / Saved | `PASS` |
 | Account switching | `EXTERNAL_BLOCKED` — deterministic pass; physical second identity unavailable |
-| Native interruption return | `PASS` on Android; iOS interaction separately blocked |
-| Accessibility / layout | `EXTERNAL_BLOCKED` — deterministic/Android pass; final iOS interaction blocked |
+| Native interruption return | `PASS` |
+| Accessibility / layout | `PASS` |
 | OTA / existing user | `PASS` |
 | Android physical | `PASS` |
-| iOS physical | `EXTERNAL_BLOCKED` — OTA activation pass, interaction blocked by Apple authorization |
+| iOS physical | `PASS` |
 | Security | `PASS` |
 
 Terminal ledger:
@@ -431,17 +464,14 @@ Terminal ledger:
 
 Bounded answer to the customer-risk question: no known reproducible
 app-controlled defect remains in the qualified automated, database, security,
-provider-readback, and Android physical boundaries that would cause
+provider-readback, Android physical, and iOS physical boundaries that would cause
 cross-account state, duplicate/wrong purchase authority, privacy bypass,
 incorrect access, native-return lockout, wrong routing, LiveKit privilege
 escalation, pagination loss, persistent busy state, duplicate navigation,
 customer-facing internal language, or a crash. The exact remaining uncertainty
-is the externally blocked final iPhone interaction and the legitimate provider
-states listed above; this is not a claim that the application is bug-free.
+is limited to the legitimate external identities/provider states listed above;
+this is not a claim that the application is bug-free.
 
-Final recommendation: `PRE_PRODUCTION_APP_QUALIFICATION_BLOCKED`.
+Final recommendation: `PRE_PRODUCTION_APP_QUALIFICATION_PASS`.
 
-The next closure action is to reauthorize iPhone UI Automation locally on the
-device without sharing or storing the passcode, then rerun the final iOS
-customer, native-return, account, accessibility, and route sweeps. Public
-production activation remains a separate Owner decision even after that proof.
+Public production activation remains a separate Owner decision.
