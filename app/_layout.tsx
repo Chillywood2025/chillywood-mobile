@@ -1367,11 +1367,31 @@ function RootNavigator() {
   );
 }
 
-function AuthBootScreen({ message = "Checking your session…" }: { message?: string }) {
+function AuthBootScreen({ message = "Checking your session…", onRetry }: { message?: string; onRetry?: () => void }) {
   return (
     <View style={styles.authBootScreen}>
       <ActivityIndicator color="#DC143C" />
       <Text style={styles.authBootText}>{message}</Text>
+      {onRetry ? (
+        <>
+          <TouchableOpacity
+            style={styles.legalGateSecondary}
+            onPress={onRetry}
+            accessibilityRole="button"
+            accessibilityLabel="Try session verification again"
+          >
+            <Text style={styles.legalGateSecondaryText}>Try again</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.legalGateSecondary}
+            onPress={() => { void supabase.auth.signOut(); }}
+            accessibilityRole="button"
+            accessibilityLabel="Sign out of this session"
+          >
+            <Text style={styles.legalGateSecondaryText}>Sign out</Text>
+          </TouchableOpacity>
+        </>
+      ) : null}
     </View>
   );
 }
@@ -1474,7 +1494,7 @@ function AuthRouteGate() {
   const pathname = usePathname();
   const params = useGlobalSearchParams();
   const segments = useSegments();
-  const { authority, authorityStatus, isLoading, isPasswordRecoverySession, isSignedIn } = useSession();
+  const { authority, authorityStatus, isLoading, isPasswordRecoverySession, isSignedIn, retryAuthority } = useSession();
   const [initialReplayDeepLink, setInitialReplayDeepLink] = useState<boolean | null>(null);
   const [legalReadback, setLegalReadback] = useState<LegalRequirementsReadback | null>(null);
   const [legalStatus, setLegalStatus] = useState<"idle" | "checking" | "accepted" | "required" | "error">("idle");
@@ -1659,7 +1679,7 @@ function AuthRouteGate() {
 
   let navigationBlocker: React.ReactNode = null;
   if (authorityStatus === "unknown") {
-    navigationBlocker = <AuthBootScreen message="Protected access remains locked because session authority is unavailable." />;
+    navigationBlocker = <AuthBootScreen message="Protected access remains locked because session authority is unavailable." onRetry={retryAuthority} />;
   } else if (legalGateBlocking) {
     navigationBlocker = legalCheckPending || legalStatus === "checking" || legalStatus === "idle"
       ? <AuthBootScreen message="Checking current policy requirements…" />

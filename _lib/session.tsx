@@ -1,6 +1,6 @@
 import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AppState, Platform } from "react-native";
 
 import { readAccountAccessStatus } from "./accountAccess";
@@ -20,10 +20,11 @@ export type SessionAuthorityStatus = "loading" | "active" | "recovery_only" | "r
 type SessionContextValue = {
   authority: AccountSessionAuthorityBinding | null; authorityStatus: SessionAuthorityStatus;
   isLoading: boolean; session: Session | null; user: User | null;
-  isSignedIn: boolean; isPasswordRecoverySession: boolean;
+  isSignedIn: boolean; isPasswordRecoverySession: boolean; retryAuthority: () => void;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
+const SESSION_AUTHORITY_AUTOMATIC_RETRY_DELAYS_MS = [1_000, 3_000] as const;
 
 let verifiedRecoveryBinding: AccountSessionAuthorityBinding | null = null;
 let recoveryQuarantineIntent = false;
@@ -70,19 +71,30 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [authority, setAuthority] = useState<AccountSessionAuthorityBinding | null>(null);
   const [authorityStatus, setAuthorityStatus] = useState<SessionAuthorityStatus>("loading");
   const [isPasswordRecoverySession, setIsPasswordRecoverySession] = useState(false);
+  const [automaticAuthorityRetryAttempt, setAutomaticAuthorityRetryAttempt] = useState(0);
+  const authorityStatusRef = useRef<SessionAuthorityStatus>("loading");
+  const authorityRetryRef = useRef<() => void>(() => {});
+  const authorityRetryInFlightRef = useRef(false);
+  const retryAuthority = useCallback(() => authorityRetryRef.current(), []);
+
+  useEffect(() => {
+    authorityStatusRef.current = authorityStatus;
+  }, [authorityStatus]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
     supabase.auth.startAutoRefresh();
     const subscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState === "active") supabase.auth.startAutoRefresh();
-      else supabase.auth.stopAutoRefresh();
+      if (nextState === "active") {
+        supabase.auth.startAutoRefresh();
+        if (authorityStatusRef.current === "unknown") retryAuthority();
+      } else supabase.auth.stopAutoRefresh();
     });
     return () => {
       subscription.remove();
       supabase.auth.stopAutoRefresh();
     };
-  }, []);
+  }, [retryAuthority]);
 
   useEffect(() => {
     let mounted = true;
@@ -210,6 +222,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       }, 0);
     };
 
+    authorityRetryRef.current = () => {
+      if (!mounted || authorityRetryInFlightRef.current) return;
+      authorityRetryInFlightRef.current = true;
+      void supabase.auth.refreshSession()
+        .then(async ({ data, error }) => {
+          if (!mounted) return;
+          if (!error && data.session) {
+            reconcile("TOKEN_REFRESHED", data.session);
+            return;
+          }
+          const current = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (mounted) reconcile("INITIAL_SESSION", current.data.session ?? null);
+        })
+        .catch(() => {
+          if (mounted) clearRenderedAuthority("unknown");
+        })
+        .finally(() => { authorityRetryInFlightRef.current = false; });
+    };
+
     const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!mounted) return;
       reconcile(event, nextSession, recoveryQuarantineIntent);
@@ -221,10 +252,27 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return () => {
       mounted = false;
       sequence += 1;
+      authorityRetryRef.current = () => {};
+      authorityRetryInFlightRef.current = false;
       listener.subscription.unsubscribe();
       publishAccountSessionAuthoritySnapshot(null);
     };
   }, []);
+
+  useEffect(() => {
+    if (authorityStatus === "active" || authorityStatus === "signed_out") {
+      setAutomaticAuthorityRetryAttempt(0);
+      return;
+    }
+    if (authorityStatus !== "unknown") return;
+    const delay = SESSION_AUTHORITY_AUTOMATIC_RETRY_DELAYS_MS[automaticAuthorityRetryAttempt];
+    if (delay === undefined) return;
+    const timeout = setTimeout(() => {
+      setAutomaticAuthorityRetryAttempt((attempt) => attempt + 1);
+      retryAuthority();
+    }, delay);
+    return () => clearTimeout(timeout);
+  }, [authorityStatus, automaticAuthorityRetryAttempt, retryAuthority]);
 
   useEffect(() => {
     reportDebugAuth({ signedIn: authorityStatus === "active", sessionExists: !!session, userId: null, email: null });
@@ -237,8 +285,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     isLoading: authorityStatus === "loading" || authorityStatus === "unknown",
     session, user,
     isSignedIn: authorityStatus === "active" && !!user && !!authority,
-    isPasswordRecoverySession,
-  }), [authority, authorityStatus, isPasswordRecoverySession, session, user]);
+    isPasswordRecoverySession, retryAuthority,
+  }), [authority, authorityStatus, isPasswordRecoverySession, retryAuthority, session, user]);
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
