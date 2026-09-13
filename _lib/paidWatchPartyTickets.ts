@@ -1,10 +1,14 @@
 import { trackEvent } from "./analytics";
 import { formatMonetizationCurrency } from "./creatorMonetization";
 import {
+  captureCreatorMoneyPurchaseAuthority,
+  isCreatorMoneyPurchaseAuthorityCurrent,
   prepareCreatorMoneyPurchaseSubject,
   revalidateCreatorMoneyPurchaseSubject,
+  invokeCreatorMoneyPurchaseSubjectRpc,
   validateCreatorMoneyPurchaseIntent,
   type CreatorMoneyPurchaseIntentExpectation,
+  type CreatorMoneyPurchaseSubject,
 } from "./creatorMoneyPurchaseAuthority";
 import {
   getRevenueCatProductionReadiness,
@@ -21,6 +25,8 @@ import { Platform } from "react-native";
 import { reportRuntimeError } from "./logger";
 import { getRuntimeConfig } from "./runtimeConfig";
 import { supabase } from "./supabase";
+import { withAuthorityReadDeadline } from "./entitlementAuthority";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export const PAID_WATCH_PARTY_TICKET_SANDBOX_PRODUCT_KEY = "watch_party_live_ticket_sandbox_099";
 export const PAID_WATCH_PARTY_TICKET_SANDBOX_PROVIDER_PRODUCT_ID = "cw_watch_party_live_ticket_sandbox_099";
@@ -406,7 +412,7 @@ export async function savePaidWatchPartyOffer(input: {
   seatLimit?: number | null;
   status?: PaidWatchPartyOfferStatus;
 }): Promise<PaidWatchPartyOffer> {
-  const { data, error } = await rpcClient.rpc("set_paid_watch_party_offer", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>("set_paid_watch_party_offer", {
     p_party_id: input.partyId,
     p_title: input.title ?? null,
     p_price_cents: Math.max(0, Math.trunc(input.priceCents ?? 99)),
@@ -422,10 +428,11 @@ export async function savePaidWatchPartyOffer(input: {
 }
 
 export async function resolvePaidWatchPartyTicketAccess(partyId: string): Promise<PaidWatchPartyTicketAccess> {
-  const { data, error } = await rpcClient.rpc("resolve_paid_watch_party_ticket_access", {
-    p_party_id: partyId,
-  });
-  if (error) {
+  const response = await withAuthorityReadDeadline(
+    rpcClient.rpc("resolve_paid_watch_party_ticket_access", { p_party_id: partyId }),
+    null,
+  );
+  if (!response || response.error) {
     return {
       allowed: false,
       reason: "access_check_failed",
@@ -440,17 +447,21 @@ export async function resolvePaidWatchPartyTicketAccess(partyId: string): Promis
       offer: null,
     };
   }
-  return normalizeAccess(data, partyId);
+  return normalizeAccess(response.data, partyId);
 }
 
 export async function createPaidWatchPartyTicketPurchaseIntent(
   offerId: string,
   expected: Omit<CreatorMoneyPurchaseIntentExpectation, "status">,
+  subject: CreatorMoneyPurchaseSubject,
 ) {
-  const { data, error } = await rpcClient.rpc("create_paid_watch_party_ticket_purchase_intent", {
-    p_offer_id: offerId,
-  });
-  if (error) throw new Error("Party Room Pass checkout is not available right now.");
+  const response = await invokeCreatorMoneyPurchaseSubjectRpc<Record<string, unknown>>(
+    subject,
+    "create_paid_watch_party_ticket_purchase_intent",
+    { p_offer_id: offerId },
+  );
+  if (!response || response.error) throw new Error("Party Room Pass checkout is not available right now.");
+  const data = response.data;
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("Party Room Pass checkout authority could not be verified.");
   }
@@ -473,9 +484,13 @@ const createIosPaidWatchPartyTicketPurchaseIntent = async (
   offerId: string,
   product: IosStoreProductRecord,
   expected: Omit<CreatorMoneyPurchaseIntentExpectation, "status">,
+  subject: CreatorMoneyPurchaseSubject,
 ) => {
-  const { data, error } = await rpcClient.rpc("create_ios_app_store_purchase_intent", {
-    p_metadata: {
+  const response = await invokeCreatorMoneyPurchaseSubjectRpc<Record<string, unknown>>(
+    subject,
+    "create_ios_app_store_purchase_intent",
+    {
+      p_metadata: {
       amount_minor: String(product.referencePriceMinor),
       currency: "usd",
       no_live_payout: true,
@@ -483,12 +498,14 @@ const createIosPaidWatchPartyTicketPurchaseIntent = async (
       sandbox_only: true,
       source_surface: "watch_party_seat_pass",
       viewer_only: true,
+      },
+      p_provider_product_id: product.productId,
+      p_source_id: offerId,
+      p_source_type: "watch_party_live",
     },
-    p_provider_product_id: product.productId,
-    p_source_id: offerId,
-    p_source_type: "watch_party_live",
-  });
-  if (error) throw new Error("App Store Party Room Pass checkout is not available right now.");
+  );
+  if (!response || response.error) throw new Error("App Store Party Room Pass checkout is not available right now.");
+  const data = response.data;
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("App Store Party Room Pass checkout authority could not be verified.");
   }
@@ -509,12 +526,20 @@ const createIosPaidWatchPartyTicketPurchaseIntent = async (
   };
 };
 
-export async function waitForPaidWatchPartyTicketAccess(partyId: string): Promise<PaidWatchPartyTicketAccess> {
+export async function waitForPaidWatchPartyTicketAccess(
+  partyId: string,
+  subject?: CreatorMoneyPurchaseSubject,
+  accountChangedFallback?: PaidWatchPartyTicketAccess,
+): Promise<PaidWatchPartyTicketAccess> {
+  if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
   let latest = await resolvePaidWatchPartyTicketAccess(partyId);
+  if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
   if (latest.allowed) return latest;
   for (let attempt = 0; attempt < PAID_WATCH_PARTY_TICKET_POLL_ATTEMPTS; attempt += 1) {
     await delay(PAID_WATCH_PARTY_TICKET_POLL_DELAY_MS);
+    if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
     latest = await resolvePaidWatchPartyTicketAccess(partyId);
+    if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
     if (latest.allowed) return latest;
   }
   return latest;
@@ -524,7 +549,11 @@ export async function purchasePaidWatchPartyTicket(input: {
   partyId: string;
   sourceSurface: string;
 }): Promise<PaidWatchPartyTicketPurchaseResult> {
+  const initiatingAuthority = captureCreatorMoneyPurchaseAuthority();
   const access = await resolvePaidWatchPartyTicketAccess(input.partyId);
+  if (!isCreatorMoneyPurchaseAuthorityCurrent(initiatingAuthority)) {
+    return { ok: false, message: "Account changed before Party Room Pass checkout. Nothing was charged.", access };
+  }
   if (access.allowed) {
     return { ok: true, message: "Party Room Pass active. You're cleared to enter this Party Room.", access };
   }
@@ -574,13 +603,13 @@ export async function purchasePaidWatchPartyTicket(input: {
     if (!decision.allowed || decision.provider !== "revenuecat_app_store") {
       return {
         ok: false,
-        message: "App Store sandbox Party Room Passes are disabled for this build. Nothing was charged.",
+        message: "Party Room Pass purchases are not available on this iPhone yet. Nothing was charged.",
         access,
       };
     }
   }
 
-  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject();
+  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject(initiatingAuthority);
   if (!purchaseSubject) {
     return {
       ok: false,
@@ -600,10 +629,10 @@ export async function purchasePaidWatchPartyTicket(input: {
     currency: access.currency,
   };
   const intent = Platform.OS === "ios" && iosProduct
-    ? await createIosPaidWatchPartyTicketPurchaseIntent(access.offer.id, iosProduct, expectedIntent)
-    : await createPaidWatchPartyTicketPurchaseIntent(access.offer.id, expectedIntent);
+    ? await createIosPaidWatchPartyTicketPurchaseIntent(access.offer.id, iosProduct, expectedIntent, purchaseSubject)
+    : await createPaidWatchPartyTicketPurchaseIntent(access.offer.id, expectedIntent, purchaseSubject);
   if (intent.alreadyPurchased) {
-    const verifiedAccess = await waitForPaidWatchPartyTicketAccess(input.partyId);
+    const verifiedAccess = await waitForPaidWatchPartyTicketAccess(input.partyId, purchaseSubject, access);
     return {
       ok: verifiedAccess.allowed,
       message: verifiedAccess.allowed
@@ -620,7 +649,7 @@ export async function purchasePaidWatchPartyTicket(input: {
   if (!product) {
     return {
       ok: false,
-      message: "Party Room Pass sandbox product is not available on this device yet.",
+      message: "Party Room Pass is not available on this device yet. Nothing was charged.",
       access,
       intentId: intent.id,
       productId,
@@ -650,7 +679,7 @@ export async function purchasePaidWatchPartyTicket(input: {
     await purchaseRevenueCatStoreProduct(product, { authority: purchaseSubject.authority });
   } catch (error) {
     await readRevenueCatCustomerInfo({ refresh: true });
-    const verifiedAccess = await waitForPaidWatchPartyTicketAccess(input.partyId);
+    const verifiedAccess = await waitForPaidWatchPartyTicketAccess(input.partyId, purchaseSubject, access);
     if (verifiedAccess.allowed) {
       return {
         ok: true,
@@ -688,7 +717,7 @@ export async function purchasePaidWatchPartyTicket(input: {
   }
 
   await readRevenueCatCustomerInfo({ refresh: true });
-  const verifiedAccess = await waitForPaidWatchPartyTicketAccess(input.partyId);
+  const verifiedAccess = await waitForPaidWatchPartyTicketAccess(input.partyId, purchaseSubject, access);
   if (!verifiedAccess.allowed) {
     return {
       ok: false,

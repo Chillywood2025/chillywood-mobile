@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export type MoneyFeatureFlagState = "off" | "on" | "locked" | "maintenance" | "sandbox_only";
 
@@ -366,7 +367,7 @@ export async function setPlatformMoneyKillSwitchState(input: {
   ownerOnlyReason?: string | null;
   metadata?: Record<string, unknown>;
 }): Promise<unknown> {
-  const { data, error } = await moneyFlagClient.rpc("set_platform_money_kill_switch_state", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("set_platform_money_kill_switch_state", {
     p_key: input.key,
     p_state: input.state,
     p_reason: input.reason,

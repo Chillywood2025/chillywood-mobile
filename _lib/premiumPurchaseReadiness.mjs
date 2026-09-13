@@ -28,8 +28,7 @@ export function resolvePremiumPurchaseReadiness(input) {
     return {
       ready: false,
       code: "purchase_shell_unavailable",
-      message: normalizeText(input.sandboxModeReason)
-        || `Premium purchases are not enabled for this ${storeName} test lane.`,
+      message: `Premium purchases are not available through ${storeName} right now.`,
     };
   }
 
@@ -38,7 +37,7 @@ export function resolvePremiumPurchaseReadiness(input) {
       return {
         ready: false,
         code: "store_rail_readback_unavailable",
-        message: `Unable to verify the ${storeName} sandbox server rail. Try the availability check again.`,
+        message: `Unable to verify ${storeName} purchase availability. Try again.`,
       };
     }
 
@@ -46,7 +45,7 @@ export function resolvePremiumPurchaseReadiness(input) {
       return {
         ready: false,
         code: "store_rail_not_sandbox",
-        message: `${storeName} sandbox purchases are not enabled on the server yet.`,
+        message: `${storeName} purchases are not available right now.`,
       };
     }
   }
@@ -55,8 +54,7 @@ export function resolvePremiumPurchaseReadiness(input) {
     return {
       ready: false,
       code: "revenuecat_not_configured",
-      message: normalizeText(input.configurationReason)
-        || "RevenueCat is not configured for this build.",
+      message: `Premium purchases are not available through ${storeName} right now.`,
     };
   }
 
@@ -72,7 +70,7 @@ export function resolvePremiumPurchaseReadiness(input) {
     return {
       ready: false,
       code: "premium_offering_missing",
-      message: "RevenueCat did not return the Premium offering for this account.",
+      message: "Premium purchase details could not be loaded for this account.",
     };
   }
 
@@ -80,15 +78,13 @@ export function resolvePremiumPurchaseReadiness(input) {
     return {
       ready: false,
       code: "premium_packages_missing",
-      message: "RevenueCat returned the Premium offering without purchasable packages.",
+      message: "A purchasable Premium plan is not available right now.",
     };
   }
 
   return {
     ready: true,
     code: "ready",
-    message: input.purchaseMode === "internal_tester_sandbox"
-      ? `Provider-backed ${storeName} sandbox purchase is ready.`
-      : `${storeName} purchase is ready.`,
+    message: `${storeName} purchase is available.`,
   };
 }

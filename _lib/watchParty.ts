@@ -49,6 +49,7 @@ import {
   type SocialAttachment,
 } from "./socialAttachments";
 import { supabase } from "./supabase";
+import { runExactSessionAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 import { readUserProfile } from "./userData";
 export {
   PARTY_SEAT_REQUEST_MESSAGE_PREFIX,
@@ -941,15 +942,8 @@ async function upsertMembership(options: MembershipUpsertOptions): Promise<Watch
   if (!partyId) return null;
   const isLeaving = options.markLeftAt === true;
   const isJoining = options.markJoinedAt !== false && !isLeaving;
-  const rpc = supabase.rpc as unknown as (
-    fn: "join_watch_party_room_session" | "heartbeat_watch_party_room_session",
-    args: Record<string, unknown>,
-  ) => PromiseLike<{
-    data: PartyMembershipRow[] | PartyMembershipRow | null;
-    error: { message?: string } | null;
-  }>;
   const result = isJoining
-    ? await rpc("join_watch_party_room_session", {
+    ? await runExactSessionAccountBoundSupabaseMutationRpc<PartyMembershipRow[] | PartyMembershipRow>("join_watch_party_room_session", {
       p_party_id: partyId,
       p_display_name: String(options.displayName ?? "").trim() || null,
       p_avatar_url: String(options.avatarUrl ?? "").trim() || null,
@@ -957,8 +951,8 @@ async function upsertMembership(options: MembershipUpsertOptions): Promise<Watch
       p_camera_enabled: !!options.cameraEnabled,
       p_mic_enabled: typeof options.micEnabled === "boolean" ? options.micEnabled : true,
       p_self_muted: typeof options.isMuted === "boolean" ? options.isMuted : null,
-    })
-    : await rpc("heartbeat_watch_party_room_session", {
+    }, writableUserId)
+    : await runExactSessionAccountBoundSupabaseMutationRpc<PartyMembershipRow[] | PartyMembershipRow>("heartbeat_watch_party_room_session", {
       p_party_id: partyId,
       p_membership_state: isLeaving ? "left" : normalizeRoomMembershipState(options.membershipState),
       p_camera_enabled: !!options.cameraEnabled,
@@ -967,7 +961,7 @@ async function upsertMembership(options: MembershipUpsertOptions): Promise<Watch
       p_display_name: String(options.displayName ?? "").trim() || null,
       p_avatar_url: String(options.avatarUrl ?? "").trim() || null,
       p_camera_preview_url: String(options.cameraPreviewUrl ?? "").trim() || null,
-    });
+    }, writableUserId);
   const row = Array.isArray(result.data) ? result.data[0] ?? null : result.data;
   if (result.error) {
     reportRuntimeError("watch-party-membership-rpc", result.error, {
@@ -1608,26 +1602,19 @@ export async function setPartyParticipantState(
       : currentMembership.stageRole === "speaker"
         ? "speaker"
         : "listener";
-  const rpc = supabase.rpc as unknown as (
-    fn: "set_watch_party_participant_authority",
-    args: {
-      p_party_id: string;
-      p_target_user_id: string;
-      p_stage_role: "listener" | "speaker";
-      p_host_muted: boolean;
-      p_membership_state: string;
+  const { data, error } = await runExactSessionAccountBoundSupabaseMutationRpc<
+    PartyMembershipRow[] | PartyMembershipRow
+  >(
+    "set_watch_party_participant_authority",
+    {
+      p_party_id: normalizedPartyId,
+      p_target_user_id: normalizedTargetUserId,
+      p_stage_role: requestedStageRole,
+      p_host_muted: changes.isMuted ?? currentMembership.hostMuted,
+      p_membership_state: requestedState,
     },
-  ) => PromiseLike<{
-    data: PartyMembershipRow[] | PartyMembershipRow | null;
-    error: { message?: string } | null;
-  }>;
-  const { data, error } = await rpc("set_watch_party_participant_authority", {
-    p_party_id: normalizedPartyId,
-    p_target_user_id: normalizedTargetUserId,
-    p_stage_role: requestedStageRole,
-    p_host_muted: changes.isMuted ?? currentMembership.hostMuted,
-    p_membership_state: requestedState,
-  });
+    writableUserId,
+  );
   const row = Array.isArray(data) ? data[0] ?? null : data;
   if (error || !row) {
     reportRuntimeError("watch-party-set-participant-state", error ?? new Error("Missing membership row"), {
