@@ -111,11 +111,13 @@ import {
 import {
   chooseOfficialRachiProfileImageFromGallery,
   clearOfficialRachiProfileImage,
+  createOfficialRachiPostOperationKey,
   createOfficialRachiPost,
   readOfficialRachiProfileImage,
   readOfficialRachiOriginals,
   readOfficialRachiPosts,
 } from "../_lib/officialRachi";
+import { createActionSingleFlightLatch } from "../_lib/actionSingleFlight.mjs";
 import type { CreatorVideo } from "../_lib/creatorVideos";
 import type { ProfilePost } from "../_lib/profilePosts";
 import {
@@ -157,6 +159,7 @@ import {
   canReviewSafetyQueue,
   formatPlatformRoleDisplayLabel,
   getModerationAccess,
+  createPlatformStaffRoleGrantOperationKey,
   grantPlatformStaffRoleByEmail,
   hasPlatformStaffPermission,
   hasPlatformRoleMembership,
@@ -274,6 +277,7 @@ import {
   DMCA_NOTIFICATION_TEMPLATES,
   adminDmcaCreateCase,
   adminDmcaAddStrike,
+  createDmcaStrikeOperationKey,
   adminDmcaForwardCounterNotice,
   adminDmcaMarkRestoreEligible,
   adminDmcaRecordContentAction,
@@ -294,6 +298,7 @@ import {
   type DmcaContentType,
 } from "../_lib/dmca";
 import { supabase } from "../_lib/supabase";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "../_lib/accountBoundSupabaseMutation";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
 import { CognitiveControlCenterFoundation } from "../components/admin/cognitive-control-center";
 
@@ -3345,7 +3350,7 @@ const readAdminContentConfigRpc = async () => {
 };
 
 const saveAdminContentConfigRpc = async (config: AppConfig, reason: string) => {
-  const { data, error } = await adminContentRpc().rpc("save_admin_content_config", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("save_admin_content_config", {
     p_config_patch: config,
     p_reason: reason,
   });
@@ -3359,7 +3364,7 @@ const applyAdminTitleProgrammingActionRpc = async (input: {
   reason: string;
   titleId?: TitleId | null;
 }) => {
-  const { data, error } = await adminContentRpc().rpc("apply_admin_title_programming_action", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("apply_admin_title_programming_action", {
     p_title_id: input.titleId ?? null,
     p_action_type: input.actionType,
     p_patch: input.patch ?? {},
@@ -3374,7 +3379,7 @@ const saveAdminCreatorGrantsRpc = async (input: {
   reason: string;
   targetUserId: string;
 }) => {
-  const { data, error } = await adminContentRpc().rpc("save_admin_creator_grants", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("save_admin_creator_grants", {
     p_target_user_id: input.targetUserId,
     p_grants: {
       canUsePartyPassRooms: input.grants.canUsePartyPassRooms,
@@ -3461,6 +3466,8 @@ export default function AdminStudioScreen() {
   const [staffRoleTarget, setStaffRoleTarget] = useState<PlatformStaffManagementRole>("moderator");
   const [staffRoleReason, setStaffRoleReason] = useState("");
   const [staffRoleBusy, setStaffRoleBusy] = useState<"grant" | "revoke" | null>(null);
+  const staffRoleGrantLatchRef = useRef(createActionSingleFlightLatch());
+  const staffRoleGrantOperationRef = useRef<{ fingerprint: string; operationKey: string } | null>(null);
   const [staffPermissionEmail, setStaffPermissionEmail] = useState("");
   const [staffPermissionSavedKeys, setStaffPermissionSavedKeys] = useState<PlatformStaffPermissionKey[] | null>(null);
   const [staffPermissionSelectedKeys, setStaffPermissionSelectedKeys] = useState<PlatformStaffPermissionKey[]>([]);
@@ -3509,6 +3516,8 @@ export default function AdminStudioScreen() {
   const [dmcaContentAction, setDmcaContentAction] = useState<DmcaContentAction>("hidden");
   const [dmcaStrikeUserId, setDmcaStrikeUserId] = useState("");
   const [dmcaStrikeSeverity, setDmcaStrikeSeverity] = useState<"standard" | "severe">("standard");
+  const dmcaStrikeLatchRef = useRef(createActionSingleFlightLatch());
+  const dmcaStrikeOperationRef = useRef<{ fingerprint: string; operationKey: string } | null>(null);
   const [dmcaIntakeVisible, setDmcaIntakeVisible] = useState(false);
   const [dmcaIntakeBusy, setDmcaIntakeBusy] = useState(false);
   const [dmcaIntakeForm, setDmcaIntakeForm] = useState<DmcaNoticeFormState>(() => createDmcaNoticeFormState());
@@ -3540,6 +3549,8 @@ export default function AdminStudioScreen() {
   const [rachiPostBody, setRachiPostBody] = useState("");
   const [rachiPostReason, setRachiPostReason] = useState("Official Chi'llywood update");
   const [rachiPostBusy, setRachiPostBusy] = useState(false);
+  const rachiPostLatchRef = useRef(createActionSingleFlightLatch());
+  const rachiPostOperationRef = useRef<{ fingerprint: string; operationKey: string } | null>(null);
   const [rachiNotice, setRachiNotice] = useState<string | null>(null);
   const [rachiProfileImageSavedUrl, setRachiProfileImageSavedUrl] = useState("");
   const [rachiProfileImageBusy, setRachiProfileImageBusy] = useState(false);
@@ -4484,6 +4495,12 @@ export default function AdminStudioScreen() {
   const selectedLegalRequest = selectedLegalRequestDetail?.request ?? legalRequests.find((request) => request.id === selectedLegalRequestId) ?? null;
   const selectedLegalTarget = legalRequestPrimaryTarget(selectedLegalRequest);
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Admin Command Center");
+
+  useEffect(() => {
+    dmcaStrikeOperationRef.current = null;
+    rachiPostOperationRef.current = null;
+    staffRoleGrantOperationRef.current = null;
+  }, [user?.id]);
 
   useEffect(() => {
     if (visibleOperatorTabs.length > 0 && !visibleOperatorTabs.some((tab) => tab.key === operatorTab)) {
@@ -6646,7 +6663,7 @@ export default function AdminStudioScreen() {
   ]);
 
   const submitRachiOfficialPost = useCallback(async () => {
-    if (!canAccessContentProgramming || rachiPostBusy) {
+    if (!canAccessContentProgramming) {
       setRachiNotice("Rachi posting requires active Owner or Admin content permission.");
       return;
     }
@@ -6656,14 +6673,24 @@ export default function AdminStudioScreen() {
       setRachiNotice("Write a Rachi update before publishing.");
       return;
     }
+    if (rachiPostBusy || !rachiPostLatchRef.current.tryAcquire()) return;
+
+    const reason = rachiPostReason.trim() || "Official Rachi update";
+    const fingerprint = JSON.stringify([user?.id ?? "", body, reason]);
+    const operation = rachiPostOperationRef.current?.fingerprint === fingerprint
+      ? rachiPostOperationRef.current
+      : { fingerprint, operationKey: createOfficialRachiPostOperationKey() };
+    rachiPostOperationRef.current = operation;
 
     try {
       setRachiPostBusy(true);
       setRachiNotice(null);
       const created = await createOfficialRachiPost({
         body,
-        reason: rachiPostReason.trim() || "Official Rachi update",
+        operationKey: operation.operationKey,
+        reason,
       });
+      rachiPostOperationRef.current = null;
       setRachiPosts((current) => [created, ...current.filter((post) => post.id !== created.id)]);
       setRachiPostBody("");
       setRachiNotice("Published Rachi update recorded with admin audit.");
@@ -6671,6 +6698,7 @@ export default function AdminStudioScreen() {
     } catch (error: any) {
       setRachiNotice(formatAdminOperationFailure(error, "Unable to create Rachi official update."));
     } finally {
+      rachiPostLatchRef.current.release();
       setRachiPostBusy(false);
     }
   }, [
@@ -6679,6 +6707,7 @@ export default function AdminStudioScreen() {
     rachiPostBody,
     rachiPostBusy,
     rachiPostReason,
+    user?.id,
   ]);
 
   const loadSafetyReports = useCallback(async () => {
@@ -6984,6 +7013,22 @@ export default function AdminStudioScreen() {
       setDmcaNotice("Strike disabled: only valid completed takedowns or preserved-evidence cases can receive active strikes.");
       return;
     }
+    if (!dmcaStrikeLatchRef.current.tryAcquire()) return;
+
+    const fingerprint = JSON.stringify([
+      user?.id ?? "",
+      selectedCaseId,
+      userId,
+      dmcaCaseDetail?.case.uploaderChannelId ?? "",
+      dmcaContentType,
+      contentId,
+      dmcaStrikeSeverity,
+      reason,
+    ]);
+    const operation = dmcaStrikeOperationRef.current?.fingerprint === fingerprint
+      ? dmcaStrikeOperationRef.current
+      : { fingerprint, operationKey: createDmcaStrikeOperationKey() };
+    dmcaStrikeOperationRef.current = operation;
 
     try {
       setDmcaActionBusy("strike-add");
@@ -6994,14 +7039,17 @@ export default function AdminStudioScreen() {
         channelId: dmcaCaseDetail?.case.uploaderChannelId ?? null,
         contentType: dmcaContentType,
         contentId,
+        operationKey: operation.operationKey,
         severity: dmcaStrikeSeverity,
         reason,
       });
+      dmcaStrikeOperationRef.current = null;
       setDmcaNotice("Copyright strike added. Repeat-infringer review opens at threshold or severe severity.");
       await refreshDmcaAfterAction(selectedCaseId);
     } catch (err: any) {
       setDmcaNotice(formatDmcaOperationFailure(err, "Failed to add copyright strike."));
     } finally {
+      dmcaStrikeLatchRef.current.release();
       setDmcaActionBusy(null);
     }
   }, [
@@ -7017,6 +7065,7 @@ export default function AdminStudioScreen() {
     dmcaStrikeSeverity,
     dmcaStrikeUserId,
     refreshDmcaAfterAction,
+    user?.id,
   ]);
 
   const runDmcaUpdateStrike = useCallback(async (strikeId: string, status: "removed" | "disputed" | "resolved") => {
@@ -9391,12 +9440,13 @@ export default function AdminStudioScreen() {
   const runStaffRoleGrant = useCallback(async (emailInput?: string | null, roleInput?: PlatformStaffManagementRole) => {
     const email = (emailInput ?? staffRoleEmail).trim().toLowerCase();
     const role = roleInput ?? staffRoleTarget;
+    const reason = staffRoleReason.trim();
     if (staffRoleBusy) return;
     if (!looksLikeEmail(email)) {
       setAdminOpsNotice("Enter a valid staff email before granting a staff role.");
       return;
     }
-    if (staffRoleReason.trim().length < 6) {
+    if (reason.length < 6) {
       setAdminOpsNotice("Audit reason is required before granting a staff role.");
       return;
     }
@@ -9408,21 +9458,31 @@ export default function AdminStudioScreen() {
       setAdminOpsNotice("Only Owner or an Admin with manage_moderators can add Moderators.");
       return;
     }
+    if (!staffRoleGrantLatchRef.current.tryAcquire()) return;
+
+    const fingerprint = JSON.stringify([user?.id ?? "", email, role, reason]);
+    const operation = staffRoleGrantOperationRef.current?.fingerprint === fingerprint
+      ? staffRoleGrantOperationRef.current
+      : { fingerprint, operationKey: createPlatformStaffRoleGrantOperationKey() };
+    staffRoleGrantOperationRef.current = operation;
 
     try {
       setStaffRoleBusy("grant");
       setAdminOpsNotice(null);
       const result = await grantPlatformStaffRoleByEmail({
         email,
+        operationKey: operation.operationKey,
         role,
-        reason: staffRoleReason.trim() || null,
+        reason,
       });
+      staffRoleGrantOperationRef.current = null;
       setAdminOpsNotice(`${formatPlatformRoleDisplayLabel(result.role)} granted for ${maskOperatorIdentity(result.email)}.`);
       setStaffRoleReason("");
       await refreshStaffRoleState();
     } catch (err: any) {
       setAdminOpsNotice(formatAdminOperationFailure(err, "Failed to grant staff role."));
     } finally {
+      staffRoleGrantLatchRef.current.release();
       setStaffRoleBusy(null);
     }
   }, [
@@ -9433,6 +9493,7 @@ export default function AdminStudioScreen() {
     staffRoleEmail,
     staffRoleReason,
     staffRoleTarget,
+    user?.id,
   ]);
 
   const runStaffRoleRevoke = useCallback(async (emailInput?: string | null, roleInput?: PlatformStaffManagementRole) => {

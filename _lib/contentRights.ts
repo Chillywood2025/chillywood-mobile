@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export type ContentRightsSurface =
   | "clip_studio"
@@ -68,10 +68,7 @@ export async function recordContentRightsDisclosure(input: {
   if (!targetId) return;
 
   const disclosure = normalizeContentRightsDisclosure(input.disclosure);
-  const rpcClient = supabase as unknown as {
-    rpc: (name: string, params: Record<string, unknown>) => Promise<{ error?: unknown }>;
-  };
-  const { error } = await rpcClient.rpc("record_content_rights_disclosure", {
+  const { error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("record_content_rights_disclosure", {
     p_surface: input.surface,
     p_target_type: input.targetType,
     p_target_id: targetId,

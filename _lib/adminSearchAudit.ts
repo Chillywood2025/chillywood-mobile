@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export type AdminSearchAuditStatus = "searched" | "blocked" | "denied" | "failed";
 
@@ -44,13 +44,6 @@ type AdminSearchAuditInput = {
   resultRef?: string | null;
 };
 
-const adminSearchAuditClient = supabase as unknown as {
-  rpc: (
-    functionName: "write_admin_search_audit",
-    params: Record<string, unknown>,
-  ) => Promise<{ data: AdminSearchAuditRpcResponse | null; error: unknown }>;
-};
-
 const normalizeText = (value: unknown) => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -80,7 +73,7 @@ const normalizeResultCount = (value: unknown) => {
 };
 
 export async function writeAdminSearchAudit(input: AdminSearchAuditInput): Promise<AdminSearchAuditReceipt> {
-  const { data, error } = await adminSearchAuditClient.rpc("write_admin_search_audit", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<AdminSearchAuditRpcResponse>("write_admin_search_audit", {
     p_search_scope: input.searchScope,
     p_query: input.query,
     p_result_count: input.resultCount ?? null,

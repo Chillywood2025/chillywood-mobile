@@ -7,6 +7,7 @@ import { reportRuntimeError } from "./logger";
 import { isClosedBetaEnvironment } from "./runtimeConfig";
 import { useSession } from "./session";
 import { supabase } from "./supabase";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export const BETA_ACCESS_TABLE = "beta_access_memberships";
 export const BETA_FEEDBACK_TABLE = "beta_feedback_items";
@@ -228,13 +229,13 @@ const deriveReporterDisplayName = (user: User | null) => {
 };
 
 export async function activateBetaMembership(): Promise<BetaAccessMembership | null> {
-  const { data, error } = await supabase.rpc("activate_beta_membership");
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Json>("activate_beta_membership");
   if (error) throw error;
   return normalizeMembershipResult(data ?? null);
 }
 
 export async function acknowledgeBetaOnboarding(): Promise<BetaAccessMembership | null> {
-  const { data, error } = await supabase.rpc("acknowledge_beta_onboarding");
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Json>("acknowledge_beta_onboarding");
   if (error) throw error;
   return normalizeMembershipResult(data ?? null);
 }

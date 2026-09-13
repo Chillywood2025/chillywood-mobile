@@ -14,6 +14,11 @@ import {
 } from "./platformRoleAuthority";
 import { supabase } from "./supabase";
 import { formatUsernameHandle } from "./usernameHandles";
+import {
+  createAccountBoundMutationOperationKey,
+  isAccountBoundSupabaseMutationOutcomeAmbiguous,
+  runCurrentAccountBoundSupabaseMutationRpc,
+} from "./accountBoundSupabaseMutation";
 
 export const SAFETY_REPORTS_TABLE = "safety_reports";
 export const PLATFORM_ROLE_MEMBERSHIPS_TABLE = "platform_role_memberships";
@@ -1076,23 +1081,37 @@ const readStaffPermissionActionResult = (value: unknown): PlatformStaffPermissio
   };
 };
 
+export const createPlatformStaffRoleGrantOperationKey = () =>
+  createAccountBoundMutationOperationKey("staff-role-grant");
+
 export async function grantPlatformStaffRoleByEmail(input: {
   email: string;
+  operationKey: string;
   role: PlatformStaffManagementRole;
   reason?: string | null;
 }) {
   const email = normalizeText(input.email).toLowerCase();
+  const operationKey = normalizeText(input.operationKey).toLowerCase();
   const role = normalizePlatformStaffManagementRole(input.role);
   if (!email) throw new Error("Enter a staff email.");
+  if (!/^staff-role-grant:[0-9a-f]{32}$/u.test(operationKey)) {
+    throw new Error("A valid staff role request is required.");
+  }
   if (!role) throw new Error("Choose a supported staff role.");
 
-  const { data, error } = await supabase.rpc("admin_grant_platform_role_by_email", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("admin_grant_platform_role_by_email", {
+    p_operation_key: operationKey,
     p_reason: normalizeText(input.reason) || undefined,
     p_role: role,
     p_target_email: email,
   });
 
-  if (error) throw error;
+  if (error) {
+    if (isAccountBoundSupabaseMutationOutcomeAmbiguous(error)) {
+      throw new Error("The staff role change is still being verified. Retrying the same grant is safe.");
+    }
+    throw error;
+  }
   return readStaffRoleActionResult(data);
 }
 
@@ -1107,11 +1126,7 @@ export async function grantPlatformStaffPermissionByEmail(input: {
   if (!email) throw new Error("Enter a staff email.");
   if (!permissionKey) throw new Error("Choose a supported staff permission.");
 
-  const rpc = supabase.rpc as unknown as (
-    fn: string,
-    args: Record<string, unknown>,
-  ) => Promise<{ data: unknown; error: { message?: string } | null }>;
-  const { data, error } = await rpc("admin_grant_platform_staff_permission_by_email", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("admin_grant_platform_staff_permission_by_email", {
     p_expires_at: normalizeText(input.expiresAt) || null,
     p_permission_key: permissionKey,
     p_reason: normalizeText(input.reason) || null,
@@ -1132,7 +1147,7 @@ export async function revokePlatformStaffRoleByEmail(input: {
   if (!email) throw new Error("Enter a staff email.");
   if (!role) throw new Error("Choose a supported staff role.");
 
-  const { data, error } = await supabase.rpc("admin_revoke_platform_role_by_email", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("admin_revoke_platform_role_by_email", {
     p_reason: normalizeText(input.reason) || undefined,
     p_role: role,
     p_target_email: email,
@@ -1152,11 +1167,7 @@ export async function revokePlatformStaffPermissionByEmail(input: {
   if (!email) throw new Error("Enter a staff email.");
   if (!permissionKey) throw new Error("Choose a supported staff permission.");
 
-  const rpc = supabase.rpc as unknown as (
-    fn: string,
-    args: Record<string, unknown>,
-  ) => Promise<{ data: unknown; error: { message?: string } | null }>;
-  const { data, error } = await rpc("admin_revoke_platform_staff_permission_by_email", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("admin_revoke_platform_staff_permission_by_email", {
     p_permission_key: permissionKey,
     p_reason: normalizeText(input.reason) || null,
     p_target_email: email,
@@ -1215,11 +1226,7 @@ export async function updatePlatformStaffPermissionsByEmail(input: {
   if (!email) throw new Error("Enter a staff email.");
   if (reason.length < 6) throw new Error("Audit reason is required for permission changes.");
 
-  const rpc = supabase.rpc as unknown as (
-    fn: string,
-    args: Record<string, unknown>,
-  ) => Promise<{ data: unknown; error: { message?: string } | null }>;
-  const { data, error } = await rpc("admin_update_platform_staff_permissions_by_email", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("admin_update_platform_staff_permissions_by_email", {
     p_expires_at: normalizeText(input.expiresAt) || null,
     p_permission_keys: permissionKeys,
     p_reason: reason,
@@ -1498,7 +1505,7 @@ export async function updateAdminReportStatusAction(input: {
     throw new Error("Add an action reason before updating report status.");
   }
 
-  const { data, error } = await reportsRpcClient.rpc("update_admin_report_status", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("update_admin_report_status", {
     p_reason: reason,
     p_report_id: input.reportId,
     p_status_action: input.action,
@@ -1529,7 +1536,7 @@ export async function applyAdminReportTargetAction(input: {
     throw new Error("Add an action reason before applying report target moderation.");
   }
 
-  const { data, error } = await reportsRpcClient.rpc("apply_admin_report_target_action", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("apply_admin_report_target_action", {
     p_action_type: input.action,
     p_reason: reason,
     p_report_id: input.reportId,

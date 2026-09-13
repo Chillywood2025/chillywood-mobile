@@ -1,4 +1,9 @@
 import { supabase } from "./supabase";
+import {
+  createAccountBoundMutationOperationKey,
+  isAccountBoundSupabaseMutationOutcomeAmbiguous,
+  runCurrentAccountBoundSupabaseMutationRpc,
+} from "./accountBoundSupabaseMutation";
 
 export const DMCA_CASE_STATUSES = [
   "received",
@@ -101,6 +106,9 @@ export const DMCA_NOTIFICATION_TEMPLATES = [
 export type DmcaCaseStatus = typeof DMCA_CASE_STATUSES[number];
 export type DmcaContentType = typeof DMCA_CONTENT_TYPES[number];
 export type DmcaContentAction = typeof DMCA_CONTENT_ACTIONS[number];
+
+export const createDmcaStrikeOperationKey = () =>
+  createAccountBoundMutationOperationKey("dmca-strike");
 
 export type DmcaCase = {
   id: string;
@@ -537,7 +545,7 @@ export async function submitDmcaNotice(input: SubmitDmcaNoticeInput) {
 export async function adminDmcaCreateCase(input: AdminDmcaCreateCaseInput) {
   validateDmcaNoticeInput(input);
 
-  const { data, error } = await dmcaClient.rpc("admin_dmca_create_case", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("admin_dmca_create_case", {
     p_payload: {
       claimantName: toText(input.reporterName),
       claimantCompany: toText(input.reporterCompany) || null,
@@ -749,7 +757,7 @@ export async function adminDmcaSetCaseStatus(input: {
   reason: string;
   adminNotes?: string;
 }) {
-  const { data, error } = await dmcaClient.rpc("admin_dmca_set_case_status", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("admin_dmca_set_case_status", {
     p_case_id: input.caseId,
     p_status: input.status,
     p_reason: input.reason,
@@ -766,7 +774,7 @@ export async function adminDmcaRecordContentAction(input: {
   action: DmcaContentAction;
   reason: string;
 }) {
-  const { data, error } = await dmcaClient.rpc("admin_dmca_record_content_action", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("admin_dmca_record_content_action", {
     p_case_id: input.caseId,
     p_content_type: input.contentType,
     p_content_id: input.contentId,
@@ -783,24 +791,35 @@ export async function adminDmcaAddStrike(input: {
   channelId?: string | null;
   contentType: DmcaContentType;
   contentId: string;
+  operationKey: string;
   severity: "standard" | "severe";
   reason: string;
 }) {
-  const { data, error } = await dmcaClient.rpc("admin_dmca_add_strike", {
+  const operationKey = String(input.operationKey ?? "").trim().toLowerCase();
+  if (!/^dmca-strike:[0-9a-f]{32}$/u.test(operationKey)) {
+    throw new Error("A valid copyright strike request is required.");
+  }
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("admin_dmca_add_strike", {
     p_case_id: input.caseId,
     p_user_id: input.userId,
     p_channel_id: input.channelId ?? null,
     p_content_type: input.contentType,
     p_content_id: input.contentId,
+    p_operation_key: operationKey,
     p_severity: input.severity,
     p_reason: input.reason,
   });
-  if (error) throw error;
+  if (error) {
+    if (isAccountBoundSupabaseMutationOutcomeAmbiguous(error)) {
+      throw new Error("The copyright strike is still being verified. Retrying the same action is safe.");
+    }
+    throw error;
+  }
   return parseStrike(data);
 }
 
 export async function adminDmcaRemoveStrike(input: { strikeId: string; reason: string }) {
-  const { data, error } = await dmcaClient.rpc("admin_dmca_remove_strike", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("admin_dmca_remove_strike", {
     p_strike_id: input.strikeId,
     p_removed_reason: input.reason,
   });
@@ -813,7 +832,7 @@ export async function adminDmcaUpdateStrikeStatus(input: {
   status: "active" | "removed" | "disputed" | "resolved";
   reason: string;
 }) {
-  const { data, error } = await dmcaClient.rpc("admin_dmca_update_strike_status", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("admin_dmca_update_strike_status", {
     p_reason: input.reason,
     p_status: input.status,
     p_strike_id: input.strikeId,
@@ -837,7 +856,7 @@ export async function adminDmcaRecordCounterNotice(input: {
   electronicSignature: string;
   forwardedToClaimant: boolean;
 }) {
-  const { data, error } = await dmcaClient.rpc("admin_dmca_record_counter_notice", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("admin_dmca_record_counter_notice", {
     p_case_id: input.caseId,
     p_payload: {
       submitterUserId: toText(input.submitterUserId) || null,
@@ -859,7 +878,7 @@ export async function adminDmcaRecordCounterNotice(input: {
 }
 
 export async function adminDmcaForwardCounterNotice(input: { counterNoticeId: string; reason: string }) {
-  const { data, error } = await dmcaClient.rpc("admin_dmca_forward_counter_notice", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("admin_dmca_forward_counter_notice", {
     p_counter_notice_id: input.counterNoticeId,
     p_reason: input.reason,
   });
@@ -868,7 +887,7 @@ export async function adminDmcaForwardCounterNotice(input: { counterNoticeId: st
 }
 
 export async function adminDmcaRecordCourtAction(input: { counterNoticeId: string; reason: string }) {
-  const { data, error } = await dmcaClient.rpc("admin_dmca_record_court_action", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("admin_dmca_record_court_action", {
     p_counter_notice_id: input.counterNoticeId,
     p_reason: input.reason,
   });
@@ -881,7 +900,7 @@ export async function adminDmcaMarkRestoreEligible(input: {
   counterNoticeId: string;
   reason: string;
 }) {
-  const { data, error } = await dmcaClient.rpc("admin_dmca_mark_restore_eligible", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("admin_dmca_mark_restore_eligible", {
     p_case_id: input.caseId,
     p_counter_notice_id: input.counterNoticeId,
     p_reason: input.reason,
@@ -1108,7 +1127,7 @@ export async function submitUploaderDmcaCounterNotice(input: {
   if (!input.serviceAcceptanceStatement) throw new Error("Confirm service acceptance.");
   assertText(input.electronicSignature, "Electronic signature is required.");
 
-  const { data, error } = await dmcaClient.rpc("submit_dmca_counter_notice", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("submit_dmca_counter_notice", {
     p_case_id: toText(input.caseId),
     p_payload: {
       electronicSignature: toText(input.electronicSignature),

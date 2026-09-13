@@ -49,7 +49,7 @@ if (existsSync(path.join(root, "app/(auth)/admin-login.tsx"))) {
 assertIncludes(admin, "readMyPlatformRoleMemberships", "Admin route backed role read");
 assertIncludes(admin, "canAccessAdminConsole", "Admin route access helper");
 assertIncludes(moderation, "platform_role_memberships", "backed platform-role helper");
-assertIncludes(moderation, "hasPlatformRoleMembership(memberships, [\"owner\", \"operator\", \"moderator\"])", "Admin route role boundary");
+assertIncludes(moderation, "hasPlatformRoleMembership(memberships, [\"owner\", \"super_admin\", \"operator\", \"moderator\"])", "Admin route role boundary");
 
 assertNotIncludes(doctrine, "Login screen can present an Admin Command Center sign-in entry", "PRODUCT_DOCTRINE admin auth truth");
 assertNotIncludes(roadmap, "Login Admin Command Center sign-in entry", "ROADMAP admin auth truth");

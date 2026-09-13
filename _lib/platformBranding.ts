@@ -3,6 +3,7 @@ import * as FileSystem from "expo-file-system/legacy";
 
 import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "./supabase";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export const PLATFORM_BRAND_BUCKET = "platform-brand-assets";
 export const PLATFORM_BRAND_SIGNED_URL_SECONDS = 60 * 60;
@@ -980,12 +981,7 @@ export async function reviewPlatformBrandAsset(
   const normalizedAssetId = toText(assetId);
   if (!normalizedAssetId) throw new Error("Choose a Platform asset before reviewing it.");
 
-  const rpc = supabase.rpc as unknown as (
-    fn: "review_platform_brand_asset",
-    args: { p_asset_id: string; p_action: string; p_reason: string | null },
-  ) => Promise<{ data: unknown; error: Error | null }>;
-
-  const { data, error } = await rpc("review_platform_brand_asset", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("review_platform_brand_asset", {
     p_asset_id: normalizedAssetId,
     p_action: action,
     p_reason: toText(reason) || null,
@@ -999,18 +995,13 @@ const publishSelectedPlatformBrandAssets = async (assetIds: string[]) => {
   const selectedAssetIds = Array.from(new Set(assetIds.map(toText).filter(Boolean)));
   if (!selectedAssetIds.length) return true;
 
-  const rpc = supabase.rpc as unknown as (
-    fn: "publish_platform_brand_profile_assets",
-    args: { p_asset_ids: string[]; p_reason: string | null },
-  ) => Promise<{ data: unknown; error: Error | null }>;
-
-  const { error } = await rpc("publish_platform_brand_profile_assets", {
+  const { error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("publish_platform_brand_profile_assets", {
     p_asset_ids: selectedAssetIds,
     p_reason: "Approved by the creator during Brand Studio publish.",
   });
 
   if (!error) return true;
-  const normalizedMessage = error.message.toLowerCase();
+  const normalizedMessage = String(error.message ?? "").toLowerCase();
   if (
     normalizedMessage.includes("publish_platform_brand_profile_assets")
     && (
