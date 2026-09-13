@@ -2244,6 +2244,43 @@ function mergeAndroidPushRegistrationResults(expoResult: PushRegistrationState, 
   return expoResult;
 }
 
+const PUSH_REGISTRATION_PROVIDER_DEADLINE_MS = 15_000;
+
+const buildPushRegistrationProviderError = (
+  permissionState: PushPermissionState,
+  message: string,
+): PushRegistrationState => ({
+  message,
+  permissionState,
+  provider: "expo",
+  status: "error",
+  tokenFingerprint: null,
+  nativeTokenFingerprint: null,
+});
+
+async function registerCurrentPushProvidersWithDeadline(
+  permissionState: PushPermissionState,
+  projectId: string,
+  failureMessage: string,
+): Promise<PushRegistrationState> {
+  const fallback = buildPushRegistrationProviderError(permissionState, failureMessage);
+  const registration = (async () => {
+    const authority = await readCurrentPushSessionBinding();
+    if (!authority) throw new Error("Push registration requires an active session binding.");
+    const token = await Notifications.getExpoPushTokenAsync({ projectId });
+    const rawToken = normalizeText(token.data);
+    if (!rawToken) throw new Error("Expo returned an empty push token.");
+    const expoResult = await registerPushTokenWithBackend({ authority, permissionStatus: permissionState, provider: "expo", token: rawToken });
+    const nativeResult = await registerAndroidNativeFcmToken(permissionState, authority);
+    return mergeAndroidPushRegistrationResults(expoResult, nativeResult);
+  })();
+
+  // Permission prompts remain user-controlled. Once permission is settled, the
+  // provider/backend portion must not leave the customer in a permanent busy
+  // state when token or network infrastructure stops responding.
+  return withAuthorityReadDeadline(registration, fallback, PUSH_REGISTRATION_PROVIDER_DEADLINE_MS);
+}
+
 export async function requestPushPermissionAndRegister(): Promise<PushRegistrationState> {
   if (Platform.OS === "web" || !Device.isDevice) {
     return {
@@ -2291,25 +2328,11 @@ export async function requestPushPermissionAndRegister(): Promise<PushRegistrati
     };
   }
 
-  try {
-    const authority = await readCurrentPushSessionBinding();
-    if (!authority) throw new Error("Push registration requires an active session binding.");
-    const token = await Notifications.getExpoPushTokenAsync({ projectId });
-    const rawToken = normalizeText(token.data);
-    if (!rawToken) throw new Error("Expo returned an empty push token.");
-    const expoResult = await registerPushTokenWithBackend({ authority, permissionStatus: finalPermissionState, provider: "expo", token: rawToken });
-    const nativeResult = await registerAndroidNativeFcmToken(finalPermissionState, authority);
-    return mergeAndroidPushRegistrationResults(expoResult, nativeResult);
-  } catch {
-    return {
-      message: `Unable to get a production push token for this ${Platform.OS === "ios" ? "iOS" : "Android"} build.`,
-      permissionState: finalPermissionState,
-      provider: "expo",
-      status: "error",
-      tokenFingerprint: null,
-      nativeTokenFingerprint: null,
-    };
-  }
+  return registerCurrentPushProvidersWithDeadline(
+    finalPermissionState,
+    projectId,
+    `Unable to get a production push token for this ${Platform.OS === "ios" ? "iOS" : "Android"} build.`,
+  );
 }
 
 export async function refreshPushRegistrationIfGranted(): Promise<PushRegistrationState> {
@@ -2347,25 +2370,11 @@ export async function refreshPushRegistrationIfGranted(): Promise<PushRegistrati
     };
   }
 
-  try {
-    const authority = await readCurrentPushSessionBinding();
-    if (!authority) throw new Error("Push registration requires an active session binding.");
-    const token = await Notifications.getExpoPushTokenAsync({ projectId });
-    const rawToken = normalizeText(token.data);
-    if (!rawToken) throw new Error("Expo returned an empty push token.");
-    const expoResult = await registerPushTokenWithBackend({ authority, permissionStatus: permissionState, provider: "expo", token: rawToken });
-    const nativeResult = await registerAndroidNativeFcmToken(permissionState, authority);
-    return mergeAndroidPushRegistrationResults(expoResult, nativeResult);
-  } catch {
-    return {
-      message: `Unable to refresh the production push token for this ${Platform.OS === "ios" ? "iOS" : "Android"} build.`,
-      permissionState,
-      provider: "expo",
-      status: "error",
-      tokenFingerprint: null,
-      nativeTokenFingerprint: null,
-    };
-  }
+  return registerCurrentPushProvidersWithDeadline(
+    permissionState,
+    projectId,
+    `Unable to refresh the production push token for this ${Platform.OS === "ios" ? "iOS" : "Android"} build.`,
+  );
 }
 
 /** @deprecated Use requestPushPermissionAndRegister for platform-neutral registration. */
