@@ -15,6 +15,7 @@ import {
 import { recordCreatorVideoUploadUsage } from "./platformUsage";
 import { resolveCreatorVipVideoAccess, type CreatorVipVideoAccess } from "./creatorVipPasses";
 import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "./supabase";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 import {
   resolveCreatorContentAccess,
   type CreatorContentAccessResolution,
@@ -568,7 +569,7 @@ export async function readCreatorVideosForOwners(
 
 export async function readCreatorVideosByIds(
   videoIds: string[],
-  options?: { limit?: number },
+  options?: { includeRenditionStatuses?: boolean; limit?: number; throwOnUnavailable?: boolean },
 ): Promise<CreatorVideo[]> {
   const normalizedVideoIds = Array.from(
     new Set(videoIds.map(toText).filter(Boolean)),
@@ -584,13 +585,17 @@ export async function readCreatorVideosByIds(
     .is("quarantined_at", null)
     .returns<CreatorVideoRow[]>();
 
-  if (error || !data) return [];
+  if (error || !data) {
+    if (options?.throwOnUnavailable) throw error ?? new Error("Creator videos are unavailable.");
+    return [];
+  }
 
   const order = new Map(normalizedVideoIds.map((id, index) => [id, index]));
   const parsed = await Promise.all(data.map((row) => parseCreatorVideo(row)));
-  return attachRenditionStatuses(parsed.sort((left, right) => (
+  const ordered = parsed.sort((left, right) => (
     (order.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(right.id) ?? Number.MAX_SAFE_INTEGER)
-  )));
+  ));
+  return options?.includeRenditionStatuses === false ? ordered : attachRenditionStatuses(ordered);
 }
 
 export async function readCreatorVideoForOwner(videoId: string): Promise<CreatorVideo | null> {
@@ -918,7 +923,7 @@ export async function syncCreatorVideoFeedItems(videoId: string): Promise<{
   const normalizedVideoId = toText(videoId);
   if (!normalizedVideoId) return null;
 
-  const { data, error } = await (supabase as any).rpc("sync_creator_video_feed_items", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>("sync_creator_video_feed_items", {
     p_video_id: normalizedVideoId,
   });
   if (error) throw error;

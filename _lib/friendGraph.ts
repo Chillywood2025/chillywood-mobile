@@ -4,6 +4,10 @@ import { isOfficialPlatformAccountUserId } from "./officialAccounts";
 import { supabase } from "./supabase";
 import { UserFacingError } from "./userFacingErrors";
 import {
+  captureAccountBoundSupabaseMutationSubject,
+  invokeAccountBoundSupabaseMutationRpc,
+} from "./accountBoundSupabaseMutation";
+import {
   buildUserChannelProfile,
   readUserProfileByUserId,
   type UserChannelProfile,
@@ -243,8 +247,9 @@ function assertFriendTargetAllowed(otherUserId: string) {
 }
 
 async function mutateFriendRelationship(otherUserId: string, action: "accept" | "decline" | "cancel" | "remove") {
-  const viewerUserId = await getSignedInFriendUserId();
-  if (!viewerUserId) {
+  const subject = await captureAccountBoundSupabaseMutationSubject().catch(() => null);
+  const viewerUserId = subject?.authority.userId ?? null;
+  if (!subject || !viewerUserId) {
     throw new UserFacingError("circle_action", "Chi'lly Circle requires a signed-in user.");
   }
 
@@ -256,10 +261,14 @@ async function mutateFriendRelationship(otherUserId: string, action: "accept" | 
     throw new UserFacingError("circle_action", "Chi'lly Circle is unavailable while a Platform audience block exists between these accounts.");
   }
 
-  const { data, error } = await supabase.rpc("respond_to_friendship", {
+  const { data, error } = await invokeAccountBoundSupabaseMutationRpc<FriendRelationshipRow | FriendRelationshipRow[]>(
+    subject,
+    "respond_to_friendship",
+    {
     next_action: action,
     target_user_id: normalizedOtherUserId,
-  });
+    },
+  );
 
   if (error) {
     throw new UserFacingError("circle_action", "Unable to update Chi'lly Circle right now.");
@@ -439,8 +448,9 @@ export async function getChillyCircleStatus(
 }
 
 export async function sendFriendRequest(otherUserId: string): Promise<FriendRelationshipState> {
-  const viewerUserId = await getSignedInFriendUserId();
-  if (!viewerUserId) {
+  const subject = await captureAccountBoundSupabaseMutationSubject().catch(() => null);
+  const viewerUserId = subject?.authority.userId ?? null;
+  if (!subject || !viewerUserId) {
     throw new UserFacingError("circle_action", "Chi'lly Circle requires a signed-in user.");
   }
 
@@ -452,9 +462,13 @@ export async function sendFriendRequest(otherUserId: string): Promise<FriendRela
     throw new UserFacingError("circle_action", "Chi'lly Circle is unavailable while a Platform audience block exists between these accounts.");
   }
 
-  const { data, error } = await supabase.rpc("request_friendship", {
+  const { data, error } = await invokeAccountBoundSupabaseMutationRpc<FriendRelationshipRow | FriendRelationshipRow[]>(
+    subject,
+    "request_friendship",
+    {
     target_user_id: normalizedOtherUserId,
-  });
+    },
+  );
 
   if (error) {
     throw new UserFacingError("circle_action", "Unable to update Chi'lly Circle right now.");

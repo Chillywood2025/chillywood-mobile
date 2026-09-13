@@ -1,6 +1,7 @@
 import type { Tables } from "../supabase/database.types";
 import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "./performancePolicy";
 import { supabase } from "./supabase";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export const PLATFORM_USAGE_METERING_EVENTS_TABLE = "platform_usage_metering_events";
 export const PLATFORM_USAGE_DAILY_ROLLUPS_TABLE = "platform_usage_daily_rollups";
@@ -519,7 +520,7 @@ export async function recordCreatorVideoUploadUsage(videoId: string): Promise<Cr
     };
   }
 
-  const { data, error } = await supabase.rpc(RECORD_CREATOR_VIDEO_UPLOAD_USAGE_RPC, {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>(RECORD_CREATOR_VIDEO_UPLOAD_USAGE_RPC, {
     target_video_id: targetVideoId,
   });
   if (error) throw error;
@@ -531,7 +532,7 @@ export async function rollupCreatorVideoUploadUsageDaily(
   usageDate?: string | null,
 ): Promise<CreatorVideoUploadDailyRollupResult> {
   const normalizedDate = toUsageText(usageDate);
-  const { data, error } = await usageRpcClient.rpc(ROLLUP_CREATOR_VIDEO_UPLOAD_USAGE_DAILY_RPC, {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>(ROLLUP_CREATOR_VIDEO_UPLOAD_USAGE_DAILY_RPC, {
     target_usage_date: normalizedDate || null,
   });
   if (error) throw error;

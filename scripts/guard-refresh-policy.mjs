@@ -30,8 +30,8 @@ const parseTsx = (source) => parse(source, {
 
 const CRITICAL_CAPTURE_COMPONENT_AST_SHA256 = Object.freeze({
   HybridLiveKitRoom: Object.freeze({
-    target: "4fc8f3e033d5a5d2b43ebb59fb0e87e4d6c863411f05c7b633891eecf15a87d1",
-    owner: "7185a97e980593e296be83851c83ec6da85b1577264a4db56817ff9def98f099",
+    target: "b1602d6879ec6bea627887bc02f50a9cf8b78b93cde3bcfe90b559cd47f0f6e9",
+    owner: "95a4159357f59b1a5795fc37231376c3aee4dc3451aa678be8e61d30f5ee1946",
   }),
   LiveKitRoom: Object.freeze({
     target: "f2957476d44fd07ed4fc63cff52d9e456d14fe99532bca29acfeb7decc424dac",

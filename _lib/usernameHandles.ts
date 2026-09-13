@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export type UsernameAvailabilityStatus =
   | "idle"
@@ -159,7 +160,7 @@ export async function updateMyUsername(value: unknown): Promise<{ username: stri
   const local = validateUsernameHandle(value);
   if (!local.available) throw new Error(local.message);
 
-  const { data, error } = await usernameRpc.rpc("update_my_username", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("update_my_username", {
     p_username: local.username,
   });
 
