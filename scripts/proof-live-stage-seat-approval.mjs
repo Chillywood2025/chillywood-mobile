@@ -267,9 +267,12 @@ const focusedHostPartyBox = buildLiveStageCommunityParticipants({
 assert(focusedHostPartyBox.some((participant) => participant.userId === hostId), "host should move into the party box when a remote viewer is the actual hero");
 assert(!focusedHostPartyBox.some((participant) => participant.userId === viewerId), "focused remote viewer should not duplicate inside the host party box");
 
-assert(getLiveStagePrimaryRoleLabel({ state: { role: "listener" } }) === "Audience", "featured listener must still be Audience");
-assert(getLiveStagePrimaryRoleLabel({ state: { role: "listener" }, isRequesting: true }) === "Seat request pending", "requesting listener must show request status");
-assert(getLiveStagePrimaryRoleLabel({ state: { role: "speaker" } }) === "Seated", "speaker status must be Seated");
+assert(getLiveStagePrimaryRoleLabel({ state: { role: "listener" } }) === "Viewer", "listener must remain visibly classified as a Viewer");
+assert(getLiveStagePrimaryRoleLabel({ state: { role: "listener" }, isRequesting: true }) === "Seat requested", "requesting listener must show the pending seat request");
+assert(getLiveStagePrimaryRoleLabel({ state: { role: "listener" }, seatState: "requested" }) === "Seat requested", "persisted seat request must match the requesting presentation");
+assert(getLiveStagePrimaryRoleLabel({ state: { role: "listener" }, seatState: "eligible" }) === "Seat eligible", "eligible listener must not be presented as an approved speaker");
+assert(getLiveStagePrimaryRoleLabel({ state: { role: "listener" }, seatState: "rejected" }) === "Rejected", "rejected listener must retain the exact rejected state");
+assert(getLiveStagePrimaryRoleLabel({ state: { role: "speaker" } }) === "Approved speaker", "speaker status must communicate explicit host approval");
 assert(getLiveStagePrimaryRoleLabel({ state: { role: "host" } }) === "Host", "host status must be Host");
 
 const viewerDefaultHeroId = resolveActualVisualHeroParticipantId({

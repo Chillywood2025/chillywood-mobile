@@ -205,6 +205,33 @@ assertIncludes(
   "setLiveKitJoinContract(null);",
   "Live Stage fallback clears LiveKit success contract",
 );
+assertIncludes(
+  liveStage,
+  "const handleAuthoritativeLiveRoomEnded = useCallback(() => {",
+  "Live Stage authoritative ended-room transition",
+);
+assertIncludes(
+  liveStage,
+  "setLiveKitRenderableJoinContract(null);",
+  "ended Live Stage clears the renderable LiveKit contract",
+);
+assertIncludes(
+  liveStage,
+  "setCommunicationRoomId(\"\");",
+  "ended Live Stage clears its linked communication room",
+);
+assertIncludes(liveStage, "setRoom(null);", "ended Live Stage clears stale room state");
+assertIncludes(liveStage, "setRoomMissing(true);", "ended Live Stage renders the unavailable-room gate");
+assertIncludes(
+  liveStage,
+  "changedRoom.is_active === false",
+  "Live Stage realtime observes authoritative inactive room state",
+);
+assertIncludes(
+  liveStage,
+  "handleAuthoritativeLiveRoomEnded();\n                return;\n              }\n              void refreshStageSnapshot(trackedUserId);",
+  "Live Stage terminal room state replaces the stale surface before ordinary snapshot refresh",
+);
 
 if (process.exitCode) process.exit();
 console.log("Old live room handling guard passed.");

@@ -1053,6 +1053,18 @@ export default function WatchPartyLiveStageScreen({
   const branding = resolveBrandingConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
 
+  const handleAuthoritativeLiveRoomEnded = useCallback(() => {
+    setLiveKitJoinContract(null);
+    setLiveKitRenderableJoinContract(null);
+    setCommunicationRoomId("");
+    setRoom(null);
+    setRoomMissing(true);
+    setRoomEntryError("");
+    setBlockedRoomAccess(null);
+    setLiveSurface("room");
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
     stageLocalMediaIntentRef.current = stageLocalMediaIntent;
   }, [stageLocalMediaIntent]);
@@ -1712,7 +1724,18 @@ export default function WatchPartyLiveStageScreen({
               table: "watch_party_rooms",
               filter: `party_id=eq.${partyId}`,
             },
-            () => {
+            (payload) => {
+              const changedRoom = payload.new && typeof payload.new === "object"
+                ? payload.new as { is_active?: unknown; party_id?: unknown }
+                : {};
+              const changedPartyId = String(changedRoom.party_id ?? "").trim().toUpperCase();
+              if (
+                changedRoom.is_active === false
+                && changedPartyId === String(partyId).trim().toUpperCase()
+              ) {
+                handleAuthoritativeLiveRoomEnded();
+                return;
+              }
               void refreshStageSnapshot(trackedUserId);
             },
           )
@@ -1765,7 +1788,7 @@ export default function WatchPartyLiveStageScreen({
         roomRealtimeChannelRef.current = null;
       }
     };
-  }, [accessRetryToken, buildStageParticipantsFromPresence, canUseBetaStage, partyId, partyIdParam, refreshStageSnapshot, syncStageSnapshot]);
+  }, [accessRetryToken, buildStageParticipantsFromPresence, canUseBetaStage, handleAuthoritativeLiveRoomEnded, partyId, partyIdParam, refreshStageSnapshot, syncStageSnapshot]);
 
   useEffect(() => {
     if (!canUseBetaStage || !isFocused || !partyId || !room?.hostUserId || liveSurface === "room" || communicationRoomId) return;
