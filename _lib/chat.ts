@@ -27,18 +27,29 @@ import {
 import { supabase } from "./supabase";
 import { normalizePeopleSearchQuery } from "./peopleSearchNormalization";
 import { getWritablePartyUserId } from "./watchParty";
-import { getCurrentAccountSessionAuthoritySnapshot } from "./accountSessionAuthority";
+import {
+  getCurrentAccountSessionAuthoritySnapshot,
+  sameAccountSessionAuthority,
+  type AccountSessionAuthorityBinding,
+} from "./accountSessionAuthority";
+import {
+  captureAccountBoundSupabaseMutationSubject,
+  invokeAccountBoundSupabaseMutationRpc,
+} from "./accountBoundSupabaseMutation";
 import {
   resolveChatThreadCallReconciliation,
   shouldApplyAuthoritativeChatCallCleanup,
 } from "./communicationCallMediaPolicy.mjs";
 import { reportRuntimeError } from "./logger";
 import { UserFacingError } from "./userFacingErrors";
+import { withAuthorityReadDeadline } from "./entitlementAuthority";
 
 export const CHAT_THREADS_TABLE = "chat_threads";
 export const CHAT_THREAD_MEMBERS_TABLE = "chat_thread_members";
 export const CHAT_MESSAGES_TABLE = "chat_messages";
 export const CHAT_USER_PROFILES_TABLE = "user_profiles";
+const CHAT_COLLECTION_PAGE_SIZE = 200;
+const CHAT_PROFILE_LOOKUP_BATCH_SIZE = 100;
 
 export type ChatCallType = "voice" | "video";
 
@@ -141,16 +152,6 @@ type ChatCallInviteStatusRow = Pick<
   "id" | "thread_id" | "communication_room_id" | "status" | "created_at" | "expires_at"
 >;
 
-type DirectChatThreadOpenRepairRpc = PromiseLike<{
-  data: { thread_id?: unknown }[] | null;
-  error: { message?: string } | null;
-}>;
-
-type ChatThreadVisibilityRpc = PromiseLike<{
-  data: Record<string, unknown> | null;
-  error: { message?: string } | null;
-}>;
-
 const CHAT_THREAD_MEMBER_SELECT =
   "thread_id,user_id,display_name,avatar_url,tagline,joined_at,last_read_at,hidden_at,unread_count";
 const CHAT_THREAD_SELECT =
@@ -192,24 +193,75 @@ const normalizeCallType = (value: unknown): ChatCallType | undefined => {
 export const buildDirectParticipantPairKey = (a: string, b: string) =>
   [toText(a), toText(b)].filter(Boolean).sort().join("::");
 
-async function openOrRepairDirectThreadWithRpc(target: ChatTargetIdentity): Promise<ChatThreadSummary> {
+type ChatMutationAuthority = {
+  accessToken: string;
+  binding: AccountSessionAuthorityBinding;
+};
+
+const CHAT_ACCOUNT_CHANGED_MESSAGE = "Your account changed before Chi'lly Chat finished. Please try again.";
+
+const assertChatMutationAuthorityCurrent = (authority: ChatMutationAuthority) => {
+  if (!sameAccountSessionAuthority(
+    authority.binding,
+    getCurrentAccountSessionAuthoritySnapshot(),
+  )) {
+    throw new UserFacingError("chat_action", CHAT_ACCOUNT_CHANGED_MESSAGE);
+  }
+};
+
+const captureChatReadBinding = () => {
+  const binding = getCurrentAccountSessionAuthoritySnapshot();
+  if (
+    !binding
+    || binding.state !== "ACTIVE"
+    || binding.restoreOnly
+    || binding.accountId !== binding.userId
+  ) throw new UserFacingError("chat_action", CHAT_ACCOUNT_CHANGED_MESSAGE);
+  return binding;
+};
+
+const assertChatReadBindingCurrent = (binding: AccountSessionAuthorityBinding) => {
+  if (!sameAccountSessionAuthority(binding, getCurrentAccountSessionAuthoritySnapshot())) {
+    throw new UserFacingError("chat_action", CHAT_ACCOUNT_CHANGED_MESSAGE);
+  }
+};
+
+const invokeBoundChatRpc = async <T>(
+  authority: ChatMutationAuthority,
+  functionName: string,
+  args: Record<string, unknown>,
+) => invokeAccountBoundSupabaseMutationRpc<T>(
+  { accessToken: authority.accessToken, authority: authority.binding },
+  functionName,
+  args,
+);
+
+async function captureChatMutationAuthority(expectedUserId?: string): Promise<ChatMutationAuthority> {
+  try {
+    const subject = await captureAccountBoundSupabaseMutationSubject(expectedUserId);
+    return { accessToken: subject.accessToken, binding: subject.authority };
+  } catch {
+    throw new UserFacingError("chat_action", CHAT_ACCOUNT_CHANGED_MESSAGE);
+  }
+}
+
+async function openOrRepairDirectThreadWithRpc(
+  target: ChatTargetIdentity,
+  authority: ChatMutationAuthority,
+): Promise<ChatThreadSummary> {
   const targetUserId = toText(target.userId);
-  const rpc = (supabase.rpc as unknown as (
-    fn: "get_or_create_direct_chat_thread",
-    args: {
-      p_target_user_id: string;
-      p_target_display_name: string | null;
-      p_target_avatar_url: string | null;
-      p_target_tagline: string | null;
-    },
-  ) => DirectChatThreadOpenRepairRpc)("get_or_create_direct_chat_thread", {
+  assertChatMutationAuthorityCurrent(authority);
+  const { data, error } = await invokeBoundChatRpc<{ thread_id?: unknown }[]>(
+    authority,
+    "get_or_create_direct_chat_thread",
+    {
     p_target_user_id: targetUserId,
     p_target_display_name: toText(target.displayName) || null,
     p_target_avatar_url: toText(target.avatarUrl) || null,
     p_target_tagline: toText(target.tagline) || null,
-  });
-
-  const { data, error } = await rpc;
+    },
+  );
+  assertChatMutationAuthorityCurrent(authority);
   if (error) {
     logChatThread("direct_thread_rpc_repair_failed", {
       targetUserId,
@@ -225,6 +277,7 @@ async function openOrRepairDirectThreadWithRpc(target: ChatTargetIdentity): Prom
   }
 
   const thread = await getChatThread(threadId);
+  assertChatMutationAuthorityCurrent(authority);
   if (!thread?.currentMember || !thread.otherMember) {
     logChatThread("direct_thread_rpc_repair_readback_failed", {
       targetUserId,
@@ -233,8 +286,11 @@ async function openOrRepairDirectThreadWithRpc(target: ChatTargetIdentity): Prom
     throw new UserFacingError("chat_action", "Unable to open Chi'lly Chat with this person right now.");
   }
 
-  await unhideChatThreadForMe(thread.threadId);
+  assertChatMutationAuthorityCurrent(authority);
+  await unhideChatThreadWithAuthority(thread.threadId, authority);
+  assertChatMutationAuthorityCurrent(authority);
   const visibleThread = await getChatThread(thread.threadId);
+  assertChatMutationAuthorityCurrent(authority);
 
   logChatThread("direct_thread_rpc_repair_success", {
     targetUserId,
@@ -364,19 +420,42 @@ function parseChatMessage(
   };
 }
 
+const timestampForCollectionOrder = (value?: string) => {
+  const parsed = Date.parse(toText(value));
+  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+};
+
+const sortChatThreadsForInbox = (threads: ChatThreadSummary[]) => [...threads].sort((left, right) => {
+  const lastMessageDifference = timestampForCollectionOrder(right.lastMessageAt)
+    - timestampForCollectionOrder(left.lastMessageAt);
+  if (lastMessageDifference) return lastMessageDifference;
+  const updatedDifference = timestampForCollectionOrder(right.updatedAt)
+    - timestampForCollectionOrder(left.updatedAt);
+  return updatedDifference || left.threadId.localeCompare(right.threadId);
+});
+
+const sortChatMessagesForThread = (messages: ChatMessage[]) => [...messages].sort((left, right) => {
+  const createdDifference = timestampForCollectionOrder(left.createdAt)
+    - timestampForCollectionOrder(right.createdAt);
+  return createdDifference || left.id.localeCompare(right.id);
+});
+
 async function enrichChatThreadsWithUsernames(threads: ChatThreadSummary[]) {
   const userIds = Array.from(new Set(threads.flatMap((thread) => thread.members.map((member) => member.userId)).filter(Boolean)));
   if (!userIds.length) return threads;
 
-  const { data, error } = await supabase
-    .from(CHAT_USER_PROFILES_TABLE)
-    .select(CHAT_USER_SEARCH_SELECT)
-    .in("user_id", userIds)
-    .returns<ChatUserProfileRow[]>();
+  const profiles: ChatUserProfileRow[] = [];
+  for (let offset = 0; offset < userIds.length; offset += CHAT_PROFILE_LOOKUP_BATCH_SIZE) {
+    const { data, error } = await supabase
+      .from(CHAT_USER_PROFILES_TABLE)
+      .select(CHAT_USER_SEARCH_SELECT)
+      .in("user_id", userIds.slice(offset, offset + CHAT_PROFILE_LOOKUP_BATCH_SIZE))
+      .returns<ChatUserProfileRow[]>();
+    if (error || !data) return threads;
+    for (const profile of data) profiles[profiles.length] = profile;
+  }
 
-  if (error || !data) return threads;
-
-  const profileByUserId = new Map(data.map((row) => [toText(row.user_id), row]));
+  const profileByUserId = new Map(profiles.map((row) => [toText(row.user_id), row]));
   return threads.map((thread) => {
     const members = thread.members.map((member) => {
       const profile = profileByUserId.get(member.userId);
@@ -427,7 +506,10 @@ async function shouldRequestStaleActiveThreadCallCleanup(thread: ChatThreadSumma
   }) === "authoritative_cleanup";
 }
 
-async function reconcileActiveChatThreadCallState(threads: ChatThreadSummary[]): Promise<ChatThreadSummary[]> {
+async function reconcileActiveChatThreadCallState(
+  threads: ChatThreadSummary[],
+  expectedBinding?: AccountSessionAuthorityBinding,
+): Promise<ChatThreadSummary[]> {
   return Promise.all(threads.map(async (thread) => {
     if (!thread.activeCommunicationRoomId || !thread.activeCallType) return thread;
     let shouldRequestCleanup = false;
@@ -441,9 +523,19 @@ async function reconcileActiveChatThreadCallState(threads: ChatThreadSummary[]):
       return thread;
     }
     if (!shouldRequestCleanup) return thread;
-    let cleanup: ChatThreadCallCleanupResult;
+    if (expectedBinding) assertChatReadBindingCurrent(expectedBinding);
     try {
-      cleanup = await clearEndedChatThreadCall(thread.threadId, thread.activeCommunicationRoomId);
+      const cleanup = await clearEndedChatThreadCall(
+        thread.threadId,
+        thread.activeCommunicationRoomId,
+        expectedBinding,
+      );
+      if (!shouldApplyAuthoritativeChatCallCleanup(cleanup)) return thread;
+      return {
+        ...thread,
+        activeCommunicationRoomId: undefined,
+        activeCallType: undefined,
+      };
     } catch (error) {
       reportRuntimeError("chilly-chat-call-reconciliation-cleanup", error, {
         roomId: thread.activeCommunicationRoomId,
@@ -451,12 +543,6 @@ async function reconcileActiveChatThreadCallState(threads: ChatThreadSummary[]):
       });
       return thread;
     }
-    if (!shouldApplyAuthoritativeChatCallCleanup(cleanup)) return thread;
-    return {
-      ...thread,
-      activeCommunicationRoomId: undefined,
-      activeCallType: undefined,
-    };
   }));
 }
 
@@ -478,25 +564,48 @@ function parseChatUserSearchResult(row: ChatUserProfileRow): ChatUserSearchResul
 }
 
 export async function listChatThreads(): Promise<ChatThreadSummary[]> {
+  const binding = captureChatReadBinding();
   const currentUserId = await getRequiredChatUserId();
-  const { data, error } = await supabase
-    .from(CHAT_THREADS_TABLE)
-    .select(CHAT_THREAD_SELECT)
-    .order("last_message_at", { ascending: false, nullsFirst: false })
-    .order("updated_at", { ascending: false })
-    .returns<ChatThreadRow[]>();
+  assertChatReadBindingCurrent(binding);
+  if (currentUserId !== binding.userId) throw new UserFacingError("chat_action", CHAT_ACCOUNT_CHANGED_MESSAGE);
+  const rowsById = new Map<string, ChatThreadRow>();
+  let threadIdCursor = "";
+  for (;;) {
+    let query = supabase
+      .from(CHAT_THREADS_TABLE)
+      .select(CHAT_THREAD_SELECT)
+      .order("id", { ascending: true })
+      .limit(CHAT_COLLECTION_PAGE_SIZE);
+    if (threadIdCursor) query = query.gt("id", threadIdCursor);
+    const { data, error } = await query.returns<ChatThreadRow[]>();
+    assertChatReadBindingCurrent(binding);
+    if (error || !data) return [];
+    for (const row of data) {
+      const threadId = toText(row.id);
+      if (threadId) rowsById.set(threadId, row);
+    }
+    if (data.length < CHAT_COLLECTION_PAGE_SIZE) break;
+    const nextCursor = toText(data[data.length - 1]?.id);
+    if (!nextCursor || nextCursor === threadIdCursor) return [];
+    threadIdCursor = nextCursor;
+  }
 
-  if (error || !data) return [];
-
-  const threads = data
+  const threads = sortChatThreadsForInbox(Array.from(rowsById.values())
     .map((row) => parseChatThread(row, currentUserId))
     .filter(isDefined)
-    .filter((thread) => !isHiddenFromCurrentInbox(thread));
-  return reconcileActiveChatThreadCallState(await enrichChatThreadsWithUsernames(threads));
+    .filter((thread) => !isHiddenFromCurrentInbox(thread)));
+  const enriched = await enrichChatThreadsWithUsernames(threads);
+  assertChatReadBindingCurrent(binding);
+  const reconciled = await reconcileActiveChatThreadCallState(enriched, binding);
+  assertChatReadBindingCurrent(binding);
+  return reconciled;
 }
 
 export async function getChatThread(threadId: string): Promise<ChatThreadSummary | null> {
+  const binding = captureChatReadBinding();
   const currentUserId = await getRequiredChatUserId();
+  assertChatReadBindingCurrent(binding);
+  if (currentUserId !== binding.userId) throw new UserFacingError("chat_action", CHAT_ACCOUNT_CHANGED_MESSAGE);
   const normalizedThreadId = toText(threadId);
   if (!normalizedThreadId) return null;
 
@@ -508,10 +617,14 @@ export async function getChatThread(threadId: string): Promise<ChatThreadSummary
     .maybeSingle();
 
   if (error || !data) return null;
+  assertChatReadBindingCurrent(binding);
   const thread = parseChatThread(data, currentUserId);
   if (!thread) return null;
   const enriched = (await enrichChatThreadsWithUsernames([thread]))[0] ?? thread;
-  return (await reconcileActiveChatThreadCallState([enriched]))[0] ?? enriched;
+  assertChatReadBindingCurrent(binding);
+  const reconciled = await reconcileActiveChatThreadCallState([enriched], binding);
+  assertChatReadBindingCurrent(binding);
+  return reconciled[0] ?? enriched;
 }
 
 export async function getChatThreadByActiveCommunicationRoomId(roomId: string): Promise<ChatThreadSummary | null> {
@@ -537,19 +650,19 @@ export async function getChatThreadByActiveCommunicationRoomId(roomId: string): 
 }
 
 export async function hideChatThreadFromInbox(threadId: string): Promise<void> {
+  const authority = await captureChatMutationAuthority();
   const normalizedThreadId = toText(threadId);
   if (!normalizedThreadId) {
     throw new UserFacingError("chat_action", "This Chi'lly Chat thread is unavailable.");
   }
 
-  const rpc = (supabase.rpc as unknown as (
-    fn: "hide_chat_thread_from_inbox",
-    args: { p_thread_id: string },
-  ) => ChatThreadVisibilityRpc)("hide_chat_thread_from_inbox", {
-    p_thread_id: normalizedThreadId,
-  });
-
-  const { error } = await rpc;
+  assertChatMutationAuthorityCurrent(authority);
+  const { error } = await invokeBoundChatRpc<Record<string, unknown>>(
+    authority,
+    "hide_chat_thread_from_inbox",
+    { p_thread_id: normalizedThreadId },
+  );
+  assertChatMutationAuthorityCurrent(authority);
   if (error) {
     logChatThread("thread_hide_failed", {
       threadId: normalizedThreadId,
@@ -562,18 +675,20 @@ export async function hideChatThreadFromInbox(threadId: string): Promise<void> {
   }
 }
 
-export async function unhideChatThreadForMe(threadId: string): Promise<void> {
+async function unhideChatThreadWithAuthority(
+  threadId: string,
+  authority: ChatMutationAuthority,
+): Promise<void> {
   const normalizedThreadId = toText(threadId);
   if (!normalizedThreadId) return;
 
-  const rpc = (supabase.rpc as unknown as (
-    fn: "unhide_chat_thread_for_me",
-    args: { p_thread_id: string },
-  ) => ChatThreadVisibilityRpc)("unhide_chat_thread_for_me", {
-    p_thread_id: normalizedThreadId,
-  });
-
-  const { error } = await rpc;
+  assertChatMutationAuthorityCurrent(authority);
+  const { error } = await invokeBoundChatRpc<Record<string, unknown>>(
+    authority,
+    "unhide_chat_thread_for_me",
+    { p_thread_id: normalizedThreadId },
+  );
+  assertChatMutationAuthorityCurrent(authority);
   if (error) {
     logChatThread("thread_unhide_failed", {
       threadId: normalizedThreadId,
@@ -582,32 +697,56 @@ export async function unhideChatThreadForMe(threadId: string): Promise<void> {
   }
 }
 
+export async function unhideChatThreadForMe(threadId: string): Promise<void> {
+  const authority = await captureChatMutationAuthority();
+  return unhideChatThreadWithAuthority(threadId, authority);
+}
+
 export async function listChatMessages(threadId: string): Promise<ChatMessage[]> {
+  const binding = captureChatReadBinding();
   const normalizedThreadId = toText(threadId);
   if (!normalizedThreadId) return [];
 
   const thread = await getChatThread(normalizedThreadId);
+  assertChatReadBindingCurrent(binding);
   if (!thread?.currentMember) return [];
 
-  const { data, error } = await supabase
-    .from(CHAT_MESSAGES_TABLE)
-    .select(CHAT_MESSAGE_SELECT)
-    .eq("thread_id", normalizedThreadId)
-    .order("created_at", { ascending: true })
-    .returns<ChatMessageRow[]>();
-
-  if (error || !data) return [];
+  const rowsById = new Map<string, ChatMessageRow>();
+  let messageIdCursor = "";
+  for (;;) {
+    let query = supabase
+      .from(CHAT_MESSAGES_TABLE)
+      .select(CHAT_MESSAGE_SELECT)
+      .eq("thread_id", normalizedThreadId)
+      .order("id", { ascending: true })
+      .limit(CHAT_COLLECTION_PAGE_SIZE);
+    if (messageIdCursor) query = query.gt("id", messageIdCursor);
+    const { data, error } = await query.returns<ChatMessageRow[]>();
+    assertChatReadBindingCurrent(binding);
+    if (error || !data) return [];
+    for (const row of data) {
+      const messageId = toText(row.id);
+      if (messageId) rowsById.set(messageId, row);
+    }
+    if (data.length < CHAT_COLLECTION_PAGE_SIZE) break;
+    const nextCursor = toText(data[data.length - 1]?.id);
+    if (!nextCursor || nextCursor === messageIdCursor) return [];
+    messageIdCursor = nextCursor;
+  }
+  const rows = Array.from(rowsById.values());
   const attachmentsByMessageId = await readSocialAttachmentsForSurfaces(
     "chat_message",
-    data.map((row) => toText(row.id)).filter(Boolean),
+    rows.map((row) => toText(row.id)).filter(Boolean),
   );
-  return data
+  assertChatReadBindingCurrent(binding);
+  return sortChatMessagesForThread(rows
     .map((row) => parseChatMessage(row, attachmentsByMessageId.get(toText(row.id)) ?? []))
-    .filter(isDefined);
+    .filter(isDefined));
 }
 
 export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promise<ChatThreadSummary> {
-  const currentUserId = await getRequiredChatUserId();
+  const authority = await captureChatMutationAuthority();
+  const currentUserId = authority.binding.userId;
   const targetUserId = toText(target.userId);
   if (!targetUserId) {
     throw new UserFacingError("chat_action", "Missing target user for Chi'lly Chat thread.");
@@ -622,7 +761,7 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
     targetDisplayName: toText(target.displayName) || "",
     pairKey: buildDirectParticipantPairKey(currentUserId, targetUserId),
   });
-  return openOrRepairDirectThreadWithRpc(target);
+  return openOrRepairDirectThreadWithRpc(target, authority);
 }
 
 export async function searchChatPeople(rawQuery: string, limit = 12): Promise<ChatUserSearchResult[]> {
@@ -812,18 +951,24 @@ export type ChatThreadCallCleanupResult = {
 export async function clearEndedChatThreadCall(
   threadId: string,
   expectedRoomId?: string | null,
+  expectedBinding?: AccountSessionAuthorityBinding,
 ): Promise<ChatThreadCallCleanupResult> {
+  const authority = await captureChatMutationAuthority(expectedBinding?.userId);
+  if (expectedBinding && !sameAccountSessionAuthority(expectedBinding, authority.binding)) {
+    throw new UserFacingError("chat_action", CHAT_ACCOUNT_CHANGED_MESSAGE);
+  }
   const normalizedThreadId = toText(threadId);
   if (!normalizedThreadId) return { cleared: false, reason: "missing_thread" };
   const normalizedRoomId = formatCommunicationRoomCode(expectedRoomId);
-  const rpc = supabase.rpc.bind(supabase) as unknown as (
-    fn: "clear_stale_chilly_chat_thread_call",
-    args: { p_thread_id: string; p_expected_room_id: string | null },
-  ) => PromiseLike<{ data: unknown; error: { message?: string } | null }>;
-  const { data, error } = await rpc("clear_stale_chilly_chat_thread_call", {
-    p_thread_id: normalizedThreadId,
-    p_expected_room_id: normalizedRoomId || null,
-  });
+  const { data, error } = await invokeBoundChatRpc<unknown>(
+    authority,
+    "clear_stale_chilly_chat_thread_call",
+    {
+      p_thread_id: normalizedThreadId,
+      p_expected_room_id: normalizedRoomId || null,
+    },
+  );
+  assertChatMutationAuthorityCurrent(authority);
   if (error) throw new Error(error.message || "Unable to clear the ended Chi'lly Chat call.");
   const result = data && typeof data === "object" && !Array.isArray(data)
     ? data as Record<string, unknown>

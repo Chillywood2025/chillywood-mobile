@@ -1033,9 +1033,7 @@ assert.equal(
   "the production binding pattern executes an SDK-shaped receiver-sensitive RPC method",
 );
 for (const [sourceBlock, label] of [
-  [communicationJoinBlock, "accepted room membership"],
   [communicationSignalBlock, "legacy WebRTC signaling"],
-  [clearEndedCallBlock, "stale call cleanup"],
 ]) {
   assert.match(
     sourceBlock,
@@ -1048,6 +1046,26 @@ for (const [sourceBlock, label] of [
     `${label} cannot detach SupabaseClient.rpc because the SDK implementation reads this.rest`,
   );
 }
+assert.match(
+  communicationJoinBlock,
+  /runExactSessionAccountBoundSupabaseMutationRpc<[\s\S]{0,180}"join_communication_room_session"[\s\S]{0,420}requestedUserId/u,
+  "accepted room membership uses the exact-session account-bound RPC boundary",
+);
+assert.match(
+  communicationJoinBlock,
+  /membership\?\.userId === requestedUserId \? membership : null/u,
+  "accepted room membership binds the server result back to the initiating subject",
+);
+assert.match(
+  clearEndedCallBlock,
+  /invokeBoundChatRpc<unknown>\([\s\S]{0,360}"clear_stale_chilly_chat_thread_call"/u,
+  "stale call cleanup uses the exact-session account-bound RPC boundary",
+);
+assert.match(
+  clearEndedCallBlock,
+  /captureChatMutationAuthority\(expectedBinding\?\.userId\)[\s\S]{0,240}sameAccountSessionAuthority\(expectedBinding, authority\.binding\)/u,
+  "stale call cleanup binds the mutation to the initiating mounted subject",
+);
 assert.match(
   communicationJoinBlock,
   /options\.userId \?\? await getWritablePartyUserId\(\)/u,

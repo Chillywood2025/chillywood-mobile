@@ -80,11 +80,14 @@ creatorTypes.forEach((type) => {
 ].forEach((needle) => add(`important category/type covered ${needle}`, includes(notifications, needle), needle));
 
 [
-  "readNotificationActivityList(undefined, 12, 18)",
+  "readNotificationListPage(undefined, 30)",
+  "readNotificationListPage(undefined, 30, nextCursor)",
   "notification-tray-important-section",
   "notification-tray-recent-section",
   "Important / Action Needed",
   "These stay visible after read until handled, dismissed, revoked, or expired.",
+  "Show More Activity",
+  "Your existing activity is unchanged.",
   "Open Notification Settings",
 ].forEach((needle) => add(`bell tray retention UI contains ${needle}`, includes(bell, needle), needle));
 
@@ -93,7 +96,8 @@ add("Settings does not duplicate bell Activity records", !includes(settings, "re
 add("mark-read updates read_at without dismissal", includes(notifications, "const payload: NotificationUpdate = { read_at") && !includes(notifications, "read_at: new Date().toISOString(), dismissed_at"), "read payload");
 add("dismiss hides active rows", includes(notifications, "dismissed_at: new Date().toISOString(), status: \"dismissed\""), "dismiss payload");
 add("important rows are read separately from recent limit", includes(notifications, "readImportantNotificationList(userId, importantLimit)") && includes(notifications, "readNotificationList(userId, recentLimit)"), "split query helper");
-add("Activity does not fake notification records", includes(bell, "No fake counts or records are shown."), "real records copy");
+add("Activity uses the authoritative paginated notification reader", includes(bell, "readNotificationListPage") && !includes(bell, "readNotificationActivityList(undefined, 12, 18)"), "paginated records");
+add("Activity deduplicates records across page boundaries", includes(bell, "seen.has(notification.id)") && includes(bell, "mergeNotifications(current, page.items)"), "cross-page deduplication");
 add("Chat remains separate from money notifications", !includes(chatIndex, "creator_money_sale") && !includes(chatIndex, "creator_money_purchase"), "chat separation");
 
 [

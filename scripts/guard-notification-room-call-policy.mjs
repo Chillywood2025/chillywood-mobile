@@ -46,8 +46,10 @@ const clearEndedCallBody = clearEndedCallMatch?.[0] ?? "";
 ].forEach((needle) => assertIncludes(packageJson, needle, "package notification room/call scripts"));
 
 assertIncludes(bell, "readNotificationSummary", "bell must use real unread summary");
-assertIncludes(bell, "readNotificationActivityList", "bell tray must use real notification records");
-assertIncludes(bell, "No fake counts or records are shown.", "bell empty state must be honest");
+assertIncludes(bell, "readNotificationListPage", "bell tray must use the authoritative paginated notification reader");
+assertIncludes(bell, "mergeNotifications(current, page.items)", "bell tray must deduplicate records across page boundaries");
+assertIncludes(bell, "Show More Activity", "bell tray must expose older retained activity");
+assertIncludes(bell, "Your existing activity is unchanged.", "bell refresh failure must preserve already-rendered safe activity");
 assertIncludes(bell, "accessibilityLabel={accessibilityLabel}", "bell accessibility label must be dynamic");
 assertIncludes(bell, "roomSafe", "bell must support room-safe mode");
 assertIncludes(profile, 'NotificationBellButton surface="profile"', "Profile header must use the shared top-right notification bell");
@@ -216,7 +218,8 @@ assertNotIncludes(chillyChatNativeCallRouteBuffer, "console.", "the early native
 assertIncludes(communicationPanel, "statusLabelOverride", "communication panel must allow honest call status labels");
 assertIncludes(chatLib, "reconcileActiveChatThreadCallState", "inbox/thread reads must reconcile stale active call state");
 assertIncludes(chatLib, "shouldRequestStaleActiveThreadCallCleanup", "stale active call cleanup must be backed by invite/room readback");
-assertIncludes(clearEndedCallBody, 'rpc("clear_stale_chilly_chat_thread_call"', "stale active call cleanup must use the authoritative compare-and-clear RPC");
+assertIncludes(clearEndedCallBody, "invokeBoundChatRpc<unknown>", "stale active call cleanup must freeze the initiating account authority");
+assertIncludes(clearEndedCallBody, '"clear_stale_chilly_chat_thread_call"', "stale active call cleanup must use the authoritative compare-and-clear RPC");
 assertIncludes(chatLib, "shouldApplyAuthoritativeChatCallCleanup(cleanup)", "local call state must follow the authoritative cleanup result");
 assertIncludes(chatLib, "thread.activeCommunicationRoomId", "reconciliation cleanup must compare against the exact observed room");
 assertIncludes(chatRoomAuthorityClosure, 'if not public."can_access_chat_thread"(p_thread_id)', "stale active call cleanup RPC must require exact thread membership");

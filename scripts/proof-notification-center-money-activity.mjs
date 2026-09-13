@@ -44,9 +44,9 @@ const migration = read("supabase/migrations/20260630130624_creator_money_notific
 
 add("read/dismiss state uses real notification rows", includes(notifications, "readNotificationActivityList") && includes(notifications, "dismissNotification"), "notification record helpers");
 add("Activity deep-link opens through route resolver", includes(bell, "router.push(path as Parameters<typeof router.push>[0])"), "Activity router.push");
-add("Activity empty state is honest", includes(bell, "No fake counts or records are shown."), "real records empty state");
+add("Activity empty state is customer-facing", includes(bell, "Your recent activity will appear here."), "customer empty state");
 add("Activity does not use Chat as money ledger", !includes(settings + bell, "chat notification ledger"), "no Chat ledger copy");
-add("Bell Activity reads important rows separately from recent limit", includes(notifications, "readImportantNotificationList(userId, importantLimit)") && includes(bell, "readNotificationActivityList(undefined, 12, 18)"), "important/recent split");
+add("Bell Activity reads important rows separately from the paginated recent window", includes(notifications, "readImportantNotificationList(userId, importantLimit)") && includes(bell, "readImportantNotificationList(undefined, 30)") && includes(bell, "readNotificationListPage(undefined, 30)"), "important/recent split");
 add("Settings does not render duplicate Activity records", !includes(settings, "readNotificationActivityList") && !includes(settings, "settings-notification-activity-list"), "no Settings Activity list");
 add("Settings refresh reads backend push registration", includes(settings, "readCurrentPushRegistration()") && includes(notifications, "export async function readCurrentPushRegistration"), "push status readback");
 add("Device push registration is separated from in-app Activity", includes(settings, "Device push registration controls phone push alerts. In-app Activity lives in the bell tray and still works in the app."), "push/activity separation copy");
@@ -60,7 +60,7 @@ add(
   "dedicated push refresh readback",
 );
 add("Device push Refresh shows busy state and does not call generic Activity refresh", includes(settings, "notificationSavingKey === \"push-refresh\"") && includes(settings, "void onPressRefreshPushRegistration();") && !includes(settings, "void refreshNotifications();\n              }}\n            >\n              <Text style={styles.utilityButtonText}>Refresh</Text>"), "refresh button wiring");
-add("Push status uses current install scope", includes(notifications, "action: \"status\"") && includes(notifications, "installId") && includes(deviceTokens, ".eq(\"install_id\", installId)"), "install-scoped status");
+add("Push status uses current install scope", includes(notifications, "action: \"status\"") && includes(notifications, "installId") && includes(deviceTokens, 'userClient.rpc("wave1_push_ownership_readback"') && includes(deviceTokens, "p_install_id: installId"), "install-scoped status");
 add("Push status returns fingerprint only", includes(deviceTokens, "tokenFingerprint") && !includes(deviceTokens, "token: token"), "no raw token status response");
 
 const failed = checks.filter((check) => !check.passed);

@@ -24,7 +24,8 @@ const notifications = read("_lib/notifications.ts");
 
 [
   "readNotificationSummary",
-  "readNotificationActivityList",
+  "readImportantNotificationList",
+  "readNotificationListPage",
   "markNotificationRead",
   "dismissNotification",
   "resolveNotificationPath",
@@ -34,7 +35,7 @@ const notifications = read("_lib/notifications.ts");
   "notification-tray",
   "notification-tray-important-section",
   "notification-tray-recent-section",
-  "No fake counts or records are shown.",
+  "Show More Activity",
 ].forEach((needle) => add(`bell uses real notification tray behavior: ${needle}`, includes(bell, needle), needle));
 
 [
@@ -56,7 +57,7 @@ add("Profile bell uses top-right header slot", includes(profile, 'NotificationBe
 add("Bell tray opens Settings notification controls", includes(bell, "Open Notification Settings") && includes(bell, "params: { section: \"notifications\" }"), "settings notification section route");
 add("Settings notifications are preferences only", includes(settings, "Bell Activity") && !includes(settings, "readNotificationActivityList") && !includes(settings, "settings-notification-activity-list"), "no duplicate Settings Activity list");
 add("Bell Activity separates important and recent records", includes(bell, "notification-tray-important-section") && includes(bell, "notification-tray-recent-section"), "important/recent Activity sections");
-add("notification path resolver supports Settings", includes(notifications, "resolveNotificationPath") && includes(notifications, 'path === "/settings"'), "settings route");
+add("notification path resolver supports Settings", includes(notifications, "resolveNotificationPath") && includes(notifications, 'normalized === "/settings"'), "settings route");
 
 const failed = checks.filter((check) => !check.passed);
 if (failed.length) {

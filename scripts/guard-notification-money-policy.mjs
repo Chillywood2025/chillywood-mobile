@@ -58,7 +58,7 @@ assertIncludes(packageJson, "proof:notification-center-money-activity", "activit
   "notification_delivery_attempts",
 ].forEach((needle) => assertIncludes(revenuecatWebhook, needle, "notification preference/push gate"));
 
-assertIncludes(bell, "Real notification records for creator money, events, system alerts, and supported activity.", "bell Activity notification copy");
+assertIncludes(bell, "Updates about creator purchases, events, account alerts, and recent activity.", "bell customer-facing Activity notification copy");
 assertNotIncludes(chatIndex, "creator_money_sale", "Chat must not become money notification center");
 assertNotIncludes(chatIndex, "creator_money_purchase", "Chat must not become money notification center");
 assertIncludes(notifications, "resolveNotificationPath", "safe notification route resolver");

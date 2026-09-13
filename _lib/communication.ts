@@ -24,6 +24,7 @@ import {
 import { supabase } from "./supabase";
 import { buildUserChannelProfile, readUserProfile } from "./userData";
 import { createPartyIdentifier, getWritablePartyUserId } from "./watchParty";
+import { runExactSessionAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export const COMMUNICATION_ROOMS_TABLE = "communication_rooms";
 export const COMMUNICATION_ROOM_MEMBERSHIPS_TABLE = "communication_room_memberships";
@@ -743,26 +744,19 @@ export async function joinCommunicationRoomSession(options: {
   );
   if (!roomId || !requestedUserId) return null;
 
-  const rpc = supabase.rpc.bind(supabase) as unknown as (
-    fn: "join_communication_room_session",
-    args: {
-      p_room_id: string;
-      p_display_name: string | null;
-      p_avatar_url: string | null;
-      p_camera_enabled: boolean;
-      p_mic_enabled: boolean;
+  const { data, error } = await runExactSessionAccountBoundSupabaseMutationRpc<
+    CommunicationMembershipRow[] | CommunicationMembershipRow
+  >(
+    "join_communication_room_session",
+    {
+      p_room_id: roomId,
+      p_display_name: String(options.displayName ?? "").trim() || null,
+      p_avatar_url: String(options.avatarUrl ?? "").trim() || null,
+      p_camera_enabled: !!options.cameraEnabled,
+      p_mic_enabled: typeof options.micEnabled === "boolean" ? options.micEnabled : true,
     },
-  ) => PromiseLike<{
-    data: CommunicationMembershipRow[] | CommunicationMembershipRow | null;
-    error: { message?: string } | null;
-  }>;
-  const { data, error } = await rpc("join_communication_room_session", {
-    p_room_id: roomId,
-    p_display_name: String(options.displayName ?? "").trim() || null,
-    p_avatar_url: String(options.avatarUrl ?? "").trim() || null,
-    p_camera_enabled: !!options.cameraEnabled,
-    p_mic_enabled: typeof options.micEnabled === "boolean" ? options.micEnabled : true,
-  });
+    requestedUserId,
+  );
   const row = Array.isArray(data) ? data[0] ?? null : data;
   if (error) throw createCommunicationOperationError("membership join", error);
   if (!row) return null;

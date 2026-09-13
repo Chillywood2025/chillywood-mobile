@@ -17,8 +17,10 @@ import {
 import {
   dismissNotification,
   markNotificationRead,
-  readNotificationActivityList,
+  readImportantNotificationList,
+  readNotificationListPage,
   readNotificationSummary,
+  type NotificationListCursor,
   resolveNotificationPath,
   type NotificationRecord,
   type NotificationSummary,
@@ -57,21 +59,57 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [trayVisible, setTrayVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<NotificationListCursor | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const mergeNotifications = useCallback((...groups: NotificationRecord[][]) => {
+    const seen = new Set<string>();
+    return groups.flat().filter((notification) => {
+      if (seen.has(notification.id)) return false;
+      seen.add(notification.id);
+      return true;
+    }).sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+  }, []);
 
   const refreshNotifications = useCallback(async () => {
     setLoading(true);
     try {
-      const [nextSummary, nextNotifications] = await Promise.all([
+      const [nextSummary, importantRows, recentPage] = await Promise.all([
         readNotificationSummary(),
-        readNotificationActivityList(undefined, 12, 18),
+        readImportantNotificationList(undefined, 30),
+        readNotificationListPage(undefined, 30),
       ]);
+      if (recentPage.status !== "resolved") throw new Error("notification_page_unavailable");
       setSummary(nextSummary);
-      setNotifications(nextNotifications.filter((notification) => !notification.isDismissed));
+      setNotifications(mergeNotifications(importantRows, recentPage.items)
+        .filter((notification) => !notification.isDismissed));
+      setNextCursor(recentPage.nextCursor);
+      setLoadError(null);
+    } catch {
+      setLoadError("Notifications could not be refreshed. Your existing activity is unchanged.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [mergeNotifications]);
+
+  const loadMoreNotifications = useCallback(async () => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await readNotificationListPage(undefined, 30, nextCursor);
+      if (page.status !== "resolved") throw new Error("notification_page_unavailable");
+      setNotifications((current) => mergeNotifications(current, page.items)
+        .filter((notification) => !notification.isDismissed));
+      setNextCursor(page.nextCursor);
+      setLoadError(null);
+    } catch {
+      setLoadError("More activity could not be loaded. Try again when your connection is available.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, mergeNotifications, nextCursor]);
 
   useFocusEffect(
     useCallback(() => {
@@ -236,7 +274,7 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
                 <Text style={styles.trayBody}>
                   {roomSafe
                     ? "You'll stay in the room while checking updates. Opening this tray will not mute, unmute, or disconnect you."
-                    : "Real notification records for creator money, events, system alerts, and supported activity."}
+                    : "Updates about creator purchases, events, account alerts, and recent activity."}
                 </Text>
               </View>
               <TouchableOpacity
@@ -250,10 +288,10 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.trayList} contentContainerStyle={styles.trayListContent}>
-              {loading ? (
+              {loading && notifications.length === 0 ? (
                 <View style={styles.emptyState}>
                   <ActivityIndicator color="#DC143C" size="small" />
-                  <Text style={styles.emptyStateText}>Loading real notification records...</Text>
+                  <Text style={styles.emptyStateText}>Loading notifications...</Text>
                 </View>
               ) : notifications.length ? (
                 <>
@@ -270,12 +308,27 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
                       {recentNotifications.map(renderRow)}
                     </View>
                   ) : null}
+                  {loadError ? <Text style={styles.loadErrorText}>{loadError}</Text> : null}
+                  {nextCursor ? (
+                    <TouchableOpacity
+                      style={styles.loadMoreButton}
+                      activeOpacity={0.84}
+                      disabled={loadingMore}
+                      onPress={() => { void loadMoreNotifications(); }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Load more notifications"
+                    >
+                      {loadingMore ? <ActivityIndicator color="#EAF0FF" size="small" /> : (
+                        <Text style={styles.loadMoreButtonText}>Show More Activity</Text>
+                      )}
+                    </TouchableOpacity>
+                  ) : null}
                 </>
               ) : (
                 <View style={styles.emptyState}>
                   <MaterialIcons name="notifications-none" size={22} color="#8D98AE" />
-                  <Text style={styles.emptyStateTitle}>No notifications yet</Text>
-                  <Text style={styles.emptyStateText}>No fake counts or records are shown.</Text>
+                  <Text style={styles.emptyStateTitle}>{loadError ? "Notifications unavailable" : "No notifications yet"}</Text>
+                  <Text style={styles.emptyStateText}>{loadError ?? "Your recent activity will appear here."}</Text>
                 </View>
               )}
             </ScrollView>
@@ -414,6 +467,26 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 16,
     fontWeight: "700",
+  },
+  loadErrorText: {
+    color: "#F7C48B",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+  },
+  loadMoreButton: {
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  loadMoreButtonText: {
+    color: "#EAF0FF",
+    fontSize: 12,
+    fontWeight: "900",
   },
   notificationRow: {
     flexDirection: "row",
