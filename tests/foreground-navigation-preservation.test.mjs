@@ -7,7 +7,7 @@ const read = (path) => readFileSync(path, "utf8");
 test("same-session foreground checks preserve the mounted navigator", () => {
   const layout = read("app/_layout.tsx");
   assert.match(layout, /let navigationBlocker: React\.ReactNode = null/u);
-  assert.match(layout, /<RootNavigator \/>[\s\S]{0,500}navigation-blocking-overlay/u);
+  assert.match(layout, /<RootNavigator key=\{navigationTreeKey\} \/>[\s\S]{0,500}navigation-blocking-overlay/u);
   assert.doesNotMatch(layout, /if \(legalGateBlocking\)[\s\S]{0,300}return <AuthBootScreen/u);
   assert.match(layout, /StyleSheet\.absoluteFillObject[\s\S]{0,160}zIndex: 100/u);
   assert.match(layout, /preserveAcceptedRender = acceptedLegalVerificationKeyRef\.current === requestVerificationKey/u);
