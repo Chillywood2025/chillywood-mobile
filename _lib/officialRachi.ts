@@ -12,7 +12,18 @@ import {
   type ProfileMediaImageFile,
 } from "./profileMedia";
 import { readProfilePosts, type ProfilePost } from "./profilePosts";
-import { SUPABASE_URL, supabase } from "./supabase";
+import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "./supabase";
+import {
+  assertAccountBoundSupabaseMutationSubjectCurrent,
+  captureAccountBoundSupabaseMutationSubject,
+  isAccountBoundSupabaseMutationOutcomeAmbiguous,
+  invokeAccountBoundSupabaseMutationRpc,
+  type AccountBoundSupabaseMutationSubject,
+} from "./accountBoundSupabaseMutation";
+import {
+  getCurrentAccountSessionAuthoritySnapshot,
+  sameAccountSessionAuthority,
+} from "./accountSessionAuthority";
 import { readUserProfileByUserId } from "./userData";
 
 export type OfficialRachiPostResult = ProfilePost & {
@@ -28,6 +39,15 @@ export type OfficialRachiProfileImage = {
 };
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const OFFICIAL_RACHI_POST_OPERATION_KEY_PATTERN = /^rachi-post:[0-9a-f]{32}$/u;
+
+export const createOfficialRachiPostOperationKey = () => {
+  let random = "";
+  for (let index = 0; index < 32; index += 1) {
+    random += Math.floor(Math.random() * 16).toString(16);
+  }
+  return `rachi-post:${random}`;
+};
 
 const RACHI_PROFILE_MEDIA_PREFIX = "official/rachi/avatar";
 const RACHI_PROFILE_ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -89,14 +109,33 @@ const extractOfficialRachiProfileMediaKey = (url?: string | null) => {
   }
 };
 
-const removeOfficialRachiProfileMediaObject = async (url?: string | null) => {
+const removeOfficialRachiProfileMediaObject = async (
+  subject: AccountBoundSupabaseMutationSubject,
+  url?: string | null,
+) => {
   const objectKey = extractOfficialRachiProfileMediaKey(url);
   if (!objectKey) return;
-  const { error } = await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]);
-  if (error) throw new Error(error.message || "Unable to remove Rachi's previous profile picture.");
+  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+  const response = await fetch(
+    `${SUPABASE_URL.replace(/\/+$/g, "")}/storage/v1/object/${PROFILE_MEDIA_BUCKET}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${subject.accessToken}`,
+        apikey: SUPABASE_ANON_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ prefixes: [objectKey] }),
+    },
+  );
+  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+  if (!response.ok) throw new Error("Unable to remove Rachi's previous profile picture.");
 };
 
-const uploadOfficialRachiProfileMedia = async (file: ProfileMediaImageFile) => {
+const uploadOfficialRachiProfileMedia = async (
+  subject: AccountBoundSupabaseMutationSubject,
+  file: ProfileMediaImageFile,
+) => {
   const uri = toText(file.uri);
   if (!uri) throw new Error("Choose a photo before saving Rachi's profile picture.");
 
@@ -106,6 +145,7 @@ const uploadOfficialRachiProfileMedia = async (file: ProfileMediaImageFile) => {
   }
 
   const size = await getImageFileSize(file);
+  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
   if (typeof size === "number" && size > PROFILE_AVATAR_MAX_BYTES) {
     throw new Error("Rachi profile pictures can be 10 MB or smaller.");
   }
@@ -117,6 +157,10 @@ const uploadOfficialRachiProfileMedia = async (file: ProfileMediaImageFile) => {
     .upload(objectKey, uploadBody as unknown as Blob, {
       contentType: mimeType,
       upsert: false,
+      headers: {
+        Authorization: `Bearer ${subject.accessToken}`,
+        apikey: SUPABASE_ANON_KEY,
+      },
     });
 
   if (uploadError) {
@@ -125,7 +169,7 @@ const uploadOfficialRachiProfileMedia = async (file: ProfileMediaImageFile) => {
 
   const publicUrl = `${SUPABASE_URL.replace(/\/+$/g, "")}/functions/v1/profile-media-public?ownerUserId=${RACHI_OFFICIAL_ACCOUNT.userId}&objectKey=${objectKey}`;
   if (!publicUrl) {
-    await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]).catch(() => undefined);
+    await removeOfficialRachiProfileMediaObject(subject, publicUrl).catch(() => undefined);
     throw new Error("Unable to prepare Rachi's profile picture for display.");
   }
 
@@ -163,18 +207,41 @@ const parseOfficialRachiProfileImageResult = (payload: Json | null): OfficialRac
 
 export async function createOfficialRachiPost(input: {
   body: string;
+  operationKey: string;
   reason?: string;
 }): Promise<OfficialRachiPostResult> {
+  const initiatingAuthority = getCurrentAccountSessionAuthoritySnapshot();
+  if (!initiatingAuthority || initiatingAuthority.restoreOnly) {
+    throw new Error("Recheck the signed-in operator account before publishing Rachi's update.");
+  }
   const body = toText(input.body);
   if (!body) throw new Error("Write a Rachi update before publishing.");
+  const operationKey = toText(input.operationKey).toLowerCase();
+  if (!OFFICIAL_RACHI_POST_OPERATION_KEY_PATTERN.test(operationKey)) {
+    throw new Error("A valid Rachi publish request is required.");
+  }
+  const subject = await captureAccountBoundSupabaseMutationSubject(initiatingAuthority.userId);
+  if (!sameAccountSessionAuthority(initiatingAuthority, subject.authority)) {
+    throw new Error("The signed-in operator account changed before publishing Rachi's update.");
+  }
 
-  const { data, error } = await supabase.rpc("admin_create_official_rachi_post", {
-    p_body: body,
-    p_visibility: "public",
-    p_reason: toText(input.reason) || "Official Rachi update",
-  });
+  const { data, error } = await invokeAccountBoundSupabaseMutationRpc<Json>(
+    subject,
+    "admin_create_official_rachi_post",
+    {
+      p_body: body,
+      p_operation_key: operationKey,
+      p_visibility: "public",
+      p_reason: toText(input.reason) || "Official Rachi update",
+    },
+  );
 
-  if (error) throw error;
+  if (error) {
+    if (isAccountBoundSupabaseMutationOutcomeAmbiguous(error)) {
+      throw new Error("Rachi's update is still being verified. Retrying the same update is safe.");
+    }
+    throw error;
+  }
   return parseOfficialRachiPostResult((data ?? null) as Json | null);
 }
 
@@ -203,44 +270,77 @@ export async function updateOfficialRachiProfileImage(input: {
   avatarUrl: string | null;
   reason?: string;
 }): Promise<OfficialRachiProfileImage> {
+  const subject = await captureAccountBoundSupabaseMutationSubject();
+  return updateOfficialRachiProfileImageWithSubject(subject, input);
+}
+
+const updateOfficialRachiProfileImageWithSubject = async (
+  subject: AccountBoundSupabaseMutationSubject,
+  input: { avatarUrl: string | null; reason?: string },
+): Promise<OfficialRachiProfileImage> => {
   const avatarUrl = toText(input.avatarUrl);
-  const { data, error } = await supabase.rpc("admin_update_official_rachi_profile_image", {
-    p_avatar_url: avatarUrl,
-    p_reason: toText(input.reason) || "Official Rachi profile photo update",
-  });
+  const { data, error } = await invokeAccountBoundSupabaseMutationRpc<Json>(
+    subject,
+    "admin_update_official_rachi_profile_image",
+    {
+      p_avatar_url: avatarUrl,
+      p_reason: toText(input.reason) || "Official Rachi profile photo update",
+    },
+  );
 
   if (error) throw error;
   return parseOfficialRachiProfileImageResult((data ?? null) as Json | null);
-}
+};
 
 export async function chooseOfficialRachiProfileImageFromGallery(input?: {
   previousAvatarUrl?: string | null;
 }): Promise<OfficialRachiProfileImage | null> {
+  const initiatingAuthority = getCurrentAccountSessionAuthoritySnapshot();
+  if (!initiatingAuthority || initiatingAuthority.restoreOnly) {
+    throw new Error("Recheck the signed-in operator account before choosing Rachi's profile picture.");
+  }
   const file = await pickProfileMediaImage("avatar");
   if (!file) return null;
+  if (!sameAccountSessionAuthority(initiatingAuthority, getCurrentAccountSessionAuthoritySnapshot())) {
+    throw new Error("The signed-in operator account changed before the picture was selected.");
+  }
+  const subject = await captureAccountBoundSupabaseMutationSubject(initiatingAuthority.userId);
+  if (!sameAccountSessionAuthority(initiatingAuthority, subject.authority)) {
+    throw new Error("The signed-in operator account changed before the picture could be saved.");
+  }
 
-  const uploaded = await uploadOfficialRachiProfileMedia(file);
+  const uploaded = await uploadOfficialRachiProfileMedia(subject, file);
   let saved: OfficialRachiProfileImage;
   try {
-    saved = await updateOfficialRachiProfileImage({
+    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    saved = await updateOfficialRachiProfileImageWithSubject(subject, {
       avatarUrl: uploaded.publicUrl,
       reason: "Update official Rachi profile photo from gallery",
     });
   } catch (error) {
-    await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([uploaded.objectKey]).catch(() => undefined);
+    if (isAccountBoundSupabaseMutationOutcomeAmbiguous(error)) {
+      const authoritative = await readOfficialRachiProfileImage().catch(() => null);
+      if (toText(authoritative?.avatarUrl) === uploaded.publicUrl) {
+        await removeOfficialRachiProfileMediaObject(subject, input?.previousAvatarUrl).catch(() => undefined);
+        return authoritative as OfficialRachiProfileImage;
+      }
+      throw new Error("Rachi's profile picture is still being verified. Refresh before trying again.");
+    }
+    await removeOfficialRachiProfileMediaObject(subject, uploaded.publicUrl).catch(() => undefined);
     throw error;
   }
-  await removeOfficialRachiProfileMediaObject(input?.previousAvatarUrl);
+  await removeOfficialRachiProfileMediaObject(subject, input?.previousAvatarUrl).catch(() => undefined);
   return saved;
 }
 
 export async function clearOfficialRachiProfileImage(input?: {
   previousAvatarUrl?: string | null;
 }): Promise<OfficialRachiProfileImage> {
-  const saved = await updateOfficialRachiProfileImage({
+  const subject = await captureAccountBoundSupabaseMutationSubject();
+  const saved = await updateOfficialRachiProfileImageWithSubject(subject, {
     avatarUrl: null,
     reason: "Clear official Rachi profile photo",
   });
-  await removeOfficialRachiProfileMediaObject(input?.previousAvatarUrl);
+  await removeOfficialRachiProfileMediaObject(subject, input?.previousAvatarUrl).catch(() => undefined);
   return saved;
 }

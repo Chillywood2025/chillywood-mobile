@@ -35,6 +35,7 @@ const originalsPlaybackMigration = read("supabase/migrations/202605260012_rachi_
 const originalsSelectHardeningMigration = read("supabase/migrations/202605260013_rachi_originals_public_link_select_hardening.sql");
 const usernameMigration = read("supabase/migrations/20260602032030_modern_username_handle_system.sql");
 const visibilityAuthorityMigration = read("supabase/migrations/20260907183000_pre_activation_rachi_official_visibility_authority.sql");
+const adversarialIntegrityMigration = read("supabase/migrations/20260912235910_preproduction_adversarial_product_integrity_closure.sql");
 const publicCreatorVideoCardsFunction = read("supabase/functions/public-creator-video-cards/index.ts");
 
 const userFacingSource = [
@@ -79,6 +80,10 @@ assertIncludes(visibilityAuthorityMigration, "official_public_allowed", "officia
 assertIncludes(visibilityAuthorityMigration, "resolve_profile_platform_visibility_access_profile_backed_v1", "ordinary profile-backed delegation");
 assertIncludes(visibilityAuthorityMigration, "official_rachi_operator_required", "official post write authority guard");
 assertIncludes(visibilityAuthorityMigration, "auth.uid() is not null", "official access authenticated identity binding");
+assertIncludes(adversarialIntegrityMigration, "p_operation_key text default null", "official post operation key");
+assertIncludes(adversarialIntegrityMigration, "pg_advisory_xact_lock", "serialized official post retry");
+assertIncludes(adversarialIntegrityMigration, "audit.\"metadata\"->>'operation_key' = safe_operation_key", "authoritative idempotent replay lookup");
+assertIncludes(adversarialIntegrityMigration, "'idempotent', true", "idempotent official post replay result");
 assertIncludes(profileImageMigration, "admin_update_official_rachi_profile_image", "official profile image RPC");
 assertIncludes(profileImageMigration, 'public."admin_content_assert_operator"()', "profile image owner/operator assertion");
 assertIncludes(profileImageMigration, "official_rachi_profile_image_updated", "profile image audit action");
@@ -99,9 +104,12 @@ assertIncludes(originalsPlaybackMigration, "video/mp4", "Rachi Originals fixture
 assertIncludes(originalsSelectHardeningMigration, 'video."visibility" = \'public\'', "Rachi Originals hardening keeps public linked-video select");
 assertIncludes(originalsSelectHardeningMigration, "video.\"moderation_status\" in ('clean', 'reported')", "Rachi Originals hardening keeps moderation-safe select");
 assertIncludes(officialRachi, "createOfficialRachiPost", "client official post helper");
+assertIncludes(officialRachi, "p_operation_key: operationKey", "client official post idempotency binding");
 assertIncludes(officialRachi, "updateOfficialRachiProfileImage", "client official profile image helper");
 assertIncludes(officialRachi, "chooseOfficialRachiProfileImageFromGallery", "client gallery picker helper");
 assertIncludes(admin, "createOfficialRachiPost", "admin Rachi post action");
+assertIncludes(admin, "rachiPostOperationRef", "admin preserves operation key across ambiguous retry");
+assertIncludes(admin, "rachiPostLatchRef.current.tryAcquire()", "admin same-frame publish single-flight");
 assertIncludes(admin, "Choose from Gallery", "admin Rachi gallery profile image action");
 assertIncludes(admin, "Clear Picture", "admin Rachi profile image clear action");
 assertNotIncludes(admin, "Paste a public HTTPS image URL", "visible URL-based Rachi profile image UI");

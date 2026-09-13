@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export type SandboxMonetizationTesterRow = {
   id: string;
@@ -64,7 +65,7 @@ export async function grantSandboxMonetizationTester(input: {
   expiresAt?: string | null;
   note?: string | null;
 }) {
-  const { data, error } = await sandboxTesterClient.rpc("grant_sandbox_monetization_tester", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("grant_sandbox_monetization_tester", {
     p_email: toText(input.email) || null,
     p_expires_at: toText(input.expiresAt) || null,
     p_note: toText(input.note) || null,
@@ -79,7 +80,7 @@ export async function revokeSandboxMonetizationTester(input: {
   email?: string | null;
   userId?: string | null;
 }) {
-  const { data, error } = await sandboxTesterClient.rpc("revoke_sandbox_monetization_tester", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("revoke_sandbox_monetization_tester", {
     p_email: toText(input.email) || null,
     p_id: toText(input.id) || null,
     p_user_id: toText(input.userId) || null,

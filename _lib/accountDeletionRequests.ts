@@ -1,4 +1,7 @@
-import { supabase } from "./supabase";
+import {
+  runAccountRestorationBoundSupabaseMutationRpc,
+  runCurrentAccountBoundSupabaseMutationRpc,
+} from "./accountBoundSupabaseMutation";
 
 type AccountDeletionRequestPayload = {
   id?: unknown;
@@ -12,21 +15,6 @@ type AccountDeletionRequestPayload = {
   restored?: unknown;
   message?: unknown;
 };
-
-type AccountDeletionRequestRpc = {
-  rpc(
-    fn: "schedule_account_deletion" | "submit_account_deletion_request",
-    args: {
-      p_reason?: string | null;
-      p_details?: string | null;
-    },
-  ): Promise<{ data: unknown; error: { message?: string; code?: string } | null }>;
-  rpc(
-    fn: "get_my_account_deletion_status" | "restore_scheduled_account_deletion",
-  ): Promise<{ data: unknown; error: { message?: string; code?: string } | null }>;
-};
-
-const accountDeletionRpc = supabase as unknown as AccountDeletionRequestRpc;
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -76,7 +64,9 @@ const parseAccountDeletionResult = (data: unknown, fallbackMessage: string): Acc
 };
 
 export async function readMyAccountDeletionStatus(): Promise<AccountDeletionRequestResult> {
-  const { data, error } = await accountDeletionRpc.rpc("get_my_account_deletion_status");
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>(
+    "get_my_account_deletion_status",
+  );
 
   if (error) throw new Error(getAccountDeletionRequestErrorMessage(error));
 
@@ -87,7 +77,7 @@ export async function scheduleAccountDeletion(input: {
   reason?: string | null;
   details?: string | null;
 } = {}): Promise<AccountDeletionRequestResult> {
-  const { data, error } = await accountDeletionRpc.rpc("schedule_account_deletion", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("schedule_account_deletion", {
     p_reason: input.reason ?? null,
     p_details: input.details ?? null,
   });
@@ -98,7 +88,7 @@ export async function scheduleAccountDeletion(input: {
 }
 
 export async function restoreScheduledAccountDeletion(): Promise<AccountDeletionRequestResult> {
-  const { data, error } = await accountDeletionRpc.rpc("restore_scheduled_account_deletion");
+  const { data, error } = await runAccountRestorationBoundSupabaseMutationRpc<unknown>();
 
   if (error) throw new Error(getAccountDeletionRequestErrorMessage(error));
 
