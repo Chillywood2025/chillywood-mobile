@@ -9,6 +9,7 @@ import {
 
 import { supabase } from "./supabase";
 import { getCurrentAccountSessionAuthoritySnapshot } from "./accountSessionAuthority";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export const CHAT_CALL_INVITES_TABLE = "chat_call_invites";
 export const CHAT_CALL_EVENTS_TABLE = "chat_call_events";
@@ -289,11 +290,16 @@ export async function beginChillyChatCall(input: {
   communicationRoomId: string;
   callType: ChillyChatCallType;
 }): Promise<BegunChillyChatCall> {
-  const { data, error } = await supabase.rpc("begin_chilly_chat_call", {
-    p_call_type: input.callType,
-    p_communication_room_id: input.communicationRoomId,
-    p_thread_id: input.threadId,
-  });
+  const actorUserId = toText(input.actorUserId);
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>(
+    "begin_chilly_chat_call",
+    {
+      p_call_type: input.callType,
+      p_communication_room_id: input.communicationRoomId,
+      p_thread_id: input.threadId,
+    },
+    actorUserId,
+  );
   if (error || !data || typeof data !== "object" || Array.isArray(data)) {
     throw error ?? new Error("Unable to reserve this Chi'lly Chat call.");
   }
@@ -307,7 +313,6 @@ export async function beginChillyChatCall(input: {
   if (!invite) {
     throw new Error("Unable to read the reserved Chi'lly Chat call.");
   }
-  const actorUserId = toText(input.actorUserId);
   const role = payload.role === "caller" || payload.role === "callee" ? payload.role : null;
   if (!hasExactMountedActor(actorUserId) || !role
     || (role === "caller" ? invite.callerUserId : invite.calleeUserId) !== actorUserId) {

@@ -30,6 +30,7 @@ import {
 } from "./chillyChatCallSoundAssets";
 import { resolveApplicationRoute } from "./appLinks";
 import { readCurrentAccountSessionAuthority } from "./accountSessionAuthority";
+import { withAuthorityReadDeadline } from "./entitlementAuthority";
 
 export const NOTIFICATIONS_TABLE = "notifications";
 export const EVENT_REMINDERS_TABLE = "event_reminders";
@@ -256,6 +257,18 @@ export type NotificationSummary = {
   undismissedCount: number;
   latestCreatedAt: string | null;
   categories: NotificationCategory[];
+};
+
+export type NotificationListCursor = {
+  createdAt: string;
+  id: string;
+};
+
+export type NotificationListPage = {
+  status: "resolved" | "unavailable";
+  subjectUserId: string | null;
+  items: NotificationRecord[];
+  nextCursor: NotificationListCursor | null;
 };
 
 export type NotificationActionName = "mark_read" | "dismiss" | "set_event_reminder";
@@ -589,12 +602,16 @@ async function reconcileChillyChatCallNotificationRows(
   const inviteStatusById = new Map<string, CallInviteStatusRow>();
 
   if (inviteIds.length) {
-    const { data } = await supabase
-      .from(CHAT_CALL_INVITES_TABLE)
-      .select("id,status,expires_at")
-      .in("id", inviteIds)
-      .returns<CallInviteStatusRow[]>();
-    (data ?? []).forEach((invite) => {
+    const inviteResponse = await withAuthorityReadDeadline(
+      supabase
+        .from(CHAT_CALL_INVITES_TABLE)
+        .select("id,status,expires_at")
+        .in("id", inviteIds)
+        .returns<CallInviteStatusRow[]>(),
+      null,
+    );
+    if (!inviteResponse || inviteResponse.error || !inviteResponse.data) return rows;
+    inviteResponse.data.forEach((invite) => {
       const inviteId = normalizeText(invite.id);
       if (inviteId) inviteStatusById.set(inviteId, invite);
     });
@@ -634,16 +651,19 @@ async function reconcileChillyChatCallNotificationRows(
 
   if (staleIds.size) {
     try {
-      await supabase
-        .from(NOTIFICATIONS_TABLE)
-        .update({
-          read_at: nowIso,
-          status: "handled",
-        } satisfies NotificationUpdate)
-        .eq("user_id", viewerUserId)
-        .eq("category", "chilly_chat_call")
-        .is("dismissed_at", null)
-        .in("id", Array.from(staleIds));
+      await withAuthorityReadDeadline(
+        supabase
+          .from(NOTIFICATIONS_TABLE)
+          .update({
+            read_at: nowIso,
+            status: "handled",
+          } satisfies NotificationUpdate)
+          .eq("user_id", viewerUserId)
+          .eq("category", "chilly_chat_call")
+          .is("dismissed_at", null)
+          .in("id", Array.from(staleIds)),
+        null,
+      );
     } catch {
       // Local reconciliation still prevents stale rows from rendering as actionable.
     }
@@ -735,8 +755,8 @@ async function readSessionUserId(explicitUserId?: string): Promise<string | null
   const normalizedExplicitUserId = normalizeText(explicitUserId);
   if (normalizedExplicitUserId) return normalizedExplicitUserId;
 
-  const { data } = await supabase.auth.getSession();
-  return normalizeText(data.session?.user?.id) || null;
+  const response = await withAuthorityReadDeadline(supabase.auth.getSession(), null);
+  return normalizeText(response?.data.session?.user?.id) || null;
 }
 
 async function readNotificationRowById(notificationId: string, viewerUserId: string): Promise<NotificationRow | null> {
@@ -893,23 +913,66 @@ export async function readNotificationList(
   userId?: string,
   limit = 50,
 ): Promise<NotificationRecord[]> {
+  const page = await readNotificationListPage(userId, limit);
+  return page.status === "resolved" ? page.items : [];
+}
+
+export async function readNotificationListPage(
+  userId?: string,
+  limit = 50,
+  cursor?: NotificationListCursor | null,
+): Promise<NotificationListPage> {
   const viewerUserId = await readSessionUserId(userId);
-  if (!viewerUserId) return [];
+  if (!viewerUserId) {
+    return { status: "resolved", subjectUserId: null, items: [], nextCursor: null };
+  }
 
   const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 100);
-  const { data, error } = await supabase
+  let query = supabase
     .from(NOTIFICATIONS_TABLE)
     .select("*")
     .eq("user_id", viewerUserId)
     .order("created_at", { ascending: false })
-    .limit(safeLimit)
-    .returns<NotificationRow[]>();
+    .order("id", { ascending: false });
+  if (cursor) {
+    const cursorCreatedAt = normalizeIsoTimestamp(cursor.createdAt);
+    const cursorId = normalizeText(cursor.id);
+    if (!cursorCreatedAt || !/^[0-9a-f-]{36}$/iu.test(cursorId)) {
+      return { status: "unavailable", subjectUserId: viewerUserId, items: [], nextCursor: null };
+    }
+    query = query.or(
+      `created_at.lt.${cursorCreatedAt},and(created_at.eq.${cursorCreatedAt},id.lt.${cursorId})`,
+    );
+  }
+  const response = await withAuthorityReadDeadline(
+    query.limit(safeLimit).returns<NotificationRow[]>(),
+    null,
+  );
 
-  if (error || !data) return [];
+  if (!response || response.error || !response.data || await readSessionUserId().catch(() => null) !== viewerUserId) {
+    return { status: "unavailable", subjectUserId: viewerUserId, items: [], nextCursor: null };
+  }
+  const data = response.data;
   const reconciledRows = await reconcileChillyChatCallNotificationRows(data, viewerUserId);
-  return reconciledRows
+  if (await readSessionUserId().catch(() => null) !== viewerUserId) {
+    return { status: "unavailable", subjectUserId: viewerUserId, items: [], nextCursor: null };
+  }
+  const items = reconciledRows
     .map((row) => parseNotificationRow(row))
     .filter(isDefined);
+  const lastRow = data[data.length - 1];
+  const nextCursor = data.length === safeLimit && lastRow
+    ? {
+        createdAt: normalizeIsoTimestamp(lastRow.created_at) ?? "",
+        id: normalizeText(lastRow.id),
+      }
+    : null;
+  return {
+    status: "resolved",
+    subjectUserId: viewerUserId,
+    items,
+    nextCursor: nextCursor?.createdAt && nextCursor.id ? nextCursor : null,
+  };
 }
 
 export async function readImportantNotificationList(
@@ -920,18 +983,26 @@ export async function readImportantNotificationList(
   if (!viewerUserId) return [];
 
   const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 50);
-  const { data, error } = await supabase
-    .from(NOTIFICATIONS_TABLE)
-    .select("*")
-    .eq("user_id", viewerUserId)
-    .is("dismissed_at", null)
-    .in("category", [...IMPORTANT_NOTIFICATION_CATEGORIES])
-    .order("created_at", { ascending: false })
-    .limit(safeLimit)
-    .returns<NotificationRow[]>();
+  const response = await withAuthorityReadDeadline(
+    supabase
+      .from(NOTIFICATIONS_TABLE)
+      .select("*")
+      .eq("user_id", viewerUserId)
+      .is("dismissed_at", null)
+      .in("category", [...IMPORTANT_NOTIFICATION_CATEGORIES])
+      .order("created_at", { ascending: false })
+      .limit(safeLimit)
+      .returns<NotificationRow[]>(),
+    null,
+  );
 
-  if (error || !data) return [];
-  const reconciledRows = await reconcileChillyChatCallNotificationRows(data, viewerUserId);
+  if (!response || response.error || !response.data) {
+    throw new Error("Important notifications could not be refreshed.");
+  }
+  const reconciledRows = await reconcileChillyChatCallNotificationRows(response.data, viewerUserId);
+  if (await readSessionUserId().catch(() => null) !== viewerUserId) {
+    throw new Error("Important notifications could not be refreshed.");
+  }
   return reconciledRows
     .map((row) => parseNotificationRow(row))
     .filter(isDefined)
@@ -958,12 +1029,37 @@ export async function readNotificationActivityList(
 export async function readNotificationSummary(
   userId?: string,
 ): Promise<NotificationSummary> {
-  const notifications = await readNotificationList(userId, 100);
+  const viewerUserId = await readSessionUserId(userId);
+  if (!viewerUserId) {
+    return { totalCount: 0, unreadCount: 0, undismissedCount: 0, latestCreatedAt: null, categories: [] };
+  }
+  const [total, unread, undismissed, recentPage] = await Promise.all([
+    withAuthorityReadDeadline(
+      supabase.from(NOTIFICATIONS_TABLE).select("*", { count: "exact", head: true }).eq("user_id", viewerUserId),
+      null,
+    ),
+    withAuthorityReadDeadline(
+      supabase.from(NOTIFICATIONS_TABLE).select("*", { count: "exact", head: true })
+        .eq("user_id", viewerUserId).is("read_at", null).is("dismissed_at", null),
+      null,
+    ),
+    withAuthorityReadDeadline(
+      supabase.from(NOTIFICATIONS_TABLE).select("*", { count: "exact", head: true })
+        .eq("user_id", viewerUserId).is("dismissed_at", null),
+      null,
+    ),
+    readNotificationListPage(viewerUserId, 100),
+  ]);
+  if (!total || !unread || !undismissed || total.error || unread.error || undismissed.error || recentPage.status !== "resolved"
+    || await readSessionUserId().catch(() => null) !== viewerUserId) {
+    throw new Error("Notification activity could not be refreshed.");
+  }
+  const notifications = recentPage.items;
 
   return {
-    totalCount: notifications.length,
-    unreadCount: notifications.filter((notification) => !notification.isRead && !notification.isDismissed).length,
-    undismissedCount: notifications.filter((notification) => !notification.isDismissed).length,
+    totalCount: Number(total.count ?? 0),
+    unreadCount: Number(unread.count ?? 0),
+    undismissedCount: Number(undismissed.count ?? 0),
     latestCreatedAt: notifications[0]?.createdAt ?? null,
     categories: Array.from(new Set(notifications.map((notification) => notification.category))),
   };
@@ -1863,7 +1959,7 @@ export async function readNativeCallAlertStatus(): Promise<NativeCallAlertStatus
       canOpenSettings: false,
       channelId: CHILLY_CHAT_NATIVE_CALL_CHANNEL_ID,
       granted: null,
-      message: "Native full-screen call alert support requires the next Google Play internal Android build.",
+      message: "Full-screen call alerts are not available on this version yet.",
     };
   }
 
@@ -1996,7 +2092,7 @@ export async function readCurrentPushRegistration(): Promise<PushRegistrationSta
   if (isRegistered) {
     const iosMessage = IOS_ORDINARY_PUSH_ENABLED
       ? "This iPhone is registered for Chi'llywood ordinary push alerts. In-app Activity is tied to your account and still works in the app."
-      : "This iPhone is registered for ordinary push readiness. Delivery remains off until physical APNs proof is complete; in-app Activity still works.";
+      : "This iPhone is registered. Remote notification delivery is not available yet; in-app Activity still works.";
     return {
       message: Platform.OS === "ios"
         ? iosMessage
@@ -2095,7 +2191,7 @@ async function registerPushTokenWithBackend(input: {
     message: input.provider === "fcm"
       ? "This Android device is registered for native Chi'lly Chat call alerts."
       : Platform.OS === "ios" && !IOS_ORDINARY_PUSH_ENABLED
-        ? "This iPhone is registered for ordinary push readiness; live iOS delivery remains off pending physical proof."
+        ? "This iPhone is registered; remote iOS notification delivery remains unavailable."
         : `This ${Platform.OS === "ios" ? "iPhone" : "Android device"} is registered for Chi'llywood notifications.`,
     permissionState: input.permissionStatus,
     provider: input.provider,
