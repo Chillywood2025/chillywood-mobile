@@ -14195,6 +14195,36 @@ export type Database = {
         }
         Relationships: []
       }
+      privileged_mutation_operation_receipts: {
+        Row: {
+          actor_user_id: string
+          created_at: string
+          operation_family: string
+          operation_key: string
+          request_fingerprint: Json
+          result_payload: Json
+          result_target_id: string | null
+        }
+        Insert: {
+          actor_user_id: string
+          created_at?: string
+          operation_family: string
+          operation_key: string
+          request_fingerprint: Json
+          result_payload: Json
+          result_target_id?: string | null
+        }
+        Update: {
+          actor_user_id?: string
+          created_at?: string
+          operation_family?: string
+          operation_key?: string
+          request_fingerprint?: Json
+          result_payload?: Json
+          result_target_id?: string | null
+        }
+        Relationships: []
+      }
       profile_post_comments: {
         Row: {
           body: string
@@ -20602,7 +20632,12 @@ export type Database = {
         Returns: string
       }
       admin_create_official_rachi_post: {
-        Args: { p_body: string; p_reason?: string; p_visibility?: string }
+        Args: {
+          p_body: string
+          p_operation_key?: string
+          p_reason?: string
+          p_visibility?: string
+        }
         Returns: Json
       }
       admin_deidentify_deleted_account: {
@@ -20628,6 +20663,7 @@ export type Database = {
           p_channel_id: string
           p_content_id: string
           p_content_type: string
+          p_operation_key: string
           p_reason: string
           p_severity: string
           p_user_id: string
@@ -21003,7 +21039,12 @@ export type Database = {
       }
       admin_get_refund_readiness_summary: { Args: never; Returns: Json }
       admin_grant_platform_role_by_email: {
-        Args: { p_reason?: string; p_role: string; p_target_email: string }
+        Args: {
+          p_operation_key: string
+          p_reason: string
+          p_role: string
+          p_target_email: string
+        }
         Returns: Json
       }
       admin_grant_platform_staff_permission_by_email: {
