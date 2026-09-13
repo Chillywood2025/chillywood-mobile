@@ -976,6 +976,8 @@ try {
     where "creator_event_id"=${literal(creatorEventId)}::uuid;
     delete from public."paid_creator_event_passes"
     where "creator_event_id"=${literal(creatorEventId)}::uuid;
+    delete from public."paid_event_events"
+    where "event_id"=${literal(paidEventId)}::uuid;
     delete from public."access_grants"
     where "user_id"=${literal(buyerId)}::uuid
       and "grant_type"='event_pass'

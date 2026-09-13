@@ -245,6 +245,9 @@ const createRuntime = (options = {}) => {
   const mocks = {
     "@react-native-async-storage/async-storage": { default: inert },
     "./appConfig": { readAppConfig: inert, resolveRoomDefaultConfig: inert },
+    "./accountBoundSupabaseMutation": {
+      runExactSessionAccountBoundSupabaseMutationRpc: async (name, args) => rpc(name, args),
+    },
     "./logger": { debugLog: () => {}, reportRuntimeError: () => {} },
     "./monetization": {
       createEmptyMonetizationGateResolution: () => ({ status: "not_required" }),

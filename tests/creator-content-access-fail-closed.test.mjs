@@ -50,9 +50,9 @@ const runtime = loadStubbed("_lib/creatorMonetization.ts", {
 });
 
 const CREATOR_ID = "11111111-1111-4111-8111-111111111111";
-const expectUnknownBlocked = (decision) => assert.deepEqual(decision, {
+const expectUnknownBlocked = (decision, reason = "resolver_unavailable") => assert.deepEqual(decision, {
   allowed: false,
-  reason: "resolver_unavailable",
+  reason,
   requiresPurchase: false,
   priceCents: null,
   currency: null,
@@ -61,7 +61,7 @@ const expectUnknownBlocked = (decision) => assert.deepEqual(decision, {
 });
 
 test("creator content resolver accepts only exact authoritative allow decisions", () => {
-  for (const reason of ["owner", "free_content", "purchase_grant", "active_grant", "sandbox_grant"]) {
+  for (const reason of ["owner", "free_content", "purchase_grant", "active_grant", "sandbox_grant", "vip_active", "active_creator_subscription"]) {
     assert.deepEqual(runtime.normalizeCreatorContentAccessResolution({
       allowed: true,
       reason,
@@ -84,6 +84,10 @@ test("creator content resolver accepts only exact authoritative allow decisions"
     priceCents: 499,
     currency: "usd",
     creatorId: CREATOR_ID,
+    provider: "revenuecat_google_play",
+    providerProductId: "paid-video-tier-499",
+    providerProductKey: "paid_video_access",
+    offerStatus: "active",
   }), {
     allowed: false,
     reason: "purchase_required",
@@ -113,26 +117,26 @@ test("malformed or contradictory resolver payloads are UNKNOWN and blocked", () 
     { allowed: false, reason: "purchase_required", requiresPurchase: true, priceCents: 499, currency: "usd", creatorId: "wrong" },
   ];
   for (const payload of malformed) {
-    expectUnknownBlocked(runtime.normalizeCreatorContentAccessResolution(payload));
+    expectUnknownBlocked(runtime.normalizeCreatorContentAccessResolution(payload), "resolver_malformed");
   }
 });
 
 test("RPC errors, timeouts, malformed envelopes, and unavailable data never allow playback", async () => {
   const cases = [
-    async () => ({ data: null, error: new Error("provider unavailable") }),
-    async () => { throw new Error("network timeout"); },
-    () => new Promise(() => {}),
-    async () => null,
-    async () => ({ data: null, error: null }),
-    async () => ({ data: { allowed: true, reason: "owner" }, error: null }),
+    [async () => ({ data: null, error: new Error("provider unavailable") }), "resolver_unavailable"],
+    [async () => { throw new Error("network timeout"); }, "resolver_unavailable"],
+    [() => new Promise(() => {}), "resolver_unavailable"],
+    [async () => null, "resolver_unavailable"],
+    [async () => ({ data: null, error: null }), "resolver_malformed"],
+    [async () => ({ data: { allowed: true, reason: "owner" }, error: null }), "resolver_malformed"],
   ];
 
-  for (const implementation of cases) {
+  for (const [implementation, reason] of cases) {
     rpcImplementation = implementation;
     expectUnknownBlocked(await runtime.resolveCreatorContentAccess({
       contentType: "creator_video",
       contentId: "22222222-2222-4222-8222-222222222222",
-    }));
+    }), reason);
   }
 });
 
