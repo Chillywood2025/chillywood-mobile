@@ -1,5 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Tables, TablesInsert } from "../supabase/database.types";
+import { readAccountScopedJsonValue, writeAccountScopedJsonValue } from "./accountScopedStorage";
+import {
+  getCurrentAccountSessionAuthoritySnapshot,
+  sameAccountSessionAuthority,
+  type AccountSessionAuthorityBinding,
+} from "./accountSessionAuthority";
 import { normalizeAccessVisibility, type AccessVisibility } from "./accessVisibility";
 import { getOfficialPlatformAccount } from "./officialAccounts";
 import {
@@ -118,6 +124,8 @@ export type UserChannelProfile = {
 };
 
 type UserListInsert = TablesInsert<"user_list">;
+type UserListRow = Pick<Tables<"user_list">, "title_id" | "updated_at">;
+const USER_MY_LIST_PAGE_SIZE = 200;
 type WatchHistoryRow = Pick<
   Tables<"watch_history">,
   "title_id" | "last_position_millis" | "duration_millis" | "last_watched_at" | "updated_at" | "completed" | "play_count"
@@ -442,42 +450,58 @@ export const buildUserChannelProfile = (options: {
   };
 };
 
-async function getSignedInUserId() {
-  try {
-    const { data } = await supabase.auth.getSession();
-    return data.session?.user?.id ?? null;
-  } catch {
-    return null;
-  }
-}
+type UserDataAccountBinding = AccountSessionAuthorityBinding | null;
 
-async function getSignedInUserSnapshot() {
+const captureUserDataAccountBinding = (): UserDataAccountBinding => (
+  getCurrentAccountSessionAuthoritySnapshot()
+);
+
+const getBoundUserId = (binding: UserDataAccountBinding) => binding?.userId ?? null;
+
+const userDataAccountBindingIsCurrent = (binding: UserDataAccountBinding) => {
+  const current = getCurrentAccountSessionAuthoritySnapshot();
+  return binding === null ? current === null : sameAccountSessionAuthority(binding, current);
+};
+
+const assertUserDataAccountBindingIsCurrent = (binding: UserDataAccountBinding) => {
+  if (!userDataAccountBindingIsCurrent(binding)) {
+    throw new Error("Account changed while customer state was loading.");
+  }
+};
+
+async function getSignedInUserSnapshot(binding: UserDataAccountBinding) {
+  let data: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"];
   try {
-    const { data } = await supabase.auth.getSession();
-    const user = data.session?.user ?? null;
-    const snapshot = {
-      userId: user?.id ?? null,
-      email: normalizeTextValue(user?.email),
-      displayName: normalizeTextValue(
-        user?.user_metadata?.display_name
-        ?? user?.user_metadata?.full_name
-        ?? user?.user_metadata?.name,
-      ),
-    };
-    logChatProfile("auth_snapshot", {
-      userId: snapshot.userId ?? "none",
-      email: snapshot.email ?? "",
-      displayName: snapshot.displayName ?? "",
-    });
-    return snapshot;
+    ({ data } = await supabase.auth.getSession());
   } catch {
+    assertUserDataAccountBindingIsCurrent(binding);
     logChatProfile("auth_snapshot_failed");
     return {
-      userId: null,
+      userId: getBoundUserId(binding),
       email: undefined,
       displayName: undefined,
     };
   }
+  assertUserDataAccountBindingIsCurrent(binding);
+  const user = data.session?.user ?? null;
+  if ((user?.id ?? null) !== getBoundUserId(binding)) {
+    throw new Error("Account changed while customer state was loading.");
+  }
+  const snapshot = {
+    userId: getBoundUserId(binding),
+    email: normalizeTextValue(user?.email),
+    displayName: normalizeTextValue(
+      user?.user_metadata?.display_name
+      ?? user?.user_metadata?.full_name
+      ?? user?.user_metadata?.name,
+    ),
+  };
+  logChatProfile("auth_snapshot", {
+    userId: snapshot.userId ?? "none",
+    email: snapshot.email ?? "",
+    displayName: snapshot.displayName ?? "",
+  });
+  return snapshot;
 }
 
 type PublicChannelProfileRpc = {
@@ -543,11 +567,15 @@ async function readRemoteUserProfile(userId: string): Promise<UserProfile | null
 }
 
 export async function readUserProfileByUserId(userId: string): Promise<UserProfile | null> {
-  return readRemoteUserProfile(userId);
+  const binding = captureUserDataAccountBinding();
+  const profile = await readRemoteUserProfile(userId);
+  assertUserDataAccountBindingIsCurrent(binding);
+  return profile;
 }
 
-async function syncUserProfileToRemote(profile: UserProfile): Promise<boolean> {
-  const userId = await getSignedInUserId();
+async function syncUserProfileToRemote(profile: UserProfile, binding: UserDataAccountBinding): Promise<boolean> {
+  assertUserDataAccountBindingIsCurrent(binding);
+  const userId = getBoundUserId(binding);
   if (!userId) return false;
 
   try {
@@ -559,6 +587,7 @@ async function syncUserProfileToRemote(profile: UserProfile): Promise<boolean> {
     const { error } = await supabase
       .from(USER_PROFILES_TABLE)
       .upsert(toUserProfileUpsertRow(userId, profile), { onConflict: "user_id" });
+    assertUserDataAccountBindingIsCurrent(binding);
     if (error) {
       logChatProfile("remote_upsert_failed", {
         userId,
@@ -568,6 +597,7 @@ async function syncUserProfileToRemote(profile: UserProfile): Promise<boolean> {
       });
       return false;
     }
+    assertUserDataAccountBindingIsCurrent(binding);
     logChatProfile("remote_upsert_success", {
       userId,
       username: profile.username,
@@ -575,6 +605,7 @@ async function syncUserProfileToRemote(profile: UserProfile): Promise<boolean> {
     });
     return true;
   } catch (error) {
+    assertUserDataAccountBindingIsCurrent(binding);
     logChatProfile("remote_upsert_failed", {
       userId,
       username: profile.username,
@@ -585,8 +616,9 @@ async function syncUserProfileToRemote(profile: UserProfile): Promise<boolean> {
   }
 }
 
-async function refreshSignedInIdentitySnapshots(profile: UserProfile): Promise<void> {
-  const userId = await getSignedInUserId();
+async function refreshSignedInIdentitySnapshots(profile: UserProfile, binding: UserDataAccountBinding): Promise<void> {
+  assertUserDataAccountBindingIsCurrent(binding);
+  const userId = getBoundUserId(binding);
   if (!userId) return;
 
   const displayName = normalizeTextValue(profile.displayName) ?? normalizeTextValue(profile.username) ?? "User";
@@ -620,42 +652,25 @@ async function refreshSignedInIdentitySnapshots(profile: UserProfile): Promise<v
       })
       .eq("user_id", userId),
   ]);
+  assertUserDataAccountBindingIsCurrent(binding);
 }
 
-async function readJsonValue<T>(key: string, fallback: T): Promise<T> {
-  try {
-    const raw = await AsyncStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
+const readAccountValue = async <T>(key: string, binding: UserDataAccountBinding, fallback: T) => {
+  assertUserDataAccountBindingIsCurrent(binding);
+  const value = await readAccountScopedJsonValue(AsyncStorage, key, getBoundUserId(binding), fallback);
+  assertUserDataAccountBindingIsCurrent(binding);
+  return value;
+};
 
-async function writeJsonValue(key: string, value: unknown) {
-  try {
-    await AsyncStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // ignore storage errors
-  }
-}
+const writeAccountValue = async (key: string, binding: UserDataAccountBinding, value: unknown) => {
+  assertUserDataAccountBindingIsCurrent(binding);
+  const written = await writeAccountScopedJsonValue(AsyncStorage, key, getBoundUserId(binding), value);
+  assertUserDataAccountBindingIsCurrent(binding);
+  return written;
+};
 
-export async function readLocalMyListIds(): Promise<string[]> {
-  const entries = await readLocalMyListEntries();
-  return entries.map((entry) => entry.id);
-}
-
-export async function saveLocalMyListIds(ids: string[]) {
-  const now = Date.now();
-  const normalized = dedupeIds(ids).map((id, index) => ({
-    id,
-    savedAt: now - index,
-  }));
-  await writeJsonValue(MY_LIST_KEY, toMyListEntryMap(normalized));
-}
-
-export async function readLocalMyListEntries(): Promise<MyListEntry[]> {
-  const parsed = await readJsonValue<unknown>(MY_LIST_KEY, []);
+async function readLocalMyListEntriesForBinding(binding: UserDataAccountBinding): Promise<MyListEntry[]> {
+  const parsed = await readAccountValue<unknown>(MY_LIST_KEY, binding, []);
 
   if (Array.isArray(parsed)) {
     const now = Date.now();
@@ -693,22 +708,66 @@ export async function readLocalMyListEntries(): Promise<MyListEntry[]> {
   return [];
 }
 
+export async function readLocalMyListIds(): Promise<string[]> {
+  const binding = captureUserDataAccountBinding();
+  const entries = await readLocalMyListEntriesForBinding(binding);
+  assertUserDataAccountBindingIsCurrent(binding);
+  return entries.map((entry) => entry.id);
+}
+
+export async function saveLocalMyListIds(ids: string[]) {
+  const binding = captureUserDataAccountBinding();
+  const now = Date.now();
+  const normalized = dedupeIds(ids).map((id, index) => ({
+    id,
+    savedAt: now - index,
+  }));
+  await writeAccountValue(MY_LIST_KEY, binding, toMyListEntryMap(normalized));
+}
+
+export async function readLocalMyListEntries(): Promise<MyListEntry[]> {
+  const binding = captureUserDataAccountBinding();
+  return readLocalMyListEntriesForBinding(binding);
+}
+
 export async function readMyListIds(): Promise<string[]> {
-  const localEntries = await readLocalMyListEntries();
+  const binding = captureUserDataAccountBinding();
+  const userId = getBoundUserId(binding);
+  const localEntries = await readLocalMyListEntriesForBinding(binding);
   const localIds = localEntries.map((entry) => entry.id);
-  const userId = await getSignedInUserId();
-  if (!userId) return localIds;
+  if (!userId) {
+    assertUserDataAccountBindingIsCurrent(binding);
+    return localIds;
+  }
 
   try {
-    const { data, error } = await supabase
-      .from(USER_MY_LIST_TABLE)
-      .select("title_id,updated_at")
-      .eq("user_id", userId)
-      .order("updated_at", { ascending: false });
+    const remoteRowsByTitleId = new Map<string, UserListRow>();
+    let titleIdCursor = "";
+    for (;;) {
+      let query = supabase
+        .from(USER_MY_LIST_TABLE)
+        .select("title_id,updated_at")
+        .eq("user_id", userId)
+        .order("title_id", { ascending: true })
+        .limit(USER_MY_LIST_PAGE_SIZE);
+      if (titleIdCursor) query = query.gt("title_id", titleIdCursor);
+      const { data, error } = await query.returns<UserListRow[]>();
+      assertUserDataAccountBindingIsCurrent(binding);
+      if (error || !data) throw error ?? new Error("Saved titles are unavailable.");
+      for (const row of data) {
+        const titleId = toIdString(row.title_id);
+        if (titleId) remoteRowsByTitleId.set(titleId, row);
+      }
+      if (data.length < USER_MY_LIST_PAGE_SIZE) break;
+      const nextCursor = toIdString(data[data.length - 1]?.title_id);
+      if (!nextCursor || nextCursor === titleIdCursor) {
+        throw new Error("Saved title pagination did not advance.");
+      }
+      titleIdCursor = nextCursor;
+    }
+    const remoteRows = Array.from(remoteRowsByTitleId.values());
 
-    if (error || !data) return localIds;
-
-    const remoteEntries = (data ?? [])
+    const remoteEntries = remoteRows
       .map((row) => {
         const id = toIdString(row.title_id);
         if (!id) return null;
@@ -740,20 +799,24 @@ export async function readMyListIds(): Promise<string[]> {
     const mergedIds = sortMyListEntries(Object.values(mergedEntriesMap)).map((entry) => entry.id);
     const missingRemoteIds = mergedIds.filter((id) => !remoteIds.includes(id));
 
-    if (missingRemoteIds.length > 0) {
+    for (let offset = 0; offset < missingRemoteIds.length; offset += USER_MY_LIST_PAGE_SIZE) {
+      const titleIds = missingRemoteIds.slice(offset, offset + USER_MY_LIST_PAGE_SIZE);
       await supabase.from(USER_MY_LIST_TABLE).upsert(
-        missingRemoteIds.map((titleId) => ({
+        titleIds.map((titleId) => ({
           user_id: userId,
           title_id: titleId,
           updated_at: new Date().toISOString(),
         }) satisfies UserListInsert),
         { onConflict: "user_id,title_id" },
       );
+      assertUserDataAccountBindingIsCurrent(binding);
     }
 
-    await writeJsonValue(MY_LIST_KEY, mergedEntriesMap);
+    await writeAccountValue(MY_LIST_KEY, binding, mergedEntriesMap);
+    assertUserDataAccountBindingIsCurrent(binding);
     return mergedIds;
   } catch {
+    assertUserDataAccountBindingIsCurrent(binding);
     return localIds;
   }
 }
@@ -770,7 +833,9 @@ export async function toggleMyListTitle(
   const id = toIdString(titleId);
   if (!id) return readLocalMyListIds();
 
-  const currentEntries = await readLocalMyListEntries();
+  const binding = captureUserDataAccountBinding();
+  const userId = getBoundUserId(binding);
+  const currentEntries = await readLocalMyListEntriesForBinding(binding);
   const currentEntryMap = toMyListEntryMap(currentEntries);
   const exists = !!currentEntryMap[id];
 
@@ -786,11 +851,13 @@ export async function toggleMyListTitle(
     };
   }
 
-  await writeJsonValue(MY_LIST_KEY, currentEntryMap);
+  await writeAccountValue(MY_LIST_KEY, binding, currentEntryMap);
   const nextIds = sortMyListEntries(Object.values(currentEntryMap)).map((entry) => entry.id);
 
-  const userId = await getSignedInUserId();
-  if (!userId) return nextIds;
+  if (!userId) {
+    assertUserDataAccountBindingIsCurrent(binding);
+    return nextIds;
+  }
 
   try {
     if (exists) {
@@ -805,21 +872,35 @@ export async function toggleMyListTitle(
         { onConflict: "user_id,title_id" },
       );
     }
+    assertUserDataAccountBindingIsCurrent(binding);
   } catch {
+    assertUserDataAccountBindingIsCurrent(binding);
     // keep local source available even if remote write fails
   }
 
+  assertUserDataAccountBindingIsCurrent(binding);
   return nextIds;
 }
 
 export async function readLocalWatchProgress(): Promise<WatchProgressMap> {
-  const parsed = await readJsonValue<unknown>(WATCH_PROGRESS_KEY, {});
+  const binding = captureUserDataAccountBinding();
+  const parsed = await readAccountValue<unknown>(WATCH_PROGRESS_KEY, binding, {});
   return parsed && typeof parsed === "object" ? (parsed as WatchProgressMap) : {};
 }
 
 export async function saveLocalWatchProgress(progressMap: WatchProgressMap) {
-  await writeJsonValue(WATCH_PROGRESS_KEY, progressMap);
+  const binding = captureUserDataAccountBinding();
+  await writeAccountValue(WATCH_PROGRESS_KEY, binding, progressMap);
 }
+
+async function readLocalWatchProgressForBinding(binding: UserDataAccountBinding): Promise<WatchProgressMap> {
+  const parsed = await readAccountValue<unknown>(WATCH_PROGRESS_KEY, binding, {});
+  return parsed && typeof parsed === "object" ? (parsed as WatchProgressMap) : {};
+}
+
+const saveLocalWatchProgressForBinding = (binding: UserDataAccountBinding, progressMap: WatchProgressMap) => (
+  writeAccountValue(WATCH_PROGRESS_KEY, binding, progressMap)
+);
 
 const toProgressEntry = (row: WatchHistoryRow): WatchProgressEntry | null => {
   const id = toIdString(row.title_id);
@@ -858,9 +939,13 @@ async function upsertWatchHistoryProgress(
 }
 
 export async function readMergedWatchProgress(): Promise<WatchProgressMap> {
-  const local = await readLocalWatchProgress();
-  const userId = await getSignedInUserId();
-  if (!userId) return local;
+  const binding = captureUserDataAccountBinding();
+  const userId = getBoundUserId(binding);
+  const local = await readLocalWatchProgressForBinding(binding);
+  if (!userId) {
+    assertUserDataAccountBindingIsCurrent(binding);
+    return local;
+  }
 
   try {
     const { data, error } = await supabase
@@ -868,6 +953,7 @@ export async function readMergedWatchProgress(): Promise<WatchProgressMap> {
       .select("title_id,last_position_millis,duration_millis,last_watched_at,updated_at,completed,play_count")
       .eq("user_id", userId);
 
+    assertUserDataAccountBindingIsCurrent(binding);
     if (error || !data) return local;
 
     const remoteMap: WatchProgressMap = {};
@@ -890,17 +976,21 @@ export async function readMergedWatchProgress(): Promise<WatchProgressMap> {
       const remoteEntry = remoteMap[id];
       if (!remoteEntry || (entry.updatedAt ?? 0) > (remoteEntry.updatedAt ?? 0)) {
         await upsertWatchHistoryProgress(userId, id, entry, { completed: false });
+        assertUserDataAccountBindingIsCurrent(binding);
       }
     }
 
-    await saveLocalWatchProgress(merged);
+    await saveLocalWatchProgressForBinding(binding, merged);
+    assertUserDataAccountBindingIsCurrent(binding);
     return merged;
   } catch {
+    assertUserDataAccountBindingIsCurrent(binding);
     return local;
   }
 }
 
 export async function writeProgressForTitle(titleId: string | number, position: number, duration?: number) {
+  const binding = captureUserDataAccountBinding();
   const id = toIdString(titleId);
   if (!id) return;
 
@@ -910,29 +1000,32 @@ export async function writeProgressForTitle(titleId: string | number, position: 
     durationMillis: duration,
   };
 
-  const map = await readLocalWatchProgress();
+  const userId = getBoundUserId(binding);
+  const map = await readLocalWatchProgressForBinding(binding);
   map[id] = nextEntry;
-  await saveLocalWatchProgress(map);
+  await saveLocalWatchProgressForBinding(binding, map);
 
-  const userId = await getSignedInUserId();
   if (!userId) return;
 
   try {
     await upsertWatchHistoryProgress(userId, id, nextEntry, { completed: false });
+    assertUserDataAccountBindingIsCurrent(binding);
   } catch {
+    assertUserDataAccountBindingIsCurrent(binding);
     // local progress remains authoritative fallback
   }
 }
 
 export async function clearProgressForTitle(titleId: string | number) {
+  const binding = captureUserDataAccountBinding();
   const id = toIdString(titleId);
   if (!id) return;
 
-  const map = await readLocalWatchProgress();
+  const userId = getBoundUserId(binding);
+  const map = await readLocalWatchProgressForBinding(binding);
   delete map[id];
-  await saveLocalWatchProgress(map);
+  await saveLocalWatchProgressForBinding(binding, map);
 
-  const userId = await getSignedInUserId();
   if (!userId) return;
 
   try {
@@ -947,16 +1040,19 @@ export async function clearProgressForTitle(titleId: string | number) {
       } satisfies WatchHistoryInsert,
       { onConflict: "user_id,title_id" },
     );
+    assertUserDataAccountBindingIsCurrent(binding);
   } catch {
+    assertUserDataAccountBindingIsCurrent(binding);
     // ignore remote cleanup failures
   }
 }
 
 export async function recordPlaybackStart(titleId: string | number) {
+  const binding = captureUserDataAccountBinding();
   const id = toIdString(titleId);
   if (!id) return;
 
-  const userId = await getSignedInUserId();
+  const userId = getBoundUserId(binding);
   if (userId) {
     try {
       const existing = await supabase
@@ -979,7 +1075,9 @@ export async function recordPlaybackStart(titleId: string | number) {
         } satisfies WatchHistoryInsert,
         { onConflict: "user_id,title_id" },
       );
+      assertUserDataAccountBindingIsCurrent(binding);
     } catch {
+      assertUserDataAccountBindingIsCurrent(binding);
       // watch history is optional foundation data
     }
   }
@@ -997,10 +1095,11 @@ export async function recordWatchHistoryProgress(
     completed?: boolean;
   },
 ) {
+  const binding = captureUserDataAccountBinding();
   const id = toIdString(titleId);
   if (!id) return;
 
-  const userId = await getSignedInUserId();
+  const userId = getBoundUserId(binding);
   if (!userId) return;
 
   try {
@@ -1024,7 +1123,9 @@ export async function recordWatchHistoryProgress(
       } satisfies WatchHistoryInsert,
       { onConflict: "user_id,title_id" },
     );
+    assertUserDataAccountBindingIsCurrent(binding);
   } catch {
+    assertUserDataAccountBindingIsCurrent(binding);
     // foundation table is optional
   }
 }
@@ -1037,10 +1138,20 @@ export function getAvatarEmoji(index: number): string {
   return AVATARS[Math.max(0, Math.min(9, index))] ?? "👤";
 }
 
-export async function readUserProfile(): Promise<UserProfile> {
-  const cached = await readJsonValue<UserProfile>(USER_PROFILE_KEY, { username: "", avatarIndex: 0 });
-  const signedInUser = await getSignedInUserSnapshot();
+export async function readUserProfile(expectedUserId?: string | null): Promise<UserProfile> {
+  const binding = captureUserDataAccountBinding();
+  const userId = getBoundUserId(binding);
+  if (expectedUserId !== undefined && userId !== expectedUserId) {
+    throw new Error("Account changed before the profile could be loaded.");
+  }
+  const signedInUser = await getSignedInUserSnapshot(binding);
+  const cached = await readAccountValue<UserProfile>(
+    USER_PROFILE_KEY,
+    binding,
+    { username: "", avatarIndex: 0 },
+  );
   const remoteProfile = signedInUser.userId ? await readRemoteUserProfile(signedInUser.userId) : null;
+  assertUserDataAccountBindingIsCurrent(binding);
   if (remoteProfile?.username) {
     logChatProfile("profile_selected", {
       source: "remote_profile",
@@ -1048,7 +1159,7 @@ export async function readUserProfile(): Promise<UserProfile> {
       username: remoteProfile.username,
       displayName: remoteProfile.displayName ?? "",
     });
-    await writeJsonValue(USER_PROFILE_KEY, remoteProfile);
+    await writeAccountValue(USER_PROFILE_KEY, binding, remoteProfile);
     return remoteProfile;
   }
 
@@ -1074,17 +1185,20 @@ export async function readUserProfile(): Promise<UserProfile> {
     username: generated.username,
     displayName: generated.displayName ?? "",
   });
-  await saveUserProfile(generated);
+  await saveUserProfile(generated, signedInUser.userId);
   return generated;
 }
 
 export async function readCachedUserProfile(): Promise<UserProfile | null> {
-  const cached = await readJsonValue<UserProfile>(USER_PROFILE_KEY, { username: "", avatarIndex: 0 });
+  const binding = captureUserDataAccountBinding();
+  const cached = await readAccountValue<UserProfile>(USER_PROFILE_KEY, binding, { username: "", avatarIndex: 0 });
+  assertUserDataAccountBindingIsCurrent(binding);
   return cached.username ? normalizeUserProfile(cached) : null;
 }
 
 export async function readMyProfileVisibility(): Promise<ProfileVisibility> {
-  const userId = await getSignedInUserId();
+  const binding = captureUserDataAccountBinding();
+  const userId = getBoundUserId(binding);
   if (!userId) return "everyone";
 
   try {
@@ -1094,23 +1208,26 @@ export async function readMyProfileVisibility(): Promise<ProfileVisibility> {
       .eq("user_id", userId)
       .maybeSingle();
 
+    assertUserDataAccountBindingIsCurrent(binding);
     if (!error && data) {
       return normalizeProfileVisibility(data.profile_visibility);
     }
   } catch {
+    assertUserDataAccountBindingIsCurrent(binding);
     // local fallback below keeps Settings responsive if remote profile is temporarily unavailable
   }
 
-  const cached = await readJsonValue<UserProfile>(USER_PROFILE_KEY, { username: "", avatarIndex: 0 });
+  const cached = await readAccountValue<UserProfile>(USER_PROFILE_KEY, binding, { username: "", avatarIndex: 0 });
   return normalizeProfileVisibility(cached.profileVisibility);
 }
 
 export async function updateMyProfileVisibility(visibility: ProfileVisibility): Promise<ProfileVisibility> {
+  const binding = captureUserDataAccountBinding();
   const normalizedVisibility = normalizeProfileVisibility(visibility);
-  const userId = await getSignedInUserId();
+  const userId = getBoundUserId(binding);
   if (!userId) throw new Error("Sign in before updating profile privacy.");
 
-  const existingProfile = await readUserProfile();
+  const existingProfile = await readUserProfile(userId);
   const { error } = await supabase
     .from(USER_PROFILES_TABLE)
     .update({
@@ -1120,8 +1237,9 @@ export async function updateMyProfileVisibility(visibility: ProfileVisibility): 
     .eq("user_id", userId);
 
   if (error) throw error;
+  assertUserDataAccountBindingIsCurrent(binding);
 
-  await writeJsonValue(USER_PROFILE_KEY, normalizeUserProfile({
+  await writeAccountValue(USER_PROFILE_KEY, binding, normalizeUserProfile({
     ...existingProfile,
     profileVisibility: normalizedVisibility,
   }));
@@ -1130,7 +1248,8 @@ export async function updateMyProfileVisibility(visibility: ProfileVisibility): 
 }
 
 export async function readMyProfileAccessVisibility(): Promise<AccessVisibility> {
-  const userId = await getSignedInUserId();
+  const binding = captureUserDataAccountBinding();
+  const userId = getBoundUserId(binding);
   if (!userId) return "public";
 
   const { data, error } = await supabase
@@ -1140,12 +1259,14 @@ export async function readMyProfileAccessVisibility(): Promise<AccessVisibility>
     .maybeSingle();
 
   if (error) throw error;
+  assertUserDataAccountBindingIsCurrent(binding);
   return normalizeAccessVisibility(data?.profile_access_visibility);
 }
 
 export async function updateMyProfileAccessVisibility(visibility: AccessVisibility): Promise<AccessVisibility> {
+  const binding = captureUserDataAccountBinding();
   const normalizedVisibility = normalizeAccessVisibility(visibility);
-  const userId = await getSignedInUserId();
+  const userId = getBoundUserId(binding);
   if (!userId) throw new Error("Sign in before updating profile visibility.");
 
   const { error } = await supabase
@@ -1157,9 +1278,11 @@ export async function updateMyProfileAccessVisibility(visibility: AccessVisibili
     .eq("user_id", userId);
 
   if (error) throw error;
+  assertUserDataAccountBindingIsCurrent(binding);
 
-  const existingProfile = await readUserProfile();
-  await writeJsonValue(USER_PROFILE_KEY, normalizeUserProfile({
+  const existingProfile = await readUserProfile(userId);
+  assertUserDataAccountBindingIsCurrent(binding);
+  await writeAccountValue(USER_PROFILE_KEY, binding, normalizeUserProfile({
     ...existingProfile,
     profileAccessVisibility: normalizedVisibility,
   }));
@@ -1168,7 +1291,8 @@ export async function updateMyProfileAccessVisibility(visibility: AccessVisibili
 }
 
 export async function readMyPlatformAccessVisibility(): Promise<AccessVisibility> {
-  const userId = await getSignedInUserId();
+  const binding = captureUserDataAccountBinding();
+  const userId = getBoundUserId(binding);
   if (!userId) return "public";
 
   const { data, error } = await supabase
@@ -1178,12 +1302,14 @@ export async function readMyPlatformAccessVisibility(): Promise<AccessVisibility
     .maybeSingle();
 
   if (error) throw error;
+  assertUserDataAccountBindingIsCurrent(binding);
   return normalizeAccessVisibility(data?.platform_access_visibility);
 }
 
 export async function updateMyPlatformAccessVisibility(visibility: AccessVisibility): Promise<AccessVisibility> {
+  const binding = captureUserDataAccountBinding();
   const normalizedVisibility = normalizeAccessVisibility(visibility);
-  const userId = await getSignedInUserId();
+  const userId = getBoundUserId(binding);
   if (!userId) throw new Error("Sign in before updating Platform visibility.");
 
   const { error } = await supabase
@@ -1195,9 +1321,11 @@ export async function updateMyPlatformAccessVisibility(visibility: AccessVisibil
     .eq("user_id", userId);
 
   if (error) throw error;
+  assertUserDataAccountBindingIsCurrent(binding);
 
-  const existingProfile = await readUserProfile();
-  await writeJsonValue(USER_PROFILE_KEY, normalizeUserProfile({
+  const existingProfile = await readUserProfile(userId);
+  assertUserDataAccountBindingIsCurrent(binding);
+  await writeAccountValue(USER_PROFILE_KEY, binding, normalizeUserProfile({
     ...existingProfile,
     platformAccessVisibility: normalizedVisibility,
   }));
@@ -1206,46 +1334,57 @@ export async function updateMyPlatformAccessVisibility(visibility: AccessVisibil
 }
 
 export async function updateMyDisplayName(displayName: string): Promise<UserProfile> {
+  const binding = captureUserDataAccountBinding();
   const normalizedDisplayName = normalizeTextValue(displayName);
   if (!normalizedDisplayName) throw new Error("Display name is required.");
   if (normalizedDisplayName.length > 60) throw new Error("Display name must be 60 characters or less.");
 
-  const userId = await getSignedInUserId();
+  const userId = getBoundUserId(binding);
   if (!userId) throw new Error("Sign in before updating your display name.");
 
-  const existingProfile = await readUserProfile();
+  const existingProfile = await readUserProfile(userId);
   const updatedProfile = normalizeUserProfile({
     ...existingProfile,
     displayName: normalizedDisplayName,
   });
-  await saveUserProfile(updatedProfile);
+  assertUserDataAccountBindingIsCurrent(binding);
+  await saveUserProfile(updatedProfile, userId);
+  assertUserDataAccountBindingIsCurrent(binding);
   return updatedProfile;
 }
 
-export async function saveUserProfile(profile: UserProfile): Promise<void> {
+export async function saveUserProfile(profile: UserProfile, expectedUserId?: string | null): Promise<void> {
+  const binding = captureUserDataAccountBinding();
   const normalized = normalizeUserProfile(profile);
+  const userId = getBoundUserId(binding);
+  if (expectedUserId !== undefined && userId !== expectedUserId) {
+    throw new Error("Account changed before the profile could be saved.");
+  }
   logChatProfile("local_profile_save", {
     username: normalized.username,
     displayName: normalized.displayName ?? "",
   });
-  await writeJsonValue(USER_PROFILE_KEY, normalized);
-  const remoteSynced = await syncUserProfileToRemote(normalized);
+  await writeAccountValue(USER_PROFILE_KEY, binding, normalized);
+  const remoteSynced = await syncUserProfileToRemote(normalized, binding);
   if (remoteSynced) {
-    await refreshSignedInIdentitySnapshots(normalized);
+    await refreshSignedInIdentitySnapshots(normalized, binding);
   }
 }
 
 // ── Last Party Session (for auto-rejoin) ──────────────────────────────────────
 
 export async function readLastPartySession(): Promise<LastPartySession | null> {
-  const cached = await readJsonValue<LastPartySession | null>(LAST_PARTY_KEY, null);
+  const binding = captureUserDataAccountBinding();
+  const cached = await readAccountValue<LastPartySession | null>(LAST_PARTY_KEY, binding, null);
   return cached;
 }
 
 export async function saveLastPartySession(session: LastPartySession): Promise<void> {
-  await writeJsonValue(LAST_PARTY_KEY, session);
+  const binding = captureUserDataAccountBinding();
+  await writeAccountValue(LAST_PARTY_KEY, binding, session);
 }
 
 export async function clearLastPartySession(): Promise<void> {
-  await writeJsonValue(LAST_PARTY_KEY, null);
+  const binding = captureUserDataAccountBinding();
+  await writeAccountValue(LAST_PARTY_KEY, binding, null);
 }

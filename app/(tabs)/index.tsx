@@ -16,7 +16,7 @@ import {
     resolveFeatureConfig,
     resolveHomeConfig,
 } from "../../_lib/appConfig";
-import { getWritablePartyUserId } from "../../_lib/watchParty";
+import { getCurrentAccountSessionAuthoritySnapshot } from "../../_lib/accountSessionAuthority";
 
 import {
     ActivityIndicator,
@@ -311,17 +311,13 @@ export default function HomeScreen() {
   }
 
   async function fetchCurrentChannelProfile() {
-    const [cachedProfile, userId] = await Promise.all([
-      readCachedUserProfile().catch(() => null),
-      getWritablePartyUserId().catch(() => null),
-    ]);
-
-    const signedInUserId = String(userId ?? "").trim();
-    if (!signedInUserId) {
+    const expectedAuthority = getCurrentAccountSessionAuthoritySnapshot();
+    if (!expectedAuthority || expectedAuthority.restoreOnly) {
       setCurrentChannel(null);
-      setMainTabHeaderProfileSnapshot(null);
       return;
     }
+    const signedInUserId = expectedAuthority.userId;
+    const cachedProfile = await readCachedUserProfile().catch(() => null);
 
     if (cachedProfile?.username) {
       const cachedChannel = buildUserChannelProfile({
@@ -331,16 +327,17 @@ export default function HomeScreen() {
         isLive: false,
       });
 
-      setCurrentChannel((existingChannel) => {
-        if (!cachedChannel.avatarUrl && existingChannel?.id === signedInUserId && existingChannel.avatarUrl) {
-          return existingChannel;
-        }
-        return cachedChannel;
-      });
-      setMainTabHeaderProfileSnapshot(cachedChannel, !!cachedChannel.avatarUrl);
+      if (setMainTabHeaderProfileSnapshot(cachedChannel, !!cachedChannel.avatarUrl, expectedAuthority)) {
+        setCurrentChannel((existingChannel) => {
+          if (!cachedChannel.avatarUrl && existingChannel?.id === signedInUserId && existingChannel.avatarUrl) {
+            return existingChannel;
+          }
+          return cachedChannel;
+        });
+      }
     }
 
-    const profile = await readUserProfile().catch(() => cachedProfile);
+    const profile = await readUserProfile(signedInUserId).catch(() => cachedProfile);
     const nextChannel = buildUserChannelProfile({
       id: signedInUserId,
       profile,
@@ -348,8 +345,9 @@ export default function HomeScreen() {
       isLive: false,
     });
 
-    setCurrentChannel(nextChannel);
-    setMainTabHeaderProfileSnapshot(nextChannel);
+    if (setMainTabHeaderProfileSnapshot(nextChannel, true, expectedAuthority)) {
+      setCurrentChannel(nextChannel);
+    }
   }
 
   async function fetchDiscoveryFeedV1() {

@@ -27,7 +27,7 @@ const supabaseConfig = read("supabase/config.toml");
 
 assertIncludes(tabLayout, "title: 'Saved'", "bottom tab viewer Library label");
 assertIncludes(viewerLibrary, "My Library", "viewer Library screen header");
-assertIncludes(viewerLibrary, "Saved titles, watch progress, followed Platforms, and saved replays live here.", "viewer Library scope copy");
+assertIncludes(viewerLibrary, "Saved titles, unlocked creator videos, watch progress, followed Platforms, and saved replays live here.", "viewer Library scope copy");
 assertIncludes(studio, "Content Library", "Platform Studio Content Library copy");
 assertIncludes(studio, "A clean library of your uploads, drafts, paid videos, Circle media, replays, and events.", "Save Replay Content Library destination copy");
 assertIncludes(studio, 'pathname: "/player/replay/[replayId]"', "Content Library replay Open route");

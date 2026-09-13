@@ -65,6 +65,7 @@ const postAuditFunctionInventory = new Set([
   "ios-voip-call-dispatch",
   "ios-voip-push-tokens",
   "profile-media-public",
+  "revenuecat-premium-reconcile",
 ]);
 
 for (const file of appFiles) {

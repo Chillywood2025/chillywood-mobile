@@ -368,21 +368,25 @@ export async function readSocialAttachmentsForSurfaces(
   const empty = new Map<string, SocialAttachment[]>();
   if (!normalizedSurfaceIds.length) return empty;
 
-  const { data, error } = await supabase
-    .from("social_attachments")
-    .select(SOCIAL_ATTACHMENT_SELECT)
-    .eq("surface_type", surfaceType)
-    .in("surface_id", normalizedSurfaceIds)
-    .is("deleted_at", null)
-    .in("moderation_status", ["clean", "reported"])
-    .in("scan_status", [...SOCIAL_ATTACHMENT_PUBLIC_SAFE_SCAN_STATUSES])
-    .order("created_at", { ascending: true })
-    .limit(Math.max(1, Math.min(200, normalizedSurfaceIds.length * 4)))
-    .returns<SocialAttachmentRow[]>();
+  const rows: SocialAttachmentRow[] = [];
+  for (let offset = 0; offset < normalizedSurfaceIds.length; offset += 50) {
+    const surfaceIdBatch = normalizedSurfaceIds.slice(offset, offset + 50);
+    const { data, error } = await supabase
+      .from("social_attachments")
+      .select(SOCIAL_ATTACHMENT_SELECT)
+      .eq("surface_type", surfaceType)
+      .in("surface_id", surfaceIdBatch)
+      .is("deleted_at", null)
+      .in("moderation_status", ["clean", "reported"])
+      .in("scan_status", [...SOCIAL_ATTACHMENT_PUBLIC_SAFE_SCAN_STATUSES])
+      .order("created_at", { ascending: true })
+      .limit(surfaceIdBatch.length * 4)
+      .returns<SocialAttachmentRow[]>();
+    if (error || !data) return empty;
+    for (const row of data) rows[rows.length] = row;
+  }
 
-  if (error || !data) return empty;
-
-  const attachments = await Promise.all(data.map(parseSocialAttachment));
+  const attachments = await Promise.all(rows.map(parseSocialAttachment));
   return attachments.reduce((map, attachment) => {
     const current = map.get(attachment.surfaceId) ?? [];
     current.push(attachment);
