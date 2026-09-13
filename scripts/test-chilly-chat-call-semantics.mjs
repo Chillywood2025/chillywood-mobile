@@ -1620,6 +1620,16 @@ assert.match(
 );
 assert.match(
   activeInviteReconciliationSource,
+  /terminalReconciliationInterval = setInterval\([\s\S]{0,220}reconcileActiveInvite\(\)[\s\S]{0,220}ACTIVE_CHAT_CALL_TERMINAL_RECONCILIATION_MS/u,
+  "accepted calls must reconcile terminal invite truth when Realtime reconnects without replaying the terminal update",
+);
+assert.match(
+  activeInviteReconciliationSource,
+  /clearInterval\(terminalReconciliationInterval\)/u,
+  "terminal invite fallback polling must stop with the accepted-call subscription",
+);
+assert.match(
+  activeInviteReconciliationSource,
   /reportIosNativeCallRemoteEnd/u,
   "remote terminal invite state must close native and media state",
 );

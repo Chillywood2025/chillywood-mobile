@@ -135,6 +135,7 @@ const logChatCall = (event: string, details?: Record<string, unknown>) => {
 };
 
 const IOS_NATIVE_PRESENTATION_GRACE_MS = 1_500;
+const ACTIVE_CHAT_CALL_TERMINAL_RECONCILIATION_MS = 4_000;
 
 const buildAuthor = (members: ChatThreadMember[], senderUserId: string) => {
   return members.find((member) => member.userId === senderUserId)?.displayName ?? "User";
@@ -1387,8 +1388,15 @@ export default function ChillyChatThreadScreen() {
     const unsubscribe = subscribeToChillyChatCallInvite(inviteId, () => {
       void reconcileActiveInvite();
     });
+    // Realtime can reconnect without replaying a terminal invite update after a
+    // short native/background interruption. Keep the accepted-call surface
+    // bounded to authoritative invite truth even when that one update is missed.
+    const terminalReconciliationInterval = setInterval(() => {
+      void reconcileActiveInvite();
+    }, ACTIVE_CHAT_CALL_TERMINAL_RECONCILIATION_MS);
     return () => {
       subscribed = false;
+      clearInterval(terminalReconciliationInterval);
       unsubscribe();
     };
   }, [
