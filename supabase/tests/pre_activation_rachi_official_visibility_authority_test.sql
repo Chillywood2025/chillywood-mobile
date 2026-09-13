@@ -107,13 +107,58 @@ insert into auth.users(
   id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
   is_sso_user, is_anonymous
-) values (
-  'a6200000-0000-4000-8000-000000000001',
-  'authenticated', 'authenticated', 'rachi-viewer@example.test', '',
-  timezone('utc'::text, now()), '{"provider":"email","providers":["email"]}', '{}',
-  timezone('utc'::text, now()), timezone('utc'::text, now()), false, false
-) on conflict (id) do nothing;
+) values
+  (
+    'a6200000-0000-4000-8000-000000000001',
+    'authenticated', 'authenticated', 'rachi-viewer@example.test', '',
+    timezone('utc'::text, now()), '{"provider":"email","providers":["email"]}', '{}',
+    timezone('utc'::text, now()), timezone('utc'::text, now()), false, false
+  ),
+  (
+    'a6200000-0000-4000-8000-000000000002',
+    'authenticated', 'authenticated', 'rachi-operator@example.test', '',
+    timezone('utc'::text, now()), '{"provider":"email","providers":["email"]}', '{}',
+    timezone('utc'::text, now()), timezone('utc'::text, now()), false, false
+  )
+on conflict (id) do nothing;
 set local session_replication_role = origin;
+
+insert into auth.sessions(id, user_id, not_after) values (
+  'a6200000-0000-4000-8000-000000000202',
+  'a6200000-0000-4000-8000-000000000002',
+  now() + interval '1 day'
+);
+
+insert into public.wave1_legal_acceptances(
+  user_id, subject_hash, document_key, document_version, market,
+  role_key, capability, session_generation, authority_source
+)
+select
+  'a6200000-0000-4000-8000-000000000002'::uuid,
+  public.wave1_sha256('a6200000-0000-4000-8000-000000000002'),
+  document.document_key,
+  document.version,
+  document.market,
+  'member',
+  document.capability,
+  'a6200000-0000-4000-8000-000000000202',
+  'service_reconciliation'
+from public.wave1_legal_document_versions document
+where document.active
+  and document.market = 'UNITED_STATES'
+  and document.capability = 'account';
+
+insert into public.platform_role_memberships(
+  role, user_id, email, status, notes, granted_by, expires_at
+) values (
+  'operator',
+  'a6200000-0000-4000-8000-000000000002',
+  'rachi-operator@example.test',
+  'active',
+  'pgTAP exact Official Rachi retry fixture',
+  'service_role',
+  now() + interval '1 day'
+);
 
 set local request.jwt.claims =
   '{"sub":"a6200000-0000-4000-8000-000000000001","role":"authenticated","email":"rachi-viewer@example.test"}';
@@ -166,6 +211,95 @@ select ok(
 );
 
 reset role;
+
+set local request.jwt.claims =
+  '{"sub":"a6200000-0000-4000-8000-000000000002","role":"authenticated","email":"rachi-operator@example.test","session_id":"a6200000-0000-4000-8000-000000000202"}';
+set local role authenticated;
+
+select lives_ok(
+  $sql$
+    select set_config(
+      'pgtap.rachi_first_result',
+      public.admin_create_official_rachi_post(
+        'One exact idempotent Rachi update',
+        'public',
+        'Pre-production adversarial retry fixture',
+        'rachi-post:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+      )::text,
+      true
+    )
+  $sql$,
+  'an exact operator-bound operation key creates the Official Rachi post once'
+);
+select ok(
+  (
+    public.admin_create_official_rachi_post(
+      'One exact idempotent Rachi update',
+      'public',
+      'Pre-production adversarial retry fixture',
+      'rachi-post:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    )->>'id'
+  ) = (current_setting('pgtap.rachi_first_result')::jsonb->>'id')
+  and (
+    public.admin_create_official_rachi_post(
+      'One exact idempotent Rachi update',
+      'public',
+      'Pre-production adversarial retry fixture',
+      'rachi-post:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    )->>'idempotent'
+  )::boolean,
+  'an ambiguous retry returns the original post rather than inserting a duplicate'
+);
+select throws_ok(
+  $sql$
+    select public.admin_create_official_rachi_post(
+      'Conflicting reuse must fail',
+      'public',
+      'Pre-production adversarial retry fixture',
+      'rachi-post:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    )
+  $sql$,
+  'P0001',
+  'rachi_post_operation_key_conflict',
+  'an operation key cannot be rebound to different public content'
+);
+select throws_ok(
+  $sql$
+    select public.admin_create_official_rachi_post(
+      'Nonpublic Official Rachi update',
+      'private',
+      'Pre-production adversarial retry fixture',
+      'rachi-post:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+    )
+  $sql$,
+  'P0001',
+  'rachi_post_public_visibility_required',
+  'the privileged RPC cannot manufacture nonpublic Official Rachi authority'
+);
+
+reset role;
+select is(
+  (
+    select count(*)::integer
+    from public.platform_admin_audit_logs audit
+    where audit.actor_user_id = 'a6200000-0000-4000-8000-000000000002'
+      and audit.action = 'official_rachi_post_created'
+      and audit.metadata->>'operation_key' =
+        'rachi-post:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+  ),
+  1,
+  'one logical Official Rachi operation creates exactly one durable audit record'
+);
+select is(
+  (
+    select count(*)::integer
+    from public.profile_posts post
+    where post.user_id = 'platform_rachi_official'
+      and post.body = 'One exact idempotent Rachi update'
+  ),
+  1,
+  'one logical Official Rachi operation creates exactly one public post'
+);
 
 select ok(
   not has_function_privilege(

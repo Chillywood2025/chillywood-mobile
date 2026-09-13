@@ -1,5 +1,5 @@
 begin;
-select plan(144);
+select plan(148);
 
 -- Successor-owned authority surfaces exist and remain service/internal only.
 select has_table('public', 'creator_earnings_lifecycle_events', 'append-only creator earnings lifecycle exists');
@@ -583,6 +583,124 @@ select
   'revenuecat', 'com.chillywood.channel.subscription.slot1',
   jsonb_build_object('synthetic_closeout_fixture', true)
 from pg_temp.creator_money_closeout_fixture;
+
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.creator_sandbox_source_owned_by_current_user_internal(text,uuid)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'authenticated',
+    'public.creator_sandbox_source_owned_by_current_user_internal(text,uuid)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'service_role',
+    'public.creator_sandbox_source_owned_by_current_user_internal(text,uuid)',
+    'EXECUTE'
+  )
+  and pg_get_functiondef(
+    'public.save_creator_sandbox_monetization_config(text,text,uuid,text,jsonb)'::regprocedure
+  ) ilike '%creator_sandbox_source_owned_by_current_user_internal%',
+  'sandbox source ownership is enforced inside the public wrapper by a fully private resolver'
+);
+
+update auth.users
+set email = 'creator-sandbox-exact-source@example.test',
+    email_confirmed_at = coalesce(email_confirmed_at, now())
+where id = (select creator_id from pg_temp.creator_money_closeout_fixture);
+
+insert into public.platform_role_memberships(
+  role, user_id, email, status, notes, granted_by, expires_at
+)
+select
+  'operator', creator_id::text, 'creator-sandbox-exact-source@example.test',
+  'active', 'pgTAP exact sandbox source ownership fixture', 'service_role',
+  now() + interval '1 day'
+from pg_temp.creator_money_closeout_fixture;
+
+set local session_replication_role = replica;
+insert into public.creator_channel_subscription_offers (
+  id, creator_id, title, price_cents, currency, interval, status,
+  provider, provider_product_id, metadata
+) values (
+  'a8000000-0000-4000-8000-000000000099',
+  'a1000000-0000-4000-8000-000000000001',
+  'Foreign creator channel subscription', 499, 'usd', 'monthly', 'sandbox',
+  'revenuecat', 'com.chillywood.channel.subscription.slot2',
+  jsonb_build_object('synthetic_closeout_fixture', true)
+);
+set local session_replication_role = origin;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'role', 'authenticated',
+    'sub', (select creator_id::text from pg_temp.creator_money_closeout_fixture),
+    'email', 'creator-sandbox-exact-source@example.test',
+    'session_id', (select session_one::text from pg_temp.creator_money_closeout_fixture)
+  )::text,
+  true
+);
+select lives_ok(
+  $sql$
+    select public.save_creator_sandbox_monetization_config(
+      'channel_subscription_sandbox_monthly_499',
+      'channel_subscription',
+      'a8000000-0000-4000-8000-000000000001',
+      'Exact owned channel',
+      '{"pgtap_exact_source":true}'::jsonb
+    )
+  $sql$,
+  'an eligible creator may save sandbox configuration for their exact owned source'
+);
+select throws_ok(
+  $sql$
+    select public.save_creator_sandbox_monetization_config(
+      'channel_subscription_sandbox_monthly_499',
+      'channel_subscription',
+      'a8000000-0000-4000-8000-000000000099',
+      'Wrong creator channel',
+      '{"pgtap_exact_source":true}'::jsonb
+    )
+  $sql$,
+  '42501',
+  'creator_sandbox_source_not_owned',
+  'creator A cannot bind sandbox configuration to creator B source authority'
+);
+reset role;
+select set_config('request.jwt.claims', '{}', true);
+
+select ok(
+  exists (
+    select 1
+    from public.creator_monetization_configs config
+    join pg_temp.creator_money_closeout_fixture fixture
+      on fixture.creator_id = config.creator_id
+    where config.source_type = 'channel_subscription'
+      and config.source_id = 'a8000000-0000-4000-8000-000000000001'
+      and config.metadata->>'pgtap_exact_source' = 'true'
+  )
+  and not exists (
+    select 1
+    from public.creator_monetization_configs config
+    join pg_temp.creator_money_closeout_fixture fixture
+      on fixture.creator_id = config.creator_id
+    where config.source_type = 'channel_subscription'
+      and config.source_id = 'a8000000-0000-4000-8000-000000000099'
+  ),
+  'the exact owned source persists and the foreign source creates no configuration row'
+);
+
+update public.platform_role_memberships
+set status = 'revoked',
+    revoked_at = now(),
+    revoked_by = 'pgtap'
+where user_id = (select creator_id::text from pg_temp.creator_money_closeout_fixture)
+  and role = 'operator'
+  and status = 'active';
 
 update public.wave1_creator_eligibility
 set age_18_plus = false
