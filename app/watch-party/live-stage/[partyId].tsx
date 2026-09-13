@@ -4795,10 +4795,10 @@ export default function WatchPartyLiveStageScreen({
       setLiveMoneyHostOfferState(offerState);
       setLiveMoneyNotice(passType === "live_watch_party_access_pass"
         ? enabled
-          ? "Live Stage entry is Paid. Viewers need a Live Stage Pass to watch/listen to this Live Stage. The paid offer currently serves Android sandbox viewers; iPhone purchase is unavailable on this build."
+          ? "Live Stage entry is Paid. Viewers need a Live Stage Pass to watch or listen. Purchase is currently available on supported Android devices; iPhone purchase is not available yet."
           : "Live Stage entry is Free."
         : enabled
-          ? "Speaking-seat eligibility is Paid. The paid offer currently serves Android sandbox viewers; iPhone purchase is unavailable on this build. A Live Stage Seat Pass never guarantees approval, camera, microphone, or LiveKit publish authority."
+          ? "Speaking-seat eligibility is Paid. Purchase is currently available on supported Android devices; iPhone purchase is not available yet. A Live Stage Seat Pass never guarantees approval, camera, microphone, or broadcast permission."
           : "Speaking-seat eligibility is Free. Host approval is still required.");
       setAccessRetryToken((value) => value + 1);
     } catch (error) {
@@ -4936,8 +4936,8 @@ export default function WatchPartyLiveStageScreen({
           <Text style={styles.routeGateBody}>
             {exactLivePassRequired
               ? LIVE_STAGE_PASS_PURCHASE_AVAILABLE
-                ? "A Live Stage Pass gives you viewer/listener access to this exact Live Stage. It does not include a speaking seat, camera, microphone, host, moderator, or LiveKit publish authority."
-                : "A Live Stage Pass gives you viewer/listener access to this exact Live Stage. This pass is currently available only through the verified Google Play sandbox, so it cannot be purchased on this build and nothing will be charged. It does not include a speaking seat, camera, microphone, host, moderator, or LiveKit publish authority."
+                ? "A Live Stage Pass gives you viewer/listener access to this exact Live Stage. It does not include a speaking seat, camera, microphone, host, moderator, or broadcast permission."
+                : "A Live Stage Pass gives you viewer/listener access to this exact Live Stage. Purchase is not available on this device yet, and nothing will be charged. It does not include a speaking seat, camera, microphone, host, moderator, or broadcast permission."
               : blockedRoomAccess ? getLiveStageAccessBody(blockedRoomAccess) : roomEntryError}
           </Text>
           {exactLivePassRequired ? (
@@ -5146,8 +5146,8 @@ export default function WatchPartyLiveStageScreen({
                     </TouchableOpacity>
                   ))}
                 </View>
-                <Text style={styles.liveMoneyHostBody} testID="live-stage-host-money-platform-note">Paid Live Stage passes currently use the verified Google Play sandbox. Android sandbox viewers can buy them; iPhone viewers cannot buy them on this build.</Text>
-                <Text style={styles.liveMoneyHostBody}>Viewer preview: {liveMoneyHostOfferState?.accessEnabled ? "Watch Live — $0.99" : "Free viewer entry"} · {liveMoneyHostOfferState?.seatEnabled ? "Live Stage Seat Pass — $0.99; host approval required" : "Free seat eligibility; host approval required"}. Payment never grants host, moderator, speaker, camera, microphone, or LiveKit publish authority.</Text>
+                <Text style={styles.liveMoneyHostBody} testID="live-stage-host-money-platform-note">Paid Live Stage passes are currently available on supported Android devices. iPhone purchase is not available yet.</Text>
+                <Text style={styles.liveMoneyHostBody}>Viewer preview: {liveMoneyHostOfferState?.accessEnabled ? "Watch Live — $0.99" : "Free viewer entry"} · {liveMoneyHostOfferState?.seatEnabled ? "Live Stage Seat Pass — $0.99; host approval required" : "Free seat eligibility; host approval required"}. Payment never grants host, moderator, speaker, camera, microphone, or broadcast permission.</Text>
                 {liveMoneyNotice ? <Text style={styles.liveMoneyHostBody}>{liveMoneyNotice}</Text> : null}
               </ScrollView>
             ) : null}
@@ -5307,7 +5307,7 @@ export default function WatchPartyLiveStageScreen({
               && liveMoneyAccess.seatOfferId
               && liveMoneyAccess.seatPriceCents ? (
               <View style={styles.stageCommunityPurchaseGroup}>
-                <Text style={styles.stageCommunityHint}>Live Stage Seat Pass: eligible for a speaking seat on this Live Stage. Host approval required. This does not guarantee speaking, camera, microphone, or LiveKit publish authority.</Text>
+                <Text style={styles.stageCommunityHint}>Live Stage Seat Pass: eligible for a speaking seat on this Live Stage. Host approval required. This does not guarantee speaking, camera, microphone, or broadcast permission.</Text>
                 {LIVE_STAGE_PASS_PURCHASE_AVAILABLE ? (
                   <TouchableOpacity
                     style={[styles.stageCommunityRequestButton, liveMoneyPurchaseBusy !== null && styles.stageCommunityRequestButtonDisabled]}
@@ -5326,7 +5326,7 @@ export default function WatchPartyLiveStageScreen({
                     </Text>
                   </TouchableOpacity>
                 ) : (
-                  <Text style={styles.stageCommunityHint} testID="live-stage-seat-pass-unavailable-live-first">This pass is currently available only through the verified Google Play sandbox. It cannot be purchased on this build, and nothing will be charged.</Text>
+                  <Text style={styles.stageCommunityHint} testID="live-stage-seat-pass-unavailable-live-first">This pass is not available on this device yet, and nothing will be charged.</Text>
                 )}
               </View>
             ) : null}
@@ -5480,7 +5480,7 @@ export default function WatchPartyLiveStageScreen({
               && liveMoneyAccess.seatOfferId
               && liveMoneyAccess.seatPriceCents ? (
               <View style={styles.stageCommunityPurchaseGroup}>
-              <Text style={styles.stageCommunityHint}>Live Stage Seat Pass: eligible for a speaking seat on this Live Stage. Host approval required. This does not guarantee speaking, camera, microphone, or LiveKit publish authority.</Text>
+              <Text style={styles.stageCommunityHint}>Live Stage Seat Pass: eligible for a speaking seat on this Live Stage. Host approval required. This does not guarantee speaking, camera, microphone, or broadcast permission.</Text>
               {LIVE_STAGE_PASS_PURCHASE_AVAILABLE ? (
                 <TouchableOpacity
                   style={[
@@ -5506,7 +5506,7 @@ export default function WatchPartyLiveStageScreen({
                   </Text>
                 </TouchableOpacity>
               ) : (
-                <Text style={styles.stageCommunityHint} testID="live-stage-seat-pass-unavailable">This pass is currently available only through the verified Google Play sandbox. It cannot be purchased on this build, and nothing will be charged.</Text>
+                <Text style={styles.stageCommunityHint} testID="live-stage-seat-pass-unavailable">This pass is not available on this device yet, and nothing will be charged.</Text>
               )}
               </View>
             ) : null}

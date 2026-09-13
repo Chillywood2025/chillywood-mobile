@@ -8179,7 +8179,7 @@ export default function PlayerScreen() {
             style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
             onPress={() => {
               if (!participant.canSpeak) {
-                Alert.alert("No mic access", "This participant does not have speaker access in this room. The control is active but does not grant LiveKit publish authority.");
+                Alert.alert("No mic access", "This participant does not have speaker access in this room. The control is active but does not grant broadcast permission.");
                 return;
               }
               setPartyParticipants((prev) => {

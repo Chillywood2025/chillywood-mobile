@@ -32,6 +32,7 @@ const sandboxChannelVipSourceMigration = read("supabase/migrations/2026061612081
 const sandboxChannelVipConstraintMigration = read("supabase/migrations/20260616120924_allow_channel_vip_config_product_types.sql");
 const sandboxIntentTesterMigration = read("supabase/migrations/20260616121739_require_sandbox_tester_for_purchase_intents.sql");
 const wave1AuthorityMigration = read("supabase/migrations/202608140001_wave1_identity_entitlement_authority.sql");
+const adversarialIntegrityMigration = read("supabase/migrations/20260912235910_preproduction_adversarial_product_integrity_closure.sql");
 const monetization = read("_lib/monetization.ts");
 const premiumEntitlements = read("_lib/premiumEntitlements.ts");
 const entitlementAuthority = read("_lib/entitlementAuthority.ts");
@@ -131,6 +132,10 @@ assertIncludes(creatorSetupMigration, 'admin_list_creator_sandbox_monetization_c
 assertIncludes(creatorSetupBoundMigration, "has_active_beta_access()", "creator setup server-side beta/internal tester requirement");
 assertIncludes(creatorSetupBoundMigration, "internal_sandbox_tester_required", "creator setup server-side tester denial");
 assertIncludes(creatorSetupBoundMigration, "public.has_platform_role(array['owner'::text, 'operator'::text])", "creator setup owner/operator server-side access");
+assertIncludes(adversarialIntegrityMigration, "creator_sandbox_source_owned_by_current_user_internal", "creator setup exact source ownership resolver");
+assertIncludes(adversarialIntegrityMigration, 'video."owner_id" = auth.uid()', "paid content exact creator ownership");
+assertIncludes(adversarialIntegrityMigration, 'event_row."host_user_id" = auth.uid()', "Event exact creator ownership");
+assertIncludes(adversarialIntegrityMigration, "creator_sandbox_source_not_owned", "wrong-target creator setup denial");
 assertIncludes(sandboxTesterMigration, 'create table if not exists public."sandbox_monetization_testers"', "sandbox tester table");
 assertIncludes(sandboxTesterMigration, "resolve_sandbox_monetization_tester", "sandbox tester resolver");
 assertIncludes(sandboxTesterMigration, "grant_sandbox_monetization_tester", "sandbox tester grant RPC");
@@ -213,10 +218,10 @@ assertNotIncludes(channelSettings, "{ id: \"revenue\", label: \"Revenue\" }", "s
 assertNotIncludes(channelSettings, "{ id: \"monetize\", label: \"Monetize\" }", "separate Monetize tab");
 assertIncludes(channelSettings, "Run your platform from one place", "Platform Studio platform copy");
 assertIncludes(publicChannel, "Platform Store", "public platform store state");
-assertIncludes(publicChannel, "Test Creator Purchases", "public tester sandbox purchase surface");
-assertIncludes(publicChannel, "Sandbox only. No real money moves.", "public tester sandbox no-money copy");
-assertIncludes(publicChannel, "Sandbox subscription complete.", "public tester sandbox subscription receipt copy");
-assertIncludes(publicChannel, "Sandbox VIP complete.", "public tester sandbox VIP receipt copy");
+assertIncludes(publicChannel, "Creator Purchases", "customer-safe purchase preview surface");
+assertIncludes(publicChannel, "No charge is made in this preview.", "purchase preview no-charge copy");
+assertIncludes(publicChannel, "Subscription updated.", "customer-safe subscription receipt copy");
+assertIncludes(publicChannel, "VIP access updated.", "customer-safe VIP receipt copy");
 assertNotIncludes(publicChannel, "No payout created.", "public buyer sandbox receipt payout copy");
 assertIncludes(publicChannel, "Checkout pending", "public platform checkout disabled copy");
 assertIncludes(publicChannel, "tester-watch-party-ticket-button", "public tester Watch-Party Seat Pass selector");

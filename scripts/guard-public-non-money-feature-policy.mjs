@@ -98,7 +98,7 @@ forbidMatch("money feature defaults", moneyFlags, /merch_enabled:\s*["']on["']/,
   "paidWatchPartyCheckoutAvailable",
   "Party Room Pass purchases are temporarily unavailable while setup is being finalized. This room stays locked until access is verified.",
   "A Party Room Pass gives you entry to this exact Party Room",
-  "It does not include Live Stage, speaking, camera, microphone, host, moderator, LiveKit publish authority",
+  "It does not include Live Stage, speaking, camera, microphone, host, moderator, broadcast permission",
 ].forEach((needle) => requireText("watch-party room route", watchPartyRoom, needle));
 
 forbidMatch("public money card", publicMoneyCard, /ROUTE-BACKED MONETIZATION PROOF/, "proof copy");

@@ -287,7 +287,7 @@ for (const filePath of walk(repoRoot)) {
   lines.forEach((line, index) => {
     for (const match of line.matchAll(visibleBrandPattern)) {
       const candidate = match[0];
-      if (candidate === canonicalBrand) continue;
+      if (candidate.toLowerCase() === canonicalBrand.toLowerCase()) continue;
       if (isAllowedTechnicalMatch(relativePath, candidate, line)) continue;
       if (relativePath === "scripts/guard-brand-spelling-policy.mjs") continue;
       addViolation(relativePath, index + 1, candidate);

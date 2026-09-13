@@ -57,7 +57,7 @@ assert.doesNotMatch(
   "purchase CTA must not hide its explanation behind disabled state",
 );
 assert.match(subscribe, /premium-purchase-blocked-reason/u, "inline blocker is visible and testable");
-assert.match(subscribe, /setExpanded\(\(current\) => \(\{ \.\.\.current, "testing-details": true \}\)\)/u, "failed readiness opens diagnostics");
+assert.match(subscribe, /setExpanded\(\(current\) => \(\{ \.\.\.current, "purchase-details": true \}\)\)/u, "failed readiness opens customer-safe purchase details");
 
 const monetization = readFileSync(new URL("../_lib/monetization.ts", import.meta.url), "utf8");
 assert.match(monetization, /readMoneyFeatureFlagSummaryWithStatus/u, "sandbox mode reads the backend rail");

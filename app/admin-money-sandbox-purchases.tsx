@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { hasPlatformRoleMembership, readMyPlatformRoleMemberships } from "../_lib/moderation";
 import { resolveInternalTesterSandboxPurchaseMode } from "../_lib/monetization";
 import {
   purchaseRevenueCatStoreProduct,
   readRevenueCatNonSubscriptionProducts,
-  syncRevenueCatCustomerIdentity,
 } from "../_lib/revenuecat";
-import { SUPABASE_URL, supabase } from "../_lib/supabase";
+import {
+  invokeCreatorMoneyPurchaseSubjectRpc,
+  prepareCreatorMoneyPurchaseSubject,
+  revalidateCreatorMoneyPurchaseSubject,
+} from "../_lib/creatorMoneyPurchaseAuthority";
+import { launchCreatorMerchSandboxCheckout } from "../_lib/creatorMonetizationSetup";
+import { supabase } from "../_lib/supabase";
 import { MoneyScopeInfoButton, type MoneyScopeKey } from "../components/monetization/MoneyScopeInfoButton";
 
 type SandboxProductKey =
@@ -68,7 +73,6 @@ const SANDBOX_PRODUCTS: SandboxProduct[] = [
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SANDBOX_EVENT_PASS_PROOF_SOURCE_ID = "9b2f4e7d-2e8e-4d2f-93ef-40b06d317004";
 const SANDBOX_MERCH_PRODUCT_KEY = "cw_merch_test_tee_sandbox";
-const STRIPE_MERCH_CHECKOUT_URL = `${SUPABASE_URL.replace(/\/+$/g, "")}/functions/v1/stripe-merch-checkout`;
 
 const scopeForSandboxProduct = (product: SandboxProduct): MoneyScopeKey => {
   if (product.sourceType === "watch_party_live") return "watch_party_ticket";
@@ -169,11 +173,15 @@ export default function AdminMoneySandboxPurchasesScreen() {
     setStatus(`Creating sandbox intent for ${selectedProduct.label}...`);
 
     try {
-      if (userId) {
-        await syncRevenueCatCustomerIdentity(userId);
+      const purchaseSubject = await prepareCreatorMoneyPurchaseSubject();
+      if (!purchaseSubject || !userId || purchaseSubject.userId !== userId) {
+        throw new Error("Billing identity is unavailable for the current account.");
       }
 
-      const { data: intent, error: intentError } = await supabase.rpc("create_money_purchase_intent", {
+      const { data: intent, error: intentError } = await invokeCreatorMoneyPurchaseSubjectRpc<Record<string, unknown>>(
+        purchaseSubject,
+        "create_money_purchase_intent",
+        {
         p_product_key: selectedProduct.key,
         p_source_type: selectedProduct.sourceType,
         p_source_id: safeSourceId,
@@ -182,7 +190,8 @@ export default function AdminMoneySandboxPurchasesScreen() {
           sandbox_only: true,
           not_payable: true,
         },
-      });
+        },
+      );
 
       if (intentError) throw intentError;
       const intentRow = intent && typeof intent === "object" && !Array.isArray(intent)
@@ -195,13 +204,16 @@ export default function AdminMoneySandboxPurchasesScreen() {
 
       setStatus(`Intent created. Loading RevenueCat product ${selectedProduct.providerProductId}...`);
       const products = await readRevenueCatNonSubscriptionProducts([selectedProduct.providerProductId]);
+      if (!await revalidateCreatorMoneyPurchaseSubject(purchaseSubject)) {
+        throw new Error("Account changed before checkout. Nothing was charged.");
+      }
       const storeProduct = products.find((entry) => normalizeText(entry.identifier) === selectedProduct.providerProductId);
       if (!storeProduct) {
         throw new Error(`RevenueCat product ${selectedProduct.providerProductId} is not available on this build/account.`);
       }
 
       setStatus(`Opening ${STORE_PROVIDER_PAIR} sandbox purchase...`);
-      const result = await purchaseRevenueCatStoreProduct(storeProduct);
+      const result = await purchaseRevenueCatStoreProduct(storeProduct, { authority: purchaseSubject.authority });
       const intentId = normalizeText(intentRow?.id);
       const purchasedProductId = normalizeText(result.productIdentifier) || selectedProduct.providerProductId;
       setStatus(
@@ -227,40 +239,14 @@ export default function AdminMoneySandboxPurchasesScreen() {
     setMerchStatus("Creating Stripe sandbox Checkout session for physical merch...");
 
     try {
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData.session?.access_token) {
-        throw new Error("Sign in again before starting Stripe physical merch sandbox checkout.");
-      }
-      const response = await fetch(STRIPE_MERCH_CHECKOUT_URL, {
-        body: JSON.stringify({
-          product_key: SANDBOX_MERCH_PRODUCT_KEY,
-          quantity: 1,
-        }),
-        headers: {
-          Authorization: `Bearer ${sessionData.session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        const safeMessage = normalizeText((data as { message?: unknown } | null)?.message) || "Stripe physical merch sandbox checkout could not be created.";
-        throw new Error(safeMessage);
-      }
-      const payload = data as { message?: string; url?: string; orderId?: string; checkoutCreated?: boolean; physicalMerchOnly?: boolean } | null;
-      const checkoutUrl = normalizeText(payload?.url);
-      if (!payload?.checkoutCreated || !checkoutUrl) {
-        throw new Error(payload?.message || "Stripe sandbox checkout did not return a checkout URL.");
-      }
-
+      const result = await launchCreatorMerchSandboxCheckout();
       setMerchStatus(
         [
           "Stripe sandbox Checkout session created.",
-          `Order: ${normalizeText(payload.orderId) || "created"}`,
+          `Order: ${result.orderId}`,
           "Physical merch only. No digital access, RevenueCat entitlement, Premium entitlement, payout, cash-out, withdrawal, transfer, or payable balance was created.",
         ].join("\n"),
       );
-      await Linking.openURL(checkoutUrl);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Stripe merch sandbox checkout could not be created.";
       setMerchStatus(message);

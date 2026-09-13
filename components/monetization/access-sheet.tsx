@@ -27,6 +27,7 @@ import {
   type MonetizationRestoreOutcome,
 } from "../../_lib/monetization";
 import { useOptionalBetaProgram } from "../../_lib/betaProgram";
+import { getCurrentAccountSessionAuthoritySnapshot } from "../../_lib/accountSessionAuthority";
 import { useSession } from "../../_lib/session";
 import { MoneyScopeInfoButton } from "./MoneyScopeInfoButton";
 import { MoneyOfferCard } from "./money-ui";
@@ -432,8 +433,19 @@ export function AccessSheet({
     setPurchaseBusy(true);
     trackEvent("monetization_purchase_started", analyticsPayload);
     try {
+      const initiatingAuthority = getCurrentAccountSessionAuthoritySnapshot();
+      if (
+        !initiatingAuthority
+        || initiatingAuthority.restoreOnly
+        || initiatingAuthority.userId !== user?.id
+      ) throw new Error("account_changed");
       const purchaseMode = sandboxMode.enabled ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE : await resolvePurchaseMode();
-      const result = await purchaseBlockedAccess({ gate, purchaseMode, userId: user?.id ?? null });
+      const result = await purchaseBlockedAccess({
+        gate,
+        purchaseMode,
+        userId: user?.id ?? null,
+        initiatingAuthority,
+      });
       trackEvent(result.ok ? "monetization_purchase_success" : "monetization_purchase_failed", {
         ...analyticsPayload,
         message: result.message,
@@ -498,6 +510,16 @@ export function AccessSheet({
           : undefined;
 
   const onRestorePress = useCallback(async () => {
+    const initiatingAuthority = getCurrentAccountSessionAuthoritySnapshot();
+    if (
+      !initiatingAuthority
+      || initiatingAuthority.restoreOnly
+      || initiatingAuthority.userId !== user?.id
+    ) {
+      setStatusTone("error");
+      setStatusMessage("Recheck the signed-in account before restoring purchases.");
+      return;
+    }
     setRestoreBusy(true);
     setStatusMessage("");
     setStatusTone("neutral");
@@ -505,7 +527,11 @@ export function AccessSheet({
 
     try {
       const purchaseMode = sandboxMode.enabled ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE : await resolvePurchaseMode();
-      const result = await restoreMonetizationAccess({ purchaseMode, userId: user?.id ?? null });
+      const result = await restoreMonetizationAccess({
+        purchaseMode,
+        userId: user?.id ?? null,
+        initiatingAuthority,
+      });
       trackEvent("monetization_restore_result", {
         ...analyticsPayload,
         ok: result.ok,
