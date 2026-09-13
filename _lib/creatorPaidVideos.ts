@@ -4,11 +4,15 @@ import {
   normalizeCreatorContentAccessResolution,
 } from "./creatorMonetization";
 import {
+  captureCreatorMoneyPurchaseAuthority,
+  isCreatorMoneyPurchaseAuthorityCurrent,
   prepareCreatorMoneyPurchaseSubject,
   revalidateCreatorMoneyPurchaseSubject,
+  invokeCreatorMoneyPurchaseSubjectRpc,
   validateCreatorMoneyPurchaseIntent,
   validateHistoricalCreatorMoneyPurchaseIntent,
   type CreatorMoneyPurchaseIntentExpectation,
+  type CreatorMoneyPurchaseSubject,
 } from "./creatorMoneyPurchaseAuthority";
 import {
   purchaseRevenueCatStoreProduct,
@@ -22,6 +26,8 @@ import {
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { supabase } from "./supabase";
 import { readCreatorVideosByIds } from "./creatorVideos";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
+import { withAuthorityReadDeadline } from "./entitlementAuthority";
 
 export const PAID_VIDEO_SANDBOX_PRODUCT_KEY = "paid_content_access_sandbox_099";
 export const PAID_VIDEO_SANDBOX_PROVIDER_PRODUCT_ID = "cw_paid_content_access_sandbox_099";
@@ -100,6 +106,16 @@ export type UnlockedPaidVideoLibraryResult = {
   status: "resolved" | "unavailable";
   subjectUserId: string | null;
   items: UnlockedPaidVideoLibraryItem[];
+};
+
+type PaidVideoLibraryGrantRow = {
+  id: string;
+  source_id: string | null;
+  created_at: string;
+  starts_at: string;
+  expires_at: string | null;
+  status: string;
+  environment: string;
 };
 
 type RpcClient = {
@@ -301,7 +317,7 @@ export async function savePaidVideoOffer(input: {
   priceCents: number;
   currency?: string | null;
 }) {
-  const { data, error } = await paidVideoClient.rpc("set_creator_content_price", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("set_creator_content_price", {
     p_content_type: "creator_video",
     p_content_id: input.videoId,
     p_is_paid: input.isPaid,
@@ -313,11 +329,14 @@ export async function savePaidVideoOffer(input: {
 }
 
 export async function resolvePaidVideoAccess(videoId: string): Promise<PaidVideoAccessResolution> {
-  const { data, error } = await paidVideoClient.rpc("resolve_creator_content_access", {
-    p_content_type: "creator_video",
-    p_content_id: videoId,
-  });
-  if (error) {
+  const response = await withAuthorityReadDeadline(
+    paidVideoClient.rpc("resolve_creator_content_access", {
+      p_content_type: "creator_video",
+      p_content_id: videoId,
+    }),
+    null,
+  );
+  if (!response || response.error) {
     return {
       allowed: false,
       reason: "access_check_failed",
@@ -331,31 +350,57 @@ export async function resolvePaidVideoAccess(videoId: string): Promise<PaidVideo
       offerStatus: null,
     };
   }
-  return normalizeAccess(data);
+  return normalizeAccess(response.data);
 }
 
 export async function readMyUnlockedPaidVideoLibraryItems(limit = 24): Promise<UnlockedPaidVideoLibraryResult> {
-  const boundedLimit = Math.max(1, Math.min(50, Math.trunc(limit || 24)));
-  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const pageSize = Math.max(1, Math.min(100, Math.trunc(limit || 24)));
+  const authResponse = await withAuthorityReadDeadline(supabase.auth.getUser(), null);
+  if (!authResponse) return { status: "unavailable", subjectUserId: null, items: [] };
+  const { data: authData, error: authError } = authResponse;
   const userId = toText(authData.user?.id);
   if (authError) return { status: "unavailable", subjectUserId: null, items: [] };
   if (!userId) return { status: "resolved", subjectUserId: null, items: [] };
 
-  const { data, error } = await supabase
-    .from("access_grants")
-    .select("source_id,created_at,starts_at,expires_at,status,environment")
-    .eq("user_id", userId)
-    .eq("grant_type", "paid_content_access")
-    .eq("source_type", "provider_event")
-    .in("status", ["active", "sandbox_only"])
-    .is("refunded_at", null)
-    .is("revoked_at", null)
-    .order("created_at", { ascending: false })
-    .limit(boundedLimit * 2);
-  if (error || !data) return { status: "unavailable", subjectUserId: userId, items: [] };
+  const userIsStillCurrent = async () => {
+    const response = await withAuthorityReadDeadline(supabase.auth.getUser(), null);
+    return !!response && !response.error && toText(response.data.user?.id) === userId;
+  };
+
+  const grantRows: PaidVideoLibraryGrantRow[] = [];
+  let cursorId = "";
+  while (true) {
+    let query = supabase
+      .from("access_grants")
+      .select("id,source_id,created_at,starts_at,expires_at,status,environment")
+      .eq("user_id", userId)
+      .eq("grant_type", "paid_content_access")
+      .eq("source_type", "provider_event")
+      .in("status", ["active", "sandbox_only"])
+      .is("refunded_at", null)
+      .is("revoked_at", null)
+      .order("id", { ascending: false });
+    if (cursorId) query = query.lt("id", cursorId);
+    const pageResponse = await withAuthorityReadDeadline(
+      query.limit(pageSize).returns<PaidVideoLibraryGrantRow[]>(),
+      null,
+    );
+    if (!pageResponse || pageResponse.error || !pageResponse.data || !await userIsStillCurrent()) {
+      return { status: "unavailable", subjectUserId: userId, items: [] };
+    }
+    const data = pageResponse.data;
+
+    grantRows.push(...data);
+    if (data.length < pageSize) break;
+    const nextCursorId = toText(data[data.length - 1]?.id);
+    if (!nextCursorId || nextCursorId === cursorId) {
+      return { status: "unavailable", subjectUserId: userId, items: [] };
+    }
+    cursorId = nextCursorId;
+  }
 
   const now = Date.now();
-  const candidates = data.filter((row) => {
+  const candidates = grantRows.filter((row) => {
     const sourceId = toText(row.source_id);
     const startsAt = Date.parse(toText(row.starts_at));
     const expiresAt = row.expires_at ? Date.parse(toText(row.expires_at)) : Number.POSITIVE_INFINITY;
@@ -367,19 +412,56 @@ export async function readMyUnlockedPaidVideoLibraryItems(limit = 24): Promise<U
       && startsAt <= now
       && expiresAt > now;
   });
-  const uniqueCandidates = Array.from(new Map(candidates.map((row) => [toText(row.source_id), row])).values())
-    .slice(0, boundedLimit);
+  const uniqueCandidateMap = new Map<string, PaidVideoLibraryGrantRow>();
+  candidates
+    .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
+    .forEach((row) => {
+      const videoId = toText(row.source_id);
+      if (!uniqueCandidateMap.has(videoId)) uniqueCandidateMap.set(videoId, row);
+    });
+  const uniqueCandidates = Array.from(uniqueCandidateMap.values());
 
-  const verifiedEntries = (await Promise.all(uniqueCandidates.map(async (row) => {
-    const videoId = toText(row.source_id);
-    const access = await resolvePaidVideoAccess(videoId);
-    return access.allowed && (access.reason === "active_grant" || access.reason === "sandbox_grant")
-      ? { videoId, unlockedAt: toText(row.created_at) }
-      : null;
-  }))).filter((entry): entry is { videoId: string; unlockedAt: string } => !!entry);
-  const videos = await readCreatorVideosByIds(verifiedEntries.map((entry) => entry.videoId), {
-    limit: boundedLimit,
-  });
+  const verifiedEntries: { videoId: string; unlockedAt: string }[] = [];
+  for (let index = 0; index < uniqueCandidates.length; index += 12) {
+    const batch = uniqueCandidates.slice(index, index + 12);
+    let resolved: ({ videoId: string; unlockedAt: string } | null)[];
+    try {
+      resolved = await Promise.all(batch.map(async (row) => {
+        const videoId = toText(row.source_id);
+        const access = await resolvePaidVideoAccess(videoId);
+        if (access.reason === "access_check_failed" || access.reason === "malformed_access_response") {
+          throw new Error("paid_video_authority_unavailable");
+        }
+        return access.allowed && (access.reason === "active_grant" || access.reason === "sandbox_grant")
+          ? { videoId, unlockedAt: toText(row.created_at) }
+          : null;
+      }));
+    } catch {
+      return { status: "unavailable", subjectUserId: userId, items: [] };
+    }
+    if (!await userIsStillCurrent()) {
+      return { status: "unavailable", subjectUserId: userId, items: [] };
+    }
+    verifiedEntries.push(...resolved.filter((entry): entry is { videoId: string; unlockedAt: string } => !!entry));
+  }
+
+  const videos: Awaited<ReturnType<typeof readCreatorVideosByIds>> = [];
+  for (let index = 0; index < verifiedEntries.length; index += 100) {
+    const videoIds = verifiedEntries.slice(index, index + 100).map((entry) => entry.videoId);
+    const batch = await withAuthorityReadDeadline(
+      readCreatorVideosByIds(videoIds, {
+        includeRenditionStatuses: false,
+        limit: videoIds.length,
+        throwOnUnavailable: true,
+      }),
+      null,
+    );
+    if (!batch) return { status: "unavailable", subjectUserId: userId, items: [] };
+    videos.push(...batch);
+    if (!await userIsStillCurrent()) {
+      return { status: "unavailable", subjectUserId: userId, items: [] };
+    }
+  }
   const videosById = new Map(videos.map((video) => [video.id, video]));
 
   return {
@@ -404,22 +486,28 @@ export async function createPaidVideoPurchaseIntent(input: {
   creatorId: string;
   amountCents: number;
   currency?: string | null;
-}, expected: Omit<CreatorMoneyPurchaseIntentExpectation, "status">) {
-  const { data, error } = await paidVideoClient.rpc("create_money_purchase_intent", {
-    p_product_key: PAID_VIDEO_SANDBOX_PRODUCT_KEY,
-    p_source_type: "paid_content",
-    p_source_id: input.videoId,
-    p_metadata: {
-      creator_id: input.creatorId,
-      amount_minor: Math.max(0, Math.trunc(input.amountCents || 0)),
-      currency: toText(input.currency).toLowerCase() || "usd",
-      source_surface: "paid_video_player",
-      paid_video_v1: true,
-      premium_unlock: false,
-      tips_path: false,
+}, expected: Omit<CreatorMoneyPurchaseIntentExpectation, "status">,
+subject: CreatorMoneyPurchaseSubject) {
+  const response = await invokeCreatorMoneyPurchaseSubjectRpc<Record<string, unknown>>(
+    subject,
+    "create_money_purchase_intent",
+    {
+      p_product_key: PAID_VIDEO_SANDBOX_PRODUCT_KEY,
+      p_source_type: "paid_content",
+      p_source_id: input.videoId,
+      p_metadata: {
+        creator_id: input.creatorId,
+        amount_minor: Math.max(0, Math.trunc(input.amountCents || 0)),
+        currency: toText(input.currency).toLowerCase() || "usd",
+        source_surface: "paid_video_player",
+        paid_video_v1: true,
+        premium_unlock: false,
+        tips_path: false,
+      },
     },
-  });
-  if (error) throw new Error("Paid video checkout is not available right now.");
+  );
+  if (!response || response.error) throw new Error("Paid video checkout is not available right now.");
+  const data = response.data;
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("Paid video checkout authority could not be verified.");
   }
@@ -451,12 +539,20 @@ export async function createPaidVideoPurchaseIntent(input: {
   };
 }
 
-export async function waitForPaidVideoAccess(videoId: string): Promise<PaidVideoAccessResolution> {
+export async function waitForPaidVideoAccess(
+  videoId: string,
+  subject?: CreatorMoneyPurchaseSubject,
+  accountChangedFallback?: PaidVideoAccessResolution,
+): Promise<PaidVideoAccessResolution> {
+  if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
   let latest = await resolvePaidVideoAccess(videoId);
+  if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
   if (latest.allowed) return latest;
   for (let attempt = 0; attempt < PAID_VIDEO_ACCESS_POLL_ATTEMPTS; attempt += 1) {
     await delay(PAID_VIDEO_ACCESS_POLL_DELAY_MS);
+    if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
     latest = await resolvePaidVideoAccess(videoId);
+    if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
     if (latest.allowed) return latest;
   }
   return latest;
@@ -468,7 +564,11 @@ export async function purchasePaidVideoAccess(input: {
   amountCents: number;
   currency?: string | null;
 }): Promise<PaidVideoPurchaseResult> {
+  const initiatingAuthority = captureCreatorMoneyPurchaseAuthority();
   const access = await resolvePaidVideoAccess(input.videoId);
+  if (!isCreatorMoneyPurchaseAuthorityCurrent(initiatingAuthority)) {
+    return { ok: false, message: "Account changed before Paid Video checkout. Nothing was charged.", access };
+  }
   if (access.allowed) {
     return { ok: true, message: "You already unlocked this video.", access };
   }
@@ -476,7 +576,7 @@ export async function purchasePaidVideoAccess(input: {
     return { ok: false, message: "Paid video access could not be verified.", access };
   }
   if (!access.creatorId || access.creatorId !== input.creatorId) {
-    return { ok: false, message: "This paid video offer is not ready.", access };
+    return { ok: false, message: "This Paid Video is not available right now.", access };
   }
   const requestedAmount = Math.trunc(input.amountCents);
   const requestedCurrency = toText(input.currency).toLowerCase() || "usd";
@@ -487,14 +587,14 @@ export async function purchasePaidVideoAccess(input: {
     || (access.provider !== "revenuecat_app_store" && access.provider !== "revenuecat_google_play")
     || !access.providerProductId
   ) {
-    return { ok: false, message: "This paid video offer is not ready.", access };
+    return { ok: false, message: "This Paid Video is not available right now.", access };
   }
 
   if (Platform.OS !== "ios" && Platform.OS !== "android") {
     return { ok: false, message: "Paid video access is not available on this device.", access };
   }
   if (Platform.OS === "android" && access.provider !== "revenuecat_google_play") {
-    return { ok: false, message: "This paid video offer is not ready.", access };
+    return { ok: false, message: "This Paid Video is not available right now.", access };
   }
   if (Platform.OS === "ios" && (
     access.currency !== "usd"
@@ -517,7 +617,7 @@ export async function purchasePaidVideoAccess(input: {
     }
   }
 
-  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject();
+  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject(initiatingAuthority);
   if (!purchaseSubject) {
     return {
       ok: false,
@@ -535,9 +635,9 @@ export async function purchasePaidVideoAccess(input: {
     environment: access.offerStatus === "active" ? "production" : "sandbox",
     amountMinor: access.priceCents,
     currency: access.currency,
-  });
+  }, purchaseSubject);
   if (intent.alreadyPurchased) {
-    const restoredAccess = await waitForPaidVideoAccess(input.videoId);
+    const restoredAccess = await waitForPaidVideoAccess(input.videoId, purchaseSubject, access);
     return restoredAccess.allowed
       ? {
         ok: true,
@@ -560,7 +660,7 @@ export async function purchasePaidVideoAccess(input: {
   if (!product) {
     return {
       ok: false,
-      message: "Paid video sandbox product is not available on this device yet.",
+      message: "Paid Video is not available on this device yet. Nothing was charged.",
       access,
       intentId: intent.id,
       productId,
@@ -597,7 +697,7 @@ export async function purchasePaidVideoAccess(input: {
         productId,
       };
     }
-    const verifiedAccess = await waitForPaidVideoAccess(input.videoId);
+    const verifiedAccess = await waitForPaidVideoAccess(input.videoId, purchaseSubject, access);
     if (verifiedAccess.allowed) {
       return {
         ok: true,
@@ -615,7 +715,7 @@ export async function purchasePaidVideoAccess(input: {
       productId,
     };
   }
-  const verifiedAccess = await waitForPaidVideoAccess(input.videoId);
+  const verifiedAccess = await waitForPaidVideoAccess(input.videoId, purchaseSubject, access);
   if (!verifiedAccess.allowed) {
     return {
       ok: false,

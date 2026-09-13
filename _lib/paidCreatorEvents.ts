@@ -1,11 +1,15 @@
 import { trackEvent } from "./analytics";
 import { formatMonetizationCurrency } from "./creatorMonetization";
 import {
+  captureCreatorMoneyPurchaseAuthority,
+  isCreatorMoneyPurchaseAuthorityCurrent,
   prepareCreatorMoneyPurchaseSubject,
   revalidateCreatorMoneyPurchaseSubject,
+  invokeCreatorMoneyPurchaseSubjectRpc,
   validateCreatorMoneyPurchaseIntent,
   validateHistoricalCreatorMoneyPurchaseIntent,
   type CreatorMoneyPurchaseIntentExpectation,
+  type CreatorMoneyPurchaseSubject,
 } from "./creatorMoneyPurchaseAuthority";
 import {
   purchaseRevenueCatStoreProduct,
@@ -18,6 +22,8 @@ import {
 } from "./iosAppStoreCommerce";
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { supabase } from "./supabase";
+import { withAuthorityReadDeadline } from "./entitlementAuthority";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export const PAID_CREATOR_EVENT_SANDBOX_PRODUCT_KEY = "event_pass_sandbox_099";
 export const PAID_CREATOR_EVENT_SANDBOX_PROVIDER_PRODUCT_ID = "cw_event_pass_sandbox_099";
@@ -362,7 +368,7 @@ export async function savePaidCreatorEventOffer(input: {
   capacityLimit?: number | null;
   status?: PaidCreatorEventOfferStatus;
 }): Promise<PaidCreatorEventOffer> {
-  const { data, error } = await rpcClient.rpc("set_paid_creator_event_offer", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>("set_paid_creator_event_offer", {
     p_creator_event_id: input.creatorEventId,
     p_description: input.description ?? null,
     p_price_cents: Math.max(0, Math.trunc(input.priceCents ?? 99)),
@@ -378,10 +384,11 @@ export async function savePaidCreatorEventOffer(input: {
 }
 
 export async function resolvePaidCreatorEventPassAccess(creatorEventId: string): Promise<PaidCreatorEventAccess> {
-  const { data, error } = await rpcClient.rpc("resolve_paid_creator_event_pass_access", {
-    p_creator_event_id: creatorEventId,
-  });
-  if (error) {
+  const response = await withAuthorityReadDeadline(
+    rpcClient.rpc("resolve_paid_creator_event_pass_access", { p_creator_event_id: creatorEventId }),
+    null,
+  );
+  if (!response || response.error) {
     return {
       allowed: false,
       reason: "access_check_failed",
@@ -396,17 +403,21 @@ export async function resolvePaidCreatorEventPassAccess(creatorEventId: string):
       offer: null,
     };
   }
-  return normalizeAccess(data, creatorEventId);
+  return normalizeAccess(response.data, creatorEventId);
 }
 
 export async function createPaidCreatorEventPassPurchaseIntent(
   offerId: string,
   expected: Omit<CreatorMoneyPurchaseIntentExpectation, "status">,
+  subject: CreatorMoneyPurchaseSubject,
 ) {
-  const { data, error } = await rpcClient.rpc("create_paid_creator_event_pass_purchase_intent", {
-    p_event_id: offerId,
-  });
-  if (error) throw new Error("Event Pass checkout is not available right now.");
+  const response = await invokeCreatorMoneyPurchaseSubjectRpc<Record<string, unknown>>(
+    subject,
+    "create_paid_creator_event_pass_purchase_intent",
+    { p_event_id: offerId },
+  );
+  if (!response || response.error) throw new Error("Event Pass checkout is not available right now.");
+  const data = response.data;
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("Event Pass checkout authority could not be verified.");
   }
@@ -438,12 +449,20 @@ export async function createPaidCreatorEventPassPurchaseIntent(
   };
 }
 
-export async function waitForPaidCreatorEventPassAccess(creatorEventId: string): Promise<PaidCreatorEventAccess> {
+export async function waitForPaidCreatorEventPassAccess(
+  creatorEventId: string,
+  subject?: CreatorMoneyPurchaseSubject,
+  accountChangedFallback?: PaidCreatorEventAccess,
+): Promise<PaidCreatorEventAccess> {
+  if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
   let latest = await resolvePaidCreatorEventPassAccess(creatorEventId);
+  if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
   if (latest.allowed) return latest;
   for (let attempt = 0; attempt < PAID_CREATOR_EVENT_POLL_ATTEMPTS; attempt += 1) {
     await delay(PAID_CREATOR_EVENT_POLL_DELAY_MS);
+    if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
     latest = await resolvePaidCreatorEventPassAccess(creatorEventId);
+    if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
     if (latest.allowed) return latest;
   }
   return latest;
@@ -453,7 +472,11 @@ export async function purchasePaidCreatorEventPass(input: {
   creatorEventId: string;
   sourceSurface: string;
 }): Promise<PaidCreatorEventPurchaseResult> {
+  const initiatingAuthority = captureCreatorMoneyPurchaseAuthority();
   const access = await resolvePaidCreatorEventPassAccess(input.creatorEventId);
+  if (!isCreatorMoneyPurchaseAuthorityCurrent(initiatingAuthority)) {
+    return { ok: false, message: "Account changed before Event Pass checkout. Nothing was charged.", access };
+  }
   if (access.allowed) {
     return { ok: true, message: "Event Pass active. You have access to this Event.", access };
   }
@@ -495,7 +518,7 @@ export async function purchasePaidCreatorEventPass(input: {
     }
   }
 
-  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject();
+  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject(initiatingAuthority);
   if (!purchaseSubject) {
     return {
       ok: false,
@@ -513,9 +536,9 @@ export async function purchasePaidCreatorEventPass(input: {
     environment: access.offer.status === "active" ? "production" : "sandbox",
     amountMinor: access.priceCents,
     currency: access.currency,
-  });
+  }, purchaseSubject);
   if (intent.alreadyPurchased) {
-    const verifiedAccess = await waitForPaidCreatorEventPassAccess(input.creatorEventId);
+    const verifiedAccess = await waitForPaidCreatorEventPassAccess(input.creatorEventId, purchaseSubject, access);
     return {
       ok: verifiedAccess.allowed,
       message: verifiedAccess.allowed
@@ -532,7 +555,7 @@ export async function purchasePaidCreatorEventPass(input: {
   if (!product) {
     return {
       ok: false,
-      message: "The Event Pass sandbox product is not available on this device yet.",
+      message: "The Event Pass is not available on this device yet. Nothing was charged.",
       access,
       intentId: intent.id,
       productId,
@@ -561,7 +584,7 @@ export async function purchasePaidCreatorEventPass(input: {
   try {
     await purchaseRevenueCatStoreProduct(product, { authority: purchaseSubject.authority });
   } catch (error) {
-    const verifiedAccess = await waitForPaidCreatorEventPassAccess(input.creatorEventId);
+    const verifiedAccess = await waitForPaidCreatorEventPassAccess(input.creatorEventId, purchaseSubject, access);
     if (verifiedAccess.allowed) {
       return {
         ok: true,
@@ -583,7 +606,7 @@ export async function purchasePaidCreatorEventPass(input: {
     };
   }
 
-  const verifiedAccess = await waitForPaidCreatorEventPassAccess(input.creatorEventId);
+  const verifiedAccess = await waitForPaidCreatorEventPassAccess(input.creatorEventId, purchaseSubject, access);
   if (!verifiedAccess.allowed) {
     return {
       ok: false,

@@ -1070,9 +1070,17 @@ export async function readMonetizationSnapshot(options?: {
   forceRefresh?: boolean;
   userId?: string | null;
   purchaseMode?: MonetizationPurchaseMode | null;
+  expectedAuthority?: AccountSessionAuthorityBinding | null;
 }): Promise<MonetizationSnapshot> {
   if (options?.userId === null) return createEmptyMonetizationSnapshot(cachedMonetizationSnapshot.configuration, null);
   const requestedUserId = normalizeOptionalIdentity(options?.userId);
+  const expectedAuthority = options?.expectedAuthority;
+  if (expectedAuthority && !sameAccountSessionAuthority(
+    expectedAuthority,
+    getCurrentAccountSessionAuthoritySnapshot(),
+  )) {
+    return createEmptyMonetizationSnapshot(cachedMonetizationSnapshot.configuration, expectedAuthority.userId);
+  }
   const authority = await readCurrentAccountSessionAuthority();
   const userId = authority?.userId ?? null;
   let configuration: RevenueCatConfigurationState;
@@ -1090,7 +1098,12 @@ export async function readMonetizationSnapshot(options?: {
   const purchaseMode = getPurchaseModeFromOption(options?.purchaseMode);
   const purchaseShellAvailable = isPremiumPurchaseShellAvailableForMode(purchaseMode);
 
-  if (!authority || authority.restoreOnly || (requestedUserId && requestedUserId !== authority.userId)) {
+  if (
+    !authority
+    || authority.restoreOnly
+    || (requestedUserId && requestedUserId !== authority.userId)
+    || (expectedAuthority && !sameAccountSessionAuthority(expectedAuthority, authority))
+  ) {
     const snapshot = { ...baseSnapshot, issues: [...baseSnapshot.issues, "Account entitlement authority is unavailable right now."] };
     trackMonetizationSnapshotResolution(snapshot);
     return snapshot;
@@ -1216,19 +1229,23 @@ export async function purchaseMonetizationTarget(
     userId?: string | null;
     purchaseMode?: MonetizationPurchaseMode | null;
     onPhase?: (phase: MonetizationPurchasePhase) => void;
+    initiatingAuthority?: AccountSessionAuthorityBinding | null;
   },
 ): Promise<MonetizationPurchaseOutcome> {
   const target = MONETIZATION_TARGETS[targetId];
   const purchaseMode = getPurchaseModeFromOption(options?.purchaseMode);
+  const initiatingAuthority = options?.initiatingAuthority ?? getCurrentAccountSessionAuthoritySnapshot();
   const operationAuthority = await readCurrentAccountSessionAuthority();
   const snapshot = await readMonetizationSnapshot({
     forceRefresh: true,
     purchaseMode,
     userId: options?.userId,
+    expectedAuthority: initiatingAuthority,
   });
   const targetState = snapshot.targets[targetId];
 
-  if (!operationAuthority || operationAuthority.restoreOnly
+  if (!initiatingAuthority || !operationAuthority || operationAuthority.restoreOnly
+    || !sameAccountSessionAuthority(initiatingAuthority, operationAuthority)
     || !sameAccountSessionAuthority(operationAuthority, await readCurrentAccountSessionAuthority())) {
     return { ok: false, target: targetId, snapshot, customerInfo: null,
       message: "Account changed while Premium authority was loading. Recheck before continuing." };
@@ -1317,6 +1334,7 @@ export async function purchaseMonetizationTarget(
       forceRefresh: true,
       purchaseMode,
       userId: options?.userId,
+      expectedAuthority: operationAuthority,
     }),
     accepts: (candidate) => candidate.targets[targetId].entitlementAuthoritative
       && candidate.targets[targetId].hasEntitlement,
@@ -1345,7 +1363,7 @@ export async function purchaseMonetizationTarget(
       return {
         ok: false,
         target: targetId,
-        snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId }),
+        snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId, expectedAuthority: operationAuthority }),
         customerInfo: result.customerInfo,
         message: `${target.label} purchase was received. Waiting for verified access to finish.`,
         packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
@@ -1390,7 +1408,7 @@ export async function purchaseMonetizationTarget(
         return {
           ok: false,
           target: targetId,
-          snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId }),
+          snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId, expectedAuthority: operationAuthority }),
           customerInfo: null,
           message: "The existing store subscription could not be restored to this Chi'llywood account. Check the signed-in account, then use Restore purchases.",
           packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
@@ -1414,7 +1432,7 @@ export async function purchaseMonetizationTarget(
       return {
         ok: false,
         target: targetId,
-        snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId }),
+        snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId, expectedAuthority: operationAuthority }),
         customerInfo: reconciliation.customerInfo,
         message: providerPremiumActive
           ? "The store restored Premium, but verified app access is still reconciling. Recheck or Restore purchases shortly."
@@ -1441,7 +1459,7 @@ export async function purchaseMonetizationTarget(
     return {
       ok: false,
       target: targetId,
-      snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId }),
+      snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId, expectedAuthority: operationAuthority }),
       customerInfo: null,
       message: isRevenueCatUserCancellation(error)
         ? `${target.label} purchase was canceled. Nothing changed.`
@@ -1455,13 +1473,16 @@ export async function restoreMonetizationAccess(options?: {
   userId?: string | null;
   purchaseMode?: MonetizationPurchaseMode | null;
   onPhase?: (phase: MonetizationPurchasePhase) => void;
+  initiatingAuthority?: AccountSessionAuthorityBinding | null;
 }): Promise<MonetizationRestoreOutcome> {
   const purchaseMode = getPurchaseModeFromOption(options?.purchaseMode);
+  const initiatingAuthority = options?.initiatingAuthority ?? getCurrentAccountSessionAuthoritySnapshot();
   const operationAuthority = await readCurrentAccountSessionAuthority();
   const snapshot = await readMonetizationSnapshot({
     forceRefresh: true,
     purchaseMode,
     userId: options?.userId,
+    expectedAuthority: initiatingAuthority,
   });
   const notifyPhase = (phase: MonetizationPurchasePhase) => {
     try {
@@ -1471,7 +1492,8 @@ export async function restoreMonetizationAccess(options?: {
     }
   };
 
-  if (!operationAuthority || operationAuthority.restoreOnly
+  if (!initiatingAuthority || !operationAuthority || operationAuthority.restoreOnly
+    || !sameAccountSessionAuthority(initiatingAuthority, operationAuthority)
     || !sameAccountSessionAuthority(operationAuthority, await readCurrentAccountSessionAuthority())) {
     return { ok: false, snapshot, customerInfo: null,
       message: "Account changed while restore authority was loading. Recheck before continuing." };
@@ -1501,6 +1523,7 @@ export async function restoreMonetizationAccess(options?: {
       forceRefresh: true,
       purchaseMode,
       userId: options?.userId,
+      expectedAuthority: operationAuthority,
     });
     notifyPhase("verifying_authority");
     const refreshedSnapshot = providerPremiumActive
@@ -1519,7 +1542,7 @@ export async function restoreMonetizationAccess(options?: {
     if (!refreshedSnapshot) {
       return {
         ok: false,
-        snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId }),
+        snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId, expectedAuthority: operationAuthority }),
         customerInfo,
         message: "The store restored Premium, but verified app access is still reconciling. Recheck shortly.",
       };
@@ -1550,7 +1573,7 @@ export async function restoreMonetizationAccess(options?: {
 
     return {
       ok: false,
-      snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId }),
+      snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId, expectedAuthority: operationAuthority }),
       customerInfo: null,
       message: "Unable to restore purchases right now.",
     };
@@ -1758,13 +1781,11 @@ export async function readMonetizationAccessSheetState(options: {
     snapshot,
     presentation,
     primaryAction: "purchase",
-    primaryLabel: purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE
-      ? "Start Sandbox Premium Test"
-      : presentation.actionLabel,
+    primaryLabel: presentation.actionLabel,
     primaryDisabled: false,
-    helperKicker: purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE ? "SANDBOX TEST" : "LIVE OFFER",
+    helperKicker: purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE ? "PURCHASE PREVIEW" : "LIVE OFFER",
     helperBody: purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE
-      ? `This provider-backed path opens ${Platform.OS === "ios" ? "App Store" : "Google Play"} sandbox billing only. No production money, payout, cash-out, withdrawal, transfer, or payable balance is created. Premium access still requires RevenueCat and Supabase entitlement readback.`
+      ? `This preview opens ${Platform.OS === "ios" ? "App Store" : "Google Play"}. The store shows the exact price and terms before you confirm. Premium starts only after the purchase is verified for this account.`
       : "This pricing is coming from the current configured offer for this build.",
     helperTone: "neutral",
     offer,
@@ -1777,12 +1798,15 @@ export async function purchaseBlockedAccess(options: {
   gate: GateLike | null | undefined;
   userId?: string | null;
   purchaseMode?: MonetizationPurchaseMode | null;
+  initiatingAuthority?: AccountSessionAuthorityBinding | null;
 }): Promise<MonetizationAccessPurchaseOutcome> {
   const purchaseMode = getPurchaseModeFromOption(options.purchaseMode);
+  const initiatingAuthority = options.initiatingAuthority ?? getCurrentAccountSessionAuthoritySnapshot();
   const snapshot = await readMonetizationSnapshot({
     forceRefresh: true,
     purchaseMode,
     userId: options.userId,
+    expectedAuthority: initiatingAuthority,
   });
   const gateReason = String(options.gate?.reason ?? "").trim().toLowerCase();
   const purchaseTargetId = options.gate?.monetization?.purchaseTargetId;
@@ -1811,6 +1835,7 @@ export async function purchaseBlockedAccess(options: {
     packageId: recommendedPackageId,
     purchaseMode,
     userId: options.userId,
+    initiatingAuthority,
   });
 
   return {

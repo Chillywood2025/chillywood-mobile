@@ -1,19 +1,25 @@
 import {
-  readCurrentAccountSessionAuthority,
+  getCurrentAccountSessionAuthoritySnapshot,
+  parseAccountSessionAuthorityReadback,
   sameAccountSessionAuthority,
   type AccountSessionAuthorityBinding,
 } from "./accountSessionAuthority";
+import {
+  captureAccountBoundSupabaseMutationSubject,
+  invokeAccountBoundSupabaseMutationRpc,
+  type AccountBoundSupabaseMutationResult,
+} from "./accountBoundSupabaseMutation";
 import { getAppMonetizationRuntimeFeatures } from "./featureFlags";
 import { getRevenueCatConfigurationState, syncRevenueCatCustomerIdentity } from "./revenuecat";
 import { isCreatorDigitalCheckoutShellAvailable as resolveCreatorDigitalCheckoutShell } from "./revenuecatPurchaseClosure";
 import { getRuntimeConfig } from "./runtimeConfig";
-import { supabase } from "./supabase";
 import { Platform } from "react-native";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 export type CreatorMoneyPurchaseSubject = {
   userId: string;
+  accessToken: string;
   authority: AccountSessionAuthorityBinding;
 };
 
@@ -39,16 +45,6 @@ const exactText = (value: unknown) => (
   typeof value === "string" && value === value.trim() ? value : ""
 );
 
-const readAuthenticatedUserId = async () => {
-  try {
-    const { data, error } = await supabase.auth.getUser();
-    const userId = exactText(data.user?.id);
-    return !error && UUID_PATTERN.test(userId) ? userId : null;
-  } catch {
-    return null;
-  }
-};
-
 export function isCreatorDigitalCheckoutShellAvailable() {
   const runtime = getAppMonetizationRuntimeFeatures();
   const runtimeConfig = getRuntimeConfig();
@@ -64,10 +60,43 @@ export function isCreatorDigitalCheckoutShellAvailable() {
   });
 }
 
-export async function prepareCreatorMoneyPurchaseSubject(): Promise<CreatorMoneyPurchaseSubject | null> {
-  const userId = await readAuthenticatedUserId();
-  const beforeAuthority = await readCurrentAccountSessionAuthority();
-  if (!userId || !beforeAuthority || beforeAuthority.restoreOnly || beforeAuthority.userId !== userId) return null;
+export function captureCreatorMoneyPurchaseAuthority(): AccountSessionAuthorityBinding | null {
+  const authority = getCurrentAccountSessionAuthoritySnapshot();
+  const userId = exactText(authority?.userId);
+  if (
+    !authority
+    || authority.state !== "ACTIVE"
+    || authority.restoreOnly
+    || authority.accountId !== userId
+    || !UUID_PATTERN.test(userId)
+  ) return null;
+  return authority;
+}
+
+export function isCreatorMoneyPurchaseAuthorityCurrent(
+  expectedAuthority: AccountSessionAuthorityBinding | null | undefined,
+) {
+  return sameAccountSessionAuthority(
+    expectedAuthority,
+    getCurrentAccountSessionAuthoritySnapshot(),
+  );
+}
+
+export async function prepareCreatorMoneyPurchaseSubject(
+  expectedAuthority: AccountSessionAuthorityBinding | null = captureCreatorMoneyPurchaseAuthority(),
+): Promise<CreatorMoneyPurchaseSubject | null> {
+  if (
+    !expectedAuthority
+    || !isCreatorMoneyPurchaseAuthorityCurrent(expectedAuthority)
+  ) return null;
+
+  const subject = await captureAccountBoundSupabaseMutationSubject(expectedAuthority.userId).catch(() => null);
+  const userId = exactText(subject?.authority.userId);
+  if (
+    !subject
+    || !UUID_PATTERN.test(userId)
+    || !sameAccountSessionAuthority(expectedAuthority, subject.authority)
+  ) return null;
 
   const identity = await syncRevenueCatCustomerIdentity(userId);
   if (
@@ -77,29 +106,45 @@ export async function prepareCreatorMoneyPurchaseSubject(): Promise<CreatorMoney
     || identity.matchesSourceUser !== true
   ) return null;
 
-  const stableUserId = await readAuthenticatedUserId();
-  const stableAuthority = await readCurrentAccountSessionAuthority();
-  if (
-    stableUserId !== userId
-    || !stableAuthority
-    || stableAuthority.restoreOnly
-    || stableAuthority.userId !== userId
-    || !sameAccountSessionAuthority(beforeAuthority, stableAuthority)
-  ) return null;
+  if (!await revalidateCreatorMoneyPurchaseSubject({
+    userId,
+    accessToken: subject.accessToken,
+    authority: subject.authority,
+  })) return null;
 
-  return { userId, authority: stableAuthority };
+  if (!isCreatorMoneyPurchaseAuthorityCurrent(expectedAuthority)) return null;
+
+  return { userId, accessToken: subject.accessToken, authority: subject.authority };
 }
 
 export async function revalidateCreatorMoneyPurchaseSubject(
   subject: CreatorMoneyPurchaseSubject,
 ): Promise<boolean> {
-  const currentUserId = await readAuthenticatedUserId();
-  const currentAuthority = await readCurrentAccountSessionAuthority();
-  return currentUserId === subject.userId
-    && !!currentAuthority
-    && !currentAuthority.restoreOnly
-    && currentAuthority.userId === subject.userId
-    && sameAccountSessionAuthority(subject.authority, currentAuthority);
+  try {
+    const result = await invokeCreatorMoneyPurchaseSubjectRpc<unknown>(
+      subject,
+      "wave1_session_authority_readback",
+    );
+    const currentAuthority = result.error
+      ? null
+      : parseAccountSessionAuthorityReadback(result.data);
+    return subject.userId === subject.authority.userId
+      && sameAccountSessionAuthority(subject.authority, currentAuthority);
+  } catch {
+    return false;
+  }
+}
+
+export function invokeCreatorMoneyPurchaseSubjectRpc<T>(
+  subject: CreatorMoneyPurchaseSubject,
+  functionName: string,
+  args: Record<string, unknown> = {},
+): Promise<AccountBoundSupabaseMutationResult<T>> {
+  return invokeAccountBoundSupabaseMutationRpc<T>(
+    { accessToken: subject.accessToken, authority: subject.authority },
+    functionName,
+    args,
+  );
 }
 
 export function validateCreatorMoneyPurchaseIntent(

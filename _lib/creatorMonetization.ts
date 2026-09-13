@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { withAuthorityReadDeadline } from "./entitlementAuthority";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export const CREATOR_MONETIZATION_SETTINGS_TABLE = "monetization_system_settings";
 export const CREATOR_MONETIZATION_PROFILES_TABLE = "creator_monetization_profiles";
@@ -190,6 +191,7 @@ const CREATOR_CONTENT_ACCESS_ALLOWED_REASONS = new Set([
   "purchase_grant",
   "sandbox_grant",
   "active_grant",
+  "vip_active",
   "active_creator_subscription",
 ]);
 const CREATOR_CONTENT_ACCESS_DENIED_REASONS = new Set([
@@ -498,10 +500,15 @@ export async function resolveCreatorContentAccess(options: {
   contentId: string;
 }): Promise<CreatorContentAccessResolution> {
   try {
-    const { data, error } = await monetizationClient.rpc("resolve_creator_content_access", {
-      p_content_type: options.contentType,
-      p_content_id: options.contentId,
-    });
+    const response = await withAuthorityReadDeadline(
+      monetizationClient.rpc("resolve_creator_content_access", {
+        p_content_type: options.contentType,
+        p_content_id: options.contentId,
+      }),
+      null,
+    );
+    if (!response) return unavailableCreatorContentAccessResolution("resolver_unavailable");
+    const { data, error } = response;
     if (error) throw error;
     return normalizeCreatorContentAccessResolution(data);
   } catch {
@@ -516,7 +523,7 @@ export async function setCreatorContentPrice(input: {
   priceCents: number;
   currency?: string;
 }) {
-  const { data, error } = await monetizationClient.rpc("set_creator_content_price", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("set_creator_content_price", {
     p_content_type: input.contentType,
     p_content_id: input.contentId,
     p_is_paid: input.isPaid,
@@ -534,7 +541,7 @@ export async function createCreatorProductListing(input: {
   productType?: CreatorProductListing["productType"];
   currency?: string;
 }) {
-  const { data, error } = await monetizationClient.rpc("create_creator_product_listing", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("create_creator_product_listing", {
     p_title: input.title,
     p_description: input.description ?? "",
     p_price_cents: Math.max(0, Math.trunc(input.priceCents || 0)),
@@ -567,7 +574,7 @@ export async function requestCreatorPayout(input: {
   amountCents: number;
   payoutType: "scheduled" | "instant";
 }) {
-  const { data, error } = await monetizationClient.rpc("request_creator_payout", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("request_creator_payout", {
     p_amount_cents: Math.max(0, Math.trunc(input.amountCents || 0)),
     p_payout_type: input.payoutType,
   });
@@ -580,7 +587,7 @@ export async function creatorMonetizationCheckoutPreflight(input: {
   targetId?: string | null;
   amountCents?: number | null;
 }) {
-  const { data, error } = await monetizationClient.rpc("creator_monetization_checkout_preflight", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("creator_monetization_checkout_preflight", {
     p_checkout_type: input.checkoutType,
     p_target_id: input.targetId ?? null,
     p_amount_cents: input.amountCents == null ? null : Math.max(0, Math.trunc(input.amountCents || 0)),

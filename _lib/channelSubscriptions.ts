@@ -1,11 +1,15 @@
 import { trackEvent } from "./analytics";
 import { formatMonetizationCurrency } from "./creatorMonetization";
 import {
+  captureCreatorMoneyPurchaseAuthority,
+  isCreatorMoneyPurchaseAuthorityCurrent,
   prepareCreatorMoneyPurchaseSubject,
   revalidateCreatorMoneyPurchaseSubject,
+  invokeCreatorMoneyPurchaseSubjectRpc,
   validateCreatorMoneyPurchaseIntent,
   validateHistoricalCreatorMoneyPurchaseIntent,
   type CreatorMoneyPurchaseIntentExpectation,
+  type CreatorMoneyPurchaseSubject,
 } from "./creatorMoneyPurchaseAuthority";
 import {
   purchaseRevenueCatPackage,
@@ -21,12 +25,14 @@ import {
   IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY,
 } from "./iosAppStoreCommerce";
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 import {
   isRevenueCatExistingPurchase,
   isRevenueCatUserCancellation,
   reconcileRevenueCatExistingPurchase,
 } from "./revenuecatPurchaseClosure";
 import { supabase } from "./supabase";
+import { withAuthorityReadDeadline } from "./entitlementAuthority";
 
 export const CHANNEL_SUBSCRIPTION_SANDBOX_PRODUCT_KEY = "channel_subscription_sandbox_monthly_499";
 export const CHANNEL_SUBSCRIPTION_SANDBOX_PROVIDER_PRODUCT_ID = "channel_subscription_sandbox_monthly_499";
@@ -443,7 +449,7 @@ export async function saveChannelSubscriptionOffer(input: {
   description?: string | null;
   status?: ChannelSubscriptionOfferStatus;
 }): Promise<ChannelSubscriptionOffer> {
-  const { data, error } = await rpcClient.rpc("set_creator_channel_subscription_offer", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>("set_creator_channel_subscription_offer", {
     p_title: input.title ?? "Platform subscription",
     p_description: input.description ?? null,
     p_status: input.status ?? "sandbox",
@@ -457,10 +463,11 @@ export async function saveChannelSubscriptionOffer(input: {
 }
 
 export async function resolveChannelSubscriptionAccess(creatorId: string): Promise<ChannelSubscriptionAccess> {
-  const { data, error } = await rpcClient.rpc("resolve_creator_channel_subscription_access", {
-    p_creator_id: creatorId,
-  });
-  if (error) {
+  const response = await withAuthorityReadDeadline(
+    rpcClient.rpc("resolve_creator_channel_subscription_access", { p_creator_id: creatorId }),
+    null,
+  );
+  if (!response || response.error) {
     return {
       allowed: false,
       reason: "access_check_failed",
@@ -477,17 +484,21 @@ export async function resolveChannelSubscriptionAccess(creatorId: string): Promi
       offer: null,
     };
   }
-  return normalizeAccess(data, creatorId);
+  return normalizeAccess(response.data, creatorId);
 }
 
 export async function createChannelSubscriptionPurchaseIntent(
   offerId: string,
   expected: Omit<CreatorMoneyPurchaseIntentExpectation, "status">,
+  subject: CreatorMoneyPurchaseSubject,
 ) {
-  const { data, error } = await rpcClient.rpc("create_creator_channel_subscription_purchase_intent", {
-    p_offer_id: offerId,
-  });
-  if (error) throw new Error("Platform Subscription checkout is not available right now.");
+  const response = await invokeCreatorMoneyPurchaseSubjectRpc<Record<string, unknown>>(
+    subject,
+    "create_creator_channel_subscription_purchase_intent",
+    { p_offer_id: offerId },
+  );
+  if (!response || response.error) throw new Error("Platform Subscription checkout is not available right now.");
+  const data = response.data;
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("Platform Subscription checkout authority could not be verified.");
   }
@@ -518,24 +529,36 @@ export async function createChannelSubscriptionPurchaseIntent(
   };
 }
 
-export async function waitForChannelSubscriptionAccess(creatorId: string): Promise<ChannelSubscriptionAccess> {
+export async function waitForChannelSubscriptionAccess(
+  creatorId: string,
+  subject?: CreatorMoneyPurchaseSubject,
+  accountChangedFallback?: ChannelSubscriptionAccess,
+): Promise<ChannelSubscriptionAccess> {
+  if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
   let latest = await resolveChannelSubscriptionAccess(creatorId);
+  if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
   if (latest.allowed) return latest;
   for (let attempt = 0; attempt < CHANNEL_SUBSCRIPTION_POLL_ATTEMPTS; attempt += 1) {
     await delay(CHANNEL_SUBSCRIPTION_POLL_DELAY_MS);
+    if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
     latest = await resolveChannelSubscriptionAccess(creatorId);
+    if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
     if (latest.allowed) return latest;
   }
   return latest;
 }
 
 export async function restoreChannelSubscription(creatorId: string): Promise<ChannelSubscriptionPurchaseResult> {
+  const initiatingAuthority = captureCreatorMoneyPurchaseAuthority();
   const access = await resolveChannelSubscriptionAccess(creatorId);
+  if (!isCreatorMoneyPurchaseAuthorityCurrent(initiatingAuthority)) {
+    return { ok: false, message: "Account changed before restoring this Platform Subscription.", access };
+  }
   if (access.allowed) return { ok: true, message: "Platform Subscription active.", access };
   if (Platform.OS !== "ios" && Platform.OS !== "android") {
     return { ok: false, message: "Restore is not available on this device.", access };
   }
-  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject();
+  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject(initiatingAuthority);
   if (!purchaseSubject) {
     return { ok: false, message: "Sign in again before restoring this Platform Subscription.", access };
   }
@@ -555,7 +578,7 @@ export async function restoreChannelSubscription(creatorId: string): Promise<Cha
       access,
     };
   }
-  const verifiedAccess = await waitForChannelSubscriptionAccess(creatorId);
+  const verifiedAccess = await waitForChannelSubscriptionAccess(creatorId, purchaseSubject, access);
   return {
     ok: verifiedAccess.allowed,
     message: verifiedAccess.allowed
@@ -569,7 +592,11 @@ export async function purchaseChannelSubscription(input: {
   creatorId: string;
   sourceSurface: string;
 }): Promise<ChannelSubscriptionPurchaseResult> {
+  const initiatingAuthority = captureCreatorMoneyPurchaseAuthority();
   const access = await resolveChannelSubscriptionAccess(input.creatorId);
+  if (!isCreatorMoneyPurchaseAuthorityCurrent(initiatingAuthority)) {
+    return { ok: false, message: "Account changed before Platform Subscription checkout. Nothing was charged.", access };
+  }
   if (access.allowed) {
     return { ok: true, message: "Subscribed.", access };
   }
@@ -608,7 +635,7 @@ export async function purchaseChannelSubscription(input: {
     }
   }
 
-  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject();
+  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject(initiatingAuthority);
   if (!purchaseSubject) {
     return {
       ok: false,
@@ -626,9 +653,9 @@ export async function purchaseChannelSubscription(input: {
     environment: access.offer.status === "active" ? "production" : "sandbox",
     amountMinor: access.priceCents,
     currency: access.currency,
-  });
+  }, purchaseSubject);
   if (intent.alreadySubscribed) {
-    const verifiedAccess = await waitForChannelSubscriptionAccess(input.creatorId);
+    const verifiedAccess = await waitForChannelSubscriptionAccess(input.creatorId, purchaseSubject, access);
     return {
       ok: verifiedAccess.allowed,
       message: verifiedAccess.allowed ? "Subscribed." : "Subscription is still being confirmed.",
@@ -643,7 +670,7 @@ export async function purchaseChannelSubscription(input: {
   if (!pkg && !storeProduct) {
     return {
       ok: false,
-      message: "Platform Subscription sandbox product is not available on this device yet.",
+      message: "Platform Subscription is not available on this device yet. Nothing was charged.",
       access,
       intentId: intent.id,
       productId,
@@ -681,7 +708,7 @@ export async function purchaseChannelSubscription(input: {
         restore: () => restoreRevenueCatPurchases({ authority: purchaseSubject.authority }),
         authorityCurrent: () => revalidateCreatorMoneyPurchaseSubject(purchaseSubject),
         waitForAuthority: async () => {
-          const verified = await waitForChannelSubscriptionAccess(input.creatorId);
+          const verified = await waitForChannelSubscriptionAccess(input.creatorId, purchaseSubject, access);
           return verified.allowed ? verified : null;
         },
       });
@@ -705,7 +732,7 @@ export async function purchaseChannelSubscription(input: {
       }
       const restoredAccess = reconciliation.status === "verified"
         ? reconciliation.authority
-        : await resolveChannelSubscriptionAccess(input.creatorId);
+        : await waitForChannelSubscriptionAccess(input.creatorId, purchaseSubject, access);
       return {
         ok: restoredAccess.allowed,
         message: restoredAccess.allowed
@@ -716,7 +743,7 @@ export async function purchaseChannelSubscription(input: {
         productId,
       };
     }
-    const verifiedAccess = await waitForChannelSubscriptionAccess(input.creatorId);
+    const verifiedAccess = await waitForChannelSubscriptionAccess(input.creatorId, purchaseSubject, access);
     if (verifiedAccess.allowed) {
       return {
         ok: true,
@@ -738,7 +765,7 @@ export async function purchaseChannelSubscription(input: {
     };
   }
 
-  const verifiedAccess = await waitForChannelSubscriptionAccess(input.creatorId);
+  const verifiedAccess = await waitForChannelSubscriptionAccess(input.creatorId, purchaseSubject, access);
   if (!verifiedAccess.allowed) {
     return {
       ok: false,

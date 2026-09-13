@@ -1,11 +1,15 @@
 import { trackEvent } from "./analytics";
 import { formatMonetizationCurrency } from "./creatorMonetization";
 import {
+  captureCreatorMoneyPurchaseAuthority,
+  isCreatorMoneyPurchaseAuthorityCurrent,
   prepareCreatorMoneyPurchaseSubject,
   revalidateCreatorMoneyPurchaseSubject,
+  invokeCreatorMoneyPurchaseSubjectRpc,
   validateCreatorMoneyPurchaseIntent,
   validateHistoricalCreatorMoneyPurchaseIntent,
   type CreatorMoneyPurchaseIntentExpectation,
+  type CreatorMoneyPurchaseSubject,
 } from "./creatorMoneyPurchaseAuthority";
 import {
   purchaseRevenueCatStoreProduct,
@@ -18,6 +22,8 @@ import {
 } from "./iosAppStoreCommerce";
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { supabase } from "./supabase";
+import { withAuthorityReadDeadline } from "./entitlementAuthority";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export const VIP_PASS_SANDBOX_PRODUCT_KEY = "vip_pass_sandbox_499";
 export const VIP_PASS_SANDBOX_PROVIDER_PRODUCT_ID = "cw_vip_pass_sandbox_499";
@@ -382,7 +388,7 @@ export async function saveCreatorVipPassOffer(input: {
   description?: string | null;
   status?: CreatorVipPassOfferStatus;
 }): Promise<CreatorVipPassOffer> {
-  const { data, error } = await rpcClient.rpc("set_creator_vip_pass_offer", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>("set_creator_vip_pass_offer", {
     p_title: input.title ?? "VIP Pass",
     p_description: input.description ?? "Creator-specific VIP access for this Platform only.",
     p_status: input.status ?? "sandbox",
@@ -396,10 +402,11 @@ export async function saveCreatorVipPassOffer(input: {
 }
 
 export async function resolveCreatorVipPassAccess(creatorId: string): Promise<CreatorVipPassAccess> {
-  const { data, error } = await rpcClient.rpc("resolve_creator_vip_pass_access", {
-    p_creator_id: creatorId,
-  });
-  if (error) {
+  const response = await withAuthorityReadDeadline(
+    rpcClient.rpc("resolve_creator_vip_pass_access", { p_creator_id: creatorId }),
+    null,
+  );
+  if (!response || response.error) {
     return {
       allowed: false,
       reason: "access_check_failed",
@@ -416,7 +423,7 @@ export async function resolveCreatorVipPassAccess(creatorId: string): Promise<Cr
       offer: null,
     };
   }
-  return normalizeAccess(data, creatorId);
+  return normalizeAccess(response.data, creatorId);
 }
 
 export async function resolveCreatorVipVideoAccess(videoId: string): Promise<CreatorVipVideoAccess> {
@@ -424,11 +431,14 @@ export async function resolveCreatorVipVideoAccess(videoId: string): Promise<Cre
   if (!ACCESS_UUID_PATTERN.test(normalizedVideoId)) {
     return { allowed: false, reason: "invalid_video_id", vipRequired: true, creatorId: null };
   }
-  const { data, error } = await rpcClient.rpc("resolve_creator_vip_video_access", { p_video_id: normalizedVideoId });
-  if (error || !data || typeof data !== "object" || Array.isArray(data)) {
+  const response = await withAuthorityReadDeadline(
+    rpcClient.rpc("resolve_creator_vip_video_access", { p_video_id: normalizedVideoId }),
+    null,
+  );
+  if (!response || response.error || !response.data || typeof response.data !== "object" || Array.isArray(response.data)) {
     return { allowed: false, reason: "access_check_failed", vipRequired: true, creatorId: null };
   }
-  const row = data as Record<string, unknown>;
+  const row = response.data as Record<string, unknown>;
   if (typeof row.allowed !== "boolean" || typeof row.vipRequired !== "boolean") {
     return { allowed: false, reason: "malformed_access_response", vipRequired: true, creatorId: null };
   }
@@ -459,7 +469,10 @@ export async function resolveCreatorVipVideoAccess(videoId: string): Promise<Cre
 export async function setCreatorVideoVipAccess(videoId: string, required: boolean) {
   const normalizedVideoId = accessText(videoId);
   if (!ACCESS_UUID_PATTERN.test(normalizedVideoId)) throw new Error("VIP video access could not be updated.");
-  const { data, error } = await rpcClient.rpc("set_creator_video_vip_access", { p_video_id: normalizedVideoId, p_required: required });
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>(
+    "set_creator_video_vip_access",
+    { p_video_id: normalizedVideoId, p_required: required },
+  );
   if (error) throw new Error("VIP video access could not be updated.");
   const row = data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : {};
   if (accessText(row.status) !== "ok") {
@@ -474,11 +487,15 @@ export async function setCreatorVideoVipAccess(videoId: string, required: boolea
 export async function createCreatorVipPassPurchaseIntent(
   offerId: string,
   expected: Omit<CreatorMoneyPurchaseIntentExpectation, "status">,
+  subject: CreatorMoneyPurchaseSubject,
 ) {
-  const { data, error } = await rpcClient.rpc("create_creator_vip_pass_purchase_intent", {
-    p_offer_id: offerId,
-  });
-  if (error) throw new Error("VIP Pass checkout is not available right now.");
+  const response = await invokeCreatorMoneyPurchaseSubjectRpc<Record<string, unknown>>(
+    subject,
+    "create_creator_vip_pass_purchase_intent",
+    { p_offer_id: offerId },
+  );
+  if (!response || response.error) throw new Error("VIP Pass checkout is not available right now.");
+  const data = response.data;
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("VIP Pass checkout authority could not be verified.");
   }
@@ -510,12 +527,20 @@ export async function createCreatorVipPassPurchaseIntent(
   };
 }
 
-export async function waitForCreatorVipPassAccess(creatorId: string): Promise<CreatorVipPassAccess> {
+export async function waitForCreatorVipPassAccess(
+  creatorId: string,
+  subject?: CreatorMoneyPurchaseSubject,
+  accountChangedFallback?: CreatorVipPassAccess,
+): Promise<CreatorVipPassAccess> {
+  if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
   let latest = await resolveCreatorVipPassAccess(creatorId);
+  if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
   if (latest.allowed) return latest;
   for (let attempt = 0; attempt < VIP_PASS_POLL_ATTEMPTS; attempt += 1) {
     await delay(VIP_PASS_POLL_DELAY_MS);
+    if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
     latest = await resolveCreatorVipPassAccess(creatorId);
+    if (subject && !await revalidateCreatorMoneyPurchaseSubject(subject)) return accountChangedFallback!;
     if (latest.allowed) return latest;
   }
   return latest;
@@ -525,7 +550,11 @@ export async function purchaseCreatorVipPass(input: {
   creatorId: string;
   sourceSurface: string;
 }): Promise<CreatorVipPurchaseResult> {
+  const initiatingAuthority = captureCreatorMoneyPurchaseAuthority();
   const access = await resolveCreatorVipPassAccess(input.creatorId);
+  if (!isCreatorMoneyPurchaseAuthorityCurrent(initiatingAuthority)) {
+    return { ok: false, message: "Account changed before VIP Pass checkout. Nothing was charged.", access };
+  }
   if (access.allowed) {
     return { ok: true, message: "VIP confirmed.", access };
   }
@@ -567,7 +596,7 @@ export async function purchaseCreatorVipPass(input: {
     }
   }
 
-  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject();
+  const purchaseSubject = await prepareCreatorMoneyPurchaseSubject(initiatingAuthority);
   if (!purchaseSubject) {
     return {
       ok: false,
@@ -585,9 +614,9 @@ export async function purchaseCreatorVipPass(input: {
     environment: access.offer.status === "active" ? "production" : "sandbox",
     amountMinor: access.priceCents,
     currency: access.currency,
-  });
+  }, purchaseSubject);
   if (intent.alreadyPurchased) {
-    const verifiedAccess = await waitForCreatorVipPassAccess(input.creatorId);
+    const verifiedAccess = await waitForCreatorVipPassAccess(input.creatorId, purchaseSubject, access);
     return {
       ok: verifiedAccess.allowed,
       message: verifiedAccess.allowed ? "VIP confirmed." : "VIP is still being confirmed.",
@@ -602,7 +631,7 @@ export async function purchaseCreatorVipPass(input: {
   if (!product) {
     return {
       ok: false,
-      message: "VIP Pass sandbox product is not available on this device yet.",
+      message: "VIP Pass is not available on this device yet. Nothing was charged.",
       access,
       intentId: intent.id,
       productId,
@@ -631,7 +660,7 @@ export async function purchaseCreatorVipPass(input: {
   try {
     await purchaseRevenueCatStoreProduct(product, { authority: purchaseSubject.authority });
   } catch (error) {
-    const verifiedAccess = await waitForCreatorVipPassAccess(input.creatorId);
+    const verifiedAccess = await waitForCreatorVipPassAccess(input.creatorId, purchaseSubject, access);
     if (verifiedAccess.allowed) {
       return {
         ok: true,
@@ -653,7 +682,7 @@ export async function purchaseCreatorVipPass(input: {
     };
   }
 
-  const verifiedAccess = await waitForCreatorVipPassAccess(input.creatorId);
+  const verifiedAccess = await waitForCreatorVipPassAccess(input.creatorId, purchaseSubject, access);
   if (!verifiedAccess.allowed) {
     return {
       ok: false,

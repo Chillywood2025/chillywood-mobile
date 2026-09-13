@@ -4,6 +4,7 @@ import { supabase } from "./supabase";
 import {
   prepareCreatorMoneyPurchaseSubject,
   revalidateCreatorMoneyPurchaseSubject,
+  invokeCreatorMoneyPurchaseSubjectRpc,
   validateCreatorMoneyPurchaseIntent,
 } from "./creatorMoneyPurchaseAuthority";
 import {
@@ -18,6 +19,8 @@ import {
 } from "./iosAppStoreCommerce";
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { getRuntimeConfig } from "./runtimeConfig";
+import { withAuthorityReadDeadline } from "./entitlementAuthority";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export type CreatorTipStatus = "setup_incomplete" | "active" | "paused" | "blocked";
 
@@ -291,7 +294,7 @@ export async function saveMyCreatorTipSettings(input: {
   maxAmountCents: number;
   currency?: string;
 }): Promise<CreatorTipSettings> {
-  const { data, error } = await creatorTipsClient.rpc("upsert_my_creator_tip_settings", {
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>("upsert_my_creator_tip_settings", {
     p_currency: input.currency ?? "usd",
     p_default_amount_cents: input.defaultAmountCents ?? null,
     p_max_amount_cents: input.maxAmountCents,
@@ -304,9 +307,12 @@ export async function saveMyCreatorTipSettings(input: {
 }
 
 export async function readCreatorTipPublicStatus(creatorId: string): Promise<CreatorTipPublicStatus> {
-  const { data, error } = await creatorTipsClient.rpc("get_creator_tip_public_status", { p_creator_id: creatorId });
-  if (error) throw error;
-  return normalizePublicTipStatus(data, creatorId);
+  const response = await withAuthorityReadDeadline(
+    creatorTipsClient.rpc("get_creator_tip_public_status", { p_creator_id: creatorId }),
+    null,
+  );
+  if (!response || response.error) return unavailablePublicTipStatus("tip_authority_unavailable");
+  return normalizePublicTipStatus(response.data, creatorId);
 }
 
 export async function listMyCreatorTipTransactions(limit = 25): Promise<CreatorTipTransaction[]> {
@@ -517,8 +523,12 @@ export async function purchaseCreatorTipWithStore(input: {
         p_source_id: creatorId,
         p_source_type: "creator_tip",
       };
-  const { data: intent, error } = await creatorTipsClient.rpc<Record<string, unknown>>(intentRpc, intentArgs);
-  if (error) {
+  const intentResponse = await invokeCreatorMoneyPurchaseSubjectRpc<Record<string, unknown>>(
+    purchaseSubject,
+    intentRpc,
+    intentArgs,
+  );
+  if (!intentResponse || intentResponse.error) {
     return {
       ok: false,
       intentId: null,
@@ -526,6 +536,7 @@ export async function purchaseCreatorTipWithStore(input: {
       message: "Tip checkout could not be started right now.",
     };
   }
+  const intent = intentResponse.data;
   const validatedIntent = validateCreatorMoneyPurchaseIntent(intent, {
     userId: purchaseSubject.userId,
     sourceType: "creator_tip",
@@ -597,7 +608,7 @@ export async function purchaseCreatorTipWithStore(input: {
     ok: true,
     intentId,
     productId,
-    message: "Sandbox tip purchase received. Creator credit waits for verified provider reconciliation.",
+    message: "Tip received. Creator credit appears only after the store confirms it.",
   };
 }
 
