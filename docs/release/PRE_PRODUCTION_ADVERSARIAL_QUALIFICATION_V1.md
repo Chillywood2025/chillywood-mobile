@@ -21,11 +21,11 @@ production processing, or production SKU activation.
 
 - Starting protected `main`: `5503c352ad73acf022aa9a0005a2a8818d5e7fec`
 - Starting protected tree: `e81786f5044ee753d13afae62bf763ed9d12b9ac`
-- Qualified executable source: `34535233b1985f777cb174225842dac518f63222`
-- Qualified executable source tree: `5184e8ad2f989beda85a5fcae2d3a360182feeb1`
+- Qualified executable source: `f2724a0352ddfaf9656f063a4102a72fc1d2560d`
+- Qualified executable source tree: `6af23c0eaeeb9aa0703e029b46244db24a312680`
 - PR #389 was already terminally merged before this qualification began.
 - The qualification stack was merged in dependency order: #416, #424, #417,
-  #418, #420, #419, #421, #423, #425, #422, #426, #428.
+  #418, #420, #419, #421, #423, #425, #422, #426, #428, #431.
 - No required product PR from this stack remains open.
 - The remaining open PRs observed after merge are historical draft review-only
   branches and were not altered or merged.
@@ -46,9 +46,10 @@ The exact product merges were:
 10. #422 — `e4c71abe293799a63473392647fcf97d91e7ca10`
 11. #426 — `72a0bc4684df8eb5499afe49a2e3f56e2db98287`
 12. #428 — `34535233b1985f777cb174225842dac518f63222`
+13. #431 — `f2724a0352ddfaf9656f063a4102a72fc1d2560d`
 
 PR #427 preserved the earlier qualification ledger checkpoint; it contained
-documentation only. PR #428 is the final product/test repair. A final
+documentation only. PR #431 is the final product/test repair. A final
 documentation-only ledger publication may advance protected `main` without
 changing the executable source and tree qualified above.
 
@@ -75,6 +76,9 @@ changing the executable source and tree qualified above.
 - Eight icon-only Back controls across seven customer surfaces omitted the
   accessibility role/label contract and were absent from the iOS accessibility
   tree even though coordinate interaction remained possible.
+- A host could authoritatively end a Live room while a connected viewer kept
+  rendering the stale Live surface instead of converging to the ended-room
+  route gate.
 
 ## 3. Defects repaired
 
@@ -101,6 +105,11 @@ changing the executable source and tree qualified above.
   Content Library replay, and Support Back controls are now accessible,
   focusable buttons with static test IDs, route-specific labels, bounded hit
   slop, and the original `router.back()` behavior.
+- Live room realtime termination now accepts only the exact room's strict
+  `is_active=false` payload, clears renderable LiveKit and access state, and
+  moves every viewer to the authoritative unavailable gate. Unknown or
+  malformed realtime payloads remain refresh hints rather than fabricated end
+  authority.
 
 ## 4. Unlisted defects discovered
 
@@ -116,6 +125,9 @@ changing the executable source and tree qualified above.
 - The final iPhone Profile smoke exposed the unlabeled icon-only Back control.
   A same-class audit found all eight occurrences across seven surfaces and
   repaired the class rather than only the observed Profile instance.
+- Exact-head CI exposed stale Live Stage proof labels in the canonical seat
+  approval proof/guard. The proof was aligned to current customer role labels,
+  retained featured-listener authority checks, and passed before merge.
 
 ## 5. Permanent test coverage added or extended
 
@@ -144,10 +156,13 @@ Permanent coverage includes:
 - surface-aware customer-facing language.
 - exact iOS-visible Back-button occurrence counts and accessibility semantics
   across every conditional render branch.
+- exact-room terminal realtime handling that clears stale viewer/LiveKit state
+  without treating unknown payloads as ended authority.
 
 ## 6. Automated adversarial results
 
 - Cross-boundary adversarial suite: 35/35 `PASS`.
+- Final affected Live/Watch-Party/Event/commerce suites: 41/41 `PASS`.
 - Non-assurance product Node suite: 321/321 `PASS`.
 - Premium source-readiness cases: 16/16 `PASS`.
 - pgTAP: 91 files, 3,340 tests, `PASS`.
@@ -158,11 +173,14 @@ Permanent coverage includes:
 - Every exact-head Phase 1 substantive product/security job passed before its
   PR merged.
 - Final exact-source iOS-visible Back navigation guard: `PASS`.
+- Final exact-source Live Stage contract, approved-seat, camera, and old-room
+  handling guards: `PASS`.
 
-The only Phase 1 failures were the accepted assurance/control-plane lanes:
-Initialize exact-head admission, Autonomous Systems All-Platform, Autonomous
-Systems iOS, and Cognitive Intelligence. No failed assurance lane is
-represented as passing.
+At PR #431's exact head, every substantive product, database, Android, iOS,
+route, runtime, lint, and TypeScript job passed. The only failures were the
+accepted assurance/control-plane lanes: Autonomous Systems All-Platform,
+Autonomous Systems iOS, and Cognitive Intelligence; Admission remained pending
+on those accepted failures. No failed assurance lane is represented as passing.
 
 ## 7. High-volume and pagination results
 
@@ -192,10 +210,11 @@ Exact-target, unknown-ownership, provider failure, cancellation, retry,
 idempotency, refund/revoke/expiry, privacy composition, Tip-no-access, and Seat
 eligibility-only regressions passed. RevenueCat's read-only API returned HTTP
 200 for the project, webhook, app, entitlement, offering, and product
-inventories. Android rendered the non-entitled Premium/Watch-Party gate once
-under three immediate taps and did not create a transaction or route storm.
-No real charge was attempted. Current external sandbox transaction scenarios
-without a legitimate available test purchase are `EXTERNAL_BLOCKED`.
+inventories. Android sandbox purchase, restore, and revoke were proven, and a
+final sandbox Premium purchase converged to active authority before the
+two-device Live test. TestFlight sandbox purchase also completed in the app and
+rendered active Premium. No real charge occurred. iOS restore/revoke was not
+independently repeated and remains a separate `EXTERNAL_BLOCKED` proof lane.
 
 ## 10. RLS and privacy results
 
@@ -210,12 +229,15 @@ not grant server authority. Result: `PASS`.
 
 LiveKit authority/routing, Watch-Party RFGC, Party Room versus Live Stage,
 seat eligibility, viewer publish denial, duplicate input, stale/ended room, and
-route regressions passed. Current read-only health showed one eligible active
-router, a fresh heartbeat, a healthy LiveKit node, zero recent
-`no_eligible_server` events, zero active rooms/participants/publishers, and no
-rejection reasons. TURN remains provider-marked `proof_pending`. No legitimate
-active multi-participant room was available for final device interaction, so
-that external physical lane is `EXTERNAL_BLOCKED`.
+route regressions passed. On the final exact-source OTAs, an iPhone host and a
+distinct Android viewer entered the same legitimate Live room. Database
+readback showed two active members: one host with host/speaking authority and
+one viewer/listener with speaking, microphone, and camera authority all false.
+After the host ended the exact room without saving, the backend recorded it
+inactive and Android immediately left the stale Live surface for the
+authoritative “Live room unavailable” gate. Current read-only health otherwise
+showed an eligible router and healthy LiveKit node. TURN remains
+provider-marked `proof_pending`.
 
 ## 12. Event results
 
@@ -273,10 +295,10 @@ production customer content. Result: `PASS`.
 - Installer readback: Google Play package installer.
 - Runtime/channel: `1.0.0-android-production-v2` /
   `android-internal-v2`.
-- Final OTA group: `fb0d0b44-96c0-4b46-8f9e-f0fa170c7240`.
-- Final update: `01a09a11-7d09-7957-8847-8681e781d757`.
+- Final OTA group: `1ed67a8e-3e09-484c-8518-4c8a495ffe3a`.
+- Final update: `01a09ba7-f1a2-718d-8876-42fecea69e33`.
 - EAS update source: exact qualified executable source
-  `34535233b1985f777cb174225842dac518f63222`.
+  `f2724a0352ddfaf9656f063a4102a72fc1d2560d`.
 - Installed release diagnostics read back the exact update, runtime, channel,
   native build, non-embedded launch, and no emergency launch.
 - OTA log sequence completed check, availability, download, restart, and final
@@ -284,6 +306,10 @@ production customer content. Result: `PASS`.
 - Customer navigation, Library/Saved, Profile Back, Platform native Share
   return, background/foreground, rapid Watch-Party entry, Settings diagnostics,
   crash observation, safe areas, and primary-action reachability passed.
+- Google Play sandbox Premium purchase converged to active authority on the
+  final OTA; the device then joined the exact iPhone-hosted Live room as a
+  viewer/listener and exited stale Live rendering immediately when the host
+  ended it.
 - The affected final sweep passed 11/11 grouped cases. Two observed fatal
   records belonged to colliding standalone UI-automation launcher processes;
   the Chi'llywood fatal, unhandled, and ANR count was zero.
@@ -295,10 +321,10 @@ Android exact-source physical result: `PASS`.
 - Signed binary: EAS build `291ebe2d-59d1-4531-ab7c-8709dd64dc27`.
 - App version/build: `1.0.0` / `13`.
 - Runtime/channel: `1.0.0-ios-production-v2` / `ios-internal-v2`.
-- Final OTA group: `e78a8349-4370-4839-a6a3-1a3b8a35358a`.
-- Final update: `01a09a0c-7ef3-7cef-adc4-427b220fde88`.
+- Final OTA group: `c0e54074-9725-4e9b-a390-d14097360d33`.
+- Final update: `01a09bb4-4e50-7cf0-9284-344ae4dd2ecd`.
 - EAS update source: exact qualified executable source
-  `34535233b1985f777cb174225842dac518f63222`.
+  `f2724a0352ddfaf9656f063a4102a72fc1d2560d`.
 - The on-device Expo update database recorded the exact final update with
   status/keep set, three successful launches, and zero failed launches.
 - App version/build installation and launch were independently read back.
@@ -314,6 +340,9 @@ Android exact-source physical result: `PASS`.
   remained reachable with the keyboard open. The affected final sweep passed
   12/12 grouped cases, and the bounded app log contained zero fatal or
   unhandled signatures.
+- TestFlight sandbox purchase completed inside the app and Premium rendered
+  active. On the final OTA, the iPhone hosted and ended the exact two-device
+  Live room used to verify Android viewer convergence.
 
 iOS exact OTA installation/activation: `PASS`.
 
@@ -350,10 +379,13 @@ Chat dispatch 45, Chat transition 9, notification tokens 56, and notification
 dispatch 57.
 
 Read-only RevenueCat v2 API returned HTTP 200 and one project, one webhook,
-three apps, three entitlements, four offerings, and twenty products. Direct
-App Store Connect and Google Play sanitized-console readbacks were unavailable;
-no such direct-console proof is claimed. EAS and installed binary/update
-readbacks remain authoritative for the executable facts stated above.
+three apps, three entitlements, four offerings, and twenty products. Sanitized
+Google Play Console readback showed Production inactive, Internal testing
+active, and the Premium product active, with no public rollout. Sanitized App
+Store Connect readback showed iOS version 1.0/build 13 and TestFlight present in
+Prepare for Submission state, with no store submission or public activation.
+EAS and installed binary/update readbacks remain authoritative for the
+executable facts stated above.
 
 Live money and payouts are `off`. Digital sales, Tips, paid content, passes,
 provider webhooks, RevenueCat, Stripe Connect, and creator monetization remain
@@ -380,19 +412,20 @@ authority, LiveKit escalation, RLS regression, unsafe retry, provider callback
 confusion, stuck busy state, and customer-facing internal language. Result:
 `PASS`.
 
-The immutable final PR #428 diff also completed with zero findings across all
-8 changed files (scan `850cd5d1-024f-4f80-bc8d-4399f07f3d97`).
+The immutable final PR #431 diff also completed with zero findings across all
+four changed files plus its supporting Live room authority module (scan
+`67ebeb1d-a657-430f-b9d0-7b9ae13c5087`).
 
 ## 21. External blocked items
 
 - Final physical A to B to A sweep: no second legitimate credentialed customer
   identity was available on the devices.
-- Live multi-participant, Event lifecycle, and two-party Chat call physical
-  scenarios: no legitimate current provider/customer state was available.
-- Current sandbox purchase/restore/revoke transactions: no legitimate available
-  sandbox transaction identity/state; no purchase was fabricated.
-- Direct App Store Connect and Google Play console API readback: required
-  credentials or an approved sanitized readback artifact were unavailable.
+- Paid/private Event lifecycle and two-party Chat call physical scenarios: no
+  legitimate current provider/customer state was available.
+- iOS sandbox restore/revoke was not independently repeated after the verified
+  TestFlight sandbox purchase.
+- iOS push delivery/tap: no active iOS push token was available. Android real
+  push delivery/tap passed with a legitimate current token.
 - LiveKit TURN provider state remains `proof_pending` despite a healthy eligible
   router.
 
@@ -407,7 +440,9 @@ submission remained unchanged. No real charge, payout, cashout, transfer, or
 public release occurred.
 
 The bounded temporary Owner PR-only recovery was used only around each exact,
-independently validated product/test merge. Ruleset `18940814` was restored
+independently validated product/test merge, including PR #431 at exact head
+`82b943c0d3c411f2637aba3ec86043390e775c9f` and tree
+`6af23c0eaeeb9aa0703e029b46244db24a312680`. Ruleset `18940814` was restored
 after every merge with the same writable-state hash. Final readback showed:
 
 - enforcement `active`;
@@ -431,13 +466,13 @@ bypassed as a substantive product defect, or claimed as passing.
 | App-controlled product | `PASS` |
 | Auth / identity | `PASS` |
 | RLS / privacy | `PASS` |
-| Premium | `EXTERNAL_BLOCKED` — app/backend pass; final sandbox transaction unavailable |
+| Premium | `PASS` — Android purchase/restore/revoke and final purchase; TestFlight sandbox purchase active |
 | Creator VIP | `EXTERNAL_BLOCKED` — app/backend pass; final sandbox transaction unavailable |
 | Tips | `EXTERNAL_BLOCKED` — app/backend pass; final sandbox transaction unavailable |
 | Paid Video | `EXTERNAL_BLOCKED` — app/backend pass; final sandbox transaction unavailable |
 | Party Room | `EXTERNAL_BLOCKED` — app/backend pass; no legitimate final active room/pass state |
 | Event | `EXTERNAL_BLOCKED` — app/backend pass; no legitimate final active Event state |
-| Live Stage | `EXTERNAL_BLOCKED` — app/backend pass; no legitimate final active Stage state |
+| Live Stage | `PASS` — exact-source two-device host/viewer authority and host-end convergence |
 | Live Stage Seat | `EXTERNAL_BLOCKED` — app/backend pass; no legitimate final Stage/seat transaction state |
 | Watch-Party | `EXTERNAL_BLOCKED` — app/backend pass; no legitimate multi-participant final room |
 | Chi'lly Chat | `EXTERNAL_BLOCKED` — app/backend pass; no legitimate second-party final call |
