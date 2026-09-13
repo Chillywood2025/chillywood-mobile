@@ -75,3 +75,15 @@ const pairs = [
 ];
 assert.equal(pairs.length, 34);
 task.invariants.forEach((invariant, index) => test(`${invariant.id}: ${invariant.positiveWitness} / ${invariant.negativeWitness}`, async () => { assert.equal(await pairs[index][0](), true); assert.equal(await pairs[index][1](), true); }));
+
+test("unknown session authority retries within a bounded window and remains user-recoverable", () => {
+  assert.match(source.session, /SESSION_AUTHORITY_AUTOMATIC_RETRY_DELAYS_MS = \[1_000, 3_000\]/u);
+  assert.match(source.session, /authorityStatusRef\.current === "unknown"\) retryAuthority\(\)/u);
+  assert.match(source.session, /if \(!mounted \|\| authorityRetryInFlightRef\.current\) return/u);
+  assert.match(source.session, /supabase\.auth\.refreshSession\(\)/u);
+  assert.match(source.session, /reconcile\("TOKEN_REFRESHED", data\.session\)/u);
+  assert.match(source.session, /SESSION_AUTHORITY_AUTOMATIC_RETRY_DELAYS_MS\[automaticAuthorityRetryAttempt\]/u);
+  assert.match(source.layout, /onRetry=\{retryAuthority\}/u);
+  assert.match(source.layout, /accessibilityLabel="Try session verification again"/u);
+  assert.match(source.layout, /accessibilityLabel="Sign out of this session"/u);
+});
