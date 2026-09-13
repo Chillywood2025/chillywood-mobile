@@ -3300,7 +3300,17 @@ export default function ProfileScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8} style={styles.headerBackButton}>
+            <TouchableOpacity
+              accessible
+              focusable
+              hitSlop={12}
+              testID="profile-back-button"
+              onPress={() => router.back()}
+              activeOpacity={0.8}
+              style={styles.headerBackButton}
+              accessibilityRole="button"
+              accessibilityLabel="Go back from Profile"
+            >
               <Text style={styles.backArrow}>←</Text>
             </TouchableOpacity>
             <Text style={styles.kicker}>{"Chi'llywood · PROFILE"}</Text>
@@ -3948,7 +3958,17 @@ export default function ProfileScreen() {
         keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "none"}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8} style={styles.headerBackButton}>
+          <TouchableOpacity
+            accessible
+            focusable
+            hitSlop={12}
+            testID="profile-back-button"
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+            style={styles.headerBackButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back from Profile"
+          >
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
           <Text style={styles.kicker}>{"Chi'llywood · PROFILE"}</Text>

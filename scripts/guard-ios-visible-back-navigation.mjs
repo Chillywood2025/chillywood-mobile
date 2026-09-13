@@ -10,6 +10,15 @@ const waitingRoom = read("app/watch-party/index.tsx");
 const partyRoom = read("app/watch-party/[partyId].tsx");
 const liveStage = read("app/watch-party/live-stage/[partyId].tsx");
 const settings = read("app/settings.tsx");
+const iconOnlyBackSurfaces = [
+  ["Content Library replay", read("app/player/replay/[replayId].tsx"), "content-library-replay-back-button", "Go back from replay", 1],
+  ["Support", read("components/system/support-screen.tsx"), "support-back-button", "Go back from Support", 1],
+  ["Platform Studio", read("app/channel-settings.tsx"), "platform-studio-back-button", "Go back from Platform Studio", 1],
+  ["Chi'lly Circle", read("app/chilly-circle.tsx"), "chilly-circle-back-button", "Go back from Chi'lly Circle", 1],
+  ["Platform Subscription", read("app/channel-subscription/[creatorId].tsx"), "platform-subscription-back-button", "Go back from Platform Subscription", 1],
+  ["Profile", read("app/profile/[userId].tsx"), "profile-back-button", "Go back from Profile", 2],
+  ["Platform", read("app/channel/[userId].tsx"), "platform-back-button", "Go back from Platform", 1],
+];
 
 assert.match(sharedBackButton, /accessibilityRole="button"/u);
 assert.match(sharedBackButton, /minHeight:\s*44/u);
@@ -37,6 +46,26 @@ for (const [label, source] of [
   ["Settings", settings],
 ]) {
   assert.match(source, /<AppBackButton/u, `${label} must use the shared visible back control`);
+}
+
+for (const [surface, source, testId, accessibilityLabel, expectedControlCount] of iconOnlyBackSurfaces) {
+  const escapedTestId = testId.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const controls = [
+    ...source.matchAll(new RegExp(`<TouchableOpacity[\\s\\S]{0,800}?testID="${escapedTestId}"[\\s\\S]{0,800}?</TouchableOpacity>`, "gu")),
+  ].map((match) => match[0]);
+  assert.equal(controls.length, expectedControlCount, `${surface} must bind every material Back render branch`);
+  for (const control of controls) {
+    assert.match(control, /\n\s+accessible\n/u, `${surface} Back must be explicitly accessible`);
+    assert.match(control, /\n\s+focusable\n/u, `${surface} Back must be focusable`);
+    assert.match(control, /hitSlop=\{12\}/u, `${surface} Back must retain an expanded touch target`);
+    assert.match(control, /onPress=\{\(\) => router\.back\(\)\}/u, `${surface} must retain stack Back behavior`);
+    assert.match(control, /accessibilityRole="button"/u, `${surface} Back must be announced as a button`);
+    assert.ok(
+      control.includes(`accessibilityLabel="${accessibilityLabel}"`),
+      `${surface} Back must expose its route-specific accessibility label`,
+    );
+    assert.match(control, /(?:name="arrow-back"|>←<)/u, `${surface} must retain its visible Back icon`);
+  }
 }
 
 console.log("iOS visible back-navigation guard passed.");

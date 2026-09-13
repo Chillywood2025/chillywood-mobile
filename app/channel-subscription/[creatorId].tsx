@@ -141,7 +141,17 @@ export default function ChannelSubscriptionScreen() {
         contentContainerStyle={[styles.content, { paddingTop: safeAreaInsets.top + 18, paddingBottom: safeAreaInsets.bottom + 32 }]}
       >
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} activeOpacity={0.82} onPress={() => router.back()}>
+          <TouchableOpacity
+            accessible
+            focusable
+            hitSlop={12}
+            testID="platform-subscription-back-button"
+            style={styles.backButton}
+            activeOpacity={0.82}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back from Platform Subscription"
+          >
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Platform Subscription</Text>
