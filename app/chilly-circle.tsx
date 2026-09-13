@@ -575,7 +575,16 @@ export default function ChillyCircleScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.82}>
+        <TouchableOpacity
+          accessible
+          focusable
+          hitSlop={12}
+          testID="chilly-circle-back-button"
+          onPress={() => router.back()}
+          activeOpacity={0.82}
+          accessibilityRole="button"
+          accessibilityLabel="Go back from Chi'lly Circle"
+        >
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
         <Text style={styles.kicker}>CHI&apos;LLY CIRCLE</Text>

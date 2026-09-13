@@ -9793,7 +9793,16 @@ export function ChannelStudioScreen() {
         contentContainerStyle={studioContentContainerStyle}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
+          <TouchableOpacity
+            accessible
+            focusable
+            hitSlop={12}
+            testID="platform-studio-back-button"
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Go back from Platform Studio"
+          >
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
           <Text style={styles.kicker}>{appDisplayName.toUpperCase()} · PLATFORM STUDIO</Text>

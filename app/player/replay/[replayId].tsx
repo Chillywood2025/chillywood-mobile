@@ -88,7 +88,17 @@ export default function CreatorReplayPlayerScreen() {
       <View style={styles.scrim} />
       <SafeAreaView style={styles.safe}>
         <View style={styles.topBar}>
-          <TouchableOpacity style={styles.iconButton} activeOpacity={0.84} onPress={() => router.back()}>
+          <TouchableOpacity
+            accessible
+            focusable
+            hitSlop={12}
+            testID="content-library-replay-back-button"
+            style={styles.iconButton}
+            activeOpacity={0.84}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back from replay"
+          >
             <MaterialIcons name="arrow-back" size={22} color="#FFFFFF" />
           </TouchableOpacity>
           <View style={styles.topCopy}>

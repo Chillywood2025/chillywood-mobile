@@ -800,7 +800,17 @@ export default function PublicChannelScreen() {
 
   const renderBackHeader = () => (
     <View style={[styles.navBar, { paddingTop: Math.max(28, safeAreaInsets.top + 12) }]}>
-      <TouchableOpacity style={styles.navButton} activeOpacity={0.82} onPress={() => router.back()}>
+      <TouchableOpacity
+        accessible
+        focusable
+        hitSlop={12}
+        testID="platform-back-button"
+        style={styles.navButton}
+        activeOpacity={0.82}
+        onPress={() => router.back()}
+        accessibilityRole="button"
+        accessibilityLabel="Go back from Platform"
+      >
         <Text style={styles.navButtonText}>←</Text>
       </TouchableOpacity>
       <Text style={styles.navTitle}>Platform</Text>
