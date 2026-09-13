@@ -57,7 +57,7 @@ test("Party Room creator setup is contextual Free or Paid entry with an exact vi
   assert.match(partySetup, /Paid · \$0\.99/u);
   assert.match(partySetup, /Charge for Party Room entry/u);
   assert.match(partySetup, /Viewer preview: Join Party Room/u);
-  assert.match(partySetup, /never grants Live Stage, speaker, host, moderator, or LiveKit publish authority/u);
+  assert.match(partySetup, /never grants Live Stage, speaker, host, moderator, or broadcast permission/u);
   assert.match(partySetup, /status: paid \? "sandbox" : "canceled"/u);
   assert.match(partySetup, /listMyPaidWatchPartyOffers/u);
   assert.match(partySetup, /setPartyRoomEntryPaid\(!!enabledOffer\)/u);
@@ -70,7 +70,7 @@ test("paid Party Room viewer copy identifies exact authority before and after ch
   assert.match(partyRoom, /gives you entry to this exact Party Room/u);
   assert.match(partyRoom, /Get Party Room Pass —/u);
   assert.match(partyRoom, /formatOneTimePrice/u);
-  assert.match(partyRoom, /does not include Live Stage, speaking, camera, microphone, host, moderator, LiveKit publish authority/u);
+  assert.match(partyRoom, /does not include Live Stage, speaking, camera, microphone, host, moderator, broadcast permission/u);
   assert.match(partyMoney, /Party Room Pass active\. You're cleared to enter this Party Room\./u);
   assert.doesNotMatch(partyRoom, /live-stage/u);
 });
@@ -166,7 +166,7 @@ test("Live Stage creator setup separates viewer entry from speaking-seat eligibi
   assert.match(liveStage, /Set Live Stage viewer entry to/u);
   assert.match(liveStage, /Set speaking-seat eligibility to/u);
   assert.match(liveStage, /A Live Stage Seat Pass makes a viewer eligible for a speaking seat\. You still decide who is approved to speak\./u);
-  assert.match(liveStage, /Payment never grants host, moderator, speaker, camera, microphone, or LiveKit publish authority/u);
+  assert.match(liveStage, /Payment never grants host, moderator, speaker, camera, microphone, or broadcast permission/u);
   assert.match(liveStage, /Viewer preview:/u);
 });
 
@@ -192,10 +192,10 @@ test("Live Stage UX preserves the verified Google Play-only provider boundary on
     /key: "live_watch_party_seat_pass_sandbox_099"[\s\S]{0,420}providerRail: REVENUECAT_GOOGLE_PLAY_PROVIDER/u,
   );
   assert.match(liveMoney, /Platform\.OS !== "android"/u);
-  assert.match(liveMoney, /available only in the verified Google Play sandbox/u);
+  assert.match(liveMoney, /is not available on this device\. Nothing was charged/u);
   assert.match(liveStage, /LIVE_STAGE_PASS_PURCHASE_AVAILABLE = Platform\.OS === "android"/u);
-  assert.match(liveStage, /Paid Live Stage passes currently use the verified Google Play sandbox/u);
-  assert.match(liveStage, /iPhone viewers cannot buy them on this build/u);
+  assert.match(liveStage, /Paid Live Stage passes are currently available on supported Android devices/u);
+  assert.match(liveStage, /iPhone purchase is not available yet/u);
   assert.match(liveStage, /live-stage-seat-pass-unavailable-live-first/u);
   assert.match(liveStage, /live-stage-seat-pass-unavailable/u);
   assert.match(adminSandbox, /Live Stage checkout unavailable on iPhone/u);
@@ -204,7 +204,7 @@ test("Live Stage UX preserves the verified Google Play-only provider boundary on
 
 test("seat checkout is denied before charge when paid Live Stage entry is missing", () => {
   const precheck = liveMoney.indexOf('input.passType === "live_watch_party_seat_pass"');
-  const purchaseIntent = liveMoney.indexOf('rpc("create_live_watch_party_purchase_intent"');
+  const purchaseIntent = liveMoney.indexOf('"create_live_watch_party_purchase_intent"');
   const storeCharge = liveMoney.indexOf("purchaseRevenueCatStoreProduct(storeProduct");
   const finalEntryCheck = liveMoney.lastIndexOf("await readLiveWatchPartyMoneyAccess(input.partyId)", storeCharge);
   assert.ok(precheck >= 0 && purchaseIntent > precheck);

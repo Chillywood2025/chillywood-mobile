@@ -78,7 +78,7 @@ test("RevenueCat routes both live products through the dedicated atomic projecto
 
 test("seat purchase is entry-first at both client and database boundaries", () => {
   const clientPrecheck = liveMoney.indexOf('input.passType === "live_watch_party_seat_pass"');
-  const intentCall = liveMoney.indexOf('rpc("create_live_watch_party_purchase_intent"');
+  const intentCall = liveMoney.indexOf('"create_live_watch_party_purchase_intent"');
   const providerCharge = liveMoney.indexOf("purchaseRevenueCatStoreProduct(storeProduct");
   const finalEntryCheck = liveMoney.lastIndexOf("await readLiveWatchPartyMoneyAccess(input.partyId)", providerCharge);
   assert.ok(clientPrecheck >= 0 && intentCall > clientPrecheck);

@@ -1,8 +1,19 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
+import ts from "typescript";
 
-import { normalizePlatformSubscriptionNotificationCopy } from "../../_lib/userFacingProductCopy.ts";
+const source = fs.readFileSync("_lib/userFacingProductCopy.ts", "utf8");
+const javascript = ts.transpileModule(source, {
+  compilerOptions: {
+    module: ts.ModuleKind.CommonJS,
+    target: ts.ScriptTarget.ES2022,
+    strict: true,
+  },
+}).outputText;
+const copyModule = { exports: {} };
+new Function("exports", "module", javascript)(copyModule.exports, copyModule);
+const { normalizePlatformSubscriptionNotificationCopy } = copyModule.exports;
 
 test("legacy Platform Subscription notification rows use current product terminology", () => {
   assert.equal(
@@ -14,7 +25,7 @@ test("legacy Platform Subscription notification rows use current product termino
       "Sandbox proof record: a viewer started a channel subscription.",
       "channel_subscription_started",
     ),
-    "Sandbox proof record: a viewer started a Platform Subscription.",
+    "A viewer started a Platform Subscription.",
   );
 });
 

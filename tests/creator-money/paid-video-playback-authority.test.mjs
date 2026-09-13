@@ -26,7 +26,11 @@ const loadCreatorMonetization = (rpc) => {
   new Function("exports", "module", "require", compile("_lib/creatorMonetization.ts"))(
     module.exports,
     module,
-    (id) => id === "./supabase" ? { supabase: { rpc, from: inert } } : inert,
+    (id) => id === "./supabase"
+      ? { supabase: { rpc, from: inert } }
+      : id === "./entitlementAuthority"
+        ? { withAuthorityReadDeadline: async (operation) => await operation }
+        : inert,
   );
   return module.exports;
 };

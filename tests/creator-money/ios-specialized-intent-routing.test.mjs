@@ -34,7 +34,11 @@ const instantiate = (path, mocks = {}) => {
   new Function("exports", "module", "require", compile(path))(
     module.exports,
     module,
-    (id) => Object.hasOwn(mocks, id) ? mocks[id] : inert,
+    (id) => Object.hasOwn(mocks, id)
+      ? mocks[id]
+      : id === "./entitlementAuthority"
+        ? { withAuthorityReadDeadline: async (operation) => await operation }
+        : inert,
   );
   return module.exports;
 };
@@ -54,6 +58,18 @@ const expected = ({ sourceType, sourceId, amountMinor, providerProductId }) => (
   amountMinor,
   currency: "usd",
 });
+
+const purchaseSubject = {
+  userId: VIEWER_ID,
+  accessToken: "token-a",
+  authority: {
+    userId: VIEWER_ID,
+    accountId: VIEWER_ID,
+    sessionGeneration: "session-1",
+    state: "ACTIVE",
+    restoreOnly: false,
+  },
+};
 
 const safeIntent = ({
   sourceType,
@@ -86,9 +102,16 @@ const safeIntent = ({
 
 const loadIntentApi = (path, platform, response) => {
   const supabase = { rpc: async () => ({ data: response, error: null }) };
-  return instantiate(path, {
+  const api = instantiate(path, {
     "./analytics": { trackEvent: inert },
-    "./creatorMoneyPurchaseAuthority": authority,
+    "./creatorMoneyPurchaseAuthority": {
+      ...authority,
+      captureCreatorMoneyPurchaseAuthority: () => purchaseSubject.authority,
+      isCreatorMoneyPurchaseAuthorityCurrent: (expected) => expected === purchaseSubject.authority,
+      prepareCreatorMoneyPurchaseSubject: async () => purchaseSubject,
+      revalidateCreatorMoneyPurchaseSubject: async () => true,
+      invokeCreatorMoneyPurchaseSubjectRpc: async (_subject, name, args) => supabase.rpc(name, args),
+    },
     "./creatorMonetization": { formatMonetizationCurrency: inert },
     "./iosAppStoreCommerce": iosCatalog,
     "./paymentRailPolicy": { resolvePaymentRailPolicy: () => ({ allowed: true }) },
@@ -96,6 +119,17 @@ const loadIntentApi = (path, platform, response) => {
     "./supabase": { supabase },
     "react-native": { Platform: { OS: platform } },
   });
+  for (const name of [
+    "createPaidCreatorEventPassPurchaseIntent",
+    "createCreatorVipPassPurchaseIntent",
+    "createPaidVideoPurchaseIntent",
+    "createChannelSubscriptionPurchaseIntent",
+  ]) {
+    if (typeof api[name] !== "function") continue;
+    const original = api[name];
+    api[name] = (...args) => original(...args, purchaseSubject);
+  }
+  return api;
 };
 
 test("finite App Store tier selection is exact and rejects the old plus-one price alias", () => {
@@ -258,6 +292,13 @@ test("Paid Video checkout loads the server-authoritative App Store product, not 
     alreadyPurchased: false,
   });
   const requestedProducts = [];
+  const checkoutAuthority = {
+    userId: VIEWER_ID,
+    accountId: VIEWER_ID,
+    sessionGeneration: "exact-session",
+    state: "ACTIVE",
+    restoreOnly: false,
+  };
   const supabase = {
     rpc: async (name) => ({
       data: name === "resolve_creator_content_access" ? access : intent,
@@ -268,11 +309,15 @@ test("Paid Video checkout loads the server-authoritative App Store product, not 
     "./analytics": { trackEvent: inert },
     "./creatorMoneyPurchaseAuthority": {
       ...authority,
+      captureCreatorMoneyPurchaseAuthority: () => checkoutAuthority,
+      isCreatorMoneyPurchaseAuthorityCurrent: (expected) => expected === checkoutAuthority,
       prepareCreatorMoneyPurchaseSubject: async () => ({
         userId: VIEWER_ID,
-        authority: { userId: VIEWER_ID, sessionGeneration: "exact-session", restoreOnly: false },
+        accessToken: "token-a",
+        authority: checkoutAuthority,
       }),
       revalidateCreatorMoneyPurchaseSubject: async () => true,
+      invokeCreatorMoneyPurchaseSubjectRpc: async (_subject, name, args) => supabase.rpc(name, args),
     },
     "./creatorMonetization": {
       formatMonetizationCurrency: inert,
@@ -511,8 +556,12 @@ test("RevenueCat purchase mutations require the selected exact product and a com
       PRODUCT_CATEGORY: { NON_SUBSCRIPTION: "NON_SUBSCRIPTION", SUBSCRIPTION: "SUBSCRIPTION" },
     },
     "./accountSessionAuthority": {
+      getCurrentAccountSessionAuthoritySnapshot: () => sessionAuthority,
       readCurrentAccountSessionAuthority: async () => sessionAuthority,
       sameAccountSessionAuthority: (left, right) => left === right,
+    },
+    "./actionSingleFlight.mjs": {
+      runKeyedSingleFlight: (_registry, _key, operation) => operation(),
     },
     "./entitlementAuthority": {
       withAuthorityReadDeadline: async (promise) => await promise,

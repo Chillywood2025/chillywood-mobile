@@ -38,7 +38,11 @@ const instantiate = (path, mocks) => {
   new Function("exports", "module", "require", compile(path))(
     module.exports,
     module,
-    (id) => Object.hasOwn(mocks, id) ? mocks[id] : inert,
+    (id) => Object.hasOwn(mocks, id)
+      ? mocks[id]
+      : id === "./entitlementAuthority"
+        ? { withAuthorityReadDeadline: async (operation) => await operation }
+        : inert,
   );
   return module.exports;
 };

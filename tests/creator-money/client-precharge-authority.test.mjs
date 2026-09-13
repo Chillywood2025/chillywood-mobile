@@ -35,7 +35,11 @@ const instantiate = (path, mocks) => {
   new Function("exports", "module", "require", compile(path))(
     module.exports,
     module,
-    (id) => Object.hasOwn(mocks, id) ? mocks[id] : inert,
+    (id) => Object.hasOwn(mocks, id)
+      ? mocks[id]
+      : id === "./entitlementAuthority"
+        ? { withAuthorityReadDeadline: async (operation) => await operation }
+        : inert,
   );
   return module.exports;
 };
@@ -183,13 +187,31 @@ const safeIntent = ({
   ...extras,
 });
 
-const loadPurchaseRuntime = ({ path, resolverRpc, access, intentRpc, intent, subjectStable = true }) => {
+const loadPurchaseRuntime = ({
+  path,
+  resolverRpc,
+  access,
+  intentRpc,
+  intent,
+  subjectStable = true,
+  deferResolver = false,
+}) => {
   let productReads = 0;
   let purchaseCalls = 0;
   let intentCalls = 0;
+  let releaseResolver = () => {};
+  let markResolverStarted = () => {};
+  const resolverGate = deferResolver
+    ? new Promise((resolve) => { releaseResolver = resolve; })
+    : Promise.resolve();
+  const resolverStarted = new Promise((resolve) => { markResolverStarted = resolve; });
   const supabase = {
     rpc: async (name) => {
-      if (name === resolverRpc) return { data: access, error: null };
+      if (name === resolverRpc) {
+        markResolverStarted();
+        await resolverGate;
+        return { data: access, error: null };
+      }
       if (name === intentRpc) {
         intentCalls += 1;
         return { data: intent, error: null };
@@ -200,6 +222,14 @@ const loadPurchaseRuntime = ({ path, resolverRpc, access, intentRpc, intent, sub
   const creatorMonetization = instantiate("_lib/creatorMonetization.ts", {
     "./supabase": { supabase },
   });
+  const initiatingAuthority = {
+    userId: VIEWER_ID,
+    accountId: VIEWER_ID,
+    sessionGeneration: "session-1",
+    state: "ACTIVE",
+    restoreOnly: false,
+  };
+  let currentAuthority = initiatingAuthority;
   const revenuecat = {
     purchaseRevenueCatPackage: async () => { purchaseCalls += 1; },
     purchaseRevenueCatStoreProduct: async () => { purchaseCalls += 1; },
@@ -212,15 +242,26 @@ const loadPurchaseRuntime = ({ path, resolverRpc, access, intentRpc, intent, sub
       productReads += 1;
       return [{ identifier: access.providerProductId }];
     },
+    restoreRevenueCatPurchases: async () => { purchaseCalls += 1; return {}; },
   };
   const api = instantiate(path, {
     "./analytics": { trackEvent: inert },
     "./creatorMoneyPurchaseAuthority": {
-      prepareCreatorMoneyPurchaseSubject: async () => ({
+      captureCreatorMoneyPurchaseAuthority: () => currentAuthority,
+      isCreatorMoneyPurchaseAuthorityCurrent: (expected) => !!expected
+        && expected.userId === currentAuthority.userId
+        && expected.accountId === currentAuthority.accountId
+        && expected.sessionGeneration === currentAuthority.sessionGeneration
+        && expected.restoreOnly === currentAuthority.restoreOnly,
+      prepareCreatorMoneyPurchaseSubject: async (expected) => expected
+        && expected.userId === currentAuthority.userId
+        && expected.sessionGeneration === currentAuthority.sessionGeneration ? ({
         userId: VIEWER_ID,
-        authority: { userId: VIEWER_ID, sessionGeneration: "session-1", restoreOnly: false },
-      }),
+        accessToken: "token-a",
+        authority: initiatingAuthority,
+      }) : null,
       revalidateCreatorMoneyPurchaseSubject: async () => subjectStable,
+      invokeCreatorMoneyPurchaseSubjectRpc: async (_subject, name, args) => supabase.rpc(name, args),
       validateCreatorMoneyPurchaseIntent: (value, expected) => {
         if (!value || typeof value !== "object" || Array.isArray(value)) return null;
         for (const [key, expectedValue] of Object.entries(expected)) {
@@ -243,6 +284,17 @@ const loadPurchaseRuntime = ({ path, resolverRpc, access, intentRpc, intent, sub
     getIntentCalls: () => intentCalls,
     getProductReads: () => productReads,
     getPurchaseCalls: () => purchaseCalls,
+    releaseResolver,
+    waitForResolver: () => resolverStarted,
+    switchAccount: () => {
+      currentAuthority = {
+        userId: SOURCE_ID,
+        accountId: SOURCE_ID,
+        sessionGeneration: "session-b",
+        state: "ACTIVE",
+        restoreOnly: false,
+      };
+    },
   };
 };
 
@@ -347,6 +399,89 @@ test("malformed or wrong-product intent readbacks cannot reach RevenueCat across
   }
 });
 
+test("delayed creator purchase access cannot adopt account B before intent or provider work", async () => {
+  const cases = [
+    {
+      path: "_lib/creatorPaidVideos.ts",
+      resolverRpc: "resolve_creator_content_access",
+      access: paidVideoAccess,
+      intentRpc: "create_money_purchase_intent",
+      purchase: (api) => api.purchasePaidVideoAccess({
+        videoId: SOURCE_ID,
+        creatorId: CREATOR_ID,
+        amountCents: 99,
+        currency: "usd",
+      }),
+    },
+    {
+      path: "_lib/paidCreatorEvents.ts",
+      resolverRpc: "resolve_paid_creator_event_pass_access",
+      access: eventAccess,
+      intentRpc: "create_paid_creator_event_pass_purchase_intent",
+      purchase: (api) => api.purchasePaidCreatorEventPass({ creatorEventId: SOURCE_ID, sourceSurface: "test" }),
+    },
+    {
+      path: "_lib/creatorVipPasses.ts",
+      resolverRpc: "resolve_creator_vip_pass_access",
+      access: vipAccess,
+      intentRpc: "create_creator_vip_pass_purchase_intent",
+      purchase: (api) => api.purchaseCreatorVipPass({ creatorId: CREATOR_ID, sourceSurface: "test" }),
+    },
+    {
+      path: "_lib/channelSubscriptions.ts",
+      resolverRpc: "resolve_creator_channel_subscription_access",
+      access: subscriptionAccess,
+      intentRpc: "create_creator_channel_subscription_purchase_intent",
+      purchase: (api) => api.purchaseChannelSubscription({ creatorId: CREATOR_ID, sourceSurface: "test" }),
+    },
+    {
+      path: "_lib/paidWatchPartyTickets.ts",
+      resolverRpc: "resolve_paid_watch_party_ticket_access",
+      access: { ...eventAccess, reason: "ticket_required", partyId: SOURCE_ID },
+      intentRpc: "create_paid_watch_party_ticket_purchase_intent",
+      purchase: (api) => api.purchasePaidWatchPartyTicket({ partyId: SOURCE_ID, sourceSurface: "test" }),
+    },
+  ];
+
+  for (const item of cases) {
+    const runtime = loadPurchaseRuntime({
+      ...item,
+      intent: {},
+      deferResolver: true,
+    });
+    const pending = item.purchase(runtime.api);
+    await runtime.waitForResolver();
+    runtime.switchAccount();
+    runtime.releaseResolver();
+    const result = await pending;
+    assert.equal(result.ok, false, item.path);
+    assert.equal(runtime.getIntentCalls(), 0, `${item.path} intent`);
+    assert.equal(runtime.getProductReads(), 0, `${item.path} product`);
+    assert.equal(runtime.getPurchaseCalls(), 0, `${item.path} provider`);
+  }
+
+  const restoreRuntime = loadPurchaseRuntime({
+    path: "_lib/channelSubscriptions.ts",
+    resolverRpc: "resolve_creator_channel_subscription_access",
+    access: subscriptionAccess,
+    intentRpc: "create_creator_channel_subscription_purchase_intent",
+    intent: {},
+    deferResolver: true,
+  });
+  const pendingRestore = restoreRuntime.api.restoreChannelSubscription(CREATOR_ID);
+  await restoreRuntime.waitForResolver();
+  restoreRuntime.switchAccount();
+  restoreRuntime.releaseResolver();
+  assert.equal((await pendingRestore).ok, false);
+  assert.equal(restoreRuntime.getPurchaseCalls(), 0, "restore provider");
+
+  const liveSeat = readFileSync("_lib/liveWatchPartyMoney.ts", "utf8");
+  const capture = liveSeat.indexOf("const initiatingAuthority = captureCreatorMoneyPurchaseAuthority()");
+  const entryRead = liveSeat.indexOf("const entryAccess = await readLiveWatchPartyMoneyAccess(input.partyId)");
+  const prepare = liveSeat.indexOf("prepareCreatorMoneyPurchaseSubject(initiatingAuthority)");
+  assert.ok(capture >= 0 && entryRead > capture && prepare > entryRead);
+});
+
 const iosSeatOffer = (providerProductId = "com.chillywood.watchparty.seat.tier1") => ({
   id: OFFER_ID,
   partyId: "PARTY-EXACT",
@@ -374,6 +509,13 @@ const loadSeatRuntime = ({ providerProductId, intent, subjectStable = true, prod
   let intentCalls = 0;
   let productReads = 0;
   let purchaseCalls = 0;
+  const seatAuthority = {
+    userId: VIEWER_ID,
+    accountId: VIEWER_ID,
+    sessionGeneration: "session-1",
+    state: "ACTIVE",
+    restoreOnly: false,
+  };
   const offer = iosSeatOffer(providerProductId);
   const access = {
     allowed: false,
@@ -410,11 +552,15 @@ const loadSeatRuntime = ({ providerProductId, intent, subjectStable = true, prod
   const api = instantiate("_lib/paidWatchPartyTickets.ts", {
     "./analytics": { trackEvent: inert },
     "./creatorMoneyPurchaseAuthority": {
+      captureCreatorMoneyPurchaseAuthority: () => seatAuthority,
+      isCreatorMoneyPurchaseAuthorityCurrent: (expected) => expected === seatAuthority,
       prepareCreatorMoneyPurchaseSubject: async () => ({
         userId: VIEWER_ID,
-        authority: { userId: VIEWER_ID, sessionGeneration: "session-1", restoreOnly: false },
+        accessToken: "token-a",
+        authority: seatAuthority,
       }),
       revalidateCreatorMoneyPurchaseSubject: async () => subjectStable,
+      invokeCreatorMoneyPurchaseSubjectRpc: async (_subject, name, args) => supabase.rpc(name, args),
       validateCreatorMoneyPurchaseIntent: (value, expected) => {
         if (!value || typeof value !== "object" || Array.isArray(value)) return null;
         for (const [key, expectedValue] of Object.entries(expected)) {
@@ -544,10 +690,12 @@ test("Tip status and checkout remain bound to exact creator, session, amount, an
           identitySyncs += 1;
           return authUserId ? {
             userId: authUserId,
-            authority: { userId: authUserId, sessionGeneration: "session-1", restoreOnly: false },
+            accessToken: "token-a",
+            authority: { userId: authUserId, accountId: authUserId, sessionGeneration: "session-1", state: "ACTIVE", restoreOnly: false },
           } : null;
         },
         revalidateCreatorMoneyPurchaseSubject: async () => subjectStable,
+        invokeCreatorMoneyPurchaseSubjectRpc: async (_subject, name, args) => supabase.rpc(name, args),
         validateCreatorMoneyPurchaseIntent: (value, expected) => {
           if (!value || typeof value !== "object" || Array.isArray(value)) return null;
           for (const [key, expectedValue] of Object.entries(expected)) {
@@ -624,18 +772,35 @@ test("Tip status and checkout remain bound to exact creator, session, amount, an
   assert.match(subscriptionSource, /return normalized \? \[normalized\] : \[\];/u);
 });
 
-test("shared creator-money purchase identity guard rejects RevenueCat, auth-user, and session-generation changes", async () => {
-  const authority = (userId, sessionGeneration) => ({ userId, sessionGeneration, restoreOnly: false });
-  const loadGuard = ({ users, authorities, identityUser = VIEWER_ID }) => {
-    let userIndex = 0;
-    let authorityIndex = 0;
+test("shared creator-money purchase identity guard rejects RevenueCat and account-generation changes", async () => {
+  const authority = (userId, sessionGeneration) => ({
+    userId,
+    accountId: userId,
+    sessionGeneration,
+    state: "ACTIVE",
+    restoreOnly: false,
+  });
+  const loadGuard = ({ capturedAuthority, readbacks, identityUser = VIEWER_ID }) => {
+    let readbackIndex = 0;
     return instantiate("_lib/creatorMoneyPurchaseAuthority.ts", {
       "./accountSessionAuthority": {
-        readCurrentAccountSessionAuthority: async () => authorities[Math.min(authorityIndex++, authorities.length - 1)] ?? null,
+        getCurrentAccountSessionAuthoritySnapshot: () => capturedAuthority,
+        parseAccountSessionAuthorityReadback: (value) => value,
         sameAccountSessionAuthority: (left, right) => !!left && !!right
           && left.userId === right.userId
+          && left.accountId === right.accountId
           && left.sessionGeneration === right.sessionGeneration
           && left.restoreOnly === right.restoreOnly,
+      },
+      "./accountBoundSupabaseMutation": {
+        captureAccountBoundSupabaseMutationSubject: async () => ({
+          accessToken: "token-a",
+          authority: capturedAuthority,
+        }),
+        invokeAccountBoundSupabaseMutationRpc: async () => ({
+          data: readbacks[Math.min(readbackIndex++, readbacks.length - 1)] ?? null,
+          error: null,
+        }),
       },
       "./revenuecat": {
         syncRevenueCatCustomerIdentity: async (userId) => ({
@@ -645,45 +810,37 @@ test("shared creator-money purchase identity guard rejects RevenueCat, auth-user
           matchesSourceUser: identityUser === userId,
         }),
       },
-      "./supabase": {
-        supabase: {
-          auth: {
-            getUser: async () => ({
-              data: { user: { id: users[Math.min(userIndex++, users.length - 1)] } },
-              error: null,
-            }),
-          },
-        },
-      },
     });
   };
 
   const exactGuard = loadGuard({
-    users: [VIEWER_ID, VIEWER_ID],
-    authorities: [authority(VIEWER_ID, "session-1"), authority(VIEWER_ID, "session-1")],
+    capturedAuthority: authority(VIEWER_ID, "session-1"),
+    readbacks: [authority(VIEWER_ID, "session-1")],
   });
   const subject = await exactGuard.prepareCreatorMoneyPurchaseSubject();
   assert.equal(subject.userId, VIEWER_ID);
+  assert.equal(subject.accessToken, "token-a");
 
   const userChanged = loadGuard({
-    users: [VIEWER_ID, SOURCE_ID],
-    authorities: [authority(VIEWER_ID, "session-1"), authority(VIEWER_ID, "session-1")],
+    capturedAuthority: authority(VIEWER_ID, "session-1"),
+    readbacks: [authority(SOURCE_ID, "session-1")],
   });
   assert.equal(await userChanged.prepareCreatorMoneyPurchaseSubject(), null);
 
   const revenueCatChanged = loadGuard({
-    users: [VIEWER_ID, VIEWER_ID],
-    authorities: [authority(VIEWER_ID, "session-1"), authority(VIEWER_ID, "session-1")],
+    capturedAuthority: authority(VIEWER_ID, "session-1"),
+    readbacks: [authority(VIEWER_ID, "session-1")],
     identityUser: SOURCE_ID,
   });
   assert.equal(await revenueCatChanged.prepareCreatorMoneyPurchaseSubject(), null);
 
   const generationChanged = loadGuard({
-    users: [VIEWER_ID],
-    authorities: [authority(VIEWER_ID, "session-2")],
+    capturedAuthority: authority(VIEWER_ID, "session-2"),
+    readbacks: [authority(VIEWER_ID, "session-2")],
   });
   assert.equal(await generationChanged.revalidateCreatorMoneyPurchaseSubject({
     userId: VIEWER_ID,
+    accessToken: "token-a",
     authority: authority(VIEWER_ID, "session-1"),
   }), false);
 });

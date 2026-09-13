@@ -18,6 +18,11 @@ const premiumPurchaseReadiness = read("_lib/premiumPurchaseReadiness.mjs");
 const liveTab = read("app/(tabs)/live.tsx");
 const premiumAccess = read("_lib/premiumWatchPartyAccess.ts");
 const guard = read("scripts/guard-premium-sandbox-policy.mjs");
+const accountBoundPurchaseCallPattern = /purchaseBlockedAccess\(\{[\s\S]{0,320}?initiatingAuthority,[\s\S]{0,120}?\}\)/u;
+const accessSheetWithoutPurchaseAuthority = accessSheet.replace(
+  /(purchaseBlockedAccess\(\{[\s\S]{0,320}?)\s+initiatingAuthority,([\s\S]{0,120}?\}\))/u,
+  "$1$2",
+);
 
 const checks = [
   {
@@ -59,9 +64,12 @@ const checks = [
     id: "access_sheet_direct_sandbox_purchase",
     ok: accessSheet.includes("if (isPremiumGateSheet && sheetState?.primaryAction !== \"purchase\")")
       && accessSheet.includes("sheetState?.primaryAction === \"purchase\"")
-      && monetization.includes("Start Sandbox Premium Test")
-      && accessSheet.includes("purchaseBlockedAccess({ gate, purchaseMode, userId: user?.id ?? null })"),
-    detail: "Premium gate sheet can launch sandbox purchase directly instead of always routing to Subscribe.",
+      && monetization.includes("primaryLabel: presentation.actionLabel")
+      && monetization.includes('helperKicker: purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE ? "PURCHASE PREVIEW"')
+      && accountBoundPurchaseCallPattern.test(accessSheet)
+      && accessSheetWithoutPurchaseAuthority !== accessSheet
+      && !accountBoundPurchaseCallPattern.test(accessSheetWithoutPurchaseAuthority),
+    detail: "Premium gate sheet can launch the bounded purchase path directly with customer-safe copy.",
   },
   {
     id: "fresh_premium_rechecks_original_gate",
