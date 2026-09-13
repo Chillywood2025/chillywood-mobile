@@ -279,7 +279,7 @@ export default function PaidCreatorEventRoute() {
               <View testID="event-pass-access-granted-state">
                 <MoneySuccessReceipt
                   title="Event Pass active"
-                  body="You have access to this Event. It does not grant generic Party Room or Live Stage access, speaking, host, moderator, camera, microphone, or LiveKit publish authority."
+                  body="You have access to this Event. It does not grant generic Party Room or Live Stage access, speaking, host, moderator, camera, microphone, or broadcast permission."
                   testID="event-pass-success-receipt"
                 />
               </View>

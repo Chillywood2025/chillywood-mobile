@@ -321,7 +321,7 @@ assertIncludes(liveTab, "CHILLYWOOD_BACKGROUND_SOURCE", "Live tab Chi'llywood ba
 assertIncludes(profileTab, "Profile is your social identity", "Profile/Platform separation");
 assertIncludes(profileTab, "Platform and Platform Studio stay separate", "Profile tab creator surface separation");
 assertIncludes(libraryTab, "My Library", "Library screen header");
-assertIncludes(libraryTab, "Saved titles, watch progress, followed Platforms, and saved replays live here.", "Library saved scope copy");
+assertIncludes(libraryTab, "Saved titles, unlocked creator videos, watch progress, followed Platforms, and saved replays live here.", "Library saved scope copy");
 assertNotIncludes(libraryTab, "creator-owned draft", "viewer Library must not become creator Content Library");
 assertIncludes(libraryTab, "readMergedWatchProgress", "Library backed continue watching");
 assertIncludes(libraryTab, "readFollowedChannelUserIds", "Library backed followed Platforms");

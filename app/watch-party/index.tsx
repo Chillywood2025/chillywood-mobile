@@ -993,7 +993,7 @@ export default function WatchPartyIndexScreen() {
 
   const onSavePaidTicketOffer = useCallback(async (paid: boolean) => {
     if (paid && !paidWatchPartyCheckoutAvailable) {
-      setPaidTicketNotice("Paid Party Room entry requires provider/test checkout readiness. Live money, payouts, cash-out, and payable balances remain off.");
+      setPaidTicketNotice("Paid Party Room entry is not available for this account yet. Nothing was charged.");
       return;
     }
     const targetRoom = preparedRoom?.room ?? preview?.room ?? null;
@@ -1047,11 +1047,11 @@ export default function WatchPartyIndexScreen() {
         || message === "Choose an approved sandbox product tier."
         || message === "Source type does not match the selected product tier."
       ) {
-        setPaidTicketNotice(message);
+        setPaidTicketNotice("Choose an available Party Room price and content source.");
       } else if (/internal sandbox monetization setup/i.test(message)) {
-        setPaidTicketNotice("This account is not approved for internal sandbox monetization setup.");
+        setPaidTicketNotice("This account cannot set up paid Party Room entry.");
       } else if (/product|provider|revenuecat|google play/i.test(message)) {
-        setPaidTicketNotice("Sandbox product is not available on this build/account.");
+        setPaidTicketNotice("Paid Party Room entry is not available on this version or account.");
       } else {
         setPaidTicketNotice("Party Room entry setup is not available for this room yet.");
       }
@@ -1798,12 +1798,12 @@ export default function WatchPartyIndexScreen() {
           <View style={styles.permissionsCard}>
             <AppText scale="caption" style={styles.permissionsLabel}>PARTY ROOM ENTRY</AppText>
             <AppText scale="footnote" style={styles.permissionsBody}>
-              Choose Free or Paid entry for this exact Party Room. Paid entry uses a Party Room Pass; it never grants Live Stage, speaker, host, moderator, or LiveKit publish authority.
+              Choose Free or Paid entry for this exact Party Room. Paid entry uses a Party Room Pass; it never grants Live Stage, speaker, host, moderator, or broadcast permission.
             </AppText>
             <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this Party Room Pass unlock?" />
             {hostLabel === "You are hosting" ? (
               <>
-                <AppText scale="footnote" style={styles.permissionsBody}>Party Room entry price: $0.99 for the current approved sandbox tier.</AppText>
+                <AppText scale="footnote" style={styles.permissionsBody}>Party Room entry price: $0.99. Customer availability depends on device and account eligibility.</AppText>
                 <TextInput
                   value={paidTicketSeatLimit}
                   onChangeText={setPaidTicketSeatLimit}

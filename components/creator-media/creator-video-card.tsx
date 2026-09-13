@@ -399,7 +399,7 @@ export function CreatorVideoCard({
         ) : null}
         {ownerMode && accessLabel ? (
           <AppText scale="caption" style={styles.ownerGuidance}>
-            {accessLabel === "Paid Video" ? "Fans must unlock this video before playback. Sandbox sales are not payable." : accessLabel}
+            {accessLabel === "Paid Video" ? "Fans must unlock this video before playback. Sales from this build do not create payable earnings." : accessLabel}
           </AppText>
         ) : null}
 

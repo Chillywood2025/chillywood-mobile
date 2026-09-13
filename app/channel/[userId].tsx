@@ -1131,7 +1131,7 @@ export default function PublicChannelScreen() {
   const renderMiniPlatformCommerce = () => {
     const products = commerceSurface?.products ?? [];
     return (
-      <AppSection title="Platform Store" statusLabel={products.length ? "Sandbox" : "Not active"} statusTone={products.length ? "warning" : "muted"}>
+      <AppSection title="Platform Store" statusLabel={products.length ? "Preview" : "Not active"} statusTone={products.length ? "warning" : "muted"}>
         {products.length ? (
           <ScrollView
             horizontal
@@ -1178,8 +1178,8 @@ export default function PublicChannelScreen() {
       {
         title: "Tip creator",
         scopeKey: "creator_tip" as MoneyScopeKey,
-        body: "Sandbox only. No real money moves.",
-        button: "Test tip",
+        body: "Support goes to this creator only and does not unlock access.",
+        button: "View tip",
         testID: "tester-tip-creator-button",
         onPress: openTipSheet,
         available: tipStatus?.canTip === true,
@@ -1187,8 +1187,8 @@ export default function PublicChannelScreen() {
       {
         title: "Paid video",
         scopeKey: "paid_creator_video" as MoneyScopeKey,
-        body: firstVideo ? "Open a public creator video and unlock it in sandbox mode." : "Video test unavailable - creator needs a public video.",
-        button: "Unlock test video",
+        body: firstVideo ? "Open a public creator video and review its exact unlock." : "Paid video unavailable — this creator needs a public video.",
+        button: "View paid video",
         testID: "tester-paid-video-unlock-button",
         onPress: () => {
           if (firstVideo) router.push({ pathname: "/player/[id]", params: { id: firstVideo.id, source: "creator-video" } });
@@ -1226,8 +1226,8 @@ export default function PublicChannelScreen() {
       {
         title: "Platform Subscription",
         scopeKey: "channel_subscription" as MoneyScopeKey,
-        body: "Creator Platform subscription test. This is not Chi'llywood Premium.",
-        button: subscriptionAccess?.allowed ? "Open Subscriber Area" : "Subscribe in test mode",
+        body: "This creator-specific membership is separate from Chi'llywood Premium.",
+        button: subscriptionAccess?.allowed ? "Open Subscriber Area" : "Subscribe",
         testID: "tester-channel-subscribe-button",
         onPress: subscriptionAccess?.allowed ? openSubscriberArea : handleSubscribe,
         available: hasSubscription,
@@ -1235,8 +1235,8 @@ export default function PublicChannelScreen() {
       {
         title: "VIP Pass",
         scopeKey: "vip_pass" as MoneyScopeKey,
-        body: "Creator-specific VIP test. Does not unlock Premium or other creators.",
-        button: vipAccess?.allowed ? "Open VIP Area" : "Get test VIP",
+        body: "Creator-specific VIP does not unlock Premium or other creators.",
+        button: vipAccess?.allowed ? "Open VIP Area" : "Get VIP",
         testID: "tester-vip-pass-button",
         onPress: vipAccess?.allowed ? openVipArea : handleGetVip,
         available: hasVip,
@@ -1244,12 +1244,12 @@ export default function PublicChannelScreen() {
     ];
 
     return (
-      <AppSection title="Test Creator Purchases" statusLabel="Sandbox" statusTone="warning">
+      <AppSection title="Creator Purchases" statusLabel="Preview" statusTone="warning">
         <View style={styles.programmingCard}>
-          <Text style={styles.cardKicker}>Sandbox only</Text>
-          <Text style={styles.cardTitle}>No real money moves.</Text>
+          <Text style={styles.cardKicker}>Purchase preview</Text>
+          <Text style={styles.cardTitle}>No charge is made in this preview.</Text>
           <Text style={styles.cardBody}>
-            Try configured creator purchase flows as a tester. Revoked tester access hides these test actions.
+            Review each creator purchase separately. Access remains tied to the exact product and account.
           </Text>
           <View style={styles.sandboxFlowGrid}>
             {flowCards.map((flow) => (
@@ -1287,7 +1287,7 @@ export default function PublicChannelScreen() {
     if (!offer || (!sandboxTesterActive && !isOwnerPlatformMode(platformMode))) return null;
     const subscribed = subscriptionAccess?.allowed === true;
     const unavailable = !subscribed && !subscriptionAccess?.requiresPurchase;
-    const unavailableCopy = "Platform Subscription is not available for this creator Platform in sandbox right now. Premium, VIP-only content, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, and Event Passes stay separate.";
+    const unavailableCopy = "Platform Subscription is not available for this creator Platform right now. Premium, VIP-only content, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, and Event Passes stay separate.";
     if (isOwnerPlatformMode(platformMode)) {
       return (
         <AppSection title="Platform Subscription" statusLabel={offer ? "Manage" : "Not set"} statusTone={offer ? "success" : "muted"}>
@@ -1317,14 +1317,14 @@ export default function PublicChannelScreen() {
     return (
       <AppSection
         title="Platform Subscription"
-        statusLabel={subscribed ? "Subscribed" : unavailable ? "Unavailable" : "Sandbox"}
+        statusLabel={subscribed ? "Subscribed" : unavailable ? "Unavailable" : "Available"}
         statusTone={subscribed ? "success" : unavailable ? "muted" : "warning"}
       >
         <View style={styles.programmingCard}>
           <Text style={styles.cardKicker}>Creator membership</Text>
           <Text style={styles.cardTitle}>{offer.title}</Text>
 	          <Text style={styles.cardBody}>
-	            {`Sandbox Test: subscribe to this creator Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. While active, this includes the creator's ordinary Paid Videos, but not VIP-only content, Premium, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, or other creators.`}
+	            {`Subscribe to this creator Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. While active, this includes the creator's ordinary Paid Videos, but not VIP-only content, Premium, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, or other creators.`}
 	          </Text>
           {subscriptionNotice ? <Text style={styles.metaText}>{subscriptionNotice}</Text> : null}
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
@@ -1335,7 +1335,7 @@ export default function PublicChannelScreen() {
             disabled={subscriptionBusy}
             onPress={subscribed || unavailable ? openSubscriberArea : handleSubscribe}
             testID="tester-channel-subscribe-button"
-            accessibilityLabel="Sandbox Test Subscribe to Creator Platform"
+            accessibilityLabel={`Subscribe to ${platformDisplayName} Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}`}
           >
             {subscriptionBusy ? (
               <ActivityIndicator color="#fff" />
@@ -1354,7 +1354,7 @@ export default function PublicChannelScreen() {
     if (!offer || (!sandboxTesterActive && !isOwnerPlatformMode(platformMode))) return null;
     const isVip = vipAccess?.allowed === true;
     const unavailable = !isVip && !vipAccess?.requiresPurchase;
-    const unavailableCopy = "VIP is not available for this creator Platform in sandbox right now. Premium, subscriptions, paid videos, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, and Event Passes stay separate.";
+    const unavailableCopy = "VIP is not available for this creator Platform right now. Premium, subscriptions, paid videos, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, and Event Passes stay separate.";
     if (isOwnerPlatformMode(platformMode)) {
       return (
         <AppSection title="VIP Pass" statusLabel={offer ? "Manage" : "Not set"} statusTone={offer ? "success" : "muted"}>
@@ -1384,14 +1384,14 @@ export default function PublicChannelScreen() {
     return (
       <AppSection
         title="VIP Pass"
-        statusLabel={isVip ? "VIP" : unavailable ? "Unavailable" : "Sandbox"}
+        statusLabel={isVip ? "VIP" : unavailable ? "Unavailable" : "Available"}
         statusTone={isVip ? "success" : unavailable ? "muted" : "warning"}
       >
         <View style={styles.programmingCard}>
           <Text style={styles.cardKicker}>Creator-specific VIP</Text>
           <Text style={styles.cardTitle}>{offer.title}</Text>
           <Text style={styles.cardBody}>
-            {`Sandbox Test: get a one-time 30-day VIP Pass for this creator Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. It includes this creator's VIP-only shelf, but not Premium, Platform Subscription, ordinary Paid Video ownership, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, LiveKit authority, room permissions, or other creators.`}
+            {`Get a one-time 30-day VIP Pass for this creator Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. It includes this creator's VIP-only shelf, but not Premium, Platform Subscription, ordinary Paid Video ownership, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, broadcast permission, room permissions, or other creators.`}
           </Text>
           {vipNotice ? <Text style={styles.metaText}>{vipNotice}</Text> : null}
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
@@ -1402,7 +1402,7 @@ export default function PublicChannelScreen() {
             disabled={vipBusy}
             onPress={isVip || unavailable ? openVipArea : handleGetVip}
             testID="tester-vip-pass-button"
-            accessibilityLabel="Sandbox Test Get Creator VIP"
+            accessibilityLabel={`Get ${platformDisplayName} VIP Pass for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. One-time 30-day access.`}
           >
             {vipBusy ? (
               <ActivityIndicator color="#fff" />

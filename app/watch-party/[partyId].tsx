@@ -553,8 +553,8 @@ export default function WatchPartyRoomScreen() {
     let active = true;
 
     Promise.all([
-      readWatchPartyLivePinnedParticipantId(),
-      readWatchPartyLivePinCoachSeen(),
+      readWatchPartyLivePinnedParticipantId(partyId),
+      readWatchPartyLivePinCoachSeen(partyId),
     ]).then(([storedPinnedParticipantId, storedPinCoachSeen]) => {
       if (!active) return;
       setPinnedParticipantId(storedPinnedParticipantId);
@@ -572,7 +572,7 @@ export default function WatchPartyRoomScreen() {
         pinCoachTimeoutRef.current = null;
       }
     };
-  }, []);
+  }, [partyId]);
 
   const triggerBubbleTapPulse = useCallback((participantId: string) => {
     if (!participantId) return;
@@ -2370,8 +2370,8 @@ export default function WatchPartyRoomScreen() {
     if (pinnedParticipantStillPresent) return;
     setPinnedParticipantId("");
     setPinActionParticipantId("");
-    void clearWatchPartyLivePinnedParticipantId();
-  }, [liveBubbleParticipants, pinnedParticipantId, pinStorageReady, presenceSynced]);
+    void clearWatchPartyLivePinnedParticipantId(partyId);
+  }, [liveBubbleParticipants, partyId, pinnedParticipantId, pinStorageReady, presenceSynced]);
 
   useEffect(() => {
     if (!pinActionParticipantId) return;
@@ -2515,19 +2515,19 @@ export default function WatchPartyRoomScreen() {
   const clearPinnedParticipant = useCallback(() => {
     setPinnedParticipantId("");
     setPinActionParticipantId("");
-    void clearWatchPartyLivePinnedParticipantId();
-  }, []);
+    void clearWatchPartyLivePinnedParticipantId(partyId);
+  }, [partyId]);
   const showPinCoachmark = useCallback(() => {
     if (pinCoachSeen) return;
     setPinCoachSeen(true);
     setPinCoachVisible(true);
-    void markWatchPartyLivePinCoachSeen();
+    void markWatchPartyLivePinCoachSeen(partyId);
     if (pinCoachTimeoutRef.current) clearTimeout(pinCoachTimeoutRef.current);
     pinCoachTimeoutRef.current = setTimeout(() => {
       setPinCoachVisible(false);
       pinCoachTimeoutRef.current = null;
     }, 3000);
-  }, [pinCoachSeen]);
+  }, [partyId, pinCoachSeen]);
   const togglePinnedParticipant = useCallback((participantId: string) => {
     const nextParticipantId = String(participantId ?? "").trim();
     if (!nextParticipantId) return;
@@ -2538,9 +2538,9 @@ export default function WatchPartyRoomScreen() {
     setPinnedParticipantId(nextParticipantId);
     setActiveParticipantId(nextParticipantId);
     setPinActionParticipantId("");
-    void saveWatchPartyLivePinnedParticipantId(nextParticipantId);
+    void saveWatchPartyLivePinnedParticipantId(partyId, nextParticipantId);
     showPinCoachmark();
-  }, [clearPinnedParticipant, pinnedParticipantId, showPinCoachmark]);
+  }, [clearPinnedParticipant, partyId, pinnedParticipantId, showPinCoachmark]);
   const featureParticipantFirst = useCallback((participantId: string) => {
     const nextParticipantId = String(participantId ?? "").trim();
     if (!nextParticipantId) return;
@@ -2848,12 +2848,12 @@ export default function WatchPartyRoomScreen() {
           {priceLabel ? <Text style={styles.ticketPrice}>{oneTimePriceLabel}</Text> : null}
           <Text style={styles.errorBody}>
             {paidTicketGate.requiresPurchase && paidWatchPartyCheckoutAvailable && priceLabel
-              ? `A Party Room Pass gives you entry to this exact Party Room for ${oneTimePriceLabel}. It does not include Live Stage, speaking, camera, microphone, host, moderator, LiveKit publish authority, Premium, subscriptions, VIP, paid videos, other rooms, or Events.`
+              ? `A Party Room Pass gives you entry to this exact Party Room for ${oneTimePriceLabel}. It does not include Live Stage, speaking, camera, microphone, host, moderator, broadcast permission, Premium, subscriptions, VIP, paid videos, other rooms, or Events.`
               : "Party Room Pass purchases are temporarily unavailable while setup is being finalized. This room stays locked until access is verified."}
           </Text>
           <MoneyScopeStrip
             includes="Access to this Watch-Party room target only."
-            excludes="Chi'llywood Premium, subscriptions, VIP, paid videos, Event Passes, LiveKit publish authority, host controls, and other rooms stay separate."
+            excludes="Chi'llywood Premium, subscriptions, VIP, paid videos, Event Passes, broadcast permission, host controls, and other rooms stay separate."
           />
           <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this Party Room Pass unlock?" />
           {paidTicketGate.requiresPurchase && priceLabel ? (

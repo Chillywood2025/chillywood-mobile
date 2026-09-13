@@ -19,6 +19,7 @@ import {
   type MonetizationPurchaseMode,
 } from "../_lib/monetization";
 import { useOptionalBetaProgram } from "../_lib/betaProgram";
+import { getCurrentAccountSessionAuthoritySnapshot } from "../_lib/accountSessionAuthority";
 import { resolvePremiumPurchaseReadiness } from "../_lib/premiumPurchaseReadiness.mjs";
 import { useSession } from "../_lib/session";
 
@@ -26,8 +27,8 @@ const FRIENDLY_UNAVAILABLE_MESSAGE =
   "Premium purchases are temporarily unavailable while setup is being finalized.";
 const PREMIUM_BODY =
   "Watch-Party Live, Live Watch-Party, creator tools, and ad-free viewing.";
-const PREMIUM_SANDBOX_NOTICE =
-  "Sandbox test mode — no real money is charged.";
+const PREMIUM_PURCHASE_PREVIEW_NOTICE =
+  "Purchase preview is active. Your store will not charge a payment method.";
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../assets/images/chillywood-branded-background.png");
 const STORE_PROVIDER_NAME = Platform.OS === "ios" ? "App Store" : "Google Play";
 const STORE_PROVIDER_PAIR = `${STORE_PROVIDER_NAME} / RevenueCat`;
@@ -280,7 +281,7 @@ export default function SubscribeScreen() {
   const purchaseStatusLabel = hasPremium
     ? "Entitled"
     : sandboxMode.enabled
-      ? purchaseReady ? "Sandbox test available" : "Sandbox setup unavailable"
+      ? purchaseReady ? "Purchase available" : "Temporarily unavailable"
       : purchaseReady ? "Available" : "Temporarily unavailable";
   const purchaseStatusTone = purchaseReady || hasPremium ? "default" : "warning";
   const availabilitySummary = hasPremium
@@ -289,14 +290,14 @@ export default function SubscribeScreen() {
       : `Premium is active for this account, but there is no active ${STORE_PROVIDER_NAME} Premium subscription to manage on this device.`
     : purchaseReady
       ? sandboxMode.enabled
-        ? `${STORE_PROVIDER_PAIR} sandbox purchase can open when billing and the Premium offering are available.`
+        ? `Premium is available through ${STORE_PROVIDER_NAME} for this account.`
         : "A verified store subscription is ready for this account."
       : FRIENDLY_UNAVAILABLE_MESSAGE;
   const primaryActionLabel = hasPremium
     ? currentStorePremiumActive ? "Manage subscription" : "Done"
     : purchaseReady
-      ? sandboxMode.enabled ? "Start Sandbox Premium Test" : "Start Premium"
-      : "Check Sandbox Purchase Setup";
+      ? "Start Premium"
+      : "Check purchase availability";
   const primaryActionBusy = hasPremium && currentStorePremiumActive ? manageBusy : purchaseBusy;
 
   const onSignIn = useCallback(() => {
@@ -320,13 +321,22 @@ export default function SubscribeScreen() {
       onSignIn();
       return;
     }
+    const initiatingAuthority = getCurrentAccountSessionAuthoritySnapshot();
+    if (
+      !initiatingAuthority
+      || initiatingAuthority.restoreOnly
+      || initiatingAuthority.userId !== user?.id
+    ) {
+      setNotice("Recheck the signed-in account before starting Premium.");
+      return;
+    }
 
     let requestedPurchaseMode: MonetizationPurchaseMode = activePurchaseMode;
     let requestedPackageId = premiumTarget.recommendedPackageId;
 
     if (!canPurchase) {
-      setNotice(`Checking ${STORE_PROVIDER_NAME} sandbox purchase availability...`);
-      setExpanded((current) => ({ ...current, "testing-details": true }));
+      setNotice(`Checking ${STORE_PROVIDER_NAME} purchase availability...`);
+      setExpanded((current) => ({ ...current, "purchase-details": true }));
 
       try {
         const nextSandboxMode = await resolveInternalTesterSandboxPurchaseMode({
@@ -354,7 +364,7 @@ export default function SubscribeScreen() {
           return;
         }
       } catch {
-        setNotice(`Unable to verify ${STORE_PROVIDER_NAME} sandbox purchase availability right now. Try again.`);
+        setNotice(`Unable to verify ${STORE_PROVIDER_NAME} purchase availability right now. Try again.`);
         return;
       }
     }
@@ -373,6 +383,7 @@ export default function SubscribeScreen() {
         userId: user?.id ?? null,
         packageId: requestedPackageId,
         purchaseMode: requestedPurchaseMode,
+        initiatingAuthority,
         onPhase: (phase) => {
           setNotice(phase === "store_processing"
             ? `${STORE_PROVIDER_NAME} is processing the subscription…`
@@ -406,6 +417,15 @@ export default function SubscribeScreen() {
       onSignIn();
       return;
     }
+    const initiatingAuthority = getCurrentAccountSessionAuthoritySnapshot();
+    if (
+      !initiatingAuthority
+      || initiatingAuthority.restoreOnly
+      || initiatingAuthority.userId !== user?.id
+    ) {
+      setNotice("Recheck the signed-in account before restoring purchases.");
+      return;
+    }
 
     if (!canRestore) {
       setNotice("Restore purchases is temporarily unavailable while setup is being finalized.");
@@ -423,6 +443,7 @@ export default function SubscribeScreen() {
       const result = await restoreMonetizationAccess({
         purchaseMode: activePurchaseMode,
         userId: user?.id ?? null,
+        initiatingAuthority,
         onPhase: (phase) => {
           setNotice(phase === "verifying_authority"
             ? "Verifying restored Premium access…"
@@ -522,7 +543,7 @@ export default function SubscribeScreen() {
             </View>
             {sandboxMode.enabled && !hasPremium ? (
               <View style={styles.sandboxNotice}>
-                <Text style={styles.sandboxNoticeText}>{PREMIUM_SANDBOX_NOTICE}</Text>
+                <Text style={styles.sandboxNoticeText}>{PREMIUM_PURCHASE_PREVIEW_NOTICE}</Text>
               </View>
             ) : null}
 
@@ -598,9 +619,9 @@ export default function SubscribeScreen() {
           ) : null}
 
           <PremiumAccordion
-            id="testing-details"
-            title="Testing details"
-            summary="Sandbox availability and purchase diagnostics"
+            id="purchase-details"
+            title="Purchase details"
+            summary="Current Premium access and store availability"
             expanded={expanded}
             onToggle={toggleAccordion}
           >
@@ -627,31 +648,31 @@ export default function SubscribeScreen() {
               tone={purchaseStatusTone}
             />
             <StatusLine
-              label="Sandbox availability"
-              value={sandboxPurchaseAvailable ? "Ready" : "Not ready"}
+              label="Store availability"
+              value={sandboxPurchaseAvailable ? "Available" : "Unavailable"}
               body={sandboxPurchaseAvailable
-                ? `Provider-backed ${STORE_PROVIDER_PAIR} sandbox purchase is available. Internal tester role is not required for this path.`
+                ? `Premium can be purchased through ${STORE_PROVIDER_NAME} for this account.`
                 : sandboxBlockedReason}
               tone={sandboxPurchaseAvailable ? "default" : "muted"}
             />
             <StatusLine
-              label={`${STORE_PROVIDER_NAME} server rail`}
+              label={`${STORE_PROVIDER_NAME} connection`}
               value={sandboxMode.storePurchaseRailReadbackComplete
-                ? sandboxMode.storePurchaseRailState === "sandbox_only" ? "Sandbox only" : "Off"
+                ? sandboxMode.storePurchaseRailState === "sandbox_only" ? "Available" : "Unavailable"
                 : "Unavailable"}
               body={sandboxMode.storePurchaseRailReadbackComplete
                 ? sandboxMode.storePurchaseRailState === "sandbox_only"
-                  ? "The bounded sandbox server rail is enabled; live money remains separate and off."
-                  : "The sandbox server rail is not enabled, so StoreKit will not open."
-                : "The server rail could not be verified. Purchases fail closed until readback succeeds."}
+                  ? "The store connection is available for this purchase."
+                  : `The ${STORE_PROVIDER_NAME} purchase connection is not available right now.`
+                : "The store connection could not be verified. No purchase can begin until it is available."}
               tone={sandboxMode.storePurchaseRailReadbackComplete && sandboxMode.storePurchaseRailState === "sandbox_only"
                 ? "default"
                 : "warning"}
             />
             <StatusLine
-              label="RevenueCat configured"
-              value={snapshot.configuration.shouldConfigure ? "Yes" : "No"}
-              body={snapshot.configuration.shouldConfigure ? `Mode: ${snapshot.configuration.mode}.` : snapshot.configuration.reason ?? "RevenueCat is not configured."}
+              label="Store service"
+              value={snapshot.configuration.shouldConfigure ? "Available" : "Unavailable"}
+              body={snapshot.configuration.shouldConfigure ? "The subscription service is available." : "The subscription service is unavailable right now."}
               tone={snapshot.configuration.shouldConfigure ? "default" : "warning"}
             />
             <StatusLine
@@ -661,35 +682,17 @@ export default function SubscribeScreen() {
               tone={snapshot.canMakePayments ? "default" : "warning"}
             />
             <StatusLine
-              label="Premium offering"
-              value={premiumTarget.offeringAvailable ? premiumTarget.resolvedOfferingId ?? "Available" : "Missing"}
-              body={`Configured offering: ${premiumTarget.configuredOfferingId}. Current offering: ${snapshot.currentOfferingId ?? "none"}.`}
+              label="Premium plan"
+              value={premiumTarget.offeringAvailable && premiumTarget.packageCount > 0 ? "Available" : "Unavailable"}
+              body={premiumTarget.offeringAvailable && premiumTarget.packageCount > 0
+                ? "A Premium plan is available for this account."
+                : "A Premium plan could not be loaded right now."}
               tone={premiumTarget.offeringAvailable ? "default" : "warning"}
             />
             <StatusLine
-              label="Premium packages"
-              value={String(premiumTarget.packageCount)}
-              body={premiumTarget.packageCount > 0 ? `Packages: ${premiumTarget.availablePackageIds.join(", ") || "available"}.` : "No purchasable Premium package was returned."}
-              tone={premiumTarget.packageCount > 0 ? "default" : "warning"}
-            />
-            <StatusLine
-              label="Tester-role diagnostic"
-              value={sandboxMode.allowedRoles.length > 0 ? "Present" : "Not required"}
-              body={sandboxMode.allowedRoles.length > 0
-                ? `Diagnostics: ${sandboxMode.allowedRoles.join(", ")}. Provider-backed sandbox purchase does not require this role.`
-                : `No owner/operator/internal-tester role is required when ${STORE_PROVIDER_PAIR} sandbox purchase is available.`}
-              tone="muted"
-            />
-            <StatusLine
-              label="Money safety flags"
-              value={sandboxMode.liveMoneyEnabled || sandboxMode.payoutsEnabled || sandboxMode.cashoutEnabled ? "Blocked" : "Off"}
-              body={`liveMoney=${sandboxMode.liveMoneyEnabled ? "on" : "off"}; payouts=${sandboxMode.payoutsEnabled ? "on" : "off"}; cashout=${sandboxMode.cashoutEnabled ? "on" : "off"}.`}
-              tone={sandboxMode.liveMoneyEnabled || sandboxMode.payoutsEnabled || sandboxMode.cashoutEnabled ? "warning" : "default"}
-            />
-            <StatusLine
-              label="Annual setup"
-              value="Pending"
-              body="Annual Premium setup is still being finalized. Use the available monthly/test path where supported."
+              label="Plan options"
+              value={premiumTarget.packageCount > 0 ? "Available" : "Unavailable"}
+              body={premiumTarget.packageCount > 0 ? "Your store will show the available plan, price, and renewal terms." : "No purchasable Premium plan is available right now."}
               tone="muted"
             />
             <TouchableOpacity

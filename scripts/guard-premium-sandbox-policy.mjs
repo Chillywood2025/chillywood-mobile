@@ -141,7 +141,7 @@ assertIncludes(monetization, "storePurchaseRailState !== \"sandbox_only\"", "bou
 assertIncludes(monetization, "storePurchaseRailReadback.readbackComplete", "missing server-rail readback fail-closed behavior");
 assertIncludes(subscribe, "disabled={busy}", "purchase CTA remains actionable for exact readiness explanation");
 assertIncludes(subscribe, "premium-purchase-blocked-reason", "visible purchase readiness blocker");
-assertIncludes(subscribe, '"testing-details": true', "purchase readiness failure opens diagnostics");
+assertIncludes(subscribe, '"purchase-details": true', "purchase readiness failure opens customer-safe purchase details");
 assertIncludes(subscribe, "useFocusEffect(", "Premium screen refreshes provider/backend authority after route focus returns");
 assertIncludes(subscribe, "AppState.addEventListener(\"change\"", "Premium screen refreshes provider/backend authority after foreground resume");
 assertNotIncludes(subscribe, "disabled={busy || (!hasPremium && !canPurchase)}", "purchase explanation hidden behind disabled CTA");
