@@ -911,4 +911,3 @@ test("Watch-Party pin preferences cannot cross accounts, rooms, or stale generat
   assert.match(route, /clearWatchPartyLivePinnedParticipantId\(partyId\)/u);
   assert.match(route, /readWatchPartyLivePinCoachSeen\(partyId\)/u);
 });
-
