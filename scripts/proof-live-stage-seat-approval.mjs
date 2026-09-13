@@ -268,6 +268,7 @@ assert(focusedHostPartyBox.some((participant) => participant.userId === hostId),
 assert(!focusedHostPartyBox.some((participant) => participant.userId === viewerId), "focused remote viewer should not duplicate inside the host party box");
 
 assert(getLiveStagePrimaryRoleLabel({ state: { role: "listener" } }) === "Viewer", "listener must remain visibly classified as a Viewer");
+assert(getLiveStagePrimaryRoleLabel({ state: { role: "listener" }, isFeatured: true }) === "Viewer", "featured listener must still be Viewer");
 assert(getLiveStagePrimaryRoleLabel({ state: { role: "listener" }, isRequesting: true }) === "Seat requested", "requesting listener must show the pending seat request");
 assert(getLiveStagePrimaryRoleLabel({ state: { role: "listener" }, seatState: "requested" }) === "Seat requested", "persisted seat request must match the requesting presentation");
 assert(getLiveStagePrimaryRoleLabel({ state: { role: "listener" }, seatState: "eligible" }) === "Seat eligible", "eligible listener must not be presented as an approved speaker");

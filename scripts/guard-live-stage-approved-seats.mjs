@@ -298,7 +298,7 @@ assertIncludes(seatApprovalProof, "host party box should not duplicate host/self
 assertIncludes(seatApprovalProof, "host should move into the party box when a remote viewer is the actual hero", "Live Stage proof covers host placement when a remote viewer is the hero");
 assertIncludes(seatApprovalProof, "focused remote viewer should not duplicate inside the host party box", "Live Stage proof excludes the actual remote hero from the party box");
 assertIncludes(seatApprovalProof, "host card tap must not hide the participant", "Live Stage proof covers pending remote viewer card retention");
-assertIncludes(seatApprovalProof, "featured listener must still be Audience", "Live Stage proof covers Featured not replacing primary role/status");
+assertIncludes(seatApprovalProof, "featured listener must still be Viewer", "Live Stage proof covers Featured not replacing primary role/status");
 assertIncludes(seatApprovalProof, "host pending-request card tap should open the seat-request sheet", "Live Stage proof covers card tap sheet behavior");
 assertIncludes(seatApprovalProof, "pending approve/dismiss actions must not render inline", "Live Stage proof covers sheet-only pending approval");
 assertIncludes(seatApprovalProof, "participant card must not borrow another remote participant's track", "Live Stage proof covers identity-matched member tracks");
