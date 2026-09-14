@@ -129,22 +129,26 @@ add(
   "inbox/thread reads clear stale active call state after terminal invite status",
   includes(chatLib, "reconcileActiveChatThreadCallState")
     && includes(chatLib, "shouldRequestStaleActiveThreadCallCleanup")
-    && includes(clearEndedCallBody, 'rpc("clear_stale_chilly_chat_thread_call"')
+    && includes(clearEndedCallBody, "invokeBoundChatRpc<unknown>")
+    && includes(clearEndedCallBody, '"clear_stale_chilly_chat_thread_call"')
     && includes(chatRoomAuthorityClosure, 'if not public."can_access_chat_thread"(p_thread_id)')
     && includes(chatRoomAuthorityClosure, "chat_call_room_identity_mismatch")
     && includes(chatLib, "CHAT_CALL_INVITES_TABLE")
     && includes(chatLib, "resolveChatThreadCallReconciliation")
     && includes(chatLib, "shouldApplyAuthoritativeChatCallCleanup(cleanup)")
-    && includes(chatLib, "clearEndedChatThreadCall(thread.threadId, thread.activeCommunicationRoomId)")
+    && /clearEndedChatThreadCall\(\s*thread\.threadId,\s*thread\.activeCommunicationRoomId,\s*expectedBinding,\s*\)/u.test(chatLib)
     && includes(chatLib, "activeCommunicationRoomId: undefined"),
   "inbox live-call badges must not survive declined/missed/expired call invites",
 );
 add(
   "stale active call clearing does not recurse through full thread readback",
-  includes(clearEndedCallBody, 'rpc("clear_stale_chilly_chat_thread_call"')
+  includes(clearEndedCallBody, "invokeBoundChatRpc<unknown>")
+    && includes(clearEndedCallBody, '"clear_stale_chilly_chat_thread_call"')
+    && includes(clearEndedCallBody, "expectedBinding?.userId")
+    && includes(clearEndedCallBody, "assertChatMutationAuthorityCurrent(authority)")
     && !includes(clearEndedCallBody, "getChatThread(")
     && !includes(clearEndedCallBody, ".from(CHAT_THREADS_TABLE)"),
-  "clearEndedChatThreadCall must use the exact server RPC without recursive readback or direct thread mutation",
+  "clearEndedChatThreadCall must use the account-bound server RPC without recursive readback or direct thread mutation",
 );
 add(
   "room-safe Decline clears active thread call state",
