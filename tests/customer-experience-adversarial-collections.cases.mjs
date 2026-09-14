@@ -9,6 +9,44 @@ import {
   loadStubbed,
   read,
 } from "./customer-experience-adversarial-helpers.mjs";
+import { settleHomeOperationsWithinDeadline } from "../_lib/homeLoadPolicy.mjs";
+
+test("Home releases its startup busy state when one provider read never settles", async () => {
+  let releaseDeadline;
+  let cancelCount = 0;
+  const pendingProviderRead = new Promise(() => {});
+  const resultPromise = settleHomeOperationsWithinDeadline([
+    Promise.resolve(),
+    pendingProviderRead,
+  ], {
+    deadlineMs: 10,
+    cancel: () => { cancelCount += 1; },
+    schedule: (callback) => {
+      releaseDeadline = callback;
+      return 1;
+    },
+  });
+
+  await Promise.resolve();
+  releaseDeadline();
+  assert.deepEqual(await resultPromise, { timedOut: true });
+  assert.equal(cancelCount, 0);
+});
+
+test("Home cancels its deadline when all startup reads settle", async () => {
+  let cancelCount = 0;
+  const result = await settleHomeOperationsWithinDeadline([
+    Promise.resolve("home"),
+    Promise.reject(new Error("optional provider failed")),
+  ], {
+    deadlineMs: 10,
+    cancel: () => { cancelCount += 1; },
+    schedule: () => 1,
+  });
+
+  assert.deepEqual(result, { timedOut: false });
+  assert.equal(cancelCount, 1);
+});
 
 const makeGrant = (number, overrides = {}) => {
   const created = new Date(Date.now() - (100 - number) * 1_000).toISOString();
