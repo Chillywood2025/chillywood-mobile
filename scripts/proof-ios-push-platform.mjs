@@ -149,8 +149,8 @@ assert.ok(activityDispatch.includes('deliveryMode: "internal_ios_proof"'), "inte
 assert.ok(activityDispatch.includes("isIosOrdinaryPushTargetEnabled(input.recipient.id, token.token, false)"), "internal proof trigger must retain exact account/device allowlisting after ordinary iOS rollout is enabled");
 assert.ok(activityDispatch.includes('deepLink: "chillywoodmobile://settings"'), "internal proof trigger must route only to non-authoritative notification settings");
 assert.ok(activityDispatch.includes('deliverableTokens.length !== 1'), "internal proof trigger must require exactly one allowlisted iOS token");
-assert.ok(activityDispatch.includes('triggerType === "internal_ios_delivery_proof" ? "access_granted" : triggerType'), "internal proof must reuse a non-authoritative customer notification type already accepted by the database contract");
-assert.ok(activityDispatch.includes('triggerType === "internal_ios_delivery_proof") return "access_granted"'), "internal proof must reuse an accepted non-authoritative customer category");
+assert.ok(activityDispatch.includes('triggerType === "internal_ios_delivery_proof" ? "content_dropped" : triggerType'), "internal proof must reuse a non-authoritative customer notification type already accepted by the database contract");
+assert.ok(activityDispatch.includes('triggerType === "internal_ios_delivery_proof") return "content_dropped"'), "internal proof must reuse an accepted non-authoritative customer category");
 assert.ok(
   callDispatch.includes('const expoCandidates = input.action === "missed" && iosRolloutEnabled')
     && callDispatch.includes('? [...androidExpoTokens, ...iosExpoTokens]')

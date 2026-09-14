@@ -194,14 +194,14 @@ const normalizeTriggerType = (value: unknown): TriggerType | null => {
 };
 
 const notificationCategoryForTrigger = (triggerType: TriggerType) => {
-  if (triggerType === "internal_ios_delivery_proof") return "access_granted";
+  if (triggerType === "internal_ios_delivery_proof") return "content_dropped";
   if (triggerType === "event_starts_soon") return "upcoming_event_reminder";
   if (triggerType === "public_upload" || triggerType === "replay_later") return "content_dropped";
   return "creator_went_live";
 };
 
 const notificationTypeForTrigger = (triggerType: TriggerType) => (
-  triggerType === "internal_ios_delivery_proof" ? "access_granted" : triggerType
+  triggerType === "internal_ios_delivery_proof" ? "content_dropped" : triggerType
 );
 
 const preferenceFieldForTrigger = (triggerType: TriggerType): keyof NotificationPreference | null => {
