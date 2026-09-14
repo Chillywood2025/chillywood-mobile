@@ -1,7 +1,7 @@
 const SHA256_HEX = /^[a-f0-9]{64}$/u;
 const MAX_INTERNAL_PROOF_RECIPIENTS = 4;
 
-export const normalizeIosOrdinaryPushInternalProofHashes = (value) => {
+export const normalizeIosOrdinaryPushInternalProofTargetHashes = (value) => {
   const entries = String(value ?? "")
     .split(",")
     .map((entry) => entry.trim().toLowerCase())
@@ -18,11 +18,11 @@ export const normalizeIosOrdinaryPushInternalProofHashes = (value) => {
 
 export const isIosOrdinaryPushDeliveryAllowed = ({
   internalProofEnabled,
-  internalProofRecipientHashes,
+  internalProofTargetHashes,
   publicRolloutEnabled,
-  recipientHash,
+  targetHash,
 }) => {
   if (publicRolloutEnabled === true) return true;
-  if (internalProofEnabled !== true || !SHA256_HEX.test(String(recipientHash ?? ""))) return false;
-  return normalizeIosOrdinaryPushInternalProofHashes(internalProofRecipientHashes).has(recipientHash);
+  if (internalProofEnabled !== true || !SHA256_HEX.test(String(targetHash ?? ""))) return false;
+  return normalizeIosOrdinaryPushInternalProofTargetHashes(internalProofTargetHashes).has(targetHash);
 };

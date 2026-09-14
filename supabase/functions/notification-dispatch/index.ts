@@ -122,12 +122,12 @@ const sha256Hex = async (value: string) => {
   const digest = await crypto.subtle.digest("SHA-256", textEncoder.encode(value));
   return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 };
-const isIosOrdinaryPushRecipientEnabled = async (recipientUserId: string) => (
+const isIosOrdinaryPushTargetEnabled = async (recipientUserId: string, pushToken: string) => (
   isIosOrdinaryPushDeliveryAllowed({
     internalProofEnabled: toText(Deno.env.get("IOS_ORDINARY_PUSH_INTERNAL_PROOF_ENABLED")).toLowerCase() === "true",
-    internalProofRecipientHashes: Deno.env.get("IOS_ORDINARY_PUSH_INTERNAL_PROOF_RECIPIENT_HASHES"),
+    internalProofTargetHashes: Deno.env.get("IOS_ORDINARY_PUSH_INTERNAL_PROOF_TARGET_HASHES"),
     publicRolloutEnabled: isIosOrdinaryPushRolloutEnabled(),
-    recipientHash: await sha256Hex(recipientUserId),
+    targetHash: await sha256Hex(`${recipientUserId}:${pushToken}`),
   })
 );
 
@@ -632,8 +632,15 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
   }
 
   const iosRolloutEnabled = isIosOrdinaryPushRolloutEnabled();
-  const iosRecipientEnabled = iosRolloutEnabled || await isIosOrdinaryPushRecipientEnabled(input.recipient.id);
-  const rolloutBlockedTokens = tokens.filter((token) => token.platform === "ios" && !iosRecipientEnabled);
+  const evaluatedTokens = await Promise.all(tokens.map(async (token) => ({
+    allowed: token.platform === "android"
+      || iosRolloutEnabled
+      || await isIosOrdinaryPushTargetEnabled(input.recipient.id, token.token),
+    token,
+  })));
+  const rolloutBlockedTokens = evaluatedTokens
+    .filter(({ allowed, token }) => token.platform === "ios" && !allowed)
+    .map(({ token }) => token);
   for (const token of rolloutBlockedTokens) {
     await insertDeliveryAttempt(adminClient, {
       errorCode: "ios_push_rollout_disabled",
@@ -644,7 +651,9 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
       status: "skipped",
     });
   }
-  const deliverableTokens = tokens.filter((token) => token.platform === "android" || iosRecipientEnabled);
+  const deliverableTokens = evaluatedTokens
+    .filter(({ allowed }) => allowed)
+    .map(({ token }) => token);
   if (!deliverableTokens.length) {
     return {
       notificationId,
