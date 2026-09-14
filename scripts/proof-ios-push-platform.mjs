@@ -7,7 +7,10 @@ import {
   IOS_NOTIFICATION_CATEGORIES,
   buildPlatformExpoPushMessage,
 } from "../supabase/functions/_shared/notification-payload.mjs";
-import { isIosOrdinaryPushDeliveryAllowed } from "../supabase/functions/_shared/ios-ordinary-push-internal-proof-policy.mjs";
+import {
+  isInternalIosOrdinaryPushProofRequestAllowed,
+  isIosOrdinaryPushDeliveryAllowed,
+} from "../supabase/functions/_shared/ios-ordinary-push-internal-proof-policy.mjs";
 
 const common = {
   androidChannelId: "default",
@@ -77,6 +80,20 @@ assert.equal(isIosOrdinaryPushDeliveryAllowed({
   targetHash: proofTargetHash,
 }), true, "the existing public rollout switch remains authoritative when separately enabled");
 
+const proofRecipientUserId = "11111111-1111-4111-8111-111111111111";
+assert.equal(isInternalIosOrdinaryPushProofRequestAllowed({
+  internalProofEnabled: true,
+  publicRolloutEnabled: true,
+  recipientUserId: proofRecipientUserId,
+  serviceRoleAuthenticated: true,
+}), true, "the benign internal proof trigger requires service role, its own switch, the canonical rollout on, and an exact UUID");
+for (const blocked of [
+  { internalProofEnabled: false, publicRolloutEnabled: true, recipientUserId: proofRecipientUserId, serviceRoleAuthenticated: true },
+  { internalProofEnabled: true, publicRolloutEnabled: false, recipientUserId: proofRecipientUserId, serviceRoleAuthenticated: true },
+  { internalProofEnabled: true, publicRolloutEnabled: true, recipientUserId: proofRecipientUserId, serviceRoleAuthenticated: false },
+  { internalProofEnabled: true, publicRolloutEnabled: true, recipientUserId: "not-a-user", serviceRoleAuthenticated: true },
+]) assert.equal(isInternalIosOrdinaryPushProofRequestAllowed(blocked), false, "every missing internal proof boundary must fail closed");
+
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const client = read("_lib/notifications.ts");
 const layout = read("app/_layout.tsx");
@@ -126,6 +143,14 @@ assert.ok(activityDispatch.includes('errorCode: "no_enabled_push_token"'), "acti
 assert.ok(activityDispatch.includes("IOS_ORDINARY_PUSH_INTERNAL_PROOF_ENABLED"), "activity dispatch must expose the bounded internal proof switch");
 assert.ok(activityDispatch.includes("IOS_ORDINARY_PUSH_INTERNAL_PROOF_TARGET_HASHES"), "internal iOS proof delivery must bind to hashed account/device targets");
 assert.ok(activityDispatch.includes("await isIosOrdinaryPushTargetEnabled(input.recipient.id, token.token)"), "iOS proof delivery must bind to the exact account and device token");
+assert.ok(activityDispatch.includes('action === "deliver-internal-ios-proof"'), "activity dispatch must expose a benign service-only internal proof trigger");
+assert.ok(activityDispatch.includes('auth.user.id === "service_role"'), "internal proof trigger must require the service-role caller");
+assert.ok(activityDispatch.includes('deliveryMode: "internal_ios_proof"'), "internal proof trigger must use its exact iOS-only delivery mode");
+assert.ok(activityDispatch.includes("isIosOrdinaryPushTargetEnabled(input.recipient.id, token.token, false)"), "internal proof trigger must retain exact account/device allowlisting after ordinary iOS rollout is enabled");
+assert.ok(activityDispatch.includes('deepLink: "chillywoodmobile://settings"'), "internal proof trigger must route only to non-authoritative notification settings");
+assert.ok(activityDispatch.includes('deliverableTokens.length !== 1'), "internal proof trigger must require exactly one allowlisted iOS token");
+assert.ok(activityDispatch.includes('triggerType === "internal_ios_delivery_proof" ? "content_dropped" : triggerType'), "internal proof must reuse a non-authoritative customer notification type already accepted by the database contract");
+assert.ok(activityDispatch.includes('triggerType === "internal_ios_delivery_proof") return "content_dropped"'), "internal proof must reuse an accepted non-authoritative customer category");
 assert.ok(
   callDispatch.includes('const expoCandidates = input.action === "missed" && iosRolloutEnabled')
     && callDispatch.includes('? [...androidExpoTokens, ...iosExpoTokens]')
@@ -148,5 +173,6 @@ console.log(JSON.stringify({
     "activity, missed-call, and creator-money senders share platform policy",
     "iOS delivery remains rollout-disabled by default",
     "internal iOS proof delivery is independently enabled and exact-account/device bound",
+    "internal proof trigger is service-role-only, iOS-only, exact-one-token, and routes to non-authoritative settings",
   ],
 }, null, 2));
