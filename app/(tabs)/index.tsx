@@ -73,6 +73,7 @@ import { AppText } from "../../components/ui/typography";
 import { setMainTabHeaderProfileSnapshot } from "../../components/navigation/main-tab-profile-cache";
 import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
 import { resolveMainTabBrandRevealHeight } from "../../_lib/customerExperiencePresentation";
+import { settleHomeOperationsWithinDeadline } from "../../_lib/homeLoadPolicy.mjs";
 
 type TitleRow = Omit<
   Pick<
@@ -112,6 +113,7 @@ type HomeActiveTitleRoomRow = Pick<
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../../assets/images/chillywood-branded-background.png");
 const HOME_CONTINUE_MIN_POSITION_MILLIS = 10_000;
 const HOME_CONTINUE_COMPLETION_THRESHOLD = 0.94;
+const HOME_LOAD_TIMEOUT_MESSAGE = "Home is taking longer than expected. Check your connection and try again.";
 const HOME_CONTINUE_BLOCKED_TITLE_STATUSES = new Set([
   "archived",
   "blocked",
@@ -271,6 +273,7 @@ export default function HomeScreen() {
       return;
     }
 
+    setError(null);
     const nextTitles = filterPubliclyReleasedTitles(data ?? []);
     setTitles(nextTitles);
   }
@@ -418,7 +421,7 @@ export default function HomeScreen() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await Promise.all([
+      const result = await settleHomeOperationsWithinDeadline([
         fetchHomeConfig(),
         fetchTitles(),
         fetchCurrentChannelProfile(),
@@ -426,6 +429,7 @@ export default function HomeScreen() {
         fetchHomeActiveTitleRoomCount(),
         fetchDiscoveryFeedV1(),
       ]);
+      if (result.timedOut) setError((existing) => existing ?? HOME_LOAD_TIMEOUT_MESSAGE);
       setLoading(false);
     })();
   }, []);
@@ -446,7 +450,7 @@ export default function HomeScreen() {
 
   async function onRefresh() {
     setRefreshing(true);
-    await Promise.all([
+    const result = await settleHomeOperationsWithinDeadline([
       fetchHomeConfig(),
       fetchTitles(),
       fetchCurrentChannelProfile(),
@@ -454,6 +458,7 @@ export default function HomeScreen() {
       fetchHomeActiveTitleRoomCount(),
       fetchDiscoveryFeedV1(),
     ]);
+    if (result.timedOut) setError((existing) => existing ?? HOME_LOAD_TIMEOUT_MESSAGE);
     setRefreshing(false);
   }
 
