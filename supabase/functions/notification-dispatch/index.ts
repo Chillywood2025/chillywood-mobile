@@ -6,7 +6,10 @@ import {
   IOS_NOTIFICATION_CATEGORIES,
   buildPlatformExpoPushMessage,
 } from "../_shared/notification-payload.mjs";
-import { isIosOrdinaryPushDeliveryAllowed } from "../_shared/ios-ordinary-push-internal-proof-policy.mjs";
+import {
+  isInternalIosOrdinaryPushProofRequestAllowed,
+  isIosOrdinaryPushDeliveryAllowed,
+} from "../_shared/ios-ordinary-push-internal-proof-policy.mjs";
 import { reconcileRecentExpoPushReceipts } from "../_shared/expo-push-receipts.ts";
 import {
   readExactCurrentSessionAuthority,
@@ -21,7 +24,8 @@ type TriggerType =
   | "circle_friend_live"
   | "event_starts_soon"
   | "public_upload"
-  | "replay_later";
+  | "replay_later"
+  | "internal_ios_delivery_proof";
 
 type AuthenticatedUser = {
   id: string;
@@ -30,6 +34,8 @@ type AuthenticatedUser = {
 
 type DispatchPayload = {
   action?: unknown;
+  recipientUserId?: unknown;
+  recipient_user_id?: unknown;
   sourceId?: unknown;
   source_id?: unknown;
   timingKey?: unknown;
@@ -115,6 +121,9 @@ const ANDROID_NOTIFICATION_CHANNEL_ID = "default";
 const textEncoder = new TextEncoder();
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const isInternalIosOrdinaryPushProofEnabled = () => (
+  toText(Deno.env.get("IOS_ORDINARY_PUSH_INTERNAL_PROOF_ENABLED")).toLowerCase() === "true"
+);
 const isIosOrdinaryPushRolloutEnabled = () => (
   toText(Deno.env.get("IOS_ORDINARY_PUSH_ROLLOUT_ENABLED")).toLowerCase() === "true"
 );
@@ -122,11 +131,15 @@ const sha256Hex = async (value: string) => {
   const digest = await crypto.subtle.digest("SHA-256", textEncoder.encode(value));
   return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 };
-const isIosOrdinaryPushTargetEnabled = async (recipientUserId: string, pushToken: string) => (
+const isIosOrdinaryPushTargetEnabled = async (
+  recipientUserId: string,
+  pushToken: string,
+  allowPublicRollout = true,
+) => (
   isIosOrdinaryPushDeliveryAllowed({
-    internalProofEnabled: toText(Deno.env.get("IOS_ORDINARY_PUSH_INTERNAL_PROOF_ENABLED")).toLowerCase() === "true",
+    internalProofEnabled: isInternalIosOrdinaryPushProofEnabled(),
     internalProofTargetHashes: Deno.env.get("IOS_ORDINARY_PUSH_INTERNAL_PROOF_TARGET_HASHES"),
-    publicRolloutEnabled: isIosOrdinaryPushRolloutEnabled(),
+    publicRolloutEnabled: allowPublicRollout && isIosOrdinaryPushRolloutEnabled(),
     targetHash: await sha256Hex(`${recipientUserId}:${pushToken}`),
   })
 );
@@ -181,12 +194,18 @@ const normalizeTriggerType = (value: unknown): TriggerType | null => {
 };
 
 const notificationCategoryForTrigger = (triggerType: TriggerType) => {
+  if (triggerType === "internal_ios_delivery_proof") return "access_granted";
   if (triggerType === "event_starts_soon") return "upcoming_event_reminder";
   if (triggerType === "public_upload" || triggerType === "replay_later") return "content_dropped";
   return "creator_went_live";
 };
 
-const preferenceFieldForTrigger = (triggerType: TriggerType): keyof NotificationPreference => {
+const notificationTypeForTrigger = (triggerType: TriggerType) => (
+  triggerType === "internal_ios_delivery_proof" ? "access_granted" : triggerType
+);
+
+const preferenceFieldForTrigger = (triggerType: TriggerType): keyof NotificationPreference | null => {
+  if (triggerType === "internal_ios_delivery_proof") return null;
   if (triggerType === "circle_friend_live") return "circle_friend_live_enabled";
   if (triggerType === "event_starts_soon") return "event_starts_soon_enabled";
   if (triggerType === "public_upload") return "public_upload_enabled";
@@ -417,6 +436,12 @@ async function sendExpoPush(message: JsonObject) {
 }
 
 const buildNotificationCopy = (triggerType: TriggerType, title: string) => {
+  if (triggerType === "internal_ios_delivery_proof") {
+    return {
+      body: "Open Chi'llywood to review your notification settings.",
+      title: "Chi'llywood notification ready",
+    };
+  }
   if (triggerType === "followed_creator_live") {
     return {
       body: title ? `${title} is live now.` : "A creator you follow is live now.",
@@ -525,11 +550,13 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
   title: string;
   triggerType: TriggerType;
   preferences: NotificationPreference | undefined;
+  deliveryMode?: "ordinary" | "internal_ios_proof";
 }) {
   const prefField = preferenceFieldForTrigger(input.triggerType);
   const preference = input.preferences;
-  const pushAllowed = preference?.push_enabled !== false && preference?.[prefField] !== false;
-  const inAppAllowed = preference?.in_app_enabled !== false && preference?.[prefField] !== false;
+  const categoryAllowed = !prefField || preference?.[prefField] !== false;
+  const pushAllowed = preference?.push_enabled !== false && categoryAllowed;
+  const inAppAllowed = preference?.in_app_enabled !== false && categoryAllowed;
   const copy = buildNotificationCopy(input.triggerType, input.title);
   const dedupeKey = [
     input.triggerType,
@@ -567,7 +594,7 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
         category: notificationCategoryForTrigger(input.triggerType),
         deep_link: input.target.deepLink,
         eligibility_reason: input.eligibilityReason,
-        notification_type: input.triggerType,
+        notification_type: notificationTypeForTrigger(input.triggerType),
         priority: input.triggerType === "event_starts_soon" ? 3 : 5,
         source_id: input.sourceId,
         source_type: input.sourceType,
@@ -632,6 +659,31 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
   }
 
   const iosRolloutEnabled = isIosOrdinaryPushRolloutEnabled();
+  if (input.deliveryMode === "internal_ios_proof") {
+    const deliverableTokens = [];
+    for (const token of tokens) {
+      if (token.platform === "ios" && await isIosOrdinaryPushTargetEnabled(input.recipient.id, token.token, false)) {
+        deliverableTokens.push(token);
+      }
+    }
+    if (deliverableTokens.length !== 1) {
+      await insertDeliveryAttempt(adminClient, {
+        errorCode: "internal_ios_proof_target_not_exact",
+        notificationId,
+        provider: "expo",
+        recipientUserId: input.recipient.id,
+        status: "skipped",
+      });
+      return {
+        notificationId,
+        pushSent: false,
+        recipientUserId: input.recipient.id,
+        status: inAppAllowed ? "created" : "skipped",
+        reason: "internal_ios_proof_target_not_exact",
+      };
+    }
+    return await sendToDeliverableTokens(adminClient, input, notificationId, deliverableTokens);
+  }
   const evaluatedTokens = await Promise.all(tokens.map(async (token) => ({
     allowed: token.platform === "android"
       || iosRolloutEnabled
@@ -664,6 +716,16 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
     };
   }
 
+  return await sendToDeliverableTokens(adminClient, input, notificationId, deliverableTokens);
+}
+
+async function sendToDeliverableTokens(
+  adminClient: SupabaseClientLike,
+  input: Parameters<typeof dispatchToRecipient>[1],
+  notificationId: string | null,
+  deliverableTokens: PushToken[],
+) {
+  const copy = buildNotificationCopy(input.triggerType, input.title);
   let sentCount = 0;
   for (const token of deliverableTokens) {
     const pushResult = await sendExpoPush(buildPlatformExpoPushMessage({
@@ -750,6 +812,43 @@ Deno.serve(async (req): Promise<Response> => {
     if (payload.error) return payload.error;
 
     const body = payload.value ?? {};
+    const action = toText(body.action).toLowerCase();
+    if (action === "deliver-internal-ios-proof") {
+      const recipientUserId = toText(body.recipientUserId ?? body.recipient_user_id);
+      const allowed = isInternalIosOrdinaryPushProofRequestAllowed({
+        internalProofEnabled: isInternalIosOrdinaryPushProofEnabled(),
+        publicRolloutEnabled: isIosOrdinaryPushRolloutEnabled(),
+        recipientUserId,
+        serviceRoleAuthenticated: auth.user.id === "service_role",
+      });
+      if (!allowed) return jsonResponse(403, { error: "internal_ios_proof_not_allowed" });
+      const timingKey = toText(body.timingKey ?? body.timing_key) || crypto.randomUUID();
+      const preferences = await readPreferences(auth.adminClient, [recipientUserId]);
+      const result = await dispatchToRecipient(auth.adminClient, {
+        actorUserId: "",
+        deliveryMode: "internal_ios_proof",
+        eligibilityReason: "bounded_internal_ios_delivery_proof",
+        preferences: preferences.get(recipientUserId),
+        recipient: { id: recipientUserId, reason: "bounded_internal_ios_delivery_proof" },
+        sourceId: `internal-ios-proof:${timingKey.slice(0, 80)}`,
+        sourceType: "account_notification_settings",
+        target: {
+          deepLink: "chillywoodmobile://settings",
+          entityId: "settings",
+          route: "/settings",
+        },
+        timingKey: timingKey.slice(0, 120),
+        title: "",
+        triggerType: "internal_ios_delivery_proof",
+      });
+      return jsonResponse(200, {
+        createdCount: result.notificationId ? 1 : 0,
+        deliveryStatus: result.status,
+        eligible: true,
+        pushSentCount: result.pushSent ? 1 : 0,
+        triggerType: "internal_ios_delivery_proof",
+      });
+    }
     const triggerType = normalizeTriggerType(body.triggerType ?? body.trigger_type);
     const sourceId = toText(body.sourceId ?? body.source_id);
     const timingKey = toText(body.timingKey ?? body.timing_key) || "default";

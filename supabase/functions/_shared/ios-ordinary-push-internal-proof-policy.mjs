@@ -26,3 +26,15 @@ export const isIosOrdinaryPushDeliveryAllowed = ({
   if (internalProofEnabled !== true || !SHA256_HEX.test(String(targetHash ?? ""))) return false;
   return normalizeIosOrdinaryPushInternalProofTargetHashes(internalProofTargetHashes).has(targetHash);
 };
+
+export const isInternalIosOrdinaryPushProofRequestAllowed = ({
+  internalProofEnabled,
+  publicRolloutEnabled,
+  recipientUserId,
+  serviceRoleAuthenticated,
+}) => serviceRoleAuthenticated === true
+  && internalProofEnabled === true
+  && publicRolloutEnabled === true
+  && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+    String(recipientUserId ?? "").trim(),
+  );
