@@ -6,6 +6,7 @@ import {
   IOS_NOTIFICATION_CATEGORIES,
   buildPlatformExpoPushMessage,
 } from "../_shared/notification-payload.mjs";
+import { isIosOrdinaryPushDeliveryAllowed } from "../_shared/ios-ordinary-push-internal-proof-policy.mjs";
 import { reconcileRecentExpoPushReceipts } from "../_shared/expo-push-receipts.ts";
 import {
   readExactCurrentSessionAuthority,
@@ -111,10 +112,23 @@ const JSON_HEADERS = {
 const PUBLIC_SAFE_RIGHTS = new Set(["creator_owned", "chillywood_original", "licensed_for_public_stream"]);
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const ANDROID_NOTIFICATION_CHANNEL_ID = "default";
+const textEncoder = new TextEncoder();
 
 const toText = (value: unknown) => String(value ?? "").trim();
 const isIosOrdinaryPushRolloutEnabled = () => (
   toText(Deno.env.get("IOS_ORDINARY_PUSH_ROLLOUT_ENABLED")).toLowerCase() === "true"
+);
+const sha256Hex = async (value: string) => {
+  const digest = await crypto.subtle.digest("SHA-256", textEncoder.encode(value));
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+const isIosOrdinaryPushRecipientEnabled = async (recipientUserId: string) => (
+  isIosOrdinaryPushDeliveryAllowed({
+    internalProofEnabled: toText(Deno.env.get("IOS_ORDINARY_PUSH_INTERNAL_PROOF_ENABLED")).toLowerCase() === "true",
+    internalProofRecipientHashes: Deno.env.get("IOS_ORDINARY_PUSH_INTERNAL_PROOF_RECIPIENT_HASHES"),
+    publicRolloutEnabled: isIosOrdinaryPushRolloutEnabled(),
+    recipientHash: await sha256Hex(recipientUserId),
+  })
 );
 
 const jsonResponse = (status: number, payload: JsonObject) =>
@@ -618,7 +632,8 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
   }
 
   const iosRolloutEnabled = isIosOrdinaryPushRolloutEnabled();
-  const rolloutBlockedTokens = tokens.filter((token) => token.platform === "ios" && !iosRolloutEnabled);
+  const iosRecipientEnabled = iosRolloutEnabled || await isIosOrdinaryPushRecipientEnabled(input.recipient.id);
+  const rolloutBlockedTokens = tokens.filter((token) => token.platform === "ios" && !iosRecipientEnabled);
   for (const token of rolloutBlockedTokens) {
     await insertDeliveryAttempt(adminClient, {
       errorCode: "ios_push_rollout_disabled",
@@ -629,7 +644,7 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
       status: "skipped",
     });
   }
-  const deliverableTokens = tokens.filter((token) => token.platform === "android" || iosRolloutEnabled);
+  const deliverableTokens = tokens.filter((token) => token.platform === "android" || iosRecipientEnabled);
   if (!deliverableTokens.length) {
     return {
       notificationId,

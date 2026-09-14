@@ -7,6 +7,7 @@ import {
   IOS_NOTIFICATION_CATEGORIES,
   buildPlatformExpoPushMessage,
 } from "../supabase/functions/_shared/notification-payload.mjs";
+import { isIosOrdinaryPushDeliveryAllowed } from "../supabase/functions/_shared/ios-ordinary-push-internal-proof-policy.mjs";
 
 const common = {
   androidChannelId: "default",
@@ -43,6 +44,38 @@ const passive = buildPlatformExpoPushMessage({
 assert.equal(passive.badge, 0, "iOS badge clearing must preserve zero");
 assert.equal(passive.interruptionLevel, "passive", "policy-selected passive delivery must be retained");
 assert.equal("sound" in passive, false, "passive iOS delivery may intentionally omit sound");
+
+const proofRecipientHash = "a".repeat(64);
+assert.equal(isIosOrdinaryPushDeliveryAllowed({
+  internalProofEnabled: true,
+  internalProofRecipientHashes: proofRecipientHash,
+  publicRolloutEnabled: false,
+  recipientHash: proofRecipientHash,
+}), true, "an exact internal proof recipient may receive iOS ordinary push while public rollout remains off");
+assert.equal(isIosOrdinaryPushDeliveryAllowed({
+  internalProofEnabled: false,
+  internalProofRecipientHashes: proofRecipientHash,
+  publicRolloutEnabled: false,
+  recipientHash: proofRecipientHash,
+}), false, "the internal proof rail must have its own explicit enable switch");
+assert.equal(isIosOrdinaryPushDeliveryAllowed({
+  internalProofEnabled: true,
+  internalProofRecipientHashes: proofRecipientHash,
+  publicRolloutEnabled: false,
+  recipientHash: "b".repeat(64),
+}), false, "a different recipient must remain rollout-blocked");
+assert.equal(isIosOrdinaryPushDeliveryAllowed({
+  internalProofEnabled: true,
+  internalProofRecipientHashes: "not-a-hash",
+  publicRolloutEnabled: false,
+  recipientHash: proofRecipientHash,
+}), false, "malformed internal proof configuration must fail closed");
+assert.equal(isIosOrdinaryPushDeliveryAllowed({
+  internalProofEnabled: false,
+  internalProofRecipientHashes: "not-a-hash",
+  publicRolloutEnabled: true,
+  recipientHash: proofRecipientHash,
+}), true, "the existing public rollout switch remains authoritative when separately enabled");
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const client = read("_lib/notifications.ts");
@@ -90,6 +123,9 @@ for (const source of [activityDispatch, callDispatch, moneyDispatch]) {
   assert.ok(source.includes("IOS_ORDINARY_PUSH_ROLLOUT_ENABLED"), "iOS delivery must default off behind the rollout flag");
 }
 assert.ok(activityDispatch.includes('errorCode: "no_enabled_push_token"'), "activity dispatch must use a platform-neutral missing-token result");
+assert.ok(activityDispatch.includes("IOS_ORDINARY_PUSH_INTERNAL_PROOF_ENABLED"), "activity dispatch must expose the bounded internal proof switch");
+assert.ok(activityDispatch.includes("IOS_ORDINARY_PUSH_INTERNAL_PROOF_RECIPIENT_HASHES"), "internal iOS proof delivery must bind to hashed recipients");
+assert.ok(activityDispatch.includes("await isIosOrdinaryPushRecipientEnabled(input.recipient.id)"), "iOS proof delivery must bind to the exact recipient");
 assert.ok(
   callDispatch.includes('const expoCandidates = input.action === "missed" && iosRolloutEnabled')
     && callDispatch.includes('? [...androidExpoTokens, ...iosExpoTokens]')
@@ -111,5 +147,6 @@ console.log(JSON.stringify({
     "iOS-as-FCM registration rejected",
     "activity, missed-call, and creator-money senders share platform policy",
     "iOS delivery remains rollout-disabled by default",
+    "internal iOS proof delivery is independently enabled and exact-recipient bound",
   ],
 }, null, 2));
