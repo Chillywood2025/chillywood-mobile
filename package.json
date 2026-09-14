@@ -247,6 +247,7 @@
     "proof:ios-commerce": "node ./scripts/proof-ios-commerce.mjs",
     "test:ios-storekit": "bash scripts/run-ios-storekit-tests.sh",
     "proof:ios-push-platform": "node ./scripts/proof-ios-push-platform.mjs",
+    "test:sign-in-presentation": "node --test ./tests/sign-in-presentation.test.mjs",
     "proof:ios-voip-policy": "node ./scripts/proof-ios-voip-policy.mjs",
     "proof:ios-voip-token-lifecycle": "node ./scripts/proof-ios-voip-token-lifecycle.mjs",
     "lint": "expo lint -- --concurrency off",
