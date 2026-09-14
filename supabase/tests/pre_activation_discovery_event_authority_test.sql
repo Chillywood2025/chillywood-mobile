@@ -358,6 +358,12 @@ insert into public.watch_party_rooms(
 ) values (
   'RFGC-CIRCLE-LIVE','a1000000-0000-4000-8000-000000000001','live',true,'circle','Circle Live proof'
 );
+insert into public.watch_party_room_memberships(
+  party_id,user_id,role,stage_role,membership_state,last_seen_at
+) values (
+  'RFGC-CIRCLE-LIVE','b2000000-0000-4000-8000-000000000002',
+  'viewer','listener','active',timezone('utc'::text,now())
+);
 select ok(public.publish_live_stage_discovery(
   'RFGC-CIRCLE-LIVE','a1000000-0000-4000-8000-000000000001'),
   'the exact host can publish a Circle Live');
