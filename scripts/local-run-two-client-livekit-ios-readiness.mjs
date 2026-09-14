@@ -7,7 +7,9 @@
  * default --self-test mode performs no network activity and needs no secrets.
  * --live is intentionally limited to non-production environments and existing,
  * owner-approved Live Stage/Watch Party rooms. It never creates rooms, changes
- * memberships, or uses service-role/LiveKit server credentials.
+ * memberships, or uses service-role/LiveKit server credentials. An explicit
+ * non-production flag can accept the currently configured account policies for
+ * the two dedicated proof users through the same authenticated RPC as the app.
  *
  * Live mode requires client A to be the existing room host and client B to be a
  * fresh approved speaker. Tokens are acquired from the repository's authenticated
@@ -22,6 +24,7 @@ const MODE_LIVE = "live";
 const ALLOWED_ENVIRONMENTS = new Set(["development", "local", "preview"]);
 const ALLOWED_SURFACES = new Set(["live-stage", "watch-party-live"]);
 const EXPLICIT_ENV_KEYS = Object.freeze({
+  acceptCurrentAccountLegal: "CHILLYWOOD_LIVEKIT_HARNESS_ACCEPT_CURRENT_ACCOUNT_LEGAL",
   accountAEmail: "CHILLYWOOD_LIVEKIT_HARNESS_ACCOUNT_A_EMAIL",
   accountAPassword: "CHILLYWOOD_LIVEKIT_HARNESS_ACCOUNT_A_PASSWORD",
   accountBEmail: "CHILLYWOOD_LIVEKIT_HARNESS_ACCOUNT_B_EMAIL",
@@ -106,6 +109,7 @@ function readLiveConfiguration() {
   const surface = readExplicitEnv(EXPLICIT_ENV_KEYS.surface, { required: true }).toLowerCase();
   const confirmBoundedTest = readExplicitEnv(EXPLICIT_ENV_KEYS.confirmBoundedTest).toLowerCase();
   const forceRelayValue = readExplicitEnv(EXPLICIT_ENV_KEYS.forceRelay).toLowerCase();
+  const acceptCurrentAccountLegalValue = readExplicitEnv(EXPLICIT_ENV_KEYS.acceptCurrentAccountLegal).toLowerCase();
   const configuredEndpoint = readExplicitEnv(EXPLICIT_ENV_KEYS.tokenEndpoint, { sensitive: true });
   const timeoutMs = parseBoundedInteger(
     readExplicitEnv(EXPLICIT_ENV_KEYS.timeoutMs),
@@ -126,6 +130,9 @@ function readLiveConfiguration() {
   if (confirmBoundedTest !== "true") throw new Error(`missing_explicit_confirmation:${EXPLICIT_ENV_KEYS.confirmBoundedTest}`);
   if (forceRelayValue && forceRelayValue !== "true" && forceRelayValue !== "false") {
     throw new Error(`invalid_boolean:${EXPLICIT_ENV_KEYS.forceRelay}`);
+  }
+  if (acceptCurrentAccountLegalValue && acceptCurrentAccountLegalValue !== "true" && acceptCurrentAccountLegalValue !== "false") {
+    throw new Error(`invalid_boolean:${EXPLICIT_ENV_KEYS.acceptCurrentAccountLegal}`);
   }
   if (accountAEmail.toLowerCase() === accountBEmail.toLowerCase()) throw new Error("two_distinct_approved_accounts_required");
   if (roomName.length > 128) throw new Error("room_name_out_of_bounds");
@@ -149,6 +156,7 @@ function readLiveConfiguration() {
   rememberSensitive(tokenEndpoint.toString());
 
   return {
+    acceptCurrentAccountLegal: acceptCurrentAccountLegalValue === "true",
     accountA: { email: accountAEmail, password: accountAPassword },
     accountB: { email: accountBEmail, password: accountBPassword },
     anonKey,
@@ -161,6 +169,75 @@ function readLiveConfiguration() {
     timeoutMs,
     tokenEndpoint: tokenEndpoint.toString(),
   };
+}
+
+function text(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readExactActiveSessionAuthority(value, expectedUserId) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const userId = text(value.userId);
+  const accountId = text(value.accountId);
+  const sessionGeneration = text(value.sessionGeneration);
+  if (value.authoritative !== true || value.state !== "ACTIVE" || value.restoreOnly !== false
+    || !userId || userId !== expectedUserId || accountId !== userId || !sessionGeneration) return null;
+  return { accountId, sessionGeneration, userId };
+}
+
+function buildCurrentAccountLegalAcceptance(value, authority) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || value.authoritative !== true || value.state !== "ACTIVE" || value.restoreOnly !== false
+    || value.market !== "UNITED_STATES" || value.capability !== "account"
+    || text(value.userId) !== authority.userId || text(value.accountId) !== authority.accountId
+    || text(value.sessionGeneration) !== authority.sessionGeneration
+    || !Array.isArray(value.requirements) || value.requirements.length === 0) return null;
+  const acceptances = {};
+  for (const requirement of value.requirements) {
+    if (!requirement || typeof requirement !== "object" || Array.isArray(requirement)) return null;
+    const documentKey = text(requirement.documentKey);
+    const version = text(requirement.version);
+    if (!documentKey || !version || Object.hasOwn(acceptances, documentKey)) return null;
+    if (!new Set(["CURRENT_ACCEPTED", "REQUIRED_UNACCEPTED"]).has(requirement.state)) return null;
+    acceptances[documentKey] = version;
+  }
+  return {
+    allAccepted: value.allAccepted === true,
+    args: {
+      p_acceptances: acceptances,
+      p_capability: "account",
+      p_expected_account_id: authority.accountId,
+      p_expected_user_id: authority.userId,
+      p_market: "UNITED_STATES",
+      p_session_generation: authority.sessionGeneration,
+    },
+  };
+}
+
+async function acceptCurrentAccountLegalForProof(client, userId, label) {
+  const { data: sessionData, error: sessionError } = await client.rpc("wave1_session_authority_readback");
+  const authority = sessionError ? null : readExactActiveSessionAuthority(sessionData, userId);
+  if (!authority) throw new Error(`proof_legal_session_authority_unavailable:${label}`);
+
+  const { data: legalData, error: legalError } = await client.rpc("wave1_legal_requirements_readback", {
+    p_capability: "account",
+  });
+  const acceptance = legalError ? null : buildCurrentAccountLegalAcceptance(legalData, authority);
+  if (!acceptance) throw new Error(`proof_legal_requirements_unavailable:${label}`);
+  if (!acceptance.allAccepted) {
+    const { data: acceptedData, error: acceptedError } = await client.rpc(
+      "wave1_accept_legal_documents",
+      acceptance.args,
+    );
+    const accepted = acceptedError ? null : buildCurrentAccountLegalAcceptance(acceptedData, authority);
+    if (!accepted?.allAccepted) throw new Error(`proof_legal_acceptance_failed:${label}`);
+  }
+
+  const { data: finalSessionData, error: finalSessionError } = await client.rpc("wave1_session_authority_readback");
+  const finalAuthority = finalSessionError ? null : readExactActiveSessionAuthority(finalSessionData, userId);
+  if (!finalAuthority || finalAuthority.sessionGeneration !== authority.sessionGeneration) {
+    throw new Error(`proof_legal_session_changed:${label}`);
+  }
 }
 
 function wait(ms) {
@@ -530,6 +607,12 @@ async function runLiveHarness() {
     const sessionB = await signInApprovedAccount(createClient, config, config.accountB, "client-b");
     sessions.push(sessionA, sessionB);
     if (sessionA.userId === sessionB.userId) throw new Error("two_distinct_authenticated_users_required");
+    if (config.acceptCurrentAccountLegal) {
+      await Promise.all([
+        acceptCurrentAccountLegalForProof(sessionA.client, sessionA.userId, "client-a"),
+        acceptCurrentAccountLegalForProof(sessionB.client, sessionB.userId, "client-b"),
+      ]);
+    }
 
     const [tokenA, tokenB] = await Promise.all([
       requestBoundedToken(config, sessionA, "client-a", "host"),
@@ -625,6 +708,44 @@ async function runSelfTest() {
   assert.doesNotThrow(() => validateBoundedTarget("preview", "watch-party-live"));
   assert.throws(() => validateBoundedTarget("production", "live-stage"));
   assert.throws(() => validateBoundedTarget("development", "chat-call"));
+  const authority = readExactActiveSessionAuthority({
+    accountId: "user-a",
+    authoritative: true,
+    restoreOnly: false,
+    sessionGeneration: "session-a",
+    state: "ACTIVE",
+    userId: "user-a",
+  }, "user-a");
+  assert.deepEqual(authority, { accountId: "user-a", sessionGeneration: "session-a", userId: "user-a" });
+  assert.equal(readExactActiveSessionAuthority({ ...authority, authoritative: true, restoreOnly: true, state: "ACTIVE" }, "user-a"), null);
+  const legalAcceptance = buildCurrentAccountLegalAcceptance({
+    accountId: "user-a",
+    allAccepted: false,
+    authoritative: true,
+    capability: "account",
+    market: "UNITED_STATES",
+    requirements: [
+      { documentKey: "privacy_policy", state: "REQUIRED_UNACCEPTED", version: "v1" },
+      { documentKey: "terms_of_service", state: "CURRENT_ACCEPTED", version: "v2" },
+    ],
+    restoreOnly: false,
+    sessionGeneration: "session-a",
+    state: "ACTIVE",
+    userId: "user-a",
+  }, authority);
+  assert.deepEqual(legalAcceptance?.args.p_acceptances, { privacy_policy: "v1", terms_of_service: "v2" });
+  assert.equal(buildCurrentAccountLegalAcceptance({
+    accountId: "user-a",
+    allAccepted: false,
+    authoritative: true,
+    capability: "account",
+    market: "UNITED_STATES",
+    requirements: [{ documentKey: "privacy_policy", state: "REQUIRED_UNACCEPTED", version: "v1" }],
+    restoreOnly: false,
+    sessionGeneration: "different-session",
+    state: "ACTIVE",
+    userId: "user-a",
+  }, authority), null);
   const relayState = {
     nominatedLocalCandidateIds: new Set(),
     nominatedRelayPairObserved: false,
@@ -715,6 +836,7 @@ async function runSelfTest() {
       "explicit-mode-selection",
       "redacted-diagnostics",
       "bounded-input-validation",
+      "current-session-bound-account-legal-acceptance",
       "two-way-media-result-contract",
       "media-recovery-without-reconnect-event-regression",
     ],
