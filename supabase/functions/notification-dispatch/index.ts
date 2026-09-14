@@ -817,6 +817,7 @@ Deno.serve(async (req): Promise<Response> => {
       const recipientUserId = toText(body.recipientUserId ?? body.recipient_user_id);
       const allowed = isInternalIosOrdinaryPushProofRequestAllowed({
         internalProofEnabled: isInternalIosOrdinaryPushProofEnabled(),
+        operatorAuthenticated: auth.user.id !== "service_role",
         publicRolloutEnabled: isIosOrdinaryPushRolloutEnabled(),
         recipientUserId,
         serviceRoleAuthenticated: auth.user.id === "service_role",
