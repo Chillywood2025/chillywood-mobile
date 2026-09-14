@@ -29,6 +29,7 @@ const EXPLICIT_ENV_KEYS = Object.freeze({
   anonKey: "CHILLYWOOD_LIVEKIT_HARNESS_SUPABASE_ANON_KEY",
   confirmBoundedTest: "CHILLYWOOD_LIVEKIT_HARNESS_CONFIRM_BOUNDED_TEST",
   environment: "CHILLYWOOD_LIVEKIT_HARNESS_ENVIRONMENT",
+  forceRelay: "CHILLYWOOD_LIVEKIT_HARNESS_FORCE_RELAY",
   holdMs: "CHILLYWOOD_LIVEKIT_HARNESS_HOLD_MS",
   roomName: "CHILLYWOOD_LIVEKIT_HARNESS_ROOM_NAME",
   supabaseUrl: "CHILLYWOOD_LIVEKIT_HARNESS_SUPABASE_URL",
@@ -104,6 +105,7 @@ function readLiveConfiguration() {
   const roomName = readExplicitEnv(EXPLICIT_ENV_KEYS.roomName, { required: true, sensitive: true });
   const surface = readExplicitEnv(EXPLICIT_ENV_KEYS.surface, { required: true }).toLowerCase();
   const confirmBoundedTest = readExplicitEnv(EXPLICIT_ENV_KEYS.confirmBoundedTest).toLowerCase();
+  const forceRelayValue = readExplicitEnv(EXPLICIT_ENV_KEYS.forceRelay).toLowerCase();
   const configuredEndpoint = readExplicitEnv(EXPLICIT_ENV_KEYS.tokenEndpoint, { sensitive: true });
   const timeoutMs = parseBoundedInteger(
     readExplicitEnv(EXPLICIT_ENV_KEYS.timeoutMs),
@@ -122,6 +124,9 @@ function readLiveConfiguration() {
 
   validateBoundedTarget(environment, surface);
   if (confirmBoundedTest !== "true") throw new Error(`missing_explicit_confirmation:${EXPLICIT_ENV_KEYS.confirmBoundedTest}`);
+  if (forceRelayValue && forceRelayValue !== "true" && forceRelayValue !== "false") {
+    throw new Error(`invalid_boolean:${EXPLICIT_ENV_KEYS.forceRelay}`);
+  }
   if (accountAEmail.toLowerCase() === accountBEmail.toLowerCase()) throw new Error("two_distinct_approved_accounts_required");
   if (roomName.length > 128) throw new Error("room_name_out_of_bounds");
 
@@ -148,6 +153,7 @@ function readLiveConfiguration() {
     accountB: { email: accountBEmail, password: accountBPassword },
     anonKey,
     environment,
+    forceRelay: forceRelayValue === "true",
     holdMs,
     roomName,
     supabaseUrl,
@@ -324,11 +330,66 @@ async function requestBoundedToken(config, session, label, role) {
   return { participantToken, serverUrl };
 }
 
-async function connectClient(rtc, serverUrl, participantToken) {
+async function connectClient(rtc, serverUrl, participantToken, forceRelay) {
   const room = new rtc.Room();
-  await room.connect(serverUrl, participantToken, { autoSubscribe: true, dynacast: true });
+  const options = { autoSubscribe: true, dynacast: true };
+  if (forceRelay) {
+    options.rtcConfig = {
+      continualGatheringPolicy: rtc.ContinualGatheringPolicy.GATHER_CONTINUALLY,
+      iceServers: [],
+      iceTransportType: rtc.IceTransportType.TRANSPORT_RELAY,
+    };
+  }
+  await room.connect(serverUrl, participantToken, options);
   if (!room.isConnected || !room.localParticipant) throw new Error("livekit_connection_not_ready");
   return room;
+}
+
+function observeRelayStats(stats, state) {
+  const entries = [
+    ...(stats?.publisherStats ?? []),
+    ...(stats?.subscriberStats ?? []),
+  ];
+  for (const entry of entries) {
+    const kind = entry?.stats?.case;
+    const value = entry?.stats?.value;
+    if (kind === "localCandidate") {
+      const candidateId = String(value?.rtc?.id ?? "").trim();
+      if (candidateId && Number(value?.candidate?.candidateType) === 3) {
+        state.relayCandidateIds.add(candidateId);
+      }
+    }
+    if (
+      kind === "candidatePair"
+      && Number(value?.candidatePair?.state) === 4
+      && value?.candidatePair?.nominated === true
+    ) {
+      const localCandidateId = String(value?.candidatePair?.localCandidateId ?? "").trim();
+      if (localCandidateId) state.nominatedLocalCandidateIds.add(localCandidateId);
+    }
+  }
+  state.nominatedRelayPairObserved = [...state.nominatedLocalCandidateIds]
+    .some((candidateId) => state.relayCandidateIds.has(candidateId));
+}
+
+async function readRelayTelemetry(room, timeoutMs) {
+  const state = {
+    nominatedLocalCandidateIds: new Set(),
+    nominatedRelayPairObserved: false,
+    relayCandidateIds: new Set(),
+  };
+  const deadline = Date.now() + timeoutMs;
+  do {
+    await room.getRtcStats()
+      .then((stats) => observeRelayStats(stats, state))
+      .catch(() => undefined);
+    if (state.nominatedRelayPairObserved) break;
+    await wait(100);
+  } while (Date.now() < deadline);
+  return {
+    nominatedRelayPairObserved: state.nominatedRelayPairObserved,
+    relayCandidateObserved: state.relayCandidateIds.size > 0,
+  };
 }
 
 async function publishSyntheticMedia(rtc, room, suffix) {
@@ -426,6 +487,10 @@ function assertLiveResult(result) {
   assert.equal(result.mediaPresentAfterReconnect, true);
   assert.equal(result.subscriptionFailures, 0);
   assert.equal(result.syntheticCaptureHealthy, true);
+  if (result.forceRelayRequested) {
+    assert.equal(result.relayCandidateObservedBothClients, true);
+    assert.equal(result.nominatedRelayPairObservedBothClients, true);
+  }
   assert.equal(result.leaveObserved, true);
   assert.equal(result.cleanupComplete, true);
 }
@@ -443,10 +508,13 @@ async function runLiveHarness() {
     automatedNotPhysical: true,
     cleanupComplete: false,
     connectedBoth: false,
+    forceRelayRequested: config.forceRelay,
     leaveObserved: false,
     mediaPresentAfterReconnect: false,
+    nominatedRelayPairObservedBothClients: false,
     publishedBothDirections: false,
     reconnectedBothClients: false,
+    relayCandidateObservedBothClients: false,
     status: "failed",
     subscribedBothDirections: false,
     subscriptionFailures: 0,
@@ -470,8 +538,8 @@ async function runLiveHarness() {
     if (tokenA.serverUrl !== tokenB.serverUrl) throw new Error("livekit_routing_assignment_mismatch");
 
     const [roomA, roomB] = await Promise.all([
-      connectClient(rtc, tokenA.serverUrl, tokenA.participantToken),
-      connectClient(rtc, tokenB.serverUrl, tokenB.participantToken),
+      connectClient(rtc, tokenA.serverUrl, tokenA.participantToken, config.forceRelay),
+      connectClient(rtc, tokenB.serverUrl, tokenB.participantToken, config.forceRelay),
     ]);
     rooms.push(roomA, roomB);
     result.connectedBoth = true;
@@ -494,6 +562,15 @@ async function runLiveHarness() {
     );
     result.subscriptionFailures = observationA.subscriptionFailures + observationB.subscriptionFailures;
     result.subscribedBothDirections = result.subscriptionFailures === 0;
+
+    const [relayA, relayB] = await Promise.all([
+      readRelayTelemetry(roomA, config.timeoutMs),
+      readRelayTelemetry(roomB, config.timeoutMs),
+    ]);
+    result.relayCandidateObservedBothClients = relayA.relayCandidateObserved
+      && relayB.relayCandidateObserved;
+    result.nominatedRelayPairObservedBothClients = relayA.nominatedRelayPairObserved
+      && relayB.nominatedRelayPairObserved;
 
     await proveReconnect(rtc, roomA, observationA, observationB, "after-reconnect-a", config.timeoutMs);
     await proveReconnect(rtc, roomB, observationB, observationA, "after-reconnect-b", config.timeoutMs);
@@ -548,13 +625,28 @@ async function runSelfTest() {
   assert.doesNotThrow(() => validateBoundedTarget("preview", "watch-party-live"));
   assert.throws(() => validateBoundedTarget("production", "live-stage"));
   assert.throws(() => validateBoundedTarget("development", "chat-call"));
+  const relayState = {
+    nominatedLocalCandidateIds: new Set(),
+    nominatedRelayPairObserved: false,
+    relayCandidateIds: new Set(),
+  };
+  observeRelayStats({
+    publisherStats: [
+      { stats: { case: "localCandidate", value: { candidate: { candidateType: 3 }, rtc: { id: "relay-a" } } } },
+      { stats: { case: "candidatePair", value: { candidatePair: { localCandidateId: "relay-a", nominated: true, state: 4 } } } },
+    ],
+  }, relayState);
+  assert.equal(relayState.nominatedRelayPairObserved, true);
   assert.doesNotThrow(() => assertLiveResult({
     cleanupComplete: true,
     connectedBoth: true,
+    forceRelayRequested: true,
     leaveObserved: true,
     mediaPresentAfterReconnect: true,
+    nominatedRelayPairObservedBothClients: true,
     publishedBothDirections: true,
     reconnectedBothClients: true,
+    relayCandidateObservedBothClients: true,
     subscribedBothDirections: true,
     subscriptionFailures: 0,
     syntheticCaptureHealthy: true,

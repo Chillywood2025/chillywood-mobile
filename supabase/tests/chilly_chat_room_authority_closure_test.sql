@@ -1,5 +1,5 @@
 begin;
-select plan(145);
+select plan(146);
 
 -- Contract and ACL surface (1-15).
 select has_function('public', 'can_access_chat_thread', array['uuid'], '1. exact chat membership helper exists');
@@ -1375,6 +1375,15 @@ select ok(
     null
   ) ->> 'allowed')::boolean,
   '90a. service-only host enforcement resolves exact target authority without treating a missing target JWT as an allow'
+);
+select is(
+  public.resolve_watch_party_livekit_viewer_authority(
+    'CLOSURESEAT',
+    'b2222222-2222-4222-8222-222222222222',
+    null
+  ) ->> 'reason',
+  'non_seat_room_authority',
+  '90b. service-only target recovery preserves the exact no-paid-authority viewer result'
 );
 select ok(
   (public.resolve_watch_party_livekit_viewer_authority(
