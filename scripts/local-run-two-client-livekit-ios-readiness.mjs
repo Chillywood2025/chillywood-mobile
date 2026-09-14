@@ -536,22 +536,30 @@ async function publishSyntheticMedia(rtc, room, suffix) {
 
 async function proveReconnect(rtc, room, observation, remoteObservation, marker, timeoutMs) {
   const simulateAt = Date.now();
+  const previousReconnected = observation.reconnected;
   await room.simulateScenario(rtc.SimulateScenarioKind.SIMULATE_FULL_RECONNECT);
   await waitFor(
-    `${marker}:connected_after_reconnect`,
-    () => room.connectionState === rtc.ConnectionState.CONN_CONNECTED,
+    `${marker}:media_recovered_after_reconnect`,
+    () => room.connectionState === rtc.ConnectionState.CONN_CONNECTED
+      && (observation.reconnected > previousReconnected || remoteObservation.lastAudioFrameAt >= simulateAt),
     timeoutMs,
   );
-  await room.localParticipant.publishData(new TextEncoder().encode(marker), {
-    reliable: true,
-    topic: "chillywood-bounded-reconnect-proof",
-  });
-  await waitFor(`${marker}:post_reconnect_data`, () => remoteObservation.dataMarkers.has(marker), timeoutMs);
   await waitFor(
     `${marker}:post_reconnect_audio`,
     () => remoteObservation.lastAudioFrameAt >= simulateAt,
     timeoutMs,
   );
+  const encodedMarker = new TextEncoder().encode(marker);
+  const markerDeadline = Date.now() + timeoutMs;
+  do {
+    await room.localParticipant.publishData(encodedMarker, {
+      reliable: true,
+      topic: "chillywood-bounded-reconnect-proof",
+    }).catch(() => undefined);
+    if (remoteObservation.dataMarkers.has(marker)) break;
+    await wait(500);
+  } while (Date.now() < markerDeadline);
+  if (!remoteObservation.dataMarkers.has(marker)) throw new Error(`timeout:${marker}:post_reconnect_data`);
   observation.reconnectProofs += 1;
   await room.getRtcStats();
 }
