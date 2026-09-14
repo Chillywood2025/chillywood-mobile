@@ -9,7 +9,9 @@ import { parseEnvFile } from "./qa/browserstack-env.mjs";
 
 const root = process.cwd();
 const PACKAGE_ID = "com.chillywood.mobile";
-const UPDATE_GROUP = "d7aac53c-65bb-4bf7-ae69-04bfea248e0a";
+const UPDATE_GROUP = process.env.TWO_CLIENT_EXPECTED_UPDATE_GROUP
+  || "d7aac53c-65bb-4bf7-ae69-04bfea248e0a";
+const EXPECTED_VERSION_CODE = process.env.TWO_CLIENT_EXPECTED_VERSION_CODE || "57";
 const DEVICE_A = process.env.TWO_CLIENT_DEVICE_A || "R5CR120QCBF";
 const DEVICE_B = process.env.TWO_CLIENT_DEVICE_B || "R3CXA0DS5JV";
 const DEVICE_A_ACCOUNT_PREFIX = process.env.TWO_CLIENT_DEVICE_A_ACCOUNT_PREFIX || "PARTICIPANT_001";
@@ -17,9 +19,9 @@ const DEVICE_B_ACCOUNT_PREFIX = process.env.TWO_CLIENT_DEVICE_B_ACCOUNT_PREFIX |
 const DEVICE_A_ACCOUNT_LABEL = process.env.TWO_CLIENT_DEVICE_A_ACCOUNT_LABEL || "proof_participant_001";
 const DEVICE_B_ACCOUNT_LABEL = process.env.TWO_CLIENT_DEVICE_B_ACCOUNT_LABEL || "proof_participant_002";
 const FLOW_SCOPE = process.env.TWO_CLIENT_FLOW_SCOPE || "all";
-const RUN_WATCH_PARTY_UI = FLOW_SCOPE === "all";
-const RUN_CHAT_UI = FLOW_SCOPE !== "live_only";
-const RUN_LIVE_UI = FLOW_SCOPE !== "chat_only";
+const RUN_WATCH_PARTY_UI = FLOW_SCOPE === "all" || FLOW_SCOPE === "watch_only";
+const RUN_CHAT_UI = FLOW_SCOPE === "all" || FLOW_SCOPE === "chat_only";
+const RUN_LIVE_UI = FLOW_SCOPE === "all" || FLOW_SCOPE === "live_only";
 const RUN_STAFF_UI = process.env.TWO_CLIENT_RUN_STAFF_UI === "1";
 const SKIP_UI_LOGIN = process.env.TWO_CLIENT_SKIP_UI_LOGIN === "1";
 const LOGIN_METHOD = process.env.TWO_CLIENT_LOGIN_METHOD || "maestro";
@@ -620,8 +622,9 @@ async function createProofRooms(host, participant) {
   }).select("party_id").single());
   setup.watchPartyRoomReady = true;
 
-  try {
-    await requireOk("insert_live_room", host.client.from("watch_party_rooms").insert({
+  if (RUN_LIVE_UI) {
+    try {
+      await requireOk("insert_live_room", host.client.from("watch_party_rooms").insert({
       capture_policy: "best_effort",
       content_access_rule: "open",
       host_user_id: host.userId,
@@ -639,7 +642,7 @@ async function createProofRooms(host, participant) {
       title_id: null,
     }).select("party_id").single());
 
-    await requireOk("insert_live_host_membership", host.client.from("watch_party_room_memberships").insert({
+      await requireOk("insert_live_host_membership", host.client.from("watch_party_room_memberships").insert({
       party_id: livePartyId,
       user_id: host.userId,
       role: "host",
@@ -653,7 +656,7 @@ async function createProofRooms(host, participant) {
       joined_at: now,
       last_seen_at: now,
     }).select("party_id").single());
-    await requireOk("insert_live_participant_membership", participant.client.from("watch_party_room_memberships").insert({
+      await requireOk("insert_live_participant_membership", participant.client.from("watch_party_room_memberships").insert({
       party_id: livePartyId,
       user_id: participant.userId,
       role: "viewer",
@@ -667,10 +670,11 @@ async function createProofRooms(host, participant) {
       joined_at: now,
       last_seen_at: now,
     }).select("party_id").single());
-    setup.liveRoomReady = true;
-  } catch (error) {
-    setup.liveRoomBlocker = redact(error?.message || error);
-    result.errors.push(`live_room_setup_partial:${setup.liveRoomBlocker}`);
+      setup.liveRoomReady = true;
+    } catch (error) {
+      setup.liveRoomBlocker = redact(error?.message || error);
+      result.errors.push(`live_room_setup_partial:${setup.liveRoomBlocker}`);
+    }
   }
 
   return setup;
@@ -943,9 +947,9 @@ async function main() {
     for (const [serial, metadata] of Object.entries(result.devices)) {
       const ok = metadata.package === PACKAGE_ID
         && metadata.versionName === "1.0.0"
-        && metadata.versionCode === "57"
+        && metadata.versionCode === EXPECTED_VERSION_CODE
         && metadata.installer === "com.android.vending";
-      addFlow(`preflight ${serial}`, ok ? "Closed" : "Blocked", ok ? "Play-internal v57 metadata verified." : "Device metadata did not match Play-internal v57.", metadata);
+      addFlow(`preflight ${serial}`, ok ? "Closed" : "Blocked", ok ? `Play-internal versionCode ${EXPECTED_VERSION_CODE} metadata verified.` : `Device metadata did not match Play-internal versionCode ${EXPECTED_VERSION_CODE}.`, metadata);
       launchApp(serial, `${serial}-preflight`);
       screenshot(serial, `${serial}-preflight-launch`);
     }
