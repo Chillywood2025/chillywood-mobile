@@ -519,6 +519,11 @@ export async function completeIosNativeCallAnswer(callUuid: string, connected: b
   return NativeCallsModule.completeAnswerAsync(callUuid, connected).then(() => true).catch(() => false);
 }
 
+export async function completeIosNativeCallTerminalTransition(callUuid: string) {
+  if (!NativeCallsModule || !isIosNativeCallsRuntimeEnabled()) return false;
+  return NativeCallsModule.completeTerminalTransitionAsync(callUuid).then(() => true).catch(() => false);
+}
+
 export async function setIosNativeCallMuted(callUuid: string, muted: boolean) {
   if (!NativeCallsModule || !isIosNativeCallsRuntimeEnabled()) return false;
   return NativeCallsModule.setMutedAsync(callUuid, muted).then(() => true).catch(() => false);

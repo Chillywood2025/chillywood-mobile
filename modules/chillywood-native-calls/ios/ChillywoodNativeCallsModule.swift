@@ -56,6 +56,10 @@ public final class ChillywoodNativeCallsModule: Module {
       try ChillywoodNativeCallCoordinator.shared.completeAnswer(callUuid: callUuid, connected: connected)
     }
 
+    AsyncFunction("completeTerminalTransitionAsync") { (callUuid: String) in
+      try ChillywoodNativeCallCoordinator.shared.completeTerminalTransition(callUuid: callUuid)
+    }
+
     AsyncFunction("setMutedAsync") { (callUuid: String, muted: Bool) in
       try ChillywoodNativeCallCoordinator.shared.setMuted(callUuid: callUuid, muted: muted)
     }
