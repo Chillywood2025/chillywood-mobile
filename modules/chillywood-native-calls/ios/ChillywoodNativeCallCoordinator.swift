@@ -56,7 +56,15 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   public var eventSink: (([String: Any]) -> Void)? {
     didSet {
       guard eventSink != nil else { return }
-      drainPendingEvents().forEach { eventSink?($0) }
+      // Expo calls OnStartObserving while the JavaScript subscription is still
+      // being installed. Draining synchronously here can delete a persisted
+      // CallKit Answer before JavaScript is able to receive it. Defer exactly
+      // one main-queue turn; the explicit getPendingEventsAsync fallback may
+      // win first, and either path drains the same bounded queue only once.
+      DispatchQueue.main.async { [weak self] in
+        guard let self, let eventSink = self.eventSink else { return }
+        self.drainPendingEvents().forEach { eventSink($0) }
+      }
     }
   }
 

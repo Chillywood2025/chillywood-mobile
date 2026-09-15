@@ -86,6 +86,7 @@ import { supabase } from "../_lib/supabase";
 import {
   completeIosNativeCallAnswer,
   completeIosNativeCallTerminalTransition,
+  drainIosNativeCallPendingEvents,
   hasIosNativeCallPresentation,
   isIosNativeCallsRuntimeEnabled,
   reportIosNativeCallRemoteEnd,
@@ -1269,6 +1270,7 @@ function IosNativeCallsBridge() {
     void startIosNativeCallsReadiness(authority, handleNativeCallEvent);
     const activationSubscription = AppState.addEventListener("change", (state) => {
       if (state !== "active") return;
+      void drainIosNativeCallPendingEvents();
       pendingNativeTerminalActions.forEach(({ event, status }) => {
         void settleNativeTerminalAction(event, status);
       });

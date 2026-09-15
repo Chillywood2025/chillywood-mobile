@@ -346,6 +346,35 @@ const handleNativeEvent = (
   });
 };
 
+const drainPendingEventsForExactLifecycle = async (
+  generation: number,
+  context: IosVoipAuthorityContext,
+) => {
+  if (
+    !NativeCallsModule
+    || !voipRegistrationActive
+    || generation !== voipLifecycleGeneration
+    || voipAuthorityContext !== context
+    || !await isExactVoipAuthorityCurrent(context)
+  ) return 0;
+
+  const pending = await NativeCallsModule.getPendingEventsAsync().catch(() => []);
+  if (
+    !voipRegistrationActive
+    || generation !== voipLifecycleGeneration
+    || voipAuthorityContext !== context
+  ) return 0;
+  pending.forEach((event) => handleNativeEvent(event, generation, context));
+  return pending.length;
+};
+
+export async function drainIosNativeCallPendingEvents() {
+  const generation = voipLifecycleGeneration;
+  const context = voipAuthorityContext;
+  if (!context) return 0;
+  return drainPendingEventsForExactLifecycle(generation, context);
+}
+
 export function subscribeToIosNativeCallEvents(listener: IosNativeCallEventListener) {
   nativeEventSubscribers.add(listener);
   return () => {
@@ -406,11 +435,15 @@ export async function startIosNativeCallsReadiness(
     eventListener = listener ?? null;
     nativeSubscription = NativeCallsModule.addListener(
       "onNativeCallEvent",
-      (event) => handleNativeEvent(event, generation, context),
+      (event) => {
+        handleNativeEvent(event, generation, context);
+        if (event.type === "applicationActive") {
+          void drainPendingEventsForExactLifecycle(generation, context);
+        }
+      },
     );
 
-    const pending = await NativeCallsModule.getPendingEventsAsync().catch(() => []);
-    pending.forEach((event) => handleNativeEvent(event, generation, context));
+    await drainPendingEventsForExactLifecycle(generation, context);
     const started = await NativeCallsModule.startVoipRegistrationAsync(
       context.authority.userId,
       context.authority.accountId,
