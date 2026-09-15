@@ -162,6 +162,9 @@ requireText(coordinator, "reportInvalidVoipPushOnMain", "Every received VoIP pus
 requireText(coordinator, "pendingAnswerActions", "CallKit answer actions must remain pending until media connection acknowledgement.");
 requireText(coordinator, "activeCallsDefaultsKey", "Non-secret active call descriptors must support bounded process recovery.");
 requireText(coordinator, "pendingEventsDefaultsKey", "Sanitized native call events must survive cold-start bridge hydration.");
+requireText(coordinator, "DispatchQueue.main.async { [weak self] in", "Persisted native call events must wait until the Expo JavaScript listener is installed.");
+requireText(coordinator, "self.drainPendingEvents().forEach { eventSink($0) }", "Deferred native event replay must drain the bounded queue exactly once into the current listener.");
+rejectText(coordinator, "drainPendingEvents().forEach { eventSink?($0) }", "A synchronous observer-start drain can delete CallKit Answer before JavaScript listener readiness.");
 requireText(coordinator, "beginTerminalTransitionBackgroundTask", "A background CallKit Decline/End must retain enough execution time for the authenticated bridge transition.");
 requireText(coordinator, "UIApplication.shared.beginBackgroundTask", "Background CallKit terminal actions must use the bounded iOS execution lease.");
 requireText(coordinator, "terminalTransitionBackgroundTaskTimeouts", "The CallKit terminal execution lease must have a bounded timeout.");
@@ -203,6 +206,9 @@ requireText(facade, "dispatchIosVoipIncomingCall", "The JS facade must expose in
 requireText(facade, "const { token: _token", "Native events exposed to application listeners must omit raw tokens.");
 requireText(facade, "subscribeToIosNativeCallEvents", "CallKit media consumers must receive sanitized audio-session and application-state events.");
 requireText(facade, "nativeEventGeneration", "Native and cold-start events must bind the current JavaScript readiness generation.");
+requireText(facade, "drainPendingEventsForExactLifecycle", "Persisted CallKit actions must replay only under the exact active account lifecycle.");
+requireText(facade, 'event.type === "applicationActive"', "Returning from CallKit must replay any Answer persisted during a listener gap.");
+requireText(rootLayout, "drainIosNativeCallPendingEvents", "React Native AppState activation must independently replay a pending native Answer.");
 requireText(facade, "completeIosNativeCallTerminalTransition", "The iOS facade must expose only the exact call-scoped terminal lease acknowledgement.");
 requireText(facade, 'clearNativeCallTransitionClaims("ios")', "Account and readiness lifecycle changes must clear only iOS in-memory native claims.");
 requireText(facade, "isCurrentAccountSessionAuthority", "PushKit token registration must recheck the exact current server session generation.");
