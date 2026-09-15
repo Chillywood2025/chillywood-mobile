@@ -9,6 +9,8 @@ const backend = read("supabase/functions/ios-voip-push-tokens/index.ts");
 const dispatch = read("supabase/functions/ios-voip-call-dispatch/index.ts");
 const coordinator = read("modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift");
 const migration = read("supabase/migrations/202608250003_ios_voip_session_authority_closure.sql");
+const bridgeLifecycle = await import("../_lib/iosNativeCallBridgeLifecycle.mjs");
+const rootLayout = read("app/_layout.tsx");
 
 assert.match(facade, /let voipLifecycleGeneration = 0;/u);
 assert.match(facade, /let voipTokenLifecycleQueue: Promise<void> = Promise\.resolve\(\);/u);
@@ -25,6 +27,53 @@ assert.doesNotMatch(
   facade,
   /AsyncStorage\.setItem\([^\n]*(?:token|Token)/u,
   "raw PushKit tokens must never be persisted in client storage",
+);
+
+const activeAuthority = {
+  accountId: "00000000-0000-4000-8000-000000000001",
+  restoreOnly: false,
+  sessionGeneration: "00000000-0000-4000-8000-000000000002",
+  state: "ACTIVE",
+  userId: "00000000-0000-4000-8000-000000000001",
+};
+assert.deepEqual(bridgeLifecycle.resolveIosNativeCallBridgeLifecycle({
+  authority: null,
+  authorityStatus: "loading",
+  hadActiveAuthority: false,
+  userId: "",
+}), { action: "preserve_cold_start", bindingKey: "" });
+assert.equal(bridgeLifecycle.resolveIosNativeCallBridgeLifecycle({
+  authority: null,
+  authorityStatus: "loading",
+  hadActiveAuthority: true,
+  userId: "",
+}).action, "revoke");
+for (const authorityStatus of ["recovery_only", "restricted", "restore_only", "signed_out", "unknown"]) {
+  assert.equal(bridgeLifecycle.resolveIosNativeCallBridgeLifecycle({
+    authority: null,
+    authorityStatus,
+    hadActiveAuthority: false,
+    userId: "",
+  }).action, "revoke", `${authorityStatus} must revoke native VoIP ownership`);
+}
+assert.match(bridgeLifecycle.resolveIosNativeCallBridgeLifecycle({
+  authority: activeAuthority,
+  authorityStatus: "active",
+  hadActiveAuthority: false,
+  userId: activeAuthority.userId,
+}).bindingKey, new RegExp(activeAuthority.sessionGeneration, "u"));
+assert.equal(bridgeLifecycle.resolveIosNativeCallBridgeLifecycle({
+  authority: activeAuthority,
+  authorityStatus: "active",
+  hadActiveAuthority: false,
+  userId: "00000000-0000-4000-8000-000000000099",
+}).action, "revoke");
+assert.match(rootLayout, /activeNativeAuthorityKeyRef/u);
+assert.match(rootLayout, /resolveIosNativeCallBridgeLifecycle/u);
+assert.doesNotMatch(
+  rootLayout,
+  /return \(\) => \{[\s\S]{0,180}clearInviteSubscriptions\(\);[\s\S]{0,100}revokeIosVoipRegistration\(\)/u,
+  "ordinary effect cleanup must preserve the persisted cold-start binding",
 );
 
 const revokeStart = facade.indexOf("export async function revokeIosVoipRegistration");

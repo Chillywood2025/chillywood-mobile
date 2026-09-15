@@ -93,6 +93,7 @@ import {
   subscribeToIosNativeCallPresentation,
   type SanitizedNativeCallEvent,
 } from "../_lib/iosNativeCalls";
+import { resolveIosNativeCallBridgeLifecycle } from "../_lib/iosNativeCallBridgeLifecycle.mjs";
 import {
   containsSensitiveNativeCallClaimRouteParams,
   consumeTrustedAndroidNativeActionStoreClaim,
@@ -1069,13 +1070,20 @@ function RevenueCatBootstrap() {
 
 function IosNativeCallsBridge() {
   const router = useRouter();
-  const { authority, isSignedIn, user } = useSession();
+  const { authority, authorityStatus, user } = useSession();
   const inviteSubscriptionsRef = useRef(new Map<string, () => void>());
   const nativeCallDescriptorsRef = useRef(new Map<string, { callUuid: string; threadId: string }>());
+  const activeNativeAuthorityKeyRef = useRef("");
 
   useEffect(() => {
     let active = true;
     const currentUserId = String(user?.id ?? "").trim();
+    const lifecycle = resolveIosNativeCallBridgeLifecycle({
+      authority,
+      authorityStatus,
+      hadActiveAuthority: !!activeNativeAuthorityKeyRef.current,
+      userId: currentUserId,
+    });
 
     const clearInviteSubscription = (inviteId: string) => {
       inviteSubscriptionsRef.current.get(inviteId)?.();
@@ -1088,18 +1096,22 @@ function IosNativeCallsBridge() {
       nativeCallDescriptorsRef.current.clear();
     };
 
-    if (!isSignedIn || !currentUserId || !authority || authority.restoreOnly
-      || authority.userId !== currentUserId || authority.accountId !== currentUserId) {
+    if (lifecycle.action !== "start" || !authority) {
       nativeCallDescriptorsRef.current.forEach((descriptor) => {
         void reportIosNativeCallRemoteEnd(descriptor.callUuid, "account_transition");
       });
       clearInviteSubscriptions();
-      void revokeIosVoipRegistration();
+      if (lifecycle.action === "revoke") {
+        activeNativeAuthorityKeyRef.current = "";
+        void revokeIosVoipRegistration();
+      }
       return () => {
         active = false;
         clearInviteSubscriptions();
       };
     }
+
+    activeNativeAuthorityKeyRef.current = lifecycle.bindingKey;
 
     const watchInviteLifecycle = (event: SanitizedNativeCallEvent) => {
       const inviteId = String(event.callInviteId ?? "").trim();
@@ -1130,7 +1142,7 @@ function IosNativeCallsBridge() {
     const routeNativeAnswer = createIosCallKitAnswerRouteHandler({
       completeAnswerFailure: (callUuid: string) => completeIosNativeCallAnswer(callUuid, false),
       getAuthenticatedUserId: () => currentUserId,
-      isActive: () => active && isSignedIn,
+      isActive: () => active && authorityStatus === "active",
       replace: (destination: string) => {
         router.replace(destination as Parameters<typeof router.replace>[0]);
       },
@@ -1273,11 +1285,10 @@ function IosNativeCallsBridge() {
       active = false;
       activationSubscription.remove();
       clearInviteSubscriptions();
-      void revokeIosVoipRegistration();
     };
   }, [
     authority,
-    isSignedIn,
+    authorityStatus,
     router,
     user?.id,
   ]);

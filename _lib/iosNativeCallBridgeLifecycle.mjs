@@ -1,0 +1,56 @@
+const text = (value) => String(value ?? "").trim();
+
+const REVOKE_STATUSES = new Set([
+  "recovery_only",
+  "restricted",
+  "restore_only",
+  "signed_out",
+  "unknown",
+]);
+
+export const resolveIosNativeCallBridgeLifecycle = ({
+  authority,
+  authorityStatus,
+  hadActiveAuthority,
+  userId,
+}) => {
+  const currentUserId = text(userId);
+  const authorityUserId = text(authority?.userId);
+  const authorityAccountId = text(authority?.accountId);
+  const sessionGeneration = text(authority?.sessionGeneration);
+  const exactActiveAuthority = authorityStatus === "active"
+    && authority?.state === "ACTIVE"
+    && authority?.restoreOnly === false
+    && !!currentUserId
+    && authorityUserId === currentUserId
+    && authorityAccountId === currentUserId
+    && !!sessionGeneration;
+
+  if (exactActiveAuthority) {
+    return {
+      action: "start",
+      bindingKey: `${authorityUserId}:${authorityAccountId}:${sessionGeneration}`,
+    };
+  }
+
+  // A terminated app begins with an intentionally empty React session while
+  // Supabase restores the already-verified local session. PushKit can launch
+  // the process and deliver a VoIP payload during that window. Clearing the
+  // exact persisted native binding here makes a valid cold-start call look
+  // foreign and forces CallKit to end it before it becomes visible.
+  //
+  // This exception is initial-hydration only. Once this process has owned an
+  // active authority, a later loading state represents an account/session
+  // transition and must revoke. Every terminal or indeterminate authority
+  // status also revokes. Server delivery remains independently restricted to
+  // a live exact auth session generation.
+  if (authorityStatus === "loading" && !hadActiveAuthority) {
+    return { action: "preserve_cold_start", bindingKey: "" };
+  }
+
+  if (REVOKE_STATUSES.has(authorityStatus) || hadActiveAuthority || authorityStatus === "active") {
+    return { action: "revoke", bindingKey: "" };
+  }
+
+  return { action: "revoke", bindingKey: "" };
+};
