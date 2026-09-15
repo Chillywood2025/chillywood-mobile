@@ -2,6 +2,7 @@ import AVFAudio
 import CallKit
 import Foundation
 import PushKit
+import UIKit
 
 enum ChillywoodNativeCallError: Error {
   case buildDisabled
@@ -46,6 +47,8 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private var pendingAnswerActions: [UUID: CXAnswerCallAction] = [:]
   private var pendingAnswerTimeouts: [UUID: DispatchWorkItem] = [:]
   private var requestedEndReasons: [UUID: String] = [:]
+  private var terminalTransitionBackgroundTasks: [UUID: UIBackgroundTaskIdentifier] = [:]
+  private var terminalTransitionBackgroundTaskTimeouts: [UUID: DispatchWorkItem] = [:]
   private var pendingEvents: [[String: Any]] = []
   private var audioSessionObservers: [NSObjectProtocol] = []
   private var prepared = false
@@ -213,6 +216,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     pendingAnswerTimeouts.values.forEach { $0.cancel() }
     pendingAnswerTimeouts.removeAll()
     requestedEndReasons.removeAll()
+    endAllTerminalTransitionBackgroundTasks()
     UserDefaults.standard.removeObject(forKey: activeCallsDefaultsKey)
     UserDefaults.standard.removeObject(forKey: terminalInvitesDefaultsKey)
     stateQueue.sync {
@@ -499,6 +503,13 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     }
   }
 
+  public func completeTerminalTransition(callUuid: String) throws {
+    guard let uuid = UUID(uuidString: callUuid) else { throw ChillywoodNativeCallError.invalidCallUuid }
+    DispatchQueue.main.async { [weak self] in
+      self?.endTerminalTransitionBackgroundTask(uuid)
+    }
+  }
+
   public func setMuted(callUuid: String, muted: Bool) throws {
     guard let uuid = UUID(uuidString: callUuid) else { throw ChillywoodNativeCallError.invalidCallUuid }
     let transaction = CXTransaction(action: CXSetMutedCallAction(call: uuid, muted: muted))
@@ -527,7 +538,43 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
 
   public func applicationWillTerminate() {
     activeCalls.values.forEach { $0.timeoutWorkItem?.cancel() }
+    endAllTerminalTransitionBackgroundTasks()
     deactivateAudioSession()
+  }
+
+  private func beginTerminalTransitionBackgroundTask(_ uuid: UUID) {
+    dispatchPrecondition(condition: .onQueue(.main))
+    endTerminalTransitionBackgroundTask(uuid)
+
+    var taskIdentifier = UIBackgroundTaskIdentifier.invalid
+    taskIdentifier = UIApplication.shared.beginBackgroundTask(
+      withName: "ChillywoodCallTerminalTransition"
+    ) { [weak self] in
+      DispatchQueue.main.async {
+        self?.endTerminalTransitionBackgroundTask(uuid)
+      }
+    }
+    guard taskIdentifier != .invalid else { return }
+
+    terminalTransitionBackgroundTasks[uuid] = taskIdentifier
+    let timeout = DispatchWorkItem { [weak self] in
+      self?.endTerminalTransitionBackgroundTask(uuid)
+    }
+    terminalTransitionBackgroundTaskTimeouts[uuid] = timeout
+    DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: timeout)
+  }
+
+  private func endTerminalTransitionBackgroundTask(_ uuid: UUID) {
+    dispatchPrecondition(condition: .onQueue(.main))
+    terminalTransitionBackgroundTaskTimeouts.removeValue(forKey: uuid)?.cancel()
+    guard let taskIdentifier = terminalTransitionBackgroundTasks.removeValue(forKey: uuid) else { return }
+    UIApplication.shared.endBackgroundTask(taskIdentifier)
+  }
+
+  private func endAllTerminalTransitionBackgroundTasks() {
+    dispatchPrecondition(condition: .onQueue(.main))
+    let callUuids = Array(terminalTransitionBackgroundTasks.keys)
+    callUuids.forEach { endTerminalTransitionBackgroundTask($0) }
   }
 
   public func drainPendingEvents() -> [[String: Any]] {
@@ -806,6 +853,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       emit(type: "providerReset", call: $0)
     }
     persistActiveCallDescriptors()
+    endAllTerminalTransitionBackgroundTasks()
     deactivateAudioSession()
   }
 
@@ -834,6 +882,12 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     failPendingAnswer(action.callUUID)
     markTerminalInvite(call.inviteId)
     let requestedReason = requestedEndReasons.removeValue(forKey: action.callUUID)
+    if requestedReason == nil {
+      // CallKit may wake a suspended process for only a fraction of a second.
+      // Keep the app alive just long enough for the authenticated JavaScript
+      // bridge to persist the exact server-authoritative Decline/End transition.
+      beginTerminalTransitionBackgroundTask(action.callUUID)
+    }
     if let requestedReason, requestedReason.hasPrefix("invite_") {
       emit(type: "remoteEnded", call: call, reason: requestedReason)
     } else {

@@ -144,6 +144,11 @@ assert.match(coordinator, /resetAccountContextOnMain\(\)/u);
 assert.match(coordinator, /UserDefaults\.standard\.removeObject\(forKey: self\.voipAuthorityDefaultsKey\)/u);
 assert.match(coordinator, /recipientSessionGeneration/u);
 assert.match(coordinator, /recipientInstallId/u);
+assert.match(coordinator, /UIApplication\.shared\.beginBackgroundTask/u);
+assert.match(coordinator, /beginTerminalTransitionBackgroundTask\(action\.callUUID\)/u);
+assert.match(coordinator, /DispatchQueue\.main\.asyncAfter\(deadline: \.now\(\) \+ 15/u);
+assert.match(facade, /completeIosNativeCallTerminalTransition/u);
+assert.match(rootLayout, /completeIosNativeCallTerminalTransition\(String\(event\.callUuid/u);
 
 console.log(
   "iOS VoIP session-authority proof passed (exact registration, durable revoke, deliverability filtering, native account reset).",

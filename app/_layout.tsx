@@ -85,6 +85,7 @@ import { SessionProvider, useSession } from "../_lib/session";
 import { supabase } from "../_lib/supabase";
 import {
   completeIosNativeCallAnswer,
+  completeIosNativeCallTerminalTransition,
   hasIosNativeCallPresentation,
   isIosNativeCallsRuntimeEnabled,
   reportIosNativeCallRemoteEnd,
@@ -1215,6 +1216,7 @@ function IosNativeCallsBridge() {
           callInviteId: inviteId,
           threadId,
         }).catch(() => 0);
+        await completeIosNativeCallTerminalTransition(String(event.callUuid ?? "").trim()).catch(() => false);
         return true;
       } finally {
         nativeTerminalActionsInFlight.delete(actionKey);

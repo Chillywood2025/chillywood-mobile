@@ -24,6 +24,7 @@ export type NativeCallsModule = {
   endCallAsync(callUuid: string, reason?: string): Promise<void>;
   reportRemoteEndAsync(callUuid: string, reason?: string): Promise<void>;
   completeAnswerAsync(callUuid: string, connected: boolean): Promise<void>;
+  completeTerminalTransitionAsync(callUuid: string): Promise<void>;
   setMutedAsync(callUuid: string, muted: boolean): Promise<void>;
   setAudioRouteAsync(route: "speaker" | "receiver" | "system"): Promise<void>;
   presentDebugIncomingCallAsync(payload?: Record<string, unknown>): Promise<string>;

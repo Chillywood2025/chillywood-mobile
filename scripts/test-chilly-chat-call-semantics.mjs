@@ -1445,6 +1445,21 @@ assert.match(
   "CallKit Decline must directly persist the durable declined transition",
 );
 assert.match(
+  nativeCoordinatorSource,
+  /requestedReason == nil[\s\S]{0,360}beginTerminalTransitionBackgroundTask\(action\.callUUID\)/u,
+  "a background customer CallKit Decline/End must hold a bounded execution lease for its server transition",
+);
+assert.match(
+  nativeCoordinatorSource,
+  /UIApplication\.shared\.beginBackgroundTask[\s\S]{0,900}DispatchQueue\.main\.asyncAfter\(deadline: \.now\(\) \+ 15/u,
+  "the native terminal execution lease must expire after a bounded interval",
+);
+assert.match(
+  rootLayoutSource,
+  /settled = true;[\s\S]{0,900}completeIosNativeCallTerminalTransition\(String\(event\.callUuid/u,
+  "the authenticated bridge must release the exact native lease only after the authoritative transition settles",
+);
+assert.match(
   rootLayoutSource,
   /event\.type === "ended"[\s\S]{0,260}settleNativeTerminalAction\(event, "ended"\)/u,
   "CallKit End must directly persist the durable ended transition",

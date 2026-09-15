@@ -148,7 +148,7 @@ for (const mode of ["audio", "remote-notification", "voip"]) {
   requireText(plugin, `\"${mode}\"`, `The conditional iOS plugin must declare ${mode} readiness.`);
 }
 
-for (const framework of ["CallKit", "PushKit", "AVFAudio"]) {
+for (const framework of ["CallKit", "PushKit", "AVFAudio", "UIKit"]) {
   requireText(coordinator, `import ${framework}`, `The native bridge must use ${framework}.`);
 }
 for (const event of ["answerRequested", "answered", "declined", "timeout", "providerReset", "audioSessionActivated", "audioInterruptionBegan"]) {
@@ -162,6 +162,10 @@ requireText(coordinator, "reportInvalidVoipPushOnMain", "Every received VoIP pus
 requireText(coordinator, "pendingAnswerActions", "CallKit answer actions must remain pending until media connection acknowledgement.");
 requireText(coordinator, "activeCallsDefaultsKey", "Non-secret active call descriptors must support bounded process recovery.");
 requireText(coordinator, "pendingEventsDefaultsKey", "Sanitized native call events must survive cold-start bridge hydration.");
+requireText(coordinator, "beginTerminalTransitionBackgroundTask", "A background CallKit Decline/End must retain enough execution time for the authenticated bridge transition.");
+requireText(coordinator, "UIApplication.shared.beginBackgroundTask", "Background CallKit terminal actions must use the bounded iOS execution lease.");
+requireText(coordinator, "terminalTransitionBackgroundTaskTimeouts", "The CallKit terminal execution lease must have a bounded timeout.");
+requireText(coordinator, "requestedReason == nil", "Only a customer-originated native terminal action may open the background transition lease.");
 requireText(coordinator, "NativeVoipAuthority", "Terminated PushKit delivery must retain only an exact account/session/install binding.");
 requireText(coordinator, "voipPayloadMatchesPersistedAuthority", "Native CallKit presentation must reject a provider payload for another account/session/install.");
 requireText(coordinator, "resetAccountContextOnMain", "Logout and account switch must end stale CallKit state and clear persisted descriptors.");
@@ -170,6 +174,7 @@ requireText(coordinator, "#if DEBUG", "The local CallKit trigger must compile on
 rejectText(coordinator, "AVCapture", "The native incoming-call bridge must not activate a camera before answer.");
 requireText(moduleSource, "stopVoipRegistrationAsync", "The native bridge must support logout/account-transition teardown.");
 requireText(moduleSource, "completeAnswerAsync", "The native bridge must acknowledge CallKit answer only after media connection.");
+requireText(moduleSource, "completeTerminalTransitionAsync", "The authenticated bridge must release the exact CallKit terminal execution lease after server acknowledgement.");
 requireText(moduleSource, "reportRemoteEndAsync", "Realtime terminal state must end CallKit without synthesizing a local decline.");
 
 requireText(facade, "EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED", "The JS facade must require an explicit runtime flag.");
@@ -198,6 +203,7 @@ requireText(facade, "dispatchIosVoipIncomingCall", "The JS facade must expose in
 requireText(facade, "const { token: _token", "Native events exposed to application listeners must omit raw tokens.");
 requireText(facade, "subscribeToIosNativeCallEvents", "CallKit media consumers must receive sanitized audio-session and application-state events.");
 requireText(facade, "nativeEventGeneration", "Native and cold-start events must bind the current JavaScript readiness generation.");
+requireText(facade, "completeIosNativeCallTerminalTransition", "The iOS facade must expose only the exact call-scoped terminal lease acknowledgement.");
 requireText(facade, 'clearNativeCallTransitionClaims("ios")', "Account and readiness lifecycle changes must clear only iOS in-memory native claims.");
 requireText(facade, "isCurrentAccountSessionAuthority", "PushKit token registration must recheck the exact current server session generation.");
 requireText(facade, "getNotificationRevocationCredential", "PushKit must reuse the device-held notification revocation credential.");
@@ -227,6 +233,7 @@ requireText(provenance, 'source: "android_native_action_store"', "The private An
 rejectText(rootLayout, 'nativeCallAction: "answer"', "CallKit navigation must not carry authoritative action text.");
 requireText(rootLayout, 'settleNativeTerminalAction(event, "declined")', "CallKit Decline must use a direct server-authoritative transition.");
 requireText(rootLayout, 'settleNativeTerminalAction(event, "ended")', "CallKit End must use a direct server-authoritative transition.");
+requireText(rootLayout, "completeIosNativeCallTerminalTransition(String(event.callUuid", "A successful server-authoritative terminal transition must release its exact native background lease.");
 requireText(rootLayout, "router.replace(destination", "CallKit Answer must replace the current route for deterministic cold-start recovery.");
 requireText(rootLayout, "subscribeToChillyChatCallInvite", "Caller cancel and invite terminal states must stop active CallKit UI.");
 requireText(rootLayout, "reportIosNativeCallRemoteEnd", "Realtime invite terminal states must report a distinct remote CallKit end.");
