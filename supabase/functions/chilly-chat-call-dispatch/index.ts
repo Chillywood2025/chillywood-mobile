@@ -884,7 +884,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
         sound: "default",
         title: copy.title,
         to: token.token,
-        ttl: 3600,
+        ttl: input.action === "incoming" ? 45 : 3600,
       });
     }
     const pushResult = await sendExpoPush(pushMessage);
