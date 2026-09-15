@@ -116,14 +116,16 @@ add(
   "stale incoming-call rows must not stay active/actionable after decline or expiry",
 );
 add(
-  "caller sees real ringing/waiting state instead of stale one-person connected success",
+  "caller sees delivery-bound ringing or honest waiting state instead of stale one-person connected success",
   includes(chatThread, "outgoingCallInvite")
     && includes(chatThread, "subscribeToChillyChatCallInvite")
     && includes(chatThread, "Voice call ringing")
-    && includes(chatThread, "statusLabelOverride={outgoingCallRinging ? \"Ringing\" : null}")
+    && includes(chatThread, "Voice call — waiting for answer")
+    && includes(chatThread, "outgoingDeviceAlertConfirmed")
+    && includes(chatThread, "statusLabelOverride={outgoingCallRinging ? outgoingDeviceAlertConfirmed ? \"Ringing\" : \"Calling\" : null}")
     && includes(communicationPanel, "statusLabelOverride")
     && includes(chillyChatCalls, "readChillyChatCallInvite"),
-  "caller ringback must follow invite lifecycle and label the single-participant call as ringing",
+  "caller presentation must follow invite lifecycle without claiming recipient ringing before confirmed device-alert dispatch",
 );
 add(
   "inbox/thread reads clear stale active call state after terminal invite status",

@@ -9,8 +9,13 @@ import {
   buildChillyChatNativeActionData,
   createChillyChatCallChannelResult,
   resolveChillyChatCallPreferencePolicy,
+  resolveChillyChatOrdinaryPushFallbackPolicy,
   summarizeChillyChatCallDispatch,
 } from "../supabase/functions/_shared/chilly-chat-call-dispatch-policy.mjs";
+import {
+  IOS_NOTIFICATION_CATEGORIES,
+  buildPlatformExpoPushMessage,
+} from "../supabase/functions/_shared/notification-payload.mjs";
 import {
   buildIosVoipApnsPayload,
   isApnsInvalidVoipTokenReason,
@@ -588,6 +593,60 @@ assert.equal(resolveChillyChatCallPreferencePolicy({
   pushEnabled: true,
 }).actionAllowed, false, "missed alerts respect the new-call preference");
 
+assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
+  action: "incoming",
+  androidNativeSent: true,
+  iosRolloutEnabled: true,
+  iosVoipSent: true,
+}), { android: false, ios: false }, "accepted native channels suppress duplicate ordinary incoming-call pushes");
+assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
+  action: "incoming",
+  androidNativeSent: false,
+  iosRolloutEnabled: true,
+  iosVoipSent: false,
+}), { android: true, ios: true }, "each failed native incoming-call channel receives its own ordinary fallback");
+assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
+  action: "incoming",
+  androidNativeSent: true,
+  iosRolloutEnabled: true,
+  iosVoipSent: false,
+}), { android: false, ios: true }, "Android success cannot suppress an iPhone fallback on another registered device");
+assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
+  action: "incoming",
+  androidNativeSent: false,
+  iosRolloutEnabled: true,
+  iosVoipSent: true,
+}), { android: true, ios: false }, "iPhone success cannot suppress an Android fallback on another registered device");
+assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
+  action: "incoming",
+  androidNativeSent: false,
+  iosRolloutEnabled: false,
+  iosVoipSent: false,
+}), { android: true, ios: false }, "disabled ordinary iOS rollout remains fail-closed");
+assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
+  action: "end",
+  androidNativeSent: false,
+  iosRolloutEnabled: true,
+  iosVoipSent: false,
+}), { android: true, ios: false }, "terminal iOS state never synthesizes a new incoming call while Android retains cleanup fallback");
+
+const iosIncomingFallback = buildPlatformExpoPushMessage({
+  badge: 1,
+  body: "Caller is calling you on Chi'lly Chat.",
+  categoryId: IOS_NOTIFICATION_CATEGORIES.incomingCall,
+  data: { callInviteId: "invite", openCall: "true", path: "/chat/thread", threadId: "thread" },
+  interruptionLevel: "time-sensitive",
+  platform: "ios",
+  sound: "default",
+  title: "Incoming Chi'lly Chat voice call",
+  to: "ExpoPushToken[fixture]",
+  ttl: 45,
+});
+assert.equal(iosIncomingFallback.categoryId, "chillywood_incoming_call");
+assert.equal(iosIncomingFallback.sound, "default");
+assert.equal(iosIncomingFallback.interruptionLevel, "time-sensitive");
+assert.equal(iosIncomingFallback.ttl, 45);
+
 const tokenFixtures = [
   ["voip_token_only", { iosVoip: sent() }, "iosVoip"],
   ["expo_token_only", { ordinaryPush: sent() }, "ordinaryPush"],
@@ -779,6 +838,9 @@ const actionScope = {
 
 assert.match(buildChillyChatCallPresentationCopy({ ...actionScope, action: "incoming" }).title, /^Incoming/u);
 assert.match(buildChillyChatCallPresentationCopy({ ...actionScope, action: "missed" }).title, /^Missed/u);
+const incomingNativeData = buildChillyChatNativeActionData({ ...actionScope, action: "incoming" });
+assert.equal(incomingNativeData.triggerType, "chilly_chat_call");
+assert.equal(incomingNativeData.notificationType, "chilly_chat_call");
 const incomingVoipData = buildIosVoipApnsPayload({ ...actionScope, action: "incoming" });
 assert.equal(incomingVoipData.action, "incoming");
 assert.equal(incomingVoipData.callUuid, actionScope.callInviteId);
@@ -812,6 +874,7 @@ for (const action of ["cancel", "declined", "end", "timeout"]) {
 
 const dispatchSource = await readFile(new URL("supabase/functions/chilly-chat-call-dispatch/index.ts", root), "utf8");
 const voipSource = await readFile(new URL("supabase/functions/ios-voip-call-dispatch/index.ts", root), "utf8");
+const notificationsSource = await readFile(new URL("_lib/notifications.ts", root), "utf8");
 const nativeCoordinatorSource = await readFile(
   new URL("modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", root),
   "utf8",
@@ -1690,5 +1753,28 @@ assert.equal(deliveryCopy.getChillyChatCallDeliveryMessage(deliveryFixture({
   androidNative: copyChannel(true),
   iosVoip: copyChannel(true),
 })), "Call alert sent through available device channels.");
+const inAppOnlyDelivery = {
+  ...deliveryFixture({}),
+  notificationCreated: true,
+  pushSent: false,
+  status: "created",
+};
+assert.equal(
+  deliveryCopy.getChillyChatCallDeliveryMessage(inAppOnlyDelivery),
+  "Call invite saved for in-app delivery. No recipient device alert was confirmed.",
+  "creating a database notification cannot be presented as receiver delivery",
+);
+assert.equal(deliveryCopy.isChillyChatCallDeviceAlertConfirmed(inAppOnlyDelivery), false);
+assert.equal(deliveryCopy.isChillyChatCallDeviceAlertConfirmed(deliveryFixture({ iosVoip: copyChannel(true) })), true);
+assert.doesNotMatch(chatThreadSource, /\bis being notified\b/u, "the caller UI cannot imply receiver delivery before a device channel confirms it");
+assert.match(chatThreadSource, /outgoingDeviceAlertConfirmed/u, "the ringing label must be bound to confirmed device-alert dispatch");
+assert.match(chatThreadSource, /statusLabelOverride=\{outgoingCallRinging \? outgoingDeviceAlertConfirmed \? "Ringing" : "Calling" : null\}/u);
+assert.ok(
+  dispatchSource.indexOf("const iosVoip = await iosVoipPromise")
+    < dispatchSource.indexOf("resolveChillyChatOrdinaryPushFallbackPolicy({"),
+  "the ordinary iOS fallback decision must use the completed PushKit result",
+);
+assert.match(dispatchSource, /interruptionLevel: input\.action === "incoming" \? "time-sensitive" : "active"/u);
+assert.match(notificationsSource, /setNotificationCategoryAsync\(IOS_INCOMING_CALL_NOTIFICATION_CATEGORY_ID/u);
 
 console.log("Chi'lly Chat schema, token, preference, terminal, delivery-copy, and bounded tip-read fixtures passed.");

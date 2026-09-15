@@ -158,8 +158,10 @@ assertIncludes(notifications, "Answer or reply\" : \"Open Chat", "handled call r
 assertIncludes(chillyChatCalls, "readChillyChatCallInvite", "caller must be able to read current invite status");
 assertIncludes(chillyChatCalls, "subscribeToChillyChatCallInvite", "caller must subscribe to invite lifecycle changes");
 assertIncludes(chatThread, "outgoingCallInvite", "caller screen must track outgoing invite state");
-assertIncludes(chatThread, "Voice call ringing", "caller screen must show ringing instead of stale one-person connected success");
-assertIncludes(chatThread, "statusLabelOverride={outgoingCallRinging ? \"Ringing\" : null}", "call panel must label one-person outgoing calls as ringing");
+assertIncludes(chatThread, "Voice call ringing", "caller screen may show ringing only after confirmed device-alert dispatch");
+assertIncludes(chatThread, "Voice call — waiting for answer", "caller screen must retain an honest waiting state when only the invite exists");
+assertIncludes(chatThread, "outgoingDeviceAlertConfirmed", "caller ringing copy must bind to confirmed device-alert dispatch");
+assertIncludes(chatThread, "statusLabelOverride={outgoingCallRinging ? outgoingDeviceAlertConfirmed ? \"Ringing\" : \"Calling\" : null}", "call panel must distinguish confirmed device alert from invite-only waiting");
 assertIncludes(chatThread, "No answer. The call expired and active call state was cleared.", "caller timeout must clear stale active call state");
 assertIncludes(chatThread, "const latestInvite = await readChillyChatCallInvite(outgoingCallInvite.id)", "caller timeout must re-read authoritative invite state before transition");
 assertIncludes(chatThread, "if (latestInvite?.status === \"accepted\")", "caller timeout must preserve an invite accepted at the deadline");

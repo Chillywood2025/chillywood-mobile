@@ -7,6 +7,7 @@
 
 export const IOS_NOTIFICATION_CATEGORIES = Object.freeze({
   activity: "chillywood_activity",
+  incomingCall: "chillywood_incoming_call",
   missedCall: "chillywood_missed_call",
 });
 
