@@ -11,6 +11,7 @@ import {
   isInternalIosOrdinaryPushProofRequestAllowed,
   isIosOrdinaryPushDeliveryAllowed,
 } from "../supabase/functions/_shared/ios-ordinary-push-internal-proof-policy.mjs";
+import { resolveChillyChatOrdinaryPushFallbackPolicy } from "../supabase/functions/_shared/chilly-chat-call-dispatch-policy.mjs";
 
 const common = {
   androidChannelId: "default",
@@ -159,13 +160,34 @@ assert.ok(activityDispatch.includes('deepLink: "chillywoodmobile://settings"'), 
 assert.ok(activityDispatch.includes('deliverableTokens.length !== 1'), "internal proof trigger must require exactly one allowlisted iOS token");
 assert.ok(activityDispatch.includes('triggerType === "internal_ios_delivery_proof" ? "content_dropped" : triggerType'), "internal proof must reuse a non-authoritative customer notification type already accepted by the database contract");
 assert.ok(activityDispatch.includes('triggerType === "internal_ios_delivery_proof") return "content_dropped"'), "internal proof must reuse an accepted non-authoritative customer category");
+assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
+  action: "incoming",
+  androidNativeSent: true,
+  iosRolloutEnabled: true,
+  iosVoipSent: true,
+}), { android: false, ios: false }, "confirmed native channels must suppress duplicate ordinary incoming-call alerts");
+assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
+  action: "incoming",
+  androidNativeSent: true,
+  iosRolloutEnabled: true,
+  iosVoipSent: false,
+}), { android: false, ios: true }, "failed PushKit delivery must allow one ordinary iOS incoming-call fallback");
+assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
+  action: "incoming",
+  androidNativeSent: true,
+  iosRolloutEnabled: false,
+  iosVoipSent: false,
+}), { android: false, ios: false }, "disabled ordinary iOS rollout must remain fail closed");
+assert.ok(callDispatch.includes("const iosVoip = await iosVoipPromise;"), "ordinary iOS fallback must wait for the authoritative PushKit result");
 assert.ok(
-  callDispatch.includes('const expoCandidates = input.action === "missed" && iosRolloutEnabled')
-    && callDispatch.includes('? [...androidExpoTokens, ...iosExpoTokens]')
-    && callDispatch.includes(': androidExpoTokens;'),
-  "ordinary iOS push candidates must be limited to the missed-call fallback",
+  callDispatch.indexOf("const iosVoip = await iosVoipPromise;")
+    < callDispatch.indexOf("resolveChillyChatOrdinaryPushFallbackPolicy({"),
+  "PushKit completion must precede the ordinary iOS fallback decision",
 );
-assert.ok(callDispatch.includes('input.action === "missed" && copy'), "iOS call-related ordinary push must remain a missed-call presentation");
+assert.ok(callDispatch.includes("IOS_NOTIFICATION_CATEGORIES.incomingCall"), "ordinary iOS incoming-call fallback must use the registered call category");
+assert.ok(callDispatch.includes('interruptionLevel: input.action === "incoming" ? "time-sensitive" : "active"'), "ordinary iOS incoming-call fallback must request time-sensitive presentation");
+assert.ok(callDispatch.includes('ttl: input.action === "incoming" ? 45 : 3600'), "ordinary iOS incoming-call fallback must expire with the call rather than becoming a stale alert");
+assert.ok(callDispatch.includes('input.action === "incoming" && token.platform === "ios"'), "ordinary iOS fallback must render visible incoming-call copy");
 assert.ok(moneyDispatch.includes('errorCode: "no_enabled_push_token"'), "creator-money dispatch must use a platform-neutral missing-token result");
 
 console.log(JSON.stringify({
@@ -178,7 +200,8 @@ console.log(JSON.stringify({
     "platform-neutral client registration and lifecycle refresh wired",
     "post-permission provider work has a bounded failure deadline",
     "iOS-as-FCM registration rejected",
-    "activity, missed-call, and creator-money senders share platform policy",
+    "activity, active/missed call, and creator-money senders share platform policy",
+    "PushKit-first incoming calls have a bounded ordinary iOS fallback without duplicate presentation",
     "iOS delivery remains rollout-disabled by default",
     "internal iOS proof delivery is independently enabled and exact-account/device bound",
     "internal proof trigger is privileged-only, iOS-only, exact-one-token, and routes to non-authoritative settings",

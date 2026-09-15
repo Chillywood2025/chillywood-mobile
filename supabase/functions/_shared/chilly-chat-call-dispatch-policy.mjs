@@ -92,6 +92,25 @@ export const resolveChillyChatCallPreferencePolicy = (input) => {
   };
 };
 
+export const resolveChillyChatOrdinaryPushFallbackPolicy = (input) => {
+  const action = toText(input.action).toLowerCase();
+  const iosRolloutEnabled = input.iosRolloutEnabled === true;
+  return {
+    // Android's Expo token is a fallback only when direct native FCM did not
+    // accept the same lifecycle signal. Missed-call presentation has no direct
+    // FCM path and therefore always uses the ordinary provider when available.
+    android: action === "missed" || input.androidNativeSent !== true,
+    // PushKit/CallKit remains the primary iOS incoming-call path. A visible,
+    // time-sensitive ordinary notification is allowed only when PushKit did
+    // not accept the invite, preventing duplicate call presentation while
+    // keeping a legitimate account-bound fallback for unavailable VoIP state.
+    ios: iosRolloutEnabled && (
+      action === "missed"
+      || (action === "incoming" && input.iosVoipSent !== true)
+    ),
+  };
+};
+
 export const buildChillyChatCallPresentationCopy = (input) => {
   const action = toText(input.action).toLowerCase();
   const callLabel = toText(input.callType).toLowerCase() === "voice" ? "voice" : "video";
@@ -135,7 +154,9 @@ export const buildChillyChatNativeActionData = (input) => {
       body: copy.body,
       notificationCategory: action === "missed" ? "chilly_chat_missed_call" : "chilly_chat_call",
       notificationChannelId: toText(input.notificationChannelId),
+      notificationType: action === "missed" ? "chilly_chat_missed_call" : "chilly_chat_call",
       title: copy.title,
+      triggerType: action === "missed" ? "chilly_chat_missed_call" : "chilly_chat_call",
     });
   }
   if (action === "incoming") Object.assign(data, { nativeCallStyle: "android_callstyle" });

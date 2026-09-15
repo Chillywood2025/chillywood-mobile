@@ -193,7 +193,7 @@ forbidSentence("Google Play internal call proof doc", doc, (sentence) => (
 });
 
 [
-  "throw new Error(\"Unable to start Chi'lly Chat call. The receiver invite could not be saved.\")",
+  "throw new UserFacingError(\"chat_action\", \"Unable to start Chi'lly Chat call. The receiver invite could not be saved.\")",
   "await endCommunicationRoom(roomId, currentUserId).catch(() => null);",
   "beginChillyChatCall",
   "dispatchChillyChatCallPush",
@@ -223,12 +223,12 @@ forbidSentence("Google Play internal call proof doc", doc, (sentence) => (
 [
   "openOrRepairDirectThreadWithRpc",
   "get_or_create_direct_chat_thread",
-  "return openOrRepairDirectThreadWithRpc(target);",
+  "return openOrRepairDirectThreadWithRpc(target, authority);",
 ].forEach((needle) => requireText("direct thread open/create fallback source", chatLib, needle));
 
 [
   "const remoteProfile = signedInUser.userId ? await readRemoteUserProfile(signedInUser.userId) : null;",
-  "await writeJsonValue(USER_PROFILE_KEY, remoteProfile);",
+  "await writeAccountValue(USER_PROFILE_KEY, binding, remoteProfile);",
 ].forEach((needle) => requireText("profile cache freshness source", userData, needle));
 
 requireText("settings handle cache source", settings, "await saveUserProfile(updatedProfile);");
@@ -237,7 +237,7 @@ requireText("settings handle cache source", settings, "await saveUserProfile(upd
   "Android call alert sent.",
   "Native iPhone call alert sent.",
   "Push notification sent.",
-  "Delivery status: in-app banner available",
+  "Call invite saved for in-app delivery. No recipient device alert was confirmed.",
   "Delivery status: push unconfirmed",
   "Delivery status: receiver unavailable",
   "Delivery status: invite failed",

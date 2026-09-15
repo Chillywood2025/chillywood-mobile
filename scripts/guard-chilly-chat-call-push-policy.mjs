@@ -105,7 +105,9 @@ for (const requiredData of ["nativeCallStyle", "android_callstyle", "threadId", 
   }
 }
 
-if (!dispatch.includes('if (input.action === "missed" && copy)') || !dispatchPolicy.includes('if (action !== "incoming") return null')) {
+if (!dispatch.includes('input.action === "missed"')
+  || !dispatch.includes('input.action === "incoming" && token.platform === "ios"')
+  || !dispatchPolicy.includes('if (action !== "incoming") return null')) {
   fail("incoming and missed presentation copy must remain action-specific");
 }
 
@@ -122,12 +124,36 @@ for (const requiredFcmDispatch of [
   }
 }
 
-if (!dispatch.includes('&& (input.action === "missed" || androidSent === 0)')) {
-  fail("Expo fallback must not be used for active incoming calls after direct FCM succeeds");
+if (!dispatch.includes("resolveChillyChatOrdinaryPushFallbackPolicy")
+  || !dispatchPolicy.includes("input.androidNativeSent !== true")
+  || !dispatchPolicy.includes('action === "incoming" && input.iosVoipSent !== true')) {
+  fail("ordinary incoming-call fallback must be selected independently after each platform-native channel result");
 }
 
-if (!dispatch.includes('sound: "default"') || dispatch.includes('sound: input.action === "incoming"')) {
-  fail("incoming call pushes must stay data-only while missed calls use standard Expo sound");
+if (!dispatch.includes("IOS_NOTIFICATION_CATEGORIES.incomingCall")
+  || !dispatch.includes('input.action === "incoming" && token.platform === "ios"')
+  || !dispatch.includes('interruptionLevel: input.action === "incoming" ? "time-sensitive" : "active"')) {
+  fail("failed PushKit delivery must use a visible account-bound ordinary iOS call fallback");
+}
+
+if (!dispatchPolicy.includes('notificationType: action === "missed" ? "chilly_chat_missed_call" : "chilly_chat_call"')
+  || !dispatchPolicy.includes('triggerType: action === "missed" ? "chilly_chat_missed_call" : "chilly_chat_call"')) {
+  fail("ordinary call fallback data must classify itself for the foreground incoming-call observer");
+}
+
+if (!notifications.includes('IOS_INCOMING_CALL_NOTIFICATION_CATEGORY_ID = "chillywood_incoming_call"')
+  || !notifications.includes("setNotificationCategoryAsync(IOS_INCOMING_CALL_NOTIFICATION_CATEGORY_ID")) {
+  fail("the mobile runtime must register the ordinary iOS incoming-call fallback category");
+}
+
+if (!dispatch.includes('let pushMessage: JsonObject = {\n      data: nativeActionData')) {
+  fail("Android incoming Expo fallback must remain data-only for native CallStyle presentation");
+}
+
+if (!chatThread.includes("outgoingDeviceAlertConfirmed")
+  || !chatThread.includes('outgoingDeviceAlertConfirmed ? "Ringing" : "Calling"')
+  || chatThread.includes("is being notified")) {
+  fail("caller ringing language must require confirmed device-alert dispatch");
 }
 
 if (!notifications.includes("Notifications.getDevicePushTokenAsync") || !notifications.includes('provider: "fcm"')) {

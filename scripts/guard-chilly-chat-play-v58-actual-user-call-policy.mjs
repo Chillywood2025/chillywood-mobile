@@ -176,7 +176,7 @@ forbidSentence("Play v58 proof doc", doc, (sentence) => (
 });
 
 [
-  "throw new Error(\"Unable to start Chi'lly Chat call. The receiver invite could not be saved.\")",
+  "throw new UserFacingError(\"chat_action\", \"Unable to start Chi'lly Chat call. The receiver invite could not be saved.\")",
   "await endCommunicationRoom(roomId, currentUserId).catch(() => null);",
   "beginChillyChatCall",
   "dispatchChillyChatCallPush",
@@ -211,7 +211,7 @@ if (/catch\s*\([^)]*invite[^)]*\)\s*{[^}]*delivery\s*=\s*{/is.test(chatLib)) {
   "Android call alert sent.",
   "Native iPhone call alert sent.",
   "Push notification sent.",
-  "Delivery status: in-app banner available",
+  "Call invite saved for in-app delivery. No recipient device alert was confirmed.",
   "Delivery status: push unconfirmed",
   "Delivery status: receiver unavailable",
   "Delivery status: invite failed",

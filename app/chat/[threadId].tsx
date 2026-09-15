@@ -30,7 +30,10 @@ import {
   type ChillyChatCallEvent,
   type ChillyChatCallInvite,
 } from "../../_lib/chillyChatCalls";
-import { getChillyChatCallDeliveryMessage } from "../../_lib/chillyChatCallDeliveryCopy";
+import {
+  getChillyChatCallDeliveryMessage,
+  isChillyChatCallDeviceAlertConfirmed,
+} from "../../_lib/chillyChatCallDeliveryCopy";
 import { resolveAuthoritativeNativeCallDecline } from "../../_lib/chillyChatNativeCallRoutes.mjs";
 import {
   playChillyChatCallSound,
@@ -306,6 +309,7 @@ export default function ChillyChatThreadScreen() {
   const [callEvents, setCallEvents] = useState<ChillyChatCallEvent[]>([]);
   const [incomingCallInvite, setIncomingCallInvite] = useState<ChillyChatCallInvite | null>(null);
   const [outgoingCallInvite, setOutgoingCallInvite] = useState<ChillyChatCallInvite | null>(null);
+  const [outgoingCallDeviceAlertSent, setOutgoingCallDeviceAlertSent] = useState(false);
   const [activeCallInvite, setActiveCallInvite] = useState<ChillyChatCallInvite | null>(null);
   const [callDeliveryStatus, setCallDeliveryStatus] = useState<string | null>(null);
   const [callControlError, setCallControlError] = useState<string | null>(null);
@@ -1429,11 +1433,16 @@ export default function ChillyChatThreadScreen() {
     && incomingCallInvite.status === "ringing"
     && incomingCallInvite.calleeUserId === currentUserId
     && incomingCallInvite.callerUserId !== currentUserId;
+  const outgoingDeviceAlertConfirmed = outgoingCallRinging && outgoingCallDeviceAlertSent;
   const callTitle = outgoingCallRinging
-    ? (thread?.activeCallType === "video" ? "Video call ringing" : "Voice call ringing")
+    ? outgoingDeviceAlertConfirmed
+      ? (thread?.activeCallType === "video" ? "Video call ringing" : "Voice call ringing")
+      : (thread?.activeCallType === "video" ? "Video call — waiting for answer" : "Voice call — waiting for answer")
     : (thread?.activeCallType === "video" ? "Video call active" : "Voice call active");
   const callBody = outgoingCallRinging
-    ? `${otherMemberDisplayName} is being notified. You can return to the thread while Chi'lly Chat keeps ringing.`
+    ? outgoingDeviceAlertConfirmed
+      ? `A device alert was sent to ${otherMemberDisplayName}. Waiting for an answer.`
+      : `The call invite is ready. Waiting for ${otherMemberDisplayName} to answer in Chi'lly Chat.`
     : thread?.activeCallType === "video"
       ? "Chi'lly Chat video stays inside this direct thread so both people can join without leaving the conversation."
       : "Chi'lly Chat voice stays inside this direct thread so both people can join without leaving the conversation.";
@@ -1444,7 +1453,7 @@ export default function ChillyChatThreadScreen() {
       : callPanelOpen
         ? "Call Open"
         : outgoingCallRinging
-          ? "Open Ringing Call"
+          ? outgoingDeviceAlertConfirmed ? "Open Ringing Call" : "Open Call"
           : activeCallInvite?.status === "accepted"
             ? thread?.activeCallType === "video"
               ? "Open Video Call"
@@ -1665,6 +1674,7 @@ export default function ChillyChatThreadScreen() {
     try {
       setCallBusy(true);
       setCallDeliveryStatus(null);
+      setOutgoingCallDeviceAlertSent(false);
       void (Platform.OS === "android"
         ? requestPushPermissionAndRegister()
         : refreshPushRegistrationIfGranted());
@@ -1695,6 +1705,7 @@ export default function ChillyChatThreadScreen() {
       setOutgoingCallInvite(result.invite);
       setIncomingCallInvite(null);
       setCallPanelOpen(true);
+      setOutgoingCallDeviceAlertSent(isChillyChatCallDeviceAlertConfirmed(result.delivery));
       setCallDeliveryStatus(getChillyChatCallDeliveryMessage(result.delivery));
       logChatCall("handle_start_call_success", {
         threadId,
@@ -3061,7 +3072,9 @@ export default function ChillyChatThreadScreen() {
             bodyText={callBody}
             loadingText="Connecting Chi'lly Chat call…"
             emptyStateText={outgoingCallRinging
-              ? "Ringing. Waiting for the other participant to answer this Chi'lly Chat call."
+              ? outgoingDeviceAlertConfirmed
+                ? "Ringing. Waiting for the other participant to answer this Chi'lly Chat call."
+                : "Waiting for the other participant to answer this Chi'lly Chat call."
               : "Waiting for the other participant to join this Chi'lly Chat call."}
             roomCode={callRoom?.roomCode ?? activeCallRoomId}
             participantCount={outgoingCallRinging ? 1 : participantCount}
@@ -3069,7 +3082,7 @@ export default function ChillyChatThreadScreen() {
             channelState={callChannelState}
             loading={outgoingCallRinging ? false : callLoading}
             statusMessage={outgoingCallRinging ? null : callError}
-            statusLabelOverride={outgoingCallRinging ? "Ringing" : null}
+            statusLabelOverride={outgoingCallRinging ? outgoingDeviceAlertConfirmed ? "Ringing" : "Calling" : null}
             participants={participants}
             callType={thread?.activeCallType ?? null}
             cameraEnabled={cameraEnabled}

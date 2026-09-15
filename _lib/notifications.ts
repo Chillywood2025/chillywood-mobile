@@ -1594,6 +1594,7 @@ const NOTIFICATION_INSTALL_ID_STORAGE_KEY = "chillywood.notification.install_id.
 const NOTIFICATION_REVOCATION_CREDENTIAL_STORAGE_KEY = "chillywood.notification.revoke_credential.v1";
 const PENDING_PUSH_REVOCATIONS_STORAGE_KEY = "chillywood.notification.pending_revocations.v1";
 const IOS_ACTIVITY_NOTIFICATION_CATEGORY_ID = "chillywood_activity";
+const IOS_INCOMING_CALL_NOTIFICATION_CATEGORY_ID = "chillywood_incoming_call";
 const IOS_MISSED_CALL_NOTIFICATION_CATEGORY_ID = "chillywood_missed_call";
 const IOS_ORDINARY_PUSH_ENABLED = String(
   process.env.EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED ?? "",
@@ -1932,6 +1933,7 @@ export async function configureNotificationRuntime() {
     };
     await Promise.all([
       Notifications.setNotificationCategoryAsync(IOS_ACTIVITY_NOTIFICATION_CATEGORY_ID, [openAction]),
+      Notifications.setNotificationCategoryAsync(IOS_INCOMING_CALL_NOTIFICATION_CATEGORY_ID, [openAction]),
       Notifications.setNotificationCategoryAsync(IOS_MISSED_CALL_NOTIFICATION_CATEGORY_ID, [openAction]),
     ]);
   }

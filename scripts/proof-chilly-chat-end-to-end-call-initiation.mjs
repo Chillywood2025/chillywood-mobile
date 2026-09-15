@@ -109,7 +109,7 @@ const callDeliveryCopy = read("_lib/chillyChatCallDeliveryCopy.ts");
   "Android call alert sent.",
   "Native iPhone call alert sent.",
   "Push notification sent.",
-  "Delivery status: in-app banner available",
+  "Call invite saved for in-app delivery. No recipient device alert was confirmed.",
   "Delivery status: push unconfirmed",
   "Delivery status: invite failed",
   "chat-call-delivery-status",

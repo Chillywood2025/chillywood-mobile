@@ -132,7 +132,7 @@ forbidSentence("end-to-end proof doc", doc, (sentence) => (
 if (!chatLib.includes("beginChillyChatCall") || !chatLib.includes("dispatchChillyChatCallPush")) {
   fail("chat source must atomically reserve receiver-visible thread/invite state before dispatch");
 }
-if (!chatLib.includes("throw new Error(\"Unable to start Chi'lly Chat call. The receiver invite could not be saved.\")")) {
+if (!chatLib.includes("throw new UserFacingError(\"chat_action\", \"Unable to start Chi'lly Chat call. The receiver invite could not be saved.\")")) {
   fail("chat source must fail when receiver invite state is not saved");
 }
 if (!chatLib.includes("await endCommunicationRoom(roomId, currentUserId).catch(() => null);")) {
@@ -172,7 +172,7 @@ requireText("same-thread receiver source", thread, "result.role === \"callee\"")
   "Android call alert sent.",
   "Native iPhone call alert sent.",
   "Push notification sent.",
-  "Delivery status: in-app banner available",
+  "Call invite saved for in-app delivery. No recipient device alert was confirmed.",
   "Delivery status: push unconfirmed",
   "Delivery status: receiver unavailable",
   "Delivery status: invite failed",

@@ -7,9 +7,13 @@ type DeliveryCopyInput = {
   status: string;
 };
 
+export function isChillyChatCallDeviceAlertConfirmed(delivery: DeliveryCopyInput | null | undefined) {
+  return delivery?.pushSent === true;
+}
+
 export function getChillyChatCallDeliveryMessage(delivery: DeliveryCopyInput | null | undefined) {
   if (!delivery) {
-    return "Call is active in this thread. Receiver delivery status is not available for the reused call.";
+    return "Call invite is active in this thread. Device-alert delivery status is unavailable for this call.";
   }
   if (delivery.pushSent) {
     const androidSent = delivery.channels?.androidNative.pushSent === true;
@@ -23,7 +27,7 @@ export function getChillyChatCallDeliveryMessage(delivery: DeliveryCopyInput | n
     return "Call alert sent through available device channels.";
   }
   if (delivery.notificationCreated) {
-    return "Delivery status: receiver notified. The receiver has an in-app call alert; background push is unconfirmed.";
+    return "Call invite saved for in-app delivery. No recipient device alert was confirmed.";
   }
   if (delivery.status === "blocked") {
     return "Delivery status: receiver unavailable. Current safety or account-status rules blocked the receiver call alert.";
@@ -35,7 +39,7 @@ export function getChillyChatCallDeliveryMessage(delivery: DeliveryCopyInput | n
     return "Delivery status: push unconfirmed. The receiver invite is saved for in-app ringing, but background push is not available.";
   }
   if (delivery.status === "created") {
-    return "Delivery status: in-app banner available. Background push was not confirmed.";
+    return "Call invite saved for in-app delivery. No recipient device alert was confirmed.";
   }
   return "Delivery status: push unconfirmed. The receiver invite is saved, but delivery confirmation is pending.";
 }

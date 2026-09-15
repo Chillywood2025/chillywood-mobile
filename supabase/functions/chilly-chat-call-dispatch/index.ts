@@ -14,6 +14,7 @@ import {
   buildChillyChatNativeActionData,
   createChillyChatCallChannelResult,
   resolveChillyChatCallPreferencePolicy,
+  resolveChillyChatOrdinaryPushFallbackPolicy,
   summarizeChillyChatCallDispatch,
 } from "../_shared/chilly-chat-call-dispatch-policy.mjs";
 import {
@@ -824,6 +825,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
     status: androidSent > 0 ? "sent" : androidFailed > 0 ? "failed" : "skipped",
   });
 
+  const iosVoip = await iosVoipPromise;
   if (!iosRolloutEnabled) {
     for (const token of iosExpoTokens) {
       await insertDeliveryAttempt(adminClient, {
@@ -837,12 +839,19 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
     }
   }
 
-  const expoCandidates = input.action === "missed" && iosRolloutEnabled
-    ? [...androidExpoTokens, ...iosExpoTokens]
-    : androidExpoTokens;
+  const ordinaryFallback = resolveChillyChatOrdinaryPushFallbackPolicy({
+    action: input.action,
+    androidNativeSent: androidSent > 0,
+    iosRolloutEnabled,
+    iosVoipSent: iosVoip.pushSent,
+  });
+  const expoCandidates = [
+    ...(ordinaryFallback.android ? androidExpoTokens : []),
+    ...(ordinaryFallback.ios ? iosExpoTokens : []),
+  ];
   const shouldAttemptExpo = pushAllowed
     && !presentationDuplicate
-    && (input.action === "missed" || androidSent === 0);
+    && expoCandidates.length > 0;
   let expoSent = 0;
   let expoFailed = 0;
   let expoSkipped = 0;
@@ -854,20 +863,28 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
       to: token.token,
       ttl: input.action === "incoming" ? 45 : 300,
     };
-    if (input.action === "missed" && copy) {
+    if (
+      copy
+      && (
+        input.action === "missed"
+        || (input.action === "incoming" && token.platform === "ios")
+      )
+    ) {
       pushMessage = buildPlatformExpoPushMessage({
         androidChannelId: channelId,
         badge: 1,
         body: copy.body,
-        categoryId: IOS_NOTIFICATION_CATEGORIES.missedCall,
+        categoryId: input.action === "incoming"
+          ? IOS_NOTIFICATION_CATEGORIES.incomingCall
+          : IOS_NOTIFICATION_CATEGORIES.missedCall,
         data: nativeActionData,
-        interruptionLevel: "active",
+        interruptionLevel: input.action === "incoming" ? "time-sensitive" : "active",
         platform: token.platform,
         priority: "high",
         sound: "default",
         title: copy.title,
         to: token.token,
-        ttl: 3600,
+        ttl: input.action === "incoming" ? 45 : 3600,
       });
     }
     const pushResult = await sendExpoPush(pushMessage);
@@ -898,13 +915,21 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
   if (pushAllowed && presentationDuplicate) {
     expoSkipped = expoCandidates.length || 1;
     expoReason = "duplicate_prevented";
-  } else if (androidSent > 0 && expoCandidates.length) {
-    expoSkipped = expoCandidates.length;
-    expoReason = "android_native_sent";
+  } else {
+    const skippedByPrimary = (ordinaryFallback.android ? 0 : androidExpoTokens.length)
+      + (ordinaryFallback.ios ? 0 : iosExpoTokens.length);
+    if (skippedByPrimary > 0) {
+      expoSkipped = skippedByPrimary;
+      expoReason = androidSent > 0 && iosVoip.pushSent
+        ? "native_channels_sent"
+        : androidSent > 0
+          ? "android_native_sent"
+          : "ios_voip_sent";
+    }
   }
   const ordinaryPush = channelResult({
-    eligible: pushAllowed && (input.action === "missed" || expoCandidates.length > 0),
-    attempted: shouldAttemptExpo && expoCandidates.length > 0,
+    eligible: pushAllowed && expoCandidates.length > 0,
+    attempted: shouldAttemptExpo,
     pushSent: expoSent > 0,
     sentCount: expoSent,
     failedCount: expoFailed,
@@ -913,7 +938,6 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
     status: expoSent > 0 ? "sent" : expoFailed > 0 ? "failed" : "skipped",
   });
 
-  const iosVoip = await iosVoipPromise;
   const remoteDelivered = androidNative.pushSent || ordinaryPush.pushSent || iosVoip.pushSent;
   if (notificationId) {
     await adminClient
