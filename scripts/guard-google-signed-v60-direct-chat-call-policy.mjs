@@ -290,7 +290,7 @@ forbidSentence("v60 proof doc", doc, (sentence) => (
 });
 
 [
-  "throw new UserFacingError(\"chat_action\", \"Unable to start Chi'lly Chat call. The receiver invite could not be saved.\")",
+  "throw new Error(\"Unable to start Chi'lly Chat call. The receiver invite could not be saved.\")",
   "beginChillyChatCall",
   "dispatchChillyChatCallPush",
 ].forEach((needle) => requireText("chat source failure handling", chatLib, needle));
@@ -298,12 +298,12 @@ forbidSentence("v60 proof doc", doc, (sentence) => (
 [
   "openOrRepairDirectThreadWithRpc",
   "get_or_create_direct_chat_thread",
-  "return openOrRepairDirectThreadWithRpc(target, authority);",
+  "return openOrRepairDirectThreadWithRpc(target);",
 ].forEach((needle) => requireText("direct thread source", chatLib, needle));
 
 [
   "const remoteProfile = signedInUser.userId ? await readRemoteUserProfile(signedInUser.userId) : null;",
-  "await writeAccountValue(USER_PROFILE_KEY, binding, remoteProfile);",
+  "await writeJsonValue(USER_PROFILE_KEY, remoteProfile);",
   "refreshSignedInIdentitySnapshots",
   ".from(\"chat_thread_members\")",
   ".from(\"communication_room_memberships\")",
