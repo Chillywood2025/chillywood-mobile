@@ -694,18 +694,32 @@ export function useLiveKitChatCallSession({
     if (!isCommittedSessionCurrent(binding) || !binding.liveKitRoom) return false;
     const bindingStillCurrent = sameCommittedAuthority(committedSessionRef.current, binding);
     const liveKitRoom = binding.liveKitRoom ?? (bindingStillCurrent ? roomRef.current : null);
-    const nextState = appStateRef.current;
+    // A terminated CallKit answer can foreground the application before this
+    // hook's AppState listener is installed. Read the canonical current value
+    // at reconciliation time so that the missed transition cannot leave the
+    // exact accepted video call permanently bound to a stale background state.
+    const nextState = AppState.currentState ?? appStateRef.current;
+    appStateRef.current = nextState;
     const appActive = nextState === "active";
     const cameraTarget = cameraRequestedRef.current && appActive;
     const allowBackgroundAudioNow = allowBackgroundAudioRef.current;
     const microphoneTarget = micRequestedRef.current && (appActive || allowBackgroundAudioNow);
     const membershipState = appActive || allowBackgroundAudioNow ? "active" : "reconnecting";
+    const nativeMicrophoneBefore = publicationIsUsable(
+      liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
+    );
+    const nativeCameraBefore = publicationIsUsable(
+      liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+    );
+    const nativeReconciliationRequired = reconcileNative
+      || nativeMicrophoneBefore !== microphoneTarget
+      || nativeCameraBefore !== cameraTarget;
     setMediaReconciliationState("recovering");
     async function setSpeaker(nextSpeakerEnabled: boolean) {
       return applySpeakerOutput(nextSpeakerEnabled);
     }
 
-    if (reconcileNative) {
+    if (nativeReconciliationRequired) {
       try {
         if (nextState === "active") {
           await LiveKitAudioSession.startAudioSession();
