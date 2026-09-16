@@ -647,6 +647,43 @@ test("cold-start video retries native camera again after call authority commits"
   assert.equal(runtime.rooms.length, 1);
 });
 
+test("cold-start video recovers when foreground activation happened before the AppState listener was ready", async (t) => {
+  const runtime = createLiveKitMountedRuntime();
+  runtime.appState = "background";
+  const hookOptions = defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  });
+  const harness = await mountLiveKitHook(runtime, hookOptions, { requireLive: false });
+  t.after(() => harness.unmount());
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await harness.fireMediaWriteTimeout();
+  }
+  await waitFor(harness, () => harness.getResult().channelState === "live", "background call authority committed");
+  assert.equal(runtime.cameraCalls.length, 0);
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await harness.fireMediaWriteTimeout();
+  }
+  assert.equal(runtime.cameraCalls.length, 0);
+  assert.equal(harness.getResult().cameraEnabled, false);
+
+  // Model the real terminated-accept race: React Native's canonical current
+  // AppState has become active, but that transition happened before the hook
+  // subscribed and therefore no listener callback reaches this session.
+  runtime.appState = "active";
+  await harness.fireHeartbeat();
+  await waitFor(harness, () => runtime.cameraCalls.length === 1, "heartbeat reached native camera boundary");
+  await waitFor(harness, () => harness.getResult().cameraEnabled, "camera state converged after missed activation event");
+  assert.equal(runtime.durableCamera, true);
+
+  await harness.fireHeartbeat();
+  assert.equal(runtime.cameraCalls.length, 1);
+  assert.equal(runtime.providerTokenCalls, 1);
+  assert.equal(runtime.rooms.length, 1);
+});
+
 test("post-commit camera recovery stops after confirmed permission denial", async (t) => {
   const runtime = createLiveKitMountedRuntime();
   for (let attempt = 0; attempt < 4; attempt += 1) runtime.queueCamera({ outcome: "reject" });
