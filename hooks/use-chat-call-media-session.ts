@@ -23,6 +23,8 @@ type UseChatCallMediaSessionOptions = {
   initialMediaPreferences?: Partial<CommunicationMediaPreferences>;
   invite: ChillyChatCallInvite | null;
   mediaActivationSerial?: number;
+  nativeForegroundActivationInviteId?: string;
+  nativeForegroundActivationSerial?: number;
   onRoomEnded?: (reason: "host-left" | "ended" | "room-full") => void | Promise<void>;
   roomId: string;
   threadId: string;
@@ -82,6 +84,8 @@ export function useChatCallMediaSession(options: UseChatCallMediaSessionOptions)
     enabled: shouldEnableLiveKit,
     allowBackgroundAudio: options.allowBackgroundAudio,
     mediaActivationSerial: options.mediaActivationSerial,
+    nativeForegroundActivationInviteId: options.nativeForegroundActivationInviteId,
+    nativeForegroundActivationSerial: options.nativeForegroundActivationSerial,
     initialMediaPreferences: options.initialMediaPreferences,
     invite: options.invite,
     onRoomEnded: options.onRoomEnded,

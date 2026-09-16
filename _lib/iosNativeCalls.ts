@@ -57,6 +57,8 @@ const nativeEventSubscribers = new Set<IosNativeCallEventListener>();
 const nativePresentationSubscribers = new Set<() => void>();
 const nativePresentedInviteIds = new Set<string>();
 let voipLifecycleGeneration = 0;
+let iosNativeApplicationActiveSerial = 0;
+const iosNativeAnswerApplicationActiveBaselines = new Map<string, number>();
 let voipRegistrationActive = false;
 let voipAuthorityContext: IosVoipAuthorityContext | null = null;
 let voipTokenLifecycleQueue: Promise<void> = Promise.resolve();
@@ -325,6 +327,28 @@ const handleNativeEvent = (
 ) => {
   if (!voipRegistrationActive || generation !== voipLifecycleGeneration || voipAuthorityContext !== context) return;
 
+  if (event.type === "applicationActive") {
+    iosNativeApplicationActiveSerial = iosNativeApplicationActiveSerial >= Number.MAX_SAFE_INTEGER
+      ? 1
+      : iosNativeApplicationActiveSerial + 1;
+  }
+  const eventInviteId = toText(event.callInviteId);
+  if (event.type === "answerRequested" && eventInviteId) {
+    iosNativeAnswerApplicationActiveBaselines.set(
+      eventInviteId,
+      iosNativeApplicationActiveSerial,
+    );
+  } else if (eventInviteId && [
+    "answerFailed",
+    "declined",
+    "ended",
+    "providerReset",
+    "remoteEnded",
+    "timeout",
+  ].includes(event.type)) {
+    iosNativeAnswerApplicationActiveBaselines.delete(eventInviteId);
+  }
+
   if (event.type === "voipTokenUpdated") {
     enqueueVoipTokenRegistration(event.token ?? "", generation, context);
   } else if (event.type === "voipTokenInvalidated") {
@@ -382,6 +406,16 @@ export function subscribeToIosNativeCallEvents(listener: IosNativeCallEventListe
   };
 }
 
+export function readIosNativeApplicationActiveSerial(inviteId: string) {
+  const normalizedInviteId = toText(inviteId);
+  const answerBaseline = iosNativeAnswerApplicationActiveBaselines.get(normalizedInviteId);
+  return normalizedInviteId
+    && answerBaseline !== undefined
+    && iosNativeApplicationActiveSerial > answerBaseline
+    ? iosNativeApplicationActiveSerial
+    : 0;
+}
+
 export function hasIosNativeCallPresentation(inviteId: string | null | undefined) {
   const normalizedInviteId = toText(inviteId);
   return !!normalizedInviteId && nativePresentedInviteIds.has(normalizedInviteId);
@@ -402,6 +436,8 @@ export async function startIosNativeCallsReadiness(
     const apnsEnvironment = readApnsEnvironment();
     const readiness = await readIosNativeCallsReadiness();
     const generation = ++voipLifecycleGeneration;
+    iosNativeApplicationActiveSerial = 0;
+    iosNativeAnswerApplicationActiveBaselines.clear();
     clearNativeCallTransitionClaims("ios");
     voipRegistrationActive = false;
     voipAuthorityContext = null;
@@ -504,6 +540,8 @@ export async function revokeIosVoipRegistration(): Promise<IosVoipRegistrationSt
     if (Platform.OS !== "ios") return { apnsEnvironment, status: "disabled", tokenFingerprint: null };
 
     ++voipLifecycleGeneration;
+    iosNativeApplicationActiveSerial = 0;
+    iosNativeAnswerApplicationActiveBaselines.clear();
     const context = voipAuthorityContext;
     clearNativeCallTransitionClaims("ios");
     voipRegistrationActive = false;

@@ -208,6 +208,9 @@ requireText(facade, "subscribeToIosNativeCallEvents", "CallKit media consumers m
 requireText(facade, "nativeEventGeneration", "Native and cold-start events must bind the current JavaScript readiness generation.");
 requireText(facade, "drainPendingEventsForExactLifecycle", "Persisted CallKit actions must replay only under the exact active account lifecycle.");
 requireText(facade, 'event.type === "applicationActive"', "Returning from CallKit must replay any Answer persisted during a listener gap.");
+requireText(facade, "iosNativeAnswerApplicationActiveBaselines", "A native foreground witness must be newer than the exact invite's Answer request.");
+requireText(facade, "readIosNativeApplicationActiveSerial(inviteId: string)", "The call screen must read only an exact-invite native foreground witness.");
+requireText(facade, "iosNativeAnswerApplicationActiveBaselines.clear()", "Account/readiness replacement must revoke every native foreground witness.");
 requireText(rootLayout, "drainIosNativeCallPendingEvents", "React Native AppState activation must independently replay a pending native Answer.");
 requireText(facade, "completeIosNativeCallTerminalTransition", "The iOS facade must expose only the exact call-scoped terminal lease acknowledgement.");
 requireText(facade, 'clearNativeCallTransitionClaims("ios")', "Account and readiness lifecycle changes must clear only iOS in-memory native claims.");
@@ -247,6 +250,9 @@ requireText(rootLayout, 'event.type === "remoteEnded"', "Remote terminal VoIP ac
 requireText(chatThread, "subscribeToIosNativeCallEvents", "The chat call screen must reconcile media after native audio-session activation.");
 requireText(chatThread, 'event.type === "audioSessionActivated"', "The chat call screen must react to CallKit AVAudioSession activation.");
 requireText(chatThread, 'event.type === "applicationActive"', "The chat call screen must restore foreground video after a native answer.");
+requireText(chatThread, "readIosNativeApplicationActiveSerial(requestedCallInviteId)", "The chat call screen must recover an activation drained before it mounted.");
+requireText(chatThread, 'requestedNativeCallAction === "answer" && requestedNativeCallOwnsTransition', "Only an attested exact native Answer may carry a foreground witness into media.");
+requireText(chatThread, "nativeForegroundActivationInviteId:", "The media hook must receive the exact invite bound to the native foreground witness.");
 requireText(chatThread, 'requestedNativeCallAction === "answer"', "Background audio permission must be scoped to a native Answer action.");
 requireText(chatThread, "consumeMountedIosNativeCallRoute", "The mounted thread must atomically consume the exact native claim after auth readiness.");
 requireText(chatThread, 'action: "answer"', "The mounted CallKit Answer consumer must supply its exact expected action.");

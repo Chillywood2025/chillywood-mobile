@@ -29,7 +29,7 @@ const createRegistry = (overrides = {}) => createNativeCallTransitionProvenanceR
 const iosEvent = (overrides = {}) => ({action: "answer", authenticatedUserId: USER, inviteId: INVITE, roomId: ROOM, nativeEventGeneration: 7, nativeIdentity: CALL, platform: "ios", source: "ios_callkit_native_event", threadId: THREAD, ...overrides});
 const consumeInput = (claimId, overrides = {}) => ({action: "answer", authenticatedUserId: USER, claimId, inviteId: INVITE, nativeIdentity: CALL, platform: "ios", source: "ios_callkit_native_event", threadId: THREAD, ...overrides});
 
-const sources = Object.fromEntries(await Promise.all(["_lib/nativeCallTransitionProvenance.mjs", "_lib/iosNativeCalls.ts", "_lib/communicationCallMediaPolicy.mjs", "app/+native-intent.tsx", "app/_layout.tsx", "app/chat/[threadId].tsx", "app/chat/index.tsx", "app/communication/[roomId].tsx", "app/profile/[userId].tsx", "app.json", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift"].map(async (path) => [path, await readFile(new URL(`../${path}`, import.meta.url), "utf8")])));
+const sources = Object.fromEntries(await Promise.all(["_lib/nativeCallTransitionProvenance.mjs", "_lib/iosNativeCalls.ts", "_lib/communicationCallMediaPolicy.mjs", "app/+native-intent.tsx", "app/_layout.tsx", "app/chat/[threadId].tsx", "app/chat/index.tsx", "app/communication/[roomId].tsx", "app/profile/[userId].tsx", "hooks/use-livekit-chat-call-session.ts", "app.json", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift"].map(async (path) => [path, await readFile(new URL(`../${path}`, import.meta.url), "utf8")])));
 const provenanceDeclarations = await readFile(new URL("../_lib/nativeCallTransitionProvenance.d.ts", import.meta.url), "utf8");
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -641,8 +641,21 @@ const validateProductionGate = async ({code, productionSources}) => {
     const facadeSource = productionSources["_lib/iosNativeCalls.ts"];
     report(
       !facadeSource.includes("drainPendingEventsForExactLifecycle")
-      || !facadeSource.includes('event.type === "applicationActive"')
+      || !facadeSource.includes('if (event.type === "applicationActive") {\n          void drainPendingEventsForExactLifecycle(generation, context);\n        }')
       || !rootSource.includes("void drainIosNativeCallPendingEvents()"),
+    );
+  } else if (code === "IOS_NATIVE_APPLICATION_ACTIVE_FOREGROUND_WITNESS_MISSING") {
+    const facadeSource = productionSources["_lib/iosNativeCalls.ts"];
+    const mediaSource = productionSources["hooks/use-livekit-chat-call-session.ts"];
+    report(
+      !facadeSource.includes("iosNativeAnswerApplicationActiveBaselines.set(")
+      || !facadeSource.includes("iosNativeApplicationActiveSerial > answerBaseline")
+      || !facadeSource.includes("iosNativeAnswerApplicationActiveBaselines.clear()")
+      || !threadSource.includes("readIosNativeApplicationActiveSerial(requestedCallInviteId)")
+      || !threadSource.includes('requestedNativeCallAction === "answer" && requestedNativeCallOwnsTransition')
+      || !mediaSource.includes("nativeForegroundActivationInviteId === inviteId")
+      || !mediaSource.includes('if (canonicalState === "background") return false;')
+      || !mediaSource.includes('if (nextState !== "active") nativeForegroundWitnessRef.current = null;')
     );
   } else if (code === "IOS_CALLKIT_COMPLETION_FAILURE_ORPHANS_ACCEPTED_INVITE") {
     const policy = await importSourceModule(policySource, code); const claim = await consumedClaimFixture(); let effects = 0;
@@ -712,6 +725,7 @@ const negativeControls = [
   replaceControl("IOS_CALLKIT_COMPLETION_BEFORE_SERVER_AUTHORITY", "app/chat/[threadId].tsx", "      const acceptedInvite = await updateChillyChatCallInviteStatus({", "      await completeIosNativeCallAnswer(requestedNativeCallUuid, true);\n      const acceptedInvite = await updateChillyChatCallInviteStatus({", "CallKit completion ordering"),
   replaceControl("IOS_NATIVE_PENDING_EVENT_EARLY_DRAIN", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "      DispatchQueue.main.async { [weak self] in\n        guard let self, let eventSink = self.eventSink else { return }\n        self.drainPendingEvents().forEach { eventSink($0) }\n      }", "      drainPendingEvents().forEach { eventSink?($0) }", "synchronous observer-start event drain"),
   replaceControl("IOS_NATIVE_PENDING_EVENT_ACTIVATION_REPLAY_MISSING", "_lib/iosNativeCalls.ts", '        if (event.type === "applicationActive") {\n          void drainPendingEventsForExactLifecycle(generation, context);\n        }\n', "", "activation replay"),
+  replaceControl("IOS_NATIVE_APPLICATION_ACTIVE_FOREGROUND_WITNESS_MISSING", "_lib/iosNativeCalls.ts", "    iosNativeAnswerApplicationActiveBaselines.set(\n      eventInviteId,\n      iosNativeApplicationActiveSerial,\n    );\n", "", "exact Answer activation baseline"),
   replaceControl("IOS_CALLKIT_COMPLETION_FAILURE_ORPHANS_ACCEPTED_INVITE", "_lib/communicationCallMediaPolicy.mjs", '  const terminal = await terminateIosAcceptedNativeAnswer({...input, reason: completed ? "accepted_media_descriptor_denied" : "callkit_answer_completion_failed"}, operations.terminal);', "  const terminal = false;", "completion failure settlement"),
   control("IOS_NATIVE_CLAIM_MEDIA_AUTHORITY_VIOLATION", "_lib/nativeCallTransitionProvenance.mjs", `${sources["_lib/nativeCallTransitionProvenance.mjs"]}\nrequestLiveKitParticipantToken();\n`),
   replaceControl("PLATFORM_PROOF_SCOPE_MISMATCH", "_lib/communicationCallMediaPolicy.mjs", "    && claim.platform === platform\n    && claim.source === expectedSource\n", "", "platform claim binding"),
