@@ -580,6 +580,46 @@ test("matrix 23: confirmed camera denial changes only camera permission state", 
   assert.equal(harness.getResult().canOpenMediaSettings, true);
 });
 
+test("cold-start video retries a transient initial camera failure without changing call authority", async (t) => {
+  const runtime = createLiveKitMountedRuntime();
+  runtime.queueCamera({ outcome: "reject" });
+  const hookOptions = defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  });
+  const harness = await mountLiveKitHook(runtime, hookOptions, { requireLive: false });
+  t.after(() => harness.unmount());
+
+  await waitFor(harness, () => runtime.cameraCalls.length === 1, "initial camera attempt reached native boundary");
+  assert.equal(harness.getResult().channelState, "connecting");
+  await harness.fireMediaWriteTimeout();
+  await waitFor(harness, () => harness.getResult().channelState === "live", "camera retry converged the call");
+
+  assert.deepEqual(runtime.cameraCalls, [true, true]);
+  assert.equal(harness.getResult().cameraEnabled, true);
+  assert.equal(harness.getResult().cameraPermissionState, "granted");
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.providerTokenCalls, 1);
+  assert.equal(runtime.rooms.length, 1);
+});
+
+test("cold-start video never retries a confirmed initial camera permission denial", async (t) => {
+  const runtime = createLiveKitMountedRuntime();
+  runtime.queueCamera({ outcome: "permission-denied" });
+  const hookOptions = defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  });
+  const harness = await mountLiveKitHook(runtime, hookOptions);
+  t.after(() => harness.unmount());
+
+  assert.deepEqual(runtime.cameraCalls, [true]);
+  assert.equal(harness.getResult().cameraEnabled, false);
+  assert.equal(harness.getResult().cameraPermissionState, "denied");
+  assert.equal(harness.getResult().canOpenMediaSettings, true);
+  assert.equal(runtime.durableCamera, false);
+});
+
 test("permission support: successful disable cannot erase a confirmed microphone denial", async (t) => {
   const { harness, runtime } = await mountCase(t);
   runtime.queueNative({ outcome: "permission-denied" });
