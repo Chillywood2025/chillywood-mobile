@@ -620,6 +620,60 @@ test("cold-start video never retries a confirmed initial camera permission denia
   assert.equal(runtime.durableCamera, false);
 });
 
+test("cold-start video retries native camera again after call authority commits", async (t) => {
+  const runtime = createLiveKitMountedRuntime();
+  for (let attempt = 0; attempt < 4; attempt += 1) runtime.queueCamera({ outcome: "reject" });
+  const hookOptions = defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  });
+  const harness = await mountLiveKitHook(runtime, hookOptions, { requireLive: false });
+  t.after(() => harness.unmount());
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await waitFor(harness, () => runtime.cameraCalls.length === attempt, `initial camera attempt ${attempt} reached native boundary`);
+    await harness.fireMediaWriteTimeout();
+  }
+  await waitFor(harness, () => runtime.cameraCalls.length === 4, "all eager camera attempts reached native boundary");
+  await waitFor(harness, () => harness.getResult().channelState === "live", "call authority committed without camera");
+  assert.equal(harness.getResult().cameraEnabled, false);
+  assert.equal(runtime.durableCamera, false);
+
+  await harness.fireMediaWriteTimeout();
+  await waitFor(harness, () => runtime.cameraCalls.length === 5, "post-commit camera recovery reached native boundary");
+  await waitFor(harness, () => harness.getResult().cameraEnabled, "post-commit camera recovery converged UI");
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.providerTokenCalls, 1);
+  assert.equal(runtime.rooms.length, 1);
+});
+
+test("post-commit camera recovery stops after confirmed permission denial", async (t) => {
+  const runtime = createLiveKitMountedRuntime();
+  for (let attempt = 0; attempt < 4; attempt += 1) runtime.queueCamera({ outcome: "reject" });
+  runtime.queueCamera({ outcome: "permission-denied" });
+  const hookOptions = defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  });
+  const harness = await mountLiveKitHook(runtime, hookOptions, { requireLive: false });
+  t.after(() => harness.unmount());
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await waitFor(harness, () => runtime.cameraCalls.length === attempt, `initial denied-path attempt ${attempt} reached native boundary`);
+    await harness.fireMediaWriteTimeout();
+  }
+  await waitFor(harness, () => harness.getResult().channelState === "live", "denied-path call authority committed");
+  await harness.fireMediaWriteTimeout();
+  await waitFor(harness, () => runtime.cameraCalls.length === 5, "post-commit denial reached native boundary");
+  assert.equal(harness.getResult().cameraEnabled, false);
+  assert.equal(harness.getResult().cameraPermissionState, "denied");
+  assert.equal(harness.getResult().canOpenMediaSettings, true);
+  await harness.flush();
+  assert.equal(runtime.cameraCalls.length, 5);
+  assert.equal(runtime.providerTokenCalls, 1);
+  assert.equal(runtime.rooms.length, 1);
+});
+
 test("permission support: successful disable cannot erase a confirmed microphone denial", async (t) => {
   const { harness, runtime } = await mountCase(t);
   runtime.queueNative({ outcome: "permission-denied" });
