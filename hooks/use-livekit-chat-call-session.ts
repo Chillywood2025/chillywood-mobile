@@ -1753,8 +1753,12 @@ export function useLiveKitChatCallSession({
               !active
               || !isCommittedSessionCurrent(recoveryBinding)
               || !cameraRequestedRef.current
-              || appStateRef.current !== "active"
             ) continue;
+            // Do not gate the retry on appStateRef: a terminated CallKit
+            // answer can foreground the app before this hook subscribes, so
+            // that ref may still contain the launch-time background value.
+            // reconcileLatestCommittedMedia reads AppState.currentState and
+            // remains the authoritative background/privacy gate.
             const reconciled = await scheduleLatestMediaReconciliation(true);
             if (!active || !isCommittedSessionCurrent(recoveryBinding)) return;
             const nativeCameraReady = publicationIsUsable(

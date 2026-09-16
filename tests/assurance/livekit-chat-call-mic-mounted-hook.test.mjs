@@ -661,12 +661,12 @@ test("cold-start video recovers when foreground activation happened before the A
     await harness.fireMediaWriteTimeout();
   }
   await waitFor(harness, () => harness.getResult().channelState === "live", "background call authority committed");
-  assert.equal(runtime.cameraCalls.length, 0);
+  assert.equal(runtime.cameraCalls.some((enabled) => enabled), false);
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
     await harness.fireMediaWriteTimeout();
   }
-  assert.equal(runtime.cameraCalls.length, 0);
+  assert.equal(runtime.cameraCalls.some((enabled) => enabled), false);
   assert.equal(harness.getResult().cameraEnabled, false);
 
   // Model the real terminated-accept race: React Native's canonical current
@@ -674,12 +674,48 @@ test("cold-start video recovers when foreground activation happened before the A
   // subscribed and therefore no listener callback reaches this session.
   runtime.appState = "active";
   await harness.fireHeartbeat();
-  await waitFor(harness, () => runtime.cameraCalls.length === 1, "heartbeat reached native camera boundary");
+  await waitFor(harness, () => runtime.cameraCalls.filter(Boolean).length === 1, "heartbeat reached native camera boundary");
   await waitFor(harness, () => harness.getResult().cameraEnabled, "camera state converged after missed activation event");
   assert.equal(runtime.durableCamera, true);
 
+  const cameraCallCount = runtime.cameraCalls.length;
   await harness.fireHeartbeat();
-  assert.equal(runtime.cameraCalls.length, 1);
+  assert.equal(runtime.cameraCalls.length, cameraCallCount);
+  assert.equal(runtime.providerTokenCalls, 1);
+  assert.equal(runtime.rooms.length, 1);
+});
+
+test("cold-start video post-commit retry observes a missed foreground transition before heartbeat", async (t) => {
+  const runtime = createLiveKitMountedRuntime();
+  runtime.appState = "background";
+  const hookOptions = defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  });
+  const harness = await mountLiveKitHook(runtime, hookOptions, { requireLive: false });
+  t.after(() => harness.unmount());
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await harness.fireMediaWriteTimeout();
+  }
+  await waitFor(harness, () => harness.getResult().channelState === "live", "background call authority committed");
+  assert.equal(runtime.cameraCalls.some((enabled) => enabled), false);
+
+  await harness.fireMediaWriteTimeout();
+  assert.equal(runtime.cameraCalls.some((enabled) => enabled), false);
+
+  // The native answer foregrounded React Native before the AppState listener
+  // existed. The next bounded post-commit retry must consult the canonical
+  // current state instead of waiting for the 15-second room heartbeat.
+  runtime.appState = "active";
+  await harness.fireMediaWriteTimeout();
+  await waitFor(harness, () => runtime.cameraCalls.filter(Boolean).length === 1, "post-commit retry reached native camera boundary");
+  await waitFor(harness, () => harness.getResult().cameraEnabled, "post-commit retry converged camera state");
+  assert.equal(runtime.durableCamera, true);
+
+  const cameraCallCount = runtime.cameraCalls.length;
+  await harness.fireHeartbeat();
+  assert.equal(runtime.cameraCalls.length, cameraCallCount);
   assert.equal(runtime.providerTokenCalls, 1);
   assert.equal(runtime.rooms.length, 1);
 });
