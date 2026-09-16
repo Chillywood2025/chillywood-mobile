@@ -84,6 +84,7 @@ type DeferredMediaReconciliation = {
 const MEDIA_WRITE_PREDECESSOR_DRAIN_TIMEOUT_MS = 2_000;
 const MEDIA_WRITE_OPERATION_TIMEOUT_MS = 4_000;
 const INITIAL_CAMERA_TRANSIENT_RETRY_DELAYS_MS = [350, 900, 1_500] as const;
+const POST_COMMIT_CAMERA_TRANSIENT_RETRY_DELAYS_MS = [250, 750, 1_500, 3_000] as const;
 
 type UseLiveKitChatCallSessionOptions = {
   authenticatedUserId: string;
@@ -729,6 +730,8 @@ export function useLiveKitChatCallSession({
       } catch (cameraError) {
         if (!isCommittedSessionCurrent(binding)) return false;
         if (isConfirmedNativePermissionDenial(cameraError)) {
+          cameraRequestedRef.current = false;
+          setCameraEnabledState(false);
           setConfirmedPermissionDenied("camera");
         } else {
           setReconciliationWarning("Local media could not be reconciled. The call remains connected.");
@@ -1719,6 +1722,40 @@ export function useLiveKitChatCallSession({
         if (liveKitRoom.remoteParticipants.size > 0) {
           emitStage("remote_participant_joined", { connectionState: "connected" });
         }
+      }
+
+      if (initialCameraEnabled && !initialCameraPermissionDenied && !cameraPublication) {
+        const recoveryBinding = effectBinding;
+        void (async () => {
+          for (const retryDelay of POST_COMMIT_CAMERA_TRANSIENT_RETRY_DELAYS_MS) {
+            if (
+              !active
+              || !recoveryBinding
+              || !isCommittedSessionCurrent(recoveryBinding)
+              || !cameraRequestedRef.current
+            ) return;
+            await new Promise((resolve) => setTimeout(resolve, retryDelay));
+            if (
+              !active
+              || !isCommittedSessionCurrent(recoveryBinding)
+              || !cameraRequestedRef.current
+              || appStateRef.current !== "active"
+            ) continue;
+            const reconciled = await scheduleLatestMediaReconciliation(true);
+            if (!active || !isCommittedSessionCurrent(recoveryBinding)) return;
+            const nativeCameraReady = publicationIsUsable(
+              recoveryBinding.liveKitRoom?.localParticipant.getTrackPublication(Track.Source.Camera),
+            );
+            if (!reconciled || !nativeCameraReady) continue;
+            setCameraEnabledState(true);
+            setCameraPermissionState("granted");
+            setCameraPermissionMessage(null);
+            updateFirstMediaState({ localVideoPublished: true });
+            emitStage("local_video_published", { connectionState: String(recoveryBinding.liveKitRoom?.state ?? "") });
+            refreshParticipantViews();
+            return;
+          }
+        })();
       }
 
       heartbeat = setInterval(() => {
