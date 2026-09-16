@@ -29,7 +29,7 @@ const createRegistry = (overrides = {}) => createNativeCallTransitionProvenanceR
 const iosEvent = (overrides = {}) => ({action: "answer", authenticatedUserId: USER, inviteId: INVITE, roomId: ROOM, nativeEventGeneration: 7, nativeIdentity: CALL, platform: "ios", source: "ios_callkit_native_event", threadId: THREAD, ...overrides});
 const consumeInput = (claimId, overrides = {}) => ({action: "answer", authenticatedUserId: USER, claimId, inviteId: INVITE, nativeIdentity: CALL, platform: "ios", source: "ios_callkit_native_event", threadId: THREAD, ...overrides});
 
-const sources = Object.fromEntries(await Promise.all(["_lib/nativeCallTransitionProvenance.mjs", "_lib/iosNativeCalls.ts", "_lib/communicationCallMediaPolicy.mjs", "app/+native-intent.tsx", "app/_layout.tsx", "app/chat/[threadId].tsx", "app/chat/index.tsx", "app/communication/[roomId].tsx", "app/profile/[userId].tsx", "hooks/use-livekit-chat-call-session.ts", "app.json", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift"].map(async (path) => [path, await readFile(new URL(`../${path}`, import.meta.url), "utf8")])));
+const sources = Object.fromEntries(await Promise.all(["_lib/nativeCallTransitionProvenance.mjs", "_lib/iosNativeCalls.ts", "_lib/communicationCallMediaPolicy.mjs", "app/+native-intent.tsx", "app/_layout.tsx", "app/chat/[threadId].tsx", "app/chat/index.tsx", "app/communication/[roomId].tsx", "app/profile/[userId].tsx", "hooks/use-livekit-chat-call-session.ts", "app.json", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "modules/chillywood-native-calls/ios/ChillywoodNativeCallsModule.swift"].map(async (path) => [path, await readFile(new URL(`../${path}`, import.meta.url), "utf8")])));
 const provenanceDeclarations = await readFile(new URL("../_lib/nativeCallTransitionProvenance.d.ts", import.meta.url), "utf8");
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -654,8 +654,61 @@ const validateProductionGate = async ({code, productionSources}) => {
       || !threadSource.includes("readIosNativeApplicationActiveSerial(requestedCallInviteId)")
       || !threadSource.includes('requestedNativeCallAction === "answer" && requestedNativeCallOwnsTransition')
       || !mediaSource.includes("nativeForegroundActivationInviteId === inviteId")
-      || !mediaSource.includes('if (canonicalState === "background") return false;')
+      || !mediaSource.includes("const nativeApplicationActive = await readIosNativeApplicationActive();")
+      || !mediaSource.includes("currentWitness?.inviteId === inviteId")
       || !mediaSource.includes('if (nextState !== "active") nativeForegroundWitnessRef.current = null;')
+    );
+  } else if (code === "IOS_NATIVE_CURRENT_APPLICATION_STATE_QUERY_MISSING") {
+    const moduleSource = productionSources["modules/chillywood-native-calls/ios/ChillywoodNativeCallsModule.swift"];
+    report(
+      !moduleSource.includes('AsyncFunction("isApplicationActiveAsync")')
+      || !moduleSource.includes("await MainActor.run")
+      || !moduleSource.includes("UIApplication.shared.applicationState == .active")
+      || !moduleSource.includes("ChillywoodNativeCallCoordinator.shared.isRuntimeDefaultEnabled")
+    );
+  } else if (code === "IOS_NATIVE_CURRENT_APPLICATION_STATE_OLD_BUILD_FAIL_OPEN") {
+    const facadeSource = productionSources["_lib/iosNativeCalls.ts"];
+    report(
+      !facadeSource.includes('typeof NativeCallsModule.isApplicationActiveAsync !== "function"')
+      || !facadeSource.includes("NativeCallsModule.isApplicationActiveAsync().catch(() => false)")
+    );
+  } else if (code === "IOS_NATIVE_CURRENT_APPLICATION_STATE_MEDIA_BYPASS") {
+    const mediaSource = productionSources["hooks/use-livekit-chat-call-session.ts"];
+    report(
+      !mediaSource.includes("const nativeApplicationActive = await readIosNativeApplicationActive();")
+      || !mediaSource.includes("currentWitness?.inviteId === inviteId")
+      || (mediaSource.match(/await readApplicationActiveForMedia\(\)/gu) ?? []).length !== 3
+      || (mediaSource.match(/await publishCameraForCurrentForeground\(/gu) ?? []).length !== 4
+      || (mediaSource.match(/setCameraEnabled\(\s*true,/gu) ?? []).length !== 1
+      || [...mediaSource.matchAll(/localParticipant\.setCameraEnabled\(\s*([A-Za-z_$][A-Za-z0-9_$]*)/gu)]
+        .some((match) => match[1] !== "true" && match[1] !== "false")
+      || !mediaSource.includes("restoreCameraPublicationForCurrentSession")
+      || !mediaSource.includes('"chat-call-livekit-camera-compensation",')
+    );
+  } else if (code === "IOS_CAMERA_ROLLBACK_DYNAMIC_ENABLE_BYPASS") {
+    const mediaSource = productionSources["hooks/use-livekit-chat-call-session.ts"];
+    report(
+      [...mediaSource.matchAll(/localParticipant\.setCameraEnabled\(\s*([A-Za-z_$][A-Za-z0-9_$]*)/gu)]
+        .some((match) => match[1] !== "true" && match[1] !== "false")
+      || !mediaSource.includes("restoreCameraPublicationForCurrentSession")
+      || !mediaSource.includes('"chat-call-livekit-camera-compensation",')
+      || !mediaSource.includes("terminateRoomForCameraSafety")
+      || !mediaSource.includes("await liveKitRoom.disconnect(true);")
+    );
+  } else if (code === "IOS_CAMERA_FAILSAFE_TERMINATION_BYPASS") {
+    const mediaSource = productionSources["hooks/use-livekit-chat-call-session.ts"];
+    report(
+      !mediaSource.includes("activePublication?.track?.stop();")
+      || !mediaSource.includes("await liveKitRoom.disconnect(true);")
+      || !mediaSource.includes("liveKitRoom.state === ConnectionState.Disconnected")
+      || !mediaSource.includes("camera_safety_termination_unprovable")
+    );
+  } else if (code === "IOS_CAMERA_DURABLE_ROLLBACK_PROOF_BYPASS") {
+    const mediaSource = productionSources["hooks/use-livekit-chat-call-session.ts"];
+    report(
+      !mediaSource.includes("durableCompensationProved")
+      || !mediaSource.includes("nativeRestored\n            && durableCompensationProved\n            && callStillValid")
+      || !mediaSource.includes('"chat-call-livekit-camera-membership-compensation-terminal"')
     );
   } else if (code === "IOS_CALLKIT_COMPLETION_FAILURE_ORPHANS_ACCEPTED_INVITE") {
     const policy = await importSourceModule(policySource, code); const claim = await consumedClaimFixture(); let effects = 0;
@@ -726,6 +779,12 @@ const negativeControls = [
   replaceControl("IOS_NATIVE_PENDING_EVENT_EARLY_DRAIN", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "      DispatchQueue.main.async { [weak self] in\n        guard let self, let eventSink = self.eventSink else { return }\n        self.drainPendingEvents().forEach { eventSink($0) }\n      }", "      drainPendingEvents().forEach { eventSink?($0) }", "synchronous observer-start event drain"),
   replaceControl("IOS_NATIVE_PENDING_EVENT_ACTIVATION_REPLAY_MISSING", "_lib/iosNativeCalls.ts", '        if (event.type === "applicationActive") {\n          void drainPendingEventsForExactLifecycle(generation, context);\n        }\n', "", "activation replay"),
   replaceControl("IOS_NATIVE_APPLICATION_ACTIVE_FOREGROUND_WITNESS_MISSING", "_lib/iosNativeCalls.ts", "    iosNativeAnswerApplicationActiveBaselines.set(\n      eventInviteId,\n      iosNativeApplicationActiveSerial,\n    );\n", "", "exact Answer activation baseline"),
+  replaceControl("IOS_NATIVE_CURRENT_APPLICATION_STATE_QUERY_MISSING", "modules/chillywood-native-calls/ios/ChillywoodNativeCallsModule.swift", "        UIApplication.shared.applicationState == .active\n", "        true\n", "current UIKit application-state query"),
+  replaceControl("IOS_NATIVE_CURRENT_APPLICATION_STATE_OLD_BUILD_FAIL_OPEN", "_lib/iosNativeCalls.ts", '    || typeof NativeCallsModule.isApplicationActiveAsync !== "function"\n', "", "old-build native method gate"),
+  replaceControl("IOS_NATIVE_CURRENT_APPLICATION_STATE_MEDIA_BYPASS", "hooks/use-livekit-chat-call-session.ts", "    const nativeApplicationActive = await readIosNativeApplicationActive();\n", "    const nativeApplicationActive = true;\n", "current native foreground enforcement"),
+  replaceControl("IOS_CAMERA_ROLLBACK_DYNAMIC_ENABLE_BYPASS", "hooks/use-livekit-chat-call-session.ts", "          await restoreCameraPublicationForCurrentSession(liveKitRoom, binding, priorActual);\n", "          await liveKitRoom.localParticipant.setCameraEnabled(priorActual, LIVE_VIDEO_CAPTURE_OPTIONS);\n", "dynamic camera rollback bypass"),
+  replaceControl("IOS_CAMERA_FAILSAFE_TERMINATION_BYPASS", "hooks/use-livekit-chat-call-session.ts", "        await liveKitRoom.disconnect(true);\n", "        await Promise.resolve();\n", "camera fail-safe room termination"),
+  replaceControl("IOS_CAMERA_DURABLE_ROLLBACK_PROOF_BYPASS", "hooks/use-livekit-chat-call-session.ts", "          const compensationProved = nativeRestored\n            && durableCompensationProved\n            && callStillValid;\n", "          const compensationProved = nativeRestored && callStillValid;\n", "camera durable rollback proof"),
   replaceControl("IOS_CALLKIT_COMPLETION_FAILURE_ORPHANS_ACCEPTED_INVITE", "_lib/communicationCallMediaPolicy.mjs", '  const terminal = await terminateIosAcceptedNativeAnswer({...input, reason: completed ? "accepted_media_descriptor_denied" : "callkit_answer_completion_failed"}, operations.terminal);', "  const terminal = false;", "completion failure settlement"),
   control("IOS_NATIVE_CLAIM_MEDIA_AUTHORITY_VIOLATION", "_lib/nativeCallTransitionProvenance.mjs", `${sources["_lib/nativeCallTransitionProvenance.mjs"]}\nrequestLiveKitParticipantToken();\n`),
   replaceControl("PLATFORM_PROOF_SCOPE_MISMATCH", "_lib/communicationCallMediaPolicy.mjs", "    && claim.platform === platform\n    && claim.source === expectedSource\n", "", "platform claim binding"),

@@ -43,6 +43,7 @@ import {
 import { reportRuntimeError } from "../_lib/logger";
 import type { MediaPermissionState } from "../_lib/mediaPermissions";
 import { registerActiveMediaSessionStopper } from "../_lib/mediaSessionLifecycle";
+import { readIosNativeApplicationActive } from "../_lib/iosNativeCalls";
 import {
   createLiveKitV1RoomOptions,
   LIVE_VIDEO_CAPTURE_OPTIONS,
@@ -128,7 +129,9 @@ const getAudioOutputCandidates = (speakerEnabled: boolean): LiveKitAudioOutput[]
 );
 
 const publicationIsUsable = (publication: TrackPublication | undefined) => (
-  !!publication?.track && !publication.isMuted
+  !!publication?.track
+  && !publication.isMuted
+  && publication.track.mediaStreamTrack.readyState !== "ended"
 );
 
 const isConfirmedNativePermissionDenial = (error: unknown) => {
@@ -198,6 +201,7 @@ export function useLiveKitChatCallSession({
   const cameraRequestedRef = useRef(initialCameraEnabled);
   const micRequestedRef = useRef(initialMicEnabled);
   const appStateRef = useRef(AppState.currentState);
+  const applicationStateGenerationRef = useRef(0);
   const nativeForegroundWitnessRef = useRef<{ inviteId: string; serial: number } | null>(
     Platform.OS === "ios"
       && nativeForegroundActivationSerial > 0
@@ -698,17 +702,165 @@ export function useLiveKitChatCallSession({
     return false;
   }, []);
 
-  const readApplicationActiveForMedia = useCallback(() => {
+  const readApplicationActiveForMedia = useCallback(async () => {
     const canonicalState = AppState.currentState ?? appStateRef.current;
     appStateRef.current = canonicalState;
-    if (canonicalState === "background") return false;
     if (canonicalState === "active") return true;
     const witness = nativeForegroundWitnessRef.current;
-    return Platform.OS === "ios"
+    const exactNativeForegroundWitness = Platform.OS === "ios"
       && !!witness
       && witness.inviteId === inviteId
       && witness.serial > 0;
+    if (!exactNativeForegroundWitness) return false;
+    // During a terminated CallKit Answer, UIKit can be active before React
+    // Native replaces its launch-time `background` value. The historical
+    // invite witness establishes why the stale state may be bridged; the
+    // current native UIKit read establishes whether it is still safe to do so.
+    const nativeApplicationActive = await readIosNativeApplicationActive();
+    const currentWitness = nativeForegroundWitnessRef.current;
+    return nativeApplicationActive
+      && currentWitness?.inviteId === inviteId
+      && currentWitness.serial === witness.serial;
   }, [inviteId]);
+
+  const terminateRoomForCameraSafety = useCallback(async (
+    liveKitRoom: Room,
+    failureScope: string,
+    failure: unknown = null,
+  ) => {
+    const alreadyStopped = !publicationIsUsable(
+      liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+    );
+    if (alreadyStopped && liveKitRoom.state === ConnectionState.Disconnected) {
+      reportRuntimeError(
+        failureScope,
+        failure ?? new Error("camera_safety_room_already_terminated"),
+      );
+      return false;
+    }
+    const activePublication = liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera);
+    let trackStopFailure: unknown = null;
+    try {
+      activePublication?.track?.stop();
+    } catch (trackStopError) {
+      trackStopFailure = trackStopError;
+    }
+
+    let disconnectFailure: unknown = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await liveKitRoom.disconnect(true);
+      } catch (roomDisconnectError) {
+        disconnectFailure = roomDisconnectError;
+      }
+      if (liveKitRoom.state === ConnectionState.Disconnected) break;
+    }
+    const cameraStopped = !publicationIsUsable(
+      liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+    );
+    const roomDisconnected = liveKitRoom.state === ConnectionState.Disconnected;
+    reportRuntimeError(
+      failureScope,
+      failure
+        ?? trackStopFailure
+        ?? disconnectFailure
+        ?? new Error(cameraStopped && roomDisconnected
+          ? "camera_disable_required_room_termination"
+          : "camera_safety_termination_unprovable"),
+    );
+    if (!cameraStopped || !roomDisconnected) {
+      reportRuntimeError(
+        "chat-call-livekit-camera-safety-terminal",
+        new Error(`camera_stopped=${cameraStopped};room_disconnected=${roomDisconnected}`),
+      );
+    }
+    return false;
+  }, []);
+
+  const disableCameraOrTerminate = useCallback(async (
+    liveKitRoom: Room,
+    failureScope: string,
+  ) => {
+    let disableFailure: unknown = null;
+    try {
+      await liveKitRoom.localParticipant.setCameraEnabled(false, LIVE_VIDEO_CAPTURE_OPTIONS);
+    } catch (cameraError) {
+      disableFailure = cameraError;
+    }
+    if (!publicationIsUsable(
+      liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+    )) return true;
+    await terminateRoomForCameraSafety(liveKitRoom, failureScope, disableFailure);
+    return false;
+  }, [terminateRoomForCameraSafety]);
+
+  const publishCameraForCurrentForeground = useCallback(async (
+    liveKitRoom: Room,
+    binding: CommittedSession,
+  ) => {
+    const applicationStateGeneration = applicationStateGenerationRef.current;
+    if (
+      !await readApplicationActiveForMedia()
+      || applicationStateGenerationRef.current !== applicationStateGeneration
+      || !isCommittedSessionCurrent(binding)
+    ) return undefined;
+
+    const publication = await liveKitRoom.localParticipant.setCameraEnabled(
+      true,
+      LIVE_VIDEO_CAPTURE_OPTIONS,
+    );
+    const stillAuthorized = applicationStateGenerationRef.current === applicationStateGeneration
+      && isCommittedSessionCurrent(binding)
+      && await readApplicationActiveForMedia();
+    if (
+      stillAuthorized
+      && publication
+      && publicationIsUsable(
+        liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+      )
+    ) return publication;
+
+    await disableCameraOrTerminate(
+      liveKitRoom,
+      "chat-call-livekit-camera-foreground-compensation",
+    );
+    return undefined;
+  }, [disableCameraOrTerminate, isCommittedSessionCurrent, readApplicationActiveForMedia]);
+
+  const restoreCameraPublicationForCurrentSession = useCallback(async (
+    liveKitRoom: Room,
+    binding: CommittedSession,
+    priorEnabled: boolean,
+  ) => {
+    let restored = false;
+    let compensationFailure: unknown = null;
+    try {
+      if (priorEnabled) {
+        const publication = await publishCameraForCurrentForeground(liveKitRoom, binding);
+        restored = !!publication && publicationIsUsable(
+          liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+        );
+      } else {
+        restored = await disableCameraOrTerminate(
+          liveKitRoom,
+          "chat-call-livekit-camera-compensation",
+        );
+      }
+    } catch (compensationError) {
+      compensationFailure = compensationError;
+    }
+    if (restored) return true;
+    reportRuntimeError(
+      "chat-call-livekit-camera-compensation",
+      compensationFailure ?? new Error("camera_compensation_unprovable"),
+    );
+    await terminateRoomForCameraSafety(
+      liveKitRoom,
+      "chat-call-livekit-camera-compensation-terminal",
+      compensationFailure,
+    );
+    return false;
+  }, [disableCameraOrTerminate, publishCameraForCurrentForeground, terminateRoomForCameraSafety]);
 
   const reconcileLatestCommittedMedia = useCallback(async (
     binding: CommittedSession,
@@ -718,10 +870,9 @@ export function useLiveKitChatCallSession({
     const bindingStillCurrent = sameCommittedAuthority(committedSessionRef.current, binding);
     const liveKitRoom = binding.liveKitRoom ?? (bindingStillCurrent ? roomRef.current : null);
     // CallKit can foreground a terminated application before React Native
-    // reports the matching AppState transition. The native foreground witness
-    // is scoped to the exact accepted invite and cannot override an explicit
-    // background state.
-    const appActive = readApplicationActiveForMedia();
+    // reports the matching AppState transition. The invite witness can bridge
+    // that stale value only while the native module confirms UIKit is active.
+    const appActive = await readApplicationActiveForMedia();
     const nextState = appActive ? "active" : appStateRef.current;
     const cameraTarget = cameraRequestedRef.current && appActive;
     const allowBackgroundAudioNow = allowBackgroundAudioRef.current;
@@ -762,7 +913,22 @@ export function useLiveKitChatCallSession({
       }
       if (!isCommittedSessionCurrent(binding)) return false;
       try {
-        await liveKitRoom.localParticipant.setCameraEnabled(cameraTarget, LIVE_VIDEO_CAPTURE_OPTIONS);
+        if (cameraTarget) {
+          const cameraPublication = await publishCameraForCurrentForeground(liveKitRoom, binding);
+          if (!cameraPublication) {
+            setReconciliationWarning("Local camera could not be reconciled. The call remains connected.");
+            return false;
+          }
+        } else {
+          const cameraStopped = await disableCameraOrTerminate(
+            liveKitRoom,
+            "chat-call-livekit-camera-background-compensation",
+          );
+          if (!cameraStopped) {
+            setReconciliationWarning("Camera safety could not be restored. The call was disconnected.");
+            return false;
+          }
+        }
       } catch (cameraError) {
         if (!isCommittedSessionCurrent(binding)) return false;
         if (isConfirmedNativePermissionDenial(cameraError)) {
@@ -783,7 +949,15 @@ export function useLiveKitChatCallSession({
         liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
       ) === cameraTarget;
       if (!nativeMicrophoneExact || !nativeCameraExact) {
-        setReconciliationWarning("Local media could not be reconciled. The call remains connected.");
+        if (!cameraTarget && !nativeCameraExact) {
+          await terminateRoomForCameraSafety(
+            liveKitRoom,
+            "chat-call-livekit-camera-reconciliation-terminal",
+          );
+          setReconciliationWarning("Camera safety could not be restored. The call was disconnected.");
+        } else {
+          setReconciliationWarning("Local media could not be reconciled. The call remains connected.");
+        }
         return false;
       }
       setMicEnabledState(microphoneTarget);
@@ -815,11 +989,14 @@ export function useLiveKitChatCallSession({
   }, [
     applySpeakerOutput,
     clearReconciliationWarning,
+    disableCameraOrTerminate,
     isCommittedSessionCurrent,
     performMembershipMediaWrite,
+    publishCameraForCurrentForeground,
     readApplicationActiveForMedia,
     setConfirmedPermissionDenied,
     setReconciliationWarning,
+    terminateRoomForCameraSafety,
   ]);
 
   const scheduleLatestMediaReconciliation = useCallback((reconcileNative = false) => {
@@ -1134,19 +1311,18 @@ export function useLiveKitChatCallSession({
       let publication: TrackPublication | undefined;
       let forwardError: unknown = null;
       try {
-        publication = await liveKitRoom.localParticipant.setCameraEnabled(
-          nextEnabled,
-          LIVE_VIDEO_CAPTURE_OPTIONS,
-        );
+        publication = nextEnabled
+          ? await publishCameraForCurrentForeground(liveKitRoom, binding)
+          : await liveKitRoom.localParticipant.setCameraEnabled(
+            false,
+            LIVE_VIDEO_CAPTURE_OPTIONS,
+          );
       } catch (cameraError) {
         forwardError = cameraError;
       }
       if (!transactionStillCurrent()) {
         if (isCommittedSessionCurrent(binding)) {
-          await liveKitRoom.localParticipant.setCameraEnabled(
-            priorActual,
-            LIVE_VIDEO_CAPTURE_OPTIONS,
-          ).catch(() => undefined);
+          await restoreCameraPublicationForCurrentSession(liveKitRoom, binding, priorActual);
         }
         return false;
       }
@@ -1154,14 +1330,17 @@ export function useLiveKitChatCallSession({
         liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
       );
       if (forwardError || nativeTarget !== nextEnabled || (nextEnabled && !publication)) {
-        await liveKitRoom.localParticipant.setCameraEnabled(
+        const nativeRestored = await restoreCameraPublicationForCurrentSession(
+          liveKitRoom,
+          binding,
           priorActual,
-          LIVE_VIDEO_CAPTURE_OPTIONS,
-        ).catch(() => undefined);
+        );
         if (forwardError && isConfirmedNativePermissionDenial(forwardError)) {
           setConfirmedPermissionDenied("camera");
         } else {
-          setReconciliationWarning("Camera state could not be synchronized. The call remains connected.");
+          setReconciliationWarning(nativeRestored
+            ? "Camera state could not be synchronized. The call remains connected."
+            : "Camera safety could not be restored. The call was disconnected.");
         }
         if (forwardError) reportRuntimeError("chat-call-livekit-camera", forwardError);
         return false;
@@ -1175,18 +1354,39 @@ export function useLiveKitChatCallSession({
       );
       if (!membership || !transactionStillCurrent()) {
         if (isCommittedSessionCurrent(binding)) {
-          await liveKitRoom.localParticipant.setCameraEnabled(
+          const nativeRestored = await restoreCameraPublicationForCurrentSession(
+            liveKitRoom,
+            binding,
             priorActual,
-            LIVE_VIDEO_CAPTURE_OPTIONS,
-          ).catch(() => undefined);
-          await performMembershipMediaWrite(
+          );
+          const durableRestored = await performMembershipMediaWrite(
             priorDurable.cameraEnabled,
             priorDurable.micEnabled,
             priorDurable.membershipState === "reconnecting" ? "reconnecting" : "active",
             true,
             binding,
           );
-          setReconciliationWarning("Camera state could not be synchronized. The call remains connected.");
+          const durableCompensationProved = !!durableRestored
+            && durableRestored.roomId === priorDurable.roomId
+            && durableRestored.userId === priorDurable.userId
+            && durableRestored.cameraEnabled === priorDurable.cameraEnabled
+            && durableRestored.micEnabled === priorDurable.micEnabled
+            && durableRestored.membershipState === priorDurable.membershipState
+            && !durableRestored.leftAt;
+          const callStillValid = liveKitRoom.state === ConnectionState.Connected
+            || liveKitRoom.state === ConnectionState.Reconnecting;
+          const compensationProved = nativeRestored
+            && durableCompensationProved
+            && callStillValid;
+          if (!compensationProved) {
+            await terminateRoomForCameraSafety(
+              liveKitRoom,
+              "chat-call-livekit-camera-membership-compensation-terminal",
+            );
+          }
+          setReconciliationWarning(compensationProved
+            ? "Camera state could not be synchronized. The call remains connected."
+            : "Camera safety could not be restored. The call was disconnected.");
         }
         return false;
       }
@@ -1207,16 +1407,20 @@ export function useLiveKitChatCallSession({
   }, [
     cameraEnabled,
     clearReconciliationWarning,
+    disableCameraOrTerminate,
     emitStage,
     enqueueSessionMediaWrite,
     isCommittedSessionCurrent,
     performMembershipMediaWrite,
+    publishCameraForCurrentForeground,
     readCurrentMembershipMediaState,
     refreshParticipantViews,
+    restoreCameraPublicationForCurrentSession,
     runMediaControl,
     setConfirmedPermissionDenied,
     setReconciliationWarning,
     setSpeaker,
+    terminateRoomForCameraSafety,
     updateFirstMediaState,
   ]);
 
@@ -1665,29 +1869,25 @@ export function useLiveKitChatCallSession({
           let lastCameraError: unknown = null;
           for (let attempt = 0; attempt <= INITIAL_CAMERA_TRANSIENT_RETRY_DELAYS_MS.length; attempt += 1) {
             if (!active || !effectBinding || !isCommittedSessionCurrent(effectBinding)) return;
-            if (readApplicationActiveForMedia()) {
-              try {
-                const candidatePublication = await liveKitRoom.localParticipant.setCameraEnabled(
-                  true,
-                  LIVE_VIDEO_CAPTURE_OPTIONS,
-                );
-                if (
-                  candidatePublication
-                  && publicationIsUsable(
-                    liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
-                  )
-                ) {
-                  cameraPublication = candidatePublication;
-                  lastCameraError = null;
-                  break;
-                }
-                lastCameraError = new Error("initial_camera_publication_unavailable");
-              } catch (cameraError) {
-                if (isConfirmedNativePermissionDenial(cameraError)) throw cameraError;
-                lastCameraError = cameraError;
+            try {
+              const candidatePublication = await publishCameraForCurrentForeground(
+                liveKitRoom,
+                effectBinding,
+              );
+              if (
+                candidatePublication
+                && publicationIsUsable(
+                  liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+                )
+              ) {
+                cameraPublication = candidatePublication;
+                lastCameraError = null;
+                break;
               }
-            } else {
-              lastCameraError = new Error("initial_camera_app_not_active");
+              lastCameraError = new Error("initial_camera_publication_unavailable");
+            } catch (cameraError) {
+              if (isConfirmedNativePermissionDenial(cameraError)) throw cameraError;
+              lastCameraError = cameraError;
             }
 
             const retryDelay = INITIAL_CAMERA_TRANSIENT_RETRY_DELAYS_MS[attempt];
@@ -1879,6 +2079,7 @@ export function useLiveKitChatCallSession({
     normalizedRoomId,
     isCommittedSessionCurrent,
     performMembershipMediaWrite,
+    publishCameraForCurrentForeground,
     refreshParticipantViews,
     readApplicationActiveForMedia,
     scheduleLatestMediaReconciliation,
@@ -1895,6 +2096,7 @@ export function useLiveKitChatCallSession({
     if (!sessionKey) return undefined;
     return registerActiveMediaSessionStopper((reason) => {
       if (reason === "app_background") {
+        applicationStateGenerationRef.current += 1;
         nativeForegroundWitnessRef.current = null;
         appStateRef.current = "background";
         void scheduleLatestMediaReconciliation(true);
@@ -1908,6 +2110,7 @@ export function useLiveKitChatCallSession({
     if (!sessionKey) return undefined;
     const subscription = AppState.addEventListener("change", (nextState) => {
       const previousState = appStateRef.current;
+      applicationStateGenerationRef.current += 1;
       const nativeWitnessRevoked = nextState !== "active" && !!nativeForegroundWitnessRef.current;
       if (nextState !== "active") nativeForegroundWitnessRef.current = null;
       appStateRef.current = nextState;

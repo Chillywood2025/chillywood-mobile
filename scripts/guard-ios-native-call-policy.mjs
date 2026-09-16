@@ -121,6 +121,7 @@ const bridgeLifecycle = read("_lib/iosNativeCallBridgeLifecycle.mjs");
 const rootLayout = read("app/_layout.tsx");
 const chatThread = read("app/chat/[threadId].tsx");
 const communicationSession = read("hooks/use-communication-room-session.ts");
+const liveKitSession = read("hooks/use-livekit-chat-call-session.ts");
 const nativeMediaPolicy = read("_lib/communicationCallMediaPolicy.mjs");
 const provenance = read("_lib/nativeCallTransitionProvenance.mjs");
 const nativeIntent = read("app/+native-intent.tsx");
@@ -179,6 +180,10 @@ requireText(moduleSource, "stopVoipRegistrationAsync", "The native bridge must s
 requireText(moduleSource, "completeAnswerAsync", "The native bridge must acknowledge CallKit answer only after media connection.");
 requireText(moduleSource, "completeTerminalTransitionAsync", "The authenticated bridge must release the exact CallKit terminal execution lease after server acknowledgement.");
 requireText(moduleSource, "reportRemoteEndAsync", "Realtime terminal state must end CallKit without synthesizing a local decline.");
+requireText(moduleSource, 'AsyncFunction("isApplicationActiveAsync")', "Cold-start video recovery must query current UIKit application state through the canonical native module.");
+requireText(moduleSource, "await MainActor.run", "The UIKit application-state query must execute on the main actor.");
+requireText(moduleSource, "UIApplication.shared.applicationState == .active", "The native query must authorize only the current active UIKit state.");
+requireText(moduleSource, "ChillywoodNativeCallCoordinator.shared.isRuntimeDefaultEnabled", "The native application-state query must fail closed outside the compiled native-call runtime.");
 
 requireText(facade, "EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED", "The JS facade must require an explicit runtime flag.");
 requireText(facade, "communication.iosNativeCallsEnabled", "The canonical communication.iosNativeCallsEnabled runtime key must be supported.");
@@ -211,6 +216,9 @@ requireText(facade, 'event.type === "applicationActive"', "Returning from CallKi
 requireText(facade, "iosNativeAnswerApplicationActiveBaselines", "A native foreground witness must be newer than the exact invite's Answer request.");
 requireText(facade, "readIosNativeApplicationActiveSerial(inviteId: string)", "The call screen must read only an exact-invite native foreground witness.");
 requireText(facade, "iosNativeAnswerApplicationActiveBaselines.clear()", "Account/readiness replacement must revoke every native foreground witness.");
+requireText(facade, "readIosNativeApplicationActive(): Promise<boolean>", "The JavaScript facade must expose the fail-closed current UIKit state query.");
+requireText(facade, 'typeof NativeCallsModule.isApplicationActiveAsync !== "function"', "Older native builds must fail closed for current UIKit state.");
+requireText(facade, "NativeCallsModule.isApplicationActiveAsync().catch(() => false)", "Native application-state query failures must keep camera publication disabled.");
 requireText(rootLayout, "drainIosNativeCallPendingEvents", "React Native AppState activation must independently replay a pending native Answer.");
 requireText(facade, "completeIosNativeCallTerminalTransition", "The iOS facade must expose only the exact call-scoped terminal lease acknowledgement.");
 requireText(facade, 'clearNativeCallTransitionClaims("ios")', "Account and readiness lifecycle changes must clear only iOS in-memory native claims.");
@@ -253,6 +261,25 @@ requireText(chatThread, 'event.type === "applicationActive"', "The chat call scr
 requireText(chatThread, "readIosNativeApplicationActiveSerial(requestedCallInviteId)", "The chat call screen must recover an activation drained before it mounted.");
 requireText(chatThread, 'requestedNativeCallAction === "answer" && requestedNativeCallOwnsTransition', "Only an attested exact native Answer may carry a foreground witness into media.");
 requireText(chatThread, "nativeForegroundActivationInviteId:", "The media hook must receive the exact invite bound to the native foreground witness.");
+requireText(liveKitSession, "const nativeApplicationActive = await readIosNativeApplicationActive();", "A CallKit witness must be combined with current UIKit state before camera publication.");
+requireText(liveKitSession, "currentWitness?.inviteId === inviteId", "The exact invite witness must be rechecked after the asynchronous native-state read.");
+if ((liveKitSession.match(/await readApplicationActiveForMedia\(\)/gu) ?? []).length !== 3) failures.push("The shared camera publisher and reconciliation state must await the authoritative foreground gate.");
+if ((liveKitSession.match(/await publishCameraForCurrentForeground\(/gu) ?? []).length !== 4) failures.push("Initial, reconciliation, manual enable, and rollback restore paths must use the shared foreground-authorized publisher.");
+if ((liveKitSession.match(/setCameraEnabled\(\s*true,/gu) ?? []).length !== 1) failures.push("Only the shared foreground-authorized publisher may directly enable camera media.");
+const directCameraPublicationTargets = [
+  ...liveKitSession.matchAll(/localParticipant\.setCameraEnabled\(\s*([A-Za-z_$][A-Za-z0-9_$]*)/gu),
+].map((match) => match[1]);
+if (directCameraPublicationTargets.some((target) => target !== "true" && target !== "false")) failures.push("Camera publication calls must never use a dynamic boolean that can bypass the foreground-authorized publisher.");
+requireText(liveKitSession, "restoreCameraPublicationForCurrentSession", "Camera rollback must use one verified compensation boundary.");
+requireText(liveKitSession, '"chat-call-livekit-camera-compensation",', "Unprovable camera compensation must be reported.");
+requireText(liveKitSession, "terminateRoomForCameraSafety", "Unprovable camera compensation must use the verified terminal fail-safe.");
+requireText(liveKitSession, "activePublication?.track?.stop();", "Camera terminal fail-safe must directly stop any still-usable capture track.");
+requireText(liveKitSession, "await liveKitRoom.disconnect(true);", "Camera terminal fail-safe must stop tracks while disconnecting the room.");
+requireText(liveKitSession, "liveKitRoom.state === ConnectionState.Disconnected", "Camera terminal fail-safe must verify room disconnection.");
+requireText(liveKitSession, "camera_safety_termination_unprovable", "Unprovable camera termination must produce an explicit security error.");
+requireText(liveKitSession, "durableCompensationProved", "Camera rollback must prove the exact durable membership state.");
+requireText(liveKitSession, "nativeRestored\n            && durableCompensationProved\n            && callStillValid", "Camera rollback must require native, durable, and call-state compensation.");
+requireText(liveKitSession, 'if (nextState !== "active") nativeForegroundWitnessRef.current = null;', "A real later background transition must revoke the exact native foreground witness.");
 requireText(chatThread, 'requestedNativeCallAction === "answer"', "Background audio permission must be scoped to a native Answer action.");
 requireText(chatThread, "consumeMountedIosNativeCallRoute", "The mounted thread must atomically consume the exact native claim after auth readiness.");
 requireText(chatThread, 'action: "answer"', "The mounted CallKit Answer consumer must supply its exact expected action.");

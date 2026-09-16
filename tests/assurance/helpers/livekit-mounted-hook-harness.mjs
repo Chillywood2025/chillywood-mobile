@@ -101,8 +101,17 @@ const productRoom = (runtime, overrides = {}) => ({
   ...overrides,
 });
 
-const makePublication = (enabled, kind) => enabled
-  ? { isMuted: false, source: kind, track: { kind } }
+const makeTrack = (kind, onStop = () => undefined) => ({
+  kind,
+  mediaStreamTrack: { readyState: "live" },
+  stop() {
+    this.mediaStreamTrack.readyState = "ended";
+    onStop();
+  },
+});
+
+const makePublication = (enabled, kind, track = makeTrack(kind)) => enabled
+  ? { isMuted: false, source: kind, track }
   : undefined;
 
 export function createLiveKitMountedRuntime(options = {}) {
@@ -114,6 +123,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     cleanupRegistrations: [],
     durableCamera: options.initialCamera ?? false,
     durableMic: options.initialMic ?? false,
+    disconnectActions: [],
     errors: [],
     heartbeatCallbacks: [],
     identityReads: 0,
@@ -121,6 +131,9 @@ export function createLiveKitMountedRuntime(options = {}) {
     membershipLeaves: 0,
     membershipTouches: [],
     micCalls: [],
+    nativeApplicationActive: options.nativeApplicationActive ?? true,
+    nativeApplicationActiveActions: [],
+    nativeApplicationActiveReads: 0,
     platformOS: options.platformOS ?? "android",
     nativeActions: [],
     nextSnapshotActions: [],
@@ -136,6 +149,8 @@ export function createLiveKitMountedRuntime(options = {}) {
   };
 
   runtime.queueCamera = (action) => runtime.cameraActions.push(action);
+  runtime.queueDisconnect = (action) => runtime.disconnectActions.push(action);
+  runtime.queueNativeApplicationActive = (action) => runtime.nativeApplicationActiveActions.push(action);
   runtime.queueNative = (action) => runtime.nativeActions.push(action);
   runtime.queueSnapshot = (action) => runtime.nextSnapshotActions.push(action);
   runtime.queueTouch = (action) => runtime.nextTouchActions.push(action);
@@ -144,14 +159,19 @@ export function createLiveKitMountedRuntime(options = {}) {
     runtime.queueNative({ gate, outcome: "success" });
     return gate;
   };
+  runtime.deferNativeApplicationActive = (outcome = true) => {
+    const gate = deferred();
+    runtime.queueNativeApplicationActive({ gate, outcome });
+    return gate;
+  };
   runtime.deferCamera = () => {
     const gate = deferred();
     runtime.queueCamera({ gate, outcome: "success" });
     return gate;
   };
-  runtime.deferTouch = () => {
+  runtime.deferTouch = (outcome = "success") => {
     const gate = deferred();
-    runtime.queueTouch({ gate, outcome: "success" });
+    runtime.queueTouch({ gate, outcome });
     return gate;
   };
   runtime.deferSnapshot = () => {
@@ -166,12 +186,18 @@ export function createLiveKitMountedRuntime(options = {}) {
       this.name = "Local";
       this.cameraEnabled = runtime.durableCamera;
       this.micEnabled = runtime.durableMic;
+      this.cameraTrack = makeTrack("video", () => {
+        this.cameraEnabled = false;
+      });
+      this.micTrack = makeTrack("audio", () => {
+        this.micEnabled = false;
+      });
     }
 
     getTrackPublication(source) {
       return source === "camera"
-        ? makePublication(this.cameraEnabled, "video")
-        : makePublication(this.micEnabled, "audio");
+        ? makePublication(this.cameraEnabled, "video", this.cameraTrack)
+        : makePublication(this.micEnabled, "audio", this.micTrack);
     }
 
     async setCameraEnabled(enabled) {
@@ -185,8 +211,9 @@ export function createLiveKitMountedRuntime(options = {}) {
       }
       if (action.outcome === "reject") throw new Error("native camera rejected");
       this.cameraEnabled = action.outcome === "mismatch" ? !enabled : enabled;
+      if (this.cameraEnabled) this.cameraTrack.mediaStreamTrack.readyState = "live";
       if (action.outcome === "missing") return undefined;
-      return makePublication(enabled, "video");
+      return makePublication(enabled, "video", this.cameraTrack);
     }
 
     async setMicrophoneEnabled(enabled) {
@@ -200,8 +227,9 @@ export function createLiveKitMountedRuntime(options = {}) {
       }
       if (action.outcome === "reject") throw new Error("native microphone rejected");
       this.micEnabled = action.outcome === "mismatch" ? !enabled : enabled;
+      if (this.micEnabled) this.micTrack.mediaStreamTrack.readyState = "live";
       if (action.outcome === "missing") return undefined;
-      return makePublication(enabled, "audio");
+      return makePublication(enabled, "audio", this.micTrack);
     }
 
     getTrackPublications() {
@@ -227,8 +255,15 @@ export function createLiveKitMountedRuntime(options = {}) {
       this.state = "connected";
     }
 
-    async disconnect() {
+    async disconnect(stopTracks = true) {
       runtime.roomDisconnects = (runtime.roomDisconnects ?? 0) + 1;
+      const action = runtime.disconnectActions.shift() ?? { outcome: "success" };
+      if (action.outcome === "reject") throw new Error("room disconnect rejected");
+      if (action.outcome === "mismatch") return;
+      if (stopTracks) {
+        this.localParticipant.cameraTrack.stop();
+        this.localParticipant.micTrack.stop();
+      }
       this.state = "disconnected";
     }
   }
@@ -342,6 +377,14 @@ export function createLiveKitMountedRuntime(options = {}) {
     },
     "../_lib/logger": {
       reportRuntimeError: (scope, error) => runtime.errors.push({ message: String(error?.message ?? error), scope }),
+    },
+    "../_lib/iosNativeCalls": {
+      readIosNativeApplicationActive: async () => {
+        runtime.nativeApplicationActiveReads += 1;
+        const action = runtime.nativeApplicationActiveActions.shift();
+        if (action?.gate) await action.gate.promise;
+        return action ? !!action.outcome : !!runtime.nativeApplicationActive;
+      },
     },
     "../_lib/mediaSessionLifecycle": {
       registerActiveMediaSessionStopper: (stopper) => {

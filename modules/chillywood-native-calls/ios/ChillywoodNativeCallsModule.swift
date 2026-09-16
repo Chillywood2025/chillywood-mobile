@@ -1,4 +1,5 @@
 import ExpoModulesCore
+import UIKit
 
 public final class ChillywoodNativeCallsModule: Module {
   public func definition() -> ModuleDefinition {
@@ -18,6 +19,16 @@ public final class ChillywoodNativeCallsModule: Module {
 
     AsyncFunction("isBuildEnabledAsync") {
       ChillywoodNativeCallCoordinator.shared.isBuildEnabled
+    }
+
+    AsyncFunction("isApplicationActiveAsync") { () async -> Bool in
+      guard ChillywoodNativeCallCoordinator.shared.isBuildEnabled,
+            ChillywoodNativeCallCoordinator.shared.isRuntimeDefaultEnabled else {
+        return false
+      }
+      return await MainActor.run {
+        UIApplication.shared.applicationState == .active
+      }
     }
 
     AsyncFunction("startVoipRegistrationAsync") {
