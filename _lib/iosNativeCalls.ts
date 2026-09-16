@@ -134,6 +134,16 @@ export async function readIosNativeCallsReadiness(): Promise<IosNativeCallsReadi
   };
 }
 
+export async function readIosNativeApplicationActive(): Promise<boolean> {
+  if (
+    Platform.OS !== "ios"
+    || !NativeCallsModule
+    || !isIosNativeCallsRuntimeEnabled()
+    || typeof NativeCallsModule.isApplicationActiveAsync !== "function"
+  ) return false;
+  return NativeCallsModule.isApplicationActiveAsync().catch(() => false);
+}
+
 const sanitizeNativeEvent = (
   event: NativeCallEvent,
   nativeEventGeneration: number,

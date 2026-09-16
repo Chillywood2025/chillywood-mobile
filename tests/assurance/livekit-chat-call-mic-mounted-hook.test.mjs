@@ -686,7 +686,7 @@ test("cold-start video recovers when foreground activation happened before the A
 });
 
 test("terminated iOS video uses an exact-invite native foreground witness when React Native AppState is stale", async (t) => {
-  const runtime = createLiveKitMountedRuntime({ platformOS: "ios" });
+  const runtime = createLiveKitMountedRuntime({ nativeApplicationActive: true, platformOS: "ios" });
   runtime.appState = "inactive";
   const hookOptions = defaultHookOptions({
     initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
@@ -700,9 +700,10 @@ test("terminated iOS video uses an exact-invite native foreground witness when R
   assert.equal(harness.getResult().cameraEnabled, true);
   assert.equal(runtime.durableCamera, true);
   assert.equal(runtime.cameraCalls.filter(Boolean).length, 1);
+  assert.equal(runtime.nativeApplicationActiveReads >= 1, true);
 });
 
-test("native foreground witness cannot enable camera for another invite or explicit background state", async (t) => {
+test("native foreground witness cannot enable camera for another invite", async (t) => {
   const mismatchedRuntime = createLiveKitMountedRuntime({ platformOS: "ios" });
   mismatchedRuntime.appState = "inactive";
   const mismatchedHarness = await mountLiveKitHook(mismatchedRuntime, defaultHookOptions({
@@ -716,24 +717,199 @@ test("native foreground witness cannot enable camera for another invite or expli
   await waitFor(mismatchedHarness, () => mismatchedHarness.getResult().channelState === "live", "mismatched witness call authority committed");
   assert.equal(mismatchedHarness.getResult().cameraEnabled, false);
   assert.equal(mismatchedRuntime.cameraCalls.some(Boolean), false);
+  assert.equal(mismatchedRuntime.nativeApplicationActiveReads, 0);
 
-  const backgroundRuntime = createLiveKitMountedRuntime({ platformOS: "ios" });
-  backgroundRuntime.appState = "background";
-  const backgroundHarness = await mountLiveKitHook(backgroundRuntime, defaultHookOptions({
+});
+
+test("terminated iOS video requires current UIKit active state before bridging stale launch-time background", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ nativeApplicationActive: true, platformOS: "ios" });
+  runtime.appState = "background";
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+    nativeForegroundActivationInviteId: "invite-1",
+    nativeForegroundActivationSerial: 1,
+  }));
+  t.after(() => harness.unmount());
+
+  assert.equal(harness.getResult().cameraEnabled, true);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.cameraCalls.filter(Boolean).length, 1);
+  assert.equal(runtime.nativeApplicationActiveReads >= 1, true);
+});
+
+test("terminated iOS video keeps camera off when the exact witness is stale but UIKit is backgrounded", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ nativeApplicationActive: false, platformOS: "ios" });
+  runtime.appState = "background";
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
     initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
     invite: { ...defaultHookOptions().invite, callType: "video" },
     nativeForegroundActivationInviteId: "invite-1",
     nativeForegroundActivationSerial: 1,
   }), { requireLive: false });
-  t.after(() => backgroundHarness.unmount());
-  for (let attempt = 0; attempt < 3; attempt += 1) await backgroundHarness.fireMediaWriteTimeout();
-  await waitFor(backgroundHarness, () => backgroundHarness.getResult().channelState === "live", "background witness call authority committed");
-  assert.equal(backgroundHarness.getResult().cameraEnabled, false);
-  assert.equal(backgroundRuntime.cameraCalls.some(Boolean), false);
+  t.after(() => harness.unmount());
+
+  for (let attempt = 0; attempt < 4; attempt += 1) await harness.fireMediaWriteTimeout();
+  await waitFor(harness, () => harness.getResult().channelState === "live", "background call authority committed");
+  assert.equal(runtime.nativeApplicationActiveReads >= 1, true);
+  assert.equal(harness.getResult().cameraEnabled, false);
+  assert.equal(runtime.durableCamera, false);
+  assert.equal(runtime.cameraCalls.some(Boolean), false);
+});
+
+test("terminated iOS video cannot publish camera when background revokes the witness during the native state read", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ nativeApplicationActive: true, platformOS: "ios" });
+  runtime.appState = "background";
+  const nativeStateRead = runtime.deferNativeApplicationActive(true);
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+    nativeForegroundActivationInviteId: "invite-1",
+    nativeForegroundActivationSerial: 1,
+  }), { requireLive: false });
+  t.after(() => harness.unmount());
+  await waitFor(harness, () => runtime.nativeApplicationActiveReads === 1, "native state read started");
+
+  await harness.fireAppState("background");
+  nativeStateRead.resolve();
+  await harness.flush(48);
+
+  assert.equal(runtime.cameraCalls.some(Boolean), false);
+  assert.equal(runtime.durableCamera, false);
+  assert.equal(harness.getResult().cameraEnabled, false);
+});
+
+test("camera enable compensates without durable publication when the app backgrounds during the native write", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ nativeApplicationActive: true, platformOS: "ios" });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  t.after(() => harness.unmount());
+  const cameraWrite = runtime.deferCamera();
+  const operation = await harness.startOperation(() => harness.getResult().setCameraEnabled(true));
+  await waitFor(harness, () => runtime.cameraCalls.at(-1) === true, "camera enable reached native boundary");
+
+  runtime.nativeApplicationActive = false;
+  await harness.fireAppState("background");
+  cameraWrite.resolve();
+  assert.equal(await settleOperation(operation, harness), false);
+
+  const finalEnabledCall = runtime.cameraCalls.lastIndexOf(true);
+  assert.equal(finalEnabledCall >= 0, true);
+  assert.equal(runtime.cameraCalls.slice(finalEnabledCall + 1).includes(false), true);
+  assert.equal(runtime.cameraCalls.at(-1), false);
+  assert.equal(runtime.durableCamera, false);
+  assert.equal(harness.getResult().cameraEnabled, false);
+  assert.equal(runtime.membershipTouches.some((entry) => entry.cameraEnabled === true), false);
+});
+
+test("camera enable disconnects when a failed membership write cannot disable capture", async (t) => {
+  const { harness, runtime } = await mountCase(t, { nativeApplicationActive: true, platformOS: "ios" }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  runtime.queueCamera({ outcome: "success" });
+  runtime.queueCamera({ outcome: "reject" });
+  runtime.queueTouch({ outcome: "null" });
+
+  assert.equal(await runOperation(harness, () => harness.getResult().setCameraEnabled(true)), false);
+  assert.equal(runtime.durableCamera, false);
+  assert.equal(harness.getResult().cameraEnabled, false);
+  assert.equal(runtime.roomDisconnects, 1);
+  assert.equal(runtime.rooms.at(-1).state, "disconnected");
+  assert.equal(runtime.errors.some((entry) => entry.scope === "chat-call-livekit-camera-compensation"), true);
+});
+
+test("camera compensation terminalizes when disable resolves without stopping capture", async (t) => {
+  const { harness, runtime } = await mountCase(t, { nativeApplicationActive: true, platformOS: "ios" }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  runtime.queueCamera({ outcome: "success" });
+  runtime.queueCamera({ outcome: "mismatch" });
+  runtime.queueTouch({ outcome: "null" });
+  runtime.queueDisconnect({ outcome: "reject" });
+
+  assert.equal(await runOperation(harness, () => harness.getResult().setCameraEnabled(true)), false);
+  assert.equal(runtime.rooms.at(-1).localParticipant.getTrackPublication("camera"), undefined);
+  assert.equal(runtime.roomDisconnects, 2);
+  assert.equal(runtime.rooms.at(-1).state, "disconnected");
+  assert.equal(runtime.errors.some((entry) => (
+    entry.scope === "chat-call-livekit-camera-compensation"
+    || entry.scope === "chat-call-livekit-camera-compensation-terminal"
+  )), true);
+});
+
+test("background reconciliation terminalizes a resolved-but-ineffective camera shutdown", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    nativeApplicationActive: true,
+    platformOS: "ios",
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  runtime.queueCamera({ outcome: "mismatch" });
+
+  runtime.nativeApplicationActive = false;
+  await harness.fireAppState("background");
+  await waitFor(harness, () => runtime.rooms.at(-1).state === "disconnected", "camera safety disconnect");
+  assert.equal(runtime.rooms.at(-1).localParticipant.getTrackPublication("camera"), undefined);
+  assert.equal(runtime.roomDisconnects, 1);
+  assert.match(harness.getResult().mediaReconciliationMessage, /disconnected/u);
+});
+
+test("camera membership rollback terminalizes unless native and durable state both restore", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    nativeApplicationActive: true,
+    platformOS: "ios",
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  runtime.queueSnapshot({ outcome: "active" });
+  runtime.queueSnapshot({ outcome: "null" });
+  runtime.queueSnapshot({ outcome: "null" });
+  runtime.queueTouch({ outcome: "null" });
+  runtime.queueTouch({ outcome: "null" });
+
+  assert.equal(await runOperation(harness, () => harness.getResult().setCameraEnabled(false)), false);
+  assert.equal(runtime.rooms.at(-1).localParticipant.getTrackPublication("camera"), undefined);
+  assert.equal(runtime.roomDisconnects, 1);
+  assert.equal(runtime.rooms.at(-1).state, "disconnected");
+  assert.match(harness.getResult().mediaReconciliationMessage, /disconnected/u);
+});
+
+test("camera rollback cannot re-enable capture after the app backgrounds", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    nativeApplicationActive: true,
+    platformOS: "ios",
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const touch = runtime.deferTouch("null");
+  const cameraCallBaseline = runtime.cameraCalls.length;
+  const operation = await harness.startOperation(() => harness.getResult().setCameraEnabled(false));
+  await waitFor(harness, () => runtime.cameraCalls.length > cameraCallBaseline, "camera disable reached native boundary");
+
+  runtime.nativeApplicationActive = false;
+  await harness.fireAppState("background");
+  touch.resolve();
+  assert.equal(await settleOperation(operation, harness), false);
+
+  const transitionCalls = runtime.cameraCalls.slice(cameraCallBaseline);
+  assert.equal(transitionCalls[0], false);
+  assert.equal(transitionCalls.includes(true), false);
+  assert.equal(runtime.roomDisconnects, 1);
+  assert.equal(runtime.rooms.at(-1).state, "disconnected");
 });
 
 test("background revokes the exact native foreground witness and the same serial cannot restart camera", async (t) => {
-  const runtime = createLiveKitMountedRuntime({ platformOS: "ios" });
+  const runtime = createLiveKitMountedRuntime({ nativeApplicationActive: true, platformOS: "ios" });
   runtime.appState = "inactive";
   const hookOptions = defaultHookOptions({
     initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
