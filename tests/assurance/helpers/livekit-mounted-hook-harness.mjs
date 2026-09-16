@@ -121,6 +121,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     membershipLeaves: 0,
     membershipTouches: [],
     micCalls: [],
+    platformOS: options.platformOS ?? "android",
     nativeActions: [],
     nextSnapshotActions: [],
     nextTouchActions: [],
@@ -359,7 +360,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     "react-native": {
       AppState,
       Linking: { openSettings: async () => { runtime.settingsCalls += 1; } },
-      Platform: { OS: "android" },
+      Platform: { OS: runtime.platformOS },
     },
   };
 
@@ -405,6 +406,8 @@ export const defaultHookOptions = (overrides = {}) => ({
     threadId: "thread-1",
   },
   mediaActivationSerial: 0,
+  nativeForegroundActivationInviteId: "",
+  nativeForegroundActivationSerial: 0,
   onRoomEnded: () => undefined,
   roomId: "ROOM-1",
   threadId: "thread-1",

@@ -685,6 +685,76 @@ test("cold-start video recovers when foreground activation happened before the A
   assert.equal(runtime.rooms.length, 1);
 });
 
+test("terminated iOS video uses an exact-invite native foreground witness when React Native AppState is stale", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ platformOS: "ios" });
+  runtime.appState = "inactive";
+  const hookOptions = defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+    nativeForegroundActivationInviteId: "invite-1",
+    nativeForegroundActivationSerial: 1,
+  });
+  const harness = await mountLiveKitHook(runtime, hookOptions);
+  t.after(() => harness.unmount());
+
+  assert.equal(harness.getResult().cameraEnabled, true);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.cameraCalls.filter(Boolean).length, 1);
+});
+
+test("native foreground witness cannot enable camera for another invite or explicit background state", async (t) => {
+  const mismatchedRuntime = createLiveKitMountedRuntime({ platformOS: "ios" });
+  mismatchedRuntime.appState = "inactive";
+  const mismatchedHarness = await mountLiveKitHook(mismatchedRuntime, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+    nativeForegroundActivationInviteId: "invite-other",
+    nativeForegroundActivationSerial: 1,
+  }), { requireLive: false });
+  t.after(() => mismatchedHarness.unmount());
+  for (let attempt = 0; attempt < 3; attempt += 1) await mismatchedHarness.fireMediaWriteTimeout();
+  await waitFor(mismatchedHarness, () => mismatchedHarness.getResult().channelState === "live", "mismatched witness call authority committed");
+  assert.equal(mismatchedHarness.getResult().cameraEnabled, false);
+  assert.equal(mismatchedRuntime.cameraCalls.some(Boolean), false);
+
+  const backgroundRuntime = createLiveKitMountedRuntime({ platformOS: "ios" });
+  backgroundRuntime.appState = "background";
+  const backgroundHarness = await mountLiveKitHook(backgroundRuntime, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+    nativeForegroundActivationInviteId: "invite-1",
+    nativeForegroundActivationSerial: 1,
+  }), { requireLive: false });
+  t.after(() => backgroundHarness.unmount());
+  for (let attempt = 0; attempt < 3; attempt += 1) await backgroundHarness.fireMediaWriteTimeout();
+  await waitFor(backgroundHarness, () => backgroundHarness.getResult().channelState === "live", "background witness call authority committed");
+  assert.equal(backgroundHarness.getResult().cameraEnabled, false);
+  assert.equal(backgroundRuntime.cameraCalls.some(Boolean), false);
+});
+
+test("background revokes the exact native foreground witness and the same serial cannot restart camera", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ platformOS: "ios" });
+  runtime.appState = "inactive";
+  const hookOptions = defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+    nativeForegroundActivationInviteId: "invite-1",
+    nativeForegroundActivationSerial: 1,
+  });
+  const harness = await mountLiveKitHook(runtime, hookOptions);
+  t.after(() => harness.unmount());
+  assert.equal(harness.getResult().cameraEnabled, true);
+
+  await harness.fireAppState("background");
+  await waitFor(harness, () => !harness.getResult().cameraEnabled, "background camera shutdown");
+  const enabledCalls = runtime.cameraCalls.filter(Boolean).length;
+
+  await harness.commitRender(hookOptions);
+  await harness.fireHeartbeat();
+  assert.equal(harness.getResult().cameraEnabled, false);
+  assert.equal(runtime.cameraCalls.filter(Boolean).length, enabledCalls);
+});
+
 test("cold-start video post-commit retry observes a missed foreground transition before heartbeat", async (t) => {
   const runtime = createLiveKitMountedRuntime();
   runtime.appState = "background";

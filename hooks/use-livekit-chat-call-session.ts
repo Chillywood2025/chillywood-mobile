@@ -93,6 +93,8 @@ type UseLiveKitChatCallSessionOptions = {
   initialMediaPreferences?: Partial<CommunicationMediaPreferences>;
   invite: ChillyChatCallInvite | null;
   mediaActivationSerial?: number;
+  nativeForegroundActivationInviteId?: string;
+  nativeForegroundActivationSerial?: number;
   onRoomEnded?: (reason: RoomEndedReason) => void | Promise<void>;
   roomId: string;
   threadId: string;
@@ -165,6 +167,8 @@ export function useLiveKitChatCallSession({
   initialMediaPreferences,
   invite,
   mediaActivationSerial = 0,
+  nativeForegroundActivationInviteId = "",
+  nativeForegroundActivationSerial = 0,
   onRoomEnded,
   roomId,
   threadId,
@@ -194,6 +198,13 @@ export function useLiveKitChatCallSession({
   const cameraRequestedRef = useRef(initialCameraEnabled);
   const micRequestedRef = useRef(initialMicEnabled);
   const appStateRef = useRef(AppState.currentState);
+  const nativeForegroundWitnessRef = useRef<{ inviteId: string; serial: number } | null>(
+    Platform.OS === "ios"
+      && nativeForegroundActivationSerial > 0
+      && nativeForegroundActivationInviteId === inviteId
+      ? { inviteId, serial: nativeForegroundActivationSerial }
+      : null,
+  );
   const allowBackgroundAudioRef = useRef(allowBackgroundAudio);
   const endingCleanupOwnersRef = useRef<Set<object | symbol>>(new Set());
   const manualDisconnectRef = useRef(false);
@@ -687,6 +698,18 @@ export function useLiveKitChatCallSession({
     return false;
   }, []);
 
+  const readApplicationActiveForMedia = useCallback(() => {
+    const canonicalState = AppState.currentState ?? appStateRef.current;
+    appStateRef.current = canonicalState;
+    if (canonicalState === "background") return false;
+    if (canonicalState === "active") return true;
+    const witness = nativeForegroundWitnessRef.current;
+    return Platform.OS === "ios"
+      && !!witness
+      && witness.inviteId === inviteId
+      && witness.serial > 0;
+  }, [inviteId]);
+
   const reconcileLatestCommittedMedia = useCallback(async (
     binding: CommittedSession,
     reconcileNative: boolean,
@@ -694,13 +717,12 @@ export function useLiveKitChatCallSession({
     if (!isCommittedSessionCurrent(binding) || !binding.liveKitRoom) return false;
     const bindingStillCurrent = sameCommittedAuthority(committedSessionRef.current, binding);
     const liveKitRoom = binding.liveKitRoom ?? (bindingStillCurrent ? roomRef.current : null);
-    // A terminated CallKit answer can foreground the application before this
-    // hook's AppState listener is installed. Read the canonical current value
-    // at reconciliation time so that the missed transition cannot leave the
-    // exact accepted video call permanently bound to a stale background state.
-    const nextState = AppState.currentState ?? appStateRef.current;
-    appStateRef.current = nextState;
-    const appActive = nextState === "active";
+    // CallKit can foreground a terminated application before React Native
+    // reports the matching AppState transition. The native foreground witness
+    // is scoped to the exact accepted invite and cannot override an explicit
+    // background state.
+    const appActive = readApplicationActiveForMedia();
+    const nextState = appActive ? "active" : appStateRef.current;
     const cameraTarget = cameraRequestedRef.current && appActive;
     const allowBackgroundAudioNow = allowBackgroundAudioRef.current;
     const microphoneTarget = micRequestedRef.current && (appActive || allowBackgroundAudioNow);
@@ -795,6 +817,7 @@ export function useLiveKitChatCallSession({
     clearReconciliationWarning,
     isCommittedSessionCurrent,
     performMembershipMediaWrite,
+    readApplicationActiveForMedia,
     setConfirmedPermissionDenied,
     setReconciliationWarning,
   ]);
@@ -1642,7 +1665,7 @@ export function useLiveKitChatCallSession({
           let lastCameraError: unknown = null;
           for (let attempt = 0; attempt <= INITIAL_CAMERA_TRANSIENT_RETRY_DELAYS_MS.length; attempt += 1) {
             if (!active || !effectBinding || !isCommittedSessionCurrent(effectBinding)) return;
-            if (appStateRef.current === "active") {
+            if (readApplicationActiveForMedia()) {
               try {
                 const candidatePublication = await liveKitRoom.localParticipant.setCameraEnabled(
                   true,
@@ -1857,6 +1880,7 @@ export function useLiveKitChatCallSession({
     isCommittedSessionCurrent,
     performMembershipMediaWrite,
     refreshParticipantViews,
+    readApplicationActiveForMedia,
     scheduleLatestMediaReconciliation,
     sessionKey,
     setCommittedRoomState,
@@ -1871,6 +1895,7 @@ export function useLiveKitChatCallSession({
     if (!sessionKey) return undefined;
     return registerActiveMediaSessionStopper((reason) => {
       if (reason === "app_background") {
+        nativeForegroundWitnessRef.current = null;
         appStateRef.current = "background";
         void scheduleLatestMediaReconciliation(true);
         return;
@@ -1883,8 +1908,10 @@ export function useLiveKitChatCallSession({
     if (!sessionKey) return undefined;
     const subscription = AppState.addEventListener("change", (nextState) => {
       const previousState = appStateRef.current;
+      const nativeWitnessRevoked = nextState !== "active" && !!nativeForegroundWitnessRef.current;
+      if (nextState !== "active") nativeForegroundWitnessRef.current = null;
       appStateRef.current = nextState;
-      if (nextState === previousState || !roomRef.current) return;
+      if ((nextState === previousState && !nativeWitnessRevoked) || !roomRef.current) return;
       const liveKitRoom = roomRef.current;
       emitStage(nextState === "active" ? "foregrounded" : "backgrounded", {
         connectionState: String(liveKitRoom.state),
@@ -1903,6 +1930,37 @@ export function useLiveKitChatCallSession({
     return () => subscription.remove();
   }, [
     emitStage,
+    refreshParticipantViews,
+    scheduleLatestMediaReconciliation,
+    sessionKey,
+  ]);
+
+  useEffect(() => {
+    const exactNativeForegroundWitness = Platform.OS === "ios"
+      && nativeForegroundActivationSerial > 0
+      && nativeForegroundActivationInviteId === inviteId;
+    if (!exactNativeForegroundWitness) {
+      nativeForegroundWitnessRef.current = null;
+      return;
+    }
+    const currentWitness = nativeForegroundWitnessRef.current;
+    if (
+      currentWitness?.inviteId === inviteId
+      && currentWitness.serial === nativeForegroundActivationSerial
+    ) return;
+    nativeForegroundWitnessRef.current = {
+      inviteId,
+      serial: nativeForegroundActivationSerial,
+    };
+    if (!sessionKey || !roomRef.current) return;
+    void scheduleLatestMediaReconciliation(true).then((reconciled) => {
+      if (!reconciled) return;
+      refreshParticipantViews();
+    });
+  }, [
+    inviteId,
+    nativeForegroundActivationInviteId,
+    nativeForegroundActivationSerial,
     refreshParticipantViews,
     scheduleLatestMediaReconciliation,
     sessionKey,

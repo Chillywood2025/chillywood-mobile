@@ -86,6 +86,7 @@ import {
   endIosNativeCall,
   hasIosNativeCallPresentation,
   isIosNativeCallsRuntimeEnabled,
+  readIosNativeApplicationActiveSerial,
   reportIosNativeCallRemoteEnd,
   setIosNativeCallAudioRoute,
   setIosNativeCallMuted,
@@ -305,6 +306,7 @@ export default function ChillyChatThreadScreen() {
   const [nativeSpeakerEnabled, setNativeSpeakerEnabled] = useState(false);
   const [iosNativeAnswerRecoveryBlocked, setIosNativeAnswerRecoveryBlocked] = useState(false);
   const [nativeMediaActivationSerial, setNativeMediaActivationSerial] = useState(0);
+  const [nativeApplicationActiveSerial, setNativeApplicationActiveSerial] = useState(0);
   const [nativeAudioSessionCallUuid, setNativeAudioSessionCallUuid] = useState("");
   const [callEvents, setCallEvents] = useState<ChillyChatCallEvent[]>([]);
   const [incomingCallInvite, setIncomingCallInvite] = useState<ChillyChatCallInvite | null>(null);
@@ -910,6 +912,14 @@ export default function ChillyChatThreadScreen() {
       && requestedNativeCallAction === "answer"
       && !!requestedNativeCallUuid,
     mediaActivationSerial: nativeMediaActivationSerial,
+    nativeForegroundActivationInviteId:
+      requestedNativeCallAction === "answer" && requestedNativeCallOwnsTransition
+        ? requestedCallInviteId
+        : "",
+    nativeForegroundActivationSerial:
+      requestedNativeCallAction === "answer" && requestedNativeCallOwnsTransition
+        ? nativeApplicationActiveSerial
+        : 0,
     initialMediaPreferences: initialCallMediaPreferences,
     onRoomEnded: async (reason) => {
       trackEvent("chat_call_ended", {
@@ -2140,6 +2150,22 @@ export default function ChillyChatThreadScreen() {
   ]);
 
   useEffect(() => {
+    const exactNativeAnswer = Platform.OS === "ios"
+      && requestedNativeCallAction === "answer"
+      && requestedNativeCallOwnsTransition
+      && !!requestedCallInviteId
+      && !!requestedNativeCallUuid;
+    setNativeApplicationActiveSerial(
+      exactNativeAnswer ? readIosNativeApplicationActiveSerial(requestedCallInviteId) : 0,
+    );
+  }, [
+    requestedCallInviteId,
+    requestedNativeCallAction,
+    requestedNativeCallOwnsTransition,
+    requestedNativeCallUuid,
+  ]);
+
+  useEffect(() => {
     if (Platform.OS !== "ios" || !requestedNativeCallUuid) return undefined;
     return subscribeToIosNativeCallEvents((event) => {
       const eventCallUuid = String(event.callUuid ?? "").trim();
@@ -2155,11 +2181,16 @@ export default function ChillyChatThreadScreen() {
       ) {
         setNativeMediaActivationSerial((current) => current + 1);
       }
+      if (event.type === "applicationActive") {
+        setNativeApplicationActiveSerial(
+          readIosNativeApplicationActiveSerial(requestedCallInviteId),
+        );
+      }
       if (event.type === "audioSessionActivated") {
         setNativeAudioSessionCallUuid(requestedNativeCallUuid);
       }
     });
-  }, [requestedNativeCallUuid, setMicrophoneEnabled]);
+  }, [requestedCallInviteId, requestedNativeCallUuid, setMicrophoneEnabled]);
 
   const handleJoinOrCloseCall = useCallback(async (
     expectedInviteId = "",
