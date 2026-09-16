@@ -83,6 +83,7 @@ type DeferredMediaReconciliation = {
 
 const MEDIA_WRITE_PREDECESSOR_DRAIN_TIMEOUT_MS = 2_000;
 const MEDIA_WRITE_OPERATION_TIMEOUT_MS = 4_000;
+const INITIAL_CAMERA_TRANSIENT_RETRY_DELAYS_MS = [350, 900, 1_500] as const;
 
 type UseLiveKitChatCallSessionOptions = {
   authenticatedUserId: string;
@@ -1617,11 +1618,44 @@ export function useLiveKitChatCallSession({
       }
 
       let effectiveCameraEnabled = initialCameraEnabled;
+      let initialCameraPermissionDenied = false;
       let cameraPublication: TrackPublication | undefined;
       try {
-        cameraPublication = initialCameraEnabled
-          ? await liveKitRoom.localParticipant.setCameraEnabled(true, LIVE_VIDEO_CAPTURE_OPTIONS)
-          : undefined;
+        if (initialCameraEnabled) {
+          let lastCameraError: unknown = null;
+          for (let attempt = 0; attempt <= INITIAL_CAMERA_TRANSIENT_RETRY_DELAYS_MS.length; attempt += 1) {
+            if (!active || !effectBinding || !isCommittedSessionCurrent(effectBinding)) return;
+            if (appStateRef.current === "active") {
+              try {
+                const candidatePublication = await liveKitRoom.localParticipant.setCameraEnabled(
+                  true,
+                  LIVE_VIDEO_CAPTURE_OPTIONS,
+                );
+                if (
+                  candidatePublication
+                  && publicationIsUsable(
+                    liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+                  )
+                ) {
+                  cameraPublication = candidatePublication;
+                  lastCameraError = null;
+                  break;
+                }
+                lastCameraError = new Error("initial_camera_publication_unavailable");
+              } catch (cameraError) {
+                if (isConfirmedNativePermissionDenial(cameraError)) throw cameraError;
+                lastCameraError = cameraError;
+              }
+            } else {
+              lastCameraError = new Error("initial_camera_app_not_active");
+            }
+
+            const retryDelay = INITIAL_CAMERA_TRANSIENT_RETRY_DELAYS_MS[attempt];
+            if (retryDelay === undefined) break;
+            await new Promise((resolve) => setTimeout(resolve, retryDelay));
+          }
+          if (!cameraPublication && lastCameraError) throw lastCameraError;
+        }
         if (initialCameraEnabled && !cameraPublication) {
           effectiveCameraEnabled = false;
           setReconciliationWarning("Local camera could not be started. The call remains connected.");
@@ -1632,6 +1666,7 @@ export function useLiveKitChatCallSession({
       } catch (cameraError) {
         effectiveCameraEnabled = false;
         if (isConfirmedNativePermissionDenial(cameraError)) {
+          initialCameraPermissionDenied = true;
           setConfirmedPermissionDenied("camera");
         } else {
           setReconciliationWarning("Local camera could not be started. The call remains connected.");
@@ -1651,7 +1686,11 @@ export function useLiveKitChatCallSession({
         roomState: "active",
       });
       if (!effectBinding) return;
-      cameraRequestedRef.current = effectiveCameraEnabled;
+      // A transient camera startup failure during cold-start must not erase the
+      // exact video-call intent. Keeping the requested target lets the existing
+      // AppState/heartbeat reconciliation retry once iOS is fully active. A
+      // confirmed permission denial remains fail-closed and is never retried.
+      cameraRequestedRef.current = initialCameraEnabled && !initialCameraPermissionDenied;
       micRequestedRef.current = effectiveMicEnabled;
       await setSpeaker(speakerRequestedRef.current);
       const initialMembership = await enqueueSessionMediaWrite(effectBinding, () => (
