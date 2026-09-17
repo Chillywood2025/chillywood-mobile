@@ -273,9 +273,10 @@ export function resolveChillyChatCallParticipantRole(input) {
 }
 
 export function resolveIncomingCallPresentation(input) {
-  if (input?.nativeCallPresentationOwned === true) return "native_ios";
   const appState = String(input?.appState ?? "").trim().toLowerCase();
-  if (appState !== "active") return "native_background";
+  if (appState !== "active") {
+    return input?.nativeCallPresentationOwned === true ? "native_ios" : "native_background";
+  }
   return input?.alreadyOnSameThread === true ? "thread_banner" : "app_banner";
 }
 

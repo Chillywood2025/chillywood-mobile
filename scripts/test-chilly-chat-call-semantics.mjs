@@ -917,9 +917,19 @@ assert.equal(resolveIncomingCallPresentation({ appState: "background", alreadyOn
 assert.equal(resolveIncomingCallPresentation({ appState: "inactive", alreadyOnSameThread: true }), "native_background");
 assert.equal(resolveIncomingCallPresentation({
   appState: "active",
+  alreadyOnSameThread: false,
+  nativeCallPresentationOwned: true,
+}), "app_banner", "an exact CallKit record cannot suppress the visible app-wide banner while Chi'llywood is foregrounded elsewhere");
+assert.equal(resolveIncomingCallPresentation({
+  appState: "active",
   alreadyOnSameThread: true,
   nativeCallPresentationOwned: true,
-}), "native_ios", "CallKit ownership suppresses the duplicate React incoming-call banner");
+}), "thread_banner", "an exact CallKit record cannot suppress the visible same-thread banner while Chi'llywood is foregrounded");
+assert.equal(resolveIncomingCallPresentation({
+  appState: "background",
+  alreadyOnSameThread: false,
+  nativeCallPresentationOwned: true,
+}), "native_ios", "an exact CallKit record continues to own background and terminated presentation");
 
 const actionScope = {
   callInviteId: "11111111-1111-4111-8111-111111111111",
@@ -1355,20 +1365,31 @@ for (const nativePresentationOwnerSource of [rootLayoutSource, chatThreadSource]
   assert.match(
     nativePresentationOwnerSource,
     /hasIosNativeCallPresentation/u,
-    "iOS incoming-call surfaces suppress fallback only for an exact native-presented invite",
-  );
-  assert.match(
-    nativePresentationOwnerSource,
-    /\|\| iosNativeCallPresentationOwned\s+\|\| waitingForIosNativePresentation[\s\S]{0,1200}playChillyChatCallSound/u,
-    "iOS in-app ringtone and vibration wait for exact CallKit presentation ownership and bounded fallback grace",
+    "iOS incoming-call surfaces retain exact native presentation bookkeeping",
   );
 }
+assert.match(
+  chatThreadSource,
+  /\|\| iosNativeCallPresentationOwned\s+\|\| waitingForIosNativePresentation[\s\S]{0,1200}playChillyChatCallSound/u,
+  "the exact thread avoids duplicate CallKit and React ringtone ownership",
+);
+assert.match(
+  rootLayoutSource,
+  /\|\| alreadyOnSameThread\s+\|\| waitingForIosNativePresentation[\s\S]{0,1200}playChillyChatCallSound/u,
+  "the app-wide foreground surface remains customer-visible after bounded native grace",
+);
 assert.match(iosNativeCallsSource, /const nativePresentedInviteIds = new Set<string>\(\)/u, "native presentation ownership is tracked per invite");
 assert.match(iosNativeCallsSource, /event\.type === "incoming" \|\| event\.type === "recovered"/u, "only confirmed native incoming/recovered events acquire presentation ownership");
 assert.match(iosNativeCallsSource, /"reportFailed"/u, "failed CallKit reporting releases fallback presentation ownership");
 assert.doesNotMatch(rootLayoutSource, /<Modal/u, "background/full-screen presentation remains native rather than a React modal");
 assert.match(rootLayoutSource, /presentation === "native_background"/u, "background state defers to native CallStyle or CallKit");
-assert.match(rootLayoutSource, /presentation === "native_ios"/u, "CallKit ownership suppresses the duplicate app-wide React banner");
+assert.match(rootLayoutSource, /presentation === "native_ios"/u, "an exact CallKit record continues to own background and terminated presentation");
+assert.match(rootLayoutSource, /presentation === "native_background"/u, "background and terminated calls remain native");
+assert.doesNotMatch(
+  rootLayoutSource,
+  /alreadyOnSameThread\s*\|\|\s*iosNativeCallPresentationOwned\s*\|\|\s*waitingForIosNativePresentation/u,
+  "native presentation bookkeeping cannot suppress active app-wide call attention",
+);
 assert.doesNotMatch(rootLayoutSource, /nativeCallAction:\s*"answer"/u, "CallKit and foreground routes never carry authoritative action text");
 assert.match(rootLayoutSource, /createIosCallKitAnswerRouteHandler/u, "CallKit Answer uses the canonical bridge-auth-router provenance handler");
 assert.match(rootLayoutSource, /await updateChillyChatCallInviteStatus[\s\S]{0,500}status:\s*"accepted"/u, "foreground Answer requests the server-authoritative transition directly");

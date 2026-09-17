@@ -599,7 +599,6 @@ function IncomingCallNotificationBridge() {
     if (
       appState !== "active"
       || alreadyOnSameThread
-      || iosNativeCallPresentationOwned
       || waitingForIosNativePresentation
       || callPreferences?.chillyChatCallsEnabled === false
       || callPreferences?.inAppEnabled === false
