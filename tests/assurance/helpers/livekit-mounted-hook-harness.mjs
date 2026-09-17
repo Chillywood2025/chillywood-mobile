@@ -115,6 +115,7 @@ const makePublication = (enabled, kind, track = makeTrack(kind)) => enabled
   : undefined;
 
 export function createLiveKitMountedRuntime(options = {}) {
+  const acceptedMediaDescriptors = new WeakSet();
   const runtime = {
     appState: "active",
     appStateListener: null,
@@ -146,6 +147,24 @@ export function createLiveKitMountedRuntime(options = {}) {
     settingsCalls: 0,
     timeoutCallbacks: [],
     userId: "local-user",
+  };
+
+  runtime.createAcceptedMediaDescriptor = (overrides = {}) => {
+    const descriptor = Object.freeze({
+      authenticatedUserId: runtime.userId,
+      callUuid: "call-uuid",
+      claimId: "claim-id",
+      inviteId: "invite-1",
+      mediaProvider: "livekit",
+      nativeEventGeneration: 1,
+      platform: "ios",
+      roomId: runtime.roomId,
+      source: "ios_callkit_native_event",
+      threadId: "thread-1",
+      ...overrides,
+    });
+    acceptedMediaDescriptors.add(descriptor);
+    return descriptor;
   };
 
   runtime.queueCamera = (action) => runtime.cameraActions.push(action);
@@ -337,6 +356,18 @@ export function createLiveKitMountedRuntime(options = {}) {
       emitChatCallLiveKitStage: (stage) => runtime.stages.push(stage),
     },
     "../_lib/chillyChatCalls": {},
+    "../_lib/communicationCallMediaPolicy.mjs": {
+      doesIosAcceptedCallKitMediaDescriptorOwnSession: (input) => (
+        !!input?.descriptor
+        && acceptedMediaDescriptors.has(input.descriptor)
+        && input.inviteStatus === "accepted"
+        && input.descriptor.authenticatedUserId === input.authenticatedUserId
+        && input.descriptor.inviteId === input.inviteId
+        && input.descriptor.mediaProvider === input.mediaProvider
+        && input.descriptor.roomId === input.roomId
+        && input.descriptor.threadId === input.threadId
+      ),
+    },
     "../_lib/communication": {
       endCommunicationRoom: async () => null,
       getActiveCommunicationMemberships: (memberships) => memberships.filter((entry) => !entry.leftAt),
@@ -436,6 +467,7 @@ export function createLiveKitMountedRuntime(options = {}) {
 
 export const defaultHookOptions = (overrides = {}) => ({
   allowBackgroundAudio: false,
+  authenticatedUserId: "local-user",
   enabled: true,
   initialMediaPreferences: { cameraEnabled: false, micEnabled: false },
   invite: {
@@ -448,6 +480,7 @@ export const defaultHookOptions = (overrides = {}) => ({
     status: "accepted",
     threadId: "thread-1",
   },
+  iosAcceptedCallKitMediaDescriptor: null,
   mediaActivationSerial: 0,
   nativeForegroundActivationInviteId: "",
   nativeForegroundActivationSerial: 0,

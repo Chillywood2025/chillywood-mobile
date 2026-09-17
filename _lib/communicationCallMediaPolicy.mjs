@@ -149,6 +149,26 @@ export function createIosAcceptedCallKitMediaDescriptor(input) {
   return descriptor;
 }
 
+export function doesIosAcceptedCallKitMediaDescriptorOwnSession(input) {
+  const descriptor = input?.descriptor;
+  if (!descriptor || iosAcceptedMediaDescriptorStates.get(descriptor) !== "active") return false;
+  const expected = {
+    authenticatedUserId: callId(input?.authenticatedUserId),
+    inviteId: callId(input?.inviteId),
+    mediaProvider: callId(input?.mediaProvider),
+    roomId: normalizeCommunicationRoomIdentifier(input?.roomId),
+    threadId: callId(input?.threadId),
+  };
+  return input?.inviteStatus === "accepted"
+    && descriptor.platform === "ios"
+    && descriptor.source === "ios_callkit_native_event"
+    && descriptor.authenticatedUserId === expected.authenticatedUserId
+    && descriptor.threadId === expected.threadId
+    && descriptor.inviteId === expected.inviteId
+    && descriptor.roomId === expected.roomId
+    && descriptor.mediaProvider === expected.mediaProvider;
+}
+
 function canSettleIosAcceptedCallKitMediaFailure(input) {
   const descriptor = input?.descriptor;
   const state = iosAcceptedMediaDescriptorStates.get(descriptor);

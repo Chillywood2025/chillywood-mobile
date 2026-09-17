@@ -720,6 +720,50 @@ test("terminated iOS video recovers when UIKit became active before CallKit Answ
   assert.equal(runtime.nativeApplicationActiveReads >= 1, true);
 });
 
+test("terminated iOS video uses the exact accepted CallKit media descriptor after the route witness is unavailable", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ nativeApplicationActive: true, platformOS: "ios" });
+  runtime.appState = "background";
+  const descriptor = runtime.createAcceptedMediaDescriptor();
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+    iosAcceptedCallKitMediaDescriptor: descriptor,
+    nativeForegroundActivationInviteId: "",
+    nativeForegroundActivationSerial: 0,
+  }));
+  t.after(() => harness.unmount());
+
+  assert.equal(harness.getResult().cameraEnabled, true);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.cameraCalls.filter(Boolean).length, 1);
+  assert.equal(runtime.nativeApplicationActiveReads >= 1, true);
+});
+
+test("accepted CallKit media descriptor cannot bridge UIKit for another account, invite, thread, room, or provider", async (t) => {
+  for (const descriptorOverrides of [
+    { authenticatedUserId: "other-user" },
+    { inviteId: "invite-other" },
+    { threadId: "thread-other" },
+    { roomId: "ROOM-OTHER" },
+    { mediaProvider: "legacy_webrtc" },
+  ]) {
+    const runtime = createLiveKitMountedRuntime({ nativeApplicationActive: true, platformOS: "ios" });
+    runtime.appState = "background";
+    const descriptor = runtime.createAcceptedMediaDescriptor(descriptorOverrides);
+    const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+      initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+      invite: { ...defaultHookOptions().invite, callType: "video" },
+      iosAcceptedCallKitMediaDescriptor: descriptor,
+    }), { requireLive: false });
+    t.after(() => harness.unmount());
+    for (let attempt = 0; attempt < 4; attempt += 1) await harness.fireMediaWriteTimeout();
+    await waitFor(harness, () => harness.getResult().channelState === "live", "mismatched descriptor authority committed without camera");
+    assert.equal(harness.getResult().cameraEnabled, false);
+    assert.equal(runtime.cameraCalls.some(Boolean), false);
+    assert.equal(runtime.nativeApplicationActiveReads, 0);
+  }
+});
+
 test("pre-Answer UIKit activation cannot publish camera without the exact invite-bound route witness", async (t) => {
   const runtime = createLiveKitMountedRuntime({ nativeApplicationActive: true, platformOS: "ios" });
   runtime.appState = "background";

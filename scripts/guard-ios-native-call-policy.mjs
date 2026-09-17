@@ -261,6 +261,8 @@ requireText(chatThread, 'event.type === "applicationActive"', "The chat call scr
 requireText(chatThread, "readIosNativeApplicationActiveSerial(requestedCallInviteId)", "The chat call screen must recover an activation drained before it mounted.");
 requireText(chatThread, 'requestedNativeCallAction === "answer" && requestedNativeCallOwnsTransition', "Only an attested exact native Answer may carry a foreground witness into media.");
 requireText(chatThread, "nativeForegroundActivationInviteId:", "The media hook must receive the exact invite bound to the native foreground witness.");
+requireText(chatThread, "iosAcceptedCallKitMediaDescriptor: acceptedIosNativeMediaDescriptorRef.current", "The media hook must receive the exact accepted CallKit descriptor after native Answer completion.");
+requireText(liveKitSession, "doesIosAcceptedCallKitMediaDescriptorOwnSession", "Cold-start camera recovery must validate the unforgeable exact accepted CallKit descriptor.");
 requireText(liveKitSession, "const nativeApplicationActive = await readIosNativeApplicationActive();", "A CallKit witness must be combined with current UIKit state before camera publication.");
 requireText(liveKitSession, "currentWitness?.inviteId === inviteId", "The exact invite witness must be rechecked after the asynchronous native-state read.");
 if ((liveKitSession.match(/await readApplicationActiveForMedia\(\)/gu) ?? []).length !== 3) failures.push("The shared camera publisher and reconciliation state must await the authoritative foreground gate.");

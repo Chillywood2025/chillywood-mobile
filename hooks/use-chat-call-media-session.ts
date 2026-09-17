@@ -9,6 +9,7 @@ import type {
   CommunicationMediaPreferences,
   CommunicationParticipantView,
 } from "../_lib/communication";
+import { createIosAcceptedCallKitMediaDescriptor } from "../_lib/communicationCallMediaPolicy.mjs";
 import { useCommunicationRoomSession } from "./use-communication-room-session";
 import {
   type ChatCallFirstMediaState,
@@ -22,6 +23,7 @@ type UseChatCallMediaSessionOptions = {
   enabled: boolean;
   initialMediaPreferences?: Partial<CommunicationMediaPreferences>;
   invite: ChillyChatCallInvite | null;
+  iosAcceptedCallKitMediaDescriptor?: IosAcceptedCallKitMediaDescriptor | null;
   mediaActivationSerial?: number;
   nativeForegroundActivationInviteId?: string;
   nativeForegroundActivationSerial?: number;
@@ -29,6 +31,10 @@ type UseChatCallMediaSessionOptions = {
   roomId: string;
   threadId: string;
 };
+
+type IosAcceptedCallKitMediaDescriptor = NonNullable<
+  ReturnType<typeof createIosAcceptedCallKitMediaDescriptor>
+>;
 
 const EMPTY_FIRST_MEDIA_STATE: ChatCallFirstMediaState = {
   firstAudio: false,
@@ -83,6 +89,7 @@ export function useChatCallMediaSession(options: UseChatCallMediaSessionOptions)
     roomId: options.roomId,
     enabled: shouldEnableLiveKit,
     allowBackgroundAudio: options.allowBackgroundAudio,
+    iosAcceptedCallKitMediaDescriptor: options.iosAcceptedCallKitMediaDescriptor,
     mediaActivationSerial: options.mediaActivationSerial,
     nativeForegroundActivationInviteId: options.nativeForegroundActivationInviteId,
     nativeForegroundActivationSerial: options.nativeForegroundActivationSerial,

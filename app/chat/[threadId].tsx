@@ -912,6 +912,7 @@ export default function ChillyChatThreadScreen() {
       && requestedNativeCallAction === "answer"
       && !!requestedNativeCallUuid,
     mediaActivationSerial: nativeMediaActivationSerial,
+    iosAcceptedCallKitMediaDescriptor: acceptedIosNativeMediaDescriptorRef.current,
     nativeForegroundActivationInviteId:
       requestedNativeCallAction === "answer" && requestedNativeCallOwnsTransition
         ? requestedCallInviteId

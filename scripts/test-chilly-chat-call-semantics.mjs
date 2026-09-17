@@ -22,6 +22,8 @@ import {
 } from "../supabase/functions/_shared/ios-voip-policy.mjs";
 import {
   canAttemptNativeCallBackgroundAudio,
+  completeIosAcceptedNativeAnswer,
+  doesIosAcceptedCallKitMediaDescriptorOwnSession,
   doesNativeCallActionOwnTransition,
   resolveLegacyChatSessionRecovery,
   resolveChatThreadCallReconciliation,
@@ -122,7 +124,11 @@ import {
   resolveChillyChatNativeCallActionPayload,
   resolveChillyChatNativeCallRoute,
 } from "../_lib/chillyChatNativeCallRoutes.mjs";
-import {createNativeCallTransitionProvenanceRegistry} from "../_lib/nativeCallTransitionProvenance.mjs";
+import {
+  consumeMountedIosNativeCallRoute,
+  createIosCallKitAnswerRouteHandler,
+  createNativeCallTransitionProvenanceRegistry,
+} from "../_lib/nativeCallTransitionProvenance.mjs";
 import {
   isPermanentFcmTokenError,
   readFcmProviderErrorCode,
@@ -739,6 +745,100 @@ assert.equal(doesNativeCallActionOwnTransition({
   threadId: nativeRouteThreadId,
   trustedNativeClaim: consumedIosAnswerClaim,
 }), false, "an exported test registry cannot manufacture production native-transition attestation");
+let acceptedPolicyDestination = "";
+const acceptedPolicyCallUuid = "33333333-3333-4333-8333-444444444444";
+const acceptedPolicyRouteHandler = createIosCallKitAnswerRouteHandler({
+  completeAnswerFailure: async () => undefined,
+  getAuthenticatedUserId: () => nativeRouteUserId,
+  isActive: () => true,
+  replace: (destination) => { acceptedPolicyDestination = destination; },
+});
+assert.equal(await acceptedPolicyRouteHandler({
+  callInviteId: nativeRouteInviteId,
+  callType: "video",
+  callUuid: acceptedPolicyCallUuid,
+  nativeEventGeneration: 7,
+  platform: "ios",
+  threadId: nativeRouteThreadId,
+  type: "answerRequested",
+}), "routed", "the native Answer creates an attested route for accepted-media policy proof");
+const acceptedPolicyUrl = new URL(acceptedPolicyDestination, "https://chillywood.invalid");
+const acceptedPolicyClaim = consumeMountedIosNativeCallRoute({
+  action: "answer",
+  authenticatedUserId: nativeRouteUserId,
+  authLoading: false,
+  callUuid: acceptedPolicyCallUuid,
+  claimId: acceptedPolicyUrl.searchParams.get("nativeCallClaim"),
+  inviteId: nativeRouteInviteId,
+  isSignedIn: true,
+  platform: "ios",
+  threadId: nativeRouteThreadId,
+});
+assert.ok(acceptedPolicyClaim, "accepted-media policy proof consumes the exact native Answer claim");
+const acceptedPolicyInvite = {
+  callType: "video",
+  calleeUserId: nativeRouteUserId,
+  callerUserId: "88888888-8888-4888-8888-888888888888",
+  communicationRoomId: "ROOM-ACCEPTED-POLICY",
+  id: nativeRouteInviteId,
+  mediaProvider: "livekit",
+  status: "accepted",
+  threadId: nativeRouteThreadId,
+};
+const acceptedPolicyCompletion = await completeIosAcceptedNativeAnswer({
+  authenticatedUserId: nativeRouteUserId,
+  callUuid: acceptedPolicyCallUuid,
+  invite: acceptedPolicyInvite,
+  serverAccepted: true,
+  threadId: nativeRouteThreadId,
+  trustedNativeClaim: acceptedPolicyClaim,
+}, {
+  completeNative: async () => true,
+  monotonicNow: () => globalThis.performance.now(),
+  terminal: {
+    delay: async () => undefined,
+    endNative: async () => true,
+    readInvite: async () => acceptedPolicyInvite,
+    updateInvite: async () => ({...acceptedPolicyInvite, status: "ended"}),
+  },
+});
+assert.equal(acceptedPolicyCompletion.status, "ready");
+const acceptedDescriptorAuthority = {
+  authenticatedUserId: nativeRouteUserId,
+  descriptor: acceptedPolicyCompletion.descriptor,
+  inviteId: nativeRouteInviteId,
+  inviteStatus: "accepted",
+  mediaProvider: "livekit",
+  roomId: acceptedPolicyInvite.communicationRoomId,
+  threadId: nativeRouteThreadId,
+};
+assert.equal(
+  doesIosAcceptedCallKitMediaDescriptorOwnSession(acceptedDescriptorAuthority),
+  true,
+  "the exact active accepted-CallKit descriptor owns only its server-accepted media session",
+);
+for (const mismatch of [
+  {authenticatedUserId: "99999999-9999-4999-8999-999999999999"},
+  {inviteId: "99999999-9999-4999-8999-999999999999"},
+  {inviteStatus: "ended"},
+  {mediaProvider: "legacy_webrtc"},
+  {roomId: "ROOM-OTHER"},
+  {threadId: "99999999-9999-4999-8999-999999999999"},
+]) {
+  assert.equal(
+    doesIosAcceptedCallKitMediaDescriptorOwnSession({...acceptedDescriptorAuthority, ...mismatch}),
+    false,
+    "accepted-CallKit descriptor authority fails closed for every exact-session mismatch",
+  );
+}
+assert.equal(
+  doesIosAcceptedCallKitMediaDescriptorOwnSession({
+    ...acceptedDescriptorAuthority,
+    descriptor: Object.freeze({...acceptedPolicyCompletion.descriptor}),
+  }),
+  false,
+  "a structurally copied descriptor cannot manufacture accepted CallKit media authority",
+);
 assert.equal(doesNativeCallActionOwnTransition({
   callInviteId: "",
   nativeCallAction: "answer",
