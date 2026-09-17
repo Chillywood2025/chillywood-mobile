@@ -14,6 +14,10 @@ import { AppState, Linking, Platform } from "react-native";
 import { emitChatCallLiveKitStage } from "../_lib/chatCallLiveKitTelemetry";
 import type { ChillyChatCallInvite } from "../_lib/chillyChatCalls";
 import {
+  createIosAcceptedCallKitMediaDescriptor,
+  doesIosAcceptedCallKitMediaDescriptorOwnSession,
+} from "../_lib/communicationCallMediaPolicy.mjs";
+import {
   endCommunicationRoom,
   getActiveCommunicationMemberships,
   getCommunicationRoomSnapshot,
@@ -36,6 +40,7 @@ import {
   LiveKitAudioSession,
   resetLiveKitIosAudioSession,
 } from "../_lib/livekit/react-native-module";
+
 import {
   requestLiveKitParticipantToken,
   validateChatCallLiveKitTokenClaims,
@@ -49,6 +54,10 @@ import {
   LIVE_VIDEO_CAPTURE_OPTIONS,
   ROOM_HEARTBEAT_MS,
 } from "../_lib/performancePolicy";
+
+type IosAcceptedCallKitMediaDescriptor = NonNullable<
+  ReturnType<typeof createIosAcceptedCallKitMediaDescriptor>
+>;
 
 type ChatCallChannelState = "idle" | "connecting" | "live" | "reconnecting" | "error";
 type RoomEndedReason = "host-left" | "ended" | "room-full";
@@ -93,6 +102,7 @@ type UseLiveKitChatCallSessionOptions = {
   enabled: boolean;
   initialMediaPreferences?: Partial<CommunicationMediaPreferences>;
   invite: ChillyChatCallInvite | null;
+  iosAcceptedCallKitMediaDescriptor?: IosAcceptedCallKitMediaDescriptor | null;
   mediaActivationSerial?: number;
   nativeForegroundActivationInviteId?: string;
   nativeForegroundActivationSerial?: number;
@@ -169,6 +179,7 @@ export function useLiveKitChatCallSession({
   enabled,
   initialMediaPreferences,
   invite,
+  iosAcceptedCallKitMediaDescriptor = null,
   mediaActivationSerial = 0,
   nativeForegroundActivationInviteId = "",
   nativeForegroundActivationSerial = 0,
@@ -192,6 +203,26 @@ export function useLiveKitChatCallSession({
   const initialCameraEnabled = inviteCallType === "video"
     && initialMediaPreferences?.cameraEnabled !== false;
   const initialMicEnabled = initialMediaPreferences?.micEnabled !== false;
+  const hasExactIosAcceptedMediaAuthority = useCallback(() => (
+    Platform.OS === "ios"
+    && doesIosAcceptedCallKitMediaDescriptorOwnSession({
+      authenticatedUserId,
+      descriptor: iosAcceptedCallKitMediaDescriptor,
+      inviteId,
+      inviteStatus,
+      mediaProvider: inviteProvider,
+      roomId: normalizedRoomId,
+      threadId,
+    })
+  ), [
+    authenticatedUserId,
+    inviteId,
+    inviteProvider,
+    inviteStatus,
+    iosAcceptedCallKitMediaDescriptor,
+    normalizedRoomId,
+    threadId,
+  ]);
   const roomRef = useRef<Room | null>(null);
   const sessionGenerationRef = useRef(0);
   const committedSessionRef = useRef<CommittedSession | null>(null);
@@ -715,17 +746,20 @@ export function useLiveKitChatCallSession({
       && !!witness
       && !!inviteId
       && witness.inviteId === inviteId;
-    if (!exactNativeForegroundWitness) return false;
+    const exactAcceptedMediaAuthority = hasExactIosAcceptedMediaAuthority();
+    if (!exactNativeForegroundWitness && !exactAcceptedMediaAuthority) return false;
     // During a terminated CallKit Answer, UIKit can be active before React
     // Native replaces its launch-time `background` value. The historical
     // invite witness establishes why the stale state may be bridged; the
     // current native UIKit read establishes whether it is still safe to do so.
     const nativeApplicationActive = await readIosNativeApplicationActive();
     const currentWitness = nativeForegroundWitnessRef.current;
-    return nativeApplicationActive
+    const currentWitnessStillExact = !!witness
       && currentWitness?.inviteId === inviteId
       && currentWitness.serial === witness.serial;
-  }, [inviteId]);
+    return nativeApplicationActive
+      && (currentWitnessStillExact || hasExactIosAcceptedMediaAuthority());
+  }, [hasExactIosAcceptedMediaAuthority, inviteId]);
 
   const terminateRoomForCameraSafety = useCallback(async (
     liveKitRoom: Room,
@@ -2146,25 +2180,29 @@ export function useLiveKitChatCallSession({
     const exactNativeForegroundWitness = Platform.OS === "ios"
       && !!inviteId
       && nativeForegroundActivationInviteId === inviteId;
+    const exactAcceptedMediaAuthority = hasExactIosAcceptedMediaAuthority();
     if (!exactNativeForegroundWitness) {
       nativeForegroundWitnessRef.current = null;
-      return;
+    } else {
+      const currentWitness = nativeForegroundWitnessRef.current;
+      if (
+        currentWitness?.inviteId !== inviteId
+        || currentWitness.serial !== nativeForegroundActivationSerial
+      ) {
+        nativeForegroundWitnessRef.current = {
+          inviteId,
+          serial: nativeForegroundActivationSerial,
+        };
+      }
     }
-    const currentWitness = nativeForegroundWitnessRef.current;
-    if (
-      currentWitness?.inviteId === inviteId
-      && currentWitness.serial === nativeForegroundActivationSerial
-    ) return;
-    nativeForegroundWitnessRef.current = {
-      inviteId,
-      serial: nativeForegroundActivationSerial,
-    };
+    if (!exactNativeForegroundWitness && !exactAcceptedMediaAuthority) return;
     if (!sessionKey || !roomRef.current) return;
     void scheduleLatestMediaReconciliation(true).then((reconciled) => {
       if (!reconciled) return;
       refreshParticipantViews();
     });
   }, [
+    hasExactIosAcceptedMediaAuthority,
     inviteId,
     nativeForegroundActivationInviteId,
     nativeForegroundActivationSerial,
