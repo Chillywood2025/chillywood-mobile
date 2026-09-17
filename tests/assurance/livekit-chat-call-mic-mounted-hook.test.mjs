@@ -703,6 +703,42 @@ test("terminated iOS video uses an exact-invite native foreground witness when R
   assert.equal(runtime.nativeApplicationActiveReads >= 1, true);
 });
 
+test("terminated iOS video recovers when UIKit became active before CallKit Answer established its serial baseline", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ nativeApplicationActive: true, platformOS: "ios" });
+  runtime.appState = "background";
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+    nativeForegroundActivationInviteId: "invite-1",
+    nativeForegroundActivationSerial: 0,
+  }));
+  t.after(() => harness.unmount());
+
+  assert.equal(harness.getResult().cameraEnabled, true);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.cameraCalls.filter(Boolean).length, 1);
+  assert.equal(runtime.nativeApplicationActiveReads >= 1, true);
+});
+
+test("pre-Answer UIKit activation cannot publish camera without the exact invite-bound route witness", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ nativeApplicationActive: true, platformOS: "ios" });
+  runtime.appState = "background";
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+    nativeForegroundActivationInviteId: "invite-other",
+    nativeForegroundActivationSerial: 0,
+  }), { requireLive: false });
+  t.after(() => harness.unmount());
+
+  for (let attempt = 0; attempt < 4; attempt += 1) await harness.fireMediaWriteTimeout();
+  await waitFor(harness, () => harness.getResult().channelState === "live", "mismatched pre-Answer witness authority committed");
+  assert.equal(harness.getResult().cameraEnabled, false);
+  assert.equal(runtime.durableCamera, false);
+  assert.equal(runtime.cameraCalls.some(Boolean), false);
+  assert.equal(runtime.nativeApplicationActiveReads, 0);
+});
+
 test("native foreground witness cannot enable camera for another invite", async (t) => {
   const mismatchedRuntime = createLiveKitMountedRuntime({ platformOS: "ios" });
   mismatchedRuntime.appState = "inactive";
