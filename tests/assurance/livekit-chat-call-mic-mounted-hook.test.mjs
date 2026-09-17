@@ -620,6 +620,83 @@ test("cold-start video never retries a confirmed initial camera permission denia
   assert.equal(runtime.durableCamera, false);
 });
 
+test("terminated iOS video preserves camera intent when launch activation returns a permission-shaped transient error", async (t) => {
+  const runtime = createLiveKitMountedRuntime({
+    cameraPermissionState: "granted",
+    nativeApplicationActive: true,
+    platformOS: "ios",
+  });
+  runtime.appState = "inactive";
+  runtime.queueCamera({ outcome: "permission-denied" });
+  const descriptor = runtime.createAcceptedMediaDescriptor();
+  const hookOptions = defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+    iosAcceptedCallKitMediaDescriptor: descriptor,
+  });
+  const harness = await mountLiveKitHook(runtime, hookOptions, { requireLive: false });
+  t.after(() => harness.unmount());
+
+  await waitFor(harness, () => runtime.cameraCalls.length === 1, "launch camera attempt reached native boundary");
+  assert.equal(runtime.cameraPermissionReads, 1);
+  assert.notEqual(harness.getResult().cameraPermissionState, "denied");
+  await harness.fireMediaWriteTimeout();
+  await waitFor(harness, () => runtime.cameraCalls.length === 2, "granted permission kept camera retry eligible");
+  await waitFor(harness, () => harness.getResult().cameraEnabled, "camera converged after launch activation transient");
+  assert.equal(harness.getResult().cameraPermissionState, "granted");
+  assert.equal(runtime.durableCamera, true);
+});
+
+test("terminated iOS voice preserves microphone intent when launch activation returns a permission-shaped transient error", async (t) => {
+  const runtime = createLiveKitMountedRuntime({
+    microphonePermissionState: "granted",
+    nativeApplicationActive: true,
+    platformOS: "ios",
+  });
+  runtime.appState = "inactive";
+  runtime.queueNative({ outcome: "permission-denied" });
+  const descriptor = runtime.createAcceptedMediaDescriptor();
+  const hookOptions = defaultHookOptions({
+    allowBackgroundAudio: true,
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    iosAcceptedCallKitMediaDescriptor: descriptor,
+  });
+  const harness = await mountLiveKitHook(runtime, hookOptions);
+  t.after(() => harness.unmount());
+
+  assert.equal(runtime.microphonePermissionReads, 1);
+  assert.notEqual(harness.getResult().microphonePermissionState, "denied");
+  assert.equal(harness.getResult().micEnabled, false);
+  await harness.fireHeartbeat();
+  await waitFor(harness, () => harness.getResult().micEnabled, "microphone converged after launch activation transient");
+  assert.equal(harness.getResult().microphonePermissionState, "granted");
+  assert.equal(runtime.durableMic, true);
+});
+
+test("a stale camera permission read cannot overwrite replacement-call media intent", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ cameraPermissionState: "denied" });
+  runtime.queueCamera({ outcome: "permission-denied" });
+  const permissionGate = runtime.deferCameraPermission("denied");
+  const firstOptions = defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  });
+  const harness = await mountLiveKitHook(runtime, firstOptions, { requireLive: false });
+  t.after(() => harness.unmount());
+
+  await waitFor(harness, () => runtime.cameraPermissionReads === 1, "first call reached permission read");
+  await harness.commitRender(defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video", id: "invite-2" },
+  }));
+  permissionGate.resolve();
+
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement call connected");
+  await waitFor(harness, () => harness.getResult().cameraEnabled, "replacement camera intent remained active");
+  assert.notEqual(harness.getResult().cameraPermissionState, "denied");
+  assert.equal(runtime.durableCamera, true);
+});
+
 test("cold-start video retries native camera again after call authority commits", async (t) => {
   const runtime = createLiveKitMountedRuntime();
   for (let attempt = 0; attempt < 4; attempt += 1) runtime.queueCamera({ outcome: "reject" });

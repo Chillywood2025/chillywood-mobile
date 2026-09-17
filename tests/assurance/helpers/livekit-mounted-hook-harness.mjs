@@ -121,6 +121,9 @@ export function createLiveKitMountedRuntime(options = {}) {
     appStateListener: null,
     cameraActions: [],
     cameraCalls: [],
+    cameraPermissionActions: [],
+    cameraPermissionReads: 0,
+    cameraPermissionState: options.cameraPermissionState ?? "denied",
     cleanupRegistrations: [],
     durableCamera: options.initialCamera ?? false,
     durableMic: options.initialMic ?? false,
@@ -132,6 +135,9 @@ export function createLiveKitMountedRuntime(options = {}) {
     membershipLeaves: 0,
     membershipTouches: [],
     micCalls: [],
+    microphonePermissionReads: 0,
+    microphonePermissionState: options.microphonePermissionState ?? "denied",
+    microphonePermissionActions: [],
     nativeApplicationActive: options.nativeApplicationActive ?? true,
     nativeApplicationActiveActions: [],
     nativeApplicationActiveReads: 0,
@@ -168,9 +174,11 @@ export function createLiveKitMountedRuntime(options = {}) {
   };
 
   runtime.queueCamera = (action) => runtime.cameraActions.push(action);
+  runtime.queueCameraPermission = (action) => runtime.cameraPermissionActions.push(action);
   runtime.queueDisconnect = (action) => runtime.disconnectActions.push(action);
   runtime.queueNativeApplicationActive = (action) => runtime.nativeApplicationActiveActions.push(action);
   runtime.queueNative = (action) => runtime.nativeActions.push(action);
+  runtime.queueMicrophonePermission = (action) => runtime.microphonePermissionActions.push(action);
   runtime.queueSnapshot = (action) => runtime.nextSnapshotActions.push(action);
   runtime.queueTouch = (action) => runtime.nextTouchActions.push(action);
   runtime.deferNative = () => {
@@ -186,6 +194,16 @@ export function createLiveKitMountedRuntime(options = {}) {
   runtime.deferCamera = () => {
     const gate = deferred();
     runtime.queueCamera({ gate, outcome: "success" });
+    return gate;
+  };
+  runtime.deferCameraPermission = (state = runtime.cameraPermissionState) => {
+    const gate = deferred();
+    runtime.queueCameraPermission({ gate, state });
+    return gate;
+  };
+  runtime.deferMicrophonePermission = (state = runtime.microphonePermissionState) => {
+    const gate = deferred();
+    runtime.queueMicrophonePermission({ gate, state });
     return gate;
   };
   runtime.deferTouch = (outcome = "success") => {
@@ -352,6 +370,32 @@ export function createLiveKitMountedRuntime(options = {}) {
   };
 
   const moduleMocks = {
+    "expo-camera": {
+      Camera: {
+        getCameraPermissionsAsync: async () => {
+          runtime.cameraPermissionReads += 1;
+          const action = runtime.cameraPermissionActions.shift() ?? {};
+          if (action.gate) await action.gate.promise;
+          const state = action.state ?? runtime.cameraPermissionState;
+          return {
+            canAskAgain: state === "undetermined",
+            granted: state === "granted",
+            status: state,
+          };
+        },
+        getMicrophonePermissionsAsync: async () => {
+          runtime.microphonePermissionReads += 1;
+          const action = runtime.microphonePermissionActions.shift() ?? {};
+          if (action.gate) await action.gate.promise;
+          const state = action.state ?? runtime.microphonePermissionState;
+          return {
+            canAskAgain: state === "undetermined",
+            granted: state === "granted",
+            status: state,
+          };
+        },
+      },
+    },
     "../_lib/chatCallLiveKitTelemetry": {
       emitChatCallLiveKitStage: (stage) => runtime.stages.push(stage),
     },
@@ -408,6 +452,13 @@ export function createLiveKitMountedRuntime(options = {}) {
     },
     "../_lib/logger": {
       reportRuntimeError: (scope, error) => runtime.errors.push({ message: String(error?.message ?? error), scope }),
+    },
+    "../_lib/mediaPermissions": {
+      resolveMediaPermission: (permission) => ({
+        canAskAgain: permission?.canAskAgain !== false,
+        shouldOpenSettings: permission?.status === "denied" || permission?.status === "restricted",
+        state: permission?.granted === true ? "granted" : String(permission?.status ?? "undetermined"),
+      }),
     },
     "../_lib/iosNativeCalls": {
       readIosNativeApplicationActive: async () => {

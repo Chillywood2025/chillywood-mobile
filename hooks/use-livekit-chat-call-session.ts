@@ -8,6 +8,7 @@ import {
   type Participant,
   type TrackPublication,
 } from "livekit-client";
+import { Camera } from "expo-camera";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AppState, Linking, Platform } from "react-native";
 
@@ -46,7 +47,11 @@ import {
   validateChatCallLiveKitTokenClaims,
 } from "../_lib/livekit/token-contract";
 import { reportRuntimeError } from "../_lib/logger";
-import type { MediaPermissionState } from "../_lib/mediaPermissions";
+import {
+  resolveMediaPermission,
+  type MediaPermissionKind,
+  type MediaPermissionState,
+} from "../_lib/mediaPermissions";
 import { registerActiveMediaSessionStopper } from "../_lib/mediaSessionLifecycle";
 import { readIosNativeApplicationActive } from "../_lib/iosNativeCalls";
 import {
@@ -144,7 +149,7 @@ const publicationIsUsable = (publication: TrackPublication | undefined) => (
   && publication.track.mediaStreamTrack.readyState !== "ended"
 );
 
-const isConfirmedNativePermissionDenial = (error: unknown) => {
+const hasNativePermissionDenialSignal = (error: unknown) => {
   const candidate = error as { code?: unknown; name?: unknown } | null;
   const name = String(candidate?.name ?? "").trim().toLowerCase();
   const code = String(candidate?.code ?? "").trim().toLowerCase();
@@ -156,6 +161,28 @@ const isConfirmedNativePermissionDenial = (error: unknown) => {
     || code === "e_camera_permission"
     || message.includes("permission denied")
     || message.includes("permission was denied");
+};
+
+type NativePermissionDenialClassification = "confirmed" | "stale" | "transient";
+
+const classifyNativePermissionDenial = async (
+  kind: MediaPermissionKind,
+  error: unknown,
+  isCurrent: () => boolean,
+): Promise<NativePermissionDenialClassification> => {
+  if (!hasNativePermissionDenialSignal(error)) {
+    return isCurrent() ? "transient" : "stale";
+  }
+  const permission = await (
+    kind === "camera"
+      ? Camera.getCameraPermissionsAsync()
+      : Camera.getMicrophonePermissionsAsync()
+  ).catch(() => null);
+  if (!isCurrent()) return "stale";
+  const resolved = resolveMediaPermission(permission);
+  return resolved.state === "denied" || resolved.state === "restricted"
+    ? "confirmed"
+    : "transient";
 };
 
 const sameCommittedAuthority = (left: CommittedSession | null, right: CommittedSession | null) => (
@@ -941,7 +968,13 @@ export function useLiveKitChatCallSession({
         await liveKitRoom.localParticipant.setMicrophoneEnabled(microphoneTarget);
       } catch (microphoneError) {
         if (!isCommittedSessionCurrent(binding)) return false;
-        if (isConfirmedNativePermissionDenial(microphoneError)) {
+        const permissionDenial = await classifyNativePermissionDenial(
+          "microphone",
+          microphoneError,
+          () => isCommittedSessionCurrent(binding),
+        );
+        if (permissionDenial === "stale") return false;
+        if (permissionDenial === "confirmed") {
           setConfirmedPermissionDenied("microphone");
         } else {
           setReconciliationWarning("Local media could not be reconciled. The call remains connected.");
@@ -969,7 +1002,13 @@ export function useLiveKitChatCallSession({
         }
       } catch (cameraError) {
         if (!isCommittedSessionCurrent(binding)) return false;
-        if (isConfirmedNativePermissionDenial(cameraError)) {
+        const permissionDenial = await classifyNativePermissionDenial(
+          "camera",
+          cameraError,
+          () => isCommittedSessionCurrent(binding),
+        );
+        if (permissionDenial === "stale") return false;
+        if (permissionDenial === "confirmed") {
           cameraRequestedRef.current = false;
           setCameraEnabledState(false);
           setConfirmedPermissionDenied("camera");
@@ -1171,7 +1210,15 @@ export function useLiveKitChatCallSession({
             liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
           ) === priorCameraActual;
           if (!nativeRestored || !cameraUnchanged) micReconciliationBlockedRef.current = true;
-          if (forwardError && isConfirmedNativePermissionDenial(forwardError)) {
+          const permissionDenial = forwardError
+            ? await classifyNativePermissionDenial(
+                "microphone",
+                forwardError,
+                transactionStillCurrent,
+              )
+            : "transient";
+          if (permissionDenial === "stale") return false;
+          if (permissionDenial === "confirmed") {
             setConfirmedPermissionDenied("microphone");
           } else {
             setReconciliationWarning();
@@ -1373,7 +1420,15 @@ export function useLiveKitChatCallSession({
           binding,
           priorActual,
         );
-        if (forwardError && isConfirmedNativePermissionDenial(forwardError)) {
+        const permissionDenial = forwardError
+          ? await classifyNativePermissionDenial(
+              "camera",
+              forwardError,
+              transactionStillCurrent,
+            )
+          : "transient";
+        if (permissionDenial === "stale") return false;
+        if (permissionDenial === "confirmed") {
           setConfirmedPermissionDenied("camera");
         } else {
           setReconciliationWarning(nativeRestored
@@ -1463,17 +1518,24 @@ export function useLiveKitChatCallSession({
   ]);
 
   const toggleCamera = useCallback(async () => {
+    const binding = committedSessionRef.current;
     try {
       const updated = await setCameraEnabled(!cameraRequestedRef.current);
       if (!updated) return false;
       return true;
     } catch (mediaError) {
-      if (isConfirmedNativePermissionDenial(mediaError)) setConfirmedPermissionDenied("camera");
+      const permissionDenial = await classifyNativePermissionDenial(
+        "camera",
+        mediaError,
+        () => isCommittedSessionCurrent(binding),
+      );
+      if (permissionDenial === "stale") return false;
+      if (permissionDenial === "confirmed") setConfirmedPermissionDenied("camera");
       else setReconciliationWarning("Camera state could not be synchronized. The call remains connected.");
       reportRuntimeError("chat-call-livekit-camera", mediaError);
       return false;
     }
-  }, [setCameraEnabled, setConfirmedPermissionDenied, setReconciliationWarning]);
+  }, [isCommittedSessionCurrent, setCameraEnabled, setConfirmedPermissionDenied, setReconciliationWarning]);
 
   const switchCamera = useCallback(async () => {
     const result = await runMediaControl(async () => {
@@ -1873,6 +1935,7 @@ export function useLiveKitChatCallSession({
       emitStage("ice_state", { connectionState: String(liveKitRoom.state) });
 
       let effectiveMicEnabled = initialMicEnabled;
+      let initialMicrophonePermissionDenied = false;
       let microphonePublication: TrackPublication | undefined;
       try {
         microphonePublication = initialMicEnabled
@@ -1887,7 +1950,14 @@ export function useLiveKitChatCallSession({
         }
       } catch (microphoneError) {
         effectiveMicEnabled = false;
-        if (isConfirmedNativePermissionDenial(microphoneError)) {
+        const permissionDenial = await classifyNativePermissionDenial(
+          "microphone",
+          microphoneError,
+          () => active && !!effectBinding && isCommittedSessionCurrent(effectBinding),
+        );
+        if (permissionDenial === "stale") return;
+        if (permissionDenial === "confirmed") {
+          initialMicrophonePermissionDenied = true;
           setConfirmedPermissionDenied("microphone");
         } else {
           setReconciliationWarning("Local microphone could not be started. The call remains connected.");
@@ -1924,7 +1994,13 @@ export function useLiveKitChatCallSession({
               }
               lastCameraError = new Error("initial_camera_publication_unavailable");
             } catch (cameraError) {
-              if (isConfirmedNativePermissionDenial(cameraError)) throw cameraError;
+              const permissionDenial = await classifyNativePermissionDenial(
+                "camera",
+                cameraError,
+                () => active && !!effectBinding && isCommittedSessionCurrent(effectBinding),
+              );
+              if (permissionDenial === "stale") return;
+              if (permissionDenial === "confirmed") throw cameraError;
               lastCameraError = cameraError;
             }
 
@@ -1943,7 +2019,13 @@ export function useLiveKitChatCallSession({
         }
       } catch (cameraError) {
         effectiveCameraEnabled = false;
-        if (isConfirmedNativePermissionDenial(cameraError)) {
+        const permissionDenial = await classifyNativePermissionDenial(
+          "camera",
+          cameraError,
+          () => active && !!effectBinding && isCommittedSessionCurrent(effectBinding),
+        );
+        if (permissionDenial === "stale") return;
+        if (permissionDenial === "confirmed") {
           initialCameraPermissionDenied = true;
           setConfirmedPermissionDenied("camera");
         } else {
@@ -1969,7 +2051,7 @@ export function useLiveKitChatCallSession({
       // AppState/heartbeat reconciliation retry once iOS is fully active. A
       // confirmed permission denial remains fail-closed and is never retried.
       cameraRequestedRef.current = initialCameraEnabled && !initialCameraPermissionDenied;
-      micRequestedRef.current = effectiveMicEnabled;
+      micRequestedRef.current = initialMicEnabled && !initialMicrophonePermissionDenied;
       await setSpeaker(speakerRequestedRef.current);
       const initialMembership = await enqueueSessionMediaWrite(effectBinding, () => (
         performMembershipMediaWrite(
