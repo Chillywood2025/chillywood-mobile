@@ -145,6 +145,10 @@ assert.match(coordinator, /UserDefaults\.standard\.removeObject\(forKey: self\.v
 assert.match(coordinator, /recipientSessionGeneration/u);
 assert.match(coordinator, /recipientInstallId/u);
 assert.match(coordinator, /UIApplication\.shared\.beginBackgroundTask/u);
+assert.match(coordinator, /beginAnswerTransitionBackgroundTask\(action\.callUUID\)/u);
+assert.match(coordinator, /DispatchQueue\.main\.asyncAfter\(deadline: \.now\(\) \+ 20/u);
+assert.match(coordinator, /completeAnswerOnMain[\s\S]{0,240}endAnswerTransitionBackgroundTask\(uuid\)/u);
+assert.match(coordinator, /failPendingAnswer[\s\S]{0,240}endAnswerTransitionBackgroundTask\(uuid\)/u);
 assert.match(coordinator, /beginTerminalTransitionBackgroundTask\(action\.callUUID\)/u);
 assert.match(coordinator, /DispatchQueue\.main\.asyncAfter\(deadline: \.now\(\) \+ 15/u);
 assert.match(facade, /completeIosNativeCallTerminalTransition/u);

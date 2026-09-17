@@ -46,6 +46,8 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private var activeCalls: [UUID: ActiveNativeCall] = [:]
   private var pendingAnswerActions: [UUID: CXAnswerCallAction] = [:]
   private var pendingAnswerTimeouts: [UUID: DispatchWorkItem] = [:]
+  private var answerTransitionBackgroundTasks: [UUID: UIBackgroundTaskIdentifier] = [:]
+  private var answerTransitionBackgroundTaskTimeouts: [UUID: DispatchWorkItem] = [:]
   private var requestedEndReasons: [UUID: String] = [:]
   private var terminalTransitionBackgroundTasks: [UUID: UIBackgroundTaskIdentifier] = [:]
   private var terminalTransitionBackgroundTaskTimeouts: [UUID: DispatchWorkItem] = [:]
@@ -223,6 +225,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     pendingAnswerActions.removeAll()
     pendingAnswerTimeouts.values.forEach { $0.cancel() }
     pendingAnswerTimeouts.removeAll()
+    endAllAnswerTransitionBackgroundTasks()
     requestedEndReasons.removeAll()
     endAllTerminalTransitionBackgroundTasks()
     UserDefaults.standard.removeObject(forKey: activeCallsDefaultsKey)
@@ -546,8 +549,44 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
 
   public func applicationWillTerminate() {
     activeCalls.values.forEach { $0.timeoutWorkItem?.cancel() }
+    endAllAnswerTransitionBackgroundTasks()
     endAllTerminalTransitionBackgroundTasks()
     deactivateAudioSession()
+  }
+
+  private func beginAnswerTransitionBackgroundTask(_ uuid: UUID) {
+    dispatchPrecondition(condition: .onQueue(.main))
+    endAnswerTransitionBackgroundTask(uuid)
+
+    var taskIdentifier = UIBackgroundTaskIdentifier.invalid
+    taskIdentifier = UIApplication.shared.beginBackgroundTask(
+      withName: "ChillywoodCallAnswerTransition"
+    ) { [weak self] in
+      DispatchQueue.main.async {
+        self?.endAnswerTransitionBackgroundTask(uuid)
+      }
+    }
+    guard taskIdentifier != .invalid else { return }
+
+    answerTransitionBackgroundTasks[uuid] = taskIdentifier
+    let timeout = DispatchWorkItem { [weak self] in
+      self?.endAnswerTransitionBackgroundTask(uuid)
+    }
+    answerTransitionBackgroundTaskTimeouts[uuid] = timeout
+    DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: timeout)
+  }
+
+  private func endAnswerTransitionBackgroundTask(_ uuid: UUID) {
+    dispatchPrecondition(condition: .onQueue(.main))
+    answerTransitionBackgroundTaskTimeouts.removeValue(forKey: uuid)?.cancel()
+    guard let taskIdentifier = answerTransitionBackgroundTasks.removeValue(forKey: uuid) else { return }
+    UIApplication.shared.endBackgroundTask(taskIdentifier)
+  }
+
+  private func endAllAnswerTransitionBackgroundTasks() {
+    dispatchPrecondition(condition: .onQueue(.main))
+    let callUuids = Array(answerTransitionBackgroundTasks.keys)
+    callUuids.forEach { endAnswerTransitionBackgroundTask($0) }
   }
 
   private func beginTerminalTransitionBackgroundTask(_ uuid: UUID) {
@@ -597,6 +636,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
 
   private func completeAnswerOnMain(_ uuid: UUID, connected: Bool, reason: String) {
     dispatchPrecondition(condition: .onQueue(.main))
+    endAnswerTransitionBackgroundTask(uuid)
     guard let action = pendingAnswerActions.removeValue(forKey: uuid) else { return }
     pendingAnswerTimeouts.removeValue(forKey: uuid)?.cancel()
     guard var call = activeCalls[uuid] else {
@@ -621,6 +661,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   private func failPendingAnswer(_ uuid: UUID) {
+    endAnswerTransitionBackgroundTask(uuid)
     pendingAnswerTimeouts.removeValue(forKey: uuid)?.cancel()
     pendingAnswerActions.removeValue(forKey: uuid)?.fail()
   }
@@ -861,6 +902,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       emit(type: "providerReset", call: $0)
     }
     persistActiveCallDescriptors()
+    endAllAnswerTransitionBackgroundTasks()
     endAllTerminalTransitionBackgroundTasks()
     deactivateAudioSession()
   }
@@ -871,6 +913,11 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       return
     }
     call.timeoutWorkItem?.cancel()
+    // PushKit may have launched the terminated app in the background. Keep the
+    // exact CallKit Answer process alive only long enough for React/session
+    // hydration, server acceptance, and LiveKit connection to acknowledge the
+    // pending action. Every terminal or failed path below releases this lease.
+    beginAnswerTransitionBackgroundTask(action.callUUID)
     pendingAnswerActions[action.callUUID] = action
     let timeout = DispatchWorkItem { [weak self] in
       self?.completeAnswerOnMain(action.callUUID, connected: false, reason: "media_connection_timeout")

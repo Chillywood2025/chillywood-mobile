@@ -161,6 +161,10 @@ requireText(coordinator, "startVoipRegistrationOnMain()", "PushKit registration 
 requireText(coordinator, "terminalInvitesDefaultsKey", "Caller-cancel ordering must persist a bounded native tombstone across cold launch.");
 requireText(coordinator, "reportInvalidVoipPushOnMain", "Every received VoIP push path must satisfy Apple's CallKit reporting contract.");
 requireText(coordinator, "pendingAnswerActions", "CallKit answer actions must remain pending until media connection acknowledgement.");
+requireText(coordinator, "beginAnswerTransitionBackgroundTask", "A terminated-app CallKit Answer must retain bounded execution time for authenticated bridge hydration and media acknowledgement.");
+requireText(coordinator, 'withName: "ChillywoodCallAnswerTransition"', "The CallKit Answer execution lease must remain separately attributable from terminal cleanup.");
+requireText(coordinator, "answerTransitionBackgroundTaskTimeouts", "The CallKit Answer execution lease must have a bounded timeout.");
+requireText(coordinator, "endAllAnswerTransitionBackgroundTasks", "Account reset, provider reset, and app termination must release every CallKit Answer execution lease.");
 requireText(coordinator, "activeCallsDefaultsKey", "Non-secret active call descriptors must support bounded process recovery.");
 requireText(coordinator, "pendingEventsDefaultsKey", "Sanitized native call events must survive cold-start bridge hydration.");
 requireText(coordinator, "DispatchQueue.main.async { [weak self] in", "Persisted native call events must wait until the Expo JavaScript listener is installed.");
