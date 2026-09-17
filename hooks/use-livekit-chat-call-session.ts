@@ -1019,34 +1019,40 @@ export function useLiveKitChatCallSession({
         return false;
       }
       if (!isCommittedSessionCurrent(binding)) return false;
-      const nativeMicrophoneExact = publicationIsUsable(
-        liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
-      ) === microphoneTarget;
-      const nativeCameraExact = publicationIsUsable(
-        liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
-      ) === cameraTarget;
-      if (!nativeMicrophoneExact || !nativeCameraExact) {
-        if (!cameraTarget && !nativeCameraExact) {
-          await terminateRoomForCameraSafety(
-            liveKitRoom,
-            "chat-call-livekit-camera-reconciliation-terminal",
-          );
-          setReconciliationWarning("Camera safety could not be restored. The call was disconnected.");
-        } else {
-          setReconciliationWarning("Local media could not be reconciled. The call remains connected.");
-        }
-        return false;
+    }
+
+    // A native publication can finish after setCameraEnabled()/setMicrophoneEnabled()
+    // has already returned a transient failure. In that case no native mutation is
+    // needed here, but the React and durable membership state still must adopt the
+    // exact verified publication. Keeping this convergence outside the mutation
+    // branch prevents a real late iOS camera track from remaining labelled Off.
+    const nativeMicrophoneExact = publicationIsUsable(
+      liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
+    ) === microphoneTarget;
+    const nativeCameraExact = publicationIsUsable(
+      liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+    ) === cameraTarget;
+    if (!nativeMicrophoneExact || !nativeCameraExact) {
+      if (!cameraTarget && !nativeCameraExact) {
+        await terminateRoomForCameraSafety(
+          liveKitRoom,
+          "chat-call-livekit-camera-reconciliation-terminal",
+        );
+        setReconciliationWarning("Camera safety could not be restored. The call was disconnected.");
+      } else {
+        setReconciliationWarning("Local media could not be reconciled. The call remains connected.");
       }
-      setMicEnabledState(microphoneTarget);
-      setCameraEnabledState(cameraTarget);
-      if (microphoneTarget) {
-        setMicrophonePermissionState("granted");
-        setMicrophonePermissionMessage(null);
-      }
-      if (cameraTarget) {
-        setCameraPermissionState("granted");
-        setCameraPermissionMessage(null);
-      }
+      return false;
+    }
+    setMicEnabledState(microphoneTarget);
+    setCameraEnabledState(cameraTarget);
+    if (microphoneTarget) {
+      setMicrophonePermissionState("granted");
+      setMicrophonePermissionMessage(null);
+    }
+    if (cameraTarget) {
+      setCameraPermissionState("granted");
+      setCameraPermissionMessage(null);
     }
 
     const membership = await performMembershipMediaWrite(
@@ -1853,6 +1859,18 @@ export function useLiveKitChatCallSession({
           if (publication.source === Track.Source.Camera) {
             updateFirstMediaState({ localVideoPublished: true });
             emitStage("local_video_published", { connectionState: String(liveKitRoom.state) });
+            const committed = committedSessionRef.current;
+            if (committed?.roomState === "active" && isCommittedSessionCurrent(committed)) {
+              // iOS can finish a CallKit cold-start capture asynchronously after
+              // the enabling promise reported a transient failure. Adopt that
+              // exact current-session publication immediately instead of waiting
+              // for the room heartbeat, while reconciliation remains the
+              // foreground/account/session authority gate.
+              void scheduleLatestMediaReconciliation(false).then((reconciled) => {
+                if (!reconciled || !active || !isCommittedSessionCurrent(committed)) return;
+                refreshParticipantViews();
+              });
+            }
           }
           refresh();
         })

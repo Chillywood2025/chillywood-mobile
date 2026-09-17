@@ -181,6 +181,17 @@ export function createLiveKitMountedRuntime(options = {}) {
   runtime.queueMicrophonePermission = (action) => runtime.microphonePermissionActions.push(action);
   runtime.queueSnapshot = (action) => runtime.nextSnapshotActions.push(action);
   runtime.queueTouch = (action) => runtime.nextTouchActions.push(action);
+  runtime.publishCameraLate = () => {
+    const room = runtime.rooms.at(-1);
+    if (!room) throw new Error("MOUNTED_LIVEKIT_ROOM_NOT_READY");
+    room.localParticipant.cameraEnabled = true;
+    room.localParticipant.cameraTrack.mediaStreamTrack.readyState = "live";
+    return {
+      isMuted: false,
+      source: "camera",
+      track: room.localParticipant.cameraTrack,
+    };
+  };
   runtime.deferNative = () => {
     const gate = deferred();
     runtime.queueNative({ gate, outcome: "success" });
