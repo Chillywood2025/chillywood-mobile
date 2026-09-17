@@ -204,8 +204,12 @@ export function useLiveKitChatCallSession({
   const applicationStateGenerationRef = useRef(0);
   const nativeForegroundWitnessRef = useRef<{ inviteId: string; serial: number } | null>(
     Platform.OS === "ios"
-      && nativeForegroundActivationSerial > 0
+      && !!inviteId
       && nativeForegroundActivationInviteId === inviteId
+      // The serial may legitimately be zero when UIKit became active before
+      // CallKit delivered Answer and established its per-invite baseline. The
+      // invite id is supplied only by the consumed exact native route claim;
+      // the current UIKit state is still re-read before camera publication.
       ? { inviteId, serial: nativeForegroundActivationSerial }
       : null,
   );
@@ -709,8 +713,8 @@ export function useLiveKitChatCallSession({
     const witness = nativeForegroundWitnessRef.current;
     const exactNativeForegroundWitness = Platform.OS === "ios"
       && !!witness
-      && witness.inviteId === inviteId
-      && witness.serial > 0;
+      && !!inviteId
+      && witness.inviteId === inviteId;
     if (!exactNativeForegroundWitness) return false;
     // During a terminated CallKit Answer, UIKit can be active before React
     // Native replaces its launch-time `background` value. The historical
@@ -2140,7 +2144,7 @@ export function useLiveKitChatCallSession({
 
   useEffect(() => {
     const exactNativeForegroundWitness = Platform.OS === "ios"
-      && nativeForegroundActivationSerial > 0
+      && !!inviteId
       && nativeForegroundActivationInviteId === inviteId;
     if (!exactNativeForegroundWitness) {
       nativeForegroundWitnessRef.current = null;
