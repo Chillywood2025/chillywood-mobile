@@ -2120,7 +2120,16 @@ export function useLiveKitChatCallSession({
             // that ref may still contain the launch-time background value.
             // reconcileLatestCommittedMedia reads AppState.currentState and
             // remains the authoritative background/privacy gate.
-            const reconciled = await scheduleLatestMediaReconciliation(true);
+            // A CallKit cold-start capture may already have completed even
+            // though the enabling promise reported a transient failure. Do
+            // not repeat that native mutation: adopt the exact usable track
+            // through the normal foreground/session/durable-state gates.
+            const nativeCameraReadyBeforeReconciliation = publicationIsUsable(
+              recoveryBinding.liveKitRoom?.localParticipant.getTrackPublication(Track.Source.Camera),
+            );
+            const reconciled = await scheduleLatestMediaReconciliation(
+              !nativeCameraReadyBeforeReconciliation,
+            );
             if (!active || !isCommittedSessionCurrent(recoveryBinding)) return;
             const nativeCameraReady = publicationIsUsable(
               recoveryBinding.liveKitRoom?.localParticipant.getTrackPublication(Track.Source.Camera),
