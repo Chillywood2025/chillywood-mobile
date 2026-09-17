@@ -644,6 +644,32 @@ const validateProductionGate = async ({code, productionSources}) => {
       || !facadeSource.includes('if (event.type === "applicationActive") {\n          void drainPendingEventsForExactLifecycle(generation, context);\n        }')
       || !rootSource.includes("void drainIosNativeCallPendingEvents()"),
     );
+  } else if (code === "IOS_NATIVE_ANSWER_BACKGROUND_LEASE_MISSING") {
+    const coordinatorSource = productionSources["modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift"];
+    const answerBlock = coordinatorSource.slice(
+      coordinatorSource.indexOf("public func provider(_ provider: CXProvider, perform action: CXAnswerCallAction)"),
+      coordinatorSource.indexOf("public func provider(_ provider: CXProvider, perform action: CXEndCallAction)"),
+    );
+    report(
+      !answerBlock.includes("beginAnswerTransitionBackgroundTask(action.callUUID)")
+      || answerBlock.indexOf("beginAnswerTransitionBackgroundTask(action.callUUID)") > answerBlock.indexOf('emit(type: "answerRequested"')
+      || !coordinatorSource.includes("DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: timeout)")
+    );
+  } else if (code === "IOS_NATIVE_ANSWER_BACKGROUND_LEASE_CLEANUP_MISSING") {
+    const coordinatorSource = productionSources["modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift"];
+    const completionBlock = coordinatorSource.slice(
+      coordinatorSource.indexOf("private func completeAnswerOnMain"),
+      coordinatorSource.indexOf("private func failPendingAnswer"),
+    );
+    const failureBlock = coordinatorSource.slice(
+      coordinatorSource.indexOf("private func failPendingAnswer"),
+      coordinatorSource.indexOf("private func persistActiveCallDescriptors"),
+    );
+    report(
+      !completionBlock.includes("endAnswerTransitionBackgroundTask(uuid)")
+      || !failureBlock.includes("endAnswerTransitionBackgroundTask(uuid)")
+      || (coordinatorSource.match(/endAllAnswerTransitionBackgroundTasks\(\)/gu) ?? []).length < 4
+    );
   } else if (code === "IOS_NATIVE_APPLICATION_ACTIVE_FOREGROUND_WITNESS_MISSING") {
     const facadeSource = productionSources["_lib/iosNativeCalls.ts"];
     const mediaSource = productionSources["hooks/use-livekit-chat-call-session.ts"];
@@ -778,6 +804,8 @@ const negativeControls = [
   replaceControl("IOS_CALLKIT_COMPLETION_BEFORE_SERVER_AUTHORITY", "app/chat/[threadId].tsx", "      const acceptedInvite = await updateChillyChatCallInviteStatus({", "      await completeIosNativeCallAnswer(requestedNativeCallUuid, true);\n      const acceptedInvite = await updateChillyChatCallInviteStatus({", "CallKit completion ordering"),
   replaceControl("IOS_NATIVE_PENDING_EVENT_EARLY_DRAIN", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "      DispatchQueue.main.async { [weak self] in\n        guard let self, let eventSink = self.eventSink else { return }\n        self.drainPendingEvents().forEach { eventSink($0) }\n      }", "      drainPendingEvents().forEach { eventSink?($0) }", "synchronous observer-start event drain"),
   replaceControl("IOS_NATIVE_PENDING_EVENT_ACTIVATION_REPLAY_MISSING", "_lib/iosNativeCalls.ts", '        if (event.type === "applicationActive") {\n          void drainPendingEventsForExactLifecycle(generation, context);\n        }\n', "", "activation replay"),
+  replaceControl("IOS_NATIVE_ANSWER_BACKGROUND_LEASE_MISSING", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "    beginAnswerTransitionBackgroundTask(action.callUUID)\n", "", "terminated Answer execution lease"),
+  replaceControl("IOS_NATIVE_ANSWER_BACKGROUND_LEASE_CLEANUP_MISSING", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "    endAnswerTransitionBackgroundTask(uuid)\n    guard let action = pendingAnswerActions.removeValue(forKey: uuid) else { return }", "    guard let action = pendingAnswerActions.removeValue(forKey: uuid) else { return }", "successful Answer lease cleanup"),
   replaceControl("IOS_NATIVE_APPLICATION_ACTIVE_FOREGROUND_WITNESS_MISSING", "_lib/iosNativeCalls.ts", "    iosNativeAnswerApplicationActiveBaselines.set(\n      eventInviteId,\n      iosNativeApplicationActiveSerial,\n    );\n", "", "exact Answer activation baseline"),
   replaceControl("IOS_NATIVE_CURRENT_APPLICATION_STATE_QUERY_MISSING", "modules/chillywood-native-calls/ios/ChillywoodNativeCallsModule.swift", "        UIApplication.shared.applicationState == .active\n", "        true\n", "current UIKit application-state query"),
   replaceControl("IOS_NATIVE_CURRENT_APPLICATION_STATE_OLD_BUILD_FAIL_OPEN", "_lib/iosNativeCalls.ts", '    || typeof NativeCallsModule.isApplicationActiveAsync !== "function"\n', "", "old-build native method gate"),
