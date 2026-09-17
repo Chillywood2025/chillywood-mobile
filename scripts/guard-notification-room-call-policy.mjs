@@ -119,9 +119,9 @@ assertIncludes(notifications, ".eq(\"category\", \"chilly_chat_call\")", "call n
 assertIncludes(notifications, ".eq(\"user_id\", viewerUserId)", "call notification row cleanup must be scoped to current user");
 assertIncludes(notifications, "staleData", "call notification row cleanup must remove older active incoming rows for the current user");
 assertIncludes(notifications, "status: \"dismissed\"", "call notification row cleanup must make rows non-actionable");
-assertIncludes(layout, "await clearEndedChatThreadCall(invite.threadId).catch(() => null);", "room-safe decline must clear active thread call state");
-assertIncludes(layout, "await dismissPresentedChillyChatCallNotifications({\n        callInviteId: invite.id,\n        dismissAllPresentedNotificationsFallback: true,\n        dismissIncomingCallFallback: true,\n        path: alert.path,\n        presentedNotificationId: alert.presentedNotificationId ?? null,\n        threadId: invite.threadId,\n      }).catch(() => 0);", "room-safe decline must retry presented Android call notification cleanup after invite status update");
-assertIncludes(layout, "await dismissChillyChatCallNotificationRows({\n        callInviteId: invite.id,\n        threadId: invite.threadId,\n      }).catch(() => 0);", "room-safe decline must retry persisted call row cleanup after invite status update");
+assertIncludes(layout, "await clearEndedChatThreadCall(declinedInvite.threadId).catch(() => null);", "room-safe decline must clear active thread call state only after authoritative terminal readback");
+assertIncludes(layout, "await dismissPresentedChillyChatCallNotifications({\n      callInviteId: declinedInvite.id,\n      dismissAllPresentedNotificationsFallback: true,\n      dismissIncomingCallFallback: true,\n      path: alert.path,\n      presentedNotificationId: alert.presentedNotificationId ?? null,\n      threadId: declinedInvite.threadId,\n    }).catch(() => 0);", "room-safe decline must retry presented Android call notification cleanup after authoritative terminal readback");
+assertIncludes(layout, "await dismissChillyChatCallNotificationRows({\n      callInviteId: declinedInvite.id,\n      threadId: declinedInvite.threadId,\n    }).catch(() => 0);", "room-safe decline must retry persisted call row cleanup after authoritative terminal readback");
 assertIncludes(layout, "presentedNotificationId: alert.presentedNotificationId ?? null", "room-safe actions must pass the exact presented Android notification id");
 assertIncludes(layout, "dismissIncomingCallFallback: true", "room-safe actions must enable the limited incoming-call title fallback only after an explicit user action");
 assertIncludes(layout, "dismissAllPresentedNotificationsFallback: true", "room-safe actions must enable the final Android presented-notification cleanup only after an explicit user action");
@@ -165,7 +165,8 @@ assertIncludes(chatThread, "statusLabelOverride={outgoingCallRinging ? outgoingD
 assertIncludes(chatThread, "No answer. The call expired and active call state was cleared.", "caller timeout must clear stale active call state");
 assertIncludes(chatThread, "const latestInvite = await readChillyChatCallInvite(outgoingCallInvite.id)", "caller timeout must re-read authoritative invite state before transition");
 assertIncludes(chatThread, "if (latestInvite?.status === \"accepted\")", "caller timeout must preserve an invite accepted at the deadline");
-assertIncludes(chatThread, "if (!latestInvite || latestInvite.status !== \"ringing\") return;", "caller timeout may only attempt a missed transition from ringing");
+assertIncludes(chatThread, "if (!latestInvite || latestInvite.status !== \"ringing\") {", "caller timeout must distinguish authoritative terminal truth from a still-ringing invite");
+assertIncludes(chatThread, "TERMINAL_CHAT_CALL_INVITE_STATUSES.has(latestInvite.status)", "caller timeout must clear stale ringing UI after authoritative terminal readback");
 assertIncludes(chatThread, "if (!missedInvite || missedInvite.status !== \"missed\") return;", "caller timeout cleanup requires a confirmed missed transition");
 assertIncludes(chatThread, "trustedNativeCallClaim", "native call transitions must originate from a consumed platform-scoped claim");
 assertIncludes(chatThread, "consumeMountedIosNativeCallRoute", "CallKit Answer must be consumed once after mounted-thread auth readiness and before a transition request");
