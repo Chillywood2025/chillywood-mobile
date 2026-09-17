@@ -724,6 +724,41 @@ test("cold-start video retries native camera again after call authority commits"
   assert.equal(runtime.rooms.length, 1);
 });
 
+test("terminated iOS video adopts a late native camera publication without waiting for heartbeat", async (t) => {
+  const runtime = createLiveKitMountedRuntime({
+    cameraPermissionState: "granted",
+    nativeApplicationActive: true,
+    platformOS: "ios",
+  });
+  for (let attempt = 0; attempt < 4; attempt += 1) runtime.queueCamera({ outcome: "reject" });
+  const descriptor = runtime.createAcceptedMediaDescriptor();
+  const hookOptions = defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+    iosAcceptedCallKitMediaDescriptor: descriptor,
+  });
+  const harness = await mountLiveKitHook(runtime, hookOptions, { requireLive: false });
+  t.after(() => harness.unmount());
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await waitFor(harness, () => runtime.cameraCalls.length === attempt, `initial late-publication camera attempt ${attempt}`);
+    await harness.fireMediaWriteTimeout();
+  }
+  await waitFor(harness, () => runtime.cameraCalls.length === 4, "initial camera retries exhausted");
+  await waitFor(harness, () => harness.getResult().channelState === "live", "call authority committed without camera");
+  assert.equal(harness.getResult().cameraEnabled, false);
+  assert.equal(runtime.durableCamera, false);
+
+  const latePublication = runtime.publishCameraLate();
+  await harness.emitRoom("LocalTrackPublished", latePublication);
+
+  await waitFor(harness, () => harness.getResult().cameraEnabled, "late native publication converged local UI");
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.membershipTouches.at(-1).cameraEnabled, true);
+  assert.equal(runtime.providerTokenCalls, 1);
+  assert.equal(runtime.rooms.length, 1);
+});
+
 test("cold-start video recovers when foreground activation happened before the AppState listener was ready", async (t) => {
   const runtime = createLiveKitMountedRuntime();
   runtime.appState = "background";
