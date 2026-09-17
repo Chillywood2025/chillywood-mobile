@@ -110,7 +110,7 @@ requireText(chatScreen, "latestThread?.activeCommunicationRoomId === roomId", "a
 requireText(chatScreen, 'snapshot?.room.status === "active"', "accepted-invite recovery rejects stale or ended rooms");
 requireText(chatScreen, 'invite.status === "accepted"\n          ? await resumeAcceptedIncomingInvite(invite)', "native Answer resumes rather than repeating the acceptance transition");
 requireText(chatScreen, "|| iosNativeCallPresentationOwned\n      || waitingForIosNativePresentation", "same-thread ringtone and vibration defer to exact CallKit ownership and grace");
-requireText(rootLayout, "|| iosNativeCallPresentationOwned\n      || waitingForIosNativePresentation", "app-wide ringtone and vibration defer to exact CallKit ownership and grace");
+requireText(rootLayout, "|| alreadyOnSameThread\n      || waitingForIosNativePresentation", "app-wide foreground ringtone and vibration remain visible after bounded native grace");
 requireText(rootLayout, 'settleNativeTerminalAction(event, "declined")', "CallKit Decline persists directly without foreground navigation");
 requireText(rootLayout, 'settleNativeTerminalAction(event, "ended")', "CallKit End persists directly without foreground navigation");
 requireText(callDispatch, 'const shouldInvokeIosVoip = (action: DispatchAction) => action === "incoming"', "PushKit dispatch is reserved for the initial invitation");
