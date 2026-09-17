@@ -1378,8 +1378,11 @@ assert.match(
   /\|\| alreadyOnSameThread\s+\|\| waitingForIosNativePresentation[\s\S]{0,1200}playChillyChatCallSound/u,
   "the app-wide foreground surface remains customer-visible after bounded native grace",
 );
-assert.match(iosNativeCallsSource, /const nativePresentedInviteIds = new Set<string>\(\)/u, "native presentation ownership is tracked per invite");
+assert.match(iosNativeCallsSource, /const nativePresentedCallUuidsByInviteId = new Map<string, string>\(\)/u, "native presentation ownership binds each invite to its exact CallKit UUID");
 assert.match(iosNativeCallsSource, /event\.type === "incoming" \|\| event\.type === "recovered"/u, "only confirmed native incoming/recovered events acquire presentation ownership");
+assert.match(iosNativeCallsSource, /nativePresentedCallUuidsByInviteId\.set\(inviteId, callUuid\)/u, "confirmed CallKit presentation records the exact invite/UUID pair");
+assert.match(iosNativeCallsSource, /requestIosNativeCallAnswer\(inviteId: string\)[\s\S]{0,520}requestAnswerAsync\(callUuid, normalizedInviteId\)/u, "foreground Answer delegates the exact native invite/UUID pair to CallKit");
+assert.match(iosNativeCallsSource, /typeof NativeCallsModule\.requestAnswerAsync !== "function"/u, "older same-runtime native binaries fail closed instead of invoking an unavailable Answer API");
 assert.match(iosNativeCallsSource, /"reportFailed"/u, "failed CallKit reporting releases fallback presentation ownership");
 assert.doesNotMatch(rootLayoutSource, /<Modal/u, "background/full-screen presentation remains native rather than a React modal");
 assert.match(rootLayoutSource, /presentation === "native_background"/u, "background state defers to native CallStyle or CallKit");
@@ -1392,7 +1395,30 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(rootLayoutSource, /nativeCallAction:\s*"answer"/u, "CallKit and foreground routes never carry authoritative action text");
 assert.match(rootLayoutSource, /createIosCallKitAnswerRouteHandler/u, "CallKit Answer uses the canonical bridge-auth-router provenance handler");
-assert.match(rootLayoutSource, /await updateChillyChatCallInviteStatus[\s\S]{0,500}status:\s*"accepted"/u, "foreground Answer requests the server-authoritative transition directly");
+const appWideOpenCallBlock = rootLayoutSource.slice(
+  rootLayoutSource.indexOf("const openCall = async () =>"),
+  rootLayoutSource.indexOf("const decline = async () =>"),
+);
+assert.match(
+  appWideOpenCallBlock,
+  /if \(iosNativeCallPresentationOwned\)[\s\S]{0,180}requestIosNativeCallAnswer\(invite\.id\)[\s\S]{0,520}clearAlert\(\);[\s\S]{0,80}return;/u,
+  "an app-wide iOS Answer owned by CallKit must request the exact native answer instead of racing it",
+);
+assert.ok(
+  appWideOpenCallBlock.indexOf("requestIosNativeCallAnswer(invite.id)")
+    < appWideOpenCallBlock.indexOf("const acceptedInvite ="),
+  "native-owned foreground Answer must delegate to CallKit before any fallback server acceptance",
+);
+assert.match(
+  nativeCoordinatorSource,
+  /requestAnswer\(callUuid: String, inviteId: String\)[\s\S]{0,760}call\.inviteId == normalizedInviteId[\s\S]{0,520}requestedAnswerTransactions\.contains\(uuid\)[\s\S]{0,420}CXAnswerCallAction\(call: uuid\)/u,
+  "native foreground Answer is exact-invite bound, single-flight, and requested through CXAnswerCallAction",
+);
+assert.match(
+  nativeCoordinatorSource,
+  /provider\(_ provider: CXProvider, perform action: CXAnswerCallAction\)[\s\S]{0,120}requestedAnswerTransactions\.remove\(action\.callUUID\)/u,
+  "the provider atomically hands an in-flight foreground Answer to the existing trusted CallKit answer pipeline",
+);
 assert.match(
   chatThreadSource,
   /const readAcceptableIncomingInvite[\s\S]{0,520}normalizeCommunicationRoomIdentifier\(latestInvite\?\.communicationRoomId\)[\s\S]{0,520}latestInvite\.calleeUserId === currentUserId/u,

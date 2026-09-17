@@ -90,6 +90,7 @@ import {
   hasIosNativeCallPresentation,
   isIosNativeCallsRuntimeEnabled,
   reportIosNativeCallRemoteEnd,
+  requestIosNativeCallAnswer,
   revokeIosVoipRegistration,
   startIosNativeCallsReadiness,
   subscribeToIosNativeCallPresentation,
@@ -711,6 +712,21 @@ function IncomingCallNotificationBridge() {
       || (invite.status !== "ringing" && invite.status !== "accepted")
     ) {
       Alert.alert("Call unavailable", "This Chi'lly Chat call can no longer be answered.");
+      return;
+    }
+    if (iosNativeCallPresentationOwned) {
+      const nativeAnswerRequested = await requestIosNativeCallAnswer(invite.id);
+      if (!nativeAnswerRequested) {
+        Alert.alert("Unable to answer", "The call remains available if it is still ringing. Try again from the chat thread.");
+        return;
+      }
+      cleanupChillyChatCallNotifications({
+        callInviteId: invite.id,
+        path: alert.path,
+        presentedNotificationId: alert.presentedNotificationId ?? null,
+        threadId: invite.threadId,
+      });
+      clearAlert();
       return;
     }
     const acceptedInvite = invite.status === "accepted"

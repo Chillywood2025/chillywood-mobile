@@ -10,6 +10,7 @@ enum ChillywoodNativeCallError: Error {
   case invalidCallUuid
   case invalidPayload
   case answerNotPending
+  case callUnavailable
   case providerUnavailable
   case runtimeDisabled
   case unsupportedAudioRoute
@@ -44,6 +45,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private var provider: CXProvider?
   private var pushRegistry: PKPushRegistry?
   private var activeCalls: [UUID: ActiveNativeCall] = [:]
+  private var requestedAnswerTransactions: Set<UUID> = []
   private var pendingAnswerActions: [UUID: CXAnswerCallAction] = [:]
   private var pendingAnswerTimeouts: [UUID: DispatchWorkItem] = [:]
   private var answerTransitionBackgroundTasks: [UUID: UIBackgroundTaskIdentifier] = [:]
@@ -221,6 +223,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       provider?.reportCall(with: call.uuid, endedAt: Date(), reason: .remoteEnded)
     }
     activeCalls.removeAll()
+    requestedAnswerTransactions.removeAll()
     pendingAnswerActions.values.forEach { $0.fail() }
     pendingAnswerActions.removeAll()
     pendingAnswerTimeouts.values.forEach { $0.cancel() }
@@ -514,6 +517,49 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     }
   }
 
+  public func requestAnswer(callUuid: String, inviteId: String) async throws {
+    guard let uuid = UUID(uuidString: callUuid) else { throw ChillywoodNativeCallError.invalidCallUuid }
+    let normalizedInviteId = inviteId.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !normalizedInviteId.isEmpty else { throw ChillywoodNativeCallError.invalidPayload }
+
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      DispatchQueue.main.async { [weak self] in
+        guard let self else {
+          continuation.resume(throwing: ChillywoodNativeCallError.callUnavailable)
+          return
+        }
+        guard
+          let call = self.activeCalls[uuid],
+          call.inviteId == normalizedInviteId,
+          !self.isTerminalInvite(normalizedInviteId)
+        else {
+          continuation.resume(throwing: ChillywoodNativeCallError.callUnavailable)
+          return
+        }
+        if call.answered
+          || self.pendingAnswerActions[uuid] != nil
+          || self.requestedAnswerTransactions.contains(uuid)
+        {
+          continuation.resume()
+          return
+        }
+
+        self.requestedAnswerTransactions.insert(uuid)
+        let transaction = CXTransaction(action: CXAnswerCallAction(call: uuid))
+        self.callController.request(transaction) { [weak self] error in
+          DispatchQueue.main.async {
+            if let error {
+              self?.requestedAnswerTransactions.remove(uuid)
+              continuation.resume(throwing: error)
+              return
+            }
+            continuation.resume()
+          }
+        }
+      }
+    }
+  }
+
   public func completeTerminalTransition(callUuid: String) throws {
     guard let uuid = UUID(uuidString: callUuid) else { throw ChillywoodNativeCallError.invalidCallUuid }
     DispatchQueue.main.async { [weak self] in
@@ -661,6 +707,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   private func failPendingAnswer(_ uuid: UUID) {
+    requestedAnswerTransactions.remove(uuid)
     endAnswerTransitionBackgroundTask(uuid)
     pendingAnswerTimeouts.removeValue(forKey: uuid)?.cancel()
     pendingAnswerActions.removeValue(forKey: uuid)?.fail()
@@ -733,6 +780,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   @discardableResult
   private func removeCall(_ uuid: UUID) -> ActiveNativeCall? {
     guard let call = activeCalls.removeValue(forKey: uuid) else { return nil }
+    requestedAnswerTransactions.remove(uuid)
     call.timeoutWorkItem?.cancel()
     persistActiveCallDescriptors()
     return call
@@ -895,6 +943,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   public func providerDidReset(_ provider: CXProvider) {
     let calls = activeCalls.values
     activeCalls.removeAll()
+    requestedAnswerTransactions.removeAll()
     calls.forEach {
       $0.timeoutWorkItem?.cancel()
       failPendingAnswer($0.uuid)
@@ -908,6 +957,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   public func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
+    requestedAnswerTransactions.remove(action.callUUID)
     guard let call = activeCalls[action.callUUID] else {
       action.fail()
       return

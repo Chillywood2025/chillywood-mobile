@@ -161,6 +161,9 @@ requireText(coordinator, "startVoipRegistrationOnMain()", "PushKit registration 
 requireText(coordinator, "terminalInvitesDefaultsKey", "Caller-cancel ordering must persist a bounded native tombstone across cold launch.");
 requireText(coordinator, "reportInvalidVoipPushOnMain", "Every received VoIP push path must satisfy Apple's CallKit reporting contract.");
 requireText(coordinator, "pendingAnswerActions", "CallKit answer actions must remain pending until media connection acknowledgement.");
+requireText(coordinator, "requestedAnswerTransactions", "In-app CallKit Answer requests must be single-flight per exact call UUID.");
+requireText(coordinator, "call.inviteId == normalizedInviteId", "In-app CallKit Answer must fail closed unless the native UUID owns the exact invite.");
+requireText(coordinator, "CXAnswerCallAction(call: uuid)", "In-app Answer must enter the canonical CallKit provider action rather than bypass native ownership.");
 requireText(coordinator, "beginAnswerTransitionBackgroundTask", "A terminated-app CallKit Answer must retain bounded execution time for authenticated bridge hydration and media acknowledgement.");
 requireText(coordinator, 'withName: "ChillywoodCallAnswerTransition"', "The CallKit Answer execution lease must remain separately attributable from terminal cleanup.");
 requireText(coordinator, "answerTransitionBackgroundTaskTimeouts", "The CallKit Answer execution lease must have a bounded timeout.");
@@ -182,6 +185,7 @@ requireText(coordinator, "#if DEBUG", "The local CallKit trigger must compile on
 rejectText(coordinator, "AVCapture", "The native incoming-call bridge must not activate a camera before answer.");
 requireText(moduleSource, "stopVoipRegistrationAsync", "The native bridge must support logout/account-transition teardown.");
 requireText(moduleSource, "completeAnswerAsync", "The native bridge must acknowledge CallKit answer only after media connection.");
+requireText(moduleSource, "requestAnswerAsync", "The native bridge must expose exact-bound CallKit Answer requests for the foreground app banner.");
 requireText(moduleSource, "completeTerminalTransitionAsync", "The authenticated bridge must release the exact CallKit terminal execution lease after server acknowledgement.");
 requireText(moduleSource, "reportRemoteEndAsync", "Realtime terminal state must end CallKit without synthesizing a local decline.");
 requireText(moduleSource, 'AsyncFunction("isApplicationActiveAsync")', "Cold-start video recovery must query current UIKit application state through the canonical native module.");
@@ -218,6 +222,10 @@ requireText(facade, "nativeEventGeneration", "Native and cold-start events must 
 requireText(facade, "drainPendingEventsForExactLifecycle", "Persisted CallKit actions must replay only under the exact active account lifecycle.");
 requireText(facade, 'event.type === "applicationActive"', "Returning from CallKit must replay any Answer persisted during a listener gap.");
 requireText(facade, "iosNativeAnswerApplicationActiveBaselines", "A native foreground witness must be newer than the exact invite's Answer request.");
+requireText(facade, "nativePresentedCallUuidsByInviteId", "Foreground native ownership must bind the exact invite to its CallKit UUID.");
+requireText(facade, "requestIosNativeCallAnswer(inviteId: string)", "Foreground app Answer must delegate through the exact native CallKit call.");
+requireText(facade, 'typeof NativeCallsModule.requestAnswerAsync !== "function"', "Older same-runtime binaries must fail closed when the additive native Answer API is absent.");
+requireText(facade, "requestAnswerAsync(callUuid, normalizedInviteId)", "The JavaScript-to-native Answer request must carry both exact UUID and invite authority.");
 requireText(facade, "readIosNativeApplicationActiveSerial(inviteId: string)", "The call screen must read only an exact-invite native foreground witness.");
 requireText(facade, "iosNativeAnswerApplicationActiveBaselines.clear()", "Account/readiness replacement must revoke every native foreground witness.");
 requireText(facade, "readIosNativeApplicationActive(): Promise<boolean>", "The JavaScript facade must expose the fail-closed current UIKit state query.");
@@ -236,6 +244,8 @@ requireText(bridgeLifecycle, 'authorityStatus === "loading" && !hadActiveAuthori
 requireText(bridgeLifecycle, "REVOKE_STATUSES", "Terminal and indeterminate session authority must revoke native VoIP ownership.");
 rejectText(bridgeLifecycle, "console.", "The native-call bridge lifecycle policy must not log account authority.");
 requireText(rootLayout, "createIosCallKitAnswerRouteHandler", "CallKit Answer must create a bounded claim through the canonical bridge handler.");
+requireText(rootLayout, "if (iosNativeCallPresentationOwned)", "The foreground banner must distinguish native-owned calls before accepting an invite.");
+requireText(rootLayout, "requestIosNativeCallAnswer(invite.id)", "The foreground banner must ask CallKit to answer its exact native-owned invite.");
 requireText(rootLayout, "{hideDebugOverlay ? null : <DevDebugOverlay />}", "Opaque native and foreground claim handles must never mount the debug snapshot/clipboard overlay.");
 requireText(rootLayout, '"#"', "Expo Router fragment values must be treated as sensitive route material.");
 requireText(rootLayout, 'normalizedValue.includes("#")', "Fragment-bearing values must be excluded from route analytics.");
