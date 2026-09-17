@@ -100,6 +100,7 @@ const MEDIA_WRITE_PREDECESSOR_DRAIN_TIMEOUT_MS = 2_000;
 const MEDIA_WRITE_OPERATION_TIMEOUT_MS = 4_000;
 const INITIAL_CAMERA_TRANSIENT_RETRY_DELAYS_MS = [350, 900, 1_500] as const;
 const POST_COMMIT_CAMERA_TRANSIENT_RETRY_DELAYS_MS = [250, 750, 1_500, 3_000] as const;
+const NATIVE_MEDIA_ACTIVATION_RETRY_DELAYS_MS = [0, 250, 750, 1_500, 3_000] as const;
 
 type UseLiveKitChatCallSessionOptions = {
   authenticatedUserId: string;
@@ -2322,11 +2323,31 @@ export function useLiveKitChatCallSession({
 
   useEffect(() => {
     if (!sessionKey || mediaActivationSerial <= 0 || !roomRef.current) return;
-    void scheduleLatestMediaReconciliation(true).then((reconciled) => {
-      if (!reconciled) return;
-      refreshParticipantViews();
-    });
+    let active = true;
+    void (async () => {
+      for (const delayMs of NATIVE_MEDIA_ACTIVATION_RETRY_DELAYS_MS) {
+        if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+        const binding = committedSessionRef.current;
+        if (!active || !binding || !isCommittedSessionCurrent(binding)) return;
+        const reconciled = await scheduleLatestMediaReconciliation(true);
+        if (!active || !isCommittedSessionCurrent(binding)) return;
+        const microphoneReady = publicationIsUsable(
+          binding.liveKitRoom?.localParticipant.getTrackPublication(Track.Source.Microphone),
+        ) === micRequestedRef.current;
+        const cameraReady = inviteCallType !== "video" || publicationIsUsable(
+          binding.liveKitRoom?.localParticipant.getTrackPublication(Track.Source.Camera),
+        ) === cameraRequestedRef.current;
+        if (!reconciled || !microphoneReady || !cameraReady) continue;
+        refreshParticipantViews();
+        return;
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, [
+    inviteCallType,
+    isCommittedSessionCurrent,
     mediaActivationSerial,
     refreshParticipantViews,
     scheduleLatestMediaReconciliation,

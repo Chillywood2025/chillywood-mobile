@@ -99,7 +99,7 @@ add(
   "declined calls also clear presented Android call notifications after delayed delivery",
   includes(layout, "dismissAllPresentedNotificationsFallback: true,\n      dismissIncomingCallFallback: true,")
     && includes(layout, "dismissAllPresentedNotificationsFallback: true,\n          dismissIncomingCallFallback: true,")
-    && includes(layout, "await dismissPresentedChillyChatCallNotifications({\n        callInviteId: invite.id,\n        dismissAllPresentedNotificationsFallback: true,\n        dismissIncomingCallFallback: true,\n        path: alert.path,\n        presentedNotificationId: alert.presentedNotificationId ?? null,\n        threadId: invite.threadId,\n      }).catch(() => 0);")
+    && includes(layout, "await dismissPresentedChillyChatCallNotifications({\n      callInviteId: declinedInvite.id,\n      dismissAllPresentedNotificationsFallback: true,\n      dismissIncomingCallFallback: true,\n      path: alert.path,\n      presentedNotificationId: alert.presentedNotificationId ?? null,\n      threadId: declinedInvite.threadId,\n    }).catch(() => 0);")
     && includes(notifications, "presentedNotificationId")
     && includes(notifications, "isIncomingChillyChatCallTitle")
     && includes(notifications, "dismissIncomingCallFallback")
@@ -154,14 +154,14 @@ add(
 );
 add(
   "room-safe Decline clears active thread call state",
-  includes(layout, "await clearEndedChatThreadCall(invite.threadId).catch(() => null);"),
-  "Decline must not leave a stale answerable active call room behind",
+  includes(layout, "await clearEndedChatThreadCall(declinedInvite.threadId).catch(() => null);"),
+  "Decline must not leave a stale answerable active call room behind after authoritative terminal readback",
 );
 add(
   "room-safe Decline retries notification row cleanup after call invite updates",
   includes(layout, "cleanupChillyChatCallNotifications")
     && includes(layout, "[750, 1800, 5000]")
-    && includes(layout, "await dismissChillyChatCallNotificationRows({\n        callInviteId: invite.id,\n        threadId: invite.threadId,\n      }).catch(() => 0);"),
+    && includes(layout, "await dismissChillyChatCallNotificationRows({\n      callInviteId: declinedInvite.id,\n      threadId: declinedInvite.threadId,\n    }).catch(() => 0);"),
   "Decline must catch delayed notification row creation and make incoming-call rows non-actionable",
 );
 

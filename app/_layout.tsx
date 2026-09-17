@@ -772,35 +772,55 @@ function IncomingCallNotificationBridge() {
   };
 
   const decline = async () => {
-    const invite = alert.invite ?? null;
+    const inviteId = String(alert.invite?.id ?? alert.inviteId ?? "").trim();
     const actorUserId = String(user?.id ?? "").trim();
-    cleanupChillyChatCallNotifications({
-      callInviteId: invite?.id ?? alert.inviteId ?? null,
-      path: alert.path,
-      presentedNotificationId: alert.presentedNotificationId ?? null,
-      threadId: invite?.threadId ?? null,
-    });
-    clearAlert();
-    if (invite && actorUserId) {
-      await updateChillyChatCallInviteStatus({
+    const invite = inviteId
+      ? await readChillyChatCallInvite(inviteId).catch(() => null)
+      : null;
+    const exactRecipient = !!invite
+      && !!actorUserId
+      && invite.calleeUserId === actorUserId
+      && invite.callerUserId !== actorUserId;
+    if (!exactRecipient || !invite) {
+      Alert.alert("Unable to decline", "The call state could not be verified. Open the chat thread and try again.");
+      return;
+    }
+    const declinedInvite = invite.status === "ringing"
+      ? await updateChillyChatCallInviteStatus({
         actorUserId,
         invite,
         status: "declined",
-      }).catch(() => null);
-      await clearEndedChatThreadCall(invite.threadId).catch(() => null);
-      await dismissPresentedChillyChatCallNotifications({
-        callInviteId: invite.id,
-        dismissAllPresentedNotificationsFallback: true,
-        dismissIncomingCallFallback: true,
-        path: alert.path,
-        presentedNotificationId: alert.presentedNotificationId ?? null,
-        threadId: invite.threadId,
-      }).catch(() => 0);
-      await dismissChillyChatCallNotificationRows({
-        callInviteId: invite.id,
-        threadId: invite.threadId,
-      }).catch(() => 0);
+      }).catch(() => null)
+      : invite;
+    const terminal = declinedInvite?.status === "declined"
+      || declinedInvite?.status === "missed"
+      || declinedInvite?.status === "canceled"
+      || declinedInvite?.status === "ended"
+      || declinedInvite?.status === "busy";
+    if (!terminal || !declinedInvite) {
+      Alert.alert("Unable to decline", "The call is still changing state. Try again from the chat thread.");
+      return;
     }
+    cleanupChillyChatCallNotifications({
+      callInviteId: declinedInvite.id,
+      path: alert.path,
+      presentedNotificationId: alert.presentedNotificationId ?? null,
+      threadId: declinedInvite.threadId,
+    });
+    clearAlert();
+    await clearEndedChatThreadCall(declinedInvite.threadId).catch(() => null);
+    await dismissPresentedChillyChatCallNotifications({
+      callInviteId: declinedInvite.id,
+      dismissAllPresentedNotificationsFallback: true,
+      dismissIncomingCallFallback: true,
+      path: alert.path,
+      presentedNotificationId: alert.presentedNotificationId ?? null,
+      threadId: declinedInvite.threadId,
+    }).catch(() => 0);
+    await dismissChillyChatCallNotificationRows({
+      callInviteId: declinedInvite.id,
+      threadId: declinedInvite.threadId,
+    }).catch(() => 0);
   };
 
   const replyInChat = () => {

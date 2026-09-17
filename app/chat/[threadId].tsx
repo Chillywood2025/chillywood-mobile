@@ -339,6 +339,22 @@ export default function ChillyChatThreadScreen() {
   const handledIncomingRoomIdsRef = useRef<Set<string>>(new Set());
   const outgoingCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const outgoingRingbackSoundRef = useRef<ChillyChatPlayingSound | null>(null);
+  const releaseTrustedNativeCallSession = useCallback((expectedInviteId: string) => {
+    if (
+      !trustedNativeCallClaim
+      || trustedNativeCallClaim.inviteId !== expectedInviteId
+    ) return false;
+    acceptedIosNativeMediaDescriptorRef.current = null;
+    activeNativeCallActionRequestKeyRef.current = "";
+    nativeCallActionHandledRef.current = "";
+    setTrustedNativeCallClaim(null);
+    setTrustedNativeCallClaimAccountId("");
+    setIosNativeAnswerRecoveryBlocked(false);
+    setNativeAudioSessionCallUuid("");
+    setNativeApplicationActiveSerial(0);
+    setNativeMediaActivationSerial(0);
+    return true;
+  }, [trustedNativeCallClaim]);
 
   useEffect(() => {
     if (
@@ -873,6 +889,7 @@ export default function ChillyChatThreadScreen() {
   const waitingForIosNativeAudioSession =
     Platform.OS === "ios"
     && requestedNativeCallAction === "answer"
+    && requestedNativeCallOwnsTransition
     && !!requestedNativeCallUuid
     && nativeAudioSessionCallUuid !== requestedNativeCallUuid;
 
@@ -910,6 +927,7 @@ export default function ChillyChatThreadScreen() {
     }) && !waitingForIosNativeAudioSession && !iosNativeAnswerRecoveryBlocked,
     allowBackgroundAudio: Platform.OS === "ios"
       && requestedNativeCallAction === "answer"
+      && requestedNativeCallOwnsTransition
       && !!requestedNativeCallUuid,
     mediaActivationSerial: nativeMediaActivationSerial,
     iosAcceptedCallKitMediaDescriptor: acceptedIosNativeMediaDescriptorRef.current,
@@ -943,6 +961,7 @@ export default function ChillyChatThreadScreen() {
         void endIosNativeCall(requestedNativeCallUuid, `room_${reason}`).catch(() => false);
       }
       void clearEndedChatThreadCall(threadId).finally(() => {
+        if (activeInvite?.id) releaseTrustedNativeCallSession(activeInvite.id);
         setCallPanelOpen(false);
         void loadThreadState();
       });
@@ -1146,7 +1165,20 @@ export default function ChillyChatThreadScreen() {
         setCallDeliveryStatus("Receiver joined the call.");
         return;
       }
-      if (!latestInvite || latestInvite.status !== "ringing") return;
+      if (!latestInvite || latestInvite.status !== "ringing") {
+        if (!latestInvite || TERMINAL_CHAT_CALL_INVITE_STATUSES.has(latestInvite.status)) {
+          stopOutgoingRingback();
+          await leaveRoom({ endRoomIfHost: true }).catch(() => null);
+          await clearEndedChatThreadCall(threadId).catch(() => null);
+          activeCallInviteRef.current = null;
+          setActiveCallInvite(null);
+          setOutgoingCallInvite(null);
+          setCallPanelOpen(false);
+          setCallDeliveryStatus("The call is no longer ringing. Active call state was cleared.");
+          await loadThreadState();
+        }
+        return;
+      }
 
       const missedInvite = await updateChillyChatCallInviteStatus({
         actorUserId: currentUserId,
@@ -1297,7 +1329,16 @@ export default function ChillyChatThreadScreen() {
     const timeoutMs = Math.max(0, Number.isFinite(expiresAt) ? expiresAt - Date.now() : 45_000);
     incomingCallTimeoutRef.current = setTimeout(async () => {
       const latestInvite = await readChillyChatCallInvite(incomingCallInvite.id).catch(() => null);
-      if (!latestInvite || latestInvite.status !== "ringing") return;
+      if (latestInvite?.status === "accepted") {
+        applyAcceptedIncomingInviteState(latestInvite);
+        return;
+      }
+      if (!latestInvite || latestInvite.status !== "ringing") {
+        clearVisibleIncomingCallState(latestInvite ?? incomingCallInvite);
+        await clearEndedChatThreadCall(threadId).catch(() => null);
+        await loadThreadState();
+        return;
+      }
       await updateChillyChatCallInviteStatus({
         actorUserId: currentUserId,
         invite: latestInvite,
@@ -1315,7 +1356,7 @@ export default function ChillyChatThreadScreen() {
         incomingCallTimeoutRef.current = null;
       }
     };
-  }, [clearVisibleIncomingCallState, currentUserId, incomingCallInvite, loadThreadState, threadId]);
+  }, [applyAcceptedIncomingInviteState, clearVisibleIncomingCallState, currentUserId, incomingCallInvite, loadThreadState, threadId]);
 
   useEffect(() => {
     if (!incomingCallInvite?.id) return undefined;
@@ -1394,6 +1435,7 @@ export default function ChillyChatThreadScreen() {
       setOutgoingCallInvite(null);
       setIncomingCallInvite(null);
       setCallPanelOpen(false);
+      releaseTrustedNativeCallSession(latestInvite.id);
       setError(null);
       setCallDeliveryStatus("The call ended. Active call state was cleared on both devices.");
       await loadThreadState();
@@ -1422,6 +1464,7 @@ export default function ChillyChatThreadScreen() {
     leaveRoom,
     loadThreadState,
     requestedNativeCallUuid,
+    releaseTrustedNativeCallSession,
     stopOutgoingRingback,
     threadId,
   ]);
@@ -1930,12 +1973,20 @@ export default function ChillyChatThreadScreen() {
     });
     const candidateInvite = updatedInvite
       ?? await readChillyChatCallInvite(invite.id).catch(() => null);
-    return resolveAuthoritativeNativeCallDecline({
+    const declinedInvite = resolveAuthoritativeNativeCallDecline({
       currentUserId,
       expectedInviteId: invite.id,
       expectedThreadId: threadId,
       invite: candidateInvite,
     });
+    if (declinedInvite) return declinedInvite;
+    const exactTerminalInvite = !!candidateInvite
+      && candidateInvite.id === invite.id
+      && candidateInvite.threadId === threadId
+      && candidateInvite.calleeUserId === currentUserId
+      && candidateInvite.callerUserId !== currentUserId
+      && TERMINAL_CHAT_CALL_INVITE_STATUSES.has(candidateInvite.status);
+    return exactTerminalInvite ? candidateInvite : null;
   }, [currentUserId, threadId]);
 
   const handleDeclineIncomingCall = useCallback(async () => {
@@ -2094,6 +2145,7 @@ export default function ChillyChatThreadScreen() {
         setActiveCallInvite(null);
         await clearEndedChatThreadCall(threadId).catch(() => null);
         setCallPanelOpen(false);
+        releaseTrustedNativeCallSession(invite.id);
         await loadThreadState();
         return;
       }
@@ -2142,6 +2194,7 @@ export default function ChillyChatThreadScreen() {
     requestedNativeCallRequestKey,
     requestedNativeCallUuid,
     requestAuthoritativeIncomingCallDecline,
+    releaseTrustedNativeCallSession,
     resumeAcceptedIncomingInvite,
     setMicrophoneEnabled,
     callRoom?.hostUserId,
@@ -2349,6 +2402,7 @@ export default function ChillyChatThreadScreen() {
       activeCallInviteRef.current = null;
       setActiveCallInvite(null);
       setCallPanelOpen(false);
+      releaseTrustedNativeCallSession(terminalInvite.id);
       setCallDeliveryStatus("The call ended and both participants' active call state was cleared.");
       await loadThreadState();
     } catch (leaveError) {
@@ -2369,7 +2423,7 @@ export default function ChillyChatThreadScreen() {
         role: shouldEndRoomAsHost ? "host" : "viewer",
       });
     }
-  }, [acceptIncomingInvite, activeCallInvite, activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, incomingCallInvite, leaveRoom, loadThreadState, officialAccount, outgoingCallInvite, requestedNativeCallUuid, stopOutgoingRingback, thread?.activeCallType, threadId]);
+  }, [acceptIncomingInvite, activeCallInvite, activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, incomingCallInvite, leaveRoom, loadThreadState, officialAccount, outgoingCallInvite, releaseTrustedNativeCallSession, requestedNativeCallUuid, stopOutgoingRingback, thread?.activeCallType, threadId]);
 
   useEffect(() => {
     if (!trustedForegroundUiIntent || loading || callBusy || !currentUserId) return;
@@ -3160,7 +3214,6 @@ export default function ChillyChatThreadScreen() {
 
       {incomingCallInvite
         && !callPanelOpen
-        && !iosNativeCallPresentationOwned
         && !waitingForIosNativePresentation ? (
         <View
           style={[styles.incomingCallBannerOverlay, { top: Math.max(safeAreaInsets.top, 10) + 8 }]}

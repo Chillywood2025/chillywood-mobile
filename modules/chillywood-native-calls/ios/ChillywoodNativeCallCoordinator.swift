@@ -46,6 +46,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private var pushRegistry: PKPushRegistry?
   private var activeCalls: [UUID: ActiveNativeCall] = [:]
   private var requestedAnswerTransactions: Set<UUID> = []
+  private var requestedAnswerCompletions: [UUID: [(Result<Void, Error>) -> Void]] = [:]
   private var pendingAnswerActions: [UUID: CXAnswerCallAction] = [:]
   private var pendingAnswerTimeouts: [UUID: DispatchWorkItem] = [:]
   private var answerTransitionBackgroundTasks: [UUID: UIBackgroundTaskIdentifier] = [:]
@@ -224,6 +225,10 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     }
     activeCalls.removeAll()
     requestedAnswerTransactions.removeAll()
+    requestedAnswerCompletions.values.flatMap { $0 }.forEach {
+      $0(.failure(ChillywoodNativeCallError.callUnavailable))
+    }
+    requestedAnswerCompletions.removeAll()
     pendingAnswerActions.values.forEach { $0.fail() }
     pendingAnswerActions.removeAll()
     pendingAnswerTimeouts.values.forEach { $0.cancel() }
@@ -536,13 +541,15 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
           continuation.resume(throwing: ChillywoodNativeCallError.callUnavailable)
           return
         }
-        if call.answered
-          || self.pendingAnswerActions[uuid] != nil
-          || self.requestedAnswerTransactions.contains(uuid)
-        {
+        if call.answered || self.pendingAnswerActions[uuid] != nil {
           continuation.resume()
           return
         }
+
+        self.requestedAnswerCompletions[uuid, default: []].append { result in
+          continuation.resume(with: result)
+        }
+        if self.requestedAnswerTransactions.contains(uuid) { return }
 
         self.requestedAnswerTransactions.insert(uuid)
         let transaction = CXTransaction(action: CXAnswerCallAction(call: uuid))
@@ -550,10 +557,19 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
           DispatchQueue.main.async {
             if let error {
               self?.requestedAnswerTransactions.remove(uuid)
-              continuation.resume(throwing: error)
+              self?.settleRequestedAnswers(uuid, result: .failure(error))
               return
             }
-            continuation.resume()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+              guard
+                let self,
+                self.requestedAnswerTransactions.remove(uuid) != nil
+              else { return }
+              self.settleRequestedAnswers(
+                uuid,
+                result: .failure(ChillywoodNativeCallError.answerNotPending)
+              )
+            }
           }
         }
       }
@@ -708,9 +724,14 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
 
   private func failPendingAnswer(_ uuid: UUID) {
     requestedAnswerTransactions.remove(uuid)
+    settleRequestedAnswers(uuid, result: .failure(ChillywoodNativeCallError.callUnavailable))
     endAnswerTransitionBackgroundTask(uuid)
     pendingAnswerTimeouts.removeValue(forKey: uuid)?.cancel()
     pendingAnswerActions.removeValue(forKey: uuid)?.fail()
+  }
+
+  private func settleRequestedAnswers(_ uuid: UUID, result: Result<Void, Error>) {
+    requestedAnswerCompletions.removeValue(forKey: uuid)?.forEach { $0(result) }
   }
 
   private func persistActiveCallDescriptors() {
@@ -781,6 +802,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private func removeCall(_ uuid: UUID) -> ActiveNativeCall? {
     guard let call = activeCalls.removeValue(forKey: uuid) else { return nil }
     requestedAnswerTransactions.remove(uuid)
+    settleRequestedAnswers(uuid, result: .failure(ChillywoodNativeCallError.callUnavailable))
     call.timeoutWorkItem?.cancel()
     persistActiveCallDescriptors()
     return call
@@ -944,6 +966,10 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     let calls = activeCalls.values
     activeCalls.removeAll()
     requestedAnswerTransactions.removeAll()
+    requestedAnswerCompletions.values.flatMap { $0 }.forEach {
+      $0(.failure(ChillywoodNativeCallError.callUnavailable))
+    }
+    requestedAnswerCompletions.removeAll()
     calls.forEach {
       $0.timeoutWorkItem?.cancel()
       failPendingAnswer($0.uuid)
@@ -959,6 +985,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   public func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
     requestedAnswerTransactions.remove(action.callUUID)
     guard let call = activeCalls[action.callUUID] else {
+      settleRequestedAnswers(action.callUUID, result: .failure(ChillywoodNativeCallError.callUnavailable))
       action.fail()
       return
     }
@@ -977,6 +1004,10 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     let timeoutDelay = max(0.5, action.timeoutDate.timeIntervalSinceNow - 0.25)
     DispatchQueue.main.asyncAfter(deadline: .now() + timeoutDelay, execute: timeout)
     emit(type: "answerRequested", call: call)
+    // A foreground React Answer request is authoritative only after CallKit
+    // has installed this exact pending action and emitted the exact-bound
+    // native event. Transaction queue acceptance alone is not handoff proof.
+    settleRequestedAnswers(action.callUUID, result: .success(()))
   }
 
   public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {

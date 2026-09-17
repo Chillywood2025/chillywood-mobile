@@ -1128,8 +1128,13 @@ assert.match(chatThreadSource, /setCallPanelOpen\(false\)[\s\S]{0,180}answer or 
 assert.match(chatThreadSource, /testID="chat-thread-incoming-call-banner"/u, "same-thread foreground calls use a compact answer banner");
 assert.match(
   chatThreadSource,
-  /incomingCallInvite[\s\S]{0,160}!callPanelOpen[\s\S]{0,160}!iosNativeCallPresentationOwned[\s\S]{0,160}!waitingForIosNativePresentation/u,
-  "the same-thread React banner is hidden when CallKit owns iOS presentation",
+  /\{incomingCallInvite[\s\S]{0,160}&& !callPanelOpen[\s\S]{0,160}&& !waitingForIosNativePresentation/u,
+  "the same-thread React banner remains visible after native presentation grace even when CallKit owns the iOS record",
+);
+assert.doesNotMatch(
+  chatThreadSource,
+  /\{incomingCallInvite[\s\S]{0,160}&& !callPanelOpen[\s\S]{0,160}&& !iosNativeCallPresentationOwned/u,
+  "CallKit bookkeeping cannot suppress the foreground same-thread Answer and Decline controls",
 );
 assert.match(
   communicationLibSource,
@@ -1420,6 +1425,36 @@ assert.match(
   "the provider atomically hands an in-flight foreground Answer to the existing trusted CallKit answer pipeline",
 );
 assert.match(
+  nativeCoordinatorSource,
+  /requestedAnswerCompletions\[uuid, default: \[\]\][\s\S]{0,360}requestedAnswerTransactions\.contains\(uuid\)[\s\S]{0,360}CXAnswerCallAction\(call: uuid\)/u,
+  "concurrent foreground Answer taps share the exact in-flight CallKit transaction",
+);
+assert.match(
+  nativeCoordinatorSource,
+  /emit\(type: "answerRequested", call: call\)[\s\S]{0,320}settleRequestedAnswers\(action\.callUUID, result: \.success\(\(\)\)\)/u,
+  "foreground Answer does not report handoff until the exact CallKit provider action is installed and emitted",
+);
+assert.match(
+  nativeCoordinatorSource,
+  /DispatchQueue\.main\.asyncAfter\(deadline: \.now\(\) \+ 3\)[\s\S]{0,360}answerNotPending/u,
+  "a CallKit transaction that never reaches the provider releases every waiting foreground Answer within a bounded deadline",
+);
+assert.match(
+  chatThreadSource,
+  /const releaseTrustedNativeCallSession = useCallback[\s\S]{0,620}setTrustedNativeCallClaim\(null\)[\s\S]{0,360}setNativeMediaActivationSerial\(0\)/u,
+  "terminal cleanup revokes the consumed native Answer claim before a later ordinary call can inherit its media gates",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /NATIVE_MEDIA_ACTIVATION_RETRY_DELAYS_MS = \[0, 250, 750, 1_500, 3_000\]/u,
+  "CallKit audio/application activation drives a bounded exact-session camera and microphone convergence loop",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /for \(const delayMs of NATIVE_MEDIA_ACTIVATION_RETRY_DELAYS_MS\)[\s\S]{0,900}isCommittedSessionCurrent\(binding\)[\s\S]{0,900}cameraRequestedRef\.current/u,
+  "native activation retries remain bound to the exact current session and requested camera authority",
+);
+assert.match(
   chatThreadSource,
   /const readAcceptableIncomingInvite[\s\S]{0,520}normalizeCommunicationRoomIdentifier\(latestInvite\?\.communicationRoomId\)[\s\S]{0,520}latestInvite\.calleeUserId === currentUserId/u,
   "callee pre-accept validation binds the exact invite and canonical text room identifier",
@@ -1460,8 +1495,13 @@ assert.match(
 );
 assert.match(
   chatThreadSource,
-  /if \(!latestInvite \|\| latestInvite\.status !== "ringing"\) return;[\s\S]{0,420}const missedInvite = await updateChillyChatCallInviteStatus[\s\S]{0,420}if \(!missedInvite \|\| missedInvite\.status !== "missed"\) return;/u,
+  /if \(!latestInvite \|\| latestInvite\.status !== "ringing"\) \{[\s\S]{0,900}const missedInvite = await updateChillyChatCallInviteStatus[\s\S]{0,420}if \(!missedInvite \|\| missedInvite\.status !== "missed"\) return;/u,
   "caller timeout cleanup must require both a fresh ringing read and a confirmed missed transition",
+);
+assert.match(
+  chatThreadSource,
+  /TERMINAL_CHAT_CALL_INVITE_STATUSES\.has\(latestInvite\.status\)[\s\S]{0,520}setOutgoingCallInvite\(null\)/u,
+  "a caller that misses the realtime terminal update clears the stale ringing surface from authoritative terminal truth",
 );
 assert.doesNotMatch(
   chatThreadSource,
