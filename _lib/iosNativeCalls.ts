@@ -55,7 +55,7 @@ let nativeSubscription: { remove(): void } | null = null;
 let eventListener: IosNativeCallEventListener | null = null;
 const nativeEventSubscribers = new Set<IosNativeCallEventListener>();
 const nativePresentationSubscribers = new Set<() => void>();
-const nativePresentedInviteIds = new Set<string>();
+const nativePresentedCallUuidsByInviteId = new Map<string, string>();
 let voipLifecycleGeneration = 0;
 let iosNativeApplicationActiveSerial = 0;
 const iosNativeAnswerApplicationActiveBaselines = new Map<string, number>();
@@ -296,8 +296,8 @@ const notifyNativePresentationSubscribers = () => {
 };
 
 const clearNativePresentedInvites = () => {
-  if (nativePresentedInviteIds.size === 0) return;
-  nativePresentedInviteIds.clear();
+  if (nativePresentedCallUuidsByInviteId.size === 0) return;
+  nativePresentedCallUuidsByInviteId.clear();
   notifyNativePresentationSubscribers();
 };
 
@@ -309,8 +309,9 @@ const updateNativePresentationOwnership = (event: SanitizedNativeCallEvent) => {
   }
 
   if (event.type === "incoming" || event.type === "recovered") {
-    if (nativePresentedInviteIds.has(inviteId)) return;
-    nativePresentedInviteIds.add(inviteId);
+    const callUuid = toText(event.callUuid).toLowerCase();
+    if (!callUuid || nativePresentedCallUuidsByInviteId.get(inviteId) === callUuid) return;
+    nativePresentedCallUuidsByInviteId.set(inviteId, callUuid);
     notifyNativePresentationSubscribers();
     return;
   }
@@ -325,7 +326,7 @@ const updateNativePresentationOwnership = (event: SanitizedNativeCallEvent) => {
     "remoteEnded",
     "reportFailed",
     "timeout",
-  ].includes(event.type) && nativePresentedInviteIds.delete(inviteId)) {
+  ].includes(event.type) && nativePresentedCallUuidsByInviteId.delete(inviteId)) {
     notifyNativePresentationSubscribers();
   }
 };
@@ -428,7 +429,7 @@ export function readIosNativeApplicationActiveSerial(inviteId: string) {
 
 export function hasIosNativeCallPresentation(inviteId: string | null | undefined) {
   const normalizedInviteId = toText(inviteId);
-  return !!normalizedInviteId && nativePresentedInviteIds.has(normalizedInviteId);
+  return !!normalizedInviteId && nativePresentedCallUuidsByInviteId.has(normalizedInviteId);
 }
 
 export function subscribeToIosNativeCallPresentation(listener: () => void) {
@@ -598,6 +599,21 @@ export async function reportIosNativeCallRemoteEnd(callUuid: string, reason = "r
 export async function completeIosNativeCallAnswer(callUuid: string, connected: boolean) {
   if (!NativeCallsModule || !isIosNativeCallsRuntimeEnabled()) return false;
   return NativeCallsModule.completeAnswerAsync(callUuid, connected).then(() => true).catch(() => false);
+}
+
+export async function requestIosNativeCallAnswer(inviteId: string) {
+  if (
+    !NativeCallsModule
+    || typeof NativeCallsModule.requestAnswerAsync !== "function"
+    || !isIosNativeCallsRuntimeEnabled()
+    || !voipRegistrationActive
+  ) return false;
+  const normalizedInviteId = toText(inviteId);
+  const callUuid = nativePresentedCallUuidsByInviteId.get(normalizedInviteId);
+  if (!normalizedInviteId || !callUuid) return false;
+  return NativeCallsModule.requestAnswerAsync(callUuid, normalizedInviteId)
+    .then((requested) => requested === true)
+    .catch(() => false);
 }
 
 export async function completeIosNativeCallTerminalTransition(callUuid: string) {

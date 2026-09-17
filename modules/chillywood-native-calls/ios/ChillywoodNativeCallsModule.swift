@@ -67,6 +67,11 @@ public final class ChillywoodNativeCallsModule: Module {
       try ChillywoodNativeCallCoordinator.shared.completeAnswer(callUuid: callUuid, connected: connected)
     }
 
+    AsyncFunction("requestAnswerAsync") { (callUuid: String, inviteId: String) async throws -> Bool in
+      try await ChillywoodNativeCallCoordinator.shared.requestAnswer(callUuid: callUuid, inviteId: inviteId)
+      return true
+    }
+
     AsyncFunction("completeTerminalTransitionAsync") { (callUuid: String) in
       try ChillywoodNativeCallCoordinator.shared.completeTerminalTransition(callUuid: callUuid)
     }
