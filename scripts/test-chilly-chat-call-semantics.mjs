@@ -1472,6 +1472,25 @@ assert.match(
   /NATIVE_MEDIA_ACTIVATION_RETRY_DELAYS_MS = \[0, 250, 750, 1_500, 3_000\]/u,
   "CallKit audio/application activation drives a bounded exact-session camera and microphone convergence loop",
 );
+const preservesDelayedPostCommitCameraRecovery = (source) => (
+  /POST_COMMIT_CAMERA_TRANSIENT_RETRY_DELAYS_MS = \[250, 750, 1_500, 3_000, 5_000\]/u.test(source)
+  && /for \(const retryDelay of POST_COMMIT_CAMERA_TRANSIENT_RETRY_DELAYS_MS\)[\s\S]{0,1200}isCommittedSessionCurrent\(recoveryBinding\)[\s\S]{0,1200}cameraRequestedRef\.current/u.test(source)
+);
+assert.equal(
+  preservesDelayedPostCommitCameraRecovery(liveKitChatCallSessionSource),
+  true,
+  "terminated iOS video retains an exact-session camera recovery attempt beyond the physical 5.5-second UIKit activation window",
+);
+assert.equal(
+  preservesDelayedPostCommitCameraRecovery(
+    liveKitChatCallSessionSource.replace(
+      "POST_COMMIT_CAMERA_TRANSIENT_RETRY_DELAYS_MS = [250, 750, 1_500, 3_000, 5_000]",
+      "POST_COMMIT_CAMERA_TRANSIENT_RETRY_DELAYS_MS = [250, 750, 1_500, 3_000]",
+    ),
+  ),
+  false,
+  "the regression guard kills the historical short post-commit camera recovery window",
+);
 assert.match(
   liveKitChatCallSessionSource,
   /for \(const delayMs of NATIVE_MEDIA_ACTIVATION_RETRY_DELAYS_MS\)[\s\S]{0,900}isCommittedSessionCurrent\(binding\)[\s\S]{0,900}cameraRequestedRef\.current/u,

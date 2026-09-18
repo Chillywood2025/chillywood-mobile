@@ -1162,6 +1162,45 @@ test("cold-start video post-commit retry observes a missed foreground transition
   assert.equal(runtime.rooms.length, 1);
 });
 
+test("terminated iOS video keeps exact camera intent through a delayed UIKit activation window", async (t) => {
+  const runtime = createLiveKitMountedRuntime({
+    nativeApplicationActive: false,
+    platformOS: "ios",
+  });
+  runtime.appState = "background";
+  const descriptor = runtime.createAcceptedMediaDescriptor();
+  const hookOptions = defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+    iosAcceptedCallKitMediaDescriptor: descriptor,
+  });
+  const harness = await mountLiveKitHook(runtime, hookOptions, { requireLive: false });
+  t.after(() => harness.unmount());
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await harness.fireMediaWriteTimeout();
+  }
+  await waitFor(harness, () => harness.getResult().channelState === "live", "accepted call authority committed");
+  assert.equal(runtime.cameraCalls.some(Boolean), false);
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await harness.fireMediaWriteTimeout();
+    assert.equal(runtime.cameraCalls.some(Boolean), false);
+    assert.equal(harness.getResult().cameraEnabled, false);
+  }
+
+  // Physical terminated-accept evidence showed UIKit can remain non-active
+  // beyond the historical 5.5-second post-commit window. Preserve the exact
+  // accepted-call authority and retry once more before the room heartbeat.
+  runtime.nativeApplicationActive = true;
+  await harness.fireMediaWriteTimeout();
+  await waitFor(harness, () => runtime.cameraCalls.filter(Boolean).length === 1, "delayed UIKit activation reached native camera boundary");
+  await waitFor(harness, () => harness.getResult().cameraEnabled, "delayed UIKit activation converged camera state");
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.providerTokenCalls, 1);
+  assert.equal(runtime.rooms.length, 1);
+});
+
 test("post-commit camera recovery stops after confirmed permission denial", async (t) => {
   const runtime = createLiveKitMountedRuntime();
   for (let attempt = 0; attempt < 4; attempt += 1) runtime.queueCamera({ outcome: "reject" });
