@@ -56,6 +56,9 @@ if (!nativeCallPlugin.includes('CALL_CHANNEL_ID = "chilly_chat_calls_fullscreen_
 if (!nativeCallPlugin.includes("NotificationCompat.CallStyle.forIncomingCall")) {
   fail("native Android incoming call plugin must render CallStyle notifications");
 }
+if (!nativeCallPlugin.includes('.setIsVideo(resolvedCallType == "video")')) {
+  fail("native Android incoming CallStyle must identify exact Video calls to the operating system");
+}
 
 if (!nativeCallPlugin.includes("val answerIntent = buildActionPendingIntent(context, data, ACTION_ANSWER, 1)")) {
   fail("native Android Answer must use the immutable explicit notification-action receiver path");

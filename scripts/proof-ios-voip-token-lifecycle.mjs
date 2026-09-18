@@ -48,13 +48,21 @@ assert.equal(bridgeLifecycle.resolveIosNativeCallBridgeLifecycle({
   hadActiveAuthority: true,
   userId: "",
 }).action, "revoke");
-for (const authorityStatus of ["recovery_only", "restricted", "restore_only", "signed_out", "unknown"]) {
+for (const authorityStatus of ["recovery_only", "restricted", "restore_only", "signed_out"]) {
   assert.equal(bridgeLifecycle.resolveIosNativeCallBridgeLifecycle({
     authority: null,
     authorityStatus,
     hadActiveAuthority: false,
     userId: "",
   }).action, "revoke", `${authorityStatus} must revoke native VoIP ownership`);
+}
+for (const hadActiveAuthority of [false, true]) {
+  assert.equal(bridgeLifecycle.resolveIosNativeCallBridgeLifecycle({
+    authority: null,
+    authorityStatus: "unknown",
+    hadActiveAuthority,
+    userId: "",
+  }).action, "preserve_transient_unknown", "transient unknown must preserve the exact server-bound native registration");
 }
 assert.match(bridgeLifecycle.resolveIosNativeCallBridgeLifecycle({
   authority: activeAuthority,

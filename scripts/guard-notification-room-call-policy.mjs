@@ -244,6 +244,7 @@ assertIncludes(nativeCallPlugin, "ExpoFirebaseMessagingService", "native CallSty
 assertIncludes(nativeCallPlugin, "tools:node", "native CallStyle plugin must remove Expo's default FCM service before registering the custom service");
 assertIncludes(nativeCallPlugin, "ChillyChatCallNotificationActionReceiver", "native CallStyle plugin must register Answer/Decline action receiver");
 assertIncludes(nativeCallPlugin, "NotificationCompat.CallStyle.forIncomingCall", "native Android incoming calls must use CallStyle");
+assertIncludes(nativeCallPlugin, '.setIsVideo(resolvedCallType == "video")', "native Android CallStyle must preserve exact Voice versus Video presentation");
 assertIncludes(nativeCallPlugin, "ACTION_ANSWER", "native CallStyle must expose Answer action");
 assertIncludes(nativeCallPlugin, "ACTION_DECLINE", "native CallStyle must expose Decline action");
 assertIncludes(nativeCallPlugin, "val answerIntent = buildActionPendingIntent(context, data, ACTION_ANSWER, 1)", "native Answer must use the trusted explicit receiver path");

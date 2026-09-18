@@ -365,6 +365,12 @@ object ChillyChatCallNotifications {
       .setImportant(true)
       .build()
 
+    val callStyle = NotificationCompat.CallStyle.forIncomingCall(
+      caller,
+      declineIntent,
+      answerIntent,
+    )
+      .setIsVideo(resolvedCallType == "video")
     val notification = NotificationCompat.Builder(context, CALL_CHANNEL_ID)
       .setSmallIcon(R.mipmap.ic_launcher)
       .setContentTitle(title)
@@ -379,7 +385,7 @@ object ChillyChatCallNotifications {
       .setContentIntent(contentIntent)
       .setDeleteIntent(buildActionPendingIntent(context, data, ACTION_DECLINE, 4))
       .setFullScreenIntent(fullScreenIntent, canUseFullScreenIntent(context))
-      .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, declineIntent, answerIntent))
+      .setStyle(callStyle)
       .build()
       .apply {
         flags = flags or Notification.FLAG_INSISTENT

@@ -5,7 +5,6 @@ const REVOKE_STATUSES = new Set([
   "restricted",
   "restore_only",
   "signed_out",
-  "unknown",
 ]);
 
 export const resolveIosNativeCallBridgeLifecycle = ({
@@ -46,6 +45,19 @@ export const resolveIosNativeCallBridgeLifecycle = ({
   // a live exact auth session generation.
   if (authorityStatus === "loading" && !hadActiveAuthority) {
     return { action: "preserve_cold_start", bindingKey: "" };
+  }
+
+  // A bounded authority read can become unknown while the same authenticated
+  // session is being revalidated (for example after a transient Home/network
+  // refresh failure). Server delivery remains independently bound to the exact
+  // live account/session/install generation. Removing the native PushKit
+  // binding here leaves an otherwise valid backend token deliverable while the
+  // device is no longer registered, so APNs can accept the push without CallKit
+  // ever presenting it. Preserve the exact persisted native binding until an
+  // explicit terminal authority state or a loading account transition revokes
+  // it. Unknown still grants no application or call authority.
+  if (authorityStatus === "unknown") {
+    return { action: "preserve_transient_unknown", bindingKey: "" };
   }
 
   if (REVOKE_STATUSES.has(authorityStatus) || hadActiveAuthority || authorityStatus === "active") {
