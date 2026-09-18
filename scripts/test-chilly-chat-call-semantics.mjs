@@ -1855,7 +1855,50 @@ assert.match(
 );
 const legacyAppStateBlock = communicationSessionSource.slice(
   communicationSessionSource.indexOf("const handleAppStateLifecycleChange"),
-  communicationSessionSource.indexOf("const ensureTrackKind", communicationSessionSource.indexOf("const handleAppStateLifecycleChange")),
+  communicationSessionSource.indexOf("appStateLifecycleHandlerRef.current", communicationSessionSource.indexOf("const handleAppStateLifecycleChange")),
+);
+const foregroundMediaRestoreSource = communicationSessionSource.slice(
+  communicationSessionSource.indexOf("const restoreLocalMediaAfterForeground"),
+  communicationSessionSource.indexOf("useEffect(() =>", communicationSessionSource.indexOf("const restoreLocalMediaAfterForeground")),
+);
+const preservesVideoForegroundRecovery = (source) => (
+  /nextCameraEnabled[\s\S]{0,500}ensureTrackKind\("video", \{[\s\S]{0,140}attachToPeers: false,[\s\S]{0,140}expectedGeneration: generation,[\s\S]{0,260}if \(!restoredCameraTrack\)[\s\S]{0,180}setCameraEnabled\(false\)[\s\S]{0,120}return false;/u.test(source)
+  && /attachMissingLocalTracks\(peerConnection, false\)[\s\S]{0,260}renegotiateAllPeers\(true\)/u.test(source)
+  && !/nextCameraEnabled[\s\S]{0,260}ensureInitialLocalStream\(false\)/u.test(source)
+);
+const trackKindRecoverySource = communicationSessionSource.slice(
+  communicationSessionSource.indexOf("const ensureTrackKind"),
+  communicationSessionSource.indexOf("const restoreLocalMediaAfterForeground"),
+);
+const preservesGenerationBoundTrackRecovery = (source) => (
+  /expectedGeneration = options\?\.expectedGeneration \?\? legacySessionGenerationRef\.current/u.test(source)
+  && /expectedPeerConnections = Object\.values\(peerConnectionsRef\.current\)/u.test(source)
+  && /!isExpectedGenerationCurrent\(\) \|\| localStreamRef\.current !== expectedLocalStream[\s\S]{0,160}stopCommunicationStream\(extraStream\)/u.test(source)
+  && /for \(const peerConnection of expectedPeerConnections\)[\s\S]{0,120}if \(!isExpectedGenerationCurrent\(\)\)/u.test(source)
+);
+assert.equal(
+  preservesVideoForegroundRecovery(foregroundMediaRestoreSource),
+  true,
+  "foreground and native-answer recovery reacquires the missing video track when background audio kept the original stream alive",
+);
+assert.equal(
+  preservesVideoForegroundRecovery(
+    foregroundMediaRestoreSource.replace('ensureTrackKind("video", {', "ensureInitialLocalStream(false); void ({"),
+  ),
+  false,
+  "the regression guard kills the audio-only early-return mutant that drops video after background or CallKit Answer",
+);
+assert.equal(
+  preservesGenerationBoundTrackRecovery(trackKindRecoverySource),
+  true,
+  "async media recovery binds capture and peer attachment to the exact accepted-call generation",
+);
+assert.equal(
+  preservesGenerationBoundTrackRecovery(
+    trackKindRecoverySource.replace("if (!isExpectedGenerationCurrent() || localStreamRef.current !== expectedLocalStream)", "if (false)"),
+  ),
+  false,
+  "the regression guard kills the stale-generation media-attachment mutant",
 );
 assert.match(
   legacyAppStateBlock,
