@@ -9,6 +9,7 @@ import {
   buildChillyChatNativeActionData,
   createChillyChatCallChannelResult,
   resolveChillyChatCallPreferencePolicy,
+  resolveChillyChatIncomingPushTtlSeconds,
   resolveChillyChatOrdinaryPushFallbackPolicy,
   summarizeChillyChatCallDispatch,
 } from "../supabase/functions/_shared/chilly-chat-call-dispatch-policy.mjs";
@@ -39,6 +40,28 @@ import {
   shouldPreserveNativeCallBackgroundAudio,
   shouldShowOutgoingRingingPanel,
 } from "../_lib/communicationCallMediaPolicy.mjs";
+
+const pushTtlNowMs = Date.parse("2026-09-18T03:54:00.000Z");
+assert.equal(
+  resolveChillyChatIncomingPushTtlSeconds("2026-09-18T03:55:30.000Z", pushTtlNowMs),
+  90,
+  "an incoming FCM delivery may use the full authoritative 90-second ringing window",
+);
+assert.equal(
+  resolveChillyChatIncomingPushTtlSeconds("2026-09-18T03:54:27.250Z", pushTtlNowMs),
+  28,
+  "FCM delivery lifetime is bound to the exact remaining invite authority",
+);
+assert.equal(
+  resolveChillyChatIncomingPushTtlSeconds("2026-09-18T03:53:59.000Z", pushTtlNowMs),
+  1,
+  "an expired invite cannot receive a renewed provider delivery lifetime",
+);
+assert.equal(
+  resolveChillyChatIncomingPushTtlSeconds("invalid", pushTtlNowMs),
+  1,
+  "malformed expiry fails closed to the minimum provider lifetime",
+);
 
 const acceptedAfterRingingDeadline = {
   inviteExpiresAt: "2026-08-30T07:47:20.422579Z",

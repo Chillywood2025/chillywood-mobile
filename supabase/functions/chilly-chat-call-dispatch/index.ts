@@ -14,6 +14,7 @@ import {
   buildChillyChatNativeActionData,
   createChillyChatCallChannelResult,
   resolveChillyChatCallPreferencePolicy,
+  resolveChillyChatIncomingPushTtlSeconds,
   resolveChillyChatOrdinaryPushFallbackPolicy,
   summarizeChillyChatCallDispatch,
 } from "../_shared/chilly-chat-call-dispatch-policy.mjs";
@@ -793,7 +794,9 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
       const pushResult = await sendFcmDataMessage({
         data: nativeActionData,
         token: token.token,
-        ttlSeconds: input.action === "incoming" ? 45 : 300,
+        ttlSeconds: input.action === "incoming"
+          ? resolveChillyChatIncomingPushTtlSeconds(input.invite.expires_at)
+          : 300,
       });
       const sent = pushResult.ok;
       if (sent) androidSent += 1;
