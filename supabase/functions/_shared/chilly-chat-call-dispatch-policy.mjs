@@ -7,10 +7,24 @@ export const CHILLY_CHAT_CALL_CHANNEL_KEYS = [
 
 const REMOTE_CHANNEL_KEYS = ["androidNative", "iosVoip", "ordinaryPush"];
 const TERMINAL_ACTIONS = new Set(["cancel", "declined", "end", "timeout"]);
+const MAX_INCOMING_CALL_PUSH_TTL_SECONDS = 90;
 
 const toText = (value) => String(value ?? "").trim();
 
 export const isChillyChatTerminalAction = (action) => TERMINAL_ACTIONS.has(toText(action).toLowerCase());
+
+export const resolveChillyChatIncomingPushTtlSeconds = (expiresAt, nowMs = Date.now()) => {
+  const expiresAtMs = Date.parse(toText(expiresAt));
+  const normalizedNowMs = Number(nowMs);
+  if (!Number.isFinite(expiresAtMs) || !Number.isFinite(normalizedNowMs)) return 1;
+  return Math.max(
+    1,
+    Math.min(
+      MAX_INCOMING_CALL_PUSH_TTL_SECONDS,
+      Math.ceil((expiresAtMs - normalizedNowMs) / 1000),
+    ),
+  );
+};
 
 export const createChillyChatCallChannelResult = (overrides = {}) => ({
   eligible: false,

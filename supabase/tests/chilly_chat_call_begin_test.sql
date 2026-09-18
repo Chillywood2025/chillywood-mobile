@@ -1,5 +1,5 @@
 begin;
-select plan(36);
+select plan(37);
 
 insert into auth.users (id, is_sso_user, is_anonymous)
 values
@@ -69,6 +69,13 @@ select is((select payload ->> 'role' from call_begin_results where label = 'firs
 select is((select count(*)::integer from public.chat_call_invites where thread_id = '4aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'), 1, 'one durable invite is created');
 select is((select count(*)::integer from public.chat_call_events where thread_id = '4aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and event_type = 'started'), 1, 'one started event is created');
 select is((select active_communication_room_id from public.chat_threads where id = '4aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'), 'ATOMIC1', 'winning room is attached to the thread');
+select is(
+  (select extract(epoch from (expires_at - created_at))::integer
+   from public.chat_call_invites
+   where thread_id = '4aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+  90,
+  'new calls retain a full 90-second authority window for delayed provider delivery and native answer'
+);
 
 select set_config(
   'request.jwt.claims',
