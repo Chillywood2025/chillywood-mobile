@@ -192,6 +192,12 @@ export function createLiveKitMountedRuntime(options = {}) {
       track: room.localParticipant.cameraTrack,
     };
   };
+  runtime.dropCameraPublication = () => {
+    const room = runtime.rooms.at(-1);
+    if (!room) throw new Error("MOUNTED_LIVEKIT_ROOM_NOT_READY");
+    room.localParticipant.cameraEnabled = false;
+    room.localParticipant.cameraTrack.mediaStreamTrack.readyState = "ended";
+  };
   runtime.deferNative = () => {
     const gate = deferred();
     runtime.queueNative({ gate, outcome: "success" });

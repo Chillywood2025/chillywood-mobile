@@ -1484,7 +1484,10 @@ assert.match(
 );
 const preservesDelayedPostCommitCameraRecovery = (source) => (
   /POST_COMMIT_CAMERA_TRANSIENT_RETRY_DELAYS_MS = \[250, 750, 1_500, 3_000, 5_000\]/u.test(source)
-  && /for \(const retryDelay of POST_COMMIT_CAMERA_TRANSIENT_RETRY_DELAYS_MS\)[\s\S]{0,1200}isCommittedSessionCurrent\(recoveryBinding\)[\s\S]{0,1200}cameraRequestedRef\.current/u.test(source)
+  && /monitorExactIosAcceptedCamera = hasExactIosAcceptedMediaAuthority\(\)[\s\S]{0,420}\(!cameraPublication \|\| monitorExactIosAcceptedCamera\)/u.test(source)
+  && /for \(const retryDelay of POST_COMMIT_CAMERA_TRANSIENT_RETRY_DELAYS_MS\)[\s\S]{0,900}isCommittedSessionCurrent\(recoveryBinding\)[\s\S]{0,900}cameraRequestedRef\.current/u.test(source)
+  && /stableInitialCallKitCamera = monitorExactIosAcceptedCamera[\s\S]{0,220}nativeCameraReadyBeforeReconciliation[\s\S]{0,260}scheduleLatestMediaReconciliation/u.test(source)
+  && /if \(!monitorExactIosAcceptedCamera\) return/u.test(source)
 );
 assert.equal(
   preservesDelayedPostCommitCameraRecovery(liveKitChatCallSessionSource),
@@ -1500,6 +1503,16 @@ assert.equal(
   ),
   false,
   "the regression guard kills the historical short post-commit camera recovery window",
+);
+assert.equal(
+  preservesDelayedPostCommitCameraRecovery(
+    liveKitChatCallSessionSource.replace(
+      "(!cameraPublication || monitorExactIosAcceptedCamera)",
+      "!cameraPublication",
+    ),
+  ),
+  false,
+  "the regression guard kills exact CallKit monitoring after an initially successful camera publication",
 );
 assert.match(
   liveKitChatCallSessionSource,

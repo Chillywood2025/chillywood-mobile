@@ -763,6 +763,49 @@ test("terminated iOS video adopts a late native camera publication without waiti
   assert.equal(runtime.rooms.length, 1);
 });
 
+test("accepted iOS CallKit video recovers a camera publication lost after initial session commit", async (t) => {
+  const runtime = createLiveKitMountedRuntime({
+    cameraPermissionState: "granted",
+    initialCamera: true,
+    initialMic: true,
+    nativeApplicationActive: true,
+    platformOS: "ios",
+  });
+  const descriptor = runtime.createAcceptedMediaDescriptor();
+  const hookOptions = defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+    iosAcceptedCallKitMediaDescriptor: descriptor,
+  });
+  const harness = await mountLiveKitHook(runtime, hookOptions);
+  t.after(() => harness.unmount());
+
+  assert.deepEqual(runtime.cameraCalls, [true]);
+  assert.equal(harness.getResult().cameraEnabled, true);
+  assert.equal(runtime.durableCamera, true);
+
+  // The first bounded verification observes the initially healthy track and
+  // must keep monitoring this exact CallKit-accepted session without issuing
+  // redundant native mutations or durable membership writes.
+  const membershipTouchesBeforeMonitoring = runtime.membershipTouches.length;
+  await harness.fireMediaWriteTimeout();
+  assert.deepEqual(runtime.cameraCalls, [true]);
+  assert.equal(runtime.membershipTouches.length, membershipTouchesBeforeMonitoring);
+
+  // Model the physical defect: the native camera publication disappears only
+  // after the accepted session was already committed and shown as connected.
+  runtime.dropCameraPublication();
+  await harness.fireMediaWriteTimeout();
+
+  await waitFor(harness, () => runtime.cameraCalls.length === 2, "lost CallKit camera reached native recovery");
+  await waitFor(harness, () => harness.getResult().cameraEnabled, "lost CallKit camera converged again");
+  assert.deepEqual(runtime.cameraCalls, [true, true]);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.membershipTouches.at(-1).cameraEnabled, true);
+  assert.equal(runtime.providerTokenCalls, 1);
+  assert.equal(runtime.rooms.length, 1);
+});
+
 test("cold-start video recovers when foreground activation happened before the AppState listener was ready", async (t) => {
   const runtime = createLiveKitMountedRuntime();
   runtime.appState = "background";
