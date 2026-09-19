@@ -273,6 +273,164 @@ test("scheduled-deletion restoration is the only restore-only mutation escape an
   assert.doesNotMatch(migration, /restoreOnly'\)::boolean[^\n]*false/u);
 });
 
+test("Chi'lly Chat reconciles an exact committed call after an ambiguous account-bound response", async () => {
+  const authority = {
+    userId: "11111111-1111-4111-8111-111111111111",
+    accountId: "11111111-1111-4111-8111-111111111111",
+    sessionGeneration: "session-a",
+    state: "ACTIVE",
+    restoreOnly: false,
+  };
+  const invite = {
+    id: "22222222-2222-4222-8222-222222222222",
+    thread_id: "33333333-3333-4333-8333-333333333333",
+    communication_room_id: "ABC123",
+    caller_user_id: authority.userId,
+    callee_user_id: "44444444-4444-4444-8444-444444444444",
+    call_type: "voice",
+    chat_call_media_provider: "livekit",
+    status: "ringing",
+    created_at: new Date(Date.now() - 1_000).toISOString(),
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
+    accepted_at: null,
+    ended_at: null,
+  };
+  let current = authority;
+  let inviteReads = 0;
+  const query = {
+    select() { return query; },
+    eq() { return query; },
+    order() { return query; },
+    limit() { return query; },
+    async returns() {
+      inviteReads += 1;
+      return { data: [invite], error: null };
+    },
+  };
+  class TestAccountBoundMutationError extends Error {}
+  const api = loadStubbed("_lib/chillyChatCalls.ts", {
+    "./accountSessionAuthority": {
+      getCurrentAccountSessionAuthoritySnapshot: () => current,
+      readCurrentAccountSessionAuthority: async () => current,
+      sameAccountSessionAuthority: (left, right) => !!left && !!right
+        && left.userId === right.userId
+        && left.accountId === right.accountId
+        && left.sessionGeneration === right.sessionGeneration
+        && left.restoreOnly === right.restoreOnly,
+    },
+    "./accountBoundSupabaseMutation": {
+      AccountBoundSupabaseMutationError: TestAccountBoundMutationError,
+      isAccountBoundSupabaseMutationOutcomeAmbiguous: (error) => [
+        "account_bound_rpc_timeout",
+        "account_bound_rpc_unavailable",
+      ].includes(error?.message),
+      runCurrentAccountBoundSupabaseMutationRpc: async () => ({
+        data: null,
+        error: { message: "account_bound_rpc_timeout" },
+      }),
+    },
+    "./chillyChatCallDispatchSchema": {
+      normalizeChillyChatCallDispatchResponse: () => ({
+        eligible: false,
+        result: {},
+        channels: {},
+      }),
+    },
+    "./supabase": {
+      supabase: { from: () => query },
+    },
+  });
+
+  const result = await api.beginChillyChatCall({
+    actorUserId: authority.userId,
+    callType: "voice",
+    communicationRoomId: "ABC123",
+    threadId: invite.thread_id,
+  });
+  assert.equal(result.created, true);
+  assert.equal(result.role, "caller");
+  assert.equal(result.invite.id, invite.id);
+  assert.equal(inviteReads, 1);
+
+  invite.communication_room_id = "WRONG1";
+  await assert.rejects(
+    api.beginChillyChatCall({
+      actorUserId: authority.userId,
+      callType: "voice",
+      communicationRoomId: "ABC123",
+      threadId: invite.thread_id,
+    }),
+    (error) => error?.message === "account_bound_rpc_timeout",
+  );
+  assert.equal(inviteReads, 2, "wrong-room committed state remains unusable");
+});
+
+test("Chi'lly Chat committed-call reconciliation rejects account replacement and relogin replay", async () => {
+  const accountA = {
+    userId: "11111111-1111-4111-8111-111111111111",
+    accountId: "11111111-1111-4111-8111-111111111111",
+    sessionGeneration: "session-a",
+    state: "ACTIVE",
+    restoreOnly: false,
+  };
+  const accountB = {
+    userId: "55555555-5555-4555-8555-555555555555",
+    accountId: "55555555-5555-4555-8555-555555555555",
+    sessionGeneration: "session-b",
+    state: "ACTIVE",
+    restoreOnly: false,
+  };
+  const accountARelogin = { ...accountA, sessionGeneration: "session-a-next" };
+  const sameAuthority = (left, right) => !!left && !!right
+    && left.userId === right.userId
+    && left.accountId === right.accountId
+    && left.sessionGeneration === right.sessionGeneration
+    && left.restoreOnly === right.restoreOnly;
+
+  for (const replacement of [accountB, accountARelogin]) {
+    let current = accountA;
+    let inviteReads = 0;
+    class TestAccountBoundMutationError extends Error {}
+    const api = loadStubbed("_lib/chillyChatCalls.ts", {
+      "./accountSessionAuthority": {
+        getCurrentAccountSessionAuthoritySnapshot: () => current,
+        readCurrentAccountSessionAuthority: async () => current,
+        sameAccountSessionAuthority: sameAuthority,
+      },
+      "./accountBoundSupabaseMutation": {
+        AccountBoundSupabaseMutationError: TestAccountBoundMutationError,
+        isAccountBoundSupabaseMutationOutcomeAmbiguous: (error) => error?.message === "account_bound_rpc_timeout",
+        runCurrentAccountBoundSupabaseMutationRpc: async () => {
+          current = replacement;
+          return { data: null, error: { message: "account_bound_rpc_timeout" } };
+        },
+      },
+      "./chillyChatCallDispatchSchema": {
+        normalizeChillyChatCallDispatchResponse: () => ({ eligible: false, result: {}, channels: {} }),
+      },
+      "./supabase": {
+        supabase: {
+          from: () => {
+            inviteReads += 1;
+            return {};
+          },
+        },
+      },
+    });
+
+    await assert.rejects(
+      api.beginChillyChatCall({
+        actorUserId: accountA.userId,
+        callType: "video",
+        communicationRoomId: "ABC123",
+        threadId: "33333333-3333-4333-8333-333333333333",
+      }),
+      (error) => error?.message === "account_bound_rpc_timeout",
+    );
+    assert.equal(inviteReads, 0, "changed account/session authority cannot read or reuse the committed invite");
+  }
+});
+
 test("Official Rachi picker cannot transfer an account-A gesture to privileged account B", async () => {
   const accountA = {
     userId: "11111111-1111-4111-8111-111111111111",
