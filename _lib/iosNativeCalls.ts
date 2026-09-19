@@ -13,6 +13,7 @@ import {
   clearNativeCallTransitionClaims,
   waitForIosCallKitAnswerRouteReadiness,
 } from "./nativeCallTransitionProvenance.mjs";
+import { shouldReuseIosNativeCallReadiness } from "./iosNativeCallBridgeLifecycle.mjs";
 import {
   createPushOwnershipOperationKey,
   getNotificationInstallId,
@@ -526,6 +527,28 @@ export async function startIosNativeCallsReadiness(
   return runVoipTransition(async () => {
     const apnsEnvironment = readApnsEnvironment();
     const readiness = await readIosNativeCallsReadiness();
+    const currentContext = voipAuthorityContext;
+    if (
+      readiness.available
+      && NativeCallsModule
+      && nativeSubscription
+      && currentContext
+      && shouldReuseIosNativeCallReadiness({
+        currentAuthority: currentContext.authority,
+        nextAuthority: authority,
+        registrationActive: voipRegistrationActive,
+      })
+      && await isExactVoipAuthorityCurrent(currentContext)
+    ) {
+      // React can re-enter this bridge while the same account/session is being
+      // harmlessly revalidated. CallKit may already be presenting an exact
+      // invite at that moment. Replacing the listener lifecycle would erase
+      // its invite/UUID ownership and make a visible foreground Answer fail
+      // closed even though the native call remains live.
+      eventListener = listener ?? null;
+      await drainPendingEventsForExactLifecycle(voipLifecycleGeneration, currentContext);
+      return { apnsEnvironment, status: "started", tokenFingerprint: null };
+    }
     const generation = ++voipLifecycleGeneration;
     iosNativeApplicationActiveSerial = 0;
     iosNativeAnswerApplicationActiveBaselines.clear();

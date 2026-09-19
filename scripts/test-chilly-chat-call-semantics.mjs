@@ -1407,6 +1407,7 @@ assert.match(
   "the app-wide foreground surface remains customer-visible after bounded native grace",
 );
 assert.match(iosNativeCallsSource, /const nativePresentedCallUuidsByInviteId = new Map<string, string>\(\)/u, "native presentation ownership binds each invite to its exact CallKit UUID");
+assert.match(iosNativeCallsSource, /shouldReuseIosNativeCallReadiness[\s\S]{0,1200}eventListener = listener \?\? null;[\s\S]{0,240}drainPendingEventsForExactLifecycle/u, "same account/session revalidation preserves an already-presented exact CallKit invite while rebinding its current event listener");
 assert.match(iosNativeCallsSource, /event\.type === "incoming" \|\| event\.type === "recovered"/u, "only confirmed native incoming/recovered events acquire presentation ownership");
 assert.match(iosNativeCallsSource, /nativePresentedCallUuidsByInviteId\.set\(inviteId, callUuid\)/u, "confirmed CallKit presentation records the exact invite/UUID pair");
 assert.match(iosNativeCallsSource, /requestIosNativeCallAnswer\(inviteId: string\)[\s\S]{0,520}requestAnswerAsync\(callUuid, normalizedInviteId\)/u, "foreground Answer delegates the exact native invite/UUID pair to CallKit");
