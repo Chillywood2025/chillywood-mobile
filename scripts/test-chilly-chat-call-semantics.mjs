@@ -1410,6 +1410,9 @@ assert.match(iosNativeCallsSource, /const nativePresentedCallUuidsByInviteId = n
 assert.match(iosNativeCallsSource, /event\.type === "incoming" \|\| event\.type === "recovered"/u, "only confirmed native incoming/recovered events acquire presentation ownership");
 assert.match(iosNativeCallsSource, /nativePresentedCallUuidsByInviteId\.set\(inviteId, callUuid\)/u, "confirmed CallKit presentation records the exact invite/UUID pair");
 assert.match(iosNativeCallsSource, /requestIosNativeCallAnswer\(inviteId: string\)[\s\S]{0,520}requestAnswerAsync\(callUuid, normalizedInviteId\)/u, "foreground Answer delegates the exact native invite/UUID pair to CallKit");
+assert.match(iosNativeCallsSource, /waitForIosNativeCallPresentation[\s\S]{0,1800}nativePresentedCallUuidsByInviteId\.has\(normalizedInviteId\)[\s\S]{0,1200}finish\("timeout"\)/u, "foreground Answer waits a bounded interval for exact late CallKit ownership");
+assert.match(rootLayoutSource, /waitForIosNativeCallPresentation\(invite\.id\)[\s\S]{0,240}resolveIosForegroundIncomingAnswerAuthority[\s\S]{0,760}answerAuthority === "blocked"/u, "app-wide Answer arbitrates late CallKit ownership and fails closed while ownership is unknown");
+assert.match(chatThreadSource, /waitForIosNativeCallPresentation\(invite\.id\)[\s\S]{0,240}resolveIosForegroundIncomingAnswerAuthority[\s\S]{0,680}answerAuthority === "blocked"/u, "same-thread Answer uses the same late CallKit ownership arbitration");
 assert.match(iosNativeCallsSource, /typeof NativeCallsModule\.requestAnswerAsync !== "function"/u, "older same-runtime native binaries fail closed instead of invoking an unavailable Answer API");
 assert.match(iosNativeCallsSource, /"reportFailed"/u, "failed CallKit reporting releases fallback presentation ownership");
 assert.doesNotMatch(rootLayoutSource, /<Modal/u, "background/full-screen presentation remains native rather than a React modal");
@@ -1424,14 +1427,14 @@ assert.doesNotMatch(
 assert.doesNotMatch(rootLayoutSource, /nativeCallAction:\s*"answer"/u, "CallKit and foreground routes never carry authoritative action text");
 assert.match(rootLayoutSource, /createIosCallKitAnswerRouteHandler/u, "CallKit Answer uses the canonical bridge-auth-router provenance handler");
 assert.match(rootLayoutSource, /await waitForIosNativeCallAnswerRouteReadiness\(event\)[\s\S]*?await routeNativeAnswer\(event\)/u, "CallKit Answer waits for exact stable application readiness before native-authority navigation");
-assert.match(chatThreadSource, /nativePresentationOwnsAnswer[\s\S]*?requestIosNativeCallAnswer\(invite\.id\)/u, "same-thread iOS Answer enters the exact CallKit handoff instead of bypassing native presentation state");
+assert.match(chatThreadSource, /answerAuthority === "native_answer"[\s\S]*?requestIosNativeCallAnswer\(invite\.id\)/u, "same-thread iOS Answer enters the exact CallKit handoff instead of bypassing native presentation state");
 const appWideOpenCallBlock = rootLayoutSource.slice(
   rootLayoutSource.indexOf("const openCall = async () =>"),
   rootLayoutSource.indexOf("const decline = async () =>"),
 );
 assert.match(
   appWideOpenCallBlock,
-  /if \(iosNativeCallPresentationOwned\)[\s\S]{0,180}requestIosNativeCallAnswer\(invite\.id\)[\s\S]{0,520}clearAlert\(\);[\s\S]{0,80}return;/u,
+  /if \(answerAuthority === "native_answer"\)[\s\S]{0,180}requestIosNativeCallAnswer\(invite\.id\)[\s\S]{0,520}clearAlert\(\);[\s\S]{0,80}return;/u,
   "an app-wide iOS Answer owned by CallKit must request the exact native answer instead of racing it",
 );
 assert.ok(

@@ -4,7 +4,7 @@ import {execFileSync} from "node:child_process";
 import {readFile} from "node:fs/promises";
 import {fileURLToPath} from "node:url";
 
-import {clearNativeCallTransitionClaims, containsSensitiveNativeCallClaimRouteParams, consumeMountedForegroundAuthenticatedUiCallRoute, consumeMountedIosNativeCallRoute, createForegroundAuthenticatedUiCallIntent, createForegroundAuthenticatedUiCallIntentRegistry, createIosCallKitAnswerRouteHandler, createNativeCallTransitionProvenanceRegistry, sanitizeExternalIosNativeCallPath, waitForIosCallKitAnswerRouteReadiness} from "../_lib/nativeCallTransitionProvenance.mjs";
+import {clearNativeCallTransitionClaims, containsSensitiveNativeCallClaimRouteParams, consumeMountedForegroundAuthenticatedUiCallRoute, consumeMountedIosNativeCallRoute, createForegroundAuthenticatedUiCallIntent, createForegroundAuthenticatedUiCallIntentRegistry, createIosCallKitAnswerRouteHandler, createNativeCallTransitionProvenanceRegistry, resolveIosForegroundIncomingAnswerAuthority, sanitizeExternalIosNativeCallPath, waitForIosCallKitAnswerRouteReadiness} from "../_lib/nativeCallTransitionProvenance.mjs";
 import {completeIosAcceptedNativeAnswer, doesForegroundAuthenticatedUiCallIntentOwnAction, doesNativeCallActionOwnTransition, settleIosAcceptedCallKitMediaFailure, terminateIosAcceptedNativeAnswer} from "../_lib/communicationCallMediaPolicy.mjs";
 import {normalizeCommunicationRoomIdentifier} from "../_lib/communicationRoomIdentifier.mjs";
 
@@ -28,6 +28,12 @@ const createRegistry = (overrides = {}) => createNativeCallTransitionProvenanceR
 });
 const iosEvent = (overrides = {}) => ({action: "answer", authenticatedUserId: USER, inviteId: INVITE, roomId: ROOM, nativeEventGeneration: 7, nativeIdentity: CALL, platform: "ios", source: "ios_callkit_native_event", threadId: THREAD, ...overrides});
 const consumeInput = (claimId, overrides = {}) => ({action: "answer", authenticatedUserId: USER, claimId, inviteId: INVITE, nativeIdentity: CALL, platform: "ios", source: "ios_callkit_native_event", threadId: THREAD, ...overrides});
+
+assert.equal(resolveIosForegroundIncomingAnswerAuthority("presented"), "native_answer");
+assert.equal(resolveIosForegroundIncomingAnswerAuthority("not_expected"), "foreground_answer");
+assert.equal(resolveIosForegroundIncomingAnswerAuthority("timeout"), "blocked");
+assert.equal(resolveIosForegroundIncomingAnswerAuthority("stale"), "blocked");
+assert.equal(resolveIosForegroundIncomingAnswerAuthority("malformed"), "blocked");
 
 const sources = Object.fromEntries(await Promise.all(["_lib/nativeCallTransitionProvenance.mjs", "_lib/iosNativeCalls.ts", "_lib/communicationCallMediaPolicy.mjs", "app/+native-intent.tsx", "app/_layout.tsx", "app/chat/[threadId].tsx", "app/chat/index.tsx", "app/communication/[roomId].tsx", "app/profile/[userId].tsx", "hooks/use-livekit-chat-call-session.ts", "app.json", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "modules/chillywood-native-calls/ios/ChillywoodNativeCallsModule.swift"].map(async (path) => [path, await readFile(new URL(`../${path}`, import.meta.url), "utf8")])));
 const provenanceDeclarations = await readFile(new URL("../_lib/nativeCallTransitionProvenance.d.ts", import.meta.url), "utf8");
@@ -660,6 +666,9 @@ const validateProductionGate = async ({code, productionSources}) => {
     const block = acceptIncomingInviteBlock(threadSource);
     const completionIndexes = [block.indexOf("completeIosNativeCallAnswer"), block.indexOf("completeTrustedIosNativeAnswer")].filter((index) => index >= 0);
     report(Math.min(...completionIndexes) < block.indexOf("updateChillyChatCallInviteStatus"));
+  } else if (code === "IOS_FOREGROUND_NATIVE_PRESENTATION_TIMEOUT_FAILS_OPEN") {
+    const mutated = await importSourceModule(registrySource, code);
+    report(mutated.resolveIosForegroundIncomingAnswerAuthority("timeout") !== "blocked");
   } else if (code === "IOS_NATIVE_PENDING_EVENT_EARLY_DRAIN") {
     const coordinatorSource = productionSources["modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift"];
     const observerBlock = coordinatorSource.slice(
@@ -862,6 +871,7 @@ const negativeControls = [
   replaceControl("IOS_NATIVE_EVENT_DUPLICATE_EXTENDS_AUTHORITY", "_lib/nativeCallTransitionProvenance.mjs", "      if (activeEventKeys.has(eventKey) || seenEventKeys.has(eventKey)) {\n        return Object.freeze({status: \"duplicate\"});\n      }", "      if (false) return Object.freeze({status: \"duplicate\"});", "duplicate event tombstone"),
   replaceControl("IOS_NATIVE_CLAIM_BINDING_MISMATCH_ACCEPTED", "_lib/communicationCallMediaPolicy.mjs", "    && claim.threadId === threadId\n", "", "thread claim binding"),
   replaceControl("IOS_CALLKIT_COMPLETION_BEFORE_SERVER_AUTHORITY", "app/chat/[threadId].tsx", "      const acceptedInvite = await updateChillyChatCallInviteStatus({", "      await completeIosNativeCallAnswer(requestedNativeCallUuid, true);\n      const acceptedInvite = await updateChillyChatCallInviteStatus({", "CallKit completion ordering"),
+  replaceControl("IOS_FOREGROUND_NATIVE_PRESENTATION_TIMEOUT_FAILS_OPEN", "_lib/nativeCallTransitionProvenance.mjs", '  return "blocked";\n};\n\nexport function createNativeCallTransitionProvenanceRegistry', '  return "foreground_answer";\n};\n\nexport function createNativeCallTransitionProvenanceRegistry', "late native presentation fail-closed arbitration"),
   replaceControl("IOS_NATIVE_PENDING_EVENT_EARLY_DRAIN", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "      DispatchQueue.main.async { [weak self] in\n        guard let self, let eventSink = self.eventSink else { return }\n        self.drainPendingEvents().forEach { eventSink($0) }\n      }", "      drainPendingEvents().forEach { eventSink?($0) }", "synchronous observer-start event drain"),
   replaceControl("IOS_NATIVE_ANSWER_EVENT_NOT_DURABLE", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "        self.persistPendingAnswerEvent(event)\n", "", "durable exact-UUID Answer replay"),
   replaceControl("IOS_NATIVE_PENDING_EVENT_ACTIVATION_REPLAY_MISSING", "_lib/iosNativeCalls.ts", '        if (event.type === "applicationActive") {\n          void drainPendingEventsForExactLifecycle(generation, context);\n        }\n', "", "activation replay"),

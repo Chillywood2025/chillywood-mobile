@@ -103,6 +103,13 @@ const buildEventKey = (claim) => [
 
 const normalizeAuthenticatedUserId = (value) => normalizeUuid(value);
 
+export const resolveIosForegroundIncomingAnswerAuthority = (presentationWaitOutcome) => {
+  const outcome = normalizeText(presentationWaitOutcome);
+  if (outcome === "presented") return "native_answer";
+  if (outcome === "not_expected") return "foreground_answer";
+  return "blocked";
+};
+
 export function createNativeCallTransitionProvenanceRegistry({
   claimIdFactory = createCryptoClaimId,
   maxActive = MAX_ACTIVE_CLAIMS,
