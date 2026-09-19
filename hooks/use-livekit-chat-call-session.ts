@@ -2100,7 +2100,17 @@ export function useLiveKitChatCallSession({
         }
       }
 
-      if (initialCameraEnabled && !initialCameraPermissionDenied && !cameraPublication) {
+      // A CallKit Answer can publish the initial iOS video track successfully
+      // and then lose it while UIKit/React Native finish the foreground
+      // transition. Monitor that exact accepted session through the bounded
+      // post-commit window even when its first publication succeeded. Ordinary
+      // video joins retain the narrower retry-only-on-failure behavior.
+      const monitorExactIosAcceptedCamera = hasExactIosAcceptedMediaAuthority();
+      if (
+        initialCameraEnabled
+        && !initialCameraPermissionDenied
+        && (!cameraPublication || monitorExactIosAcceptedCamera)
+      ) {
         const recoveryBinding = effectBinding;
         void (async () => {
           for (const retryDelay of POST_COMMIT_CAMERA_TRANSIENT_RETRY_DELAYS_MS) {
@@ -2128,9 +2138,12 @@ export function useLiveKitChatCallSession({
             const nativeCameraReadyBeforeReconciliation = publicationIsUsable(
               recoveryBinding.liveKitRoom?.localParticipant.getTrackPublication(Track.Source.Camera),
             );
-            const reconciled = await scheduleLatestMediaReconciliation(
-              !nativeCameraReadyBeforeReconciliation,
-            );
+            const stableInitialCallKitCamera = monitorExactIosAcceptedCamera
+              && !!cameraPublication
+              && nativeCameraReadyBeforeReconciliation;
+            const reconciled = stableInitialCallKitCamera
+              ? true
+              : await scheduleLatestMediaReconciliation(!nativeCameraReadyBeforeReconciliation);
             if (!active || !isCommittedSessionCurrent(recoveryBinding)) return;
             const nativeCameraReady = publicationIsUsable(
               recoveryBinding.liveKitRoom?.localParticipant.getTrackPublication(Track.Source.Camera),
@@ -2142,7 +2155,7 @@ export function useLiveKitChatCallSession({
             updateFirstMediaState({ localVideoPublished: true });
             emitStage("local_video_published", { connectionState: String(recoveryBinding.liveKitRoom?.state ?? "") });
             refreshParticipantViews();
-            return;
+            if (!monitorExactIosAcceptedCamera) return;
           }
         })();
       }
@@ -2215,6 +2228,7 @@ export function useLiveKitChatCallSession({
     emitStage,
     initialCameraEnabled,
     initialMicEnabled,
+    hasExactIosAcceptedMediaAuthority,
     enqueueSessionMediaWrite,
     inviteCallType,
     inviteCalleeUserId,
