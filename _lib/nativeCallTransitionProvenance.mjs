@@ -23,6 +23,8 @@ const SENSITIVE_EXTERNAL_PARAMETER_SET = new Set(
   SENSITIVE_EXTERNAL_PARAMETERS.map((value) => value.toLowerCase()),
 );
 const FOREGROUND_UI_ACTIONS = new Set(["open_call", "start_video", "start_voice"]);
+const IOS_ANSWER_ROUTE_READINESS_DELAYS_MS = [0, 100, 250, 500, 750, 1_000, 1_500];
+const IOS_ANSWER_ROUTE_STABILITY_DELAY_MS = 180;
 
 const SOURCE_POLICIES = Object.freeze({
   android_native_action_store: Object.freeze({
@@ -355,6 +357,49 @@ const buildTrustedIosCallKitAnswerRoute = (event) => {
     status: "created",
     threadId: created.threadId,
   });
+};
+
+export const waitForIosCallKitAnswerRouteReadiness = async (event, {
+  delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  isApplicationActive = async () => Boolean(false),
+  isExactContextCurrent = async (_event) => Boolean(false),
+  readinessDelaysMs = IOS_ANSWER_ROUTE_READINESS_DELAYS_MS,
+  stabilityDelayMs = IOS_ANSWER_ROUTE_STABILITY_DELAY_MS,
+} = {}) => {
+  const callUuid = normalizeUuid(event?.callUuid);
+  const inviteId = normalizeUuid(event?.callInviteId);
+  const threadId = normalizeUuid(event?.threadId);
+  const nativeEventGeneration = Number(event?.nativeEventGeneration);
+  const callType = normalizeText(event?.callType);
+  if (
+    normalizeText(event?.type) !== "answerrequested"
+    || normalizeText(event?.platform) !== "ios"
+    || !callUuid
+    || !inviteId
+    || !threadId
+    || (callType !== "voice" && callType !== "video")
+    || !Number.isSafeInteger(nativeEventGeneration)
+    || nativeEventGeneration <= 0
+    || typeof delay !== "function"
+    || typeof isApplicationActive !== "function"
+    || typeof isExactContextCurrent !== "function"
+    || !Array.isArray(readinessDelaysMs)
+  ) return "denied";
+
+  for (const rawDelayMs of readinessDelaysMs) {
+    const delayMs = Number(rawDelayMs);
+    if (!Number.isFinite(delayMs) || delayMs < 0) return "denied";
+    if (delayMs > 0) await delay(delayMs);
+    if (await Promise.resolve(isExactContextCurrent(event)) !== true) return "stale";
+    if (await Promise.resolve(isApplicationActive()) !== true) continue;
+
+    const stableDelayMs = Number(stabilityDelayMs);
+    if (!Number.isFinite(stableDelayMs) || stableDelayMs < 0) return "denied";
+    if (stableDelayMs > 0) await delay(stableDelayMs);
+    if (await Promise.resolve(isExactContextCurrent(event)) !== true) return "stale";
+    if (await Promise.resolve(isApplicationActive()) === true) return "ready";
+  }
+  return "timeout";
 };
 
 export const createIosCallKitAnswerRouteHandler = ({

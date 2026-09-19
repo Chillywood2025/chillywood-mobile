@@ -72,6 +72,22 @@ export function createIosCallKitAnswerRouteHandler(input?: {
   type?: string;
 } | null) => Promise<"denied" | "duplicate" | "inactive" | "routed">;
 
+export function waitForIosCallKitAnswerRouteReadiness(event?: {
+  callInviteId?: string;
+  callType?: string;
+  callUuid?: string;
+  nativeEventGeneration?: number;
+  platform?: string;
+  threadId?: string;
+  type?: string;
+} | null, input?: {
+  delay?: (ms: number) => Promise<unknown> | unknown;
+  isApplicationActive?: () => Promise<boolean> | boolean;
+  isExactContextCurrent?: (event: unknown) => Promise<boolean> | boolean;
+  readinessDelaysMs?: readonly number[];
+  stabilityDelayMs?: number;
+}): Promise<"denied" | "ready" | "stale" | "timeout">;
+
 export function consumeNativeCallTransitionClaim(
   input?: {
     action: NativeCallTransitionAction;
