@@ -248,8 +248,17 @@ requireText(bridgeLifecycle, 'authorityStatus === "loading" && !hadActiveAuthori
 requireText(bridgeLifecycle, "REVOKE_STATUSES", "Terminal and indeterminate session authority must revoke native VoIP ownership.");
 rejectText(bridgeLifecycle, "console.", "The native-call bridge lifecycle policy must not log account authority.");
 requireText(rootLayout, "createIosCallKitAnswerRouteHandler", "CallKit Answer must create a bounded claim through the canonical bridge handler.");
-requireText(rootLayout, "if (iosNativeCallPresentationOwned)", "The foreground banner must distinguish native-owned calls before accepting an invite.");
+requireText(rootLayout, "waitForIosNativeCallPresentation(invite.id)", "The foreground banner must wait for late exact-invite CallKit ownership before accepting an invite.");
+requireText(rootLayout, "resolveIosForegroundIncomingAnswerAuthority(nativePresentationWaitOutcome)", "The foreground banner must resolve answer authority through the fail-closed iOS arbitration policy.");
+requireText(rootLayout, 'answerAuthority === "native_answer"', "The foreground banner must delegate exact native-owned calls to CallKit.");
+requireText(rootLayout, 'answerAuthority === "blocked"', "The foreground banner must block indeterminate late native ownership rather than accepting directly.");
 requireText(rootLayout, "requestIosNativeCallAnswer(invite.id)", "The foreground banner must ask CallKit to answer its exact native-owned invite.");
+requireText(chatThread, "waitForIosNativeCallPresentation(invite.id)", "The same-thread answer path must wait for late exact-invite CallKit ownership.");
+requireText(chatThread, "resolveIosForegroundIncomingAnswerAuthority(presentationWaitOutcome)", "The same-thread answer path must share the fail-closed iOS arbitration policy.");
+requireText(chatThread, 'answerAuthority === "blocked"', "The same-thread answer path must block indeterminate native ownership rather than accepting directly.");
+requireText(provenance, 'if (outcome === "presented") return "native_answer"', "Presented exact-invite CallKit ownership must route through native Answer.");
+requireText(provenance, 'if (outcome === "not_expected") return "foreground_answer"', "Direct foreground Answer must remain limited to platforms without the native iOS call path.");
+requireText(provenance, 'return "blocked"', "Unknown, stale, and timed-out iOS presentation ownership must fail closed.");
 requireText(rootLayout, "{hideDebugOverlay ? null : <DevDebugOverlay />}", "Opaque native and foreground claim handles must never mount the debug snapshot/clipboard overlay.");
 requireText(rootLayout, '"#"', "Expo Router fragment values must be treated as sensitive route material.");
 requireText(rootLayout, 'normalizedValue.includes("#")', "Fragment-bearing values must be excluded from route analytics.");
