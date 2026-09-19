@@ -88,6 +88,7 @@ import {
   isIosNativeCallsRuntimeEnabled,
   readIosNativeApplicationActiveSerial,
   reportIosNativeCallRemoteEnd,
+  requestIosNativeCallAnswer,
   setIosNativeCallAudioRoute,
   setIosNativeCallMuted,
   subscribeToIosNativeCallEvents,
@@ -1898,6 +1899,21 @@ export default function ChillyChatThreadScreen() {
 
   const acceptIncomingInvite = useCallback(async (invite: ChillyChatCallInvite) => {
     if (!invite || callBusy || !currentUserId) return false;
+    const nativePresentationOwnsAnswer = Platform.OS === "ios"
+      && !requestedNativeCallUuid
+      && hasIosNativeCallPresentation(invite.id);
+    if (nativePresentationOwnsAnswer) {
+      setCallBusy(true);
+      try {
+        const requested = await requestIosNativeCallAnswer(invite.id);
+        if (!requested) {
+          setError("Unable to hand this call to iPhone right now. The call remains available while it is still ringing.");
+        }
+        return requested;
+      } finally {
+        setCallBusy(false);
+      }
+    }
     Vibration.cancel();
     void stopChillyChatCallSound(incomingCallSoundRef.current);
     incomingCallSoundRef.current = null;

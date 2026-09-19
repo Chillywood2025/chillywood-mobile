@@ -4,7 +4,7 @@ import {execFileSync} from "node:child_process";
 import {readFile} from "node:fs/promises";
 import {fileURLToPath} from "node:url";
 
-import {clearNativeCallTransitionClaims, containsSensitiveNativeCallClaimRouteParams, consumeMountedForegroundAuthenticatedUiCallRoute, consumeMountedIosNativeCallRoute, createForegroundAuthenticatedUiCallIntent, createForegroundAuthenticatedUiCallIntentRegistry, createIosCallKitAnswerRouteHandler, createNativeCallTransitionProvenanceRegistry, sanitizeExternalIosNativeCallPath} from "../_lib/nativeCallTransitionProvenance.mjs";
+import {clearNativeCallTransitionClaims, containsSensitiveNativeCallClaimRouteParams, consumeMountedForegroundAuthenticatedUiCallRoute, consumeMountedIosNativeCallRoute, createForegroundAuthenticatedUiCallIntent, createForegroundAuthenticatedUiCallIntentRegistry, createIosCallKitAnswerRouteHandler, createNativeCallTransitionProvenanceRegistry, sanitizeExternalIosNativeCallPath, waitForIosCallKitAnswerRouteReadiness} from "../_lib/nativeCallTransitionProvenance.mjs";
 import {completeIosAcceptedNativeAnswer, doesForegroundAuthenticatedUiCallIntentOwnAction, doesNativeCallActionOwnTransition, settleIosAcceptedCallKitMediaFailure, terminateIosAcceptedNativeAnswer} from "../_lib/communicationCallMediaPolicy.mjs";
 import {normalizeCommunicationRoomIdentifier} from "../_lib/communicationRoomIdentifier.mjs";
 
@@ -234,6 +234,40 @@ for (const historicalRoomId of [ROOM, OTHER_ROOM, "TCL034DEC", "RT25CALL3B53800F
   assert.equal(normalizeCommunicationRoomIdentifier(historicalRoomId), historicalRoomId, "the live bounded production room-name grammar remains supported");
 }
 const validProducerEvent = {callInviteId: INVITE, callType: "voice", callUuid: CALL, nativeEventGeneration: 9, platform: "ios", threadId: THREAD, type: "answerRequested"};
+let readinessActiveChecks = 0;
+const readinessDelays = [];
+assert.equal(await waitForIosCallKitAnswerRouteReadiness(validProducerEvent, {
+  delay: (ms) => { readinessDelays.push(ms); },
+  isApplicationActive: () => {
+    readinessActiveChecks += 1;
+    return readinessActiveChecks >= 2;
+  },
+  isExactContextCurrent: () => true,
+  readinessDelaysMs: [0, 25],
+  stabilityDelayMs: 10,
+}), "ready", "CallKit Answer routing waits for a stable active application before navigating");
+assert.deepEqual(readinessDelays, [25, 10], "the readiness gate performs a second active-state observation after a bounded stability delay");
+let staleActiveChecks = 0;
+assert.equal(await waitForIosCallKitAnswerRouteReadiness(validProducerEvent, {
+  delay: () => undefined,
+  isApplicationActive: () => { staleActiveChecks += 1; return true; },
+  isExactContextCurrent: () => false,
+  readinessDelaysMs: [0],
+  stabilityDelayMs: 0,
+}), "stale", "CallKit Answer routing fails closed before navigation when exact lifecycle authority is stale");
+assert.equal(staleActiveChecks, 0, "stale lifecycle authority cannot reach the application-state witness");
+assert.equal(await waitForIosCallKitAnswerRouteReadiness({...validProducerEvent, callUuid: OTHER_CALL}, {
+  delay: () => undefined,
+  isApplicationActive: () => false,
+  isExactContextCurrent: () => true,
+  readinessDelaysMs: [0, 1],
+  stabilityDelayMs: 0,
+}), "timeout", "an exact Answer that never reaches the active application remains blocked");
+assert.equal(await waitForIosCallKitAnswerRouteReadiness({...validProducerEvent, callUuid: "malformed"}, {
+  delay: () => undefined,
+  isApplicationActive: () => true,
+  isExactContextCurrent: () => true,
+}), "denied", "malformed Answer authority cannot use the readiness gate");
 const producerDenials = [
   {...validProducerEvent, callInviteId: ""},
   {...validProducerEvent, callInviteId: "malformed"},

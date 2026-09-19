@@ -1423,6 +1423,8 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(rootLayoutSource, /nativeCallAction:\s*"answer"/u, "CallKit and foreground routes never carry authoritative action text");
 assert.match(rootLayoutSource, /createIosCallKitAnswerRouteHandler/u, "CallKit Answer uses the canonical bridge-auth-router provenance handler");
+assert.match(rootLayoutSource, /await waitForIosNativeCallAnswerRouteReadiness\(event\)[\s\S]*?await routeNativeAnswer\(event\)/u, "CallKit Answer waits for exact stable application readiness before native-authority navigation");
+assert.match(chatThreadSource, /nativePresentationOwnsAnswer[\s\S]*?requestIosNativeCallAnswer\(invite\.id\)/u, "same-thread iOS Answer enters the exact CallKit handoff instead of bypassing native presentation state");
 const appWideOpenCallBlock = rootLayoutSource.slice(
   rootLayoutSource.indexOf("const openCall = async () =>"),
   rootLayoutSource.indexOf("const decline = async () =>"),
@@ -1688,8 +1690,8 @@ assert.doesNotMatch(
 );
 assert.match(
   rootLayoutSource,
-  /event\.type === "answerRequested"\)[\s\S]{0,120}routeNativeAnswer\(event\)/u,
-  "CallKit Answer remains the only native action that opens the accepted media route",
+  /event\.type === "answerRequested"\)[\s\S]{0,420}waitForIosNativeCallAnswerRouteReadiness\(event\)[\s\S]{0,420}routeNativeAnswer\(event\)/u,
+  "CallKit Answer remains the only native action that opens the accepted media route after stable app readiness",
 );
 assert.match(
   rootLayoutSource,

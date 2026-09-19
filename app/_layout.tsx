@@ -94,6 +94,7 @@ import {
   revokeIosVoipRegistration,
   startIosNativeCallsReadiness,
   subscribeToIosNativeCallPresentation,
+  waitForIosNativeCallAnswerRouteReadiness,
   type SanitizedNativeCallEvent,
 } from "../_lib/iosNativeCalls";
 import { resolveIosNativeCallBridgeLifecycle } from "../_lib/iosNativeCallBridgeLifecycle.mjs";
@@ -1266,6 +1267,11 @@ function IosNativeCallsBridge() {
         return;
       }
       if (event.type === "answerRequested") {
+        const navigationReady = await waitForIosNativeCallAnswerRouteReadiness(event);
+        if (!navigationReady) {
+          await completeIosNativeCallAnswer(String(event.callUuid ?? "").trim(), false).catch(() => false);
+          return;
+        }
         await routeNativeAnswer(event);
         return;
       }

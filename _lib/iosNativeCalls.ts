@@ -9,7 +9,10 @@ import {
   isCurrentAccountSessionAuthority,
   type AccountSessionAuthorityBinding,
 } from "./accountSessionAuthority";
-import { clearNativeCallTransitionClaims } from "./nativeCallTransitionProvenance.mjs";
+import {
+  clearNativeCallTransitionClaims,
+  waitForIosCallKitAnswerRouteReadiness,
+} from "./nativeCallTransitionProvenance.mjs";
 import {
   createPushOwnershipOperationKey,
   getNotificationInstallId,
@@ -408,6 +411,31 @@ export async function drainIosNativeCallPendingEvents() {
   const context = voipAuthorityContext;
   if (!context) return 0;
   return drainPendingEventsForExactLifecycle(generation, context);
+}
+
+export async function waitForIosNativeCallAnswerRouteReadiness(
+  event: SanitizedNativeCallEvent,
+) {
+  const generation = voipLifecycleGeneration;
+  const context = voipAuthorityContext;
+  if (!context) return false;
+  const readiness = await waitForIosCallKitAnswerRouteReadiness(event, {
+    isApplicationActive: readIosNativeApplicationActive,
+    isExactContextCurrent: async (candidateEvent: unknown) => {
+      const candidate = candidateEvent as SanitizedNativeCallEvent;
+      const inviteId = toText(candidate.callInviteId);
+      const callUuid = toText(candidate.callUuid).toLowerCase();
+      return !!inviteId
+        && !!callUuid
+        && candidate.nativeEventGeneration === generation
+        && voipRegistrationActive
+        && generation === voipLifecycleGeneration
+        && context === voipAuthorityContext
+        && nativePresentedCallUuidsByInviteId.get(inviteId) === callUuid
+        && await isExactVoipAuthorityCurrent(context);
+    },
+  });
+  return readiness === "ready";
 }
 
 export function subscribeToIosNativeCallEvents(listener: IosNativeCallEventListener) {
