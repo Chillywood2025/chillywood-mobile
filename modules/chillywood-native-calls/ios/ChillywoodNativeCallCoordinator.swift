@@ -39,6 +39,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private let callController = CXCallController()
   private let stateQueue = DispatchQueue(label: "com.chillywood.native-calls.state")
   private let pendingEventsDefaultsKey = "com.chillywood.native-calls.pending-events.v1"
+  private let pendingAnswerEventsDefaultsKey = "com.chillywood.native-calls.pending-answer-events.v1"
   private let terminalInvitesDefaultsKey = "com.chillywood.native-calls.terminal-invites.v1"
   private let activeCallsDefaultsKey = "com.chillywood.native-calls.active-descriptors.v1"
   private let voipAuthorityDefaultsKey = "com.chillywood.native-calls.session-authority.v1"
@@ -241,6 +242,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     stateQueue.sync {
       pendingEvents.removeAll()
       UserDefaults.standard.removeObject(forKey: pendingEventsDefaultsKey)
+      UserDefaults.standard.removeObject(forKey: pendingAnswerEventsDefaultsKey)
     }
     deactivateAudioSession()
   }
@@ -689,15 +691,80 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   public func drainPendingEvents() -> [[String: Any]] {
     stateQueue.sync {
       let persistedEvents = UserDefaults.standard.array(forKey: pendingEventsDefaultsKey) as? [[String: Any]] ?? []
-      let events = persistedEvents + pendingEvents
+      let durableAnswerEvents = UserDefaults.standard.array(forKey: pendingAnswerEventsDefaultsKey) as? [[String: Any]] ?? []
+      // Answer is the only lifecycle event whose native CallKit action remains
+      // pending while JavaScript restores authenticated authority and joins
+      // media. Keep it replayable until completeAnswerOnMain/failure/terminal
+      // cleanup acknowledges that exact UUID. Other lifecycle events remain a
+      // bounded one-shot queue.
+      let transientEvents = persistedEvents.filter { $0["type"] as? String != "answerRequested" }
+      let events = durableAnswerEvents + transientEvents + pendingEvents
       pendingEvents.removeAll()
       UserDefaults.standard.removeObject(forKey: pendingEventsDefaultsKey)
       return events
     }
   }
 
+  private func persistPendingAnswerEvent(_ event: [String: Any]) {
+    guard
+      event["type"] as? String == "answerRequested",
+      let callUuid = event["callUuid"] as? String,
+      UUID(uuidString: callUuid) != nil,
+      let callInviteId = event["callInviteId"] as? String,
+      !callInviteId.isEmpty,
+      let threadId = event["threadId"] as? String,
+      !threadId.isEmpty
+    else { return }
+
+    let normalizedUuid = callUuid.lowercased()
+    let sanitizedEvent: [String: Any] = [
+      "type": "answerRequested",
+      "callUuid": normalizedUuid,
+      "callInviteId": callInviteId,
+      "threadId": threadId,
+      "callType": event["callType"] as? String == "video" ? "video" : "voice",
+    ]
+    stateQueue.sync {
+      var persisted = UserDefaults.standard.array(forKey: pendingAnswerEventsDefaultsKey) as? [[String: Any]] ?? []
+      persisted.removeAll { ($0["callUuid"] as? String)?.lowercased() == normalizedUuid }
+      persisted.append(sanitizedEvent)
+      if persisted.count > 8 { persisted.removeFirst(persisted.count - 8) }
+      UserDefaults.standard.set(persisted, forKey: pendingAnswerEventsDefaultsKey)
+    }
+  }
+
+  private func clearPendingAnswerEvent(_ uuid: UUID) {
+    let normalizedUuid = uuid.uuidString.lowercased()
+    stateQueue.sync {
+      var persisted = UserDefaults.standard.array(forKey: pendingAnswerEventsDefaultsKey) as? [[String: Any]] ?? []
+      persisted.removeAll { ($0["callUuid"] as? String)?.lowercased() == normalizedUuid }
+      if persisted.isEmpty {
+        UserDefaults.standard.removeObject(forKey: pendingAnswerEventsDefaultsKey)
+      } else {
+        UserDefaults.standard.set(persisted, forKey: pendingAnswerEventsDefaultsKey)
+      }
+    }
+  }
+
+  private func retainPendingAnswerEvents(for callUuids: Set<UUID>) {
+    let retainedUuids = Set(callUuids.map { $0.uuidString.lowercased() })
+    stateQueue.sync {
+      let persisted = UserDefaults.standard.array(forKey: pendingAnswerEventsDefaultsKey) as? [[String: Any]] ?? []
+      let retained = persisted.filter {
+        guard let callUuid = ($0["callUuid"] as? String)?.lowercased() else { return false }
+        return retainedUuids.contains(callUuid)
+      }
+      if retained.isEmpty {
+        UserDefaults.standard.removeObject(forKey: pendingAnswerEventsDefaultsKey)
+      } else {
+        UserDefaults.standard.set(retained, forKey: pendingAnswerEventsDefaultsKey)
+      }
+    }
+  }
+
   private func completeAnswerOnMain(_ uuid: UUID, connected: Bool, reason: String) {
     dispatchPrecondition(condition: .onQueue(.main))
+    clearPendingAnswerEvent(uuid)
     endAnswerTransitionBackgroundTask(uuid)
     guard let action = pendingAnswerActions.removeValue(forKey: uuid) else { return }
     pendingAnswerTimeouts.removeValue(forKey: uuid)?.cancel()
@@ -723,6 +790,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   private func failPendingAnswer(_ uuid: UUID) {
+    clearPendingAnswerEvent(uuid)
     requestedAnswerTransactions.remove(uuid)
     settleRequestedAnswers(uuid, result: .failure(ChillywoodNativeCallError.callUnavailable))
     endAnswerTransitionBackgroundTask(uuid)
@@ -786,6 +854,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       activeCalls[uuid] = restoredCall
     }
     persistActiveCallDescriptors()
+    retainPendingAnswerEvents(for: Set(activeCalls.keys))
     activeCalls.values.forEach { emit(type: "recovered", call: $0) }
   }
 
@@ -800,6 +869,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
 
   @discardableResult
   private func removeCall(_ uuid: UUID) -> ActiveNativeCall? {
+    clearPendingAnswerEvent(uuid)
     guard let call = activeCalls.removeValue(forKey: uuid) else { return nil }
     requestedAnswerTransactions.remove(uuid)
     settleRequestedAnswers(uuid, result: .failure(ChillywoodNativeCallError.callUnavailable))
@@ -823,6 +893,13 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private func emitRaw(_ event: [String: Any]) {
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
+      if event["type"] as? String == "answerRequested" {
+        // Persist before touching the Expo event sink. A suspended app may
+        // retain an in-memory sink even though JavaScript cannot consume the
+        // event yet. Exact-UUID replay remains available until media success
+        // or a terminal path explicitly clears it.
+        self.persistPendingAnswerEvent(event)
+      }
       if let eventSink = self.eventSink {
         eventSink(event)
       } else {
@@ -834,7 +911,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
           if event["token"] != nil {
             self.pendingEvents.append(event)
             if self.pendingEvents.count > 32 { self.pendingEvents.removeFirst() }
-          } else {
+          } else if event["type"] as? String != "answerRequested" {
             var persisted = UserDefaults.standard.array(forKey: self.pendingEventsDefaultsKey) as? [[String: Any]] ?? []
             persisted.append(event)
             if persisted.count > 32 { persisted.removeFirst(persisted.count - 32) }
@@ -977,6 +1054,9 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       emit(type: "providerReset", call: $0)
     }
     persistActiveCallDescriptors()
+    stateQueue.sync {
+      UserDefaults.standard.removeObject(forKey: pendingAnswerEventsDefaultsKey)
+    }
     endAllAnswerTransitionBackgroundTasks()
     endAllTerminalTransitionBackgroundTasks()
     deactivateAudioSession()

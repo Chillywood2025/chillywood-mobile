@@ -637,6 +637,32 @@ const validateProductionGate = async ({code, productionSources}) => {
       || !observerBlock.includes("self.drainPendingEvents().forEach { eventSink($0) }")
       || observerBlock.includes("drainPendingEvents().forEach { eventSink?($0) }"),
     );
+  } else if (code === "IOS_NATIVE_ANSWER_EVENT_NOT_DURABLE") {
+    const coordinatorSource = productionSources["modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift"];
+    const emitBlock = coordinatorSource.slice(
+      coordinatorSource.indexOf("private func emitRaw"),
+      coordinatorSource.indexOf("private func terminalInvites"),
+    );
+    const drainBlock = coordinatorSource.slice(
+      coordinatorSource.indexOf("public func drainPendingEvents"),
+      coordinatorSource.indexOf("private func persistPendingAnswerEvent"),
+    );
+    const completionBlock = coordinatorSource.slice(
+      coordinatorSource.indexOf("private func completeAnswerOnMain"),
+      coordinatorSource.indexOf("private func persistActiveCallDescriptors"),
+    );
+    const removalBlock = coordinatorSource.slice(
+      coordinatorSource.indexOf("private func removeCall"),
+      coordinatorSource.indexOf("private func emit(type:"),
+    );
+    report(
+      !emitBlock.includes("self.persistPendingAnswerEvent(event)")
+      || emitBlock.indexOf("self.persistPendingAnswerEvent(event)") > emitBlock.indexOf("if let eventSink = self.eventSink")
+      || !drainBlock.includes("let events = durableAnswerEvents + transientEvents + pendingEvents")
+      || drainBlock.includes("removeObject(forKey: pendingAnswerEventsDefaultsKey)")
+      || (completionBlock.match(/clearPendingAnswerEvent\(uuid\)/gu) ?? []).length < 2
+      || !removalBlock.includes("clearPendingAnswerEvent(uuid)")
+    );
   } else if (code === "IOS_NATIVE_PENDING_EVENT_ACTIVATION_REPLAY_MISSING") {
     const facadeSource = productionSources["_lib/iosNativeCalls.ts"];
     report(
@@ -803,6 +829,7 @@ const negativeControls = [
   replaceControl("IOS_NATIVE_CLAIM_BINDING_MISMATCH_ACCEPTED", "_lib/communicationCallMediaPolicy.mjs", "    && claim.threadId === threadId\n", "", "thread claim binding"),
   replaceControl("IOS_CALLKIT_COMPLETION_BEFORE_SERVER_AUTHORITY", "app/chat/[threadId].tsx", "      const acceptedInvite = await updateChillyChatCallInviteStatus({", "      await completeIosNativeCallAnswer(requestedNativeCallUuid, true);\n      const acceptedInvite = await updateChillyChatCallInviteStatus({", "CallKit completion ordering"),
   replaceControl("IOS_NATIVE_PENDING_EVENT_EARLY_DRAIN", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "      DispatchQueue.main.async { [weak self] in\n        guard let self, let eventSink = self.eventSink else { return }\n        self.drainPendingEvents().forEach { eventSink($0) }\n      }", "      drainPendingEvents().forEach { eventSink?($0) }", "synchronous observer-start event drain"),
+  replaceControl("IOS_NATIVE_ANSWER_EVENT_NOT_DURABLE", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "        self.persistPendingAnswerEvent(event)\n", "", "durable exact-UUID Answer replay"),
   replaceControl("IOS_NATIVE_PENDING_EVENT_ACTIVATION_REPLAY_MISSING", "_lib/iosNativeCalls.ts", '        if (event.type === "applicationActive") {\n          void drainPendingEventsForExactLifecycle(generation, context);\n        }\n', "", "activation replay"),
   replaceControl("IOS_NATIVE_ANSWER_BACKGROUND_LEASE_MISSING", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "    beginAnswerTransitionBackgroundTask(action.callUUID)\n", "", "terminated Answer execution lease"),
   replaceControl("IOS_NATIVE_ANSWER_BACKGROUND_LEASE_CLEANUP_MISSING", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "    endAnswerTransitionBackgroundTask(uuid)\n    guard let action = pendingAnswerActions.removeValue(forKey: uuid) else { return }", "    guard let action = pendingAnswerActions.removeValue(forKey: uuid) else { return }", "successful Answer lease cleanup"),

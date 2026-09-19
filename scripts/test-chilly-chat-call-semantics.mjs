@@ -1459,6 +1459,16 @@ assert.match(
 );
 assert.match(
   nativeCoordinatorSource,
+  /if event\["type"\] as\? String == "answerRequested"[\s\S]{0,480}self\.persistPendingAnswerEvent\(event\)[\s\S]{0,320}if let eventSink = self\.eventSink/u,
+  "CallKit Answer is durably exact-bound before a suspended Expo event sink can lose the handoff",
+);
+assert.match(
+  nativeCoordinatorSource,
+  /let events = durableAnswerEvents \+ transientEvents \+ pendingEvents[\s\S]{0,220}removeObject\(forKey: pendingEventsDefaultsKey\)/u,
+  "ordinary event draining preserves the exact CallKit Answer until media or terminal acknowledgement",
+);
+assert.match(
+  nativeCoordinatorSource,
   /DispatchQueue\.main\.asyncAfter\(deadline: \.now\(\) \+ 3\)[\s\S]{0,360}answerNotPending/u,
   "a CallKit transaction that never reaches the provider releases every waiting foreground Answer within a bounded deadline",
 );
