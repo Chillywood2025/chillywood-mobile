@@ -43,6 +43,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private let terminalInvitesDefaultsKey = "com.chillywood.native-calls.terminal-invites.v1"
   private let activeCallsDefaultsKey = "com.chillywood.native-calls.active-descriptors.v1"
   private let voipAuthorityDefaultsKey = "com.chillywood.native-calls.session-authority.v1"
+  private let presentationAckHost = "bmkkhihfbmsnnmcqkoly.supabase.co"
   private var provider: CXProvider?
   private var pushRegistry: PKPushRegistry?
   private var activeCalls: [UUID: ActiveNativeCall] = [:]
@@ -57,6 +58,14 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private var terminalTransitionBackgroundTaskTimeouts: [UUID: DispatchWorkItem] = [:]
   private var pendingEvents: [[String: Any]] = []
   private var audioSessionObservers: [NSObjectProtocol] = []
+  private lazy var presentationAckSession: URLSession = {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.timeoutIntervalForRequest = 3
+    configuration.timeoutIntervalForResource = 4
+    configuration.httpCookieStorage = nil
+    configuration.urlCache = nil
+    return URLSession(configuration: configuration)
+  }()
   private var prepared = false
 
   public var eventSink: (([String: Any]) -> Void)? {
@@ -255,6 +264,72 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       && toText(payload["recipientInstallId"]) == authority.installId
   }
 
+  private func acknowledgeIncomingCallPresentation(
+    payload: [String: Any],
+    callUuid: UUID,
+    inviteId: String
+  ) {
+    guard
+      let authority = persistedVoipAuthority(),
+      let attemptId = payload["presentationAttemptId"] as? String,
+      UUID(uuidString: attemptId) != nil,
+      let token = payload["presentationAckToken"] as? String,
+      token.range(of: "^[A-Za-z0-9_-]{43}$", options: .regularExpression) != nil,
+      let urlText = payload["presentationAckUrl"] as? String,
+      let url = URL(string: urlText),
+      url.scheme?.lowercased() == "https",
+      url.host?.lowercased() == presentationAckHost,
+      url.port == nil || url.port == 443,
+      url.user == nil,
+      url.password == nil,
+      url.query == nil,
+      url.fragment == nil,
+      url.path.hasSuffix("/functions/v1/ios-voip-call-dispatch")
+    else { return }
+
+    let body: [String: String] = [
+      "action": "presentation_ack",
+      "inviteId": inviteId,
+      "presentationAckToken": token,
+      "presentationAttemptId": attemptId.lowercased(),
+      "recipientUserId": authority.userId,
+    ]
+    guard let bodyData = try? JSONSerialization.data(withJSONObject: body) else { return }
+
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.httpBody = bodyData
+    request.timeoutInterval = 3
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    sendPresentationAcknowledgementRequest(
+      request,
+      callUuid: callUuid,
+      inviteId: inviteId,
+      retry: 0
+    )
+  }
+
+  private func sendPresentationAcknowledgementRequest(
+    _ request: URLRequest,
+    callUuid: UUID,
+    inviteId: String,
+    retry: Int
+  ) {
+    presentationAckSession.dataTask(with: request) { [weak self] _, response, error in
+      let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+      guard (error != nil || status >= 500 || status == 0), retry < 1 else { return }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+        guard let self, self.activeCalls[callUuid]?.inviteId == inviteId else { return }
+        self.sendPresentationAcknowledgementRequest(
+          request,
+          callUuid: callUuid,
+          inviteId: inviteId,
+          retry: retry + 1
+        )
+      }
+    }.resume()
+  }
+
   public func reportIncomingCall(payload: [String: Any]) async throws -> String {
     guard isBuildEnabled else { throw ChillywoodNativeCallError.buildDisabled }
     guard isRuntimeDefaultEnabled else { throw ChillywoodNativeCallError.runtimeDisabled }
@@ -378,6 +453,11 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
         completion?(error)
         return
       }
+      self?.acknowledgeIncomingCallPresentation(
+        payload: payload,
+        callUuid: callUuid,
+        inviteId: inviteId
+      )
       self?.emit(type: "incoming", call: call)
       let serverRemainder = expiresAt?.timeIntervalSinceNow ?? 45
       let timeoutSeconds = min(45, max(0.1, serverRemainder))

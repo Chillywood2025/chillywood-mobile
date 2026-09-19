@@ -17,9 +17,12 @@ type DispatchPayload = {
   action?: unknown;
   inviteId?: unknown;
   invite_id?: unknown;
+  presentationAckToken?: unknown;
+  presentationAttemptId?: unknown;
+  recipientUserId?: unknown;
 };
 
-type DispatchAction = "incoming";
+type DispatchAction = "incoming" | "presentation_ack";
 
 type CallInvite = {
   id: string;
@@ -64,6 +67,7 @@ const toText = (value: unknown) => String(value ?? "").trim();
 const normalizeAction = (value: unknown): DispatchAction | null => {
   const normalized = toText(value).toLowerCase();
   if (normalized === "incoming" || normalized === "dispatch_incoming") return "incoming";
+  if (normalized === "presentation_ack") return "presentation_ack";
   return null;
 };
 
@@ -92,6 +96,67 @@ const parseBody = async (req: Request): Promise<DispatchPayload | null> => {
 const sha256Hex = async (value: string) => {
   const digest = await crypto.subtle.digest("SHA-256", encoder.encode(value));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const presentationTokenPattern = /^[A-Za-z0-9_-]{43}$/u;
+
+const createPresentationCapability = () => {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return base64UrlEncode(bytes);
+};
+
+const acknowledgePresentation = async (
+  adminClient: SupabaseClientLike,
+  body: DispatchPayload,
+  inviteId: string,
+) => {
+  const presentationAttemptId = toText(body.presentationAttemptId).toLowerCase();
+  const presentationAckToken = toText(body.presentationAckToken);
+  const recipientUserId = toText(body.recipientUserId).toLowerCase();
+  if (
+    !uuidPattern.test(inviteId)
+    || !uuidPattern.test(presentationAttemptId)
+    || !uuidPattern.test(recipientUserId)
+    || !presentationTokenPattern.test(presentationAckToken)
+  ) {
+    return jsonResponse(400, { acknowledged: false, error: "invalid_presentation_ack" });
+  }
+
+  const tokenHash = await sha256Hex(presentationAckToken);
+  const { data, error } = await adminClient.rpc(
+    "whole_app_acknowledge_ios_callkit_presentation",
+    {
+      p_attempt_id: presentationAttemptId,
+      p_call_invite_id: inviteId,
+      p_capability_hash: tokenHash,
+      p_recipient_user_id: recipientUserId,
+    },
+  );
+  if (error) return jsonResponse(500, { acknowledged: false, error: "presentation_ack_failed" });
+  return jsonResponse(data === true ? 200 : 202, { acknowledged: data === true });
+};
+
+const waitForAnyPresentationAcknowledgement = async (
+  adminClient: SupabaseClientLike,
+  attemptIds: string[],
+  timeoutMs = 4_000,
+) => {
+  if (!attemptIds.length) return false;
+  const deadline = Date.now() + Math.max(0, Math.min(5_000, timeoutMs));
+  do {
+    const { data, error } = await adminClient
+      .from("voip_push_delivery_attempts")
+      .select("id")
+      .in("id", attemptIds)
+      .not("presented_at", "is", null)
+      .limit(1);
+    if (!error && data?.length) return true;
+    if (Date.now() >= deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  } while (Date.now() <= deadline);
+  return false;
 };
 
 const readAuthenticatedAuthority = async (req: Request) => {
@@ -305,14 +370,18 @@ Deno.serve(async (req): Promise<Response> => {
         status: "skipped",
       });
     }
-    if (!inviteId) return jsonResponse(400, { error: "missing_invite_id" });
-
     const serviceRoleKey = readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseUrl = readRequiredEnv("SUPABASE_URL");
     const adminClient = createClient(
-      readRequiredEnv("SUPABASE_URL"),
+      supabaseUrl,
       serviceRoleKey,
       { auth: { persistSession: false } },
     );
+    if (!inviteId) return jsonResponse(400, { error: "missing_invite_id" });
+    if (action === "presentation_ack") {
+      return acknowledgePresentation(adminClient, body, inviteId);
+    }
+
     const callerAuthority = await readAuthenticatedAuthority(req);
     const callerUserId = callerAuthority?.userId ?? "";
     if (!callerAuthority || !callerUserId) return jsonResponse(401, { error: "unauthenticated" });
@@ -378,6 +447,7 @@ Deno.serve(async (req): Promise<Response> => {
     const topic = buildIosVoipTopic(readRequiredEnv("IOS_BUNDLE_IDENTIFIER"));
     if (!topic) return jsonResponse(503, { error: "apns_topic_unavailable" });
     const authorization = await createApnsAuthorization({ keyId, privateKey, teamId });
+    const presentationAckUrl = `${supabaseUrl.replace(/\/+$/u, "")}/functions/v1/ios-voip-call-dispatch`;
 
     const { data: tokenRows, error: tokenError } = await adminClient.rpc(
       "whole_app_read_deliverable_ios_voip_tokens",
@@ -403,27 +473,21 @@ Deno.serve(async (req): Promise<Response> => {
     let sentCount = 0;
     let failedCount = 0;
     let skippedCount = 0;
+    const sentPresentationAttemptIds: string[] = [];
 
     for (const tokenRow of tokens) {
-      const payload = buildIosVoipApnsPayload({
-        action,
-        callInviteId: invite.id,
-        callerName: toText(caller?.display_name) || "Chi'llywood caller",
-        callType: invite.call_type,
-        expiresAt: invite.expires_at,
-        recipientAccountId: tokenRow.account_id,
-        recipientInstallId: tokenRow.install_id,
-        recipientSessionGeneration: tokenRow.session_generation,
-        recipientUserId: tokenRow.user_id,
-        threadId: invite.thread_id,
-      }) as JsonObject;
+      const presentationAckToken = createPresentationCapability();
+      const presentationAckTokenHash = await sha256Hex(presentationAckToken);
+      const newAttemptId = crypto.randomUUID();
       const dispatchKey = await sha256Hex(`ios_voip:${invite.id}:${tokenRow.id}:${action}`);
       let { data: attempt, error: attemptError } = await adminClient
         .from("voip_push_delivery_attempts")
         .insert({
+          id: newAttemptId,
           apns_environment: tokenRow.apns_environment,
           call_invite_id: invite.id,
           dispatch_key: dispatchKey,
+          presentation_ack_token_hash: presentationAckTokenHash,
           recipient_user_id: recipientUserId,
           status: "attempted",
           voip_push_token_id: tokenRow.id,
@@ -455,6 +519,8 @@ Deno.serve(async (req): Promise<Response> => {
           .update({
             attempt_count: attemptCount + 1,
             error_code: null,
+            presentation_ack_token_hash: presentationAckTokenHash,
+            presented_at: null,
             provider_message_id: null,
             provider_status_code: null,
             status: "attempted",
@@ -475,6 +541,22 @@ Deno.serve(async (req): Promise<Response> => {
         failedCount += 1;
         continue;
       }
+
+      const payload = buildIosVoipApnsPayload({
+        action,
+        callInviteId: invite.id,
+        callerName: toText(caller?.display_name) || "Chi'llywood caller",
+        callType: invite.call_type,
+        expiresAt: invite.expires_at,
+        presentationAckToken,
+        presentationAckUrl,
+        presentationAttemptId: attempt.id,
+        recipientAccountId: tokenRow.account_id,
+        recipientInstallId: tokenRow.install_id,
+        recipientSessionGeneration: tokenRow.session_generation,
+        recipientUserId: tokenRow.user_id,
+        threadId: invite.thread_id,
+      }) as JsonObject;
 
       const result = await sendVoipPush({
         apnsEnvironment: tokenRow.apns_environment,
@@ -503,6 +585,7 @@ Deno.serve(async (req): Promise<Response> => {
 
       if (result.ok) {
         sentCount += 1;
+        sentPresentationAttemptIds.push(attempt.id);
       } else {
         failedCount += 1;
         if (isApnsInvalidVoipTokenReason(result.reason)) {
@@ -521,10 +604,17 @@ Deno.serve(async (req): Promise<Response> => {
       }
     }
 
+    const presentationAcknowledged = sentCount > 0
+      ? await waitForAnyPresentationAcknowledgement(adminClient, sentPresentationAttemptIds)
+      : false;
+
     return jsonResponse(200, {
       eligible: true,
       failedCount,
-      reason: sentCount > 0 ? "sent" : failedCount > 0 ? "provider_failed" : "duplicate_prevented",
+      presentationAcknowledged,
+      reason: sentCount > 0
+        ? presentationAcknowledged ? "presented" : "provider_accepted_unacknowledged"
+        : failedCount > 0 ? "provider_failed" : "duplicate_prevented",
       sentCount,
       skippedCount,
       status: sentCount > 0 ? "sent" : failedCount > 0 ? "failed" : "skipped",

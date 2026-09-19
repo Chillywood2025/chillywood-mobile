@@ -17,11 +17,11 @@ export function getChillyChatCallDeliveryMessage(delivery: DeliveryCopyInput | n
   }
   if (delivery.pushSent) {
     const androidSent = delivery.channels?.androidNative.pushSent === true;
-    const iosVoipSent = delivery.channels?.iosVoip.pushSent === true;
+    const iosVoipPresented = delivery.channels?.iosVoip.presentationAcknowledged === true;
     const ordinaryPushSent = delivery.channels?.ordinaryPush.pushSent === true;
-    const sentChannelCount = [androidSent, iosVoipSent, ordinaryPushSent].filter(Boolean).length;
+    const sentChannelCount = [androidSent, iosVoipPresented, ordinaryPushSent].filter(Boolean).length;
     if (sentChannelCount > 1) return "Call alert sent through available device channels.";
-    if (iosVoipSent) return "Native iPhone call alert sent.";
+    if (iosVoipPresented) return "Native iPhone call alert presented.";
     if (androidSent) return "Android call alert sent.";
     if (ordinaryPushSent) return "Push notification sent.";
     return "Call alert sent through available device channels.";

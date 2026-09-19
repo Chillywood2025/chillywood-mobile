@@ -129,7 +129,7 @@ for (const requiredFcmDispatch of [
 
 if (!dispatch.includes("resolveChillyChatOrdinaryPushFallbackPolicy")
   || !dispatchPolicy.includes("input.androidNativeSent !== true")
-  || !dispatchPolicy.includes('action === "incoming" && input.iosVoipSent !== true')) {
+  || !dispatchPolicy.includes('action === "incoming" && input.iosVoipPresented !== true')) {
   fail("ordinary incoming-call fallback must be selected independently after each platform-native channel result");
 }
 

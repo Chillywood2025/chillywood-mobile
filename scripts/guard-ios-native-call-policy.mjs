@@ -130,6 +130,7 @@ const callInvites = read("_lib/chillyChatCalls.ts");
 const easConfig = JSON.parse(read("eas.json"));
 const migration = read("supabase/migrations/20260715150522_ios_voip_push_token_foundation.sql");
 const sessionAuthorityMigration = read("supabase/migrations/202608250003_ios_voip_session_authority_closure.sql");
+const presentationAckMigration = read("supabase/migrations/20260919223835_ios_callkit_presentation_ack_fallback.sql");
 const tokenFunction = read("supabase/functions/ios-voip-push-tokens/index.ts");
 const dispatchFunction = read("supabase/functions/ios-voip-call-dispatch/index.ts");
 const notifications = read("_lib/notifications.ts");
@@ -185,6 +186,15 @@ requireText(coordinator, "NativeVoipAuthority", "Terminated PushKit delivery mus
 requireText(coordinator, "voipPayloadMatchesPersistedAuthority", "Native CallKit presentation must reject a provider payload for another account/session/install.");
 requireText(coordinator, "resetAccountContextOnMain", "Logout and account switch must end stale CallKit state and clear persisted descriptors.");
 requireText(coordinator, "completion?(error)", "PushKit completion must wait for CallKit reporting.");
+requireText(coordinator, "acknowledgeIncomingCallPresentation", "CallKit presentation must acknowledge only the exact APNs delivery attempt.");
+requireText(coordinator, "URLSessionConfiguration.ephemeral", "CallKit presentation acknowledgement transport must retain no cookies or cache.");
+requireText(coordinator, 'url.scheme?.lowercased() == "https"', "CallKit presentation acknowledgement must require HTTPS.");
+requireText(coordinator, 'url.host?.lowercased() == presentationAckHost', "CallKit presentation acknowledgement must remain bound to the canonical backend host.");
+requireText(coordinator, 'url.port == nil || url.port == 443', "CallKit presentation acknowledgement must reject a non-standard backend port.");
+requireText(coordinator, 'url.path.hasSuffix("/functions/v1/ios-voip-call-dispatch")', "CallKit presentation acknowledgement must target only the canonical Edge Function.");
+if (coordinator.lastIndexOf("self?.acknowledgeIncomingCallPresentation(") < coordinator.indexOf("provider.reportNewIncomingCall")) {
+  failures.push("CallKit presentation acknowledgement must occur only after reportNewIncomingCall succeeds.");
+}
 requireText(coordinator, "#if DEBUG", "The local CallKit trigger must compile only in debug builds.");
 rejectText(coordinator, "AVCapture", "The native incoming-call bridge must not activate a camera before answer.");
 requireText(moduleSource, "stopVoipRegistrationAsync", "The native bridge must support logout/account-transition teardown.");
@@ -387,6 +397,23 @@ requireText(migration, "voip_push_delivery_attempts_dispatch_unique", "APNs VoIP
 requireText(migration, "provider_status_code", "Sanitized APNs HTTP status evidence must be recorded.");
 requireText(migration, "attempt_count", "Transient APNs attempts must have a bounded retry counter.");
 rejectText(migration, "grant select", "Raw VoIP token tables must not gain direct client SELECT grants.");
+for (const marker of [
+  'add column if not exists "presentation_ack_token_hash"',
+  'add column if not exists "presented_at"',
+  "voip_push_delivery_attempts_presentation_hash_check",
+  "voip_push_delivery_attempts_presented_requires_hash_check",
+  "voip_push_delivery_attempts_presented_idx",
+  "whole_app_acknowledge_ios_callkit_presentation",
+  'invite."status" = \'ringing\'',
+  'invite."expires_at" > clock_timestamp()',
+  'invite."callee_user_id" = attempt."recipient_user_id"::text',
+  "from public, anon, authenticated",
+  "to service_role",
+]) {
+  requireText(presentationAckMigration, marker, `CallKit presentation evidence requires ${marker}.`);
+}
+rejectText(presentationAckMigration, "grant select on table", "Presentation evidence must not grant raw delivery-attempt reads.");
+rejectText(presentationAckMigration, "grant all on table", "Presentation evidence must not change raw delivery-attempt table grants.");
 
 for (const marker of [
   'add column if not exists "account_id"',
@@ -445,6 +472,15 @@ requireText(dispatchFunction, "isApnsInvalidVoipTokenReason", "Invalid APNs toke
 requireText(dispatchFunction, "whole_app_read_deliverable_ios_voip_tokens", "APNs dispatch must read only exact current-session tokens.");
 requireText(dispatchFunction, "recipientSessionGeneration", "APNs payloads must carry the exact recipient session generation for native rejection.");
 requireText(dispatchFunction, "provider_status_code", "APNs delivery attempts must record the provider HTTP status without response secrets.");
+requireText(dispatchFunction, "createPresentationCapability", "Each APNs attempt must receive a fresh random CallKit presentation capability.");
+requireText(dispatchFunction, "presentation_ack_token_hash", "The backend must persist only a digest of the presentation capability.");
+requireText(dispatchFunction, 'action === "presentation_ack"', "The native device must be able to acknowledge the exact CallKit presentation attempt.");
+requireText(dispatchFunction, '"whole_app_acknowledge_ios_callkit_presentation"', "Presentation acknowledgement must use the atomic exact-authority RPC.");
+requireText(dispatchFunction, "p_call_invite_id: inviteId", "Presentation acknowledgement must bind the exact call invite.");
+requireText(dispatchFunction, "p_recipient_user_id: recipientUserId", "Presentation acknowledgement must bind the exact recipient account.");
+requireText(dispatchFunction, "p_capability_hash: tokenHash", "Presentation acknowledgement must bind the one-time capability digest.");
+requireText(dispatchFunction, "waitForAnyPresentationAcknowledgement", "APNs acceptance must wait boundedly for customer-visible presentation evidence.");
+requireText(dispatchFunction, '"provider_accepted_unacknowledged"', "APNs acceptance without presentation must remain explicitly unconfirmed.");
 requireText(dispatchFunction, "if (!await readCallPreference", "incoming VoIP presentation must honor the new-call preference");
 rejectText(dispatchFunction, "authorize_chilly_chat_call_transition_retry", "terminal retry work must never enter the incoming-only VoIP dispatcher");
 

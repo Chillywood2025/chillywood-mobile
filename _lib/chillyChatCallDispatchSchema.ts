@@ -18,6 +18,7 @@ export type ChillyCallChannelResult = {
   eligible: boolean;
   attempted: boolean;
   notificationCreated: boolean;
+  presentationAcknowledged: boolean;
   pushSent: boolean;
   sentCount: number;
   failedCount: number;
@@ -91,6 +92,10 @@ const parseChannel = (value: unknown, key: string): ChillyCallChannelResult => {
     eligible: readBoolean(value, "eligible"),
     attempted: readBoolean(value, "attempted"),
     notificationCreated: readBoolean(value, "notificationCreated"),
+    // Older function revisions do not emit this field. Missing must fail
+    // closed: APNs transport acceptance is not customer-visible CallKit
+    // presentation evidence.
+    presentationAcknowledged: value.presentationAcknowledged === true,
     pushSent: readBoolean(value, "pushSent"),
     sentCount: readCount(value, "sentCount"),
     failedCount: readCount(value, "failedCount"),
@@ -124,7 +129,7 @@ export const parseChillyChatCallDispatchResponse = (value: unknown): ChillyChatC
   };
 
   const remotePushSent = parsed.channels.androidNative.pushSent
-    || parsed.channels.iosVoip.pushSent
+    || parsed.channels.iosVoip.presentationAcknowledged
     || parsed.channels.ordinaryPush.pushSent;
   if (parsed.result.pushSent !== remotePushSent) {
     throw new Error("dispatch_schema_push_sent_channel_mismatch");
@@ -139,6 +144,7 @@ const failedChannel = (reason: string): ChillyCallChannelResult => ({
   eligible: false,
   attempted: false,
   notificationCreated: false,
+  presentationAcknowledged: false,
   pushSent: false,
   sentCount: 0,
   failedCount: 0,
