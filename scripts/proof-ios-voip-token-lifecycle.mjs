@@ -155,8 +155,17 @@ assert.match(coordinator, /recipientInstallId/u);
 assert.match(coordinator, /UIApplication\.shared\.beginBackgroundTask/u);
 assert.match(coordinator, /beginAnswerTransitionBackgroundTask\(action\.callUUID\)/u);
 assert.match(coordinator, /DispatchQueue\.main\.asyncAfter\(deadline: \.now\(\) \+ 20/u);
+assert.match(coordinator, /pendingAnswerEventsDefaultsKey/u);
+assert.match(coordinator, /if event\["type"\] as\? String == "answerRequested"[\s\S]{0,480}persistPendingAnswerEvent\(event\)[\s\S]{0,320}if let eventSink/u);
+assert.match(coordinator, /let events = durableAnswerEvents \+ transientEvents \+ pendingEvents/u);
+assert.doesNotMatch(
+  coordinator.slice(coordinator.indexOf("public func drainPendingEvents"), coordinator.indexOf("private func persistPendingAnswerEvent")),
+  /removeObject\(forKey: pendingAnswerEventsDefaultsKey\)/u,
+);
 assert.match(coordinator, /completeAnswerOnMain[\s\S]{0,240}endAnswerTransitionBackgroundTask\(uuid\)/u);
+assert.match(coordinator, /completeAnswerOnMain[\s\S]{0,180}clearPendingAnswerEvent\(uuid\)/u);
 assert.match(coordinator, /failPendingAnswer[\s\S]{0,240}endAnswerTransitionBackgroundTask\(uuid\)/u);
+assert.match(coordinator, /failPendingAnswer[\s\S]{0,180}clearPendingAnswerEvent\(uuid\)/u);
 assert.match(coordinator, /beginTerminalTransitionBackgroundTask\(action\.callUUID\)/u);
 assert.match(coordinator, /DispatchQueue\.main\.asyncAfter\(deadline: \.now\(\) \+ 15/u);
 assert.match(facade, /completeIosNativeCallTerminalTransition/u);

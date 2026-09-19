@@ -170,6 +170,10 @@ requireText(coordinator, "answerTransitionBackgroundTaskTimeouts", "The CallKit 
 requireText(coordinator, "endAllAnswerTransitionBackgroundTasks", "Account reset, provider reset, and app termination must release every CallKit Answer execution lease.");
 requireText(coordinator, "activeCallsDefaultsKey", "Non-secret active call descriptors must support bounded process recovery.");
 requireText(coordinator, "pendingEventsDefaultsKey", "Sanitized native call events must survive cold-start bridge hydration.");
+requireText(coordinator, "pendingAnswerEventsDefaultsKey", "A suspended JavaScript listener must not consume the exact CallKit Answer before authenticated cold-start recovery.");
+requireText(coordinator, "self.persistPendingAnswerEvent(event)", "CallKit Answer must be durably recorded before delivery to an in-memory Expo event sink.");
+requireText(coordinator, "let events = durableAnswerEvents + transientEvents + pendingEvents", "Pending CallKit Answer replay must survive ordinary one-shot event draining.");
+requireText(coordinator, "clearPendingAnswerEvent(uuid)", "Answer durability must be revoked on success, failure, and terminal cleanup.");
 requireText(coordinator, "DispatchQueue.main.async { [weak self] in", "Persisted native call events must wait until the Expo JavaScript listener is installed.");
 requireText(coordinator, "self.drainPendingEvents().forEach { eventSink($0) }", "Deferred native event replay must drain the bounded queue exactly once into the current listener.");
 rejectText(coordinator, "drainPendingEvents().forEach { eventSink?($0) }", "A synchronous observer-start drain can delete CallKit Answer before JavaScript listener readiness.");
