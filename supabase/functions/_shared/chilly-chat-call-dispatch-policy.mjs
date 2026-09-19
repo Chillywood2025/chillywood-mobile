@@ -30,6 +30,7 @@ export const createChillyChatCallChannelResult = (overrides = {}) => ({
   eligible: false,
   attempted: false,
   notificationCreated: false,
+  presentationAcknowledged: false,
   pushSent: false,
   sentCount: 0,
   failedCount: 0,
@@ -41,7 +42,9 @@ export const createChillyChatCallChannelResult = (overrides = {}) => ({
 
 export const summarizeChillyChatCallDispatch = (eligible, channels, blockedReason = "") => {
   const remoteChannels = REMOTE_CHANNEL_KEYS.map((key) => channels[key]);
-  const pushSent = remoteChannels.some((channel) => channel.pushSent === true);
+  const pushSent = channels.androidNative.pushSent === true
+    || channels.ordinaryPush.pushSent === true
+    || channels.iosVoip.presentationAcknowledged === true;
   const notificationCreated = channels.inAppNotification.notificationCreated === true;
   const failed = remoteChannels.some((channel) => channel.attempted === true && channel.failedCount > 0);
   const disabled = remoteChannels.some((channel) => channel.status === "disabled");
@@ -114,13 +117,13 @@ export const resolveChillyChatOrdinaryPushFallbackPolicy = (input) => {
     // accept the same lifecycle signal. Missed-call presentation has no direct
     // FCM path and therefore always uses the ordinary provider when available.
     android: action === "missed" || input.androidNativeSent !== true,
-    // PushKit/CallKit remains the primary iOS incoming-call path. A visible,
-    // time-sensitive ordinary notification is allowed only when PushKit did
-    // not accept the invite, preventing duplicate call presentation while
-    // keeping a legitimate account-bound fallback for unavailable VoIP state.
+    // PushKit/CallKit remains the primary iOS incoming-call path. APNs HTTP
+    // acceptance is transport evidence, not customer-visible presentation.
+    // Use the ordinary time-sensitive notification only until the exact
+    // device acknowledges successful CallKit presentation.
     ios: iosRolloutEnabled && (
       action === "missed"
-      || (action === "incoming" && input.iosVoipSent !== true)
+      || (action === "incoming" && input.iosVoipPresented !== true)
     ),
   };
 };

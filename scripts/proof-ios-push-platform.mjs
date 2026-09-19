@@ -164,18 +164,21 @@ assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
   action: "incoming",
   androidNativeSent: true,
   iosRolloutEnabled: true,
+  iosVoipPresented: true,
   iosVoipSent: true,
-}), { android: false, ios: false }, "confirmed native channels must suppress duplicate ordinary incoming-call alerts");
+}), { android: false, ios: false }, "confirmed native presentation must suppress duplicate ordinary incoming-call alerts");
 assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
   action: "incoming",
   androidNativeSent: true,
   iosRolloutEnabled: true,
-  iosVoipSent: false,
-}), { android: false, ios: true }, "failed PushKit delivery must allow one ordinary iOS incoming-call fallback");
+  iosVoipPresented: false,
+  iosVoipSent: true,
+}), { android: false, ios: true }, "provider-accepted but unacknowledged PushKit delivery must allow one ordinary iOS incoming-call fallback");
 assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
   action: "incoming",
   androidNativeSent: true,
   iosRolloutEnabled: false,
+  iosVoipPresented: false,
   iosVoipSent: false,
 }), { android: false, ios: false }, "disabled ordinary iOS rollout must remain fail closed");
 assert.ok(callDispatch.includes("const iosVoip = await iosVoipPromise;"), "ordinary iOS fallback must wait for the authoritative PushKit result");

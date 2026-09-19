@@ -516,10 +516,20 @@ const sent = (reason = "sent") => createChillyChatCallChannelResult({
   reason,
   status: "sent",
 });
+const presented = (reason = "presented") => createChillyChatCallChannelResult({
+  eligible: true,
+  attempted: true,
+  presentationAcknowledged: true,
+  pushSent: true,
+  sentCount: 1,
+  reason,
+  status: "sent",
+});
 
 const fixtureCases = [
   ["android_native_only", { androidNative: sent("fcm_sent") }, true, "sent"],
-  ["ios_voip_only", { iosVoip: sent("apns_voip_sent") }, true, "sent"],
+  ["ios_voip_presented", { iosVoip: presented("callkit_presented") }, true, "sent"],
+  ["ios_voip_provider_accepted_unacknowledged", { iosVoip: sent("provider_accepted_unacknowledged") }, false, "skipped"],
   ["ordinary_push_only", { ordinaryPush: sent("expo_sent") }, true, "sent"],
   ["in_app_only", {
     inAppNotification: createChillyChatCallChannelResult({
@@ -532,7 +542,7 @@ const fixtureCases = [
   }, false, "created"],
   ["multiple_channels", {
     androidNative: sent("fcm_sent"),
-    iosVoip: sent("apns_voip_sent"),
+    iosVoip: presented("callkit_presented"),
     ordinaryPush: sent("expo_sent"),
   }, true, "sent"],
 ];
@@ -626,38 +636,51 @@ assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
   action: "incoming",
   androidNativeSent: true,
   iosRolloutEnabled: true,
+  iosVoipPresented: true,
   iosVoipSent: true,
-}), { android: false, ios: false }, "accepted native channels suppress duplicate ordinary incoming-call pushes");
+}), { android: false, ios: false }, "device-acknowledged native presentation suppresses duplicate ordinary incoming-call pushes");
 assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
   action: "incoming",
   androidNativeSent: false,
   iosRolloutEnabled: true,
+  iosVoipPresented: false,
   iosVoipSent: false,
 }), { android: true, ios: true }, "each failed native incoming-call channel receives its own ordinary fallback");
 assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
   action: "incoming",
   androidNativeSent: true,
   iosRolloutEnabled: true,
+  iosVoipPresented: false,
   iosVoipSent: false,
 }), { android: false, ios: true }, "Android success cannot suppress an iPhone fallback on another registered device");
 assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
   action: "incoming",
   androidNativeSent: false,
   iosRolloutEnabled: true,
+  iosVoipPresented: true,
   iosVoipSent: true,
 }), { android: true, ios: false }, "iPhone success cannot suppress an Android fallback on another registered device");
 assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
   action: "incoming",
   androidNativeSent: false,
   iosRolloutEnabled: false,
+  iosVoipPresented: false,
   iosVoipSent: false,
 }), { android: true, ios: false }, "disabled ordinary iOS rollout remains fail-closed");
 assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
   action: "end",
   androidNativeSent: false,
   iosRolloutEnabled: true,
+  iosVoipPresented: false,
   iosVoipSent: false,
 }), { android: true, ios: false }, "terminal iOS state never synthesizes a new incoming call while Android retains cleanup fallback");
+assert.deepEqual(resolveChillyChatOrdinaryPushFallbackPolicy({
+  action: "incoming",
+  androidNativeSent: true,
+  iosRolloutEnabled: true,
+  iosVoipPresented: false,
+  iosVoipSent: true,
+}), { android: false, ios: true }, "APNs HTTP acceptance without exact CallKit presentation acknowledgement must retain the ordinary iOS fallback");
 
 const iosIncomingFallback = buildPlatformExpoPushMessage({
   badge: 1,
@@ -677,10 +700,10 @@ assert.equal(iosIncomingFallback.interruptionLevel, "time-sensitive");
 assert.equal(iosIncomingFallback.ttl, 45);
 
 const tokenFixtures = [
-  ["voip_token_only", { iosVoip: sent() }, "iosVoip"],
+  ["voip_token_only", { iosVoip: presented() }, "iosVoip"],
   ["expo_token_only", { ordinaryPush: sent() }, "ordinaryPush"],
   ["fcm_token_only", { androidNative: sent() }, "androidNative"],
-  ["all_token_types", { androidNative: sent(), iosVoip: sent(), ordinaryPush: sent() }, "iosVoip"],
+  ["all_token_types", { androidNative: sent(), iosVoip: presented(), ordinaryPush: sent() }, "iosVoip"],
   ["no_tokens", {}, null],
 ];
 for (const [name, overrides, expectedSentChannel] of tokenFixtures) {
@@ -962,6 +985,9 @@ const actionScope = {
   notificationChannelId: "chilly_chat_calls_fullscreen_v1",
   notificationId: "notification-id",
   path: "/chat/22222222-2222-4222-8222-222222222222",
+  presentationAckToken: "A".repeat(43),
+  presentationAckUrl: "https://example.supabase.co/functions/v1/ios-voip-call-dispatch",
+  presentationAttemptId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
   recipientAccountId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   recipientInstallId: "install-authority-1",
   recipientSessionGeneration: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
@@ -985,6 +1011,9 @@ assert.equal(incomingVoipData.recipientAccountId, actionScope.recipientAccountId
 assert.equal(incomingVoipData.recipientInstallId, actionScope.recipientInstallId);
 assert.equal(incomingVoipData.recipientSessionGeneration, actionScope.recipientSessionGeneration);
 assert.equal(incomingVoipData.recipientUserId, actionScope.recipientUserId);
+assert.equal(incomingVoipData.presentationAckToken, actionScope.presentationAckToken);
+assert.equal(incomingVoipData.presentationAckUrl, actionScope.presentationAckUrl);
+assert.equal(incomingVoipData.presentationAttemptId, actionScope.presentationAttemptId);
 
 for (const action of ["cancel", "declined", "end", "timeout"]) {
   const androidData = buildChillyChatNativeActionData({ ...actionScope, action });
@@ -2068,7 +2097,11 @@ assert.match(tipSheetSource, /\}, \[iosProductIdSignature, visible\]\);/u);
 assert.match(tipSheetSource, /setIosProductPriceLabels\(\(current\) =>/u);
 assert.doesNotMatch(tipSheetSource, /readRevenueCatNonSubscriptionProducts\([\s\S]{0,120}iosTipOptions/u);
 
-const copyChannel = (pushSent) => ({ ...createChillyChatCallChannelResult(), pushSent });
+const copyChannel = (pushSent, presentationAcknowledged = false) => ({
+  ...createChillyChatCallChannelResult(),
+  presentationAcknowledged,
+  pushSent,
+});
 const deliveryFixture = (channels) => ({
   channels: {
     androidNative: copyChannel(false),
@@ -2082,11 +2115,11 @@ const deliveryFixture = (channels) => ({
   status: "sent",
 });
 assert.equal(deliveryCopy.getChillyChatCallDeliveryMessage(deliveryFixture({ androidNative: copyChannel(true) })), "Android call alert sent.");
-assert.equal(deliveryCopy.getChillyChatCallDeliveryMessage(deliveryFixture({ iosVoip: copyChannel(true) })), "Native iPhone call alert sent.");
+assert.equal(deliveryCopy.getChillyChatCallDeliveryMessage(deliveryFixture({ iosVoip: copyChannel(true, true) })), "Native iPhone call alert presented.");
 assert.equal(deliveryCopy.getChillyChatCallDeliveryMessage(deliveryFixture({ ordinaryPush: copyChannel(true) })), "Push notification sent.");
 assert.equal(deliveryCopy.getChillyChatCallDeliveryMessage(deliveryFixture({
   androidNative: copyChannel(true),
-  iosVoip: copyChannel(true),
+  iosVoip: copyChannel(true, true),
 })), "Call alert sent through available device channels.");
 const inAppOnlyDelivery = {
   ...deliveryFixture({}),
@@ -2100,7 +2133,17 @@ assert.equal(
   "creating a database notification cannot be presented as receiver delivery",
 );
 assert.equal(deliveryCopy.isChillyChatCallDeviceAlertConfirmed(inAppOnlyDelivery), false);
-assert.equal(deliveryCopy.isChillyChatCallDeviceAlertConfirmed(deliveryFixture({ iosVoip: copyChannel(true) })), true);
+assert.equal(deliveryCopy.isChillyChatCallDeviceAlertConfirmed(deliveryFixture({ iosVoip: copyChannel(true, true) })), true);
+const providerAcceptedOnly = deliveryFixture({ iosVoip: copyChannel(true, false) });
+providerAcceptedOnly.pushSent = false;
+providerAcceptedOnly.status = "created";
+providerAcceptedOnly.notificationCreated = true;
+assert.equal(deliveryCopy.isChillyChatCallDeviceAlertConfirmed(providerAcceptedOnly), false);
+assert.equal(
+  deliveryCopy.getChillyChatCallDeliveryMessage(providerAcceptedOnly),
+  "Call invite saved for in-app delivery. No recipient device alert was confirmed.",
+  "APNs acceptance alone must never be customer-visible ringing confirmation",
+);
 assert.doesNotMatch(chatThreadSource, /\bis being notified\b/u, "the caller UI cannot imply receiver delivery before a device channel confirms it");
 assert.match(chatThreadSource, /outgoingDeviceAlertConfirmed/u, "the ringing label must be bound to confirmed device-alert dispatch");
 assert.match(chatThreadSource, /statusLabelOverride=\{outgoingCallRinging \? outgoingDeviceAlertConfirmed \? "Ringing" : "Calling" : null\}/u);

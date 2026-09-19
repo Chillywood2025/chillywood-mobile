@@ -35,10 +35,31 @@ export const buildIosVoipApnsPayload = (input) => {
   const recipientAccountId = toText(input.recipientAccountId);
   const recipientSessionGeneration = toText(input.recipientSessionGeneration);
   const recipientInstallId = toText(input.recipientInstallId);
+  const presentationAttemptId = toText(input.presentationAttemptId).toLowerCase();
+  const presentationAckToken = toText(input.presentationAckToken);
+  const presentationAckUrl = toText(input.presentationAckUrl);
   const action = toText(input.action).toLowerCase() || "incoming";
   if (!callInviteId || !threadId || !recipientUserId || recipientAccountId !== recipientUserId
     || !recipientSessionGeneration || !recipientInstallId) {
     throw new Error("invalid_voip_payload_scope");
+  }
+  let parsedAckUrl;
+  try {
+    parsedAckUrl = new URL(presentationAckUrl);
+  } catch {
+    throw new Error("invalid_voip_presentation_ack_scope");
+  }
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(presentationAttemptId)
+    || !/^[A-Za-z0-9_-]{43}$/u.test(presentationAckToken)
+    || parsedAckUrl.protocol !== "https:"
+    || !parsedAckUrl.pathname.endsWith("/functions/v1/ios-voip-call-dispatch")
+    || parsedAckUrl.username
+    || parsedAckUrl.password
+    || parsedAckUrl.search
+    || parsedAckUrl.hash
+  ) {
+    throw new Error("invalid_voip_presentation_ack_scope");
   }
   if (action !== "incoming") throw new Error("non_incoming_voip_payload_denied");
 
@@ -55,6 +76,9 @@ export const buildIosVoipApnsPayload = (input) => {
     callerName,
     expiresAt: toText(input.expiresAt),
     path: `/chat/${encodeURIComponent(threadId)}?callInviteId=${encodeURIComponent(callInviteId)}`,
+    presentationAckToken,
+    presentationAckUrl: parsedAckUrl.toString(),
+    presentationAttemptId,
     recipientAccountId,
     recipientInstallId,
     recipientSessionGeneration,

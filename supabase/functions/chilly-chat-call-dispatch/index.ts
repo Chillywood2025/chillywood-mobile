@@ -83,6 +83,7 @@ type ChillyCallChannelResult = {
   eligible: boolean;
   attempted: boolean;
   notificationCreated: boolean;
+  presentationAcknowledged: boolean;
   pushSent: boolean;
   sentCount: number;
   failedCount: number;
@@ -135,6 +136,7 @@ type IosVoipDispatchPayload = {
   action?: unknown;
   eligible?: unknown;
   failedCount?: unknown;
+  presentationAcknowledged?: unknown;
   reason?: unknown;
   sentCount?: unknown;
   skippedCount?: unknown;
@@ -566,6 +568,7 @@ async function invokeIosVoipDispatch(input: {
       return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
     };
     const sentCount = safeCount(payload.sentCount);
+    const presentationAcknowledged = payload.presentationAcknowledged === true;
     const failedCount = safeCount(payload.failedCount) + (!response.ok ? 1 : 0);
     const skippedCount = safeCount(payload.skippedCount);
     const rawStatus = toText(payload.status).toLowerCase();
@@ -586,6 +589,7 @@ async function invokeIosVoipDispatch(input: {
       attempted: response.ok && status !== "blocked" && status !== "disabled" && status !== "skipped"
         ? true
         : failedCount > 0,
+      presentationAcknowledged,
       pushSent: sentCount > 0,
       sentCount,
       failedCount,
@@ -846,6 +850,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
     action: input.action,
     androidNativeSent: androidSent > 0,
     iosRolloutEnabled,
+    iosVoipPresented: iosVoip.presentationAcknowledged,
     iosVoipSent: iosVoip.pushSent,
   });
   const expoCandidates = [
@@ -941,7 +946,9 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
     status: expoSent > 0 ? "sent" : expoFailed > 0 ? "failed" : "skipped",
   });
 
-  const remoteDelivered = androidNative.pushSent || ordinaryPush.pushSent || iosVoip.pushSent;
+  const remoteDelivered = androidNative.pushSent
+    || ordinaryPush.pushSent
+    || iosVoip.presentationAcknowledged;
   if (notificationId) {
     await adminClient
       .from("notifications")
