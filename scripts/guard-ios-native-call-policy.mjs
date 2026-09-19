@@ -227,6 +227,7 @@ requireText(facade, "drainPendingEventsForExactLifecycle", "Persisted CallKit ac
 requireText(facade, 'event.type === "applicationActive"', "Returning from CallKit must replay any Answer persisted during a listener gap.");
 requireText(facade, "iosNativeAnswerApplicationActiveBaselines", "A native foreground witness must be newer than the exact invite's Answer request.");
 requireText(facade, "nativePresentedCallUuidsByInviteId", "Foreground native ownership must bind the exact invite to its CallKit UUID.");
+requireText(facade, "shouldReuseIosNativeCallReadiness", "A harmless exact-account/session refresh must preserve active CallKit presentation ownership.");
 requireText(facade, "requestIosNativeCallAnswer(inviteId: string)", "Foreground app Answer must delegate through the exact native CallKit call.");
 requireText(facade, 'typeof NativeCallsModule.requestAnswerAsync !== "function"', "Older same-runtime binaries must fail closed when the additive native Answer API is absent.");
 requireText(facade, "requestAnswerAsync(callUuid, normalizedInviteId)", "The JavaScript-to-native Answer request must carry both exact UUID and invite authority.");

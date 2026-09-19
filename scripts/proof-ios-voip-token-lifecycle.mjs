@@ -36,6 +36,26 @@ const activeAuthority = {
   state: "ACTIVE",
   userId: "00000000-0000-4000-8000-000000000001",
 };
+assert.equal(bridgeLifecycle.shouldReuseIosNativeCallReadiness({
+  currentAuthority: activeAuthority,
+  nextAuthority: { ...activeAuthority },
+  registrationActive: true,
+}), true, "same-account/session refresh must preserve the exact active CallKit lifecycle");
+assert.equal(bridgeLifecycle.shouldReuseIosNativeCallReadiness({
+  currentAuthority: activeAuthority,
+  nextAuthority: { ...activeAuthority, sessionGeneration: "00000000-0000-4000-8000-000000000003" },
+  registrationActive: true,
+}), false, "a new session generation must replace native CallKit ownership");
+assert.equal(bridgeLifecycle.shouldReuseIosNativeCallReadiness({
+  currentAuthority: activeAuthority,
+  nextAuthority: { ...activeAuthority, restoreOnly: true },
+  registrationActive: true,
+}), false, "restore-only authority must never reuse active native-call ownership");
+assert.equal(bridgeLifecycle.shouldReuseIosNativeCallReadiness({
+  currentAuthority: activeAuthority,
+  nextAuthority: { ...activeAuthority },
+  registrationActive: false,
+}), false, "inactive native registration cannot be revived by a same-authority refresh");
 assert.deepEqual(bridgeLifecycle.resolveIosNativeCallBridgeLifecycle({
   authority: null,
   authorityStatus: "loading",
@@ -77,6 +97,8 @@ assert.equal(bridgeLifecycle.resolveIosNativeCallBridgeLifecycle({
   userId: "00000000-0000-4000-8000-000000000099",
 }).action, "revoke");
 assert.match(rootLayout, /activeNativeAuthorityKeyRef/u);
+assert.match(facade, /shouldReuseIosNativeCallReadiness/u);
+assert.match(facade, /eventListener = listener \?\? null;[\s\S]{0,180}drainPendingEventsForExactLifecycle/u);
 assert.match(rootLayout, /resolveIosNativeCallBridgeLifecycle/u);
 assert.doesNotMatch(
   rootLayout,

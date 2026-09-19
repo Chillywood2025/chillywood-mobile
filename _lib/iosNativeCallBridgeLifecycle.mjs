@@ -7,6 +7,29 @@ const REVOKE_STATUSES = new Set([
   "signed_out",
 ]);
 
+export const getIosNativeCallAuthorityBindingKey = (authority) => {
+  const userId = text(authority?.userId);
+  const accountId = text(authority?.accountId);
+  const sessionGeneration = text(authority?.sessionGeneration);
+  if (
+    authority?.state !== "ACTIVE"
+    || authority?.restoreOnly !== false
+    || !userId
+    || accountId !== userId
+    || !sessionGeneration
+  ) return "";
+  return `${userId}:${accountId}:${sessionGeneration}`;
+};
+
+export const shouldReuseIosNativeCallReadiness = ({
+  currentAuthority,
+  nextAuthority,
+  registrationActive,
+}) => registrationActive === true
+  && !!getIosNativeCallAuthorityBindingKey(currentAuthority)
+  && getIosNativeCallAuthorityBindingKey(currentAuthority)
+    === getIosNativeCallAuthorityBindingKey(nextAuthority);
+
 export const resolveIosNativeCallBridgeLifecycle = ({
   authority,
   authorityStatus,
@@ -14,21 +37,16 @@ export const resolveIosNativeCallBridgeLifecycle = ({
   userId,
 }) => {
   const currentUserId = text(userId);
+  const authorityBindingKey = getIosNativeCallAuthorityBindingKey(authority);
   const authorityUserId = text(authority?.userId);
-  const authorityAccountId = text(authority?.accountId);
-  const sessionGeneration = text(authority?.sessionGeneration);
   const exactActiveAuthority = authorityStatus === "active"
-    && authority?.state === "ACTIVE"
-    && authority?.restoreOnly === false
-    && !!currentUserId
-    && authorityUserId === currentUserId
-    && authorityAccountId === currentUserId
-    && !!sessionGeneration;
+    && !!authorityBindingKey
+    && authorityUserId === currentUserId;
 
   if (exactActiveAuthority) {
     return {
       action: "start",
-      bindingKey: `${authorityUserId}:${authorityAccountId}:${sessionGeneration}`,
+      bindingKey: authorityBindingKey,
     };
   }
 
