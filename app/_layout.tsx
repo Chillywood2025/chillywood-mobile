@@ -95,6 +95,7 @@ import {
   startIosNativeCallsReadiness,
   subscribeToIosNativeCallPresentation,
   waitForIosNativeCallAnswerRouteReadiness,
+  waitForIosNativeCallPresentation,
   type SanitizedNativeCallEvent,
 } from "../_lib/iosNativeCalls";
 import { resolveIosNativeCallBridgeLifecycle } from "../_lib/iosNativeCallBridgeLifecycle.mjs";
@@ -103,6 +104,7 @@ import {
   consumeTrustedAndroidNativeActionStoreClaim,
   createForegroundAuthenticatedUiCallIntent,
   createIosCallKitAnswerRouteHandler,
+  resolveIosForegroundIncomingAnswerAuthority,
   sanitizeExternalIosNativeCallPath,
 } from "../_lib/nativeCallTransitionProvenance.mjs";
 import { BetaWelcomeSheet } from "../components/beta/beta-welcome-sheet";
@@ -715,7 +717,11 @@ function IncomingCallNotificationBridge() {
       Alert.alert("Call unavailable", "This Chi'lly Chat call can no longer be answered.");
       return;
     }
-    if (iosNativeCallPresentationOwned) {
+    const nativePresentationWaitOutcome = Platform.OS === "ios"
+      ? await waitForIosNativeCallPresentation(invite.id)
+      : "not_expected";
+    const answerAuthority = resolveIosForegroundIncomingAnswerAuthority(nativePresentationWaitOutcome);
+    if (answerAuthority === "native_answer") {
       const nativeAnswerRequested = await requestIosNativeCallAnswer(invite.id);
       if (!nativeAnswerRequested) {
         Alert.alert("Unable to answer", "The call remains available if it is still ringing. Try again from the chat thread.");
@@ -728,6 +734,13 @@ function IncomingCallNotificationBridge() {
         threadId: invite.threadId,
       });
       clearAlert();
+      return;
+    }
+    if (answerAuthority === "blocked") {
+      Alert.alert(
+        "Still preparing this call",
+        "iPhone is still preparing the incoming call. Answer from the iPhone call alert when it appears.",
+      );
       return;
     }
     const acceptedInvite = invite.status === "accepted"

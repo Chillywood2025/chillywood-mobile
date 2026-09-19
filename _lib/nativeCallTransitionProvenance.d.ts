@@ -2,6 +2,13 @@ export type NativeCallTransitionPlatform = "android" | "ios";
 export type NativeCallTransitionSource = "android_native_action_store" | "ios_callkit_native_event";
 export type NativeCallTransitionAction = "answer" | "decline" | "end" | "mute" | "unmute";
 
+export type IosNativePresentationWaitOutcome = "not_expected" | "presented" | "stale" | "timeout";
+export type IosForegroundIncomingAnswerAuthority = "blocked" | "foreground_answer" | "native_answer";
+
+export function resolveIosForegroundIncomingAnswerAuthority(
+  presentationWaitOutcome?: IosNativePresentationWaitOutcome | string | null,
+): IosForegroundIncomingAnswerAuthority;
+
 export type NativeCallTransitionClaimInput = {
   action: NativeCallTransitionAction;
   authenticatedUserId: string;

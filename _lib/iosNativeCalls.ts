@@ -39,6 +39,7 @@ export type SanitizedNativeCallEvent = Omit<NativeCallEvent, "token"> & {
   platform: "ios";
 };
 export type IosNativeCallEventListener = (event: SanitizedNativeCallEvent) => void;
+export type IosNativePresentationWaitOutcome = "not_expected" | "presented" | "stale" | "timeout";
 
 export type IosVoipRegistrationState = {
   apnsEnvironment: "development" | "production";
@@ -465,6 +466,57 @@ export function subscribeToIosNativeCallPresentation(listener: () => void) {
   return () => {
     nativePresentationSubscribers.delete(listener);
   };
+}
+
+export async function waitForIosNativeCallPresentation(
+  inviteId: string | null | undefined,
+  timeoutMs = 12_000,
+): Promise<IosNativePresentationWaitOutcome> {
+  const normalizedInviteId = toText(inviteId);
+  if (!normalizedInviteId) return "stale";
+  if (Platform.OS !== "ios" || !NativeCallsModule || !isIosNativeCallsRuntimeEnabled()) {
+    return "not_expected";
+  }
+  if (nativePresentedCallUuidsByInviteId.has(normalizedInviteId)) return "presented";
+
+  const generation = voipLifecycleGeneration;
+  const context = voipAuthorityContext;
+  if (!voipRegistrationActive || !context) return "stale";
+
+  const boundedTimeoutMs = Number.isFinite(timeoutMs)
+    ? Math.max(0, Math.min(20_000, timeoutMs))
+    : 12_000;
+  return new Promise((resolve) => {
+    let settled = false;
+    let unsubscribe = () => {};
+    const finish = (outcome: IosNativePresentationWaitOutcome) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      unsubscribe();
+      resolve(outcome);
+    };
+    const inspect = () => {
+      if (
+        !voipRegistrationActive
+        || generation !== voipLifecycleGeneration
+        || context !== voipAuthorityContext
+      ) {
+        finish("stale");
+        return;
+      }
+      if (nativePresentedCallUuidsByInviteId.has(normalizedInviteId)) finish("presented");
+    };
+    const timeout = setTimeout(() => {
+      if (nativePresentedCallUuidsByInviteId.has(normalizedInviteId)) {
+        finish("presented");
+        return;
+      }
+      finish("timeout");
+    }, boundedTimeoutMs);
+    unsubscribe = subscribeToIosNativeCallPresentation(inspect);
+    inspect();
+  });
 }
 
 export async function startIosNativeCallsReadiness(

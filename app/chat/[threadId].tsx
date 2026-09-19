@@ -93,11 +93,13 @@ import {
   setIosNativeCallMuted,
   subscribeToIosNativeCallEvents,
   subscribeToIosNativeCallPresentation,
+  waitForIosNativeCallPresentation,
 } from "../../_lib/iosNativeCalls";
 import {
   consumeMountedAndroidNativeCallRoute,
   consumeMountedForegroundAuthenticatedUiCallRoute,
   consumeMountedIosNativeCallRoute,
+  resolveIosForegroundIncomingAnswerAuthority,
   subscribeToTrustedAndroidNativeActionRoutes,
 } from "../../_lib/nativeCallTransitionProvenance.mjs";
 import type { TrustedAndroidNativeActionRoute } from "../../_lib/nativeCallTransitionProvenance.d.ts";
@@ -1899,17 +1901,22 @@ export default function ChillyChatThreadScreen() {
 
   const acceptIncomingInvite = useCallback(async (invite: ChillyChatCallInvite) => {
     if (!invite || callBusy || !currentUserId) return false;
-    const nativePresentationOwnsAnswer = Platform.OS === "ios"
-      && !requestedNativeCallUuid
-      && hasIosNativeCallPresentation(invite.id);
-    if (nativePresentationOwnsAnswer) {
+    if (Platform.OS === "ios" && !requestedNativeCallUuid) {
       setCallBusy(true);
       try {
-        const requested = await requestIosNativeCallAnswer(invite.id);
-        if (!requested) {
-          setError("Unable to hand this call to iPhone right now. The call remains available while it is still ringing.");
+        const presentationWaitOutcome = await waitForIosNativeCallPresentation(invite.id);
+        const answerAuthority = resolveIosForegroundIncomingAnswerAuthority(presentationWaitOutcome);
+        if (answerAuthority === "native_answer") {
+          const requested = await requestIosNativeCallAnswer(invite.id);
+          if (!requested) {
+            setError("Unable to hand this call to iPhone right now. The call remains available while it is still ringing.");
+          }
+          return requested;
         }
-        return requested;
+        if (answerAuthority === "blocked") {
+          setError("Unable to hand this call to iPhone right now. The call remains available while it is still ringing.");
+          return false;
+        }
       } finally {
         setCallBusy(false);
       }
