@@ -1198,12 +1198,31 @@ const beginCallBlock = chillyChatCallsSource.slice(
   chillyChatCallsSource.indexOf("export async function beginChillyChatCall"),
   chillyChatCallsSource.indexOf("export async function createChillyChatCallInvite"),
 );
+const startThreadCallBlock = chatLibSource.slice(
+  chatLibSource.indexOf("export async function startChatThreadCall"),
+  chatLibSource.indexOf("export function subscribeToInbox"),
+);
 const updateCallBlock = chillyChatCallsSource.slice(
   chillyChatCallsSource.indexOf("export async function updateChillyChatCallInviteStatus"),
   chillyChatCallsSource.indexOf("export async function insertChillyChatCallEvent"),
 );
 assert.doesNotMatch(`${beginCallBlock}\n${updateCallBlock}`, /supabase\.auth\.getSession/u, "call begin and transition paths do not discard mounted identity for a redundant auth lookup");
 assert.match(chillyChatCallsSource, /payload\.role === "caller" \|\| payload\.role === "callee"/u, "call begin binds the server-returned role to the mounted actor");
+assert.match(
+  beginCallBlock,
+  /captureExactMountedCallActor[\s\S]{0,1200}reconcileCommittedChillyChatCallBegin/u,
+  "an ambiguous call-begin result may reconcile only against the exact initiating account/session",
+);
+assert.match(
+  chillyChatCallsSource,
+  /invite\.threadId !== input\.threadId[\s\S]{0,420}invite\.callerUserId !== input\.actorUserId[\s\S]{0,220}invite\.callType !== input\.callType/u,
+  "post-commit call recovery remains bound to the exact thread, room, caller, and call type",
+);
+assert.match(
+  startThreadCallBlock,
+  /begunCall = await beginChillyChatCall[\s\S]{0,600}if \(begunCall\.created\)[\s\S]{0,220}dispatchChillyChatCallPush/u,
+  "a reconciled committed invite resumes the canonical receiver-dispatch path instead of becoming an undispatched missed call",
+);
 assert.match(chatLibSource, /getCurrentAccountSessionAuthoritySnapshot\(\)[\s\S]{0,420}getWritablePartyUserId/u, "direct chat operations prefer established exact mounted authority and retain a bounded fallback");
 const communicationJoinBlock = communicationLibSource.slice(
   communicationLibSource.indexOf("export async function joinCommunicationRoomSession"),

@@ -8,8 +8,17 @@ import {
 } from "./chillyChatCallDispatchSchema";
 
 import { supabase } from "./supabase";
-import { getCurrentAccountSessionAuthoritySnapshot } from "./accountSessionAuthority";
-import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
+import {
+  getCurrentAccountSessionAuthoritySnapshot,
+  readCurrentAccountSessionAuthority,
+  sameAccountSessionAuthority,
+  type AccountSessionAuthorityBinding,
+} from "./accountSessionAuthority";
+import {
+  AccountBoundSupabaseMutationError,
+  isAccountBoundSupabaseMutationOutcomeAmbiguous,
+  runCurrentAccountBoundSupabaseMutationRpc,
+} from "./accountBoundSupabaseMutation";
 
 export const CHAT_CALL_INVITES_TABLE = "chat_call_invites";
 export const CHAT_CALL_EVENTS_TABLE = "chat_call_events";
@@ -234,6 +243,56 @@ const parseEvent = (row: CallEventRow | null): ChillyChatCallEvent | null => {
   };
 };
 
+const captureExactMountedCallActor = (actorUserId: string): AccountSessionAuthorityBinding | null => {
+  const authority = getCurrentAccountSessionAuthoritySnapshot();
+  return authority?.state === "ACTIVE"
+    && authority.restoreOnly === false
+    && authority.userId === actorUserId
+    && authority.accountId === actorUserId
+    ? authority
+    : null;
+};
+
+async function reconcileCommittedChillyChatCallBegin(input: {
+  actorUserId: string;
+  callType: ChillyChatCallType;
+  communicationRoomId: string;
+  initiatingAuthority: AccountSessionAuthorityBinding;
+  mutationError: unknown;
+  threadId: string;
+}): Promise<BegunChillyChatCall | null> {
+  if (
+    !(input.mutationError instanceof AccountBoundSupabaseMutationError)
+    && !isAccountBoundSupabaseMutationOutcomeAmbiguous(input.mutationError)
+  ) return null;
+
+  let currentAuthority = getCurrentAccountSessionAuthoritySnapshot();
+  if (!sameAccountSessionAuthority(input.initiatingAuthority, currentAuthority)) {
+    currentAuthority = await readCurrentAccountSessionAuthority().catch(() => null);
+  }
+  if (!sameAccountSessionAuthority(input.initiatingAuthority, currentAuthority)) return null;
+
+  const invite = await readLatestChillyChatCallInviteForRoom(input.communicationRoomId).catch(() => null);
+  if (
+    !invite
+    || invite.threadId !== input.threadId
+    || toText(invite.communicationRoomId).toUpperCase() !== input.communicationRoomId.toUpperCase()
+    || invite.callerUserId !== input.actorUserId
+    || invite.callType !== input.callType
+    || !["ringing", "accepted"].includes(invite.status)
+  ) return null;
+  if (invite.status === "ringing") {
+    const expiresAt = Date.parse(invite.expiresAt);
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
+  }
+
+  return {
+    created: true,
+    invite,
+    role: "caller",
+  };
+}
+
 const DEFAULT_CALL_DELIVERY: ChillyChatCallInviteDelivery = {
   attempted: false,
   eligible: null,
@@ -291,17 +350,38 @@ export async function beginChillyChatCall(input: {
   callType: ChillyChatCallType;
 }): Promise<BegunChillyChatCall> {
   const actorUserId = toText(input.actorUserId);
-  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>(
-    "begin_chilly_chat_call",
-    {
-      p_call_type: input.callType,
-      p_communication_room_id: input.communicationRoomId,
-      p_thread_id: input.threadId,
-    },
-    actorUserId,
-  );
-  if (error || !data || typeof data !== "object" || Array.isArray(data)) {
-    throw error ?? new Error("Unable to reserve this Chi'lly Chat call.");
+  const initiatingAuthority = captureExactMountedCallActor(actorUserId);
+  if (!initiatingAuthority) {
+    throw new AccountBoundSupabaseMutationError();
+  }
+
+  let data: Record<string, unknown> | null = null;
+  try {
+    const result = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>(
+      "begin_chilly_chat_call",
+      {
+        p_call_type: input.callType,
+        p_communication_room_id: input.communicationRoomId,
+        p_thread_id: input.threadId,
+      },
+      actorUserId,
+    );
+    if (result.error) throw result.error;
+    data = result.data;
+  } catch (mutationError) {
+    const reconciled = await reconcileCommittedChillyChatCallBegin({
+      actorUserId,
+      callType: input.callType,
+      communicationRoomId: input.communicationRoomId,
+      initiatingAuthority,
+      mutationError,
+      threadId: input.threadId,
+    });
+    if (reconciled) return reconciled;
+    throw mutationError;
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Unable to reserve this Chi'lly Chat call.");
   }
 
   const payload = data as Record<string, unknown>;
