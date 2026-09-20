@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { inspectPhase1AggregateEvidence, PHASE1_EVIDENCE_STAGES, PHASE1_MODES, verifyPhase1AggregateEvidence } from "./phase1-admission.mjs";
+import { inspectPhase1AggregateEvidence, PHASE1_ADMISSION_CHECK_NAME, PHASE1_ADMISSION_PRODUCER, PHASE1_EVIDENCE_STAGES, PHASE1_MODES, verifyPhase1AggregateEvidence } from "./phase1-admission.mjs";
 import { ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE, readGitHubJsonSync, resolveTerminalAmendmentState, validateImplementationChain } from "./control-plane-v2.mjs";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -33,6 +33,10 @@ const FINAL_SOURCE_RECEIPT_TYPE_V1 = "OWNER_ASSURANCE_ARCHITECTURE_FINAL_SOURCE_
 const FINAL_SOURCE_RECEIPT_LIFECYCLE_V2 = "ASSURANCE_RECEIPT_LIFECYCLE_V2";
 const PHASE1_ADMISSION_EVIDENCE_SCHEMA_V1 = "PHASE1_ADMISSION_EVIDENCE_V1";
 const FINAL_SOURCE_RECEIPT_ENVELOPE_SCHEMA_VERSION = 1;
+export const PHASE1_FINAL_SOURCE_SEMANTIC_ENVELOPE_V1 = "PHASE1_FINAL_SOURCE_SEMANTIC_ENVELOPE_V1";
+export const PHASE1_FINAL_SOURCE_PAYLOAD_KEYS = Object.freeze([
+  "acceptable", "action", "affectedRiskDomains", "baseRef", "baseSha", "blockingFindingCount", "checkName", "currentRulesetStage", "decisionHash", "deferredExternalCount", "draft", "evaluatorSha", "eventUpdatedAt", "headRef", "headSha", "lifecycleGeneration", "maintenanceStatus", "mergeAuthorityGranted", "mode", "nonBlockingAssuranceFindingCount", "phase1SourceDecisionHash", "pr", "publisherAnchorHash", "publisherProvisioningReadbackHash", "rawFailedLanes", "rawPassedLanes", "repository", "requiredLanes", "result", "runAttempt", "runId", "schemaVersion", "sourceTree",
+]);
 
 /**
  * Frozen, append-only allowlist for representation compatibility. A field is
@@ -56,9 +60,9 @@ export const RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1 = Object.freeze({
       strictLegacyEvidenceClassifications: Object.freeze(["PHASE1_EXACT_HEAD_EVIDENCE_V1"]),
       strictLegacyEvidenceResults: Object.freeze(["PASS_13_OF_13"]),
       fieldPath: "phase1.maintenanceStatus",
-      allowedLegacyRepresentation: "EXPLICIT_NULL",
+      allowedLegacyRepresentation: "OMITTED",
       compatibleRepresentations: Object.freeze(["OMITTED", "EXPLICIT_NULL"]),
-      canonicalCurrentRepresentation: "OMITTED",
+      canonicalCurrentRepresentation: "EXPLICIT_NULL",
       normalizedSemanticValue: null,
       normalizedSemanticLabel: "NO_MAINTENANCE_STATUS",
       authoritySensitivity: "REPRESENTATION_ONLY_NON_AUTHORITY_CHANGING",
@@ -215,11 +219,58 @@ export function canonicalReceiptEvidenceWireProjection({ rawRepresentation, sche
   return projected.value;
 }
 
+const PHASE1_FINAL_SOURCE_SEMANTIC_ENVELOPE_KEYS = Object.freeze(["phase1", "producer", "receiptLifecycleContract", "schemaVersion", "type"]);
+
 export const phase1FinalSourceSemanticEnvelope = (value) => ({
-  type: FINAL_SOURCE_RECEIPT_TYPE_V1,
+  schemaVersion: 1,
+  type: PHASE1_FINAL_SOURCE_SEMANTIC_ENVELOPE_V1,
+  producer: PHASE1_ADMISSION_PRODUCER,
   receiptLifecycleContract: FINAL_SOURCE_RECEIPT_LIFECYCLE_V2,
   phase1: structuredClone(value),
 });
+
+export function extractPhase1FinalSourceSemanticEnvelope({ envelope, expected = {} } = {}) {
+  const findings = [];
+  if (!receiptObject(envelope)
+    || stableJson(Object.keys(envelope).sort()) !== stableJson([...PHASE1_FINAL_SOURCE_SEMANTIC_ENVELOPE_KEYS].sort())) {
+    findings.push("PHASE1_FINAL_SOURCE_SEMANTIC_ENVELOPE_SHAPE_INVALID");
+  }
+  if (envelope?.schemaVersion !== 1) findings.push("PHASE1_FINAL_SOURCE_SEMANTIC_ENVELOPE_SCHEMA_INVALID");
+  if (envelope?.type !== PHASE1_FINAL_SOURCE_SEMANTIC_ENVELOPE_V1) findings.push("PHASE1_FINAL_SOURCE_SEMANTIC_ENVELOPE_TYPE_INVALID");
+  if (envelope?.producer !== PHASE1_ADMISSION_PRODUCER) findings.push("PHASE1_FINAL_SOURCE_SEMANTIC_ENVELOPE_PRODUCER_INVALID");
+  if (envelope?.receiptLifecycleContract !== FINAL_SOURCE_RECEIPT_LIFECYCLE_V2) findings.push("PHASE1_FINAL_SOURCE_SEMANTIC_ENVELOPE_LIFECYCLE_INVALID");
+  const phase1 = envelope?.phase1;
+  if (!receiptObject(phase1)
+    || stableJson(Object.keys(phase1).sort()) !== stableJson([...PHASE1_FINAL_SOURCE_PAYLOAD_KEYS].sort())
+    || phase1?.schemaVersion !== PHASE1_ADMISSION_EVIDENCE_SCHEMA_V1
+    || phase1?.checkName !== PHASE1_ADMISSION_CHECK_NAME) {
+    findings.push("PHASE1_FINAL_SOURCE_SEMANTIC_ENVELOPE_PAYLOAD_INVALID");
+  }
+  if (phase1?.evaluatorSha !== phase1?.baseSha) findings.push("PHASE1_FINAL_SOURCE_SEMANTIC_ENVELOPE_PRODUCER_BINDING_INVALID");
+  const bindings = [
+    ["repository", phase1?.repository],
+    ["pr", phase1?.pr],
+    ["branch", phase1?.headRef],
+    ["headSha", phase1?.headSha],
+    ["tree", phase1?.sourceTree],
+    ["baseSha", phase1?.baseSha],
+  ];
+  for (const [name, observed] of bindings) {
+    if (expected?.[name] !== undefined && expected[name] !== observed) findings.push(`PHASE1_FINAL_SOURCE_SEMANTIC_ENVELOPE_${name.replaceAll(/([a-z])([A-Z])/gu, "$1_$2").toUpperCase()}_MISMATCH`);
+  }
+  const unique = [...new Set(findings)].sort();
+  return { ok: unique.length === 0, findings: unique, evidence: unique.length === 0 ? structuredClone(phase1) : null };
+}
+
+export function comparePhase1FinalSourceEvidence({ left, right, expected = {} } = {}) {
+  const leftExtraction = extractPhase1FinalSourceSemanticEnvelope({ envelope: phase1FinalSourceSemanticEnvelope(left), expected });
+  const rightExtraction = extractPhase1FinalSourceSemanticEnvelope({ envelope: phase1FinalSourceSemanticEnvelope(right), expected });
+  return {
+    equal: leftExtraction.ok && rightExtraction.ok && stableJson(leftExtraction.evidence) === stableJson(rightExtraction.evidence),
+    left: leftExtraction,
+    right: rightExtraction,
+  };
+}
 
 export function phase1AdmissionEvidenceValid({ evidence, liveEvidence = null, repository = "Chillywood2025/chillywood-mobile", pr, branch, head, tree, base } = {}) {
   if (evidence?.valid === true && evidence?.result === "PASS_13_OF_13") {
@@ -244,7 +295,7 @@ export function phase1AdmissionEvidenceValid({ evidence, liveEvidence = null, re
   const inspected = inspectPhase1AggregateEvidence({ aggregate: stored, identity, mode: PHASE1_MODES.READY, stage: PHASE1_EVIDENCE_STAGES.SOURCE });
   const verified = verifyPhase1AggregateEvidence({ aggregate: live, identity, mode: PHASE1_MODES.READY, stage: PHASE1_EVIDENCE_STAGES.SOURCE });
   return inspected.ok === true && verified.ok === true
-    && compareReceiptEvidenceSemantics({ left: phase1FinalSourceSemanticEnvelope(inspected.evidence), right: phase1FinalSourceSemanticEnvelope(verified.evidence) }).equal
+    && comparePhase1FinalSourceEvidence({ left: inspected.evidence, right: verified.evidence, expected: { repository, pr, branch, headSha: head, tree, baseSha: expectedBase } }).equal
     && stored.headRef === branch && stored.result === "PHASE_1_ACCEPTABLE"
     && stored.acceptable === true && stored.mergeAuthorityGranted === false;
 }

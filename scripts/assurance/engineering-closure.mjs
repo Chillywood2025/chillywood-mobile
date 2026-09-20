@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS, createCandidateGitContext, readGitHubJsonSync, readGitHubTextSync } from "./control-plane-v2.mjs";
-import { canonicalGitText, canonicalReceiptEvidenceWireProjection, classifyGitHubExecutionIdentity, compareReceiptEvidenceSemantics, evaluateTerminalVerifierRepairHistory, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, normalizeReceiptEvidenceSemantics, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, parseProtectedPullRequestMergeSubject, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, phase1FinalSourceSemanticEnvelope, RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS, RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
+import { canonicalGitText, canonicalReceiptEvidenceWireProjection, classifyGitHubExecutionIdentity, comparePhase1FinalSourceEvidence, compareReceiptEvidenceSemantics, evaluateTerminalVerifierRepairHistory, extractPhase1FinalSourceSemanticEnvelope, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, normalizeReceiptEvidenceSemantics, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, parseProtectedPullRequestMergeSubject, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, PHASE1_FINAL_SOURCE_PAYLOAD_KEYS, phase1FinalSourceSemanticEnvelope, RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS, RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
 import { derivePhase1LifecycleGeneration, inspectPhase1AggregateEvidence, PHASE1_EVIDENCE_STAGES, PHASE1_MODES, resolveProtectedPhase1AdmissionEvidence, verifyPhase1AggregateEvidence, verifyProtectedPhase1PublisherProvisioningReadback } from "./phase1-admission.mjs";
 import { deriveFiniteTaskPrRiskAuthority, evaluateDraftSourceReadinessScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
 import {
@@ -65,7 +65,7 @@ export {
   verifyTaskJurisdictionBindingV2,
 };
 export { evaluateDraftSourceReadinessScope };
-export { canonicalReceiptEvidenceWireProjection, compareReceiptEvidenceSemantics, normalizeReceiptEvidenceSemantics, phase1FinalSourceSemanticEnvelope, RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS, RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1 };
+export { canonicalReceiptEvidenceWireProjection, comparePhase1FinalSourceEvidence, compareReceiptEvidenceSemantics, extractPhase1FinalSourceSemanticEnvelope, normalizeReceiptEvidenceSemantics, phase1FinalSourceSemanticEnvelope, RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS, RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1 };
 export { ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS };
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -3304,12 +3304,23 @@ const PHASE1_ADMISSION_WORKFLOW_PATH = ".github/workflows/phase1-admission.yml";
 const PHASE1_READY_MODE = "READY_MERGE_AUTHORITY";
 const PHASE1_ACCEPTABLE_RESULT = "PHASE_1_ACCEPTABLE";
 const aggregatePhase1EvidenceValue = (value) => value?.evidence ?? value?.decision ?? value;
-const PHASE1_AGGREGATE_FINAL_SOURCE_FIELDS = Object.freeze(["schemaVersion", "checkName", "result", "mode", "acceptable", "mergeAuthorityGranted", "repository", "pr", "headRef", "headSha", "sourceTree", "baseRef", "baseSha", "evaluatorSha", "action", "eventUpdatedAt", "draft", "runId", "runAttempt", "lifecycleGeneration", "requiredLanes", "rawPassedLanes", "rawFailedLanes", "blockingFindingCount", "nonBlockingAssuranceFindingCount", "deferredExternalCount", "affectedRiskDomains", "maintenanceStatus", "currentRulesetStage", "publisherAnchorHash", "publisherProvisioningReadbackHash", "phase1SourceDecisionHash", "decisionHash"]);
-export const compactAggregatePhase1Evidence = (value) => Object.fromEntries(PHASE1_AGGREGATE_FINAL_SOURCE_FIELDS.map((field) => [field, structuredClone(value?.[field])]).filter(([, fieldValue]) => fieldValue !== undefined));
+export const compactAggregatePhase1Evidence = (value) => Object.fromEntries(PHASE1_FINAL_SOURCE_PAYLOAD_KEYS.map((field) => [field, structuredClone(value?.[field])]).filter(([, fieldValue]) => fieldValue !== undefined));
 
-export const canonicalPhase1FinalSourceWireProjection = ({ value } = {}) => canonicalReceiptEvidenceWireProjection({
-  rawRepresentation: phase1FinalSourceSemanticEnvelope(compactAggregatePhase1Evidence(value)),
-}).phase1;
+export const canonicalPhase1FinalSourceWireProjection = ({ value, identity = {} } = {}) => {
+  const extracted = extractPhase1FinalSourceSemanticEnvelope({
+    envelope: phase1FinalSourceSemanticEnvelope(compactAggregatePhase1Evidence(value)),
+    expected: {
+      repository: identity.repository ?? value?.repository,
+      pr: identity.pr ?? value?.pr,
+      branch: identity.branch ?? identity.headRef ?? value?.headRef,
+      headSha: identity.headSha ?? value?.headSha,
+      tree: identity.tree ?? identity.sourceTree ?? value?.sourceTree,
+      baseSha: identity.baseSha ?? value?.baseSha,
+    },
+  });
+  if (!extracted.ok) throw new Error(`PHASE1_FINAL_SOURCE_SEMANTIC_ENVELOPE_INVALID:${extracted.findings.join(",")}`);
+  return extracted.evidence;
+};
 
 export function phase1AdmissionPolicyForBase({ identity, root = REPOSITORY_ROOT } = {}) {
   const base = identity?.baseSha;
@@ -3366,9 +3377,10 @@ const storedPhase1MatchesLive = ({ stored, live, identity, tree, root = REPOSITO
   if (!verified.ok) return false;
   if (verified.policy === "LEGACY_EXACT_13_OF_13") return true;
   const inspected = inspectPhase1AggregateEvidence({ aggregate: stored, identity: { ...identity, tree }, mode: PHASE1_READY_MODE, stage: PHASE1_EVIDENCE_STAGES.SOURCE });
-  return inspected.ok && compareReceiptEvidenceSemantics({
-    left: phase1FinalSourceSemanticEnvelope(compactAggregatePhase1Evidence(inspected.evidence)),
-    right: phase1FinalSourceSemanticEnvelope(compactAggregatePhase1Evidence(verified.evidence)),
+  return inspected.ok && comparePhase1FinalSourceEvidence({
+    left: compactAggregatePhase1Evidence(inspected.evidence),
+    right: compactAggregatePhase1Evidence(verified.evidence),
+    expected: { repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, headSha: identity?.headSha, tree, baseSha: identity?.baseSha },
   }).equal;
 };
 
@@ -4404,18 +4416,16 @@ export function verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ raw = null, 
   if (admissionAuthority?.ok !== true || !trustedOwnerJurisdictionAuthority(ownerJurisdictionAuthority)) return { ok: false, mergeEligible: false, findings: ["FINITE_TASK_ADMISSION_FINAL_SOURCE_AUTHORITY_INVALID"] };
   const reviewSelection = selectCurrentArchitectureRepositoryReview({ comments, identity, tree, scope, profile: "FINITE_TASK_ADMISSION_JURISDICTION_V2", root });
   const review = reviewSelection.review;
-  const requiredKey = { repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, head: identity?.headSha, tree, task: admissionAuthority.finiteLeaseId };
+  const aggregatePolicy = phase1AdmissionPolicyForBase({ identity, root }) === "RISK_BASED_AGGREGATE_V1";
+  const requiredKey = { repository: identity?.repository, pr: identity?.pr, branch: identity?.branch, head: identity?.headSha, tree, base: aggregatePolicy ? identity?.baseSha : null, task: admissionAuthority.finiteLeaseId };
+  const stableExpected = { repository: identity?.repository, product: ownerJurisdictionAuthority.taskBinding?.scope?.product, launchProgram: ownerJurisdictionAuthority.taskBinding?.scope?.launchProgram, pr: identity?.pr, task: admissionAuthority.finiteLeaseId, ownerLogin: "Chillywood2025" };
   const finalSelection = selectCurrentImmutableEvidence({
     candidates: finals,
     requiredKey,
     classify: (item) => {
-      const normalized = normalizeGitHubCommentIdentity(item, { repository: identity?.repository, pr: identity?.pr, commentId: item?.id });
-      const verified = normalized ? verifyFiniteTaskAdmissionFinalSourceV2({ body: normalized.body, receipt: jurisdictionReceipt(normalized), expected: { repository: identity?.repository, product: ownerJurisdictionAuthority.taskBinding?.scope?.product, launchProgram: ownerJurisdictionAuthority.taskBinding?.scope?.launchProgram, pr: identity?.pr, task: admissionAuthority.finiteLeaseId, ownerLogin: "Chillywood2025", baseSha: identity?.baseSha } }) : { ok: false };
-      const subject = verified.subject;
-      if (!verified.ok || !subject) return { valid: false, key: null, value: { normalized, verified, phase1: null }, disposition: "MALFORMED_INVALID" };
-      const key = { repository: subject.scope?.repository ?? null, pr: subject.admissionIdentity?.pr ?? null, branch: subject.admissionIdentity?.branch ?? null, head: subject.admissionIdentity?.head ?? null, tree: subject.admissionIdentity?.tree ?? null, task: subject.admissionIdentity?.taskId ?? null };
-      const sameCurrentKey = stableJson(key) === stableJson(requiredKey);
-      if (!sameCurrentKey) return { valid: true, key, value: { normalized, verified, phase1: null }, disposition: "HISTORICAL_STALE_FINITE_TASK_ADMISSION_FINAL_SOURCE" };
+      const lifecycle = classifyFiniteTaskAdmissionFinalSourceReceiptV2({ item, identity, tree, stableExpected, requiredKey, aggregatePolicy });
+      if (lifecycle.disposition !== "CURRENT_STRUCTURALLY_VALID_FINITE_TASK_ADMISSION_FINAL_SOURCE") return lifecycle;
+      const { key, value: { normalized, verified, subject } } = lifecycle;
       let phase1 = null;
       try { phase1 = phase1EvidenceResolver({ runId: subject.phase1?.runId, identity, tree, root }); } catch {}
       const phase1Verification = verifyPhase1SourceReadinessEvidence({ phase1Evidence: phase1, identity, tree, root });
@@ -4444,10 +4454,12 @@ export function verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ raw = null, 
   });
   const selected = finalSelection.selected?.value ?? null;
   const callerBound = !raw || raw.id === selected?.normalized?.id;
-  const ok = reviewSelection.ok && finalSelection.ok && callerBound;
+  const malformed = finalSelection.classifications.some(({ disposition }) => disposition === "MALFORMED_INVALID");
+  const invalidCurrent = finalSelection.classifications.some((classification) => !classification.valid && stableJson(classification.key) === stableJson(requiredKey));
+  const ok = reviewSelection.ok && finalSelection.ok && callerBound && !malformed && !invalidCurrent;
   const findings = [];
   if (!reviewSelection.ok) findings.push("FINITE_TASK_ADMISSION_FINAL_SOURCE_REVIEW_INVALID");
-  if (!finalSelection.ok || !callerBound) findings.push(finals.length === 0 ? "FINITE_TASK_ADMISSION_FINAL_SOURCE_REQUIRED" : "FINITE_TASK_ADMISSION_FINAL_SOURCE_INVALID");
+  if (!finalSelection.ok || !callerBound || malformed || invalidCurrent) findings.push(finals.length === 0 ? "FINITE_TASK_ADMISSION_FINAL_SOURCE_REQUIRED" : "FINITE_TASK_ADMISSION_FINAL_SOURCE_INVALID");
   return {
     ok,
     mergeEligible: ok,
@@ -4459,6 +4471,18 @@ export function verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ raw = null, 
     reviewClassifications: reviewSelection.classifications,
     classifications: finalSelection.classifications.map((classification) => ({ commentId: finals[classification.index]?.id ?? null, status: classification.disposition, valid: classification.valid, current: classification.current, key: classification.key })),
   };
+}
+
+export function classifyFiniteTaskAdmissionFinalSourceReceiptV2({ item, identity, tree, stableExpected = {}, requiredKey, aggregatePolicy = false } = {}) {
+  const normalized = normalizeGitHubCommentIdentity(item, { repository: identity?.repository, pr: identity?.pr, commentId: item?.id });
+  const structural = normalized ? verifyFiniteTaskAdmissionFinalSourceV2({ body: normalized.body, receipt: jurisdictionReceipt(normalized), expected: stableExpected }) : { ok: false };
+  const subject = structural.subject;
+  if (!structural.ok || !subject) return { valid: false, key: null, value: { normalized, verified: structural, subject: null, phase1: null }, disposition: "MALFORMED_INVALID" };
+  const key = { repository: subject.scope?.repository ?? null, pr: subject.admissionIdentity?.pr ?? null, branch: subject.admissionIdentity?.branch ?? null, head: subject.admissionIdentity?.head ?? null, tree: subject.admissionIdentity?.tree ?? null, base: subject.phase1?.schemaVersion === "PHASE1_ADMISSION_EVIDENCE_V1" ? subject.phase1.baseSha ?? null : null, task: subject.admissionIdentity?.taskId ?? null };
+  if (stableJson(key) !== stableJson(requiredKey)) return { valid: true, key, value: { normalized, verified: structural, subject, phase1: null }, disposition: "HISTORICAL_STALE_FINITE_TASK_ADMISSION_FINAL_SOURCE" };
+  const verified = verifyFiniteTaskAdmissionFinalSourceV2({ body: normalized.body, receipt: jurisdictionReceipt(normalized), expected: { ...stableExpected, head: identity?.headSha, tree, ...(aggregatePolicy ? { baseSha: identity?.baseSha } : {}) } });
+  if (!verified.ok) return { valid: false, key, value: { normalized, verified, subject, phase1: null }, disposition: "INVALID_CURRENT_FINITE_TASK_ADMISSION_FINAL_SOURCE" };
+  return { valid: true, key, value: { normalized, verified, subject: verified.subject, phase1: null }, disposition: "CURRENT_STRUCTURALLY_VALID_FINITE_TASK_ADMISSION_FINAL_SOURCE" };
 }
 
 export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], paginationComplete = false, allCommits = [], commitsPaginationComplete = false, identity, tree, scope, noCompetingDomainOwner = true, ancestryVerified = null, phase1EvidenceResolver = observePhase1RunEvidence, publisherProvisioningReadbackResolver = () => null, root = REPOSITORY_ROOT } = {}) {
