@@ -34,7 +34,7 @@ import {
   verifyOwnerJurisdictionDecisionV2,
   verifyTaskJurisdictionBindingV2,
 } from "../../scripts/assurance/jurisdiction-policy.mjs";
-import { ARCHITECTURE_REPOSITORY_REVIEW_MARKER, STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_ARCHITECTURE_PATHS, STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, canonicalPhase1FinalSourceWireProjection, classifyFiniteTaskAdmissionFinalSourceReceiptV2, FINITE_TASK_ADMISSION_LEASE_STATE, finiteTaskAdmissionHistoryValidV2, finiteTaskAdmissionLeaseStateValid, finiteTaskAdmissionSubject, finiteTaskFinalSourceOwnerJurisdictionV2, finiteTaskJurisdictionEvidenceV2, finiteTaskScopeV2, hashValue, normalizeGitHubCommentIdentity, ownerJurisdictionPolicyBindingTruthV2, resolveFiniteTaskAdmissionTaskBindingV2, stableJson, verifyFiniteTaskAdmissionFinalSourceEligibilityV2, verifyFiniteTaskOwnerApprovalV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
+import { ARCHITECTURE_REPOSITORY_REVIEW_MARKER, STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_ARCHITECTURE_PATHS, STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, canonicalPhase1FinalSourceWireProjection, classifyFiniteTaskAdmissionFinalSourceReceiptV2, FINITE_TASK_ADMISSION_LEASE_STATE, finiteTaskAdmissionHistoryValidV2, finiteTaskAdmissionLeaseStateValid, finiteTaskAdmissionSubject, finiteTaskFinalSourceOwnerJurisdictionV2, finiteTaskJurisdictionEvidenceV2, finiteTaskScopeV2, hashValue, normalizeGitHubCommentIdentity, ownerJurisdictionPolicyBindingTruthV2, resolveFiniteTaskAdmissionTaskBindingV2, stableJson, verifyArchitectureMaintenanceAuthority, verifyFiniteTaskAdmissionFinalSourceEligibilityV2, verifyFiniteTaskOwnerApprovalV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
 
 const DOMAINS = Object.freeze([
   "auth-session-password-recovery",
@@ -118,6 +118,10 @@ test("structured Owner receipt transport repair has an exact non-product mainten
   assert.equal(subject.currentTruthCompanionIncluded, false);
   assert.equal(Object.hasOwn(subject, "currentTruthCompanion"), false);
   assert.equal(Object.values(subject.authority).every((value) => value === false), true);
+  const raw = githubReceipt(1, identity.pr, architectureMaintenanceOwnerCommentBody(subject), "2026-09-20T00:00:00Z");
+  const authority = verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree: subject.currentTree, scope: maintenanceScope, ancestryVerified: true });
+  assert.equal(authority.authorizationOk, true, authority.findings.join(","));
+  assert.equal(authority.mergeEligible, false);
   assert.throws(() => architectureMaintenanceSubject({ identity, tree: sha40("c"), scope: { ...maintenanceScope, files: maintenanceScope.files.slice(1) }, profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2", objective: STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1 }), /OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SCOPE_INVALID/u);
 });
 const legacyHash = (value) => crypto.createHash("sha256").update(typeof value === "string" ? value : canonicalJson(value)).digest("hex");
