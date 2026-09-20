@@ -35,6 +35,7 @@ import {
   verifyTaskJurisdictionBindingV2,
 } from "../../scripts/assurance/jurisdiction-policy.mjs";
 import { ARCHITECTURE_REPOSITORY_REVIEW_MARKER, STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_ARCHITECTURE_PATHS, STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, canonicalPhase1FinalSourceWireProjection, classifyFiniteTaskAdmissionFinalSourceReceiptV2, FINITE_TASK_ADMISSION_LEASE_STATE, finiteTaskAdmissionHistoryValidV2, finiteTaskAdmissionLeaseStateValid, finiteTaskAdmissionSubject, finiteTaskFinalSourceOwnerJurisdictionV2, finiteTaskJurisdictionEvidenceV2, finiteTaskScopeV2, hashValue, normalizeGitHubCommentIdentity, ownerJurisdictionPolicyBindingTruthV2, resolveFiniteTaskAdmissionTaskBindingV2, stableJson, verifyArchitectureMaintenanceAuthority, verifyFiniteTaskAdmissionFinalSourceEligibilityV2, verifyFiniteTaskOwnerApprovalV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
+import { resolveAssuranceControlSourceOnlyProfile } from "../../scripts/assurance/lib.mjs";
 
 const DOMAINS = Object.freeze([
   "auth-session-password-recovery",
@@ -118,6 +119,7 @@ test("structured Owner receipt transport repair has an exact non-product mainten
   assert.equal(subject.currentTruthCompanionIncluded, false);
   assert.equal(Object.hasOwn(subject, "currentTruthCompanion"), false);
   assert.equal(Object.values(subject.authority).every((value) => value === false), true);
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: maintenanceScope.files, budget: { maximumFiles: 5, maximumChangedLines: 900, maximumHandAuthoredNetLines: 900 }, changedFiles: 5 })?.profileId, STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1);
   const raw = githubReceipt(1, identity.pr, architectureMaintenanceOwnerCommentBody(subject), "2026-09-20T00:00:00Z");
   const authority = verifyArchitectureMaintenanceAuthority({ raw, allComments: [raw], paginationComplete: true, identity, tree: subject.currentTree, scope: maintenanceScope, ancestryVerified: true });
   assert.equal(authority.authorizationOk, true, authority.findings.join(","));

@@ -2072,6 +2072,12 @@ export function observeLiveTerminalRepairTaskContext({ environment = process.env
 export const ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES = Object.freeze([
   ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE,
   Object.freeze({
+    profileId: "STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1",
+    paths: Object.freeze(["scripts/assurance/active-task.mjs", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/jurisdiction-policy.mjs", "scripts/assurance/lib.mjs", "tests/assurance/jurisdiction-policy.test.mjs"]),
+    maximumFiles: 5,
+    maximumChangedLines: 900,
+  }),
+  Object.freeze({
     profileId: "ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1",
     paths: Object.freeze(["config/assurance/current-truth-contract-v1.json", "config/assurance/current-truth-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "tests/assurance/current-truth-sync.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]),
     maximumFiles: 7,
