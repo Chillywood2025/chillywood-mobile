@@ -1184,6 +1184,19 @@ export function deriveDoctrineArtifactDependencyClosure({ root = REPOSITORY_ROOT
   return { ...body, closureHash: hashValue(body), modelRevisionRequired: body.generatorSemanticChanged || body.structuralModelChanged };
 }
 
+export function doctrineModelRevisionBlocksTask({ dependencyClosure, executionMode, taskContext, changedPaths = [] } = {}) {
+  if (dependencyClosure?.modelRevisionRequired !== true) return false;
+  const exactAdmissionTruth = executionMode === "FINITE_TASK_ADMISSION_SUCCESSOR"
+    && taskContext?.type === "FINITE_TASK_ADMISSION_SUCCESSOR"
+    && taskContext?.ok === true
+    && taskContext?.taskAuthorization === "VALID"
+    && taskContext?.source === "FINITE_TASK_ADMISSION_SUCCESSOR_V1"
+    && stableJson(canonicalSort([...changedPaths])) === stableJson(TERMINAL_TRUTH_PATHS)
+    && dependencyClosure.generatorSemanticChanged === false
+    && stableJson(dependencyClosure.structuralGraphInputs) === stableJson(["UNATTRIBUTED_STRUCTURAL_GRAPH_CHANGE"]);
+  return !exactAdmissionTruth;
+}
+
 export function deriveCurrentTreeObservation({ root = REPOSITORY_ROOT, identity = {}, changedPaths = [], baseline = validateDoctrineBaselineArtifacts(root), currentGraph = generateDomainGraph(root, { authoritative: true }) } = {}) {
   const baselineMembers = inventoryMembers(baseline.graph); const currentMembers = inventoryMembers(currentGraph);
   const addedAssets = [...currentMembers.keys()].filter((key) => !baselineMembers.has(key));
@@ -9577,7 +9590,12 @@ async function main() {
       if (!fs.existsSync(reportPath) || stableJson(readJson(REPOSITORY_ROOT, "docs/assurance/whole-app-engineering-doctrine-v1-report.json")) !== stableJson(report)) findings.push("WHOLE_APP_DOCTRINE_REPORT_BASELINE_INVALID");
     } else {
       findings.push(...(currentTaskReport?.baseline.findings ?? []));
-      if (currentTaskReport?.observation.dependencyClosure.modelRevisionRequired) findings.push("WHOLE_APP_DOMAIN_MODEL_REVISION_REQUIRED");
+      if (doctrineModelRevisionBlocksTask({
+        dependencyClosure: currentTaskReport?.observation.dependencyClosure,
+        executionMode: modeResult.mode,
+        taskContext: taskContextResolution.taskContext,
+        changedPaths: scope?.files ?? [],
+      })) findings.push("WHOLE_APP_DOMAIN_MODEL_REVISION_REQUIRED");
     }
     const baselinePacket = currentTaskReport?.baseline.report?.bootstrap?.packet;
     const boundedClosure = bootstrapMode ? report.bootstrap.packet.sections.C_AFFECTED_DOMAIN_CLOSURE : baselinePacket?.sections?.C_AFFECTED_DOMAIN_CLOSURE;
