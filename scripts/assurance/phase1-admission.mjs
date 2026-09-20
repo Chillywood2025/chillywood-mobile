@@ -1011,6 +1011,23 @@ async function readCommit(repository, sha, token) {
 const ACTIVE_ACTIONS_STATUSES = Object.freeze(["requested", "queued", "in_progress", "waiting", "pending"]);
 const APP_ONLY_MERGE_JOB_NAME = "Execute protected App-only merge gate";
 
+export function reconcileRepositoryActiveRuns({ listedRuns, authoritativeRuns } = {}) {
+  const listed = Array.isArray(listedRuns) ? listedRuns : [];
+  const authoritative = Array.isArray(authoritativeRuns) ? authoritativeRuns : [];
+  const listedIds = listed.map(({ id }) => id);
+  const authoritativeIds = authoritative.map(({ id }) => id);
+  if (listedIds.some((id) => !Number.isInteger(id) || id < 1)
+    || new Set(listedIds).size !== listedIds.length
+    || new Set(authoritativeIds).size !== authoritativeIds.length
+    || stableJson([...listedIds].sort((left, right) => left - right)) !== stableJson([...authoritativeIds].sort((left, right) => left - right))) {
+    throw new Error("PHASE1_APP_MERGE_ACTIONS_REREAD_INVALID");
+  }
+  if (authoritative.some(({ status }) => status !== "completed" && !ACTIVE_ACTIONS_STATUSES.includes(status))) {
+    throw new Error("PHASE1_APP_MERGE_ACTIONS_REREAD_INVALID");
+  }
+  return authoritative.filter(({ status }) => status !== "completed");
+}
+
 export function evaluateRepositoryActionsQuiescence({ runs, recentRuns, paginationComplete, recentPaginationComplete, currentRunId, currentRunAttempt, evaluatorSha, gateStartedAt } = {}) {
   const values = Array.isArray(runs) ? runs : [];
   const recent = Array.isArray(recentRuns) ? recentRuns : [];
@@ -1032,7 +1049,9 @@ async function readRepositoryActionsQuiescence({ repository, token, currentRunId
     const values = await githubCollection(`/repos/${repository}/actions/runs?status=${status}`, "workflow_runs", token);
     active.push(...values);
   }
-  const unique = [...new Map(active.map((run) => [run?.id, run])).values()];
+  const listed = [...new Map(active.map((run) => [run?.id, run])).values()];
+  const authoritative = await Promise.all(listed.map(({ id }) => githubRequest(`/repos/${repository}/actions/runs/${id}`, token)));
+  const unique = reconcileRepositoryActiveRuns({ listedRuns: listed, authoritativeRuns: authoritative });
   const current = unique.find(({ id }) => id === currentRunId);
   const startedAt = gateStartedAt ?? current?.created_at;
   const recent = validTimestamp(startedAt)
@@ -1331,12 +1350,19 @@ function validAdmissionCheck(check, identity, generation) {
 async function ensureAdmissionCheck({ repository, identity, token, publisherAppId, generation, allowPriorGeneration = false }) {
   let allTrusted = partitionProtectedAdmissionChecks({ checks: await findAdmissionChecks(repository, identity.headSha, token), identity, publisherAppId }).publisher;
   if (allTrusted.length > 1) {
-    await Promise.all(allTrusted.map((check) => githubRequest(`/repos/${repository}/check-runs/${check.id}`, token, { method: "PATCH", body: JSON.stringify({ name: PHASE1_ADMISSION_CHECK_NAME, status: "in_progress", external_id: check.external_id, output: { title: "Phase 1 admission blocked", summary: "Duplicate or cross-PR trusted publisher checks require fail-closed repair." } }) })));
+    await Promise.all(allTrusted.map((check) => githubRequest(`/repos/${repository}/check-runs/${check.id}`, token, { method: "PATCH", body: JSON.stringify({
+      ...phase1AdmissionRevalidationPatch(check, { summary: "Duplicate or cross-PR trusted publisher checks require fail-closed repair." }),
+      output: { title: "Phase 1 admission blocked", summary: "Duplicate or cross-PR trusted publisher checks require fail-closed repair." },
+    }) })));
     throw new Error("PHASE1_ADMISSION_CHECK_CARDINALITY_OR_PROVENANCE_INVALID");
   }
   let checks = trustedAdmissionChecks(allTrusted, identity, publisherAppId);
   if (allTrusted.length === 1 && checks.length === 0) {
-    await githubRequest(`/repos/${repository}/check-runs/${allTrusted[0].id}`, token, { method: "PATCH", body: JSON.stringify({ name: PHASE1_ADMISSION_CHECK_NAME, status: "in_progress", external_id: `phase1-admission:v1:${identity.pr}:${identity.headSha}:${generation}:pending`, output: { title: "Phase 1 admission pending", summary: "A new PR identity reused this commit; prior admission was invalidated." } }) });
+    await githubRequest(`/repos/${repository}/check-runs/${allTrusted[0].id}`, token, { method: "PATCH", body: JSON.stringify({
+      ...phase1AdmissionRevalidationPatch(allTrusted[0], { summary: "A new PR identity reused this commit; prior admission was invalidated." }),
+      external_id: `phase1-admission:v1:${identity.pr}:${identity.headSha}:${generation}:pending`,
+      output: { title: "Phase 1 admission pending", summary: "A new PR identity reused this commit; prior admission was invalidated." },
+    }) });
     allTrusted = trustedPublisherChecks(await findAdmissionChecks(repository, identity.headSha, token), identity.headSha, publisherAppId);
     checks = trustedAdmissionChecks(allTrusted, identity, publisherAppId);
   }
@@ -1362,8 +1388,9 @@ async function ensureAdmissionCheck({ repository, identity, token, publisherAppI
 async function publishCheck({ repository, identity, token, publisherAppId, check, generation, decision, initialize = false, allowPriorGeneration = false }) {
   if (check?.app?.id !== publisherAppId || (allowPriorGeneration ? !validAdmissionCheckAnyGeneration(check, identity, publisherAppId) : !validAdmissionCheck(check, identity, generation))) throw new Error("PHASE1_ADMISSION_CHECK_PROVENANCE_INVALID");
   const evidence = decision?.evidence ?? null;
-  const status = initialize ? "in_progress" : "completed";
-  const conclusion = initialize ? undefined : (decision?.acceptable ? "action_required" : "failure");
+  const completedInitialization = initialize && check.status === "completed";
+  const status = initialize && !completedInitialization ? "in_progress" : "completed";
+  const conclusion = initialize ? (completedInitialization ? "action_required" : undefined) : (decision?.acceptable ? "action_required" : "failure");
   const summary = initialize
     ? `Awaiting a complete Phase 1 CI run for PR #${identity.pr} at ${identity.headSha}.`
     : [
@@ -1412,24 +1439,36 @@ async function initializeAdmission({ repository, prNumber, readToken, publisher,
 async function invalidateTrustedChecksAtHead({ repository, headSha, publisher }) {
   if (!validSha(headSha)) throw new Error("PHASE1_ADMISSION_INVALIDATION_HEAD_INVALID");
   const trusted = trustedPublisherChecks(await findAdmissionChecks(repository, headSha, publisher.token), headSha, publisher.appId);
-  await Promise.all(trusted.map((check) => githubRequest(`/repos/${repository}/check-runs/${check.id}`, publisher.token, { method: "PATCH", body: JSON.stringify({ name: PHASE1_ADMISSION_CHECK_NAME, status: "in_progress", external_id: check.external_id, output: { title: "Phase 1 admission revalidation required", summary: "New lifecycle evidence requires fail-closed revalidation." } }) })));
+  await Promise.all(trusted.map((check) => githubRequest(`/repos/${repository}/check-runs/${check.id}`, publisher.token, { method: "PATCH", body: JSON.stringify(phase1AdmissionRevalidationPatch(check, { summary: "New lifecycle evidence requires fail-closed revalidation." })) })));
   if (trusted.length > 1) throw new Error("PHASE1_ADMISSION_INVALIDATION_CARDINALITY_INVALID");
+}
+
+export function phase1AdmissionRevalidationPatch(check, { summary = "Immutable evidence changed; prior final admission is no longer current.", completedAt = new Date().toISOString() } = {}) {
+  if (!check || !["queued", "in_progress", "completed"].includes(check.status)
+    || typeof check.external_id !== "string" || !check.external_id
+    || typeof summary !== "string" || !summary
+    || !validTimestamp(completedAt)) throw new Error("PHASE1_ADMISSION_REVALIDATION_CHECK_INVALID");
+  const completed = check.status === "completed";
+  return {
+    name: PHASE1_ADMISSION_CHECK_NAME,
+    status: completed ? "completed" : "in_progress",
+    external_id: check.external_id,
+    output: { title: "Phase 1 admission revalidation required", summary },
+    ...(completed ? { conclusion: "action_required", completed_at: completedAt } : {}),
+  };
 }
 
 async function invalidateAdmissionForRefresh({ repository, prNumber, readToken, publisher }) {
   const identity = identityFromPr(repository, await readPr(repository, prNumber, readToken));
   const checks = trustedPublisherChecks(await findAdmissionChecks(repository, identity.headSha, publisher.token), identity.headSha, publisher.appId);
   if (checks.length === 0) return;
-  await Promise.all(checks.map((check) => githubRequest(`/repos/${repository}/check-runs/${check.id}`, publisher.token, { method: "PATCH", body: JSON.stringify({ name: PHASE1_ADMISSION_CHECK_NAME, status: "in_progress", external_id: check.external_id, output: { title: "Phase 1 admission revalidation required", summary: "Immutable evidence changed; prior final admission is no longer current." } }) })));
+  const patches = checks.map((check) => phase1AdmissionRevalidationPatch(check));
+  await Promise.all(checks.map((check, index) => githubRequest(`/repos/${repository}/check-runs/${check.id}`, publisher.token, { method: "PATCH", body: JSON.stringify(patches[index]) })));
   if (checks.length !== 1) throw new Error("PHASE1_ADMISSION_REFRESH_INVALIDATION_PROVENANCE_INVALID");
-  const body = {
-    name: PHASE1_ADMISSION_CHECK_NAME,
-    status: "in_progress",
-    external_id: checks[0].external_id,
-    output: { title: "Phase 1 admission revalidation required", summary: "Immutable evidence changed; prior final admission is no longer current." },
-  };
+  const body = patches[0];
   const readback = trustedPublisherChecks(await findAdmissionChecks(repository, identity.headSha, publisher.token), identity.headSha, publisher.appId);
-  if (readback.length !== 1 || readback[0]?.id !== checks[0].id || readback[0]?.status !== "in_progress"
+  if (readback.length !== 1 || readback[0]?.id !== checks[0].id || readback[0]?.status !== body.status
+    || (body.status === "completed" && readback[0]?.conclusion !== body.conclusion)
     || readback[0]?.external_id !== body.external_id || readback[0]?.output?.title !== body.output.title
     || readback[0]?.output?.summary !== body.output.summary) throw new Error("PHASE1_ADMISSION_REFRESH_INVALIDATION_READBACK_INVALID");
 }
