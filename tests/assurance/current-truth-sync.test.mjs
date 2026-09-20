@@ -169,6 +169,8 @@ assert.deepEqual(schemas.$defs.ownerJurisdictionPolicyCapability.const, truthCon
 assert.deepEqual(truthContract.ownerJurisdictionPolicyCapability.inheritanceAllowlist, [...STANDING_POLICY_INHERITANCE_ALLOWLIST]);
 assert.deepEqual(truthContract.ownerJurisdictionPolicyCapability.inheritanceDenylist, [...STANDING_POLICY_INHERITANCE_DENYLIST]);
 assert.equal(truthContract.rollingProtectedMain.authorityControlPaths.includes("scripts/assurance/jurisdiction-policy.mjs"), true);
+assert.equal(truthContract.rollingProtectedMain.authorityControlPaths.includes("scripts/guard-autonomous-systems-contract.mjs"), false);
+assert.equal(truthContract.rollingProtectedMain.authorityControlPaths.includes("scripts/proof-autonomous-systems-contract.mjs"), false);
 assert.deepEqual(
   [
     "config/assurance/pr-scope-policy-v1.json",
@@ -405,6 +407,39 @@ const fixedPointGit = (argv) => argv[0] === "rev-parse"
 assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: fixedPointObservation, gitCommand: fixedPointGit }), true);
 const fixedPointPaths = fixedPointProfile.paths;
 assert.equal(verifyDerivedProtectedMainTruthSynchronization({ observation: { ...fixedPointObservation, changedPaths: [...fixedPointPaths, "app/index.tsx"].sort() }, gitCommand }), false);
+const advancementFixture = ({ changedPaths, parentCount = 2, authorityUpdateBound = false }) => {
+  const checkpoint = "a".repeat(40);
+  const observed = "c".repeat(40);
+  const source = "d".repeat(40);
+  const record = structuredClone(truthRecord);
+  record.mainSha = checkpoint;
+  record.protectedMainAuthority.checkpointSha = checkpoint;
+  record.protectedMainAuthority.checkpointTree = "b".repeat(40);
+  return evaluateProtectedMainAdvancement({
+    record,
+    contract: truthContract,
+    observedProtectedMainSha: observed,
+    checkpointTreeObservation: record.protectedMainAuthority.checkpointTree,
+    checkpointIsAncestor: true,
+    advancementObservations: [{
+      commit: observed,
+      parents: parentCount === 2 ? [checkpoint, source] : [checkpoint],
+      tree: "e".repeat(40),
+      subject: "Bounded control change (#500)",
+      changedPaths,
+      authorityUpdateBound,
+    }],
+  });
+};
+const wrapperOnlyAdvancement = advancementFixture({ changedPaths: ["scripts/guard-autonomous-systems-contract.mjs"] });
+assert.equal(wrapperOnlyAdvancement.findings.includes("CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT"), false);
+assert.equal(wrapperOnlyAdvancement.authorityControlEligible, true);
+const unboundAuthorityAdvancement = advancementFixture({ changedPaths: ["scripts/assurance/lib.mjs"] });
+assert.equal(unboundAuthorityAdvancement.findings.includes("CURRENT_TRUTH_AUTHORITY_CONTROL_DRIFT"), true);
+assert.equal(unboundAuthorityAdvancement.authorityControlEligible, false);
+const oneParentAdvancement = advancementFixture({ changedPaths: ["README.md"], parentCount: 1 });
+assert.equal(oneParentAdvancement.findings.includes("CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID"), true);
+assert.equal(oneParentAdvancement.authorityControlEligible, false);
 const rolling = evaluateProtectedMainAdvancement({ record: truthRecord, contract: truthContract, observedProtectedMainSha: gitCommand(["rev-parse", "origin/main"]), gitCommand });
 assert.equal(rolling.findings.includes("CURRENT_TRUTH_TERMINAL_SYNCHRONIZATION_INCOMPLETE"), false, stableJson(rolling.findings));
 assert.equal(rolling.pendingTransitionCount, 0);
