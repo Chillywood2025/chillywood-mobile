@@ -6253,6 +6253,33 @@ export function resolvePhase1SourceAuthorityEligibility({ repository, identity, 
   };
 }
 
+const PHASE1_TYPED_SOURCE_AUTHORITY_TYPES = new Set([
+  "ARCHITECTURE",
+  "FINITE_TASK_ADMISSION",
+  "FINITE_TASK_IMPLEMENTATION",
+  "TERMINAL_TRUTH",
+]);
+
+export function phase1CommittedEvidenceHead(authority, identity) {
+  const exactIdentity = authority?.repository === identity?.repository
+    && authority?.pr === identity?.pr
+    && authority?.headRef === identity?.headRef
+    && authority?.headSha === identity?.headSha
+    && authority?.sourceTree === identity?.sourceTree
+    && authority?.baseRef === identity?.baseRef
+    && authority?.baseSha === identity?.baseSha;
+  const trustedEnvelope = authority?.contract === "PHASE1_SOURCE_AUTHORITY_RESOLUTION_V2"
+    && authority?.producer === "PROTECTED_MAIN_ENGINEERING_CLOSURE_V1"
+    && PHASE1_TYPED_SOURCE_AUTHORITY_TYPES.has(authority?.authorityType)
+    && authority?.draftSourceOnly === false
+    && authority?.mergeAuthorityGranted === false
+    && Array.isArray(authority?.findings)
+    && authority.findings.length === 0;
+  return trustedEnvelope && exactIdentity && /^[0-9a-f]{40}$/u.test(identity?.headSha ?? "")
+    ? identity.headSha
+    : null;
+}
+
 export async function resolvePhase1AdmissionMergeEligibility({ repository, pr, identity, phase1Evidence, publisherProvisioningReadback, token, root = REPOSITORY_ROOT } = {}) {
   const findings = [];
   const engineIdentity = { repository, pr, branch: identity?.headRef, headSha: identity?.headSha, baseRef: identity?.baseRef, baseSha: identity?.baseSha };
