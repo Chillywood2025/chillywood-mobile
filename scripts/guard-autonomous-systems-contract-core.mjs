@@ -10,7 +10,11 @@ import {
   renderCurrentState,
   renderNextTask
 } from "./assurance/lib.mjs";
-import { evaluateAutonomousEngineeringRequest, resolvePhase1SourceAuthorityEligibility } from "./assurance/engineering-closure.mjs";
+import {
+  evaluateAutonomousEngineeringRequest,
+  phase1CommittedEvidenceHead,
+  resolvePhase1SourceAuthorityEligibility,
+} from "./assurance/engineering-closure.mjs";
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
@@ -73,13 +77,22 @@ const notIncludes = (source, needle, label) => {
   if (source.includes(needle)) fail(`${label} must not include: ${needle}`);
 };
 let assuranceControlAuthorityProof = null;
+let phase1SourceIdentity = null;
 try {
   const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
   const pull = event?.pull_request;
   const identity = { repository: event?.repository?.full_name, pr: pull?.number, headRef: pull?.head?.ref, headSha: pull?.head?.sha, sourceTree: subjectGit(["rev-parse", `${pull?.head?.sha}^{tree}`]), baseRef: pull?.base?.ref, baseSha: pull?.base?.sha };
+  phase1SourceIdentity = identity;
   assuranceControlAuthorityProof = resolvePhase1SourceAuthorityEligibility({ repository: identity.repository, identity, root });
 } catch {}
-const finiteTaskRuntime = evaluateFiniteTaskLeaseRuntime({ record: currentTruth, contract: currentTruthContract, gitCommand: subjectGit, assuranceControlAuthorityProof });
+const committedEvidenceHead = phase1CommittedEvidenceHead(assuranceControlAuthorityProof, phase1SourceIdentity);
+const finiteTaskRuntime = evaluateFiniteTaskLeaseRuntime({
+  record: currentTruth,
+  contract: currentTruthContract,
+  checkoutHead: committedEvidenceHead ?? "HEAD",
+  gitCommand: subjectGit,
+  assuranceControlAuthorityProof,
+});
 const protectedMainRuntime = evaluateProtectedMainAdvancement({
   record: currentTruth,
   contract: currentTruthContract,
