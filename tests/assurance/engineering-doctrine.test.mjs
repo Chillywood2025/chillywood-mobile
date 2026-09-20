@@ -14,13 +14,13 @@ import {
   architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject,
   finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject,
   authoritativeReplayOnce, buildDoctrineReport, buildInventory, classifyContractFreshness, classifyLaterFinding,
-  canonicalGitDiffArgs, canonicalGitDiffHash, canonicalPhase1FinalSourceWireProjection, canonicalReceiptEvidenceWireProjection, compactAggregatePhase1Evidence, compareReceiptEvidenceSemantics,
+  canonicalGitDiffArgs, canonicalGitDiffHash, canonicalPhase1FinalSourceWireProjection, canonicalReceiptEvidenceWireProjection, compactAggregatePhase1Evidence, compareReceiptEvidenceSemantics, extractPhase1FinalSourceSemanticEnvelope,
   deriveAffectedDomainClosure, deriveVerificationDependencyClosure, detectGraphFindings, doctrineBootstrapAuthorizationSubject, doctrineBootstrapOwnerCommentBody,
   doctrineScopeAmendmentOwnerCommentBody, doctrineScopeAmendmentSubject,
   doctrineVerificationDependencyCorrectionOwnerCommentBody, doctrineVerificationDependencyCorrectionSubject,
   createTaskLocalDomainGraphDelta, createTaskLocalEdgeDisposition,
   evaluateAutonomousEngineeringRequest, evaluateFiniteTaskAdmissionSuccessorV2, evaluatePreimplementationGate, evaluateTaskAdmission, generateDomainGraph, hashValue,
-  inventoryMappingFindings, makeBootstrapPacket, makeTaskPacket, normalizeGitHubCommentIdentity, normalizeReceiptEvidenceSemantics, observeCandidateScopeFromGit,
+  inventoryMappingFindings, makeBootstrapPacket, makeTaskPacket, normalizeGitHubCommentIdentity, normalizeReceiptEvidenceSemantics, observeCandidateScopeFromGit, phase1FinalSourceSemanticEnvelope,
   observeGitHubTaskIdentity, observeGroundedRuntimeEvidence, observeOfficialPublicContract, observeRepositoryOwnedReview, readGitHubApi, resolveEngineeringClosureTaskContext, runAuthoritativeReplay, stableJson,
   verifyArchitectureDependencyAmendment, verifyArchitectureDependencyWitnessAmendment, verifyArchitectureMaintenanceAuthority, verifyArchitectureRepositoryReview, verifyDoctrineScopeAmendment, verifyDoctrineVerificationDependencyCorrection, verifyExternalTrustRootReceipt, verifyInventoryNonVacuity,
   phase1AdmissionPolicyForBase, phase1AdmissionPublisherProvisioningReadback, phase1AdmissionPublisherProvisioningReadbackValid, PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1, projectPhase1AdmissionFinalSourceEvidence, selectFiniteTaskTerminalTruthOwnerReceipts, verifyFiniteTaskTerminalBaseAdvancement, verifyFiniteTaskTerminalTruthAuthority, verifyPhase1AdmissionEvidenceForMerge, verifyPhase1RunEvidence,
@@ -927,6 +927,41 @@ test("Phase 1 aggregate final-source compactor preserves only the exact maintena
   assert.notEqual(hashValue(nullMaintenance), hashValue(omittedMaintenance));
 });
 
+test("canonical Phase 1 final-source semantic envelope rejects representation and identity substitution 15/15", async (t) => {
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 900, branch: "codex/final-source-envelope-fixture", headSha: "b".repeat(40), tree: "c".repeat(40), baseSha: "a".repeat(40) };
+  const phase1 = {
+    schemaVersion: "PHASE1_ADMISSION_EVIDENCE_V1", checkName: "Phase 1 / Admission Decision", result: "PHASE_1_ACCEPTABLE", maintenanceStatus: null,
+    mode: "READY_MERGE_AUTHORITY", acceptable: true, mergeAuthorityGranted: false, repository: identity.repository, pr: identity.pr, headRef: identity.branch,
+    headSha: identity.headSha, sourceTree: identity.tree, baseRef: "main", baseSha: identity.baseSha, evaluatorSha: identity.baseSha, action: "ready_for_review",
+    eventUpdatedAt: "2026-08-26T03:00:00Z", draft: false, runId: 33000000000, runAttempt: 1, lifecycleGeneration: "d".repeat(64), requiredLanes: 13,
+    rawPassedLanes: 13, rawFailedLanes: 0, blockingFindingCount: 0, nonBlockingAssuranceFindingCount: 0, deferredExternalCount: 0, affectedRiskDomains: [],
+    currentRulesetStage: "FINAL_AGGREGATE_ONLY", publisherAnchorHash: "e".repeat(64), publisherProvisioningReadbackHash: "f".repeat(64),
+    phase1SourceDecisionHash: "1".repeat(64), decisionHash: "2".repeat(64),
+  };
+  const envelope = phase1FinalSourceSemanticEnvelope(phase1);
+  const mutateEnvelope = (change) => { const value = structuredClone(envelope); change(value); return value; };
+  const extract = (value, expected = identity) => extractPhase1FinalSourceSemanticEnvelope({ envelope: value, expected });
+  const cases = [
+    ["01 canonical envelope validates and extracts the exact raw payload", () => { const result = extract(envelope); assert.equal(result.ok, true, result.findings.join(",")); assert.deepEqual(result.evidence, phase1); assert.notEqual(result.evidence, phase1); }],
+    ["02 raw evidence is canonical after validated transport extraction", () => assert.deepEqual(canonicalPhase1FinalSourceWireProjection({ value: phase1, identity }), phase1)],
+    ["03 unwrapped transport input cannot masquerade as an envelope", () => assert.equal(extract(phase1).ok, false)],
+    ["04 arbitrary wrapper field is rejected", () => assert.equal(extract(mutateEnvelope((value) => { value.arbitrary = true; })).ok, false)],
+    ["05 wrong envelope type is rejected", () => assert.equal(extract(mutateEnvelope((value) => { value.type = "ARBITRARY_WRAPPER"; })).ok, false)],
+    ["06 wrong envelope schema is rejected", () => assert.equal(extract(mutateEnvelope((value) => { value.schemaVersion = 2; })).ok, false)],
+    ["07 wrong producer is rejected", () => assert.equal(extract(mutateEnvelope((value) => { value.producer = "UNTRUSTED_PRODUCER"; })).ok, false)],
+    ["08 missing payload is rejected", () => assert.equal(extract(mutateEnvelope((value) => { delete value.phase1; })).ok, false)],
+    ["09 double wrapping is rejected", () => assert.equal(extract(mutateEnvelope((value) => { value.phase1 = phase1FinalSourceSemanticEnvelope(value.phase1); })).ok, false)],
+    ["10 repository mismatch is rejected", () => assert.equal(extract(envelope, { ...identity, repository: "attacker/fork" }).ok, false)],
+    ["11 PR mismatch is rejected", () => assert.equal(extract(envelope, { ...identity, pr: identity.pr + 1 }).ok, false)],
+    ["12 head mismatch is rejected", () => assert.equal(extract(envelope, { ...identity, headSha: "3".repeat(40) }).ok, false)],
+    ["13 tree mismatch is rejected", () => assert.equal(extract(envelope, { ...identity, tree: "4".repeat(40) }).ok, false)],
+    ["14 base mismatch is rejected", () => assert.equal(extract(envelope, { ...identity, baseSha: "5".repeat(40) }).ok, false)],
+    ["15 evaluator identity cannot diverge from the protected base", () => assert.equal(extract(mutateEnvelope((value) => { value.phase1.evaluatorSha = "6".repeat(40); })).ok, false)],
+  ];
+  assert.equal(cases.length, 15);
+  for (const [name, assertion] of cases) await t.test(name, assertion);
+});
+
 test("generic receipt semantic-normalization adversarial matrix 52/52", async (t) => {
   const D = RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS;
   const policy = RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1;
@@ -999,8 +1034,8 @@ test("generic receipt semantic-normalization adversarial matrix 52/52", async (t
     authority: { product: false, database: false, provider: false, build: false, submission: false, ota: false, publicRelease: false, moneyMovement: false },
     ownerIdentity: { login: "Chillywood2025", association: "OWNER" },
   };
-  const legacyNull = structuredClone(canonical);
-  legacyNull.phase1.maintenanceStatus = null;
+  const legacyOmitted = structuredClone(canonical);
+  delete legacyOmitted.phase1.maintenanceStatus;
   const mutate = (change, source = canonical) => { const value = structuredClone(source); change(value); return value; };
   const compare = (left, right = canonical, options = {}) => compareReceiptEvidenceSemantics({ left, right, leftSchemaVersion: schemaVersion, rightSchemaVersion: schemaVersion, ...options });
   const normalize = (rawRepresentation, options = {}) => normalizeReceiptEvidenceSemantics({ rawRepresentation, schemaVersion, ...options });
@@ -1033,39 +1068,39 @@ test("generic receipt semantic-normalization adversarial matrix 52/52", async (t
   const staleOmitted = mutate((value) => { value.finalHead = "6".repeat(40); value.phase1.headSha = value.finalHead; });
   const staleNull = mutate((value) => { value.finalHead = "7".repeat(40); value.phase1.headSha = value.finalHead; value.phase1.maintenanceStatus = null; });
   const canonicalNormalization = normalize(canonical);
-  const legacyNormalization = normalize(legacyNull);
-  const compatibleComparison = compare(legacyNull);
+  const legacyNormalization = normalize(legacyOmitted);
+  const compatibleComparison = compare(legacyOmitted);
   const canonicalBody = architectureFinalSourceOwnerCommentBody(canonical);
-  const legacyBody = architectureFinalSourceOwnerCommentBody(legacyNull);
+  const legacyBody = architectureFinalSourceOwnerCommentBody(legacyOmitted);
   const unapprovedOmitted = structuredClone(canonical);
   const unapprovedNull = mutate((value) => { value.repositoryReview.unapprovedOptionalField = null; });
   const nonNull = mutate((value) => { value.phase1.maintenanceStatus = "PHASE_1_NON_BLOCKING_ASSURANCE_MAINTENANCE_REQUIRED"; });
   const cases = [
     ["01 policy is generic and has no repository, PR, branch, base, head, or tree exception", () => assert.deepEqual(["repository", "pr", "branch", "protectedBase", "head", "tree"].filter((field) => Object.hasOwn(rule.cutoverBoundary, field)), [])],
     ["02 policy approves only the explicit maintenanceStatus field", () => assert.deepEqual(policy.fields.map(({ fieldPath }) => fieldPath), ["phase1.maintenanceStatus"])],
-    ["03 policy declares version, legacy, canonical, normalized, and authority sensitivity", () => assert.deepEqual({ range: rule.receiptSchemaVersionRange, legacy: rule.allowedLegacyRepresentation, current: rule.canonicalCurrentRepresentation, normalized: rule.normalizedSemanticValue, authorityChanging: rule.authorityChanging }, { range: { minimum: 1, maximum: 1 }, legacy: "EXPLICIT_NULL", current: "OMITTED", normalized: null, authorityChanging: false })],
+    ["03 policy declares version, legacy, canonical, normalized, and authority sensitivity", () => assert.deepEqual({ range: rule.receiptSchemaVersionRange, legacy: rule.allowedLegacyRepresentation, current: rule.canonicalCurrentRepresentation, normalized: rule.normalizedSemanticValue, authorityChanging: rule.authorityChanging }, { range: { minimum: 1, maximum: 1 }, legacy: "OMITTED", current: "EXPLICIT_NULL", normalized: null, authorityChanging: false })],
     ["04 policy and nested selectors are immutable", () => assert.equal([policy, policy.fields, rule, rule.receiptSchemaVersionRange, rule.lifecycleContracts, rule.evidenceSchemaVersions, rule.cutoverBoundary].every(Object.isFrozen), true)],
     ["05 all five required compatibility dispositions are exact", () => assert.deepEqual(Object.values(D).sort(), ["CANONICAL_CURRENT", "COMPATIBLE_LEGACY_REPRESENTATION", "HISTORICAL_NON_AUTHORITATIVE", "MALFORMED_BLOCKING", "SEMANTIC_MISMATCH_BLOCKING"].sort())],
     ["06 normalizer exposes the exact audit envelope", () => assert.deepEqual(Object.keys(canonicalNormalization).sort(), ["compatibilityDisposition", "normalizedSemantics", "rawRepresentation", "schemaVersion"])],
-    ["07 rawRepresentation remains exact and separately cloned", () => { assert.deepEqual(legacyNormalization.rawRepresentation, legacyNull); assert.notEqual(legacyNormalization.rawRepresentation, legacyNull); assert.equal(Object.hasOwn(legacyNormalization.rawRepresentation.phase1, "maintenanceStatus"), true); }],
+    ["07 rawRepresentation remains exact and separately cloned", () => { assert.deepEqual(legacyNormalization.rawRepresentation, legacyOmitted); assert.notEqual(legacyNormalization.rawRepresentation, legacyOmitted); assert.equal(Object.hasOwn(legacyNormalization.rawRepresentation.phase1, "maintenanceStatus"), false); }],
     ["08 schemaVersion remains explicit in the audit envelope", () => assert.equal(legacyNormalization.schemaVersion, schemaVersion)],
-    ["09 canonical omitted representation classifies CANONICAL_CURRENT", () => assert.equal(canonicalNormalization.compatibilityDisposition, D.CANONICAL_CURRENT)],
-    ["10 compatible explicit-null representation classifies COMPATIBLE_LEGACY_REPRESENTATION", () => assert.equal(legacyNormalization.compatibilityDisposition, D.COMPATIBLE_LEGACY_REPRESENTATION)],
-    ["11 historical representation classifies HISTORICAL_NON_AUTHORITATIVE", () => assert.equal(normalize(legacyNull, { authorityClassification: "HISTORICAL" }).compatibilityDisposition, D.HISTORICAL_NON_AUTHORITATIVE)],
+    ["09 canonical explicit-null representation classifies CANONICAL_CURRENT", () => assert.equal(canonicalNormalization.compatibilityDisposition, D.CANONICAL_CURRENT)],
+    ["10 compatible omitted representation classifies COMPATIBLE_LEGACY_REPRESENTATION", () => assert.equal(legacyNormalization.compatibilityDisposition, D.COMPATIBLE_LEGACY_REPRESENTATION)],
+    ["11 historical representation classifies HISTORICAL_NON_AUTHORITATIVE", () => assert.equal(normalize(legacyOmitted, { authorityClassification: "HISTORICAL" }).compatibilityDisposition, D.HISTORICAL_NON_AUTHORITATIVE)],
     ["12 semantic difference classifies SEMANTIC_MISMATCH_BLOCKING", () => assert.equal(compare(nonNull).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
     ["13 malformed schema classifies MALFORMED_BLOCKING", () => assert.equal(normalizeReceiptEvidenceSemantics({ rawRepresentation: canonical, schemaVersion: "1" }).compatibilityDisposition, D.MALFORMED_BLOCKING)],
     ["14 A approved omission and null are semantically equivalent", () => { assert.equal(compatibleComparison.equal, true); assert.equal(compatibleComparison.semanticallyEquivalent, true); assert.equal(compatibleComparison.compatibilityDisposition, D.COMPATIBLE_LEGACY_REPRESENTATION); }],
     ["15 approved omission and null normalize to the same semantic object", () => { assert.deepEqual(canonicalNormalization.normalizedSemantics, legacyNormalization.normalizedSemantics); assert.equal(legacyNormalization.normalizedSemantics.phase1.maintenanceStatus, null); }],
-    ["16 exact final-source comparator is symmetric across approved representations", () => { assert.equal(architectureFinalSourceSubjectsWireEquivalent(canonical, legacyNull), true); assert.equal(architectureFinalSourceSubjectsWireEquivalent(legacyNull, canonical), true); }],
-    ["17 canonical writer deterministically omits the approved semantic null", () => { const first = canonicalReceiptEvidenceWireProjection({ rawRepresentation: legacyNull, schemaVersion }); const second = canonicalReceiptEvidenceWireProjection({ rawRepresentation: structuredClone(legacyNull), schemaVersion }); assert.deepEqual(first, second); assert.equal(Object.hasOwn(first.phase1, "maintenanceStatus"), false); }],
-    ["18 aggregate writer uses the same canonical representation", () => assert.equal(Object.hasOwn(canonicalPhase1FinalSourceWireProjection({ value: phase1WithNull, identity }), "maintenanceStatus"), false)],
+    ["16 exact final-source comparator is symmetric across approved representations", () => { assert.equal(architectureFinalSourceSubjectsWireEquivalent(canonical, legacyOmitted), true); assert.equal(architectureFinalSourceSubjectsWireEquivalent(legacyOmitted, canonical), true); }],
+    ["17 canonical writer deterministically materializes the producer's explicit semantic null", () => { const first = canonicalReceiptEvidenceWireProjection({ rawRepresentation: legacyOmitted, schemaVersion }); const second = canonicalReceiptEvidenceWireProjection({ rawRepresentation: structuredClone(legacyOmitted), schemaVersion }); assert.deepEqual(first, second); assert.equal(Object.hasOwn(first.phase1, "maintenanceStatus"), true); assert.equal(first.phase1.maintenanceStatus, null); }],
+    ["18 aggregate writer uses the same canonical representation", () => { const projected = canonicalPhase1FinalSourceWireProjection({ value: phase1WithNull, identity }); assert.equal(Object.hasOwn(projected, "maintenanceStatus"), true); assert.equal(projected.maintenanceStatus, null); }],
     ["19 immutable raw bodies and hashes remain representation-distinct", () => { assert.notEqual(canonicalBody, legacyBody); assert.notEqual(hashValue(canonicalBody), hashValue(legacyBody)); }],
     ["20 B omitted versus null on an unapproved field blocks", () => { const result = compare(unapprovedNull, unapprovedOmitted); assert.equal(result.equal, false); assert.equal(result.compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING); }],
-    ["21 C approved-field null versus non-null blocks", () => assert.equal(compare(legacyNull, nonNull).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
+    ["21 C approved-field null versus non-null blocks", () => assert.equal(compare(canonical, nonNull).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
     ["22 non-null maintenance value is preserved exactly by the canonical writer", () => assert.equal(canonicalReceiptEvidenceWireProjection({ rawRepresentation: nonNull, schemaVersion }).phase1.maintenanceStatus, nonNull.phase1.maintenanceStatus)],
     ["23 D false versus omitted blocks", () => assert.equal(compare(mutate((value) => { value.phase1.maintenanceStatus = false; })).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
     ["24 E zero versus omitted blocks", () => assert.equal(compare(mutate((value) => { value.phase1.maintenanceStatus = 0; })).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
-    ["25 F empty string versus null blocks", () => assert.equal(compare(mutate((value) => { value.phase1.maintenanceStatus = ""; }), legacyNull).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
+    ["25 F empty string versus null blocks", () => assert.equal(compare(mutate((value) => { value.phase1.maintenanceStatus = ""; }), canonical).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
     ["26 present undefined is malformed rather than normalized", () => assert.equal(normalize(mutate((value) => { value.phase1.maintenanceStatus = undefined; })).compatibilityDisposition, D.MALFORMED_BLOCKING)],
     ["27 wrong repository remains a semantic mismatch", () => assert.equal(compare(mutate((value) => { value.repository = "attacker/fork"; })).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
     ["28 wrong PR remains a semantic mismatch", () => assert.equal(compare(mutate((value) => { value.pr += 1; })).compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING)],
@@ -1081,18 +1116,18 @@ test("generic receipt semantic-normalization adversarial matrix 52/52", async (t
     ["38 source, publisher, and merge authority changes remain strict", () => { assert.equal(compare(mutate((value) => { value.phase1.phase1SourceDecisionHash = "0".repeat(64); })).equal, false); assert.equal(compare(mutate((value) => { value.phase1.publisherAnchorHash = "0".repeat(64); })).equal, false); assert.equal(compare(mutate((value) => { value.phase1.mergeAuthorityGranted = true; })).equal, false); }],
     ["39 G stale-head compatible receipt is historical only", () => { const result = normalize(staleNull, { authorityClassification: "HISTORICAL" }); const selected = selectCurrentImmutableEvidence({ candidates: [historical(staleNull)], requiredKey, classify }); assert.equal(result.compatibilityDisposition, D.HISTORICAL_NON_AUTHORITATIVE); assert.equal(selected.ok, false); assert.equal(selected.currentCount, 0); }],
     ["40 J duplicate exact-current receipts block cardinality", () => { const selected = selectCurrentImmutableEvidence({ candidates: [current(canonical), current(structuredClone(canonical))], requiredKey, classify }); assert.equal(selected.ok, false); assert.equal(selected.currentCount, 2); }],
-    ["41 two semantically equivalent current wire variants still block cardinality", () => { const selected = selectCurrentImmutableEvidence({ candidates: [current(canonical), current(legacyNull)], requiredKey, classify }); assert.equal(selected.ok, false); assert.equal(selected.currentCount, 2); }],
+    ["41 two semantically equivalent current wire variants still block cardinality", () => { const selected = selectCurrentImmutableEvidence({ candidates: [current(canonical), current(legacyOmitted)], requiredKey, classify }); assert.equal(selected.ok, false); assert.equal(selected.currentCount, 2); }],
     ["42 K one current plus multiple compatible historical receipts passes", () => { const selected = selectCurrentImmutableEvidence({ candidates: [historical(staleOmitted), current(canonical), historical(staleNull)], requiredKey, classify }); assert.equal(selected.ok, true); assert.equal(selected.currentCount, 1); assert.equal(selected.classifications.filter(({ disposition }) => disposition === D.HISTORICAL_NON_AUTHORITATIVE).length, 2); }],
     ["43 historical receipts remain raw, visible, immutable, and non-current", () => { const audit = normalize(staleNull, { authorityClassification: "HISTORICAL" }); const selected = selectCurrentImmutableEvidence({ candidates: [historical(staleNull), current(canonical)], requiredKey, classify }); const record = selected.classifications.find(({ disposition }) => disposition === D.HISTORICAL_NON_AUTHORITATIVE); assert.equal(record.current, false); assert.deepEqual(audit.rawRepresentation, staleNull); assert.notEqual(audit.rawRepresentation, staleNull); assert.equal(Object.hasOwn(audit.rawRepresentation.phase1, "maintenanceStatus"), true); }],
     ["44 historical receipt cannot grant current authority by itself", () => { const selected = selectCurrentImmutableEvidence({ candidates: [historical(staleOmitted), historical(staleNull)], requiredKey, classify }); assert.equal(selected.ok, false); assert.equal(selected.currentCount, 0); }],
     ["45 L malformed schema version blocks", () => assert.equal(normalizeReceiptEvidenceSemantics({ rawRepresentation: canonical, schemaVersion: NaN }).compatibilityDisposition, D.MALFORMED_BLOCKING)],
     ["46 M future unknown receipt schema blocks", () => assert.equal(normalizeReceiptEvidenceSemantics({ rawRepresentation: canonical, schemaVersion: rule.receiptSchemaVersionRange.maximum + 1 }).compatibilityDisposition, D.MALFORMED_BLOCKING)],
     ["47 future unknown evidence schema blocks", () => assert.equal(normalize(mutate((value) => { value.phase1.schemaVersion = "PHASE1_ADMISSION_EVIDENCE_V999"; })).compatibilityDisposition, D.MALFORMED_BLOCKING)],
-    ["48 N downgraded receipt schema cannot regain authority", () => { const result = compareReceiptEvidenceSemantics({ left: legacyNull, right: canonical, leftSchemaVersion: rule.receiptSchemaVersionRange.minimum - 1, rightSchemaVersion: schemaVersion }); assert.equal(result.equal, false); assert.equal(result.compatibilityDisposition, D.MALFORMED_BLOCKING); }],
+    ["48 N downgraded receipt schema cannot regain authority", () => { const result = compareReceiptEvidenceSemantics({ left: legacyOmitted, right: canonical, leftSchemaVersion: rule.receiptSchemaVersionRange.minimum - 1, rightSchemaVersion: schemaVersion }); assert.equal(result.equal, false); assert.equal(result.compatibilityDisposition, D.MALFORMED_BLOCKING); }],
     ["49 downgraded evidence schema cannot regain authority", () => assert.equal(normalize(mutate((value) => { value.phase1.schemaVersion = "PHASE1_ADMISSION_EVIDENCE_V0"; })).compatibilityDisposition, D.MALFORMED_BLOCKING)],
     ["50 missing lifecycle selector is malformed and fail-closed", () => assert.equal(normalize(mutate((value) => { delete value.receiptLifecycleContract; })).compatibilityDisposition, D.MALFORMED_BLOCKING)],
     ["51 O compatibility field with changed authority meaning blocks", () => { const attack = mutate((value) => { value.phase1.maintenanceStatus = null; value.phase1.blockingFindingCount = 1; value.authority.product = true; }); const result = compare(attack); assert.equal(result.equal, false); assert.equal(result.compatibilityDisposition, D.SEMANTIC_MISMATCH_BLOCKING); }],
-    ["52 canonical and legacy representations both preserve every non-policy field exactly", () => { const normalized = legacyNormalization.normalizedSemantics; const expected = structuredClone(legacyNull); expected.phase1.maintenanceStatus = null; assert.deepEqual(normalized, expected); assert.equal(normalized.originalSubjectHash, canonical.originalSubjectHash); assert.deepEqual(normalized.authority, canonical.authority); }],
+    ["52 canonical and legacy representations both preserve every non-policy field exactly", () => { const normalized = legacyNormalization.normalizedSemantics; const expected = structuredClone(legacyOmitted); expected.phase1.maintenanceStatus = null; assert.deepEqual(normalized, expected); assert.equal(normalized.originalSubjectHash, canonical.originalSubjectHash); assert.deepEqual(normalized.authority, canonical.authority); }],
   ];
   assert.equal(cases.length, 52);
   for (const [name, assertion] of cases) await t.test(name, assertion);
