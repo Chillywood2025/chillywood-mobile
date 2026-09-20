@@ -2,6 +2,8 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
+Admission projection pending exact PR identity; this line is replaced by canonical generation before review.
+
 1. WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE
 
 Ordinary protected-main advancement never requires a truth-only prerequisite PR. If the active candidate is behind, merge current protected main normally and regenerate the packet. Canonical synchronization remains required for terminal task or authority transitions.
