@@ -235,17 +235,32 @@ function scanCanonicalJson(text) {
 
 export function parseCanonicalMarkedComment(body, marker, { maxBytes = MAX_CANONICAL_COMMENT_BYTES } = {}) {
   if (!isText(body) || Buffer.byteLength(body, "utf8") > maxBytes) return { ok: false, finding: "COMMENT_SIZE_INVALID" };
-  if (!isText(marker) || body.split(marker).length !== 2 || !body.startsWith(`${marker}\n`)) return { ok: false, finding: "COMMENT_MARKER_INVALID" };
-  const text = body.slice(marker.length + 1);
-  if (!text || text.includes(`\n${marker}`)) return { ok: false, finding: "MULTIPLE_MARKERS_OR_PAYLOADS" };
+  if (!isText(marker) || body.split(marker).length !== 2 || !hasCanonicalMarkedCommentPrefix(body, marker)) return { ok: false, finding: "COMMENT_MARKER_INVALID" };
+  const separator = body.startsWith(`${marker}\r\n`) ? "\r\n" : "\n";
+  const rawText = body.slice(marker.length + separator.length);
+  const terminalNewline = rawText.endsWith("\r\n") ? "\r\n" : rawText.endsWith("\n") ? "\n" : "";
+  const text = terminalNewline ? rawText.slice(0, -terminalNewline.length) : rawText;
+  if (!text || text.includes(`\n${marker}`) || text.includes(`\r${marker}`)) return { ok: false, finding: "MULTIPLE_MARKERS_OR_PAYLOADS" };
   try {
     scanCanonicalJson(text);
     const payload = JSON.parse(text);
     if (!isObject(payload) || canonicalJson(payload) !== text) return { ok: false, finding: "NONCANONICAL_JSON" };
-    return { ok: true, payload };
+    const canonicalBody = `${marker}\n${canonicalJson(payload)}`;
+    return {
+      ok: true,
+      payload,
+      canonicalBody,
+      canonicalBodyHash: legacyHash(canonicalBody),
+      rawBodyHash: legacyHash(body),
+      transport: Object.freeze({ separator, terminalNewline }),
+    };
   } catch (error) {
     return { ok: false, finding: error instanceof Error ? error.message : "INVALID_JSON" };
   }
+}
+
+export function hasCanonicalMarkedCommentPrefix(body, marker) {
+  return isText(body) && isText(marker) && (body.startsWith(`${marker}\n`) || body.startsWith(`${marker}\r\n`));
 }
 
 const SCOPE_KEYS = ["launchProgram", "product", "repository"];
@@ -741,7 +756,7 @@ export function resolveOwnerJurisdictionPolicyChainV2({ receipts, registry, expe
   const verifiedNodes = [];
   for (const receipt of receipts) {
     if (!isPositiveInteger(receipt?.id) || !isText(receipt?.body) || !isCanonicalTimestamp(receipt?.createdAt) || receipt.createdAt !== receipt.updatedAt || receipt.authorAssociation !== "OWNER") { findings.push("POLICY_RECEIPT_IMMUTABILITY_INVALID"); continue; }
-    const verification = receipt.body.startsWith(`${OWNER_JURISDICTION_DECISION_V2_MARKER}\n`) ? verifyOwnerJurisdictionDecisionV2({ body: receipt.body, registry, receipt: { ...receipt, authorLogin: receipt.authorLogin ?? receipt.user?.login, authorAssociation: receipt.authorAssociation } }) : verifyPolicyChainBody(receipt.body);
+    const verification = hasCanonicalMarkedCommentPrefix(receipt.body, OWNER_JURISDICTION_DECISION_V2_MARKER) ? verifyOwnerJurisdictionDecisionV2({ body: receipt.body, registry, receipt: { ...receipt, authorLogin: receipt.authorLogin ?? receipt.user?.login, authorAssociation: receipt.authorAssociation } }) : verifyPolicyChainBody(receipt.body);
     if (!verification.ok) { findings.push(...verification.findings.map((finding) => `POLICY_RECEIPT_INVALID:${finding}`)); continue; }
     const policy = verification.standingPolicy;
     if ((receipt.authorLogin ?? receipt.user?.login) !== policy.owner.login) findings.push("POLICY_RECEIPT_OWNER_INVALID");
@@ -964,7 +979,7 @@ export function verifyFiniteTaskAdmissionV2({ body, receipt = null, expected = {
   if (expected.ownerJurisdictionBinding && canonicalJson(payload.subject.ownerJurisdictionBinding) !== canonicalJson(expected.ownerJurisdictionBinding)) findings.push("ADMISSION_OWNER_JURISDICTION_BINDING_MISMATCH");
   if (expected.ownerLogin && payload.owner.login !== expected.ownerLogin) findings.push("ADMISSION_OWNER_MISMATCH");
   if (receipt && (!isPositiveInteger(receipt.id) || receipt.authorLogin !== payload.owner.login || receipt.authorAssociation !== "OWNER" || !isCanonicalTimestamp(receipt.createdAt) || receipt.createdAt !== receipt.updatedAt || (receipt.body !== undefined && receipt.body !== body))) findings.push("ADMISSION_V2_IMMUTABILITY_INVALID");
-  return { ok: findings.length === 0, findings: sorted([...new Set(findings)]), payload: findings.length === 0 ? clone(payload) : undefined, subject: findings.length === 0 ? clone(payload.subject) : undefined, subjectHash: findings.length === 0 ? subjectHash : null, bodyHash: findings.length === 0 ? payload.bodyHash : null };
+  return { ok: findings.length === 0, findings: sorted([...new Set(findings)]), payload: findings.length === 0 ? clone(payload) : undefined, subject: findings.length === 0 ? clone(payload.subject) : undefined, subjectHash: findings.length === 0 ? subjectHash : null, bodyHash: findings.length === 0 ? payload.bodyHash : null, canonicalBody: findings.length === 0 ? parsed.canonicalBody : null, canonicalBodyHash: findings.length === 0 ? parsed.canonicalBodyHash : null, rawBodyHash: parsed.rawBodyHash ?? null };
   } catch {
     return { ok: false, findings: ["ADMISSION_V2_MALFORMED"], subjectHash: null, bodyHash: null };
   }
@@ -1044,7 +1059,7 @@ export function verifyLegacyFiniteTaskAdmissionV1({ body, receipt = null, expect
       && payload.bodyHash === originalBodyHash
       && receiptValid
       && expectedValid;
-    return { ok, findings: ok ? [] : ["LEGACY_ADMISSION_RECEIPT_INVALID"], originalPayload: ok ? payload : undefined, subject: ok ? payload.subject : undefined, subjectHash: ok ? payload.subjectHash : null, bodyHash: ok ? payload.bodyHash : null, repository: ok ? payload.repository : null, pr: ok ? payload.pr : null, task: ok ? task : null, head: ok ? payload.subject.admissionHead : null, tree: ok ? payload.subject.admissionTree : null, sequence: ok ? 0 : null };
+    return { ok, findings: ok ? [] : ["LEGACY_ADMISSION_RECEIPT_INVALID"], originalPayload: ok ? payload : undefined, subject: ok ? payload.subject : undefined, subjectHash: ok ? payload.subjectHash : null, bodyHash: ok ? payload.bodyHash : null, canonicalBody: ok ? parsed.canonicalBody : null, canonicalBodyHash: ok ? parsed.canonicalBodyHash : null, rawBodyHash: parsed.rawBodyHash ?? null, repository: ok ? payload.repository : null, pr: ok ? payload.pr : null, task: ok ? task : null, head: ok ? payload.subject.admissionHead : null, tree: ok ? payload.subject.admissionTree : null, sequence: ok ? 0 : null };
   } catch {
     return { ok: false, findings: ["LEGACY_ADMISSION_RECEIPT_INVALID"], subjectHash: null, bodyHash: null, repository: null, pr: null, task: null, head: null, tree: null, sequence: null };
   }
@@ -1058,7 +1073,7 @@ export function resolveFiniteTaskAdmissionChainV2({ receipts, expected = {}, com
   const nodes = [];
   for (const receipt of receipts) {
     if (!isPositiveInteger(receipt?.id) || !isText(receipt?.body) || !isCanonicalTimestamp(receipt?.createdAt) || receipt.createdAt !== receipt.updatedAt || receipt.authorAssociation !== "OWNER") { findings.push("ADMISSION_RECEIPT_IMMUTABILITY_INVALID"); continue; }
-    if (receipt.body.startsWith(`${LEGACY_FINITE_TASK_ADMISSION_V1_MARKER}\n`)) {
+    if (hasCanonicalMarkedCommentPrefix(receipt.body, LEGACY_FINITE_TASK_ADMISSION_V1_MARKER)) {
       if (!expected.legacyV1Subject) { findings.push("ADMISSION_V1_EXPECTED_SUBJECT_REQUIRED"); continue; }
       const legacy = verifyLegacyFiniteTaskAdmissionV1({ body: receipt.body, receipt, expected: { repository: expected.repository, pr: expected.pr, task: expected.task, ownerLogin: expected.ownerLogin, subject: expected.legacyV1Subject } });
       if (!legacy.ok) { findings.push(...legacy.findings); continue; }
@@ -1253,7 +1268,7 @@ export function verifyFiniteTaskAdmissionFinalSourceV2({ body, receipt = null, e
     if (expected.ownerLogin && payload.owner.login !== expected.ownerLogin) findings.push("ADMISSION_FINAL_SOURCE_OWNER_MISMATCH");
     if (receipt && (!isPositiveInteger(receipt.id) || receipt.authorLogin !== payload.owner.login || receipt.authorAssociation !== "OWNER" || !isCanonicalTimestamp(receipt.createdAt) || receipt.createdAt !== receipt.updatedAt || (receipt.body !== undefined && receipt.body !== body))) findings.push("ADMISSION_FINAL_SOURCE_IMMUTABILITY_INVALID");
     const ok = findings.length === 0;
-    return { ok, findings: sorted([...new Set(findings)]), payload: ok ? clone(payload) : undefined, subject: ok ? clone(payload.subject) : undefined, subjectHash: ok ? subjectHash : null, bodyHash: ok ? payload.bodyHash : null, envelopeHash: ok ? envelopeHash : null };
+    return { ok, findings: sorted([...new Set(findings)]), payload: ok ? clone(payload) : undefined, subject: ok ? clone(payload.subject) : undefined, subjectHash: ok ? subjectHash : null, bodyHash: ok ? payload.bodyHash : null, envelopeHash: ok ? envelopeHash : null, canonicalBody: ok ? parsed.canonicalBody : null, canonicalBodyHash: ok ? parsed.canonicalBodyHash : null, rawBodyHash: parsed.rawBodyHash ?? null };
   } catch {
     return { ok: false, findings: ["ADMISSION_FINAL_SOURCE_MALFORMED"], subjectHash: null, bodyHash: null, envelopeHash: null };
   }

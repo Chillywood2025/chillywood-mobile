@@ -19,6 +19,7 @@ import {
   OWNER_JURISDICTION_POLICY_CHAIN_DECISION_V2,
   OWNER_JURISDICTION_POLICY_CHAIN_V2_MARKER,
   OWNER_JURISDICTION_TASK_BINDING_V2,
+  hasCanonicalMarkedCommentPrefix,
   parseCanonicalMarkedComment,
   resolveOwnerJurisdictionPolicyChainV2,
   verifyOwnerJurisdictionDecisionV2,
@@ -111,8 +112,8 @@ const PRE_ADMISSION_TASK_ARTIFACT_PATH = /^docs\/assurance\/tasks\/[A-Za-z0-9][A
 const preAdmissionForbiddenPath = (file, taskArtifactPath) => !PRE_ADMISSION_TASK_ARTIFACT_PATH.test(taskArtifactPath ?? "") || file !== taskArtifactPath;
 
 const parseOwnerPayload = (comment) => {
-  if (!comment?.body?.startsWith(`${PRE_ADMISSION_OWNER_MARKER}\n`)) return null;
-  try { return JSON.parse(comment.body.slice(PRE_ADMISSION_OWNER_MARKER.length + 1)); } catch { return null; }
+  const parsed = parseCanonicalMarkedComment(comment?.body, PRE_ADMISSION_OWNER_MARKER);
+  return parsed.ok ? parsed.payload : null;
 };
 
 export function evaluatePreAdmissionEngineeringSeed(facts = {}) {
@@ -248,9 +249,9 @@ function normalizeOwnerJurisdictionPolicyReceipt(comment) {
 function discoverOwnerJurisdictionPolicyObservation(repository, { admissionPr, taskId } = {}) {
   const comments = ghPages(`repos/${repository}/issues/comments?per_page=100`);
   if (!Array.isArray(comments)) return { complete: false, receipts: [] };
-  const rawComments = comments.filter(({ body }) => ownerJurisdictionPolicyMarkers.some((marker) => body?.startsWith(`${marker}\n`)));
+  const rawComments = comments.filter(({ body }) => ownerJurisdictionPolicyMarkers.some((marker) => hasCanonicalMarkedCommentPrefix(body, marker)));
   const admissionComments = Number.isSafeInteger(admissionPr) ? ghPages(`repos/${repository}/issues/${admissionPr}/comments?per_page=100`) : [];
-  const admissionRaws = Array.isArray(admissionComments) ? admissionComments.filter(({ body }) => [FINITE_TASK_ADMISSION_V2_MARKER, LEGACY_FINITE_TASK_ADMISSION_V1_MARKER].some((marker) => body?.startsWith(`${marker}\n`))) : [];
+  const admissionRaws = Array.isArray(admissionComments) ? admissionComments.filter(({ body }) => [FINITE_TASK_ADMISSION_V2_MARKER, LEGACY_FINITE_TASK_ADMISSION_V1_MARKER].some((marker) => hasCanonicalMarkedCommentPrefix(body, marker))) : [];
   const admissionPull = Number.isSafeInteger(admissionPr) ? ghJson(`repos/${repository}/pulls/${admissionPr}`) : null;
   let admissionTree = null;
   try { admissionTree = admissionPull?.head?.sha ? git(["rev-parse", `${admissionPull.head.sha}^{tree}`]) : null; } catch {}
@@ -370,7 +371,7 @@ export function verifyActiveTaskOwnerJurisdictionPolicy({
   }
 
   const sourceReceipt = receipts.find(({ id }) => id === policyResolution.commentId);
-  const marker = ownerJurisdictionPolicyMarkers.find((value) => sourceReceipt?.body?.startsWith(`${value}\n`));
+  const marker = ownerJurisdictionPolicyMarkers.find((value) => hasCanonicalMarkedCommentPrefix(sourceReceipt?.body, value));
   const parsedSource = marker ? parseCanonicalMarkedComment(sourceReceipt.body, marker) : { ok: false };
   const policySource = projection.policySource;
   const sourceDecisionVersion = marker === OWNER_JURISDICTION_DECISION_V2_MARKER
