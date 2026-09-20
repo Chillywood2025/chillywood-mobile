@@ -24,6 +24,8 @@ import {
   normalizeProtectedPhase1RulesetUpdateReadback,
   parsePhase1AdmissionCheckReadback,
   partitionProtectedAdmissionChecks,
+  phase1AdmissionRevalidationPatch,
+  reconcileRepositoryActiveRuns,
   resolveProtectedPhase1PublisherProvisioningReadback,
   selectAuthoritativePhase1WorkflowIdentity,
   selectDurablePhase1PullRequest,
@@ -701,6 +703,37 @@ test("App-only merge quiescence rejects hidden pagination, old-head work, and ev
   assert.equal(evaluateRepositoryActionsQuiescence({ ...options, recentPaginationComplete: false }).ok, false);
   assert.equal(evaluateRepositoryActionsQuiescence({ ...options, runs: [{ ...current, head_sha: "e".repeat(40) }] }).ok, false);
   assert.equal(evaluateRepositoryActionsQuiescence({ ...options, runs: [{ ...current, actor: { login: "write-collaborator" } }] }).ok, false);
+});
+
+test("Actions quiescence discards only provider-list ghosts proven completed by authoritative reread", () => {
+  const current = { id: 7001, status: "in_progress" };
+  const ghost = { id: 6999, status: "queued" };
+  assert.deepEqual(reconcileRepositoryActiveRuns({
+    listedRuns: [current, ghost],
+    authoritativeRuns: [current, { ...ghost, status: "completed", conclusion: "success" }],
+  }), [current]);
+  assert.deepEqual(reconcileRepositoryActiveRuns({ listedRuns: [current, ghost], authoritativeRuns: [current, ghost] }), [current, ghost]);
+  assert.throws(() => reconcileRepositoryActiveRuns({ listedRuns: [current, ghost], authoritativeRuns: [current] }), /PHASE1_APP_MERGE_ACTIONS_REREAD_INVALID/u);
+  assert.throws(() => reconcileRepositoryActiveRuns({ listedRuns: [current], authoritativeRuns: [{ id: 7002, status: "in_progress" }] }), /PHASE1_APP_MERGE_ACTIONS_REREAD_INVALID/u);
+  assert.throws(() => reconcileRepositoryActiveRuns({ listedRuns: [current], authoritativeRuns: [{ ...current, status: "unknown" }] }), /PHASE1_APP_MERGE_ACTIONS_REREAD_INVALID/u);
+});
+
+test("completed admission checks remain completed and blocking while immutable evidence is revalidated", () => {
+  const completedAt = "2026-09-20T13:08:20Z";
+  const base = { external_id: "phase1-admission:v1:478:head:generation:run:decision" };
+  assert.deepEqual(phase1AdmissionRevalidationPatch({ ...base, status: "completed" }, { completedAt }), {
+    name: PHASE1_ADMISSION_CHECK_NAME,
+    status: "completed",
+    external_id: base.external_id,
+    output: { title: "Phase 1 admission revalidation required", summary: "Immutable evidence changed; prior final admission is no longer current." },
+    conclusion: "action_required",
+    completed_at: completedAt,
+  });
+  const inProgress = phase1AdmissionRevalidationPatch({ ...base, status: "in_progress" }, { completedAt });
+  assert.equal(inProgress.status, "in_progress");
+  assert.equal(Object.hasOwn(inProgress, "conclusion"), false);
+  assert.equal(Object.hasOwn(inProgress, "completed_at"), false);
+  assert.throws(() => phase1AdmissionRevalidationPatch({ ...base, status: "completed" }, { completedAt: "invalid" }), /PHASE1_ADMISSION_REVALIDATION_CHECK_INVALID/u);
 });
 
 test("App-only merge postcondition requires the exact bot, subject, merge parents, tree, PR, and main readback", () => {
