@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "artifactId": "RELEASE_DELIVERY_AUTOMATION_CONTROL_PLANE_HARDENING_V1",
+  "taskId": "release-delivery-automation-control-plane-hardening-v1",
+  "repository": "Chillywood2025/chillywood-mobile",
+  "waveId": "POST_CHAT_CONTROL_PLANE_HARDENING",
+  "status": "DEFECT_LEDGER_STABLE",
+  "authorizationStatus": "PRODUCT_SOURCE_EDITING_NOT_YET_AUTHORIZED",
+  "primaryDomain": "eas-build-update-release",
+  "implementation": {
+    "branch": "codex/release-delivery-automation-control-plane-hardening-v1",
+    "pullRequest": null,
+    "seedHead": null,
+    "seedTree": null
+  },
+  "rootDefects": [
+    "RDA-CP-P1-OTA-PLATFORM-PROVENANCE-001",
+    "RDA-CP-P1-IOS-DELIVERY-BOUNDARY-002",
+    "RDA-CP-P1-IOS-DUPLICATE-SUBMISSION-003",
+    "RDA-CP-P1-PHYSICAL-AUTOMATION-RESTART-004",
+    "RDA-CP-P1-CURRENT-TRUTH-AUTHORITY-DRIFT-005",
+    "RDA-CP-P1-PROTECTED-MAIN-MERGE-MODEL-006"
+  ],
+  "provisionalConnectedDomains": [
+    "eas-build-update-release",
+    "pushkit-callkit"
+  ],
+  "provisionalPathBudget": {
+    "maximumFiles": 30,
+    "maximumHandAuthoredNetLines": 3600,
+    "packageChanges": false,
+    "partitionRule": "Keep OTA and iOS delivery tooling, physical automation tooling, and assurance-control repair in coherent exact-diff partitions; every implementation PR remains within the repository default 15-file and 1200-line budget unless a machine-readable waiver is independently approved."
+  },
+  "ownerIntent": {
+    "requestedOutcome": "Harden the post-Chat release, iOS delivery, physical automation, and protected-main control planes without reopening qualified product behavior or performing a public release.",
+    "authorization": "Level C source, test, local physical-tooling proof, exact-diff security review, PR creation, and safe merge. Private provider readback is allowed; provider mutation remains bounded by the task's explicit prohibitions and repository Level D gates.",
+    "prohibitedOutcomes": [
+      "public OTA or public App Store release",
+      "Google Play production submission or rollout expansion",
+      "production money, payouts, cashout, Stripe, or SKU activation",
+      "duplicate Apple submission or rebuild of an unchanged valid signed artifact solely because delivery is delayed",
+      "permanent Owner, User, or RepositoryRole bypass",
+      "gratuitous reopening of Chi'lly Chat product qualification",
+      "committing credentials, trust material, private device evidence, signed URLs, account identifiers, or device identifiers"
+    ]
+  },
+  "stableDefectLedger": {
+    "status": "STABLE",
+    "startingBlockingOpen": 6,
+    "startingRepairedUnproven": 0,
+    "allowedFinalDispositions": [
+      "PROVEN",
+      "NOT_A_DEFECT",
+      "REPAIRED_UNPROVEN",
+      "BLOCKED_EXTERNAL",
+      "BLOCKED_OWNER_ACTION"
+    ]
+  },
+  "proofTiers": {
+    "T0_REQUIREMENT": "REQUIREMENTS_CLEAR",
+    "T1_SOURCE": "PLANNED_PENDING_IMPLEMENTATION",
+    "T2_MODEL": "PLANNED_PENDING_IMPLEMENTATION",
+    "T3_INTEGRATION": "PLANNED_PENDING_IMPLEMENTATION",
+    "T4_NATIVE_PROVIDER": "PLANNED_READ_ONLY_AND_BOUNDED_INTERNAL_ONLY",
+    "T5_SIGNED_ARTIFACT": "HISTORICAL_ONLY_NO_NEW_BUILD_AUTHORIZED",
+    "T6_INSTALLED_PHYSICAL": "PLANNED_TOOLING_RECONSTRUCTION_ONLY",
+    "T7_PUBLIC_CANARY": "NOT_AUTHORIZED"
+  },
+  "nonGoals": [
+    "change Chi'lly Chat call behavior",
+    "rerun the full 16-cell Chat matrix",
+    "publish an OTA or create, submit, or release a new store artifact merely to exercise tooling",
+    "change database schema, migrations, RLS, auth, entitlements, money, or provider rights",
+    "bypass Apple device trust, signing, UI Automation authorization, or macOS security controls"
+  ],
+  "rollback": {
+    "strategy": "Revert source-only tooling changes by exact PR, preserve signed artifacts and provider state, stop only task-owned local automation processes, and retain fail-closed protected-main checks.",
+    "publicReleaseAuthorized": false
+  },
+  "cleanup": {
+    "strategy": "Remove only task-created temporary process state and retain raw device evidence outside Git; restore ruleset 18940814 to Integration-only bypass after any separately approved recovery.",
+    "deleteSignedArtifacts": false
+  },
+  "observability": {
+    "strategy": "Persist redacted hashes, state classifications, exact source identities, and resumption actions without secrets or private provider/device payloads.",
+    "rawSecretsAllowed": false
+  }
+}
