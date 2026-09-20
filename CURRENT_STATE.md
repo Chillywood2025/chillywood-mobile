@@ -2,7 +2,7 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-- Protected authority checkpoint: `c2b77bad9c34e143a9e05a9881c3c2d3df1c5471` / tree `7fb85aabe7d1c73d2d0e4c7cec19c07544faf47c`.
+- Protected authority checkpoint: `511ce066428ea2882e9f2e44c0e57d50b07f4103` / tree `9e4e3ac9b1228bed8778eed9033b1867b20093e5`.
 - Protected-main advancement is evaluated dynamically from exact Git history; the runtime-observed protected main is derived at execution and is not committed as authority after every merge.
 - Ordinary protected advancement invalidates only affected task evidence. Terminal task or authority transitions require canonical synchronization.
 - Latest merged implementation: PR #411, `b17417fb5c45010b22c520f864c71e7bcad9051d`; merge `bca44d60d3456cc777c4fe9eadb426021a2cbb3b`.
@@ -23,7 +23,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - Current freshness claims: `repository-task-lease-customer-commerce-visual-system` (REPOSITORY_TASK_LEASE, expires `2036-09-07T19:35:00.000Z`), `repository-task-lease-pre-release-wave1` (REPOSITORY_TASK_LEASE, expires `2036-08-11T18:43:16.000Z`), `repository-task-lease-d2a-release-critical` (REPOSITORY_TASK_LEASE, expires `2036-08-09T00:04:54.000Z`), `repository-source-s0-exact-closure-reuse-final` (REPOSITORY_SOURCE, expires `2026-08-12T04:34:00Z`), `repository-task-lease-release-delivery-automation` (REPOSITORY_TASK_LEASE, expires `2036-09-17T12:05:15.601Z`).
 - Blocked freshness claims: `repository-source-a1-exact-carrier-full-history` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T04:07:31Z`), `repository-source-a1-complete-late-sentinel-inventory` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T03:25:40Z`), `repository-source-a1-post-merge-control-readback` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T03:16:55Z`), `repository-source-a1-late-review-owner-registry-bootstrap` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T02:48:20Z`), `repository-source-a1-assurance-control-final` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T02:37:45Z`), `provider-critical-b3-linked-readback` (PROVIDER_CRITICAL, STALE_BLOCKED, expired `2026-08-02T14:00:44Z`).
 - Internally validated historical review sentinels: PR #195 reviewed `605039a1eec08e153f33380a2998ee1c4cef2a90` after merge with 3 unresolved findings; successor `codex/assurance-active-task-and-claim-freshness-a1`; PR #194 reviewed `c15a58039b67d65eabdcaa03a9422ebc8d6dd95e` after merge with 5 unresolved findings; successor `codex/d2a-livekit-mic-post-merge-review-correction`. Only protected-main registered finding sets block post-merge completion claims, unrelated successor work, release, and proof-tier promotion; unvalidated Codex commentary remains advisory triage.
-- Document rendered at `2026-09-20T12:05:15.601Z`; document deadline `2026-08-13T18:46:27Z` is diagnostic only and grants no universal implementation authority. Claim-scoped freshness remains mandatory. Derived live provider readback: false.
+- Document rendered at `2026-09-20T12:25:58.573Z`; document deadline `2026-08-13T18:46:27Z` is diagnostic only and grants no universal implementation authority. Claim-scoped freshness remains mandatory. Derived live provider readback: false.
 
 ## Engineering doctrine
 
