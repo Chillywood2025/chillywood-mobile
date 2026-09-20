@@ -14,3 +14,4 @@ Do not ask owner approval for Level 0/1 autonomous operations. Keep Level 3/4 ow
 
 Do not resume Cognitive LiveKit activation.
 Do not create a release or distribution build, submit an artifact, publish OTA, mutate a provider or database, enable a switch or schedule, change Premium, money, rights, auth or RLS, start Responsive Layout V2 or AppLovin, submit public App Review, use external TestFlight, or release publicly.
+Implement the admitted release-delivery automation control-plane hardening in PR #476; provider mutation, builds, submissions, OTA publication, and public release remain separately gated.
