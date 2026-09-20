@@ -1189,8 +1189,10 @@ export function doctrineModelRevisionBlocksTask({ dependencyClosure, executionMo
   const exactAdmissionTruth = executionMode === "FINITE_TASK_ADMISSION_SUCCESSOR"
     && taskContext?.type === "FINITE_TASK_ADMISSION_SUCCESSOR"
     && taskContext?.ok === true
-    && taskContext?.taskAuthorization === "VALID"
-    && taskContext?.source === "FINITE_TASK_ADMISSION_SUCCESSOR_V1"
+    && taskContext?.authorizationOk === true
+    && taskContext?.classification === FINITE_TASK_ADMISSION_V2
+    && taskContext?.authoritySource === "IMMUTABLE_OWNER_FINITE_TASK_ADMISSION_CHAIN"
+    && taskContext?.checks?.exactScope === true
     && stableJson(canonicalSort([...changedPaths])) === stableJson(TERMINAL_TRUTH_PATHS)
     && dependencyClosure.generatorSemanticChanged === false
     && stableJson(dependencyClosure.structuralGraphInputs) === stableJson(["UNATTRIBUTED_STRUCTURAL_GRAPH_CHANGE"]);

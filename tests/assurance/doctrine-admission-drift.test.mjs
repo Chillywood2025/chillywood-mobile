@@ -11,8 +11,10 @@ const EXACT_TERMINAL_TRUTH = Object.freeze([
 const VALID_ADMISSION_CONTEXT = Object.freeze({
   type: "FINITE_TASK_ADMISSION_SUCCESSOR",
   ok: true,
-  taskAuthorization: "VALID",
-  source: "FINITE_TASK_ADMISSION_SUCCESSOR_V1",
+  authorizationOk: true,
+  classification: "FINITE_TASK_ADMISSION_V2",
+  authoritySource: "IMMUTABLE_OWNER_FINITE_TASK_ADMISSION_CHAIN",
+  checks: Object.freeze({ exactScope: true }),
 });
 
 const PREEXISTING_UNATTRIBUTED_DRIFT = Object.freeze({
@@ -34,7 +36,10 @@ test("finite-task admission still blocks real or untrusted doctrine drift", () =
   const candidates = [
     { executionMode: "PRODUCT_DOMAIN_TASK" },
     { taskContext: { ...VALID_ADMISSION_CONTEXT, ok: false } },
-    { taskContext: { ...VALID_ADMISSION_CONTEXT, taskAuthorization: "INVALID" } },
+    { taskContext: { ...VALID_ADMISSION_CONTEXT, authorizationOk: false } },
+    { taskContext: { ...VALID_ADMISSION_CONTEXT, classification: "FINITE_TASK_ADMISSION_V1" } },
+    { taskContext: { ...VALID_ADMISSION_CONTEXT, authoritySource: "UNTRUSTED" } },
+    { taskContext: { ...VALID_ADMISSION_CONTEXT, checks: { exactScope: false } } },
     { changedPaths: [...EXACT_TERMINAL_TRUTH, "app/index.tsx"] },
     { dependencyClosure: { ...PREEXISTING_UNATTRIBUTED_DRIFT, generatorSemanticChanged: true } },
     { dependencyClosure: { ...PREEXISTING_UNATTRIBUTED_DRIFT, structuralGraphInputs: ["config/assurance/feature-registry-v1.json"] } },
