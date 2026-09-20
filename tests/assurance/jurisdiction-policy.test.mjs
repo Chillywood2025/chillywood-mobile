@@ -34,7 +34,7 @@ import {
   verifyOwnerJurisdictionDecisionV2,
   verifyTaskJurisdictionBindingV2,
 } from "../../scripts/assurance/jurisdiction-policy.mjs";
-import { ARCHITECTURE_REPOSITORY_REVIEW_MARKER, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, canonicalPhase1FinalSourceWireProjection, classifyFiniteTaskAdmissionFinalSourceReceiptV2, FINITE_TASK_ADMISSION_LEASE_STATE, finiteTaskAdmissionHistoryValidV2, finiteTaskAdmissionLeaseStateValid, finiteTaskAdmissionSubject, finiteTaskFinalSourceOwnerJurisdictionV2, finiteTaskJurisdictionEvidenceV2, finiteTaskScopeV2, hashValue, ownerJurisdictionPolicyBindingTruthV2, resolveFiniteTaskAdmissionTaskBindingV2, verifyFiniteTaskAdmissionFinalSourceEligibilityV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
+import { ARCHITECTURE_REPOSITORY_REVIEW_MARKER, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, canonicalPhase1FinalSourceWireProjection, classifyFiniteTaskAdmissionFinalSourceReceiptV2, FINITE_TASK_ADMISSION_LEASE_STATE, finiteTaskAdmissionHistoryValidV2, finiteTaskAdmissionLeaseStateValid, finiteTaskAdmissionSubject, finiteTaskFinalSourceOwnerJurisdictionV2, finiteTaskJurisdictionEvidenceV2, finiteTaskScopeV2, hashValue, normalizeGitHubCommentIdentity, ownerJurisdictionPolicyBindingTruthV2, resolveFiniteTaskAdmissionTaskBindingV2, stableJson, verifyFiniteTaskAdmissionFinalSourceEligibilityV2, verifyFiniteTaskOwnerApprovalV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
 
 const DOMAINS = Object.freeze([
   "auth-session-password-recovery",
@@ -265,6 +265,75 @@ test("strict marked parser rejects duplicate/unknown keys, whitespace, multiple 
   const rendered = renderOwnerJurisdictionDecisionV2(baseInput);
   const payload = payloadFrom(rendered.body, OWNER_JURISDICTION_DECISION_V2_MARKER);
   assert.equal(verifyOwnerJurisdictionDecisionV2({ body: withPayload(OWNER_JURISDICTION_DECISION_V2_MARKER, { ...payload, unknownCriticalField: true }), registry }).ok, false);
+});
+
+test("structured Owner receipt transport canonicalizes only the marker separator and one terminal newline", () => {
+  const marker = OWNER_JURISDICTION_DECISION_V2_MARKER;
+  const lf = `${marker}\n{"a":1}`;
+  const crlf = `${marker}\r\n{"a":1}`;
+  const parsedLf = parseCanonicalMarkedComment(lf, marker);
+  const parsedCrlf = parseCanonicalMarkedComment(crlf, marker);
+  assert.equal(parsedLf.ok, true);
+  assert.equal(parsedCrlf.ok, true);
+  assert.equal(parsedLf.canonicalBody, lf);
+  assert.equal(parsedCrlf.canonicalBody, lf);
+  assert.equal(parsedLf.canonicalBodyHash, parsedCrlf.canonicalBodyHash);
+  assert.notEqual(parsedLf.rawBodyHash, parsedCrlf.rawBodyHash);
+  assert.equal(parseCanonicalMarkedComment(`${lf}\n`, marker).canonicalBodyHash, parsedLf.canonicalBodyHash);
+  assert.equal(parseCanonicalMarkedComment(`${crlf}\r\n`, marker).canonicalBodyHash, parsedLf.canonicalBodyHash);
+  assert.equal(parseCanonicalMarkedComment(`${marker}\r\n{"a":1}\r\nunsigned`, marker).ok, false);
+  assert.equal(parseCanonicalMarkedComment(`${marker}-mutated\n{"a":1}`, marker).ok, false);
+  assert.equal(parseCanonicalMarkedComment(`${marker}\n{"a":1`, marker).ok, false);
+  assert.equal(parseCanonicalMarkedComment(`${marker}\n{"a":1}\n{"b":2}`, marker).ok, false);
+  assert.equal(parseCanonicalMarkedComment(`${marker}\r\n{"a":1}\r\n${marker}\n{"a":1}`, marker).ok, false);
+  const changed = parseCanonicalMarkedComment(`${marker}\n{"a":2}`, marker);
+  assert.equal(changed.ok, true);
+  assert.notEqual(changed.canonicalBodyHash, parsedLf.canonicalBodyHash);
+});
+
+test("Owner approval and finite-task receipts preserve semantic bindings across LF and CRLF", () => {
+  const implementation = { branch: taskIdentity.implementationBranch, pr: taskIdentity.implementationPr, seedHead: taskIdentity.originalSeedHead, seedTree: taskIdentity.originalSeedTree, taskArtifactPath: taskIdentity.taskArtifactPath };
+  const taskArtifact = { primaryDomain: "auth-session-password-recovery", taskId: taskIdentity.taskId };
+  const subject = {
+    admittedSeed: { head: implementation.seedHead, tree: implementation.seedTree },
+    authority: { build: false, database: false, money: false, ota: false, product: false, provider: false, publicRelease: false, submission: false },
+    implementationBranch: implementation.branch,
+    implementationPr: implementation.pr,
+    leaseId: taskArtifact.taskId,
+    ownerIdentity: owner,
+    primaryFeature: taskArtifact.primaryDomain,
+    repository: scope.repository,
+    taskArtifact: implementation.taskArtifactPath,
+  };
+  const base = { currentHead: implementation.seedHead, evidenceClass: "OWNER_INTENT", leaseId: taskArtifact.taskId, pr: implementation.pr, repository: scope.repository, subject, subjectHash: hashValue(subject), type: "REGISTERED_OWNER_DECISION" };
+  const payload = { ...base, bodyHash: hashValue(base) };
+  const marker = LEGACY_OWNER_AUTHORIZATION_V1_MARKER;
+  const lfBody = `${marker}\n${stableJson(payload)}`;
+  const crlfBody = `${marker}\r\n${stableJson(payload)}`;
+  const raw = (id, body, overrides = {}) => ({ id, node_id: `IC_${id}`, user: { login: owner.login }, author_association: owner.association, body, created_at: "2026-09-20T12:00:00Z", updated_at: "2026-09-20T12:00:00Z", issue_url: `https://api.github.com/repos/${scope.repository}/issues/${implementation.pr}`, html_url: `https://github.com/${scope.repository}/pull/${implementation.pr}#issuecomment-${id}`, ...overrides });
+  const normalize = (value) => normalizeGitHubCommentIdentity(value, { repository: scope.repository, pr: implementation.pr, commentId: value.id });
+  const args = { identity: { repository: scope.repository }, implementation, taskArtifact, binding: { taskIdentity: { ownerApprovalCommentId: 7001 } } };
+  assert.equal(verifyFiniteTaskOwnerApprovalV2({ approval: normalize(raw(7001, lfBody)), ...args }), true);
+  assert.equal(verifyFiniteTaskOwnerApprovalV2({ approval: normalize(raw(7001, crlfBody)), ...args }), true);
+  assert.equal(verifyFiniteTaskOwnerApprovalV2({ approval: normalize(raw(7001, crlfBody, { updated_at: "2026-09-20T12:00:01Z" })), ...args }), false);
+  assert.equal(verifyFiniteTaskOwnerApprovalV2({ approval: normalize(raw(7001, crlfBody, { user: { login: "NotOwner" } })), ...args }), false);
+  const rendered = admissionFixture().v2;
+  const browserBody = rendered.body.replace("\n", "\r\n");
+  const lfVerified = verifyFiniteTaskAdmissionV2({ body: rendered.body, expected: { repository: scope.repository, pr: rendered.payload.pr, head: rendered.payload.subject.admissionIdentity.head, tree: rendered.payload.subject.admissionIdentity.tree } });
+  const crlfVerified = verifyFiniteTaskAdmissionV2({ body: browserBody, expected: { repository: scope.repository, pr: rendered.payload.pr, head: rendered.payload.subject.admissionIdentity.head, tree: rendered.payload.subject.admissionIdentity.tree } });
+  assert.equal(lfVerified.ok, true);
+  assert.equal(crlfVerified.ok, true);
+  assert.equal(lfVerified.canonicalBodyHash, crlfVerified.canonicalBodyHash);
+  assert.notEqual(lfVerified.rawBodyHash, crlfVerified.rawBodyHash);
+  assert.equal(verifyFiniteTaskAdmissionV2({ body: rendered.body, expected: { repository: "Elsewhere/repo" } }).ok, false);
+  assert.equal(verifyFiniteTaskAdmissionV2({ body: rendered.body, expected: { pr: rendered.payload.pr + 1 } }).ok, false);
+  assert.equal(verifyFiniteTaskAdmissionV2({ body: rendered.body, expected: { head: sha40("f") } }).ok, false);
+  assert.equal(verifyFiniteTaskAdmissionV2({ body: rendered.body, expected: { tree: sha40("e") } }).ok, false);
+  const mutatedValue = structuredClone(rendered.payload); mutatedValue.subject.supersessionReason += " ";
+  assert.equal(verifyFiniteTaskAdmissionV2({ body: withPayload(FINITE_TASK_ADMISSION_V2_MARKER, mutatedValue) }).ok, false);
+  const mutatedString = structuredClone(rendered.payload); mutatedString.subject.supersessionReason += "\\n";
+  assert.equal(verifyFiniteTaskAdmissionV2({ body: withPayload(FINITE_TASK_ADMISSION_V2_MARKER, mutatedString) }).ok, false);
+  assert.equal(verifyFiniteTaskAdmissionV2({ body: withPayload(FINITE_TASK_ADMISSION_V2_MARKER, { ...rendered.payload, subjectHash: sha64("0") }) }).ok, false);
 });
 
 test("type-separated hashes reject cross-object substitution", () => {
@@ -608,7 +677,7 @@ test("final-source V2 binds exact review, Phase 1, admission, policy, clearance,
   assert.equal(verifyFiniteTaskAdmissionFinalSourceV2({ body: renderFiniteTaskAdmissionFinalSourceV2({ admissionIdentity: fixture.admissionIdentity, currentAdmission, diffHash: sha64("9"), owner, ownerJurisdiction: oneDomainOwner, phase1, prospective: oneDomainProspective, repositoryReview, scope }).body }).ok, true);
 });
 
-test("aggregate final-source representation and historical lifecycle classification remain exact 16/16", async (t) => {
+test("aggregate final-source representation, transport, and historical lifecycle remain exact 20/20", async (t) => {
   const fixture = admissionFixture();
   const admission = verifyFiniteTaskAdmissionV2({ body: fixture.v2.body });
   const identity = { repository: scope.repository, pr: fixture.admissionIdentity.pr, branch: fixture.admissionIdentity.branch, headSha: fixture.admissionIdentity.head, baseSha: sha40("9") };
@@ -649,8 +718,12 @@ test("aggregate final-source representation and historical lifecycle classificat
     ["14 cross-task evidence remains malformed and cannot transfer authority", () => { const other = render({ admissionIdentity: { ...fixture.admissionIdentity, taskId: "other-task" }, phase1: currentPhase1 }); assert.equal(classify(githubReceipt(5294100002, identity.pr, other.body, "2026-09-20T12:30:00Z")).disposition, "MALFORMED_INVALID"); }],
     ["15 protected-base advancement never rewrites the historical immutable body", () => { const before = oldBaseRaw.body; classify(oldBaseRaw); assert.equal(oldBaseRaw.body, before); assert.equal(oldBaseRaw.created_at, oldBaseRaw.updated_at); }],
     ["16 history plus current remains order-independent at the classification boundary", () => { const forward = [oldBaseRaw, oldHeadRaw, currentRaw].map((item) => classify(item).disposition); const reverse = [currentRaw, oldHeadRaw, oldBaseRaw].map((item) => classify(item).disposition).sort(); assert.deepEqual([...forward].sort(), reverse); }],
+    ["17 browser CRLF separator retains the same semantic receipt identity", () => { const lf = verifyFiniteTaskAdmissionFinalSourceV2({ body: current.body }); const crlf = verifyFiniteTaskAdmissionFinalSourceV2({ body: current.body.replace("\n", "\r\n") }); assert.equal(crlf.ok, true); assert.equal(crlf.canonicalBodyHash, lf.canonicalBodyHash); assert.notEqual(crlf.rawBodyHash, lf.rawBodyHash); }],
+    ["18 one optional terminal newline retains semantic identity", () => { const exact = verifyFiniteTaskAdmissionFinalSourceV2({ body: current.body }); const terminal = verifyFiniteTaskAdmissionFinalSourceV2({ body: `${current.body}\r\n` }); assert.equal(terminal.ok, true); assert.equal(terminal.canonicalBodyHash, exact.canonicalBodyHash); }],
+    ["19 wrong protected base remains rejected", () => assert.equal(verifyFiniteTaskAdmissionFinalSourceV2({ body: current.body, expected: { ...stableExpected, baseSha: sha40("0") } }).ok, false)],
+    ["20 transport normalization cannot smuggle a second payload", () => assert.equal(verifyFiniteTaskAdmissionFinalSourceV2({ body: `${current.body}\r\n{}` }).ok, false)],
   ];
-  assert.equal(cases.length, 16);
+  assert.equal(cases.length, 20);
   for (const [name, assertion] of cases) await t.test(name, assertion);
 });
 
@@ -690,6 +763,10 @@ test("production final-source eligibility readback binds exact review, Phase 1, 
   assert.equal(verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ ...args, allComments: [reviewRaw, duplicateReviewRaw, finalRaw] }).mergeEligible, false);
   const duplicateFinalRaw = { ...finalRaw, id: 5294000003, node_id: "IC_5294000003", html_url: `https://github.com/${scope.repository}/pull/233#issuecomment-5294000003` };
   assert.equal(verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ ...args, allComments: [reviewRaw, finalRaw, duplicateFinalRaw] }).mergeEligible, false);
+  const browserTransportDuplicate = { ...finalRaw, id: 5294000005, node_id: "IC_5294000005", body: finalRaw.body.replace("\n", "\r\n"), html_url: `https://github.com/${scope.repository}/pull/233#issuecomment-5294000005` };
+  const transportEquivalent = verifyFiniteTaskAdmissionFinalSourceEligibilityV2({ ...args, allComments: [reviewRaw, finalRaw, browserTransportDuplicate] });
+  assert.equal(transportEquivalent.mergeEligible, true, transportEquivalent.findings.join(","));
+  assert.equal(transportEquivalent.commentId, finalRaw.id);
 
   const staleSelectedFinal = renderFiniteTaskAdmissionFinalSourceV2({ scope, owner, admissionIdentity: fixture.admissionIdentity, diffHash: reviewScope.diffHash, ownerJurisdiction: finiteTaskFinalSourceOwnerJurisdictionV2(authority), currentAdmission: { bodyHash: admission.bodyHash, commentId: admissionAuthority.commentId, sequence: admission.subject.sequence, subjectHash: admission.subjectHash }, repositoryReview: { bodyHash: hashValue(staleReviewRaw.body), commentId: staleReviewRaw.id, disposition: staleReviewSubject.disposition, subjectHash: hashValue(staleReviewSubject) }, phase1, prospective: { classification: "PREIMPLEMENTATION_ENGINEERING_CLEAR", externalProofInherited: false, marketJurisdictionOwnerCoverage: { covered: 9, required: 9, result: "9/9" }, productMutationAllowedAfterAdmissionMerge: true, productMutationAllowedBeforeAdmissionMerge: false, taskLocalGoverningEdgeClosure: "CLEAR" } });
   const staleSelectedFinalRaw = githubReceipt(5294000004, 233, staleSelectedFinal.body, "2026-08-14T16:02:00Z");

@@ -7,6 +7,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { inspectPhase1AggregateEvidence, PHASE1_ADMISSION_CHECK_NAME, PHASE1_ADMISSION_PRODUCER, PHASE1_EVIDENCE_STAGES, PHASE1_MODES, verifyPhase1AggregateEvidence } from "./phase1-admission.mjs";
 import { ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE, readGitHubJsonSync, resolveTerminalAmendmentState, validateImplementationChain } from "./control-plane-v2.mjs";
+import { hasCanonicalMarkedCommentPrefix, parseCanonicalMarkedComment } from "./jurisdiction-policy.mjs";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const rel = (...parts) => path.join(ROOT, ...parts);
@@ -1740,12 +1741,13 @@ export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, recei
   const body = finiteTaskFinalReceiptBody(subject);
   const subjectHash = sha256(subject);
   const payloadBodyHash = sha256({ subject, subjectHash });
-  const rawBodyHash = sha256(body);
+  const canonicalBodyHash = sha256(body);
+  const rawBodyHash = sha256(observation?.body ?? "");
   const receiptHashesValid = subject.schemaVersion >= 2
     ? receipt?.subjectHash === subjectHash
       && receipt?.bodyHash === payloadBodyHash
       && receipt?.rawBodyHash === rawBodyHash
-    : receipt?.subjectHash === subjectHash && receipt?.bodySha256 === rawBodyHash;
+    : receipt?.subjectHash === subjectHash && receipt?.bodySha256 === canonicalBodyHash;
   const ok = hashesValid
     && subject.scopeResult === "PASS"
     && Number.isInteger(subject.phase1RunId) && subject.phase1RunId > 0
@@ -1829,8 +1831,8 @@ export function verifyFiniteTaskFinalReceipt({ lease, candidate, evidence, recei
     && typeof observation?.createdAt === "string"
     && observation.createdAt === observation.updatedAt
     && observation.issueUrl === `https://api.github.com/repos/Chillywood2025/chillywood-mobile/issues/${lease?.implementationPr}`
-    && observation.body === body;
-  return { ok, stale: typeof receipt?.subjectHash === "string" && receipt.subjectHash !== subjectHash, subject, subjectHash, bodyHash: subject.schemaVersion >= 2 ? payloadBodyHash : rawBodyHash, rawBodyHash };
+    && parseCanonicalMarkedComment(observation.body, finalReceiptMarker).canonicalBody === body;
+  return { ok, stale: typeof receipt?.subjectHash === "string" && receipt.subjectHash !== subjectHash, subject, subjectHash, bodyHash: subject.schemaVersion >= 2 ? payloadBodyHash : canonicalBodyHash, canonicalBodyHash, rawBodyHash };
 }
 export function verifyFiniteTaskFinalSourceEligibility({
   lease,
@@ -1844,15 +1846,16 @@ export function verifyFiniteTaskFinalSourceEligibility({
 } = {}) {
   const findings = [];
   if (!Array.isArray(comments) || commentsPaginationComplete !== true) findings.push("FINITE_TASK_FINAL_SOURCE_DISCOVERY_INCOMPLETE");
-  const matches = (Array.isArray(comments) ? comments : []).filter(({ body }) => typeof body === "string" && body.startsWith(`${finalReceiptMarker}\n`));
+  const matches = (Array.isArray(comments) ? comments : []).filter(({ body }) => hasCanonicalMarkedCommentPrefix(body, finalReceiptMarker));
   const requiredKey = { finalHead: candidate?.head ?? null, finalTree: candidate?.tree ?? null };
   const selection = selectCurrentImmutableEvidence({
     candidates: matches,
     requiredKey,
     classify: (raw, index) => {
       const observation = normalizeIssueComment(raw);
-      let envelope;
-      try { envelope = JSON.parse(observation.body.slice(finalReceiptMarker.length + 1)); } catch { return { valid: false, key: null, value: null, disposition: "MALFORMED_INVALID" }; }
+      const parsed = parseCanonicalMarkedComment(observation.body, finalReceiptMarker);
+      if (!parsed.ok) return { valid: false, key: null, value: null, disposition: "MALFORMED_INVALID" };
+      const envelope = parsed.payload;
       if (!envelope || typeof envelope !== "object" || Array.isArray(envelope) || !envelope.subject || typeof envelope.subject !== "object" || Array.isArray(envelope.subject)) {
         return { valid: false, key: null, value: null, disposition: "MALFORMED_INVALID" };
       }
@@ -3782,10 +3785,10 @@ export function registerVerifiedFiniteTaskImplementationLifecycle({ lifecycle: v
       || typeof raw?.created_at !== "string"
       || raw.created_at !== raw.updated_at
       || raw?.issue_url !== `https://api.github.com/repos/${repository}/issues/${implementationPr}`
-      || typeof raw?.body !== "string"
-      || !raw.body.startsWith(`${marker}\n`)) return null;
-    let envelope;
-    try { envelope = JSON.parse(raw.body.slice(marker.length + 1)); } catch { return null; }
+      || !hasCanonicalMarkedCommentPrefix(raw?.body, marker)) return null;
+    const parsed = parseCanonicalMarkedComment(raw.body, marker);
+    if (!parsed.ok) return null;
+    const envelope = parsed.payload;
     if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)
       || !envelope.subject || typeof envelope.subject !== "object" || Array.isArray(envelope.subject)) return null;
     const body = Object.fromEntries(Object.entries(envelope).filter(([key]) => key !== "bodyHash"));
@@ -3801,7 +3804,7 @@ export function registerVerifiedFiniteTaskImplementationLifecycle({ lifecycle: v
     head: value?.candidateHead ?? null,
     tree: value?.candidateTree ?? null,
   };
-  const reviewCandidates = (liveObservation?.comments ?? []).filter(({ body }) => typeof body === "string" && body.startsWith(`${reviewMarker}\n`));
+  const reviewCandidates = (liveObservation?.comments ?? []).filter(({ body }) => hasCanonicalMarkedCommentPrefix(body, reviewMarker));
   const reviewSelection = selectCurrentImmutableEvidence({
     candidates: reviewCandidates,
     requiredKey: reviewRequiredKey,
@@ -3849,7 +3852,7 @@ export function registerVerifiedFiniteTaskImplementationLifecycle({ lifecycle: v
     head: value?.candidateHead ?? null,
     tree: value?.candidateTree ?? null,
   };
-  const finalCandidates = (liveObservation?.comments ?? []).filter(({ body }) => typeof body === "string" && body.startsWith(`${finalReceiptMarker}\n`));
+  const finalCandidates = (liveObservation?.comments ?? []).filter(({ body }) => hasCanonicalMarkedCommentPrefix(body, finalReceiptMarker));
   const finalSelection = selectCurrentImmutableEvidence({
     candidates: finalCandidates,
     requiredKey: finalRequiredKey,
@@ -4234,9 +4237,11 @@ function normalizeIssueComment(raw) {
   };
 }
 function parseTaskLeaseAmendmentBody(body) {
-  if (typeof body !== "string" || !body.startsWith(`${taskLeaseAmendmentMarker}\n`)) return null;
+  if (!hasCanonicalMarkedCommentPrefix(body, taskLeaseAmendmentMarker)) return null;
   try {
-    const envelope = JSON.parse(body.slice(taskLeaseAmendmentMarker.length + 1));
+    const parsed = parseCanonicalMarkedComment(body, taskLeaseAmendmentMarker);
+    if (!parsed.ok) return null;
+    const envelope = parsed.payload;
     if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return null;
     return envelope;
   } catch {
@@ -4244,9 +4249,11 @@ function parseTaskLeaseAmendmentBody(body) {
   }
 }
 function parseFiniteTaskTestAdaptationBody(body) {
-  if (typeof body !== "string" || !body.startsWith(`${finiteTaskTestAdaptationMarker}\n`)) return null;
+  if (!hasCanonicalMarkedCommentPrefix(body, finiteTaskTestAdaptationMarker)) return null;
   try {
-    const envelope = JSON.parse(body.slice(finiteTaskTestAdaptationMarker.length + 1));
+    const parsed = parseCanonicalMarkedComment(body, finiteTaskTestAdaptationMarker);
+    if (!parsed.ok) return null;
+    const envelope = parsed.payload;
     return envelope && typeof envelope === "object" && !Array.isArray(envelope) ? envelope : null;
   } catch { return null; }
 }
@@ -4440,7 +4447,7 @@ const finiteTaskOverlayFinalReceiptRecordValid = (receipt, outcome, lease = null
     && receipt.testAdaptationCommentId === outcome?.testAdaptationReceipt?.commentId;
 };
 const finiteTaskOverlayFinalReceiptMatchesLiveObservation = (receipt, liveObservation, implementationPr) => {
-  const matches = (liveObservation?.comments ?? []).filter(({ body }) => typeof body === "string" && body.startsWith(`${finalReceiptMarker}\n`));
+  const matches = (liveObservation?.comments ?? []).filter(({ body }) => hasCanonicalMarkedCommentPrefix(body, finalReceiptMarker));
   const requiredKey = {
     repository: receipt?.subject?.repository ?? null,
     featureId: receipt?.subject?.featureId ?? null,
@@ -4454,8 +4461,9 @@ const finiteTaskOverlayFinalReceiptMatchesLiveObservation = (receipt, liveObserv
     requiredKey,
     classify: (raw) => {
       const observed = normalizeIssueComment(raw);
-      let envelope;
-      try { envelope = JSON.parse(observed.body.slice(finalReceiptMarker.length + 1)); } catch { return { valid: false, key: null, value: null, disposition: "MALFORMED_INVALID" }; }
+      const parsed = parseCanonicalMarkedComment(observed.body, finalReceiptMarker);
+      if (!parsed.ok) return { valid: false, key: null, value: null, disposition: "MALFORMED_INVALID" };
+      const envelope = parsed.payload;
       const subject = envelope?.subject;
       if (!subject || typeof subject !== "object" || Array.isArray(subject)) return { valid: false, key: null, value: null, disposition: "MALFORMED_INVALID" };
       const key = {
@@ -4475,7 +4483,7 @@ const finiteTaskOverlayFinalReceiptMatchesLiveObservation = (receipt, liveObserv
         && envelope.subjectHash === sha256(subject)
         && envelope.bodyHash === sha256(envelopeBody)
         && stableJson(subject) === stableJson(receipt?.subject)
-        && observed.body === finiteTaskFinalReceiptBody(subject);
+        && parsed.canonicalBody === finiteTaskFinalReceiptBody(subject);
       return {
         valid,
         key,
