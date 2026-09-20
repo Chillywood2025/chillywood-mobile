@@ -160,9 +160,7 @@
       "config/assurance/github-required-checks-v1.json",
       "scripts/assurance/current-truth.mjs",
       "scripts/assurance/active-task.mjs",
-      "scripts/assurance/lib.mjs",
-      "scripts/guard-autonomous-systems-contract.mjs",
-      "scripts/proof-autonomous-systems-contract.mjs"
+      "scripts/assurance/lib.mjs"
       ,"config/assurance/engineering-doctrine-v1.json"
       ,"config/assurance/adversarial-taxonomy-v1.json"
       ,"config/assurance/platform-provider-contracts-v1.json"
