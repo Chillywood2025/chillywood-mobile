@@ -9,9 +9,9 @@
   "primaryDomain": "eas-build-update-release",
   "implementation": {
     "branch": "codex/release-delivery-automation-control-plane-hardening-v1",
-    "pullRequest": null,
-    "seedHead": null,
-    "seedTree": null
+    "pullRequest": 476,
+    "seedHead": "d38615a191a5ed943071bdcaa89a6d6c9d57077e",
+    "seedTree": "bb14ceeb135375e357986bad876350fbaed4d6e6"
   },
   "rootDefects": [
     "RDA-CP-P1-OTA-PLATFORM-PROVENANCE-001",
