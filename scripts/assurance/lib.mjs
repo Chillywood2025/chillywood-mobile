@@ -2034,6 +2034,12 @@ function readGithubEvent(environment = process.env) {
   try { return JSON.parse(fs.readFileSync(eventPath, "utf8")); } catch { return null; }
 }
 
+export function finiteTaskLiveContextCheckoutEligible({ checkoutHead, actualCheckoutHead, githubEvent } = {}) {
+  return checkoutHead === undefined
+    || checkoutHead === actualCheckoutHead
+    || Boolean(githubEvent?.pull_request && checkoutHead === githubEvent.pull_request.head?.sha);
+}
+
 const trustedGitHubExecutionIdentities = new WeakMap();
 const registerGitHubExecutionIdentity = (value) => { trustedGitHubExecutionIdentities.set(value, sha256(value)); return value; };
 export const githubExecutionIdentityValid = (value) => value?.relationship?.valid === true && trustedGitHubExecutionIdentities.get(value) === sha256(value);
@@ -2521,7 +2527,11 @@ export function evaluateFiniteTaskLeaseRuntime({
   const liveContextEligible = githubEvent === undefined
     && suppliedObservation === undefined
     && effectiveReservationResolution === null
-    && (checkoutHead === undefined || checkoutHead === safeRuntimeGit(gitCommand, ["rev-parse", "HEAD"]));
+    && finiteTaskLiveContextCheckoutEligible({
+      checkoutHead,
+      actualCheckoutHead: safeRuntimeGit(gitCommand, ["rev-parse", "HEAD"]),
+      githubEvent: event,
+    });
   const assuranceControlContext = currentProtectedBaseResolution.ok && liveContextEligible
     ? observeLiveAssuranceControlTaskContext({
       environment,
