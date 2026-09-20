@@ -1854,6 +1854,7 @@ export const FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1 = "FINITE_TASK_
 export const FINITE_TASK_TERMINAL_TRUTH_V1 = "FINITE_TASK_TERMINAL_TRUTH_V1";
 export const FINITE_TASK_TERMINAL_TRUTH_FINAL_SOURCE_V1 = "FINITE_TASK_TERMINAL_TRUTH_FINAL_SOURCE_V1";
 export const IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1 = "IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_V1";
+export const STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1 = "STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1";
 export const PHASE1_RISK_BASED_ADMISSION_REFORM_V1 = "PHASE1_RISK_BASED_ADMISSION_REFORM_V1";
 export const ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1 = "ASSURANCE_CONTROL_PLANE_FIXED_POINT_SYNCHRONIZATION_V1";
 export const ASSURANCE_CONTROL_PLANE_FIXED_POINT_PATHS = Object.freeze(["config/assurance/current-truth-contract-v1.json", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "tests/assurance/current-truth-sync.test.mjs", "tests/assurance/engineering-doctrine.test.mjs", "tests/assurance/pr-scope-feature-bundles.test.mjs"]);
@@ -2030,6 +2031,13 @@ export const IMMUTABLE_EVIDENCE_LIFECYCLE_CONVERGENCE_ARCHITECTURE_PATHS = Objec
   "tests/assurance/jurisdiction-policy.test.mjs",
   "tests/assurance/pr-scope-feature-bundles.test.mjs",
 ]);
+export const STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_ARCHITECTURE_PATHS = Object.freeze([
+  "scripts/assurance/active-task.mjs",
+  "scripts/assurance/engineering-closure.mjs",
+  "scripts/assurance/jurisdiction-policy.mjs",
+  "scripts/assurance/lib.mjs",
+  "tests/assurance/jurisdiction-policy.test.mjs",
+]);
 export const FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION = "FINITE_TASK_TERMINAL_TRUTH_V1_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION";
 export const FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_PATHS = Object.freeze([
   "config/assurance/current-truth-v1.json",
@@ -2082,6 +2090,8 @@ const phase1ControlProfile = (objective) => objective === PHASE1_RISK_BASED_ADMI
   ? { paths: PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_ARCHITECTURE_PATHS, maximumFiles: 2, maximumChangedLines: 80 }
   : objective === ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2
   ? ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE
+  : objective === STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1
+  ? { paths: STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_ARCHITECTURE_PATHS, maximumFiles: 5, maximumChangedLines: 900 }
   : null;
 export const TERMINAL_TRUTH_PATHS = Object.freeze(["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"]);
 export const FINITE_TASK_ADMISSION_LEASE_STATE = "ACTIVE_IMPLEMENTATION";
