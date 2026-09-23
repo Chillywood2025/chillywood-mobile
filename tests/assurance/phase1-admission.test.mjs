@@ -924,13 +924,13 @@ test("finite-task admission synchronization lineage has one exact assurance-only
   assert.deepEqual(profile, {
     profileId: FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2,
     paths: FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_ARCHITECTURE_PATHS,
-    maximumFiles: 9,
-    maximumChangedLines: 2200,
+    maximumFiles: 11,
+    maximumChangedLines: 2400,
   });
-  const budget = { maximumFiles: 9, maximumChangedLines: 2200, maximumHandAuthoredNetLines: 2200 };
-  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: profile.paths, budget, changedFiles: 9 })?.profileId, FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2);
-  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: profile.paths.slice(1), budget, changedFiles: 8 }), null);
-  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: [...profile.paths, "app/index.tsx"].sort(), budget, changedFiles: 10 }), null);
+  const budget = { maximumFiles: 11, maximumChangedLines: 2400, maximumHandAuthoredNetLines: 2400 };
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: profile.paths, budget, changedFiles: 11 })?.profileId, FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2);
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: profile.paths.slice(1), budget, changedFiles: 10 }), null);
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: [...profile.paths, "app/index.tsx"].sort(), budget, changedFiles: 12 }), null);
   const subject = architectureMaintenanceSubject({
     identity: { repository: REPOSITORY, pr: 901, branch: "codex/admission-sync-lineage", headSha: HEAD, baseSha: BASE },
     tree: TREE,
@@ -940,8 +940,15 @@ test("finite-task admission synchronization lineage has one exact assurance-only
   });
   assert.equal(subject.objective, FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2);
   assert.deepEqual(subject.changedPaths, profile.paths);
-  assert.equal(subject.currentTruthCompanionIncluded, false);
+  assert.equal(subject.currentTruthCompanionIncluded, true);
   assert.deepEqual(subject.authority, { product: false, nativeProduct: false, package: false, database: false, provider: false, build: false, release: false, submission: false, ota: false, publicRelease: false });
+});
+
+test("Phase 1 lifecycle risk reads the PR-scope registry from the exact protected base", () => {
+  const source = fs.readFileSync("scripts/assurance/phase1-admission.mjs", "utf8");
+  assert.match(source, /git["'], \[["']show["'], `\$\{identity\.baseSha\}:config\/assurance\/pr-scope-policy-v1\.json`\]/u);
+  assert.match(source, /classifyDiffRisk\([\s\S]*prScopePolicy/u);
+  assert.doesNotMatch(source, /JSON\.parse\(fs\.readFileSync\([^\n]*pr-scope-policy-v1\.json/u);
 });
 
 test("release task mandatory commands resolve to exact non-shell allowlist entries", () => {

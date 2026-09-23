@@ -30,6 +30,7 @@ import {
 import { parseCanonicalMarkedComment } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const policy = JSON.parse(fs.readFileSync("config/assurance/control-plane-lifecycle-v2.json", "utf8"));
+const prScopePolicy = JSON.parse(fs.readFileSync("config/assurance/pr-scope-policy-v1.json", "utf8"));
 const sha = (character) => character.repeat(40);
 const digest = (character) => character.repeat(64);
 const lease = { leaseId: "synthetic-lifecycle-task-v1", implementationPr: 700, implementationBranch: "codex/synthetic-lifecycle-task-v1" };
@@ -221,6 +222,30 @@ test("presentation-only risk requires exact boundary proof and high/unknown risk
   assert.equal(classifyDiffRisk({ changedPaths: ["supabase/migrations/example.sql"], policy }).classification, RISK_CLASSES.HIGH);
   assert.equal(classifyDiffRisk({ changedPaths: ["unknown.txt"], policy }).classification, RISK_CLASSES.UNKNOWN);
   assert.equal(classifyDiffRisk({ changedPaths: ["scripts/assurance/example.mjs"], policy }).classification, RISK_CLASSES.ASSURANCE);
+});
+
+test("protected PR-scope high-risk domains drive lifecycle risk without allowing unknown paths to ride along", () => {
+  const releasePaths = [
+    "docs/assurance/tasks/synthetic-release-control-v1.json",
+    "docs/release/CONTROL_PLANE_RUNBOOK.md",
+    "scripts/ios-delivery-control.mjs",
+    "scripts/physical-automation-control.mjs",
+    "tests/release-control-plane.test.mjs",
+  ];
+  assert.deepEqual(classifyDiffRisk({ changedPaths: releasePaths, policy, prScopePolicy }), {
+    classification: RISK_CLASSES.HIGH,
+    hostedSecurity: "HOSTED_SECURITY_REQUIRED",
+    findings: [],
+  });
+  const malformed = structuredClone(prScopePolicy);
+  malformed.contractId = "forged-pr-scope-policy";
+  assert.equal(classifyDiffRisk({ changedPaths: releasePaths, policy, prScopePolicy: malformed }).classification, RISK_CLASSES.UNKNOWN);
+  assert.equal(classifyDiffRisk({ changedPaths: [...releasePaths, "unregistered/runtime-boundary.bin"], policy, prScopePolicy }).classification, RISK_CLASSES.UNKNOWN);
+  assert.equal(classifyDiffRisk({ changedPaths: ["scripts/ios-delivery-control.mjs"], policy, prScopePolicy }).classification, RISK_CLASSES.UNKNOWN);
+  assert.equal(classifyDiffRisk({ changedPaths: ["docs/release/CONTROL_PLANE_RUNBOOK.md", "app/(auth)/login.tsx"], policy, prScopePolicy }).classification, RISK_CLASSES.HIGH);
+  const downgraded = structuredClone(prScopePolicy);
+  downgraded.domains.find(({ id }) => id === "release-OTA").risk = "medium";
+  assert.equal(classifyDiffRisk({ changedPaths: releasePaths, policy, prScopePolicy: downgraded }).classification, RISK_CLASSES.UNKNOWN);
 });
 
 test("authenticated generated current-truth companions classify as assurance-control high risk", () => {

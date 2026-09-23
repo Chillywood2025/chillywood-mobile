@@ -1591,6 +1591,10 @@ async function finalizeAdmission({ repository, prNumber, readToken, publisher, s
     if (!fs.existsSync(policyPath)) return null;
     const lifecyclePolicy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
     if (!validateLifecyclePolicy(lifecyclePolicy).ok) throw new Error("PHASE1_LIFECYCLE_POLICY_INVALID");
+    const prScopePolicyRead = spawnSync("git", ["show", `${identity.baseSha}:config/assurance/pr-scope-policy-v1.json`], { cwd: root, encoding: "utf8", shell: false });
+    if (prScopePolicyRead.status !== 0) throw new Error("PHASE1_PROTECTED_PR_SCOPE_POLICY_READ_FAILED");
+    let prScopePolicy = null;
+    try { prScopePolicy = JSON.parse(prScopePolicyRead.stdout); } catch { throw new Error("PHASE1_PROTECTED_PR_SCOPE_POLICY_INVALID"); }
     const paths = runGit(["diff", "--name-only", identity.baseSha, identity.headSha]).split(/\r?\n/gu).filter(Boolean).sort();
     const patch = spawnSync("git", ["diff", "--binary", identity.baseSha, identity.headSha], { cwd: root, shell: false, stdio: ["ignore", "pipe", "pipe"] });
     if (patch.status !== 0) throw new Error("PHASE1_CANDIDATE_DIFF_READ_FAILED");
@@ -1622,6 +1626,7 @@ async function finalizeAdmission({ repository, prNumber, readToken, publisher, s
       exactDiff,
       assuranceTransitionContext: assuranceTransition.ok ? assuranceTransition.context : null,
       policy: lifecyclePolicy,
+      prScopePolicy,
     });
     return { lifecyclePolicy, riskClassification: risk.classification, lifecycleStage: pr.draft === true ? "AUTHORIZED_IMPLEMENTATION" : "FROZEN_CANDIDATE" };
   });

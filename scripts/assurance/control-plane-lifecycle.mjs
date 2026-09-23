@@ -59,6 +59,33 @@ const exactKeys = (value, keys) => value && typeof value === "object"
   && stableLifecycleJson(Object.keys(value).sort()) === stableLifecycleJson([...keys].sort());
 const pathMatchesPolicyEntry = (file, entry) => typeof entry === "string"
   && (entry.endsWith("/") ? file.startsWith(entry) : file === entry);
+const pathMatchesPrScopePattern = (file, pattern) => {
+  if (typeof file !== "string" || typeof pattern !== "string" || !file || !pattern) return false;
+  const escaped = pattern.split("*").map((part) => part.replace(/[\\^$.*+?()[\]{}|]/gu, "\\$&")).join(".*");
+  return new RegExp(`^${escaped}`, "u").test(file);
+};
+const protectedPrScopeRisk = (paths, prScopePolicy) => {
+  const domains = prScopePolicy?.domains;
+  const policyValid = prScopePolicy?.schemaVersion === 1
+    && prScopePolicy?.contractId === "pr-scope-policy-v1"
+    && Array.isArray(domains)
+    && domains.length > 0
+    && new Set(domains.map(({ id }) => id)).size === domains.length
+    && domains.every(({ id, risk, paths: patterns }) => typeof id === "string" && id.length > 0
+      && ["high", "medium", "supporting"].includes(risk)
+      && Array.isArray(patterns) && patterns.length > 0
+      && patterns.every((pattern) => typeof pattern === "string" && pattern.length > 0));
+  if (!policyValid) return { valid: false, complete: false, highRisk: false, domains: [] };
+  const classified = paths.map((file) => ({
+    file,
+    domains: domains.filter(({ paths: patterns }) => patterns.some((pattern) => pathMatchesPrScopePattern(file, pattern))),
+    canonicalTaskArtifact: /^docs\/assurance\/tasks\/[A-Za-z0-9][A-Za-z0-9_-]*\.json$/u.test(file),
+  }));
+  const complete = classified.every(({ domains: matches, canonicalTaskArtifact }) => matches.length > 0 || canonicalTaskArtifact);
+  const affected = [...new Set(classified.flatMap(({ domains: matches }) => matches.map(({ id }) => id)))].sort();
+  const highRisk = complete && classified.some(({ domains: matches }) => matches.some(({ risk }) => risk === "high"));
+  return { valid: true, complete, highRisk, domains: affected };
+};
 const exactPathSet = (actual, expected) => stableLifecycleJson([...new Set(actual ?? [])].sort()) === stableLifecycleJson([...expected].sort());
 const exactDiffIdentityValid = (exactDiff, paths) => exactKeys(exactDiff, ["repository", "implementationPr", "baseSha", "headSha", "sourceTree", "changedPathSha256", "patchSha256"])
   && exactDiff?.repository === "Chillywood2025/chillywood-mobile"
@@ -218,7 +245,7 @@ export function authorizeCanonicalGeneratedAssuranceCompanionTransition({
 
 const presentationRoots = ["app/", "components/", "tests/", "docs/assurance/tasks/"];
 const forbiddenPresentationRoots = [".github/", ".agents/", "config/", "scripts/", "supabase/", "android/", "ios/", "plugins/", "package.json", "package-lock.json", "app.config.ts", "app.json", "eas.json"];
-export function classifyDiffRisk({ changedPaths = [], boundaryAssessment = null, exactDiff = null, assuranceTransitionContext = null, policy } = {}) {
+export function classifyDiffRisk({ changedPaths = [], boundaryAssessment = null, exactDiff = null, assuranceTransitionContext = null, policy, prScopePolicy = null } = {}) {
   const paths = [...new Set(changedPaths)].sort();
   const assuranceRoots = policy?.security?.assuranceRoots ?? [];
   if (paths.length === 0) return { classification: RISK_CLASSES.UNKNOWN, hostedSecurity: "HOSTED_SECURITY_REQUIRED", findings: ["RISK_CHANGED_PATHS_EMPTY"] };
@@ -238,6 +265,10 @@ export function classifyDiffRisk({ changedPaths = [], boundaryAssessment = null,
   }
   if (paths.every((file) => assuranceRoots.some((root) => file === root || file.startsWith(root)))) {
     return { classification: RISK_CLASSES.ASSURANCE, hostedSecurity: "HOSTED_SECURITY_REQUIRED", findings: [] };
+  }
+  const protectedRisk = protectedPrScopeRisk(paths, prScopePolicy);
+  if (protectedRisk.valid && protectedRisk.complete && protectedRisk.highRisk) {
+    return { classification: RISK_CLASSES.HIGH, hostedSecurity: "HOSTED_SECURITY_REQUIRED", findings: [] };
   }
   const sensitive = policy?.security?.sensitiveBoundaries ?? [];
   const exactDiffValid = exactDiffIdentityValid(exactDiff, paths);

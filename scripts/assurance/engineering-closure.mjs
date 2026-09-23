@@ -2099,11 +2099,13 @@ export const CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS = O
 export const FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2 = "FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2";
 export const FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_ARCHITECTURE_PATHS = Object.freeze([
   "config/assurance/command-allowlist-v1.json",
+  "config/assurance/current-truth-v1.json",
   "scripts/assurance/active-task.mjs",
   "scripts/assurance/control-plane-lifecycle.mjs",
   "scripts/assurance/engineering-closure.mjs",
   "scripts/assurance/jurisdiction-policy.mjs",
   "scripts/assurance/lib.mjs",
+  "scripts/assurance/phase1-admission.mjs",
   "tests/assurance/control-plane-lifecycle-v2.test.mjs",
   "tests/assurance/jurisdiction-policy.test.mjs",
   "tests/assurance/phase1-admission.test.mjs",
@@ -2119,7 +2121,7 @@ const phase1ControlProfile = (objective) => objective === PHASE1_RISK_BASED_ADMI
   : objective === CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1
   ? { paths: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS, maximumFiles: 6, maximumChangedLines: 1200 }
   : objective === FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2
-  ? { paths: FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_ARCHITECTURE_PATHS, maximumFiles: 9, maximumChangedLines: 2200 }
+  ? { paths: FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_ARCHITECTURE_PATHS, maximumFiles: 11, maximumChangedLines: 2400 }
   : objective === ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2
   ? ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE
   : objective === STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1

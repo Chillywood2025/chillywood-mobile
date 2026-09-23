@@ -2150,9 +2150,9 @@ export const ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES = Object.freeze([
   }),
   Object.freeze({
     profileId: "FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2",
-    paths: Object.freeze(["config/assurance/command-allowlist-v1.json", "scripts/assurance/active-task.mjs", "scripts/assurance/control-plane-lifecycle.mjs", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/jurisdiction-policy.mjs", "scripts/assurance/lib.mjs", "tests/assurance/control-plane-lifecycle-v2.test.mjs", "tests/assurance/jurisdiction-policy.test.mjs", "tests/assurance/phase1-admission.test.mjs"]),
-    maximumFiles: 9,
-    maximumChangedLines: 2200,
+    paths: Object.freeze(["config/assurance/command-allowlist-v1.json", "config/assurance/current-truth-v1.json", "scripts/assurance/active-task.mjs", "scripts/assurance/control-plane-lifecycle.mjs", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/jurisdiction-policy.mjs", "scripts/assurance/lib.mjs", "scripts/assurance/phase1-admission.mjs", "tests/assurance/control-plane-lifecycle-v2.test.mjs", "tests/assurance/jurisdiction-policy.test.mjs", "tests/assurance/phase1-admission.test.mjs"]),
+    maximumFiles: 11,
+    maximumChangedLines: 2400,
   }),
 ]);
 
