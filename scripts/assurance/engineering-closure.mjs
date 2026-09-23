@@ -2087,6 +2087,14 @@ export const PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_ARCHITECTURE_PATHS = Object.fr
   ".github/workflows/phase1-ci.yml",
   "tests/assurance/source-readiness-wrapper.test.mjs",
 ]);
+export const CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1 = "CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1";
+export const CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS = Object.freeze([
+  "scripts/assurance/control-plane-lifecycle.mjs",
+  "scripts/assurance/engineering-closure.mjs",
+  "scripts/assurance/phase1-admission.mjs",
+  "tests/assurance/control-plane-lifecycle-v2.test.mjs",
+  "tests/assurance/phase1-admission.test.mjs",
+]);
 const phase1ControlProfile = (objective) => objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1
   ? { paths: PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS, maximumFiles: 14, maximumChangedLines: 4200 }
   : objective === PHASE1_ADMISSION_RULESET_CUTOVER_V1
@@ -2095,6 +2103,8 @@ const phase1ControlProfile = (objective) => objective === PHASE1_RISK_BASED_ADMI
   ? { paths: PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_ARCHITECTURE_PATHS, maximumFiles: 2, maximumChangedLines: 80 }
   : objective === PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1
   ? { paths: PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_ARCHITECTURE_PATHS, maximumFiles: 2, maximumChangedLines: 80 }
+  : objective === CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1
+  ? { paths: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS, maximumFiles: 5, maximumChangedLines: 1200 }
   : objective === ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2
   ? ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE
   : objective === STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1

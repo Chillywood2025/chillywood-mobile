@@ -39,6 +39,8 @@ import {
 import {
   ARCHITECTURE_FINAL_SOURCE_MARKER,
   ARCHITECTURE_MAINTENANCE_MARKER,
+  CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS,
+  CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
   PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1,
   PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS,
   PHASE1_RISK_BASED_ADMISSION_REFORM_V1,
@@ -771,6 +773,30 @@ test("Phase 1 risk classification consumes only the authenticated canonical gene
   assert.match(engine, /sourceAuthorityProof = resolvePhase1SourceAuthorityEligibility\(\{ repository, identity, root \}\)/u);
   assert.match(engine, /canonicalCurrentStateText: renderCurrentState\(currentTruth\)/u);
   assert.match(engine, /canonicalNextTaskText: renderNextTask\(currentTruth\)/u);
+});
+
+test("canonical generated-companion risk maintenance has an exact non-recursive architecture profile", () => {
+  const identity = { repository: REPOSITORY, pr: 900, branch: "codex/canonical-generated-companion-risk", headSha: HEAD, baseSha: BASE };
+  const scope = { files: [...CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS], additions: 420, deletions: 80, netChangedLines: 340 };
+  const subject = architectureMaintenanceSubject({
+    identity,
+    tree: TREE,
+    scope,
+    profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2",
+    objective: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
+  });
+  assert.equal(subject.objective, CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1);
+  assert.deepEqual(subject.changedPaths, [...CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS]);
+  assert.equal(subject.currentTruthCompanionIncluded, false);
+  assert.equal(subject.reusableByAnotherPr, false);
+  assert.deepEqual(subject.authority, { product: false, nativeProduct: false, package: false, database: false, provider: false, build: false, release: false, submission: false, ota: false, publicRelease: false });
+  assert.throws(() => architectureMaintenanceSubject({
+    identity,
+    tree: TREE,
+    scope: { ...scope, files: scope.files.slice(1) },
+    profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2",
+    objective: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
+  }), /OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SCOPE_INVALID/u);
 });
 
 test("every Phase 1 step that invokes the authenticated source resolver receives the read-only GitHub token", () => {
