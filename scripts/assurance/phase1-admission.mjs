@@ -88,6 +88,10 @@ const CONTEXT_PREFIX = "Phase 1 Context / ";
 const CONTEXT_RE = /^Phase 1 Context \/ (DRAFT_SOURCE_READINESS|READY_MERGE_AUTHORITY) \/ PR-([1-9][0-9]*) \/ BASE-([0-9a-f]{40}) \/ ACT-([a-z_]+) \/ GEN-([0-9TZ:.-]+)$/u;
 const MAINTENANCE_STEP = "Validate non-authoritative assurance display projection";
 const MAINTENANCE_LANES = new Set(["Phase 1 / Autonomous Systems All-Platform Contract", "Phase 1 / Autonomous Systems iOS Contract", "Phase 1 / Cognitive Intelligence Contract"]);
+const LIFECYCLE_AWARE_PHASE1_V2 = "LIFECYCLE_RISK_AWARE_PHASE1_V2";
+const V2_REQUIRED_SUCCESS_STEPS = new Map([
+  ["Phase 1 / Autonomous Systems All-Platform Contract", "Validate lifecycle-ready assurance controls"],
+]);
 const GENERATED_SUFFIX_STEP_RE = /^(?:Post (?:Setup Deno|Setup Node\.js|Checkout)|Complete job)$/u;
 const aggregateEvidenceBrand = new WeakSet();
 const mergeEligibilityBrand = new WeakSet();
@@ -344,6 +348,14 @@ function exactMaintenanceJob(job, { identity, run } = {}) {
 
 function exactSuccessfulLane(job, context) {
   if (!exactJobIdentity(job, context) || job?.status !== "completed" || job?.conclusion !== "success") return false;
+  if (context?.lifecyclePolicyId === LIFECYCLE_AWARE_PHASE1_V2) {
+    const steps = Array.isArray(job.steps) ? job.steps : [];
+    if (steps.length === 0 || steps.some(({ status, conclusion }) => status !== "completed" || !["success", "skipped"].includes(conclusion))) return false;
+    const requiredStep = V2_REQUIRED_SUCCESS_STEPS.get(job.name);
+    if (!requiredStep) return true;
+    const matches = steps.filter(({ name }) => name === requiredStep);
+    return matches.length === 1 && matches[0]?.status === "completed" && matches[0]?.conclusion === "success";
+  }
   if (!MAINTENANCE_LANES.has(job?.name)) return true;
   const steps = Array.isArray(job.steps) ? job.steps : [];
   const matching = steps.filter(({ name }) => name === MAINTENANCE_STEP);
@@ -630,7 +642,12 @@ export function evaluatePhase1Admission(input = {}) {
     } else if (jobs.length > 1) {
       const observed = finding("PHASE1_REQUIRED_LANE_DUPLICATE", name);
       lanes.push({ name, result: PHASE1_LANE_RESULTS.BLOCKING, findings: [classifyPhase1Finding(observed, { trustedContext })] });
-    } else lanes.push(classifyLane(jobs[0], trustedContext, { identity, run, maintenanceProof: input.maintenanceProof }));
+    } else lanes.push(classifyLane(jobs[0], trustedContext, {
+      identity,
+      run,
+      maintenanceProof: input.maintenanceProof,
+      lifecyclePolicyId: lifecyclePolicy?.phase1?.policyId ?? null,
+    }));
   }
 
   const extraFindings = Array.isArray(input.findings) ? input.findings : [];
@@ -1574,6 +1591,10 @@ async function finalizeAdmission({ repository, prNumber, readToken, publisher, s
     if (!fs.existsSync(policyPath)) return null;
     const lifecyclePolicy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
     if (!validateLifecyclePolicy(lifecyclePolicy).ok) throw new Error("PHASE1_LIFECYCLE_POLICY_INVALID");
+    const prScopePolicyRead = spawnSync("git", ["show", `${identity.baseSha}:config/assurance/pr-scope-policy-v1.json`], { cwd: root, encoding: "utf8", shell: false });
+    if (prScopePolicyRead.status !== 0) throw new Error("PHASE1_PROTECTED_PR_SCOPE_POLICY_READ_FAILED");
+    let prScopePolicy = null;
+    try { prScopePolicy = JSON.parse(prScopePolicyRead.stdout); } catch { throw new Error("PHASE1_PROTECTED_PR_SCOPE_POLICY_INVALID"); }
     const paths = runGit(["diff", "--name-only", identity.baseSha, identity.headSha]).split(/\r?\n/gu).filter(Boolean).sort();
     const patch = spawnSync("git", ["diff", "--binary", identity.baseSha, identity.headSha], { cwd: root, shell: false, stdio: ["ignore", "pipe", "pipe"] });
     if (patch.status !== 0) throw new Error("PHASE1_CANDIDATE_DIFF_READ_FAILED");
@@ -1597,7 +1618,16 @@ async function finalizeAdmission({ repository, prNumber, readToken, publisher, s
       }
     }
     const boundaryAssessment = boundaryAssessments.length === 1 ? boundaryAssessments[0] : null;
-    const risk = classifyDiffRisk({ changedPaths: paths, boundaryAssessment, exactDiff, policy: lifecyclePolicy });
+    if (typeof engine.resolveCanonicalGeneratedAssuranceCompanionRiskContext !== "function") throw new Error("PHASE1_CANONICAL_GENERATED_COMPANION_RESOLVER_MISSING");
+    const assuranceTransition = engine.resolveCanonicalGeneratedAssuranceCompanionRiskContext({ repository, identity, exactDiff, changedPaths: paths, root });
+    const risk = classifyDiffRisk({
+      changedPaths: paths,
+      boundaryAssessment,
+      exactDiff,
+      assuranceTransitionContext: assuranceTransition.ok ? assuranceTransition.context : null,
+      policy: lifecyclePolicy,
+      prScopePolicy,
+    });
     return { lifecyclePolicy, riskClassification: risk.classification, lifecycleStage: pr.draft === true ? "AUTHORIZED_IMPLEMENTATION" : "FROZEN_CANDIDATE" };
   });
   const input = {

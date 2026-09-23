@@ -21,6 +21,8 @@
     {"id":"codex-review-exact-head-test","contractCommand":"node --test tests/assurance/codex-review-exact-head.test.mjs","file":"node","args":["--test","tests/assurance/codex-review-exact-head.test.mjs"],"timeoutMs":30000,"resultContract":{"type":"node-test-tap-v1"}},
     {"id":"lint","contractCommand":"npm run lint","file":"npm","args":["run","lint"],"timeoutMs":120000,"resultContract":{"type":"exit-zero-v1"}},
     {"id":"typecheck","contractCommand":"npm run typecheck","file":"npm","args":["run","typecheck"],"timeoutMs":120000,"resultContract":{"type":"exit-zero-v1"}},
+    {"id":"release-ota-native-boundary","contractCommand":"npm run guard:ota-native-boundary","file":"npm","args":["run","guard:ota-native-boundary"],"timeoutMs":120000,"resultContract":{"type":"exit-zero-v1"}},
+    {"id":"release-manifest-contract","contractCommand":"npm run generate:release-manifest-contract","file":"npm","args":["run","generate:release-manifest-contract"],"timeoutMs":120000,"resultContract":{"type":"exit-zero-v1"}},
     {"id":"diff-check","contractCommand":"git diff --check","file":"git","args":["diff","--check"],"timeoutMs":30000,"resultContract":{"type":"exit-zero-empty-v1"}},
     {"id":"node-version","contractCommand":"node --version","file":"node","args":["--version"],"timeoutMs":10000,"resultContract":{"type":"node-version-v1"}},
     {"id":"d2a-call-semantics","contractCommand":"npm run test:chilly-chat-call-semantics","file":"npm","args":["run","test:chilly-chat-call-semantics"],"timeoutMs":120000,"resultContract":{"type":"exit-zero-v1"}},

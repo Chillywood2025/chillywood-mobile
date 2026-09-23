@@ -39,23 +39,33 @@ import {
 import {
   ARCHITECTURE_FINAL_SOURCE_MARKER,
   ARCHITECTURE_MAINTENANCE_MARKER,
+  CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS,
+  CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
+  FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_ARCHITECTURE_PATHS,
+  FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2,
   PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1,
   PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS,
   PHASE1_RISK_BASED_ADMISSION_REFORM_V1,
   architectureFinalSourceOwnerCommentBody,
+  architectureFinalSourceSubject,
   architectureMaintenanceOwnerCommentBody,
   architectureMaintenanceSubject,
+  architectureRepositoryReviewCommentBody,
+  architectureRepositoryReviewSubject,
   hashValue,
   phase1AdmissionPublisherProvisioningReadback,
   phase1InstalledPublisherAnchorFindings,
+  verifyArchitectureMaintenanceAuthority,
   verifyPhase1AdmissionPublisherImmutableAnchor,
 } from "../../scripts/assurance/engineering-closure.mjs";
+import { ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES, resolveAssuranceControlSourceOnlyProfile } from "../../scripts/assurance/lib.mjs";
 
 const HEAD = "1".repeat(40);
 const TREE = "2".repeat(40);
 const BASE = "3".repeat(40);
 const BLOB = "4".repeat(40);
 const REPOSITORY = "Chillywood2025/chillywood-mobile";
+const LIFECYCLE_POLICY = JSON.parse(fs.readFileSync("config/assurance/control-plane-lifecycle-v2.json", "utf8"));
 const PUBLISHER_KEY_READBACK = Object.freeze({ keyFingerprint: "a".repeat(64), jwtAppReadbackHash: "b".repeat(64), webhookConfigHash: "c".repeat(64), secretCreatedAt: "2026-08-24T12:00:00Z", secretUpdatedAt: "2026-08-24T12:00:00Z" });
 const maintenanceLanes = [
   "Phase 1 / Autonomous Systems All-Platform Contract",
@@ -210,6 +220,15 @@ const failedJob = (name, id) => ({
     { number: 9, name: "Post Checkout", status: "completed", conclusion: "success" },
     { number: 10, name: "Complete job", status: "completed", conclusion: "success" }],
 });
+const v2SuccessJob = (name, id) => ({
+  id, run_id: 8001, head_sha: HEAD, name, status: "completed", conclusion: "success",
+  steps: [
+    ...successSteps(),
+    ...(name === "Phase 1 / Autonomous Systems All-Platform Contract"
+      ? [{ number: 3, name: "Validate lifecycle-ready assurance controls", status: "completed", conclusion: "success" }]
+      : []),
+  ],
+});
 
 function fixture({ draft = false, action = "synchronize", eventUpdatedAt = "2026-08-24T12:00:00Z", failed = [], findings = [], evidenceComplete = true } = {}) {
   const mode = draft ? PHASE1_MODES.DRAFT : PHASE1_MODES.READY;
@@ -258,6 +277,15 @@ function fixture({ draft = false, action = "synchronize", eventUpdatedAt = "2026
     workflowIntegrity: { trusted: true, complete: true, candidateBlobSha: BLOB, protectedBlobSha: BLOB },
     evaluatorIdentity: { sha: BASE, workflowBlobSha: BLOB },
   };
+}
+
+function v2Fixture() {
+  const input = fixture({ action: "ready_for_review" });
+  input.jobs = input.jobs.map((job, index) => PHASE1_REQUIRED_LANES.includes(job.name) ? v2SuccessJob(job.name, 100 + index) : job);
+  input.lifecyclePolicy = LIFECYCLE_POLICY;
+  input.lifecycleStage = "FROZEN_CANDIDATE";
+  input.riskClassification = "SECURITY_SENSITIVE_HIGH_RISK";
+  return input;
 }
 
 function policy({ mode = PHASE1_MODES.READY, failures = {} } = {}) {
@@ -475,6 +503,68 @@ test("missing, duplicate, wrong-job, incomplete, and workflow-substituted eviden
   const substituted = fixture();
   substituted.workflowIntegrity.protectedBlobSha = "9".repeat(40);
   assert.equal(evaluatePhase1Admission(substituted).acceptable, false);
+});
+
+test("Phase 1 V2 accepts exact successful historical lanes without the retired display-projection step", () => {
+  const input = v2Fixture();
+  const decision = evaluatePhase1Admission(input);
+  assert.equal(decision.acceptable, true, JSON.stringify(decision.blockingFindings));
+  for (const name of maintenanceLanes) {
+    assert.equal(decision.laneResults.find((lane) => lane.name === name)?.result, PHASE1_LANE_RESULTS.PASS);
+    assert.equal(input.jobs.find((job) => job.name === name)?.steps.some((step) => step.name === "Validate non-authoritative assurance display projection"), false);
+  }
+  const workflow = fs.readFileSync(".github/workflows/phase1-ci.yml", "utf8");
+  assert.equal(workflow.includes("Validate non-authoritative assurance display projection"), false);
+  assert.equal((workflow.match(/Validate lifecycle-ready assurance controls/gu) ?? []).length, 1);
+});
+
+test("Phase 1 V2 requires its All-Platform lifecycle control but not an invented iOS or Cognitive companion", () => {
+  for (const mutation of ["missing", "failed", "skipped"]) {
+    const input = v2Fixture();
+    const job = input.jobs.find(({ name }) => name === "Phase 1 / Autonomous Systems All-Platform Contract");
+    const index = job.steps.findIndex(({ name }) => name === "Validate lifecycle-ready assurance controls");
+    if (mutation === "missing") job.steps.splice(index, 1);
+    else job.steps[index].conclusion = mutation === "failed" ? "failure" : "skipped";
+    assert.equal(evaluatePhase1Admission(input).acceptable, false, mutation);
+  }
+  const input = v2Fixture();
+  for (const name of maintenanceLanes.slice(1)) {
+    assert.equal(input.jobs.find((job) => job.name === name)?.steps.some((step) => step.name === "Validate lifecycle-ready assurance controls"), false);
+  }
+  assert.equal(evaluatePhase1Admission(input).acceptable, true);
+});
+
+test("Phase 1 V2 applicable jobs fail closed on absence, terminal failure states, or a failed substantive step", () => {
+  const lane = "Phase 1 / Autonomous Systems iOS Contract";
+  const missing = v2Fixture();
+  missing.jobs = missing.jobs.filter((job) => job.name !== lane);
+  assert.equal(evaluatePhase1Admission(missing).acceptable, false);
+  for (const [status, conclusion] of [["completed", "failure"], ["completed", "cancelled"], ["completed", "skipped"], ["completed", "timed_out"], ["in_progress", null]]) {
+    const input = v2Fixture();
+    Object.assign(input.jobs.find((job) => job.name === lane), { status, conclusion });
+    assert.equal(evaluatePhase1Admission(input).acceptable, false, `${status}/${conclusion}`);
+  }
+  const hiddenFailure = v2Fixture();
+  const job = hiddenFailure.jobs.find((candidate) => candidate.name === lane);
+  job.steps[1].conclusion = "failure";
+  assert.equal(job.conclusion, "success");
+  assert.equal(evaluatePhase1Admission(hiddenFailure).acceptable, false);
+});
+
+test("Phase 1 V2 exact run, head, policy, and historical identities cannot transfer authority", () => {
+  for (const mutate of [
+    (input) => { input.jobs[0].run_id += 1; },
+    (input) => { input.jobs[0].head_sha = "9".repeat(40); },
+    (input) => { input.run.id += 1; },
+    (input) => { input.lifecyclePolicy.phase1.policyId = "HISTORICAL_PHASE1_POLICY"; },
+  ]) {
+    const input = v2Fixture();
+    input.lifecyclePolicy = structuredClone(input.lifecyclePolicy);
+    mutate(input);
+    const decision = evaluatePhase1Admission(input);
+    assert.equal(decision.acceptable, false);
+    assert.ok(decision.blockingFindings.length > 0);
+  }
 });
 
 test("only the exact source-authority token workflow transition is structurally eligible", () => {
@@ -761,6 +851,177 @@ test("Phase 1 keeps useful product checks and retires unfinished authority compa
   assert.match(guard, /const subjectGit = \(argv, options = \{\}\) => execFileSync\("git", argv, \{\s*cwd: root,/u);
   assert.equal((guard.match(/gitCommand: subjectGit/gu) ?? []).length, 2, "protected code must evaluate the candidate checkout, not its own base worktree");
   assert.match(library, /const candidateRoot = process\.cwd\(\);[\s\S]*validateUntrustedAssuranceControlTaskContextObservation/u);
+});
+
+test("Phase 1 risk classification consumes only the authenticated canonical generated-companion resolver", () => {
+  const publisher = fs.readFileSync(new URL("../../scripts/assurance/phase1-admission.mjs", import.meta.url), "utf8");
+  const engine = fs.readFileSync(new URL("../../scripts/assurance/engineering-closure.mjs", import.meta.url), "utf8");
+  assert.match(publisher, /resolveCanonicalGeneratedAssuranceCompanionRiskContext\(\{ repository, identity, exactDiff, changedPaths: paths, root \}\)/u);
+  assert.match(publisher, /assuranceTransitionContext: assuranceTransition\.ok \? assuranceTransition\.context : null/u);
+  assert.match(engine, /sourceAuthorityProof = resolvePhase1SourceAuthorityEligibility\(\{ repository, identity, root \}\)/u);
+  assert.match(engine, /canonicalCurrentStateText: renderCurrentState\(currentTruth\)/u);
+  assert.match(engine, /canonicalNextTaskText: renderNextTask\(currentTruth\)/u);
+});
+
+test("canonical generated-companion risk maintenance has an exact non-recursive architecture profile", () => {
+  const identity = { repository: REPOSITORY, pr: 900, branch: "codex/canonical-generated-companion-risk", headSha: HEAD, baseSha: BASE };
+  const scope = { files: [...CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS], additions: 420, deletions: 80, netChangedLines: 340 };
+  const subject = architectureMaintenanceSubject({
+    identity,
+    tree: TREE,
+    scope,
+    profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2",
+    objective: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
+  });
+  assert.equal(subject.objective, CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1);
+  assert.deepEqual(subject.changedPaths, [...CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS]);
+  assert.equal(subject.currentTruthCompanionIncluded, false);
+  assert.equal(subject.reusableByAnotherPr, false);
+  assert.deepEqual(subject.authority, { product: false, nativeProduct: false, package: false, database: false, provider: false, build: false, release: false, submission: false, ota: false, publicRelease: false });
+  const protectedProfile = ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES.find(({ profileId }) => profileId === CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1);
+  assert.deepEqual(protectedProfile, {
+    profileId: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
+    paths: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS,
+    maximumFiles: 6,
+    maximumChangedLines: 1200,
+  });
+  const protectedBudget = { maximumFiles: 6, maximumChangedLines: 1200, maximumHandAuthoredNetLines: 1200 };
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: protectedProfile.paths, budget: protectedBudget, changedFiles: 6 })?.profileId, CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1);
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: protectedProfile.paths.slice(1), budget: protectedBudget, changedFiles: 5 }), null);
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: [...protectedProfile.paths, "app/index.tsx"].sort(), budget: protectedBudget, changedFiles: 7 }), null);
+  assert.throws(() => architectureMaintenanceSubject({
+    identity,
+    tree: TREE,
+    scope: { ...scope, files: scope.files.slice(1) },
+    profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2",
+    objective: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
+  }), /OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SCOPE_INVALID/u);
+
+  const raw = {
+    id: 9001,
+    node_id: "IC_9001",
+    body: architectureMaintenanceOwnerCommentBody(subject),
+    user: { login: "Chillywood2025" },
+    author_association: "OWNER",
+    created_at: "2026-09-23T12:00:00Z",
+    updated_at: "2026-09-23T12:00:00Z",
+    issue_url: `${"https://api.github.com/repos"}/${REPOSITORY}/issues/900`,
+    html_url: `${"https://github.com"}/${REPOSITORY}/pull/900#issuecomment-9001`,
+  };
+  const authority = verifyArchitectureMaintenanceAuthority({
+    raw,
+    allComments: [raw],
+    paginationComplete: true,
+    identity: { repository: REPOSITORY, pr: 900, branch: identity.branch, baseRef: "main", baseSha: BASE, headSha: HEAD },
+    tree: TREE,
+    scope,
+    ancestryVerified: true,
+  });
+  assert.equal(authority.authorizationOk, true);
+  assert.equal(authority.ok, true);
+  assert.equal(authority.mergeEligible, false, "final-source evidence remains a later lifecycle requirement");
+
+});
+
+test("finite-task admission synchronization lineage has one exact assurance-only maintenance profile", () => {
+  const profile = ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES.find(({ profileId }) => profileId === FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2);
+  assert.deepEqual(profile, {
+    profileId: FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2,
+    paths: FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_ARCHITECTURE_PATHS,
+    maximumFiles: 11,
+    maximumChangedLines: 2400,
+  });
+  const budget = { maximumFiles: 11, maximumChangedLines: 2400, maximumHandAuthoredNetLines: 2400 };
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: profile.paths, budget, changedFiles: 11 })?.profileId, FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2);
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: profile.paths.slice(1), budget, changedFiles: 10 }), null);
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: [...profile.paths, "app/index.tsx"].sort(), budget, changedFiles: 12 }), null);
+  const subject = architectureMaintenanceSubject({
+    identity: { repository: REPOSITORY, pr: 901, branch: "codex/admission-sync-lineage", headSha: HEAD, baseSha: BASE },
+    tree: TREE,
+    scope: { files: profile.paths, additions: 700, deletions: 100, netChangedLines: 600 },
+    profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2",
+    objective: FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2,
+  });
+  assert.equal(subject.objective, FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2);
+  assert.deepEqual(subject.changedPaths, profile.paths);
+  assert.equal(subject.currentTruthCompanionIncluded, true);
+  assert.deepEqual(subject.authority, { product: false, nativeProduct: false, package: false, database: false, provider: false, build: false, release: false, submission: false, ota: false, publicRelease: false });
+  const raw = {
+    id: 9011,
+    node_id: "IC_9011",
+    body: architectureMaintenanceOwnerCommentBody(subject),
+    user: { login: "Chillywood2025" },
+    author_association: "OWNER",
+    created_at: "2026-09-23T12:00:00Z",
+    updated_at: "2026-09-23T12:00:00Z",
+    issue_url: `${"https://api.github.com/repos"}/${REPOSITORY}/issues/901`,
+    html_url: `${"https://github.com"}/${REPOSITORY}/pull/901#issuecomment-9011`,
+  };
+  const authority = verifyArchitectureMaintenanceAuthority({
+    raw,
+    allComments: [raw],
+    paginationComplete: true,
+    identity: { repository: REPOSITORY, pr: 901, branch: "codex/admission-sync-lineage", baseRef: "main", baseSha: BASE, headSha: HEAD },
+    tree: TREE,
+    scope: { files: profile.paths, additions: 700, deletions: 100, netChangedLines: 600 },
+    ancestryVerified: true,
+  });
+  assert.equal(authority.authorizationOk, true);
+  assert.equal(authority.ok, true);
+  assert.equal(authority.mergeEligible, false, "final-source evidence remains a later lifecycle requirement");
+
+  const finalIdentity = { repository: REPOSITORY, pr: 901, branch: "codex/admission-sync-lineage", baseSha: BASE, headSha: HEAD };
+  const finalScope = { files: profile.paths, additions: 700, deletions: 100, netChangedLines: 600, diffHash: "f".repeat(64) };
+  const reviewSubject = architectureRepositoryReviewSubject({
+    identity: finalIdentity,
+    tree: TREE,
+    scope: finalScope,
+    profile: FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2,
+  });
+  const reviewRaw = {
+    id: 9012,
+    node_id: "IC_9012",
+    body: architectureRepositoryReviewCommentBody(reviewSubject),
+    user: { login: "codex" },
+    author_association: "NONE",
+    created_at: "2026-09-23T12:01:00Z",
+    updated_at: "2026-09-23T12:01:00Z",
+    issue_url: `${"https://api.github.com/repos"}/${REPOSITORY}/issues/901`,
+    html_url: `${"https://github.com"}/${REPOSITORY}/pull/901#issuecomment-9012`,
+  };
+  const finalSubject = architectureFinalSourceSubject({
+    identity: finalIdentity,
+    tree: TREE,
+    scope: finalScope,
+    originalRaw: raw,
+    repositoryReviewRaw: reviewRaw,
+  });
+  assert.equal(finalSubject.objective, FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2);
+  assert.equal(finalSubject.repositoryReview.profile, FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2);
+  assert.deepEqual(finalSubject.budget, { maximumFiles: 11, maximumChangedLines: 2400, maximumHandAuthoredNetLines: 2400 });
+  assert.equal(finalSubject.currentTruthCompanionIncluded, true);
+});
+
+test("Phase 1 lifecycle risk reads the PR-scope registry from the exact protected base", () => {
+  const source = fs.readFileSync("scripts/assurance/phase1-admission.mjs", "utf8");
+  assert.match(source, /git["'], \[["']show["'], `\$\{identity\.baseSha\}:config\/assurance\/pr-scope-policy-v1\.json`\]/u);
+  assert.match(source, /classifyDiffRisk\([\s\S]*prScopePolicy/u);
+  assert.doesNotMatch(source, /JSON\.parse\(fs\.readFileSync\([^\n]*pr-scope-policy-v1\.json/u);
+});
+
+test("release task mandatory commands resolve to exact non-shell allowlist entries", () => {
+  const allowlist = JSON.parse(fs.readFileSync("config/assurance/command-allowlist-v1.json", "utf8"));
+  const expected = new Map([
+    ["npm run guard:ota-native-boundary", ["npm", "run", "guard:ota-native-boundary"]],
+    ["npm run generate:release-manifest-contract", ["npm", "run", "generate:release-manifest-contract"]],
+  ]);
+  for (const [contractCommand, argv] of expected) {
+    const matches = allowlist.commands.filter((rule) => rule.contractCommand === contractCommand);
+    assert.equal(matches.length, 1, contractCommand);
+    assert.deepEqual([matches[0].file, ...matches[0].args], argv, contractCommand);
+    assert.equal(matches[0].resultContract.type, "exit-zero-v1", contractCommand);
+  }
+  assert.equal(allowlist.deferredContractCommands.some((command) => expected.has(command)), false);
 });
 
 test("every Phase 1 step that invokes the authenticated source resolver receives the read-only GitHub token", () => {
