@@ -375,17 +375,17 @@ function hostPreflightIdentityMatches(host, lifecycle, descriptor) {
     && host?.target?.headRevision === descriptor.target.head;
 }
 
-function hostCompletionIdentityMatches(host, lifecycle, descriptor) {
+function hostCompletionIdentityMatches(host, lifecycle, descriptor, { requireSnapshotDigest = true } = {}) {
   const binding = lifecycle?.hostBinding;
-  return host?.scanId === lifecycle?.scanId
+  const identityMatches = host?.scanId === lifecycle?.scanId
     && ["COMPLETED", "SUCCEEDED"].includes(host?.scanState)
     && ["COMPLETE", "SEALED"].includes(host?.phase)
     && host?.diffKind === binding?.diffKind
     && host?.target?.id === binding?.target?.id
     && host?.target?.displayName === binding?.target?.displayName
     && host?.target?.baseRevision === descriptor?.base?.head
-    && host?.target?.headRevision === descriptor?.target?.head
-    && digest(host?.target?.snapshotDigest);
+    && host?.target?.headRevision === descriptor?.target?.head;
+  return identityMatches && (requireSnapshotDigest !== true || digest(host?.target?.snapshotDigest));
 }
 
 export function preflight({ lifecycle, descriptor, host = {}, runGit = git, lifecycleStore = productionLifecycleStore }) {
@@ -488,6 +488,11 @@ export function finalize({ lifecycle, descriptor, host = {}, sourceReviewComplet
   }
   const attempted = nextLifecycle(lifecycle, "FINALIZATION_RUNNING", { completionAttempts: 1 });
   const snapshotDigest = host?.target?.snapshotDigest;
+  if (!hostCompletionIdentityMatches(host, lifecycle, descriptor, { requireSnapshotDigest: false })) {
+    const terminal = terminalize(attempted, "TERMINAL_FAILED", "CODEX_SECURITY_FINALIZATION_GUARD");
+    const committed = commitLifecycleTransition(lifecycle, terminal, lifecycleStore);
+    return { ok: false, status: committed ? "CODEX_SECURITY_FINALIZATION_GUARD" : "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle: committed ?? lifecycle };
+  }
   if (!digest(snapshotDigest)) {
     const terminal = terminalize(attempted, "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING", "HOST_SNAPSHOT_DIGEST_UNAVAILABLE_AT_FINALIZATION");
     const committed = commitLifecycleTransition(lifecycle, terminal, lifecycleStore);
@@ -498,7 +503,7 @@ export function finalize({ lifecycle, descriptor, host = {}, sourceReviewComplet
     };
   }
   const guard = repositoryIdentityCurrent(descriptor, runGit)
-    && hostCompletionIdentityMatches(host, lifecycle, descriptor)
+    && hostCompletionIdentityMatches(host, lifecycle, descriptor, { requireSnapshotDigest: true })
     && snapshotDigest !== descriptor.repositorySourceSnapshotDigest
     && sourceReviewComplete === true
     && coverageComplete === true

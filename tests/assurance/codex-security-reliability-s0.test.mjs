@@ -680,6 +680,22 @@ test("tooling fallback is allowed only after completion metadata cannot provide 
   input.hostScanStarted = true;
   const accepted = repositoryClosure(input, dependencies);
   assert.equal(accepted.ok, true);
+  for (const mutateHost of [
+    (host) => { host.scanId = "foreign-scan"; },
+    (host) => { host.scanState = "RUNNING"; },
+    (host) => { host.phase = "PREFLIGHT"; },
+    (host) => { host.target.id = "foreign-target"; },
+    (host) => { host.target.baseRevision = "0".repeat(40); },
+    (host) => { host.target.headRevision = "0".repeat(40); },
+  ]) {
+    const candidate = reachSourceReviewComplete(value);
+    const host = { ...candidate.host, target: { ...candidate.host.target } };
+    delete host.target.snapshotDigest;
+    mutateHost(host);
+    const rejected = finalizeFor({ lifecycle: candidate.lifecycle, descriptor: value, host, sourceReviewComplete: true, coverageComplete: true, deferredFindings: [], ledger: { discovery: true, validation: true, attackPath: true, policy: true }, runGit: gitFor(value) });
+    assert.equal(rejected.status, "CODEX_SECURITY_FINALIZATION_GUARD");
+    assert.equal(rejected.lifecycle.state, "TERMINAL_FAILED");
+  }
   const forged = structuredClone(input);
   forged.reason = "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT";
   assert.equal(repositoryClosure(forged, dependencies).ok, false);

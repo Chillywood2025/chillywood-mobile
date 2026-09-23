@@ -130,6 +130,8 @@ test("assurance self-maintenance is bounded and product mixing remains forbidden
   assert.equal(valid.ok, true);
   assert.deepEqual(valid.authority, CLOSED_EXTERNAL_AUTHORITY);
   assert.equal(validateAssuranceSelfMaintenance({ changedPaths: ["scripts/assurance/example.mjs", "app/example.tsx"], policy }).ok, false);
+  assert.equal(validateAssuranceSelfMaintenance({ changedPaths: [".github/workflows/phase1-ci.yml.backup"], policy }).ok, false);
+  assert.equal(validateAssuranceSelfMaintenance({ changedPaths: [".agents/skills/chillywood-assurance/SKILL.md.backup"], policy }).ok, false);
   assert.equal(validateAssuranceSelfMaintenance({ changedPaths: ["scripts/assurance/example.mjs"], policy, productAuthority: true }).ok, false);
 });
 

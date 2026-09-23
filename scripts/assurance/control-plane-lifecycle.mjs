@@ -46,6 +46,8 @@ export const lifecycleHash = (value) => crypto.createHash("sha256").update(typeo
 
 const exactKeys = (value, keys) => value && typeof value === "object"
   && stableLifecycleJson(Object.keys(value).sort()) === stableLifecycleJson([...keys].sort());
+const pathMatchesPolicyEntry = (file, entry) => typeof entry === "string"
+  && (entry.endsWith("/") ? file.startsWith(entry) : file === entry);
 const closedAuthority = Object.freeze({ providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false, money: false });
 export const CLOSED_EXTERNAL_AUTHORITY = closedAuthority;
 const allowedTransition = new Map([
@@ -180,8 +182,11 @@ export function validateAssuranceSelfMaintenance({ changedPaths = [], policy, pr
   const allowed = policy?.selfMaintenance?.allowedRoots ?? [];
   const forbidden = policy?.selfMaintenance?.forbiddenRoots ?? [];
   const findings = [];
-  if (!paths.length || !paths.every((file) => allowed.some((root) => file === root || file.startsWith(root)))) findings.push("ASSURANCE_SELF_MAINTENANCE_SCOPE_INVALID");
-  if (paths.some((file) => forbidden.some((root) => file === root || file.startsWith(root)))) findings.push("ASSURANCE_SELF_MAINTENANCE_PRODUCT_PATH_PRESENT");
+  if (policy?.selfMaintenance?.classification !== "BOUNDED_ASSURANCE_SELF_MAINTENANCE_V2"
+    || policy?.selfMaintenance?.requiresExactFrozenSource !== true
+    || policy?.selfMaintenance?.allowsProductAuthority !== false) findings.push("ASSURANCE_SELF_MAINTENANCE_POLICY_INVALID");
+  if (!paths.length || !paths.every((file) => allowed.some((root) => pathMatchesPolicyEntry(file, root)))) findings.push("ASSURANCE_SELF_MAINTENANCE_SCOPE_INVALID");
+  if (paths.some((file) => forbidden.some((root) => pathMatchesPolicyEntry(file, root)))) findings.push("ASSURANCE_SELF_MAINTENANCE_PRODUCT_PATH_PRESENT");
   if (productAuthority !== false) findings.push("ASSURANCE_SELF_MAINTENANCE_PRODUCT_AUTHORITY_FORBIDDEN");
   return { ok: findings.length === 0, classification: "BOUNDED_ASSURANCE_SELF_MAINTENANCE_V2", findings, authority: closedAuthority };
 }
