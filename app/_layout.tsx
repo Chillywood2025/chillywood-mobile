@@ -1471,6 +1471,7 @@ function AuthBootScreen({ message = "Checking your session…", onRetry }: { mes
 }
 
 function AccountRestoreOnlyScreen() {
+  const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const restore = async () => {
@@ -1485,20 +1486,48 @@ function AccountRestoreOnlyScreen() {
     } finally { setBusy(false); }
   };
   return (
-    <View style={styles.legalGateScreen}>
-      <View style={styles.legalGateCard}>
+    <ChillywoodBrandedSurface
+      style={styles.legalBrandedGateScreen}
+      testID="account-restore-branded-surface"
+      variant="legal"
+    >
+      <ScrollView
+        contentContainerStyle={[
+          styles.legalGateScroll,
+          {
+            paddingTop: Math.max(insets.top + 24, 40),
+            paddingBottom: Math.max(insets.bottom + 24, 40),
+          },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+      <ChillywoodGlassPanel style={styles.legalGateCard} testID="account-restore-glass-panel" variant="legal">
         <Text style={styles.legalGateKicker}>ACCOUNT DELETION SCHEDULED</Text>
         <Text style={styles.legalGateTitle}>Restore or sign out</Text>
         <Text style={styles.legalGateBody}>Private features and notifications remain off. Restore this account before continuing.</Text>
         {error ? <Text style={styles.legalGateError}>{error}</Text> : null}
-        <TouchableOpacity style={styles.legalGateButton} onPress={() => { void restore(); }} disabled={busy}>
+        <TouchableOpacity
+          style={[styles.legalGateButton, busy && styles.legalGateButtonDisabled]}
+          onPress={() => { void restore(); }}
+          disabled={busy}
+          accessibilityLabel="Restore scheduled account deletion"
+          accessibilityRole="button"
+          accessibilityState={{ busy, disabled: busy }}
+        >
           <Text style={styles.legalGateButtonText}>{busy ? "Restoring…" : "Restore account"}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.legalGateSecondary} onPress={() => { void supabase.auth.signOut(); }}>
+        <TouchableOpacity
+          style={styles.legalGateSecondary}
+          onPress={() => { void supabase.auth.signOut(); }}
+          accessibilityLabel="Sign out without restoring this account"
+          accessibilityRole="button"
+        >
           <Text style={styles.legalGateSecondaryText}>Sign out</Text>
         </TouchableOpacity>
-      </View>
-    </View>
+      </ChillywoodGlassPanel>
+      </ScrollView>
+    </ChillywoodBrandedSurface>
   );
 }
 

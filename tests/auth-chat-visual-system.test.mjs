@@ -91,6 +91,9 @@ test("auth actions, route targets, legal controls, and keyboard behavior remain 
 });
 test("the post-login legal acceptance gate is branded and remains fail-closed", () => {
   assertIncludes(source.layout, [
+    'testID="account-restore-branded-surface"',
+    'testID="account-restore-glass-panel"',
+    'accessibilityLabel="Restore scheduled account deletion"',
     'testID="legal-acceptance-branded-surface"',
     'testID="legal-acceptance-glass-panel"',
     '<Text style={styles.legalGateKicker}>ACCOUNT REQUIREMENT</Text>',
