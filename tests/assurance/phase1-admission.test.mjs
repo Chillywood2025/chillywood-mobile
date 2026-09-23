@@ -60,6 +60,7 @@ const TREE = "2".repeat(40);
 const BASE = "3".repeat(40);
 const BLOB = "4".repeat(40);
 const REPOSITORY = "Chillywood2025/chillywood-mobile";
+const LIFECYCLE_POLICY = JSON.parse(fs.readFileSync("config/assurance/control-plane-lifecycle-v2.json", "utf8"));
 const PUBLISHER_KEY_READBACK = Object.freeze({ keyFingerprint: "a".repeat(64), jwtAppReadbackHash: "b".repeat(64), webhookConfigHash: "c".repeat(64), secretCreatedAt: "2026-08-24T12:00:00Z", secretUpdatedAt: "2026-08-24T12:00:00Z" });
 const maintenanceLanes = [
   "Phase 1 / Autonomous Systems All-Platform Contract",
@@ -214,6 +215,15 @@ const failedJob = (name, id) => ({
     { number: 9, name: "Post Checkout", status: "completed", conclusion: "success" },
     { number: 10, name: "Complete job", status: "completed", conclusion: "success" }],
 });
+const v2SuccessJob = (name, id) => ({
+  id, run_id: 8001, head_sha: HEAD, name, status: "completed", conclusion: "success",
+  steps: [
+    ...successSteps(),
+    ...(name === "Phase 1 / Autonomous Systems All-Platform Contract"
+      ? [{ number: 3, name: "Validate lifecycle-ready assurance controls", status: "completed", conclusion: "success" }]
+      : []),
+  ],
+});
 
 function fixture({ draft = false, action = "synchronize", eventUpdatedAt = "2026-08-24T12:00:00Z", failed = [], findings = [], evidenceComplete = true } = {}) {
   const mode = draft ? PHASE1_MODES.DRAFT : PHASE1_MODES.READY;
@@ -262,6 +272,15 @@ function fixture({ draft = false, action = "synchronize", eventUpdatedAt = "2026
     workflowIntegrity: { trusted: true, complete: true, candidateBlobSha: BLOB, protectedBlobSha: BLOB },
     evaluatorIdentity: { sha: BASE, workflowBlobSha: BLOB },
   };
+}
+
+function v2Fixture() {
+  const input = fixture({ action: "ready_for_review" });
+  input.jobs = input.jobs.map((job, index) => PHASE1_REQUIRED_LANES.includes(job.name) ? v2SuccessJob(job.name, 100 + index) : job);
+  input.lifecyclePolicy = LIFECYCLE_POLICY;
+  input.lifecycleStage = "FROZEN_CANDIDATE";
+  input.riskClassification = "SECURITY_SENSITIVE_HIGH_RISK";
+  return input;
 }
 
 function policy({ mode = PHASE1_MODES.READY, failures = {} } = {}) {
@@ -479,6 +498,68 @@ test("missing, duplicate, wrong-job, incomplete, and workflow-substituted eviden
   const substituted = fixture();
   substituted.workflowIntegrity.protectedBlobSha = "9".repeat(40);
   assert.equal(evaluatePhase1Admission(substituted).acceptable, false);
+});
+
+test("Phase 1 V2 accepts exact successful historical lanes without the retired display-projection step", () => {
+  const input = v2Fixture();
+  const decision = evaluatePhase1Admission(input);
+  assert.equal(decision.acceptable, true, JSON.stringify(decision.blockingFindings));
+  for (const name of maintenanceLanes) {
+    assert.equal(decision.laneResults.find((lane) => lane.name === name)?.result, PHASE1_LANE_RESULTS.PASS);
+    assert.equal(input.jobs.find((job) => job.name === name)?.steps.some((step) => step.name === "Validate non-authoritative assurance display projection"), false);
+  }
+  const workflow = fs.readFileSync(".github/workflows/phase1-ci.yml", "utf8");
+  assert.equal(workflow.includes("Validate non-authoritative assurance display projection"), false);
+  assert.equal((workflow.match(/Validate lifecycle-ready assurance controls/gu) ?? []).length, 1);
+});
+
+test("Phase 1 V2 requires its All-Platform lifecycle control but not an invented iOS or Cognitive companion", () => {
+  for (const mutation of ["missing", "failed", "skipped"]) {
+    const input = v2Fixture();
+    const job = input.jobs.find(({ name }) => name === "Phase 1 / Autonomous Systems All-Platform Contract");
+    const index = job.steps.findIndex(({ name }) => name === "Validate lifecycle-ready assurance controls");
+    if (mutation === "missing") job.steps.splice(index, 1);
+    else job.steps[index].conclusion = mutation === "failed" ? "failure" : "skipped";
+    assert.equal(evaluatePhase1Admission(input).acceptable, false, mutation);
+  }
+  const input = v2Fixture();
+  for (const name of maintenanceLanes.slice(1)) {
+    assert.equal(input.jobs.find((job) => job.name === name)?.steps.some((step) => step.name === "Validate lifecycle-ready assurance controls"), false);
+  }
+  assert.equal(evaluatePhase1Admission(input).acceptable, true);
+});
+
+test("Phase 1 V2 applicable jobs fail closed on absence, terminal failure states, or a failed substantive step", () => {
+  const lane = "Phase 1 / Autonomous Systems iOS Contract";
+  const missing = v2Fixture();
+  missing.jobs = missing.jobs.filter((job) => job.name !== lane);
+  assert.equal(evaluatePhase1Admission(missing).acceptable, false);
+  for (const [status, conclusion] of [["completed", "failure"], ["completed", "cancelled"], ["completed", "skipped"], ["completed", "timed_out"], ["in_progress", null]]) {
+    const input = v2Fixture();
+    Object.assign(input.jobs.find((job) => job.name === lane), { status, conclusion });
+    assert.equal(evaluatePhase1Admission(input).acceptable, false, `${status}/${conclusion}`);
+  }
+  const hiddenFailure = v2Fixture();
+  const job = hiddenFailure.jobs.find((candidate) => candidate.name === lane);
+  job.steps[1].conclusion = "failure";
+  assert.equal(job.conclusion, "success");
+  assert.equal(evaluatePhase1Admission(hiddenFailure).acceptable, false);
+});
+
+test("Phase 1 V2 exact run, head, policy, and historical identities cannot transfer authority", () => {
+  for (const mutate of [
+    (input) => { input.jobs[0].run_id += 1; },
+    (input) => { input.jobs[0].head_sha = "9".repeat(40); },
+    (input) => { input.run.id += 1; },
+    (input) => { input.lifecyclePolicy.phase1.policyId = "HISTORICAL_PHASE1_POLICY"; },
+  ]) {
+    const input = v2Fixture();
+    input.lifecyclePolicy = structuredClone(input.lifecyclePolicy);
+    mutate(input);
+    const decision = evaluatePhase1Admission(input);
+    assert.equal(decision.acceptable, false);
+    assert.ok(decision.blockingFindings.length > 0);
+  }
 });
 
 test("only the exact source-authority token workflow transition is structurally eligible", () => {
