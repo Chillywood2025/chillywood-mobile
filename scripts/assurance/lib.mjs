@@ -2142,6 +2142,12 @@ export const ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES = Object.freeze([
     maximumFiles: 2,
     maximumChangedLines: 80,
   }),
+  Object.freeze({
+    profileId: "CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1",
+    paths: Object.freeze(["scripts/assurance/control-plane-lifecycle.mjs", "scripts/assurance/engineering-closure.mjs", "scripts/assurance/lib.mjs", "scripts/assurance/phase1-admission.mjs", "tests/assurance/control-plane-lifecycle-v2.test.mjs", "tests/assurance/phase1-admission.test.mjs"]),
+    maximumFiles: 6,
+    maximumChangedLines: 1200,
+  }),
 ]);
 
 const DERIVED_PROTECTED_MAIN_TRUTH_PATH = "config/assurance/current-truth-v1.json";

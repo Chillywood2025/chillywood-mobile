@@ -2091,6 +2091,7 @@ export const CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1 = "CANONICAL_GENERA
 export const CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS = Object.freeze([
   "scripts/assurance/control-plane-lifecycle.mjs",
   "scripts/assurance/engineering-closure.mjs",
+  "scripts/assurance/lib.mjs",
   "scripts/assurance/phase1-admission.mjs",
   "tests/assurance/control-plane-lifecycle-v2.test.mjs",
   "tests/assurance/phase1-admission.test.mjs",
@@ -2104,7 +2105,7 @@ const phase1ControlProfile = (objective) => objective === PHASE1_RISK_BASED_ADMI
   : objective === PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1
   ? { paths: PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_ARCHITECTURE_PATHS, maximumFiles: 2, maximumChangedLines: 80 }
   : objective === CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1
-  ? { paths: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS, maximumFiles: 5, maximumChangedLines: 1200 }
+  ? { paths: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS, maximumFiles: 6, maximumChangedLines: 1200 }
   : objective === ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2
   ? ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE
   : objective === STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1

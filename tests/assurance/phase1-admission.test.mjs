@@ -53,6 +53,7 @@ import {
   verifyArchitectureMaintenanceAuthority,
   verifyPhase1AdmissionPublisherImmutableAnchor,
 } from "../../scripts/assurance/engineering-closure.mjs";
+import { ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES, resolveAssuranceControlSourceOnlyProfile } from "../../scripts/assurance/lib.mjs";
 
 const HEAD = "1".repeat(40);
 const TREE = "2".repeat(40);
@@ -791,6 +792,17 @@ test("canonical generated-companion risk maintenance has an exact non-recursive 
   assert.equal(subject.currentTruthCompanionIncluded, false);
   assert.equal(subject.reusableByAnotherPr, false);
   assert.deepEqual(subject.authority, { product: false, nativeProduct: false, package: false, database: false, provider: false, build: false, release: false, submission: false, ota: false, publicRelease: false });
+  const protectedProfile = ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES.find(({ profileId }) => profileId === CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1);
+  assert.deepEqual(protectedProfile, {
+    profileId: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
+    paths: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS,
+    maximumFiles: 6,
+    maximumChangedLines: 1200,
+  });
+  const protectedBudget = { maximumFiles: 6, maximumChangedLines: 1200, maximumHandAuthoredNetLines: 1200 };
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: protectedProfile.paths, budget: protectedBudget, changedFiles: 6 })?.profileId, CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1);
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: protectedProfile.paths.slice(1), budget: protectedBudget, changedFiles: 5 }), null);
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: [...protectedProfile.paths, "app/index.tsx"].sort(), budget: protectedBudget, changedFiles: 7 }), null);
   assert.throws(() => architectureMaintenanceSubject({
     identity,
     tree: TREE,
