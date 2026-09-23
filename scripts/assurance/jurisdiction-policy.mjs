@@ -235,7 +235,7 @@ function scanCanonicalJson(text) {
 
 export function parseCanonicalMarkedComment(body, marker, { maxBytes = MAX_CANONICAL_COMMENT_BYTES } = {}) {
   if (!isText(body) || Buffer.byteLength(body, "utf8") > maxBytes) return { ok: false, finding: "COMMENT_SIZE_INVALID" };
-  if (!isText(marker) || body.split(marker).length !== 2 || !hasCanonicalMarkedCommentPrefix(body, marker)) return { ok: false, finding: "COMMENT_MARKER_INVALID" };
+  if (!isText(marker) || !hasCanonicalMarkedCommentPrefix(body, marker)) return { ok: false, finding: "COMMENT_MARKER_INVALID" };
   const separator = body.startsWith(`${marker}\r\n`) ? "\r\n" : "\n";
   const rawText = body.slice(marker.length + separator.length);
   const terminalNewline = rawText.endsWith("\r\n") ? "\r\n" : rawText.endsWith("\n") ? "\n" : "";

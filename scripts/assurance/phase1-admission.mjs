@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { APPLICABILITY, RISK_CLASSES, classifyDiffRisk, phase1LaneApplicability, validateLifecyclePolicy } from "./control-plane-lifecycle.mjs";
 
 export const PHASE1_ADMISSION_CHECK_NAME = "Phase 1 / Admission Decision";
 export const PHASE1_ADMISSION_PRODUCER = "PROTECTED_MAIN_PHASE1_ADMISSION_V1";
@@ -69,24 +70,7 @@ const REPOSITORY = "Chillywood2025/chillywood-mobile";
 const WORKFLOW_PATH = ".github/workflows/phase1-ci.yml";
 const WORKFLOW_FILE = "phase1-ci.yml";
 const WORKFLOW_NAME = "Phase 1 CI";
-const SOURCE_AUTHORITY_TEST_PATH = "tests/assurance/source-readiness-wrapper.test.mjs", SOURCE_AUTHORITY_STEP = "          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}";
-const SOURCE_AUTHORITY_TOKEN_STEP = "          GH_TOKEN: ${{ github.token }}\n";
-const SOURCE_AUTHORITY_TEST_ANCHOR = "test(\"draft source readiness rejects deletion of a protected-base test\", () => {";
-const SOURCE_AUTHORITY_TEST_BLOCK = `test("all source-authority lanes receive the exact workflow token and protected base", () => {
-  const steps = workflow.match(/      - name: Validate assurance authority and source correctness[\\s\\S]*?(?=\\n      - name:|\\n  [a-z][a-z-]*:|$)/gu) ?? [];
-  assert.equal(steps.length, 3);
-  for (const step of steps) {
-    assert.match(step, /env:\\s*\\n\\s*GH_TOKEN: \\$\\{\\{ github\\.token \\}\\}\\s*\\n\\s*PHASE1_PROTECTED_BASE_SHA: \\$\\{\\{ github\\.event\\.pull_request\\.base\\.sha \\|\\| github\\.sha \\}\\}/u);
-  }
-});
-
-`;
-const SOURCE_AUTHORITY_PERMISSION_BLOCK = "permissions:\n  actions: read\n  contents: read\n  pull-requests: read";
-const SOURCE_AUTHORITY_ISSUE_PERMISSION_BLOCK = "permissions:\n  actions: read\n  contents: read\n  issues: read\n  pull-requests: read";
-const SOURCE_AUTHORITY_PERMISSION_TEST_ANCHOR = "test(\"all source-authority lanes receive the exact workflow token and protected base\", () => {\n";
-const SOURCE_AUTHORITY_PERMISSION_TEST_BLOCK = `  assert.match(workflow,
-    /permissions:\\s*\\n\\s*actions: read\\s*\\n\\s*contents: read\\s*\\n\\s*issues: read\\s*\\n\\s*pull-requests: read/u);
-`;
+const SOURCE_AUTHORITY_TEST_PATH = "tests/assurance/source-readiness-wrapper.test.mjs";
 
 export function selectAuthoritativePhase1WorkflowIdentity({ run, workflow } = {}) {
   const workflowId = run?.workflow_id;
@@ -265,8 +249,43 @@ export function classifyPhase1Finding(observed, { trustedContext = false } = {})
 // This pure policy reducer is intentionally non-authoritative. It supports
 // deterministic doctrine regression tests; only protected live readback can
 // produce evidence accepted by verifyPhase1AggregateEvidence.
-export function decidePhase1Policy({ mode, lanes } = {}) {
+export function decidePhase1Policy({ mode, lanes, lifecyclePolicy = null, lifecycleStage = null, riskClassification = null } = {}) {
   const supplied = Array.isArray(lanes) ? lanes : [];
+  if (lifecyclePolicy && lifecycleStage && riskClassification) {
+    const applicability = phase1LaneApplicability({ policy: lifecyclePolicy, lifecycleStage, riskClassification });
+    const applicable = applicability.filter((lane) => lane.applicability === APPLICABILITY.APPLICABLE);
+    const laneResults = applicability.map((decision) => {
+      if (decision.applicability !== APPLICABILITY.APPLICABLE) return { ...decision, result: "NOT_RUN", findings: [] };
+      const matches = supplied.filter(({ name }) => name === decision.name);
+      if (matches.length !== 1) return { ...decision, result: PHASE1_LANE_RESULTS.BLOCKING, findings: [classifyPhase1Finding(finding(matches.length ? "PHASE1_REQUIRED_LANE_DUPLICATE" : "PHASE1_REQUIRED_LANE_MISSING", decision.name), { trustedContext: true })] };
+      const lane = matches[0];
+      if (lane.status === "PASS" && (!Array.isArray(lane.diagnosticCodes) || lane.diagnosticCodes.length === 0)) return { ...decision, result: PHASE1_LANE_RESULTS.PASS, findings: [] };
+      const findings = (lane.diagnosticCodes?.length ? lane.diagnosticCodes : ["PHASE1_UNCLASSIFIED_FAILURE"]).map((code) => classifyPhase1Finding(finding(code, decision.name), { trustedContext: true }));
+      return { ...decision, result: PHASE1_LANE_RESULTS.BLOCKING, findings };
+    });
+    const findings = laneResults.flatMap((lane) => lane.findings);
+    const blocking = findings.filter(({ classification }) => classification === PHASE1_LANE_RESULTS.BLOCKING);
+    if (riskClassification === RISK_CLASSES.UNKNOWN) blocking.push(classifyPhase1Finding(finding("PHASE1_UNCLASSIFIED_FAILURE", null, { message: "unknown risk requires explicit classification" }), { trustedContext: true }));
+    const acceptable = blocking.length === 0 && applicable.length > 0;
+    return {
+      authoritative: false,
+      acceptable,
+      result: acceptable ? (mode === PHASE1_MODES.DRAFT ? PHASE1_ADMISSION_RESULTS.SOURCE_READINESS_ACCEPTABLE : PHASE1_ADMISSION_RESULTS.ACCEPTABLE) : PHASE1_ADMISSION_RESULTS.BLOCKED,
+      maintenanceStatus: null,
+      discoveredLanes: applicability.length,
+      applicableLanes: applicable.length,
+      deferredLanes: applicability.length - applicable.length,
+      lifecycleStage,
+      riskClassification,
+      mergeAuthorityGranted: false,
+      rawPassedLanes: laneResults.filter(({ applicability: value, result }) => value === APPLICABILITY.APPLICABLE && result === PHASE1_LANE_RESULTS.PASS).length,
+      rawFailedLanes: laneResults.filter(({ applicability: value, result }) => value === APPLICABILITY.APPLICABLE && result !== PHASE1_LANE_RESULTS.PASS).length,
+      laneResults,
+      blockingFindings: blocking,
+      nonBlockingAssuranceFindings: [],
+      deferredExternalFindings: [],
+    };
+  }
   const names = supplied.map(({ name }) => name);
   const exact = supplied.length === PHASE1_REQUIRED_LANES.length
     && new Set(names).size === names.length
@@ -348,7 +367,7 @@ function classifyLane(job, trustedContext, certificateContext) {
 
 function decisionProjection(decision) {
   return {
-    schemaVersion: "PHASE1_ADMISSION_EVIDENCE_V1",
+    schemaVersion: decision.applicabilityPolicyId ? "PHASE1_ADMISSION_EVIDENCE_V2" : "PHASE1_ADMISSION_EVIDENCE_V1",
     checkName: decision.checkName,
     result: decision.result,
     maintenanceStatus: decision.maintenanceStatus,
@@ -370,6 +389,14 @@ function decisionProjection(decision) {
     runAttempt: decision.runAttempt,
     lifecycleGeneration: decision.lifecycleGeneration,
     requiredLanes: decision.requiredLanes,
+    ...(decision.applicabilityPolicyId ? {
+      applicabilityPolicyId: decision.applicabilityPolicyId,
+      discoveredLanes: decision.discoveredLanes,
+      applicableLanes: decision.applicableLanes,
+      deferredLanes: decision.deferredLanes,
+      lifecycleStage: decision.lifecycleStage,
+      riskClassification: decision.riskClassification,
+    } : {}),
     rawPassedLanes: decision.rawPassedLanes,
     rawFailedLanes: decision.rawFailedLanes,
     blockingFindingCount: decision.blockingFindings.length,
@@ -491,6 +518,12 @@ export function verifyPhase1SourceAuthorityTokenWorkflowTransition({ candidateWo
       .every(sourceAuthorityStepValid);
   const regressionPresent = candidateTest.includes("all source-authority lanes receive the exact workflow token and protected base")
     && candidateTest.includes("issues: read");
+  const lifecycleAwareTransition = sourceAuthorityJobIds.length === 3
+    && !candidateWorkflow.includes("Validate assurance authority and source correctness")
+    && !candidateWorkflow.includes("Validate non-authoritative assurance display projection")
+    && (candidateWorkflow.match(/Validate lifecycle-ready assurance controls/gu) ?? []).length === 1
+    && candidateTest.includes("unfinished authority companions are retired while lifecycle-ready assurance remains explicit")
+    && candidateTest.includes("issues: read");
   const protectedJobIds = [...protectedJobs.keys()];
   const candidateJobIds = new Set(candidateJobs.keys());
   const protectedRequiredNames = [...protectedWorkflow.matchAll(/^    name: (Phase 1 \/ .+)$/gmu)].map((match) => match[1]);
@@ -500,7 +533,9 @@ export function verifyPhase1SourceAuthorityTokenWorkflowTransition({ candidateWo
     && protectedRequiredNames.every((name) => candidateWorkflow.includes(`    name: ${name}`))
     && lifecycleInvariant;
   const changed = candidateWorkflow !== protectedWorkflow || candidateTest !== protectedTest;
-  return changed && minimumReadAuthority && !unsafePermissionAuthority && exactStepAuthority && regressionPresent && protectedInvariantsPreserved;
+  return changed && minimumReadAuthority && !unsafePermissionAuthority
+    && ((exactStepAuthority && regressionPresent) || lifecycleAwareTransition)
+    && protectedInvariantsPreserved;
 }
 
 export function evaluatePhase1Admission(input = {}) {
@@ -510,7 +545,13 @@ export function evaluatePhase1Admission(input = {}) {
   const workflowIntegrity = input.workflowIntegrity ?? {};
   const evaluatorIdentity = input.evaluatorIdentity ?? {};
   const publisherAnchor = input.publisherAnchor ?? {};
-  const required = [...PHASE1_REQUIRED_LANES];
+  const lifecyclePolicy = input.lifecyclePolicy ?? null;
+  const lifecycleStage = input.lifecycleStage ?? null;
+  const riskClassification = input.riskClassification ?? null;
+  const applicability = lifecyclePolicy && lifecycleStage && riskClassification
+    ? phase1LaneApplicability({ policy: lifecyclePolicy, lifecycleStage, riskClassification })
+    : PHASE1_REQUIRED_LANES.map((name) => ({ name, applicability: APPLICABILITY.APPLICABLE, reason: "LEGACY_EXACT_13" }));
+  const required = applicability.filter((lane) => lane.applicability === APPLICABILITY.APPLICABLE).map(({ name }) => name);
   const suppliedJobs = Array.isArray(input.jobs) ? input.jobs : [];
   const matchingJobs = suppliedJobs.filter((job) => required.includes(job?.name));
   const contextJobs = suppliedJobs.filter((job) => typeof job?.name === "string" && job.name.startsWith(CONTEXT_PREFIX));
@@ -576,7 +617,12 @@ export function evaluatePhase1Admission(input = {}) {
     preflight.push(finding("PHASE1_WORKFLOW_INTEGRITY_INVALID", null));
   }
   const lanes = [];
-  for (const name of required) {
+  for (const laneDecision of applicability) {
+    const { name } = laneDecision;
+    if (laneDecision.applicability !== APPLICABILITY.APPLICABLE) {
+      lanes.push({ name, applicability: laneDecision.applicability, reason: laneDecision.reason, result: "NOT_RUN", findings: [] });
+      continue;
+    }
     const jobs = matchingJobs.filter((job) => job?.name === name);
     if (jobs.length === 0) {
       const observed = finding("PHASE1_REQUIRED_LANE_MISSING", name);
@@ -601,12 +647,13 @@ export function evaluatePhase1Admission(input = {}) {
   if (mode === PHASE1_MODES.READY && deferredExternalFindings.length > 0) {
     for (const value of deferredExternalFindings) blockingFindings.push({ ...value, classification: PHASE1_LANE_RESULTS.BLOCKING });
   }
+  if (riskClassification === RISK_CLASSES.UNKNOWN) blockingFindings.push(classifyPhase1Finding(finding("PHASE1_UNCLASSIFIED_FAILURE", null, { message: "unknown risk requires explicit classification" }), { trustedContext }));
   const acceptable = blockingFindings.length === 0;
   const result = acceptable
     ? (mode === PHASE1_MODES.DRAFT ? PHASE1_ADMISSION_RESULTS.SOURCE_READINESS_ACCEPTABLE : PHASE1_ADMISSION_RESULTS.ACCEPTABLE)
     : PHASE1_ADMISSION_RESULTS.BLOCKED;
   const maintenanceStatus = nonBlockingAssuranceFindings.length > 0 ? PHASE1_ADMISSION_RESULTS.MAINTENANCE_REQUIRED : null;
-  const rawPassedLanes = lanes.filter(({ result: laneResult }) => laneResult === PHASE1_LANE_RESULTS.PASS).length;
+  const rawPassedLanes = lanes.filter(({ applicability: value = APPLICABILITY.APPLICABLE, result: laneResult }) => value === APPLICABILITY.APPLICABLE && laneResult === PHASE1_LANE_RESULTS.PASS).length;
   const rawFailedLanes = required.length - rawPassedLanes;
   const affectedRiskDomains = uniqueSorted(lanes
     .filter(({ result: laneResult }) => laneResult !== PHASE1_LANE_RESULTS.PASS)
@@ -633,6 +680,12 @@ export function evaluatePhase1Admission(input = {}) {
     runId: run.id ?? null,
     runAttempt: run.runAttempt ?? null,
     requiredLanes: required.length,
+    applicabilityPolicyId: lifecyclePolicy ? lifecyclePolicy.phase1.policyId : null,
+    discoveredLanes: applicability.length,
+    applicableLanes: required.length,
+    deferredLanes: applicability.length - required.length,
+    lifecycleStage,
+    riskClassification,
     rawPassedLanes,
     rawFailedLanes,
     affectedRiskDomains,
@@ -673,7 +726,7 @@ export function inspectPhase1AggregateEvidence({ aggregate, identity = {}, mode,
   const fullDecision = aggregate?.schemaVersion === "PHASE1_ADMISSION_DECISION_V1";
   const value = fullDecision ? decisionProjection(aggregate) : aggregate;
   const findings = [];
-  if (value?.schemaVersion !== "PHASE1_ADMISSION_EVIDENCE_V1") findings.push("PHASE1_ADMISSION_SCHEMA_INVALID");
+  if (!["PHASE1_ADMISSION_EVIDENCE_V1", "PHASE1_ADMISSION_EVIDENCE_V2"].includes(value?.schemaVersion)) findings.push("PHASE1_ADMISSION_SCHEMA_INVALID");
   if (value?.checkName !== PHASE1_ADMISSION_CHECK_NAME) findings.push("PHASE1_ADMISSION_CHECK_NAME_INVALID");
   if (value?.repository !== identity.repository || value?.pr !== identity.pr
     || value?.headSha !== identity.headSha || value?.baseSha !== identity.baseSha) findings.push("PHASE1_ADMISSION_IDENTITY_MISMATCH");
@@ -700,9 +753,17 @@ export function inspectPhase1AggregateEvidence({ aggregate, identity = {}, mode,
   if (!lifecycleActions.has(value?.action) || !validTimestamp(value?.eventUpdatedAt)
     || typeof value?.draft !== "boolean"
     || value?.lifecycleGeneration !== derivePhase1LifecycleGeneration({ identity: value, mode: value?.mode, action: value?.action, eventUpdatedAt: value?.eventUpdatedAt })) findings.push("PHASE1_ADMISSION_LIFECYCLE_INVALID");
-  if (value?.requiredLanes !== PHASE1_REQUIRED_LANES.length
+  const lifecycleAware = value?.schemaVersion === "PHASE1_ADMISSION_EVIDENCE_V2";
+  if (!Number.isInteger(value?.requiredLanes) || value.requiredLanes < 1
     || !Number.isInteger(value?.rawPassedLanes) || !Number.isInteger(value?.rawFailedLanes)
-    || value.rawPassedLanes + value.rawFailedLanes !== PHASE1_REQUIRED_LANES.length) findings.push("PHASE1_ADMISSION_LANE_ACCOUNTING_INVALID");
+    || value.rawPassedLanes + value.rawFailedLanes !== value.requiredLanes
+    || (!lifecycleAware && value.requiredLanes !== PHASE1_REQUIRED_LANES.length)
+    || (lifecycleAware && (value.applicabilityPolicyId !== "LIFECYCLE_RISK_AWARE_PHASE1_V2"
+      || value.discoveredLanes !== PHASE1_REQUIRED_LANES.length
+      || value.applicableLanes !== value.requiredLanes
+      || value.deferredLanes + value.applicableLanes !== value.discoveredLanes
+      || !["AUTHORIZED_IMPLEMENTATION", "FROZEN_CANDIDATE", "NORMAL_MERGE_READY"].includes(value.lifecycleStage)
+      || !Object.values(RISK_CLASSES).includes(value.riskClassification)))) findings.push("PHASE1_ADMISSION_LANE_ACCOUNTING_INVALID");
   const expectedResult = value?.mode === PHASE1_MODES.DRAFT ? PHASE1_ADMISSION_RESULTS.SOURCE_READINESS_ACCEPTABLE : PHASE1_ADMISSION_RESULTS.ACCEPTABLE;
   if (value?.acceptable !== true || value?.result !== expectedResult || value?.blockingFindingCount !== 0) findings.push("PHASE1_ADMISSION_NOT_ACCEPTABLE");
   if (value?.mode === PHASE1_MODES.DRAFT && value?.mergeAuthorityGranted !== false) findings.push("PHASE1_DRAFT_MERGE_AUTHORITY_INVALID");
@@ -1073,7 +1134,7 @@ export function evaluateAppOnlyMergeGateSnapshot({ identity, decision, latestEvi
   try { requireOpenPullRequest(pullRequest); liveIdentity = identityFromPr(identity?.repository, pullRequest); } catch { findings.push("PHASE1_APP_MERGE_PR_IDENTITY_INVALID"); }
   if (identity?.repository !== REPOSITORY || pullRequest?.draft !== false || stableJson(liveIdentity) !== stableJson({ repository: identity?.repository, pr: identity?.pr, headRef: identity?.headRef, headSha: identity?.headSha, baseRef: identity?.baseRef, baseSha: identity?.baseSha })) findings.push("PHASE1_APP_MERGE_PR_LIFECYCLE_INVALID");
   if (sourceTree !== identity?.sourceTree || defaultMainSha !== identity?.baseSha) findings.push("PHASE1_APP_MERGE_SOURCE_OR_BASE_STALE");
-  if (decision?.repository !== identity?.repository || decision?.pr !== identity?.pr || decision?.headSha !== identity?.headSha || decision?.sourceTree !== identity?.sourceTree || decision?.baseSha !== identity?.baseSha || decision?.mode !== PHASE1_MODES.READY || decision?.draft !== false || decision?.acceptable !== true || decision?.mergeAuthorityGranted !== true || decision?.blockingFindings?.length !== 0 || decision?.requiredLanes !== 13 || decision?.rawPassedLanes + decision?.rawFailedLanes !== 13 || decision?.currentRulesetStage !== "FINAL_AGGREGATE_ONLY" || !DIGEST_RE.test(decision?.publisherAnchorHash ?? "") || stableJson(decision?.evidence) !== stableJson(latestEvidence)) findings.push("PHASE1_APP_MERGE_ADMISSION_INVALID");
+  if (decision?.repository !== identity?.repository || decision?.pr !== identity?.pr || decision?.headSha !== identity?.headSha || decision?.sourceTree !== identity?.sourceTree || decision?.baseSha !== identity?.baseSha || decision?.mode !== PHASE1_MODES.READY || decision?.draft !== false || decision?.acceptable !== true || decision?.mergeAuthorityGranted !== true || decision?.blockingFindings?.length !== 0 || !Number.isInteger(decision?.requiredLanes) || decision.requiredLanes < 1 || decision?.rawPassedLanes + decision?.rawFailedLanes !== decision.requiredLanes || decision?.currentRulesetStage !== "FINAL_AGGREGATE_ONLY" || !DIGEST_RE.test(decision?.publisherAnchorHash ?? "") || stableJson(decision?.evidence) !== stableJson(latestEvidence)) findings.push("PHASE1_APP_MERGE_ADMISSION_INVALID");
   if (provisioningReadback?.schemaVersion !== 1 || provisioningReadback?.contract !== "PHASE1_ADMISSION_PUBLISHER_PROVISIONING_READBACK_V1" || provisioningReadback?.app?.id !== publisherAppId || provisioningReadback?.app?.slug !== PHASE1_PUBLISHER_APP.slug || provisioningReadback?.installation?.suspended !== false || provisioningReadback?.installation?.repositories?.length !== 1 || provisioningReadback.installation.repositories[0] !== identity?.repository || provisioningReadback?.ruleset?.stage !== "FINAL_AGGREGATE_ONLY" || !["EXPLICIT_APP_PULL_REQUEST_ONLY", "OWNER_IMMUTABLE_STAGE_RECEIPT_REQUIRED"].includes(provisioningReadback?.ruleset?.bypassReadback) || provisioningReadback?.aggregate?.displayOnlyNeverPassing !== true || provisioningReadback?.aggregate?.mergeAuthoritySource !== "APP_ONLY_SHA_BOUND_MERGE_API" || provisioningReadback?.readbackHash !== decision?.publisherProvisioningReadbackHash) findings.push("PHASE1_APP_MERGE_PROVIDER_GATE_INVALID");
   if (execution?.ref !== `refs/pull/${identity?.pr}/merge` || !validSha(execution?.sha) || !validSha(execution?.tree) || stableJson(execution?.parents) !== stableJson([identity?.baseSha, identity?.headSha])) findings.push("PHASE1_APP_MERGE_EXECUTION_INVALID");
   return {
@@ -1508,6 +1569,25 @@ async function finalizeAdmission({ repository, prNumber, readToken, publisher, s
   if (typeof engine.resolvePhase1SourceAuthorityEligibility !== "function") throw new Error("PHASE1_SOURCE_AUTHORITY_RESOLVER_MISSING");
   const sourceAuthorityProof = brandSourceAuthority(await withCandidateWorktree(identity, (root) => engine.resolvePhase1SourceAuthorityEligibility({ repository, identity, lifecycle, root })), { identity, lifecycle });
   const transitionProof = candidateBlobSha === protectedBlobSha ? null : await resolveWorkflowTransitionProof({ repository, identity, token: readToken, sourceAuthorityProof, candidateBlobSha, protectedBlobSha });
+  const applicabilityContext = await withCandidateWorktree(identity, (root) => {
+    const policyPath = path.join(root, "config/assurance/control-plane-lifecycle-v2.json");
+    if (!fs.existsSync(policyPath)) return null;
+    const lifecyclePolicy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
+    if (!validateLifecyclePolicy(lifecyclePolicy).ok) throw new Error("PHASE1_LIFECYCLE_POLICY_INVALID");
+    const paths = runGit(["diff", "--name-only", identity.baseSha, identity.headSha]).split(/\r?\n/gu).filter(Boolean).sort();
+    let boundaryAssessment = null;
+    const taskDirectory = path.join(root, "docs/assurance/tasks");
+    if (fs.existsSync(taskDirectory)) {
+      for (const entry of fs.readdirSync(taskDirectory).filter((name) => name.endsWith(".json"))) {
+        try {
+          const candidate = JSON.parse(fs.readFileSync(path.join(taskDirectory, entry), "utf8"))?.exactDiffBoundaryAssessment;
+          if (candidate) boundaryAssessment = candidate;
+        } catch {}
+      }
+    }
+    const risk = classifyDiffRisk({ changedPaths: paths, boundaryAssessment, policy: lifecyclePolicy });
+    return { lifecyclePolicy, riskClassification: risk.classification, lifecycleStage: pr.draft === true ? "AUTHORIZED_IMPLEMENTATION" : "FROZEN_CANDIDATE" };
+  });
   const input = {
     identity,
     lifecycle,
@@ -1522,6 +1602,7 @@ async function finalizeAdmission({ repository, prNumber, readToken, publisher, s
     publisherAnchorRequired: true,
     sourceAuthorityProof,
     sourceAuthorityRequired: true,
+    ...(applicabilityContext ?? {}),
   };
   const sourceDecision = evaluatePhase1Admission(input);
   const generation = normalizedRun.lifecycleGeneration;

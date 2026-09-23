@@ -26,16 +26,16 @@
     "requiredBeforeDiscovery": [
       "scanId",
       "scanState=RUNNING",
-      "repository",
-      "base.head",
-      "base.tree",
-      "target.head",
-      "target.tree",
-      "target.snapshotDigest"
+      "phase=PREFLIGHT",
+      "diffKind=PULL_REQUEST",
+      "target.id",
+      "target.displayName",
+      "target.baseRevision",
+      "target.headRevision"
     ],
-    "snapshotDigestField": "scan.target.snapshotDigest",
-    "unavailableCode": "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE",
-    "missingCode": "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT",
+    "repositoryBindingSource": "repository-owned frozen target descriptor",
+    "providerUnavailableBeforeCompletion": ["target.snapshotDigest", "repository", "base.tree", "target.tree"],
+    "snapshotDigestRequiredAtCompletion": true,
     "workersStartedOnFailure": false,
     "polling": false
   },
@@ -87,7 +87,9 @@
   "completion": {
     "maximumAttempts": 1,
     "failedAttemptIsTerminal": true,
-    "terminalRetryAllowed": false
+    "terminalRetryAllowed": false,
+    "requiredProviderSealedTarget": ["scanId", "scanState=COMPLETED|SUCCEEDED", "phase=COMPLETE|SEALED", "diffKind", "target.id", "target.displayName", "target.baseRevision", "target.headRevision", "target.snapshotDigest"],
+    "repositoryDescriptorReconciliationRequired": true
   },
   "evidenceReuse": {
     "unchangedExactSource": "EXACT_UNCHANGED_SOURCE_REUSE",
@@ -139,7 +141,7 @@
   "incidentSanitization": {
     "errorCode": "HOST_SNAPSHOT_DIGEST_MISSING_FINALIZER",
     "observedFinalizationState": "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING",
-    "mitigation": "S0 preflight would prevent the expensive scan from starting",
+    "mitigation": "S0 now permits discovery using provider commit identity and keeps completion fail-closed until a sealed provider snapshot digest is available",
     "rawErrorRetained": false,
     "tokenValues": null,
     "wallValues": null,
@@ -150,7 +152,9 @@
   },
   "invariants": [
     "host digest and repository digest use separate fields and authorities",
-    "discovery only starts after exact preflight",
+    "discovery starts only after provider scan, target, diff kind, and base/head revisions reconcile to the repository-owned frozen descriptor",
+    "provider snapshot digest is not required before the provider exposes it at successful completion",
+    "provider snapshot digest remains mandatory before CODEX_SECURITY_SEALED",
     "a source push invalidates the exact lease and prior evidence",
     "one completion attempt maximum",
     "scan creation and completion attempts are atomically registered outside caller lifecycle snapshots",

@@ -8,9 +8,10 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE, ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PATHS, createCandidateGitContext, readGitHubJsonSync, readGitHubTextSync } from "./control-plane-v2.mjs";
-import { canonicalGitText, canonicalReceiptEvidenceWireProjection, classifyGitHubExecutionIdentity, comparePhase1FinalSourceEvidence, compareReceiptEvidenceSemantics, evaluateTerminalVerifierRepairHistory, extractPhase1FinalSourceSemanticEnvelope, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, normalizeReceiptEvidenceSemantics, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, parseProtectedPullRequestMergeSubject, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, PHASE1_FINAL_SOURCE_PAYLOAD_KEYS, phase1FinalSourceSemanticEnvelope, RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS, RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
+import { canonicalGitText, canonicalReceiptEvidenceWireProjection, classifyGitHubExecutionIdentity, comparePhase1FinalSourceEvidence, compareReceiptEvidenceSemantics, evaluateTerminalVerifierRepairHistory, extractPhase1FinalSourceSemanticEnvelope, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, normalizeReceiptEvidenceSemantics, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, parseProtectedPullRequestMergeSubject, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, PHASE1_FINAL_SOURCE_PAYLOAD_KEYS, PHASE1_FINAL_SOURCE_PAYLOAD_KEYS_V2, phase1FinalSourceSemanticEnvelope, RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS, RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
 import { derivePhase1LifecycleGeneration, inspectPhase1AggregateEvidence, PHASE1_EVIDENCE_STAGES, PHASE1_MODES, resolveProtectedPhase1AdmissionEvidence, verifyPhase1AggregateEvidence, verifyProtectedPhase1PublisherProvisioningReadback } from "./phase1-admission.mjs";
 import { deriveFiniteTaskPrRiskAuthority, evaluateDraftSourceReadinessScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
+import { validateAssuranceSelfMaintenance } from "./control-plane-lifecycle.mjs";
 import {
   ACTIVE_POLICY_STATUS,
   FINITE_TASK_ADMISSION_FINAL_SOURCE_V2_MARKER,
@@ -1186,7 +1187,7 @@ export function deriveDoctrineArtifactDependencyClosure({ root = REPOSITORY_ROOT
   return { ...body, closureHash: hashValue(body), modelRevisionRequired: body.generatorSemanticChanged || body.structuralModelChanged };
 }
 
-export function doctrineModelRevisionBlocksTask({ dependencyClosure, executionMode, taskContext, changedPaths = [] } = {}) {
+export function doctrineModelRevisionBlocksTask({ dependencyClosure, executionMode, taskContext, changedPaths = [], lifecyclePolicy = null } = {}) {
   if (dependencyClosure?.modelRevisionRequired !== true) return false;
   const exactAdmissionTruth = executionMode === "FINITE_TASK_ADMISSION_SUCCESSOR"
     && taskContext?.type === "FINITE_TASK_ADMISSION_SUCCESSOR"
@@ -1198,7 +1199,13 @@ export function doctrineModelRevisionBlocksTask({ dependencyClosure, executionMo
     && stableJson(canonicalSort([...changedPaths])) === stableJson(TERMINAL_TRUTH_PATHS)
     && dependencyClosure.generatorSemanticChanged === false
     && stableJson(dependencyClosure.structuralGraphInputs) === stableJson(["UNATTRIBUTED_STRUCTURAL_GRAPH_CHANGE"]);
-  return !exactAdmissionTruth;
+  const selfMaintenance = ["ASSURANCE_CONTROL_SOURCE_ONLY", "POST_DOCTRINE_ARCHITECTURE_MAINTENANCE"].includes(executionMode)
+    && (taskContext?.evaluationType === "ASSURANCE_CONTROL_SOURCE_ONLY" || taskContext?.type === "OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE")
+    && taskContext?.productAuthorityGranted !== true
+    && validateAssuranceSelfMaintenance({ changedPaths, policy: lifecyclePolicy, productAuthority: false }).ok
+    && dependencyClosure.generatorSemanticChanged !== true
+    && !dependencyClosure.structuralGraphInputs.some((value) => value === "UNATTRIBUTED_STRUCTURAL_GRAPH_CHANGE" || !String(value).startsWith("scripts/assurance/"));
+  return !(exactAdmissionTruth || selfMaintenance);
 }
 
 export function deriveCurrentTreeObservation({ root = REPOSITORY_ROOT, identity = {}, changedPaths = [], baseline = validateDoctrineBaselineArtifacts(root), currentGraph = generateDomainGraph(root, { authoritative: true }) } = {}) {
@@ -3322,7 +3329,7 @@ const PHASE1_ADMISSION_WORKFLOW_PATH = ".github/workflows/phase1-admission.yml";
 const PHASE1_READY_MODE = "READY_MERGE_AUTHORITY";
 const PHASE1_ACCEPTABLE_RESULT = "PHASE_1_ACCEPTABLE";
 const aggregatePhase1EvidenceValue = (value) => value?.evidence ?? value?.decision ?? value;
-export const compactAggregatePhase1Evidence = (value) => Object.fromEntries(PHASE1_FINAL_SOURCE_PAYLOAD_KEYS.map((field) => [field, structuredClone(value?.[field])]).filter(([, fieldValue]) => fieldValue !== undefined));
+export const compactAggregatePhase1Evidence = (value) => Object.fromEntries((value?.schemaVersion === "PHASE1_ADMISSION_EVIDENCE_V2" ? PHASE1_FINAL_SOURCE_PAYLOAD_KEYS_V2 : PHASE1_FINAL_SOURCE_PAYLOAD_KEYS).map((field) => [field, structuredClone(value?.[field])]).filter(([, fieldValue]) => fieldValue !== undefined));
 
 export const canonicalPhase1FinalSourceWireProjection = ({ value, identity = {} } = {}) => {
   const extracted = extractPhase1FinalSourceSemanticEnvelope({
@@ -9682,6 +9689,7 @@ async function main() {
         executionMode: modeResult.mode,
         taskContext: taskContextResolution.taskContext,
         changedPaths: scope?.files ?? [],
+        lifecyclePolicy: readJson(REPOSITORY_ROOT, "config/assurance/control-plane-lifecycle-v2.json"),
       })) findings.push("WHOLE_APP_DOMAIN_MODEL_REVISION_REQUIRED");
     }
     const baselinePacket = currentTaskReport?.baseline.report?.bootstrap?.packet;

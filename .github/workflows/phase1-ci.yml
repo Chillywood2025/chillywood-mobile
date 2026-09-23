@@ -132,38 +132,8 @@ jobs:
           deno check --node-modules-dir=auto --no-lock supabase/functions/autonomous-approval-request/index.ts
           deno check --node-modules-dir=auto --no-lock supabase/functions/user-report-intake/index.ts
 
-      - name: Validate assurance authority and source correctness
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
-        run: |
-          set +e
-          if git cat-file -e "$PHASE1_PROTECTED_BASE_SHA":.github/workflows/phase1-admission.yml 2>/dev/null; then
-            PHASE1_STRICT_EVALUATOR_ROOT="$(mktemp -d "$RUNNER_TEMP/phase1-strict-evaluator.XXXXXX")"
-            trap 'git worktree remove --force "$PHASE1_STRICT_EVALUATOR_ROOT" >/dev/null 2>&1 || true' EXIT
-            git worktree add --detach "$PHASE1_STRICT_EVALUATOR_ROOT" "$PHASE1_PROTECTED_BASE_SHA"
-            node "$PHASE1_STRICT_EVALUATOR_ROOT/scripts/guard-autonomous-systems-contract.mjs"; SOURCE_GUARD=$?
-          else
-            node ./scripts/guard-autonomous-systems-contract.mjs; SOURCE_GUARD=$?
-          fi
-          npm run test:engineering-doctrine; DOCTRINE=$?
-          node --test tests/assurance/phase1-risk-based-closure-gate.test.mjs; CLOSURE_GATE_TEST=$?
-          node scripts/assurance/phase1-risk-based-closure-gate.mjs; CLOSURE=$?
-          test "$SOURCE_GUARD" -eq 0 -a "$DOCTRINE" -eq 0 -a "$CLOSURE_GATE_TEST" -eq 0 -a "$CLOSURE" -eq 0
-
-      - name: Validate non-authoritative assurance display projection
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
-        run: |
-          if git cat-file -e "$PHASE1_PROTECTED_BASE_SHA":.github/workflows/phase1-admission.yml 2>/dev/null; then
-            PHASE1_EVALUATOR_ROOT="$(mktemp -d "$RUNNER_TEMP/phase1-evaluator.XXXXXX")"
-            trap 'git worktree remove --force "$PHASE1_EVALUATOR_ROOT" >/dev/null 2>&1 || true' EXIT
-            git worktree add --detach "$PHASE1_EVALUATOR_ROOT" "$PHASE1_PROTECTED_BASE_SHA"
-            node "$PHASE1_EVALUATOR_ROOT/scripts/guard-autonomous-systems-contract.mjs" --maintenance-projection-only
-          else
-            echo 'LEGACY_PRE_CUTOVER'
-          fi
+      - name: Validate lifecycle-ready assurance controls
+        run: node --test tests/assurance/control-plane-lifecycle-v2.test.mjs tests/assurance/phase1-admission.test.mjs
 
   autonomous-systems-ios-contract:
     name: Phase 1 / Autonomous Systems iOS Contract
@@ -208,38 +178,6 @@ jobs:
           npm run guard:ios-autonomous-system-coverage
           npm run proof:ios-autonomous-system-coverage
 
-      - name: Validate assurance authority and source correctness
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
-        run: |
-          set +e
-          if git cat-file -e "$PHASE1_PROTECTED_BASE_SHA":.github/workflows/phase1-admission.yml 2>/dev/null; then
-            PHASE1_STRICT_EVALUATOR_ROOT="$(mktemp -d "$RUNNER_TEMP/phase1-strict-evaluator.XXXXXX")"
-            trap 'git worktree remove --force "$PHASE1_STRICT_EVALUATOR_ROOT" >/dev/null 2>&1 || true' EXIT
-            git worktree add --detach "$PHASE1_STRICT_EVALUATOR_ROOT" "$PHASE1_PROTECTED_BASE_SHA"
-            node "$PHASE1_STRICT_EVALUATOR_ROOT/scripts/guard-autonomous-systems-contract.mjs"; SOURCE_GUARD=$?
-          else
-            node ./scripts/guard-autonomous-systems-contract.mjs; SOURCE_GUARD=$?
-          fi
-          npm run test:engineering-doctrine; DOCTRINE=$?
-          node --test tests/assurance/phase1-risk-based-closure-gate.test.mjs; CLOSURE_GATE_TEST=$?
-          node scripts/assurance/phase1-risk-based-closure-gate.mjs; CLOSURE=$?
-          test "$SOURCE_GUARD" -eq 0 -a "$DOCTRINE" -eq 0 -a "$CLOSURE_GATE_TEST" -eq 0 -a "$CLOSURE" -eq 0
-
-      - name: Validate non-authoritative assurance display projection
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
-        run: |
-          if git cat-file -e "$PHASE1_PROTECTED_BASE_SHA":.github/workflows/phase1-admission.yml 2>/dev/null; then
-            PHASE1_EVALUATOR_ROOT="$(mktemp -d "$RUNNER_TEMP/phase1-evaluator.XXXXXX")"
-            trap 'git worktree remove --force "$PHASE1_EVALUATOR_ROOT" >/dev/null 2>&1 || true' EXIT
-            git worktree add --detach "$PHASE1_EVALUATOR_ROOT" "$PHASE1_PROTECTED_BASE_SHA"
-            node "$PHASE1_EVALUATOR_ROOT/scripts/guard-autonomous-systems-contract.mjs" --maintenance-projection-only
-          else
-            echo 'LEGACY_PRE_CUTOVER'
-          fi
 
   cognitive-intelligence-contract:
     name: Phase 1 / Cognitive Intelligence Contract
@@ -272,38 +210,6 @@ jobs:
           npm run guard:cognitive-architecture-graph
           npm run proof:cognitive-architecture-graph
 
-      - name: Validate assurance authority and source correctness
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
-        run: |
-          set +e
-          if git cat-file -e "$PHASE1_PROTECTED_BASE_SHA":.github/workflows/phase1-admission.yml 2>/dev/null; then
-            PHASE1_STRICT_EVALUATOR_ROOT="$(mktemp -d "$RUNNER_TEMP/phase1-strict-evaluator.XXXXXX")"
-            trap 'git worktree remove --force "$PHASE1_STRICT_EVALUATOR_ROOT" >/dev/null 2>&1 || true' EXIT
-            git worktree add --detach "$PHASE1_STRICT_EVALUATOR_ROOT" "$PHASE1_PROTECTED_BASE_SHA"
-            node "$PHASE1_STRICT_EVALUATOR_ROOT/scripts/guard-autonomous-systems-contract.mjs"; SOURCE_GUARD=$?
-          else
-            node ./scripts/guard-autonomous-systems-contract.mjs; SOURCE_GUARD=$?
-          fi
-          npm run test:engineering-doctrine; DOCTRINE=$?
-          node --test tests/assurance/phase1-risk-based-closure-gate.test.mjs; CLOSURE_GATE_TEST=$?
-          node scripts/assurance/phase1-risk-based-closure-gate.mjs; CLOSURE=$?
-          test "$SOURCE_GUARD" -eq 0 -a "$DOCTRINE" -eq 0 -a "$CLOSURE_GATE_TEST" -eq 0 -a "$CLOSURE" -eq 0
-
-      - name: Validate non-authoritative assurance display projection
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PHASE1_PROTECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
-        run: |
-          if git cat-file -e "$PHASE1_PROTECTED_BASE_SHA":.github/workflows/phase1-admission.yml 2>/dev/null; then
-            PHASE1_EVALUATOR_ROOT="$(mktemp -d "$RUNNER_TEMP/phase1-evaluator.XXXXXX")"
-            trap 'git worktree remove --force "$PHASE1_EVALUATOR_ROOT" >/dev/null 2>&1 || true' EXIT
-            git worktree add --detach "$PHASE1_EVALUATOR_ROOT" "$PHASE1_PROTECTED_BASE_SHA"
-            node "$PHASE1_EVALUATOR_ROOT/scripts/guard-autonomous-systems-contract.mjs" --maintenance-projection-only
-          else
-            echo 'LEGACY_PRE_CUTOVER'
-          fi
 
   cognitive-execution-safety:
     name: Phase 1 / Cognitive Execution Safety

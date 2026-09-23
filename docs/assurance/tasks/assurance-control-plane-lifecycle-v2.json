@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 2,
+  "taskId": "assurance-control-plane-lifecycle-v2",
+  "repository": "Chillywood2025/chillywood-mobile",
+  "classification": "BOUNDED_ASSURANCE_SELF_MAINTENANCE_V2",
+  "objective": "Replace recursive assurance timing assumptions with one explicit lifecycle, truthful normal/exceptional/deferred terminal outcomes, lifecycle-aware Phase 1 applicability, bounded assurance self-maintenance, risk-based hosted security, and provider-capability-correct S0 sealing.",
+  "ownerDirection": "CHI'LLYWOOD ASSURANCE CONTROL-PLANE COMPLETION + SIMPLIFICATION",
+  "scopeWaiver": {
+    "schemaVersion": 1,
+    "reviewer": "Chillywood2025",
+    "reason": "One coherent control-plane architecture requires lifecycle source, contracts, current truth, workflow, skill, and their negative tests to change atomically; splitting them would recreate the forbidden recursive repair chain.",
+    "maximumFiles": 18,
+    "maximumChangedLines": 2600,
+    "timeboxHours": 8,
+    "coherentObjectiveCount": 1,
+    "secondHighRiskDomain": false
+  },
+  "productPathsAllowed": [],
+  "authority": {
+    "product": false,
+    "providerMutation": false,
+    "databaseDeployment": false,
+    "build": false,
+    "submission": false,
+    "ota": false,
+    "publicRelease": false,
+    "money": false
+  },
+  "historicalPhase1Lanes": [
+    {
+      "name": "Cognitive Intelligence Contract",
+      "retained": ["cognitive product and architecture contracts"],
+      "deferred": ["legacy authority companion"],
+      "retired": ["generated display projection as merge authority"],
+      "applicableWhen": "security-sensitive cognitive product paths are affected"
+    },
+    {
+      "name": "Autonomous Systems iOS Contract",
+      "retained": ["iOS autonomous product and platform contracts"],
+      "deferred": ["legacy authority companion"],
+      "retired": ["generated display projection as merge authority"],
+      "applicableWhen": "security-sensitive iOS/native paths are affected"
+    },
+    {
+      "name": "Autonomous Systems All-Platform Contract",
+      "retained": ["all-platform product contracts", "lifecycle-v2 authority tests"],
+      "deferred": ["legacy authority companion"],
+      "retired": ["generated display projection as merge authority"],
+      "applicableWhen": "assurance self-maintenance or security-sensitive cross-platform paths are affected"
+    }
+  ],
+  "deferred476Defects": [
+    "RDA-CP-P1-OTA-PLATFORM-PROVENANCE-001",
+    "RDA-CP-P1-IOS-DELIVERY-BOUNDARY-002",
+    "RDA-CP-P1-IOS-DUPLICATE-SUBMISSION-003",
+    "RDA-CP-P1-PHYSICAL-AUTOMATION-RESTART-004",
+    "RDA-CP-P1-CURRENT-TRUTH-AUTHORITY-DRIFT-005",
+    "RDA-CP-P1-PROTECTED-MAIN-MERGE-MODEL-006"
+  ],
+  "exceptionalOutcome484": {
+    "schemaVersion": 2,
+    "classification": "MERGED_BY_EXPLICIT_OWNER_BYPASS_AT_EXACT_FROZEN_SOURCE",
+    "repository": "Chillywood2025/chillywood-mobile",
+    "taskId": "chillywood-auth-chat-visual-system-alignment-v1",
+    "leaseId": "chillywood-auth-chat-visual-system-alignment-v1",
+    "implementationPr": 484,
+    "implementationBranch": "codex/chillywood-auth-chat-visual-system-alignment-v1",
+    "protectedBase": "a542dc708695e1105711c9402c6c19a0f404ef2a",
+    "sourceHead": "969359cf0baaf832b2de0598c9affea1b2bf913b",
+    "sourceTree": "e42928aa80dc8f2910639878b6070cc61faa3b64",
+    "patchSha256": "3db20c51aaa778b9d730a566c11a5fa7145ea3ffa0dc6986635434cebd8e2c88",
+    "changedPathSha256": "51d7ebdb1c0a1640279d56cd779fae27aa2a974193975cca1b239b9ea1843b3d",
+    "mergeSha": "cf120d38cdfacd39f17093a197c0148e501156a7",
+    "mergeTree": "e42928aa80dc8f2910639878b6070cc61faa3b64",
+    "mergeParents": ["a542dc708695e1105711c9402c6c19a0f404ef2a", "969359cf0baaf832b2de0598c9affea1b2bf913b"],
+    "normalPathEvidence": {
+      "exactHeadReview": "NOT_PRODUCED",
+      "phase1": "NOT_SUCCESSFUL",
+      "finalSourceReceipt": "NOT_PRODUCED"
+    },
+    "hostedSecurity": "NOT_APPLICABLE_PRESENTATION_ONLY",
+    "physicalProof": "PENDING",
+    "ownerReceipt": {
+      "commentId": 5793895087,
+      "author": "Chillywood2025",
+      "authorAssociation": "OWNER",
+      "createdAt": "2026-09-23T11:20:13Z",
+      "updatedAt": "2026-09-23T11:20:13Z",
+      "subjectHash": "9b8c3637ae60709e53a80ddba9c4bebf9a5fda578218dcd8ccc2447cf76299de",
+      "bodyHash": "d83540a2dee4abe79dc891085cf31009a700083cf074ae7afa1d2d91eba86110",
+      "subject": {
+        "repository": "Chillywood2025/chillywood-mobile",
+        "implementationPr": 484,
+        "leaseId": "chillywood-auth-chat-visual-system-alignment-v1",
+        "protectedBase": "a542dc708695e1105711c9402c6c19a0f404ef2a",
+        "sourceHead": "969359cf0baaf832b2de0598c9affea1b2bf913b",
+        "sourceTree": "e42928aa80dc8f2910639878b6070cc61faa3b64",
+        "patchSha256": "3db20c51aaa778b9d730a566c11a5fa7145ea3ffa0dc6986635434cebd8e2c88",
+        "changedPathSha256": "51d7ebdb1c0a1640279d56cd779fae27aa2a974193975cca1b239b9ea1843b3d",
+        "mergeSha": "cf120d38cdfacd39f17093a197c0148e501156a7",
+        "mergeTree": "e42928aa80dc8f2910639878b6070cc61faa3b64",
+        "mergeParents": ["a542dc708695e1105711c9402c6c19a0f404ef2a", "969359cf0baaf832b2de0598c9affea1b2bf913b"],
+        "classification": "MERGED_BY_EXPLICIT_OWNER_BYPASS_AT_EXACT_FROZEN_SOURCE",
+        "normalPathEvidence": {
+          "exactHeadReview": "NOT_PRODUCED",
+          "phase1": "NOT_SUCCESSFUL",
+          "finalSourceReceipt": "NOT_PRODUCED"
+        }
+      }
+    },
+    "gitEvidence": {
+      "protectedBase": "a542dc708695e1105711c9402c6c19a0f404ef2a",
+      "sourceHead": "969359cf0baaf832b2de0598c9affea1b2bf913b",
+      "sourceTree": "e42928aa80dc8f2910639878b6070cc61faa3b64",
+      "mergeSha": "cf120d38cdfacd39f17093a197c0148e501156a7",
+      "mergeTree": "e42928aa80dc8f2910639878b6070cc61faa3b64",
+      "mergeParents": ["a542dc708695e1105711c9402c6c19a0f404ef2a", "969359cf0baaf832b2de0598c9affea1b2bf913b"],
+      "patchSha256": "3db20c51aaa778b9d730a566c11a5fa7145ea3ffa0dc6986635434cebd8e2c88",
+      "changedPathSha256": "51d7ebdb1c0a1640279d56cd779fae27aa2a974193975cca1b239b9ea1843b3d"
+    },
+    "ruleset": {
+      "id": 18940814,
+      "temporaryActor": {"actorId": 210200794, "actorType": "User", "bypassMode": "pull_request"},
+      "mergeAt": "2026-09-23T10:35:32Z",
+      "evidence": {
+        "before": {"onlyIntegration": true},
+        "bypass": {"userPresent": true, "version": 50617345, "updatedAt": "2026-09-23T05:35:29.664-05:00"},
+        "restored": {"onlyIntegration": true, "integrationId": 4707730, "version": 50617351, "updatedAt": "2026-09-23T05:35:34.262-05:00"}
+      }
+    },
+    "authority": {"providerMutation": false, "databaseDeployment": false, "build": false, "submission": false, "ota": false, "publicRelease": false, "money": false},
+    "evidenceHash": "c705f4ea21f3acb6e96cc5f49c0bebf7a9285f0ec10c42e8f68e69a75c33fc51"
+  }
+}
