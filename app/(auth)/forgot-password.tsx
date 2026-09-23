@@ -2,7 +2,6 @@ import { Link, useLocalSearchParams } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
   Alert,
-  ImageBackground,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -18,8 +17,13 @@ import { reportRuntimeError } from "../../_lib/logger";
 import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
 import { supabase } from "../../_lib/supabase";
 import { AppActionButton, AppStatusPill } from "../../components/ui/app-surface";
+import {
+  CHILLYWOOD_VISUAL,
+  ChillywoodBrandedSurface,
+  ChillywoodBrandReserve,
+  ChillywoodGlassPanel,
+} from "../../components/ui/chillywood-branded-surface";
 
-const LOGIN_BACKGROUND_SOURCE = require("../../assets/images/chicago-skyline.jpg");
 const PASSWORD_RESET_REDIRECT_URL = "https://chillywoodstream.com/reset-password";
 
 function getPasswordResetErrorMessage(error: unknown) {
@@ -93,8 +97,7 @@ export default function ForgotPassword() {
   };
 
   return (
-    <ImageBackground source={LOGIN_BACKGROUND_SOURCE} style={styles.background} resizeMode="cover">
-      <View style={styles.overlay} />
+    <ChillywoodBrandedSurface testID="auth-forgot-password-branded-surface">
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardShell}
@@ -113,7 +116,8 @@ export default function ForgotPassword() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.card}>
+          <ChillywoodBrandReserve compact testID="auth-forgot-password-branding-clearance" />
+          <ChillywoodGlassPanel testID="auth-forgot-password-glass-panel">
             <View style={styles.headerRow}>
               <Text style={styles.kicker}>CHI&apos;LLYWOOD</Text>
               <AppStatusPill label={isClosedBetaEnvironment() ? "Closed Beta" : "Public V1"} tone="accent" />
@@ -158,6 +162,7 @@ export default function ForgotPassword() {
               label={loading ? "Sending..." : "Send reset link"}
               loading={loading}
               onPress={sendPasswordReset}
+              style={styles.primaryAction}
               testID="forgot-password-submit-button"
               variant="primary"
             />
@@ -168,18 +173,14 @@ export default function ForgotPassword() {
             >
               Back to login
             </Link>
-          </View>
+          </ChillywoodGlassPanel>
         </ScrollView>
       </KeyboardAvoidingView>
-    </ImageBackground>
+    </ChillywoodBrandedSurface>
   );
 }
 
 const styles = StyleSheet.create({
-  background: {
-    flex: 1,
-    backgroundColor: "#06070B",
-  },
   backLink: {
     color: "#F2F5FB",
     fontSize: 15,
@@ -187,18 +188,8 @@ const styles = StyleSheet.create({
     marginTop: 18,
     textAlign: "center",
   },
-  card: {
-    width: "100%",
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(7,10,16,0.88)",
-    paddingHorizontal: 24,
-    paddingVertical: 28,
-  },
   container: {
     flexGrow: 1,
-    justifyContent: "center",
     paddingHorizontal: 22,
   },
   headerRow: {
@@ -209,10 +200,10 @@ const styles = StyleSheet.create({
   },
   input: {
     minHeight: 58,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     color: "white",
     fontSize: 16,
     fontWeight: "700",
@@ -223,14 +214,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   kicker: {
-    color: "#AAB4C8",
-    fontSize: 13,
+    color: "#D2CFE2",
+    fontSize: 12,
     fontWeight: "900",
-    letterSpacing: 0,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(7,10,16,0.74)",
+    letterSpacing: 2.2,
   },
   sentBody: {
     color: "#B8C2D8",
@@ -260,9 +247,14 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   title: {
-    color: "#F2F5FB",
-    fontSize: 38,
+    color: CHILLYWOOD_VISUAL.textPrimary,
+    fontSize: 36,
     fontWeight: "900",
     marginBottom: 14,
+  },
+  primaryAction: {
+    minHeight: 56,
+    borderColor: "rgba(91,214,255,0.72)",
+    backgroundColor: "#5B1DFF",
   },
 });
