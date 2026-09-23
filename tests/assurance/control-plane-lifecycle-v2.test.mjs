@@ -30,6 +30,7 @@ import {
 import { parseCanonicalMarkedComment } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const policy = JSON.parse(fs.readFileSync("config/assurance/control-plane-lifecycle-v2.json", "utf8"));
+const prScopePolicy = JSON.parse(fs.readFileSync("config/assurance/pr-scope-policy-v1.json", "utf8"));
 const sha = (character) => character.repeat(40);
 const digest = (character) => character.repeat(64);
 const lease = { leaseId: "synthetic-lifecycle-task-v1", implementationPr: 700, implementationBranch: "codex/synthetic-lifecycle-task-v1" };
@@ -223,6 +224,30 @@ test("presentation-only risk requires exact boundary proof and high/unknown risk
   assert.equal(classifyDiffRisk({ changedPaths: ["scripts/assurance/example.mjs"], policy }).classification, RISK_CLASSES.ASSURANCE);
 });
 
+test("protected PR-scope high-risk domains drive lifecycle risk without allowing unknown paths to ride along", () => {
+  const releasePaths = [
+    "docs/assurance/tasks/synthetic-release-control-v1.json",
+    "docs/release/CONTROL_PLANE_RUNBOOK.md",
+    "scripts/ios-delivery-control.mjs",
+    "scripts/physical-automation-control.mjs",
+    "tests/release-control-plane.test.mjs",
+  ];
+  assert.deepEqual(classifyDiffRisk({ changedPaths: releasePaths, policy, prScopePolicy }), {
+    classification: RISK_CLASSES.HIGH,
+    hostedSecurity: "HOSTED_SECURITY_REQUIRED",
+    findings: [],
+  });
+  const malformed = structuredClone(prScopePolicy);
+  malformed.contractId = "forged-pr-scope-policy";
+  assert.equal(classifyDiffRisk({ changedPaths: releasePaths, policy, prScopePolicy: malformed }).classification, RISK_CLASSES.UNKNOWN);
+  assert.equal(classifyDiffRisk({ changedPaths: [...releasePaths, "unregistered/runtime-boundary.bin"], policy, prScopePolicy }).classification, RISK_CLASSES.UNKNOWN);
+  assert.equal(classifyDiffRisk({ changedPaths: ["scripts/ios-delivery-control.mjs"], policy, prScopePolicy }).classification, RISK_CLASSES.UNKNOWN);
+  assert.equal(classifyDiffRisk({ changedPaths: ["docs/release/CONTROL_PLANE_RUNBOOK.md", "app/(auth)/login.tsx"], policy, prScopePolicy }).classification, RISK_CLASSES.HIGH);
+  const downgraded = structuredClone(prScopePolicy);
+  downgraded.domains.find(({ id }) => id === "release-OTA").risk = "medium";
+  assert.equal(classifyDiffRisk({ changedPaths: releasePaths, policy, prScopePolicy: downgraded }).classification, RISK_CLASSES.UNKNOWN);
+});
+
 test("authenticated generated current-truth companions classify as assurance-control high risk", () => {
   const fixture = canonicalCompanionFixture();
   const authorized = authorizeCanonicalGeneratedAssuranceCompanionTransition(fixture);
@@ -230,6 +255,39 @@ test("authenticated generated current-truth companions classify as assurance-con
   const risk = classifyDiffRisk({ changedPaths: fixture.changedPaths, exactDiff: fixture.exactDiff, assuranceTransitionContext: authorized.context, policy });
   assert.deepEqual(risk, { classification: RISK_CLASSES.ASSURANCE, hostedSecurity: "HOSTED_SECURITY_REQUIRED", findings: [] });
   assert.notEqual(risk.classification, RISK_CLASSES.PRESENTATION);
+});
+
+test("authenticated generated companions accept a verified rolling protected-main base without weakening task identity", () => {
+  const fixture = canonicalCompanionFixture();
+  const checkpoint = sha("b");
+  fixture.currentTruth.mainSha = checkpoint;
+  fixture.currentTruth.protectedMainAuthority.checkpointSha = checkpoint;
+  fixture.protectedMainLineage = {
+    checkpointSha: checkpoint,
+    checkpointTree: fixture.currentTruth.protectedMainAuthority.checkpointTree,
+    observedProtectedMainSha: fixture.exactDiff.baseSha,
+    mainRelation: "PROTECTED_MAIN_ADVANCED",
+    currentTruthStatus: "CURRENT",
+    authorityCheckpointEligible: true,
+    authorityControlEligible: true,
+    pendingTransitionCount: 0,
+    activeTaskModelInvalidated: false,
+    activeTaskInputsInvalidated: [],
+    protectedAdvancementChainHash: digest("c"),
+    findings: [],
+  };
+  assert.equal(authorizeCanonicalGeneratedAssuranceCompanionTransition(fixture).ok, true);
+  for (const [name, mutate] of [
+    ["wrong observed base", (value) => { value.protectedMainLineage.observedProtectedMainSha = sha("d"); }],
+    ["broken checkpoint", (value) => { value.protectedMainLineage.checkpointSha = sha("e"); }],
+    ["pending transition", (value) => { value.protectedMainLineage.pendingTransitionCount = 1; }],
+    ["task input invalidation", (value) => { value.protectedMainLineage.activeTaskInputsInvalidated = ["package.json"]; }],
+    ["unresolved lineage finding", (value) => { value.protectedMainLineage.findings = ["CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID"]; }],
+  ]) {
+    const candidate = structuredClone(fixture);
+    mutate(candidate);
+    assert.equal(authorizeCanonicalGeneratedAssuranceCompanionTransition(candidate).ok, false, name);
+  }
 });
 
 test("generated companion mutations and forged contexts remain UNKNOWN_RISK", () => {

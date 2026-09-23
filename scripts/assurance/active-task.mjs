@@ -246,13 +246,14 @@ function normalizeOwnerJurisdictionPolicyReceipt(comment) {
   };
 }
 
-function discoverOwnerJurisdictionPolicyObservation(repository, { admissionPr, taskId } = {}) {
+function discoverOwnerJurisdictionPolicyObservation(repository, { admissionPr, implementationPr, taskId } = {}) {
   const comments = ghPages(`repos/${repository}/issues/comments?per_page=100`);
   if (!Array.isArray(comments)) return { complete: false, receipts: [] };
   const rawComments = comments.filter(({ body }) => ownerJurisdictionPolicyMarkers.some((marker) => hasCanonicalMarkedCommentPrefix(body, marker)));
   const admissionComments = Number.isSafeInteger(admissionPr) ? ghPages(`repos/${repository}/issues/${admissionPr}/comments?per_page=100`) : [];
   const admissionRaws = Array.isArray(admissionComments) ? admissionComments.filter(({ body }) => [FINITE_TASK_ADMISSION_V2_MARKER, LEGACY_FINITE_TASK_ADMISSION_V1_MARKER].some((marker) => hasCanonicalMarkedCommentPrefix(body, marker))) : [];
   const admissionPull = Number.isSafeInteger(admissionPr) ? ghJson(`repos/${repository}/pulls/${admissionPr}`) : null;
+  const implementationPull = Number.isSafeInteger(implementationPr) ? ghJson(`repos/${repository}/pulls/${implementationPr}`) : null;
   let admissionTree = null;
   try { admissionTree = admissionPull?.head?.sha ? git(["rev-parse", `${admissionPull.head.sha}^{tree}`]) : null; } catch {}
   return {
@@ -261,10 +262,70 @@ function discoverOwnerJurisdictionPolicyObservation(repository, { admissionPr, t
     receipts: rawComments.map(normalizeOwnerJurisdictionPolicyReceipt),
     admissionRaws,
     admissionIdentity: admissionPull ? { repository, pr: admissionPr, branch: admissionPull.head?.ref, baseRef: admissionPull.base?.ref, baseSha: admissionPull.base?.sha, headSha: admissionPull.head?.sha, tree: admissionTree } : null,
+    implementationPull,
   };
 }
 
 const sameCanonicalValue = (left, right) => stableJson(left) === stableJson(right);
+
+/**
+ * Reads admission artifact evidence from the exact implementation head bound by
+ * current truth. The admission checkout is intentionally not an artifact
+ * authority source because a canonical admission synchronization contains only
+ * generated current-truth companions.
+ */
+export function resolveActiveTaskAdmissionImplementationEvidence({
+  activeBinding,
+  lease,
+  projection,
+  implementationPull,
+  root = ROOT,
+} = {}) {
+  const findings = [];
+  const task = projection?.taskBinding;
+  const artifactPath = lease?.artifactReservation?.closureArtifactPath;
+  const planningHead = task?.planningHead;
+  const planningTree = task?.planningTree;
+  const add = (condition, finding) => { if (!condition) findings.push(finding); };
+  add(implementationPull?.number === activeBinding?.implementationPr && implementationPull?.number === lease?.implementationPr && implementationPull?.number === task?.prNumber, "ACTIVE_TASK_IMPLEMENTATION_PR_INVALID");
+  add(implementationPull?.state === "open" && implementationPull?.merged !== true, "ACTIVE_TASK_IMPLEMENTATION_STATE_INVALID");
+  add(implementationPull?.base?.repo?.full_name === projection?.repository && implementationPull?.base?.ref === "main", "ACTIVE_TASK_IMPLEMENTATION_BASE_INVALID");
+  add(implementationPull?.head?.repo?.full_name === projection?.repository, "ACTIVE_TASK_IMPLEMENTATION_REPOSITORY_INVALID");
+  add(implementationPull?.head?.ref === activeBinding?.implementationBranch && implementationPull?.head?.ref === lease?.implementationBranch, "ACTIVE_TASK_IMPLEMENTATION_BRANCH_INVALID");
+  add(activeBinding?.currentImplementationHead === planningHead, "ACTIVE_TASK_IMPLEMENTATION_HEAD_INVALID");
+  add(activeBinding?.currentImplementationTree === planningTree, "ACTIVE_TASK_IMPLEMENTATION_TREE_INVALID");
+  add(typeof artifactPath === "string" && artifactPath === activeBinding?.closureArtifactPath && /^docs\/assurance\/tasks\/[A-Za-z0-9][A-Za-z0-9_-]*\.json$/u.test(artifactPath), "ACTIVE_TASK_IMPLEMENTATION_ARTIFACT_PATH_INVALID");
+  let observedTree = null;
+  let artifactRead = null;
+  let currentHeadDescendsFromPlanning = false;
+  try {
+    observedTree = spawnSync("git", ["rev-parse", `${planningHead}^{tree}`], { cwd: root, encoding: "utf8", shell: false }).stdout.trim();
+    currentHeadDescendsFromPlanning = spawnSync("git", ["merge-base", "--is-ancestor", planningHead, implementationPull?.head?.sha], { cwd: root, encoding: "utf8", shell: false }).status === 0;
+    artifactRead = readTaskArtifactAtGitHead(artifactPath, planningHead, root);
+  } catch {}
+  add(observedTree === planningTree, "ACTIVE_TASK_IMPLEMENTATION_OBSERVED_TREE_INVALID");
+  add(currentHeadDescendsFromPlanning, "ACTIVE_TASK_IMPLEMENTATION_ANCESTRY_INVALID");
+  add(artifactRead?.artifactHash === lease?.closure?.artifactHash, "ACTIVE_TASK_IMPLEMENTATION_ARTIFACT_HASH_INVALID");
+  add(artifactRead?.artifact?.taskId === lease?.leaseId && artifactRead?.artifact?.taskId === task?.taskId, "ACTIVE_TASK_IMPLEMENTATION_TASK_INVALID");
+  add(artifactRead?.artifact?.repository === projection?.repository, "ACTIVE_TASK_IMPLEMENTATION_ARTIFACT_REPOSITORY_INVALID");
+  add(artifactRead?.artifact?.implementation?.pullRequest === implementationPull?.number && artifactRead?.artifact?.implementation?.branch === implementationPull?.head?.ref, "ACTIVE_TASK_IMPLEMENTATION_ARTIFACT_IDENTITY_INVALID");
+  const unique = [...new Set(findings)].sort();
+  return {
+    ok: unique.length === 0,
+    findings: unique,
+    artifactRead: unique.length === 0 ? artifactRead : null,
+    implementation: unique.length === 0 ? {
+      pr: implementationPull.number,
+      branch: implementationPull.head.ref,
+      planningHead,
+      planningTree,
+      seedHead: lease.admittedSeedHead,
+      seedTree: lease.admittedSeedTree,
+      ownerCommentId: lease.ownerAuthorizationCommentId,
+      taskArtifactPath: artifactPath,
+    } : null,
+  };
+}
 
 function activeTaskJurisdictionEvidenceFindings({ projection, activeBinding, lease, fullTaskBinding, policyResolution, registry }) {
   const findings = [];
@@ -352,7 +413,7 @@ export function verifyActiveTaskOwnerJurisdictionPolicy({
     return { ok: false, findings: [...new Set(projectionFindings.map(({ id }) => id))].sort() };
   }
 
-  const observation = policyObservation ?? discoverOwnerJurisdictionPolicyObservation(projection.repository, { admissionPr: lease?.protectedAdmissionPr, taskId: projection.taskBinding.taskId });
+  const observation = policyObservation ?? discoverOwnerJurisdictionPolicyObservation(projection.repository, { admissionPr: lease?.protectedAdmissionPr, implementationPr: activeBinding?.implementationPr, taskId: projection.taskBinding.taskId });
   if (observation?.complete !== true || !Array.isArray(observation.receipts)) {
     return { ok: false, findings: ["ACTIVE_TASK_OWNER_JURISDICTION_COMPLETE_DISCOVERY_REQUIRED"] };
   }
@@ -395,11 +456,10 @@ export function verifyActiveTaskOwnerJurisdictionPolicy({
   let fullTaskBinding = observation.taskBinding;
   if (!fullTaskBinding && observation.admissionIdentity && Array.isArray(observation.admissionRaws)) {
     try {
-      const taskArtifactPath = lease?.artifactReservation?.closureArtifactPath;
-      const taskArtifactSource = fs.readFileSync(path.join(ROOT, taskArtifactPath), "utf8");
-      const taskArtifact = JSON.parse(taskArtifactSource);
-      const implementation = { pr: activeBinding?.implementationPr, branch: activeBinding?.implementationBranch, seedHead: lease?.admittedSeedHead, seedTree: lease?.admittedSeedTree, planningHead: projection.taskBinding.planningHead, planningTree: projection.taskBinding.planningTree, ownerCommentId: lease?.ownerAuthorizationCommentId, taskArtifactPath };
-      const admission = resolveFiniteTaskAdmissionTaskBindingV2({ admissionRaws: observation.admissionRaws, paginationComplete: observation.complete, identity: observation.admissionIdentity, tree: observation.admissionIdentity.tree, implementation, taskArtifact, taskArtifactHash: sha256(taskArtifactSource), expectedScope, expectedDomainIds: projection.taskBinding.domainIds, root: ROOT });
+      const implementationEvidence = resolveActiveTaskAdmissionImplementationEvidence({ activeBinding, lease, projection, implementationPull: observation.implementationPull, root: ROOT });
+      const admission = implementationEvidence.ok
+        ? resolveFiniteTaskAdmissionTaskBindingV2({ admissionRaws: observation.admissionRaws, paginationComplete: observation.complete, identity: observation.admissionIdentity, tree: observation.admissionIdentity.tree, implementation: implementationEvidence.implementation, taskArtifact: implementationEvidence.artifactRead.artifact, taskArtifactHash: implementationEvidence.artifactRead.artifactHash, expectedScope, expectedDomainIds: projection.taskBinding.domainIds, root: ROOT })
+        : { ok: false };
       if (admission.ok) fullTaskBinding = admission.taskBinding;
     } catch {}
   }
