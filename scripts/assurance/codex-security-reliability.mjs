@@ -364,14 +364,28 @@ function blockedPreflight(lifecycle, status, fallback = null, lifecycleStore = p
   };
 }
 
-function hostIdentityMatches(host, lifecycle, descriptor) {
+function hostPreflightIdentityMatches(host, lifecycle, descriptor) {
   return host?.scanId === lifecycle.scanId
     && host?.scanState === "RUNNING"
-    && host?.repository === descriptor.repository.slug
-    && host?.base?.head === descriptor.base.head
-    && host?.base?.tree === descriptor.base.tree
-    && host?.target?.head === descriptor.target.head
-    && host?.target?.tree === descriptor.target.tree;
+    && host?.phase === "PREFLIGHT"
+    && host?.diffKind === "PULL_REQUEST"
+    && typeof host?.target?.id === "string" && host.target.id.length > 0
+    && typeof host?.target?.displayName === "string" && host.target.displayName.length > 0
+    && host?.target?.baseRevision === descriptor.base.head
+    && host?.target?.headRevision === descriptor.target.head;
+}
+
+function hostCompletionIdentityMatches(host, lifecycle, descriptor, { requireSnapshotDigest = true } = {}) {
+  const binding = lifecycle?.hostBinding;
+  const identityMatches = host?.scanId === lifecycle?.scanId
+    && ["COMPLETED", "SUCCEEDED"].includes(host?.scanState)
+    && ["COMPLETE", "SEALED"].includes(host?.phase)
+    && host?.diffKind === binding?.diffKind
+    && host?.target?.id === binding?.target?.id
+    && host?.target?.displayName === binding?.target?.displayName
+    && host?.target?.baseRevision === descriptor?.base?.head
+    && host?.target?.headRevision === descriptor?.target?.head;
+  return identityMatches && (requireSnapshotDigest !== true || digest(host?.target?.snapshotDigest));
 }
 
 export function preflight({ lifecycle, descriptor, host = {}, runGit = git, lifecycleStore = productionLifecycleStore }) {
@@ -381,29 +395,20 @@ export function preflight({ lifecycle, descriptor, host = {}, runGit = git, life
   if (!repositoryIdentityCurrent(descriptor, runGit)) {
     return blockedPreflight(lifecycle, "CODEX_SECURITY_SOURCE_LEASE_CHANGED", null, lifecycleStore);
   }
-  if (!hostIdentityMatches(host, lifecycle, descriptor)) {
-    return blockedPreflight(lifecycle, "CODEX_SECURITY_PREFLIGHT_IDENTITY_MISMATCH", null, lifecycleStore);
-  }
-  if (host.snapshotDigestExposed !== true) {
-    return blockedPreflight(lifecycle, "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE", "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED", lifecycleStore);
-  }
-  const hostSnapshotDigest = host?.target?.snapshotDigest;
-  if (!digest(hostSnapshotDigest)) {
-    return blockedPreflight(lifecycle, "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT", "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED", lifecycleStore);
-  }
-  if (hostSnapshotDigest === descriptor.repositorySourceSnapshotDigest) {
+  if (!hostPreflightIdentityMatches(host, lifecycle, descriptor)) {
     return blockedPreflight(lifecycle, "CODEX_SECURITY_PREFLIGHT_IDENTITY_MISMATCH", null, lifecycleStore);
   }
   const next = nextLifecycle(lifecycle, "HOST_PREFLIGHT_CLEAR", {
     hostBinding: {
-      repository: host.repository,
       scanId: host.scanId,
       scanState: host.scanState,
-      base: host.base,
+      phase: host.phase,
+      diffKind: host.diffKind,
       target: {
-        head: host.target.head,
-        tree: host.target.tree,
-        snapshotDigest: hostSnapshotDigest,
+        id: host.target.id,
+        displayName: host.target.displayName,
+        baseRevision: host.target.baseRevision,
+        headRevision: host.target.headRevision,
       },
     },
   });
@@ -483,18 +488,22 @@ export function finalize({ lifecycle, descriptor, host = {}, sourceReviewComplet
   }
   const attempted = nextLifecycle(lifecycle, "FINALIZATION_RUNNING", { completionAttempts: 1 });
   const snapshotDigest = host?.target?.snapshotDigest;
-  if (host?.snapshotDigestExposed !== true || !digest(snapshotDigest)) {
+  if (!hostCompletionIdentityMatches(host, lifecycle, descriptor, { requireSnapshotDigest: false })) {
+    const terminal = terminalize(attempted, "TERMINAL_FAILED", "CODEX_SECURITY_FINALIZATION_GUARD");
+    const committed = commitLifecycleTransition(lifecycle, terminal, lifecycleStore);
+    return { ok: false, status: committed ? "CODEX_SECURITY_FINALIZATION_GUARD" : "CODEX_SECURITY_ILLEGAL_TRANSITION", lifecycle: committed ?? lifecycle };
+  }
+  if (!digest(snapshotDigest)) {
     const terminal = terminalize(attempted, "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING", "HOST_SNAPSHOT_DIGEST_UNAVAILABLE_AT_FINALIZATION");
     const committed = commitLifecycleTransition(lifecycle, terminal, lifecycleStore);
     return {
       ok: false,
-      status: committed ? (host?.snapshotDigestExposed === true ? "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT" : "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE") : "CODEX_SECURITY_ILLEGAL_TRANSITION",
+      status: committed ? "HOST_SNAPSHOT_DIGEST_UNAVAILABLE_AT_FINALIZATION" : "CODEX_SECURITY_ILLEGAL_TRANSITION",
       lifecycle: committed ?? lifecycle,
     };
   }
   const guard = repositoryIdentityCurrent(descriptor, runGit)
-    && hostIdentityMatches(host, lifecycle, descriptor)
-    && stableJson(host) === stableJson({ ...lifecycle.hostBinding, snapshotDigestExposed: true })
+    && hostCompletionIdentityMatches(host, lifecycle, descriptor, { requireSnapshotDigest: true })
     && snapshotDigest !== descriptor.repositorySourceSnapshotDigest
     && sourceReviewComplete === true
     && coverageComplete === true
@@ -648,7 +657,7 @@ export function repositoryClosure(value, { runGit = git, readReceipt, receiptArt
   const policySelfReview = value?.reason === "HOSTED_SECURITY_SELF_APPROVAL_PROHIBITED"
     && value?.hostScanStarted === false
     && value?.lifecycle === null;
-  const toolingFallback = ["HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE", "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT"].includes(value?.reason)
+  const historicalPreflightFallback = ["HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE", "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT"].includes(value?.reason)
     && value?.lifecycle?.state === "HOST_PREFLIGHT_BLOCKED"
     && value?.lifecycle?.stateVersion === 1
     && value?.lifecycle?.terminal === true
@@ -656,6 +665,16 @@ export function repositoryClosure(value, { runGit = git, readReceipt, receiptArt
     && lifecycleIdentityCurrent(value.lifecycle, descriptor)
     && lifecycleAuthorityCurrent(value.lifecycle)
     && value?.hostScanStarted === false;
+  const completionCapabilityFallback = value?.reason === "HOST_SNAPSHOT_DIGEST_UNAVAILABLE_AT_FINALIZATION"
+    && value?.lifecycle?.state === "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING"
+    && value?.lifecycle?.stateVersion === 4
+    && value?.lifecycle?.terminal === true
+    && value?.lifecycle?.terminalReason === value.reason
+    && value?.lifecycle?.workersStarted === true
+    && lifecycleIdentityCurrent(value.lifecycle, descriptor)
+    && lifecycleAuthorityCurrent(value.lifecycle)
+    && value?.hostScanStarted === true;
+  const toolingFallback = historicalPreflightFallback || completionCapabilityFallback;
   const ok = descriptorValid(descriptor)
     && repositoryIdentityCurrent(descriptor, runGit)
     && value?.classification === "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED"
@@ -693,7 +712,7 @@ function closureValidForReuse(closure, descriptor) {
     || closure.schemaVersion !== 1
     || closure.classification !== "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED"
     || closure.sealed !== false
-    || !["HOSTED_SECURITY_SELF_APPROVAL_PROHIBITED", "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE", "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT"].includes(closure.reason)
+    || !["HOSTED_SECURITY_SELF_APPROVAL_PROHIBITED", "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE", "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT", "HOST_SNAPSHOT_DIGEST_UNAVAILABLE_AT_FINALIZATION"].includes(closure.reason)
     || closure.repository !== descriptor.repository.slug
     || stableJson(closure.target) !== stableJson(descriptor.target)
     || closure.changedPathWorklistSha256 !== descriptor.changedPathWorklistSha256
@@ -825,7 +844,7 @@ export function benchmark() {
   const noExposure = preflight({
     lifecycle: created.lifecycle,
     descriptor,
-    host: { scanId: benchmarkScanId, scanState: "RUNNING", repository: descriptor.repository.slug, base: { head: descriptor.base.head, tree: descriptor.base.tree }, target: { head: descriptor.target.head, tree: descriptor.target.tree }, snapshotDigestExposed: false },
+    host: { scanId: benchmarkScanId, scanState: "RUNNING", phase: "PREFLIGHT", diffKind: "PULL_REQUEST", target: { id: "benchmark-target-1", displayName: "Benchmark one", baseRevision: descriptor.base.head, headRevision: descriptor.target.head } },
     runGit,
     lifecycleStore,
   });
@@ -833,20 +852,23 @@ export function benchmark() {
   const missingDigest = preflight({
     lifecycle: second.lifecycle,
     descriptor,
-    host: { scanId: "s0-benchmark:missing-digest", scanState: "RUNNING", repository: descriptor.repository.slug, base: { head: descriptor.base.head, tree: descriptor.base.tree }, target: { head: descriptor.target.head, tree: descriptor.target.tree, snapshotDigest: "" }, snapshotDigestExposed: true },
+    host: { scanId: "s0-benchmark:missing-digest", scanState: "RUNNING", phase: "PREFLIGHT", diffKind: "PULL_REQUEST", target: { id: "benchmark-target-2", displayName: "Benchmark two", baseRevision: descriptor.base.head, headRevision: descriptor.target.head } },
     runGit,
     lifecycleStore,
   });
   const incidentResults = [...recurringFailures].map(([scanId, error]) => sanitizeIncident({ scanId, error, sourceReviewCompletionState: "SOURCE_REVIEW_COMPLETE", finalizationState: "SOURCE_REVIEW_COMPLETE_SEAL_BLOCKED_TOOLING", mitigation: "S0 preflight would prevent the expensive scan from starting" }));
-  const ok = noExposure.status === "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE"
+  const ok = noExposure.status === "HOST_PREFLIGHT_CLEAR"
+    && noExposure.discoveryAuthorized === true
     && noExposure.workersStarted === false
-    && missingDigest.status === "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT"
+    && missingDigest.status === "HOST_PREFLIGHT_CLEAR"
+    && missingDigest.discoveryAuthorized === true
     && missingDigest.workersStarted === false
     && incidentResults.every(({ ok: incidentOk }) => incidentOk);
   result = {
     ok,
     failedIncidents: [...recurringFailures.keys()],
-    expensiveScanWorkAvoided: 2,
+    preflightCapabilityCompatible: 2,
+    expensiveScanWorkAvoided: 0,
     preflightResults: [noExposure.status, missingDigest.status],
     incidentHashes: incidentResults.map(({ record }) => record?.incidentHash),
     tokenValues: null,

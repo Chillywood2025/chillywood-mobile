@@ -749,18 +749,15 @@ test("App-only merge postcondition requires the exact bot, subject, merge parent
   assert.equal(evaluateAppOnlyMergePostcondition({ expected, response, pullRequest, mainSha: "0".repeat(40), commit }).ok, false);
 });
 
-test("raw Phase 1 deterministically cuts over its three narrow maintenance projections from protected main", () => {
+test("Phase 1 keeps useful product checks and retires unfinished authority companions", () => {
   const workflow = fs.readFileSync(new URL("../../.github/workflows/phase1-ci.yml", import.meta.url), "utf8");
   const guard = fs.readFileSync(new URL("../../scripts/guard-autonomous-systems-contract.mjs", import.meta.url), "utf8");
   const library = fs.readFileSync(new URL("../../scripts/assurance/lib.mjs", import.meta.url), "utf8");
   assert.doesNotMatch(workflow, /PHASE1_RISK_ADMISSION_ACTIVE/u);
-  assert.equal((workflow.match(/git cat-file -e "\$PHASE1_PROTECTED_BASE_SHA":\.github\/workflows\/phase1-admission\.yml/gu) ?? []).length, 6);
-  assert.equal((workflow.match(/LEGACY_PRE_CUTOVER/gu) ?? []).length, 3);
-  assert.equal((workflow.match(/Validate non-authoritative assurance display projection/gu) ?? []).length, 3);
-  assert.equal((workflow.match(/node "\$PHASE1_EVALUATOR_ROOT\/scripts\/guard-autonomous-systems-contract\.mjs" --maintenance-projection-only/gu) ?? []).length, 3);
-  assert.equal((workflow.match(/node "\$PHASE1_STRICT_EVALUATOR_ROOT\/scripts\/guard-autonomous-systems-contract\.mjs"; SOURCE_GUARD=\$\?/gu) ?? []).length, 3);
-  assert.equal((workflow.match(/node \.\/scripts\/guard-autonomous-systems-contract\.mjs; SOURCE_GUARD=\$\?/gu) ?? []).length, 3, "candidate evaluator is bootstrap-only; protected main owns post-cutover classification");
-  assert.doesNotMatch(workflow, /node \.\/scripts\/guard-autonomous-systems-contract\.mjs --maintenance-projection-only/u);
+  assert.equal((workflow.match(/Validate assurance authority and source correctness/gu) ?? []).length, 0);
+  assert.equal((workflow.match(/Validate non-authoritative assurance display projection/gu) ?? []).length, 0);
+  assert.equal((workflow.match(/Validate lifecycle-ready assurance controls/gu) ?? []).length, 1);
+  assert.equal((workflow.match(/npm run proof:autonomous-systems-contract/gu) ?? []).length, 3);
   assert.match(guard, /const subjectGit = \(argv, options = \{\}\) => execFileSync\("git", argv, \{\s*cwd: root,/u);
   assert.equal((guard.match(/gitCommand: subjectGit/gu) ?? []).length, 2, "protected code must evaluate the candidate checkout, not its own base worktree");
   assert.match(library, /const candidateRoot = process\.cwd\(\);[\s\S]*validateUntrustedAssuranceControlTaskContextObservation/u);
@@ -846,7 +843,7 @@ test("immutable publisher anchor requires exact R1 Owner receipts and exact sepa
   };
   const anchor = { ...anchorBody, anchorHash: hashValue(anchorBody) };
   const verify = (value, observed = live, comments = [intentRaw, finalRaw]) => verifyPhase1AdmissionPublisherImmutableAnchor({ anchor: value, liveProvisioningReadback: observed, comments, paginationComplete: true, repository: REPOSITORY });
-  assert.equal(verify(anchor).ok, true);
+  assert.equal(verify(anchor).ok, true, JSON.stringify(verify(anchor)));
   const advancedLive = phase1AdmissionPublisherProvisioningReadback({
     ...PUBLISHER_KEY_READBACK,
     appId: live.app.id,

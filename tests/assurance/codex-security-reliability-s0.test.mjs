@@ -72,12 +72,21 @@ function hostFor(value, overrides = {}) {
   const host = {
     scanId: "scan-s0-1",
     scanState: "RUNNING",
-    repository: value.repository.slug,
-    base: { head: value.base.head, tree: value.base.tree },
-    target: { head: value.target.head, tree: value.target.tree, snapshotDigest: "f".repeat(64) },
-    snapshotDigestExposed: true,
+    phase: "PREFLIGHT",
+    diffKind: "PULL_REQUEST",
+    target: { id: "target-s0-1", displayName: "Synthetic pull request", baseRevision: value.base.head, headRevision: value.target.head },
   };
   return { ...host, ...overrides };
+}
+
+function completedHostFor(value, preflightHost, overrides = {}) {
+  return {
+    ...preflightHost,
+    scanState: "COMPLETED",
+    phase: "SEALED",
+    target: { ...preflightHost.target, snapshotDigest: "f".repeat(64) },
+    ...overrides,
+  };
 }
 
 function gitFor(value, replacement = value) {
@@ -221,7 +230,7 @@ function reachSourceReviewComplete(value = descriptor()) {
   assert.equal(discovery.ok, true);
   const completed = completeSourceReview({ lifecycle: discovery.lifecycle, descriptor: value, complete: true, runGit: gitFor(value) });
   assert.equal(completed.ok, true);
-  return { lifecycle: completed.lifecycle, host };
+  return { lifecycle: completed.lifecycle, host: completedHostFor(value, host) };
 }
 
 test("target descriptor is deterministic and binds repository, trees, worklist, and source digest", () => {
@@ -259,40 +268,28 @@ test("descriptor validation fails closed on every exact identity class", () => {
   }
 });
 
-test("preflight stops before discovery when host snapshot digest is unavailable", () => {
+test("preflight uses metadata exposed by the running provider and does not require a completion-only digest", () => {
   const value = descriptor();
   const lifecycle = lifecycleFor(value);
-  const unavailable = preflight({ lifecycle, descriptor: value, host: hostFor(value, { scanId: lifecycle.scanId, snapshotDigestExposed: false }), runGit: gitFor(value) });
-  assert.equal(unavailable.status, "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE");
-  assert.equal(unavailable.workersStarted, false);
-  assert.equal(unavailable.lifecycle.state, "HOST_PREFLIGHT_BLOCKED");
-  assert.equal(unavailable.lifecycle.terminal, true);
-  const replayedPreflight = preflight({ lifecycle, descriptor: value, host: hostFor(value, { scanId: lifecycle.scanId }), runGit: gitFor(value) });
-  assert.equal(replayedPreflight.status, "CODEX_SECURITY_ILLEGAL_TRANSITION");
-  assert.equal(replayedPreflight.workersStarted, false);
-
-  for (const snapshotDigest of [undefined, null, "", "not-a-digest"]) {
-    const candidateLifecycle = lifecycleFor(value);
-    const host = hostFor(value, { scanId: candidateLifecycle.scanId });
-    host.target.snapshotDigest = snapshotDigest;
-    const missing = preflight({ lifecycle: candidateLifecycle, descriptor: value, host, runGit: gitFor(value) });
-    assert.equal(missing.status, "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT");
-    assert.equal(missing.discoveryAuthorized, false);
-    assert.equal(missing.workersStarted, false);
-  }
+  const clear = preflight({ lifecycle, descriptor: value, host: hostFor(value, { scanId: lifecycle.scanId }), runGit: gitFor(value) });
+  assert.equal(clear.status, "HOST_PREFLIGHT_CLEAR");
+  assert.equal(clear.discoveryAuthorized, true);
+  assert.equal(clear.workersStarted, false);
+  assert.equal(clear.lifecycle.hostBinding.target.baseRevision, value.base.head);
+  assert.equal(Object.hasOwn(clear.lifecycle.hostBinding.target, "snapshotDigest"), false);
 });
 
-test("preflight requires exact repository, scan, base, target, state, and separated digests", () => {
+test("preflight requires exact scan, phase, diff kind, target, baseRevision, and headRevision", () => {
   const value = descriptor();
   const attacks = [
-    (host) => { host.repository = "attacker/repository"; },
     (host) => { host.scanId = "another-scan"; },
     (host) => { host.scanState = "QUEUED"; },
-    (host) => { host.base.head = "0".repeat(40); },
-    (host) => { host.base.tree = "0".repeat(40); },
-    (host) => { host.target.head = "0".repeat(40); },
-    (host) => { host.target.tree = "0".repeat(40); },
-    (host) => { host.target.snapshotDigest = value.repositorySourceSnapshotDigest; },
+    (host) => { host.phase = "DISCOVERY"; },
+    (host) => { host.diffKind = "REPOSITORY"; },
+    (host) => { host.target.id = ""; },
+    (host) => { host.target.displayName = ""; },
+    (host) => { host.target.baseRevision = "0".repeat(40); },
+    (host) => { host.target.headRevision = "0".repeat(40); },
   ];
   for (const attack of attacks) {
     const lifecycle = lifecycleFor(value);
@@ -456,11 +453,11 @@ test("authoritative lifecycle snapshot binding rejects caller-mutated finalizati
   const value = descriptor();
   const reached = reachSourceReviewComplete(value);
   const mutated = structuredClone(reached.lifecycle);
-  mutated.hostBinding.target.snapshotDigest = "e".repeat(64);
+  mutated.hostBinding.target.headRevision = "e".repeat(40);
   const result = finalizeFor({
     lifecycle: mutated,
     descriptor: value,
-    host: { ...reached.host, target: { ...reached.host.target, snapshotDigest: "e".repeat(64) } },
+    host: { ...reached.host, target: { ...reached.host.target, headRevision: "e".repeat(40) } },
     sourceReviewComplete: true,
     coverageComplete: true,
     deferredFindings: [],
@@ -671,15 +668,34 @@ test("repository closure independently reconstructs the descriptor and governed 
   assert.equal(receipts.size, repositoryClosureTestIds.length);
 });
 
-test("tooling-preflight closure requires a matching terminal preflight reason", () => {
+test("tooling fallback is allowed only after completion metadata cannot provide a sealed digest", () => {
   const value = descriptor();
-  const lifecycle = lifecycleFor(value);
-  const blocked = preflight({ lifecycle, descriptor: value, host: hostFor(value, { scanId: lifecycle.scanId, snapshotDigestExposed: false }), runGit: gitFor(value) });
+  const reached = reachSourceReviewComplete(value);
+  const missingDigest = { ...reached.host, target: { ...reached.host.target } };
+  delete missingDigest.target.snapshotDigest;
+  const blocked = finalizeFor({ lifecycle: reached.lifecycle, descriptor: value, host: missingDigest, sourceReviewComplete: true, coverageComplete: true, deferredFindings: [], ledger: { discovery: true, validation: true, attackPath: true, policy: true }, runGit: gitFor(value) });
   const { input, dependencies } = closureFixture(value);
-  input.reason = "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE";
+  input.reason = "HOST_SNAPSHOT_DIGEST_UNAVAILABLE_AT_FINALIZATION";
   input.lifecycle = blocked.lifecycle;
+  input.hostScanStarted = true;
   const accepted = repositoryClosure(input, dependencies);
   assert.equal(accepted.ok, true);
+  for (const mutateHost of [
+    (host) => { host.scanId = "foreign-scan"; },
+    (host) => { host.scanState = "RUNNING"; },
+    (host) => { host.phase = "PREFLIGHT"; },
+    (host) => { host.target.id = "foreign-target"; },
+    (host) => { host.target.baseRevision = "0".repeat(40); },
+    (host) => { host.target.headRevision = "0".repeat(40); },
+  ]) {
+    const candidate = reachSourceReviewComplete(value);
+    const host = { ...candidate.host, target: { ...candidate.host.target } };
+    delete host.target.snapshotDigest;
+    mutateHost(host);
+    const rejected = finalizeFor({ lifecycle: candidate.lifecycle, descriptor: value, host, sourceReviewComplete: true, coverageComplete: true, deferredFindings: [], ledger: { discovery: true, validation: true, attackPath: true, policy: true }, runGit: gitFor(value) });
+    assert.equal(rejected.status, "CODEX_SECURITY_FINALIZATION_GUARD");
+    assert.equal(rejected.lifecycle.state, "TERMINAL_FAILED");
+  }
   const forged = structuredClone(input);
   forged.reason = "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT";
   assert.equal(repositoryClosure(forged, dependencies).ok, false);
@@ -691,13 +707,10 @@ test("tooling-preflight closure requires a matching terminal preflight reason", 
   assert.equal(repositoryClosure(selfAttested, dependencies).ok, false);
 
   const anotherSource = changedDescriptor(value);
-  const anotherLifecycle = lifecycleFor(anotherSource);
-  const anotherBlocked = preflight({
-    lifecycle: anotherLifecycle,
-    descriptor: anotherSource,
-    host: hostFor(anotherSource, { scanId: anotherLifecycle.scanId, snapshotDigestExposed: false }),
-    runGit: gitFor(anotherSource),
-  });
+  const anotherReached = reachSourceReviewComplete(anotherSource);
+  const anotherHost = { ...anotherReached.host, target: { ...anotherReached.host.target } };
+  delete anotherHost.target.snapshotDigest;
+  const anotherBlocked = finalizeFor({ lifecycle: anotherReached.lifecycle, descriptor: anotherSource, host: anotherHost, sourceReviewComplete: true, coverageComplete: true, deferredFindings: [], ledger: { discovery: true, validation: true, attackPath: true, policy: true }, runGit: gitFor(anotherSource) });
   const crossSource = structuredClone(input);
   crossSource.lifecycle = anotherBlocked.lifecycle;
   assert.equal(repositoryClosure(crossSource, dependencies).ok, false);
@@ -734,13 +747,14 @@ test("known recurring incidents are sanitized and unrecognized or sensitive payl
   assert.equal(sanitizeIncident({ ...baseline, mitigation: "free-form" }).ok, false);
 });
 
-test("benchmark proves both recurring digest failures stop before expensive work", () => {
+test("benchmark proves both historical provider shapes now clear commit-bound preflight", () => {
   const result = benchmark();
   assert.equal(result.ok, true);
-  assert.equal(result.expensiveScanWorkAvoided, 2);
+  assert.equal(result.preflightCapabilityCompatible, 2);
+  assert.equal(result.expensiveScanWorkAvoided, 0);
   assert.deepEqual(result.preflightResults, [
-    "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE",
-    "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT",
+    "HOST_PREFLIGHT_CLEAR",
+    "HOST_PREFLIGHT_CLEAR",
   ]);
   assert.equal(result.incidentHashes.length, 2);
   assert.equal(result.incidentHashes.every((value) => /^[0-9a-f]{64}$/u.test(value)), true);
@@ -857,7 +871,8 @@ test("S0 contract, incident ledger, skill, and task-aware Phase 1 integration ag
   const resolveScope = (fixture, extra = {}) => deriveTaskScopeContext({ event: fixture.event, readback: fixture.readback, policy: scopePolicy, registry: featureRegistry, currentTruth: { finiteTaskLeases: { tasks: [] } }, ...extra });
   assert.deepEqual(contract.states, states);
   assert.equal(contract.repository, "Chillywood2025/chillywood-mobile");
-  assert.equal(contract.hostPreflight.snapshotDigestField, "scan.target.snapshotDigest");
+  assert.equal(contract.hostPreflight.snapshotDigestRequiredAtCompletion, true);
+  assert.deepEqual(contract.hostPreflight.providerUnavailableBeforeCompletion, ["target.snapshotDigest", "repository", "base.tree", "target.tree"]);
   assert.equal(contract.hostPreflight.workersStartedOnFailure, false);
   assert.equal(contract.completion.maximumAttempts, 1);
   assert.equal(contract.completion.terminalRetryAllowed, false);
@@ -971,13 +986,13 @@ test("S0 contract, incident ledger, skill, and task-aware Phase 1 integration ag
     "--base=\"$S0_BASE_REF\" --target=\"$S0_TARGET_REF\"",
   ]) assert.equal(workflow.includes(mainPushControl), true, mainPushControl);
   for (const requiredText of [
-    "HOST_SNAPSHOT_DIGEST_NOT_PREFLIGHTABLE",
-    "BLOCKED_TOOLING_CODEX_SECURITY_SNAPSHOT_DIGEST_PREFLIGHT",
-    "workersStarted=false",
+    "RUNNING`/`PREFLIGHT`",
+    "provider does not expose repository slug, trees",
+    "At successful completion, require the provider target",
     "REPOSITORY_SECURITY_CLOSURE_NOT_CODEX_SEALED",
     "OPTIONAL_ADVISORY",
     "Never request, retry, or poll",
-    "exactly the 13 Phase 1 checks",
+    "lifecycle-aware Phase 1",
   ]) {
     assert.equal(skill.includes(requiredText), true, requiredText);
   }

@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 2,
+  "contractId": "ASSURANCE_CONTROL_PLANE_LIFECYCLE_V2",
+  "repository": "Chillywood2025/chillywood-mobile",
+  "states": [
+    "NO_ACTIVE_TASK",
+    "OWNER_INTENT",
+    "FINITE_TASK_ADMISSION",
+    "AUTHORIZED_IMPLEMENTATION",
+    "FROZEN_CANDIDATE",
+    "NORMAL_MERGE_READY",
+    "MERGED_NORMAL_VERIFIED",
+    "MERGED_BY_EXPLICIT_OWNER_BYPASS_AT_EXACT_FROZEN_SOURCE",
+    "OWNER_DEFERRED",
+    "TERMINAL_TRUTH"
+  ],
+  "terminalSourceClassifications": [
+    "MERGED_NORMAL_VERIFIED",
+    "MERGED_BY_EXPLICIT_OWNER_BYPASS_AT_EXACT_FROZEN_SOURCE",
+    "OWNER_DEFERRED"
+  ],
+  "applicability": [
+    "APPLICABLE",
+    "NOT_APPLICABLE_YET",
+    "NOT_APPLICABLE_TO_RISK",
+    "DEFERRED_UNFINISHED_ARCHITECTURE",
+    "RETIRED_DUPLICATE"
+  ],
+  "results": [
+    "PASS",
+    "FAIL",
+    "NOT_RUN",
+    "NOT_PRODUCED",
+    "HISTORICAL",
+    "STALE",
+    "PENDING"
+  ],
+  "riskClasses": [
+    "LOW_RISK_PRESENTATION_ONLY",
+    "ASSURANCE_CONTROL_PLANE_HIGH_RISK",
+    "SECURITY_SENSITIVE_HIGH_RISK",
+    "UNKNOWN_RISK"
+  ],
+  "phase1": {
+    "policyId": "LIFECYCLE_RISK_AWARE_PHASE1_V2",
+    "canonicalDecision": "Phase 1 / Admission Decision",
+    "lanes": [
+      {"name":"Phase 1 / Android Regression Guards","risk":["SECURITY_SENSITIVE_HIGH_RISK"],"stages":["FROZEN_CANDIDATE","NORMAL_MERGE_READY"],"readiness":"READY_AND_APPLICABLE"},
+      {"name":"Phase 1 / Autonomous Systems All-Platform Contract","risk":["ASSURANCE_CONTROL_PLANE_HIGH_RISK","SECURITY_SENSITIVE_HIGH_RISK"],"stages":["FROZEN_CANDIDATE","NORMAL_MERGE_READY"],"readiness":"READY_AND_APPLICABLE","components":[{"id":"product-contracts","classification":"READY_AND_APPLICABLE"},{"id":"legacy-authority-companion","classification":"UNFINISHED_ARCHITECTURE"},{"id":"lifecycle-v2-authority","classification":"READY_AND_APPLICABLE"}]},
+      {"name":"Phase 1 / Autonomous Systems iOS Contract","risk":["SECURITY_SENSITIVE_HIGH_RISK"],"stages":["FROZEN_CANDIDATE","NORMAL_MERGE_READY"],"readiness":"READY_AND_APPLICABLE","components":[{"id":"ios-product-contracts","classification":"READY_AND_APPLICABLE"},{"id":"legacy-authority-companion","classification":"UNFINISHED_ARCHITECTURE"}]},
+      {"name":"Phase 1 / Cognitive Execution Safety","risk":["SECURITY_SENSITIVE_HIGH_RISK"],"stages":["FROZEN_CANDIDATE","NORMAL_MERGE_READY"],"readiness":"READY_AND_APPLICABLE"},
+      {"name":"Phase 1 / Cognitive Intelligence Contract","risk":["SECURITY_SENSITIVE_HIGH_RISK"],"stages":["FROZEN_CANDIDATE","NORMAL_MERGE_READY"],"readiness":"READY_AND_APPLICABLE","components":[{"id":"cognitive-product-contracts","classification":"READY_AND_APPLICABLE"},{"id":"legacy-authority-companion","classification":"UNFINISHED_ARCHITECTURE"}]},
+      {"name":"Phase 1 / Expo Doctor","risk":["LOW_RISK_PRESENTATION_ONLY","SECURITY_SENSITIVE_HIGH_RISK"],"stages":["AUTHORIZED_IMPLEMENTATION","FROZEN_CANDIDATE","NORMAL_MERGE_READY"],"readiness":"READY_AND_APPLICABLE"},
+      {"name":"Phase 1 / Repository Lint","risk":["LOW_RISK_PRESENTATION_ONLY","ASSURANCE_CONTROL_PLANE_HIGH_RISK","SECURITY_SENSITIVE_HIGH_RISK","UNKNOWN_RISK"],"stages":["AUTHORIZED_IMPLEMENTATION","FROZEN_CANDIDATE","NORMAL_MERGE_READY"],"readiness":"READY_AND_APPLICABLE"},
+      {"name":"Phase 1 / Research and Memory Integrity","risk":["SECURITY_SENSITIVE_HIGH_RISK"],"stages":["FROZEN_CANDIDATE","NORMAL_MERGE_READY"],"readiness":"READY_AND_APPLICABLE"},
+      {"name":"Phase 1 / Route Contracts","risk":["LOW_RISK_PRESENTATION_ONLY","SECURITY_SENSITIVE_HIGH_RISK"],"stages":["AUTHORIZED_IMPLEMENTATION","FROZEN_CANDIDATE","NORMAL_MERGE_READY"],"readiness":"READY_AND_APPLICABLE"},
+      {"name":"Phase 1 / Runtime Validation","risk":["LOW_RISK_PRESENTATION_ONLY","SECURITY_SENSITIVE_HIGH_RISK"],"stages":["FROZEN_CANDIDATE","NORMAL_MERGE_READY"],"readiness":"READY_AND_APPLICABLE"},
+      {"name":"Phase 1 / Supabase Database Integration","risk":["SECURITY_SENSITIVE_HIGH_RISK"],"stages":["FROZEN_CANDIDATE","NORMAL_MERGE_READY"],"readiness":"READY_AND_APPLICABLE"},
+      {"name":"Phase 1 / TypeScript","risk":["LOW_RISK_PRESENTATION_ONLY","ASSURANCE_CONTROL_PLANE_HIGH_RISK","SECURITY_SENSITIVE_HIGH_RISK","UNKNOWN_RISK"],"stages":["AUTHORIZED_IMPLEMENTATION","FROZEN_CANDIDATE","NORMAL_MERGE_READY"],"readiness":"READY_AND_APPLICABLE"},
+      {"name":"Phase 1 / iOS Configuration","risk":["SECURITY_SENSITIVE_HIGH_RISK"],"stages":["FROZEN_CANDIDATE","NORMAL_MERGE_READY"],"readiness":"READY_AND_APPLICABLE"}
+    ]
+  },
+  "security": {
+    "presentationOnlyClassification": "NOT_APPLICABLE_PRESENTATION_ONLY",
+    "unknownRiskDisposition": "HOSTED_SECURITY_REQUIRED",
+    "highRiskDisposition": "HOSTED_SECURITY_REQUIRED",
+    "sensitiveBoundaries": ["authSessionAuthority","passwordRecoveryAuthority","legalAcceptanceAuthority","chatThreadAuthority","callAuthority","databaseRls","secrets","nativeCapabilities","providerConfiguration","releaseAuthority","commerceMoney","trustBoundary"],
+    "assuranceRoots": [".github/workflows/",".agents/skills/chillywood-assurance/","config/assurance/","scripts/assurance/","tests/assurance/","docs/assurance/"]
+  },
+  "exceptionalMerge": {
+    "classification": "MERGED_BY_EXPLICIT_OWNER_BYPASS_AT_EXACT_FROZEN_SOURCE",
+    "normalEvidenceDisposition": "NOT_PRODUCED",
+    "requiredBindings": ["repository","implementationPr","leaseId","protectedBase","sourceHead","sourceTree","patchSha256","changedPathSha256","mergeSha","mergeTree","mergeParents","ownerReceipt","rulesetBefore","rulesetBypass","rulesetRestored"],
+    "authority": {"providerMutation":false,"databaseDeployment":false,"build":false,"submission":false,"ota":false,"publicRelease":false,"money":false}
+  },
+  "selfMaintenance": {
+    "classification": "BOUNDED_ASSURANCE_SELF_MAINTENANCE_V2",
+    "allowedRoots": [".github/workflows/phase1-ci.yml",".agents/skills/chillywood-assurance/SKILL.md","config/assurance/","scripts/assurance/","tests/assurance/","docs/assurance/"],
+    "forbiddenRoots": ["app/","components/","hooks/","supabase/","android/","ios/","plugins/"],
+    "requiresExactFrozenSource": true,
+    "allowsProductAuthority": false,
+    "fixedPointConsumesInstallationMerge": true
+  },
+  "ownerInteraction": {
+    "reapprovalTriggers": ["scope-increase","authority-increase","source-change-after-exceptional-authorization","provider","database","build","submission","ota","public-release","money"],
+    "mechanicalContinuationDoesNotRequireReapproval": true,
+    "transportEquivalentReceiptRetryDoesNotRequireReapproval": true
+  }
+}

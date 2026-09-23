@@ -278,14 +278,13 @@ test("all raw autonomous contract lanes preserve protected workflow bytes and ro
   assert.doesNotMatch(workflow, /PHASE1_AUTONOMOUS_CONTRACT_CORE_PATH/u);
 });
 
-test("all source-authority lanes receive the exact workflow token and protected base", () => {
+test("unfinished authority companions are retired while lifecycle-ready assurance remains explicit", () => {
   assert.match(workflow,
     /permissions:\s*\n\s*actions: read\s*\n\s*contents: read\s*\n\s*issues: read\s*\n\s*pull-requests: read/u);
-  const steps = workflow.match(/      - name: Validate assurance authority and source correctness[\s\S]*?(?=\n      - name:|\n  [a-z][a-z-]*:|$)/gu) ?? [];
-  assert.equal(steps.length, 3);
-  for (const step of steps) {
-    assert.match(step, /env:\s*\n\s*GH_TOKEN: \$\{\{ github\.token \}\}\s*\n\s*PHASE1_PROTECTED_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.sha \}\}/u);
-  }
+  assert.equal((workflow.match(/Validate assurance authority and source correctness/gu) ?? []).length, 0);
+  assert.equal((workflow.match(/Validate non-authoritative assurance display projection/gu) ?? []).length, 0);
+  assert.equal((workflow.match(/Validate lifecycle-ready assurance controls/gu) ?? []).length, 1);
+  assert.match(workflow, /node --test tests\/assurance\/control-plane-lifecycle-v2\.test\.mjs tests\/assurance\/phase1-admission\.test\.mjs/u);
 });
 
 test("draft source readiness rejects deletion of a protected-base test", () => {
