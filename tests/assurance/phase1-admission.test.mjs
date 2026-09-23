@@ -942,6 +942,29 @@ test("finite-task admission synchronization lineage has one exact assurance-only
   assert.deepEqual(subject.changedPaths, profile.paths);
   assert.equal(subject.currentTruthCompanionIncluded, true);
   assert.deepEqual(subject.authority, { product: false, nativeProduct: false, package: false, database: false, provider: false, build: false, release: false, submission: false, ota: false, publicRelease: false });
+  const raw = {
+    id: 9011,
+    node_id: "IC_9011",
+    body: architectureMaintenanceOwnerCommentBody(subject),
+    user: { login: "Chillywood2025" },
+    author_association: "OWNER",
+    created_at: "2026-09-23T12:00:00Z",
+    updated_at: "2026-09-23T12:00:00Z",
+    issue_url: `${"https://api.github.com/repos"}/${REPOSITORY}/issues/901`,
+    html_url: `${"https://github.com"}/${REPOSITORY}/pull/901#issuecomment-9011`,
+  };
+  const authority = verifyArchitectureMaintenanceAuthority({
+    raw,
+    allComments: [raw],
+    paginationComplete: true,
+    identity: { repository: REPOSITORY, pr: 901, branch: "codex/admission-sync-lineage", baseRef: "main", baseSha: BASE, headSha: HEAD },
+    tree: TREE,
+    scope: { files: profile.paths, additions: 700, deletions: 100, netChangedLines: 600 },
+    ancestryVerified: true,
+  });
+  assert.equal(authority.authorizationOk, true);
+  assert.equal(authority.ok, true);
+  assert.equal(authority.mergeEligible, false, "final-source evidence remains a later lifecycle requirement");
 });
 
 test("Phase 1 lifecycle risk reads the PR-scope registry from the exact protected base", () => {
