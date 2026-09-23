@@ -39,6 +39,8 @@ import {
 import {
   ARCHITECTURE_FINAL_SOURCE_MARKER,
   ARCHITECTURE_MAINTENANCE_MARKER,
+  CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS,
+  CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
   PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1,
   PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS,
   PHASE1_RISK_BASED_ADMISSION_REFORM_V1,
@@ -48,8 +50,10 @@ import {
   hashValue,
   phase1AdmissionPublisherProvisioningReadback,
   phase1InstalledPublisherAnchorFindings,
+  verifyArchitectureMaintenanceAuthority,
   verifyPhase1AdmissionPublisherImmutableAnchor,
 } from "../../scripts/assurance/engineering-closure.mjs";
+import { ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES, resolveAssuranceControlSourceOnlyProfile } from "../../scripts/assurance/lib.mjs";
 
 const HEAD = "1".repeat(40);
 const TREE = "2".repeat(40);
@@ -761,6 +765,75 @@ test("Phase 1 keeps useful product checks and retires unfinished authority compa
   assert.match(guard, /const subjectGit = \(argv, options = \{\}\) => execFileSync\("git", argv, \{\s*cwd: root,/u);
   assert.equal((guard.match(/gitCommand: subjectGit/gu) ?? []).length, 2, "protected code must evaluate the candidate checkout, not its own base worktree");
   assert.match(library, /const candidateRoot = process\.cwd\(\);[\s\S]*validateUntrustedAssuranceControlTaskContextObservation/u);
+});
+
+test("Phase 1 risk classification consumes only the authenticated canonical generated-companion resolver", () => {
+  const publisher = fs.readFileSync(new URL("../../scripts/assurance/phase1-admission.mjs", import.meta.url), "utf8");
+  const engine = fs.readFileSync(new URL("../../scripts/assurance/engineering-closure.mjs", import.meta.url), "utf8");
+  assert.match(publisher, /resolveCanonicalGeneratedAssuranceCompanionRiskContext\(\{ repository, identity, exactDiff, changedPaths: paths, root \}\)/u);
+  assert.match(publisher, /assuranceTransitionContext: assuranceTransition\.ok \? assuranceTransition\.context : null/u);
+  assert.match(engine, /sourceAuthorityProof = resolvePhase1SourceAuthorityEligibility\(\{ repository, identity, root \}\)/u);
+  assert.match(engine, /canonicalCurrentStateText: renderCurrentState\(currentTruth\)/u);
+  assert.match(engine, /canonicalNextTaskText: renderNextTask\(currentTruth\)/u);
+});
+
+test("canonical generated-companion risk maintenance has an exact non-recursive architecture profile", () => {
+  const identity = { repository: REPOSITORY, pr: 900, branch: "codex/canonical-generated-companion-risk", headSha: HEAD, baseSha: BASE };
+  const scope = { files: [...CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS], additions: 420, deletions: 80, netChangedLines: 340 };
+  const subject = architectureMaintenanceSubject({
+    identity,
+    tree: TREE,
+    scope,
+    profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2",
+    objective: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
+  });
+  assert.equal(subject.objective, CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1);
+  assert.deepEqual(subject.changedPaths, [...CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS]);
+  assert.equal(subject.currentTruthCompanionIncluded, false);
+  assert.equal(subject.reusableByAnotherPr, false);
+  assert.deepEqual(subject.authority, { product: false, nativeProduct: false, package: false, database: false, provider: false, build: false, release: false, submission: false, ota: false, publicRelease: false });
+  const protectedProfile = ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES.find(({ profileId }) => profileId === CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1);
+  assert.deepEqual(protectedProfile, {
+    profileId: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
+    paths: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS,
+    maximumFiles: 6,
+    maximumChangedLines: 1200,
+  });
+  const protectedBudget = { maximumFiles: 6, maximumChangedLines: 1200, maximumHandAuthoredNetLines: 1200 };
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: protectedProfile.paths, budget: protectedBudget, changedFiles: 6 })?.profileId, CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1);
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: protectedProfile.paths.slice(1), budget: protectedBudget, changedFiles: 5 }), null);
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: [...protectedProfile.paths, "app/index.tsx"].sort(), budget: protectedBudget, changedFiles: 7 }), null);
+  assert.throws(() => architectureMaintenanceSubject({
+    identity,
+    tree: TREE,
+    scope: { ...scope, files: scope.files.slice(1) },
+    profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2",
+    objective: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
+  }), /OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SCOPE_INVALID/u);
+
+  const raw = {
+    id: 9001,
+    node_id: "IC_9001",
+    body: architectureMaintenanceOwnerCommentBody(subject),
+    user: { login: "Chillywood2025" },
+    author_association: "OWNER",
+    created_at: "2026-09-23T12:00:00Z",
+    updated_at: "2026-09-23T12:00:00Z",
+    issue_url: `${"https://api.github.com/repos"}/${REPOSITORY}/issues/900`,
+    html_url: `${"https://github.com"}/${REPOSITORY}/pull/900#issuecomment-9001`,
+  };
+  const authority = verifyArchitectureMaintenanceAuthority({
+    raw,
+    allComments: [raw],
+    paginationComplete: true,
+    identity: { repository: REPOSITORY, pr: 900, branch: identity.branch, baseRef: "main", baseSha: BASE, headSha: HEAD },
+    tree: TREE,
+    scope,
+    ancestryVerified: true,
+  });
+  assert.equal(authority.authorizationOk, true);
+  assert.equal(authority.ok, true);
+  assert.equal(authority.mergeEligible, false, "final-source evidence remains a later lifecycle requirement");
 });
 
 test("every Phase 1 step that invokes the authenticated source resolver receives the read-only GitHub token", () => {
