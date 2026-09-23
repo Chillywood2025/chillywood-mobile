@@ -50,6 +50,7 @@ import {
   hashValue,
   phase1AdmissionPublisherProvisioningReadback,
   phase1InstalledPublisherAnchorFindings,
+  verifyArchitectureMaintenanceAuthority,
   verifyPhase1AdmissionPublisherImmutableAnchor,
 } from "../../scripts/assurance/engineering-closure.mjs";
 
@@ -797,6 +798,30 @@ test("canonical generated-companion risk maintenance has an exact non-recursive 
     profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2",
     objective: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
   }), /OWNER_ASSURANCE_ARCHITECTURE_MAINTENANCE_SCOPE_INVALID/u);
+
+  const raw = {
+    id: 9001,
+    node_id: "IC_9001",
+    body: architectureMaintenanceOwnerCommentBody(subject),
+    user: { login: "Chillywood2025" },
+    author_association: "OWNER",
+    created_at: "2026-09-23T12:00:00Z",
+    updated_at: "2026-09-23T12:00:00Z",
+    issue_url: `${"https://api.github.com/repos"}/${REPOSITORY}/issues/900`,
+    html_url: `${"https://github.com"}/${REPOSITORY}/pull/900#issuecomment-9001`,
+  };
+  const authority = verifyArchitectureMaintenanceAuthority({
+    raw,
+    allComments: [raw],
+    paginationComplete: true,
+    identity: { repository: REPOSITORY, pr: 900, branch: identity.branch, baseRef: "main", baseSha: BASE, headSha: HEAD },
+    tree: TREE,
+    scope,
+    ancestryVerified: true,
+  });
+  assert.equal(authority.authorizationOk, true);
+  assert.equal(authority.ok, true);
+  assert.equal(authority.mergeEligible, false, "final-source evidence remains a later lifecycle requirement");
 });
 
 test("every Phase 1 step that invokes the authenticated source resolver receives the read-only GitHub token", () => {

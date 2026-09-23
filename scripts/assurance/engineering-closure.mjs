@@ -3750,6 +3750,7 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
     PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1,
     PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1,
     STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1,
+    CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
     FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION,
   ].includes(originalSubject.objective)) {
     const observed = exactScope(scope);
@@ -4692,6 +4693,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1,
     PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1,
     STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1,
+    CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
     FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION,
   ].includes(originalSubject?.objective)) {
     const jurisdictionModel = originalSubject?.objective === "install versioned standing Owner jurisdiction policy with exact task bindings and append-only admission supersession";
