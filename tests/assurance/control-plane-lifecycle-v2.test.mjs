@@ -63,9 +63,17 @@ function exceptionalFixture() {
   return { outcome, receipt, gitEvidence, rulesetEvidence, ownerReceiptReadback };
 }
 
-function boundaryAssessment(paths, patchSha256 = digest("a")) {
+function exactDiff(paths) {
+  return {
+    repository: "Chillywood2025/chillywood-mobile", implementationPr: 700,
+    baseSha: sha("1"), headSha: sha("2"), sourceTree: sha("3"),
+    changedPathSha256: lifecycleHash([...paths].sort().join("\n") + "\n"), patchSha256: digest("a"),
+  };
+}
+
+function boundaryAssessment(paths, source = exactDiff(paths)) {
   const boundaries = Object.fromEntries(policy.security.sensitiveBoundaries.map((key) => [key, false]));
-  const body = { schemaVersion: 1, classification: "EXACT_DIFF_BOUNDARY_ASSESSMENT_V1", changedPathSha256: lifecycleHash([...paths].sort().join("\n") + "\n"), patchSha256, boundaries };
+  const body = { schemaVersion: 1, classification: "EXACT_DIFF_BOUNDARY_ASSESSMENT_V1", ...source, boundaries };
   return { ...body, assessmentHash: lifecycleHash(body) };
 }
 
@@ -121,10 +129,16 @@ test("historical three lanes inventory retains product checks and defers unfinis
 
 test("presentation-only risk requires exact boundary proof and high/unknown risk requires hosted security [72-75]", () => {
   const paths = ["app/example.tsx", "components/ui/example.tsx", "tests/example.test.mjs"];
-  const presentation = classifyDiffRisk({ changedPaths: paths, boundaryAssessment: boundaryAssessment(paths), policy });
+  const source = exactDiff(paths);
+  const presentation = classifyDiffRisk({ changedPaths: paths, boundaryAssessment: boundaryAssessment(paths, source), exactDiff: source, policy });
   assert.deepEqual([presentation.classification, presentation.hostedSecurity], [RISK_CLASSES.PRESENTATION, "NOT_APPLICABLE_PRESENTATION_ONLY"]);
-  const mutated = boundaryAssessment(paths); mutated.boundaries.authSessionAuthority = true;
-  assert.equal(classifyDiffRisk({ changedPaths: paths, boundaryAssessment: mutated, policy }).hostedSecurity, "HOSTED_SECURITY_REQUIRED");
+  const mutated = boundaryAssessment(paths, source); mutated.boundaries.authSessionAuthority = true;
+  assert.equal(classifyDiffRisk({ changedPaths: paths, boundaryAssessment: mutated, exactDiff: source, policy }).hostedSecurity, "HOSTED_SECURITY_REQUIRED");
+  const stalePatch = boundaryAssessment(paths, { ...source, patchSha256: digest("b") });
+  assert.equal(classifyDiffRisk({ changedPaths: paths, boundaryAssessment: stalePatch, exactDiff: source, policy }).hostedSecurity, "HOSTED_SECURITY_REQUIRED");
+  const staleHead = boundaryAssessment(paths, { ...source, headSha: sha("4") });
+  assert.equal(classifyDiffRisk({ changedPaths: paths, boundaryAssessment: staleHead, exactDiff: source, policy }).hostedSecurity, "HOSTED_SECURITY_REQUIRED");
+  assert.equal(classifyDiffRisk({ changedPaths: paths, boundaryAssessment: boundaryAssessment(paths, source), policy }).hostedSecurity, "HOSTED_SECURITY_REQUIRED");
   assert.equal(classifyDiffRisk({ changedPaths: ["supabase/migrations/example.sql"], policy }).classification, RISK_CLASSES.HIGH);
   assert.equal(classifyDiffRisk({ changedPaths: ["unknown.txt"], policy }).classification, RISK_CLASSES.UNKNOWN);
   assert.equal(classifyDiffRisk({ changedPaths: ["scripts/assurance/example.mjs"], policy }).classification, RISK_CLASSES.ASSURANCE);

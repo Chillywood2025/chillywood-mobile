@@ -1575,17 +1575,29 @@ async function finalizeAdmission({ repository, prNumber, readToken, publisher, s
     const lifecyclePolicy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
     if (!validateLifecyclePolicy(lifecyclePolicy).ok) throw new Error("PHASE1_LIFECYCLE_POLICY_INVALID");
     const paths = runGit(["diff", "--name-only", identity.baseSha, identity.headSha]).split(/\r?\n/gu).filter(Boolean).sort();
-    let boundaryAssessment = null;
+    const patch = spawnSync("git", ["diff", "--binary", identity.baseSha, identity.headSha], { cwd: root, shell: false, stdio: ["ignore", "pipe", "pipe"] });
+    if (patch.status !== 0) throw new Error("PHASE1_CANDIDATE_DIFF_READ_FAILED");
+    const exactDiff = {
+      repository,
+      implementationPr: identity.pr,
+      baseSha: identity.baseSha,
+      headSha: identity.headSha,
+      sourceTree: identity.sourceTree,
+      changedPathSha256: crypto.createHash("sha256").update(`${paths.join("\n")}\n`).digest("hex"),
+      patchSha256: crypto.createHash("sha256").update(patch.stdout).digest("hex"),
+    };
+    const boundaryAssessments = [];
     const taskDirectory = path.join(root, "docs/assurance/tasks");
     if (fs.existsSync(taskDirectory)) {
       for (const entry of fs.readdirSync(taskDirectory).filter((name) => name.endsWith(".json"))) {
         try {
           const candidate = JSON.parse(fs.readFileSync(path.join(taskDirectory, entry), "utf8"))?.exactDiffBoundaryAssessment;
-          if (candidate) boundaryAssessment = candidate;
+          if (candidate && ["repository", "implementationPr", "baseSha", "headSha", "sourceTree", "changedPathSha256", "patchSha256"].every((key) => candidate[key] === exactDiff[key])) boundaryAssessments.push(candidate);
         } catch {}
       }
     }
-    const risk = classifyDiffRisk({ changedPaths: paths, boundaryAssessment, policy: lifecyclePolicy });
+    const boundaryAssessment = boundaryAssessments.length === 1 ? boundaryAssessments[0] : null;
+    const risk = classifyDiffRisk({ changedPaths: paths, boundaryAssessment, exactDiff, policy: lifecyclePolicy });
     return { lifecyclePolicy, riskClassification: risk.classification, lifecycleStage: pr.draft === true ? "AUTHORIZED_IMPLEMENTATION" : "FROZEN_CANDIDATE" };
   });
   const input = {

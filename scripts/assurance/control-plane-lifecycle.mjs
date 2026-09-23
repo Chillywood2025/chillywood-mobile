@@ -83,7 +83,7 @@ export function validateLifecyclePolicy(policy) {
 
 const presentationRoots = ["app/", "components/", "tests/", "docs/assurance/tasks/"];
 const forbiddenPresentationRoots = [".github/", ".agents/", "config/", "scripts/", "supabase/", "android/", "ios/", "plugins/", "package.json", "package-lock.json", "app.config.ts", "app.json", "eas.json"];
-export function classifyDiffRisk({ changedPaths = [], boundaryAssessment = null, policy } = {}) {
+export function classifyDiffRisk({ changedPaths = [], boundaryAssessment = null, exactDiff = null, policy } = {}) {
   const paths = [...new Set(changedPaths)].sort();
   const assuranceRoots = policy?.security?.assuranceRoots ?? [];
   if (paths.length === 0) return { classification: RISK_CLASSES.UNKNOWN, hostedSecurity: "HOSTED_SECURITY_REQUIRED", findings: ["RISK_CHANGED_PATHS_EMPTY"] };
@@ -91,10 +91,18 @@ export function classifyDiffRisk({ changedPaths = [], boundaryAssessment = null,
     return { classification: RISK_CLASSES.ASSURANCE, hostedSecurity: "HOSTED_SECURITY_REQUIRED", findings: [] };
   }
   const sensitive = policy?.security?.sensitiveBoundaries ?? [];
-  const exactAssessment = boundaryAssessment?.schemaVersion === 1
+  const exactDiffValid = exactKeys(exactDiff, ["repository", "implementationPr", "baseSha", "headSha", "sourceTree", "changedPathSha256", "patchSha256"])
+    && exactDiff?.repository === "Chillywood2025/chillywood-mobile"
+    && Number.isInteger(exactDiff?.implementationPr) && exactDiff.implementationPr > 0
+    && [exactDiff?.baseSha, exactDiff?.headSha, exactDiff?.sourceTree].every((value) => sha40.test(value ?? ""))
+    && exactDiff?.changedPathSha256 === lifecycleHash(paths.join("\n") + "\n")
+    && sha256.test(exactDiff?.patchSha256 ?? "");
+  const expectedAssessmentKeys = ["schemaVersion", "classification", "repository", "implementationPr", "baseSha", "headSha", "sourceTree", "changedPathSha256", "patchSha256", "boundaries", "assessmentHash"];
+  const exactAssessment = exactDiffValid
+    && exactKeys(boundaryAssessment, expectedAssessmentKeys)
+    && boundaryAssessment?.schemaVersion === 1
     && boundaryAssessment?.classification === "EXACT_DIFF_BOUNDARY_ASSESSMENT_V1"
-    && boundaryAssessment?.changedPathSha256 === lifecycleHash(paths.join("\n") + "\n")
-    && sha256.test(boundaryAssessment?.patchSha256 ?? "")
+    && ["repository", "implementationPr", "baseSha", "headSha", "sourceTree", "changedPathSha256", "patchSha256"].every((key) => boundaryAssessment?.[key] === exactDiff[key])
     && sensitive.every((key) => boundaryAssessment?.boundaries?.[key] === false)
     && boundaryAssessment?.assessmentHash === lifecycleHash(Object.fromEntries(Object.entries(boundaryAssessment).filter(([key]) => key !== "assessmentHash")));
   const presentationPaths = paths.every((file) => presentationRoots.some((root) => file.startsWith(root)))
