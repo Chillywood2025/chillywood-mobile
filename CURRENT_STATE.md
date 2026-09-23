@@ -2,11 +2,12 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-- Protected authority checkpoint: `cf120d38cdfacd39f17093a197c0148e501156a7` / tree `e42928aa80dc8f2910639878b6070cc61faa3b64`.
+- Protected authority checkpoint: `90e9875df0b1a5c3781b31db87f817ddfdc906e5` / tree `fe93d65b9cd2209fcf324deac6392177dcc42957`.
 - Protected-main advancement is evaluated dynamically from exact Git history; the runtime-observed protected main is derived at execution and is not committed as authority after every merge.
 - Ordinary protected advancement invalidates only affected task evidence. Terminal task or authority transitions require canonical synchronization.
 - Latest merged implementation: PR #484, `969359cf0baaf832b2de0598c9affea1b2bf913b`; merge `cf120d38cdfacd39f17093a197c0148e501156a7`.
-- Structured active task: `NO_ACTIVE_TASK`; implementation authority is closed until the next finite admission.
+- Structured task-lease binding: feature `eas-build-update-release`, PR #490, admitted seed `9f9fdd59cab028193e63ef277abb99645f5f7a1e` / `c0d3b8f609f37badb6fa3332c3c2fd47e88383ed`, phase `PREIMPLEMENTATION_ENGINEERING_CLEAR`, execution `RELEASE_DELIVERY_AUTOMATION_CONTROL_PLANE_IMPLEMENTATION_AUTHORIZED`. Current candidate `8ecf8b437bdaabf4efd2a8a00cd614c0722dd789` / `38df9cba7299a07cf75c7f610aed20b55989fd01` is a non-authoritative read-only observation; final receipt, review, Phase 1, and merge provenance bind the frozen final head.
+- Finite task lease: `ASSURANCE_FINITE_TASK_LEASE_V1`, admitted seed `9f9fdd59cab028193e63ef277abb99645f5f7a1e` / `c0d3b8f609f37badb6fa3332c3c2fd47e88383ed`, protected admission PR #495, state `ACTIVE_IMPLEMENTATION`; descendant heads do not require another admission, source binding, or merge-provenance PR.
 - Review policy: provider Codex Review is `OPTIONAL_ADVISORY`; the 13 historical lanes are discovered, then lifecycle and risk determine the applicable set. Every applicable failure blocks; deferred or not-applicable lanes are neither PASS nor merge authority, and must run fresh if a later transition makes them applicable. Unknown findings block, and draft source-readiness never grants merge authority.
 - Assurance program display text: WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE; completed: PR-A, CURRENT-TRUTH-SYNCHRONIZATION-PR-56, CURRENT-TRUTH-GUARD-CORRECTION-PR-58, CURRENT-TRUTH-SYNCHRONIZATION-PR-60, FEATURE-DOMAIN-SCOPE-GUARD-PR-62, CURRENT-TRUTH-SYNCHRONIZATION-PR-67, CURRENT-TRUTH-SYNCHRONIZATION-PR-86, CURRENT-TRUTH-HEAD-BINDING-PR-90, CURRENT-TRUTH-SYNCHRONIZATION-PR-97, CURRENT-TRUTH-SYNCHRONIZATION-PR-103, CURRENT-TRUTH-SYNCHRONIZATION-PR-109, PR-C-MODELS-PR-64, MIGRATION-READBACK-METADATA-PR-113, CURRENT-TRUTH-SYNCHRONIZATION-PR-123, BASE-SYNC-HEAD-BINDING-PR-125, BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127, DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129, PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116, CURRENT-TRUTH-SYNCHRONIZATION-PR-131, CURRENT-TRUTH-SYNCHRONIZATION-PR-132, CURRENT-TRUTH-SYNCHRONIZATION-PR-135, PR-B1-LIVEKIT-SOURCE-BINDING-PR-70, CURRENT-TRUTH-SYNCHRONIZATION-PR-137, PR-B2-REVENUECAT-TRANSFER-PR-69, CURRENT-TRUTH-SYNCHRONIZATION-PR-139, CURRENT-TRUTH-SYNCHRONIZATION-PR-140, PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75, CURRENT-TRUTH-SYNCHRONIZATION-PR-142, PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION, PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143, CURRENT-TRUTH-SYNCHRONIZATION-PR-151, CURRENT-TRUTH-SYNCHRONIZATION-PR-156, CURRENT-TRUTH-SYNCHRONIZATION-PR-161, CURRENT-TRUTH-SYNCHRONIZATION-PR-162, PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152, BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170, D2B-CURRENT-TRUTH-BINDING-PR-169, D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181, PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164, E0-CURRENT-TRUTH-BINDING-PR-190, PR-E0-ASSURANCE-EFFICIENCY-PR-185, D2A-MICROPHONE-CORRECTION-PR-194, ASSURANCE-CONTROL-A1-PR-201, ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205, ASSURANCE-CONTROL-RULESET-READBACK-PR-207, ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208, CODEX-SECURITY-SCAN-RELIABILITY-S0-PR-206, LIVEKIT-MIC-POST-MERGE-CORRECTION-PR-210, FINITE-TASK-LEASE-RUNTIME-CORRECTION-PR-218, PR-D2A-LEGACY-WEBRTC-CORRECTION-PR-214, BRACE-EXPANSION-VERSION-LINE-CORRECTION-PR-220, FINITE-TASK-TERMINAL-HANDOFF-PR-223, PR-D2A-NATIVE-LIFECYCLE-PR-212, TERMINAL-PROTECTED-BASE-RESOLUTION-PR-225, WHOLE-APP-ENGINEERING-DOCTRINE-PR-226, TYPED-TASK-CONTEXT-TERMINAL-SUCCESSOR-PR-227.
 - Android internal: build 86, runtime `1.0.0-android-chat-call-action-v1`, channel `android-chat-livekit-qa`, update `e3379ac9-61f0-40db-a014-81975be123e5`.
@@ -19,16 +20,15 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 - Chi'llywood autonomous app operating model is now documented and guarded at `docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md`; Level 0/1 work does not require owner approval, while Level 3/4 boundaries do.
 - Installed Product QA closure is retained as historical evidence only: chillywood-installed-qa-firebase-smoke.timer_daily_cost_capped; proof rows `ff81956d-94e3-49e9-8c80-fae2c12b0dd8`, `1dc00369-b5ca-4289-92bc-daf5bae00222`, `282fb154-101c-402b-9539-d3fb8080de51`; last recorded matrix state `POLL_HTTP_FAILED`. It is not fresh installed or physical proof.
 - RevenueCat closure values are historical only, not current provider proof: dashboard TEST recorded HTTP `200` / `test_received` with `premiumGranted=false`, `liveMoneyAction=false`, and `moneyMoved=false`.
-- Current freshness claims: `repository-task-lease-chillywood-auth-chat-visual-system-alignment` (REPOSITORY_TASK_LEASE, expires `2036-09-17T19:18:38.000Z`), `repository-task-lease-customer-commerce-visual-system` (REPOSITORY_TASK_LEASE, expires `2036-09-07T19:35:00.000Z`), `repository-task-lease-pre-release-wave1` (REPOSITORY_TASK_LEASE, expires `2036-08-11T18:43:16.000Z`), `repository-task-lease-d2a-release-critical` (REPOSITORY_TASK_LEASE, expires `2036-08-09T00:04:54.000Z`), `repository-source-s0-exact-closure-reuse-final` (REPOSITORY_SOURCE, expires `2026-08-12T04:34:00Z`).
+- Current freshness claims: `repository-source-s0-exact-closure-reuse-final` (REPOSITORY_SOURCE, expires `2026-08-12T04:34:00Z`), `repository-task-lease-release-delivery-automation-control-plane-hardening-v2` (REPOSITORY_TASK_LEASE, expires `2036-09-20T22:16:31.168Z`).
 - Blocked freshness claims: `repository-source-a1-exact-carrier-full-history` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T04:07:31Z`), `repository-source-a1-complete-late-sentinel-inventory` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T03:25:40Z`), `repository-source-a1-post-merge-control-readback` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T03:16:55Z`), `repository-source-a1-late-review-owner-registry-bootstrap` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T02:48:20Z`), `repository-source-a1-assurance-control-final` (REPOSITORY_SOURCE, STALE_BLOCKED, expired `2026-08-11T02:37:45Z`), `provider-critical-b3-linked-readback` (PROVIDER_CRITICAL, STALE_BLOCKED, expired `2026-08-02T14:00:44Z`).
 - Internally validated historical review sentinels: PR #195 reviewed `605039a1eec08e153f33380a2998ee1c4cef2a90` after merge with 3 unresolved findings; successor `codex/assurance-active-task-and-claim-freshness-a1`; PR #194 reviewed `c15a58039b67d65eabdcaa03a9422ebc8d6dd95e` after merge with 5 unresolved findings; successor `codex/d2a-livekit-mic-post-merge-review-correction`. Only protected-main registered finding sets block post-merge completion claims, unrelated successor work, release, and proof-tier promotion; unvalidated Codex commentary remains advisory triage.
-- Document rendered at `2026-09-20T22:57:51.889Z`; document deadline `2026-08-13T18:46:27Z` is diagnostic only and grants no universal implementation authority. Claim-scoped freshness remains mandatory. Derived live provider readback: false.
+- Document rendered at `2026-09-23T22:16:31.168Z`; document deadline `2026-08-13T18:46:27Z` is diagnostic only and grants no universal implementation authority. Claim-scoped freshness remains mandatory. Derived live provider readback: false.
 
 ## Control-plane lifecycle
 
-- Contract `ASSURANCE_CONTROL_PLANE_LIFECYCLE_V2`; current stage `TERMINAL_TRUTH`; terminal classification `MERGED_BY_EXPLICIT_OWNER_BYPASS_AT_EXACT_FROZEN_SOURCE`; pending transitions `0`.
+- Contract `ASSURANCE_CONTROL_PLANE_LIFECYCLE_V2`; current stage `AUTHORIZED_IMPLEMENTATION`; terminal classification `NONE`; pending transitions `0`.
 - Merge authority: `false`; provider/build/OTA/release authority: `false`; physical proof: `PENDING`.
-- Exceptional source merge facts: PR #484, source `969359cf0baaf832b2de0598c9affea1b2bf913b` / `e42928aa80dc8f2910639878b6070cc61faa3b64`, merge `cf120d38cdfacd39f17093a197c0148e501156a7` / `e42928aa80dc8f2910639878b6070cc61faa3b64`. Normal exact-head review `NOT_PRODUCED`; normal Phase 1 `NOT_SUCCESSFUL`; final-source receipt `NOT_PRODUCED`; hosted security `NOT_APPLICABLE_PRESENTATION_ONLY`. None of these absences is promoted to PASS.
 
 ## Engineering doctrine
 
@@ -45,7 +45,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 ## Pre-admission engineering seed capability
 
 - Contract `OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1` is `ACTIVE`; product mutation is `false` until finite lease admission through `FINITE_TASK_ADMISSION_TO_CLEARANCE_V1`.
-- Static PR binding, source-binding PR, and provenance PR are not required. Immediate next action: `IMPLEMENT_CHILLYWOOD_AUTH_CHAT_VISUAL_SYSTEM_ALIGNMENT`.
+- Static PR binding, source-binding PR, and provenance PR are not required. Immediate next action: `IMPLEMENT_RELEASE_DELIVERY_AUTOMATION_CONTROL_PLANE_HARDENING`.
 
 ## Finite-task admission-to-clearance capability
 
@@ -61,7 +61,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
 - Contract `OWNER_JURISDICTION_CANONICAL_MODEL_V2` is `ACTIVE`; standing policy may be reused: `true`; domain coverage may be reused: `false`. Every task must enumerate exact domains: `true`.
 - Legacy receipts retain their original semantics. External proof is never inherited, operational ownership is preserved, and this capability grants no product, provider, database-deployment, build, submission, OTA, or public-release authority.
-- Current immutable policy source: comment #5296932596, standing-policy hash `16772f5aa32d6c2ba4d8a465ae447519ab5ff7219882ddcd614176410bcc817f`, status `ACTIVE_UNTIL_OWNER_SUPERSESSION_OR_REVOCATION`; task binding `03e550a06d931432d44c32cb680963e2884767a04bb41cf29abc94abb961d04e` covers `3/3` exact domains.
+- Current immutable policy source: comment #5296932596, standing-policy hash `16772f5aa32d6c2ba4d8a465ae447519ab5ff7219882ddcd614176410bcc817f`, status `ACTIVE_UNTIL_OWNER_SUPERSESSION_OR_REVOCATION`; task binding `701b36ce14a5a036c39c39aa5f0a9ce4c8c1577e481df8ff27d1fe9d12803dc9` covers `1/1` exact domains.
 
 ## Assurance receipt lifecycle
 
@@ -80,7 +80,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
 ## Open implementation PRs
 
-- None.
+- PR #490 at `8ecf8b437bdaabf4efd2a8a00cd614c0722dd789`: open-draft-current; implementation.
 
 ## Open review-only PRs
 
