@@ -47,8 +47,11 @@ import {
   PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS,
   PHASE1_RISK_BASED_ADMISSION_REFORM_V1,
   architectureFinalSourceOwnerCommentBody,
+  architectureFinalSourceSubject,
   architectureMaintenanceOwnerCommentBody,
   architectureMaintenanceSubject,
+  architectureRepositoryReviewCommentBody,
+  architectureRepositoryReviewSubject,
   hashValue,
   phase1AdmissionPublisherProvisioningReadback,
   phase1InstalledPublisherAnchorFindings,
@@ -917,6 +920,7 @@ test("canonical generated-companion risk maintenance has an exact non-recursive 
   assert.equal(authority.authorizationOk, true);
   assert.equal(authority.ok, true);
   assert.equal(authority.mergeEligible, false, "final-source evidence remains a later lifecycle requirement");
+
 });
 
 test("finite-task admission synchronization lineage has one exact assurance-only maintenance profile", () => {
@@ -965,6 +969,37 @@ test("finite-task admission synchronization lineage has one exact assurance-only
   assert.equal(authority.authorizationOk, true);
   assert.equal(authority.ok, true);
   assert.equal(authority.mergeEligible, false, "final-source evidence remains a later lifecycle requirement");
+
+  const finalIdentity = { repository: REPOSITORY, pr: 901, branch: "codex/admission-sync-lineage", baseSha: BASE, headSha: HEAD };
+  const finalScope = { files: profile.paths, additions: 700, deletions: 100, netChangedLines: 600, diffHash: "f".repeat(64) };
+  const reviewSubject = architectureRepositoryReviewSubject({
+    identity: finalIdentity,
+    tree: TREE,
+    scope: finalScope,
+    profile: FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2,
+  });
+  const reviewRaw = {
+    id: 9012,
+    node_id: "IC_9012",
+    body: architectureRepositoryReviewCommentBody(reviewSubject),
+    user: { login: "codex" },
+    author_association: "NONE",
+    created_at: "2026-09-23T12:01:00Z",
+    updated_at: "2026-09-23T12:01:00Z",
+    issue_url: `${"https://api.github.com/repos"}/${REPOSITORY}/issues/901`,
+    html_url: `${"https://github.com"}/${REPOSITORY}/pull/901#issuecomment-9012`,
+  };
+  const finalSubject = architectureFinalSourceSubject({
+    identity: finalIdentity,
+    tree: TREE,
+    scope: finalScope,
+    originalRaw: raw,
+    repositoryReviewRaw: reviewRaw,
+  });
+  assert.equal(finalSubject.objective, FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2);
+  assert.equal(finalSubject.repositoryReview.profile, FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2);
+  assert.deepEqual(finalSubject.budget, { maximumFiles: 11, maximumChangedLines: 2400, maximumHandAuthoredNetLines: 2400 });
+  assert.equal(finalSubject.currentTruthCompanionIncluded, true);
 });
 
 test("Phase 1 lifecycle risk reads the PR-scope registry from the exact protected base", () => {
