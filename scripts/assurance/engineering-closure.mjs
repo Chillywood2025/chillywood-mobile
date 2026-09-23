@@ -11,7 +11,7 @@ import { ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2, ASSURANCE_CONTROL_PLANE_CONSO
 import { canonicalGitText, canonicalReceiptEvidenceWireProjection, classifyGitHubExecutionIdentity, comparePhase1FinalSourceEvidence, compareReceiptEvidenceSemantics, evaluateTerminalVerifierRepairHistory, extractPhase1FinalSourceSemanticEnvelope, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, normalizeReceiptEvidenceSemantics, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, parseProtectedPullRequestMergeSubject, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, PHASE1_FINAL_SOURCE_PAYLOAD_KEYS, PHASE1_FINAL_SOURCE_PAYLOAD_KEYS_V2, phase1FinalSourceSemanticEnvelope, RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS, RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
 import { derivePhase1LifecycleGeneration, inspectPhase1AggregateEvidence, PHASE1_EVIDENCE_STAGES, PHASE1_MODES, resolveProtectedPhase1AdmissionEvidence, verifyPhase1AggregateEvidence, verifyProtectedPhase1PublisherProvisioningReadback } from "./phase1-admission.mjs";
 import { deriveFiniteTaskPrRiskAuthority, evaluateDraftSourceReadinessScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
-import { validateAssuranceSelfMaintenance } from "./control-plane-lifecycle.mjs";
+import { authorizeCanonicalGeneratedAssuranceCompanionTransition, validateAssuranceSelfMaintenance } from "./control-plane-lifecycle.mjs";
 import {
   ACTIVE_POLICY_STATUS,
   FINITE_TASK_ADMISSION_FINAL_SOURCE_V2_MARKER,
@@ -2087,6 +2087,15 @@ export const PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_ARCHITECTURE_PATHS = Object.fr
   ".github/workflows/phase1-ci.yml",
   "tests/assurance/source-readiness-wrapper.test.mjs",
 ]);
+export const CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1 = "CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1";
+export const CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS = Object.freeze([
+  "scripts/assurance/control-plane-lifecycle.mjs",
+  "scripts/assurance/engineering-closure.mjs",
+  "scripts/assurance/lib.mjs",
+  "scripts/assurance/phase1-admission.mjs",
+  "tests/assurance/control-plane-lifecycle-v2.test.mjs",
+  "tests/assurance/phase1-admission.test.mjs",
+]);
 const phase1ControlProfile = (objective) => objective === PHASE1_RISK_BASED_ADMISSION_REFORM_V1
   ? { paths: PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS, maximumFiles: 14, maximumChangedLines: 4200 }
   : objective === PHASE1_ADMISSION_RULESET_CUTOVER_V1
@@ -2095,6 +2104,8 @@ const phase1ControlProfile = (objective) => objective === PHASE1_RISK_BASED_ADMI
   ? { paths: PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_ARCHITECTURE_PATHS, maximumFiles: 2, maximumChangedLines: 80 }
   : objective === PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1
   ? { paths: PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_ARCHITECTURE_PATHS, maximumFiles: 2, maximumChangedLines: 80 }
+  : objective === CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1
+  ? { paths: CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS, maximumFiles: 6, maximumChangedLines: 1200 }
   : objective === ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2
   ? ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2_PROFILE
   : objective === STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1
@@ -3740,6 +3751,7 @@ export function architectureFinalSourceSubject({ identity, tree, scope, original
     PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1,
     PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1,
     STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1,
+    CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
     FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION,
   ].includes(originalSubject.objective)) {
     const observed = exactScope(scope);
@@ -4682,6 +4694,7 @@ export function verifyArchitectureMaintenanceAuthority({ raw, allComments = [], 
     PHASE1_PUBLISHER_METADATA_COMPATIBILITY_REPAIR_V1,
     PHASE1_SOURCE_AUTHORITY_TOKEN_WIRING_V1,
     STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1,
+    CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
     FINITE_TASK_TERMINAL_TRUTH_RECEIPT_LIFECYCLE_BASE_ADVANCEMENT_CORRECTION,
   ].includes(originalSubject?.objective)) {
     const jurisdictionModel = originalSubject?.objective === "install versioned standing Owner jurisdiction policy with exact task bindings and append-only admission supersession";
@@ -6319,6 +6332,30 @@ export function resolvePhase1SourceAuthorityEligibility({ repository, identity, 
     scopeHash,
     findings: [...new Set(findings)].sort(),
   };
+}
+
+export function resolveCanonicalGeneratedAssuranceCompanionRiskContext({ repository, identity, exactDiff, changedPaths, root = REPOSITORY_ROOT } = {}) {
+  let currentTruth = null;
+  let currentStateText = null;
+  let nextTaskText = null;
+  try {
+    currentTruth = readJson(root, "config/assurance/current-truth-v1.json");
+    currentStateText = fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8");
+    nextTaskText = fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8");
+  } catch {
+    return { ok: false, findings: ["CANONICAL_GENERATED_COMPANION_READ_FAILED"], context: null };
+  }
+  const sourceAuthorityProof = resolvePhase1SourceAuthorityEligibility({ repository, identity, root });
+  return authorizeCanonicalGeneratedAssuranceCompanionTransition({
+    changedPaths,
+    exactDiff,
+    sourceAuthorityProof,
+    currentTruth,
+    currentStateText,
+    nextTaskText,
+    canonicalCurrentStateText: renderCurrentState(currentTruth),
+    canonicalNextTaskText: renderNextTask(currentTruth),
+  });
 }
 
 const PHASE1_TYPED_SOURCE_AUTHORITY_TYPES = new Set([

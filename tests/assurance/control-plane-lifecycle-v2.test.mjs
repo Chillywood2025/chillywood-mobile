@@ -3,11 +3,13 @@ import fs from "node:fs";
 import test from "node:test";
 import {
   APPLICABILITY,
+  CANONICAL_GENERATED_ASSURANCE_COMPANION_PATHS,
   CLOSED_EXTERNAL_AUTHORITY,
   EXCEPTIONAL_MERGE_CLASSIFICATION,
   GATE_RESULTS,
   RISK_CLASSES,
   aggregateApplicablePhase1,
+  authorizeCanonicalGeneratedAssuranceCompanionTransition,
   authorizeExceptionalMergeOutcome,
   classifyDiffRisk,
   evidenceInvalidation,
@@ -77,6 +79,83 @@ function boundaryAssessment(paths, source = exactDiff(paths)) {
   return { ...body, assessmentHash: lifecycleHash(body) };
 }
 
+function canonicalCompanionFixture() {
+  const paths = [...CANONICAL_GENERATED_ASSURANCE_COMPANION_PATHS];
+  const source = exactDiff(paths);
+  const leaseId = "synthetic-admitted-task-v1";
+  const taskLease = {
+    leaseId,
+    implementationPr: 701,
+    implementationBranch: "codex/synthetic-admitted-task-v1",
+    featureId: "synthetic-feature",
+    admittedSeedHead: sha("6"),
+    admittedSeedTree: sha("7"),
+    protectedAdmissionPr: source.implementationPr,
+    taskState: "ACTIVE_IMPLEMENTATION",
+    authority: { providerMutation: false, databaseDeployment: false, build: false, submission: false, ota: false, publicRelease: false },
+  };
+  const currentTruth = {
+    mainSha: source.baseSha,
+    protectedMainAuthority: { checkpointSha: source.baseSha, checkpointTree: sha("8") },
+    activeTaskBinding: {
+      implementationBindingId: leaseId,
+      implementationPr: taskLease.implementationPr,
+      implementationBranch: taskLease.implementationBranch,
+      featureId: taskLease.featureId,
+      immutableSourceHead: taskLease.admittedSeedHead,
+      immutableSourceTree: taskLease.admittedSeedTree,
+      productSourceMutationAllowed: true,
+      providerMutationAllowed: false,
+      databaseDeploymentAllowed: false,
+      buildAllowed: false,
+      submissionAllowed: false,
+      otaAllowed: false,
+      publicReleaseAllowed: false,
+    },
+    controlPlaneLifecycle: {
+      contractId: "ASSURANCE_CONTROL_PLANE_LIFECYCLE_V2",
+      currentStage: "AUTHORIZED_IMPLEMENTATION",
+      terminalClassification: null,
+      pendingTransitionCount: 0,
+      mergeAuthority: false,
+      providerBuildOtaReleaseAuthority: false,
+      activeLeaseId: leaseId,
+    },
+    finiteTaskLeases: { tasks: [taskLease] },
+  };
+  const sourceAuthorityProof = {
+    schemaVersion: 1,
+    contract: "PHASE1_SOURCE_AUTHORITY_RESOLUTION_V2",
+    producer: "PROTECTED_MAIN_ENGINEERING_CLOSURE_V1",
+    repository: source.repository,
+    pr: source.implementationPr,
+    headRef: "codex/synthetic-admission-v1",
+    headSha: source.headSha,
+    sourceTree: source.sourceTree,
+    baseRef: "main",
+    baseSha: source.baseSha,
+    authorityType: "FINITE_TASK_ADMISSION",
+    authorityMode: null,
+    draftSourceOnly: false,
+    mergeAuthorityGranted: false,
+    lifecycleAction: null,
+    lifecycleEventUpdatedAt: null,
+    lifecycleGeneration: null,
+    scopeHash: digest("9"),
+    findings: [],
+  };
+  return {
+    changedPaths: paths,
+    exactDiff: source,
+    sourceAuthorityProof,
+    currentTruth,
+    currentStateText: "canonical current state\n",
+    nextTaskText: "canonical next task\n",
+    canonicalCurrentStateText: "canonical current state\n",
+    canonicalNextTaskText: "canonical next task\n",
+  };
+}
+
 test("lifecycle policy and transitions cover normal, exceptional, and deferred convergence [1-4,5-10,18-20,23-27,31,34-36,47-54]", () => {
   assert.deepEqual(validateLifecyclePolicy(policy), { ok: true, findings: [] });
   const normal = ["NO_ACTIVE_TASK", "OWNER_INTENT", "FINITE_TASK_ADMISSION", "AUTHORIZED_IMPLEMENTATION", "FROZEN_CANDIDATE", "NORMAL_MERGE_READY", "MERGED_NORMAL_VERIFIED", "TERMINAL_TRUTH"];
@@ -142,6 +221,55 @@ test("presentation-only risk requires exact boundary proof and high/unknown risk
   assert.equal(classifyDiffRisk({ changedPaths: ["supabase/migrations/example.sql"], policy }).classification, RISK_CLASSES.HIGH);
   assert.equal(classifyDiffRisk({ changedPaths: ["unknown.txt"], policy }).classification, RISK_CLASSES.UNKNOWN);
   assert.equal(classifyDiffRisk({ changedPaths: ["scripts/assurance/example.mjs"], policy }).classification, RISK_CLASSES.ASSURANCE);
+});
+
+test("authenticated generated current-truth companions classify as assurance-control high risk", () => {
+  const fixture = canonicalCompanionFixture();
+  const authorized = authorizeCanonicalGeneratedAssuranceCompanionTransition(fixture);
+  assert.deepEqual([authorized.ok, authorized.findings], [true, []]);
+  const risk = classifyDiffRisk({ changedPaths: fixture.changedPaths, exactDiff: fixture.exactDiff, assuranceTransitionContext: authorized.context, policy });
+  assert.deepEqual(risk, { classification: RISK_CLASSES.ASSURANCE, hostedSecurity: "HOSTED_SECURITY_REQUIRED", findings: [] });
+  assert.notEqual(risk.classification, RISK_CLASSES.PRESENTATION);
+});
+
+test("generated companion mutations and forged contexts remain UNKNOWN_RISK", () => {
+  const mutations = [
+    ["manual CURRENT_STATE edit", (value) => { value.currentStateText = "manual edit\n"; }],
+    ["manual NEXT_TASK edit", (value) => { value.nextTaskText = "manual edit\n"; }],
+    ["noncanonical current-state generation", (value) => { value.canonicalCurrentStateText = "different canonical output\n"; }],
+    ["noncanonical next-task generation", (value) => { value.canonicalNextTaskText = "different canonical output\n"; }],
+    ["missing companion", (value) => {
+      value.changedPaths = value.changedPaths.filter((file) => file !== "NEXT_TASK.md");
+      value.exactDiff = exactDiff(value.changedPaths);
+    }],
+    ["product-path mixing", (value) => {
+      value.changedPaths = [...value.changedPaths, "app/example.tsx"];
+      value.exactDiff = exactDiff(value.changedPaths);
+    }],
+    ["wrong task identity", (value) => { value.currentTruth.activeTaskBinding.implementationBindingId = "different-task"; }],
+    ["wrong protected admission PR", (value) => { value.currentTruth.finiteTaskLeases.tasks[0].protectedAdmissionPr += 1; }],
+    ["wrong authority type", (value) => { value.sourceAuthorityProof.authorityType = "FINITE_TASK_IMPLEMENTATION"; }],
+    ["wrong authority producer", (value) => { value.sourceAuthorityProof.producer = "UNTRUSTED"; }],
+    ["wrong authority head", (value) => { value.sourceAuthorityProof.headSha = sha("0"); }],
+    ["wrong repository", (value) => { value.sourceAuthorityProof.repository = "example/other"; }],
+  ];
+  for (const [name, mutate] of mutations) {
+    const fixture = canonicalCompanionFixture();
+    mutate(fixture);
+    const authorized = authorizeCanonicalGeneratedAssuranceCompanionTransition(fixture);
+    assert.equal(authorized.ok, false, name);
+    const risk = classifyDiffRisk({ changedPaths: fixture.changedPaths, exactDiff: fixture.exactDiff, assuranceTransitionContext: authorized.context, policy });
+    assert.equal(risk.classification, RISK_CLASSES.UNKNOWN, name);
+    assert.equal(risk.hostedSecurity, "HOSTED_SECURITY_REQUIRED", name);
+  }
+
+  const fixture = canonicalCompanionFixture();
+  const real = authorizeCanonicalGeneratedAssuranceCompanionTransition(fixture);
+  const forged = structuredClone(real.context);
+  assert.equal(classifyDiffRisk({ changedPaths: fixture.changedPaths, exactDiff: fixture.exactDiff, assuranceTransitionContext: forged, policy }).classification, RISK_CLASSES.UNKNOWN);
+
+  const changedDiff = { ...fixture.exactDiff, patchSha256: digest("b") };
+  assert.equal(classifyDiffRisk({ changedPaths: fixture.changedPaths, exactDiff: changedDiff, assuranceTransitionContext: real.context, policy }).classification, RISK_CLASSES.UNKNOWN);
 });
 
 test("assurance self-maintenance is bounded and product mixing remains forbidden [60-64]", () => {
