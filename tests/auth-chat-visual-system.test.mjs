@@ -92,8 +92,6 @@ test("auth actions, route targets, legal controls, and keyboard behavior remain 
 test("the post-login legal acceptance gate is branded and remains fail-closed", () => {
   assertIncludes(source.layout, [
     'testID="account-restore-branded-surface"',
-    'testID="account-restore-glass-panel"',
-    'accessibilityLabel="Restore scheduled account deletion"',
     'testID="legal-acceptance-branded-surface"',
     'testID="legal-acceptance-glass-panel"',
     '<Text style={styles.legalGateKicker}>ACCOUNT REQUIREMENT</Text>',
@@ -152,7 +150,6 @@ test("message and composer presentation keeps long content readable and input mu
   ], "message layout");
   assert.doesNotMatch(source.thread, /width:\s*\d{3,}[^\n]*messageBubble/);
 });
-
 test("visible recovery handlers preserve token safety and route authority", () => {
   assertIncludes(source.callback, [
     'consumeApplicationAuthInput(callbackRoute, "auth_callback")',

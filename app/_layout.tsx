@@ -113,10 +113,7 @@ import DevDebugOverlay from "../components/dev/dev-debug-overlay";
 import { RootErrorBoundary } from "../components/system/root-error-boundary";
 import { RuntimeUnavailableScreen } from "../components/system/runtime-unavailable-screen";
 import InterstitialAdController from "../components/ads/InterstitialController";
-import {
-  ChillywoodBrandedSurface,
-  ChillywoodGlassPanel,
-} from "../components/ui/chillywood-branded-surface";
+import { ChillywoodBrandedSurface, ChillywoodGlassPanel } from "../components/ui/chillywood-branded-surface";
 
 const PUBLIC_LEGAL_PATHS = new Set<string>(APPLICATION_LEGAL_PATHS);
 const IOS_NATIVE_PRESENTATION_GRACE_MS = 1_500;
@@ -1471,7 +1468,6 @@ function AuthBootScreen({ message = "Checking your session…", onRetry }: { mes
 }
 
 function AccountRestoreOnlyScreen() {
-  const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const restore = async () => {
@@ -1486,47 +1482,19 @@ function AccountRestoreOnlyScreen() {
     } finally { setBusy(false); }
   };
   return (
-    <ChillywoodBrandedSurface
-      style={styles.legalBrandedGateScreen}
-      testID="account-restore-branded-surface"
-      variant="legal"
-    >
-      <ScrollView
-        contentContainerStyle={[
-          styles.legalGateScroll,
-          {
-            paddingTop: Math.max(insets.top + 24, 40),
-            paddingBottom: Math.max(insets.bottom + 24, 40),
-          },
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
+    <ChillywoodBrandedSurface style={[styles.legalBrandedGateScreen, styles.legalGateScroll]} testID="account-restore-branded-surface" variant="legal">
       <ChillywoodGlassPanel style={styles.legalGateCard} testID="account-restore-glass-panel" variant="legal">
         <Text style={styles.legalGateKicker}>ACCOUNT DELETION SCHEDULED</Text>
         <Text style={styles.legalGateTitle}>Restore or sign out</Text>
         <Text style={styles.legalGateBody}>Private features and notifications remain off. Restore this account before continuing.</Text>
         {error ? <Text style={styles.legalGateError}>{error}</Text> : null}
-        <TouchableOpacity
-          style={[styles.legalGateButton, busy && styles.legalGateButtonDisabled]}
-          onPress={() => { void restore(); }}
-          disabled={busy}
-          accessibilityLabel="Restore scheduled account deletion"
-          accessibilityRole="button"
-          accessibilityState={{ busy, disabled: busy }}
-        >
+        <TouchableOpacity style={styles.legalGateButton} onPress={() => { void restore(); }} disabled={busy}>
           <Text style={styles.legalGateButtonText}>{busy ? "Restoring…" : "Restore account"}</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.legalGateSecondary}
-          onPress={() => { void supabase.auth.signOut(); }}
-          accessibilityLabel="Sign out without restoring this account"
-          accessibilityRole="button"
-        >
+        <TouchableOpacity style={styles.legalGateSecondary} onPress={() => { void supabase.auth.signOut(); }}>
           <Text style={styles.legalGateSecondaryText}>Sign out</Text>
         </TouchableOpacity>
       </ChillywoodGlassPanel>
-      </ScrollView>
     </ChillywoodBrandedSurface>
   );
 }
