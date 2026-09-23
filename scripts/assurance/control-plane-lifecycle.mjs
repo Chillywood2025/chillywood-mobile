@@ -1,12 +1,15 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { parseCanonicalMarkedComment } from "./jurisdiction-policy.mjs";
 
 export const CONTROL_PLANE_LIFECYCLE_CONTRACT = "ASSURANCE_CONTROL_PLANE_LIFECYCLE_V2";
 export const EXCEPTIONAL_MERGE_CLASSIFICATION = "MERGED_BY_EXPLICIT_OWNER_BYPASS_AT_EXACT_FROZEN_SOURCE";
 export const OWNER_DEFERRED_CLASSIFICATION = "OWNER_DEFERRED";
 export const NORMAL_MERGE_CLASSIFICATION = "MERGED_NORMAL_VERIFIED";
+export const EXCEPTIONAL_OWNER_TERMINAL_MARKER = "<!-- chillywood-exceptional-owner-bypass-terminal-v2 -->";
 
 export const LIFECYCLE_STATES = Object.freeze([
   "NO_ACTIVE_TASK", "OWNER_INTENT", "FINITE_TASK_ADMISSION", "AUTHORIZED_IMPLEMENTATION",
@@ -229,6 +232,71 @@ export function validateExceptionalMergeOutcome(outcome, { lease, ownerReceipt, 
   return { ok: findings.length === 0, findings };
 }
 
+export function validateExceptionalOwnerReceiptReadback(outcome, raw) {
+  const parsed = parseCanonicalMarkedComment(raw?.body, EXCEPTIONAL_OWNER_TERMINAL_MARKER);
+  const payload = parsed?.payload;
+  const unhashedPayload = payload && Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "bodyHash"));
+  const projected = {
+    commentId: raw?.id,
+    author: raw?.user?.login,
+    authorAssociation: raw?.author_association,
+    createdAt: raw?.created_at,
+    updatedAt: raw?.updated_at,
+    subjectHash: payload?.subjectHash,
+    bodyHash: payload?.bodyHash,
+    subject: payload?.subject,
+  };
+  const findings = [];
+  if (!parsed?.ok || !exactKeys(payload, ["bodyHash", "marker", "schemaVersion", "subject", "subjectHash", "type"])) findings.push("EXCEPTIONAL_OWNER_RECEIPT_PARSE_INVALID");
+  if (payload?.schemaVersion !== 2 || payload?.type !== "OWNER_EXCEPTIONAL_BYPASS_TERMINAL_ACKNOWLEDGEMENT_V2" || payload?.marker !== EXCEPTIONAL_OWNER_TERMINAL_MARKER) findings.push("EXCEPTIONAL_OWNER_RECEIPT_TYPE_INVALID");
+  if (!payload || payload?.subjectHash !== lifecycleHash(payload.subject) || payload?.bodyHash !== lifecycleHash(unhashedPayload)) findings.push("EXCEPTIONAL_OWNER_RECEIPT_HASH_INVALID");
+  if (raw?.user?.login !== "Chillywood2025" || raw?.author_association !== "OWNER" || raw?.created_at !== raw?.updated_at) findings.push("EXCEPTIONAL_OWNER_RECEIPT_IDENTITY_INVALID");
+  if (stableLifecycleJson(projected) !== stableLifecycleJson(outcome?.ownerReceipt)) findings.push("EXCEPTIONAL_OWNER_RECEIPT_PROJECTION_INVALID");
+  return { ok: findings.length === 0, findings, receipt: findings.length === 0 ? projected : null };
+}
+
+export function deriveExceptionalGitEvidence(outcome, { root } = {}) {
+  const git = (args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  try {
+    const mergeParents = git(["show", "-s", "--format=%P", outcome.mergeSha]).split(/\s+/u).filter(Boolean);
+    const patch = execFileSync("git", ["diff", "--binary", outcome.protectedBase, outcome.sourceHead], { cwd: root });
+    const paths = git(["diff", "--name-only", outcome.protectedBase, outcome.sourceHead]).split(/\r?\n/gu).filter(Boolean).sort();
+    return {
+      protectedBase: outcome.protectedBase,
+      sourceHead: outcome.sourceHead,
+      sourceTree: git(["rev-parse", `${outcome.sourceHead}^{tree}`]),
+      mergeSha: outcome.mergeSha,
+      mergeTree: git(["rev-parse", `${outcome.mergeSha}^{tree}`]),
+      mergeParents,
+      patchSha256: crypto.createHash("sha256").update(patch).digest("hex"),
+      changedPathSha256: crypto.createHash("sha256").update(`${paths.join("\n")}\n`).digest("hex"),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function authorizeExceptionalMergeOutcome(outcome, { lease, ownerReceiptReadback, gitEvidence, rulesetReadback } = {}) {
+  const receipt = validateExceptionalOwnerReceiptReadback(outcome, ownerReceiptReadback);
+  const structural = validateExceptionalMergeOutcome(outcome, {
+    lease,
+    ownerReceipt: receipt.receipt,
+    gitEvidence,
+    rulesetEvidence: outcome?.ruleset?.evidence,
+  });
+  const bypassActors = rulesetReadback?.bypass_actors ?? [];
+  const rulesetRestored = rulesetReadback?.id === 18940814
+    && rulesetReadback?.enforcement === "active"
+    && bypassActors.length === 1
+    && bypassActors[0]?.actor_type === "Integration"
+    && bypassActors[0]?.actor_id === 4707730
+    && bypassActors[0]?.bypass_mode === "pull_request";
+  const findings = [...receipt.findings, ...structural.findings];
+  if (stableLifecycleJson(gitEvidence) !== stableLifecycleJson(outcome?.gitEvidence)) findings.push("EXCEPTIONAL_GIT_EVIDENCE_LIVE_MISMATCH");
+  if (!rulesetRestored) findings.push("EXCEPTIONAL_RULESET_LIVE_RESTORATION_INVALID");
+  return { ok: findings.length === 0, findings: [...new Set(findings)].sort() };
+}
+
 export function validateDeferredOutcome(outcome, { lease } = {}) {
   const unhashed = Object.fromEntries(Object.entries(outcome ?? {}).filter(([key]) => key !== "evidenceHash"));
   const findings = [];
@@ -263,7 +331,8 @@ export function projectExceptionalTerminalTruth(record, outcome) {
   next.protectedMainAuthority ??= {};
   next.protectedMainAuthority.checkpointSha = outcome.mergeSha;
   next.protectedMainAuthority.checkpointTree = outcome.mergeTree;
-  next.latestMergedImplementationPr = { number: outcome.implementationPr, state: "merged", head: outcome.sourceHead, mergeSha: outcome.mergeSha, mergeTree: outcome.mergeTree, title: "Align Chi'llywood auth and Chat visual system" };
+  const priorImplementation = (next.openImplementationPrs ?? []).find(({ number }) => number === outcome.implementationPr);
+  next.latestMergedImplementationPr = { number: outcome.implementationPr, state: "merged", head: outcome.sourceHead, mergeSha: outcome.mergeSha, mergeTree: outcome.mergeTree, title: priorImplementation?.title ?? `Finite task ${outcome.taskId}` };
   next.openImplementationPrs = (next.openImplementationPrs ?? []).filter(({ number }) => number !== outcome.implementationPr);
   next.activeTaskBinding = null;
   next.finiteTaskRuntime = {
@@ -322,7 +391,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const task = JSON.parse(fs.readFileSync(taskPath, "utf8"));
     const outcome = task.exceptionalOutcome484;
     const lease = (record?.finiteTaskLeases?.tasks ?? []).find(({ leaseId }) => leaseId === outcome?.leaseId);
-    const verification = validateExceptionalMergeOutcome(outcome, { lease });
+    let ownerReceiptReadback = null;
+    let rulesetReadback = null;
+    try {
+      ownerReceiptReadback = JSON.parse(execFileSync("gh", ["api", `repos/${outcome.repository}/issues/comments/${outcome.ownerReceipt.commentId}`], { cwd: root, encoding: "utf8" }));
+      rulesetReadback = JSON.parse(execFileSync("gh", ["api", `repos/${outcome.repository}/rulesets/${outcome.ruleset.id}`], { cwd: root, encoding: "utf8" }));
+    } catch {}
+    const verification = authorizeExceptionalMergeOutcome(outcome, { lease, ownerReceiptReadback, gitEvidence: deriveExceptionalGitEvidence(outcome, { root }), rulesetReadback });
     if (!verification.ok) {
       process.stderr.write(`${JSON.stringify(verification)}\n`);
       process.exitCode = 1;

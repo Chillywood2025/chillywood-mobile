@@ -8,6 +8,7 @@ import {
   GATE_RESULTS,
   RISK_CLASSES,
   aggregateApplicablePhase1,
+  authorizeExceptionalMergeOutcome,
   classifyDiffRisk,
   evidenceInvalidation,
   evaluateLifecycleAuthority,
@@ -22,6 +23,7 @@ import {
   validateDeferredOutcome,
   validateExceptionalMergeOutcome,
   validateLifecyclePolicy,
+  EXCEPTIONAL_OWNER_TERMINAL_MARKER,
 } from "../../scripts/assurance/control-plane-lifecycle.mjs";
 import { parseCanonicalMarkedComment } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
@@ -42,7 +44,8 @@ function ownerSubject() {
 
 function exceptionalFixture() {
   const subject = ownerSubject();
-  const receipt = { commentId: 9001, author: "Chillywood2025", authorAssociation: "OWNER", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z", subject, subjectHash: lifecycleHash(subject), bodyHash: digest("7") };
+  const payloadBody = { marker: EXCEPTIONAL_OWNER_TERMINAL_MARKER, schemaVersion: 2, subject, subjectHash: lifecycleHash(subject), type: "OWNER_EXCEPTIONAL_BYPASS_TERMINAL_ACKNOWLEDGEMENT_V2" };
+  const receipt = { commentId: 9001, author: "Chillywood2025", authorAssociation: "OWNER", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z", subject, subjectHash: lifecycleHash(subject), bodyHash: lifecycleHash(payloadBody) };
   const gitEvidence = { protectedBase: subject.protectedBase, sourceHead: subject.sourceHead, sourceTree: subject.sourceTree, mergeSha: subject.mergeSha, mergeTree: subject.mergeTree, mergeParents: subject.mergeParents, patchSha256: subject.patchSha256, changedPathSha256: subject.changedPathSha256 };
   const rulesetEvidence = { before: { onlyIntegration: true }, bypass: { userPresent: true, updatedAt: "2026-01-01T00:00:30Z" }, restored: { onlyIntegration: true, integrationId: 4707730, updatedAt: "2026-01-01T00:01:30Z" } };
   const body = {
@@ -55,7 +58,9 @@ function exceptionalFixture() {
     authority: CLOSED_EXTERNAL_AUTHORITY,
   };
   const outcome = { ...body, evidenceHash: lifecycleHash(body) };
-  return { outcome, receipt, gitEvidence, rulesetEvidence };
+  const payload = { ...payloadBody, bodyHash: lifecycleHash(payloadBody) };
+  const ownerReceiptReadback = { id: receipt.commentId, user: { login: receipt.author }, author_association: receipt.authorAssociation, created_at: receipt.createdAt, updated_at: receipt.updatedAt, body: `${EXCEPTIONAL_OWNER_TERMINAL_MARKER}\n${stableLifecycleJson(payload)}` };
+  return { outcome, receipt, gitEvidence, rulesetEvidence, ownerReceiptReadback };
 }
 
 function boundaryAssessment(paths, patchSha256 = digest("a")) {
@@ -139,6 +144,8 @@ test("exceptional exact-source merge preserves missing normal evidence and relea
   const fixture = exceptionalFixture();
   const result = validateExceptionalMergeOutcome(fixture.outcome, { lease, ownerReceipt: fixture.receipt, gitEvidence: fixture.gitEvidence, rulesetEvidence: fixture.rulesetEvidence });
   assert.deepEqual(result, { ok: true, findings: [] });
+  const rulesetReadback = { id: 18940814, enforcement: "active", bypass_actors: [{ actor_id: 4707730, actor_type: "Integration", bypass_mode: "pull_request" }] };
+  assert.deepEqual(authorizeExceptionalMergeOutcome(fixture.outcome, { lease, ownerReceiptReadback: fixture.ownerReceiptReadback, gitEvidence: fixture.gitEvidence, rulesetReadback }), { ok: true, findings: [] });
   assert.deepEqual(fixture.outcome.normalPathEvidence, normalMissing);
   assert.deepEqual(fixture.outcome.authority, CLOSED_EXTERNAL_AUTHORITY);
   const registry = { tasks: [lease], completedLeaseOutcomes: [], exceptionalLeaseOutcomes: [fixture.outcome], deferredLeaseOutcomes: [] };
@@ -172,6 +179,18 @@ test("exceptional merge mutations cannot become authority [37-46,49]", () => {
     const fixture = exceptionalFixture(); mutation(fixture);
     assert.equal(validateExceptionalMergeOutcome(fixture.outcome, { lease, ownerReceipt: fixture.receipt, gitEvidence: fixture.gitEvidence, rulesetEvidence: fixture.rulesetEvidence }).ok, false);
   }
+  const rulesetReadback = { id: 18940814, enforcement: "active", bypass_actors: [{ actor_id: 4707730, actor_type: "Integration", bypass_mode: "pull_request" }] };
+  for (const mutation of [
+    (value) => { value.ownerReceiptReadback.user.login = "codex-bot"; },
+    (value) => { value.ownerReceiptReadback.updated_at = "2026-01-01T00:02:00Z"; },
+    (value) => { value.ownerReceiptReadback.body += `\n${EXCEPTIONAL_OWNER_TERMINAL_MARKER}\n{}`; },
+    (value) => { value.gitEvidence.sourceTree = sha("0"); },
+  ]) {
+    const fixture = exceptionalFixture(); mutation(fixture);
+    assert.equal(authorizeExceptionalMergeOutcome(fixture.outcome, { lease, ownerReceiptReadback: fixture.ownerReceiptReadback, gitEvidence: fixture.gitEvidence, rulesetReadback }).ok, false);
+  }
+  const fixture = exceptionalFixture();
+  assert.equal(authorizeExceptionalMergeOutcome(fixture.outcome, { lease, ownerReceiptReadback: fixture.ownerReceiptReadback, gitEvidence: fixture.gitEvidence, rulesetReadback: { ...rulesetReadback, bypass_actors: [{ actor_id: 210200794, actor_type: "User", bypass_mode: "pull_request" }] } }).ok, false);
 });
 
 test("Owner-deferred terminal truth keeps defects NOT_IMPLEMENTED and releases the lease [50-54]", () => {
