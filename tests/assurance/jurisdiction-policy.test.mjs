@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
+import { resolveActiveTaskAdmissionImplementationEvidence } from "../../scripts/assurance/active-task.mjs";
 
 import {
   ACTIVE_POLICY_STATUS,
@@ -34,8 +37,8 @@ import {
   verifyOwnerJurisdictionDecisionV2,
   verifyTaskJurisdictionBindingV2,
 } from "../../scripts/assurance/jurisdiction-policy.mjs";
-import { ARCHITECTURE_REPOSITORY_REVIEW_MARKER, STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_ARCHITECTURE_PATHS, STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, canonicalPhase1FinalSourceWireProjection, classifyFiniteTaskAdmissionFinalSourceReceiptV2, FINITE_TASK_ADMISSION_LEASE_STATE, finiteTaskAdmissionHistoryValidV2, finiteTaskAdmissionLeaseStateValid, finiteTaskAdmissionSubject, finiteTaskFinalSourceOwnerJurisdictionV2, finiteTaskJurisdictionEvidenceV2, finiteTaskScopeV2, hashValue, normalizeGitHubCommentIdentity, ownerJurisdictionPolicyBindingTruthV2, resolveFiniteTaskAdmissionTaskBindingV2, stableJson, verifyArchitectureMaintenanceAuthority, verifyFiniteTaskAdmissionFinalSourceEligibilityV2, verifyFiniteTaskOwnerApprovalV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
-import { finiteTaskLiveContextCheckoutEligible, resolveAssuranceControlSourceOnlyProfile } from "../../scripts/assurance/lib.mjs";
+import { ARCHITECTURE_REPOSITORY_REVIEW_MARKER, STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_ARCHITECTURE_PATHS, STRUCTURED_OWNER_RECEIPT_TRANSPORT_CANONICALIZATION_V1, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, canonicalPhase1FinalSourceWireProjection, classifyFiniteTaskAdmissionFinalSourceReceiptV2, FINITE_TASK_ADMISSION_LEASE_STATE, finiteTaskAdmissionHistoryValidV2, finiteTaskAdmissionLeaseStateValid, finiteTaskAdmissionSubject, finiteTaskEngineeringSourceLineageValid, finiteTaskFinalSourceOwnerJurisdictionV2, finiteTaskJurisdictionEvidenceV2, finiteTaskScopeV2, hashValue, normalizeGitHubCommentIdentity, ownerJurisdictionPolicyBindingTruthV2, resolveFiniteTaskAdmissionTaskBindingV2, stableJson, verifyArchitectureMaintenanceAuthority, verifyFiniteTaskAdmissionFinalSourceEligibilityV2, verifyFiniteTaskAdmissionSynchronizationLineage, verifyFiniteTaskOwnerApprovalV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2 } from "../../scripts/assurance/engineering-closure.mjs";
+import { finiteTaskLiveContextCheckoutEligible, renderCurrentState, renderNextTask, resolveAssuranceControlSourceOnlyProfile } from "../../scripts/assurance/lib.mjs";
 
 const DOMAINS = Object.freeze([
   "auth-session-password-recovery",
@@ -85,6 +88,60 @@ const registry = Object.freeze({
     providers: [`provider-${index}`],
   })),
 });
+
+const runGit = (root, args) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+const writeFixture = (root, file, value) => {
+  const target = path.join(root, file);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, value);
+};
+
+function canonicalAdmissionSynchronizationFixture(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-admission-lineage-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  runGit(root, ["init", "--initial-branch=main"]);
+  runGit(root, ["config", "user.name", "Synthetic Assurance"]);
+  runGit(root, ["config", "user.email", "assurance@example.invalid"]);
+  writeFixture(root, "config/assurance/current-truth-v1.json", "{}\n");
+  writeFixture(root, "config/assurance/current-truth-contract-v1.json", fs.readFileSync(new URL("../../config/assurance/current-truth-contract-v1.json", import.meta.url), "utf8"));
+  writeFixture(root, "config/assurance/control-plane-lifecycle-v2.json", fs.readFileSync(new URL("../../config/assurance/control-plane-lifecycle-v2.json", import.meta.url), "utf8"));
+  writeFixture(root, "CURRENT_STATE.md", "synthetic base\n");
+  writeFixture(root, "NEXT_TASK.md", "synthetic base\n");
+  runGit(root, ["add", "."]);
+  runGit(root, ["commit", "--no-gpg-sign", "-m", "Synthetic protected base"]);
+  const anchorBase = runGit(root, ["rev-parse", "HEAD"]);
+  const anchorBaseTree = runGit(root, ["rev-parse", "HEAD^{tree}"]);
+
+  runGit(root, ["checkout", "-b", "admission"]);
+  const record = JSON.parse(fs.readFileSync(new URL("../../config/assurance/current-truth-v1.json", import.meta.url), "utf8"));
+  record.mainSha = anchorBase;
+  record.protectedMainAuthority.checkpointSha = anchorBase;
+  record.protectedMainAuthority.checkpointTree = anchorBaseTree;
+  writeFixture(root, "config/assurance/current-truth-v1.json", `${JSON.stringify(record, null, 2)}\n`);
+  writeFixture(root, "CURRENT_STATE.md", renderCurrentState(record));
+  writeFixture(root, "NEXT_TASK.md", renderNextTask(record));
+  runGit(root, ["add", "CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"]);
+  runGit(root, ["commit", "--no-gpg-sign", "-m", "Canonical finite-task admission"]);
+  const anchorHead = runGit(root, ["rev-parse", "HEAD"]);
+  const anchorTree = runGit(root, ["rev-parse", "HEAD^{tree}"]);
+
+  runGit(root, ["checkout", "main"]);
+  runGit(root, ["checkout", "-b", "unrelated"]);
+  writeFixture(root, "docs/synthetic-unrelated.md", "unrelated protected advancement\n");
+  runGit(root, ["add", "docs/synthetic-unrelated.md"]);
+  runGit(root, ["commit", "--no-gpg-sign", "-m", "Synthetic unrelated source"]);
+  runGit(root, ["checkout", "main"]);
+  runGit(root, ["merge", "--no-ff", "--no-gpg-sign", "unrelated", "-m", "Merge pull request #777 from owner/unrelated"]);
+  const currentBase = runGit(root, ["rev-parse", "HEAD"]);
+  runGit(root, ["checkout", "admission"]);
+  runGit(root, ["merge", "--no-ff", "--no-gpg-sign", "main", "-m", "Synchronize protected main"]);
+  const currentHead = runGit(root, ["rev-parse", "HEAD"]);
+  const currentTree = runGit(root, ["rev-parse", "HEAD^{tree}"]);
+  const currentTruth = JSON.parse(fs.readFileSync(path.join(root, "config/assurance/current-truth-v1.json"), "utf8"));
+  const currentAdmission = { admissionIdentity: { branch: "admission", head: anchorHead, tree: anchorTree } };
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 777, branch: "admission", baseRef: "main", baseSha: currentBase, headSha: currentHead };
+  return { root, record, currentTruth, currentAdmission, identity, tree: currentTree, anchorHead, anchorTree, currentBase };
+}
 
 test("admission lease state matches the canonical current-truth schema and contract", () => {
   const schemas = JSON.parse(fs.readFileSync(new URL("../../config/assurance/schemas-v1.json", import.meta.url), "utf8"));
@@ -408,6 +465,28 @@ test("future wave inherits only allowlisted standing fields and binds its own ex
   const forgedEmbedded = structuredClone(binding); forgedEmbedded.policyReference = { source: "THIS_IMMUTABLE_OWNER_DECISION", standingPolicyHash: policyResolution.standingPolicyHash, standingPolicySequence: 0, standingPolicyStatus: ACTIVE_POLICY_STATUS, standingPolicyType: "OWNER_JURISDICTION_STANDING_POLICY_V2", standingPolicyVersion: 2 }; forgedEmbedded.bindingHash = typeSeparatedHash(jurisdictionHashDomains.taskBinding, Object.fromEntries(Object.entries(forgedEmbedded).filter(([key]) => key !== "bindingHash"))); assert.equal(verifyTaskJurisdictionBindingV2({ activePolicy: policyResolution, allowEmbeddedReference: true, binding: forgedEmbedded, registry }).ok, false);
 });
 
+test("standing policy authority survives registry drift while historical task authority does not transfer", () => {
+  const rendered = renderOwnerJurisdictionDecisionV2(baseInput);
+  const immutableReceipt = receipt(9001, rendered.body, "2026-08-14T12:00:00Z");
+  const currentRegistry = structuredClone(registry);
+  currentRegistry.features[0].productOwner = "current-product-owner";
+  assert.deepEqual(verifyOwnerJurisdictionDecisionV2({ body: rendered.body, receipt: immutableReceipt, registry: currentRegistry }).findings, ["OPERATIONAL_OWNER_PROJECTION_INVALID"]);
+
+  const policyResolution = resolveOwnerJurisdictionPolicyChainV2({ completeDiscovery: true, expectedScope: scope, receipts: [immutableReceipt], registry: currentRegistry });
+  assert.equal(policyResolution.ok, true);
+  assert.equal(policyResolution.standingPolicyHash, rendered.standingPolicyHash);
+
+  const currentIdentity = { ...taskIdentity, implementationBranch: "codex/current-task", implementationPr: 330, leaseId: "current-task", ownerApprovalCommentId: 6000000330, planningHead: sha40("7"), planningTree: sha40("8"), taskArtifactPath: "docs/assurance/tasks/current-task.json", taskId: "current-task" };
+  const currentBinding = deriveTaskJurisdictionBindingV2({ domainIds: [DOMAINS[0]], policyReceipt: policyResolution, registry: currentRegistry, scope, taskEvidence, taskIdentity: currentIdentity });
+  assert.equal(currentBinding.operationalOwnerProjection[0].productOwner, "current-product-owner");
+  assert.equal(verifyTaskJurisdictionBindingV2({ activePolicy: policyResolution, binding: currentBinding, registry: currentRegistry }).ok, true);
+  assert.notEqual(currentBinding.bindingHash, rendered.taskBindingHash);
+
+  const mutatedReceipt = structuredClone(immutableReceipt);
+  mutatedReceipt.body = mutatedReceipt.body.replace("UNITED_STATES_ONLY", "GLOBAL");
+  assert.equal(resolveOwnerJurisdictionPolicyChainV2({ completeDiscovery: true, expectedScope: scope, receipts: [mutatedReceipt], registry: currentRegistry }).ok, false);
+});
+
 test("genuine changes require a new Owner choice but unavailable external proof does not", () => {
   const rendered = renderOwnerJurisdictionDecisionV2(baseInput);
   const policyResolution = resolveOwnerJurisdictionPolicyChainV2({ completeDiscovery: true, expectedScope: scope, receipts: [receipt(9001, rendered.body, "2026-08-14T12:00:00Z")], registry });
@@ -631,16 +710,17 @@ test("native V2 admission genesis works without historical V1 while minimalist V
   assert.equal(resolveFiniteTaskAdmissionChainV2({ expected: admissionExpected(fixture), receipts: [receipt(5290645158, fixture.v1Body, "2026-08-14T13:00:00Z")] }).ok, false);
 });
 
-test("production admission binding resolver bridges V1 and selects the hash-chain V2 tip", () => {
-  const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(); const tree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], { encoding: "utf8" }).trim(); const parent = execFileSync("git", ["rev-parse", "HEAD^"], { encoding: "utf8" }).trim(); const files = execFileSync("git", ["diff", "--name-only", `${parent}...${head}`], { encoding: "utf8" }).trim().split("\n").filter(Boolean);
-  const identity = { repository: scope.repository, pr: 233, branch: "codex/admission", baseSha: parent, headSha: head }; const taskId = "admission-bridge-fixture"; const artifactPath = `docs/assurance/tasks/${taskId}.json`;
+test("production admission binding resolver bridges V1 and selects the hash-chain V2 tip", (t) => {
+  const synchronized = canonicalAdmissionSynchronizationFixture(t);
+  const head = synchronized.anchorHead; const tree = synchronized.anchorTree; const parent = synchronized.record.mainSha; const files = ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"];
+  const receiptIdentity = { repository: scope.repository, pr: 233, branch: "admission", baseRef: "main", baseSha: parent, headSha: head }; const identity = { ...synchronized.identity, pr: 233 }; const taskId = "admission-bridge-fixture"; const artifactPath = `docs/assurance/tasks/${taskId}.json`;
   const edge = { closureHash: sha64("1"), evidenceHash: sha64("2"), modelDeltaEdges: [] }; const taskArtifact = { taskId, primaryDomain: DOMAINS[0], closure: { packetHash: sha64("3"), affectedDomainClosure: { domains: [DOMAINS[0]] }, sections: { C_AFFECTED_DOMAIN_CLOSURE: { taskLocalGoverningEdgeClosure: edge } } }, certificate: { certificateHash: sha64("4") }, taskLocalGoverningEdgeClosure: edge, implementationPlan: { allowedPaths: [artifactPath], tests: ["tests/bridge.test.mjs"], scope: { amendmentMaximumFiles: 2, amendmentMaximumHandAuthoredNetLines: 20, maximumAmendments: 1, maximumFiles: 1, maximumHandAuthoredNetLines: 10, packageChanges: false } } }; const taskArtifactHash = sha64("5");
   const implementation = { pr: 229, branch: "codex/bridge", seedHead: head, seedTree: tree, planningHead: head, planningTree: tree, ownerCommentId: 5285464582, taskArtifactPath: artifactPath }; const bridgeIdentity = { taskId, implementationPr: 229, implementationBranch: implementation.branch, leaseId: taskId, originalSeedHead: head, originalSeedTree: tree, planningHead: head, planningTree: tree, ownerApprovalCommentId: implementation.ownerCommentId, taskArtifactPath: artifactPath }; const evidence = finiteTaskJurisdictionEvidenceV2(taskArtifact, taskArtifactHash);
   const ownerRendered = renderOwnerJurisdictionDecisionV2({ domainApplications: [{ decision: "Exact bridge task market application.", domainId: DOMAINS[0], jurisdictionDecisionOwner: owner.login, market: "UNITED_STATES_ONLY", minimumCreatorAge: null }], domainIds: [DOMAINS[0]], owner, registry, scope, taskEvidence: evidence, taskIdentity: bridgeIdentity }); const ownerVerified = verifyOwnerJurisdictionDecisionV2({ body: ownerRendered.body, registry, receipt: receipt(9100, ownerRendered.body, "2026-08-14T12:00:00Z") });
-  const v1Subject = finiteTaskAdmissionSubject({ identity, tree, scope: { files }, implementation, taskArtifact, taskArtifactHash }); const v1Body = legacyBody(LEGACY_FINITE_TASK_ADMISSION_V1_MARKER, { authorizationId: "finite_task_admission_to_clearance_v1", evidenceClass: "OWNER_INTENT", pr: 233, repository: scope.repository, schemaVersion: 1, subject: v1Subject, type: "FINITE_TASK_ADMISSION_TO_CLEARANCE_V1" }); const v1 = verifyLegacyFiniteTaskAdmissionV1({ body: v1Body });
-  const ownerJurisdictionBinding = { domainIds: [DOMAINS[0]], ownerDecisionCommentBodyHash: ownerVerified.commentBodyHash, ownerDecisionCommentId: 9100, standingPolicyHash: ownerVerified.standingPolicyHash, standingPolicySequence: 0, standingPolicyStatus: ACTIVE_POLICY_STATUS, standingPolicyType: "OWNER_JURISDICTION_STANDING_POLICY_V2", standingPolicyVersion: 2, taskBinding: ownerVerified.taskBinding, taskBindingHash: ownerVerified.taskBindingHash }; const admissionIdentity = { branch: identity.branch, head, pr: 233, taskId, tree }; const common = { admissionIdentity, changedPaths: ["CURRENT_STATE.md"], owner, ownerJurisdictionBinding, scope, scopeBudget: { maximumChangedLines: 10, maximumFiles: 1 }, taskEvidence: evidence, taskScope: finiteTaskScopeV2(taskArtifact) };
+  const v1Subject = finiteTaskAdmissionSubject({ identity: receiptIdentity, tree, scope: { files }, implementation, taskArtifact, taskArtifactHash }); const v1Body = legacyBody(LEGACY_FINITE_TASK_ADMISSION_V1_MARKER, { authorizationId: "finite_task_admission_to_clearance_v1", evidenceClass: "OWNER_INTENT", pr: 233, repository: scope.repository, schemaVersion: 1, subject: v1Subject, type: "FINITE_TASK_ADMISSION_TO_CLEARANCE_V1" }); const v1 = verifyLegacyFiniteTaskAdmissionV1({ body: v1Body });
+  const ownerJurisdictionBinding = { domainIds: [DOMAINS[0]], ownerDecisionCommentBodyHash: ownerVerified.commentBodyHash, ownerDecisionCommentId: 9100, standingPolicyHash: ownerVerified.standingPolicyHash, standingPolicySequence: 0, standingPolicyStatus: ACTIVE_POLICY_STATUS, standingPolicyType: "OWNER_JURISDICTION_STANDING_POLICY_V2", standingPolicyVersion: 2, taskBinding: ownerVerified.taskBinding, taskBindingHash: ownerVerified.taskBindingHash }; const admissionIdentity = { branch: receiptIdentity.branch, head, pr: 233, taskId, tree }; const common = { admissionIdentity, changedPaths: files, owner, ownerJurisdictionBinding, scope, scopeBudget: { maximumChangedLines: 3600, maximumFiles: 3 }, taskEvidence: evidence, taskScope: finiteTaskScopeV2(taskArtifact) };
   const first = renderFiniteTaskAdmissionV2({ ...common, predecessor: { bodyHash: v1.bodyHash, commentId: 9200, sequence: 0, subjectHash: v1.subjectHash, version: 1 } }); const firstVerified = verifyFiniteTaskAdmissionV2({ body: first.body }); const tip = renderFiniteTaskAdmissionV2({ ...common, predecessor: { bodyHash: firstVerified.bodyHash, commentId: 9201, sequence: 1, subjectHash: firstVerified.subjectHash, version: 2 } });
-  const resolved = resolveFiniteTaskAdmissionTaskBindingV2({ admissionRaws: [githubReceipt(9200, 233, v1Body, "2026-08-14T13:00:00Z"), githubReceipt(9201, 233, first.body, "2026-08-14T13:01:00Z"), githubReceipt(9202, 233, tip.body, "2026-08-14T13:02:00Z")], paginationComplete: true, identity, tree, implementation, taskArtifact, taskArtifactHash, expectedScope: scope, expectedDomainIds: [DOMAINS[0]] });
+  const resolved = resolveFiniteTaskAdmissionTaskBindingV2({ admissionRaws: [githubReceipt(9200, 233, v1Body, "2026-08-14T13:00:00Z"), githubReceipt(9201, 233, first.body, "2026-08-14T13:01:00Z"), githubReceipt(9202, 233, tip.body, "2026-08-14T13:02:00Z")], paginationComplete: true, identity, tree: synchronized.tree, implementation, taskArtifact, taskArtifactHash, expectedScope: scope, expectedDomainIds: [DOMAINS[0]], currentTruth: synchronized.currentTruth, root: synchronized.root });
   assert.equal(resolved.ok, true, resolved.findings.join(",")); assert.equal(resolved.chain.currentCommentId, 9202); assert.equal(resolved.taskBinding.bindingHash, ownerVerified.taskBindingHash);
 });
 
@@ -848,4 +928,165 @@ test("production final-source eligibility readback binds exact review, Phase 1, 
   assert.equal(synchronized.mergeEligible, true, synchronized.findings.join(","));
   assert.equal(synchronized.commentId, synchronizedFinalRaw.id);
   assert.equal(synchronized.classifications.find(({ commentId }) => commentId === finalRaw.id).status, "HISTORICAL_STALE_FINITE_TASK_ADMISSION_FINAL_SOURCE");
+});
+
+test("finite-task engineering evidence remains source-bound across canonical admission synchronization", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-engineering-source-lineage-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  runGit(root, ["init", "--initial-branch=main"]);
+  runGit(root, ["config", "user.name", "Synthetic Assurance"]);
+  runGit(root, ["config", "user.email", "assurance@example.invalid"]);
+  writeFixture(root, "closure.txt", "historical bounded engineering analysis\n");
+  runGit(root, ["add", "closure.txt"]);
+  runGit(root, ["commit", "--no-gpg-sign", "-m", "Historical engineering closure"]);
+  const closureHead = runGit(root, ["rev-parse", "HEAD"]);
+  const closureTree = runGit(root, ["rev-parse", "HEAD^{tree}"]);
+
+  writeFixture(root, "edge.txt", "task-local edge evidence\n");
+  runGit(root, ["add", "edge.txt"]);
+  runGit(root, ["commit", "--no-gpg-sign", "-m", "Task-local edge evidence"]);
+  const edgeHead = runGit(root, ["rev-parse", "HEAD"]);
+  const edgeTree = runGit(root, ["rev-parse", "HEAD^{tree}"]);
+
+  writeFixture(root, "planning.txt", "canonical planning snapshot\n");
+  runGit(root, ["add", "planning.txt"]);
+  runGit(root, ["commit", "--no-gpg-sign", "-m", "Canonical planning snapshot"]);
+  const planningHead = runGit(root, ["rev-parse", "HEAD"]);
+  const planningTree = runGit(root, ["rev-parse", "HEAD^{tree}"]);
+  const exact = {
+    edgeSourceIdentity: { head: edgeHead, tree: edgeTree },
+    closureSourceIdentity: { head: closureHead, tree: closureTree },
+    planningHead,
+    planningTree,
+    root,
+  };
+  assert.equal(finiteTaskEngineeringSourceLineageValid(exact), true);
+
+  const wrongEdgeTree = structuredClone(exact);
+  wrongEdgeTree.edgeSourceIdentity.tree = sha40("f");
+  assert.equal(finiteTaskEngineeringSourceLineageValid(wrongEdgeTree), false);
+  const wrongClosureTree = structuredClone(exact);
+  wrongClosureTree.closureSourceIdentity.tree = sha40("e");
+  assert.equal(finiteTaskEngineeringSourceLineageValid(wrongClosureTree), false);
+  const wrongPlanningTree = structuredClone(exact);
+  wrongPlanningTree.planningTree = sha40("d");
+  assert.equal(finiteTaskEngineeringSourceLineageValid(wrongPlanningTree), false);
+
+  runGit(root, ["checkout", "--detach", closureHead]);
+  writeFixture(root, "unrelated-edge.txt", "not part of planning lineage\n");
+  runGit(root, ["add", "unrelated-edge.txt"]);
+  runGit(root, ["commit", "--no-gpg-sign", "-m", "Unrelated forged edge"]);
+  const unrelatedEdge = structuredClone(exact);
+  unrelatedEdge.edgeSourceIdentity = {
+    head: runGit(root, ["rev-parse", "HEAD"]),
+    tree: runGit(root, ["rev-parse", "HEAD^{tree}"]),
+  };
+  assert.equal(finiteTaskEngineeringSourceLineageValid(unrelatedEdge), false);
+});
+
+test("finite-task Owner authority survives only canonical protected-main synchronization lineage", (t) => {
+  const fixture = canonicalAdmissionSynchronizationFixture(t);
+  const result = verifyFiniteTaskAdmissionSynchronizationLineage(fixture);
+  assert.equal(result.ok, true, result.findings.join(","));
+  assert.equal(result.synchronizationCount, 1);
+  assert.equal(result.anchorHead, fixture.anchorHead);
+  assert.equal(result.currentBase, fixture.currentBase);
+  assert.equal(result.protectedMainRuntime.currentTruthStatus, "CURRENT");
+  assert.equal(result.protectedMainRuntime.pendingTransitionCount, 0);
+});
+
+test("active-task admission resolves the immutable artifact from the exact implementation head", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-active-task-admission-artifact-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  runGit(root, ["init", "--initial-branch=main"]);
+  runGit(root, ["config", "user.name", "Synthetic Assurance"]);
+  runGit(root, ["config", "user.email", "assurance@example.invalid"]);
+  const taskId = "generic-admission-implementation-artifact";
+  const artifactPath = `docs/assurance/tasks/${taskId}.json`;
+  const implementationPr = 701;
+  const implementationBranch = "codex/generic-admission-implementation";
+  const repository = "Chillywood2025/chillywood-mobile";
+  const artifact = { taskId, repository, implementation: { branch: implementationBranch, pullRequest: implementationPr } };
+  const artifactSource = `${JSON.stringify(artifact, null, 2)}\n`;
+  writeFixture(root, artifactPath, artifactSource);
+  runGit(root, ["add", artifactPath]);
+  runGit(root, ["commit", "--no-gpg-sign", "-m", "Synthetic implementation artifact"]);
+  const planningHead = runGit(root, ["rev-parse", "HEAD"]);
+  const planningTree = runGit(root, ["rev-parse", "HEAD^{tree}"]);
+  const artifactHash = crypto.createHash("sha256").update(artifactSource).digest("hex");
+  const activeBinding = { closureArtifactPath: artifactPath, currentImplementationHead: planningHead, currentImplementationTree: planningTree, implementationBranch, implementationPr };
+  const lease = { admittedSeedHead: planningHead, admittedSeedTree: planningTree, artifactReservation: { closureArtifactPath: artifactPath }, closure: { artifactHash }, implementationBranch, implementationPr, leaseId: taskId, ownerAuthorizationCommentId: 9001 };
+  const projection = { repository, taskBinding: { planningHead, planningTree, prNumber: implementationPr, taskId } };
+  const implementationPull = { number: implementationPr, state: "open", merged: false, base: { ref: "main", repo: { full_name: repository } }, head: { ref: implementationBranch, sha: planningHead, repo: { full_name: repository } } };
+  const exact = { activeBinding, lease, projection, implementationPull, root };
+  const result = resolveActiveTaskAdmissionImplementationEvidence(exact);
+  assert.equal(result.ok, true, result.findings.join(","));
+  assert.equal(result.artifactRead.artifactHash, artifactHash);
+  assert.deepEqual(result.implementation, { pr: implementationPr, branch: implementationBranch, planningHead, planningTree, seedHead: planningHead, seedTree: planningTree, ownerCommentId: 9001, taskArtifactPath: artifactPath });
+
+  writeFixture(root, "implementation.txt", "authorized descendant\n");
+  runGit(root, ["add", "implementation.txt"]);
+  runGit(root, ["commit", "--no-gpg-sign", "-m", "Authorized implementation descendant"]);
+  const descendant = structuredClone(exact);
+  descendant.implementationPull.head.sha = runGit(root, ["rev-parse", "HEAD"]);
+  assert.equal(resolveActiveTaskAdmissionImplementationEvidence(descendant).ok, true, "an implementation descendant preserves the immutable artifact anchor");
+
+  for (const [name, mutate] of [
+    ["wrong PR", (value) => { value.implementationPull.number += 1; }],
+    ["closed implementation", (value) => { value.implementationPull.state = "closed"; }],
+    ["wrong repository", (value) => { value.implementationPull.head.repo.full_name = "forged/repository"; }],
+    ["wrong branch", (value) => { value.implementationPull.head.ref = "codex/forged"; }],
+    ["unrelated head", (value) => { value.implementationPull.head.sha = "f".repeat(40); }],
+    ["wrong bound tree", (value) => { value.activeBinding.currentImplementationTree = "e".repeat(40); }],
+    ["wrong artifact hash", (value) => { value.lease.closure.artifactHash = "d".repeat(64); }],
+    ["wrong task identity", (value) => { value.projection.taskBinding.taskId = "forged-task"; }],
+    ["unbound artifact path", (value) => { value.activeBinding.closureArtifactPath = "docs/assurance/tasks/other.json"; }],
+  ]) {
+    const candidate = structuredClone(exact);
+    mutate(candidate);
+    assert.equal(resolveActiveTaskAdmissionImplementationEvidence(candidate).ok, false, name);
+  }
+});
+
+test("finite-task admission synchronization rejects identity, semantic, scope, ancestry, and generated-companion mutations", (t) => {
+  const identityMutations = [
+    ["wrong current tree", (fixture) => ({ ...fixture, tree: sha40("f") })],
+    ["wrong protected base", (fixture) => ({ ...fixture, identity: { ...fixture.identity, baseSha: fixture.anchorHead } })],
+    ["wrong branch", (fixture) => ({ ...fixture, identity: { ...fixture.identity, branch: "forged-admission" } })],
+    ["forged refreshed head", (fixture) => ({ ...fixture, identity: { ...fixture.identity, headSha: fixture.currentBase }, tree: runGit(fixture.root, ["rev-parse", `${fixture.currentBase}^{tree}`]) })],
+  ];
+  for (const [name, mutate] of identityMutations) {
+    const fixture = canonicalAdmissionSynchronizationFixture(t);
+    assert.equal(verifyFiniteTaskAdmissionSynchronizationLineage(mutate(fixture)).ok, false, name);
+  }
+
+  const semanticMutations = [
+    ["changed task identity", (record) => { record.activeTaskBinding = { implementationBindingId: "different-task" }; }],
+    ["changed scope", (record) => { record.finiteTaskLeases.policyId = "forged-scope-policy"; }],
+    ["changed authority", (record) => { record.ownerJurisdictionPolicyCapability.status = "FORGED"; }],
+    ["changed implementation target", (record) => { record.openImplementationPrs = [{ number: 999, head: sha40("9"), state: "open", disposition: "forged" }]; }],
+  ];
+  for (const [name, mutate] of semanticMutations) {
+    const fixture = canonicalAdmissionSynchronizationFixture(t);
+    const forged = structuredClone(fixture.currentTruth);
+    mutate(forged);
+    const result = verifyFiniteTaskAdmissionSynchronizationLineage({ ...fixture, currentTruth: forged });
+    assert.equal(result.ok, false, name);
+    assert.ok(result.findings.includes("ADMISSION_SYNCHRONIZATION_SEMANTIC_TRUTH_CHANGED"), name);
+  }
+
+  for (const [name, file, content] of [
+    ["arbitrary descendant", "docs/arbitrary-descendant.md", "not a synchronization\n"],
+    ["product path addition", "app/forged-product.tsx", "export default null;\n"],
+    ["manual generated companion", "CURRENT_STATE.md", "manually edited\n"],
+  ]) {
+    const fixture = canonicalAdmissionSynchronizationFixture(t);
+    writeFixture(fixture.root, file, content);
+    runGit(fixture.root, ["add", file]);
+    runGit(fixture.root, ["commit", "--no-gpg-sign", "-m", name]);
+    const headSha = runGit(fixture.root, ["rev-parse", "HEAD"]);
+    const tree = runGit(fixture.root, ["rev-parse", "HEAD^{tree}"]);
+    const result = verifyFiniteTaskAdmissionSynchronizationLineage({ ...fixture, identity: { ...fixture.identity, headSha }, tree });
+    assert.equal(result.ok, false, name);
+  }
 });

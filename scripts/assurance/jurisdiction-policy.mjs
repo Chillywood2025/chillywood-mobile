@@ -643,7 +643,47 @@ export function renderOwnerJurisdictionDecisionV2({ scope, owner, taskIdentity, 
   return { body: `${OWNER_JURISDICTION_DECISION_V2_MARKER}\n${canonicalJson(payload)}`, payload, standingPolicyHash, taskBindingHash: taskBinding.bindingHash, envelopeHash };
 }
 
-export function verifyOwnerJurisdictionDecisionV2({ body, registry, receipt = null, expected = {} } = {}) {
+function historicalEmbeddedTaskBindingFindings(binding, standingPolicy) {
+  const findings = [];
+  const domainIds = Array.isArray(binding?.domainIds) ? binding.domainIds : [];
+  const projection = Array.isArray(binding?.operationalOwnerProjection) ? binding.operationalOwnerProjection : [];
+  const embedded = binding?.policyReference?.source === "THIS_IMMUTABLE_OWNER_DECISION";
+  if (!exactKeys(binding, TASK_BINDING_KEYS) || binding?.schemaVersion !== 2 || binding?.type !== OWNER_JURISDICTION_TASK_BINDING_V2) findings.push("TASK_BINDING_FIELDS_OR_TYPE_INVALID");
+  if (!exactScope(binding?.scope) || !taskIdentityValid(binding?.taskIdentity) || !taskEvidenceValid(binding?.taskEvidence)) findings.push("TASK_BINDING_IDENTITY_INVALID");
+  if (domainIds.length === 0 || domainIds.some((domainId) => !isText(domainId)) || canonicalJson(domainIds) !== canonicalJson(sorted([...new Set(domainIds)]))) findings.push("TASK_BINDING_DOMAINS_INVALID");
+  if (!embedded || !policyReferenceValid(binding?.policyReference, { embedded: true })) findings.push("TASK_BINDING_POLICY_REFERENCE_INVALID");
+  if (!Array.isArray(binding?.domainApplications)
+    || binding.domainApplications.length !== domainIds.length
+    || binding.domainApplications.some((application, index) => !exactKeys(application, APPLICATION_KEYS)
+      || application.domainId !== domainIds[index]
+      || !isText(application.market)
+      || application.jurisdictionDecisionOwner !== binding.jurisdictionDecisionOwner
+      || !isText(application.decision)
+      || application.decision.length > 8_192
+      || !(application.minimumCreatorAge === null || (Number.isSafeInteger(application.minimumCreatorAge) && application.minimumCreatorAge >= 18)))) findings.push("TASK_BINDING_APPLICATIONS_INVALID");
+  if (!Array.isArray(binding?.capabilitySpecificConflicts) || binding.capabilitySpecificConflicts.length !== 0) findings.push("TASK_BINDING_CONFLICT_INVALID");
+  if (projection.length !== domainIds.length
+    || projection.some((entry, index) => !exactKeys(entry, OWNER_PROJECTION_KEYS) || entry.domainId !== domainIds[index])
+    || binding?.operationalOwnerProjectionHash !== typeSeparatedHash(HASH_DOMAINS.operationalOwners, projection)
+    || binding?.operationalOwnersPreserved !== true) findings.push("OPERATIONAL_OWNER_PROJECTION_INVALID");
+  if (binding?.externalProofInherited !== false
+    || binding?.domainCoverageReusable !== false
+    || binding?.domainCoverageSource !== "TASK_LOCAL_EXACT_ENUMERATION"
+    || binding?.taskSpecific !== true
+    || !authorityIsFalse(binding?.authority)) findings.push("TASK_BINDING_AUTHORITY_BOUNDARY_INVALID");
+  if (!sameScope(binding?.scope, standingPolicy?.scope)
+    || binding?.jurisdictionDecisionOwner !== standingPolicy?.owner?.login
+    || binding?.domainApplications?.some((application) => application.market !== standingPolicy?.policy?.primaryMarket)
+    || binding?.policyReference?.standingPolicyHash !== typeSeparatedHash(HASH_DOMAINS.standingPolicy, standingPolicy)
+    || binding?.policyReference?.standingPolicySequence !== standingPolicy?.sequence
+    || binding?.policyReference?.standingPolicyStatus !== standingPolicy?.status
+    || canonicalJson(binding?.inheritedStandingPolicy) !== canonicalJson(inheritedPolicyFields(standingPolicy))) findings.push("STALE_OR_CROSS_SCOPE_POLICY_REFERENCE");
+  const base = without(binding ?? {}, "bindingHash");
+  if (!isSha256(binding?.bindingHash) || binding.bindingHash !== typeSeparatedHash(HASH_DOMAINS.taskBinding, base)) findings.push("TASK_BINDING_HASH_INVALID");
+  return sorted([...new Set(findings)]);
+}
+
+function verifyOwnerJurisdictionDecisionEnvelopeV2({ body, registry, receipt = null, expected = {}, standingPolicySourceOnly = false } = {}) {
   try {
   const parsed = parseCanonicalMarkedComment(body, OWNER_JURISDICTION_DECISION_V2_MARKER);
   const findings = [];
@@ -657,7 +697,12 @@ export function verifyOwnerJurisdictionDecisionV2({ body, registry, receipt = nu
   if (payload.standingPolicyHash !== standingPolicyHash || payload?.subject?.standingPolicyHash !== standingPolicyHash) findings.push("STANDING_POLICY_HASH_INVALID");
   const embeddedPolicyContext = { commentId: receipt?.id, commentBodyHash: payload?.bodyHash, standingPolicy: payload?.subject?.standingPolicy, standingPolicyHash, status: ACTIVE_POLICY_STATUS, suppliesAuthority: true };
   trustedEmbeddedPolicyContexts.add(embeddedPolicyContext);
-  const bindingResult = verifyTaskJurisdictionBindingV2({ binding: payload?.subject?.taskBinding, registry, activePolicy: embeddedPolicyContext, allowEmbeddedReference: true });
+  const historicalBindingFindings = standingPolicySourceOnly
+    ? historicalEmbeddedTaskBindingFindings(payload?.subject?.taskBinding, payload?.subject?.standingPolicy)
+    : null;
+  const bindingResult = standingPolicySourceOnly
+    ? { ok: historicalBindingFindings.length === 0, findings: historicalBindingFindings, coverage: null }
+    : verifyTaskJurisdictionBindingV2({ binding: payload?.subject?.taskBinding, registry, activePolicy: embeddedPolicyContext, allowEmbeddedReference: true });
   if (!bindingResult.ok) findings.push(...bindingResult.findings);
   if (payload.pr !== payload?.subject?.taskBinding?.taskIdentity?.implementationPr || payload.task !== payload?.subject?.taskBinding?.taskIdentity?.taskId || payload.repository !== payload?.subject?.taskBinding?.scope?.repository || payload?.subject?.taskBinding?.jurisdictionDecisionOwner !== payload.owner.login) findings.push("OWNER_DECISION_TASK_CROSS_BINDING_INVALID");
   if (payload.taskBindingHash !== payload?.subject?.taskBindingHash || payload.taskBindingHash !== payload?.subject?.taskBinding?.bindingHash) findings.push("TASK_BINDING_CROSS_HASH_INVALID");
@@ -702,6 +747,10 @@ export function verifyOwnerJurisdictionDecisionV2({ body, registry, receipt = nu
   } catch {
     return { ok: false, findings: ["OWNER_DECISION_MALFORMED"], standingPolicyHash: null, taskBindingHash: null, envelopeHash: null, commentBodyHash: null, receipt: null, coverage: null };
   }
+}
+
+export function verifyOwnerJurisdictionDecisionV2(input = {}) {
+  return verifyOwnerJurisdictionDecisionEnvelopeV2({ ...input, standingPolicySourceOnly: false });
 }
 
 export function preflightOwnerJurisdictionDecisionV2(input) {
@@ -756,7 +805,7 @@ export function resolveOwnerJurisdictionPolicyChainV2({ receipts, registry, expe
   const verifiedNodes = [];
   for (const receipt of receipts) {
     if (!isPositiveInteger(receipt?.id) || !isText(receipt?.body) || !isCanonicalTimestamp(receipt?.createdAt) || receipt.createdAt !== receipt.updatedAt || receipt.authorAssociation !== "OWNER") { findings.push("POLICY_RECEIPT_IMMUTABILITY_INVALID"); continue; }
-    const verification = hasCanonicalMarkedCommentPrefix(receipt.body, OWNER_JURISDICTION_DECISION_V2_MARKER) ? verifyOwnerJurisdictionDecisionV2({ body: receipt.body, registry, receipt: { ...receipt, authorLogin: receipt.authorLogin ?? receipt.user?.login, authorAssociation: receipt.authorAssociation } }) : verifyPolicyChainBody(receipt.body);
+    const verification = hasCanonicalMarkedCommentPrefix(receipt.body, OWNER_JURISDICTION_DECISION_V2_MARKER) ? verifyOwnerJurisdictionDecisionEnvelopeV2({ body: receipt.body, registry, receipt: { ...receipt, authorLogin: receipt.authorLogin ?? receipt.user?.login, authorAssociation: receipt.authorAssociation }, standingPolicySourceOnly: true }) : verifyPolicyChainBody(receipt.body);
     if (!verification.ok) { findings.push(...verification.findings.map((finding) => `POLICY_RECEIPT_INVALID:${finding}`)); continue; }
     const policy = verification.standingPolicy;
     if ((receipt.authorLogin ?? receipt.user?.login) !== policy.owner.login) findings.push("POLICY_RECEIPT_OWNER_INVALID");

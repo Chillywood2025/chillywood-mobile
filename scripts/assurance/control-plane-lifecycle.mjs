@@ -116,6 +116,7 @@ export function authorizeCanonicalGeneratedAssuranceCompanionTransition({
   nextTaskText = null,
   canonicalCurrentStateText = null,
   canonicalNextTaskText = null,
+  protectedMainLineage = null,
 } = {}) {
   const findings = [];
   const paths = [...new Set(changedPaths)].sort();
@@ -144,8 +145,22 @@ export function authorizeCanonicalGeneratedAssuranceCompanionTransition({
   const lease = matchingLeases[0];
   const activeAuthorityClosed = [active?.providerMutationAllowed, active?.databaseDeploymentAllowed, active?.buildAllowed, active?.submissionAllowed, active?.otaAllowed, active?.publicReleaseAllowed].every((value) => value === false);
   const leaseAuthorityClosed = [lease?.authority?.providerMutation, lease?.authority?.databaseDeployment, lease?.authority?.build, lease?.authority?.submission, lease?.authority?.ota, lease?.authority?.publicRelease].every((value) => value === false);
-  const truthIdentityMatches = currentTruth?.mainSha === exactDiff?.baseSha
-    && currentTruth?.protectedMainAuthority?.checkpointSha === exactDiff?.baseSha
+  const exactCheckpoint = currentTruth?.mainSha === exactDiff?.baseSha
+    && currentTruth?.protectedMainAuthority?.checkpointSha === exactDiff?.baseSha;
+  const rollingCheckpoint = protectedMainLineage?.checkpointSha === currentTruth?.mainSha
+    && protectedMainLineage?.checkpointTree === currentTruth?.protectedMainAuthority?.checkpointTree
+    && protectedMainLineage?.observedProtectedMainSha === exactDiff?.baseSha
+    && protectedMainLineage?.mainRelation === "PROTECTED_MAIN_ADVANCED"
+    && protectedMainLineage?.currentTruthStatus === "CURRENT"
+    && protectedMainLineage?.authorityCheckpointEligible === true
+    && protectedMainLineage?.authorityControlEligible === true
+    && protectedMainLineage?.pendingTransitionCount === 0
+    && protectedMainLineage?.activeTaskModelInvalidated === false
+    && Array.isArray(protectedMainLineage?.activeTaskInputsInvalidated)
+    && protectedMainLineage.activeTaskInputsInvalidated.length === 0
+    && Array.isArray(protectedMainLineage?.findings)
+    && protectedMainLineage.findings.length === 0;
+  const truthIdentityMatches = (exactCheckpoint || rollingCheckpoint)
     && sha40.test(currentTruth?.protectedMainAuthority?.checkpointTree ?? "")
     && lifecycle?.contractId === CONTROL_PLANE_LIFECYCLE_CONTRACT
     && lifecycle?.currentStage === "AUTHORIZED_IMPLEMENTATION"
@@ -189,6 +204,8 @@ export function authorizeCanonicalGeneratedAssuranceCompanionTransition({
     patchSha256: exactDiff.patchSha256,
     leaseId: lease.leaseId,
     implementationPr: lease.implementationPr,
+    protectedMainRelation: exactCheckpoint ? "EXACT_CHECKPOINT" : "VERIFIED_ROLLING_PROTECTED_MAIN",
+    protectedMainChainHash: exactCheckpoint ? null : protectedMainLineage.protectedAdvancementChainHash,
     currentTruthHash: lifecycleHash(currentTruth),
     currentStateHash: lifecycleHash(currentStateText),
     nextTaskHash: lifecycleHash(nextTaskText),

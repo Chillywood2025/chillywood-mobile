@@ -41,6 +41,8 @@ import {
   ARCHITECTURE_MAINTENANCE_MARKER,
   CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_ARCHITECTURE_PATHS,
   CANONICAL_GENERATED_ASSURANCE_COMPANION_RISK_V1,
+  FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_ARCHITECTURE_PATHS,
+  FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2,
   PHASE1_ADMISSION_PUBLISHER_PROVISIONING_V1,
   PHASE1_RISK_BASED_ADMISSION_REFORM_ARCHITECTURE_PATHS,
   PHASE1_RISK_BASED_ADMISSION_REFORM_V1,
@@ -915,6 +917,46 @@ test("canonical generated-companion risk maintenance has an exact non-recursive 
   assert.equal(authority.authorizationOk, true);
   assert.equal(authority.ok, true);
   assert.equal(authority.mergeEligible, false, "final-source evidence remains a later lifecycle requirement");
+});
+
+test("finite-task admission synchronization lineage has one exact assurance-only maintenance profile", () => {
+  const profile = ASSURANCE_CONTROL_SOURCE_ONLY_PROFILES.find(({ profileId }) => profileId === FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2);
+  assert.deepEqual(profile, {
+    profileId: FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2,
+    paths: FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_ARCHITECTURE_PATHS,
+    maximumFiles: 9,
+    maximumChangedLines: 2200,
+  });
+  const budget = { maximumFiles: 9, maximumChangedLines: 2200, maximumHandAuthoredNetLines: 2200 };
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: profile.paths, budget, changedFiles: 9 })?.profileId, FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2);
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: profile.paths.slice(1), budget, changedFiles: 8 }), null);
+  assert.equal(resolveAssuranceControlSourceOnlyProfile({ changedPaths: [...profile.paths, "app/index.tsx"].sort(), budget, changedFiles: 10 }), null);
+  const subject = architectureMaintenanceSubject({
+    identity: { repository: REPOSITORY, pr: 901, branch: "codex/admission-sync-lineage", headSha: HEAD, baseSha: BASE },
+    tree: TREE,
+    scope: { files: profile.paths, additions: 700, deletions: 100, netChangedLines: 600 },
+    profile: "OWNER_JURISDICTION_CANONICAL_MODEL_V2",
+    objective: FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2,
+  });
+  assert.equal(subject.objective, FINITE_TASK_ADMISSION_SYNCHRONIZATION_LINEAGE_V2);
+  assert.deepEqual(subject.changedPaths, profile.paths);
+  assert.equal(subject.currentTruthCompanionIncluded, false);
+  assert.deepEqual(subject.authority, { product: false, nativeProduct: false, package: false, database: false, provider: false, build: false, release: false, submission: false, ota: false, publicRelease: false });
+});
+
+test("release task mandatory commands resolve to exact non-shell allowlist entries", () => {
+  const allowlist = JSON.parse(fs.readFileSync("config/assurance/command-allowlist-v1.json", "utf8"));
+  const expected = new Map([
+    ["npm run guard:ota-native-boundary", ["npm", "run", "guard:ota-native-boundary"]],
+    ["npm run generate:release-manifest-contract", ["npm", "run", "generate:release-manifest-contract"]],
+  ]);
+  for (const [contractCommand, argv] of expected) {
+    const matches = allowlist.commands.filter((rule) => rule.contractCommand === contractCommand);
+    assert.equal(matches.length, 1, contractCommand);
+    assert.deepEqual([matches[0].file, ...matches[0].args], argv, contractCommand);
+    assert.equal(matches[0].resultContract.type, "exit-zero-v1", contractCommand);
+  }
+  assert.equal(allowlist.deferredContractCommands.some((command) => expected.has(command)), false);
 });
 
 test("every Phase 1 step that invokes the authenticated source resolver receives the read-only GitHub token", () => {

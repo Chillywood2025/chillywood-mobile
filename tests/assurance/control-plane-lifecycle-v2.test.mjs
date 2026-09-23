@@ -232,6 +232,39 @@ test("authenticated generated current-truth companions classify as assurance-con
   assert.notEqual(risk.classification, RISK_CLASSES.PRESENTATION);
 });
 
+test("authenticated generated companions accept a verified rolling protected-main base without weakening task identity", () => {
+  const fixture = canonicalCompanionFixture();
+  const checkpoint = sha("b");
+  fixture.currentTruth.mainSha = checkpoint;
+  fixture.currentTruth.protectedMainAuthority.checkpointSha = checkpoint;
+  fixture.protectedMainLineage = {
+    checkpointSha: checkpoint,
+    checkpointTree: fixture.currentTruth.protectedMainAuthority.checkpointTree,
+    observedProtectedMainSha: fixture.exactDiff.baseSha,
+    mainRelation: "PROTECTED_MAIN_ADVANCED",
+    currentTruthStatus: "CURRENT",
+    authorityCheckpointEligible: true,
+    authorityControlEligible: true,
+    pendingTransitionCount: 0,
+    activeTaskModelInvalidated: false,
+    activeTaskInputsInvalidated: [],
+    protectedAdvancementChainHash: digest("c"),
+    findings: [],
+  };
+  assert.equal(authorizeCanonicalGeneratedAssuranceCompanionTransition(fixture).ok, true);
+  for (const [name, mutate] of [
+    ["wrong observed base", (value) => { value.protectedMainLineage.observedProtectedMainSha = sha("d"); }],
+    ["broken checkpoint", (value) => { value.protectedMainLineage.checkpointSha = sha("e"); }],
+    ["pending transition", (value) => { value.protectedMainLineage.pendingTransitionCount = 1; }],
+    ["task input invalidation", (value) => { value.protectedMainLineage.activeTaskInputsInvalidated = ["package.json"]; }],
+    ["unresolved lineage finding", (value) => { value.protectedMainLineage.findings = ["CURRENT_TRUTH_PROTECTED_MAIN_CHAIN_INVALID"]; }],
+  ]) {
+    const candidate = structuredClone(fixture);
+    mutate(candidate);
+    assert.equal(authorizeCanonicalGeneratedAssuranceCompanionTransition(candidate).ok, false, name);
+  }
+});
+
 test("generated companion mutations and forged contexts remain UNKNOWN_RISK", () => {
   const mutations = [
     ["manual CURRENT_STATE edit", (value) => { value.currentStateText = "manual edit\n"; }],
