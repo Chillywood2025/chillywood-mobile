@@ -2,7 +2,6 @@ import { Link, type Href, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
-  ImageBackground,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -31,10 +30,15 @@ import {
   type UsernameAvailability,
 } from "../../_lib/usernameHandles";
 import { AppStatusPill } from "../../components/ui/app-surface";
+import {
+  CHILLYWOOD_VISUAL,
+  ChillywoodBrandedSurface,
+  ChillywoodBrandReserve,
+  ChillywoodGlassPanel,
+} from "../../components/ui/chillywood-branded-surface";
 
 const COMMUNITY_GUIDELINES_HREF = "/community-guidelines" as Href;
 const EMAIL_CONFIRM_REDIRECT_URL = "https://chillywoodstream.com/auth-callback";
-const SIGNUP_BACKGROUND_SOURCE = require("../../assets/images/chicago-skyline.jpg");
 
 function getSignupErrorMessage(error: unknown) {
   const raw = String(
@@ -327,9 +331,7 @@ export default function Signup() {
   };
 
   return (
-    <ImageBackground source={SIGNUP_BACKGROUND_SOURCE} style={styles.background} resizeMode="cover">
-      <View style={styles.overlay} />
-
+    <ChillywoodBrandedSurface testID="auth-signup-branded-surface">
       <KeyboardAvoidingView
         style={styles.keyboardShell}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -348,7 +350,8 @@ export default function Signup() {
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          <View style={styles.card}>
+          <ChillywoodBrandReserve compact testID="auth-signup-branding-clearance" />
+          <ChillywoodGlassPanel style={styles.card} testID="auth-signup-glass-panel">
             <View style={styles.headerRow}>
               <Text style={styles.kicker}>Chi&apos;llywood</Text>
               <AppStatusPill label={isClosedBetaEnvironment() ? "Closed Beta" : "Public V1"} tone="accent" />
@@ -530,22 +533,14 @@ export default function Signup() {
             Sign in
           </Link>
         </View>
-          </View>
+          </ChillywoodGlassPanel>
       </ScrollView>
     </KeyboardAvoidingView>
-    </ImageBackground>
+    </ChillywoodBrandedSurface>
   );
 }
 
 const styles = StyleSheet.create({
-  background: {
-    flex: 1,
-    backgroundColor: "#06070B",
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(7,10,16,0.78)",
-  },
   keyboardShell: {
     flex: 1,
   },
@@ -555,11 +550,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
   },
   card: {
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(12,13,19,0.94)",
-    padding: 22,
+    marginBottom: 8,
   },
   headerRow: {
     flexDirection: "row",
@@ -569,21 +560,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   kicker: {
-    color: "#7B869E",
-    fontSize: 10,
+    color: "#D2CFE2",
+    fontSize: 12,
     fontWeight: "900",
-    letterSpacing: 1.2,
+    letterSpacing: 2.2,
   },
   title: {
-    color: "#DC143C",
-    fontSize: 28,
+    color: CHILLYWOOD_VISUAL.textPrimary,
+    fontSize: 34,
     fontWeight: "900",
     marginBottom: 10,
   },
   subtitle: {
-    color: "#A9B3C8",
-    fontSize: 13.5,
-    lineHeight: 20,
+    color: CHILLYWOOD_VISUAL.textMuted,
+    fontSize: 14,
+    lineHeight: 21,
     fontWeight: "600",
     marginBottom: 14,
   },
@@ -595,10 +586,10 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   ageGateCard: {
-    borderRadius: 14,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: "rgba(110,33,255,0.42)",
+    backgroundColor: "rgba(17,15,42,0.62)",
     padding: 14,
     gap: 10,
     marginBottom: 14,
@@ -626,8 +617,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   checkboxChecked: {
-    borderColor: "#FF5A76",
-    backgroundColor: "rgba(220,20,60,0.28)",
+    borderColor: CHILLYWOOD_VISUAL.accentBlue,
+    backgroundColor: "rgba(110,33,255,0.5)",
   },
   checkboxDot: {
     width: 10,
@@ -643,15 +634,15 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   legalLink: {
-    color: "#FF5A76",
+    color: "#A98BFF",
     fontWeight: "800",
     textDecorationLine: "underline",
   },
   usernameCard: {
-    borderRadius: 8,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: "rgba(110,33,255,0.36)",
+    backgroundColor: "rgba(17,15,42,0.58)",
     padding: 14,
     marginBottom: 16,
   },
@@ -671,14 +662,16 @@ const styles = StyleSheet.create({
   usernameInputWrap: {
     minHeight: 48,
     borderRadius: 10,
-    backgroundColor: "#1A1A22",
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 14,
     marginBottom: 10,
   },
   atPrefix: {
-    color: "#FF5A76",
+    color: "#A98BFF",
     fontSize: 16,
     fontWeight: "900",
     marginRight: 2,
@@ -746,20 +739,30 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   input: {
-    backgroundColor: "rgba(255,255,255,0.04)",
+    minHeight: 54,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
     color: "white",
     padding: 14,
     borderRadius: 14,
     marginBottom: 14,
   },
   button: {
-    backgroundColor: "#DC143C",
+    minHeight: 56,
+    backgroundColor: "#5B1DFF",
+    borderWidth: 1,
+    borderColor: "rgba(91,214,255,0.72)",
     padding: 16,
-    borderRadius: 14,
+    borderRadius: 16,
     alignItems: "center",
+    justifyContent: "center",
     marginTop: 10,
+    shadowColor: "#241DFF",
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
   },
   buttonText: {
     color: "white",
@@ -779,7 +782,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   link: {
-    color: "#FF5A76",
+    color: "#A98BFF",
     fontSize: 13,
     fontWeight: "800",
   },

@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
+import { ChillywoodBrandedSurface } from "../../components/ui/chillywood-branded-surface";
 
 import { trackEvent } from "../../_lib/analytics";
 import { DEFAULT_APP_CONFIG, readAppConfig } from "../../_lib/appConfig";
@@ -2664,16 +2665,16 @@ export default function ChillyChatThreadScreen() {
 
   if (authLoading || loading) {
     return (
-      <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
+      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
         <ActivityIndicator size="small" color="#F34B74" />
         <Text style={styles.stateText}>{authLoading ? "Checking Chi'lly Chat access..." : "Loading thread…"}</Text>
-      </View>
+      </ChillywoodBrandedSurface>
     );
   }
 
   if (!isSignedIn) {
     return (
-      <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
+      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
         <Text style={styles.stateText}>Sign in to open Chi&apos;lly Chat.</Text>
         <TouchableOpacity
           style={[styles.secondaryBtn, styles.signInBtn]}
@@ -2690,24 +2691,24 @@ export default function ChillyChatThreadScreen() {
         <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85} onPress={() => router.back()}>
           <Text style={styles.secondaryBtnText}>Back</Text>
         </TouchableOpacity>
-      </View>
+      </ChillywoodBrandedSurface>
     );
   }
 
   if (!thread) {
     return (
-      <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
+      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
         <Text style={styles.stateText}>{error ?? "This Chi'lly Chat thread is unavailable."}</Text>
         <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85} onPress={() => router.back()}>
           <Text style={styles.secondaryBtnText}>Back</Text>
         </TouchableOpacity>
-      </View>
+      </ChillywoodBrandedSurface>
     );
   }
 
   if (officialAccount) {
     return (
-      <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28, paddingHorizontal: 24 }]}>
+      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28, paddingHorizontal: 24 }]}>
         <Text style={styles.stateText}>Rachi now lives in Chi&apos;lly Circle.</Text>
         <Text style={[styles.stateText, styles.centeredStateBody]}>
           Rachi is your first official Chi&apos;lly Circle connection. Chi&apos;lly Chat is for direct threads with people.
@@ -2724,7 +2725,7 @@ export default function ChillyChatThreadScreen() {
         <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85} onPress={() => router.back()}>
           <Text style={styles.secondaryBtnText}>Back</Text>
         </TouchableOpacity>
-      </View>
+      </ChillywoodBrandedSurface>
     );
   }
 
@@ -2738,6 +2739,7 @@ export default function ChillyChatThreadScreen() {
     && iosNativePresentationGraceReadyInviteId !== incomingCallInviteId;
 
   return (
+    <ChillywoodBrandedSurface variant="chat" testID="chat-thread-branded-surface">
     <KeyboardAvoidingView
       style={[styles.screen, { paddingTop: safeAreaInsets.top + 8 }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -3003,6 +3005,7 @@ export default function ChillyChatThreadScreen() {
       <ScrollView
         style={styles.messages}
         contentContainerStyle={styles.messagesContent}
+        keyboardShouldPersistTaps="handled"
         testID="chat-thread-messages-scroll"
         accessibilityLabel="Chi'lly Chat messages"
       >
@@ -3301,13 +3304,13 @@ export default function ChillyChatThreadScreen() {
         onClose={() => setAttachmentSheetVisible(false)}
       />
     </KeyboardAvoidingView>
+    </ChillywoodBrandedSurface>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#060A12",
   },
   centered: {
     alignItems: "center",
@@ -3319,8 +3322,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 14,
     paddingHorizontal: 18,
-    paddingBottom: 16,
+    marginHorizontal: 12,
+    marginBottom: 12,
+    padding: 14,
     alignItems: "flex-start",
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(132,40,255,0.4)",
+    backgroundColor: "rgba(7,5,27,0.8)",
   },
   backText: {
     color: "#E2E9F7",
@@ -3329,6 +3338,8 @@ const styles = StyleSheet.create({
   },
   headerAvatarButton: {
     borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(0,168,255,0.48)",
   },
   headerAvatar: {
     width: 48,
@@ -3356,7 +3367,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   kicker: {
-    color: "#8894AB",
+    color: "#C5BCDE",
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1.15,
@@ -3391,8 +3402,8 @@ const styles = StyleSheet.create({
     gap: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: "rgba(102,61,190,0.48)",
+    backgroundColor: "rgba(17,15,42,0.7)",
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
@@ -3582,15 +3593,17 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: "rgba(102,61,190,0.62)",
+    backgroundColor: "rgba(17,15,42,0.82)",
     paddingVertical: 12,
     alignItems: "center",
   },
   joinBtn: {
     flex: 1.2,
     borderRadius: 14,
-    backgroundColor: "#F34B74",
+    borderWidth: 1,
+    borderColor: "rgba(91,214,255,0.62)",
+    backgroundColor: "#5B1DFF",
     paddingVertical: 12,
     alignItems: "center",
   },
@@ -3812,6 +3825,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingBottom: 16,
     gap: 11,
+    paddingTop: 4,
   },
   messageBubble: {
     maxWidth: "84%",
@@ -3822,13 +3836,15 @@ const styles = StyleSheet.create({
   },
   messageBubbleMe: {
     alignSelf: "flex-end",
-    backgroundColor: "#F34B74",
+    backgroundColor: "rgba(91,29,255,0.94)",
+    borderWidth: 1,
+    borderColor: "rgba(0,168,255,0.38)",
   },
   messageBubbleThem: {
     alignSelf: "flex-start",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "rgba(8,7,29,0.9)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(102,61,190,0.42)",
   },
   messageAuthor: {
     color: "#F4F8FF",
@@ -3883,8 +3899,8 @@ const styles = StyleSheet.create({
   emptyCard: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderColor: "rgba(102,61,190,0.42)",
+    backgroundColor: "rgba(7,5,27,0.82)",
     padding: 18,
     gap: 8,
     marginTop: 4,
@@ -3929,8 +3945,8 @@ const styles = StyleSheet.create({
     paddingTop: 11,
     paddingBottom: Platform.OS === "ios" ? 28 : 20,
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(6,10,18,0.96)",
+    borderTopColor: "rgba(132,40,255,0.44)",
+    backgroundColor: "rgba(7,5,27,0.96)",
   },
   composerKeyboardDocked: {
     // KeyboardAvoidingView already owns Android keyboard-height compensation.
@@ -4021,8 +4037,8 @@ const styles = StyleSheet.create({
     minHeight: 46,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(102,61,190,0.62)",
+    backgroundColor: "rgba(17,15,42,0.82)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -4031,8 +4047,8 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: "rgba(102,61,190,0.62)",
+    backgroundColor: "rgba(17,15,42,0.82)",
     color: "#F7FBFF",
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -4041,7 +4057,9 @@ const styles = StyleSheet.create({
   },
   sendBtn: {
     borderRadius: 14,
-    backgroundColor: "#F34B74",
+    borderWidth: 1,
+    borderColor: "rgba(91,214,255,0.58)",
+    backgroundColor: "#5B1DFF",
     paddingHorizontal: 16,
     paddingVertical: 13,
     alignItems: "center",

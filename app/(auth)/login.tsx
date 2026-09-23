@@ -4,7 +4,6 @@ import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  ImageBackground,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -12,7 +11,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from "react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
@@ -25,8 +23,11 @@ import { completePendingSignupProfile } from "../../_lib/signupProfileCompletion
 import { supabase } from "../../_lib/supabase";
 import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
 import { AppActionButton, AppStatusPill } from "../../components/ui/app-surface";
-
-const LOGIN_BACKGROUND_SOURCE = require("../../assets/images/chicago-skyline.jpg");
+import {
+  ChillywoodBrandedSurface,
+  ChillywoodBrandReserve,
+  ChillywoodGlassPanel,
+} from "../../components/ui/chillywood-branded-surface";
 
 function NeonSignInButton({ loading, onPress }: { loading: boolean; onPress: () => void }) {
   return (
@@ -66,7 +67,6 @@ export default function Login() {
   const router = useRouter();
   const params = useLocalSearchParams<{ redirectId?: string }>();
   const insets = useSafeAreaInsets();
-  const { height: viewportHeight } = useWindowDimensions();
   const scrollRef = useRef<ScrollView | null>(null);
   const signInLatchRef = useRef(createActionSingleFlightLatch());
   const redirectId = String(params.redirectId ?? "").trim();
@@ -74,7 +74,6 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const closedBeta = isClosedBetaEnvironment();
-  const brandReserveHeight = Math.max(170, Math.min(viewportHeight * 0.28, 280));
 
   const signIn = async () => {
     if (!email || !password) {
@@ -127,9 +126,7 @@ export default function Login() {
   };
 
   return (
-    <ImageBackground source={LOGIN_BACKGROUND_SOURCE} style={styles.background} resizeMode="cover">
-      <View style={styles.overlay} />
-
+    <ChillywoodBrandedSurface testID="auth-login-branded-surface">
       <KeyboardAvoidingView
         style={styles.keyboardShell}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -148,13 +145,8 @@ export default function Login() {
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          <View
-            accessibilityLabel="Chi'llywood. Stream the City."
-            accessibilityRole="header"
-            style={[styles.brandReserve, { minHeight: brandReserveHeight }]}
-            testID="auth-login-branding-clearance"
-          />
-          <View style={styles.card}>
+          <ChillywoodBrandReserve testID="auth-login-branding-clearance" />
+          <ChillywoodGlassPanel testID="auth-login-glass-panel">
             <View style={styles.headerRow}>
               <Text style={styles.kicker}>WELCOME BACK</Text>
               {closedBeta ? <AppStatusPill label="Closed Beta" tone="accent" /> : null}
@@ -234,47 +226,20 @@ export default function Login() {
                 Sign up
               </Link>
             </View>
-          </View>
+          </ChillywoodGlassPanel>
         </ScrollView>
       </KeyboardAvoidingView>
-    </ImageBackground>
+    </ChillywoodBrandedSurface>
   );
 }
 
 const styles = StyleSheet.create({
-  background: {
-    flex: 1,
-    backgroundColor: "#06070B",
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(4,4,20,0.48)",
-  },
   keyboardShell: {
     flex: 1,
   },
   container: {
     flexGrow: 1,
     paddingHorizontal: 20,
-  },
-  brandReserve: {
-    width: "100%",
-  },
-  card: {
-    alignSelf: "center",
-    width: "100%",
-    maxWidth: 560,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: "rgba(132,40,255,0.88)",
-    backgroundColor: "rgba(7,5,27,0.91)",
-    paddingHorizontal: 24,
-    paddingVertical: 28,
-    shadowColor: "#5B1DFF",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.55,
-    shadowRadius: 20,
-    elevation: 18,
   },
   headerRow: {
     flexDirection: "row",

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const login = readFileSync(new URL("../app/(auth)/login.tsx", import.meta.url), "utf8");
+const brandedSurface = readFileSync(new URL("../components/ui/chillywood-branded-surface.tsx", import.meta.url), "utf8");
 
 test("Sign In preserves the existing auth and navigation contract", () => {
   assert.equal(login.match(/supabase\.auth\.signInWithPassword/g)?.length, 1);
@@ -38,24 +39,29 @@ test("Sign In keeps the real controls accessible, keyboard-safe, and automation-
 });
 
 test("Sign In reserves a responsive unobstructed Chi'llywood branding zone", () => {
-  assert.match(login, /assets\/images\/chicago-skyline\.jpg/);
-  assert.match(login, /useWindowDimensions\(\)/);
-  assert.match(login, /Math\.max\(170, Math\.min\(viewportHeight \* 0\.28, 280\)\)/);
+  assert.match(brandedSurface, /assets\/images\/chicago-skyline\.jpg/);
+  assert.match(brandedSurface, /useWindowDimensions\(\)/);
+  assert.match(brandedSurface, /Math\.max\(170, Math\.min\(height \* 0\.28, 280\)\)/);
   assert.match(login, /testID="auth-login-branding-clearance"/);
-  assert.match(login, /accessibilityLabel="Chi'llywood\. Stream the City\."/);
+  assert.match(brandedSurface, /accessibilityLabel="Chi'llywood\. Stream the City\."/);
   assert.ok(
-    login.indexOf('testID="auth-login-branding-clearance"') < login.indexOf("<View style={styles.card}>"),
+    login.indexOf('testID="auth-login-branding-clearance"') < login.indexOf('testID="auth-login-glass-panel"'),
     "branding clearance must render before the Sign In card",
   );
-  assert.match(login, /maxWidth: 560/);
+  assert.match(brandedSurface, /maxWidth: 560/);
   assert.match(login, /flexGrow: 1/);
   assert.doesNotMatch(login, /position:\s*"absolute"[^}]+top:\s*\d+/s);
 });
 
 test("Sign In uses the approved Chicago-night glass and neon presentation", () => {
   for (const marker of [
-    'backgroundColor: "rgba(7,5,27,0.91)"',
-    'borderColor: "rgba(132,40,255,0.88)"',
+    'glassBackground: "rgba(7,5,27,0.91)"',
+    'glassBorder: "rgba(132,40,255,0.88)"',
+    'assets/images/chicago-skyline.jpg',
+  ]) assert.ok(brandedSurface.includes(marker), `missing approved shared Sign In presentation marker: ${marker}`);
+  for (const marker of [
+    'testID="auth-login-branded-surface"',
+    'testID="auth-login-glass-panel"',
     'stopColor="#7300D8"',
     'stopColor="#321CFF"',
     'stopColor="#00A8FF"',

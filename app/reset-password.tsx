@@ -23,6 +23,12 @@ import { consumeApplicationAuthInput, parseApplicationLink, registerVerifiedAppl
 import { reportRuntimeError } from "../_lib/logger";
 import { beginPasswordRecoverySessionQuarantine, cancelPasswordRecoverySessionQuarantine, clearQuarantinedPasswordRecoverySession, persistVerifiedPasswordRecoveryBinding } from "../_lib/session";
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "../_lib/supabase";
+import {
+  CHILLYWOOD_VISUAL,
+  ChillywoodBrandedSurface,
+  ChillywoodBrandReserve,
+  ChillywoodGlassPanel,
+} from "../components/ui/chillywood-branded-surface";
 import type { Database } from "../supabase/database.types";
 
 type RecoveryParams = {
@@ -540,176 +546,179 @@ export default function ResetPasswordScreen() {
   }, [confirmPassword, newPassword, recoveryAuthority, router, saving, status]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.keyboardShell}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
-        contentContainerStyle={[
-          styles.container,
-          {
-            paddingTop: Math.max(insets.top + 40, 72),
-            paddingBottom: Math.max(insets.bottom + 40, 72),
-          },
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <ChillywoodBrandedSurface testID="auth-reset-password-branded-surface">
+      <KeyboardAvoidingView
+        style={styles.keyboardShell}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <View style={styles.card}>
-          <Text style={styles.kicker}>CHI&apos;LLYWOOD</Text>
-          <Text style={styles.title}>Reset password</Text>
-          <Text style={styles.subtitle}>{statusMessage}</Text>
+        <ScrollView
+          contentContainerStyle={[
+            styles.container,
+            {
+              paddingTop: Math.max(insets.top + 32, 72),
+              paddingBottom: Math.max(insets.bottom + 96, 120),
+            },
+          ]}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <ChillywoodBrandReserve compact testID="auth-reset-password-branding-clearance" />
+          <ChillywoodGlassPanel testID="auth-reset-password-glass-panel">
+            <Text style={styles.kicker}>CHI&apos;LLYWOOD · ACCOUNT RECOVERY</Text>
+            <Text style={styles.title}>Reset password</Text>
+            <Text style={styles.subtitle}>{statusMessage}</Text>
 
-          {status === "checking" ? (
-            <View style={styles.statusRow}>
-              <ActivityIndicator color="#DC143C" />
-              <Text style={styles.statusText}>Opening reset link...</Text>
-            </View>
-          ) : null}
+            {status === "checking" ? (
+              <View style={styles.statusRow}>
+                <ActivityIndicator color={CHILLYWOOD_VISUAL.accentCrimson} />
+                <Text style={styles.statusText}>Opening reset link...</Text>
+              </View>
+            ) : null}
 
-          {status === "ready" ? (
-            <View testID="reset-password-sheet" collapsable={false}>
-              <TextInput
-                style={styles.input}
-                placeholder="New password"
-                placeholderTextColor="#7A859A"
-                autoCapitalize="none"
-                autoCorrect={false}
-                passwordRules="minlength: 8;"
-                returnKeyType="next"
-                secureTextEntry
-                textContentType="newPassword"
-                value={newPassword}
-                onChangeText={setNewPassword}
-                accessibilityLabel="New password"
-                testID="reset-password-new-password-input"
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Confirm new password"
-                placeholderTextColor="#7A859A"
-                autoCapitalize="none"
-                autoCorrect={false}
-                passwordRules="minlength: 8;"
-                returnKeyType="done"
-                secureTextEntry
-                textContentType="newPassword"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                onSubmitEditing={() => {
-                  void updatePassword();
-                }}
-                accessibilityLabel="Confirm new password"
-                testID="reset-password-confirm-password-input"
-              />
-              <Text
-                style={[
-                  styles.validationText,
-                  canSubmit ? styles.validationTextReady : styles.validationTextMuted,
-                ]}
-                testID="reset-password-validation-message"
-              >
-                {passwordValidationMessage}
-              </Text>
-              <Pressable
-                style={[styles.button, !canSubmit && styles.buttonDisabled]}
-                onPress={updatePassword}
-                accessibilityRole="button"
-                accessibilityLabel="Update password"
-                accessibilityState={{ disabled: !canSubmit, busy: saving }}
-                testID="reset-password-update-button"
-              >
-                <Text style={styles.buttonText}>{saving ? "Updating..." : "Update password"}</Text>
-              </Pressable>
-            </View>
-          ) : null}
+            {status === "ready" ? (
+              <View testID="reset-password-sheet" collapsable={false}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="New password"
+                  placeholderTextColor="#8E97AD"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  passwordRules="minlength: 8;"
+                  returnKeyType="next"
+                  secureTextEntry
+                  textContentType="newPassword"
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  accessibilityLabel="New password"
+                  testID="reset-password-new-password-input"
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Confirm new password"
+                  placeholderTextColor="#8E97AD"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  passwordRules="minlength: 8;"
+                  returnKeyType="done"
+                  secureTextEntry
+                  textContentType="newPassword"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  onSubmitEditing={() => {
+                    void updatePassword();
+                  }}
+                  accessibilityLabel="Confirm new password"
+                  testID="reset-password-confirm-password-input"
+                />
+                <Text
+                  style={[
+                    styles.validationText,
+                    canSubmit ? styles.validationTextReady : styles.validationTextMuted,
+                  ]}
+                  testID="reset-password-validation-message"
+                >
+                  {passwordValidationMessage}
+                </Text>
+                <Pressable
+                  style={[styles.button, !canSubmit && styles.buttonDisabled]}
+                  onPress={updatePassword}
+                  accessibilityRole="button"
+                  accessibilityLabel="Update password"
+                  accessibilityState={{ disabled: !canSubmit, busy: saving }}
+                  testID="reset-password-update-button"
+                >
+                  <Text style={styles.buttonText}>{saving ? "Updating..." : "Update password"}</Text>
+                </Pressable>
+              </View>
+            ) : null}
 
-          {status === "missing" || status === "failed" ? (
-            <View testID="reset-password-expired-state" collapsable={false}>
-              <Pressable
-                style={styles.button}
-                onPress={requestNewResetEmail}
-                onPressIn={requestNewResetEmail}
-                accessibilityRole="button"
-                accessibilityLabel="Request new reset email"
-                testID="reset-password-request-new-email-button"
-              >
-                <Text style={styles.buttonText}>Request new reset email</Text>
-              </Pressable>
-              <Pressable
-                style={styles.secondaryButton}
-                onPress={backToSignIn}
-                onPressIn={backToSignIn}
-                accessibilityRole="button"
-                accessibilityLabel="Back to sign in"
-                testID="reset-password-back-to-sign-in-button"
-              >
-                <Text style={styles.secondaryButtonText}>Back to sign in</Text>
-              </Pressable>
-            </View>
-          ) : null}
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            {status === "missing" || status === "failed" ? (
+              <View testID="reset-password-expired-state" collapsable={false}>
+                <Pressable
+                  style={styles.button}
+                  onPress={requestNewResetEmail}
+                  onPressIn={requestNewResetEmail}
+                  accessibilityRole="button"
+                  accessibilityLabel="Request new reset email"
+                  testID="reset-password-request-new-email-button"
+                >
+                  <Text style={styles.buttonText}>Request new reset email</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.secondaryButton}
+                  onPress={backToSignIn}
+                  onPressIn={backToSignIn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to sign in"
+                  testID="reset-password-back-to-sign-in-button"
+                >
+                  <Text style={styles.secondaryButtonText}>Back to sign in</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </ChillywoodGlassPanel>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </ChillywoodBrandedSurface>
   );
 }
 
 const styles = StyleSheet.create({
   keyboardShell: {
     flex: 1,
-    backgroundColor: "#06070B",
   },
   container: {
     flexGrow: 1,
-    backgroundColor: "#06070B",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-  },
-  card: {
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(12,13,19,0.96)",
-    padding: 22,
+    paddingHorizontal: 22,
   },
   kicker: {
-    color: "#7B869E",
-    fontSize: 10,
+    color: "#D2CFE2",
+    fontSize: 11,
     fontWeight: "900",
-    letterSpacing: 1.2,
-    marginBottom: 12,
+    letterSpacing: 1.8,
+    marginBottom: 16,
   },
   title: {
-    color: "#DC143C",
-    fontSize: 28,
+    color: CHILLYWOOD_VISUAL.textPrimary,
+    fontSize: 36,
     fontWeight: "900",
-    marginBottom: 10,
+    marginBottom: 14,
   },
   subtitle: {
-    color: "#A9B3C8",
-    fontSize: 13.5,
-    fontWeight: "600",
-    lineHeight: 20,
-    marginBottom: 20,
+    color: "#B8C2D8",
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 23,
+    marginBottom: 22,
   },
   input: {
-    backgroundColor: "rgba(255,255,255,0.04)",
+    minHeight: 58,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    borderRadius: 14,
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    borderRadius: 16,
     color: "white",
+    fontSize: 16,
+    fontWeight: "700",
     marginBottom: 14,
-    padding: 14,
+    paddingHorizontal: 16,
   },
   button: {
     alignItems: "center",
-    backgroundColor: "#DC143C",
-    borderRadius: 14,
+    backgroundColor: "#5B1DFF",
+    borderColor: "rgba(91,214,255,0.72)",
+    borderRadius: 16,
+    borderWidth: 1,
     marginTop: 6,
-    padding: 16,
+    minHeight: 56,
+    justifyContent: "center",
+    paddingHorizontal: 18,
+    paddingVertical: 14,
   },
   buttonDisabled: {
-    backgroundColor: "rgba(220,20,60,0.42)",
+    backgroundColor: "rgba(91,29,255,0.42)",
+    borderColor: "rgba(91,214,255,0.24)",
   },
   buttonText: {
     color: "white",
@@ -718,11 +727,15 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     alignItems: "center",
-    borderColor: "rgba(255,255,255,0.14)",
-    borderRadius: 14,
+    backgroundColor: "rgba(17,15,42,0.68)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    borderRadius: 16,
     borderWidth: 1,
+    justifyContent: "center",
     marginTop: 12,
-    padding: 15,
+    minHeight: 54,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
   },
   secondaryButtonText: {
     color: "#F4F7FC",

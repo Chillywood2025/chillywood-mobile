@@ -4,6 +4,7 @@ import {
   Linking,
   ActivityIndicator,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -15,6 +16,12 @@ import { clearExactLocalAuthSession, readCurrentAccountSessionAuthority, type Lo
 import { consumeApplicationAuthInput, parseApplicationLink, registerVerifiedApplicationAuthInput } from "../_lib/appLinks";
 import { reportRuntimeError } from "../_lib/logger";
 import { supabase } from "../_lib/supabase";
+import {
+  CHILLYWOOD_VISUAL,
+  ChillywoodBrandedSurface,
+  ChillywoodBrandReserve,
+  ChillywoodGlassPanel,
+} from "../components/ui/chillywood-branded-surface";
 
 type AuthCallbackParams = {
   code?: string | string[];
@@ -354,74 +361,71 @@ export default function AuthCallbackScreen() {
   }, [callbackState, urlHydrated]);
 
   return (
-    <View
-      style={[
-        styles.screen,
-        {
-          paddingTop: Math.max(insets.top + 28, 56),
-          paddingBottom: Math.max(insets.bottom + 28, 56),
-        },
-      ]}
-    >
-      <View style={styles.card}>
-        <Text style={styles.kicker}>CHI&apos;LLYWOOD</Text>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.message}>{message}</Text>
-        {checking ? (
-          <View style={styles.statusRow}>
-            <ActivityIndicator color="#DC143C" />
-            <Text style={styles.statusText}>Checking link...</Text>
-          </View>
-        ) : (
-          <View style={styles.actions}>
-            <Pressable
-              style={styles.button}
-              onPress={goToLogin}
-              accessibilityRole="button"
-              accessibilityLabel="Go to login"
-            >
-              <Text style={styles.buttonText}>Go to login</Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
-    </View>
+    <ChillywoodBrandedSurface testID="auth-callback-branded-surface">
+      <ScrollView
+        bounces={false}
+        contentContainerStyle={[
+          styles.screen,
+          {
+            paddingTop: Math.max(insets.top + 32, 72),
+            paddingBottom: Math.max(insets.bottom + 72, 96),
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <ChillywoodBrandReserve compact testID="auth-callback-branding-clearance" />
+        <ChillywoodGlassPanel testID="auth-callback-glass-panel">
+          <Text style={styles.kicker}>CHI&apos;LLYWOOD · ACCOUNT ACCESS</Text>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.message}>{message}</Text>
+          {checking ? (
+            <View style={styles.statusRow}>
+              <ActivityIndicator color={CHILLYWOOD_VISUAL.accentCrimson} />
+              <Text style={styles.statusText}>Checking link...</Text>
+            </View>
+          ) : (
+            <View style={styles.actions}>
+              <Pressable
+                style={styles.button}
+                onPress={goToLogin}
+                accessibilityRole="button"
+                accessibilityLabel="Go to login"
+                testID="auth-callback-go-to-login-button"
+              >
+                <Text style={styles.buttonText}>Go to login</Text>
+              </Pressable>
+            </View>
+          )}
+        </ChillywoodGlassPanel>
+      </ScrollView>
+    </ChillywoodBrandedSurface>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
-    backgroundColor: "#06070B",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-  },
-  card: {
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(12,13,19,0.96)",
-    padding: 22,
+    flexGrow: 1,
+    paddingHorizontal: 22,
   },
   kicker: {
-    color: "#7B869E",
-    fontSize: 10,
+    color: "#D2CFE2",
+    fontSize: 11,
     fontWeight: "900",
-    letterSpacing: 1.2,
-    marginBottom: 12,
+    letterSpacing: 1.8,
+    marginBottom: 16,
   },
   title: {
-    color: "#DC143C",
-    fontSize: 28,
+    color: CHILLYWOOD_VISUAL.textPrimary,
+    fontSize: 36,
     fontWeight: "900",
-    marginBottom: 10,
+    marginBottom: 14,
   },
   message: {
-    color: "#A9B3C8",
-    fontSize: 14,
-    fontWeight: "600",
-    lineHeight: 21,
-    marginBottom: 20,
+    color: "#B8C2D8",
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 23,
+    marginBottom: 22,
   },
   statusRow: {
     alignItems: "center",
@@ -438,9 +442,11 @@ const styles = StyleSheet.create({
   },
   button: {
     alignItems: "center",
-    backgroundColor: "#DC143C",
-    borderRadius: 14,
-    minHeight: 50,
+    backgroundColor: "#5B1DFF",
+    borderColor: "rgba(91,214,255,0.72)",
+    borderRadius: 16,
+    borderWidth: 1,
+    minHeight: 56,
     justifyContent: "center",
     paddingHorizontal: 18,
     paddingVertical: 14,

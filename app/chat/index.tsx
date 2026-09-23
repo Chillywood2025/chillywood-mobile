@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
+import { ChillywoodBrandedSurface } from "../../components/ui/chillywood-branded-surface";
 
 import { readAccountAccessStatus, type AccountAccessStatusReadback } from "../../_lib/accountAccess";
 import { trackEvent } from "../../_lib/analytics";
@@ -732,16 +733,16 @@ export default function ChillyChatInboxScreen() {
 
   if (authLoading || loading) {
     return (
-      <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
+      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
         <ActivityIndicator size="small" color="#F34B74" />
         <Text style={styles.stateText}>{authLoading ? "Checking Chi'lly Chat access..." : "Loading Chi'lly Chat..."}</Text>
-      </View>
+      </ChillywoodBrandedSurface>
     );
   }
 
   if (!isSignedIn) {
     return (
-      <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
+      <ChillywoodBrandedSurface variant="chat" style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
         <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>Sign in to open Chi&apos;lly Chat</Text>
           <Text style={styles.emptyBody}>
@@ -755,13 +756,14 @@ export default function ChillyChatInboxScreen() {
             <Text style={styles.quickActionAccentButtonText}>Sign In</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ChillywoodBrandedSurface>
     );
   }
 
   if (restrictedAccess) {
     return (
-      <View
+      <ChillywoodBrandedSurface
+        variant="chat"
         style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}
         testID="chat-access-restricted-state"
         accessibilityLabel="Chi'lly Chat account access restricted"
@@ -783,20 +785,28 @@ export default function ChillyChatInboxScreen() {
             <Text style={styles.quickActionAccentButtonText}>Support</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ChillywoodBrandedSurface>
     );
   }
 
   return (
-    <View
+    <ChillywoodBrandedSurface
+      variant="chat"
       style={[styles.screen, { paddingTop: safeAreaInsets.top + 12 }]}
+      testID="chat-inbox-branded-surface"
+    >
+      <View
       testID="chat-inbox-screen"
       accessibilityLabel="Chi'lly Chat inbox screen"
+      style={styles.screen}
     >
       <FlatList
         data={visibleThreads}
         keyExtractor={(item) => item.threadId}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: Math.max(safeAreaInsets.bottom + 38, 52) },
+        ]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadThreads(true)} tintColor="#F34B74" />}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={(
@@ -920,14 +930,14 @@ export default function ChillyChatInboxScreen() {
           </TouchableOpacity>
         ) : null}
       />
-    </View>
+      </View>
+    </ChillywoodBrandedSurface>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#060A12",
   },
   centered: {
     alignItems: "center",
@@ -941,7 +951,16 @@ const styles = StyleSheet.create({
   },
   header: {
     gap: 9,
-    paddingBottom: 18,
+    marginBottom: 10,
+    padding: 16,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(132,40,255,0.42)",
+    backgroundColor: "rgba(7,5,27,0.78)",
+    shadowColor: "#3F21FF",
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
   },
   headerMetaRow: {
     flexDirection: "row",
@@ -951,8 +970,8 @@ const styles = StyleSheet.create({
   headerPill: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: "rgba(110,33,255,0.34)",
+    backgroundColor: "rgba(17,15,42,0.7)",
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
@@ -1063,8 +1082,8 @@ const styles = StyleSheet.create({
     gap: 10,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.055)",
+    borderColor: "rgba(102,61,190,0.66)",
+    backgroundColor: "rgba(17,15,42,0.76)",
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
@@ -1253,14 +1272,14 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   kicker: {
-    color: "#8894AB",
+    color: "#C5BCDE",
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1.15,
   },
   title: {
     color: "#F8FBFF",
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: "900",
   },
   body: {
@@ -1273,18 +1292,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    borderRadius: 14,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 8,
-    shadowOpacity: 0,
-    shadowRadius: 0,
+    borderColor: "rgba(102,61,190,0.38)",
+    backgroundColor: "rgba(8,7,29,0.82)",
+    padding: 11,
+    shadowColor: "#241DFF",
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 0 },
   },
   threadCardUnread: {
-    borderColor: "rgba(243,75,116,0.26)",
-    backgroundColor: "rgba(243,75,116,0.08)",
+    borderColor: "rgba(243,75,116,0.56)",
+    backgroundColor: "rgba(70,13,49,0.82)",
   },
   threadCardOfficial: {
     borderColor: "rgba(242,194,91,0.24)",
@@ -1295,6 +1315,8 @@ const styles = StyleSheet.create({
   },
   avatarButton: {
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(0,168,255,0.42)",
   },
   avatar: {
     width: 40,
@@ -1558,11 +1580,11 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   emptyCard: {
-    borderRadius: 10,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.03)",
-    padding: 10,
+    borderColor: "rgba(102,61,190,0.44)",
+    backgroundColor: "rgba(7,5,27,0.82)",
+    padding: 18,
     gap: 8,
     marginTop: 10,
   },

@@ -1,7 +1,8 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, AppState, Linking, Platform, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
+import { ActivityIndicator, Alert, AppState, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
 import { restoreScheduledAccountDeletion } from "../_lib/accountDeletionRequests";
@@ -112,6 +113,7 @@ import DevDebugOverlay from "../components/dev/dev-debug-overlay";
 import { RootErrorBoundary } from "../components/system/root-error-boundary";
 import { RuntimeUnavailableScreen } from "../components/system/runtime-unavailable-screen";
 import InterstitialAdController from "../components/ads/InterstitialController";
+import { ChillywoodBrandedSurface, ChillywoodGlassPanel } from "../components/ui/chillywood-branded-surface";
 
 const PUBLIC_LEGAL_PATHS = new Set<string>(APPLICATION_LEGAL_PATHS);
 const IOS_NATIVE_PRESENTATION_GRACE_MS = 1_500;
@@ -1480,8 +1482,8 @@ function AccountRestoreOnlyScreen() {
     } finally { setBusy(false); }
   };
   return (
-    <View style={styles.legalGateScreen}>
-      <View style={styles.legalGateCard}>
+    <ChillywoodBrandedSurface style={[styles.legalBrandedGateScreen, styles.legalGateScroll]} testID="account-restore-branded-surface" variant="legal">
+      <ChillywoodGlassPanel style={styles.legalGateCard} testID="account-restore-glass-panel" variant="legal">
         <Text style={styles.legalGateKicker}>ACCOUNT DELETION SCHEDULED</Text>
         <Text style={styles.legalGateTitle}>Restore or sign out</Text>
         <Text style={styles.legalGateBody}>Private features and notifications remain off. Restore this account before continuing.</Text>
@@ -1492,8 +1494,8 @@ function AccountRestoreOnlyScreen() {
         <TouchableOpacity style={styles.legalGateSecondary} onPress={() => { void supabase.auth.signOut(); }}>
           <Text style={styles.legalGateSecondaryText}>Sign out</Text>
         </TouchableOpacity>
-      </View>
-    </View>
+      </ChillywoodGlassPanel>
+    </ChillywoodBrandedSurface>
   );
 }
 
@@ -1501,6 +1503,7 @@ function LegalAcceptanceScreen({ readback, onAccepted, onRetry }: {
   readback: LegalRequirementsReadback | null; onAccepted: (value: LegalRequirementsReadback) => void; onRetry: () => void;
 }) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { authority } = useSession();
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -1516,8 +1519,23 @@ function LegalAcceptanceScreen({ readback, onAccepted, onRetry }: {
   };
 
   return (
-    <View style={styles.legalGateScreen}>
-      <View style={styles.legalGateCard}>
+    <ChillywoodBrandedSurface
+      style={styles.legalBrandedGateScreen}
+      testID="legal-acceptance-branded-surface"
+      variant="legal"
+    >
+      <ScrollView
+        contentContainerStyle={[
+          styles.legalGateScroll,
+          {
+            paddingTop: Math.max(insets.top + 24, 40),
+            paddingBottom: Math.max(insets.bottom + 24, 40),
+          },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+      <ChillywoodGlassPanel style={styles.legalGateCard} testID="legal-acceptance-glass-panel" variant="legal">
         <Text style={styles.legalGateKicker}>ACCOUNT REQUIREMENT</Text>
         <Text style={styles.legalGateTitle}>Review current policies</Text>
         <Text style={styles.legalGateBody}>Acceptance is server-recorded for this exact account, version, U.S. market, and session.</Text>
@@ -1535,14 +1553,19 @@ function LegalAcceptanceScreen({ readback, onAccepted, onRetry }: {
         )}
         {readback ? (
           <TouchableOpacity style={styles.legalGateConfirm} onPress={() => setConfirmed((value) => !value)}
-            accessibilityRole="checkbox" accessibilityState={{ checked: confirmed }}>
+            accessibilityLabel="Accept every current Chi'llywood policy version"
+            accessibilityRole="checkbox" accessibilityState={{ checked: confirmed }}
+            testID="legal-acceptance-checkbox">
             <Text style={styles.legalGateCheck}>{confirmed ? "✓" : ""}</Text>
             <Text style={styles.legalGateConfirmText}>I reviewed and accept every policy version listed above.</Text>
           </TouchableOpacity>
         ) : null}
         {error ? <Text style={styles.legalGateError}>{error}</Text> : null}
         <TouchableOpacity style={[styles.legalGateButton, (!readback || !confirmed || busy) && styles.legalGateButtonDisabled]}
-          disabled={!readback || !confirmed || busy} onPress={() => { void accept(); }} accessibilityRole="button">
+          disabled={!readback || !confirmed || busy} onPress={() => { void accept(); }}
+          accessibilityLabel="Accept current policies and continue" accessibilityRole="button"
+          accessibilityState={{ busy, disabled: !readback || !confirmed || busy }}
+          testID="legal-acceptance-submit-button">
           <Text style={styles.legalGateButtonText}>{busy ? "Verifying…" : "Accept and continue"}</Text>
         </TouchableOpacity>
         {!readback ? (
@@ -1550,11 +1573,13 @@ function LegalAcceptanceScreen({ readback, onAccepted, onRetry }: {
             <Text style={styles.legalGateSecondaryText}>Retry verification</Text>
           </TouchableOpacity>
         ) : null}
-        <TouchableOpacity style={styles.legalGateSecondary} onPress={() => { void supabase.auth.signOut(); }} accessibilityRole="button">
+        <TouchableOpacity style={styles.legalGateSecondary} onPress={() => { void supabase.auth.signOut(); }}
+          accessibilityLabel="Sign out instead of accepting current policies" accessibilityRole="button">
           <Text style={styles.legalGateSecondaryText}>Sign out</Text>
         </TouchableOpacity>
-      </View>
-    </View>
+      </ChillywoodGlassPanel>
+      </ScrollView>
+    </ChillywoodBrandedSurface>
   );
 }
 
@@ -1912,21 +1937,21 @@ const styles = StyleSheet.create({
     maxWidth: 320,
     textAlign: "center",
   },
-  legalGateScreen: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#05060A", padding: 22 },
-  legalGateCard: { width: "100%", maxWidth: 520, borderRadius: 22, borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)", backgroundColor: "#0C0E14", gap: 12, padding: 22 },
-  legalGateKicker: { color: "#DC143C", fontSize: 11, fontWeight: "900", letterSpacing: 1 },
-  legalGateTitle: { color: "#FFFFFF", fontSize: 24, fontWeight: "900" },
+  legalBrandedGateScreen: { flex: 1 },
+  legalGateScroll: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 22 },
+  legalGateCard: { gap: 14 },
+  legalGateKicker: { color: "#D2CFE2", fontSize: 11, fontWeight: "900", letterSpacing: 2.1 },
+  legalGateTitle: { color: "#FFFFFF", fontSize: 30, fontWeight: "900" },
   legalGateBody: { color: "#AAB4C8", fontSize: 14, fontWeight: "600", lineHeight: 20 },
-  legalGatePolicy: { borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", padding: 12 },
+  legalGatePolicy: { borderRadius: 16, borderWidth: 1, borderColor: "rgba(102,61,190,0.62)", backgroundColor: "rgba(17,15,42,0.64)", padding: 14 },
   legalGatePolicyTitle: { color: "#F4F7FC", fontSize: 14, fontWeight: "800" },
-  legalGatePolicyVersion: { color: "#8E9AB0", fontSize: 12, fontWeight: "600", marginTop: 3 },
+  legalGatePolicyVersion: { color: "#AAA3C8", fontSize: 12, fontWeight: "700", marginTop: 3 },
   legalGateConfirm: { alignItems: "center", flexDirection: "row", gap: 10, paddingVertical: 4 },
-  legalGateCheck: { width: 24, height: 24, borderRadius: 6, borderWidth: 1,
-    borderColor: "#DC143C", color: "#FFFFFF", textAlign: "center" },
+  legalGateCheck: { width: 26, height: 26, borderRadius: 8, borderWidth: 1,
+    borderColor: "#7A4DFF", backgroundColor: "rgba(110,33,255,0.2)", color: "#FFFFFF", textAlign: "center" },
   legalGateConfirmText: { color: "#E6EAF2", flex: 1, fontSize: 13, fontWeight: "700", lineHeight: 18 },
   legalGateError: { color: "#FFB4C1", fontSize: 13, fontWeight: "700", lineHeight: 18 },
-  legalGateButton: { alignItems: "center", backgroundColor: "#DC143C", borderRadius: 12, padding: 14 },
+  legalGateButton: { minHeight: 54, alignItems: "center", justifyContent: "center", backgroundColor: "#5B1DFF", borderRadius: 16, borderWidth: 1, borderColor: "rgba(91,214,255,0.62)", padding: 14 },
   legalGateButtonDisabled: { opacity: 0.45 },
   legalGateButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
   legalGateSecondary: { alignItems: "center", padding: 8 },
