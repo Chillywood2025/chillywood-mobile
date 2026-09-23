@@ -11,7 +11,7 @@ import { ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2, ASSURANCE_CONTROL_PLANE_CONSO
 import { canonicalGitText, canonicalReceiptEvidenceWireProjection, classifyGitHubExecutionIdentity, comparePhase1FinalSourceEvidence, compareReceiptEvidenceSemantics, evaluateTerminalVerifierRepairHistory, extractPhase1FinalSourceSemanticEnvelope, finalReceiptMarker, finiteTaskEffectiveReservationAuthorityValid, finiteTaskLeaseEffectivelyTerminal, finiteTaskPostMergeTransitionAuthorityValid, HISTORICAL_PENDING_DOCTRINE_TRANSITION_V1, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_HISTORY, HISTORICAL_TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, normalizeReceiptEvidenceSemantics, observeLiveFiniteTaskEffectiveReservation, observePublicGitHubPullRequest, parseProtectedPullRequestMergeSubject, PENDING_TERMINAL_TRANSITION_CHAIN_BOOTSTRAP_V1, PHASE1_FINAL_SOURCE_PAYLOAD_KEYS, PHASE1_FINAL_SOURCE_PAYLOAD_KEYS_V2, phase1FinalSourceSemanticEnvelope, RECEIPT_SEMANTIC_COMPATIBILITY_DISPOSITIONS, RECEIPT_SEMANTIC_COMPATIBILITY_POLICY_V1, registerVerifiedFiniteTaskImplementationLifecycle, registerVerifiedFiniteTaskPostMergeTransition, renderCurrentState, renderNextTask, resolveFiniteTaskEffectiveReservation, selectCurrentImmutableEvidence, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_CLASSIFICATION, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS, TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE, validateFiniteTaskLeaseRegistry, verifyFiniteTaskFinalSourceEligibility, verifyFiniteTaskMergeProvenance } from "./lib.mjs";
 import { derivePhase1LifecycleGeneration, inspectPhase1AggregateEvidence, PHASE1_EVIDENCE_STAGES, PHASE1_MODES, resolveProtectedPhase1AdmissionEvidence, verifyPhase1AggregateEvidence, verifyProtectedPhase1PublisherProvisioningReadback } from "./phase1-admission.mjs";
 import { deriveFiniteTaskPrRiskAuthority, evaluateDraftSourceReadinessScope, validatePullRequestEventIdentity } from "./pr-scope-lib.mjs";
-import { validateAssuranceSelfMaintenance } from "./control-plane-lifecycle.mjs";
+import { authorizeCanonicalGeneratedAssuranceCompanionTransition, validateAssuranceSelfMaintenance } from "./control-plane-lifecycle.mjs";
 import {
   ACTIVE_POLICY_STATUS,
   FINITE_TASK_ADMISSION_FINAL_SOURCE_V2_MARKER,
@@ -6319,6 +6319,30 @@ export function resolvePhase1SourceAuthorityEligibility({ repository, identity, 
     scopeHash,
     findings: [...new Set(findings)].sort(),
   };
+}
+
+export function resolveCanonicalGeneratedAssuranceCompanionRiskContext({ repository, identity, exactDiff, changedPaths, root = REPOSITORY_ROOT } = {}) {
+  let currentTruth = null;
+  let currentStateText = null;
+  let nextTaskText = null;
+  try {
+    currentTruth = readJson(root, "config/assurance/current-truth-v1.json");
+    currentStateText = fs.readFileSync(path.join(root, "CURRENT_STATE.md"), "utf8");
+    nextTaskText = fs.readFileSync(path.join(root, "NEXT_TASK.md"), "utf8");
+  } catch {
+    return { ok: false, findings: ["CANONICAL_GENERATED_COMPANION_READ_FAILED"], context: null };
+  }
+  const sourceAuthorityProof = resolvePhase1SourceAuthorityEligibility({ repository, identity, root });
+  return authorizeCanonicalGeneratedAssuranceCompanionTransition({
+    changedPaths,
+    exactDiff,
+    sourceAuthorityProof,
+    currentTruth,
+    currentStateText,
+    nextTaskText,
+    canonicalCurrentStateText: renderCurrentState(currentTruth),
+    canonicalNextTaskText: renderNextTask(currentTruth),
+  });
 }
 
 const PHASE1_TYPED_SOURCE_AUTHORITY_TYPES = new Set([

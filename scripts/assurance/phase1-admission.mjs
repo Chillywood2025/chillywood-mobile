@@ -1597,7 +1597,15 @@ async function finalizeAdmission({ repository, prNumber, readToken, publisher, s
       }
     }
     const boundaryAssessment = boundaryAssessments.length === 1 ? boundaryAssessments[0] : null;
-    const risk = classifyDiffRisk({ changedPaths: paths, boundaryAssessment, exactDiff, policy: lifecyclePolicy });
+    if (typeof engine.resolveCanonicalGeneratedAssuranceCompanionRiskContext !== "function") throw new Error("PHASE1_CANONICAL_GENERATED_COMPANION_RESOLVER_MISSING");
+    const assuranceTransition = engine.resolveCanonicalGeneratedAssuranceCompanionRiskContext({ repository, identity, exactDiff, changedPaths: paths, root });
+    const risk = classifyDiffRisk({
+      changedPaths: paths,
+      boundaryAssessment,
+      exactDiff,
+      assuranceTransitionContext: assuranceTransition.ok ? assuranceTransition.context : null,
+      policy: lifecyclePolicy,
+    });
     return { lifecyclePolicy, riskClassification: risk.classification, lifecycleStage: pr.draft === true ? "AUTHORIZED_IMPLEMENTATION" : "FROZEN_CANDIDATE" };
   });
   const input = {

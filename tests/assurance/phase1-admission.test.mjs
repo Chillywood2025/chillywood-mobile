@@ -763,6 +763,16 @@ test("Phase 1 keeps useful product checks and retires unfinished authority compa
   assert.match(library, /const candidateRoot = process\.cwd\(\);[\s\S]*validateUntrustedAssuranceControlTaskContextObservation/u);
 });
 
+test("Phase 1 risk classification consumes only the authenticated canonical generated-companion resolver", () => {
+  const publisher = fs.readFileSync(new URL("../../scripts/assurance/phase1-admission.mjs", import.meta.url), "utf8");
+  const engine = fs.readFileSync(new URL("../../scripts/assurance/engineering-closure.mjs", import.meta.url), "utf8");
+  assert.match(publisher, /resolveCanonicalGeneratedAssuranceCompanionRiskContext\(\{ repository, identity, exactDiff, changedPaths: paths, root \}\)/u);
+  assert.match(publisher, /assuranceTransitionContext: assuranceTransition\.ok \? assuranceTransition\.context : null/u);
+  assert.match(engine, /sourceAuthorityProof = resolvePhase1SourceAuthorityEligibility\(\{ repository, identity, root \}\)/u);
+  assert.match(engine, /canonicalCurrentStateText: renderCurrentState\(currentTruth\)/u);
+  assert.match(engine, /canonicalNextTaskText: renderNextTask\(currentTruth\)/u);
+});
+
 test("every Phase 1 step that invokes the authenticated source resolver receives the read-only GitHub token", () => {
   const workflow = fs.readFileSync(new URL("../../.github/workflows/phase1-ci.yml", import.meta.url), "utf8");
   const steps = workflow.match(/^      - name: [^\n]+\n[\s\S]*?(?=^      - name: |^  [a-z][a-z0-9-]*:|(?![\s\S]))/gmu) ?? [];
