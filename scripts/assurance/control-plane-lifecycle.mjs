@@ -10,6 +10,8 @@ export const EXCEPTIONAL_MERGE_CLASSIFICATION = "MERGED_BY_EXPLICIT_OWNER_BYPASS
 export const OWNER_DEFERRED_CLASSIFICATION = "OWNER_DEFERRED";
 export const NORMAL_MERGE_CLASSIFICATION = "MERGED_NORMAL_VERIFIED";
 export const EXCEPTIONAL_OWNER_TERMINAL_MARKER = "<!-- chillywood-exceptional-owner-bypass-terminal-v2 -->";
+export const EXCEPTIONAL_OWNER_TERMINAL_MARKER_V3 = "<!-- chillywood-exceptional-owner-bypass-terminal-v3 -->";
+const REPOSITORY_REVIEW_MARKER = "<!-- chillywood-assurance-repository-review-v1 -->";
 
 export const LIFECYCLE_STATES = Object.freeze([
   "NO_ACTIVE_TASK", "OWNER_INTENT", "FINITE_TASK_ADMISSION", "AUTHORIZED_IMPLEMENTATION",
@@ -87,6 +89,8 @@ const protectedPrScopeRisk = (paths, prScopePolicy) => {
   return { valid: true, complete, highRisk, domains: affected };
 };
 const exactPathSet = (actual, expected) => stableLifecycleJson([...new Set(actual ?? [])].sort()) === stableLifecycleJson([...expected].sort());
+const canonicalGitText = (value) => value.replace(/\r\n?|\n/gu, "\n").trim();
+const fileHash = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const exactDiffIdentityValid = (exactDiff, paths) => exactKeys(exactDiff, ["repository", "implementationPr", "baseSha", "headSha", "sourceTree", "changedPathSha256", "patchSha256"])
   && exactDiff?.repository === "Chillywood2025/chillywood-mobile"
   && Number.isInteger(exactDiff?.implementationPr) && exactDiff.implementationPr > 0
@@ -377,20 +381,63 @@ export function validateAssuranceSelfMaintenance({ changedPaths = [], policy, pr
   return { ok: findings.length === 0, classification: "BOUNDED_ASSURANCE_SELF_MAINTENANCE_V2", findings, authority: closedAuthority };
 }
 
+const v2ExceptionalKeys = ["schemaVersion", "classification", "repository", "taskId", "leaseId", "implementationPr", "implementationBranch", "protectedBase", "sourceHead", "sourceTree", "patchSha256", "changedPathSha256", "mergeSha", "mergeTree", "mergeParents", "normalPathEvidence", "hostedSecurity", "physicalProof", "ownerReceipt", "gitEvidence", "ruleset", "authority", "evidenceHash"];
+const v3ExceptionalKeys = [...v2ExceptionalKeys, "independentEvidence"];
+const reviewEvidenceKeys = ["commentId", "author", "authorAssociation", "createdAt", "updatedAt", "canonicalBodyHash", "subjectHash", "repository", "implementationPr", "leaseId", "protectedBase", "reviewedHead", "reviewedTree", "changedPathHash", "diffHash", "disposition"];
+const securityEvidenceKeys = ["scanId", "targetId", "baseRevision", "headRevision", "snapshotDigest", "status", "completedAt", "sealedAt", "findingsCount", "coverageCompleteness", "findingsSha256", "coverageSha256", "manifestSha256"];
+
+function exceptionalReviewProjectionValid(outcome, evidence) {
+  return exactKeys(evidence, reviewEvidenceKeys)
+    && Number.isInteger(evidence.commentId) && evidence.commentId > 0
+    && evidence.author === "Chillywood2025" && evidence.authorAssociation === "OWNER"
+    && evidence.createdAt === evidence.updatedAt && Number.isFinite(Date.parse(evidence.createdAt))
+    && Date.parse(evidence.createdAt) <= Date.parse(outcome?.ruleset?.mergeAt)
+    && [evidence.canonicalBodyHash, evidence.subjectHash, evidence.changedPathHash, evidence.diffHash].every((value) => sha256.test(value ?? ""))
+    && evidence.repository === outcome?.repository && evidence.implementationPr === outcome?.implementationPr && evidence.leaseId === outcome?.leaseId
+    && evidence.protectedBase === outcome?.protectedBase && evidence.reviewedHead === outcome?.sourceHead && evidence.reviewedTree === outcome?.sourceTree
+    && stableLifecycleJson(evidence.disposition) === stableLifecycleJson({ P0: 0, P1: 0, launchImpactingP2: 0 });
+}
+
+function exceptionalSecurityProjectionValid(outcome, evidence) {
+  return exactKeys(evidence, securityEvidenceKeys)
+    && [evidence.scanId, evidence.targetId].every((value) => typeof value === "string" && value.length > 0)
+    && evidence.baseRevision === outcome?.protectedBase && evidence.headRevision === outcome?.sourceHead
+    && /^codex-security-snapshot\/v1:sha256:[0-9a-f]{64}$/u.test(evidence.snapshotDigest ?? "")
+    && evidence.status === "completed" && evidence.completedAt === evidence.sealedAt && Number.isFinite(Date.parse(evidence.sealedAt))
+    && Date.parse(evidence.sealedAt) <= Date.parse(outcome?.ruleset?.mergeAt)
+    && evidence.findingsCount === 0 && evidence.coverageCompleteness === "complete"
+    && [evidence.findingsSha256, evidence.coverageSha256, evidence.manifestSha256].every((value) => sha256.test(value ?? ""));
+}
+
 export function validateExceptionalMergeOutcome(outcome, { lease, ownerReceipt, gitEvidence, rulesetEvidence } = {}) {
   const findings = [];
-  const required = ["schemaVersion", "classification", "repository", "taskId", "leaseId", "implementationPr", "implementationBranch", "protectedBase", "sourceHead", "sourceTree", "patchSha256", "changedPathSha256", "mergeSha", "mergeTree", "mergeParents", "normalPathEvidence", "hostedSecurity", "physicalProof", "ownerReceipt", "gitEvidence", "ruleset", "authority", "evidenceHash"];
-  if (!exactKeys(outcome, required) || outcome?.schemaVersion !== 2 || outcome?.classification !== EXCEPTIONAL_MERGE_CLASSIFICATION || outcome?.repository !== "Chillywood2025/chillywood-mobile") findings.push("EXCEPTIONAL_OUTCOME_SCHEMA_INVALID");
+  const version = outcome?.schemaVersion;
+  const required = version === 3 ? v3ExceptionalKeys : v2ExceptionalKeys;
+  if (!exactKeys(outcome, required) || ![2, 3].includes(version) || outcome?.classification !== EXCEPTIONAL_MERGE_CLASSIFICATION || outcome?.repository !== "Chillywood2025/chillywood-mobile") findings.push("EXCEPTIONAL_OUTCOME_SCHEMA_INVALID");
   if (!lease || outcome?.taskId !== lease.leaseId || outcome?.leaseId !== lease.leaseId || outcome?.implementationPr !== lease.implementationPr || outcome?.implementationBranch !== lease.implementationBranch) findings.push("EXCEPTIONAL_OUTCOME_LEASE_BINDING_INVALID");
   if (![outcome?.protectedBase, outcome?.sourceHead, outcome?.sourceTree, outcome?.mergeSha, outcome?.mergeTree].every((value) => sha40.test(value ?? "")) || ![outcome?.patchSha256, outcome?.changedPathSha256].every((value) => sha256.test(value ?? ""))) findings.push("EXCEPTIONAL_OUTCOME_SOURCE_IDENTITY_INVALID");
   if (stableLifecycleJson(outcome?.mergeParents) !== stableLifecycleJson([outcome?.protectedBase, outcome?.sourceHead]) || outcome?.mergeTree !== outcome?.sourceTree) findings.push("EXCEPTIONAL_OUTCOME_MERGE_IDENTITY_INVALID");
   gitEvidence ??= outcome?.gitEvidence;
   ownerReceipt ??= outcome?.ownerReceipt;
   rulesetEvidence ??= outcome?.ruleset?.evidence;
-  if (stableLifecycleJson(gitEvidence) !== stableLifecycleJson({ protectedBase: outcome?.protectedBase, sourceHead: outcome?.sourceHead, sourceTree: outcome?.sourceTree, mergeSha: outcome?.mergeSha, mergeTree: outcome?.mergeTree, mergeParents: outcome?.mergeParents, patchSha256: outcome?.patchSha256, changedPathSha256: outcome?.changedPathSha256 })) findings.push("EXCEPTIONAL_OUTCOME_GIT_READBACK_INVALID");
+  const expectedGit = version === 3 ? outcome?.gitEvidence : { protectedBase: outcome?.protectedBase, sourceHead: outcome?.sourceHead, sourceTree: outcome?.sourceTree, mergeSha: outcome?.mergeSha, mergeTree: outcome?.mergeTree, mergeParents: outcome?.mergeParents, patchSha256: outcome?.patchSha256, changedPathSha256: outcome?.changedPathSha256 };
+  if (stableLifecycleJson(gitEvidence) !== stableLifecycleJson(expectedGit)) findings.push("EXCEPTIONAL_OUTCOME_GIT_READBACK_INVALID");
   const normal = outcome?.normalPathEvidence;
-  if (stableLifecycleJson(normal) !== stableLifecycleJson({ exactHeadReview: "NOT_PRODUCED", phase1: "NOT_SUCCESSFUL", finalSourceReceipt: "NOT_PRODUCED" })) findings.push("EXCEPTIONAL_OUTCOME_NORMAL_EVIDENCE_INVALID");
-  if (!["NOT_PRODUCED", "NOT_APPLICABLE_PRESENTATION_ONLY"].includes(outcome?.hostedSecurity) || outcome?.physicalProof !== "PENDING") findings.push("EXCEPTIONAL_OUTCOME_PROOF_STATUS_INVALID");
+  const reviewStatuses = version === 3 ? ["NOT_PRODUCED", "PRODUCED_VALID"] : ["NOT_PRODUCED"];
+  if (!exactKeys(normal, ["exactHeadReview", "phase1", "finalSourceReceipt"])
+    || !reviewStatuses.includes(normal?.exactHeadReview)
+    || !["NOT_PRODUCED", "NOT_SUCCESSFUL"].includes(normal?.phase1)
+    || normal?.finalSourceReceipt !== "NOT_PRODUCED") findings.push("EXCEPTIONAL_OUTCOME_NORMAL_EVIDENCE_INVALID");
+  const securityStatuses = version === 3 ? ["NOT_PRODUCED", "NOT_APPLICABLE_PRESENTATION_ONLY", "SEALED_PASS"] : ["NOT_PRODUCED", "NOT_APPLICABLE_PRESENTATION_ONLY"];
+  if (!securityStatuses.includes(outcome?.hostedSecurity) || !["PENDING", "NOT_PRODUCED"].includes(outcome?.physicalProof)) findings.push("EXCEPTIONAL_OUTCOME_PROOF_STATUS_INVALID");
+  if (version === 3) {
+    const evidence = outcome?.independentEvidence;
+    if (!exactKeys(evidence, ["exactHeadReview", "hostedSecurity"])) findings.push("EXCEPTIONAL_OUTCOME_INDEPENDENT_EVIDENCE_INVALID");
+    if ((normal?.exactHeadReview === "PRODUCED_VALID") !== Boolean(exceptionalReviewProjectionValid(outcome, evidence?.exactHeadReview))) findings.push("EXCEPTIONAL_OUTCOME_REVIEW_EVIDENCE_INVALID");
+    if ((outcome?.hostedSecurity === "SEALED_PASS") !== Boolean(exceptionalSecurityProjectionValid(outcome, evidence?.hostedSecurity))) findings.push("EXCEPTIONAL_OUTCOME_SECURITY_EVIDENCE_INVALID");
+    if (normal?.exactHeadReview === "NOT_PRODUCED" && evidence?.exactHeadReview !== null) findings.push("EXCEPTIONAL_OUTCOME_REVIEW_EVIDENCE_INVALID");
+    if (["NOT_PRODUCED", "NOT_APPLICABLE_PRESENTATION_ONLY"].includes(outcome?.hostedSecurity) && evidence?.hostedSecurity !== null) findings.push("EXCEPTIONAL_OUTCOME_SECURITY_EVIDENCE_INVALID");
+  }
   if (stableLifecycleJson(outcome?.authority) !== stableLifecycleJson(closedAuthority)) findings.push("EXCEPTIONAL_OUTCOME_AUTHORITY_INVALID");
   const expectedOwnerSubject = {
     repository: outcome?.repository,
@@ -406,17 +453,24 @@ export function validateExceptionalMergeOutcome(outcome, { lease, ownerReceipt, 
     mergeParents: outcome?.mergeParents,
     classification: EXCEPTIONAL_MERGE_CLASSIFICATION,
     normalPathEvidence: outcome?.normalPathEvidence,
+    ...(version === 3 ? { hostedSecurity: outcome?.hostedSecurity, independentEvidence: outcome?.independentEvidence } : {}),
   };
   if (!ownerReceipt || ownerReceipt?.author !== "Chillywood2025" || ownerReceipt?.authorAssociation !== "OWNER" || ownerReceipt?.createdAt !== ownerReceipt?.updatedAt || stableLifecycleJson(ownerReceipt?.subject) !== stableLifecycleJson(expectedOwnerSubject) || ownerReceipt?.subjectHash !== lifecycleHash(expectedOwnerSubject) || !sha256.test(ownerReceipt?.bodyHash ?? "")) findings.push("EXCEPTIONAL_OUTCOME_OWNER_RECEIPT_INVALID");
   const rules = outcome?.ruleset;
   if (!rulesetEvidence || rules?.id !== 18940814 || rules?.temporaryActor?.actorId !== 210200794 || rules?.temporaryActor?.actorType !== "User" || rules?.temporaryActor?.bypassMode !== "pull_request" || rulesetEvidence?.before?.onlyIntegration !== true || rulesetEvidence?.bypass?.userPresent !== true || rulesetEvidence?.restored?.onlyIntegration !== true || rulesetEvidence?.restored?.integrationId !== 4707730 || !(Date.parse(rulesetEvidence.bypass.updatedAt) <= Date.parse(rules.mergeAt) && Date.parse(rules.mergeAt) <= Date.parse(rulesetEvidence.restored.updatedAt))) findings.push("EXCEPTIONAL_OUTCOME_RULESET_RESTORATION_INVALID");
+  if (version === 3 && (![rulesetEvidence?.before?.version, rulesetEvidence?.bypass?.version, rulesetEvidence?.restored?.version].every((value) => Number.isInteger(value) && value > 0)
+    || !(rulesetEvidence.before.version < rulesetEvidence.bypass.version && rulesetEvidence.bypass.version < rulesetEvidence.restored.version)
+    || !(Date.parse(rulesetEvidence.before.updatedAt) <= Date.parse(rulesetEvidence.bypass.updatedAt)))) findings.push("EXCEPTIONAL_OUTCOME_RULESET_HISTORY_INVALID");
   const unhashed = Object.fromEntries(Object.entries(outcome ?? {}).filter(([key]) => key !== "evidenceHash"));
   if (outcome?.evidenceHash !== lifecycleHash(unhashed)) findings.push("EXCEPTIONAL_OUTCOME_HASH_INVALID");
   return { ok: findings.length === 0, findings };
 }
 
 export function validateExceptionalOwnerReceiptReadback(outcome, raw) {
-  const parsed = parseCanonicalMarkedComment(raw?.body, EXCEPTIONAL_OWNER_TERMINAL_MARKER);
+  const version = outcome?.schemaVersion;
+  const marker = version === 3 ? EXCEPTIONAL_OWNER_TERMINAL_MARKER_V3 : EXCEPTIONAL_OWNER_TERMINAL_MARKER;
+  const type = version === 3 ? "OWNER_EXCEPTIONAL_BYPASS_TERMINAL_ACKNOWLEDGEMENT_V3" : "OWNER_EXCEPTIONAL_BYPASS_TERMINAL_ACKNOWLEDGEMENT_V2";
+  const parsed = parseCanonicalMarkedComment(raw?.body, marker);
   const payload = parsed?.payload;
   const unhashedPayload = payload && Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "bodyHash"));
   const projected = {
@@ -431,20 +485,85 @@ export function validateExceptionalOwnerReceiptReadback(outcome, raw) {
   };
   const findings = [];
   if (!parsed?.ok || !exactKeys(payload, ["bodyHash", "marker", "schemaVersion", "subject", "subjectHash", "type"])) findings.push("EXCEPTIONAL_OWNER_RECEIPT_PARSE_INVALID");
-  if (payload?.schemaVersion !== 2 || payload?.type !== "OWNER_EXCEPTIONAL_BYPASS_TERMINAL_ACKNOWLEDGEMENT_V2" || payload?.marker !== EXCEPTIONAL_OWNER_TERMINAL_MARKER) findings.push("EXCEPTIONAL_OWNER_RECEIPT_TYPE_INVALID");
+  if (payload?.schemaVersion !== version || payload?.type !== type || payload?.marker !== marker) findings.push("EXCEPTIONAL_OWNER_RECEIPT_TYPE_INVALID");
   if (!payload || payload?.subjectHash !== lifecycleHash(payload.subject) || payload?.bodyHash !== lifecycleHash(unhashedPayload)) findings.push("EXCEPTIONAL_OWNER_RECEIPT_HASH_INVALID");
   if (raw?.user?.login !== "Chillywood2025" || raw?.author_association !== "OWNER" || raw?.created_at !== raw?.updated_at) findings.push("EXCEPTIONAL_OWNER_RECEIPT_IDENTITY_INVALID");
   if (stableLifecycleJson(projected) !== stableLifecycleJson(outcome?.ownerReceipt)) findings.push("EXCEPTIONAL_OWNER_RECEIPT_PROJECTION_INVALID");
   return { ok: findings.length === 0, findings, receipt: findings.length === 0 ? projected : null };
 }
 
+export function validateExceptionalRepositoryReviewReadback(outcome, raw) {
+  const parsed = parseCanonicalMarkedComment(raw?.body, REPOSITORY_REVIEW_MARKER);
+  const payload = parsed?.payload;
+  const subject = payload?.subject;
+  const body = payload && Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "bodyHash"));
+  const evidence = outcome?.independentEvidence?.exactHeadReview;
+  const projection = {
+    commentId: raw?.id, author: raw?.user?.login, authorAssociation: raw?.author_association,
+    createdAt: raw?.created_at, updatedAt: raw?.updated_at, canonicalBodyHash: parsed?.canonicalBodyHash,
+    subjectHash: payload?.subjectHash, repository: subject?.repository, implementationPr: subject?.pr,
+    leaseId: subject?.finiteTaskEffectiveReservation?.leaseId, protectedBase: subject?.protectedBase,
+    reviewedHead: subject?.reviewedHead, reviewedTree: subject?.reviewedTree,
+    changedPathHash: subject?.changedPathHash, diffHash: subject?.diffHash, disposition: subject?.disposition,
+  };
+  const git = outcome?.gitEvidence;
+  const issueUrl = `https://api.github.com/repos/${outcome?.repository}/issues/${outcome?.implementationPr}`;
+  const findings = [];
+  if (!parsed?.ok || !exactKeys(payload, ["bodyHash", "evidenceClass", "pr", "repository", "schemaVersion", "subject", "subjectHash", "type"])) findings.push("EXCEPTIONAL_REVIEW_PARSE_INVALID");
+  if (payload?.schemaVersion !== 1 || payload?.type !== "REPOSITORY_OWNED_EXACT_HEAD_REVIEW_V1" || payload?.evidenceClass !== "REPOSITORY_EXACT_HEAD_REVIEW" || payload?.repository !== outcome?.repository || payload?.pr !== outcome?.implementationPr) findings.push("EXCEPTIONAL_REVIEW_TYPE_INVALID");
+  if (subject?.type !== payload?.type || subject?.repository !== outcome?.repository || subject?.pr !== outcome?.implementationPr || subject?.branch !== outcome?.implementationBranch) findings.push("EXCEPTIONAL_REVIEW_SUBJECT_IDENTITY_INVALID");
+  if (!payload || payload.subjectHash !== lifecycleHash(subject) || payload.bodyHash !== lifecycleHash(body)) findings.push("EXCEPTIONAL_REVIEW_HASH_INVALID");
+  if (raw?.user?.login !== "Chillywood2025" || raw?.author_association !== "OWNER" || raw?.created_at !== raw?.updated_at || raw?.issue_url !== issueUrl) findings.push("EXCEPTIONAL_REVIEW_IDENTITY_INVALID");
+  if (!exceptionalReviewProjectionValid(outcome, projection) || stableLifecycleJson(projection) !== stableLifecycleJson(evidence)) findings.push("EXCEPTIONAL_REVIEW_PROJECTION_INVALID");
+  if (!exactKeys(git, ["protectedBase", "sourceHead", "sourceTree", "mergeSha", "mergeTree", "mergeParents", "patchSha256", "changedPathSha256", "changedPaths", "reviewChangedPathHash", "diffHash", "additions", "deletions"])
+    || subject?.changedPathHash !== git?.reviewChangedPathHash || subject?.diffHash !== git?.diffHash
+    || stableLifecycleJson(subject?.changedPaths) !== stableLifecycleJson(git?.changedPaths)
+    || subject?.additions !== git?.additions || subject?.deletions !== git?.deletions
+    || subject?.netChangedLines !== Math.max(0, git?.additions - git?.deletions)) findings.push("EXCEPTIONAL_REVIEW_GIT_BINDING_INVALID");
+  if (subject?.finiteTaskEffectiveReservation?.authorityValid !== true || subject?.finiteTaskEffectiveReservation?.implementationPr !== outcome?.implementationPr
+    || subject?.finiteTaskEffectiveReservation?.implementationBranch !== outcome?.implementationBranch
+    || subject?.finiteTaskEffectiveReservation?.candidateHead !== outcome?.sourceHead
+    || subject?.finiteTaskEffectiveReservation?.candidateTree !== outcome?.sourceTree
+    || stableLifecycleJson(subject?.disposition) !== stableLifecycleJson({ P0: 0, P1: 0, launchImpactingP2: 0 })) findings.push("EXCEPTIONAL_REVIEW_AUTHORITY_INVALID");
+  return { ok: findings.length === 0, findings: [...new Set(findings)].sort(), evidence: findings.length === 0 ? projection : null };
+}
+
+export function validateExceptionalHostedSecurityReadback(outcome, { manifestText, findingsText, coverageText } = {}) {
+  const evidence = outcome?.independentEvidence?.hostedSecurity;
+  let manifest; let findingsDocument; let coverage;
+  try { manifest = JSON.parse(manifestText); findingsDocument = JSON.parse(findingsText); coverage = JSON.parse(coverageText); } catch {}
+  const scan = manifest?.scan;
+  const target = scan?.target;
+  const projection = {
+    scanId: scan?.id, targetId: target?.targetId, baseRevision: target?.baseRevision, headRevision: target?.headRevision,
+    snapshotDigest: target?.snapshotDigest, status: scan?.status, completedAt: scan?.completedAt, sealedAt: scan?.sealedAt,
+    findingsCount: findingsDocument?.findings?.length, coverageCompleteness: coverage?.completeness,
+    findingsSha256: typeof findingsText === "string" ? fileHash(findingsText) : null,
+    coverageSha256: typeof coverageText === "string" ? fileHash(coverageText) : null,
+    manifestSha256: typeof manifestText === "string" ? fileHash(manifestText) : null,
+  };
+  const artifacts = new Map((scan?.artifacts ?? []).map((entry) => [entry?.path, entry?.sha256]));
+  const findings = [];
+  if (!exceptionalSecurityProjectionValid(outcome, projection) || stableLifecycleJson(projection) !== stableLifecycleJson(evidence)) findings.push("EXCEPTIONAL_SECURITY_PROJECTION_INVALID");
+  if (manifest?.documentType !== "codex-security.scan-manifest" || manifest?.schemaVersion !== "1.0" || target?.kind !== "git_diff") findings.push("EXCEPTIONAL_SECURITY_MANIFEST_INVALID");
+  if (artifacts.get("findings.json") !== projection.findingsSha256 || artifacts.get("coverage.json") !== projection.coverageSha256 || scan?.findingsRef !== "findings.json" || scan?.coverageRef !== "coverage.json") findings.push("EXCEPTIONAL_SECURITY_ARTIFACT_HASH_INVALID");
+  if (findingsDocument?.documentType !== "codex-security.findings" || findingsDocument?.scanId !== scan?.id || findingsDocument?.schemaVersion !== "1.0" || !Array.isArray(findingsDocument?.findings) || findingsDocument.findings.length !== 0) findings.push("EXCEPTIONAL_SECURITY_FINDINGS_INVALID");
+  const labels = (coverage?.surfaces ?? []).map(({ label }) => label).sort();
+  if (coverage?.documentType !== "codex-security.coverage" || coverage?.scanId !== scan?.id || coverage?.schemaVersion !== "1.0" || coverage?.completeness !== "complete"
+    || !Array.isArray(coverage?.deferred) || coverage.deferred.length !== 0 || !Array.isArray(coverage?.openQuestions) || coverage.openQuestions.length !== 0
+    || (coverage?.surfaces ?? []).some(({ disposition }) => disposition !== "no_issue_found")
+    || stableLifecycleJson(labels) !== stableLifecycleJson(outcome?.gitEvidence?.changedPaths)) findings.push("EXCEPTIONAL_SECURITY_COVERAGE_INVALID");
+  return { ok: findings.length === 0, findings: [...new Set(findings)].sort(), evidence: findings.length === 0 ? projection : null };
+}
+
 export function deriveExceptionalGitEvidence(outcome, { root } = {}) {
   const git = (args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
   try {
     const mergeParents = git(["show", "-s", "--format=%P", outcome.mergeSha]).split(/\s+/u).filter(Boolean);
-    const patch = execFileSync("git", ["diff", "--binary", outcome.protectedBase, outcome.sourceHead], { cwd: root });
+    const v3 = outcome?.schemaVersion === 3;
+    const patch = execFileSync("git", ["diff", ...(v3 ? ["--full-index"] : []), "--binary", "--no-ext-diff", outcome.protectedBase, outcome.sourceHead], { cwd: root });
     const paths = git(["diff", "--name-only", outcome.protectedBase, outcome.sourceHead]).split(/\r?\n/gu).filter(Boolean).sort();
-    return {
+    const basic = {
       protectedBase: outcome.protectedBase,
       sourceHead: outcome.sourceHead,
       sourceTree: git(["rev-parse", `${outcome.sourceHead}^{tree}`]),
@@ -454,12 +573,17 @@ export function deriveExceptionalGitEvidence(outcome, { root } = {}) {
       patchSha256: crypto.createHash("sha256").update(patch).digest("hex"),
       changedPathSha256: crypto.createHash("sha256").update(`${paths.join("\n")}\n`).digest("hex"),
     };
+    if (!v3) return basic;
+    const rows = git(["diff", "--numstat", outcome.protectedBase, outcome.sourceHead]).split(/\r?\n/gu).filter(Boolean).map((row) => row.split("\t"));
+    const additions = rows.reduce((sum, [value]) => sum + (/^\d+$/u.test(value) ? Number(value) : 0), 0);
+    const deletions = rows.reduce((sum, [, value]) => sum + (/^\d+$/u.test(value) ? Number(value) : 0), 0);
+    return { ...basic, changedPaths: paths, reviewChangedPathHash: lifecycleHash(paths), diffHash: lifecycleHash(canonicalGitText(patch.toString("utf8"))), additions, deletions };
   } catch {
     return null;
   }
 }
 
-export function authorizeExceptionalMergeOutcome(outcome, { lease, ownerReceiptReadback, gitEvidence, rulesetReadback } = {}) {
+export function authorizeExceptionalMergeOutcome(outcome, { lease, ownerReceiptReadback, repositoryReviewReadback, hostedSecurityReadback, gitEvidence, rulesetReadback } = {}) {
   const receipt = validateExceptionalOwnerReceiptReadback(outcome, ownerReceiptReadback);
   const structural = validateExceptionalMergeOutcome(outcome, {
     lease,
@@ -474,9 +598,15 @@ export function authorizeExceptionalMergeOutcome(outcome, { lease, ownerReceiptR
     && bypassActors[0]?.actor_type === "Integration"
     && bypassActors[0]?.actor_id === 4707730
     && bypassActors[0]?.bypass_mode === "pull_request";
+  const requiredStatusRule = (rulesetReadback?.rules ?? []).find(({ type }) => type === "required_status_checks");
+  const strictProtection = outcome?.schemaVersion !== 3 || (requiredStatusRule?.parameters?.strict_required_status_checks_policy === true
+    && stableLifecycleJson(requiredStatusRule?.parameters?.required_status_checks) === stableLifecycleJson([{ context: "Phase 1 / Admission Decision", integration_id: 4707730 }]));
   const findings = [...receipt.findings, ...structural.findings];
+  if (outcome?.schemaVersion === 3 && outcome?.normalPathEvidence?.exactHeadReview === "PRODUCED_VALID") findings.push(...validateExceptionalRepositoryReviewReadback(outcome, repositoryReviewReadback).findings);
+  if (outcome?.schemaVersion === 3 && outcome?.hostedSecurity === "SEALED_PASS") findings.push(...validateExceptionalHostedSecurityReadback(outcome, hostedSecurityReadback).findings);
   if (stableLifecycleJson(gitEvidence) !== stableLifecycleJson(outcome?.gitEvidence)) findings.push("EXCEPTIONAL_GIT_EVIDENCE_LIVE_MISMATCH");
   if (!rulesetRestored) findings.push("EXCEPTIONAL_RULESET_LIVE_RESTORATION_INVALID");
+  if (!strictProtection) findings.push("EXCEPTIONAL_RULESET_LIVE_STRICT_STATUS_INVALID");
   return { ok: findings.length === 0, findings: [...new Set(findings)].sort() };
 }
 
@@ -521,7 +651,7 @@ export function projectExceptionalTerminalTruth(record, outcome) {
   next.finiteTaskRuntime = {
     ...next.finiteTaskRuntime,
     candidateObservation: { pr: outcome.implementationPr, branch: outcome.implementationBranch, prState: "merged", head: outcome.sourceHead, tree: outcome.sourceTree, classification: EXCEPTIONAL_MERGE_CLASSIFICATION, observedAt: outcome.ruleset.mergeAt },
-    finalEvidence: { ownerReceipt: false, repositoryReview: false, phase1: false, mergeEligible: false },
+    finalEvidence: { ownerReceipt: false, repositoryReview: outcome.normalPathEvidence.exactHeadReview === "PRODUCED_VALID", hostedSecurity: outcome.hostedSecurity === "SEALED_PASS", phase1: false, mergeEligible: false },
     exceptionalTerminalOutcome: structuredClone(outcome),
   };
   next.engineeringDoctrine = { ...next.engineeringDoctrine, activeTaskSentinel: "NO_ACTIVE_PRODUCT_IMPLEMENTATION", taskLeaseState: "NO_ACTIVE_TASK", blockers: [], nextPermittedAction: "WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE" };
@@ -572,21 +702,32 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const truthPath = path.join(root, "config/assurance/current-truth-v1.json");
     const record = JSON.parse(fs.readFileSync(truthPath, "utf8"));
     const task = JSON.parse(fs.readFileSync(taskPath, "utf8"));
-    const outcome = task.exceptionalOutcome484;
+    const outcome = task.exceptionalOutcome ?? task.exceptionalOutcome484;
     const lease = (record?.finiteTaskLeases?.tasks ?? []).find(({ leaseId }) => leaseId === outcome?.leaseId);
     let ownerReceiptReadback = null;
     let rulesetReadback = null;
+    let repositoryReviewReadback = null;
+    let hostedSecurityReadback = null;
     try {
       ownerReceiptReadback = JSON.parse(execFileSync("gh", ["api", `repos/${outcome.repository}/issues/comments/${outcome.ownerReceipt.commentId}`], { cwd: root, encoding: "utf8" }));
       rulesetReadback = JSON.parse(execFileSync("gh", ["api", `repos/${outcome.repository}/rulesets/${outcome.ruleset.id}`], { cwd: root, encoding: "utf8" }));
+      if (outcome.schemaVersion === 3 && outcome.normalPathEvidence.exactHeadReview === "PRODUCED_VALID") repositoryReviewReadback = JSON.parse(execFileSync("gh", ["api", `repos/${outcome.repository}/issues/comments/${outcome.independentEvidence.exactHeadReview.commentId}`], { cwd: root, encoding: "utf8" }));
+      if (outcome.schemaVersion === 3 && outcome.hostedSecurity === "SEALED_PASS") {
+        const directory = path.resolve(path.dirname(taskPath), task.hostedSecurityArtifactDirectory ?? ".");
+        hostedSecurityReadback = {
+          manifestText: fs.readFileSync(path.join(directory, "scan-manifest.json"), "utf8"),
+          findingsText: fs.readFileSync(path.join(directory, "findings.json"), "utf8"),
+          coverageText: fs.readFileSync(path.join(directory, "coverage.json"), "utf8"),
+        };
+      }
     } catch {}
-    const verification = authorizeExceptionalMergeOutcome(outcome, { lease, ownerReceiptReadback, gitEvidence: deriveExceptionalGitEvidence(outcome, { root }), rulesetReadback });
+    const verification = authorizeExceptionalMergeOutcome(outcome, { lease, ownerReceiptReadback, repositoryReviewReadback, hostedSecurityReadback, gitEvidence: deriveExceptionalGitEvidence(outcome, { root }), rulesetReadback });
     if (!verification.ok) {
       process.stderr.write(`${JSON.stringify(verification)}\n`);
       process.exitCode = 1;
     } else {
       const projected = projectExceptionalTerminalTruth(record, outcome);
-      fs.writeFileSync(truthPath, `${JSON.stringify(projected, null, 2)}\n`);
+      fs.writeFileSync(truthPath, `${JSON.stringify(projected)}\n`);
       process.stdout.write(`${JSON.stringify({ ok: true, classification: outcome.classification, leaseId: outcome.leaseId, mergeSha: outcome.mergeSha })}\n`);
     }
   }

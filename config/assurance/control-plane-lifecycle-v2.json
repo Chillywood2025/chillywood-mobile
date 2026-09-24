@@ -69,7 +69,15 @@
   },
   "exceptionalMerge": {
     "classification": "MERGED_BY_EXPLICIT_OWNER_BYPASS_AT_EXACT_FROZEN_SOURCE",
-    "normalEvidenceDisposition": "NOT_PRODUCED",
+    "normalEvidenceDisposition": "FACTUAL_INDEPENDENT_EVIDENCE_SUBSET",
+    "normalPhase1": ["NOT_PRODUCED", "NOT_SUCCESSFUL"],
+    "finalSourceReceipt": "NOT_PRODUCED",
+    "independentEvidence": {
+      "exactHeadReview": ["NOT_PRODUCED", "PRODUCED_VALID"],
+      "hostedSecurity": ["NOT_PRODUCED", "NOT_APPLICABLE_PRESENTATION_ONLY", "SEALED_PASS"],
+      "producedEvidenceRequiresIndependentVerification": true,
+      "producedEvidenceDoesNotGrantNormalMergeAuthority": true
+    },
     "requiredBindings": ["repository","implementationPr","leaseId","protectedBase","sourceHead","sourceTree","patchSha256","changedPathSha256","mergeSha","mergeTree","mergeParents","ownerReceipt","rulesetBefore","rulesetBypass","rulesetRestored"],
     "authority": {"providerMutation":false,"databaseDeployment":false,"build":false,"submission":false,"ota":false,"publicRelease":false,"money":false}
   },
