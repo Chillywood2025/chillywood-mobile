@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createOtaPublicationPlan, validateOtaPublicationPlan } from "./release-control-plane-lib.mjs";
 
 const readConfig = (target) => {
   const env = {
@@ -38,6 +39,26 @@ assert.equal(androidInternal?.extra?.runtime?.internalV2OtaPlatform, "android", 
 
 const invalid = readConfig("production-v2");
 assert.notEqual(invalid.status, 0, "unknown internal-v2 publication targets must fail closed");
+
+const sourceSha = "1".repeat(40);
+const sourceTree = "2".repeat(40);
+const binaryFor = (platform, runtimeVersion) => ({
+  artifactSha256: "3".repeat(64),
+  nativeCapabilities: platform === "ios" ? ["ios-native-calls"] : [],
+  platform,
+  revoked: false,
+  runtimeVersion,
+  sourceSha,
+  sourceTree,
+  valid: true,
+});
+for (const [platform, config] of [["ios", iosInternal], ["android", androidInternal]]) {
+  const runtimeVersion = platform === "ios" ? config.ios.runtimeVersion : config.android.runtimeVersion;
+  const plan = createOtaPublicationPlan({ platform, sourceSha, sourceTree, runtimeVersion, signedBinary: binaryFor(platform, runtimeVersion) });
+  assert.deepEqual(validateOtaPublicationPlan(plan).findings, [], `${platform} exact provenance must pass`);
+  assert.ok(validateOtaPublicationPlan({ ...plan, channel: `${platform === "ios" ? "android" : "ios"}-internal-v2` }).findings.includes("OTA_CHANNEL_PLATFORM_MISMATCH"));
+  assert.ok(validateOtaPublicationPlan({ ...plan, signedBinary: { ...plan.signedBinary, platform: platform === "ios" ? "android" : "ios" } }).findings.includes("OTA_BINARY_PLATFORM_MISMATCH"));
+}
 
 console.log(JSON.stringify({
   androidIosNativeCallsEnabled: androidInternal.extra.runtime.communication.iosNativeCallsEnabled,
