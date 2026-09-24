@@ -9,7 +9,7 @@ import { unresolvedLateReviewSentinels } from "./late-review-sentinel.mjs";
 import { deriveFiniteTaskPrRiskAuthority } from "./pr-scope-lib.mjs";
 import { phase1AdmissionRulesetCutoverAggregateValid } from "./github-main-ruleset-readback.mjs";
 import { createCandidateGitContext, readGitHubJsonSync } from "./control-plane-v2.mjs";
-import { DOCTRINE_BASE, DOCTRINE_BRANCH, affectedDomainClosure, createImplementationIdentityObservation, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, generateDomainGraph, hashValue, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit, observeGitHubTaskIdentity, readTaskArtifactAtGitHead, resolveFiniteTaskAdmissionTaskBindingV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2, verifyTaskLocalGoverningEdgeClosure } from "./engineering-closure.mjs";
+import { DOCTRINE_BASE, DOCTRINE_BRANCH, affectedDomainClosure, createImplementationIdentityObservation, deriveFiniteTaskTaskLocalEvidenceV2, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateAutonomousEngineeringRequest, evaluatePreimplementationGate, finiteTaskLeaseClosureV2, generateDomainGraph, hashValue, normalizeGitHubCommentIdentity, observeCandidateScopeFromGit, observeGitHubTaskIdentity, readTaskArtifactAtGitHead, resolveFiniteTaskAdmissionTaskBindingV2, verifyOwnerJurisdictionAuthorityV2, verifyTaskJurisdictionAuthorityV2, verifyTaskLocalGoverningEdgeClosure } from "./engineering-closure.mjs";
 import {
   ACTIVE_POLICY_STATUS,
   FINITE_TASK_ADMISSION_V2_MARKER,
@@ -148,8 +148,9 @@ export function evaluatePreAdmissionEngineeringSeed(facts = {}) {
   const unique = [...new Set(findings)].sort();
   if (unique.length) return { ok: false, findings: unique, productSourceMutationAllowed: false };
   const graph = facts.graph ?? generateDomainGraph();
-  const closure = artifact?.taskLocalEdgeEvidence
-    ? verifyTaskLocalGoverningEdgeClosure(artifact.taskLocalEdgeEvidence, { root: ROOT, runs: 2 })
+  const taskLocalProjection = deriveFiniteTaskTaskLocalEvidenceV2(artifact);
+  const closure = taskLocalProjection.valid
+    ? verifyTaskLocalGoverningEdgeClosure(taskLocalProjection.edgeEvidence, { root: ROOT, runs: 2 })
     : affectedDomainClosure(graph, subject.primaryFeature);
   const domains = closure.domains ?? [];
   const graphSlice = {
@@ -174,7 +175,7 @@ export function evaluatePreAdmissionEngineeringSeed(facts = {}) {
     taskArtifactHash: facts.taskArtifactHash,
     affectedGraphSlice: graphSlice,
     provisionalDomainClosure: { status: closure.status ?? closure.classification, domains, findings: closure.findings ?? [] },
-    taskLocalGoverningEdgeClosure: artifact?.taskLocalEdgeEvidence ? { classification: closure.classification, closureHash: closure.closureHash, evidenceHash: closure.evidenceHash, unresolvedEdges: closure.accounting?.unresolvedSet ?? [], deterministic: closure.verificationRuns } : null,
+    taskLocalGoverningEdgeClosure: taskLocalProjection.valid ? { classification: closure.classification, closureHash: closure.closureHash, evidenceHash: closure.evidenceHash, unresolvedEdges: closure.accounting?.unresolvedSet ?? [], deterministic: closure.verificationRuns } : null,
     currentScope: { changedPaths, changedFiles: changedPaths.length, productSourceChangedFiles: 0 },
     productSourceMutationAllowed: false,
     finiteLeasePresent: false,
@@ -327,20 +328,22 @@ export function resolveActiveTaskAdmissionImplementationEvidence({
   };
 }
 
-function activeTaskJurisdictionEvidenceFindings({ projection, activeBinding, lease, fullTaskBinding, policyResolution, registry }) {
+function activeTaskJurisdictionEvidenceFindings({ projection, activeBinding, lease, fullTaskBinding, policyResolution, registry, taskArtifact, taskArtifactHash }) {
   const findings = [];
   const task = fullTaskBinding?.taskIdentity;
   const taskEvidence = fullTaskBinding?.taskEvidence;
   const projectedTask = projection?.taskBinding;
   const projectedDomains = projectedTask?.domainIds;
   const reservedDomains = [...(lease?.artifactReservation?.allowedDomains ?? [])].sort();
+  const taskLocalProjection = deriveFiniteTaskTaskLocalEvidenceV2(taskArtifact);
+  const expectedLeaseClosure = finiteTaskLeaseClosureV2(taskArtifact, taskArtifactHash);
   const expectedTaskEvidence = {
-    closurePacketHash: lease?.closure?.packetHash,
-    completenessCertificateHash: lease?.closure?.certificateHash,
-    taskArtifactHash: lease?.closure?.artifactHash,
-    taskLocalEdgeClosureHash: lease?.closure?.edgeClosureHash,
-    taskLocalEdgeEvidenceHash: lease?.closure?.edgeEvidenceHash,
-    taskLocalModelHash: lease?.closure?.modelDeltaHash,
+    closurePacketHash: expectedLeaseClosure.packetHash,
+    completenessCertificateHash: expectedLeaseClosure.certificateHash,
+    taskArtifactHash: expectedLeaseClosure.artifactHash,
+    taskLocalEdgeClosureHash: expectedLeaseClosure.edgeClosureHash,
+    taskLocalEdgeEvidenceHash: expectedLeaseClosure.edgeEvidenceHash,
+    taskLocalModelHash: taskLocalProjection.modelDeltaEdgeIdHash,
   };
   const registeredDomains = new Set((registry?.features ?? []).map(({ featureId }) => featureId));
 
@@ -377,7 +380,9 @@ function activeTaskJurisdictionEvidenceFindings({ projection, activeBinding, lea
     || !projectedDomains?.includes(activeBinding?.featureId)) {
     findings.push("ACTIVE_TASK_OWNER_JURISDICTION_EXACT_DOMAIN_MISMATCH");
   }
-  if (!sameCanonicalValue(taskEvidence, expectedTaskEvidence)) {
+  if (!taskLocalProjection.valid
+    || !sameCanonicalValue(lease?.closure, expectedLeaseClosure)
+    || !sameCanonicalValue(taskEvidence, expectedTaskEvidence)) {
     findings.push("ACTIVE_TASK_OWNER_JURISDICTION_TASK_EVIDENCE_MISMATCH");
   }
   if (projectedTask?.standingPolicyCommentId !== policyResolution?.commentId
@@ -454,6 +459,7 @@ export function verifyActiveTaskOwnerJurisdictionPolicy({
   }
 
   let fullTaskBinding = observation.taskBinding;
+  const artifactRead = readTaskArtifactAtGitHead(lease?.artifactReservation?.closureArtifactPath, activeBinding?.currentImplementationHead, ROOT);
   if (!fullTaskBinding && observation.admissionIdentity && Array.isArray(observation.admissionRaws)) {
     try {
       const implementationEvidence = resolveActiveTaskAdmissionImplementationEvidence({ activeBinding, lease, projection, implementationPull: observation.implementationPull, root: ROOT });
@@ -493,16 +499,9 @@ export function verifyActiveTaskOwnerJurisdictionPolicy({
   if (!bindingVerification.ok) {
     return { ok: false, findings: ["ACTIVE_TASK_OWNER_JURISDICTION_TASK_BINDING_INVALID", ...bindingVerification.findings].sort() };
   }
-  const semanticFindings = activeTaskJurisdictionEvidenceFindings({ projection, activeBinding, lease, fullTaskBinding, policyResolution, registry });
+  const semanticFindings = activeTaskJurisdictionEvidenceFindings({ projection, activeBinding, lease, fullTaskBinding, policyResolution, registry, taskArtifact: artifactRead?.artifact, taskArtifactHash: artifactRead?.artifactHash });
   if (semanticFindings.length) return { ok: false, findings: [...new Set(semanticFindings)].sort() };
-  const expectedTaskEvidence = {
-    closurePacketHash: lease?.closure?.packetHash,
-    completenessCertificateHash: lease?.closure?.certificateHash,
-    taskArtifactHash: lease?.closure?.artifactHash,
-    taskLocalEdgeClosureHash: lease?.closure?.edgeClosureHash,
-    taskLocalEdgeEvidenceHash: lease?.closure?.edgeEvidenceHash,
-    taskLocalModelHash: lease?.closure?.modelDeltaHash,
-  };
+  const expectedTaskEvidence = fullTaskBinding.taskEvidence;
   const directOwnerRaw = taskBindingCameFromOwnerReceipt
     ? observation.rawComments?.find(({ id }) => id === policyResolution.commentId)
     : null;
@@ -597,7 +596,9 @@ export function observePreAdmissionEngineeringSeed({ preAdmissionPr, taskArtifac
 
 const trustedEngineeringScopeObservations = new WeakSet();
 function observeEngineeringScope(lease, currentHead, currentProtectedMain = null, effectiveReservationResolution = null) {
-  let observation = observeCandidateScopeFromGit(currentProtectedMain ?? lease?.admittedBase, currentHead, ROOT);
+  let observation = observeCandidateScopeFromGit(currentProtectedMain ?? lease?.admittedBase, currentHead, ROOT, {
+    nonBudgetedPaths: [lease?.artifactReservation?.closureArtifactPath],
+  });
   const implementation = effectiveReservationResolution?.scopePartitions?.implementation;
   const aggregate = effectiveReservationResolution?.scopePartitions?.aggregate;
   if (observation && implementation && aggregate
@@ -657,6 +658,8 @@ export function redactActiveTaskPacket(value) {
   return redact(value);
 }
 
+export const finiteTaskPathMatchesReservation = (file, patterns = []) => patterns.some((glob) => glob.endsWith("/**") ? file.startsWith(glob.slice(0, -2)) : file === glob);
+
 export function validateEngineeringTaskAuthority({ doctrineTruth, featureId, phase = "IMPLEMENTATION", lease, baseLease = lease, effectiveReservationResolution = null, closurePacket, certificate, taskArtifactBytes = null, sourcePushed = false, samePr = true, branch, currentMain, currentHead, implementationPr, implementationMerged = false, bootstrapExpired = false, sourceChanging = true, readOnlyDiagnostic = false, scopeObservation, taskIdentityObservation, implementationIdentity, ownerJurisdictionAuthority } = {}) {
   const admittedArtifactRequired = admittedFiniteTaskLeaseV2(baseLease);
   const wrappedFiniteTaskArtifact = Boolean(closurePacket?.closure?.sections);
@@ -698,7 +701,7 @@ export function validateEngineeringTaskAuthority({ doctrineTruth, featureId, pha
       ? new Set(effectiveReservationResolution?.amendmentReceipt?.addedPaths ?? [])
       : new Set();
     if (!reservationValid) findings.push("PREIMPLEMENTATION_AFFECTED_DOMAIN_INCOMPLETE");
-    const matches = (file, patterns = []) => patterns.some((glob) => glob.endsWith("/**") ? file.startsWith(glob.slice(0, -3)) : file === glob);
+    const matches = finiteTaskPathMatchesReservation;
     const phasePlanningOnly = ["INTENT_CAPTURED", "DOMAIN_DISCOVERY", "ARCHITECTURE_DESIGNED", "DEFECT_LEDGER_STABLE"].includes(phase);
     const finiteLeasePresent = Boolean(lease?.leaseId && lease?.implementationPr === implementationPr && lease?.implementationBranch === branch && !["MERGED_VERIFIED", "ABANDONED_BY_OWNER"].includes(lease?.taskState));
     const artifactFrozen = !["INTENT_CAPTURED", "DOMAIN_DISCOVERY", "ARCHITECTURE_DESIGNED"].includes(phase);

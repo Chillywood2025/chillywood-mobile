@@ -10,6 +10,7 @@ import {
   activeTask,
   admittedFiniteTaskCommandRule,
   evaluatePreAdmissionEngineeringSeed,
+  finiteTaskPathMatchesReservation,
   OWNER_PRE_ADMISSION_ENGINEERING_SEED_V1,
   ownerBootstrapAuthorizationCommentBody,
   ownerBootstrapBindingSubject,
@@ -82,7 +83,7 @@ import {
   verifyFiniteTaskTestAdaptationReceipt,
   verifyTaskLeaseAmendment
 } from "../../scripts/assurance/lib.mjs";
-import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, observeFiniteTaskGitScope, observeFiniteTaskPostMergeTransition, observePhase1RunEvidence, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyArchitectureRepositoryReview, verifyFiniteTaskImplementationLifecycle, verifyFiniteTaskTerminalBaseAdvancement, verifyFiniteTaskTerminalTruthAuthority, verifyOwnerJurisdictionAuthorityV2, verifyPhase1RunEvidence, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
+import { AUTHORITY_CONTROL_CURRENT_TRUTH_COMPANION_V2, DOCTRINE_BASE, FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, FINITE_TASK_TERMINAL_TRUTH_V1, PHASE1_REQUIRED_JOB_NAMES, TYPED_CONTEXT_ARCHITECTURE_PATHS, affectedDomainClosure, architectureFinalSourceOwnerCommentBody, architectureFinalSourceSubject, architectureMaintenanceOwnerCommentBody, architectureMaintenanceSubject, architectureRepositoryReviewCommentBody, architectureRepositoryReviewSubject, contentSnapshotSubject, createImplementationIdentityObservation, deriveCurrentTreeObservation, deriveDoctrineArtifactDependencyClosure, deriveEngineeringClosureExecutionMode, deriveFiniteTaskTaskLocalEvidenceV2, deriveTrustedImplementationScopeObservation, evaluateAdmittedFiniteTaskArtifactV2, evaluateFrozenFiniteTaskArtifactV2, evaluatePreimplementationGate, finiteTaskJurisdictionEvidenceV2, finiteTaskLeaseClosureV2, finiteTaskTerminalTruthFinalSourceOwnerCommentBody, finiteTaskTerminalTruthFinalSourceSubject, finiteTaskTerminalTruthOwnerCommentBody, finiteTaskTerminalTruthSubject, generateCurrentEngineeringTaskReport, generateDomainGraph, hashValue, makeTaskPacket, observeCandidateScopeFromGit, observeFiniteTaskGitScope, observeFiniteTaskPostMergeTransition, observePhase1RunEvidence, readGitHubApi, readTaskArtifactAtGitHead, resolveEngineeringClosureTaskContext, structuralGraphSubject, terminalTruthSuccessorVerifierRepairOwnerCommentBody, terminalTruthSuccessorVerifierRepairSubject, validateDoctrineBaselineArtifacts, verifyArchitectureMaintenanceAuthority, verifyArchitectureRepositoryReview, verifyFiniteTaskImplementationLifecycle, verifyFiniteTaskTerminalBaseAdvancement, verifyFiniteTaskTerminalTruthAuthority, verifyOwnerJurisdictionAuthorityV2, verifyPhase1RunEvidence, verifyTerminalTruthSuccessorAuthority } from "../../scripts/assurance/engineering-closure.mjs";
 import { deriveTaskJurisdictionBindingV2, preflightOwnerJurisdictionDecisionV2, resolveOwnerJurisdictionPolicyChainV2 } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -6532,6 +6533,7 @@ const admittedWave1ArtifactFixture = () => {
   admittedWave1ArtifactFixtureCache = { actualScope, implementationIdentity, lease, ownerJurisdictionAuthority, taskArtifact, taskArtifactBytes: artifactSource, taskArtifactHash };
   return admittedWave1ArtifactFixtureCache;
 };
+const historicalTaskLocalArtifactFixture = () => JSON.parse(spawnSync("git", ["show", "14e6d3a05bc4110712f88de11c76968cb610dae1:docs/assurance/tasks/pre-release-identity-entitlement-authority-v1.json"], { encoding: "utf8" }).stdout);
 
 test("active-task frozen artifact 01: malformed generic state models fail closed without throwing", () => {
   for (const malformed of [
@@ -6768,6 +6770,78 @@ test("active-task frozen artifact 06: frozen edge evidence is reverified at the 
   } finally {
     fs.rmSync(temporaryParent, { recursive: true, force: true });
   }
+});
+
+test("active-task frozen artifact 06a: canonical full task-local evidence is the source for every compact projection", () => {
+  const artifact = historicalTaskLocalArtifactFixture();
+  const packetC = artifact.closure.sections.C_AFFECTED_DOMAIN_CLOSURE;
+  packetC.taskLocalEvidence = structuredClone(artifact.taskLocalEdgeEvidence);
+  packetC.taskLocalGoverningEdgeClosure = structuredClone(artifact.taskLocalGoverningEdgeClosure);
+  delete packetC.taskLocalModelDeltas;
+  const fullModelHash = hashValue(packetC.taskLocalEvidence.modelDeltas);
+  artifact.taskLocalDomainGraphDelta = {
+    edgeIds: packetC.taskLocalEvidence.modelDeltas.map(({ edgeId }) => edgeId).sort(),
+    hash: fullModelHash,
+  };
+  const projection = deriveFiniteTaskTaskLocalEvidenceV2(artifact);
+  assert.equal(projection.valid, true);
+  assert.equal(projection.representation, "CANONICAL_FULL");
+  assert.equal(projection.edgeSummary.closureHash, packetC.taskLocalGoverningEdgeClosure.closureHash);
+  assert.equal(projection.evidenceSummary.dispositionCount, packetC.taskLocalEvidence.dispositions.length);
+  assert.equal(projection.evidenceSummary.modelDeltaCount, packetC.taskLocalEvidence.modelDeltas.length);
+  assert.equal(projection.modelDeltaSummary.hash, fullModelHash);
+  const artifactHash = "a".repeat(64);
+  const ownerEvidence = finiteTaskJurisdictionEvidenceV2(artifact, artifactHash);
+  const leaseClosure = finiteTaskLeaseClosureV2(artifact, artifactHash);
+  assert.equal(ownerEvidence.taskLocalModelHash, hashValue(projection.modelDeltaSummary.edgeIds));
+  assert.equal(leaseClosure.modelDeltaHash, fullModelHash);
+
+  delete artifact.taskLocalEdgeEvidence;
+  delete artifact.taskLocalGoverningEdgeClosure;
+  delete artifact.taskLocalDomainGraphDelta;
+  assert.equal(deriveFiniteTaskTaskLocalEvidenceV2(artifact).valid, true, "undocumented duplicate top-level projections are optional");
+});
+
+test("active-task frozen artifact 06b: task-local duplicate, hash, edge, count, classification, determinism, and finding mutations fail closed", () => {
+  const canonical = historicalTaskLocalArtifactFixture();
+  const packetC = canonical.closure.sections.C_AFFECTED_DOMAIN_CLOSURE;
+  packetC.taskLocalEvidence = structuredClone(canonical.taskLocalEdgeEvidence);
+  packetC.taskLocalGoverningEdgeClosure = structuredClone(canonical.taskLocalGoverningEdgeClosure);
+  delete packetC.taskLocalModelDeltas;
+  canonical.taskLocalDomainGraphDelta = {
+    edgeIds: packetC.taskLocalEvidence.modelDeltas.map(({ edgeId }) => edgeId).sort(),
+    hash: hashValue(packetC.taskLocalEvidence.modelDeltas),
+  };
+  const mutations = [
+    (value) => { value.taskLocalEdgeEvidence.dispositions.pop(); },
+    (value) => { value.taskLocalGoverningEdgeClosure.closureHash = "0".repeat(64); },
+    (value) => { value.taskLocalDomainGraphDelta.edgeIds[0] = "forged-edge"; },
+    (value) => { value.taskLocalDomainGraphDelta.hash = "0".repeat(64); },
+    (value) => { value.closure.sections.C_AFFECTED_DOMAIN_CLOSURE.taskLocalGoverningEdgeClosure.classification = "TASK_LOCAL_GOVERNING_EDGE_CLOSURE_BLOCKED"; },
+    (value) => { value.closure.sections.C_AFFECTED_DOMAIN_CLOSURE.taskLocalGoverningEdgeClosure.deterministic = false; },
+    (value) => { value.closure.sections.C_AFFECTED_DOMAIN_CLOSURE.taskLocalGoverningEdgeClosure.findings = ["FORGED_CLEAR"]; },
+  ];
+  for (const mutate of mutations) {
+    const forged = structuredClone(canonical);
+    mutate(forged);
+    assert.equal(deriveFiniteTaskTaskLocalEvidenceV2(forged).valid, false);
+  }
+});
+
+test("active-task frozen artifact 06c: historical full model-delta envelopes remain readable but cannot contradict packet evidence", () => {
+  const artifact = historicalTaskLocalArtifactFixture();
+  assert.equal(deriveFiniteTaskTaskLocalEvidenceV2(artifact).representation, "HISTORICAL_COMPACT");
+  assert.equal(deriveFiniteTaskTaskLocalEvidenceV2(artifact).valid, true);
+  const forged = structuredClone(artifact);
+  forged.taskLocalDomainGraphDelta.edges[0].edgeId = "forged-historical-edge";
+  assert.equal(deriveFiniteTaskTaskLocalEvidenceV2(forged).valid, false);
+});
+
+test("active-task path globs match descendants without authorizing a sibling route file", () => {
+  assert.equal(finiteTaskPathMatchesReservation("app/admin/owner.tsx", ["app/admin/**"]), true);
+  assert.equal(finiteTaskPathMatchesReservation("app/admin.tsx", ["app/admin/**"]), false);
+  assert.equal(finiteTaskPathMatchesReservation("app/administer.tsx", ["app/admin/**"]), false);
+  assert.equal(finiteTaskPathMatchesReservation("app/admin.tsx", ["app/admin.tsx"]), true);
 });
 
 const coordinatedAdmittedWave1Mutation = (mutate, commentId) => {

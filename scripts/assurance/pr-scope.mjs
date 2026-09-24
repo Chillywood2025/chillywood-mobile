@@ -161,6 +161,9 @@ if (!event.pull_request) {
   const typedAuthorities = validatedIdentity.ok && tree
     ? observeTypedTaskAuthorities({ identity: validatedIdentity.identity, tree, scope, currentTruth })
     : { architectureAuthority: null, terminalTruthAuthority: null, finiteTaskAuthority: null, finiteTaskAdmissionAuthority: null };
+  const authoritativeFiniteTaskChangedLines = typedAuthorities.finiteTaskAuthority?.ok === true
+    ? typedAuthorities.finiteTaskAuthority.canonicalChangedLines
+    : null;
   let context = deriveTaskScopeContext({
     event,
     readback,
@@ -172,7 +175,7 @@ if (!event.pull_request) {
     requestedFeature: options.feature ?? null,
     requestedWaiver: options.waiver ?? null,
     observedChangedPaths: scope.files,
-    observedCanonicalChangedLines: scope.additions + scope.deletions,
+    observedCanonicalChangedLines: authoritativeFiniteTaskChangedLines ?? scope.additions + scope.deletions,
   });
   const classified = classifyPrScopePaths(scope.files, policy);
   const domains = [...new Set(classified.flatMap(({ domains: values }) => values))].sort();
@@ -189,6 +192,10 @@ if (!event.pull_request) {
     : waiver
       ? { files: waiver.fileBudget.waivedMaximum, lines: waiver.lineBudget.waivedMaximum, source: waiver.contractId }
       : { files: policy.defaultBudget.changedFiles, lines: policy.defaultBudget.netChangedLines, source: "pr-scope-policy-v1" };
+  const budgetedChangedLines = context.contextType === "ACTIVE_FINITE_TASK_LEASE"
+    && Number.isSafeInteger(authoritativeFiniteTaskChangedLines)
+    ? authoritativeFiniteTaskChangedLines
+    : Math.max(0, scope.additions - scope.deletions);
   if (context.authoritySource === "TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_V1" && (stableJson(scope.files) !== stableJson(TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PATHS) || scope.files.length !== TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumFiles || scope.additions + scope.deletions > TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines || budget.files !== TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumFiles || budget.lines !== TERMINAL_TRUTH_SUCCESSOR_VERIFIER_REPAIR_PROFILE.maximumNetLines)) {
     findings.push({ id: "ASSURANCE_TERMINAL_VERIFIER_REPAIR_PROFILE_INVALID", status: "BLOCKED_INTERNAL" });
   }
@@ -197,7 +204,7 @@ if (!event.pull_request) {
     if (!profile || scope.additions + scope.deletions > profile.maximumChangedLines) findings.push({ id: "ASSURANCE_CONTROL_SOURCE_ONLY_PROFILE_INVALID", status: "BLOCKED_INTERNAL" });
   }
   if (scope.files.length > budget.files) findings.push({ id: "ASSURANCE_PR_FILE_BUDGET_EXCEEDED", status: "BLOCKED_INTERNAL", actual: scope.files.length, maximum: budget.files });
-  if (Math.max(0, scope.additions - scope.deletions) > budget.lines) findings.push({ id: "ASSURANCE_PR_LINE_BUDGET_EXCEEDED", status: "BLOCKED_INTERNAL", actual: scope.additions - scope.deletions, maximum: budget.lines });
+  if (budgetedChangedLines > budget.lines) findings.push({ id: "ASSURANCE_PR_LINE_BUDGET_EXCEEDED", status: "BLOCKED_INTERNAL", actual: budgetedChangedLines, maximum: budget.lines });
   const scopeEvaluation = evaluateHighRiskScope({
     highRiskDomains: highRisk,
     objectiveDomains: context.objectiveDomains ?? [],
@@ -232,6 +239,7 @@ if (!event.pull_request) {
     additions: scope.additions,
     deletions: scope.deletions,
     netChangedLines: scope.netChangedLines,
+    handAuthoredChangedLines: budgetedChangedLines,
     domains,
     highRiskDomains: highRisk,
     primaryFeatureId: context.primaryFeatureId,
@@ -252,5 +260,5 @@ if (!event.pull_request) {
     ? `PR scope: SOURCE READINESS — ${scope.files.length} exact files, task authority deferred, merge authority false`
     : context.contextType === "RISK_BASED_READY_ADMISSION_V1"
       ? `PR scope: ${findings.length ? "FAIL" : "PASS"} — bounded owner risk-based ready admission, ${scope.files.length}/${budget.files} files, ${scope.additions - scope.deletions}/${budget.lines} net lines`
-      : `PR scope: ${findings.length ? "FAIL" : "PASS"} — ${scope.files.length}/${budget.files} files, ${scope.additions - scope.deletions}/${budget.lines} net lines, task ${context.bindingId ?? "unbound"}`]);
+      : `PR scope: ${findings.length ? "FAIL" : "PASS"} — ${scope.files.length}/${budget.files} files, ${budgetedChangedLines}/${budget.lines} hand-authored changed lines, task ${context.bindingId ?? "unbound"}`]);
 }

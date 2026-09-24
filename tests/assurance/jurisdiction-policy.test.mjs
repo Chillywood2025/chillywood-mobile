@@ -209,6 +209,16 @@ const aggregatePhase1Evidence = ({ repository = scope.repository, pr, branch, he
     phase1SourceDecisionHash: sha64("c"), decisionHash: sha64("d"),
   };
 };
+const aggregatePhase1EvidenceV2 = (args = {}) => ({
+  ...aggregatePhase1Evidence(args),
+  schemaVersion: "PHASE1_ADMISSION_EVIDENCE_V2",
+  applicabilityPolicyId: "LIFECYCLE_RISK_AWARE_PHASE1_V2",
+  applicableLanes: 13,
+  deferredLanes: 0,
+  discoveredLanes: 13,
+  lifecycleStage: "FROZEN_CANDIDATE",
+  riskClassification: "SECURITY_SENSITIVE_HIGH_RISK",
+});
 const legacyBody = (marker, base) => {
   const withSubjectHash = { ...base, subjectHash: legacyHash(base.subject) };
   return `${marker}\n${canonicalJson({ ...withSubjectHash, bodyHash: legacyHash(withSubjectHash) })}`;
@@ -834,6 +844,36 @@ test("aggregate final-source representation, transport, and historical lifecycle
   ];
   assert.equal(cases.length, 20);
   for (const [name, assertion] of cases) await t.test(name, assertion);
+});
+
+test("V2 aggregate final-source evidence binds exact lifecycle, risk, base, head, and tree without V1 fallback", () => {
+  const fixture = admissionFixture();
+  const admission = verifyFiniteTaskAdmissionV2({ body: fixture.v2.body });
+  const identity = { repository: scope.repository, pr: fixture.admissionIdentity.pr, branch: fixture.admissionIdentity.branch, headSha: fixture.admissionIdentity.head, baseSha: sha40("9") };
+  const tree = fixture.admissionIdentity.tree;
+  const phase1 = aggregatePhase1EvidenceV2({ pr: identity.pr, branch: identity.branch, head: identity.headSha, tree, base: identity.baseSha });
+  const ownerJurisdiction = { commentBodyHash: fixture.ownerJurisdictionBinding.ownerDecisionCommentBodyHash, commentId: fixture.ownerJurisdictionBinding.ownerDecisionCommentId, domainIds: DOMAINS, referenceScope: "TASK_BOUND_COMPOSITE", standingPolicyHash: fixture.ownerJurisdictionBinding.standingPolicyHash, standingPolicySequence: 0, standingPolicyStatus: ACTIVE_POLICY_STATUS, standingPolicyType: "OWNER_JURISDICTION_STANDING_POLICY_V2", standingPolicyVersion: 2, taskBindingHash: fixture.ownerJurisdictionBinding.taskBindingHash };
+  const renderArgs = {
+    admissionIdentity: fixture.admissionIdentity,
+    currentAdmission: { bodyHash: admission.bodyHash, commentId: 5291000000, sequence: admission.subject.sequence, subjectHash: admission.subjectHash },
+    diffHash: sha64("9"), owner, ownerJurisdiction, phase1,
+    prospective: { classification: "PREIMPLEMENTATION_ENGINEERING_CLEAR", externalProofInherited: false, marketJurisdictionOwnerCoverage: { covered: DOMAINS.length, required: DOMAINS.length, result: `${DOMAINS.length}/${DOMAINS.length}` }, productMutationAllowedAfterAdmissionMerge: true, productMutationAllowedBeforeAdmissionMerge: false, taskLocalGoverningEdgeClosure: "CLEAR" },
+    repositoryReview: { bodyHash: sha64("7"), commentId: 5293000000, disposition: { P0: 0, P1: 0, launchImpactingP2: 0 }, subjectHash: sha64("8") },
+    scope,
+  };
+  const rendered = renderFiniteTaskAdmissionFinalSourceV2(renderArgs);
+  const expected = { repository: identity.repository, product: scope.product, launchProgram: scope.launchProgram, pr: identity.pr, task: taskIdentity.taskId, ownerLogin: owner.login, head: identity.headSha, tree, baseSha: identity.baseSha };
+  assert.equal(verifyFiniteTaskAdmissionFinalSourceV2({ body: rendered.body, expected }).ok, true);
+  const mutate = (change) => {
+    const value = structuredClone(phase1);
+    change(value);
+    assert.throws(() => renderFiniteTaskAdmissionFinalSourceV2({ ...renderArgs, phase1: value }), /FINITE_TASK_ADMISSION_FINAL_SOURCE_SUBJECT_INVALID/u);
+  };
+  mutate((value) => { value.headSha = sha40("0"); });
+  mutate((value) => { value.baseSha = sha40("0"); });
+  mutate((value) => { value.lifecycleStage = "OWNER_INTENT"; });
+  mutate((value) => { value.riskClassification = "FORGED_RISK"; });
+  mutate((value) => { value.applicableLanes = 12; });
 });
 
 test("production final-source eligibility readback binds exact review, Phase 1, admission, and Owner policy", () => {

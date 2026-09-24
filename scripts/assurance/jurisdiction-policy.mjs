@@ -1185,6 +1185,7 @@ const FINAL_SOURCE_ADMISSION_KEYS = ["bodyHash", "commentId", "sequence", "subje
 const FINAL_SOURCE_REVIEW_KEYS = ["bodyHash", "commentId", "disposition", "subjectHash"];
 const FINAL_SOURCE_PHASE1_KEYS = ["head", "passedJobs", "requiredJobs", "result", "runId", "tree"];
 const FINAL_SOURCE_PHASE1_AGGREGATE_KEYS = ["acceptable", "action", "affectedRiskDomains", "baseRef", "baseSha", "blockingFindingCount", "checkName", "currentRulesetStage", "decisionHash", "deferredExternalCount", "draft", "evaluatorSha", "eventUpdatedAt", "headRef", "headSha", "lifecycleGeneration", "maintenanceStatus", "mergeAuthorityGranted", "mode", "nonBlockingAssuranceFindingCount", "phase1SourceDecisionHash", "pr", "publisherAnchorHash", "publisherProvisioningReadbackHash", "rawFailedLanes", "rawPassedLanes", "repository", "requiredLanes", "result", "runAttempt", "runId", "schemaVersion", "sourceTree"];
+const FINAL_SOURCE_PHASE1_AGGREGATE_KEYS_V2 = [...FINAL_SOURCE_PHASE1_AGGREGATE_KEYS, "applicabilityPolicyId", "applicableLanes", "deferredLanes", "discoveredLanes", "lifecycleStage", "riskClassification"];
 const FINAL_SOURCE_PROSPECTIVE_KEYS = ["classification", "externalProofInherited", "marketJurisdictionOwnerCoverage", "productMutationAllowedAfterAdmissionMerge", "productMutationAllowedBeforeAdmissionMerge", "taskLocalGoverningEdgeClosure"];
 const ADMISSION_FINAL_SOURCE_SUBJECT_KEYS = ["admissionIdentity", "authority", "changedPaths", "currentAdmission", "diffHash", "ownerJurisdiction", "phase1", "prospective", "repositoryReview", "schemaVersion", "scope", "type"];
 const ADMISSION_FINAL_SOURCE_PAYLOAD_KEYS = ["bodyHash", "commentContextHash", "envelopeHash", "evidenceClass", "owner", "pr", "repository", "schemaVersion", "subject", "subjectHash", "task", "type"];
@@ -1197,8 +1198,8 @@ const legacyFinalSourcePhase1Valid = (phase1, subject) => exactKeys(phase1, FINA
   && phase1.passedJobs === 13
   && phase1.result === "PASS";
 
-const aggregateFinalSourcePhase1Valid = (phase1, subject) => exactKeys(phase1, FINAL_SOURCE_PHASE1_AGGREGATE_KEYS)
-  && phase1.schemaVersion === "PHASE1_ADMISSION_EVIDENCE_V1"
+const aggregateFinalSourcePhase1Valid = (phase1, subject) => exactKeys(phase1, phase1?.schemaVersion === "PHASE1_ADMISSION_EVIDENCE_V2" ? FINAL_SOURCE_PHASE1_AGGREGATE_KEYS_V2 : FINAL_SOURCE_PHASE1_AGGREGATE_KEYS)
+  && ["PHASE1_ADMISSION_EVIDENCE_V1", "PHASE1_ADMISSION_EVIDENCE_V2"].includes(phase1.schemaVersion)
   && phase1.checkName === "Phase 1 / Admission Decision"
   && phase1.result === "PHASE_1_ACCEPTABLE"
   && phase1.mode === "READY_MERGE_AUTHORITY"
@@ -1223,7 +1224,14 @@ const aggregateFinalSourcePhase1Valid = (phase1, subject) => exactKeys(phase1, F
   && [null, "PHASE_1_NON_BLOCKING_ASSURANCE_MAINTENANCE_REQUIRED"].includes(phase1.maintenanceStatus)
   && isPositiveInteger(phase1.runId)
   && Number.isSafeInteger(phase1.runAttempt) && phase1.runAttempt > 0
-  && phase1.requiredLanes === 13
+  && (phase1.schemaVersion === "PHASE1_ADMISSION_EVIDENCE_V1"
+    ? phase1.requiredLanes === 13
+    : phase1.applicabilityPolicyId === "LIFECYCLE_RISK_AWARE_PHASE1_V2"
+      && phase1.discoveredLanes === 13
+      && phase1.applicableLanes === phase1.requiredLanes
+      && phase1.deferredLanes + phase1.applicableLanes === phase1.discoveredLanes
+      && ["AUTHORIZED_IMPLEMENTATION", "FROZEN_CANDIDATE", "NORMAL_MERGE_READY"].includes(phase1.lifecycleStage)
+      && ["LOW_RISK_PRESENTATION_ONLY", "ASSURANCE_CONTROL_PLANE_HIGH_RISK", "SECURITY_SENSITIVE_HIGH_RISK", "UNKNOWN_RISK"].includes(phase1.riskClassification))
   && Number.isSafeInteger(phase1.rawPassedLanes) && phase1.rawPassedLanes >= 0
   && Number.isSafeInteger(phase1.rawFailedLanes) && phase1.rawFailedLanes >= 0
   && phase1.rawPassedLanes + phase1.rawFailedLanes === phase1.requiredLanes
@@ -1312,7 +1320,7 @@ export function verifyFiniteTaskAdmissionFinalSourceV2({ body, receipt = null, e
     if (expected.task && payload.task !== expected.task) findings.push("ADMISSION_FINAL_SOURCE_TASK_MISMATCH");
     if (expected.head && payload.subject.admissionIdentity.head !== expected.head) findings.push("ADMISSION_FINAL_SOURCE_HEAD_MISMATCH");
     if (expected.tree && payload.subject.admissionIdentity.tree !== expected.tree) findings.push("ADMISSION_FINAL_SOURCE_TREE_MISMATCH");
-    if (expected.baseSha && payload.subject.phase1?.schemaVersion === "PHASE1_ADMISSION_EVIDENCE_V1" && payload.subject.phase1.baseSha !== expected.baseSha) findings.push("ADMISSION_FINAL_SOURCE_BASE_MISMATCH");
+    if (expected.baseSha && ["PHASE1_ADMISSION_EVIDENCE_V1", "PHASE1_ADMISSION_EVIDENCE_V2"].includes(payload.subject.phase1?.schemaVersion) && payload.subject.phase1.baseSha !== expected.baseSha) findings.push("ADMISSION_FINAL_SOURCE_BASE_MISMATCH");
     if (expected.subject && canonicalJson(payload.subject) !== canonicalJson(expected.subject)) findings.push("ADMISSION_FINAL_SOURCE_SUBJECT_MISMATCH");
     if (expected.ownerLogin && payload.owner.login !== expected.ownerLogin) findings.push("ADMISSION_FINAL_SOURCE_OWNER_MISMATCH");
     if (receipt && (!isPositiveInteger(receipt.id) || receipt.authorLogin !== payload.owner.login || receipt.authorAssociation !== "OWNER" || !isCanonicalTimestamp(receipt.createdAt) || receipt.createdAt !== receipt.updatedAt || (receipt.body !== undefined && receipt.body !== body))) findings.push("ADMISSION_FINAL_SOURCE_IMMUTABILITY_INVALID");

@@ -2859,13 +2859,16 @@ export function architectureRepositoryReviewSubject({ identity, tree, scope, pro
   const controlPlaneConsolidationReview = profile === ASSURANCE_CONTROL_PLANE_CONSOLIDATION_V2;
   const phase1AdmissionControlReview = Boolean(phase1ControlProfile(profile));
   const dependencyAmendment = dependencyAmendmentProjection(dependencyAmendmentResolution);
+  const finiteTaskBudgetScope = finiteTaskImplementationReview
+    ? observeFiniteTaskBudgetScope({ root, base: identity?.baseSha, head: identity?.headSha, lease: effectiveReservationResolution?.baseLease, scope })
+    : null;
   const finiteTaskPrRiskAuthority = finiteTaskImplementationReview
     ? deriveFiniteTaskPrRiskAuthority({
         effectiveReservationResolution,
         registry: readJson(root, "config/assurance/feature-registry-v1.json"),
         policy: readJson(root, "config/assurance/pr-scope-policy-v1.json"),
         observedChangedPaths: observed.changedPaths,
-        observedCanonicalChangedLines: Number(scope?.additions ?? 0) + Number(scope?.deletions ?? 0),
+        observedCanonicalChangedLines: finiteTaskBudgetScope?.changedLines ?? null,
       })
     : null;
   return {
@@ -4040,14 +4043,86 @@ export function evaluateFiniteTaskAdmissionSuccessor({ raw, allComments = [], pa
 
 export function finiteTaskJurisdictionEvidenceV2(taskArtifact, taskArtifactHash) {
   const closure = taskArtifact?.closure;
-  const edgeClosure = taskArtifact?.taskLocalGoverningEdgeClosure ?? closure?.sections?.C_AFFECTED_DOMAIN_CLOSURE?.taskLocalGoverningEdgeClosure;
+  const projection = deriveFiniteTaskTaskLocalEvidenceV2(taskArtifact);
+  const edgeClosure = projection.edgeClosure;
   return {
     taskArtifactHash,
     closurePacketHash: closure?.packetHash,
     completenessCertificateHash: taskArtifact?.certificate?.certificateHash,
     taskLocalEdgeClosureHash: edgeClosure?.closureHash,
     taskLocalEdgeEvidenceHash: edgeClosure?.evidenceHash,
-    taskLocalModelHash: hashValue(edgeClosure?.modelDeltaEdges ?? []),
+    // Historical immutable Owner receipts bind the compact edge-id projection.
+    // The canonical lease below separately binds the full model-delta evidence.
+    taskLocalModelHash: projection.modelDeltaEdgeIdHash,
+  };
+}
+
+export function deriveFiniteTaskTaskLocalEvidenceV2(taskArtifact) {
+  const packetC = taskArtifact?.closure?.sections?.C_AFFECTED_DOMAIN_CLOSURE;
+  const packetEvidence = packetC?.taskLocalEvidence;
+  const packetClosure = packetC?.taskLocalGoverningEdgeClosure;
+  const topEvidence = taskArtifact?.taskLocalEdgeEvidence;
+  const topClosure = taskArtifact?.taskLocalGoverningEdgeClosure;
+  const fullEvidence = Array.isArray(packetEvidence?.dispositions) && Array.isArray(packetEvidence?.modelDeltas)
+    ? packetEvidence
+    : topEvidence;
+  const fullClosure = typeof packetClosure?.taskId === "string" && object(packetClosure?.sourceIdentity)
+    ? packetClosure
+    : topClosure;
+  const edgeSummaryKeys = ["accounting", "classification", "closureHash", "contract", "deterministic", "evidenceHash", "findings", "verificationRuns"];
+  const edgeSummary = object(fullClosure) ? Object.fromEntries(edgeSummaryKeys.map((key) => [key, structuredClone(fullClosure[key])])) : null;
+  const evidenceSummary = object(fullEvidence) && object(fullClosure) ? {
+    dispositionCount: Array.isArray(fullEvidence.dispositions) ? fullEvidence.dispositions.length : -1,
+    evidenceHash: fullClosure.evidenceHash,
+    inputHash: fullClosure.inputHash,
+    modelDeltaCount: Array.isArray(fullEvidence.modelDeltas) ? fullEvidence.modelDeltas.length : -1,
+  } : null;
+  const modelDeltaSummary = object(fullEvidence) && Array.isArray(fullEvidence.modelDeltas) ? {
+    edgeIds: fullEvidence.modelDeltas.map((item) => item?.edgeId).filter((edgeId) => typeof edgeId === "string").sort(compareUtf8),
+    hash: hashValue(fullEvidence.modelDeltas),
+  } : null;
+  const fullPacket = stableJson(packetClosure) === stableJson(fullClosure)
+    && stableJson(packetEvidence) === stableJson(fullEvidence)
+    && (!Object.hasOwn(packetC ?? {}, "taskLocalModelDeltas") || stableJson(packetC.taskLocalModelDeltas) === stableJson(modelDeltaSummary));
+  const historicalCompactPacket = stableJson(packetClosure) === stableJson(edgeSummary)
+    && stableJson(packetEvidence) === stableJson(evidenceSummary)
+    && stableJson(packetC?.taskLocalModelDeltas) === stableJson(modelDeltaSummary);
+  const duplicateEvidenceValid = topEvidence === undefined || stableJson(topEvidence) === stableJson(fullEvidence);
+  const duplicateClosureValid = topClosure === undefined || stableJson(topClosure) === stableJson(fullClosure);
+  const historicalModelDeltaEnvelope = taskArtifact?.taskLocalDomainGraphDelta;
+  const historicalModelDeltaEnvelopeValid = object(historicalModelDeltaEnvelope)
+    && historicalModelDeltaEnvelope.id === "TASK_LOCAL_DOMAIN_GRAPH_DELTA_V1"
+    && historicalModelDeltaEnvelope.classification === "PREDICTABLE_MODEL_OMISSION"
+    && stableJson(historicalModelDeltaEnvelope.edges) === stableJson(fullEvidence?.modelDeltas)
+    && historicalModelDeltaEnvelope.hash === modelDeltaSummary?.hash;
+  const duplicateModelDeltaValid = historicalModelDeltaEnvelope === undefined
+    || stableJson(historicalModelDeltaEnvelope) === stableJson(modelDeltaSummary)
+    || historicalModelDeltaEnvelopeValid;
+  const valid = object(fullEvidence) && object(fullClosure) && object(modelDeltaSummary)
+    && (fullPacket || historicalCompactPacket)
+    && duplicateEvidenceValid && duplicateClosureValid && duplicateModelDeltaValid;
+  return {
+    valid,
+    edgeEvidence: fullEvidence ?? null,
+    edgeClosure: fullClosure ?? null,
+    edgeSummary,
+    evidenceSummary,
+    modelDeltaSummary,
+    modelDeltaEdgeIdHash: hashValue(modelDeltaSummary?.edgeIds ?? []),
+    representation: fullPacket ? "CANONICAL_FULL" : historicalCompactPacket ? "HISTORICAL_COMPACT" : "INVALID",
+  };
+}
+
+export function finiteTaskLeaseClosureV2(taskArtifact, taskArtifactHash) {
+  const closure = taskArtifact?.closure;
+  const projection = deriveFiniteTaskTaskLocalEvidenceV2(taskArtifact);
+  return {
+    artifactHash: taskArtifactHash,
+    packetHash: closure?.packetHash,
+    certificateHash: taskArtifact?.certificate?.certificateHash,
+    edgeClosureHash: projection.edgeClosure?.closureHash,
+    edgeEvidenceHash: projection.edgeClosure?.evidenceHash,
+    modelDeltaHash: projection.modelDeltaSummary?.hash,
   };
 }
 
@@ -4398,23 +4473,13 @@ export function evaluateAdmittedFiniteTaskArtifactV2(taskArtifact, {
   const domains = Array.isArray(taskArtifact?.closure?.affectedDomainClosure?.domains) ? taskArtifact.closure.affectedDomainClosure.domains : [];
   const packetC = taskArtifact?.closure?.sections?.C_AFFECTED_DOMAIN_CLOSURE;
   const packetDomains = typeof packetC?.primaryDomain === "string" && Array.isArray(packetC?.includedDependencies) ? [packetC.primaryDomain, ...packetC.includedDependencies].sort(compareUtf8) : [];
-  const edgeEvidence = taskArtifact?.taskLocalEdgeEvidence ?? taskArtifact?.closure?.sections?.C_AFFECTED_DOMAIN_CLOSURE?.taskLocalEvidence;
-  const edgeClosure = taskArtifact?.taskLocalGoverningEdgeClosure ?? taskArtifact?.closure?.sections?.C_AFFECTED_DOMAIN_CLOSURE?.taskLocalGoverningEdgeClosure;
+  const taskLocalProjection = deriveFiniteTaskTaskLocalEvidenceV2(taskArtifact);
+  const edgeEvidence = taskLocalProjection.edgeEvidence;
+  const edgeClosure = taskLocalProjection.edgeClosure;
   const edgeVerificationEligible = authoritativeIdentity && authoritativeJurisdiction && authoritativeScope && rawHash === taskArtifactHash && rawHash === implementationIdentity?.taskArtifactHash && rawHash === authoritativeLease?.closure?.artifactHash;
   const verifiedEdgeClosure = edgeVerificationEligible && object(edgeEvidence) ? verifyTaskLocalGoverningEdgeClosureAtSourceSnapshot(edgeEvidence, { root, runs: 2, snapshotHead: bindingIdentity?.planningHead, snapshotTree: bindingIdentity?.planningTree }) : null;
   const engineeringSourceLineageValid = finiteTaskEngineeringSourceLineageValid({ edgeSourceIdentity: edgeEvidence?.sourceIdentity, closureSourceIdentity: taskArtifact?.closure?.sourceIdentity, planningHead: bindingIdentity?.planningHead, planningTree: bindingIdentity?.planningTree, root });
-  const expectedLeaseClosure = {
-    artifactHash: taskEvidence?.taskArtifactHash,
-    packetHash: taskEvidence?.closurePacketHash,
-    certificateHash: taskEvidence?.completenessCertificateHash,
-    edgeClosureHash: taskEvidence?.taskLocalEdgeClosureHash,
-    edgeEvidenceHash: taskEvidence?.taskLocalEdgeEvidenceHash,
-    modelDeltaHash: taskEvidence?.taskLocalModelHash,
-  };
-  const edgeSummaryKeys = ["accounting", "classification", "closureHash", "contract", "deterministic", "evidenceHash", "findings", "verificationRuns"];
-  const expectedEdgeSummary = object(verifiedEdgeClosure) ? Object.fromEntries(edgeSummaryKeys.map((key) => [key, verifiedEdgeClosure[key]])) : null;
-  const expectedEdgeEvidenceSummary = object(edgeEvidence) && object(verifiedEdgeClosure) ? { dispositionCount: Array.isArray(edgeEvidence.dispositions) ? edgeEvidence.dispositions.length : -1, evidenceHash: verifiedEdgeClosure.evidenceHash, inputHash: verifiedEdgeClosure.inputHash, modelDeltaCount: Array.isArray(edgeEvidence.modelDeltas) ? edgeEvidence.modelDeltas.length : -1 } : null;
-  const expectedModelDeltaSummary = object(edgeEvidence) && Array.isArray(edgeEvidence.modelDeltas) ? { edgeIds: edgeEvidence.modelDeltas.map((item) => item?.edgeId).filter((edgeId) => typeof edgeId === "string").sort(compareUtf8), hash: hashValue(edgeEvidence.modelDeltas) } : null;
+  const expectedLeaseClosure = finiteTaskLeaseClosureV2(taskArtifact, taskArtifactHash);
   const planningTree = /^[0-9a-f]{40}$/u.test(bindingIdentity?.planningHead ?? "")
     ? typedGit(root, ["rev-parse", `${bindingIdentity.planningHead}^{tree}`])
     : { status: 1, stdout: "" };
@@ -4480,9 +4545,7 @@ export function evaluateAdmittedFiniteTaskArtifactV2(taskArtifact, {
     && stableJson(domains) === stableJson(packetC?.computedClosure?.domains)
     && stableJson(domains) === stableJson(edgeClosure?.domains)
     && stableJson(domains) === stableJson(verifiedEdgeClosure?.domains)
-    && stableJson(packetC?.taskLocalGoverningEdgeClosure) === stableJson(expectedEdgeSummary)
-    && stableJson(packetC?.taskLocalEvidence) === stableJson(expectedEdgeEvidenceSummary)
-    && stableJson(packetC?.taskLocalModelDeltas) === stableJson(expectedModelDeltaSummary)
+    && taskLocalProjection.valid
     && edgeEvidence?.taskId === taskArtifact?.taskId
     && edgeClosure?.taskId === taskArtifact?.taskId
     && edgeEvidence?.primaryDomain === taskArtifact?.primaryDomain
@@ -4546,8 +4609,9 @@ export function evaluateFiniteTaskAdmissionSuccessorV2({ raw, allComments = [], 
   try { expectedComment = renderFiniteTaskAdmissionSuccessorV2({ predecessorRaw, identity: receiptIdentity, tree: chain.currentAdmission?.admissionIdentity?.tree, admissionScope: scope, implementation, taskArtifact, taskArtifactHash, ownerJurisdictionAuthority, root }); } catch {}
   const closure = taskArtifact?.closure;
   const certificate = taskArtifact?.certificate;
-  const edgeEvidence = taskArtifact?.taskLocalEdgeEvidence ?? closure?.sections?.C_AFFECTED_DOMAIN_CLOSURE?.taskLocalEvidence;
-  const edgeClosure = taskArtifact?.taskLocalGoverningEdgeClosure ?? closure?.sections?.C_AFFECTED_DOMAIN_CLOSURE?.taskLocalGoverningEdgeClosure;
+  const taskLocalProjection = deriveFiniteTaskTaskLocalEvidenceV2(taskArtifact);
+  const edgeEvidence = taskLocalProjection.edgeEvidence;
+  const edgeClosure = taskLocalProjection.edgeClosure;
   const verifiedEdgeClosure = edgeEvidence ? verifyTaskLocalGoverningEdgeClosure(edgeEvidence, { root, runs: 2 }) : null;
   const domains = closure?.affectedDomainClosure?.domains ?? [];
   const lease = (truthRecord?.finiteTaskLeases?.tasks ?? []).filter(({ leaseId }) => leaseId === taskArtifact?.taskId);
@@ -4573,9 +4637,9 @@ export function evaluateFiniteTaskAdmissionSuccessorV2({ raw, allComments = [], 
     implementation: implementation?.state === "open" && implementation?.draft === true && implementation?.pr === binding?.taskIdentity?.implementationPr && implementation?.branch === binding?.taskIdentity?.implementationBranch && implementation?.changedPaths?.length === 1 && implementation.changedPaths[0] === implementation.taskArtifactPath,
     seed: seedIsAncestor && admittedImplementationBaseIsAncestor && implementation?.seedHead === binding?.taskIdentity?.originalSeedHead && implementation?.seedTree === binding?.taskIdentity?.originalSeedTree && implementation?.observedSeedTree === implementation?.seedTree,
     owner: verifyFiniteTaskOwnerApprovalV2({ approval: ownerApproval, identity, implementation, taskArtifact, binding }),
-    artifact: /^[0-9a-f]{64}$/u.test(taskArtifactHash ?? "") && stableJson(taskEvidence) === stableJson(binding?.taskEvidence) && prospectiveGateFindings.length === 0,
+    artifact: /^[0-9a-f]{64}$/u.test(taskArtifactHash ?? "") && taskLocalProjection.valid && stableJson(taskEvidence) === stableJson(binding?.taskEvidence) && prospectiveGateFindings.length === 0,
     registryCompatibility: validateFiniteTaskLeaseRegistry(truthRecord?.finiteTaskLeases).length === 0,
-    truthLease: lease.length === 1 && leaseRecord?.implementationPr === implementation?.pr && leaseRecord?.implementationBranch === implementation?.branch && leaseRecord?.protectedAdmissionPr === identity?.pr && finiteTaskAdmissionLeaseStateValid(leaseRecord) && stableJson(leaseRecord?.artifactReservation?.allowedDomains) === stableJson(domains) && stableJson(leaseRecord?.allowedPaths) === stableJson(taskArtifact?.implementationPlan?.allowedPaths) && stableJson(leaseRecord?.scopeBudget) === stableJson(taskScope.scopeBudget) && stableJson(leaseRecord?.amendmentMaximum) === stableJson(taskScope.amendmentMaximum) && stableJson(leaseRecord?.closure) === stableJson({ artifactHash: taskEvidence.taskArtifactHash, packetHash: taskEvidence.closurePacketHash, certificateHash: taskEvidence.completenessCertificateHash, edgeClosureHash: taskEvidence.taskLocalEdgeClosureHash, edgeEvidenceHash: taskEvidence.taskLocalEdgeEvidenceHash, modelDeltaHash: taskEvidence.taskLocalModelHash }),
+    truthLease: lease.length === 1 && leaseRecord?.implementationPr === implementation?.pr && leaseRecord?.implementationBranch === implementation?.branch && leaseRecord?.protectedAdmissionPr === identity?.pr && finiteTaskAdmissionLeaseStateValid(leaseRecord) && stableJson(leaseRecord?.artifactReservation?.allowedDomains) === stableJson(domains) && stableJson(leaseRecord?.allowedPaths) === stableJson(taskArtifact?.implementationPlan?.allowedPaths) && stableJson(leaseRecord?.scopeBudget) === stableJson(taskScope.scopeBudget) && stableJson(leaseRecord?.amendmentMaximum) === stableJson(taskScope.amendmentMaximum) && stableJson(leaseRecord?.closure) === stableJson(finiteTaskLeaseClosureV2(taskArtifact, taskArtifactHash)),
     truthBinding: active?.implementationPr === implementation?.pr && active?.implementationBranch === implementation?.branch && active?.immutableSourceHead === implementation?.seedHead && active?.currentImplementationHead === implementation?.planningHead && active?.phase === "PREIMPLEMENTATION_ENGINEERING_CLEAR" && active?.productSourceMutationAllowed === true && [active?.providerMutationAllowed, active?.databaseDeploymentAllowed, active?.buildAllowed, active?.submissionAllowed, active?.otaAllowed, active?.publicReleaseAllowed].every((value) => value === false),
     authority: truthRecord?.ownerJurisdictionPolicyCapability?.status === "ACTIVE" && truthRecord?.finiteTaskAdmissionClearanceCapability?.status === "ACTIVE" && truthRecord.finiteTaskAdmissionClearanceCapability.productMutationBeforeAdmissionMerge === false,
     duplicate: priorDuplicate === false,
@@ -4711,7 +4775,7 @@ export function classifyFiniteTaskAdmissionFinalSourceReceiptV2({ item, identity
   const structural = normalized ? verifyFiniteTaskAdmissionFinalSourceV2({ body: normalized.body, receipt: jurisdictionReceipt(normalized), expected: stableExpected }) : { ok: false };
   const subject = structural.subject;
   if (!structural.ok || !subject) return { valid: false, key: null, value: { normalized, verified: structural, subject: null, phase1: null }, disposition: "MALFORMED_INVALID" };
-  const key = { repository: subject.scope?.repository ?? null, pr: subject.admissionIdentity?.pr ?? null, branch: subject.admissionIdentity?.branch ?? null, head: subject.admissionIdentity?.head ?? null, tree: subject.admissionIdentity?.tree ?? null, base: subject.phase1?.schemaVersion === "PHASE1_ADMISSION_EVIDENCE_V1" ? subject.phase1.baseSha ?? null : null, task: subject.admissionIdentity?.taskId ?? null };
+  const key = { repository: subject.scope?.repository ?? null, pr: subject.admissionIdentity?.pr ?? null, branch: subject.admissionIdentity?.branch ?? null, head: subject.admissionIdentity?.head ?? null, tree: subject.admissionIdentity?.tree ?? null, base: aggregatePolicy ? subject.phase1?.baseSha ?? null : null, task: subject.admissionIdentity?.taskId ?? null };
   if (stableJson(key) !== stableJson(requiredKey)) return { valid: true, key, value: { normalized, verified: structural, subject, phase1: null }, disposition: "HISTORICAL_STALE_FINITE_TASK_ADMISSION_FINAL_SOURCE" };
   const verified = verifyFiniteTaskAdmissionFinalSourceV2({ body: normalized.body, receipt: jurisdictionReceipt(normalized), expected: { ...stableExpected, head: identity?.headSha, tree, ...(aggregatePolicy ? { baseSha: identity?.baseSha } : {}) } });
   if (!verified.ok) return { valid: false, key, value: { normalized, verified, subject, phase1: null }, disposition: "INVALID_CURRENT_FINITE_TASK_ADMISSION_FINAL_SOURCE" };
@@ -6649,6 +6713,17 @@ export const observeFiniteTaskGitScope = (root, base, head) => {
     binaryPaths: context.binaryPaths,
   } : null;
 };
+const observeFiniteTaskBudgetScope = ({ root, base, head, lease, scope } = {}) => {
+  const artifactPath = lease?.artifactReservation?.closureArtifactPath;
+  const observation = typeof artifactPath === "string" && artifactPath.length > 0
+    ? observeCandidateScopeFromGit(base, head, root, { nonBudgetedPaths: [artifactPath] })
+    : null;
+  return observation
+    && stableJson(observation.paths) === stableJson(scope?.files)
+    && observation.diffHash === scope?.diffHash
+    ? observation
+    : null;
+};
 const gitScope = observeFiniteTaskGitScope;
 export function observeTypedTaskAuthorities({ identity, tree, scope, currentTruth, phase1EvidenceResolver = observePhase1RunEvidence, publisherProvisioningReadbackResolver = () => null, root = REPOSITORY_ROOT } = {}) {
   if (!identity || !/^[0-9a-f]{40}$/u.test(tree ?? "")) return { architectureAuthority: null, terminalTruthAuthority: null, finiteTaskAuthority: null, finiteTaskAdmissionAuthority: null };
@@ -6680,7 +6755,8 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
     };
     const liveObservation = observeLiveFiniteTaskEffectiveReservation({ repository: identity.repository, pr: identity.pr, authorityEvidence });
     const pullRequest = liveObservation.pullRequest;
-    const canonicalChangedLines = Number(scope?.additions ?? 0) + Number(scope?.deletions ?? 0);
+    const finiteTaskBudgetScope = observeFiniteTaskBudgetScope({ root, base: identity.baseSha, head: identity.headSha, lease, scope });
+    const canonicalChangedLines = finiteTaskBudgetScope?.changedLines ?? null;
     const candidatePaths = Array.isArray(scope?.files) ? [...scope.files].sort() : scope?.files;
     const candidate = {
       repository: identity.repository,
@@ -6690,8 +6766,8 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
       tree,
       files: candidatePaths,
       changedPaths: candidatePaths,
-      additions: Number(scope?.additions ?? 0),
-      deletions: Number(scope?.deletions ?? 0),
+      additions: finiteTaskBudgetScope?.additions ?? null,
+      deletions: finiteTaskBudgetScope?.deletions ?? null,
       changedLines: canonicalChangedLines,
       canonicalChangedLines,
       scopeBase: identity.baseSha,
@@ -6852,7 +6928,7 @@ export function observeTypedTaskAuthorities({ identity, tree, scope, currentTrut
       const ownerCommentId = currentTruth?.finiteTaskLeases?.tasks?.find(({ implementationPr }) => implementationPr === binding?.implementationPr)?.ownerAuthorizationCommentId;
       const ownerRaw = Number.isInteger(ownerCommentId) ? parsedResponse(typedGh(root, [`repos/${identity.repository}/issues/comments/${ownerCommentId}`]), null) : null;
       const ownerApproval = ownerRaw ? normalizeGitHubCommentIdentity(ownerRaw, { repository: identity.repository, pr: binding?.implementationPr, commentId: ownerCommentId }) : null;
-      const ownerMarker = ownerApproval?.body?.match(/^(<!-- chillywood-[a-z0-9-]+-v\d+ -->)\n/u)?.[1];
+      const ownerMarker = ownerApproval?.body?.match(/^(<!-- chillywood-[a-z0-9-]+-v\d+ -->)(?:\r?\n)/u)?.[1];
       const ownerPayload = ownerMarker ? parseExactOwnerBody(ownerApproval, ownerMarker) : null;
       const seedHead = ownerPayload?.subject?.admittedSeed?.head;
       const seedTree = ownerPayload?.subject?.admittedSeed?.tree;
@@ -7030,7 +7106,7 @@ export function verifyFiniteTaskImplementationLifecycle({
     registry: readJson(root, "config/assurance/feature-registry-v1.json"),
     policy: readJson(root, "config/assurance/pr-scope-policy-v1.json"),
     observedChangedPaths: scope?.files,
-    observedCanonicalChangedLines: Number(scope?.additions ?? 0) + Number(scope?.deletions ?? 0),
+    observedCanonicalChangedLines: finiteTaskAuthority?.candidate?.changedLines ?? null,
   });
   if (finiteTaskAuthority?.ok !== true
     || !finiteTaskEffectiveReservationAuthorityValid(resolution)
@@ -7067,7 +7143,7 @@ export function verifyFiniteTaskImplementationLifecycle({
         mutationNegativeControlHash: finalSubject?.mutationNegativeControlHash,
         repositoryReviewHash: review?.subjectHash,
         phase1RunId: phase1Evidence?.runId,
-        phase1Head: phase1Evidence?.sourceHead,
+        phase1Head: phase1Evidence?.sourceHead ?? phase1Evidence?.headSha,
         finiteTaskPrRiskAuthority,
         repositoryReview: review,
         phase1Evidence,
@@ -7174,6 +7250,7 @@ export function observeFiniteTaskPostMergeTransition({
   const sourceTree = sourceHead ? gitText(root, ["rev-parse", `${sourceHead}^{tree}`]) : null;
   const mergeTree = mergeSha ? gitText(root, ["rev-parse", `${mergeSha}^{tree}`]) : null;
   const scope = firstParent && sourceHead ? observeFiniteTaskGitScope(root, firstParent, sourceHead) : null;
+  const finiteTaskBudgetScope = scope ? observeFiniteTaskBudgetScope({ root, base: firstParent, head: sourceHead, lease, scope }) : null;
   if (!pullRequest?.merged_at
     || !/^[0-9a-f]{40}$/u.test(mergeSha ?? "")
     || mergeParts.length !== 3
@@ -7185,7 +7262,8 @@ export function observeFiniteTaskPostMergeTransition({
     || pullRequest?.base?.repo?.full_name !== "Chillywood2025/chillywood-mobile"
     || !/^[0-9a-f]{40}$/u.test(sourceTree ?? "")
     || !/^[0-9a-f]{40}$/u.test(mergeTree ?? "")
-    || !scope) findings.push("FINITE_TASK_POST_MERGE_IDENTITY_INVALID");
+    || !scope
+    || !finiteTaskBudgetScope) findings.push("FINITE_TASK_POST_MERGE_IDENTITY_INVALID");
   const candidate = scope ? {
     repository: "Chillywood2025/chillywood-mobile",
     pr: lease.implementationPr,
@@ -7194,7 +7272,7 @@ export function observeFiniteTaskPostMergeTransition({
     head: sourceHead,
     tree: sourceTree,
     changedPaths: scope.files,
-    changedLines: Number(scope.additions ?? 0) + Number(scope.deletions ?? 0),
+    changedLines: finiteTaskBudgetScope?.changedLines ?? null,
     scopeBase: firstParent,
     diffHash: scope.diffHash,
     changedPathHash: hashValue(scope.files),
@@ -8095,13 +8173,18 @@ export function createImplementationIdentityObservation({
   if (candidateEligible) trustedImplementationIdentities.add(observation);
   return observation;
 }
-export function observeCandidateScopeFromGit(base, head, root = REPOSITORY_ROOT) {
+export function observeCandidateScopeFromGit(base, head, root = REPOSITORY_ROOT, { nonBudgetedPaths = [] } = {}) {
   if (!/^[0-9a-f]{40}$/u.test(base ?? "") || !/^[0-9a-f]{40}$/u.test(head ?? "")) return null;
   const context = createCandidateGitContext({ root, base, head, expectedHead: head });
   if (!context.ok) return null;
   const paths = context.changedPaths;
-  const additions = context.additions;
-  const deletions = context.deletions;
+  const excluded = new Set(nonBudgetedPaths.filter((entry) => typeof entry === "string" && entry.length > 0));
+  const numstat = spawnSync("git", ["diff", "--numstat", "--no-renames", `${context.baseHead}...${context.sourceHead}`], { cwd: root, encoding: "utf8", shell: false, maxBuffer: 32 * 1024 * 1024 });
+  if (numstat.status !== 0) return null;
+  const rows = numstat.stdout.split(/\r?\n/gu).filter(Boolean).map((line) => line.split("\t"));
+  if (rows.some(([, , file]) => typeof file !== "string")) return null;
+  const additions = rows.filter(([, , file]) => !excluded.has(file)).reduce((sum, [added]) => sum + (/^\d+$/u.test(added) ? Number(added) : 0), 0);
+  const deletions = rows.filter(([, , file]) => !excluded.has(file)).reduce((sum, [, deleted]) => sum + (/^\d+$/u.test(deleted) ? Number(deleted) : 0), 0);
   const changedLines = additions + deletions;
   const observation = {
     base: context.baseHead,

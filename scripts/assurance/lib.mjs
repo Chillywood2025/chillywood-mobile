@@ -298,8 +298,9 @@ export function phase1AdmissionEvidenceValid({ evidence, liveEvidence = null, re
   }
   const stored = evidence?.evidence ?? evidence?.decision ?? evidence;
   const live = liveEvidence?.evidence ?? liveEvidence?.decision ?? liveEvidence ?? stored;
-  if (!stored || stored.schemaVersion !== "PHASE1_ADMISSION_EVIDENCE_V1"
-    || !live || live.schemaVersion !== "PHASE1_ADMISSION_EVIDENCE_V1") return false;
+  if (!stored || !["PHASE1_ADMISSION_EVIDENCE_V1", "PHASE1_ADMISSION_EVIDENCE_V2"].includes(stored.schemaVersion)
+    || !live || !["PHASE1_ADMISSION_EVIDENCE_V1", "PHASE1_ADMISSION_EVIDENCE_V2"].includes(live.schemaVersion)
+    || stored.schemaVersion !== live.schemaVersion) return false;
   const expectedBase = base ?? stored.baseSha;
   const identity = { repository, pr, headSha: head, baseSha: expectedBase, tree };
   const inspected = inspectPhase1AggregateEvidence({ aggregate: stored, identity, mode: PHASE1_MODES.READY, stage: PHASE1_EVIDENCE_STAGES.SOURCE });
@@ -2292,10 +2293,14 @@ export function resolveCurrentProtectedBase({
   return unavailable();
 }
 
-function runtimeChangedLines(gitCommand, range) {
+function runtimeChangedLines(gitCommand, range, nonBudgetedPaths = []) {
+  const excluded = new Set(nonBudgetedPaths.filter((entry) => typeof entry === "string" && entry.length > 0));
   const output = gitCommand(["diff", "--numstat", range]);
-  return output.split(/\r?\n/gu).filter(Boolean).reduce((total, line) => total + line.split("\t").slice(0, 2)
-    .reduce((sum, value) => sum + (/^\d+$/u.test(value) ? Number(value) : 0), 0), 0);
+  return output.split(/\r?\n/gu).filter(Boolean).reduce((total, line) => {
+    const [added, deleted, file] = line.split("\t");
+    if (excluded.has(file)) return total;
+    return total + [added, deleted].reduce((sum, value) => sum + (/^\d+$/u.test(value) ? Number(value) : 0), 0);
+  }, 0);
 }
 
 export function deriveFiniteTaskCandidateObservation({
@@ -2381,7 +2386,7 @@ export function deriveFiniteTaskCandidateObservation({
     const baseIsAncestor = safeRuntimeGit(gitCommand, ["merge-base", "--is-ancestor", lease.admittedBase, head], null) !== null;
     const range = `${identity.scopeBase ?? protectedBase}...${head}`;
     const changedPaths = gitCommand(["diff", "--name-only", range]).split(/\r?\n/gu).filter(Boolean).sort();
-    const changedLines = runtimeChangedLines(gitCommand, range);
+    const changedLines = runtimeChangedLines(gitCommand, range, [lease?.artifactReservation?.closureArtifactPath]);
     const candidate = {
       pr: identity.pr,
       branch: identity.branch,
@@ -6365,9 +6370,7 @@ export function verifyCurrentTruthHeadBindings({
         };
         const candidateRange = `${remoteMain}...${observed}`;
         const changedPaths = git(["diff", "--name-only", candidateRange]).split(/\r?\n/gu).filter(Boolean).sort();
-        const changedLines = git(["diff", "--numstat", candidateRange]).split(/\r?\n/gu).filter(Boolean)
-          .reduce((total, line) => total + line.split("\t").slice(0, 2)
-            .reduce((sum, value) => sum + (/^\d+$/u.test(value) ? Number(value) : 0), 0), 0);
+        const changedLines = runtimeChangedLines(git, candidateRange, [lease?.artifactReservation?.closureArtifactPath]);
         finiteLeaseCandidate = evaluateFiniteTaskCandidate({
           lease,
           registry: finiteTaskLeases,

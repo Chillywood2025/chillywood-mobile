@@ -602,7 +602,7 @@ export function projectTerminalSynchronization({ record, transition } = {}) {
   }
   const existing = record?.finiteTaskRuntime?.terminalOutcome;
   const completed = (record?.finiteTaskLeases?.completedLeaseOutcomes ?? []).find(({ leaseId }) => leaseId === transition.taskId);
-  const alreadyConverged = existing?.schemaVersion === 3
+  const existingEvidenceMatches = existing?.schemaVersion === 3
     && existing.taskId === transition.taskId
     && existing.baseLeaseHash === transition.baseLeaseHash
     && exactObject(existing.baseReservation, transition.baseReservation)
@@ -612,12 +612,22 @@ export function projectTerminalSynchronization({ record, transition } = {}) {
     && exactObject(existing.implementationChain, implementations)
     && existing.mergeSha === transition.finalProtectedMain
     && existing.nextTask === transition.nextTask
-    && exactObject(completed, existing)
+    && exactObject(completed, existing);
+  const alreadyConverged = existingEvidenceMatches
     && record.activeTaskBinding === null
     && record.engineeringDoctrine?.activeTaskSentinel === "NO_ACTIVE_PRODUCT_IMPLEMENTATION"
-    && record.engineeringDoctrine?.taskLeaseState === "NO_ACTIVE_TASK";
+    && record.engineeringDoctrine?.taskLeaseState === "NO_ACTIVE_TASK"
+    && record.controlPlaneLifecycle?.schemaVersion === 2
+    && record.controlPlaneLifecycle?.contractId === "ASSURANCE_CONTROL_PLANE_LIFECYCLE_V2"
+    && record.controlPlaneLifecycle?.currentStage === "TERMINAL_TRUTH"
+    && record.controlPlaneLifecycle?.terminalClassification === "MERGED_NORMAL_VERIFIED"
+    && record.controlPlaneLifecycle?.activeLeaseId === null
+    && record.controlPlaneLifecycle?.pendingTransitionCount === 0
+    && record.controlPlaneLifecycle?.mergeAuthority === false
+    && record.controlPlaneLifecycle?.providerBuildOtaReleaseAuthority === false
+    && record.controlPlaneLifecycle?.physicalProof === "PENDING";
   if (alreadyConverged) return { ok: true, mutated: false, record: structuredClone(record), terminalOutcome: structuredClone(existing), findings: [] };
-  if (existing?.schemaVersion === 3 && existing?.taskId === transition.taskId) {
+  if (existing?.schemaVersion === 3 && existing?.taskId === transition.taskId && !existingEvidenceMatches) {
     return { ok: false, mutated: false, findings: ["TERMINAL_SYNCHRONIZATION_CONFLICT"] };
   }
   const terminalEvidence = {
@@ -687,6 +697,17 @@ export function projectTerminalSynchronization({ record, transition } = {}) {
   };
   next.engineeringDoctrine = structuredClone(transition.noActiveEngineeringDoctrine);
   next.assuranceProgram.nextActions = [transition.nextTask];
+  next.controlPlaneLifecycle = {
+    schemaVersion: 2,
+    contractId: "ASSURANCE_CONTROL_PLANE_LIFECYCLE_V2",
+    currentStage: "TERMINAL_TRUTH",
+    terminalClassification: "MERGED_NORMAL_VERIFIED",
+    activeLeaseId: null,
+    pendingTransitionCount: 0,
+    mergeAuthority: false,
+    providerBuildOtaReleaseAuthority: false,
+    physicalProof: "PENDING",
+  };
   const mutated = canonicalJson(record) !== canonicalJson(next);
   return { ok: true, mutated, record: next, terminalOutcome, findings: [] };
 }

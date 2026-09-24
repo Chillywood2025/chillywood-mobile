@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -416,6 +416,35 @@ test("only fixed git observation can establish source scope and caller cannot un
   const original = process.env.PATH; const dir = fs.mkdtempSync(path.join(os.tmpdir(), "doctrine-git-")); const executable = path.join(dir, "git");
   fs.writeFileSync(executable, `#!/bin/sh\ncase "$*" in\n*"${"2".repeat(40)}^{tree}"*) printf '${"3".repeat(40)}\\n';;\n*"${"1".repeat(40)}^{tree}"*) printf '${"4".repeat(40)}\\n';;\n*"${"2".repeat(40)}^{commit}"*) printf '${"2".repeat(40)}\\n';;\n*"${"1".repeat(40)}^{commit}"*) printf '${"1".repeat(40)}\\n';;\n*--name-only*) printf 'app/chat/a.tsx\\0';;\n*--numstat*) printf '10000\\t0\\tapp/chat/a.tsx\\0';;\n*--raw*) printf ':100644 100644 ${"a".repeat(40)} ${"b".repeat(40)} M\\0app/chat/a.tsx\\0';;\n*) printf 'fixed diff';;\nesac\n`); fs.chmodSync(executable, 0o755); process.env.PATH = `${dir}:${original}`;
   try { const observed = observeCandidateScopeFromGit("1".repeat(40), "2".repeat(40)); assert.equal(observed.changedLines, 10000); assert.deepEqual(observed.paths, ["app/chat/a.tsx"]); } finally { process.env.PATH = original; fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("generated finite-task artifacts remain in exact diff identity while only hand-authored lines consume the implementation budget", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "finite-task-generated-budget-"));
+  try {
+    for (const args of [["init", "--initial-branch=main"], ["config", "user.name", "Synthetic Assurance"], ["config", "user.email", "assurance@example.invalid"]]) assert.equal(spawnSync("git", args, { cwd: root }).status, 0);
+    fs.mkdirSync(path.join(root, "docs/assurance/tasks"), { recursive: true });
+    fs.mkdirSync(path.join(root, "app"), { recursive: true });
+    fs.writeFileSync(path.join(root, "docs/assurance/tasks/task.json"), "{}\n");
+    fs.writeFileSync(path.join(root, "app/screen.tsx"), "export default null;\n");
+    assert.equal(spawnSync("git", ["add", "."], { cwd: root }).status, 0);
+    assert.equal(spawnSync("git", ["commit", "-m", "base"], { cwd: root }).status, 0);
+    const base = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout.trim();
+    fs.writeFileSync(path.join(root, "docs/assurance/tasks/task.json"), `${"generated\n".repeat(5000)}`);
+    fs.writeFileSync(path.join(root, "app/screen.tsx"), "export default function Screen() {\n  return null;\n}\n");
+    assert.equal(spawnSync("git", ["add", "."], { cwd: root }).status, 0);
+    assert.equal(spawnSync("git", ["commit", "-m", "candidate"], { cwd: root }).status, 0);
+    const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout.trim();
+    const raw = observeCandidateScopeFromGit(base, head, root);
+    const budgeted = observeCandidateScopeFromGit(base, head, root, { nonBudgetedPaths: ["docs/assurance/tasks/task.json"] });
+    assert.deepEqual(budgeted.paths, raw.paths);
+    assert.equal(budgeted.diffHash, raw.diffHash);
+    assert.ok(raw.changedLines > 5000);
+    assert.ok(budgeted.changedLines < 10);
+    assert.equal(budgeted.paths.includes("docs/assurance/tasks/task.json"), true);
+    assert.equal(budgeted.paths.includes("app/screen.tsx"), true);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("graph reservations reject self-authorized product and high-risk globs", () => {

@@ -20,6 +20,33 @@ test("terminal synchronization converges once and the exact second execution is 
     record: first.record,
     findings: [],
   });
+  assert.deepEqual(first.record.controlPlaneLifecycle, {
+    schemaVersion: 2,
+    contractId: "ASSURANCE_CONTROL_PLANE_LIFECYCLE_V2",
+    currentStage: "TERMINAL_TRUTH",
+    terminalClassification: "MERGED_NORMAL_VERIFIED",
+    activeLeaseId: null,
+    pendingTransitionCount: 0,
+    mergeAuthority: false,
+    providerBuildOtaReleaseAuthority: false,
+    physicalProof: "PENDING",
+  });
+});
+
+test("terminal synchronization does not mistake a stale lifecycle projection for the fixed point", () => {
+  const fixture = terminalFixture();
+  const first = projectTerminalSynchronization(fixture);
+  const stale = structuredClone(first.record);
+  stale.controlPlaneLifecycle.currentStage = "AUTHORIZED_IMPLEMENTATION";
+  stale.controlPlaneLifecycle.activeLeaseId = fixture.transition.taskId;
+  const reconciled = projectTerminalSynchronization({ record: stale, transition: fixture.transition });
+  assert.equal(reconciled.ok, true);
+  assert.equal(reconciled.mutated, true);
+  assert.equal(reconciled.record.controlPlaneLifecycle.currentStage, "TERMINAL_TRUTH");
+  assert.equal(reconciled.record.controlPlaneLifecycle.activeLeaseId, null);
+  const fixed = projectTerminalSynchronization({ record: reconciled.record, transition: fixture.transition });
+  assert.equal(fixed.ok, true);
+  assert.equal(fixed.mutated, false);
 });
 
 test("terminal synchronization rejects evidence changes after convergence", () => {
