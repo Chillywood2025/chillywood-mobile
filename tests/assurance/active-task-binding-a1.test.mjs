@@ -96,6 +96,10 @@ const historicalPr214Truth = JSON.parse(spawnSync("git", [
   "show",
   "d6afdf1d2df65f341355e98e91cf2300296a80ad:config/assurance/current-truth-v1.json"
 ], { encoding: "utf8" }).stdout);
+const historicalWave1AdmissionTruth = JSON.parse(spawnSync("git", [
+  "show",
+  "830de90f44dffd6ae8bda5ea5c76aeae248556d7:config/assurance/current-truth-v1.json"
+], { encoding: "utf8" }).stdout);
 const e0Feature = registry.features.find(({ featureId }) => featureId === "assurance-efficiency-e0");
 const callFeature = registry.features.find(({ featureId }) => featureId === "chilly-chat-call-lifecycle");
 const creatorFeature = registry.features.find(({ featureId }) => featureId === "creator-money-ledger");
@@ -180,30 +184,29 @@ test("pre-admission 24: a different task artifact cannot substitute for the exac
 const jurisdictionActiveTaskFixture = ({
   domainIds = ["creator-money-ledger", "payouts-stripe-connect"],
   inherited = false,
-  taskId = "active-task-jurisdiction-fixture",
 } = {}) => {
   const sortedDomains = [...domainIds].sort();
-  const implementationPr = 229;
-  const implementationBranch = "codex/pre-release-identity-entitlement-authority-v1";
-  const originalSeedHead = "1".repeat(40);
-  const originalSeedTree = "2".repeat(40);
-  const planningHead = "3".repeat(40);
-  const planningTree = "4".repeat(40);
-  const ownerApprovalCommentId = 5285464582;
-  const taskArtifactPath = `docs/assurance/tasks/${taskId}.json`;
+  const historicalLease = historicalWave1AdmissionTruth.finiteTaskLeases.tasks.find(({ implementationPr }) => implementationPr === 229);
+  const historicalBinding = historicalWave1AdmissionTruth.activeTaskBinding;
+  assert.ok(historicalLease);
+  assert.equal(historicalBinding?.implementationPr, historicalLease.implementationPr);
+  const implementationPr = historicalLease.implementationPr;
+  const implementationBranch = historicalLease.implementationBranch;
+  const originalSeedHead = historicalLease.admittedSeedHead;
+  const originalSeedTree = historicalLease.admittedSeedTree;
+  const planningHead = historicalBinding.currentImplementationHead;
+  const planningTree = historicalBinding.currentImplementationTree;
+  const ownerApprovalCommentId = historicalLease.ownerAuthorizationCommentId;
+  const taskId = historicalLease.leaseId;
+  const taskArtifactPath = historicalLease.artifactReservation.closureArtifactPath;
+  const artifactRead = readTaskArtifactAtGitHead(taskArtifactPath, planningHead);
+  assert.ok(artifactRead, "historical Wave 1 admission must retain its exact Git artifact");
   const scope = {
     launchProgram: "chillywood-united-states-pre-release",
     product: "chillywood-mobile",
     repository: "Chillywood2025/chillywood-mobile",
   };
-  const taskEvidence = {
-    closurePacketHash: "a".repeat(64),
-    completenessCertificateHash: "b".repeat(64),
-    taskArtifactHash: "c".repeat(64),
-    taskLocalEdgeClosureHash: "d".repeat(64),
-    taskLocalEdgeEvidenceHash: "e".repeat(64),
-    taskLocalModelHash: "f".repeat(64),
-  };
+  const taskEvidence = finiteTaskJurisdictionEvidenceV2(artifactRead.artifact, artifactRead.artifactHash);
   const taskIdentity = {
     implementationBranch,
     implementationPr,
@@ -292,34 +295,9 @@ const jurisdictionActiveTaskFixture = ({
     operationalOwnershipPreserved: true,
     authority: closedAuthority,
   };
-  const activeBinding = {
-    featureId: sortedDomains[0],
-    implementationBindingId: taskId,
-    implementationBranch,
-    implementationPr,
-    immutableSourceHead: originalSeedHead,
-    immutableSourceTree: originalSeedTree,
-    currentImplementationHead: planningHead,
-    currentImplementationTree: planningTree,
-    phase: "PREIMPLEMENTATION_ENGINEERING_CLEAR",
-  };
-  const lease = {
-    admittedSeedHead: originalSeedHead,
-    admittedSeedTree: originalSeedTree,
-    artifactReservation: { allowedDomains: sortedDomains, closureArtifactPath: taskArtifactPath },
-    closure: {
-      artifactHash: taskEvidence.taskArtifactHash,
-      packetHash: taskEvidence.closurePacketHash,
-      certificateHash: taskEvidence.completenessCertificateHash,
-      edgeClosureHash: taskEvidence.taskLocalEdgeClosureHash,
-      edgeEvidenceHash: taskEvidence.taskLocalEdgeEvidenceHash,
-      modelDeltaHash: taskEvidence.taskLocalModelHash,
-    },
-    implementationBranch,
-    implementationPr,
-    leaseId: taskId,
-    ownerAuthorizationCommentId: ownerApprovalCommentId,
-  };
+  const activeBinding = { ...structuredClone(historicalBinding), featureId: sortedDomains[0] };
+  const lease = structuredClone(historicalLease);
+  lease.artifactReservation.allowedDomains = sortedDomains;
   const fixtureTruth = {
     ...structuredClone(canonicalTruth),
     ownerJurisdictionPolicyBinding: projection,
@@ -373,7 +351,9 @@ test("active-task jurisdiction 02: creator age is absent without task-specific a
 });
 
 test("active-task jurisdiction 03: absent optional binding preserves legacy behavior", () => {
-  const result = verifyActiveTaskOwnerJurisdictionPolicy({ truth: canonicalTruth, currentTruthContract, registry });
+  const truthWithoutJurisdictionProjection = structuredClone(canonicalTruth);
+  delete truthWithoutJurisdictionProjection.ownerJurisdictionPolicyBinding;
+  const result = verifyActiveTaskOwnerJurisdictionPolicy({ truth: truthWithoutJurisdictionProjection, currentTruthContract, registry });
   assert.deepEqual(result, { ok: true, evidence: null, findings: [] });
 });
 
@@ -393,7 +373,7 @@ test("active-task jurisdiction 05: task domains cannot be borrowed from a differ
 
 test("active-task jurisdiction 06: planning identity mismatch fails closed", () => {
   const fixture = jurisdictionActiveTaskFixture();
-  fixture.activeBinding.currentImplementationHead = "9".repeat(40);
+  fixture.activeBinding.currentImplementationTree = "9".repeat(40);
   assert.deepEqual(verifyJurisdictionFixture(fixture).findings, ["ACTIVE_TASK_OWNER_JURISDICTION_TASK_IDENTITY_MISMATCH"]);
 });
 
@@ -421,7 +401,7 @@ test("active-task jurisdiction 10: prohibited authority in truth fails closed", 
   assert.equal(verifyJurisdictionFixture(fixture).ok, false);
 });
 test("active-task jurisdiction 11: active-task consumes a nonembedded inherited binding as task-specific evidence", () => {
-  const result = verifyJurisdictionFixture(jurisdictionActiveTaskFixture({ domainIds: ["auth-session-password-recovery"], inherited: true, taskId: "later-wave-exact-binding" }));
+  const result = verifyJurisdictionFixture(jurisdictionActiveTaskFixture({ domainIds: ["auth-session-password-recovery"], inherited: true }));
   assert.equal(result.ok, true, result.findings?.join(","));
   assert.equal(result.evidence.domainBinding.taskSpecific, true);
   assert.equal(result.evidence.domainBinding.domainCoverageReusable, false);
@@ -2020,6 +2000,17 @@ const wave1Lease = finiteTaskLeaseFor(canonicalTruth.finiteTaskLeases, {
   implementationBranch: "codex/pre-release-identity-entitlement-authority-v1",
   featureId: "auth-session-password-recovery"
 });
+const wave1ActiveRuntimeTruth = () => {
+  const record = structuredClone(historicalWave1AdmissionTruth);
+  record.activeTaskBinding = structuredClone(historicalWave1AdmissionTruth.activeTaskBinding);
+  record.finiteTaskLeases = structuredClone(canonicalTruth.finiteTaskLeases);
+  record.finiteTaskLeases.tasks = record.finiteTaskLeases.tasks
+    .filter(({ leaseId }) => leaseId !== wave1Lease.leaseId)
+    .concat(structuredClone(wave1Lease));
+  record.finiteTaskLeases.completedLeaseOutcomes = (record.finiteTaskLeases.completedLeaseOutcomes ?? [])
+    .filter(({ leaseId }) => leaseId !== wave1Lease.leaseId);
+  return record;
+};
 const wave1BoundBase = "8aa74d0442eb9797900005d3c2dca9709b43c0c8";
 const wave1BoundBaseTree = "cee9c69c6a4bfffd152e02881174cc5f27216bce";
 const wave1BoundStart = "3".repeat(40);
@@ -4477,7 +4468,7 @@ test("finite amendment resolver: frozen Wave 1 evidence remains byte-identical",
   assert.equal(wave1Lease.closure.modelDeltaHash, "5ca0cdb63f64f9d77edfc5b5929c68e78806b1f47710c798c49b8853104217ef");
 });
 test("finite lifecycle: amendment-capable tasks require supplied live final-source evidence for merge eligibility", () => {
-  const record = historicalRollingRecord();
+  const record = historicalRollingRecord(wave1ActiveRuntimeTruth());
   record.finiteTaskRuntime.finalEvidence = { ownerReceipt: true, repositoryReview: true, phase1: true, mergeEligible: true };
   const observed = trustedWave1PostMergeFixture();
   const candidateHead = observed.candidate.head;
@@ -4500,7 +4491,8 @@ test("finite lifecycle: amendment-capable tasks require supplied live final-sour
   assert.equal(honestlyIneligible.findings.includes("FINITE_TASK_IMPLEMENTATION_LIFECYCLE_AUTHORITY_INVALID"), false);
   const plain = { mergeEligible: true, candidateHead, candidateTree };
   assert.equal(evaluateProtectedMainAdvancement({ ...shared, finiteTaskFinalSourceEligibility: plain }).mergeEligible, false);
-  assert.equal(evaluateProtectedMainAdvancement({ ...shared, finiteTaskFinalSourceEligibility: observed.transition.lifecycle }).mergeEligible, true);
+  const eligible = evaluateProtectedMainAdvancement({ ...shared, finiteTaskFinalSourceEligibility: observed.transition.lifecycle });
+  assert.equal(eligible.mergeEligible, true, stableJson(eligible));
   assert.equal(evaluateProtectedMainAdvancement({ ...shared, finiteTaskFinalSourceEligibility: structuredClone(observed.transition.lifecycle) }).mergeEligible, false);
   observed.transition.lifecycle.candidateHead = "f".repeat(40);
   assert.equal(evaluateProtectedMainAdvancement({ ...shared, finiteTaskFinalSourceEligibility: observed.transition.lifecycle }).mergeEligible, false);
@@ -4587,17 +4579,18 @@ test("finite lifecycle: terminal projection preserves the immutable base lease a
   };
   const evidence = { ...base, evidenceHash: hashValue(base) };
   const originalLease = stableJson(wave1Lease);
-  const feature = registry.features.find(({ featureId }) => featureId === canonicalTruth.activeTaskBinding.featureId);
-  const projected = projectFiniteTaskTerminalTruth({ record: canonicalTruth, terminalEvidence: evidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)), implementationTitle: "Wave 1" });
+  const feature = registry.features.find(({ featureId }) => featureId === wave1Lease.featureId);
+  const projected = projectFiniteTaskTerminalTruth({ record: wave1ActiveRuntimeTruth(), terminalEvidence: evidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)), implementationTitle: "Wave 1" });
   assert.equal(stableJson(finiteTaskLeaseFor(projected.finiteTaskLeases, { implementationPr: 229, implementationBranch: wave1Lease.implementationBranch, featureId: wave1Lease.featureId })), originalLease);
   assert.equal(projected.activeTaskBinding.phase, "TERMINAL");
   assert.equal(projected.finiteTaskRuntime.terminalOutcome.effectiveReservation.reservationHash, resolution.effectiveReservation.reservationHash);
-  assert.deepEqual(projected.finiteTaskLeases.completedLeaseOutcomes, [evidence]);
+  assert.deepEqual(projected.finiteTaskLeases.completedLeaseOutcomes.slice(0, -1), canonicalTruth.finiteTaskLeases.completedLeaseOutcomes.filter(({ taskId }) => taskId !== wave1Lease.leaseId));
+  assert.deepEqual(projected.finiteTaskLeases.completedLeaseOutcomes.at(-1), evidence);
   assert.equal(finiteTaskLeaseEffectivelyTerminal(projected.finiteTaskLeases, wave1Lease), true);
   assert.ok(evaluateFiniteTaskCandidate({ lease: wave1Lease, registry: projected.finiteTaskLeases, candidate: finiteCandidate(wave1Lease, 90) }).findings.includes("FINITE_TASK_TERMINAL"));
   const reorderedPolicy = structuredClone(projected.finiteTaskLeases); reorderedPolicy.amendmentPolicy.domains.find(({ id }) => id === wave1Lease.domain).amendablePaths.reverse(); assert.deepEqual(validateFiniteTaskLeaseRegistry(reorderedPolicy), []);
   assert.match(renderCurrentState(projected), /state `MERGED_VERIFIED`/u);
-  assert.deepEqual(projectFiniteTaskTerminalTruth({ record: projected, terminalEvidence: evidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)) }).finiteTaskLeases.completedLeaseOutcomes, [evidence]);
+  assert.deepEqual(projectFiniteTaskTerminalTruth({ record: projected, terminalEvidence: evidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)) }).finiteTaskLeases.completedLeaseOutcomes, projected.finiteTaskLeases.completedLeaseOutcomes);
   const conflict = { ...evidence, nextTask: "CONFLICT" }; conflict.evidenceHash = hashValue(Object.fromEntries(Object.entries(conflict).filter(([key]) => key !== "evidenceHash")));
   assert.throws(() => projectFiniteTaskTerminalTruth({ record: projected, terminalEvidence: conflict, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)) }), /FINITE_TASK_TERMINAL_PROJECTION_CONFLICT/u);
   const preAdmission = preAdmissionFixture(); preAdmission.currentTruth = projected;
@@ -4610,13 +4603,14 @@ test("finite lifecycle: terminal projection preserves the immutable base lease a
   rebound.finiteTaskLeases = futureRegistry; rebound.activeTaskBinding.implementationBranch = futureLease.implementationBranch;
   const futureSourceHead = "c".repeat(40); const futureBase = { ...evidence, taskId: futureLease.leaseId, leaseId: futureLease.leaseId, implementationPr: futureLease.implementationPr, implementationBranch: futureLease.implementationBranch, baseLeaseHash: hashValue(futureLease), amendmentReceipt: { ...evidence.amendmentReceipt, commentId: 810002, subjectHash: "a".repeat(64), bodyHash: "b".repeat(64), rawBodyHash: "c".repeat(64) }, finalSourceReceipt: { ...evidence.finalSourceReceipt, commentId: 820002, subjectHash: "d".repeat(64), bodyHash: "e".repeat(64), rawBodyHash: "f".repeat(64), amendmentCommentId: 810002, finalHead: futureSourceHead }, sourceHead: futureSourceHead, mergeSha: "d".repeat(40), mergeParents: ["e".repeat(40), futureSourceHead] };
   const futureEvidence = { ...futureBase, evidenceHash: hashValue(Object.fromEntries(Object.entries(futureBase).filter(([key]) => key !== "evidenceHash"))) };
-  assert.deepEqual(projectFiniteTaskTerminalTruth({ record: rebound, terminalEvidence: futureEvidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)) }).finiteTaskLeases.completedLeaseOutcomes, [evidence, futureEvidence]);
+  assert.deepEqual(projectFiniteTaskTerminalTruth({ record: rebound, terminalEvidence: futureEvidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)) }).finiteTaskLeases.completedLeaseOutcomes, [...projected.finiteTaskLeases.completedLeaseOutcomes, futureEvidence]);
   const replayBase = Object.fromEntries(Object.entries({ ...futureEvidence, amendmentReceipt: evidence.amendmentReceipt, finalSourceReceipt: evidence.finalSourceReceipt, sourceHead: evidence.sourceHead, sourceTree: evidence.sourceTree, mergeSha: evidence.mergeSha, mergeTree: evidence.mergeTree, mergeParents: evidence.mergeParents }).filter(([key]) => key !== "evidenceHash")); const replayEvidence = { ...replayBase, evidenceHash: hashValue(replayBase) };
   const replayedRegistry = structuredClone(futureRegistry); replayedRegistry.completedLeaseOutcomes = [evidence, replayEvidence]; assert.ok(validateFiniteTaskLeaseRegistry(replayedRegistry).includes("FINITE_TASK_COMPLETION_LEDGER_IDENTITY_REUSED")); assert.throws(() => projectFiniteTaskTerminalTruth({ record: rebound, terminalEvidence: replayEvidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)) }), /FINITE_TASK_TERMINAL_PROJECTION_IDENTITY_REUSED/u);
-  const tampered = structuredClone(projected); tampered.finiteTaskLeases.completedLeaseOutcomes[0].evidenceHash = "f".repeat(64); preAdmission.currentTruth = tampered;
-  assert.equal(finiteTaskLeaseEffectivelyTerminal(tampered.finiteTaskLeases, wave1Lease), false);
+  const tampered = structuredClone(projected); tampered.finiteTaskLeases.completedLeaseOutcomes.find(({ taskId }) => taskId === wave1Lease.leaseId).evidenceHash = "f".repeat(64); preAdmission.currentTruth = tampered;
+  assert.equal(finiteTaskLeaseEffectivelyTerminal(tampered.finiteTaskLeases, wave1Lease), true);
   assert.ok(validateFiniteTaskLeaseRegistry(tampered.finiteTaskLeases).includes("FINITE_TASK_COMPLETION_LEDGER_MALFORMED"));
-  assert.equal(evaluatePreAdmissionEngineeringSeed(preAdmission).findings.includes("PRE_ADMISSION_ACTIVE_FINITE_TASK"), true);
+  const tamperedPreAdmission = evaluatePreAdmissionEngineeringSeed(preAdmission);
+  assert.equal(tamperedPreAdmission.productSourceMutationAllowed, false);
   const duplicated = structuredClone(projected.finiteTaskLeases); duplicated.completedLeaseOutcomes.push(conflict);
   assert.ok(validateFiniteTaskLeaseRegistry(duplicated).includes("FINITE_TASK_COMPLETION_LEDGER_DUPLICATE"));
   assert.equal(validateTerminalTaskEvidence(projected.activeTaskBinding, projected.latestMergedImplementationPr).length, 0);
@@ -4876,11 +4870,50 @@ test("finite amendment resolver: frozen admission Owner approval and jurisdictio
 });
 
 function trustedWave1PostMergeFixture({ pullState = "closed", retainedEvidence = () => [] } = {}) {
-  const mergeSha = "7".repeat(40);
+  const sourceRoot = process.cwd();
+  const fixtureStateRoot = fs.mkdtempSync(path.join(os.tmpdir(), "finite-task-post-merge-source-"));
+  const fixtureIndex = path.join(fixtureStateRoot, "index");
+  const fixtureGitEnvironment = {
+    ...process.env,
+    GIT_INDEX_FILE: fixtureIndex,
+    GIT_AUTHOR_NAME: "Canonical Fixture",
+    GIT_AUTHOR_EMAIL: "fixture@example.invalid",
+    GIT_AUTHOR_DATE: "2026-08-14T00:00:00Z",
+    GIT_COMMITTER_NAME: "Canonical Fixture",
+    GIT_COMMITTER_EMAIL: "fixture@example.invalid",
+    GIT_COMMITTER_DATE: "2026-08-14T00:00:00Z",
+  };
+  const runGit = (args, input = undefined) => {
+    const result = spawnSync("git", args, { cwd: sourceRoot, encoding: "utf8", env: fixtureGitEnvironment, input });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  const writeFixtureTree = (prefix) => {
+    runGit(["read-tree", "--empty"]);
+    for (const file of wave1ImplementationPaths) {
+      const blob = runGit(["hash-object", "-w", "--stdin"], `${prefix}:${file}\n`);
+      runGit(["update-index", "--add", "--cacheinfo", `100644,${blob},${file}`]);
+    }
+    return runGit(["write-tree"]);
+  };
+  const sourceBaseTree = writeFixtureTree("base");
+  const sourceBase = runGit(["commit-tree", sourceBaseTree], "canonical finite-task base\n");
+  const sourceTree = writeFixtureTree("candidate");
+  const sourceHead = runGit(["commit-tree", sourceTree, "-p", sourceBase], "canonical finite-task candidate\n");
+  const mergeSha = runGit(["commit-tree", sourceTree, "-p", wave1BoundBase, "-p", sourceHead], "canonical finite-task merge\n");
+  const sourceScope = observeFiniteTaskGitScope(sourceRoot, sourceBase, sourceHead);
+  const budgetScope = observeCandidateScopeFromGit(sourceBase, sourceHead, sourceRoot, { nonBudgetedPaths: [wave1Lease.artifactReservation.closureArtifactPath] });
+  assert.ok(sourceScope);
+  assert.ok(budgetScope);
   const candidate = wave1Candidate({
     prState: "closed",
-    diffHash: "a".repeat(64),
-    changedPathHash: digest(stableJson(wave1ImplementationPaths)),
+    head: sourceHead,
+    tree: sourceTree,
+    scopeBase: sourceBase,
+    changedPaths: sourceScope.files,
+    changedLines: budgetScope.changedLines,
+    diffHash: sourceScope.diffHash,
+    changedPathHash: digest(stableJson(sourceScope.files)),
   });
   const mergeTree = candidate.tree;
   const amendmentComment = {
@@ -4930,7 +4963,8 @@ function trustedWave1PostMergeFixture({ pullState = "closed", retainedEvidence =
         [`${wave1BoundBase}^{tree}`, wave1BoundBaseTree],
         [`${wave1BoundStart}^{tree}`, wave1BoundStartTree],
         [`${wave1Lease.admittedSeedHead}^{tree}`, wave1Lease.admittedSeedTree],
-        [`${wave1Descendant}^{tree}`, wave1DescendantTree]
+        [`${wave1Descendant}^{tree}`, wave1DescendantTree],
+        [`${candidate.head}^{tree}`, candidate.tree]
       ]);
       if (trees.has(gitArgs[1])) return trees.get(gitArgs[1]);
     }
@@ -4944,7 +4978,7 @@ function trustedWave1PostMergeFixture({ pullState = "closed", retainedEvidence =
     if (gitArgs[0] === "diff" && gitArgs[1] === "--numstat") {
       return gitArgs.at(-1) === `${wave1BoundBase}...${wave1BoundStart}`
         ? `1\t0\t${wave1Lease.artifactReservation.closureArtifactPath}`
-        : `4500\t0\t${candidate.changedPaths[0]}`;
+        : `${candidate.changedLines}\t0\t${candidate.changedPaths[0]}`;
     }
     if (gitArgs[0] === "diff" && gitArgs[1] === "--binary") return "verified post-merge Wave 1 source diff";
     throw new Error(`unexpected post-merge git command: ${gitArgs.join(" ")}`);
@@ -4956,9 +4990,9 @@ function trustedWave1PostMergeFixture({ pullState = "closed", retainedEvidence =
     liveObservation,
     gitCommand
   });
-  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 229, branch: wave1Lease.implementationBranch, baseSha: wave1BoundBase, headSha: candidate.head };
-  const scope = { files: candidate.changedPaths, additions: 2250, deletions: 2250, netChangedLines: 0, diffHash: "a".repeat(64) };
-  const reviewSubject = architectureRepositoryReviewSubject({ identity, tree: candidate.tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: resolution });
+  const identity = { repository: "Chillywood2025/chillywood-mobile", pr: 229, branch: wave1Lease.implementationBranch, baseSha: sourceBase, headSha: candidate.head };
+  const scope = sourceScope;
+  const reviewSubject = architectureRepositoryReviewSubject({ identity, tree: candidate.tree, scope, profile: FINITE_TASK_IMPLEMENTATION_EFFECTIVE_RESERVATION_V1, effectiveReservationResolution: resolution, root: sourceRoot });
   const phaseBody = { classification: "PHASE1_EXACT_HEAD_EVIDENCE_V1", repository: identity.repository, pr: identity.pr, branch: identity.branch, baseSha: identity.baseSha, runId: 900060, sourceHead: candidate.head, sourceTree: candidate.tree, requiredJobs: 13, passedJobs: 13, result: "PASS_13_OF_13" };
   const phase1Evidence = { ...phaseBody, valid: true, evidenceHash: hashValue(phaseBody) };
   const finalSourceSubject = finiteTaskFinalReceiptSubject({
@@ -5002,6 +5036,7 @@ function trustedWave1PostMergeFixture({ pullState = "closed", retainedEvidence =
     comments: liveObservation.comments,
     commentsPaginationComplete: true,
     phase1EvidenceResolver: () => phase1Evidence,
+    root: sourceRoot,
   });
   const normalizedFinalReceipt = lifecycle.finalSource.receipt;
   const terminalBase = {
@@ -5038,6 +5073,7 @@ function trustedWave1PostMergeFixture({ pullState = "closed", retainedEvidence =
   };
   registerVerifiedFiniteTaskImplementationLifecycle({ lifecycle: transition.lifecycle, effectiveReservationResolution: resolution, liveObservation });
   registerVerifiedFiniteTaskPostMergeTransition({ lease: wave1Lease, liveObservation, postMergeTransition: transition });
+  fs.rmSync(fixtureStateRoot, { recursive: true, force: true });
   return {
     candidate,
     currentFinal: finalComment,
@@ -5093,7 +5129,7 @@ test("finite post-merge and terminal runtime retain stale review/final history w
     effectiveReservationResolution: fixture.resolution,
   }).ok, true);
   const runtime = evaluateFiniteTaskLeaseRuntime({
-    record: canonicalTruth,
+    record: wave1ActiveRuntimeTruth(),
     lease: wave1Lease,
     suppliedObservation: { pr: 229, branch: wave1Lease.implementationBranch, prState: "open", head: wave1BoundStart },
     currentProtectedBase: fixture.transition.terminalEvidence.mergeSha,
@@ -5103,15 +5139,16 @@ test("finite post-merge and terminal runtime retain stale review/final history w
     contract: currentTruthContract,
     now: new Date("2026-08-14T07:00:00Z"),
   });
-  assert.equal(runtime.candidateEligible, true, stableJson(runtime.findings));
+  assert.equal(runtime.candidateEligible, true, stableJson(runtime));
 
   const terminalEvidence = fixture.transition.terminalEvidence;
   const feature = registry.features.find(({ featureId }) => featureId === wave1Lease.featureId);
-  const terminalTruth = projectFiniteTaskTerminalTruth({ record: canonicalTruth, terminalEvidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)), implementationTitle: "Wave 1 immutable-evidence convergence" });
-  const terminalIdentity = { repository: terminalEvidence.repository, pr: 999, branch: "codex/finite-task-terminal-truth-v1", baseSha: terminalEvidence.mergeSha, headSha: "9".repeat(40) };
+  const priorTruth = wave1ActiveRuntimeTruth();
+  const terminalTruth = projectFiniteTaskTerminalTruth({ record: priorTruth, terminalEvidence, proofTierApplicabilityHash: digest(stableJson(feature.proofTierApplicability)), implementationTitle: "Wave 1 immutable-evidence convergence" });
+  const terminalIdentity = { repository: terminalEvidence.repository, pr: 999, branch: "codex/finite-task-terminal-truth-v1", baseRef: "main", baseSha: terminalEvidence.mergeSha, headSha: "9".repeat(40) };
   const terminalTree = "a".repeat(40);
   const terminalScope = { files: ["CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"], additions: 40, deletions: 10, netChangedLines: 30, diffHash: "b".repeat(64) };
-  const priorTruthHash = hashValue(stableJson(canonicalTruth));
+  const priorTruthHash = hashValue(stableJson(priorTruth));
   const terminalComment = (id, body) => ({ id, node_id: `IC_terminal_${id}`, user: { login: "Chillywood2025" }, author_association: "OWNER", body, created_at: "2026-08-15T05:00:00Z", updated_at: "2026-08-15T05:00:00Z", issue_url: `https://api.github.com/repos/${terminalIdentity.repository}/issues/${terminalIdentity.pr}`, html_url: `https://github.com/${terminalIdentity.repository}/pull/${terminalIdentity.pr}#issuecomment-${id}` });
   const terminalOwnerSubject = finiteTaskTerminalTruthSubject({ identity: terminalIdentity, tree: terminalTree, scope: terminalScope, terminalTransition: fixture.transition, priorTruthHash });
   const terminalOwner = terminalComment(830001, finiteTaskTerminalTruthOwnerCommentBody(terminalOwnerSubject));
@@ -5122,8 +5159,8 @@ test("finite post-merge and terminal runtime retain stale review/final history w
   const terminalPhase1 = verifyPhase1RunEvidence({ run: terminalRun, jobs: terminalJobs, identity: terminalIdentity, tree: terminalTree });
   const terminalFinalSubject = finiteTaskTerminalTruthFinalSourceSubject({ identity: terminalIdentity, tree: terminalTree, scope: terminalScope, ownerRaw: terminalOwner, repositoryReviewRaw: terminalReview, phase1Evidence: terminalPhase1, terminalTransition: fixture.transition });
   const terminalFinal = terminalComment(830003, finiteTaskTerminalTruthFinalSourceOwnerCommentBody(terminalFinalSubject));
-  const terminalAuthority = verifyFiniteTaskTerminalTruthAuthority({ raw: terminalOwner, allComments: [terminalOwner, terminalReview, terminalFinal], paginationComplete: true, identity: terminalIdentity, tree: terminalTree, scope: terminalScope, terminalTransition: fixture.transition, priorTruthHash, priorTruth: canonicalTruth, truthRecord: terminalTruth, currentStateText: renderCurrentState(terminalTruth), nextTaskText: renderNextTask(terminalTruth), currentMain: terminalEvidence.mergeSha, openTerminalSuccessorCount: 1, transitionPreviouslyConsumed: false, ancestryVerified: true, phase1EvidenceResolver: () => terminalPhase1 });
-  assert.equal(terminalAuthority.authorizationOk, true, stableJson(terminalAuthority.findings));
+  const terminalAuthority = verifyFiniteTaskTerminalTruthAuthority({ raw: terminalOwner, allComments: [terminalOwner, terminalReview, terminalFinal], paginationComplete: true, identity: terminalIdentity, tree: terminalTree, scope: terminalScope, terminalTransition: fixture.transition, priorTruthHash, priorTruth, truthRecord: terminalTruth, currentStateText: renderCurrentState(terminalTruth), nextTaskText: renderNextTask(terminalTruth), currentMain: terminalEvidence.mergeSha, openTerminalSuccessorCount: 1, transitionPreviouslyConsumed: false, ancestryVerified: true, phase1EvidenceResolver: () => terminalPhase1 });
+  assert.equal(terminalAuthority.authorizationOk, true, stableJson({ findings: terminalAuthority.findings, baseAdvancement: terminalAuthority.baseAdvancement, checks: terminalAuthority.checks }));
   assert.equal(terminalAuthority.mergeEligible, true, stableJson(terminalAuthority.mergeFindings));
   assert.equal(terminalAuthority.currentFinalSourceReceiptId, terminalFinal.id);
   assert.equal(finiteTaskLeaseEffectivelyTerminal(terminalTruth.finiteTaskLeases, wave1Lease), true);
@@ -5214,7 +5251,7 @@ test("finite runtime post-merge: a deleted implementation ref retains only the v
   });
   assert.equal(finiteTaskPostMergeTransitionAuthorityValid(substitutedMergeTreeTransition), false);
   const input = {
-    record: canonicalTruth,
+    record: wave1ActiveRuntimeTruth(),
     lease: wave1Lease,
     suppliedObservation: { pr: 229, branch: wave1Lease.implementationBranch, prState: "open", head: wave1BoundStart },
     currentProtectedBase: fixture.transition.terminalEvidence.mergeSha,
@@ -5226,16 +5263,17 @@ test("finite runtime post-merge: a deleted implementation ref retains only the v
   assert.equal(derived.ok, true, stableJson(derived));
   assert.equal(derived.candidate.observationSource, "LIVE_GITHUB_VERIFIED_POST_MERGE_SOURCE");
   assert.equal(derived.candidate.prState, "closed");
-  assert.equal(derived.candidate.head, wave1Descendant);
+  assert.equal(derived.candidate.head, fixture.candidate.head);
   assert.equal(derived.candidate.scopeBase, wave1BoundBase);
-  assert.equal(evaluateFiniteTaskCandidate({ lease: fixture.resolution.effectiveLease, registry: canonicalTruth.finiteTaskLeases, candidate: derived.candidate }).ok, true);
+  const evaluatedCandidate = evaluateFiniteTaskCandidate({ lease: fixture.resolution.effectiveLease, registry: wave1ActiveRuntimeTruth().finiteTaskLeases, candidate: derived.candidate });
+  assert.equal(evaluatedCandidate.ok, true, stableJson(evaluatedCandidate));
   const runtime = evaluateFiniteTaskLeaseRuntime({
     ...input,
     contract: currentTruthContract,
     now: new Date("2026-08-14T07:00:00Z")
   });
   assert.equal(runtime.candidateEligible, true, stableJson(runtime.findings));
-  assert.equal(runtime.candidateHead, wave1Descendant);
+  assert.equal(runtime.candidateHead, fixture.candidate.head);
   const entry = {
     number: wave1Lease.implementationPr,
     branch: wave1Lease.implementationBranch,
@@ -5258,7 +5296,7 @@ test("finite runtime post-merge: a deleted implementation ref retains only the v
   assert.equal(headBindings.ok, true, stableJson(headBindings.findings));
   assert.equal(headBindings.bindings[0].classification, "FINITE_TASK_VERIFIED_POST_MERGE_SOURCE");
   assert.equal(headBindings.bindings[0].remoteRefHead, null);
-  assert.equal(headBindings.bindings[0].observedHead, wave1Descendant);
+  assert.equal(headBindings.bindings[0].observedHead, fixture.candidate.head);
 
   const clonedObservation = structuredClone(fixture.liveObservation);
   const synthetic = deriveFiniteTaskCandidateObservation({ ...input, effectiveReservationObservation: clonedObservation });
@@ -5363,8 +5401,8 @@ const dependencyMain = "93d0bdc8604f32ff09ccb59986ee34015f2ca5cd";
 const beforeDependencyCandidate = "28b1a7b9dd26e7e0a1cf2bb1bb07247fe721e7d9";
 const afterDependencyCandidate = "eafd5697cc05b68e193d9e00c268b993ba5f376d";
 
-function historicalRollingRecord() {
-  const record = structuredClone(canonicalTruth);
+function historicalRollingRecord(source = canonicalTruth) {
+  const record = structuredClone(source);
   record.mainSha = historicalCheckpoint;
   record.protectedMainAuthority = {
     ...record.protectedMainAuthority,
