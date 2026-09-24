@@ -21098,9 +21098,9 @@
     },
     "implementationScope": "62 exact task files",
     "status": "BOUND_COMPLETE_WITH_EXTERNAL_PROOF_BLOCKED",
-    "packetFactsHash": "aca12f399e85447867b7f329f6f6db559b0c7ae401da5994aaee62f414a1c972",
+    "packetFactsHash": "290ab1a5d498dd017476561945cc0065415db4aa33c2d331f1ae4a5af9c2cc51",
     "classification": "BOUNDED_ENGINEERING_COMPLETENESS_CERTIFICATE_V1",
-    "certificateHash": "7cc3a895e9f6b26f9b368e641dc40cd907b318c343c195b5a40ce0923401dff0"
+    "certificateHash": "f85175c881f66ba64b2af5c08195db42fe51f7bb6f5f45ce6f9338d249662e0f"
   },
   "closure": {
     "id": "ENGINEERING_CLOSURE_PACKET_V1",
@@ -72157,9 +72157,9 @@
         },
         "implementationScope": "62 exact task files",
         "status": "BOUND_COMPLETE_WITH_EXTERNAL_PROOF_BLOCKED",
-        "packetFactsHash": "aca12f399e85447867b7f329f6f6db559b0c7ae401da5994aaee62f414a1c972",
+        "packetFactsHash": "290ab1a5d498dd017476561945cc0065415db4aa33c2d331f1ae4a5af9c2cc51",
         "classification": "BOUNDED_ENGINEERING_COMPLETENESS_CERTIFICATE_V1",
-        "certificateHash": "7cc3a895e9f6b26f9b368e641dc40cd907b318c343c195b5a40ce0923401dff0"
+        "certificateHash": "f85175c881f66ba64b2af5c08195db42fe51f7bb6f5f45ce6f9338d249662e0f"
       },
       "M_STOP_CONDITIONS": {
         "unknownDependency": "stop with all unresolved dimensions",
@@ -72216,7 +72216,7 @@
         "watch-party-live"
       ]
     },
-    "packetHash": "b310ab3d6130a18a981f0d0f2b5aa40d1bbd283d247fef575b9e0d4a821f0c5f"
+    "packetHash": "c3ef67536e5fbce6fa053ef9662e1618e8f015d4b4ff505b2d11a76216b17aa1"
   },
   "implementation": {
     "branch": "codex/chillywood-native-visual-system-whole-app-v1",
