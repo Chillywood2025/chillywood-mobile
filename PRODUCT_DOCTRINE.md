@@ -9,7 +9,7 @@ It works alongside:
 - `ROOM_BLUEPRINT.md` for room-specific implications only
 - `ROADMAP.md` for the current phased planning split
 
-This file does not replace or reinterpret the locked Chi'lly Chat communication doctrine or the locked Rachi official-account doctrine. Those remain carried forward through `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, `CURRENT_STATE.md`, and `NEXT_TASK.md`.
+This file does not replace or reinterpret the locked Chi'lly Chat communication doctrine or the locked Rachi official-account doctrine. Those remain carried forward through `MASTER_VISION.md`, `ARCHITECTURE_RULES.md`, the relevant product source, and focused regression tests.
 
 If older active docs contain scattered cross-cutting monetization, compliance, product-phase, or profile/channel-platform statements that conflict with this file, this file wins unless a narrower room-specific rule in `ROOM_BLUEPRINT.md` intentionally governs that room.
 

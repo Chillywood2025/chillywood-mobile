@@ -586,11 +586,11 @@ Do not guess when duplicate surfaces may exist.
 - cross-cutting monetization, compliance, product-phase, and profile/channel-platform doctrine belongs in `PRODUCT_DOCTRINE.md`
 - durable room/surface blueprint doctrine belongs in `ROOM_BLUEPRINT.md`
 - roadmap/phasing belongs in `ROADMAP.md`
-- current implementation truth belongs in `CURRENT_STATE.md`
+- current implementation truth comes from protected Git history, the relevant source, and live pull-request/check state
 
 ## Production Prompt Rule
 Future Codex prompts for Chi'llywood must be production-grade. They need exact product truth, scope, route/screen purpose, UI layout, buttons/actions, data sources, empty/loading/error states, permissions/gates, backend/RLS/storage limits, forbidden areas, validation/manual proof, and report format. Vague prompts such as "modernize", "polish", "add filters", "add route", or "improve dashboard" are not enough unless every behavior is spelled out.
-- immediate execution scope belongs in `NEXT_TASK.md`
+- immediate execution scope belongs in the current pull request and its concise design or implementation note
 - session guardrails belong in `SESSION_START_PROTOCOL.md`
 - temporary ADB/device/emulator debugging does not belong in permanent product doctrine
 - Expo Router route-tree utility exposure cleanup is pushed: the unreferenced exposed `app/data/titles.ts` and `app/lib/_supabase.ts` files were removed, and active Watch-Party helper modules were moved out of `app/` to `_lib/watch-party/room-shared.ts` and `_lib/watch-party/waiting-room-shared.ts` with import updates.

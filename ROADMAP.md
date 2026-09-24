@@ -290,9 +290,9 @@ CLI/Management API follow-up status: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROO
 ## Planning Rule
 `ROADMAP.md` now records Chi'llywood's phased product planning truth rather than older chapter-by-chapter execution history.
 
-- current checkpoint truth belongs in `CURRENT_STATE.md`
+- current implementation truth comes from protected Git history and live pull-request/check state
 - detailed older checkpoint history belongs in `docs/archive/`
-- the immediate next working lane belongs in `NEXT_TASK.md`
+- the immediate working objective belongs in its ordinary pull request and relevant design note
 - Locked Chi'lly Chat communication doctrine and locked Rachi official-account doctrine remain carried forward unchanged and are not reopened by this planning rewrite.
 
 ## Public v1

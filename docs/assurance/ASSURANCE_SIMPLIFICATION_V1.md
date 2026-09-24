@@ -65,6 +65,14 @@ merge source.
 | unresolved late review findings | `scripts/release-review-gate.mjs` in action-specific workflows |
 | OTA/Apple/physical provenance | #490 release-control helpers and regression tests |
 
+The autonomous job retains every substantive command from the former three
+autonomous/cognitive lanes and their execution, research, memory and database
+companions. It deliberately retires only
+`proof:autonomous-systems-contract`, whose wrapper mixed those checks with the
+finite-task lease/current-truth eligibility being removed. A static migration
+audit enumerates the retained direct commands so a future workflow edit cannot
+silently drop them.
+
 ## Protected cutover
 
 Live ruleset 18940814 initially requires App check `Phase 1 / Admission

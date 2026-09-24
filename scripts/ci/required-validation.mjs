@@ -47,6 +47,7 @@ export function computeValidationPlan(paths, config = policy) {
     categories.nativeRelease = true;
     categories.autonomous = true;
   }
+  if (categories.autonomous) categories.database = true;
   if (categories.database || categories.nativeRelease || categories.autonomous) categories.sensitive = true;
 
   return {

@@ -8,6 +8,10 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const failures = [];
 const instructionFiles = [
   "AGENTS.md",
+  "ARCHITECTURE_RULES.md",
+  "PRODUCT_DOCTRINE.md",
+  "ROADMAP.md",
+  "SESSION_START_PROTOCOL.md",
   ".github/AGENTS.md",
   ".agents/skills/chillywood-assurance/SKILL.md",
   "app/AGENTS.md",
@@ -32,6 +36,9 @@ const forbidden = [
 for (const file of activeFiles) {
   if (!fs.existsSync(path.join(root, file))) failures.push(`ACTIVE_FILE_MISSING:${file}`);
   else for (const needle of forbidden) if (read(file).includes(needle)) failures.push(`RETIRED_CALLER:${file}:${needle}`);
+}
+for (const file of ["ARCHITECTURE_RULES.md", "PRODUCT_DOCTRINE.md", "ROADMAP.md", "SESSION_START_PROTOCOL.md"]) {
+  if (/CURRENT_STATE\.md|NEXT_TASK\.md|proof:session/u.test(read(file))) failures.push(`ACTIVE_INSTRUCTION_RETIRED_AUTHORITY:${file}`);
 }
 
 for (const removed of [".github/workflows/phase1-ci.yml", ".github/workflows/phase1-admission.yml", ".github/workflows/codex-review-exact-head.yml"]) {
@@ -92,6 +99,98 @@ for (const workflow of activeFiles.filter((file) => file.startsWith(".github/wor
 }
 
 const requiredWorkflow = read(".github/workflows/required-validation.yml");
+const retainedSubstantiveCommands = [
+  "guard:critical-ux-polish-policy",
+  "guard:pre-activation-discovery-home",
+  "guard:autonomous-component-inventory",
+  "proof:autonomous-component-inventory",
+  "guard:autonomous-operating-model",
+  "guard:scheduled-provider-adapters",
+  "proof:scheduled-provider-adapters",
+  "test:scheduled-provider-adapters",
+  "guard:all-platform-autonomy",
+  "proof:all-platform-autonomy",
+  "test:all-platform-autonomy",
+  "guard:user-report-router",
+  "guard:user-report-threshold-routing",
+  "proof:user-report-router",
+  "proof:user-report-threshold-routing",
+  "proof:user-report-safety-privacy",
+  "proof:notification-delivery-operator",
+  "proof:release-ota-operator",
+  "proof:security-owner-operator",
+  "proof:moderation-safety-operator",
+  "proof:observability-runtime-operator",
+  "proof:installed-product-qa-operator",
+  "proof:platform-recovery-operator",
+  "proof:privacy-compliance-operator",
+  "proof:support-success-operator",
+  "proof:search-ranking-integrity-operator",
+  "proof:money-flow-control",
+  "proof:money-operator-write-scope",
+  "proof:livekit-autonomous-operator",
+  "proof:owner-command-operator",
+  "proof:owner-command-routing",
+  "proof:owner-command-approval-gates",
+  "guard:ios-autonomous-call-retry",
+  "proof:ios-autonomous-call-retry",
+  "guard:ios-notification-autonomy",
+  "proof:ios-notification-autonomy",
+  "test:ios-notification-autonomy",
+  "guard:ios-release-autonomy",
+  "proof:ios-release-autonomy",
+  "test:ios-release-autonomy",
+  "guard:ios-observability-autonomy",
+  "proof:ios-observability-autonomy",
+  "test:ios-observability-autonomy",
+  "guard:ios-installed-qa-autonomy",
+  "proof:ios-installed-qa-autonomy",
+  "test:ios-installed-qa-autonomy",
+  "guard:ios-autonomous-system-coverage",
+  "proof:ios-autonomous-system-coverage",
+  "guard:cognitive-intelligence-contract",
+  "proof:cognitive-intelligence-contract",
+  "guard:cognitive-architecture-graph",
+  "proof:cognitive-architecture-graph",
+  "test:brace-expansion-compat",
+  "guard:cognitive-execution-safety",
+  "proof:cognitive-execution-safety",
+  "test:cognitive-execution-safety",
+  "guard:cognitive-executor-confinement",
+  "test:cognitive-executor-confinement",
+  "guard:cognitive-capability-contract",
+  "test:cognitive-capability-contract",
+  "guard:cognitive-evaluator-independence",
+  "test:cognitive-evaluator-independence",
+  "test:cognitive-budget-cancellation",
+  "test:cognitive-conflict-rollback",
+  "test:cognitive-red-team",
+  "test:cognitive-hardening-regressions",
+  "test:cognitive-runtime-authority-regressions",
+  "guard:cognitive-policy-parity",
+  "guard:cognitive-network-policy-parity",
+  "guard:cognitive-credential-path-policy-parity",
+  "guard:cognitive-dependency-advisories",
+  "test:cognitive-collective-governance",
+  "test:cognitive-governance-adversarial",
+  "test:cognitive-two-party-handoff",
+  "test:cognitive-bootstrap-edge-contract",
+  "test:cognitive-model-independence",
+  "test:cognitive-product-sentinels",
+  "test:cognitive-livekit-experience-collector",
+  "test:cognitive-isolated-runtime",
+  "guard:cognitive-admin-truth",
+  "guard:cognitive-ci-supply-chain",
+  "guard:research-source-integrity",
+  "proof:research-source-integrity",
+  "test:research-source-broker",
+  "guard:cognitive-memory-integrity",
+  "proof:cognitive-memory-integrity",
+];
+for (const command of retainedSubstantiveCommands) {
+  if (!requiredWorkflow.includes(`npm run ${command}`)) failures.push(`RETAINED_SUBSTANTIVE_COMMAND_MISSING:${command}`);
+}
+if (requiredWorkflow.includes("proof:autonomous-systems-contract")) failures.push("RETIRED_AUTONOMOUS_TASK_FRESHNESS_WRAPPER_PRESENT");
 if (/pull_request_target|workflow_run/u.test(requiredWorkflow)) failures.push("UNTRUSTED_SOURCE_WORKFLOW_PRIVILEGED_TRIGGER");
 if (!requiredWorkflow.includes("Validation / Results") || !requiredWorkflow.includes("if: always()")) failures.push("SOURCE_FINAL_RESULT_MISSING");
 const publisher = read(".github/workflows/required-validation-publisher.yml");
