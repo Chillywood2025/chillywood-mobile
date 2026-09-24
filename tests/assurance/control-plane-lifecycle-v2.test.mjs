@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import test from "node:test";
 import {
@@ -24,8 +25,11 @@ import {
   validateAssuranceSelfMaintenance,
   validateDeferredOutcome,
   validateExceptionalMergeOutcome,
+  validateExceptionalHostedSecurityReadback,
+  validateExceptionalRepositoryReviewReadback,
   validateLifecyclePolicy,
   EXCEPTIONAL_OWNER_TERMINAL_MARKER,
+  EXCEPTIONAL_OWNER_TERMINAL_MARKER_V3,
 } from "../../scripts/assurance/control-plane-lifecycle.mjs";
 import { parseCanonicalMarkedComment } from "../../scripts/assurance/jurisdiction-policy.mjs";
 
@@ -65,6 +69,162 @@ function exceptionalFixture() {
   const ownerReceiptReadback = { id: receipt.commentId, user: { login: receipt.author }, author_association: receipt.authorAssociation, created_at: receipt.createdAt, updated_at: receipt.updatedAt, body: `${EXCEPTIONAL_OWNER_TERMINAL_MARKER}\n${stableLifecycleJson(payload)}` };
   return { outcome, receipt, gitEvidence, rulesetEvidence, ownerReceiptReadback };
 }
+
+function exceptionalFixtureV3({ review = false, security = false } = {}) {
+  const fixture = exceptionalFixture();
+  const changedPaths = ["scripts/example.mjs", "tests/example.test.mjs"];
+  const gitEvidence = {
+    ...fixture.gitEvidence,
+    changedPaths,
+    reviewChangedPathHash: lifecycleHash(changedPaths),
+    diffHash: digest("d"),
+    additions: 12,
+    deletions: 3,
+  };
+  const reviewSubject = {
+    type: "REPOSITORY_OWNED_EXACT_HEAD_REVIEW_V1",
+    repository: fixture.outcome.repository,
+    pr: fixture.outcome.implementationPr,
+    branch: fixture.outcome.implementationBranch,
+    protectedBase: fixture.outcome.protectedBase,
+    reviewedHead: fixture.outcome.sourceHead,
+    reviewedTree: fixture.outcome.sourceTree,
+    changedPaths,
+    changedPathHash: gitEvidence.reviewChangedPathHash,
+    diffHash: gitEvidence.diffHash,
+    additions: gitEvidence.additions,
+    deletions: gitEvidence.deletions,
+    netChangedLines: gitEvidence.additions - gitEvidence.deletions,
+    disposition: { P0: 0, P1: 0, launchImpactingP2: 0 },
+    finiteTaskEffectiveReservation: {
+      authorityValid: true,
+      implementationPr: fixture.outcome.implementationPr,
+      implementationBranch: fixture.outcome.implementationBranch,
+      leaseId: lease.leaseId,
+      candidateHead: fixture.outcome.sourceHead,
+      candidateTree: fixture.outcome.sourceTree,
+    },
+  };
+  const reviewPayloadBody = {
+    schemaVersion: 1,
+    evidenceClass: "REPOSITORY_EXACT_HEAD_REVIEW",
+    type: reviewSubject.type,
+    repository: reviewSubject.repository,
+    pr: reviewSubject.pr,
+    subject: reviewSubject,
+    subjectHash: lifecycleHash(reviewSubject),
+  };
+  const reviewPayload = { ...reviewPayloadBody, bodyHash: lifecycleHash(reviewPayloadBody) };
+  const reviewBody = `<!-- chillywood-assurance-repository-review-v1 -->\n${stableLifecycleJson(reviewPayload)}`;
+  const repositoryReviewReadback = {
+    id: 9100,
+    user: { login: "Chillywood2025" },
+    author_association: "OWNER",
+    created_at: "2026-01-01T00:00:05Z",
+    updated_at: "2026-01-01T00:00:05Z",
+    issue_url: `https://api.github.com/repos/${fixture.outcome.repository}/issues/${fixture.outcome.implementationPr}`,
+    body: reviewBody,
+  };
+  const reviewEvidence = review ? {
+    commentId: repositoryReviewReadback.id,
+    author: repositoryReviewReadback.user.login,
+    authorAssociation: repositoryReviewReadback.author_association,
+    createdAt: repositoryReviewReadback.created_at,
+    updatedAt: repositoryReviewReadback.updated_at,
+    canonicalBodyHash: lifecycleHash(reviewBody),
+    subjectHash: reviewPayload.subjectHash,
+    repository: reviewSubject.repository,
+    implementationPr: reviewSubject.pr,
+    leaseId: lease.leaseId,
+    protectedBase: reviewSubject.protectedBase,
+    reviewedHead: reviewSubject.reviewedHead,
+    reviewedTree: reviewSubject.reviewedTree,
+    changedPathHash: reviewSubject.changedPathHash,
+    diffHash: reviewSubject.diffHash,
+    disposition: reviewSubject.disposition,
+  } : null;
+
+  const findingsDocument = { documentType: "codex-security.findings", findings: [], scanId: "scan-1", schemaVersion: "1.0" };
+  const coverageDocument = { completeness: "complete", deferred: [], documentType: "codex-security.coverage", openQuestions: [], scanId: "scan-1", schemaVersion: "1.0", surfaces: changedPaths.map((label) => ({ label, disposition: "no_issue_found" })) };
+  const findingsText = `${stableLifecycleJson(findingsDocument)}\n`;
+  const coverageText = `${stableLifecycleJson(coverageDocument)}\n`;
+  const hash = (value) => crypto.createHash("sha256").update(value).digest("hex");
+  const manifestDocument = {
+    documentType: "codex-security.scan-manifest",
+    schemaVersion: "1.0",
+    scan: {
+      id: "scan-1",
+      status: "completed",
+      completedAt: "2026-01-01T00:00:10Z",
+      sealedAt: "2026-01-01T00:00:10Z",
+      findingsRef: "findings.json",
+      coverageRef: "coverage.json",
+      artifacts: [
+        { path: "findings.json", sha256: hash(findingsText) },
+        { path: "coverage.json", sha256: hash(coverageText) },
+      ],
+      target: {
+        kind: "git_diff",
+        targetId: "target-1",
+        baseRevision: fixture.outcome.protectedBase,
+        headRevision: fixture.outcome.sourceHead,
+        snapshotDigest: `codex-security-snapshot/v1:sha256:${digest("f")}`,
+      },
+    },
+  };
+  const manifestText = `${stableLifecycleJson(manifestDocument)}\n`;
+  const hostedSecurityReadback = { manifestText, findingsText, coverageText };
+  const securityEvidence = security ? {
+    scanId: "scan-1",
+    targetId: "target-1",
+    baseRevision: fixture.outcome.protectedBase,
+    headRevision: fixture.outcome.sourceHead,
+    snapshotDigest: `codex-security-snapshot/v1:sha256:${digest("f")}`,
+    status: "completed",
+    completedAt: "2026-01-01T00:00:10Z",
+    sealedAt: "2026-01-01T00:00:10Z",
+    findingsCount: 0,
+    coverageCompleteness: "complete",
+    findingsSha256: hash(findingsText),
+    coverageSha256: hash(coverageText),
+    manifestSha256: hash(manifestText),
+  } : null;
+
+  const normalPathEvidence = { exactHeadReview: review ? "PRODUCED_VALID" : "NOT_PRODUCED", phase1: "NOT_SUCCESSFUL", finalSourceReceipt: "NOT_PRODUCED" };
+  const independentEvidence = { exactHeadReview: reviewEvidence, hostedSecurity: securityEvidence };
+  const subject = { ...ownerSubject(), normalPathEvidence, hostedSecurity: security ? "SEALED_PASS" : "NOT_PRODUCED", independentEvidence };
+  const ownerPayloadBody = { marker: EXCEPTIONAL_OWNER_TERMINAL_MARKER_V3, schemaVersion: 3, subject, subjectHash: lifecycleHash(subject), type: "OWNER_EXCEPTIONAL_BYPASS_TERMINAL_ACKNOWLEDGEMENT_V3" };
+  const ownerReceipt = { ...fixture.receipt, subject, subjectHash: lifecycleHash(subject), bodyHash: lifecycleHash(ownerPayloadBody) };
+  const ownerPayload = { ...ownerPayloadBody, bodyHash: lifecycleHash(ownerPayloadBody) };
+  const ownerReceiptReadback = { ...fixture.ownerReceiptReadback, body: `${EXCEPTIONAL_OWNER_TERMINAL_MARKER_V3}\n${stableLifecycleJson(ownerPayload)}` };
+  const body = {
+    ...Object.fromEntries(Object.entries(fixture.outcome).filter(([key]) => key !== "evidenceHash")),
+    schemaVersion: 3,
+    normalPathEvidence,
+    hostedSecurity: security ? "SEALED_PASS" : "NOT_PRODUCED",
+    independentEvidence,
+    ownerReceipt,
+    gitEvidence,
+    ruleset: {
+      ...fixture.outcome.ruleset,
+      evidence: {
+        before: { onlyIntegration: true, version: 1, updatedAt: "2025-12-31T23:59:00Z" },
+        bypass: { ...fixture.rulesetEvidence.bypass, version: 2 },
+        restored: { ...fixture.rulesetEvidence.restored, version: 3 },
+      },
+    },
+  };
+  const rulesetEvidence = body.ruleset.evidence;
+  const outcome = { ...body, evidenceHash: lifecycleHash(body) };
+  return { ...fixture, outcome, gitEvidence, ownerReceipt, ownerReceiptReadback, repositoryReviewReadback, hostedSecurityReadback, rulesetEvidence };
+}
+
+const strictRulesetReadback = () => ({
+  id: 18940814,
+  enforcement: "active",
+  bypass_actors: [{ actor_id: 4707730, actor_type: "Integration", bypass_mode: "pull_request" }],
+  rules: [{ type: "required_status_checks", parameters: { strict_required_status_checks_policy: true, required_status_checks: [{ context: "Phase 1 / Admission Decision", integration_id: 4707730 }] } }],
+});
 
 function exactDiff(paths) {
   return {
@@ -355,6 +515,85 @@ test("exceptional exact-source merge preserves missing normal evidence and relea
   assert.equal(projected.activeTaskBinding, null);
   assert.equal(projected.controlPlaneLifecycle.currentStage, "TERMINAL_TRUTH");
   assert.equal(projected.finiteTaskRuntime.finalEvidence.phase1, false);
+});
+
+test("exceptional terminal v3 preserves every independently verified review/security subset without promoting Phase 1 or final-source", () => {
+  const rulesetReadback = strictRulesetReadback();
+  for (const combination of [
+    { review: false, security: false },
+    { review: true, security: false },
+    { review: false, security: true },
+    { review: true, security: true },
+  ]) {
+    const fixture = exceptionalFixtureV3(combination);
+    const structural = validateExceptionalMergeOutcome(fixture.outcome, { lease, ownerReceipt: fixture.ownerReceipt, gitEvidence: fixture.gitEvidence, rulesetEvidence: fixture.rulesetEvidence });
+    assert.deepEqual(structural, { ok: true, findings: [] }, JSON.stringify(combination));
+    const authorized = authorizeExceptionalMergeOutcome(fixture.outcome, {
+      lease,
+      ownerReceiptReadback: fixture.ownerReceiptReadback,
+      repositoryReviewReadback: fixture.repositoryReviewReadback,
+      hostedSecurityReadback: fixture.hostedSecurityReadback,
+      gitEvidence: fixture.gitEvidence,
+      rulesetReadback,
+    });
+    assert.deepEqual(authorized, { ok: true, findings: [] }, JSON.stringify(combination));
+    assert.equal(fixture.outcome.normalPathEvidence.phase1, "NOT_SUCCESSFUL");
+    assert.equal(fixture.outcome.normalPathEvidence.finalSourceReceipt, "NOT_PRODUCED");
+    const record = { mainSha: sha("1"), activeTaskBinding: { implementationPr: 700 }, finiteTaskLeases: { tasks: [lease], completedLeaseOutcomes: [] }, finiteTaskRuntime: {}, engineeringDoctrine: {}, openImplementationPrs: [{ number: 700 }] };
+    const projected = projectExceptionalTerminalTruth(record, fixture.outcome);
+    assert.equal(projected.finiteTaskRuntime.finalEvidence.repositoryReview, combination.review);
+    assert.equal(projected.finiteTaskRuntime.finalEvidence.hostedSecurity, combination.security);
+    assert.equal(projected.finiteTaskRuntime.finalEvidence.phase1, false);
+    assert.equal(projected.finiteTaskRuntime.finalEvidence.ownerReceipt, false);
+    assert.equal(projected.controlPlaneLifecycle.mergeAuthority, false);
+    assert.deepEqual(projected.finiteTaskRuntime.exceptionalTerminalOutcome.authority, CLOSED_EXTERNAL_AUTHORITY);
+  }
+});
+
+test("exceptional v3 produced evidence is independently verified and fails closed on stale, incomplete, or blocking proof", () => {
+  const rulesetReadback = strictRulesetReadback();
+  const authorize = (fixture) => authorizeExceptionalMergeOutcome(fixture.outcome, {
+    lease,
+    ownerReceiptReadback: fixture.ownerReceiptReadback,
+    repositoryReviewReadback: fixture.repositoryReviewReadback,
+    hostedSecurityReadback: fixture.hostedSecurityReadback,
+    gitEvidence: fixture.gitEvidence,
+    rulesetReadback,
+  });
+  for (const [name, mutate] of [
+    ["review missing", (value) => { value.repositoryReviewReadback = null; }],
+    ["review wrong source", (value) => { value.repositoryReviewReadback.body = value.repositoryReviewReadback.body.replace(value.outcome.sourceHead, sha("9")); }],
+    ["review wrong tree", (value) => { value.repositoryReviewReadback.body = value.repositoryReviewReadback.body.replace(value.outcome.sourceTree, sha("8")); }],
+    ["review wrong PR", (value) => { value.repositoryReviewReadback.issue_url = `https://api.github.com/repos/${value.outcome.repository}/issues/701`; }],
+    ["review wrong branch", (value) => { value.repositoryReviewReadback.body = value.repositoryReviewReadback.body.replace(value.outcome.implementationBranch, "codex/wrong-branch"); }],
+    ["review wrong subject type", (value) => { value.repositoryReviewReadback.body = value.repositoryReviewReadback.body.replace('"type":"REPOSITORY_OWNED_EXACT_HEAD_REVIEW_V1"', '"type":"WRONG_REVIEW_TYPE"'); }],
+    ["review edited", (value) => { value.repositoryReviewReadback.updated_at = "2026-01-01T00:00:06Z"; }],
+    ["review blocking severity", (value) => { value.repositoryReviewReadback.body = value.repositoryReviewReadback.body.replace('"P0":0', '"P0":1'); }],
+    ["security unsealed", (value) => { value.hostedSecurityReadback.manifestText = value.hostedSecurityReadback.manifestText.replace('"sealedAt":"2026-01-01T00:00:10Z"', '"sealedAt":null'); }],
+    ["security wrong source", (value) => { value.hostedSecurityReadback.manifestText = value.hostedSecurityReadback.manifestText.replace(value.outcome.sourceHead, sha("9")); }],
+    ["security incomplete", (value) => { value.hostedSecurityReadback.manifestText = value.hostedSecurityReadback.manifestText.replace('"status":"completed"', '"status":"running"'); }],
+    ["security missing seal digest", (value) => { value.hostedSecurityReadback.manifestText = value.hostedSecurityReadback.manifestText.replace(/codex-security-snapshot\/v1:sha256:[0-9a-f]{64}/u, ""); }],
+    ["security finding", (value) => { value.hostedSecurityReadback.findingsText = value.hostedSecurityReadback.findingsText.replace('"findings":[]', '"findings":[{"severity":"high"}]'); }],
+    ["security stale artifact", (value) => { value.hostedSecurityReadback.coverageText += " "; }],
+  ]) {
+    const fixture = exceptionalFixtureV3({ review: true, security: true });
+    mutate(fixture);
+    assert.equal(authorize(fixture).ok, false, name);
+  }
+  const phase1 = exceptionalFixtureV3({ review: true, security: true });
+  phase1.outcome.normalPathEvidence.phase1 = "PASS";
+  assert.equal(validateExceptionalMergeOutcome(phase1.outcome, { lease, ownerReceipt: phase1.ownerReceipt, gitEvidence: phase1.gitEvidence, rulesetEvidence: phase1.rulesetEvidence }).ok, false);
+  const finalSource = exceptionalFixtureV3({ review: true, security: true });
+  finalSource.outcome.normalPathEvidence.finalSourceReceipt = "PRODUCED_VALID";
+  assert.equal(validateExceptionalMergeOutcome(finalSource.outcome, { lease, ownerReceipt: finalSource.ownerReceipt, gitEvidence: finalSource.gitEvidence, rulesetEvidence: finalSource.rulesetEvidence }).ok, false);
+  const noStrictProtection = exceptionalFixtureV3({ review: true, security: true });
+  assert.equal(authorize(noStrictProtection).ok, true);
+  const invalidRuleset = strictRulesetReadback();
+  invalidRuleset.rules[0].parameters.strict_required_status_checks_policy = false;
+  assert.equal(authorizeExceptionalMergeOutcome(noStrictProtection.outcome, { lease, ownerReceiptReadback: noStrictProtection.ownerReceiptReadback, repositoryReviewReadback: noStrictProtection.repositoryReviewReadback, hostedSecurityReadback: noStrictProtection.hostedSecurityReadback, gitEvidence: noStrictProtection.gitEvidence, rulesetReadback: invalidRuleset }).ok, false);
+  const nonMonotonicRulesetHistory = exceptionalFixtureV3({ review: true, security: true });
+  nonMonotonicRulesetHistory.outcome.ruleset.evidence.restored.version = nonMonotonicRulesetHistory.outcome.ruleset.evidence.bypass.version;
+  assert.equal(validateExceptionalMergeOutcome(nonMonotonicRulesetHistory.outcome, { lease, ownerReceipt: nonMonotonicRulesetHistory.ownerReceipt, gitEvidence: nonMonotonicRulesetHistory.gitEvidence, rulesetEvidence: nonMonotonicRulesetHistory.outcome.ruleset.evidence }).ok, false);
 });
 
 test("exceptional merge mutations cannot become authority [37-46,49]", () => {

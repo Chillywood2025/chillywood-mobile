@@ -2,12 +2,11 @@
 
 Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
-- Protected authority checkpoint: `90e9875df0b1a5c3781b31db87f817ddfdc906e5` / tree `fe93d65b9cd2209fcf324deac6392177dcc42957`.
+- Protected authority checkpoint: `761766c39aab339975c09516dbbc4a6fd01d9022` / tree `aea3fbc9cdc5d42e7bc844cc9f5d5b9442615fd3`.
 - Protected-main advancement is evaluated dynamically from exact Git history; the runtime-observed protected main is derived at execution and is not committed as authority after every merge.
 - Ordinary protected advancement invalidates only affected task evidence. Terminal task or authority transitions require canonical synchronization.
-- Latest merged implementation: PR #484, `969359cf0baaf832b2de0598c9affea1b2bf913b`; merge `cf120d38cdfacd39f17093a197c0148e501156a7`.
-- Structured task-lease binding: feature `eas-build-update-release`, PR #490, admitted seed `9f9fdd59cab028193e63ef277abb99645f5f7a1e` / `c0d3b8f609f37badb6fa3332c3c2fd47e88383ed`, phase `PREIMPLEMENTATION_ENGINEERING_CLEAR`, execution `RELEASE_DELIVERY_AUTOMATION_CONTROL_PLANE_IMPLEMENTATION_AUTHORIZED`. Current candidate `8ecf8b437bdaabf4efd2a8a00cd614c0722dd789` / `38df9cba7299a07cf75c7f610aed20b55989fd01` is a non-authoritative read-only observation; final receipt, review, Phase 1, and merge provenance bind the frozen final head.
-- Finite task lease: `ASSURANCE_FINITE_TASK_LEASE_V1`, admitted seed `9f9fdd59cab028193e63ef277abb99645f5f7a1e` / `c0d3b8f609f37badb6fa3332c3c2fd47e88383ed`, protected admission PR #495, state `ACTIVE_IMPLEMENTATION`; descendant heads do not require another admission, source binding, or merge-provenance PR.
+- Latest merged implementation: PR #490, `58b1f05a7b0c0ac34ac39e12c63845ed344b75ea`; merge `761766c39aab339975c09516dbbc4a6fd01d9022`.
+- Structured active task: `NO_ACTIVE_TASK`; implementation authority is closed until the next finite admission.
 - Review policy: provider Codex Review is `OPTIONAL_ADVISORY`; the 13 historical lanes are discovered, then lifecycle and risk determine the applicable set. Every applicable failure blocks; deferred or not-applicable lanes are neither PASS nor merge authority, and must run fresh if a later transition makes them applicable. Unknown findings block, and draft source-readiness never grants merge authority.
 - Assurance program display text: WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE; completed: PR-A, CURRENT-TRUTH-SYNCHRONIZATION-PR-56, CURRENT-TRUTH-GUARD-CORRECTION-PR-58, CURRENT-TRUTH-SYNCHRONIZATION-PR-60, FEATURE-DOMAIN-SCOPE-GUARD-PR-62, CURRENT-TRUTH-SYNCHRONIZATION-PR-67, CURRENT-TRUTH-SYNCHRONIZATION-PR-86, CURRENT-TRUTH-HEAD-BINDING-PR-90, CURRENT-TRUTH-SYNCHRONIZATION-PR-97, CURRENT-TRUTH-SYNCHRONIZATION-PR-103, CURRENT-TRUTH-SYNCHRONIZATION-PR-109, PR-C-MODELS-PR-64, MIGRATION-READBACK-METADATA-PR-113, CURRENT-TRUTH-SYNCHRONIZATION-PR-123, BASE-SYNC-HEAD-BINDING-PR-125, BASE-SYNC-FIRST-PARENT-DISTANCE-PR-127, DETERMINISTIC-COGNITIVE-DB-LOCK-ORDER-PR-129, PR-B0-CHAT-CALL-REMOTE-HISTORY-PR-116, CURRENT-TRUTH-SYNCHRONIZATION-PR-131, CURRENT-TRUTH-SYNCHRONIZATION-PR-132, CURRENT-TRUTH-SYNCHRONIZATION-PR-135, PR-B1-LIVEKIT-SOURCE-BINDING-PR-70, CURRENT-TRUTH-SYNCHRONIZATION-PR-137, PR-B2-REVENUECAT-TRANSFER-PR-69, CURRENT-TRUTH-SYNCHRONIZATION-PR-139, CURRENT-TRUTH-SYNCHRONIZATION-PR-140, PR-B3-ROOM-HOST-BLOCK-CHECK-PR-75, CURRENT-TRUTH-SYNCHRONIZATION-PR-142, PR-52-PR-53-SOURCE-COVERAGE-DISPOSITION, PR-D1-OFFLINE-NATIVE-PROVIDER-RUNTIME-ARTIFACT-PARITY-PR-143, CURRENT-TRUTH-SYNCHRONIZATION-PR-151, CURRENT-TRUTH-SYNCHRONIZATION-PR-156, CURRENT-TRUTH-SYNCHRONIZATION-PR-161, CURRENT-TRUTH-SYNCHRONIZATION-PR-162, PR-D2C-IOS-NATIVE-CALL-ROUTE-PROVENANCE-PR-152, BOOTSTRAP-IMAGE-SIZE-SAFE-DEPENDENCY-PR-170, D2B-CURRENT-TRUTH-BINDING-PR-169, D2B-CURRENT-TRUTH-CORRECTIONS-PR-175-PR-177-PR-179-PR-181, PR-D2B-ANDROID-NATIVE-ACTION-ORIGIN-BACKUP-PR-164, E0-CURRENT-TRUTH-BINDING-PR-190, PR-E0-ASSURANCE-EFFICIENCY-PR-185, D2A-MICROPHONE-CORRECTION-PR-194, ASSURANCE-CONTROL-A1-PR-201, ASSURANCE-CONTROL-A1-LATE-REVIEW-REGISTRY-PR-205, ASSURANCE-CONTROL-RULESET-READBACK-PR-207, ASSURANCE-CONTROL-PROOF-TIER-CORRECTION-PR-208, CODEX-SECURITY-SCAN-RELIABILITY-S0-PR-206, LIVEKIT-MIC-POST-MERGE-CORRECTION-PR-210, FINITE-TASK-LEASE-RUNTIME-CORRECTION-PR-218, PR-D2A-LEGACY-WEBRTC-CORRECTION-PR-214, BRACE-EXPANSION-VERSION-LINE-CORRECTION-PR-220, FINITE-TASK-TERMINAL-HANDOFF-PR-223, PR-D2A-NATIVE-LIFECYCLE-PR-212, TERMINAL-PROTECTED-BASE-RESOLUTION-PR-225, WHOLE-APP-ENGINEERING-DOCTRINE-PR-226, TYPED-TASK-CONTEXT-TERMINAL-SUCCESSOR-PR-227.
 - Android internal: build 86, runtime `1.0.0-android-chat-call-action-v1`, channel `android-chat-livekit-qa`, update `e3379ac9-61f0-40db-a014-81975be123e5`.
@@ -27,8 +26,9 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
 ## Control-plane lifecycle
 
-- Contract `ASSURANCE_CONTROL_PLANE_LIFECYCLE_V2`; current stage `AUTHORIZED_IMPLEMENTATION`; terminal classification `NONE`; pending transitions `0`.
+- Contract `ASSURANCE_CONTROL_PLANE_LIFECYCLE_V2`; current stage `TERMINAL_TRUTH`; terminal classification `MERGED_BY_EXPLICIT_OWNER_BYPASS_AT_EXACT_FROZEN_SOURCE`; pending transitions `0`.
 - Merge authority: `false`; provider/build/OTA/release authority: `false`; physical proof: `PENDING`.
+- Exceptional source merge facts: PR #490, source `58b1f05a7b0c0ac34ac39e12c63845ed344b75ea` / `aea3fbc9cdc5d42e7bc844cc9f5d5b9442615fd3`, merge `761766c39aab339975c09516dbbc4a6fd01d9022` / `aea3fbc9cdc5d42e7bc844cc9f5d5b9442615fd3`. Exact-head review `PRODUCED_VALID`; normal Phase 1 `NOT_SUCCESSFUL`; final-source receipt `NOT_PRODUCED`; hosted security `SEALED_PASS`. Produced evidence is retained only at its independently verified tier; missing or unsuccessful normal-path evidence is not promoted to PASS, and exceptional terminalization grants no merge, provider, build, OTA, release, or money authority.
 
 ## Engineering doctrine
 
@@ -80,7 +80,7 @@ Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
 
 ## Open implementation PRs
 
-- PR #490 at `8ecf8b437bdaabf4efd2a8a00cd614c0722dd789`: open-draft-current; implementation.
+- None.
 
 ## Open review-only PRs
 

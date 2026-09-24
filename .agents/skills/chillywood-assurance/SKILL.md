@@ -42,8 +42,11 @@ denial, independent semantic review, adjacent-defect discovery, and required CI.
 - `closeout`: require applicable focused proof, review, exact final CI, retained
   review branches, unmerged review PRs, and the contract-defined truth sync for
   a normal merge. For an exact Owner-bypass merge, validate the exact Git and
-  ruleset facts and record absent normal evidence as `NOT_PRODUCED`; never
-  fabricate it. For Owner-deferred work, retain defects as `NOT_IMPLEMENTED`.
+  ruleset facts and record every proof at its factual level. Independently
+  verified exact-head review or sealed hosted-security evidence may be retained,
+  while absent final-source evidence remains `NOT_PRODUCED` and an unsuccessful
+  Phase 1 remains `NOT_SUCCESSFUL`; never promote or fabricate either. For
+  Owner-deferred work, retain defects as `NOT_IMPLEMENTED`.
 
 ## Lifecycle and applicability
 
