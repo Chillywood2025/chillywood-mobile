@@ -99,7 +99,7 @@ test("protected publisher rejects wrong workflow, stale source, incomplete paths
   const jobs = successfulJobs(files.map((file) => file.filename)).map((job) => ({ ...job, headSha: undefined }));
   const snapshot = {
     repository: "Chillywood2025/chillywood-mobile",
-    run: { event: "pull_request", name: "Chi'llywood Source Validation", path: ".github/workflows/required-validation.yml", status: "completed", conclusion: "success", head_sha: head, pull_requests: [{ number: 7 }] },
+    run: { event: "pull_request", name: "Chi'llywood Source Validation", path: ".github/workflows/required-validation.yml", status: "completed", conclusion: "success", head_sha: head, pull_requests: [{ number: 7, head: { sha: head }, base: { ref: "main", sha: sha("a") } }] },
     pull: { number: 7, state: "open", changed_files: 1, user: { login: "contributor" }, head: { sha: head }, base: { ref: "main", sha: sha("a"), repo: { full_name: "Chillywood2025/chillywood-mobile" } } },
     files,
     runJobs: jobs,
@@ -110,6 +110,7 @@ test("protected publisher rejects wrong workflow, stale source, incomplete paths
   assert.throws(() => evaluateWorkflowSnapshot({ ...snapshot, run: { ...snapshot.run, path: ".github/workflows/forged.yml" } }), /VALIDATION_WORKFLOW_RUN_INVALID/u);
   assert.throws(() => evaluateWorkflowSnapshot({ ...snapshot, run: { ...snapshot.run, conclusion: "failure" } }), /VALIDATION_WORKFLOW_RUN_INVALID/u);
   assert.throws(() => evaluateWorkflowSnapshot({ ...snapshot, run: { ...snapshot.run, head_sha: sha("c") } }), /VALIDATION_WORKFLOW_HEAD_STALE/u);
+  assert.throws(() => evaluateWorkflowSnapshot({ ...snapshot, run: { ...snapshot.run, pull_requests: [{ ...snapshot.run.pull_requests[0], base: { ref: "main", sha: sha("c") } }] } }), /VALIDATION_WORKFLOW_BASE_STALE/u);
   assert.throws(() => evaluateWorkflowSnapshot({ ...snapshot, files: [] }), /VALIDATION_CHANGED_PATHS_INCOMPLETE/u);
   assert.throws(() => evaluateWorkflowSnapshot({ ...snapshot, pull: { ...snapshot.pull, number: 8 } }), /VALIDATION_PULL_REQUEST_IDENTITY_INVALID/u);
 });

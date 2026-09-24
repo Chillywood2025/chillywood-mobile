@@ -141,10 +141,12 @@ export function evaluateWorkflowSnapshot({ repository, run, pull, files, runJobs
     || run.status !== "completed" || run.conclusion !== "success") throw new Error("VALIDATION_WORKFLOW_RUN_INVALID");
   const pulls = Array.isArray(run.pull_requests) ? run.pull_requests : [];
   if (pulls.length !== 1) throw new Error("VALIDATION_PULL_REQUEST_IDENTITY_INVALID");
-  const prNumber = pulls[0].number;
+  const runPull = pulls[0];
+  const prNumber = runPull.number;
   if (pull.number !== prNumber) throw new Error("VALIDATION_PULL_REQUEST_IDENTITY_INVALID");
   if (pull.state !== "open" || pull.base.repo.full_name !== repository || pull.base.ref !== policy.baseBranch) throw new Error("VALIDATION_PULL_REQUEST_STATE_INVALID");
-  if (pull.head.sha !== run.head_sha) throw new Error("VALIDATION_WORKFLOW_HEAD_STALE");
+  if (pull.head.sha !== run.head_sha || runPull.head?.sha !== run.head_sha) throw new Error("VALIDATION_WORKFLOW_HEAD_STALE");
+  if (runPull.base?.ref !== policy.baseBranch || runPull.base?.sha !== pull.base.sha) throw new Error("VALIDATION_WORKFLOW_BASE_STALE");
   if (files.length !== pull.changed_files) throw new Error("VALIDATION_CHANGED_PATHS_INCOMPLETE");
   const result = evaluateRun({
     baseRef: pull.base.ref,
