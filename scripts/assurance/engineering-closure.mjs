@@ -4167,13 +4167,26 @@ function legacyFiniteTaskAdmissionSubjectV2({ raw, identity, implementation, tas
   return finiteTaskAdmissionSubject({ identity: { ...identity, baseSha: legacy.protectedBase, headSha: legacy.admissionHead }, tree, scope: observed, implementation, taskArtifact, taskArtifactHash });
 }
 
-const finiteTaskAdmissionTruthSemanticProjection = (record) => {
+const finiteTaskAdmissionTruthSemanticProjection = (record, taskId) => {
   const projection = structuredClone(record);
   delete projection.mainSha;
   if (projection.protectedMainAuthority) {
     delete projection.protectedMainAuthority.checkpointSha;
     delete projection.protectedMainAuthority.checkpointTree;
   }
+  if (typeof taskId === "string" && projection.activeTaskBinding?.implementationBindingId === taskId) {
+    delete projection.activeTaskBinding.requiredFreshnessClaims;
+    delete projection.activeTaskBinding.taskLocalGoverningEdgeClosure;
+  }
+  const projectedLease = projection.finiteTaskLeases?.tasks?.find(({ leaseId }) => leaseId === taskId);
+  if (projectedLease) delete projectedLease.closure;
+  if (Array.isArray(projection.freshnessClaims)) {
+    projection.freshnessClaims = projection.freshnessClaims.filter(({ leaseId }) => leaseId !== taskId);
+  }
+  if (Array.isArray(projection.evidenceSources)) {
+    projection.evidenceSources = projection.evidenceSources.filter(({ leaseId }) => leaseId !== taskId);
+  }
+  if (projection.finiteTaskRuntime) delete projection.finiteTaskRuntime.candidateObservation;
   return projection;
 };
 
@@ -4207,6 +4220,7 @@ export function verifyFiniteTaskAdmissionSynchronizationLineage({
   const add = (condition, finding) => { if (!condition) findings.push(finding); };
   const anchorHead = currentAdmission?.admissionIdentity?.head;
   const anchorTree = currentAdmission?.admissionIdentity?.tree;
+  const taskId = currentAdmission?.admissionIdentity?.taskId;
   const currentHead = identity?.headSha;
   const currentBase = identity?.baseSha;
   const paths = [...new Set(expectedChangedPaths ?? [])].sort();
@@ -4233,7 +4247,7 @@ export function verifyFiniteTaskAdmissionSynchronizationLineage({
     anchorBase = anchorRecord?.protectedMainAuthority?.checkpointSha ?? anchorRecord?.mainSha;
     anchorBaseTree = gitCommand(["rev-parse", `${anchorBase}^{tree}`]);
     add(anchorRecord?.mainSha === anchorBase && anchorRecord?.protectedMainAuthority?.checkpointSha === anchorBase && anchorRecord?.protectedMainAuthority?.checkpointTree === anchorBaseTree, "ADMISSION_SYNCHRONIZATION_ANCHOR_CHECKPOINT_INVALID");
-    add(stableJson(finiteTaskAdmissionTruthSemanticProjection(observedRecord)) === stableJson(finiteTaskAdmissionTruthSemanticProjection(anchorRecord)), "ADMISSION_SYNCHRONIZATION_SEMANTIC_TRUTH_CHANGED");
+    add(stableJson(finiteTaskAdmissionTruthSemanticProjection(observedRecord, taskId)) === stableJson(finiteTaskAdmissionTruthSemanticProjection(anchorRecord, taskId)), "ADMISSION_SYNCHRONIZATION_SEMANTIC_TRUTH_CHANGED");
     const observedCheckpoint = observedRecord?.protectedMainAuthority?.checkpointSha;
     const unchangedCheckpoint = observedRecord?.mainSha === anchorBase && observedCheckpoint === anchorBase && observedRecord?.protectedMainAuthority?.checkpointTree === anchorBaseTree;
     const refreshedCheckpoint = observedRecord?.mainSha === currentBase && observedCheckpoint === currentBase && observedRecord?.protectedMainAuthority?.checkpointTree === currentBaseTree;
@@ -4256,22 +4270,34 @@ export function verifyFiniteTaskAdmissionSynchronizationLineage({
       add(lineageCommits.length > 0, "ADMISSION_SYNCHRONIZATION_LINEAGE_EMPTY");
       let previousHead = anchorHead;
       let previousBase = anchorBase;
+      let protectedMergeCount = 0;
       for (const commit of lineageCommits) {
         const parents = gitCommand(["show", "-s", "--format=%P", commit]).split(/\s+/u).filter(Boolean);
         const commitTree = gitCommand(["rev-parse", `${commit}^{tree}`]);
         const canonicalTree = parents.length === 2 ? gitCommand(["merge-tree", "--write-tree", parents[0], parents[1]]).split(/\r?\n/gu)[0] : null;
         const synchronizedPaths = parents.length === 2 ? gitCommand(["diff", "--name-only", parents[1], commit]).split(/\r?\n/gu).filter(Boolean).sort() : [];
-        add(parents.length === 2 && parents[0] === previousHead, "ADMISSION_SYNCHRONIZATION_MERGE_TOPOLOGY_INVALID");
-        add(parents.length === 2 && typedGit(root, ["merge-base", "--is-ancestor", previousBase, parents[1]]).status === 0, "ADMISSION_SYNCHRONIZATION_PROTECTED_ANCESTRY_INVALID");
-        add(parents.length === 2 && typedGit(root, ["merge-base", "--is-ancestor", parents[1], currentBase]).status === 0, "ADMISSION_SYNCHRONIZATION_PROTECTED_BASE_INVALID");
-        add(commitTree === canonicalTree, "ADMISSION_SYNCHRONIZATION_NONCANONICAL_MERGE");
-        add(stableJson(synchronizedPaths) === stableJson(paths), "ADMISSION_SYNCHRONIZATION_SCOPE_CHANGED");
+        const generatedPaths = parents.length === 1 ? gitCommand(["diff", "--name-only", parents[0], commit]).split(/\r?\n/gu).filter(Boolean).sort() : [];
+        add(parents[0] === previousHead, "ADMISSION_SYNCHRONIZATION_MERGE_TOPOLOGY_INVALID");
+        if (parents.length === 2) {
+          protectedMergeCount += 1;
+          add(typedGit(root, ["merge-base", "--is-ancestor", previousBase, parents[1]]).status === 0, "ADMISSION_SYNCHRONIZATION_PROTECTED_ANCESTRY_INVALID");
+          add(typedGit(root, ["merge-base", "--is-ancestor", parents[1], currentBase]).status === 0, "ADMISSION_SYNCHRONIZATION_PROTECTED_BASE_INVALID");
+          add(commitTree === canonicalTree, "ADMISSION_SYNCHRONIZATION_NONCANONICAL_MERGE");
+          add(stableJson(synchronizedPaths) === stableJson(paths), "ADMISSION_SYNCHRONIZATION_SCOPE_CHANGED");
+          previousBase = parents[1];
+        } else if (parents.length === 1) {
+          add(generatedPaths.length > 0 && generatedPaths.every((path) => paths.includes(path)), "ADMISSION_SYNCHRONIZATION_SCOPE_CHANGED");
+          const generatedRecord = admissionJsonAt(root, commit, "config/assurance/current-truth-v1.json");
+          add(Boolean(generatedRecord), "ADMISSION_SYNCHRONIZATION_GENERATED_TRUTH_MISSING");
+          add(admissionTextAt(root, commit, "CURRENT_STATE.md") === renderCurrentState(generatedRecord), "ADMISSION_SYNCHRONIZATION_CURRENT_STATE_INVALID");
+          add(admissionTextAt(root, commit, "NEXT_TASK.md") === renderNextTask(generatedRecord), "ADMISSION_SYNCHRONIZATION_NEXT_TASK_INVALID");
+        } else {
+          add(false, "ADMISSION_SYNCHRONIZATION_MERGE_TOPOLOGY_INVALID");
+        }
         previousHead = commit;
-        previousBase = parents[1] ?? previousBase;
       }
       add(lineageCommits.at(-1) === currentHead, "ADMISSION_SYNCHRONIZATION_CURRENT_HEAD_UNREACHABLE");
-      const finalParents = gitCommand(["show", "-s", "--format=%P", currentHead]).split(/\s+/u).filter(Boolean);
-      add(finalParents.length === 2 && finalParents[1] === currentBase, "ADMISSION_SYNCHRONIZATION_LATEST_BASE_INVALID");
+      add(protectedMergeCount > 0 && previousBase === currentBase, "ADMISSION_SYNCHRONIZATION_LATEST_BASE_INVALID");
     }
 
     const contract = admissionJsonAt(root, currentHead, "config/assurance/current-truth-contract-v1.json");

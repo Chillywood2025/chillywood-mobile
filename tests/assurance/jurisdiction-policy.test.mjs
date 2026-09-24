@@ -1033,6 +1033,26 @@ test("finite-task Owner authority survives only canonical protected-main synchro
   assert.equal(result.currentBase, fixture.currentBase);
   assert.equal(result.protectedMainRuntime.currentTruthStatus, "CURRENT");
   assert.equal(result.protectedMainRuntime.pendingTransitionCount, 0);
+
+  const regenerated = structuredClone(fixture.currentTruth);
+  regenerated.mainSha = fixture.currentBase;
+  regenerated.protectedMainAuthority.checkpointSha = fixture.currentBase;
+  regenerated.protectedMainAuthority.checkpointTree = runGit(fixture.root, ["rev-parse", `${fixture.currentBase}^{tree}`]);
+  writeFixture(fixture.root, "config/assurance/current-truth-v1.json", `${JSON.stringify(regenerated, null, 2)}\n`);
+  writeFixture(fixture.root, "CURRENT_STATE.md", renderCurrentState(regenerated));
+  writeFixture(fixture.root, "NEXT_TASK.md", renderNextTask(regenerated));
+  runGit(fixture.root, ["add", "CURRENT_STATE.md", "NEXT_TASK.md", "config/assurance/current-truth-v1.json"]);
+  runGit(fixture.root, ["commit", "--no-gpg-sign", "-m", "Canonically regenerate protected-main admission companions"]);
+  const regeneratedHead = runGit(fixture.root, ["rev-parse", "HEAD"]);
+  const regeneratedTree = runGit(fixture.root, ["rev-parse", "HEAD^{tree}"]);
+  const regeneratedResult = verifyFiniteTaskAdmissionSynchronizationLineage({
+    ...fixture,
+    currentTruth: regenerated,
+    identity: { ...fixture.identity, headSha: regeneratedHead },
+    tree: regeneratedTree,
+  });
+  assert.equal(regeneratedResult.ok, true, regeneratedResult.findings.join(","));
+  assert.equal(regeneratedResult.synchronizationCount, 2);
 });
 
 test("active-task admission resolves the immutable artifact from the exact implementation head", (t) => {
