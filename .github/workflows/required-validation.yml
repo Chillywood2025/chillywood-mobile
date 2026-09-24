@@ -1,0 +1,210 @@
+name: Chi'llywood Source Validation
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-validation-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Validation / Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      product: ${{ steps.plan.outputs.product }}
+      sensitive: ${{ steps.plan.outputs.sensitive }}
+      database: ${{ steps.plan.outputs.database }}
+      nativeRelease: ${{ steps.plan.outputs.nativeRelease }}
+      autonomous: ${{ steps.plan.outputs.autonomous }}
+      policy: ${{ steps.plan.outputs.policy }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: plan
+        name: Compute conservative validation plan from the complete changed-path set
+        run: node scripts/ci/required-validation.mjs --plan --base="${{ github.event.pull_request.base.sha }}"
+
+  core:
+    name: Validation / Core
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm ci --prefix ops/alert-automation
+      - name: Lint, TypeScript, runtime, routes and Expo configuration
+        env:
+          CI: "1"
+          EXPO_NO_DOTENV: "1"
+          EXPO_NO_CLIENT_ENV_VARS: "1"
+          EXPO_PUBLIC_SUPABASE_URL: "https://ci.invalid"
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: "ci-placeholder-not-a-secret"
+          EXPO_PUBLIC_BETA_OPERATOR_ALLOWLIST: "ci@example.invalid"
+          EXPO_PUBLIC_BETA_ENVIRONMENT: "closed-beta"
+        run: |
+          npm run lint
+          npm run typecheck
+          npm run validate:runtime
+          npm run guard:route-contracts
+          npx expo-doctor
+
+  product:
+    name: Validation / Product
+    if: needs.plan.outputs.product == 'true'
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - name: Run product and navigation regression tests
+        run: node --test tests/*.test.mjs
+
+  sensitive:
+    name: Validation / Sensitive
+    if: needs.plan.outputs.sensitive == 'true'
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: 20, cache: npm }
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with: { deno-version: v2.x }
+      - run: npm ci
+      - name: Run auth, entitlement, money, moderation and call authority regressions
+        run: |
+          node --test tests/wave1/*.test.mjs tests/creator-money/*.test.mjs
+          npm run guard:admin-auth-safety
+          npm run guard:first-owner-authority-policy
+          npm run guard:creator-monetization-policy
+          npm run guard:legal-privacy-data-safety-policy
+          npm run guard:malware-scanning-policy
+          npm run guard:content-rights-policy
+          npm run guard:money-center-policy
+          npm run guard:payment-rail-policy
+          npm run guard:chat-thread-hide-from-inbox-policy
+          npm run guard:chilly-chat-call-push-policy
+          npm run test:chilly-chat-livekit-authority
+
+  database:
+    name: Validation / Database
+    if: needs.plan.outputs.database == 'true'
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { persist-credentials: false }
+      - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1.7.1
+        with: { version: 2.109.1 }
+      - name: Rebuild and test the local database
+        run: |
+          supabase start
+          supabase db reset
+          supabase test db
+
+  native-release:
+    name: Validation / Native and Release
+    if: needs.plan.outputs.nativeRelease == 'true'
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - name: Run native, OTA and release boundary checks without provider mutation
+        run: |
+          npm run guard:ota-native-boundary
+          npm run guard:android-native-runtime-compatibility
+          npm run guard:android-signing-secret-policy
+          npm run guard:ios-config-policy
+          npm run guard:ios-native-call-policy
+          npm run guard:ios-privacy-manifest
+          npm run guard:ios-release-workflows
+          npm run guard:media-object-storage-migration
+          node --test tests/release-control-plane.test.mjs tests/release-review-gate.test.mjs
+
+  autonomous:
+    name: Validation / Autonomous
+    if: needs.plan.outputs.autonomous == 'true'
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - name: Run substantive autonomous product and platform checks
+        run: |
+          npm run guard:autonomous-component-inventory
+          npm run proof:autonomous-component-inventory
+          npm run guard:autonomous-operating-model
+          npm run guard:scheduled-provider-adapters
+          npm run test:scheduled-provider-adapters
+          npm run guard:all-platform-autonomy
+          npm run test:all-platform-autonomy
+          npm run guard:ios-autonomous-call-retry
+          npm run test:ios-notification-autonomy
+          npm run guard:cognitive-execution-safety
+          npm run test:cognitive-execution-safety
+          npm run test:cognitive-hardening-regressions
+          npm run test:cognitive-runtime-authority-regressions
+
+  policy:
+    name: Validation / Policy
+    if: needs.plan.outputs.policy == 'true'
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - name: Validate the replacement workflow and retained release boundaries
+        run: node --test tests/ci/*.test.mjs tests/release-review-gate.test.mjs tests/release-control-plane.test.mjs
+
+  result:
+    name: Validation / Results
+    if: always()
+    needs: [plan, core, product, sensitive, database, native-release, autonomous, policy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      NEEDS_JSON: ${{ toJson(needs) }}
+    steps:
+      - name: Publish a complete source-run summary
+        run: |
+          node - <<'NODE'
+          const needs = JSON.parse(process.env.NEEDS_JSON);
+          const failures = Object.entries(needs).filter(([, value]) => value.result === 'failure' || value.result === 'cancelled');
+          const planFailed = needs.plan?.result !== 'success';
+          const coreFailed = needs.core?.result !== 'success';
+          console.log(JSON.stringify({ jobs: Object.fromEntries(Object.entries(needs).map(([key, value]) => [key, value.result])), failures: failures.map(([key]) => key) }));
+          if (planFailed || coreFailed || failures.length > 0) process.exit(1);
+          NODE

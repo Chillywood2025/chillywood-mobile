@@ -27,8 +27,6 @@ if (!fs.existsSync(path.join(repoRoot, checklistPath))) {
 
 const checklist = read(checklistPath);
 const packageJson = read("package.json");
-const currentState = read("CURRENT_STATE.md");
-const nextTask = read("NEXT_TASK.md");
 const secretLikePattern = new RegExp([
   String.raw`postgres(?:ql)?://`,
   String.raw`service[_-]?role`,
@@ -67,7 +65,7 @@ for (const command of requiredWorkerCommands) {
 
 assertIncludes(checklist, "MEDIA_WORKER_RUN_ONE_CONFIRM=I_UNDERSTAND_ONE_JOB", "checklist owner confirmation");
 assertIncludes(checklist, "Continuous automation remains blocked", "checklist continuous automation boundary");
-assertIncludes(checklist, "production creator-video playback remains signed-origin fallback by default", "checklist production playback fallback");
+assertIncludes(checklist, "signed-origin fallback remains mandatory", "checklist production playback fallback");
 assertIncludes(checklist, "The production worker is not deployed", "checklist production worker status");
 assertIncludes(checklist, "no cron or scheduler is configured", "checklist scheduler status");
 assertIncludes(checklist, "It is not PITR and does not replace PITR for continuous production.", "checklist PITR boundary");
@@ -78,8 +76,6 @@ assertIncludes(checklist, "Storing backups in the public playback bucket.", "che
 assertIncludes(checklist, "Serving backups through `media.chillywoodstream.com`.", "checklist public media domain prohibition");
 
 assertIncludes(packageJson, "\"proof:media-worker-cli-operating-checklist\"", "package checklist proof script");
-assertIncludes(currentState, "Final CLI media-worker operating checklist", "current state checklist reference");
-assertIncludes(nextTask, "Use CLI checklist for any future allowlisted one-job media worker run.", "next task checklist instruction");
 
 assertNotMatches(checklist, /\b(?:worker is deployed|continuous automation is closed|production playback uses CDN|production playback uses HLS|R2 logical backup is true PITR|R2 logical backups are true PITR|PITR is unnecessary)\b/i, "checklist overclaim");
 assertNotMatches(checklist, /\b(?:schedule:\s*\[|workflow_dispatch|cron\s*:\s*|on:\s*push)\b/i, "checklist workflow or cron instructions");

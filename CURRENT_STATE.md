@@ -1,6 +1,8 @@
 # CURRENT STATE
 
-Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
+Historical snapshot retained for audit only. It is not ordinary source authority
+and is no longer consumed by required validation, release actions, or agent
+instructions.
 
 - Protected authority checkpoint: `761766c39aab339975c09516dbbc4a6fd01d9022` / tree `aea3fbc9cdc5d42e7bc844cc9f5d5b9442615fd3`.
 - Protected-main advancement is evaluated dynamically from exact Git history; the runtime-observed protected main is derived at execution and is not committed as authority after every merge.

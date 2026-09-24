@@ -18,17 +18,10 @@ const assertNotMatches = (source, pattern, label) => {
   if (match) fail(`${label} must not match ${pattern}: ${match[0]}`);
 };
 
-const beforeHeading = (source, heading) => {
-  const index = source.indexOf(heading);
-  return index === -1 ? source : source.slice(0, index);
-};
-
 const runbook = read("docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md");
 const migrationPlan = read("docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.md");
 const architecture = read("docs/MEDIA_DELIVERY_SCALE_ARCHITECTURE.md");
 const vodDoc = read("docs/VOD_QUALITY_LADDER_AND_PLAYBACK_RESOLVER.md");
-const currentState = read("CURRENT_STATE.md");
-const nextTaskMediaSection = beforeHeading(read("NEXT_TASK.md"), "# Watch-Party");
 
 const requiredReadbackStrings = [
   "`bmkkhihfbmsnnmcqkoly`",
@@ -87,29 +80,16 @@ assertIncludes(
   "Backup/PITR gate status is Blocked",
   "VOD doc backup gate classification",
 );
-assertIncludes(
-  currentState,
-  "Backup/PITR gate status is still Blocked for broad production worker writes/backfill/continuous activation",
-  "current state backup gate classification",
-);
-assertIncludes(
-  nextTaskMediaSection,
-  "Backup/PITR gate is Blocked for production worker activation",
-  "next task backup gate classification",
-);
-
 const mediaBackupGateCorpus = [
   runbook,
   migrationPlan,
   architecture,
   vodDoc,
-  currentState,
-  nextTaskMediaSection,
 ].join("\n\n");
 
 assertIncludes(
   mediaBackupGateCorpus,
-  "No broad production worker writes or backfill while the gate is Blocked or Partial.",
+  "No broad production worker writes or backfill while the backup/PITR gate is Blocked or Partial.",
   "backup gate no-write rule",
 );
 assertIncludes(

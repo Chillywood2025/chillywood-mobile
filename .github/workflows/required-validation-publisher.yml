@@ -1,0 +1,39 @@
+name: Chi'llywood Required Validation Publisher
+
+on:
+  workflow_run:
+    workflows: ["Chi'llywood Source Validation"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: required-validation-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Publish exact-head required result
+    if: github.event.workflow_run.event == 'pull_request'
+    environment: phase1-admission-publisher
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout protected-main evaluator only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Independently verify plan, exact source and every applicable job
+        env:
+          GITHUB_READ_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          PHASE1_ADMISSION_APP_INTEGRATION_ID: ${{ vars.PHASE1_ADMISSION_APP_INTEGRATION_ID }}
+          PHASE1_ADMISSION_APP_INSTALLATION_ID: ${{ vars.PHASE1_ADMISSION_APP_INSTALLATION_ID }}
+          PHASE1_ADMISSION_APP_KEY_FINGERPRINT: ${{ vars.PHASE1_ADMISSION_APP_KEY_FINGERPRINT }}
+          PHASE1_ADMISSION_APP_CLIENT_ID: ${{ vars.PHASE1_ADMISSION_APP_CLIENT_ID }}
+          PHASE1_ADMISSION_APP_PRIVATE_KEY: ${{ secrets.PHASE1_ADMISSION_APP_PRIVATE_KEY }}
+        run: node scripts/ci/required-validation.mjs --publish
