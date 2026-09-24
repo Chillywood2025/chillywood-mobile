@@ -14,4 +14,4 @@ Do not ask owner approval for Level 0/1 autonomous operations. Keep Level 3/4 ow
 
 Do not resume Cognitive LiveKit activation.
 Do not create a release or distribution build, submit an artifact, publish OTA, mutate a provider or database, enable a switch or schedule, change Premium, money, rights, auth or RLS, start Responsive Layout V2 or AppLovin, submit public App Review, use external TestFlight, or release publicly.
-Keep the release/delivery/automation control-plane task bounded to repository tooling; provider mutation, database deployment, native product mutation, build, submission, OTA publication, public release, and money authority remain closed until separately authorized.
+Keep the Chi'llywood native whole-app visual-system task presentation-only; do not modify auth, legal, messaging, call, provider, database, native, release, public-release, or money authority.
