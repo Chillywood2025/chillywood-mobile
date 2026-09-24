@@ -153,7 +153,7 @@ export function evaluateWorkflowSnapshot({ repository, run, pull, files, runJobs
     baseRef: pull.base.ref,
     baseSha: pull.base.sha,
     headSha: pull.head.sha,
-    paths: files.map((file) => file.filename),
+    paths: files.flatMap((file) => [file.filename, file.previous_filename]).filter(Boolean),
     jobs: runJobs.map((job) => ({ name: job.name, status: job.status, conclusion: job.conclusion, headSha: run.head_sha })),
     reviews: reviews.map((review) => ({ id: review.id, state: review.state, authorAssociation: review.author_association, user: review.user?.login, commitId: review.commit_id, submittedAt: review.submitted_at })),
     author: pull.user.login,
@@ -259,7 +259,7 @@ async function revokePublisherToken(token) {
 }
 
 function localChangedPaths(base) {
-  return execFileSync("git", ["diff", "--name-only", "-z", `${base}...HEAD`], { cwd: fileURLToPath(root), encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\0").filter(Boolean);
+  return execFileSync("git", ["diff", "--name-only", "--no-renames", "-z", `${base}...HEAD`], { cwd: fileURLToPath(root), encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\0").filter(Boolean);
 }
 
 async function main() {

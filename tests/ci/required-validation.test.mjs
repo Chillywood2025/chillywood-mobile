@@ -85,6 +85,22 @@ test("untrusted labels or caller classifications cannot downgrade a sensitive di
   assert.equal("labels" in plan, false);
 });
 
+test("renaming a sensitive source into documentation cannot downgrade validation", () => {
+  const paths = ["docs/login-notes.md", "app/(auth)/login.tsx"];
+  const head = sha("b");
+  const jobs = successfulJobs(paths).map((job) => ({ ...job, headSha: undefined }));
+  const result = evaluateWorkflowSnapshot({
+    repository: "Chillywood2025/chillywood-mobile",
+    run: { event: "pull_request", name: "Chi'llywood Source Validation", path: ".github/workflows/required-validation.yml", status: "completed", conclusion: "success", head_sha: head, pull_requests: [{ number: 7, head: { sha: head }, base: { ref: "main", sha: sha("a") } }] },
+    pull: { number: 7, state: "open", changed_files: 1, user: { login: "contributor" }, head: { sha: head }, base: { ref: "main", sha: sha("a"), repo: { full_name: "Chillywood2025/chillywood-mobile" } } },
+    files: [{ filename: "docs/login-notes.md", previous_filename: "app/(auth)/login.tsx", status: "renamed" }],
+    runJobs: jobs,
+    reviews: [],
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.plan.categories.sensitive, true);
+});
+
 test("concurrent candidates are independent and changing one head invalidates only its evidence", () => {
   const paths = ["components/Card.tsx"];
   const jobsA = successfulJobs(paths);
