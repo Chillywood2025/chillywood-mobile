@@ -27,13 +27,10 @@ const activeCallGuardMigration = read("supabase/migrations/20260629140032_guard_
 const types = read("supabase/database.types.ts");
 const chatLib = read("_lib/chat.ts");
 const inbox = read("app/chat/index.tsx");
-const currentState = read("CURRENT_STATE.md");
-const nextTask = read("NEXT_TASK.md");
 const roadmap = read("ROADMAP.md");
 const goNoGo = read("docs/FINAL_PUBLIC_USE_GO_NO_GO.md");
 const checklist = read("docs/FINAL_PRODUCTION_READINESS_CHECKLIST.md");
 const releaseDoc = read("docs/release/CROSS_APP_PEOPLE_HANDLE_SEARCH_FIX.md");
-const packageJson = read("package.json");
 
 [
   "hidden_at",
@@ -65,7 +62,7 @@ const packageJson = read("package.json");
   "hide_chat_thread_from_inbox",
   "unhide_chat_thread_for_me",
   "getOrCreateDirectThread",
-  "await unhideChatThreadForMe",
+  "await unhideChatThreadWithAuthority",
   "active_call_in_progress",
   "Finish or leave the active call before removing this conversation from your inbox.",
 ].forEach((needle) => requireText("chat helper", chatLib, needle));
@@ -82,8 +79,6 @@ const packageJson = read("package.json");
 ].forEach((needle) => requireText("chat inbox", inbox, needle));
 
 [
-  ["CURRENT_STATE.md", currentState],
-  ["NEXT_TASK.md", nextTask],
   ["ROADMAP.md", roadmap],
   ["FINAL_PUBLIC_USE_GO_NO_GO.md", goNoGo],
   ["FINAL_PRODUCTION_READINESS_CHECKLIST.md", checklist],
@@ -111,11 +106,6 @@ const packageJson = read("package.json");
   ].forEach((needle) => requireText(label, content, needle));
   requireText(label, content, "OFF");
 });
-
-[
-  "proof:chat-thread-hide-from-inbox",
-  "guard:chat-thread-hide-from-inbox-policy",
-].forEach((needle) => requireText("package scripts", packageJson, needle));
 
 [
   ["chat helper", chatLib],

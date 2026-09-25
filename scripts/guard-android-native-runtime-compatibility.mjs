@@ -192,7 +192,7 @@ assert.doesNotMatch(appConfig, /1\.0\.0-android-production-v2/u,
 assert.doesNotMatch(appConfig, /1\.0\.0-ios-production-v2/u,
   "the production-v2 iOS runtime must be sourced from the canonical generation contract, not duplicated in app.config.ts");
 
-const ci = read(".github/workflows/phase1-ci.yml");
+const ci = read(".github/workflows/required-validation.yml");
 assert.match(ci, /npm run guard:android-native-runtime-compatibility/u);
 assert.equal(packageJson.scripts?.["guard:android-native-runtime-compatibility"],
   "node ./scripts/guard-android-native-runtime-compatibility.mjs");

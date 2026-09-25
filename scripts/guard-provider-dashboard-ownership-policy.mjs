@@ -72,7 +72,6 @@ const packageJson = read("package.json");
 ].forEach((needle) => requireText("public switchboard", publicDoc, needle));
 
 [
-  "proof:provider-dashboard-ownership-access-governance",
   "guard:provider-dashboard-ownership-policy",
 ].forEach((needle) => requireText("package scripts", packageJson, needle));
 

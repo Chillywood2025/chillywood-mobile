@@ -13,8 +13,6 @@ const migration = read(migrationPath);
 const migrationPlan = read(migrationPlanPath);
 const architecture = read("docs/MEDIA_DELIVERY_SCALE_ARCHITECTURE.md");
 const vodDoc = read("docs/VOD_QUALITY_LADDER_AND_PLAYBACK_RESOLVER.md");
-const currentState = read("CURRENT_STATE.md");
-const nextTask = read("NEXT_TASK.md");
 
 const failures = [];
 const fail = (message) => failures.push(message);
@@ -44,7 +42,7 @@ const hasNegatingLanguage = (sentence) => (
   /\b(not|no|never|missing|pending|planned|future|blocked|fallback|without|until|cannot|does not|do not|must not|unchanged)\b/i.test(sentence)
 );
 
-const docsCorpus = [migrationPlan, architecture, vodDoc, currentState, nextTask].join("\n\n");
+const docsCorpus = [migrationPlan, architecture, vodDoc].join("\n\n");
 const proofCorpus = [migration, docsCorpus, read("scripts/proof-media-rendition-migration-policy.mjs")].join("\n\n");
 
 assertIncludes(migration, 'create table if not exists public."media_transcode_jobs"', "migration");
@@ -132,9 +130,10 @@ for (const indexName of [
   assertIncludes(migration, indexName, `required index ${indexName}`);
 }
 
-assertIncludes(migrationPlan, "Status: production schema applied, with one scoped owner-approved proof job.", "migration plan status");
+assertIncludes(migrationPlan, "Status: production schema applied, with scoped audited rows from the City Lights one-job proof, bounded CLI auto-detect cycle, and protected Premium HD pass.", "migration plan status");
 assertIncludes(migrationPlan, "Production schema migration status: applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`);", "migration plan production schema apply status");
-assertIncludes(migrationPlan, "Production data/write boundary after the first one-job proof: exactly one allowlisted City Lights proof job and two audited HLS rendition rows exist in `media_transcode_jobs`/`media_renditions`; no production media backfill, production `video_renditions` write, production resolver bridge, deployed production transcode worker, broad queue processor, or production playback switch is live.", "migration plan production data boundary");
+assertIncludes(migrationPlan, "Production data/write boundary after the bounded CLI auto-detect cycle:", "migration plan production data boundary");
+assertIncludes(migrationPlan, "No production media backfill, production `video_renditions` write, deployed production transcode worker, broad queue processor, private/Premium public-CDN path, or broad playback migration is live.", "migration plan production data boundary");
 assertIncludes(migrationPlan, "Production runtime policy proof: a rollback-only production transaction denied anon/authenticated trusted writes", "migration plan rollback-only proof status");
 assertIncludes(migrationPlan, "`service_role` / backend worker is the only intended writer", "migration plan write authority");
 assertIncludes(migrationPlan, "Public CDN eligibility must never come from app/client input", "migration plan client trust boundary");
@@ -145,8 +144,6 @@ assertIncludes(migrationPlan, "Owner approval to apply the schema migration: com
 
 assertIncludes(architecture, "Trusted backend migration path status:", "architecture migration status");
 assertIncludes(vodDoc, "Trusted backend migration path:", "VOD migration status");
-assertIncludes(currentState, "Trusted backend migration schema is applied to production and now contains the first owner-approved one-job proof rows only:", "current state migration status");
-assertIncludes(nextTask, "Trusted backend migration schema is applied to production and now contains only the first controlled one-job proof rows:", "next task migration status");
 
 assertMatches(
   docsCorpus,

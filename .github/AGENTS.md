@@ -1,11 +1,20 @@
-# CI and review assurance boundary
+# GitHub Workflow Rules
 
-Keep one always-running planner and use conditional jobs rather than path-filter
-skipping of a required workflow. Every applicable job must be accounted for by
-an `if: always()` final summary. Documentation still runs contracts, current
-truth, review head, links, diff, and final summary.
-
-Pin actions by commit. CI/package/test-infrastructure changes cannot conceal
-unrelated product scope. Review-only branches contain review records only and
-never merge. A stale implementation head, missing evidence, proof substitution,
-scope violation, or unresolved database drift fails closed.
+- Pull-request source workflows run without production credentials and use
+  `pull_request`, never privileged `pull_request_target`, for untrusted code.
+- `Chi'llywood Source Validation` computes applicability from the complete
+  changed-path set and always emits `Validation / Results`.
+- The protected-main publisher independently verifies the current PR head,
+  base, complete file list, expected jobs, conclusions, and exact-head policy
+  review before publishing `Chi'llywood / Required Validation`.
+- Do not reuse the required check name in a pull-request-controlled workflow.
+- Workflow and policy changes must receive exact-head approval from a trusted
+  reviewer other than the PR author.
+- Missing, failed, cancelled, timed-out, stale, or wrong-source applicable work
+  fails closed. Skips are valid only when the protected planner classifies the
+  job as not applicable.
+- Keep release/build/submission workflows separate from ordinary source merge
+  authority. They require action-specific authorization and the retained
+  release review, provenance, compatibility, duplicate-submission, and rollback
+  controls.
+- Pin third-party actions to immutable commits and minimize permissions.

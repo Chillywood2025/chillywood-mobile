@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "workflowName": "Chi'llywood Source Validation",
+  "workflowPath": ".github/workflows/required-validation.yml",
+  "requiredCheckName": "Chi'llywood / Required Validation",
+  "baseBranch": "main",
+  "publisherApp": {
+    "integrationId": 4707730,
+    "clientIdVariable": "PHASE1_ADMISSION_APP_CLIENT_ID",
+    "installationIdVariable": "PHASE1_ADMISSION_APP_INSTALLATION_ID",
+    "keyFingerprintVariable": "PHASE1_ADMISSION_APP_KEY_FINGERPRINT",
+    "privateKeySecret": "PHASE1_ADMISSION_APP_PRIVATE_KEY",
+    "owner": "Chillywood2025",
+    "slug": "chillywood-phase1-admission-app",
+    "repositorySelection": "selected",
+    "permissions": {
+      "checks": "write",
+      "metadata": "read"
+    }
+  },
+  "jobs": {
+    "plan": "Validation / Plan",
+    "core": "Validation / Core",
+    "product": "Validation / Product",
+    "sensitive": "Validation / Sensitive",
+    "database": "Validation / Database",
+    "nativeRelease": "Validation / Native and Release",
+    "autonomous": "Validation / Autonomous",
+    "policy": "Validation / Policy",
+    "result": "Validation / Results"
+  },
+  "categories": {
+    "product": [
+      "app/**",
+      "assets/**",
+      "components/**",
+      "constants/**",
+      "hooks/**",
+      "lib/**",
+      "plugins/**",
+      "tests/**"
+    ],
+    "sensitive": [
+      "app/(auth)/**",
+      "app/account*",
+      "app/admin*",
+      "app/auth*",
+      "app/auth/**",
+      "app/callback.tsx",
+      "app/chat/**",
+      "app/*money*",
+      "app/*purchase*",
+      "app/*payout*",
+      "app/premium*",
+      "app/reset-password.tsx",
+      "app/settings*",
+      "components/admin/**",
+      "components/chat/**",
+      "components/communication/**",
+      "components/legal/**",
+      "components/monetization/**",
+      "components/premium/**",
+      "components/room/**",
+      "components/safety/**",
+      "components/watch-party-live/**",
+      "lib/auth/**",
+      "lib/chat/**",
+      "lib/commerce/**",
+      "lib/moderation/**",
+      "lib/premium/**",
+      "scripts/*auth*",
+      "scripts/*money*",
+      "scripts/*premium*",
+      "scripts/*security*",
+      "scripts/*chilly-chat*",
+      "tests/creator-money/**",
+      "tests/wave1/**"
+    ],
+    "database": [
+      "supabase/**"
+    ],
+    "nativeRelease": [
+      "android/**",
+      "ios/**",
+      "eas.json",
+      "app.json",
+      "app.config.*",
+      "plugins/**",
+      "scripts/publish-*",
+      "scripts/*release*",
+      "scripts/*ota*",
+      "scripts/*ios*",
+      "scripts/*android*",
+      "scripts/release-control-plane-lib.mjs",
+      "scripts/ios-delivery-control.mjs",
+      "scripts/physical-automation-control.mjs",
+      "tests/release-control-plane.test.mjs",
+      ".github/workflows/*release*",
+      ".github/workflows/*build*",
+      ".github/workflows/*preview*",
+      ".github/workflows/*testflight*"
+    ],
+    "autonomous": [
+      "isolated-runtime/**",
+      "lib/autonomous/**",
+      "lib/cognitive/**",
+      "scripts/*autonomous*",
+      "scripts/*cognitive*",
+      "supabase/functions/*operator*/**",
+      "supabase/functions/cognitive-*/**"
+    ],
+    "policy": [
+      "AGENTS.md",
+      ".agents/**",
+      ".github/AGENTS.md",
+      ".github/workflows/**",
+      "config/ci/**",
+      "package.json",
+      "package-lock.json",
+      "scripts/ci/**",
+      "scripts/assurance/**",
+      "tests/ci/**",
+      "tests/assurance/**"
+    ]
+  },
+  "knownDocumentation": [
+    "**/*.md",
+    "docs/**"
+  ],
+  "trustedReviewAssociations": [
+    "OWNER",
+    "MEMBER",
+    "COLLABORATOR"
+  ]
+}

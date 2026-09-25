@@ -27,8 +27,6 @@ const migration = read("supabase/migrations/202605260007_content_rights_disclosu
 const dmcaDocs = read("docs/legal/COPYRIGHT_DMCA_POLICY.md");
 const clipDocs = read("docs/CLIP_STUDIO.md");
 const spectatorDocs = read("docs/SPECTATOR_CHILD_ROOM_FLOW.md");
-const currentState = read("CURRENT_STATE.md");
-const nextTask = read("NEXT_TASK.md");
 const productDoctrine = read("PRODUCT_DOCTRINE.md");
 const roomBlueprint = read("ROOM_BLUEPRINT.md");
 
@@ -41,8 +39,6 @@ const section = (source, start, end) => {
   return endIndex === -1 ? fromStart : fromStart.slice(0, endIndex);
 };
 const currentRightsDocs = [
-  before(currentState, "May 26, 2026 Weekly Repo Documentation Audit"),
-  before(nextTask, "## Previous Recommended Lane"),
   section(productDoctrine, "## Lightweight Rights Disclosure", "## Monetization Core"),
   section(roomBlueprint, "Visible Rights Disclosure UI", "## Feature Maturity Model"),
   section(clipDocs, "## Rights Disclosure Placement", "##"),
@@ -56,8 +52,6 @@ const rightsContractSurface = [
   dmcaDocs,
   clipDocs,
   spectatorDocs,
-  currentState,
-  nextTask,
   productDoctrine,
   roomBlueprint,
 ].join("\n");

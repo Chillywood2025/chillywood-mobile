@@ -1,6 +1,8 @@
 # NEXT TASK
 
-Generated from `config/assurance/current-truth-v1.json`. Do not hand-edit.
+Historical snapshot retained for audit only. It does not select or authorize
+current work and is no longer consumed by required validation, release actions,
+or agent instructions.
 
 1. WHOLE_APP_PRE_RELEASE_ENGINEERING_CLOSURE
 

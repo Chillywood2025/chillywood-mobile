@@ -24,7 +24,6 @@ const admin = read("app/admin.tsx");
 const moderation = read("_lib/moderation.ts");
 const doctrine = read("PRODUCT_DOCTRINE.md");
 const roadmap = read("ROADMAP.md");
-const nextTask = read("NEXT_TASK.md");
 
 [
   "Admin Command Center sign in",
@@ -53,7 +52,6 @@ assertIncludes(moderation, "hasPlatformRoleMembership(memberships, [\"owner\", \
 
 assertNotIncludes(doctrine, "Login screen can present an Admin Command Center sign-in entry", "PRODUCT_DOCTRINE admin auth truth");
 assertNotIncludes(roadmap, "Login Admin Command Center sign-in entry", "ROADMAP admin auth truth");
-assertNotIncludes(nextTask, "Admin Command Center sign-in entry is pushed", "NEXT_TASK admin auth truth");
 
 if (process.exitCode) {
   process.exit();

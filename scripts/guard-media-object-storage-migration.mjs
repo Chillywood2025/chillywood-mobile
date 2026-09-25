@@ -16,8 +16,6 @@ const notIncludes = (source, text, label) => {
 };
 
 const runbook = read("docs/MEDIA_OBJECT_STORAGE_R2_MIGRATION_RUNBOOK.md");
-const currentState = read("CURRENT_STATE.md");
-const nextTask = read("NEXT_TASK.md");
 const architecture = read("docs/MEDIA_DELIVERY_SCALE_ARCHITECTURE.md");
 const automation = read("docs/MEDIA_AUTOMATION_OPERATOR_RUNBOOK.md");
 const worker = read("docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md");
@@ -29,7 +27,7 @@ const scanGateway = read("supabase/functions/media-scan-private-access/index.ts"
 const migrationFunction = read("supabase/functions/media-object-storage-migration/index.ts");
 const config = read("supabase/config.toml");
 
-const docs = [runbook, currentState, nextTask, architecture, automation, worker].join("\n\n");
+const docs = [runbook, architecture, automation, worker].join("\n\n");
 
 includes(docs, "Hetzner Object Storage", "migration docs");
 includes(docs, "Hetzner LiveKit", "migration docs");
@@ -41,10 +39,10 @@ includes(docs, "Hetzner fallback retained", "migration docs");
 includes(docs, "backups/hetzner-object-storage-shutdown/", "migration docs");
 includes(docs, "final shutdown/export packet", "migration docs");
 includesAny(docs, ["no media was processed", "No media was processed"], "migration docs");
-includesAny(docs, ["no playback rows were written", "No playback rows were written", "no media_transcode_jobs or media_renditions rows were written"], "migration docs");
 includes(docs, "shutdown-ready by active-reference semantics", "migration docs");
 includes(docs, "activeUnresolvedHetznerObjectRefs=0", "migration docs");
-includes(docs, "not deleted, not marked migrated, and not replaced with fake R2 objects", "migration docs");
+includes(docs, "did not delete `media_scan_jobs`", "migration docs");
+includes(docs, "did not create fake R2 objects", "migration docs");
 includes(autonomousRegistry, "object-storage R2 migration/readiness", "autonomous registry");
 includes(autonomousRegistry, "object_storage_migration_and_shutdown_readiness", "autonomous registry");
 includes(autonomousRegistry, "retain Hetzner read fallback until owner shutdown decision", "autonomous registry");

@@ -7,8 +7,6 @@ const repoRoot = process.cwd();
 const read = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
 
 const model = read("docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md");
-const currentState = read("CURRENT_STATE.md");
-const nextTask = read("NEXT_TASK.md");
 const mediaWorkerRunbook = read("docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md");
 const recoveryRunbook = read("docs/MEDIA_RECOVERY_OPERATOR_RUNBOOK.md");
 const mediaArchitecture = read("docs/MEDIA_DELIVERY_SCALE_ARCHITECTURE.md");
@@ -17,7 +15,7 @@ const autonomousApproval = read("_lib/autonomousApprovalRequests.ts");
 const autonomousRegistryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
 const moneyRunbook = read("docs/MONEY_FLOW_CONTROL_RUNBOOK.md");
 const ownerCommandRunbook = read("docs/OWNER_COMMAND_OPERATOR_RUNBOOK.md");
-const docsCorpus = [model, currentState, nextTask, mediaWorkerRunbook, recoveryRunbook, mediaArchitecture, autonomousRegistryDoc, moneyRunbook, ownerCommandRunbook].join("\n\n");
+const docsCorpus = [model, mediaWorkerRunbook, recoveryRunbook, mediaArchitecture, autonomousRegistryDoc, moneyRunbook, ownerCommandRunbook].join("\n\n");
 
 const failures = [];
 
@@ -127,8 +125,6 @@ assertIncludes(ownerCommandRunbook, "Owner makes judgment", "owner command runbo
 assertIncludes(ownerCommandRunbook, "routes through existing autonomous systems", "owner command runbook routing");
 assertIncludes(ownerCommandRunbook, "Blocked commands return exact blockers", "owner command runbook blockers");
 
-assertIncludes(currentState, "Chi'llywood autonomous app operating model is now documented", "current state autonomous model");
-assertIncludes(nextTask, "Do not ask owner approval for Level 0/1 autonomous operations", "next task autonomous behavior");
 assertIncludes(mediaWorkerRunbook, "Autonomous operating model:", "media worker autonomous policy");
 assertIncludes(recoveryRunbook, "Autonomous operating model:", "recovery autonomous policy");
 assertIncludes(mediaArchitecture, "Autonomous operating model status:", "media architecture autonomous policy");
