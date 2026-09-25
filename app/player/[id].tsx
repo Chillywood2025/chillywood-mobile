@@ -147,6 +147,7 @@ import { LinkedText } from "../../components/social/linked-text";
 import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import { ProfileMediaImage } from "../../components/ui/ProfileMediaImage";
+import { CHILLYWOOD_VISUAL } from "../../components/ui/chillywood-visual-system";
 import { LiveLowerDock } from "../../components/room/live-lower-dock";
 import { pushRecentReaction } from "../../components/room/reaction-picker";
 import { useChannelFollowAction } from "../../hooks/use-channel-follow-action";
@@ -240,6 +241,7 @@ const WATCH_PARTY_SHARED_ANDROID_VIDEO_WATCHDOG_MILLIS = 4500;
 const WATCH_PARTY_SHARED_ANDROID_VIDEO_MAX_RECOVERIES = 2;
 const WATCH_PARTY_BRANDED_BACKGROUND = require("../../assets/images/chillywood-branded-background.png");
 const CREATOR_VIDEO_BRANDED_BACKGROUND = WATCH_PARTY_BRANDED_BACKGROUND;
+const PLAYER_CHICAGO_NIGHT_BACKGROUND = require("../../assets/images/chicago-skyline.jpg");
 
 const getWatchPartyAccessTitle = (access: Pick<RoomAccessResolution, "reason"> | null | undefined) => {
   if (access?.reason === "room_locked") return "Watch party locked";
@@ -9830,10 +9832,13 @@ export default function PlayerScreen() {
               <ImageBackground source={frameworkBackgroundSource} style={styles.watchPartyFrameworkPosterWash} resizeMode="cover" />
             ) : null}
           </>
-        ) : frameworkBackgroundSource ? (
-          <ImageBackground source={frameworkBackgroundSource} style={styles.playerFrameworkBackground} resizeMode="cover" />
         ) : (
-          <View style={styles.playerFrameworkBackgroundFallback} />
+          <>
+            <ImageBackground source={PLAYER_CHICAGO_NIGHT_BACKGROUND} style={styles.playerFrameworkBackground} resizeMode="cover" />
+            {frameworkBackgroundSource ? (
+              <ImageBackground source={frameworkBackgroundSource} style={styles.watchPartyFrameworkPosterWash} resizeMode="cover" />
+            ) : null}
+          </>
         )}
         {!isPlayerFullscreen ? (
           <>
@@ -10786,7 +10791,7 @@ const styles = StyleSheet.create({
     opacity: 0.22,
   },
   playerFrameworkBackgroundFallback: { ...StyleSheet.absoluteFillObject, backgroundColor: "#0B0B10" },
-  playerFrameworkOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(8,8,12,0.58)" },
+  playerFrameworkOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(4,5,18,0.72)" },
   playerFrameworkOverlayWatchParty: { backgroundColor: "rgba(7,6,12,0.68)" },
   playerFrameworkDepthTop: {
     position: "absolute",
@@ -10817,8 +10822,8 @@ const styles = StyleSheet.create({
   topSectionFramework: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(0,0,0,0.24)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     paddingHorizontal: 9,
     paddingVertical: 6,
     marginBottom: 4,
@@ -10831,7 +10836,7 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     marginBottom: 2,
   },
-  kicker: { color: "#5B5B5B", fontSize: 9.5, fontWeight: "800", letterSpacing: 1.1 },
+  kicker: { color: CHILLYWOOD_VISUAL.accentBlue, fontSize: 9.5, fontWeight: "800", letterSpacing: 1.1 },
   kickerWatchParty: { color: "#D2A7B5" },
   header: { color: "white", fontSize: 23, fontWeight: "900", lineHeight: 27 },
   headerWatchParty: { fontSize: 21, lineHeight: 24 },

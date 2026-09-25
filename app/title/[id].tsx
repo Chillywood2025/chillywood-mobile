@@ -43,10 +43,10 @@ import { readMyListIds, toggleMyListTitle } from "../../_lib/userData";
 import { AccessSheet, getAccessSheetEntryLabel } from "../../components/monetization/access-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { StableImage } from "../../components/ui/StableImage";
+import { ChillywoodBrandedSurface, ChillywoodGlassPanel } from "../../components/ui/chillywood-branded-surface";
+import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
 import { AppText } from "../../components/ui/typography";
 import type { Tables } from "../../supabase/database.types";
-
-const ACCENT = "#DC143C";
 
 type TitleDbRow = Pick<
   Tables<"titles">,
@@ -615,22 +615,28 @@ export default function TitleDetails() {
 
   if (loading) {
     return (
-      <View style={styles.screenCenter}>
-        <ActivityIndicator color={ACCENT} />
-        <AppText scale="footnote" style={styles.loadingText}>Loading Chi&apos;llywood title…</AppText>
-      </View>
+      <ChillywoodBrandedSurface variant="app">
+        <View style={styles.screenCenter}>
+          <ActivityIndicator color={CHILLYWOOD_VISUAL.accentBlue} />
+          <AppText scale="footnote" style={styles.loadingText}>Loading Chi&apos;llywood title…</AppText>
+        </View>
+      </ChillywoodBrandedSurface>
     );
   }
 
   if (!title) {
     return (
-      <View style={styles.screenCenter}>
-        <AppText scale="display" weight="900" style={styles.h1}>Title unavailable</AppText>
-        <AppText scale="subhead" weight="600" style={styles.stateText}>This title isn’t available right now.</AppText>
-        <Pressable onPress={() => router.back()} style={styles.btnGhost}>
-          <AppText scale="title2" weight="900" style={styles.btnText}>Go back</AppText>
-        </Pressable>
-      </View>
+      <ChillywoodBrandedSurface variant="app">
+        <View style={styles.screenCenter}>
+          <ChillywoodGlassPanel style={styles.statePanel}>
+            <AppText scale="display" weight="900" style={styles.h1}>Title unavailable</AppText>
+            <AppText scale="subhead" weight="600" style={styles.stateText}>This title isn’t available right now.</AppText>
+            <Pressable onPress={() => router.back()} style={styles.btnGhost}>
+              <AppText scale="title2" weight="900" style={styles.btnText}>Go back</AppText>
+            </Pressable>
+          </ChillywoodGlassPanel>
+        </View>
+      </ChillywoodBrandedSurface>
     );
   }
 
@@ -688,17 +694,19 @@ export default function TitleDetails() {
 
   return (
     <>
-      <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 28 }}>
-        <StableImage
-          expectedWidth="100%"
-          expectedHeight={420}
-          source={localMatch?.poster ?? null}
-          containerStyle={styles.hero}
-          borderRadius={0}
-          resizeMode="cover"
-        />
+      <ChillywoodBrandedSurface style={styles.surface} testID="title-details-branded-surface" variant="app">
+        <ScrollView style={styles.screen} contentContainerStyle={styles.scrollContent}>
+          <StableImage
+            expectedWidth="100%"
+            expectedHeight={420}
+            source={localMatch?.poster ?? null}
+            containerStyle={styles.hero}
+            borderRadius={0}
+            resizeMode="cover"
+          />
 
-        <View style={styles.content}>
+          <View style={styles.contentWrap}>
+          <ChillywoodGlassPanel style={styles.content}>
           <AppText scale="display" weight="900" style={styles.h1}>{title.title}</AppText>
           <View style={styles.metaRow}>
             <AppText scale="subhead" weight="700" style={styles.metaText}>{infoLine}</AppText>
@@ -789,6 +797,7 @@ export default function TitleDetails() {
               onPress={onPlay}
               disabled={accessLoading}
             >
+              <ChillywoodPrimaryActionFill opacity={accessLoading ? 0.7 : 1} radius={14} />
               <AppText scale="title2" weight="900" style={styles.btnPrimaryText}>
                 {accessLoading ? "Checking access..." : titleAccess && !titleAccess.isAllowed ? blockedTitleAccessEntryLabel : "Play"}
               </AppText>
@@ -843,8 +852,10 @@ export default function TitleDetails() {
           <Pressable onPress={() => router.back()} style={[styles.btnGhost, { marginTop: 18 }]}>
             <AppText scale="title2" weight="900" style={styles.btnText}>Back</AppText>
           </Pressable>
-        </View>
-      </ScrollView>
+          </ChillywoodGlassPanel>
+          </View>
+        </ScrollView>
+      </ChillywoodBrandedSurface>
 
       {titleAccess?.reason === "premium_required" ? (
         <AccessSheet
@@ -943,9 +954,12 @@ export default function TitleDetails() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "black" },
-  screenCenter: { flex: 1, backgroundColor: "black", alignItems: "center", justifyContent: "center", padding: 20 },
-  loadingText: { color: "#9a9a9a", marginTop: 10 },
+  surface: { flex: 1 },
+  screen: { flex: 1, backgroundColor: "transparent" },
+  scrollContent: { paddingBottom: 28 },
+  screenCenter: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
+  statePanel: { alignItems: "center", padding: 24 },
+  loadingText: { color: CHILLYWOOD_VISUAL.textMuted, marginTop: 10 },
   stateText: {
     color: "#AAB6CC",
     fontSize: 13,
@@ -956,7 +970,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   hero: { width: "100%", height: 420 },
-  content: { paddingHorizontal: 16, paddingTop: 14 },
+  contentWrap: { paddingHorizontal: 14, marginTop: -30 },
+  content: { maxWidth: 680, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 20 },
   h1: { color: "white", fontSize: 40, fontWeight: "900" },
   metaRow: {
     flexDirection: "row",
@@ -1081,29 +1096,37 @@ const styles = StyleSheet.create({
   },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 14, marginBottom: 12 },
   btnPrimary: {
-    backgroundColor: ACCENT,
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.accentPurple,
     paddingVertical: 12,
     paddingHorizontal: 18,
     borderRadius: 14,
+    overflow: "hidden",
+    shadowColor: CHILLYWOOD_VISUAL.primaryGlow,
+    shadowOpacity: 0.38,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
   btnDisabled: {
     opacity: 0.7,
   },
   btnPrimaryText: { color: "white", fontWeight: "900", fontSize: 16 },
   btnGhost: {
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingVertical: 12,
     paddingHorizontal: 18,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
   },
   btnGhostActive: {
-    borderColor: "rgba(243,75,116,0.4)",
-    backgroundColor: "rgba(243,75,116,0.14)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: "rgba(50,28,255,0.2)",
   },
   btnText: { color: "white", fontWeight: "900", fontSize: 16 },
-  btnTextActive: { color: "#FFE1E7" },
+  btnTextActive: { color: "#DDF5FF" },
   sectionTitle: { color: "white", fontSize: 18, fontWeight: "900", marginTop: 14 },
   body: { color: "rgba(255,255,255,0.85)", marginTop: 6, lineHeight: 20 },
 });
