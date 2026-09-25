@@ -128,7 +128,12 @@ test("physically observed half-migrated surfaces use the Sign In-derived surface
   assert.match(sources.liveStage, /liveMoneyHostSetupExpanded && \{[\s\S]+paddingTop: Math\.max\(320, Math\.min\(440, windowHeight - 180\)\)/);
   assert.match(sources.liveStage, /liveRoomShareButton[\s\S]+<ChillywoodPrimaryActionFill radius=\{999\} \/>/);
   assert.match(sources.liveStage, /routeGateBackground:[\s\S]+StyleSheet\.absoluteFillObject/);
-  assert.match(sources.liveStage, /!isLiveRoomSurface && \{[\s\S]+top: safeAreaInsets\.top \+ 252/);
+  assert.match(sources.liveStage, /isLiveRoomSurface[\s\S]+styles\.liveMoneyHostControlsRoom[\s\S]+styles\.liveMoneyHostControlsStage/);
+  assert.match(sources.liveStage, /!isLiveRoomSurface && liveMoneyHostSetupExpanded[\s\S]+styles\.liveMoneyHostControlsStageExpanded/);
+  assert.match(sources.liveStage, /!isLiveRoomSurface \? \{ top: safeAreaInsets\.top \+ 252 \} : null/);
+  assert.match(sources.liveStage, /liveMoneyHostControlsStage: \{[\s\S]{0,180}right: 12,[\s\S]{0,120}width: 156,[\s\S]{0,120}borderRadius: 999/);
+  assert.match(sources.liveStage, /liveMoneyHostControlsStageExpanded: \{[\s\S]{0,180}left: 12,[\s\S]{0,80}right: 12,[\s\S]{0,80}width: "auto"/);
+  assert.match(sources.liveStage, /!isLiveRoomSurface && !liveMoneyHostSetupExpanded[\s\S]{0,120}\? "Money"[\s\S]{0,120}: "Live Stage monetization"/);
   assert.match(sources.liveStage, /stageHeroFallback:[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground/);
   assert.equal((sources.liveStage.match(/NotificationBellButton surface="live-stage"/gu) ?? []).length, 1);
   assert.match(sources.title, /title-details-branded-surface/);
