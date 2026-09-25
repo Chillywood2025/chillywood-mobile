@@ -149,6 +149,10 @@ import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { ParticipantDetailSheet } from "../../components/room/participant-detail-sheet";
 import { RoomParticipantTile } from "../../components/room/participant-tile";
 import { AppBackButton } from "../../components/navigation/app-back-button";
+import {
+  CHILLYWOOD_VISUAL,
+  ChillywoodPrimaryActionFill,
+} from "../../components/ui/chillywood-visual-system";
 import { resolveWatchPartyReturnNavigation } from "../../_lib/watchPartyReturnNavigation.mjs";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
 import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
@@ -3122,6 +3126,7 @@ export default function WatchPartyRoomScreen() {
             delayLongPress={260}
             disabled={watchPartyLiveOpening}
           >
+            <ChillywoodPrimaryActionFill opacity={watchPartyLiveOpening ? 0.58 : 1} radius={16} />
             <Text style={styles.watchCTAText}>{watchPartyLiveOpening ? "Opening Player..." : "Open Shared Player"}</Text>
           </Pressable>
         </View>
@@ -3151,6 +3156,7 @@ export default function WatchPartyRoomScreen() {
             delayLongPress={260}
             disabled={watchPartyLiveOpening}
           >
+            <ChillywoodPrimaryActionFill opacity={watchPartyLiveOpening ? 0.58 : 1} radius={16} />
             <MaterialIcons name="play-arrow" size={20} color="#FFFFFF" />
             <Text style={styles.partyRoomDockButtonText}>{watchPartyLiveOpening ? "Opening" : "Player"}</Text>
           </Pressable>
@@ -5033,12 +5039,15 @@ const styles = StyleSheet.create({
 
   // Watch CTA
   watchCTA: {
-    backgroundColor: "#DC143C",
+    backgroundColor: CHILLYWOOD_VISUAL.accentBlue,
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
     paddingVertical: 16,
     alignItems: "center",
-    shadowColor: "#DC143C",
-    shadowOpacity: 0.22,
+    overflow: "hidden",
+    shadowColor: CHILLYWOOD_VISUAL.primaryGlow,
+    shadowOpacity: 0.34,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
   },
@@ -5086,8 +5095,9 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   partyRoomDockButtonPrimary: {
-    borderColor: "rgba(220,20,60,0.46)",
-    backgroundColor: "rgba(220,20,60,0.24)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.accentBlue,
+    overflow: "hidden",
   },
   partyRoomDockButtonPressed: {
     opacity: 0.82,

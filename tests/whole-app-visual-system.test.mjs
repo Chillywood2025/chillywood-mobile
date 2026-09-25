@@ -21,10 +21,13 @@ const sources = {
   reset: read("app/reset-password.tsx"),
   settings: read("app/settings.tsx"),
   signup: read("app/(auth)/signup.tsx"),
+  subscribe: read("app/subscribe.tsx"),
   studio: read("app/channel-settings.tsx"),
   tabs: read("app/(tabs)/_layout.tsx"),
   thread: read("app/chat/[threadId].tsx"),
   visual: read("components/ui/chillywood-visual-system.tsx"),
+  partyRoom: read("app/watch-party/[partyId].tsx"),
+  liveStage: read("app/watch-party/live-stage/[partyId].tsx"),
   watchParty: read("app/watch-party/index.tsx"),
 };
 
@@ -107,6 +110,18 @@ test("physically observed half-migrated surfaces use the Sign In-derived surface
   assert.match(sources.live, /primaryButton:[^\n]+CHILLYWOOD_VISUAL\.accentPurple[^\n]+CHILLYWOOD_VISUAL\.primaryBorder/);
   assert.match(sources.watchParty, /primaryButton:[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.accentPurple,[\s\S]+borderColor: CHILLYWOOD_VISUAL\.primaryBorder,/);
   assert.doesNotMatch(sources.watchParty, /primaryButton:[\s\S]{0,260}backgroundColor: "#DC143C"/);
+  assert.match(sources.subscribe, /premium-purchase-button[\s\S]+<ChillywoodPrimaryActionFill opacity=\{busy \? 0\.56 : 1\} radius=\{14\} \/>/);
+  assert.doesNotMatch(sources.subscribe, /primaryButton:[\s\S]{0,260}backgroundColor: "#DC143C"/);
+  assert.match(sources.studio, /active \? <ChillywoodPrimaryActionFill radius=\{999\} \/> : null/);
+  assert.match(sources.studio, /studioTabButtonActive:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.primaryBorder/);
+  assert.match(sources.studio, /studioHeaderCard:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground/);
+  assert.match(sources.partyRoom, /watch-party-open-shared-player-button[\s\S]+<ChillywoodPrimaryActionFill opacity=\{watchPartyLiveOpening \? 0\.58 : 1\} radius=\{16\} \/>/);
+  assert.doesNotMatch(sources.partyRoom, /watchCTA:[\s\S]{0,260}backgroundColor: "#DC143C"/);
+  assert.match(sources.liveStage, /live-room-enter-stage-button[\s\S]+<ChillywoodPrimaryActionFill radius=\{16\} \/>/);
+  assert.match(sources.liveStage, /routeGateBackground:[\s\S]+StyleSheet\.absoluteFillObject/);
+  assert.match(sources.liveStage, /!isLiveRoomSurface && \{[\s\S]+top: safeAreaInsets\.top \+ 174/);
+  assert.match(sources.liveStage, /stageHeroFallback:[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground/);
+  assert.equal((sources.liveStage.match(/NotificationBellButton surface="live-stage"/gu) ?? []).length, 1);
 });
 
 test("the preserved user-visible route inventory remains present", () => {

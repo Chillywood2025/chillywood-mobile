@@ -292,7 +292,10 @@ import { MoneyScopeInfoButton, type MoneyScopeKey } from "../components/monetiza
 import { NotificationBellButton } from "../components/notifications/notification-bell-button";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
 import { AppActionButton, AppEmptyState, AppStickyActionBar } from "../components/ui/app-surface";
-import { ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
+import {
+  CHILLYWOOD_VISUAL,
+  ChillywoodPrimaryActionFill,
+} from "../components/ui/chillywood-visual-system";
 
 const SKYLINE_SOURCE = require("../assets/images/chicago-skyline.jpg");
 
@@ -5774,6 +5777,7 @@ export function ChannelStudioScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={selectedClipVideoFile || hasSavedVideo ? "Replace Video" : "Choose Full Video"}
                   >
+                    <ChillywoodPrimaryActionFill radius={12} />
                     <Text style={styles.studioActionButtonText}>{selectedClipVideoFile || hasSavedVideo ? "Replace Video" : "Choose Full Video"}</Text>
                     <Text style={styles.studioActionButtonCopy}>Up to {CREATOR_VIDEO_MAX_RUNTIME_LABEL}</Text>
                   </TouchableOpacity>
@@ -5811,6 +5815,7 @@ export function ChannelStudioScreen() {
                         onPress={onPickClipCoverFile}
                         disabled={clipSaving}
                       >
+                        <ChillywoodPrimaryActionFill radius={12} />
                         <Text style={styles.studioActionButtonText}>Change Cover</Text>
                         <Text style={styles.studioActionButtonCopy}>Open image picker</Text>
                       </TouchableOpacity>
@@ -6033,6 +6038,7 @@ export function ChannelStudioScreen() {
                     }}
                     disabled={isPrimaryClipActionDisabled}
                   >
+                    <ChillywoodPrimaryActionFill radius={14} />
                     {clipSaving ? (
                       <View style={styles.eventPrimaryButtonBusyRow}>
                         <ActivityIndicator color="#fff" />
@@ -6150,6 +6156,7 @@ export function ChannelStudioScreen() {
         testID="brand-preview-public-platform-button"
         accessibilityLabel="Preview Public Platform"
       >
+        <ChillywoodPrimaryActionFill radius={12} />
         <Text style={styles.studioActionButtonText}>Preview Platform</Text>
         <Text style={styles.studioActionButtonCopy}>Reviewed public view</Text>
       </TouchableOpacity>
@@ -6234,6 +6241,7 @@ export function ChannelStudioScreen() {
             testID={tab.id === "brand" ? "platform-studio-tab-brand" : undefined}
             accessibilityLabel={tab.id === "brand" ? "Open Brand Studio" : tab.label}
           >
+            {active ? <ChillywoodPrimaryActionFill radius={999} /> : null}
             <Text style={[styles.studioTabButtonText, active && styles.studioTabButtonTextActive]}>
               {tab.label}
             </Text>
@@ -6655,6 +6663,7 @@ export function ChannelStudioScreen() {
             <Text style={styles.latestContentDescription} numberOfLines={2}>{latestCreatorVideo.description}</Text>
           ) : null}
           <TouchableOpacity style={styles.eventPrimaryButton} activeOpacity={0.88} onPress={onPressAction}>
+            <ChillywoodPrimaryActionFill radius={14} />
             <Text style={styles.eventPrimaryButtonText}>{actionLabel}</Text>
           </TouchableOpacity>
         </View>
@@ -7093,6 +7102,7 @@ export function ChannelStudioScreen() {
                     testID="brand-hero-choose-image-button"
                     accessibilityLabel="Choose Brand Studio Hero Image"
                   >
+                    <ChillywoodPrimaryActionFill radius={14} />
                     {brandBusyAssetType === "hero_image"
                       ? <ActivityIndicator color="#fff" />
                       : <Text style={styles.eventPrimaryButtonText}>{platformBranding?.heroImage ? "Change Image" : "Choose Image"}</Text>}
@@ -7149,6 +7159,7 @@ export function ChannelStudioScreen() {
                         accessibilityLabel="Save Brand Studio Draft"
                         hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
                       >
+                        <ChillywoodPrimaryActionFill radius={14} />
                         <Text style={styles.eventPrimaryButtonText}>Save Draft</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -7186,6 +7197,7 @@ export function ChannelStudioScreen() {
                     testID="brand-background-choose-image-button"
                     accessibilityLabel="Choose Brand Studio Background Image"
                   >
+                    <ChillywoodPrimaryActionFill radius={14} />
                     {brandBusyAssetType === "background_image"
                       ? <ActivityIndicator color="#fff" />
                       : <Text style={styles.eventPrimaryButtonText}>{platformBranding?.backgroundImage ? "Change Background" : "Choose Background"}</Text>}
@@ -7238,6 +7250,7 @@ export function ChannelStudioScreen() {
                         testID="brand-background-save-draft-button"
                         accessibilityLabel="Save Brand Studio Draft"
                       >
+                        <ChillywoodPrimaryActionFill radius={14} />
                         <Text style={styles.eventPrimaryButtonText}>Save Draft</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -7290,6 +7303,7 @@ export function ChannelStudioScreen() {
                     testID="brand-avatar-choose-image-button"
                     accessibilityLabel="Choose Brand Studio Avatar Image"
                   >
+                    <ChillywoodPrimaryActionFill radius={14} />
                     <Text style={styles.eventPrimaryButtonText}>{platformBranding?.avatar ? "Change Avatar" : "Choose Avatar"}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -8272,6 +8286,7 @@ export function ChannelStudioScreen() {
                     accessibilityLabel="Enable Tips"
                     testID="money-manager-tips-enable-button"
                   >
+                    <ChillywoodPrimaryActionFill radius={14} />
                     {tipSettingsBusy ? (
                       <View style={styles.eventPrimaryButtonBusyRow}>
                         <ActivityIndicator color="#fff" />
@@ -8371,6 +8386,7 @@ export function ChannelStudioScreen() {
                 accessibilityLabel="Open Content to publish a video"
                 testID="money-manager-paid-videos-open-content-button"
               >
+                <ChillywoodPrimaryActionFill radius={14} />
                 <Text style={styles.eventPrimaryButtonText}>Open Content</Text>
               </TouchableOpacity>
             </>
@@ -8450,6 +8466,7 @@ export function ChannelStudioScreen() {
                 accessibilityLabel="Create Watch-Party target"
                 testID="money-manager-watch-party-create-target-button"
               >
+                <ChillywoodPrimaryActionFill radius={14} />
                 <Text style={styles.eventPrimaryButtonText}>Create Watch-Party target</Text>
               </TouchableOpacity>
             </>
@@ -8476,6 +8493,7 @@ export function ChannelStudioScreen() {
                   accessibilityLabel={hasChannelSubscriptionOffer ? "Manage Platform Subscription" : "Enable Platform Subscription"}
                   testID="money-manager-channel-subscription-enable-button"
                 >
+                  <ChillywoodPrimaryActionFill radius={14} />
                   {channelSubscriptionSaving ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
@@ -8522,6 +8540,7 @@ export function ChannelStudioScreen() {
                   accessibilityLabel={hasVipPassOffer ? "Manage VIP Pass" : "Enable VIP Pass"}
                   testID="money-manager-vip-pass-enable-button"
                 >
+                  <ChillywoodPrimaryActionFill radius={14} />
                   {vipPassSaving ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
@@ -8598,6 +8617,7 @@ export function ChannelStudioScreen() {
               accessibilityLabel="Open event creation"
               testID="money-manager-paid-events-open-live-button"
             >
+              <ChillywoodPrimaryActionFill radius={14} />
               <Text style={styles.eventPrimaryButtonText}>Open Event Creation</Text>
             </TouchableOpacity>
           </>
@@ -8882,6 +8902,7 @@ export function ChannelStudioScreen() {
             accessibilityLabel="Open Ways to Earn"
             testID="money-center-open-ways-to-earn-button"
           >
+            <ChillywoodPrimaryActionFill radius={14} />
             <Text style={styles.eventPrimaryButtonText}>Open Ways to Earn</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -8970,6 +8991,7 @@ export function ChannelStudioScreen() {
             accessibilityLabel="Review cashout readiness"
             testID="money-payout-review-readiness-button"
           >
+            <ChillywoodPrimaryActionFill radius={14} />
             <Text style={styles.eventPrimaryButtonText}>Review cashout readiness</Text>
           </TouchableOpacity>
         </View>
@@ -8982,6 +9004,7 @@ export function ChannelStudioScreen() {
                 disabled={payoutSetupBusy !== null}
                 onPress={handleStartPayoutProviderSetup}
               >
+                <ChillywoodPrimaryActionFill radius={14} />
                 {payoutSetupBusy === "setup" ? (
                   <View style={styles.eventPrimaryButtonBusyRow}>
                     <ActivityIndicator color="#fff" />
@@ -9462,6 +9485,7 @@ export function ChannelStudioScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Set up sandbox offers"
                   >
+                    <ChillywoodPrimaryActionFill radius={14} />
                     {sandboxSetupBusy ? (
                       <View style={styles.eventPrimaryButtonBusyRow}>
                         <ActivityIndicator color="#fff" />
@@ -9687,6 +9711,7 @@ export function ChannelStudioScreen() {
               accessibilityState={{ selected: !!paidEventOffer, disabled: paidEventBusy }}
               accessibilityLabel={`Charge for ${event.eventTitle} entry with an Event Pass for 99 cents`}
             >
+              <ChillywoodPrimaryActionFill radius={14} />
               {paidEventBusy ? (
                 <ActivityIndicator color="#fff" />
               ) : (
@@ -10094,6 +10119,7 @@ export function ChannelStudioScreen() {
                   activeOpacity={0.88}
                   disabled={eventSaving}
                 >
+                  <ChillywoodPrimaryActionFill radius={14} />
                   {eventSaving ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
@@ -10502,11 +10528,16 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   heroCard: {
-    borderRadius: 18,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(12,16,24,0.88)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     padding: 16,
+    shadowColor: CHILLYWOOD_VISUAL.primaryGlow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
+    elevation: 10,
   },
   heroTitle: {
     color: "#fff",
@@ -10521,14 +10552,14 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   studioHeaderCard: {
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(168,192,245,0.16)",
-    backgroundColor: "rgba(12,16,24,0.92)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     padding: 16,
     gap: 11,
-    shadowColor: "#000",
-    shadowOpacity: 0.22,
+    shadowColor: CHILLYWOOD_VISUAL.primaryGlow,
+    shadowOpacity: 0.3,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
   },
@@ -10612,13 +10643,16 @@ const styles = StyleSheet.create({
     minWidth: 132,
     borderRadius: 12,
     borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 2,
+    overflow: "hidden",
   },
   studioActionButtonPrimary: {
-    borderColor: "rgba(220,20,60,0.45)",
-    backgroundColor: "rgba(220,20,60,0.24)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.accentPurple,
   },
   studioActionButtonDanger: {
     borderColor: "rgba(255,75,104,0.42)",
@@ -10654,15 +10688,16 @@ const styles = StyleSheet.create({
     minHeight: 42,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 14,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
   studioTabButtonActive: {
-    borderColor: "rgba(220,20,60,0.55)",
-    backgroundColor: "rgba(220,20,60,0.28)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.accentBlue,
   },
   studioTabButtonText: {
     color: "#B9C3D9",
@@ -10699,10 +10734,10 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   studioAccordionCard: {
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(12,16,24,0.86)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     overflow: "hidden",
   },
   studioAccordionHeader: {
@@ -10896,8 +10931,8 @@ const styles = StyleSheet.create({
     minHeight: 96,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     padding: 13,
     justifyContent: "space-between",
     gap: 8,
@@ -10928,8 +10963,8 @@ const styles = StyleSheet.create({
     minHeight: 64,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.055)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 10,
     paddingVertical: 10,
     justifyContent: "center",
@@ -10964,8 +10999,8 @@ const styles = StyleSheet.create({
     minHeight: 82,
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.09)",
-    backgroundColor: "rgba(255,255,255,0.045)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 12,
     paddingVertical: 11,
     justifyContent: "center",
@@ -11921,10 +11956,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   input: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 12,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",
@@ -11950,8 +11985,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   chipActive: {
-    borderColor: "#DC143C",
-    backgroundColor: "rgba(220,20,60,0.22)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: "rgba(110,33,255,0.28)",
   },
   chipDisabled: {
     opacity: 0.42,
@@ -12209,8 +12244,8 @@ const styles = StyleSheet.create({
   eventCard: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 12,
     paddingVertical: 12,
     gap: 8,
@@ -12361,8 +12396,8 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   filterChipActive: {
-    borderColor: "rgba(220,20,60,0.48)",
-    backgroundColor: "rgba(220,20,60,0.18)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: "rgba(110,33,255,0.28)",
   },
   filterChipText: {
     color: "#B9C3D6",
@@ -12376,13 +12411,16 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 132,
     borderRadius: 14,
-    backgroundColor: "#DC143C",
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.accentPurple,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
   eventPrimaryButtonDisabled: {
-    backgroundColor: "rgba(220,20,60,0.38)",
+    opacity: 0.52,
   },
   eventPrimaryButtonBusyRow: {
     flexDirection: "row",
@@ -12682,7 +12720,7 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     borderRadius: 14,
-    backgroundColor: "#DC143C",
+    backgroundColor: CHILLYWOOD_VISUAL.accentBlue,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
