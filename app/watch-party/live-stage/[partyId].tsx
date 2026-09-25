@@ -6390,7 +6390,8 @@ const styles = StyleSheet.create({
   stageHudTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 7 },
   liveMoneyHostControls: {
     position: "absolute",
-    zIndex: 30,
+    zIndex: 120,
+    elevation: 120,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",

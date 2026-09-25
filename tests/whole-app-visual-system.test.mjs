@@ -131,6 +131,7 @@ test("physically observed half-migrated surfaces use the Sign In-derived surface
   assert.match(sources.liveStage, /isLiveRoomSurface[\s\S]+styles\.liveMoneyHostControlsRoom[\s\S]+styles\.liveMoneyHostControlsStage/);
   assert.match(sources.liveStage, /!isLiveRoomSurface && liveMoneyHostSetupExpanded[\s\S]+styles\.liveMoneyHostControlsStageExpanded/);
   assert.match(sources.liveStage, /!isLiveRoomSurface \? \{ top: safeAreaInsets\.top \+ 252 \} : null/);
+  assert.match(sources.liveStage, /liveMoneyHostControls: \{[\s\S]{0,120}zIndex: 120,[\s\S]{0,80}elevation: 120/);
   assert.match(sources.liveStage, /liveMoneyHostControlsStage: \{[\s\S]{0,180}right: 12,[\s\S]{0,120}width: 156,[\s\S]{0,120}borderRadius: 999/);
   assert.match(sources.liveStage, /liveMoneyHostControlsStageExpanded: \{[\s\S]{0,180}left: 12,[\s\S]{0,80}right: 12,[\s\S]{0,80}width: "auto"/);
   assert.match(sources.liveStage, /!isLiveRoomSurface && !liveMoneyHostSetupExpanded[\s\S]{0,120}\? "Money"[\s\S]{0,120}: "Live Stage monetization"/);
