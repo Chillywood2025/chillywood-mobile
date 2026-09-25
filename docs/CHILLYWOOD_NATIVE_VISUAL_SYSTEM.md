@@ -11,6 +11,22 @@ not design-system responsibilities and must remain unchanged.
 The implementation belongs to PR #497 on
 `codex/chillywood-native-visual-system-whole-app-v1`.
 
+## Coherent migration budget
+
+```json
+{
+  "budgetWaiverVersion": 1,
+  "reviewer": "Chillywood2025 Owner direction for PR #497",
+  "reason": "The whole-app presentation objective necessarily updates the canonical visual primitives and the existing route families that consume them; splitting those coupled presentation changes would leave competing visual systems live.",
+  "objectiveCount": 1,
+  "objective": "Sign In-derived whole-app presentation migration with behavior frozen",
+  "highRiskDomains": [],
+  "timeboxActiveHours": 6,
+  "maximumChangedPaths": 36,
+  "maximumNetChangedLines": 1800
+}
+```
+
 ## Golden reference
 
 Read the current implementation rather than approximating it:

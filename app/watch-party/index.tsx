@@ -85,6 +85,7 @@ import { AppBackButton } from "../../components/navigation/app-back-button";
 import { PLAYER_WATCH_PARTY_SOURCE } from "../../_lib/watch-party/room-shared";
 import WatchPartyLiveStageScreen from "./live-stage/[partyId]";
 import { AppText } from "../../components/ui/typography";
+import { ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
 
 type RoomPreview = {
   room: WatchPartyState;
@@ -2051,6 +2052,7 @@ export default function WatchPartyIndexScreen() {
               accessibilityState={{ disabled: createActionDisabled, busy: createActionBusy }}
               hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
             >
+              <ChillywoodPrimaryActionFill />
               {createActionBusy ? (
                 <View style={styles.lookingRow}>
                   <ActivityIndicator color="#fff" size="small" />
@@ -2105,6 +2107,7 @@ export default function WatchPartyIndexScreen() {
                     hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                     testID="watch-party-preview-join"
                   >
+                    <ChillywoodPrimaryActionFill radius={14} />
                     <AppText scale="body" style={styles.joinNowBtnText}>Join Now →</AppText>
                   </Pressable>
                   <Pressable
@@ -2141,6 +2144,7 @@ export default function WatchPartyIndexScreen() {
                       hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                       testID="tester-watch-party-ticket-button"
                     >
+                      <ChillywoodPrimaryActionFill radius={14} />
                       <AppText scale="body" style={styles.joinNowBtnText}>
                         {paidTicketBusy
                           ? "Opening Store"
@@ -2192,6 +2196,7 @@ export default function WatchPartyIndexScreen() {
                   hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                   testID="watch-party-find-room-button"
                 >
+                  <ChillywoodPrimaryActionFill />
                   {joinLookupBusy ? (
                     <View style={styles.lookingRow}>
                       <ActivityIndicator color="#fff" size="small" />
@@ -2526,6 +2531,9 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
     elevation: 5,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(91,214,255,0.72)",
   },
   joinLookupButton: {
     position: "relative",
@@ -2572,6 +2580,9 @@ const styles = StyleSheet.create({
     position: "relative",
     zIndex: 21,
     elevation: 21,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(91,214,255,0.72)",
   },
   joinNowBtnText: { color: "#fff", fontSize: 14, fontWeight: "900" },
   cancelBtn: {

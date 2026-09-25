@@ -4,10 +4,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useColorScheme,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  ChillywoodBrandedSurface,
+  ChillywoodGlassPanel,
+} from "../ui/chillywood-branded-surface";
 
 type LegalPageShellProps = {
   eyebrow: string;
@@ -17,26 +20,23 @@ type LegalPageShellProps = {
 };
 
 export function LegalPageShell({ eyebrow, title, subtitle, children }: LegalPageShellProps) {
-  const colorScheme = useColorScheme();
-  const dark = colorScheme === "dark";
-
   return (
-    <SafeAreaView style={[styles.safeArea, dark ? styles.safeAreaDark : styles.safeAreaLight]}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={Platform.OS === "web"}
-      >
-        <View style={[styles.card, dark ? styles.cardDark : styles.cardLight]}>
-          <Text style={[styles.eyebrow, dark ? styles.eyebrowDark : styles.eyebrowLight]}>{eyebrow}</Text>
-          <Text style={[styles.title, dark ? styles.titleDark : styles.titleLight]}>{title}</Text>
-          {subtitle ? (
-            <Text style={[styles.subtitle, dark ? styles.subtitleDark : styles.subtitleLight]}>{subtitle}</Text>
-          ) : null}
-          <View style={styles.body}>{children}</View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+    <ChillywoodBrandedSurface style={styles.safeArea} variant="legal">
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={Platform.OS === "web"}
+        >
+          <ChillywoodGlassPanel style={styles.card} variant="legal">
+            <Text style={styles.eyebrow}>{eyebrow}</Text>
+            <Text style={styles.title}>{title}</Text>
+            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+            <View style={styles.body}>{children}</View>
+          </ChillywoodGlassPanel>
+        </ScrollView>
+      </SafeAreaView>
+    </ChillywoodBrandedSurface>
   );
 }
 
@@ -47,32 +47,23 @@ export function LegalSection({
   title: string;
   children: React.ReactNode;
 }) {
-  const colorScheme = useColorScheme();
-  const dark = colorScheme === "dark";
-
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, dark ? styles.sectionTitleDark : styles.sectionTitleLight]}>{title}</Text>
+      <Text style={styles.sectionTitle}>{title}</Text>
       <View style={styles.sectionBody}>{children}</View>
     </View>
   );
 }
 
 export function LegalParagraph({ children }: { children: React.ReactNode }) {
-  const colorScheme = useColorScheme();
-  const dark = colorScheme === "dark";
-
-  return <Text style={[styles.paragraph, dark ? styles.paragraphDark : styles.paragraphLight]}>{children}</Text>;
+  return <Text style={styles.paragraph}>{children}</Text>;
 }
 
 export function LegalList({ items }: { items: string[] }) {
-  const colorScheme = useColorScheme();
-  const dark = colorScheme === "dark";
-
   return (
     <View style={styles.list}>
       {items.map((item) => (
-        <Text key={item} style={[styles.listItem, dark ? styles.paragraphDark : styles.paragraphLight]}>
+        <Text key={item} style={styles.listItem}>
           • {item}
         </Text>
       ))}
@@ -81,11 +72,8 @@ export function LegalList({ items }: { items: string[] }) {
 }
 
 export function LegalMeta({ label, value }: { label: string; value: string }) {
-  const colorScheme = useColorScheme();
-  const dark = colorScheme === "dark";
-
   return (
-    <Text style={[styles.meta, dark ? styles.metaDark : styles.metaLight]}>
+    <Text style={styles.meta}>
       <Text style={styles.metaLabel}>{label}: </Text>
       {value}
     </Text>
@@ -95,12 +83,6 @@ export function LegalMeta({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-  },
-  safeAreaLight: {
-    backgroundColor: "#F4EFE7",
-  },
-  safeAreaDark: {
-    backgroundColor: "#121212",
   },
   scroll: {
     flex: 1,
@@ -118,48 +100,25 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     borderWidth: 1,
   },
-  cardLight: {
-    backgroundColor: "#FFFDF9",
-    borderColor: "#E4D9CA",
-  },
-  cardDark: {
-    backgroundColor: "#1B1B1B",
-    borderColor: "#383838",
-  },
   eyebrow: {
+    color: "#D2CFE2",
     fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 1.2,
+    fontWeight: "900",
+    letterSpacing: 1.8,
     textTransform: "uppercase",
     marginBottom: 10,
   },
-  eyebrowLight: {
-    color: "#8B4A25",
-  },
-  eyebrowDark: {
-    color: "#FFB07A",
-  },
   title: {
+    color: "#FFFFFF",
     fontSize: 34,
     lineHeight: 40,
-    fontWeight: "800",
-  },
-  titleLight: {
-    color: "#1B120D",
-  },
-  titleDark: {
-    color: "#FFF7EF",
+    fontWeight: "900",
   },
   subtitle: {
+    color: "#B7B3C7",
     fontSize: 16,
     lineHeight: 24,
     marginTop: 12,
-  },
-  subtitleLight: {
-    color: "#5F4A3C",
-  },
-  subtitleDark: {
-    color: "#D6C0B0",
   },
   body: {
     marginTop: 20,
@@ -168,47 +127,33 @@ const styles = StyleSheet.create({
     marginTop: 22,
   },
   sectionTitle: {
+    color: "#EAE7FF",
     fontSize: 20,
     lineHeight: 26,
-    fontWeight: "700",
+    fontWeight: "800",
     marginBottom: 10,
-  },
-  sectionTitleLight: {
-    color: "#231711",
-  },
-  sectionTitleDark: {
-    color: "#FFF1E8",
   },
   sectionBody: {
     gap: 10,
   },
   paragraph: {
+    color: "#D2CFE2",
     fontSize: 15,
     lineHeight: 24,
-  },
-  paragraphLight: {
-    color: "#433329",
-  },
-  paragraphDark: {
-    color: "#E6D6CB",
   },
   list: {
     gap: 8,
   },
   listItem: {
+    color: "#D2CFE2",
     fontSize: 15,
     lineHeight: 24,
   },
   meta: {
+    color: "#B7B3C7",
     fontSize: 14,
     lineHeight: 22,
     marginTop: 6,
-  },
-  metaLight: {
-    color: "#5F4A3C",
-  },
-  metaDark: {
-    color: "#D6C0B0",
   },
   metaLabel: {
     fontWeight: "700",

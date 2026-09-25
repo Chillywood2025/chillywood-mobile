@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ChillywoodPrimaryActionFill } from "../ui/chillywood-visual-system";
 
 import { type SafetyReportCategory } from "../../_lib/moderation";
 
@@ -342,6 +343,7 @@ export function ReportSheet({
                   });
                 }}
               >
+                <ChillywoodPrimaryActionFill radius={999} />
                 <Text style={styles.primaryButtonText}>
                   {busy ? "Sending…" : "Send Report"}
                 </Text>
@@ -522,6 +524,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#DC143C",
     paddingVertical: 12,
     alignItems: "center",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(91,214,255,0.72)",
   },
   buttonDisabled: {
     opacity: 0.7,

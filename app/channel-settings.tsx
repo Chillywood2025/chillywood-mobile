@@ -292,6 +292,7 @@ import { MoneyScopeInfoButton, type MoneyScopeKey } from "../components/monetiza
 import { NotificationBellButton } from "../components/notifications/notification-bell-button";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
 import { AppActionButton, AppEmptyState, AppStickyActionBar } from "../components/ui/app-surface";
+import { ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
 
 const SKYLINE_SOURCE = require("../assets/images/chicago-skyline.jpg");
 
@@ -7453,6 +7454,7 @@ export function ChannelStudioScreen() {
             accessibilityLabel="Publish Brand Studio Changes"
             hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
           >
+            <ChillywoodPrimaryActionFill radius={14} />
             {brandSaving || saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Publish Changes</Text>}
           </TouchableOpacity>
         </View>
@@ -12684,6 +12686,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(91,214,255,0.72)",
   },
   saveButtonText: {
     color: "#fff",

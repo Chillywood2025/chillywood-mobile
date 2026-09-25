@@ -35,6 +35,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
 import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 import { titles as localTitles } from "../../_data/titles";
 import type { Tables } from "../../supabase/database.types";
@@ -624,6 +625,7 @@ export default function HomeScreen() {
               <View style={styles.homeHeroFooter}>
                 <Text style={styles.homeHeroProgressText}>{formatContinueWatchingLabel(progress)}</Text>
                 <View style={styles.homeHeroButton}>
+                  <ChillywoodPrimaryActionFill radius={999} />
                   <Text style={styles.homeHeroButtonText}>Resume</Text>
                 </View>
               </View>
@@ -956,6 +958,7 @@ export default function HomeScreen() {
           <AppText scale="body" style={styles.errorMsg}>{error}</AppText>
 
           <Pressable style={styles.retryBtn} onPress={onRefresh}>
+            <ChillywoodPrimaryActionFill radius={10} />
             <AppText scale="body" style={styles.retryText}>Retry</AppText>
           </Pressable>
         </View>
@@ -1206,6 +1209,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 10,
+    overflow: "hidden",
   },
   retryText: {
     color: "#fff",
@@ -1298,6 +1302,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
   homeHeroButtonText: {
     color: "#FFFFFF",

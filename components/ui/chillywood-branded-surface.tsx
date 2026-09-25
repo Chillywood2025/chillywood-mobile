@@ -7,19 +7,12 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import { CHILLYWOOD_VISUAL } from "./chillywood-visual-system";
+
 const CHICAGO_NIGHT_SOURCE = require("../../assets/images/chicago-skyline.jpg");
-export const CHILLYWOOD_VISUAL = Object.freeze({
-  accentBlue: "#00A8FF",
-  accentCrimson: "#F34B74",
-  accentPurple: "#6E21FF",
-  controlBackground: "rgba(17,15,42,0.76)",
-  controlBorder: "rgba(102,61,190,0.72)",
-  glassBackground: "rgba(7,5,27,0.91)",
-  glassBorder: "rgba(132,40,255,0.88)",
-  textMuted: "#B7B3C7",
-  textPrimary: "#FFFFFF",
-});
-type SurfaceVariant = "auth" | "chat" | "legal";
+export { CHILLYWOOD_VISUAL } from "./chillywood-visual-system";
+
+type SurfaceVariant = "app" | "auth" | "chat" | "legal";
 export function ChillywoodBrandedSurface({
   accessibilityLabel,
   children,
@@ -46,6 +39,7 @@ export function ChillywoodBrandedSurface({
         style={[
           StyleSheet.absoluteFill,
           styles.overlay,
+          variant === "app" && styles.appOverlay,
           variant === "chat" && styles.chatOverlay,
           variant === "legal" && styles.legalOverlay,
         ]}
@@ -103,6 +97,9 @@ const styles = StyleSheet.create({
   },
   overlay: {
     backgroundColor: "rgba(4,4,20,0.48)",
+  },
+  appOverlay: {
+    backgroundColor: "rgba(4,5,18,0.7)",
   },
   chatOverlay: {
     backgroundColor: "rgba(4,5,18,0.76)",

@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { ChillywoodPrimaryActionFill } from "../ui/chillywood-visual-system";
 
 import { trackEvent } from "../../_lib/analytics";
 import {
@@ -704,6 +705,7 @@ export function AccessSheet({
               disabled={busy}
               testID={primaryButtonTestID}
             >
+              <ChillywoodPrimaryActionFill radius={14} />
               {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.primaryText}>{displayedCopy.actionLabel}</Text>}
             </TouchableOpacity>
           </View>
@@ -950,6 +952,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#DC143C",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(91,214,255,0.72)",
   },
   primaryButtonDisabled: {
     opacity: 0.68,

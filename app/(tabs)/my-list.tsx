@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
 
 import { titles as localTitles } from "../../_data/titles";
 import { readFollowedChannelUserIds } from "../../_lib/channelAudience";
@@ -376,7 +377,7 @@ export default function MyListScreen() {
               <View style={styles.errorCard}>
                 <Text style={styles.errorTitle}>Library could not fully refresh</Text>
                 <Text style={styles.errorText}>{errorMsg}</Text>
-                <TouchableOpacity style={styles.emptyButton} activeOpacity={0.86} onPress={onRefresh}><Text style={styles.emptyButtonText}>Retry</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.emptyButton} activeOpacity={0.86} onPress={onRefresh}><ChillywoodPrimaryActionFill radius={12} /><Text style={styles.emptyButtonText}>Retry</Text></TouchableOpacity>
               </View>
             ) : null}
 
@@ -454,7 +455,7 @@ export default function MyListScreen() {
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyTitle}>Nothing saved yet</Text>
                 <Text style={styles.emptyText}>Saved titles, unlocked creator videos, progress, replays, and followed Platforms will appear here.</Text>
-                <TouchableOpacity style={styles.emptyButton} activeOpacity={0.86} onPress={() => router.push("/(tabs)/explore")}><Text style={styles.emptyButtonText}>Explore</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.emptyButton} activeOpacity={0.86} onPress={() => router.push("/(tabs)/explore")}><ChillywoodPrimaryActionFill radius={12} /><Text style={styles.emptyButtonText}>Explore</Text></TouchableOpacity>
               </View>
             ) : null}
           </ScrollView>
@@ -510,7 +511,7 @@ const styles = StyleSheet.create({
   emptyCard: { borderRadius: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", backgroundColor: "rgba(255,255,255,0.05)", padding: 16, gap: 10 },
   emptyTitle: { color: "#fff", fontSize: 18, lineHeight: 23, fontWeight: "900" },
   emptyText: { color: "#bfc6d4", fontSize: 13, lineHeight: 19, fontWeight: "600" },
-  emptyButton: { alignSelf: "flex-start", minHeight: 42, borderRadius: 12, backgroundColor: "#E50914", alignItems: "center", justifyContent: "center", paddingHorizontal: 14, marginTop: 2 },
+  emptyButton: { alignSelf: "flex-start", minHeight: 42, borderRadius: 12, backgroundColor: "#6E21FF", alignItems: "center", justifyContent: "center", paddingHorizontal: 14, marginTop: 2, overflow: "hidden", borderWidth: 1, borderColor: "rgba(91,214,255,0.72)" },
   emptyButtonText: { color: "#fff", fontSize: 13, fontWeight: "900" },
   errorCard: { borderRadius: 8, borderWidth: 1, borderColor: "rgba(229,9,20,0.3)", backgroundColor: "rgba(229,9,20,0.12)", padding: 12, gap: 7 },
   errorTitle: { color: "#fff", fontSize: 13, fontWeight: "900" },

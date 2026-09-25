@@ -30,6 +30,7 @@ import {
   type UsernameAvailability,
 } from "../../_lib/usernameHandles";
 import { AppStatusPill } from "../../components/ui/app-surface";
+import { ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
 import {
   CHILLYWOOD_VISUAL,
   ChillywoodBrandedSurface,
@@ -522,6 +523,7 @@ export default function Signup() {
           accessibilityState={{ disabled: loading }}
           testID="signup-submit-button"
         >
+          <ChillywoodPrimaryActionFill />
           <Text style={styles.buttonText}>
             {loading ? "Creating..." : "Sign Up"}
           </Text>
@@ -763,6 +765,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 12,
     elevation: 8,
+    overflow: "hidden",
   },
   buttonText: {
     color: "white",

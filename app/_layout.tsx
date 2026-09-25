@@ -114,6 +114,7 @@ import { RootErrorBoundary } from "../components/system/root-error-boundary";
 import { RuntimeUnavailableScreen } from "../components/system/runtime-unavailable-screen";
 import InterstitialAdController from "../components/ads/InterstitialController";
 import { ChillywoodBrandedSurface, ChillywoodGlassPanel } from "../components/ui/chillywood-branded-surface";
+import { ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
 
 const PUBLIC_LEGAL_PATHS = new Set<string>(APPLICATION_LEGAL_PATHS);
 const IOS_NATIVE_PRESENTATION_GRACE_MS = 1_500;
@@ -1391,7 +1392,7 @@ function RootNavigator() {
       <RoomSafeActivityNotificationBridge />
       <IncomingCallNotificationBridge />
       <InterstitialAdController />
-      <Stack initialRouteName="(tabs)" screenOptions={{ headerShown: false }}>
+      <Stack initialRouteName="(tabs)" screenOptions={{ headerShown: false, contentStyle: styles.navigatorContent }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="player/[id]" />
@@ -1489,6 +1490,7 @@ function AccountRestoreOnlyScreen() {
         <Text style={styles.legalGateBody}>Private features and notifications remain off. Restore this account before continuing.</Text>
         {error ? <Text style={styles.legalGateError}>{error}</Text> : null}
         <TouchableOpacity style={styles.legalGateButton} onPress={() => { void restore(); }} disabled={busy}>
+          <ChillywoodPrimaryActionFill />
           <Text style={styles.legalGateButtonText}>{busy ? "Restoring…" : "Restore account"}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.legalGateSecondary} onPress={() => { void supabase.auth.signOut(); }}>
@@ -1566,6 +1568,7 @@ function LegalAcceptanceScreen({ readback, onAccepted, onRetry }: {
           accessibilityLabel="Accept current policies and continue" accessibilityRole="button"
           accessibilityState={{ busy, disabled: !readback || !confirmed || busy }}
           testID="legal-acceptance-submit-button">
+          <ChillywoodPrimaryActionFill />
           <Text style={styles.legalGateButtonText}>{busy ? "Verifying…" : "Accept and continue"}</Text>
         </TouchableOpacity>
         {!readback ? (
@@ -1797,7 +1800,7 @@ function AuthRouteGate() {
   }
 
   return (
-    <View style={styles.appRootReady} testID="app-root-ready">
+    <ChillywoodBrandedSurface style={styles.appRootReady} testID="app-root-ready" variant="app">
       <RootNavigator key={navigationTreeKey} />
       {navigationBlocker ? (
         <View
@@ -1808,7 +1811,7 @@ function AuthRouteGate() {
           {navigationBlocker}
         </View>
       ) : null}
-    </View>
+    </ChillywoodBrandedSurface>
   );
 }
 
@@ -1869,7 +1872,9 @@ function PublicLegalNavigator() {
       <DefaultOrientationLock />
       <BetaProgramProvider>
         <RootErrorBoundary>
-          <Stack screenOptions={{ headerShown: false }} />
+          <ChillywoodBrandedSurface style={styles.appRootReady} variant="app">
+            <Stack screenOptions={{ headerShown: false, contentStyle: styles.navigatorContent }} />
+          </ChillywoodBrandedSurface>
         </RootErrorBoundary>
       </BetaProgramProvider>
     </SessionProvider>
@@ -1917,9 +1922,12 @@ const styles = StyleSheet.create({
   appRootReady: {
     flex: 1,
   },
+  navigatorContent: {
+    backgroundColor: "transparent",
+  },
   navigationBlockingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#05060A",
+    backgroundColor: "rgba(4,5,18,0.94)",
     elevation: 100,
     zIndex: 100,
   },
@@ -1927,7 +1935,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#05060A",
+    backgroundColor: "transparent",
     gap: 10,
   },
   authBootText: {
@@ -1951,7 +1959,7 @@ const styles = StyleSheet.create({
     borderColor: "#7A4DFF", backgroundColor: "rgba(110,33,255,0.2)", color: "#FFFFFF", textAlign: "center" },
   legalGateConfirmText: { color: "#E6EAF2", flex: 1, fontSize: 13, fontWeight: "700", lineHeight: 18 },
   legalGateError: { color: "#FFB4C1", fontSize: 13, fontWeight: "700", lineHeight: 18 },
-  legalGateButton: { minHeight: 54, alignItems: "center", justifyContent: "center", backgroundColor: "#5B1DFF", borderRadius: 16, borderWidth: 1, borderColor: "rgba(91,214,255,0.62)", padding: 14 },
+  legalGateButton: { minHeight: 54, alignItems: "center", justifyContent: "center", backgroundColor: "#5B1DFF", borderRadius: 16, borderWidth: 1, borderColor: "rgba(91,214,255,0.62)", padding: 14, overflow: "hidden" },
   legalGateButtonDisabled: { opacity: 0.45 },
   legalGateButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
   legalGateSecondary: { alignItems: "center", padding: 8 },

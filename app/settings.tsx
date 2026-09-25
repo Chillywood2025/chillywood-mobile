@@ -3,6 +3,7 @@ import * as Clipboard from "expo-clipboard";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, ActivityIndicator, ImageBackground, Linking, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, Vibration, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
 
 import { trackEvent } from "../_lib/analytics";
 import {
@@ -1791,6 +1792,7 @@ export default function SettingsScreen() {
               disabled={displayNameSaving || !displayNameDraft.trim() || displayNameDraft.trim().replace(/\s+/g, " ") === (myProfile?.displayName ?? "").trim().replace(/\s+/g, " ")}
               onPress={onPressSaveDisplayName}
             >
+              <ChillywoodPrimaryActionFill radius={10} />
               <Text style={styles.inlinePrimaryButtonText}>{displayNameSaving ? "Saving..." : "Save Display Name"}</Text>
             </TouchableOpacity>
           </View>
@@ -1847,6 +1849,7 @@ export default function SettingsScreen() {
               disabled={usernameSaving}
               onPress={onPressSaveUsername}
             >
+              <ChillywoodPrimaryActionFill radius={10} />
               <Text style={styles.inlinePrimaryButtonText}>{usernameSaving ? "Saving..." : "Save Handle"}</Text>
             </TouchableOpacity>
           </View>
@@ -1902,8 +1905,9 @@ export default function SettingsScreen() {
             onPress={() => {
               void onPressProfileVisibility(profileVisibility);
             }}
-          >
-            <Text style={styles.inlinePrimaryButtonText}>
+            >
+              <ChillywoodPrimaryActionFill radius={10} />
+              <Text style={styles.inlinePrimaryButtonText}>
               {profileVisibilitySaving ? "Saving..." : "Save Profile Visibility"}
             </Text>
           </TouchableOpacity>
@@ -2674,6 +2678,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 14,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(91,214,255,0.72)",
   },
   inlinePrimaryButtonDisabled: {
     opacity: 0.48,

@@ -4,6 +4,8 @@ import test from "node:test";
 
 const login = readFileSync(new URL("../app/(auth)/login.tsx", import.meta.url), "utf8");
 const brandedSurface = readFileSync(new URL("../components/ui/chillywood-branded-surface.tsx", import.meta.url), "utf8");
+const appSurface = readFileSync(new URL("../components/ui/app-surface.tsx", import.meta.url), "utf8");
+const visualSystem = readFileSync(new URL("../components/ui/chillywood-visual-system.tsx", import.meta.url), "utf8");
 
 test("Sign In preserves the existing auth and navigation contract", () => {
   assert.equal(login.match(/supabase\.auth\.signInWithPassword/g)?.length, 1);
@@ -28,7 +30,6 @@ test("Sign In keeps the real controls accessible, keyboard-safe, and automation-
     'accessibilityLabel="Login email"',
     'accessibilityLabel="Login password"',
     'accessibilityLabel="Log in"',
-    'accessibilityState={{ busy: loading, disabled: loading }}',
     'behavior={Platform.OS === "ios" ? "padding" : "height"}',
     'keyboardShouldPersistTaps="handled"',
     'keyboardDismissMode="on-drag"',
@@ -36,6 +37,8 @@ test("Sign In keeps the real controls accessible, keyboard-safe, and automation-
     'returnKeyType="done"',
     'void signIn()',
   ]) assert.ok(login.includes(marker), `missing preserved Sign In contract: ${marker}`);
+  assert.match(appSurface, /accessibilityState=\{\{ disabled: disabled \|\| loading, busy: loading \}\}/);
+  assert.match(login, /loading=\{loading\}/);
 });
 
 test("Sign In reserves a responsive unobstructed Chi'llywood branding zone", () => {
@@ -57,17 +60,19 @@ test("Sign In uses the approved Chicago-night glass and neon presentation", () =
   for (const marker of [
     'glassBackground: "rgba(7,5,27,0.91)"',
     'glassBorder: "rgba(132,40,255,0.88)"',
-    'assets/images/chicago-skyline.jpg',
-  ]) assert.ok(brandedSurface.includes(marker), `missing approved shared Sign In presentation marker: ${marker}`);
+  ]) assert.ok(visualSystem.includes(marker), `missing approved shared Sign In presentation marker: ${marker}`);
+  assert.match(brandedSurface, /assets\/images\/chicago-skyline\.jpg/);
   for (const marker of [
     'testID="auth-login-branded-surface"',
     'testID="auth-login-glass-panel"',
-    'stopColor="#7300D8"',
-    'stopColor="#321CFF"',
-    'stopColor="#00A8FF"',
+    '<AppActionButton',
+    'variant="primary"',
     '<Text style={styles.kicker}>WELCOME BACK</Text>',
     '<Text style={styles.titleLight}>Sign </Text>',
     '<Text style={styles.titleAccent}>In</Text>',
     "Access your account, join rooms, and keep up with your favorite creators.",
   ]) assert.ok(login.includes(marker), `missing approved Sign In presentation marker: ${marker}`);
+  for (const marker of ['color: "#7300D8"', 'color: "#321CFF"', 'color: "#00A8FF"']) {
+    assert.ok(visualSystem.includes(marker), `missing canonical Sign In gradient marker: ${marker}`);
+  }
 });

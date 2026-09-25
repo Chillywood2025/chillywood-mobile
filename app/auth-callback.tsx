@@ -22,6 +22,7 @@ import {
   ChillywoodBrandReserve,
   ChillywoodGlassPanel,
 } from "../components/ui/chillywood-branded-surface";
+import { ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
 
 type AuthCallbackParams = {
   code?: string | string[];
@@ -392,6 +393,7 @@ export default function AuthCallbackScreen() {
                 accessibilityLabel="Go to login"
                 testID="auth-callback-go-to-login-button"
               >
+                <ChillywoodPrimaryActionFill />
                 <Text style={styles.buttonText}>Go to login</Text>
               </Pressable>
             </View>
@@ -450,6 +452,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 18,
     paddingVertical: 14,
+    overflow: "hidden",
   },
   buttonText: {
     color: "#FFFFFF",

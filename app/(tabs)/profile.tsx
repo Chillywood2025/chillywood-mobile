@@ -1,9 +1,11 @@
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useSession } from "../../_lib/session";
+import { ChillywoodBrandedSurface, ChillywoodGlassPanel } from "../../components/ui/chillywood-branded-surface";
+import { ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
 
 export default function ProfileTabScreen() {
   const { isLoading, user } = useSession();
@@ -33,27 +35,29 @@ export default function ProfileTabScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.center}>
-        {isLoading ? <ActivityIndicator color="#E50914" /> : null}
-        <Text style={styles.title}>{isLoading ? "Opening Profile" : "Profile"}</Text>
-        <Text style={styles.body}>
-          Profile is your social identity. Platform and Platform Studio stay separate creator surfaces.
-        </Text>
-        {!isLoading ? (
-          <Pressable style={styles.button} onPress={openProfile} accessibilityRole="button" accessibilityLabel="Open Profile">
-            <Text style={styles.buttonText}>Open Profile</Text>
-          </Pressable>
-        ) : null}
-      </View>
-    </SafeAreaView>
+    <ChillywoodBrandedSurface style={styles.safe} variant="app">
+      <SafeAreaView style={styles.safe}>
+        <ChillywoodGlassPanel style={styles.center}>
+          {isLoading ? <ActivityIndicator color="#00A8FF" /> : null}
+          <Text style={styles.title}>{isLoading ? "Opening Profile" : "Profile"}</Text>
+          <Text style={styles.body}>
+            Profile is your social identity. Platform and Platform Studio stay separate creator surfaces.
+          </Text>
+          {!isLoading ? (
+            <Pressable style={styles.button} onPress={openProfile} accessibilityRole="button" accessibilityLabel="Open Profile">
+              <ChillywoodPrimaryActionFill radius={14} />
+              <Text style={styles.buttonText}>Open Profile</Text>
+            </Pressable>
+          ) : null}
+        </ChillywoodGlassPanel>
+      </SafeAreaView>
+    </ChillywoodBrandedSurface>
   );
 }
 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#050505",
   },
   center: {
     flex: 1,
@@ -61,6 +65,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 22,
     gap: 10,
+    margin: 22,
   },
   title: {
     color: "#FFFFFF",
@@ -82,6 +87,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(91,214,255,0.72)",
   },
   buttonText: {
     color: "#FFFFFF",

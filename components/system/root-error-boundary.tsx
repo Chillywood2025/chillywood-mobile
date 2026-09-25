@@ -1,12 +1,14 @@
 import { usePathname } from "expo-router";
 import React, { useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity } from "react-native";
 
 import { trackEvent } from "../../_lib/analytics";
 import { submitBetaFeedback, type BetaAccessState, useOptionalBetaProgram } from "../../_lib/betaProgram";
 import { reportRuntimeError } from "../../_lib/logger";
 import { useOptionalSession } from "../../_lib/session";
 import { BetaFeedbackSheet } from "../beta/beta-feedback-sheet";
+import { ChillywoodBrandedSurface, ChillywoodGlassPanel } from "../ui/chillywood-branded-surface";
+import { ChillywoodPrimaryActionFill } from "../ui/chillywood-visual-system";
 
 type RootErrorBoundaryState = {
   error: Error | null;
@@ -98,14 +100,15 @@ function RootBoundaryFallback({
   };
 
   return (
-    <View style={styles.outer}>
-      <View style={styles.card}>
+    <ChillywoodBrandedSurface style={styles.outer} variant="app">
+      <ChillywoodGlassPanel style={styles.card}>
         <Text style={styles.kicker}>APP RECOVERY</Text>
         <Text style={styles.title}>Chi&apos;llywood needs a quick reset.</Text>
         <Text style={styles.body}>
           Try this screen again. If it keeps happening, send a report with the current route attached.
         </Text>
         <TouchableOpacity style={styles.button} activeOpacity={0.86} onPress={onRetry}>
+          <ChillywoodPrimaryActionFill />
           <Text style={styles.buttonText}>Try Again</Text>
         </TouchableOpacity>
         {canSendFeedback ? (
@@ -117,7 +120,7 @@ function RootBoundaryFallback({
             Sign in to send a report from inside the app.
           </Text>
         )}
-      </View>
+      </ChillywoodGlassPanel>
 
       <BetaFeedbackSheet
         visible={reportVisible}
@@ -131,14 +134,13 @@ function RootBoundaryFallback({
         onSubmit={onSubmitFeedback}
         onClose={() => setReportVisible(false)}
       />
-    </View>
+    </ChillywoodBrandedSurface>
   );
 }
 
 const styles = StyleSheet.create({
   outer: {
     flex: 1,
-    backgroundColor: "#06070B",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
@@ -148,8 +150,6 @@ const styles = StyleSheet.create({
     maxWidth: 440,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(14,15,20,0.96)",
     padding: 22,
     gap: 12,
   },
@@ -177,6 +177,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 12,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(91,214,255,0.72)",
+    overflow: "hidden",
   },
   buttonText: {
     color: "#fff",
