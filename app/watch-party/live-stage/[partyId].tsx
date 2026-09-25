@@ -5143,11 +5143,13 @@ export default function WatchPartyLiveStageScreen({
           <View
             style={[
               styles.liveMoneyHostControls,
-              !isLiveRoomSurface && {
-                left: 12,
-                right: 12,
-                top: safeAreaInsets.top + 252,
-              },
+              isLiveRoomSurface
+                ? styles.liveMoneyHostControlsRoom
+                : styles.liveMoneyHostControlsStage,
+              !isLiveRoomSurface && liveMoneyHostSetupExpanded
+                ? styles.liveMoneyHostControlsStageExpanded
+                : null,
+              !isLiveRoomSurface ? { top: safeAreaInsets.top + 252 } : null,
             ]}
             testID="live-stage-host-money-controls"
           >
@@ -5159,7 +5161,11 @@ export default function WatchPartyLiveStageScreen({
               accessibilityState={{ expanded: liveMoneyHostSetupExpanded }}
               testID="live-stage-host-money-controls-toggle"
             >
-              <Text style={styles.liveMoneyHostTitle}>Live Stage monetization</Text>
+              <Text numberOfLines={1} style={styles.liveMoneyHostTitle}>
+                {!isLiveRoomSurface && !liveMoneyHostSetupExpanded
+                  ? "Money"
+                  : "Live Stage monetization"}
+              </Text>
               <Text style={styles.liveMoneyHostToggleText}>{liveMoneyHostSetupExpanded ? "Close" : "Configure"}</Text>
             </TouchableOpacity>
             {liveMoneyHostSetupExpanded ? (
@@ -6384,9 +6390,6 @@ const styles = StyleSheet.create({
   stageHudTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 7 },
   liveMoneyHostControls: {
     position: "absolute",
-    top: 88,
-    left: 0,
-    right: 0,
     zIndex: 30,
     borderRadius: 14,
     borderWidth: 1,
@@ -6395,6 +6398,25 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 8,
     gap: 6,
+  },
+  liveMoneyHostControlsRoom: {
+    top: 88,
+    left: 0,
+    right: 0,
+  },
+  liveMoneyHostControlsStage: {
+    right: 12,
+    width: 156,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  liveMoneyHostControlsStageExpanded: {
+    left: 12,
+    right: 12,
+    width: "auto",
+    borderRadius: 14,
+    padding: 10,
   },
   liveMoneyHostHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   liveMoneyHostTitle: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
