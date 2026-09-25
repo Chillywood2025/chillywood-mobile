@@ -3181,7 +3181,11 @@ export default function ChillyChatThreadScreen() {
       </View>
 
       {callPanelOpen ? (
-        <View style={styles.callOverlay}>
+        <ChillywoodBrandedSurface
+          variant="chat"
+          style={styles.callOverlay}
+          testID="chat-call-branded-surface"
+        >
           <InRoomCommunicationPanel
             surfaceLabel="Chi'lly Chat"
             titleText={callTitle}
@@ -3239,7 +3243,7 @@ export default function ChillyChatThreadScreen() {
               setCallDeliveryStatus("Call is still connected. Tap Open Call to return.");
             }}
           />
-        </View>
+        </ChillywoodBrandedSurface>
       ) : null}
 
       {incomingCallInvite

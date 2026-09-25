@@ -5,6 +5,7 @@ import { getCommunicationRTCModule, type CommunicationParticipantView } from "..
 import { LiveKitVideoTrack } from "../../_lib/livekit/react-native-module";
 import { responsiveFontSize, type ResponsiveLayout, useResponsiveLayout } from "../../hooks/use-responsive-layout";
 import { ProfileMediaImage as Image } from "../ui/ProfileMediaImage";
+import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 
 const logCallDebug = (..._args: unknown[]) => {};
 
@@ -175,6 +176,7 @@ export function CommunicationParticipantGrid({
                   style={[
                     styles.avatarFrame,
                     compactTile && styles.avatarFrameCompact,
+                    isFullscreen && styles.avatarFrameFullscreen,
                   ]}
                 >
                   {participant.avatarUrl ? (
@@ -304,6 +306,13 @@ const styles = StyleSheet.create({
   mediaFrameFullscreen: {
     flex: 1,
     minHeight: 0,
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
+    shadowColor: CHILLYWOOD_VISUAL.primaryGlow,
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    elevation: 7,
   },
   video: {
     position: "absolute",
@@ -335,6 +344,9 @@ const styles = StyleSheet.create({
   },
   avatarFrameCompact: {
     paddingHorizontal: 14,
+  },
+  avatarFrameFullscreen: {
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
   },
   avatarImage: {
     width: 72,
