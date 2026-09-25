@@ -4,11 +4,13 @@ import test from "node:test";
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const source = {
   callback: read("app/auth-callback.tsx"),
+  callPanel: read("components/communication/in-room-communication-panel.tsx"),
   forgot: read("app/(auth)/forgot-password.tsx"),
   inbox: read("app/chat/index.tsx"),
   layout: read("app/_layout.tsx"),
   login: read("app/(auth)/login.tsx"),
   reset: read("app/reset-password.tsx"),
+  participantGrid: read("components/communication/communication-participant-grid.tsx"),
   signup: read("app/(auth)/signup.tsx"),
   surface: read("components/ui/chillywood-branded-surface.tsx"),
   visual: read("components/ui/chillywood-visual-system.tsx"),
@@ -144,6 +146,27 @@ test("Chat call, message, attachment, navigation, and safety authority wiring is
     'getOrCreateDirectThread',
     'hideChatThreadFromInbox',
   ], "Chat Inbox behavior");
+});
+test("fullscreen Chat calls retain the canonical Chicago-night and glass presentation", () => {
+  assertIncludes(source.thread, [
+    'testID="chat-call-branded-surface"',
+    'variant="chat"',
+    'style={styles.callOverlay}',
+    'presentation="fullscreen"',
+  ], "fullscreen Chat call shell");
+  assertIncludes(source.callPanel, [
+    'import { CHILLYWOOD_VISUAL }',
+    'backgroundColor: "transparent"',
+    'borderColor: CHILLYWOOD_VISUAL.glassBorder',
+    'backgroundColor: CHILLYWOOD_VISUAL.glassBackground',
+    'shadowColor: CHILLYWOOD_VISUAL.primaryGlow',
+  ], "fullscreen Chat call panel");
+  assertIncludes(source.participantGrid, [
+    'isFullscreen && styles.avatarFrameFullscreen',
+    'borderColor: CHILLYWOOD_VISUAL.glassBorder',
+    'backgroundColor: CHILLYWOOD_VISUAL.glassBackground',
+  ], "fullscreen Chat participant stage");
+  assert.doesNotMatch(source.callPanel, /fullscreenCard:\s*\{[\s\S]{0,220}backgroundColor:\s*"#05070C"/);
 });
 test("message and composer presentation keeps long content readable and input multiline", () => {
   assertIncludes(source.thread, [

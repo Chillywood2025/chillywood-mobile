@@ -2,6 +2,7 @@ import type { CommunicationParticipantView } from "../../_lib/communication";
 import React, { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useResponsiveLayout } from "../../hooks/use-responsive-layout";
+import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 
 import { CommunicationControlBar } from "./communication-control-bar";
 import { CommunicationParticipantGrid } from "./communication-participant-grid";
@@ -298,7 +299,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 0,
     borderWidth: 0,
-    backgroundColor: "#05070C",
+    backgroundColor: "transparent",
     paddingHorizontal: 16,
     gap: 10,
   },
@@ -311,6 +312,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
     flexShrink: 0,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
+    padding: 14,
+    shadowColor: CHILLYWOOD_VISUAL.primaryGlow,
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
   },
   fullscreenHeaderCopy: {
     flex: 1,
@@ -441,6 +452,8 @@ const styles = StyleSheet.create({
   fullscreenStateCard: {
     flex: 1,
     minHeight: 0,
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
   },
   stateText: {
     color: "#D7E0F2",
@@ -456,6 +469,10 @@ const styles = StyleSheet.create({
   controlsWrapFullscreen: {
     marginTop: 0,
     paddingTop: 8,
-    backgroundColor: "#05070C",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
+    paddingHorizontal: 10,
   },
 });
