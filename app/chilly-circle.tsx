@@ -33,6 +33,7 @@ import { searchPublicPeople, type PublicPeopleSearchResult } from "../_lib/publi
 import { useSession } from "../_lib/session";
 import { getUserFacingErrorMessage } from "../_lib/userFacingErrors";
 import { ProfileMediaImage as Image } from "../components/ui/ProfileMediaImage";
+import { ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
 
 type CircleAction = "accept" | "decline" | "cancel" | "remove";
 
@@ -375,6 +376,7 @@ export default function ChillyCircleScreen() {
           void runAction(action, item.id);
         }}
       >
+        {accent ? <ChillywoodPrimaryActionFill radius={10} /> : null}
         {busy ? <ActivityIndicator color={accent ? "#FFF7FA" : "#EAF0FF"} size="small" /> : null}
         <Text style={[styles.actionButtonText, accent && styles.actionButtonTextAccent]}>
           {busy ? "Working" : label}
@@ -690,7 +692,7 @@ export default function ChillyCircleScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#06070B",
+    backgroundColor: "rgba(4,5,18,0.78)",
     paddingHorizontal: 18,
   },
   content: {
@@ -700,7 +702,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#06070B",
+    backgroundColor: "rgba(4,5,18,0.78)",
     gap: 10,
   },
   header: {
@@ -747,6 +749,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.11)",
     backgroundColor: "rgba(255,255,255,0.055)",
     paddingHorizontal: 12,
+    overflow: "hidden",
     paddingVertical: 8,
   },
   searchInput: {
@@ -1029,8 +1032,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   actionButtonAccent: {
-    borderColor: "rgba(220,20,60,0.45)",
-    backgroundColor: "rgba(220,20,60,0.2)",
+    borderColor: "rgba(91,214,255,0.62)",
+    backgroundColor: "rgba(110,33,255,0.2)",
   },
   actionButtonDisabled: {
     opacity: 0.58,

@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
 import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 import { resolveMainTabBrandRevealHeight } from "../../_lib/customerExperiencePresentation";
 
@@ -1110,6 +1111,7 @@ export default function ExploreScreen() {
                     <Text style={styles.inlineErrorTitle}>Titles could not refresh</Text>
                     <Text style={styles.inlineErrorText}>{errorMsg}</Text>
                     <Pressable onPress={() => void loadExplore({ refresh: true })} style={styles.retryBtn}>
+                      <ChillywoodPrimaryActionFill radius={12} />
                       <Text style={styles.retryText}>Retry</Text>
                     </Pressable>
                   </View>
@@ -1790,6 +1792,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 14,
+    overflow: "hidden",
   },
   retryText: {
     color: "#fff",

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   StyleSheet,
@@ -10,6 +10,7 @@ import {
 
 import { color, fontSize, fontWeight, motion, radius, spacing } from "./tokens";
 import { AppText } from "./typography";
+import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "./chillywood-visual-system";
 
 type AppTone = "default" | "accent" | "success" | "warning" | "danger" | "muted" | "premium";
 
@@ -35,6 +36,7 @@ export const AppStatusPill = ({ label, tone = "default" }: { label: string; tone
 export const AppActionButton = ({
   accessibilityLabel,
   disabled = false,
+  endIcon,
   label,
   loading = false,
   onPress,
@@ -44,6 +46,7 @@ export const AppActionButton = ({
 }: {
   accessibilityLabel?: string;
   disabled?: boolean;
+  endIcon?: ReactNode;
   label: string;
   loading?: boolean;
   onPress?: () => void;
@@ -70,7 +73,15 @@ export const AppActionButton = ({
       style,
     ]}
   >
-    {loading ? <ActivityIndicator color={color.textOnPrimary} size="small" /> : <AppText scale="body" weight="900" style={styles.actionButtonText}>{label}</AppText>}
+    {variant === "primary" ? <ChillywoodPrimaryActionFill /> : null}
+    {loading ? (
+      <ActivityIndicator color={color.textOnPrimary} size="small" />
+    ) : (
+      <View style={styles.actionButtonContent}>
+        <AppText scale="body" weight="900" style={styles.actionButtonText}>{label}</AppText>
+        {endIcon}
+      </View>
+    )}
   </TouchableOpacity>
 );
 
@@ -203,6 +214,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xxl,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  actionButtonContent: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.md,
+    justifyContent: "center",
   },
   actionButtonDanger: {
     borderColor: color.dangerBorderStrong,
@@ -216,8 +234,14 @@ const styles = StyleSheet.create({
     borderColor: color.borderBlue,
   },
   actionButtonPrimary: {
+    minHeight: 58,
     backgroundColor: color.primary,
-    borderColor: color.borderDefault,
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    shadowColor: CHILLYWOOD_VISUAL.primaryGlow,
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.46,
+    shadowRadius: 12,
+    elevation: 8,
   },
   actionButtonSuccess: {
     backgroundColor: color.successSurfaceStrong,
@@ -225,7 +249,7 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: color.textOnPrimary,
-    fontSize: fontSize.lg,
+    fontSize: 17,
     fontWeight: fontWeight.heavy,
   },
   chevronBox: {

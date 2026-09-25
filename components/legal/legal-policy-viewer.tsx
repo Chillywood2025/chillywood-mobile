@@ -7,11 +7,11 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useColorScheme,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { type LegalPolicy } from "../../_lib/legalPolicies";
+import { ChillywoodBrandedSurface } from "../ui/chillywood-branded-surface";
 
 type LegalPolicyViewerProps = {
   policy: LegalPolicy;
@@ -20,8 +20,7 @@ type LegalPolicyViewerProps = {
 const normalize = (value: unknown) => String(value ?? "").trim().toLowerCase();
 
 export function LegalPolicyViewer({ policy }: LegalPolicyViewerProps) {
-  const colorScheme = useColorScheme();
-  const dark = colorScheme === "dark";
+  const dark = true;
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(policy.sections.map((section) => [section.heading, true])),
@@ -41,6 +40,7 @@ export function LegalPolicyViewer({ policy }: LegalPolicyViewerProps) {
   };
 
   return (
+    <ChillywoodBrandedSurface style={styles.safeArea} variant="legal">
     <SafeAreaView style={[styles.safeArea, dark ? styles.safeAreaDark : styles.safeAreaLight]}>
       <ScrollView
         style={styles.scroll}
@@ -137,6 +137,7 @@ export function LegalPolicyViewer({ policy }: LegalPolicyViewerProps) {
         )}
       </ScrollView>
     </SafeAreaView>
+    </ChillywoodBrandedSurface>
   );
 }
 
@@ -145,10 +146,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   safeAreaLight: {
-    backgroundColor: "#F4EFE7",
+    backgroundColor: "transparent",
   },
   safeAreaDark: {
-    backgroundColor: "#0D0F14",
+    backgroundColor: "transparent",
   },
   scroll: {
     flex: 1,

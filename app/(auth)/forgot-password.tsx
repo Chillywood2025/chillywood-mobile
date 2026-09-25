@@ -255,6 +255,5 @@ const styles = StyleSheet.create({
   primaryAction: {
     minHeight: 56,
     borderColor: "rgba(91,214,255,0.72)",
-    backgroundColor: "#5B1DFF",
   },
 });

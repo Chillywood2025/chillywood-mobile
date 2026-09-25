@@ -30,6 +30,7 @@ import {
   ChillywoodGlassPanel,
 } from "../components/ui/chillywood-branded-surface";
 import type { Database } from "../supabase/database.types";
+import { ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
 
 type RecoveryParams = {
   accessToken: string | null;
@@ -628,6 +629,7 @@ export default function ResetPasswordScreen() {
                   accessibilityState={{ disabled: !canSubmit, busy: saving }}
                   testID="reset-password-update-button"
                 >
+                  <ChillywoodPrimaryActionFill />
                   <Text style={styles.buttonText}>{saving ? "Updating..." : "Update password"}</Text>
                 </Pressable>
               </View>
@@ -643,6 +645,7 @@ export default function ResetPasswordScreen() {
                   accessibilityLabel="Request new reset email"
                   testID="reset-password-request-new-email-button"
                 >
+                  <ChillywoodPrimaryActionFill />
                   <Text style={styles.buttonText}>Request new reset email</Text>
                 </Pressable>
                 <Pressable
@@ -715,6 +718,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 18,
     paddingVertical: 14,
+    overflow: "hidden",
   },
   buttonDisabled: {
     backgroundColor: "rgba(91,29,255,0.42)",

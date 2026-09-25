@@ -73,8 +73,13 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBarBackground: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(7,5,27,0.94)',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.14)',
+    borderTopColor: 'rgba(132,40,255,0.58)',
+    shadowColor: '#241DFF',
+    shadowOffset: { width: 0, height: -5 },
+    shadowOpacity: 0.24,
+    shadowRadius: 12,
+    elevation: 12,
   },
 });

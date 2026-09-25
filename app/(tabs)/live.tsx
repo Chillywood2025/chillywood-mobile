@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
 import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import {
@@ -248,6 +249,7 @@ export default function LiveTabScreen() {
               accessibilityState={{ disabled: liveTransitionInFlight, busy: liveTransitionInFlight }}
               testID="live-tab-open-live-button"
             >
+              <ChillywoodPrimaryActionFill radius={12} />
               <MaterialIcons name="videocam" size={19} color="#FFFFFF" />
               <Text style={styles.buttonText}>Start Live</Text>
             </Pressable>
@@ -389,7 +391,7 @@ const styles = StyleSheet.create({
   statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#59E6A9" },
   statusPillText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
   quickActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  primaryButton: { minHeight: 48, borderRadius: 12, backgroundColor: "#E50914", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 14, flexBasis: "100%" },
+  primaryButton: { minHeight: 48, borderRadius: 12, backgroundColor: "#6E21FF", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 14, flexBasis: "100%", overflow: "hidden", borderWidth: 1, borderColor: "rgba(91,214,255,0.72)" },
   primaryButtonDisabled: { opacity: 0.55 },
   secondaryButton: { minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.13)", backgroundColor: "rgba(255,255,255,0.08)", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 14, alignSelf: "flex-start" },
   quickActionSecondary: { flexGrow: 1, flexBasis: 132, alignSelf: "stretch" },

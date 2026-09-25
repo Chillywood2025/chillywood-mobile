@@ -2,7 +2,6 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Link, type Href, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -10,10 +9,8 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
-import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import { trackEvent } from "../../_lib/analytics";
@@ -28,40 +25,6 @@ import {
   ChillywoodBrandReserve,
   ChillywoodGlassPanel,
 } from "../../components/ui/chillywood-branded-surface";
-
-function NeonSignInButton({ loading, onPress }: { loading: boolean; onPress: () => void }) {
-  return (
-    <TouchableOpacity
-      accessibilityLabel="Log in"
-      accessibilityRole="button"
-      accessibilityState={{ busy: loading, disabled: loading }}
-      activeOpacity={0.82}
-      disabled={loading}
-      onPress={onPress}
-      style={[styles.primaryButton, loading && styles.controlDisabled]}
-      testID="auth-login-submit-button"
-    >
-      <Svg height="100%" pointerEvents="none" style={StyleSheet.absoluteFill} width="100%">
-        <Defs>
-          <LinearGradient id="loginButtonGradient" x1="0" x2="1" y1="0" y2="0">
-            <Stop offset="0" stopColor="#7300D8" />
-            <Stop offset="0.54" stopColor="#321CFF" />
-            <Stop offset="1" stopColor="#00A8FF" />
-          </LinearGradient>
-        </Defs>
-        <Rect fill="url(#loginButtonGradient)" height="100%" rx="16" width="100%" />
-      </Svg>
-      {loading ? (
-        <ActivityIndicator color="#FFFFFF" size="small" />
-      ) : (
-        <View style={styles.primaryButtonContent}>
-          <Text style={styles.primaryButtonText}>Log In</Text>
-          <MaterialIcons accessibilityElementsHidden importantForAccessibility="no-hide-descendants" color="#FFFFFF" name="arrow-forward" size={24} />
-        </View>
-      )}
-    </TouchableOpacity>
-  );
-}
 
 export default function Login() {
   const router = useRouter();
@@ -204,7 +167,16 @@ export default function Login() {
               />
             </View>
 
-            <NeonSignInButton loading={loading} onPress={() => { void signIn(); }} />
+            <AppActionButton
+              accessibilityLabel="Log in"
+              endIcon={<MaterialIcons accessibilityElementsHidden importantForAccessibility="no-hide-descendants" color="#FFFFFF" name="arrow-forward" size={24} />}
+              label="Log In"
+              loading={loading}
+              onPress={() => { void signIn(); }}
+              style={styles.primaryButton}
+              testID="auth-login-submit-button"
+              variant="primary"
+            />
 
             <AppActionButton
               accessibilityLabel="Forgot password"
@@ -294,33 +266,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   primaryButton: {
-    minHeight: 58,
-    overflow: "hidden",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(91,214,255,0.72)",
     marginBottom: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#241DFF",
-    shadowOffset: { width: 0, height: 7 },
-    shadowOpacity: 0.46,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  primaryButtonContent: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 10,
-    justifyContent: "center",
-  },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 17,
-    fontWeight: "900",
-  },
-  controlDisabled: {
-    opacity: 0.62,
   },
   forgotPasswordButton: {
     minHeight: 54,

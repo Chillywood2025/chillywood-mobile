@@ -1,5 +1,6 @@
 import React from "react";
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ChillywoodPrimaryActionFill } from "../ui/chillywood-visual-system";
 
 type BetaWelcomeSheetProps = {
   visible: boolean;
@@ -29,6 +30,7 @@ export function BetaWelcomeSheet({
             disabled={busy}
             onPress={onPrimaryPress}
           >
+            <ChillywoodPrimaryActionFill radius={999} />
             <Text style={styles.primaryButtonText}>{busy ? "Saving…" : "Open Beta Guide"}</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -50,6 +52,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.62)",
     alignItems: "center",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(91,214,255,0.72)",
     justifyContent: "center",
     paddingHorizontal: 24,
   },

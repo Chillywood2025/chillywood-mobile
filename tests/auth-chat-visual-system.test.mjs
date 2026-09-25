@@ -11,6 +11,7 @@ const source = {
   reset: read("app/reset-password.tsx"),
   signup: read("app/(auth)/signup.tsx"),
   surface: read("components/ui/chillywood-branded-surface.tsx"),
+  visual: read("components/ui/chillywood-visual-system.tsx"),
   thread: read("app/chat/[threadId].tsx"),
 };
 const assertIncludes = (value, markers, label) => {
@@ -21,15 +22,19 @@ const assertIncludes = (value, markers, label) => {
 test("the canonical Chi'llywood foundation owns the skyline, overlay, glass, and brand reserve", () => {
   assertIncludes(source.surface, [
     'assets/images/chicago-skyline.jpg',
-    'export const CHILLYWOOD_VISUAL',
+    'export { CHILLYWOOD_VISUAL }',
     'export function ChillywoodBrandedSurface',
     'export function ChillywoodBrandReserve',
     'export function ChillywoodGlassPanel',
     'accessibilityLabel="Chi\'llywood. Stream the City."',
     'backgroundColor: "rgba(4,5,18,0.76)"',
-    'glassBackground: "rgba(7,5,27,0.91)"',
     'borderColor: CHILLYWOOD_VISUAL.glassBorder',
   ], "shared visual foundation");
+  assertIncludes(source.visual, [
+    'export const CHILLYWOOD_VISUAL',
+    'glassBackground: "rgba(7,5,27,0.91)"',
+    'export function ChillywoodPrimaryActionFill',
+  ], "canonical visual tokens");
   assert.doesNotMatch(source.surface, /BlurView|Animated\.loop|setInterval/);
 });
 test("Sign In, Sign Up, and Forgot Password render the shared branded auth family", () => {

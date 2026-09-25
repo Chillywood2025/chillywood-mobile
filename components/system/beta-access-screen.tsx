@@ -1,9 +1,11 @@
 import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import React, { useMemo } from "react";
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity } from "react-native";
 
 import { getSupportRoutePath, isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
 import { useSession } from "../../_lib/session";
+import { ChillywoodBrandedSurface, ChillywoodGlassPanel } from "../ui/chillywood-branded-surface";
+import { ChillywoodPrimaryActionFill } from "../ui/chillywood-visual-system";
 
 const serializeRedirectTarget = (pathname: string, params: Record<string, unknown>) => {
   const search = new URLSearchParams();
@@ -55,10 +57,10 @@ export function BetaAccessScreen({
 
   if (isLoading || loadingOverride) {
     return (
-      <View style={styles.outer}>
+      <ChillywoodBrandedSurface style={styles.outer} variant="app">
         <ActivityIndicator color="#DC143C" />
         <Text style={styles.loadingText}>Checking your session…</Text>
-      </View>
+      </ChillywoodBrandedSurface>
     );
   }
 
@@ -75,8 +77,8 @@ export function BetaAccessScreen({
       : "Sign In to Continue";
 
   return (
-    <View style={styles.outer}>
-      <View style={styles.card}>
+    <ChillywoodBrandedSurface style={styles.outer} variant="app">
+      <ChillywoodGlassPanel style={styles.card}>
         <Text style={styles.kicker}>{kicker}</Text>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.body}>{body}</Text>
@@ -101,14 +103,15 @@ export function BetaAccessScreen({
               });
             }}
           >
+            <ChillywoodPrimaryActionFill />
             <Text style={styles.primaryButtonText}>{primaryLabel}</Text>
           </TouchableOpacity>
         ) : null}
         <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.82} onPress={() => router.replace("/(tabs)")}>
           <Text style={styles.secondaryButtonText}>{operatorOnly ? "Back to Home" : "Keep Browsing"}</Text>
         </TouchableOpacity>
-      </View>
-    </View>
+      </ChillywoodGlassPanel>
+    </ChillywoodBrandedSurface>
   );
 }
 
@@ -118,15 +121,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
-    backgroundColor: "#06070B",
   },
   card: {
     width: "100%",
     maxWidth: 460,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(12,13,19,0.96)",
     padding: 22,
     gap: 12,
   },
@@ -154,6 +154,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 12,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(91,214,255,0.72)",
+    overflow: "hidden",
   },
   primaryButtonText: {
     color: "#fff",

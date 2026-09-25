@@ -1,24 +1,24 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text } from "react-native";
+import { ChillywoodBrandedSurface, ChillywoodGlassPanel } from "../ui/chillywood-branded-surface";
 
 export function RuntimeUnavailableScreen({ message }: { message: string }) {
   return (
-    <View style={styles.outer}>
-      <View style={styles.card}>
+    <ChillywoodBrandedSurface style={styles.outer} variant="app">
+      <ChillywoodGlassPanel style={styles.card}>
         <Text style={styles.kicker}>RUNTIME CONFIG REQUIRED</Text>
         <Text style={styles.title}>Chi&apos;llywood is unavailable right now.</Text>
         <Text style={styles.body}>
           {message}
         </Text>
-      </View>
-    </View>
+      </ChillywoodGlassPanel>
+    </ChillywoodBrandedSurface>
   );
 }
 
 const styles = StyleSheet.create({
   outer: {
     flex: 1,
-    backgroundColor: "#05060A",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
@@ -28,8 +28,6 @@ const styles = StyleSheet.create({
     maxWidth: 460,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(14,15,20,0.96)",
     padding: 22,
     gap: 12,
   },

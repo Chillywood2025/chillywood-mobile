@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
 import { ChillywoodBrandedSurface } from "../../components/ui/chillywood-branded-surface";
+import { ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
 
 import { trackEvent } from "../../_lib/analytics";
 import { DEFAULT_APP_CONFIG, readAppConfig } from "../../_lib/appConfig";
@@ -2973,6 +2974,7 @@ export default function ChillyChatThreadScreen() {
             disabled={callBusy || (!activeCallRoomId && !callPanelOpen)}
             onPress={() => void handleJoinOrCloseCall()}
           >
+            <ChillywoodPrimaryActionFill />
             <Text style={styles.joinBtnText}>{callActionLabel}</Text>
           </TouchableOpacity>
         ) : null}
@@ -3017,6 +3019,7 @@ export default function ChillyChatThreadScreen() {
               message.isMe ? styles.messageBubbleMe : styles.messageBubbleThem,
             ]}
           >
+            {message.isMe ? <ChillywoodPrimaryActionFill opacity={0.34} radius={20} /> : null}
             <Text style={[styles.messageAuthor, message.isMe && styles.messageAuthorMe]}>
               {message.isMe ? "You" : message.authorLabel}
             </Text>
@@ -3171,6 +3174,7 @@ export default function ChillyChatThreadScreen() {
               void handleSend();
             }}
           >
+            <ChillywoodPrimaryActionFill />
             <Text style={styles.sendBtnText}>{sending ? "..." : "Send"}</Text>
           </TouchableOpacity>
         </View>
@@ -3606,6 +3610,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#5B1DFF",
     paddingVertical: 12,
     alignItems: "center",
+    overflow: "hidden",
   },
   callBtnDisabled: {
     opacity: 0.5,
@@ -3833,10 +3838,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
     gap: 4,
+    overflow: "hidden",
   },
   messageBubbleMe: {
     alignSelf: "flex-end",
-    backgroundColor: "rgba(91,29,255,0.94)",
+    backgroundColor: "rgba(7,5,27,0.94)",
     borderWidth: 1,
     borderColor: "rgba(0,168,255,0.38)",
   },
@@ -4064,6 +4070,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
   sendBtnText: {
     color: "#fff",

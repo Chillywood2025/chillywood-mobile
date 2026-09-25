@@ -24,6 +24,7 @@ import {
 } from "./main-tab-profile-cache";
 import { NotificationBellButton } from "../notifications/notification-bell-button";
 import { ProfileMediaImage as Image } from "../ui/ProfileMediaImage";
+import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 
 type MainTabTopBarProps = {
   surface: "home" | "explore" | "live" | "library";
@@ -159,7 +160,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   kicker: {
-    color: "#8D98AE",
+    color: CHILLYWOOD_VISUAL.textMuted,
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0,
@@ -180,8 +181,8 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 19,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(12,12,16,0.68)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -190,8 +191,8 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(12,12,16,0.84)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
@@ -209,13 +210,13 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(220,20,60,0.24)",
+    backgroundColor: "rgba(110,33,255,0.32)",
   },
   avatarPlaceholder: {
     width: "100%",
     height: "100%",
     borderRadius: 22,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(0,168,255,0.12)",
   },
   avatarInitial: {
     color: "#fff",

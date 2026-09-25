@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { ChillywoodPrimaryActionFill } from "../ui/chillywood-visual-system";
 
 import {
   BETA_FEEDBACK_CATEGORIES,
@@ -163,6 +164,7 @@ export function BetaFeedbackSheet({
               });
             }}
           >
+            <ChillywoodPrimaryActionFill radius={999} />
             <Text style={styles.primaryButtonText}>{busy ? "Sending…" : "Send Feedback"}</Text>
           </TouchableOpacity>
 
@@ -285,6 +287,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#DC143C",
     paddingVertical: 12,
     alignItems: "center",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(91,214,255,0.72)",
   },
   buttonDisabled: {
     opacity: 0.7,
