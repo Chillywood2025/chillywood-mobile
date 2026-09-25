@@ -147,7 +147,10 @@ import { LinkedText } from "../../components/social/linked-text";
 import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import { ProfileMediaImage } from "../../components/ui/ProfileMediaImage";
-import { CHILLYWOOD_VISUAL } from "../../components/ui/chillywood-visual-system";
+import {
+  CHILLYWOOD_VISUAL,
+  ChillywoodPrimaryActionFill,
+} from "../../components/ui/chillywood-visual-system";
 import { LiveLowerDock } from "../../components/room/live-lower-dock";
 import { pushRecentReaction } from "../../components/room/reaction-picker";
 import { useChannelFollowAction } from "../../hooks/use-channel-follow-action";
@@ -9328,6 +9331,7 @@ export default function PlayerScreen() {
             accessibilityRole="button"
             testID={isSharedPartyPlayback ? (compactFullscreenRail ? "shared-player-fullscreen-comment-send" : "shared-player-comment-send") : undefined}
           >
+            <ChillywoodPrimaryActionFill radius={999} />
             {compactFullscreenRail ? (
               partyCommentSending ? (
                 <Text style={[styles.partyCommentsSendBtnText, styles.partyCommentsSendBtnTextFullscreenRail]}>...</Text>
@@ -11876,8 +11880,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     color: "#EEF1F8",
     fontSize: 11,
     fontWeight: "600",
@@ -11894,18 +11898,24 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.7)",
-    backgroundColor: "rgba(220,20,60,0.26)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.accentBlue,
     paddingHorizontal: 10,
     paddingVertical: 10,
     justifyContent: "center",
+    overflow: "hidden",
+    shadowColor: CHILLYWOOD_VISUAL.primaryGlow,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    elevation: 8,
   },
   partyCommentsSendBtnFullscreenRail: {
     width: 34,
     height: 34,
     minHeight: 34,
-    borderColor: "rgba(255,255,255,0.2)",
-    backgroundColor: "rgba(255,255,255,0.1)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.accentBlue,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 0,
@@ -12337,7 +12347,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   watchPartyPlayerBandKicker: {
-    color: "#E7C0CD",
+    color: CHILLYWOOD_VISUAL.accentBlue,
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1,
@@ -12348,16 +12358,16 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   watchPartySocialShell: {
-    borderRadius: 18,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.22)",
-    backgroundColor: "rgba(8, 10, 18, 0.88)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     paddingHorizontal: 12,
     paddingTop: 12,
     paddingBottom: 10,
     gap: 8,
-    shadowColor: "#000000",
-    shadowOpacity: 0.24,
+    shadowColor: CHILLYWOOD_VISUAL.primaryGlow,
+    shadowOpacity: 0.3,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
   },
@@ -12373,15 +12383,15 @@ const styles = StyleSheet.create({
   watchPartySocialMetaPill: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 10,
     paddingVertical: 6,
     maxWidth: "100%",
   },
   watchPartySocialMetaPillRole: {
-    borderColor: "rgba(220,20,60,0.24)",
-    backgroundColor: "rgba(220,20,60,0.14)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: "rgba(110,33,255,0.24)",
   },
   watchPartySocialMetaText: {
     color: "#DCE4F6",
@@ -12406,7 +12416,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "rgba(5,7,14,0.96)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
   },
   watchPartySocialMediaFrameInner: {
     flex: 1,
@@ -12664,15 +12674,17 @@ const styles = StyleSheet.create({
     minWidth: 104,
     minHeight: 42,
     borderRadius: 999,
-    borderWidth: 0,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 14,
     paddingVertical: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   watchPartyDockActionBtnActive: {
-    backgroundColor: "rgba(220,20,60,0.24)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: "rgba(110,33,255,0.28)",
   },
   watchPartyDockActionText: {
     color: "#EDF1F9",
@@ -12689,16 +12701,18 @@ const styles = StyleSheet.create({
     lineHeight: 15,
   },
   watchPartyDockCard: {
-    borderRadius: 18,
-    backgroundColor: "rgba(6,8,16,0.72)",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 14,
     paddingVertical: 13,
     gap: 10,
   },
   watchPartyHostReviewCard: {
-    borderColor: "rgba(220,20,60,0.28)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
     borderWidth: 1,
-    backgroundColor: "rgba(8,9,18,0.9)",
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
   },
   watchPartyHostReviewHeader: {
     flexDirection: "row",
@@ -12737,8 +12751,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   watchPartyHostReviewPrimaryBtn: {
-    borderColor: "rgba(220,20,60,0.56)",
-    backgroundColor: "rgba(220,20,60,0.24)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: "rgba(110,33,255,0.28)",
   },
   watchPartyDockCardKeyboardComposer: {
     paddingHorizontal: 10,
@@ -12765,8 +12779,9 @@ const styles = StyleSheet.create({
   watchPartyDockMenuBtn: {
     flex: 1,
     borderRadius: 999,
-    borderWidth: 0,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 12,
     paddingVertical: 9,
     alignItems: "center",
@@ -12784,13 +12799,15 @@ const styles = StyleSheet.create({
   },
   watchPartyDockRateChip: {
     borderRadius: 999,
-    borderWidth: 0,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   watchPartyDockRateChipActive: {
-    backgroundColor: "rgba(220,20,60,0.26)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: "rgba(110,33,255,0.28)",
   },
   watchPartyDockRateChipText: {
     color: "#D9E0EF",

@@ -25,6 +25,10 @@ import {
   type NotificationRecord,
   type NotificationSummary,
 } from "../../_lib/notifications";
+import {
+  CHILLYWOOD_VISUAL,
+  ChillywoodPrimaryActionFill,
+} from "../ui/chillywood-visual-system";
 
 type NotificationBellButtonProps = {
   surface: string;
@@ -340,6 +344,7 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
               accessibilityLabel="Open notification settings"
               testID={`${surface}-notification-tray-open-settings`}
             >
+              <ChillywoodPrimaryActionFill radius={21} />
               <Text style={styles.fullActivityButtonText}>Open Notification Settings</Text>
             </TouchableOpacity>
           </View>
@@ -397,15 +402,20 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.13)",
-    backgroundColor: "rgba(8,9,14,0.98)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     paddingHorizontal: 18,
     paddingTop: 18,
     paddingBottom: 18,
+    shadowColor: CHILLYWOOD_VISUAL.primaryGlow,
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
+    elevation: 18,
   },
   roomSafeTraySheet: {
     maxHeight: "62%",
-    borderColor: "rgba(169,246,210,0.24)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
   },
   trayHeader: {
     flexDirection: "row",
@@ -438,7 +448,8 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -452,8 +463,8 @@ const styles = StyleSheet.create({
   traySection: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.035)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     padding: 10,
     gap: 10,
   },
@@ -478,7 +489,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 14,
@@ -494,8 +506,8 @@ const styles = StyleSheet.create({
     gap: 10,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    backgroundColor: "rgba(255,255,255,0.045)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     padding: 12,
   },
   notificationRowUnread: {
@@ -531,7 +543,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
   },
   emptyState: {
     minHeight: 120,
@@ -540,8 +554,8 @@ const styles = StyleSheet.create({
     gap: 7,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.035)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     padding: 18,
   },
   emptyStateTitle: {
@@ -559,9 +573,17 @@ const styles = StyleSheet.create({
     marginTop: 12,
     minHeight: 42,
     borderRadius: 21,
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(220,20,60,0.92)",
+    backgroundColor: CHILLYWOOD_VISUAL.accentBlue,
+    overflow: "hidden",
+    shadowColor: CHILLYWOOD_VISUAL.primaryGlow,
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.32,
+    shadowRadius: 14,
+    elevation: 10,
   },
   fullActivityButtonText: {
     color: "#FFFFFF",

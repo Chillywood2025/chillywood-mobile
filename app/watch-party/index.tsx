@@ -1627,62 +1627,63 @@ export default function WatchPartyIndexScreen() {
   const partyPermissionsBody = `${getPartyJoinPolicyCopy(activeRoomContext?.joinPolicy)} ${getPartyContentAccessCopy(activeRoomContext?.contentAccessRule)} ${getPartyCapturePolicyCopy(activeRoomContext?.capturePolicy)}`;
   const waitingRoomReadinessRows = isLiveWaitingRoom ? liveReadinessRows : partyReadinessRows;
   const waitingRoomPermissionsBody = isLiveWaitingRoom ? livePermissionsBody : partyPermissionsBody;
-  const sourcePreflightStatus = isLiveWaitingRoom
+  const sourceGuideStatus = isLiveWaitingRoom
     ? "Ready"
     : partyTitleId || partySourceId
       ? "Ready"
       : "Needed";
-  const sourcePreflightBody = isLiveWaitingRoom
-    ? "Live Watch-Party starts without a title source."
+  const sourceGuideBody = isLiveWaitingRoom
+    ? "This one is about the people, so you can start without choosing a video."
     : partyTitleId || partySourceId
-      ? `${partyTitleName} is selected for Watch-Party Live.`
-      : "Choose content first to start Watch-Party Live.";
-  const hostPreflightRows = [
+      ? `${partyTitleName} is queued up for everyone to watch together.`
+      : "Pick what everyone is watching before you open the room.";
+  const hostGuideRows = [
     {
-      label: "Room type",
-      status: isLiveWaitingRoom ? "Live Watch-Party" : "Watch-Party Live",
-      detail: isLiveWaitingRoom ? "People-first live room entry." : "Content-first Party Room entry.",
-    },
-    {
-      label: "Audience",
-      status: activeRoomContext?.joinPolicy === "locked" ? "Locked" : "Room code",
-      detail: isLiveWaitingRoom ? getJoinPolicyCopy(activeRoomContext?.joinPolicy) : getPartyJoinPolicyCopy(activeRoomContext?.joinPolicy),
-    },
-    {
-      label: "Mic / Camera",
-      status: isLiveWaitingRoom ? "Live Room" : "Party Room",
+      label: "You're hosting",
+      status: isLiveWaitingRoom ? "A live hangout" : "A watch party",
       detail: isLiveWaitingRoom
-        ? "Mic and camera setup stays inside Live Room."
-        : "Watch-Party Live camera setup stays inside Party Room and shared Player.",
+        ? "Bring your people together here, then move into Live Stage when the room feels right."
+        : `Bring your people together around ${partyTitleName}.`,
     },
     {
-      label: "Source / Content",
-      status: sourcePreflightStatus,
-      detail: sourcePreflightBody,
+      label: "Friends get in with",
+      status: activeRoomContext?.joinPolicy === "locked" ? "Your approval" : "The room code",
+      detail: activeRoomContext?.joinPolicy === "locked"
+        ? "You'll choose who comes in before they join the room."
+        : "Share the code with the people you want here.",
     },
     {
-      label: "Who can speak",
-      status: "Host managed",
+      label: "Camera & mic",
+      status: "You choose inside",
       detail: isLiveWaitingRoom
-        ? "Speaker seats stay controlled by the Live Room."
-        : "Party Room voice controls stay controlled by the room.",
+        ? "Nothing goes live from this screen. You'll turn them on when you're ready inside Live Room."
+        : "Set them up inside Party Room or the shared player—nothing starts from this screen.",
     },
     {
-      label: "Safety controls",
-      status: "Destination room",
-      detail: "Access checks, reports, and host actions remain in their existing room surfaces.",
+      label: isLiveWaitingRoom ? "What this room is about" : "Tonight's pick",
+      status: sourceGuideStatus,
+      detail: sourceGuideBody,
     },
     {
-      label: "Paid / Free status",
-      status: "Checked before entry",
+      label: "Who gets the mic",
+      status: "You decide",
       detail: isLiveWaitingRoom
-        ? "Live access uses the existing Premium check."
-        : "Party Room entry uses the exact Party Room Pass check when the creator chooses Paid.",
+        ? "You can bring people into the conversation from Live Room."
+        : "You can manage voices once everyone is inside Party Room.",
     },
     {
-      label: "Start",
+      label: "Access",
+      status: "Checked at the door",
+      detail: isLiveWaitingRoom
+        ? "Chi'llywood checks Premium before anyone enters."
+        : "If you made this party paid, guests need its Party Room Pass before they enter.",
+    },
+    {
+      label: "Next move",
       status: isLiveWaitingRoom ? "Create Live Room" : "Create Party Room",
-      detail: "Start uses the existing room creation path.",
+      detail: isLiveWaitingRoom
+        ? "Tap Create Live Room and we'll take you to the lobby before Live Stage."
+        : "Tap Create Party Room and we'll take you where the video, guests, and controls come together.",
     },
   ];
   const waitingRoomInviteBody = isPreparingInitialCode
@@ -1717,10 +1718,16 @@ export default function WatchPartyIndexScreen() {
       <>
         <View style={styles.hostPreflightCard}>
           <View style={styles.hostPreflightHeader}>
-            <AppText scale="caption" style={styles.hostPreflightLabel}>HOST PREFLIGHT</AppText>
+            <View style={styles.hostPreflightHeadingCopy}>
+              <AppText scale="caption" style={styles.hostPreflightLabel}>QUICK HEADS-UP</AppText>
+              <AppText scale="subhead" style={styles.hostPreflightHeading}>Your room, without the tech talk.</AppText>
+              <AppText scale="caption" style={styles.hostPreflightIntro}>
+                Here&apos;s what your friends will experience and what you&apos;ll handle once you&apos;re inside.
+              </AppText>
+            </View>
             <AppText scale="caption" style={styles.hostPreflightPill}>{isLiveWaitingRoom ? "Live" : "Party"}</AppText>
           </View>
-          {hostPreflightRows.map((row) => (
+          {hostGuideRows.map((row) => (
             <View key={row.label} style={styles.hostPreflightRow}>
               <View style={styles.hostPreflightCopy}>
                 <AppText scale="footnote" style={styles.hostPreflightTitle}>{row.label}</AppText>
@@ -2658,14 +2665,14 @@ const styles = StyleSheet.create({
   modeChoiceBody: { color: "#A7B0C3", fontSize: 12, lineHeight: 17, fontWeight: "600" },
 
   readinessCard: {
-    backgroundColor: "rgba(12,12,16,0.92)",
-    borderRadius: 16,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
     padding: 14,
     gap: 10,
   },
-  readinessLabel: { color: "#666", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+  readinessLabel: { color: CHILLYWOOD_VISUAL.textMuted, fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
   readinessRow: { flexDirection: "row", gap: 10 },
   readinessDot: { width: 10, height: 10, borderRadius: 999, marginTop: 5 },
   readinessDotReady: { backgroundColor: "#32D583" },
@@ -2678,12 +2685,17 @@ const styles = StyleSheet.create({
   readinessBody: { color: "#A7B0C3", fontSize: 12, lineHeight: 17, fontWeight: "600" },
 
   hostPreflightCard: {
-    backgroundColor: "rgba(12,12,16,0.92)",
-    borderRadius: 8,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    padding: 14,
-    gap: 10,
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    padding: 16,
+    gap: 12,
+    shadowColor: CHILLYWOOD_VISUAL.primaryGlow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.24,
+    shadowRadius: 16,
+    elevation: 8,
   },
   hostPreflightHeader: {
     flexDirection: "row",
@@ -2691,11 +2703,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10,
   },
-  hostPreflightLabel: { color: "#8FA2C8", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+  hostPreflightHeadingCopy: { flex: 1, gap: 5 },
+  hostPreflightLabel: { color: CHILLYWOOD_VISUAL.accentBlue, fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+  hostPreflightHeading: { color: CHILLYWOOD_VISUAL.textPrimary, fontSize: 17, lineHeight: 22, fontWeight: "900" },
+  hostPreflightIntro: { color: CHILLYWOOD_VISUAL.textMuted, fontSize: 12, lineHeight: 17, fontWeight: "600" },
   hostPreflightPill: {
     overflow: "hidden",
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: "rgba(110,33,255,0.22)",
     color: "#EAF0FF",
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -2709,8 +2726,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10,
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.06)",
-    paddingTop: 9,
+    borderTopColor: CHILLYWOOD_VISUAL.controlBorder,
+    paddingTop: 11,
   },
   hostPreflightCopy: {
     flex: 1,
@@ -2718,10 +2735,10 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   hostPreflightTitle: { color: "#F2F5FC", fontSize: 12.5, fontWeight: "900" },
-  hostPreflightBody: { color: "#A7B0C3", fontSize: 11.5, lineHeight: 16, fontWeight: "600" },
+  hostPreflightBody: { color: CHILLYWOOD_VISUAL.textMuted, fontSize: 11.5, lineHeight: 16, fontWeight: "600" },
   hostPreflightStatus: {
     maxWidth: 116,
-    color: "#FFFFFF",
+    color: "#D7E8FF",
     fontSize: 10.5,
     lineHeight: 15,
     fontWeight: "900",
@@ -2729,15 +2746,15 @@ const styles = StyleSheet.create({
   },
 
   permissionsCard: {
-    backgroundColor: "rgba(12,12,16,0.92)",
-    borderRadius: 16,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
     padding: 14,
     gap: 8,
   },
-  permissionsLabel: { color: "#666", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
-  permissionsBody: { color: "#A7B0C3", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  permissionsLabel: { color: CHILLYWOOD_VISUAL.textMuted, fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+  permissionsBody: { color: CHILLYWOOD_VISUAL.textMuted, fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
   discoveryChoiceRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   discoveryChoice: {
     minHeight: 44,
@@ -2746,10 +2763,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 12,
   },
-  discoveryChoiceSelected: { borderColor: "#DC143C", backgroundColor: "rgba(220,20,60,0.2)" },
+  discoveryChoiceSelected: { borderColor: CHILLYWOOD_VISUAL.primaryBorder, backgroundColor: "rgba(110,33,255,0.28)" },
   discoveryChoiceText: { color: "#F4F7FF", fontWeight: "800" },
 
   smartHelperCard: {
