@@ -5891,6 +5891,7 @@ export function ChannelStudioScreen() {
                       activeOpacity={0.86}
                       onPress={() => updateClipEditor({ titleOverlayPosition: option.id })}
                     >
+                      {clipEditor.titleOverlayPosition === option.id ? <ChillywoodPrimaryActionFill radius={999} /> : null}
                       <Text style={[styles.segmentButtonText, clipEditor.titleOverlayPosition === option.id && styles.segmentButtonTextActive]}>
                         {option.label}
                       </Text>
@@ -5906,6 +5907,7 @@ export function ChannelStudioScreen() {
                       activeOpacity={0.86}
                       onPress={() => updateClipEditor({ titleOverlayStyle: option.id })}
                     >
+                      {clipEditor.titleOverlayStyle === option.id ? <ChillywoodPrimaryActionFill radius={999} /> : null}
                       <Text style={[styles.segmentButtonText, clipEditor.titleOverlayStyle === option.id && styles.segmentButtonTextActive]}>
                         {option.label}
                       </Text>
@@ -5938,6 +5940,7 @@ export function ChannelStudioScreen() {
                       onPress={() => applyClipTemplatePreset(option.id)}
                       disabled={clipSaving}
                     >
+                      {clipEditor.templatePreset === option.id ? <ChillywoodPrimaryActionFill radius={14} /> : null}
                       <Text style={styles.brandThemeTitle}>{option.label}</Text>
                       <Text style={styles.brandThemeBody}>{option.body}</Text>
                     </TouchableOpacity>
@@ -5970,6 +5973,7 @@ export function ChannelStudioScreen() {
                       onPress={() => updateClipEditor({ clipFormat: option.id })}
                       disabled={clipSaving}
                     >
+                      {clipEditor.clipFormat === option.id ? <ChillywoodPrimaryActionFill radius={14} /> : null}
                       <Text style={styles.brandThemeTitle}>{option.label}</Text>
                       <Text style={styles.brandThemeBody}>{option.body}</Text>
                     </TouchableOpacity>
@@ -5985,6 +5989,7 @@ export function ChannelStudioScreen() {
                       onPress={() => updateClipEditor({ fitMode: option.id })}
                       disabled={clipSaving}
                     >
+                      {clipEditor.fitMode === option.id ? <ChillywoodPrimaryActionFill radius={999} /> : null}
                       <Text style={[styles.segmentButtonText, clipEditor.fitMode === option.id && styles.segmentButtonTextActive]}>
                         {option.label}
                       </Text>
@@ -7355,6 +7360,7 @@ export function ChannelStudioScreen() {
                       activeOpacity={0.86}
                       onPress={() => updateBrandDraft({ themePreset: option.id })}
                     >
+                      {draft?.themePreset === option.id ? <ChillywoodPrimaryActionFill radius={14} /> : null}
                       <Text style={styles.brandThemeTitle}>{option.label}</Text>
                       <Text style={styles.brandThemeBody}>{option.body}</Text>
                     </TouchableOpacity>
@@ -10378,6 +10384,7 @@ export function ChannelStudioScreen() {
             accessibilityRole="button"
             accessibilityLabel="Choose from Photos or Gallery"
           >
+            <ChillywoodPrimaryActionFill radius={16} />
             <Text style={styles.uploadSourceButtonText}>Photos / Gallery</Text>
             <Text style={styles.uploadSourceButtonMeta}>Open your video gallery</Text>
           </TouchableOpacity>
@@ -11306,10 +11313,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 11,
     gap: 4,
+    overflow: "hidden",
   },
   brandThemeCardActive: {
-    borderColor: "rgba(220,20,60,0.5)",
-    backgroundColor: "rgba(220,20,60,0.14)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.accentPurple,
   },
   brandThemeTitle: {
     color: "#F3F6FF",
@@ -11362,10 +11370,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
   segmentButtonActive: {
-    borderColor: "rgba(220,20,60,0.55)",
-    backgroundColor: "rgba(220,20,60,0.24)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.accentPurple,
   },
   segmentButtonDisabled: {
     opacity: 0.46,
@@ -11644,8 +11653,8 @@ const styles = StyleSheet.create({
     padding: 15,
   },
   creatorContentPanel: {
-    borderColor: "rgba(220,20,60,0.26)",
-    backgroundColor: "rgba(30,13,24,0.92)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
   },
   contentLibraryStatsRow: {
     flexDirection: "row",
@@ -11713,8 +11722,8 @@ const styles = StyleSheet.create({
     aspectRatio: 9 / 16,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.22)",
-    backgroundColor: "rgba(18,10,18,0.94)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     padding: 11,
     justifyContent: "flex-end",
     gap: 7,
@@ -12618,10 +12627,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 13,
     gap: 3,
+    overflow: "hidden",
   },
   uploadSourceButtonPrimary: {
-    borderColor: "rgba(220,20,60,0.55)",
-    backgroundColor: "rgba(220,20,60,0.2)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.accentPurple,
   },
   uploadSourceButtonText: {
     color: "#FFFFFF",

@@ -4199,6 +4199,7 @@ export default function WatchPartyLiveStageScreen({
           style={styles.liveRoomShareButton}
           pointerEvents="none"
         >
+          <ChillywoodPrimaryActionFill radius={999} />
           <Text style={styles.liveRoomShareButtonText}>Invite in app</Text>
         </View>
       </Pressable>
@@ -4264,7 +4265,14 @@ export default function WatchPartyLiveStageScreen({
     <View style={styles.liveRoomSurface}>
       <ScrollView
         style={styles.liveRoomSurfaceScroll}
-        contentContainerStyle={[styles.liveRoomSurfaceContent, { paddingBottom: liveRoomFooterInset + 28 }]}
+        contentContainerStyle={[
+          styles.liveRoomSurfaceContent,
+          isHost && styles.liveRoomSurfaceContentHost,
+          isHost && liveMoneyHostSetupExpanded && {
+            paddingTop: Math.max(320, Math.min(440, windowHeight - 180)),
+          },
+          { paddingBottom: liveRoomFooterInset + 28 },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -5138,7 +5146,7 @@ export default function WatchPartyLiveStageScreen({
               !isLiveRoomSurface && {
                 left: 12,
                 right: 12,
-                top: safeAreaInsets.top + 174,
+                top: safeAreaInsets.top + 252,
               },
             ]}
             testID="live-stage-host-money-controls"
@@ -5156,7 +5164,14 @@ export default function WatchPartyLiveStageScreen({
             </TouchableOpacity>
             {liveMoneyHostSetupExpanded ? (
               <ScrollView
-                style={[styles.liveMoneyHostScroller, { maxHeight: Math.max(180, Math.min(360, windowHeight - 220)) }]}
+                style={[
+                  styles.liveMoneyHostScroller,
+                  {
+                    maxHeight: isLiveRoomSurface
+                      ? Math.max(180, Math.min(360, windowHeight - 260))
+                      : Math.max(160, Math.min(280, windowHeight - safeAreaInsets.top - 360)),
+                  },
+                ]}
                 contentContainerStyle={styles.liveMoneyHostScrollerContent}
                 keyboardShouldPersistTaps="handled"
                 nestedScrollEnabled
@@ -5174,6 +5189,7 @@ export default function WatchPartyLiveStageScreen({
                       accessibilityState={{ selected: liveMoneyHostOfferState?.accessEnabled === paid }}
                       accessibilityLabel={`Set Live Stage viewer entry to ${paid ? "Paid" : "Free"}`}
                     >
+                      {liveMoneyHostOfferState?.accessEnabled === paid ? <ChillywoodPrimaryActionFill radius={10} /> : null}
                       <Text style={styles.liveMoneyHostButtonText}>{liveMoneyOfferBusy === "live_watch_party_access_pass" ? "Saving…" : paid ? "Paid · $0.99" : "Free"}</Text>
                     </TouchableOpacity>
                   ))}
@@ -5191,6 +5207,7 @@ export default function WatchPartyLiveStageScreen({
                       accessibilityState={{ selected: liveMoneyHostOfferState?.seatEnabled === paid }}
                       accessibilityLabel={`Set speaking-seat eligibility to ${paid ? "Paid" : "Free"}`}
                     >
+                      {liveMoneyHostOfferState?.seatEnabled === paid ? <ChillywoodPrimaryActionFill radius={10} /> : null}
                       <Text style={styles.liveMoneyHostButtonText}>{liveMoneyOfferBusy === "live_watch_party_seat_pass" ? "Saving…" : paid ? "Paid · $0.99" : "Free"}</Text>
                     </TouchableOpacity>
                   ))}
@@ -6353,6 +6370,7 @@ const styles = StyleSheet.create({
   liveRoomSurface: { flex: 1 },
   liveRoomSurfaceScroll: { flex: 1 },
   liveRoomSurfaceContent: { paddingBottom: 20 },
+  liveRoomSurfaceContentHost: { paddingTop: 112 },
   liveRoomFooter: {
     paddingTop: 8,
     paddingHorizontal: 2,
@@ -6393,12 +6411,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(220,20,60,0.86)",
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 8,
+    overflow: "hidden",
   },
   liveMoneyHostButtonSelected: {
-    borderWidth: 2,
-    borderColor: "#FFFFFF",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
   },
   liveMoneyHostButtonText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800", textAlign: "center" },
   stageCommunityPurchaseGroup: { gap: 7 },
@@ -6513,10 +6533,11 @@ const styles = StyleSheet.create({
   liveRoomShareButton: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.48)",
-    backgroundColor: "rgba(220,20,60,0.18)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.accentPurple,
     paddingHorizontal: 14,
     paddingVertical: 9,
+    overflow: "hidden",
   },
   liveRoomShareButtonText: { color: "#FFF5F7", fontSize: 12, fontWeight: "900" },
   liveRoomActionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
@@ -6529,8 +6550,8 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   liveRoomActionBtnActive: {
-    borderColor: "rgba(220,20,60,0.3)",
-    backgroundColor: "rgba(220,20,60,0.16)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: "rgba(50,28,255,0.22)",
   },
   liveRoomActionBtnDisabled: {
     opacity: 0.45,

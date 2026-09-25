@@ -17,6 +17,7 @@ const sources = {
   library: read("app/(tabs)/my-list.tsx"),
   live: read("app/(tabs)/live.tsx"),
   login: read("app/(auth)/login.tsx"),
+  player: read("app/player/[id].tsx"),
   profileTab: read("app/(tabs)/profile.tsx"),
   reset: read("app/reset-password.tsx"),
   settings: read("app/settings.tsx"),
@@ -25,6 +26,7 @@ const sources = {
   studio: read("app/channel-settings.tsx"),
   tabs: read("app/(tabs)/_layout.tsx"),
   thread: read("app/chat/[threadId].tsx"),
+  title: read("app/title/[id].tsx"),
   visual: read("components/ui/chillywood-visual-system.tsx"),
   partyRoom: read("app/watch-party/[partyId].tsx"),
   liveStage: read("app/watch-party/live-stage/[partyId].tsx"),
@@ -113,15 +115,28 @@ test("physically observed half-migrated surfaces use the Sign In-derived surface
   assert.match(sources.subscribe, /premium-purchase-button[\s\S]+<ChillywoodPrimaryActionFill opacity=\{busy \? 0\.56 : 1\} radius=\{14\} \/>/);
   assert.doesNotMatch(sources.subscribe, /primaryButton:[\s\S]{0,260}backgroundColor: "#DC143C"/);
   assert.match(sources.studio, /active \? <ChillywoodPrimaryActionFill radius=\{999\} \/> : null/);
+  assert.match(sources.studio, /titleOverlayPosition === option\.id \? <ChillywoodPrimaryActionFill radius=\{999\} \/> : null/);
+  assert.match(sources.studio, /templatePreset === option\.id \? <ChillywoodPrimaryActionFill radius=\{14\} \/> : null/);
+  assert.match(sources.studio, /creatorContentPanel:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground,/);
+  assert.match(sources.studio, /creator-upload-source-gallery-button[\s\S]+<ChillywoodPrimaryActionFill radius=\{16\} \/>/);
   assert.match(sources.studio, /studioTabButtonActive:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.primaryBorder/);
   assert.match(sources.studio, /studioHeaderCard:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground/);
   assert.match(sources.partyRoom, /watch-party-open-shared-player-button[\s\S]+<ChillywoodPrimaryActionFill opacity=\{watchPartyLiveOpening \? 0\.58 : 1\} radius=\{16\} \/>/);
   assert.doesNotMatch(sources.partyRoom, /watchCTA:[\s\S]{0,260}backgroundColor: "#DC143C"/);
   assert.match(sources.liveStage, /live-room-enter-stage-button[\s\S]+<ChillywoodPrimaryActionFill radius=\{16\} \/>/);
+  assert.match(sources.liveStage, /liveRoomSurfaceContentHost:\s*\{ paddingTop: 112 \}/);
+  assert.match(sources.liveStage, /liveMoneyHostSetupExpanded && \{[\s\S]+paddingTop: Math\.max\(320, Math\.min\(440, windowHeight - 180\)\)/);
+  assert.match(sources.liveStage, /liveRoomShareButton[\s\S]+<ChillywoodPrimaryActionFill radius=\{999\} \/>/);
   assert.match(sources.liveStage, /routeGateBackground:[\s\S]+StyleSheet\.absoluteFillObject/);
-  assert.match(sources.liveStage, /!isLiveRoomSurface && \{[\s\S]+top: safeAreaInsets\.top \+ 174/);
+  assert.match(sources.liveStage, /!isLiveRoomSurface && \{[\s\S]+top: safeAreaInsets\.top \+ 252/);
   assert.match(sources.liveStage, /stageHeroFallback:[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground/);
   assert.equal((sources.liveStage.match(/NotificationBellButton surface="live-stage"/gu) ?? []).length, 1);
+  assert.match(sources.title, /title-details-branded-surface/);
+  assert.match(sources.title, /<ChillywoodGlassPanel style=\{styles\.content\}>/);
+  assert.match(sources.title, /<ChillywoodPrimaryActionFill opacity=\{accessLoading \? 0\.7 : 1\} radius=\{14\} \/>/);
+  assert.match(sources.player, /PLAYER_CHICAGO_NIGHT_BACKGROUND = require\("\.\.\/\.\.\/assets\/images\/chicago-skyline\.jpg"\)/);
+  assert.match(sources.player, /source=\{PLAYER_CHICAGO_NIGHT_BACKGROUND\}[\s\S]+frameworkBackgroundSource/);
+  assert.match(sources.player, /topSectionFramework:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground,/);
 });
 
 test("the preserved user-visible route inventory remains present", () => {
