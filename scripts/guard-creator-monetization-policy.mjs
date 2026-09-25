@@ -238,8 +238,6 @@ assertIncludes(vipRoute, "vip-area-get-vip-button", "VIP route purchase selector
 assertIncludes(admin, "No checkout success, payout release, simulated purchase, simulated order, simulated tip, or live money action", "Admin money safety copy");
 assertIncludes(admin, "1.5% with no default cap", "Admin cash-out fee copy");
 
-assertNotIncludes(read("CURRENT_STATE.md"), "$7.99", "CURRENT_STATE stale Premium price");
-assertNotIncludes(read("NEXT_TASK.md"), "$7.99", "NEXT_TASK stale Premium price");
 assertNotIncludes(read("ROADMAP.md"), "$7.99", "ROADMAP stale Premium price");
 
 if (process.exitCode) {

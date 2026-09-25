@@ -22,7 +22,6 @@ const moderation = read("docs/legal/MODERATION_REPORTING_WORKFLOW.md");
 const moneySupport = read("docs/support/MONEY_SUPPORT_WORKFLOW.md");
 const platformRoles = read("docs/admin/PLATFORM_ROLES.md");
 const readiness = read("docs/FINAL_PRODUCTION_READINESS_CHECKLIST.md");
-const nextTask = read("NEXT_TASK.md");
 const roadmap = read("ROADMAP.md");
 const adminUi = read("app/admin.tsx");
 const appConfig = read("_lib/appConfig.ts");
@@ -40,7 +39,6 @@ const currentDocs = [
   moneySupport,
   platformRoles,
   readiness,
-  nextTask,
   roadmap,
 ].join("\n");
 const uiText = [adminUi, appConfig, adminMoneySandbox, channelSettings, edge].join("\n");
@@ -61,9 +59,9 @@ assertIncludes(currentDocs, "Support is a work area", "Support work-area docs");
 assertIncludes(lock, "Moderator includes support duties when granted exact support scopes", "Moderator support-duty doctrine");
 assertIncludes(lock, "Moderator is separate from Admin/operator", "Moderator separate doctrine");
 if (
-  !(nextTask + roadmap + lock).includes("Next lane: Moderator role scope including support duties.")
-  && !(nextTask + roadmap + lock).includes("Next lane: real staff grant/readback only when Owner selects the actual Moderator accounts and exact scopes.")
-  && !(nextTask + roadmap + lock).includes("Next lane: Return to final production readiness checklist and app-controlled launch blockers, excluding known Google Play base-plan provider blocker.")
+  !(roadmap + lock).includes("Next lane: Moderator role scope including support duties.")
+  && !(roadmap + lock).includes("Next lane: real staff grant/readback only when Owner selects the actual Moderator accounts and exact scopes.")
+  && !(roadmap + lock).includes("Next lane: Return to final production readiness checklist and app-controlled launch blockers, excluding known Google Play base-plan provider blocker.")
 ) {
   fail("missing next lane recommendation");
 }

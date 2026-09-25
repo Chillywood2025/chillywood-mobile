@@ -13,12 +13,6 @@ import {
   validateOtaPublicationPlan,
   validatePublishedUpdateReadback,
 } from "../scripts/release-control-plane-lib.mjs";
-import {
-  CONTROL_PLANE_LIFECYCLE_CONTRACT,
-  evaluateLifecycleAuthority,
-  fixedPointAcceptsAdvancement,
-  transitionLifecycle,
-} from "../scripts/assurance/control-plane-lifecycle.mjs";
 
 const sha = (character) => character.repeat(40);
 const digest = (character) => character.repeat(64);
@@ -42,7 +36,6 @@ const plan = (platform) => createOtaPublicationPlan({
 const artifact = { artifactId: "artifact-1", sha256: digest("d"), sourceSha: sha("e"), sourceTree: sha("f"), buildNumber: "42", valid: true, revoked: false };
 const ref = (state, extra = {}) => ({ artifactId: artifact.artifactId, artifactSha256: artifact.sha256, state, ...extra });
 const delivery = (extra = {}) => ({ artifact, ...extra });
-const policy = JSON.parse(fs.readFileSync(new URL("../config/assurance/control-plane-lifecycle-v2.json", import.meta.url), "utf8"));
 
 test("exact Android and iOS OTA provenance passes", () => {
   assert.deepEqual(validateOtaPublicationPlan(plan("android")).findings, []);
@@ -170,29 +163,9 @@ test("wrong device/app identity and invisible device cannot become healthy", () 
   assert.equal(reconstructPhysicalAutomation(invisible).ok, false);
 });
 
-test("#489 lifecycle closes defects 5 and 6 without duplicate implementation", () => {
+test("historical current-truth and protected-main defects remain recorded as resolved", () => {
   assert.equal(RELEASE_DEFECT_DISPOSITIONS["RDA-CP-P1-CURRENT-TRUTH-AUTHORITY-DRIFT-005"], "RESOLVED_BY_489");
   assert.equal(RELEASE_DEFECT_DISPOSITIONS["RDA-CP-P1-PROTECTED-MAIN-MERGE-MODEL-006"], "RESOLVED_BY_489");
-  assert.equal(transitionLifecycle("MERGED_NORMAL_VERIFIED", "TERMINAL_TRUTH").ok, true);
-  assert.equal(transitionLifecycle("OWNER_DEFERRED", "TERMINAL_TRUTH").ok, true);
-  assert.equal(transitionLifecycle("AUTHORIZED_IMPLEMENTATION", "TERMINAL_TRUTH").ok, false);
-  assert.equal(evaluateLifecycleAuthority({ stage: "AUTHORIZED_IMPLEMENTATION", admissionValid: true }).implementation, true);
-  assert.equal(evaluateLifecycleAuthority({ stage: "AUTHORIZED_IMPLEMENTATION", admissionValid: false }).implementation, false);
-});
-
-test("terminal synchronization reaches one assurance fixed point", () => {
-  const base = sha("1");
-  const source = sha("2");
-  const tree = sha("3");
-  const record = {
-    mainSha: base,
-    activeTaskBinding: null,
-    controlPlaneLifecycle: { contractId: CONTROL_PLANE_LIFECYCLE_CONTRACT, currentStage: "TERMINAL_TRUTH" },
-    finiteTaskRuntime: { exceptionalTerminalOutcome: { mergeSha: base } },
-  };
-  const result = fixedPointAcceptsAdvancement({ record, observation: { parents: [base, source], sourceHead: source, tree, sourceTree: tree, changedPaths: ["scripts/assurance/current-truth.mjs"] }, policy, expectedFirstParent: base });
-  assert.equal(result.ok, true);
-  assert.equal(fixedPointAcceptsAdvancement({ record, observation: { parents: [sha("9"), source], sourceHead: source, tree, sourceTree: tree, changedPaths: ["scripts/assurance/current-truth.mjs"] }, policy, expectedFirstParent: base }).ok, false);
 });
 
 test("canonical publisher and controls remain the only governed mutation entry points", () => {

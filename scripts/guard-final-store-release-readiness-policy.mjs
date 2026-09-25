@@ -123,7 +123,6 @@ forbidMatch("money feature defaults", moneyFlags, /tips_enabled:\s*["']on["']/, 
 forbidMatch("money feature defaults", moneyFlags, /merch_enabled:\s*["']on["']/, "merch on state");
 
 [
-  "proof:final-store-release-readiness-play-submission-packet",
   "guard:final-store-release-readiness-policy",
 ].forEach((needle) => requireText("package scripts", packageJson, needle));
 

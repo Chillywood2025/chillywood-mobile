@@ -94,7 +94,6 @@ for (const script of [
   "guard:admin-role-scope-policy",
   "proof:moderator-role-scope",
   "guard:moderator-role-scope-policy",
-  "proof:role-terminology-lock",
   "guard:role-terminology-policy",
 ]) {
   assertIncludes(packageJson, script, `package script ${script}`);

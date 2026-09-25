@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "task": "assurance-simplification-v1",
+  "reviewer": "Repository Owner — September 24, 2026 simplification directive",
+  "reason": "The coherent cutover must install replacement validation, disconnect every active admission/terminal caller, preserve release safeguards, and update the governing instructions in one reviewable migration.",
+  "coherentObjective": "Replace ordinary-work custom authority machinery with normal protected pull-request validation without changing product or production-action authority.",
+  "limits": {
+    "maximumChangedPaths": 50,
+    "maximumNetChangedLines": 2500,
+    "activeHourTimebox": 8
+  },
+  "actualScope": {
+    "productSourceChanged": false,
+    "productionProviderMutation": false,
+    "databaseMutation": false,
+    "nativeMutation": false,
+    "secondHighRiskDomain": false
+  }
+}

@@ -229,7 +229,10 @@ assert.ok(spectatorLive.includes("setItems([])") && spectatorLive.includes("setU
   "an ended immersive Live must clear its active cards and become unavailable");
 assert.ok(spectatorLive.includes("setSheetItem(null)") && spectatorLive.includes("setReportItem(null)"),
   "an ended immersive Live must clear stale action surfaces");
-assert.ok(event.includes("Audience") && event.includes("accessibilityLabel"), "Event detail must expose its authoritative audience accessibly");
+assert.ok(event.includes('const audienceLabel = event?.visibility === "circle"')
+  && event.includes('event?.visibility === "private"')
+  && event.includes('<Text style={styles.detail}>{audienceLabel}</Text>'),
+"Event detail must expose its authoritative audience as readable React Native text");
 assert.ok(eventSource.includes('.eq("visibility", "public")'), "public Event queries must request only public authoritative rows");
 assert.ok(discoverySource.includes('item.live_state === "scheduled"')
   && discoverySource.includes("startsAtMillis > nowMillis")

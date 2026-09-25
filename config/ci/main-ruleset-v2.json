@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "rulesetId": 18940814,
+  "enforcement": "active",
+  "target": "branch",
+  "includeRefs": ["refs/heads/main"],
+  "strictRequiredStatusChecksPolicy": true,
+  "requiredStatusChecks": [
+    {
+      "context": "Chi'llywood / Required Validation",
+      "integrationId": 4707730
+    }
+  ],
+  "permanentBypassActors": [],
+  "mergeMethods": ["merge", "squash", "rebase"],
+  "rollback": {
+    "sourceCommit": "a36603bbf37419d5eb38899cdb617b75496c4443",
+    "requiredStatusCheck": {
+      "context": "Phase 1 / Admission Decision",
+      "integrationId": 4707730
+    },
+    "permanentBypassActor": {
+      "actorId": 4707730,
+      "actorType": "Integration",
+      "bypassMode": "pull_request"
+    },
+    "publisherAppPermissions": {
+      "checks": "write",
+      "contents": "write",
+      "environments": "read",
+      "metadata": "read",
+      "statuses": "write"
+    }
+  }
+}

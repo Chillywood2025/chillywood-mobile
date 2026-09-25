@@ -33,8 +33,6 @@ const docs = [
   read("docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md"),
   read("docs/MEDIA_RECOVERY_OPERATOR_RUNBOOK.md"),
   read("docs/MEDIA_DELIVERY_SCALE_ARCHITECTURE.md"),
-  read("CURRENT_STATE.md"),
-  read("NEXT_TASK.md"),
 ].join("\n\n");
 
 assert(service.includes("disabled template"), "service must be marked disabled template");

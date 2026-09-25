@@ -23,7 +23,6 @@ const packageJson = read("package.json");
 const doctrine = exists("docs/admin/FIRST_OWNER_AUTHORITY_AND_SUCCESSION.md")
   ? read("docs/admin/FIRST_OWNER_AUTHORITY_AND_SUCCESSION.md")
   : "";
-const nextTask = read("NEXT_TASK.md");
 const readiness = exists("docs/FINAL_PRODUCTION_READINESS_CHECKLIST.md")
   ? read("docs/FINAL_PRODUCTION_READINESS_CHECKLIST.md")
   : "";
@@ -48,8 +47,7 @@ check("break_glass_model", includesAll(combinedMigration + edge + doctrine, ["pl
 check("controls_enabled_for_first_owner", includesAll(edge + client + adminUi + doctrine, ["first_owner_grant_owner", "firstOwnerControlsEnabled", "First Owner controls are enabled for authenticated First Owner after validation"]), "enabled controls are exposed only for authenticated First Owner");
 check("forbidden_secret_exposure_doc", doctrine.includes("No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed"), "docs forbid secret/raw private data exposure");
 check("money_provider_switches_unchanged", !combinedMigration.includes("live_money_enabled = true") && !combinedMigration.includes("payouts_enabled = true") && !packageJson.includes("live_money_enabled\": true"), "no money/provider activation markers added");
-check("proof_script_package_script", packageJson.includes("proof:first-owner-authority") && packageJson.includes("guard:first-owner-authority-policy"), "package scripts are wired");
-check("required_docs_updated", includesAll(`${doctrine}\n${nextTask}\n${readiness}`, [
+check("required_docs_updated", includesAll(`${doctrine}\n${readiness}`, [
   "Only First Owner can grant or revoke Owner",
   "First Owner cannot remove himself as the last active Owner",
   "First Owner self-step-down requires successor, password re-auth, generated single-use passcode, typed confirmation, reason, and audit",

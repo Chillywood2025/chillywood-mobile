@@ -10,7 +10,6 @@ const edge = read("supabase/functions/admin-owner-controls/index.ts");
 const ui = read("app/admin.tsx");
 const doctrine = read("docs/admin/FIRST_OWNER_AUTHORITY_AND_SUCCESSION.md");
 const readiness = read("docs/FINAL_PRODUCTION_READINESS_CHECKLIST.md");
-const packageJson = read("package.json");
 
 const failures = [];
 const fail = (message) => failures.push(message);
@@ -47,7 +46,6 @@ requireText(doctrine, "Normal Owner dashboard viewing is not Break Glass", "doct
 requireText(doctrine, "Break Glass is documented and audited when used", "doctrine");
 requireText(doctrine, "No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed", "doctrine");
 requireText(readiness, "First Owner controls are enabled for authenticated First Owner after validation", "readiness checklist");
-requireText(packageJson, "proof:first-owner-authority", "package scripts");
 
 forbidText(migration, '"passcode_plaintext" text', "First Owner migration");
 forbidText(migration, "passcode_plaintext text", "First Owner migration");
