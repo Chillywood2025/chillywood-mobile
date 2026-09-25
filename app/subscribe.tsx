@@ -22,6 +22,10 @@ import { useOptionalBetaProgram } from "../_lib/betaProgram";
 import { getCurrentAccountSessionAuthoritySnapshot } from "../_lib/accountSessionAuthority";
 import { resolvePremiumPurchaseReadiness } from "../_lib/premiumPurchaseReadiness.mjs";
 import { useSession } from "../_lib/session";
+import {
+  CHILLYWOOD_VISUAL,
+  ChillywoodPrimaryActionFill,
+} from "../components/ui/chillywood-visual-system";
 
 const FRIENDLY_UNAVAILABLE_MESSAGE =
   "Premium purchases are temporarily unavailable while setup is being finalized.";
@@ -525,6 +529,7 @@ export default function SubscribeScreen() {
             Premium is account-owned. Sign in so Chi&apos;llywood can check your subscription or restore purchases safely.
           </Text>
           <TouchableOpacity style={styles.primaryButton} activeOpacity={0.88} onPress={onSignIn}>
+            <ChillywoodPrimaryActionFill radius={14} />
             <Text style={styles.primaryButtonText}>Sign In</Text>
           </TouchableOpacity>
         </View>
@@ -564,6 +569,7 @@ export default function SubscribeScreen() {
                 : undefined}
               accessibilityState={{ disabled: busy }}
             >
+              <ChillywoodPrimaryActionFill opacity={busy ? 0.56 : 1} radius={14} />
               {primaryActionBusy ? (
                 <ActivityIndicator color="#fff" />
               ) : (
@@ -912,10 +918,18 @@ const styles = StyleSheet.create({
   primaryButton: {
     minHeight: 48,
     borderRadius: 14,
-    backgroundColor: "#DC143C",
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.accentBlue,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
+    overflow: "hidden",
+    shadowColor: CHILLYWOOD_VISUAL.primaryGlow,
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.34,
+    shadowRadius: 14,
+    elevation: 10,
   },
   primaryButtonDisabled: {
     opacity: 0.56,

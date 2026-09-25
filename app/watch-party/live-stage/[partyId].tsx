@@ -149,6 +149,10 @@ import { SocialAttachmentActionSheet } from "../../../components/social/social-a
 import { SocialAttachmentCard } from "../../../components/social/social-attachment-card";
 import { AppBackButton } from "../../../components/navigation/app-back-button";
 import {
+  CHILLYWOOD_VISUAL,
+  ChillywoodPrimaryActionFill,
+} from "../../../components/ui/chillywood-visual-system";
+import {
   patchLiveKitSignalReadingLoop,
 } from "../../../components/watch-party-live/livekit-stage-media-surface";
 import {
@@ -194,6 +198,8 @@ import {
   shouldShowLiveStageJoinUnavailable,
   type LiveStageSeatRequestState,
 } from "../../../_lib/watch-party/live-stage-presentation";
+
+const CHILLYWOOD_BACKGROUND_SOURCE = require("../../../assets/images/chillywood-branded-background.png");
 
 type StageParticipant = SharedParticipantIdentity & {
   username: string;
@@ -4279,6 +4285,7 @@ export default function WatchPartyLiveStageScreen({
           onPress={onEnterLiveStage}
           testID="live-room-enter-stage-button"
         >
+          <ChillywoodPrimaryActionFill radius={16} />
           <Text style={styles.liveRoomPrimaryButtonText}>{liveRoomEntryLabel}</Text>
         </TouchableOpacity>
       </View>
@@ -4903,7 +4910,9 @@ export default function WatchPartyLiveStageScreen({
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#DC143C" />
+        <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.routeGateBackground} resizeMode="cover" />
+        <View style={styles.routeGateBackdrop} pointerEvents="none" />
+        <ActivityIndicator size="large" color={CHILLYWOOD_VISUAL.accentBlue} />
         <Text style={styles.loadingText}>Opening Live Room…</Text>
       </View>
     );
@@ -4912,6 +4921,8 @@ export default function WatchPartyLiveStageScreen({
   if (roomMissing) {
     return (
       <View style={styles.center}>
+        <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.routeGateBackground} resizeMode="cover" />
+        <View style={styles.routeGateBackdrop} pointerEvents="none" />
         <View style={styles.routeGateCard}>
           <Text style={styles.routeGateTitle}>Live room unavailable</Text>
           <Text style={styles.routeGateBody}>
@@ -4936,6 +4947,7 @@ export default function WatchPartyLiveStageScreen({
               accessibilityLabel="Home"
               hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
             >
+              <ChillywoodPrimaryActionFill radius={16} />
               <Text style={styles.routeGatePrimaryText}>Home</Text>
             </TouchableOpacity>
           </View>
@@ -4950,6 +4962,8 @@ export default function WatchPartyLiveStageScreen({
   if (roomEntryError || blockedRoomAccess || exactLivePassRequired) {
     return (
       <View style={styles.center}>
+        <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.routeGateBackground} resizeMode="cover" />
+        <View style={styles.routeGateBackdrop} pointerEvents="none" />
         <View style={styles.routeGateCard}>
           <Text style={styles.routeGateTitle}>
             {exactLivePassRequired
@@ -4983,6 +4997,7 @@ export default function WatchPartyLiveStageScreen({
               accessibilityState={{ disabled: liveMoneyPurchaseBusy !== null, busy: liveMoneyPurchaseBusy !== null }}
               testID="live-stage-buy-access-pass"
             >
+              <ChillywoodPrimaryActionFill opacity={liveMoneyPurchaseBusy !== null ? 0.56 : 1} radius={16} />
               <Text style={styles.routeGatePrimaryText}>
                 {liveMoneyPurchaseBusy === "live_watch_party_access_pass"
                   ? "Opening checkout…"
@@ -5028,6 +5043,7 @@ export default function WatchPartyLiveStageScreen({
               accessibilityLabel={exactLivePassRequired ? "Refresh Live Stage Pass" : blockedRoomAccessPrimaryLabel}
               hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
             >
+              <ChillywoodPrimaryActionFill radius={16} />
               <Text style={styles.routeGatePrimaryText}>{exactLivePassRequired ? "Refresh Live Stage Pass" : blockedRoomAccessPrimaryLabel}</Text>
             </TouchableOpacity>
           </View>
@@ -5116,7 +5132,17 @@ export default function WatchPartyLiveStageScreen({
           </Animated.View>
         </View>
         {isHost ? (
-          <View style={styles.liveMoneyHostControls} testID="live-stage-host-money-controls">
+          <View
+            style={[
+              styles.liveMoneyHostControls,
+              !isLiveRoomSurface && {
+                left: 12,
+                right: 12,
+                top: safeAreaInsets.top + 174,
+              },
+            ]}
+            testID="live-stage-host-money-controls"
+          >
             <TouchableOpacity
               style={styles.liveMoneyHostHeader}
               onPress={() => setLiveMoneyHostSetupExpanded((value) => !value)}
@@ -6064,19 +6090,6 @@ export default function WatchPartyLiveStageScreen({
         ) : null}
       </View>
 
-      {!isLiveRoomSurface ? (
-        <View
-          pointerEvents="box-none"
-          style={[styles.stageNotificationPortal, { top: safeAreaInsets.top + 50 }]}
-        >
-          <NotificationBellButton
-            surface="live-stage"
-            roomSafe
-            style={styles.stagePortalNotificationBell}
-          />
-        </View>
-      ) : null}
-
       <ParticipantDetailSheet
         visible={!!selectedParticipant}
         participant={selectedParticipant}
@@ -6269,20 +6282,22 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.3)",
   },
   screen: { flex: 1, backgroundColor: "transparent", paddingTop: 56, paddingBottom: 18, paddingHorizontal: 10 },
-  center: { flex: 1, backgroundColor: "#050505", alignItems: "center", justifyContent: "center" },
-  loadingText: { color: "#888", marginTop: 14, fontSize: 14 },
+  center: { flex: 1, backgroundColor: "#06070B", alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  routeGateBackground: { ...StyleSheet.absoluteFillObject },
+  routeGateBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(3,5,10,0.78)" },
+  loadingText: { color: "#D8E1F3", marginTop: 14, fontSize: 14, fontWeight: "700" },
   routeGateCard: {
     width: "88%",
     maxWidth: 460,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: "rgba(168,192,245,0.2)",
-    backgroundColor: "rgba(8,12,20,0.96)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     paddingHorizontal: 24,
     paddingVertical: 24,
     gap: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.32,
+    shadowColor: CHILLYWOOD_VISUAL.primaryGlow,
+    shadowOpacity: 0.38,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 14 },
     elevation: 18,
@@ -6306,10 +6321,13 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 46,
     borderRadius: 16,
-    backgroundColor: "#DC143C",
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.accentBlue,
     paddingVertical: 13,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
   routeGatePrimaryText: {
     color: "#FFFFFF",
@@ -6669,12 +6687,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 10,
     borderRadius: 16,
-    backgroundColor: "#DC143C",
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.accentBlue,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#DC143C",
-    shadowOpacity: 0.22,
+    overflow: "hidden",
+    shadowColor: CHILLYWOOD_VISUAL.primaryGlow,
+    shadowOpacity: 0.34,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
     elevation: 16,
@@ -6887,7 +6908,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(8,12,20,0.92)",
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
   },
   stageHeroFallbackInitial: {
     color: "#F4F7FF",
