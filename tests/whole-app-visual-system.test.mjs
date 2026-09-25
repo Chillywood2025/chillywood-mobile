@@ -44,9 +44,13 @@ test("the Sign In-derived system owns one exact canonical primary gradient", () 
   assert.match(sources.login, /<Stop offset="0\.54" stopColor="#321CFF" \/>/);
   assert.match(sources.login, /<Stop offset="1" stopColor="#00A8FF" \/>/);
   assert.match(sources.visual, /preserveAspectRatio="none"/);
-  assert.match(sources.visual, /style=\{StyleSheet\.absoluteFillObject\}/);
+  assert.match(sources.visual, /styles\.primaryActionFill/);
+  assert.match(sources.visual, /\.\.\.StyleSheet\.absoluteFillObject/);
+  assert.match(sources.visual, /backgroundColor:\s*CHILLYWOOD_PRIMARY_GRADIENT\.stops\[2\]\.color/);
+  assert.match(sources.visual, /overflow:\s*"hidden"/);
   assert.match(sources.visual, /viewBox="0 0 100 100"/);
-  assert.doesNotMatch(sources.visual, /<Svg[^>]+height="100%"[^>]+width="100%"/s);
+  assert.match(sources.visual, /<Svg[^>]+height="100%"[^>]+width="100%"/s);
+  assert.doesNotMatch(sources.visual, /<Svg[^>]+style=\{StyleSheet\.absoluteFillObject\}/s);
   assert.doesNotMatch(sources.appSurface, /#7300D8|#321CFF|#00A8FF/);
 });
 
