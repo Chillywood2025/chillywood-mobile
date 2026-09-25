@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
+import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
 import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
 import {
@@ -387,13 +387,13 @@ const styles = StyleSheet.create({
   kicker: { color: "#FF9AA2", fontSize: 11, fontWeight: "900", letterSpacing: 1 },
   title: { color: "#FFFFFF", fontSize: 36, fontWeight: "900" },
   heroSubtitle: { color: "#C7CEDD", fontSize: 14, lineHeight: 20, fontWeight: "600" },
-  statusPill: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,255,255,0.14)", backgroundColor: "rgba(255,255,255,0.07)", paddingHorizontal: 10, paddingVertical: 6 },
+  statusPill: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 999, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, paddingHorizontal: 10, paddingVertical: 6 },
   statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#59E6A9" },
   statusPillText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
   quickActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  primaryButton: { minHeight: 48, borderRadius: 12, backgroundColor: "#6E21FF", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 14, flexBasis: "100%", overflow: "hidden", borderWidth: 1, borderColor: "rgba(91,214,255,0.72)" },
+  primaryButton: { minHeight: 48, borderRadius: 12, backgroundColor: CHILLYWOOD_VISUAL.accentPurple, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 14, flexBasis: "100%", overflow: "hidden", borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.primaryBorder },
   primaryButtonDisabled: { opacity: 0.55 },
-  secondaryButton: { minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.13)", backgroundColor: "rgba(255,255,255,0.08)", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 14, alignSelf: "flex-start" },
+  secondaryButton: { minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 14, alignSelf: "flex-start" },
   quickActionSecondary: { flexGrow: 1, flexBasis: 132, alignSelf: "stretch" },
   buttonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
   section: { gap: 9 },
@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
   sectionTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "900" },
   sectionMeta: { color: "#9DA7BB", fontSize: 10, fontWeight: "900", letterSpacing: 0.5, textTransform: "uppercase" },
   rail: { gap: 10, paddingRight: 4 },
-  discoveryCard: { minHeight: 184, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.11)", backgroundColor: "rgba(10,12,18,0.9)", padding: 16, gap: 10 },
+  discoveryCard: { minHeight: 184, borderRadius: 16, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, padding: 16, gap: 10 },
   liveBadge: { alignSelf: "flex-start", borderRadius: 999, backgroundColor: "#E50914", paddingHorizontal: 8, paddingVertical: 4 },
   liveBadgeText: { color: "#FFFFFF", fontSize: 9, fontWeight: "900", letterSpacing: 0.5 },
   upcomingBadge: { alignSelf: "flex-start", borderRadius: 999, backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 8, paddingVertical: 4 },
@@ -409,15 +409,15 @@ const styles = StyleSheet.create({
   cardTitle: { color: "#FFFFFF", fontSize: 15, lineHeight: 19, fontWeight: "900" },
   cardBody: { color: "#C7CEDD", fontSize: 12, lineHeight: 17, fontWeight: "600" },
   cardMeta: { color: "#FFB2B8", fontSize: 11, fontWeight: "800", marginTop: "auto" },
-  loadingRow: { minHeight: 96, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", backgroundColor: "rgba(255,255,255,0.04)", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  loadingRow: { minHeight: 96, borderRadius: 14, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   muted: { color: "#AEB7C8", fontSize: 12, fontWeight: "700" },
-  emptyState: { borderRadius: 14, borderWidth: 1, borderStyle: "dashed", borderColor: "rgba(255,255,255,0.14)", backgroundColor: "rgba(255,255,255,0.035)", padding: 13, gap: 4 },
+  emptyState: { borderRadius: 14, borderWidth: 1, borderStyle: "dashed", borderColor: CHILLYWOOD_VISUAL.controlBorder, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, padding: 13, gap: 4 },
   emptyStateTitle: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
   emptyStateBody: { color: "#AEB7C8", fontSize: 12, lineHeight: 17, fontWeight: "600" },
   errorCard: { borderRadius: 14, borderWidth: 1, borderColor: "rgba(229,9,20,0.32)", backgroundColor: "rgba(229,9,20,0.12)", padding: 13, gap: 8 },
   errorTitle: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
   errorBody: { color: "#FFDDE0", fontSize: 12, lineHeight: 17, fontWeight: "600" },
-  disclosureCard: { borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)", backgroundColor: "rgba(255,255,255,0.052)", overflow: "hidden" },
+  disclosureCard: { borderRadius: 16, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, overflow: "hidden" },
   disclosureHeader: { minHeight: 58, paddingHorizontal: 13, paddingVertical: 11, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   disclosureCopy: { flex: 1, gap: 2 },
   disclosureTitle: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },

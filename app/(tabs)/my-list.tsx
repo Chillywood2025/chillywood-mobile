@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
+import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
 
 import { titles as localTitles } from "../../_data/titles";
 import { readFollowedChannelUserIds } from "../../_lib/channelAudience";
@@ -478,7 +478,7 @@ const styles = StyleSheet.create({
   header: { color: "#fff", fontSize: 34, fontWeight: "900" },
   headerBody: { color: "#bfc6d4", fontSize: 13, lineHeight: 19, fontWeight: "600" },
   libraryScopeRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 4 },
-  scopePill: { minWidth: 84, flexGrow: 1, borderRadius: 8, borderWidth: 1, borderColor: "rgba(229,9,20,0.32)", backgroundColor: "rgba(229,9,20,0.12)", paddingHorizontal: 12, paddingVertical: 10 },
+  scopePill: { minWidth: 84, flexGrow: 1, borderRadius: 12, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, paddingHorizontal: 12, paddingVertical: 10 },
   scopePillValue: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
   scopePillLabel: { color: "#CBD3E1", fontSize: 11, lineHeight: 16, fontWeight: "800", marginTop: 3 },
   section: { gap: 9 },
@@ -486,29 +486,29 @@ const styles = StyleSheet.create({
   sectionTitle: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
   sectionMeta: { color: "#9DA7BB", fontSize: 10, fontWeight: "900", letterSpacing: 0.5, textTransform: "uppercase" },
   rail: { gap: 10, paddingRight: 4 },
-  titleCard: { width: 132, borderRadius: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", backgroundColor: "rgba(10,12,18,0.88)", padding: 9, gap: 7 },
+  titleCard: { width: 132, borderRadius: 12, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, padding: 9, gap: 7 },
   posterWrap: { width: "100%", height: 150, borderRadius: 8, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: "#171A22" },
   poster: { width: "100%", height: "100%" },
   posterInitial: { color: "#FFFFFF", fontSize: 30, fontWeight: "900" },
   itemTitle: { color: "#fff", fontSize: 13, lineHeight: 17, fontWeight: "900" },
   meta: { color: "#bfbfbf", fontSize: 11, lineHeight: 15, fontWeight: "700" },
-  replayCard: { width: 156, borderRadius: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", backgroundColor: "rgba(10,12,18,0.88)", padding: 9, gap: 7 },
+  replayCard: { width: 156, borderRadius: 12, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, padding: 9, gap: 7 },
   replayThumb: { height: 92, borderRadius: 8, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: "#171A22" },
   replayIcon: { color: "#FFFFFF", fontSize: 28, fontWeight: "900" },
   replayStatus: { color: "#FF9AA2", fontSize: 10, fontWeight: "900", textTransform: "uppercase" },
   unlockedCard: { width: 156, borderRadius: 8, borderWidth: 1, borderColor: "rgba(124,224,163,0.28)", backgroundColor: "rgba(12,30,22,0.9)", padding: 9, gap: 7 },
   unlockedThumb: { height: 92, borderRadius: 8, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: "#171A22" },
   unlockedStatus: { color: "#9AF2BC", fontSize: 10, fontWeight: "900", textTransform: "uppercase" },
-  platformCard: { width: 150, minHeight: 166, borderRadius: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", backgroundColor: "rgba(10,12,18,0.88)", padding: 10, gap: 8 },
-  platformAvatar: { width: 58, height: 58, borderRadius: 29, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(229,9,20,0.2)" },
+  platformCard: { width: 150, minHeight: 166, borderRadius: 12, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, padding: 10, gap: 8 },
+  platformAvatar: { width: 58, height: 58, borderRadius: 29, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(110,33,255,0.28)" },
   platformAvatarImage: { width: "100%", height: "100%" },
   platformAvatarInitial: { color: "#fff", fontSize: 22, fontWeight: "900" },
   platformName: { color: "#fff", fontSize: 13, lineHeight: 17, fontWeight: "900" },
   platformMeta: { color: "#bfc6d4", fontSize: 11, lineHeight: 16, fontWeight: "600" },
-  emptyInline: { borderRadius: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", backgroundColor: "rgba(255,255,255,0.05)", paddingHorizontal: 12, paddingVertical: 10, gap: 4 },
+  emptyInline: { borderRadius: 12, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, paddingHorizontal: 12, paddingVertical: 10, gap: 4 },
   emptyInlineTitle: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
   emptyInlineText: { color: "#BFC7D7", fontSize: 11, lineHeight: 16, fontWeight: "600" },
-  emptyCard: { borderRadius: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", backgroundColor: "rgba(255,255,255,0.05)", padding: 16, gap: 10 },
+  emptyCard: { borderRadius: 16, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.glassBorder, backgroundColor: CHILLYWOOD_VISUAL.glassBackground, padding: 16, gap: 10 },
   emptyTitle: { color: "#fff", fontSize: 18, lineHeight: 23, fontWeight: "900" },
   emptyText: { color: "#bfc6d4", fontSize: 13, lineHeight: 19, fontWeight: "600" },
   emptyButton: { alignSelf: "flex-start", minHeight: 42, borderRadius: 12, backgroundColor: "#6E21FF", alignItems: "center", justifyContent: "center", paddingHorizontal: 14, marginTop: 2, overflow: "hidden", borderWidth: 1, borderColor: "rgba(91,214,255,0.72)" },
