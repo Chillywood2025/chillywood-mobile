@@ -267,19 +267,6 @@ const emptyUserSummary = (): AdminUserReadModelSummary => ({
   accountDeletionRequests: null,
 });
 
-const emptyUserCounts = (): AdminUserReadModelCounts => ({
-  reportsMade: null,
-  reportsTargetingUser: null,
-  openReportsTargetingUser: null,
-  blocksCreated: null,
-  blocksReceived: null,
-  profilePosts: null,
-  publicProfilePosts: null,
-  creatorVideos: null,
-  publicCreatorVideos: null,
-  accountDeletionRequests: null,
-});
-
 const emptyUsageSummary = (): AdminUsageDetailSummary => ({
   filteredRows: null,
   internalRows: null,

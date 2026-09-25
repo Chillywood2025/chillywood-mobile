@@ -5,6 +5,8 @@ type LiveKitReactNativeModule = typeof import("@livekit/react-native");
 
 const loadLiveKitReactNativeModule = (): LiveKitReactNativeModule | null => {
   if (Platform.OS === "web") return null;
+  // Preserve the native-only load boundary; a static import evaluates on web.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   return require("@livekit/react-native") as LiveKitReactNativeModule;
 };
 

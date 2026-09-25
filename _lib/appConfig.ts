@@ -25,7 +25,7 @@ import {
   type JoinPolicy,
   type ReactionsPolicy,
 } from "./roomRules";
-import type { Tables, TablesInsert } from "../supabase/database.types";
+import type { TablesInsert } from "../supabase/database.types";
 import { supabase } from "./supabase";
 
 export const APP_CONFIG_TABLE = "app_configurations";
@@ -104,7 +104,6 @@ export type AppConfig = {
   roomDefaults: RoomDefaultConfig;
 };
 
-type AppConfigRow = Tables<"app_configurations">;
 type AppConfigInsert = TablesInsert<"app_configurations">;
 
 export type ThemePresetPalette = {

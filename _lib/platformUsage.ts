@@ -116,7 +116,7 @@ type ProviderUsageReconciliationReadRow = Pick<Tables<"provider_usage_reconcilia
 const ACTIVE_PREMIUM_ENTITLEMENT_STATUSES = ["active", "trialing", "grace_period"] as const;
 const MAX_METADATA_ROWS = 1000;
 const MS_PER_MINUTE = 60 * 1000;
-const PROVIDER_USAGE_IMPORT_STATUS_DEFAULTS: Array<{ provider: ProviderUsageKey; label: string }> = [
+const PROVIDER_USAGE_IMPORT_STATUS_DEFAULTS: { provider: ProviderUsageKey; label: string }[] = [
   { provider: "cloudflare_r2", label: "Cloudflare R2" },
   { provider: "hetzner_object_storage", label: "Hetzner Object Storage" },
   { provider: "hetzner_server", label: "Hetzner Servers" },
@@ -193,13 +193,6 @@ const adminUsageFoundationClient = supabase as unknown as {
   from: (table: string) => any;
 };
 
-const usageRpcClient = supabase as unknown as {
-  rpc: (
-    fn: string,
-    args?: Record<string, unknown>,
-  ) => Promise<{ data: unknown; error: unknown }>;
-};
-
 const readTableCount = async (table: string) => (
   readCount(
     adminUsageFoundationClient
@@ -222,7 +215,7 @@ const sumRows = <T>(rows: T[] | null | undefined, pick: (row: T) => unknown) => 
 );
 
 const calculateMembershipMinutes = (
-  rows: Array<WatchPartyMembershipUsageRow | CommunicationMembershipUsageRow> | null | undefined,
+  rows: (WatchPartyMembershipUsageRow | CommunicationMembershipUsageRow)[] | null | undefined,
   windowStartIso: string,
   now = new Date(),
 ) => {

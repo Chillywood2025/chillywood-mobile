@@ -37,7 +37,7 @@ export function shouldShowOutgoingRingingPanel(
   input: ChillyChatCallParticipantRoleInput & { inviteStatus?: string | null },
 ): boolean;
 
-export function setActiveCommunicationTracksEnabled(tracks: Array<{ readyState?: string; enabled: boolean }>, enabled: boolean): number;
+export function setActiveCommunicationTracksEnabled(tracks: { readyState?: string; enabled: boolean }[], enabled: boolean): number;
 export function resolveIncomingCallRoomJoinAction(input: {
   currentUserIsRoomHost: boolean;
   inviteBelongsToCurrentCallee: boolean;

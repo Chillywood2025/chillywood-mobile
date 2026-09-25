@@ -273,6 +273,7 @@ export default function SubscribeScreen() {
   const premiumTarget = snapshot.targets.premium_subscription;
   const hasPremium = !!premiumTarget.hasEntitlement;
   const currentStorePremiumActive = hasPremium && hasCurrentStorePremiumSubscription(snapshot);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained subscription state contract; the current render path intentionally does not read it.
   const premiumActiveOutsideCurrentStore = hasPremium && !currentStorePremiumActive;
   const purchaseReadiness = buildPurchaseReadiness(snapshot, activePurchaseMode, sandboxMode, isSignedIn);
   const purchaseReady = purchaseReadiness.ready;

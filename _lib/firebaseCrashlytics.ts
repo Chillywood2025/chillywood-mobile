@@ -7,7 +7,7 @@ const canUseFirebaseCrashlytics = () => Platform.OS !== "web";
 
 let cachedCrashlyticsModule: typeof import("@react-native-firebase/crashlytics").default | null = null;
 
-const SENSITIVE_TEXT_PATTERNS: Array<[RegExp, string]> = [
+const SENSITIVE_TEXT_PATTERNS: [RegExp, string][] = [
   [/(Bearer\s+)[A-Za-z0-9._~+/-]+=*/gi, "$1[redacted]"],
   [/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[redacted-jwt]"],
   [/([?&](?:access_token|refresh_token|token|apikey|key|signature|expires|expires_in)=)[^&\s]+/gi, "$1[redacted]"],
@@ -77,6 +77,8 @@ const getCrashlyticsModule = () => {
   if (!ensureFirebaseDefaultApp()) return null;
 
   cachedCrashlyticsModule ??=
+    // Firebase native modules must load only after the platform/app guard succeeds.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     require("@react-native-firebase/crashlytics").default as typeof import("@react-native-firebase/crashlytics").default;
 
   return cachedCrashlyticsModule;

@@ -554,11 +554,7 @@ export function useCommunicationRoomSession({
 
   useEffect(() => {
     cameraPermissionSnapshotRef.current = cameraPermissionSnapshot;
-  }, [
-    cameraPermissionSnapshot.canAskAgain,
-    cameraPermissionSnapshot.shouldOpenSettings,
-    cameraPermissionSnapshot.state,
-  ]);
+  }, [cameraPermissionSnapshot]);
 
   useEffect(() => {
     microphonePermissionRef.current = microphonePermission;
@@ -2421,10 +2417,15 @@ export function useCommunicationRoomSession({
       const capturedMemberships = membershipsRef.current;
       const capturedPresenceState = presenceStateRef.current;
       const capturedMedia = {
+        // Capture at teardown, not effect setup: async initialization may add
+        // resources later and this generation must clean everything it owns.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         answerWaiters: Object.entries(legacyMicAnswerWaitersRef.current),
         auxiliaryStreams: [...auxiliaryStreamsRef.current],
         localStream: localStreamRef.current,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         offerRetryTimers: Object.entries(offerRetryTimersRef.current),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         peers: Object.entries(peerConnectionsRef.current),
       };
       const wasCurrentGeneration = legacySessionGenerationRef.current === sessionGeneration;

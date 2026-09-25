@@ -1,7 +1,6 @@
 import type { CommunicationRoomMembership, CommunicationRoomState } from "./communication";
 import { evaluateCommunicationRoomAccess } from "./communication";
 import {
-  type ContentAccessDecision,
   type CreatorPermissionSet,
   type MonetizationAccessRule,
   type MonetizationGateResolution,
@@ -26,7 +25,6 @@ import {
   type RoomPolicyLike,
   evaluateRoomAccess,
   normalizeCapturePolicy,
-  normalizeContentAccessRule,
   normalizeJoinPolicy,
 } from "./roomRules";
 import type { UserProfile } from "./userData";

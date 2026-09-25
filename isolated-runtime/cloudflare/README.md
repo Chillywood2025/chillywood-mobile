@@ -162,6 +162,12 @@ npm ci
 npm run verify
 ```
 
+Wrangler 4.141.0 declares Node.js 22 or newer. Any future Wrangler CLI job must
+therefore use a scoped Node 22+ runtime. The repository's ordinary Node 20
+validation may inspect this lockfile and run the provider-independent generator
+and tests, but it is not evidence that the Wrangler CLI itself is qualified on
+Node 20.
+
 `npm run generate` deterministically emits:
 
 - eleven Wrangler templates;

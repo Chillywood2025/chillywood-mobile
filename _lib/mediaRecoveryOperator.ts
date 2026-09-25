@@ -570,12 +570,12 @@ export function resolveContinuousWorkerBackupGate(input: {
 }
 
 export function buildMediaBackupRetentionPlan(input: {
-  backups: Array<{
+  backups: {
     backup_id: string;
     created_at: string;
     r2_object_prefix: string;
     restore_drill_passed?: boolean | null;
-  }>;
+  }[];
   policy?: MediaBackupRetentionPolicy | null;
 }): MediaBackupRetentionPlan {
   const policy = input.policy ?? MEDIA_BACKUP_DEFAULT_RETENTION_POLICY;

@@ -44,7 +44,7 @@ export type MediaScanJobPlan = {
   scannerType: "ffprobe_media_readability" | "clamav_malware" | "plan_only";
   totalCandidates: number;
   plannedJobCount: number;
-  jobs: Array<{
+  jobs: {
     sourceType: string;
     sourceId: string;
     title: string;
@@ -53,7 +53,7 @@ export type MediaScanJobPlan = {
     requiredScannerProof: string[];
     trustedWritePath: "service_role_media_scan_rpc_required";
     productionWritePlanned: false;
-  }>;
+  }[];
   skipped: MediaScanCandidateClassification[];
   mutationAttempted: false;
   productionRowsWritten: false;

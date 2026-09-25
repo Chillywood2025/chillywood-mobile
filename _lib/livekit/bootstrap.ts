@@ -24,6 +24,8 @@ export function bootstrapLiveKitFoundation() {
         NativeModules.WebRTCModule as Record<string, unknown> | undefined,
       );
     }
+    // LiveKit performs native global registration and must not initialize on web.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const liveKitModule = require("@livekit/react-native") as LiveKitReactNativeModule;
     liveKitModule.registerGlobals({
       autoConfigureAudioSession: Platform.OS !== "ios",

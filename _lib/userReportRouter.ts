@@ -98,7 +98,7 @@ const LONG_SECRET_LIKE_PATTERN = /[A-Za-z0-9._~+/=-]{32,}/g;
 const PROMPT_INJECTION_PATTERN = /(ignore (all )?(previous|prior) instructions|developer message|system prompt|run this command|execute this|bypass approval|approve this|owner command|service role|grant premium|move money|ban user|delete content)/i;
 const SPAM_PATTERN = /(free money|crypto giveaway|airdrop|follow my link|http:\/\/|https:\/\/.*https:\/\/|.{0,12}\b(?:buy now|promo code)\b.{0,12})/i;
 
-const CATEGORY_HINTS: Array<[UserReportClass, RegExp]> = [
+const CATEGORY_HINTS: [UserReportClass, RegExp][] = [
   ["security_access", /\b(security|hacked|unauthorized|admin access|permission|access control|account takeover|2fa|mfa|session hijack|leak)\b/i],
   ["premium_or_billing", /\b(premium|subscription|billing|charged|charge|google play|play billing|revenuecat|storekit|iap|in-app purchase|app store purchase|apple subscription|restore purchases|seat pass|tip tier|store|purchase|restore|refund|revocation)\b/i],
   ["payout_or_money", /\b(payout|cashout|transfer|stripe|bank|tax|refund|money|invoice|checkout)\b/i],

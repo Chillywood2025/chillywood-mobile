@@ -2858,6 +2858,7 @@ export default function ProfileScreen() {
     channelAccessProfile?.subscriberSurfaceEnabled,
     isOfficialProfile,
   ]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Profile source contract; the current render path intentionally does not call it.
   const audiencePostureBody = useMemo(() => {
     if (isOfficialProfile) return "";
 
@@ -3086,6 +3087,7 @@ export default function ProfileScreen() {
     title: getAccessPostureTitle(channelAccessResolution, isOfficialProfile),
     body: getProfileAccessBody(channelAccessResolution, isOfficialProfile),
   };
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Profile source contract; the current render path intentionally does not call it.
   const accessDetails: readonly ProfileAccessDetail[] = isOfficialProfile ? [
     {
       label: "Browse",
@@ -3834,6 +3836,7 @@ export default function ProfileScreen() {
       )}
     </View>
   );
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Profile source contract; the current render path intentionally does not call it.
   const renderOwnerHandoffCard = () => {
     if (!isSelfProfile) return null;
 

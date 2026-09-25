@@ -35,6 +35,8 @@ const roomRow = {
 
 function loadCommunication() {
   const runtime = {
+    accountBoundError: null,
+    accountBoundRpcCalls: [],
     queryResponses: new Map(),
     rpcResponse: { data: null, error: null },
   };
@@ -63,6 +65,13 @@ function loadCommunication() {
     },
   };
   const moduleMocks = {
+    "./accountBoundSupabaseMutation": {
+      runExactSessionAccountBoundSupabaseMutationRpc: async (functionName, args, expectedUserId) => {
+        runtime.accountBoundRpcCalls.push({ args, expectedUserId, functionName });
+        if (runtime.accountBoundError) throw runtime.accountBoundError;
+        return runtime.rpcResponse;
+      },
+    },
     "./appConfig": { readAppConfig: async () => null, resolveRoomDefaultConfig: () => ({ communication: {} }) },
     "./monetization": { readCreatorPermissions: async () => null, sanitizeCreatorRoomAccessRule: (value) => value },
     "./performancePolicy": { ROOM_ACTIVITY_ACTIVE_WINDOW_MS: 60_000, ROOM_HEARTBEAT_MS: 15_000 },
@@ -130,6 +139,22 @@ test("communication membership join preserves RPC failure evidence", async () =>
     roomId: "ROOM-ERROR",
     userId: "11111111-1111-4111-8111-111111111111",
   }), /join denied operationally/u);
+  assert.deepEqual(
+    runtime.accountBoundRpcCalls.map(({ expectedUserId, functionName }) => ({ expectedUserId, functionName })),
+    [{
+      expectedUserId: "11111111-1111-4111-8111-111111111111",
+      functionName: "join_communication_room_session",
+    }],
+  );
+});
+
+test("communication membership join preserves account replacement rejection", async () => {
+  const { api, runtime } = loadCommunication();
+  runtime.accountBoundError = new Error("The signed-in account changed before this action finished.");
+  await assert.rejects(api.joinCommunicationRoomSession({
+    roomId: "ROOM-ERROR",
+    userId: "11111111-1111-4111-8111-111111111111",
+  }), /signed-in account changed/u);
 });
 
 test("communication membership update preserves database failure evidence", async () => {

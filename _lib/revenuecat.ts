@@ -74,11 +74,6 @@ const normalizeIdentityText = (value: unknown) => {
   if (!normalized) return "";
   return INVALID_IDENTITY_LITERALS.has(normalized.toLowerCase()) ? "" : normalized;
 };
-const exactIdentityText = (value: unknown) => {
-  const normalized = normalizeIdentityText(value);
-  return typeof value === "string" && value === normalized ? normalized : "";
-};
-
 const normalizeRevenueCatIdentityState = (
   appUserId: unknown,
   sourceUserId?: string | null,

@@ -451,7 +451,7 @@ export default function ChillyChatInboxScreen() {
     void openDirectThreadForPerson(person, mode);
   }, [openDirectThreadForPerson]);
 
-  const renderPeopleSuggestionRows = () => {
+  const renderPeopleSuggestionRows = useCallback(() => {
     const search = normalizePeopleSearchQuery(debouncedSearchQuery);
     if (!search.searchable || search.candidates.every((candidate) => candidate.length < CHAT_SUGGESTION_MIN_LENGTH)) {
       return null;
@@ -554,7 +554,16 @@ export default function ChillyChatInboxScreen() {
         )}
       </View>
     );
-  };
+  }, [
+    debouncedSearchQuery,
+    filteredThreads.length,
+    openSearchSuggestion,
+    openSearchSuggestionCall,
+    searchPeopleError,
+    searchPeopleLoading,
+    searchPeopleResults,
+    startingChatUserId,
+  ]);
 
   const listHeader = useMemo(() => (
     <View style={styles.header}>
@@ -716,16 +725,10 @@ export default function ChillyChatInboxScreen() {
     confirmHideThread,
     openProfile,
     openThread,
-    openSearchSuggestion,
-    openSearchSuggestionCall,
+    renderPeopleSuggestionRows,
     quickActionThread,
     searchQuery,
-    debouncedSearchQuery,
-    searchPeopleError,
-    searchPeopleLoading,
-    searchPeopleResults,
     shouldCollapseThreads,
-    startingChatUserId,
     threads.length,
     unreadThreadCount,
     visibleThreads.length,

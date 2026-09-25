@@ -22,6 +22,8 @@ const getRemoteConfigModule = () => {
   if (!ensureFirebaseDefaultApp()) return null;
 
   cachedRemoteConfigModule ??=
+    // Firebase native modules must load only after the platform/app guard succeeds.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     require("@react-native-firebase/remote-config").default as typeof import("@react-native-firebase/remote-config").default;
 
   return cachedRemoteConfigModule;

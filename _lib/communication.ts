@@ -353,6 +353,8 @@ export const getCommunicationRTCModule = (): RTCModule | null => {
   if (cachedRTCModule !== undefined) return cachedRTCModule;
 
   try {
+    // Keep the optional native RTC package out of web/bootstrap evaluation.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     cachedRTCModule = require("@livekit/react-native-webrtc") as RTCModule;
   } catch {
     cachedRTCModule = null;

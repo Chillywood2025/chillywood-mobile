@@ -157,6 +157,7 @@ import { useChannelFollowAction } from "../../hooks/use-channel-follow-action";
 import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
 import {
   LiveKitStageMediaSurface,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Player LiveKit source contract; the current render path intentionally does not read it.
   type LiveKitStageParticipantRosterEntry,
 } from "../../components/watch-party-live/livekit-stage-media-surface";
 import {
@@ -182,6 +183,7 @@ import {
   classifyWatchPartyLiveMediaSource,
   closeWatchPartySeatRequestReview,
   createWatchPartySeatRequestVersion,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Player seat-state source contract; the current render path intentionally does not call it.
   emptyWatchPartyLiveSeatRequestState,
   isWatchPartySeatRequestExpired,
   mergeWatchPartyLiveRoster,
@@ -1149,6 +1151,7 @@ export default function PlayerScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [durationMillis, setDurationMillis] = useState(0);
   const [positionMillis, setPositionMillis] = useState(0);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- The setter remains active; the current render path intentionally does not read this state slot.
   const [resumeCueMillis, setResumeCueMillis] = useState(0);
   const [playbackRate, setPlaybackRate] = useState<number>(1);
   const [videoVolume, setVideoVolume] = useState(WATCH_PARTY_LIVE_VIDEO_VOLUME_DEFAULT);
@@ -1188,6 +1191,7 @@ export default function PlayerScreen() {
   const [sharedAndroidVideoRemountIndex, setSharedAndroidVideoRemountIndex] = useState(0);
   const [sharedAndroidVideoFallbackMode, setSharedAndroidVideoFallbackMode] = useState<"expo-video" | "expo-av">("expo-video");
   const [sharedAndroidVideoRenderFailure, setSharedAndroidVideoRenderFailure] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- The setter remains active; the current render path intentionally does not read this state slot.
   const [sharedAndroidVideoWatchdogActive, setSharedAndroidVideoWatchdogActive] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isStandaloneFullscreen, setIsStandaloneFullscreen] = useState(false);
@@ -3825,6 +3829,52 @@ export default function PlayerScreen() {
     }
   }, [blockViewerSharedPlaybackControl, isPlaying, isVideoReady, nextTitleId, showControlsAndResetAutoHideTimer, syncHostSharedPlayback, titleId]);
 
+  const isStandalonePlayer = !inWatchParty && !isLiveModeFlag;
+  const standalonePlaybackBlocked = isStandalonePlayer && !!standaloneAccess && !standaloneAccess.isAllowed;
+  const standalonePlaybackUnknown = isStandalonePlayer && !standaloneAccessLoading && !standaloneAccess && !!accessError;
+  const retryStandaloneAccessCheck = useCallback(() => {
+    setStandaloneAccessRetryToken((current) => current + 1);
+  }, []);
+
+  const replayFromStart = useCallback(async () => {
+    if (standalonePlaybackBlocked) {
+      retryStandaloneAccessCheck();
+      return;
+    }
+    if (standalonePlaybackUnknown) {
+      retryStandaloneAccessCheck();
+      return;
+    }
+
+    try {
+      if (upNextIntervalRef.current) {
+        clearInterval(upNextIntervalRef.current);
+        upNextIntervalRef.current = null;
+      }
+      if (nextAutoplayTimeoutRef.current) {
+        clearTimeout(nextAutoplayTimeoutRef.current);
+        nextAutoplayTimeoutRef.current = null;
+      }
+      shouldAutoplayNextRef.current = false;
+      setShowUpNext(false);
+      setUpNextCountdown(UP_NEXT_COUNTDOWN_SECONDS);
+      setUpNextCanceled(false);
+      await videoRef.current?.setPositionAsync(0);
+      await videoRef.current?.playAsync();
+      didJustFinishRef.current = false;
+      currentPositionRef.current = 0;
+      lastPersistedPositionRef.current = 0;
+      setPositionMillis(0);
+      setIsPlaying(true);
+      if (titleId) writeProgressForTitle(titleId, 0, durationRef.current || undefined).catch(() => {});
+    } catch {
+      // ignore transient player errors
+    }
+  }, [retryStandaloneAccessCheck, standalonePlaybackBlocked, standalonePlaybackUnknown, titleId]);
+
+  // Keep the existing per-render tap closure so the responder reads the current
+  // entitlement and playback gates without moving authority across lifecycles.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleSingleTap = () => {
     if (isStandalonePlayer && standaloneAccessLoading) return;
     if (standalonePlaybackBlocked) {
@@ -4519,42 +4569,6 @@ export default function PlayerScreen() {
     setIsVideoReady(false);
     setIsPlaying(false);
   }, []);
-
-  const replayFromStart = async () => {
-    if (standalonePlaybackBlocked) {
-      retryStandaloneAccessCheck();
-      return;
-    }
-    if (standalonePlaybackUnknown) {
-      retryStandaloneAccessCheck();
-      return;
-    }
-
-    try {
-      if (upNextIntervalRef.current) {
-        clearInterval(upNextIntervalRef.current);
-        upNextIntervalRef.current = null;
-      }
-      if (nextAutoplayTimeoutRef.current) {
-        clearTimeout(nextAutoplayTimeoutRef.current);
-        nextAutoplayTimeoutRef.current = null;
-      }
-      shouldAutoplayNextRef.current = false;
-      setShowUpNext(false);
-      setUpNextCountdown(UP_NEXT_COUNTDOWN_SECONDS);
-      setUpNextCanceled(false);
-      await videoRef.current?.setPositionAsync(0);
-      await videoRef.current?.playAsync();
-      didJustFinishRef.current = false;
-      currentPositionRef.current = 0;
-      lastPersistedPositionRef.current = 0;
-      setPositionMillis(0);
-      setIsPlaying(true);
-      if (titleId) writeProgressForTitle(titleId, 0, durationRef.current || undefined).catch(() => {});
-    } catch {
-      // ignore transient player errors
-    }
-  };
 
   const onToggleMyList = useCallback(async () => {
     if (!titleId || myListBusy) return;
@@ -5892,18 +5906,12 @@ export default function PlayerScreen() {
     return enabled;
   }, [requestWatchPartyLocalMediaPermissions, showLivePresenceEvent, watchPartyLocalMediaIntent]);
 
-  const watchPartyLiveKitJoinContractExpiryState = useMemo(
-    () => watchPartyLiveKitJoinContract
-      ? getLiveKitParticipantTokenExpiryState(watchPartyLiveKitJoinContract.participantToken)
-      : null,
-    [watchPartyLiveKitJoinContract?.participantToken],
-  );
-  const watchPartyLiveKitRenderableContractExpiryState = useMemo(
-    () => watchPartyLiveKitRenderableContract
-      ? getLiveKitParticipantTokenExpiryState(watchPartyLiveKitRenderableContract.participantToken)
-      : null,
-    [watchPartyLiveKitRenderableContract?.participantToken],
-  );
+  const watchPartyLiveKitJoinContractExpiryState = watchPartyLiveKitJoinContract?.participantToken
+    ? getLiveKitParticipantTokenExpiryState(watchPartyLiveKitJoinContract.participantToken)
+    : null;
+  const watchPartyLiveKitRenderableContractExpiryState = watchPartyLiveKitRenderableContract?.participantToken
+    ? getLiveKitParticipantTokenExpiryState(watchPartyLiveKitRenderableContract.participantToken)
+    : null;
   const watchPartyLiveKitJoinContractExpired = !!watchPartyLiveKitJoinContractExpiryState?.isExpired;
   const watchPartyLiveKitRenderableContractExpired = !!watchPartyLiveKitRenderableContractExpiryState?.isExpired;
   const activeWatchPartyLiveKitJoinContract = canUseWatchPartyLiveRenderableContract(
@@ -6065,7 +6073,6 @@ export default function PlayerScreen() {
   }, [
     currentWatchPartyHostAuthority.isHost,
     currentWatchPartyParticipant,
-    currentWatchPartyParticipant?.id,
     currentWatchPartyParticipantCanSpeak,
     currentWatchPartyViewerRequestPending,
     isSharedPartyPlayback,
@@ -6222,6 +6229,7 @@ export default function PlayerScreen() {
     && playerMediaIsInteractive
     && watchPartyLiveKitCanPublish
     && !currentWatchPartyParticipantMuted;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained local-camera fallback contract; the current render path uses the shared media surface.
   const watchPartyLiveKitLocalParticipantFallback = (
     Platform.OS !== "web"
     && publishWatchPartyLiveKitVideo
@@ -6527,6 +6535,7 @@ export default function PlayerScreen() {
     trackedUserId,
     watchPartyEntryAllowed,
     watchPartyLiveKitFallbackRosterAllowed,
+    watchPartyLiveKitIdentity,
     watchPartyLiveKitHardFallbackReason,
     watchPartyLiveKitParticipantRoster,
     watchPartyLiveKitJoinContract,
@@ -6792,6 +6801,10 @@ export default function PlayerScreen() {
     return () => {
       active = false;
     };
+  // The request owns the listed semantic contract fields. Depending on the
+  // whole response object can cancel it while the matching request-key guard
+  // deliberately suppresses a duplicate replacement.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     currentWatchPartyMembershipAuthoritySignature,
     currentWatchPartyParticipantMuted,
@@ -7446,7 +7459,6 @@ export default function PlayerScreen() {
       ? "remote"
       : "missing";
   const playerVideoVolume = isSharedPartyPlayback ? effectiveVideoVolume : 1;
-  const isStandalonePlayer = !inWatchParty && !isLiveMode;
   const isPlayerFullscreen = isStandaloneFullscreen && (isStandalonePlayer || isSharedPartyPlayback);
   const isSharedPlayerFullscreen = isSharedPartyPlayback && isPlayerFullscreen;
   const shouldCoverPlayerVideo = (isStandalonePlayer || isSharedPartyPlayback)
@@ -7645,8 +7657,6 @@ export default function PlayerScreen() {
     };
   }, [cleanId, displayItem?.content_access_rule, displayItem?.id, isStandalonePlayer, playbackSourceKind, standaloneAccessRetryToken]);
 
-  const standalonePlaybackBlocked = isStandalonePlayer && !!standaloneAccess && !standaloneAccess.isAllowed;
-  const standalonePlaybackUnknown = isStandalonePlayer && !standaloneAccessLoading && !standaloneAccess && !!accessError;
   const standalonePlaybackGateActive = isStandalonePlayer && (
     standaloneAccessLoading || standalonePlaybackBlocked || standalonePlaybackUnknown
   );
@@ -7681,9 +7691,6 @@ export default function PlayerScreen() {
         canPurchase: standaloneAccess.monetization.canPurchase,
       })
     : "Review access";
-  const retryStandaloneAccessCheck = useCallback(() => {
-    setStandaloneAccessRetryToken((current) => current + 1);
-  }, []);
   const refreshStandaloneAccessAfterSheetAction = useCallback(async (action: "purchase" | "restore") => {
     const safeTitleId = String(displayItem?.id ?? cleanId).trim();
     if (!safeTitleId) {

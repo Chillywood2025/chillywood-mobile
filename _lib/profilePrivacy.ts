@@ -1,4 +1,4 @@
-import { getChillyCircleStatus, type FriendRelationshipState } from "./friendGraph";
+import type { FriendRelationshipState } from "./friendGraph";
 import {
   resolveProfileVisibilityAccess,
   type AccessVisibility,
@@ -123,91 +123,6 @@ export async function resolveProfilePrivacyAccess(input: {
     };
   }
 
-  if (viewerUserId && viewerUserId === ownerUserId) {
-    return {
-      ownerUserId,
-      viewerUserId,
-      visibility,
-      accessVisibility: "public",
-      canViewFullProfile: true,
-      isLocked: false,
-      reason: "owner",
-      relationshipState: null,
-      accessResolution: null,
-    };
-  }
-
-  const relationshipState = viewerUserId
-    ? input.relationshipState ?? await getChillyCircleStatus(viewerUserId, ownerUserId).catch(() => null)
-    : null;
-
-  if (relationshipState?.availability === "blocked") {
-    return {
-      ownerUserId,
-      viewerUserId,
-      visibility,
-      accessVisibility: "private",
-      canViewFullProfile: false,
-      isLocked: true,
-      reason: "blocked",
-      relationshipState,
-      accessResolution: null,
-    };
-  }
-
-  if (visibility === "everyone") {
-    return {
-      ownerUserId,
-      viewerUserId,
-      visibility,
-      accessVisibility: "public",
-      canViewFullProfile: true,
-      isLocked: false,
-      reason: "everyone",
-      relationshipState,
-      accessResolution: null,
-    };
-  }
-
-  if (visibility === "private") {
-    return {
-      ownerUserId,
-      viewerUserId,
-      visibility,
-      accessVisibility: "private",
-      canViewFullProfile: false,
-      isLocked: true,
-      reason: "private",
-      relationshipState,
-      accessResolution: null,
-    };
-  }
-
-  if (relationshipState?.isFriend) {
-    return {
-      ownerUserId,
-      viewerUserId,
-      visibility,
-      accessVisibility: "private",
-      canViewFullProfile: true,
-      isLocked: false,
-      reason: "chilly_circle",
-      relationshipState,
-      accessResolution: null,
-    };
-  }
-
-  return {
-    ownerUserId,
-    viewerUserId,
-    visibility,
-    accessVisibility: "private",
-    canViewFullProfile: false,
-    isLocked: true,
-    reason: "chilly_circle_required",
-    relationshipState,
-    accessResolution: null,
-  };
 }
 
 export const getProfilePrivacyLockedTitle = (access: ProfilePrivacyAccess | null) => {

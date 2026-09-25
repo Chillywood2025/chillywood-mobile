@@ -87,7 +87,6 @@ export type ClipStudioTemplatePresetConfig = {
 
 type ClipStudioEditRow = Tables<"creator_clip_edits">;
 type ClipStudioEditInsert = TablesInsert<"creator_clip_edits">;
-type ClipStudioEditUpdate = TablesUpdate<"creator_clip_edits">;
 type CreatorVideoOwnerRow = Pick<
   Tables<"videos">,
   "id" | "owner_id" | "thumb_storage_path" | "storage_provider" | "storage_bucket"
