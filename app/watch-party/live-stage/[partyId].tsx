@@ -2524,26 +2524,26 @@ export default function WatchPartyLiveStageScreen({
             ? "Your Live Stage Pass is viewer/listener access only. A separate Live Stage Seat Pass is required before you can ask the host for camera or microphone approval."
             : "Watching is allowed here when the room is free or your account has the required access. Camera requests are unavailable for your current role.";
   const liveRoomRoleLabel = isHost ? "Host" : "Viewer";
-  const liveRoomModeLabel = isLiveFirstMode ? "Live-First" : branding.watchPartyLabel;
+  const liveRoomModeLabel = isLiveFirstMode ? "Live hangout" : branding.watchPartyLabel;
   const liveRoomJoinLabel = room?.joinPolicy === "locked"
-    ? "Host approval"
-    : "Signed-in access";
+    ? "You approve"
+    : "Signed-in friends";
   const liveRoomReactionsLabel = room?.reactionsPolicy === "muted"
-    ? "Host-muted"
-    : "Enabled";
+    ? "Off for now"
+    : "On";
   const liveRoomCaptureLabel = room?.capturePolicy === "host_managed"
-    ? "Host-managed capture"
-    : "Best-effort capture";
+    ? "Host controlled"
+    : "When available";
   const liveRoomShareCode = String(room?.roomCode ?? partyId ?? "").trim().toUpperCase();
   const liveRoomShellTitle = isHost
-    ? "Set the live room before the stage opens."
-    : "This live room stays pre-stage.";
+    ? "Your people are here. Set the vibe, then go live."
+    : "You're in the lobby. Make it yours before you join.";
   const liveRoomShellBody = isHost
-    ? "Invite people, set the room, and then continue into Live Stage."
-    : "Check the room setup, choose who to follow first, and then join Live Stage.";
+    ? "Pick the opening view, check who can join, and share the room. You still choose when to enter Live Stage and turn on your camera or mic."
+    : "Choose who you want up front, check how the room works, then head into Live Stage when you're ready.";
   const liveRoomPermissionCopy = isHost
-    ? "Access, reactions, capture, and focus stay here before stage."
-    : "The host manages access, reactions, capture, and the handoff here.";
+    ? "You're still in control—who gets in, reactions, capture, and the opening view can all be checked here."
+    : "The host handles access, reactions, and capture. You can choose the view that feels best on your device.";
   const liveRoomFocusTarget = isHost
     ? (lowerCommunityParticipants[0] ?? hostParticipant)
     : hostParticipant;
@@ -2554,19 +2554,19 @@ export default function WatchPartyLiveStageScreen({
     ? `${lowerCommunityParticipants.length} ready before stage`
     : "Audience syncing";
   const liveRoomControlTitle = isHost
-    ? "Set the opening focus."
-    : "Choose who you want to follow first.";
+    ? "Who should be front and center?"
+    : "Who do you want to see first?";
   const liveRoomControlBody = isHost
-    ? "Choose the first view here and leave presentation controls for Live Stage."
-    : "Choose the host or audience view before you join.";
+    ? "Choose the first face people see. You can still switch things up inside Live Stage."
+    : "Start with the host or someone in the room. You can change your view later.";
   const liveRoomPolicyTitle = isHost
-    ? "Keep room defaults here."
-    : "Current room defaults";
+    ? "Set the room vibe."
+    : "Here's how this room works.";
   const liveRoomPolicyBody = isHost
-    ? "Set access, reactions, and capture here before you continue."
-    : `Current room defaults are ${liveRoomJoinLabel.toLowerCase()}, ${liveRoomReactionsLabel.toLowerCase()}, and ${liveRoomCaptureLabel.toLowerCase()}.`;
-  const liveRoomShareTitle = "Share the room code.";
-  const liveRoomShareBody = "Invite in app first, then use system share only if you need it.";
+    ? "Decide who gets in, whether reactions are on, and how capture is handled before you continue."
+    : `Right now: ${liveRoomJoinLabel.toLowerCase()}, reactions ${liveRoomReactionsLabel.toLowerCase()}, and capture ${liveRoomCaptureLabel.toLowerCase()}.`;
+  const liveRoomShareTitle = "Bring your people in.";
+  const liveRoomShareBody = "Invite them in Chi'llywood, or share the code another way if that's easier.";
   const liveRoomEntryLabel = isHost ? "Continue to Live Stage" : "Join Live Stage";
   const currentStageMembership = membershipMapRef.current[trackedUserId];
   const currentTrackedParticipantState = participantStateById[trackedUserId];
@@ -4069,7 +4069,7 @@ export default function WatchPartyLiveStageScreen({
 
   const renderLiveRoomOverviewCard = () => (
     <View style={styles.liveRoomShellCard}>
-      <Text style={styles.liveRoomShellKicker}>LIVE ROOM</Text>
+      <Text style={styles.liveRoomShellKicker}>BEFORE YOU GO LIVE</Text>
       <Text style={styles.liveRoomShellTitle}>{liveRoomShellTitle}</Text>
       <Text style={styles.liveRoomShellBody}>{liveRoomShellBody}</Text>
 
@@ -4102,7 +4102,7 @@ export default function WatchPartyLiveStageScreen({
 
   const renderLiveRoomViewingDefaultsCard = () => (
     <View style={styles.liveRoomControlCard}>
-      <Text style={styles.liveRoomControlKicker}>VIEWING DEFAULTS</Text>
+      <Text style={styles.liveRoomControlKicker}>FIRST IMPRESSION</Text>
       <Text style={styles.liveRoomControlTitle}>{liveRoomControlTitle}</Text>
       <Text style={styles.liveRoomControlBody}>{liveRoomControlBody}</Text>
       <View style={styles.liveRoomMetaRow}>
@@ -4183,7 +4183,7 @@ export default function WatchPartyLiveStageScreen({
 
   const renderLiveRoomInviteCard = () => (
     <View style={[styles.liveRoomControlCard, styles.liveRoomControlCardSubtle]}>
-      <Text style={styles.liveRoomControlKicker}>INVITE + SHARE</Text>
+      <Text style={styles.liveRoomControlKicker}>BRING YOUR PEOPLE</Text>
       <Text style={styles.liveRoomControlTitle}>{liveRoomShareTitle}</Text>
       <Text style={styles.liveRoomControlBody}>{liveRoomShareBody}</Text>
       <Pressable
@@ -4208,7 +4208,7 @@ export default function WatchPartyLiveStageScreen({
 
   const renderLiveRoomPolicyCard = () => (
     <View style={[styles.liveRoomControlCard, styles.liveRoomControlCardSubtle]}>
-      <Text style={styles.liveRoomControlKicker}>ROOM DEFAULTS</Text>
+      <Text style={styles.liveRoomControlKicker}>ROOM VIBE + PRIVACY</Text>
       <Text style={styles.liveRoomControlTitle}>{liveRoomPolicyTitle}</Text>
       <Text style={styles.liveRoomControlBody}>{liveRoomPolicyBody}</Text>
       <View style={styles.liveRoomActionRow}>
@@ -4255,7 +4255,7 @@ export default function WatchPartyLiveStageScreen({
 
   const renderLiveRoomSupportSection = () => (
     <View style={styles.liveRoomSupportSection}>
-      <Text style={styles.liveRoomSupportSectionLabel}>BEFORE STAGE</Text>
+      <Text style={styles.liveRoomSupportSectionLabel}>ONE LAST LOOK</Text>
       {renderLiveRoomInviteCard()}
       {renderLiveRoomPolicyCard()}
     </View>

@@ -17,6 +17,7 @@ const sources = {
   library: read("app/(tabs)/my-list.tsx"),
   live: read("app/(tabs)/live.tsx"),
   login: read("app/(auth)/login.tsx"),
+  notifications: read("components/notifications/notification-bell-button.tsx"),
   player: read("app/player/[id].tsx"),
   profileTab: read("app/(tabs)/profile.tsx"),
   reset: read("app/reset-password.tsx"),
@@ -114,6 +115,9 @@ test("physically observed half-migrated surfaces use the Sign In-derived surface
   assert.doesNotMatch(sources.watchParty, /primaryButton:[\s\S]{0,260}backgroundColor: "#DC143C"/);
   assert.match(sources.subscribe, /premium-purchase-button[\s\S]+<ChillywoodPrimaryActionFill opacity=\{busy \? 0\.56 : 1\} radius=\{14\} \/>/);
   assert.doesNotMatch(sources.subscribe, /primaryButton:[\s\S]{0,260}backgroundColor: "#DC143C"/);
+  assert.match(sources.subscribe, /heroCard:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground,/);
+  assert.match(sources.subscribe, /statusLine:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.controlBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.controlBackground,/);
+  assert.match(sources.subscribe, /accordion:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground,/);
   assert.match(sources.studio, /active \? <ChillywoodPrimaryActionFill radius=\{999\} \/> : null/);
   assert.match(sources.studio, /titleOverlayPosition === option\.id \? <ChillywoodPrimaryActionFill radius=\{999\} \/> : null/);
   assert.match(sources.studio, /templatePreset === option\.id \? <ChillywoodPrimaryActionFill radius=\{14\} \/> : null/);
@@ -143,6 +147,40 @@ test("physically observed half-migrated surfaces use the Sign In-derived surface
   assert.match(sources.player, /PLAYER_CHICAGO_NIGHT_BACKGROUND = require\("\.\.\/\.\.\/assets\/images\/chicago-skyline\.jpg"\)/);
   assert.match(sources.player, /source=\{PLAYER_CHICAGO_NIGHT_BACKGROUND\}[\s\S]+frameworkBackgroundSource/);
   assert.match(sources.player, /topSectionFramework:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground,/);
+  assert.match(sources.player, /watchPartySocialShell:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground,/);
+  assert.match(sources.player, /watchPartyDockActionBtn:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.controlBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.controlBackground,/);
+  assert.match(sources.player, /shared-player-comment-send[\s\S]+<ChillywoodPrimaryActionFill radius=\{999\} \/>/);
+  assert.match(sources.notifications, /traySheet:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground,/);
+  assert.match(sources.notifications, /notification-tray-open-settings[\s\S]+<ChillywoodPrimaryActionFill radius=\{21\} \/>/);
+});
+
+test("Watch-Party setup guidance is useful human copy without changing room authority", () => {
+  assert.doesNotMatch(sources.watchParty, />HOST PREFLIGHT</);
+  for (const marker of [
+    "QUICK HEADS-UP",
+    "Your room, without the tech talk.",
+    "Friends get in with",
+    "Who gets the mic",
+    "Checked at the door",
+    "Create Party Room",
+    "Create Live Room",
+  ]) assert.ok(sources.watchParty.includes(marker), `missing friendly waiting-room guidance: ${marker}`);
+
+  for (const marker of [
+    "BEFORE YOU GO LIVE",
+    "Your people are here. Set the vibe, then go live.",
+    "FIRST IMPRESSION",
+    "BRING YOUR PEOPLE",
+    "ROOM VIBE + PRIVACY",
+    "ONE LAST LOOK",
+  ]) assert.ok(sources.liveStage.includes(marker), `missing friendly Live Room guidance: ${marker}`);
+
+  assert.match(sources.watchParty, /getJoinPolicyCopy|activeRoomContext\?\.joinPolicy/);
+  assert.match(sources.watchParty, /Party Room Pass/);
+  assert.match(sources.liveStage, /onToggleLiveRoomLock/);
+  assert.match(sources.liveStage, /onToggleLiveRoomReactions/);
+  assert.match(sources.liveStage, /onToggleLiveRoomCapture/);
+  assert.match(sources.liveStage, /testID="live-room-enter-stage-button"/);
 });
 
 test("the preserved user-visible route inventory remains present", () => {
