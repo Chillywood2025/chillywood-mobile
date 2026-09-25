@@ -41,22 +41,29 @@ export function ChillywoodPrimaryActionFill({
   const gradientId = `chillywood-primary-${useId().replace(/[^a-zA-Z0-9_-]/gu, "")}`;
 
   return (
-    <Svg
-      opacity={opacity}
+    <View
       pointerEvents="none"
-      preserveAspectRatio="none"
-      style={StyleSheet.absoluteFillObject}
-      viewBox="0 0 100 100"
+      style={[
+        styles.primaryActionFill,
+        { borderRadius: radius, opacity },
+      ]}
     >
-      <Defs>
-        <LinearGradient id={gradientId} {...CHILLYWOOD_PRIMARY_GRADIENT.direction}>
-          {CHILLYWOOD_PRIMARY_GRADIENT.stops.map((stop) => (
-            <Stop key={stop.offset} offset={stop.offset} stopColor={stop.color} />
-          ))}
-        </LinearGradient>
-      </Defs>
-      <Rect fill={`url(#${gradientId})`} height="100" rx={radius} ry={radius} width="100" />
-    </Svg>
+      <Svg
+        height="100%"
+        preserveAspectRatio="none"
+        viewBox="0 0 100 100"
+        width="100%"
+      >
+        <Defs>
+          <LinearGradient id={gradientId} {...CHILLYWOOD_PRIMARY_GRADIENT.direction}>
+            {CHILLYWOOD_PRIMARY_GRADIENT.stops.map((stop) => (
+              <Stop key={stop.offset} offset={stop.offset} stopColor={stop.color} />
+            ))}
+          </LinearGradient>
+        </Defs>
+        <Rect fill={`url(#${gradientId})`} height="100" width="100" />
+      </Svg>
+    </View>
   );
 }
 
@@ -83,6 +90,11 @@ export function ChillywoodInputFrame({
 }
 
 const styles = StyleSheet.create({
+  primaryActionFill: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: CHILLYWOOD_PRIMARY_GRADIENT.stops[2].color,
+    overflow: "hidden",
+  },
   inputFrame: {
     minHeight: 58,
     alignItems: "center",
