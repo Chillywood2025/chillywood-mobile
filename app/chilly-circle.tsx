@@ -33,7 +33,7 @@ import { searchPublicPeople, type PublicPeopleSearchResult } from "../_lib/publi
 import { useSession } from "../_lib/session";
 import { getUserFacingErrorMessage } from "../_lib/userFacingErrors";
 import { ProfileMediaImage as Image } from "../components/ui/ProfileMediaImage";
-import { ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
+import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
 
 type CircleAction = "accept" | "decline" | "cancel" | "remove";
 
@@ -746,8 +746,8 @@ const styles = StyleSheet.create({
     gap: 10,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.11)",
-    backgroundColor: "rgba(255,255,255,0.055)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 12,
     overflow: "hidden",
     paddingVertical: 8,
@@ -762,8 +762,8 @@ const styles = StyleSheet.create({
   searchClearButton: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
@@ -788,8 +788,8 @@ const styles = StyleSheet.create({
   sectionCard: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(18,18,18,0.96)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     padding: 12,
     gap: 10,
   },
@@ -817,8 +817,8 @@ const styles = StyleSheet.create({
   sectionToggleButton: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 9,
     paddingVertical: 2,
   },
@@ -831,8 +831,8 @@ const styles = StyleSheet.create({
     minHeight: 36,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     padding: 10,
     justifyContent: "center",
   },
@@ -848,8 +848,8 @@ const styles = StyleSheet.create({
   officialCard: {
     borderRadius: 11,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(18,18,18,0.9)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 8,
     paddingVertical: 6,
     gap: 6,
@@ -920,8 +920,8 @@ const styles = StyleSheet.create({
   personCard: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     padding: 9,
     gap: 8,
   },
@@ -954,13 +954,13 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(220,20,60,0.28)",
+    backgroundColor: "rgba(110,33,255,0.32)",
     overflow: "hidden",
   },
   officialAvatar: {
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(220,20,60,0.44)",
+    backgroundColor: "rgba(110,33,255,0.46)",
   },
   avatarImage: {
     width: "100%",
@@ -993,8 +993,8 @@ const styles = StyleSheet.create({
   resultPill: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.35)",
-    backgroundColor: "rgba(220,20,60,0.16)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: "rgba(110,33,255,0.2)",
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
@@ -1007,8 +1007,8 @@ const styles = StyleSheet.create({
   suggestionRow: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     padding: 10,
     flexDirection: "row",
     alignItems: "center",
@@ -1023,8 +1023,8 @@ const styles = StyleSheet.create({
     minHeight: 36,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -1032,8 +1032,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   actionButtonAccent: {
-    borderColor: "rgba(91,214,255,0.62)",
-    backgroundColor: "rgba(110,33,255,0.2)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.accentPurple,
   },
   actionButtonDisabled: {
     opacity: 0.58,

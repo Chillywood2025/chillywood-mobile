@@ -10,6 +10,7 @@ const sources = {
   authCallback: read("app/auth-callback.tsx"),
   betaAccess: read("components/system/beta-access-screen.tsx"),
   circle: read("app/chilly-circle.tsx"),
+  explore: read("app/(tabs)/explore.tsx"),
   forgot: read("app/(auth)/forgot-password.tsx"),
   home: read("app/(tabs)/index.tsx"),
   legal: read("components/legal/legal-page-shell.tsx"),
@@ -37,8 +38,15 @@ test("the Sign In-derived system owns one exact canonical primary gradient", () 
     'primaryGlow: "#241DFF"',
   ]) assert.ok(sources.visual.includes(marker), `missing canonical visual marker: ${marker}`);
 
-  assert.match(sources.login, /<AppActionButton[\s\S]+variant="primary"/);
-  assert.doesNotMatch(sources.login, /LinearGradient|stopColor=/);
+  assert.match(sources.login, /function NeonSignInButton/);
+  assert.match(sources.login, /<LinearGradient id="loginButtonGradient" x1="0" x2="1" y1="0" y2="0">/);
+  assert.match(sources.login, /<Stop offset="0" stopColor="#7300D8" \/>/);
+  assert.match(sources.login, /<Stop offset="0\.54" stopColor="#321CFF" \/>/);
+  assert.match(sources.login, /<Stop offset="1" stopColor="#00A8FF" \/>/);
+  assert.match(sources.visual, /preserveAspectRatio="none"/);
+  assert.match(sources.visual, /style=\{StyleSheet\.absoluteFillObject\}/);
+  assert.match(sources.visual, /viewBox="0 0 100 100"/);
+  assert.doesNotMatch(sources.visual, /<Svg[^>]+height="100%"[^>]+width="100%"/s);
   assert.doesNotMatch(sources.appSurface, /#7300D8|#321CFF|#00A8FF/);
 });
 
@@ -84,6 +92,17 @@ test("panels, legal pages, loading states, and error states use reusable branded
   assert.match(sources.appSurface, /ChillywoodPrimaryActionFill/);
   assert.match(sources.visual, /export function ChillywoodPanel/);
   assert.match(sources.visual, /export function ChillywoodInputFrame/);
+});
+
+test("physically observed half-migrated surfaces use the Sign In-derived surface roles", () => {
+  assert.match(sources.settings, /card:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground,/);
+  assert.match(sources.settings, /settingsRow:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.controlBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.controlBackground,/);
+  assert.match(sources.circle, /sectionCard:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground,/);
+  assert.match(sources.explore, /scopeChipActive:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.primaryBorder,[\s\S]+rgba\(110,33,255,0\.28\)/);
+  assert.match(sources.library, /scopePill:[^\n]+CHILLYWOOD_VISUAL\.controlBorder[^\n]+CHILLYWOOD_VISUAL\.controlBackground/);
+  assert.match(sources.live, /primaryButton:[^\n]+CHILLYWOOD_VISUAL\.accentPurple[^\n]+CHILLYWOOD_VISUAL\.primaryBorder/);
+  assert.match(sources.watchParty, /primaryButton:[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.accentPurple,[\s\S]+borderColor: CHILLYWOOD_VISUAL\.primaryBorder,/);
+  assert.doesNotMatch(sources.watchParty, /primaryButton:[\s\S]{0,260}backgroundColor: "#DC143C"/);
 });
 
 test("the preserved user-visible route inventory remains present", () => {

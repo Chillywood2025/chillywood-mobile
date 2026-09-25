@@ -37,8 +37,9 @@ test("Sign In keeps the real controls accessible, keyboard-safe, and automation-
     'returnKeyType="done"',
     'void signIn()',
   ]) assert.ok(login.includes(marker), `missing preserved Sign In contract: ${marker}`);
+  assert.match(login, /accessibilityState=\{\{ busy: loading, disabled: loading \}\}/);
+  assert.match(login, /<NeonSignInButton loading=\{loading\}/);
   assert.match(appSurface, /accessibilityState=\{\{ disabled: disabled \|\| loading, busy: loading \}\}/);
-  assert.match(login, /loading=\{loading\}/);
 });
 
 test("Sign In reserves a responsive unobstructed Chi'llywood branding zone", () => {
@@ -65,8 +66,11 @@ test("Sign In uses the approved Chicago-night glass and neon presentation", () =
   for (const marker of [
     'testID="auth-login-branded-surface"',
     'testID="auth-login-glass-panel"',
-    '<AppActionButton',
-    'variant="primary"',
+    '<NeonSignInButton',
+    'id="loginButtonGradient"',
+    '<Stop offset="0" stopColor="#7300D8" />',
+    '<Stop offset="0.54" stopColor="#321CFF" />',
+    '<Stop offset="1" stopColor="#00A8FF" />',
     '<Text style={styles.kicker}>WELCOME BACK</Text>',
     '<Text style={styles.titleLight}>Sign </Text>',
     '<Text style={styles.titleAccent}>In</Text>',

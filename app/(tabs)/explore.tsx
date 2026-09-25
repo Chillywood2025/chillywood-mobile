@@ -19,7 +19,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
+import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
 import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 import { resolveMainTabBrandRevealHeight } from "../../_lib/customerExperiencePresentation";
 
@@ -906,6 +906,7 @@ export default function ExploreScreen() {
               style={[styles.peopleAction, styles.peopleActionPrimary]}
               onPress={() => openChannel(platformId)}
             >
+              <ChillywoodPrimaryActionFill radius={999} />
               <Text style={[styles.peopleActionText, styles.peopleActionPrimaryText]}>View Platform</Text>
             </TouchableOpacity>
           ) : null}
@@ -1337,29 +1338,29 @@ const styles = StyleSheet.create({
   scopeChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(229,9,20,0.32)",
-    backgroundColor: "rgba(229,9,20,0.12)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
   scopeChipActive: {
-    borderColor: "rgba(255,255,255,0.58)",
-    backgroundColor: "#FFFFFF",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: "rgba(110,33,255,0.28)",
   },
   scopeChipText: {
-    color: "#FFE8EA",
+    color: CHILLYWOOD_VISUAL.textMuted,
     fontSize: 11,
     fontWeight: "900",
   },
   scopeChipTextActive: {
-    color: "#111318",
+    color: CHILLYWOOD_VISUAL.textPrimary,
   },
   searchShell: {
     gap: 8,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(168,192,245,0.14)",
-    backgroundColor: "rgba(9,12,20,0.78)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     paddingHorizontal: 13,
     paddingVertical: 12,
   },
@@ -1374,8 +1375,8 @@ const styles = StyleSheet.create({
     minHeight: 46,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.055)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -1399,8 +1400,8 @@ const styles = StyleSheet.create({
   typeaheadPanel: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(9,12,20,0.84)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     padding: 12,
     gap: 10,
   },
@@ -1421,8 +1422,8 @@ const styles = StyleSheet.create({
     minHeight: 58,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.045)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
@@ -1434,9 +1435,9 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(229,9,20,0.2)",
+    backgroundColor: "rgba(110,33,255,0.24)",
     borderWidth: 1,
-    borderColor: "rgba(229,9,20,0.4)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
   },
   typeaheadIconText: {
     color: "#FFFFFF",
@@ -1485,9 +1486,9 @@ const styles = StyleSheet.create({
   statPill: {
     minWidth: 92,
     borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.075)",
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -1537,8 +1538,8 @@ const styles = StyleSheet.create({
     aspectRatio: 9 / 16,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(10,12,18,0.88)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     overflow: "hidden",
   },
   creatorVideoTile: {
@@ -1637,8 +1638,8 @@ const styles = StyleSheet.create({
   peopleResultCard: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(10,12,18,0.88)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     padding: 12,
     gap: 10,
   },
@@ -1734,8 +1735,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.07)",
   },
   peopleActionPrimary: {
-    borderColor: "rgba(229,9,20,0.5)",
-    backgroundColor: "rgba(229,9,20,0.2)",
+    overflow: "hidden",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.accentPurple,
   },
   peopleActionText: {
     color: "#FFFFFF",
@@ -1743,7 +1745,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   peopleActionPrimaryText: {
-    color: "#FFE8EA",
+    color: CHILLYWOOD_VISUAL.textPrimary,
   },
   inlineEmpty: {
     borderRadius: 8,

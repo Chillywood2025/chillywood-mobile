@@ -41,7 +41,13 @@ export function ChillywoodPrimaryActionFill({
   const gradientId = `chillywood-primary-${useId().replace(/[^a-zA-Z0-9_-]/gu, "")}`;
 
   return (
-    <Svg height="100%" opacity={opacity} pointerEvents="none" style={StyleSheet.absoluteFill} width="100%">
+    <Svg
+      opacity={opacity}
+      pointerEvents="none"
+      preserveAspectRatio="none"
+      style={StyleSheet.absoluteFillObject}
+      viewBox="0 0 100 100"
+    >
       <Defs>
         <LinearGradient id={gradientId} {...CHILLYWOOD_PRIMARY_GRADIENT.direction}>
           {CHILLYWOOD_PRIMARY_GRADIENT.stops.map((stop) => (
@@ -49,7 +55,7 @@ export function ChillywoodPrimaryActionFill({
           ))}
         </LinearGradient>
       </Defs>
-      <Rect fill={`url(#${gradientId})`} height="100%" rx={radius} ry={radius} width="100%" />
+      <Rect fill={`url(#${gradientId})`} height="100" rx={radius} ry={radius} width="100" />
     </Svg>
   );
 }
