@@ -1135,7 +1135,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     let active = true;
 
-    if (isOfficialProfile || !userId) {
+    if (!userId) {
       setChannelAccessProfile(null);
       setChannelAccessPermissions(null);
       setChannelAccessReady(true);
@@ -1145,6 +1145,26 @@ export default function ProfileScreen() {
     }
 
     setChannelAccessReady(false);
+
+    if (isOfficialProfile) {
+      void readUserProfileByUserId(userId)
+        .then((resolvedProfile) => {
+          if (!active) return;
+          setChannelAccessProfile(resolvedProfile);
+          setChannelAccessPermissions(null);
+          setChannelAccessReady(true);
+        })
+        .catch(() => {
+          if (!active) return;
+          setChannelAccessProfile(null);
+          setChannelAccessPermissions(null);
+          setChannelAccessReady(true);
+        });
+
+      return () => {
+        active = false;
+      };
+    }
 
     Promise.all([
       isSelfProfile

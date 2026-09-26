@@ -160,3 +160,17 @@ test("Settings uses customer language for profile controls and support diagnosti
   assert.doesNotMatch(settings, /value=\{myProfile \? "Ready" : "Loading"\}/u);
   assert.doesNotMatch(settings, /installed OTA proof/u);
 });
+
+test("Official Rachi profile reads clean backed media without weakening protected identity", () => {
+  const profile = read("app/profile/[userId].tsx");
+  assert.match(
+    profile,
+    /if \(isOfficialProfile\) \{\s+void readUserProfileByUserId\(userId\)/u,
+  );
+  assert.doesNotMatch(
+    profile,
+    /if \(isOfficialProfile \|\| !userId\) \{\s+setChannelAccessProfile\(null\)/u,
+  );
+  assert.match(profile, /resolveChannelAccess\(\{ channelUserId: userId, isOfficial: true \}\)/u);
+  assert.match(profile, /!isProfileMediaActive\(profile\.profileAvatarMediaStatus\)/u);
+});
