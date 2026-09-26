@@ -10,9 +10,23 @@ const require = createRequire(import.meta.url);
 const readJson = (path) => JSON.parse(fs.readFileSync(path, "utf8"));
 
 test("patched advisory leaves are resolved independently in all three package trees", () => {
+  const rootManifest = readJson("package.json");
   const rootLock = readJson("package-lock.json");
   assert.equal(rootLock.packages["node_modules/@humanfs/node"].version, "0.16.8");
   assert.equal(rootLock.packages["node_modules/postcss"].version, "8.5.23");
+  assert.equal(
+    rootManifest.dependencies["decode-uri-component"],
+    "file:vendor/decode-uri-component-safe/chillywood-decode-uri-component-safe-0.5.0-chillywood.1.tgz",
+  );
+  assert.equal(rootManifest.overrides["decode-uri-component"], "$decode-uri-component");
+  const decoderEntries = Object.entries(rootLock.packages).filter(
+    ([packagePath]) => packagePath === "node_modules/decode-uri-component"
+      || packagePath.endsWith("/node_modules/decode-uri-component"),
+  );
+  assert.equal(decoderEntries.length, 1);
+  assert.equal(decoderEntries[0][0], "node_modules/decode-uri-component");
+  assert.equal(decoderEntries[0][1].name, "@chillywood/decode-uri-component-safe");
+  assert.equal(decoderEntries[0][1].version, "0.5.0-chillywood.1");
 
   const alertLock = readJson("ops/alert-automation/package-lock.json");
   assert.equal(alertLock.packages["node_modules/nanoid"].version, "3.3.18");
@@ -56,8 +70,12 @@ test("xcode uses the patched uuid line without changing native identifier genera
   assert.throws(() => uuid.v6({}, new Uint8Array(1), 0), RangeError);
 });
 
-test("the supported router query contract retains bounded auth-link behavior", () => {
+test("the fixed decoder preserves the supported router query and auth-link contract", () => {
+  const decoderMetadata = require("decode-uri-component/package.json");
   const queryString = require("query-string");
+  assert.equal(decoderMetadata.name, "@chillywood/decode-uri-component-safe");
+  assert.equal(decoderMetadata.version, "0.5.0-chillywood.1");
+  assert.equal(typeof require("decode-uri-component"), "function");
   const query = "name=Chi%27llywood&unicode=%E4%BD%A0%E5%A5%BD&tag=one&tag=two&malformed=%E0%A4%A&space=a+b";
   const parsed = queryString.parse(query);
 
@@ -81,15 +99,50 @@ test("the supported router query contract retains bounded auth-link behavior", (
     `assert.equal(parsed.unicode, "你好");`,
     `assert.deepEqual(parsed.tag, ["one", "two"]);`,
     `assert.equal(parsed.space, "a b");`,
+    `const generic = require("query-string").parse("code=" + "%ab".repeat(5000));`,
+    `assert.equal(generic.code, "%ab".repeat(5000));`,
+    `let bounded = ""; let index = 0;`,
+    `while (bounded.length < 8000) { const codePoint = 0x80 + (index % (0xD7FF - 0x80)); bounded += encodeURIComponent(String.fromCodePoint(codePoint)) + "x"; index += 1; }`,
+    `bounded = bounded.slice(0, 8179) + "%";`,
+    `const aggregateQuery = Array.from({ length: 100 }, (_, field) => "field" + field + "=" + bounded).join("&");`,
+    `const aggregate = require("query-string").parse(aggregateQuery);`,
+    `assert.equal(aggregate.field0, bounded); assert.equal(aggregate.field99, bounded);`,
+    `const { getStateFromPath } = require("@react-navigation/core");`,
+    `const state = getStateFromPath("/auth-callback?" + aggregateQuery, { screens: { AuthCallback: "auth-callback" } });`,
+    `assert.equal(state.routes[0].params.field0, bounded); assert.equal(state.routes[0].params.field99, bounded);`,
+    `const amplifier = "x".repeat(4000) + "%24%60".repeat(500) + "%";`,
+    `assert.equal(require("decode-uri-component")(amplifier), amplifier);`,
+    `const amplifierQuery = Array.from({ length: 100 }, (_, field) => "amplifier" + field + "=" + amplifier).join("&");`,
+    `const amplified = require("query-string").parse(amplifierQuery);`,
+    `assert.equal(amplified.amplifier0, amplifier); assert.equal(amplified.amplifier99, amplifier);`,
+    `const amplifierState = getStateFromPath("/auth-callback?" + amplifierQuery, { screens: { AuthCallback: "auth-callback" } });`,
+    `assert.equal(amplifierState.routes[0].params.amplifier0, amplifier); assert.equal(amplifierState.routes[0].params.amplifier99, amplifier);`,
     `const adversarial = parseQueryParams("/auth-callback?code=" + "%ab".repeat(5000), { params: {} }, undefined, "");`,
     `assert.equal(typeof adversarial.code, "string");`,
   ].join("\n");
-  const result = spawnSync(process.execPath, ["-e", probe], {
+  const result = spawnSync(process.execPath, ["--max-old-space-size=64", "-e", probe], {
     encoding: "utf8",
-    timeout: 1_000,
+    timeout: 2_000,
   });
 
   assert.equal(result.error?.code, undefined, result.error?.message);
   assert.equal(result.signal, null, result.stderr);
   assert.equal(result.status, 0, result.stderr);
+});
+
+test("the complete vendored decoder compatibility suite passes", { timeout: 60_000 }, () => {
+  const result = spawnSync(process.execPath, ["scripts/test-decode-uri-component-safe-compat.mjs"], {
+    encoding: "utf8",
+    timeout: 45_000,
+  });
+
+  assert.equal(result.error?.code, undefined, result.error?.message);
+  assert.equal(result.signal, null, result.stderr);
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.vulnerableInstalledCopies, 0);
+  assert.equal(report.genericQueryParserAggregateParameters, 100);
+  assert.ok(report.genericQueryParserAggregateCharacters > 800_000);
+  assert.equal(report.replacementAmplifierAggregateParameters, 100);
+  assert.ok(report.replacementAmplifierAggregateCharacters > 700_000);
 });

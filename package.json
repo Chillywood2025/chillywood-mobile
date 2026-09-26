@@ -540,6 +540,7 @@
     "guard:cognitive-credential-path-policy-parity": "node ./scripts/guard-cognitive-network-path-policy-parity.mjs",
     "guard:cognitive-dependency-advisories": "node ./scripts/guard-cognitive-dependency-advisories.mjs",
     "test:brace-expansion-compat": "node ./scripts/test-brace-expansion-compat.mjs",
+    "test:decode-uri-component-safe-compat": "node ./scripts/test-decode-uri-component-safe-compat.mjs",
     "test:revenuecat-premium-quarantine-concurrency": "node ./scripts/test-revenuecat-premium-quarantine-concurrency.mjs",
     "test:image-size-safe-compat": "node ./scripts/test-image-size-safe-compat.mjs",
     "test:cognitive-collective-governance": "node ./scripts/test-cognitive-collective-governance.mjs",
@@ -602,6 +603,7 @@
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
     "@supabase/supabase-js": "2.100.0",
+    "decode-uri-component": "file:vendor/decode-uri-component-safe/chillywood-decode-uri-component-safe-0.5.0-chillywood.1.tgz",
     "expo": "~54.0.37",
     "expo-application": "~7.0.8",
     "expo-asset": "~12.0.13",
@@ -683,6 +685,7 @@
       }
     },
     "@humanfs/node": "0.16.8",
+    "decode-uri-component": "$decode-uri-component",
     "fast-uri": "3.1.6",
     "glob@13.0.6": {
       "minimatch@10.2.4": {
