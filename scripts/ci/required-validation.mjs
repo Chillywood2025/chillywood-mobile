@@ -9,7 +9,10 @@ const root = new URL("../../", import.meta.url);
 const policy = JSON.parse(fs.readFileSync(new URL("config/ci/required-validation-v1.json", root), "utf8"));
 const SHA = /^[0-9a-f]{40}$/u;
 const REVIEW_STATES = new Set(["APPROVED", "CHANGES_REQUESTED", "DISMISSED"]);
+const REPOSITORY_OWNER_TYPES = new Set(["User", "Organization"]);
 const stable = (value) => JSON.stringify(value, Object.keys(value ?? {}).sort());
+const sameLogin = (left, right) => typeof left === "string" && typeof right === "string"
+  && left.toLowerCase() === right.toLowerCase();
 
 const globRegex = (glob) => new RegExp(`^${glob
   .replace(/[.+^${}()|[\]\\]/gu, "\\$&")
@@ -81,7 +84,25 @@ function effectiveReviewStates(reviews, headSha) {
   return [...latest.values()];
 }
 
-export function evaluateRun({ baseRef, baseSha, headSha, paths, jobs, reviews = [], author, config = policy }) {
+export function isVerifiedRepositoryOwnerAuthor({ repository, repositoryMetadata, pull }) {
+  const [repositoryOwner, repositoryName, ...extra] = String(repository ?? "").split("/");
+  const owner = repositoryMetadata?.owner;
+  const author = pull?.user;
+  return extra.length === 0
+    && Boolean(repositoryOwner)
+    && Boolean(repositoryName)
+    && sameLogin(repositoryMetadata?.full_name, repository)
+    && sameLogin(repositoryMetadata?.name, repositoryName)
+    && sameLogin(owner?.login, repositoryOwner)
+    && owner?.type === "User"
+    && author?.type === "User"
+    && Number.isInteger(owner?.id)
+    && owner.id > 0
+    && author?.id === owner.id
+    && sameLogin(author?.login, owner.login);
+}
+
+export function evaluateRun({ baseRef, baseSha, headSha, paths, jobs, reviews = [], author, verifiedRepositoryOwnerAuthor = false, config = policy }) {
   const findings = [];
   if (baseRef !== config.baseBranch) findings.push("VALIDATION_BASE_BRANCH_INVALID");
   if (!SHA.test(baseSha ?? "")) findings.push("VALIDATION_BASE_SHA_INVALID");
@@ -100,12 +121,25 @@ export function evaluateRun({ baseRef, baseSha, headSha, paths, jobs, reviews = 
     else if (job.headSha && job.headSha !== headSha) findings.push(`VALIDATION_JOB_HEAD_INVALID:${name}`);
   }
   if (plan.categories.policy) {
-    const current = effectiveReviewStates(reviews, headSha).filter((review) => review.user !== author
+    const current = effectiveReviewStates(reviews, headSha).filter((review) => !sameLogin(review.user, author)
       && config.trustedReviewAssociations.includes(review.authorAssociation)
       && review.commitId === headSha);
-    if (!current.some((review) => review.state === "APPROVED") || current.some((review) => review.state === "CHANGES_REQUESTED")) findings.push("VALIDATION_POLICY_REVIEW_REQUIRED");
+    const ownerAuthorAllowed = config.policyReview?.allowVerifiedUserRepositoryOwnerAuthor === true
+      && verifiedRepositoryOwnerAuthor;
+    if ((!ownerAuthorAllowed && !current.some((review) => review.state === "APPROVED"))
+      || current.some((review) => review.state === "CHANGES_REQUESTED")) findings.push("VALIDATION_POLICY_REVIEW_REQUIRED");
   }
-  return { ok: findings.length === 0, findings, plan, requiredJobs: required };
+  return {
+    ok: findings.length === 0,
+    findings,
+    plan,
+    requiredJobs: required,
+    policyAuthorization: plan.categories.policy
+      ? (verifiedRepositoryOwnerAuthor && config.policyReview?.allowVerifiedUserRepositoryOwnerAuthor === true
+        ? "VERIFIED_REPOSITORY_OWNER_AUTHOR"
+        : "TRUSTED_EXACT_HEAD_REVIEW")
+      : "NOT_REQUIRED",
+  };
 }
 
 async function githubJson(path, token) {
@@ -137,7 +171,16 @@ async function githubJobPages(path, token) {
   }
 }
 
-export function evaluateWorkflowSnapshot({ repository, run, pull, files, runJobs, reviews }) {
+export function evaluateWorkflowSnapshot({ repository, repositoryMetadata, run, pull, files, runJobs, reviews }) {
+  const [repositoryOwner, repositoryName, ...extra] = String(repository ?? "").split("/");
+  if (extra.length !== 0 || !repositoryOwner || !repositoryName
+    || !sameLogin(repositoryMetadata?.full_name, repository)
+    || !sameLogin(repositoryMetadata?.name, repositoryName)
+    || !sameLogin(repositoryMetadata?.owner?.login, repositoryOwner)
+    || !REPOSITORY_OWNER_TYPES.has(repositoryMetadata?.owner?.type)
+    || !Number.isInteger(repositoryMetadata?.owner?.id)
+    || repositoryMetadata.owner.id < 1
+    || repositoryMetadata?.default_branch !== policy.baseBranch) throw new Error("VALIDATION_REPOSITORY_IDENTITY_INVALID");
   if (run.event !== "pull_request" || run.name !== policy.workflowName || run.path !== policy.workflowPath
     || run.status !== "completed" || run.conclusion !== "success") throw new Error("VALIDATION_WORKFLOW_RUN_INVALID");
   const pulls = Array.isArray(run.pull_requests) ? run.pull_requests : [];
@@ -157,6 +200,7 @@ export function evaluateWorkflowSnapshot({ repository, run, pull, files, runJobs
     jobs: runJobs.map((job) => ({ name: job.name, status: job.status, conclusion: job.conclusion, headSha: run.head_sha })),
     reviews: reviews.map((review) => ({ id: review.id, state: review.state, authorAssociation: review.author_association, user: review.user?.login, commitId: review.commit_id, submittedAt: review.submitted_at })),
     author: pull.user.login,
+    verifiedRepositoryOwnerAuthor: isVerifiedRepositoryOwnerAuthor({ repository, repositoryMetadata, pull }),
   });
   return { ...result, prNumber, headSha: pull.head.sha, repository };
 }
@@ -167,13 +211,14 @@ export async function evaluateWorkflowRun({ repository, runId, token }) {
   const pulls = Array.isArray(run.pull_requests) ? run.pull_requests : [];
   if (pulls.length !== 1) throw new Error("VALIDATION_PULL_REQUEST_IDENTITY_INVALID");
   const prNumber = pulls[0].number;
-  const [pull, files, runJobs, reviews] = await Promise.all([
+  const [repositoryMetadata, pull, files, runJobs, reviews] = await Promise.all([
+    githubJson(`/repos/${owner}/${repo}`, token),
     githubJson(`/repos/${owner}/${repo}/pulls/${prNumber}`, token),
     githubPages(`/repos/${owner}/${repo}/pulls/${prNumber}/files`, token),
     githubJobPages(`/repos/${owner}/${repo}/actions/runs/${runId}/jobs`, token),
     githubPages(`/repos/${owner}/${repo}/pulls/${prNumber}/reviews`, token),
   ]);
-  return evaluateWorkflowSnapshot({ repository, run, pull, files, runJobs, reviews });
+  return evaluateWorkflowSnapshot({ repository, repositoryMetadata, run, pull, files, runJobs, reviews });
 }
 
 async function publishCheck({ repository, token, result, detailsUrl }) {

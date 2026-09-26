@@ -25,8 +25,10 @@ retained use.
 - Core lint, TypeScript, runtime, routes, and Expo validation always run.
 - Diff-derived categories add product, sensitive, database, native/release,
   autonomous, and policy checks. Unknown scope runs every category.
-- CI/workflow/policy changes require stronger exact-head human review. A label,
-  comment, or caller-provided risk value cannot reduce checks.
+- CI/workflow/policy changes require either a GitHub-verified personal
+  repository owner as author or stronger exact-head human review by a trusted
+  non-author. A label, comment, author association, or caller-provided risk
+  value cannot establish the owner exception or reduce checks.
 - Missing, stale, wrong-head, failed, cancelled, timed-out, or unjustifiably
   skipped applicable jobs block the required result.
 - Preserve functional handlers, navigation, auth/session/RLS, entitlements,
