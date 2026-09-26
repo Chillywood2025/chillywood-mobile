@@ -1,0 +1,53 @@
+{
+  "name": "@chillywood/decode-uri-component-safe",
+  "version": "0.5.0-chillywood.1",
+  "description": "CommonJS-compatible packaging of the security-fixed decode-uri-component 0.5.0 implementation",
+  "private": true,
+  "license": "MIT",
+  "repository": "SamVerschueren/decode-uri-component",
+  "author": {
+    "name": "Sam Verschueren",
+    "email": "sam.verschueren@gmail.com",
+    "url": "https://github.com/SamVerschueren"
+  },
+  "type": "commonjs",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "require": "./index.js",
+      "default": "./index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=14.16"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ],
+  "chillywoodSource": {
+    "sourcePackage": "decode-uri-component@0.5.0",
+    "sourceRepository": "https://github.com/SamVerschueren/decode-uri-component",
+    "sourceGitHead": "a12fabaa28303cc8b5b07e93d128f4fc09fc31e5",
+    "securityFixCommit": "fa479dafeede7bedf04e5c89aa78f2a78c664005",
+    "advisory": "GHSA-vcc3-ghjq-m6fr",
+    "registryIntegrity": "sha512-1BiQVoK8C9gUbQU6NzAtO/tkz2qOFpEObMWpcFvhx4fYnj4Oc5yzaJN/LD36ihkVUdXyh5ZekzX+yM+ty/SrPg==",
+    "registryTarballSha256": "f42d289f996e6c9f0e33d8f31de1fe9a7a077c612dca489cafdb2df4cbb6122f",
+    "sourceIndexSha256": "9401353df38f8010ad7035fe8d666bce6a4902bc1cff809afc4ab23fa2e0bdaa",
+    "sourceTypesSha256": "f7f52a51b25daac3448d6b455a89738dfa1f004eccaca168318834093a315ba2",
+    "sourceTestSha256": "7379b41fa223c4dec2c1459b8a1ee43c713eca16d28b16e19c36fb046bceab8c",
+    "sourceLicenseSha256": "ed7a9a0f74e43951b2520efe1a4349cb9ed5f3dff0b0f268e2e51a4d38df7ea4",
+    "adaptation": "Upstream algorithm retained behind a callable CommonJS export; matching type export adjusted; malformed components over the application 8192-character navigation limit, 32 encoded-run fallback budget, or an encoded replacement-string amplification token remain encoded",
+    "maxMalformedComponentLength": 8192,
+    "maxMalformedPercentRuns": 32,
+    "blockedMalformedReplacementTokens": [
+      "$&",
+      "$`",
+      "$'"
+    ]
+  }
+}

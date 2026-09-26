@@ -54,6 +54,15 @@ const expectedImageSize = Object.freeze({
   resolved: "file:vendor/image-size-safe/chillywood-image-size-safe-1.2.1-chillywood.1.tgz",
   integrity: "sha512-cGvr+Whcqj51TOAJ1/WATSs9hwNrJtTgIGcqCJhEWueF/WdRwtRcMczBFjW00MI3J+gFLNFjZnyO6oeuco1S2w==",
 });
+const expectedDecodeUriComponent = Object.freeze({
+  declaration: "file:vendor/decode-uri-component-safe/chillywood-decode-uri-component-safe-0.5.0-chillywood.1.tgz",
+  override: "$decode-uri-component",
+  name: "@chillywood/decode-uri-component-safe",
+  version: "0.5.0-chillywood.1",
+  resolved: "file:vendor/decode-uri-component-safe/chillywood-decode-uri-component-safe-0.5.0-chillywood.1.tgz",
+  integrity: "sha512-gfw8lRzGPXqBJP0tXlIAXmSsAt+21ENoU1YKdCcU2FIpCbic4YehTN6AHCC+8fXqM5mLNIIqSZ4LONUI5ymMtA==",
+  parents: Object.freeze(["", "node_modules/query-string"]),
+});
 const expectedNanoid = Object.freeze({
   version: "3.3.18",
   resolved: "https://registry.npmjs.org/nanoid/-/nanoid-3.3.18.tgz",
@@ -72,16 +81,20 @@ const expectedDependencyAdvisoryClosure = Object.freeze({
   "node_modules/js-yaml": "4.3.2",
 });
 // Exact reviewed lock graph after the bounded browserslist, fast-uri, js-yaml,
-// xmldom, @humanfs/node, PostCSS, and xcode-scoped uuid advisory closures.
+// xmldom, @humanfs/node, PostCSS, xcode-scoped uuid, and decoder advisory
+// closures. The decoder package paths are excluded below and verified by their
+// own exact identity witness.
 // Any later package identity drift still fails closed at this digest.
-const expectedUnrelatedPackageGraphSha256 = "9b9ce7d07356dc791f1663c5fed1a84dc3c64ff76f8ef5034a245676d8654b08";
+const expectedUnrelatedPackageGraphSha256 = "c737c9fa4c26f18be212847e1012ec34aa98353121c723563e7bf5d6b966ddf7";
 const compatibilityClosurePaths = new Set([
   "node_modules/concat-map",
+  "node_modules/decode-uri-component",
   "node_modules/expo/node_modules/balanced-match",
   "node_modules/expo/node_modules/brace-expansion",
   "node_modules/minimatch/node_modules/balanced-match",
   "node_modules/minimatch/node_modules/brace-expansion",
   "node_modules/nanoid",
+  "node_modules/query-string/node_modules/decode-uri-component",
 ]);
 
 function valueAt(object, keys) {
@@ -135,6 +148,8 @@ function validatePolicy(model) {
   gate(JSON.stringify(model.minimatch) === JSON.stringify(expectedMinimatch)
     && JSON.stringify(model.braceExpansion) === JSON.stringify(expectedBraceExpansion), "LOCK_OVERRIDE_GRAPH_MISMATCH", "The lock graph differs from the approved version-line mapping");
   gate(JSON.stringify(model.imageSize) === JSON.stringify(expectedImageSize), "IMAGE_SIZE_SAFE_IDENTITY_CHANGED", "The vendored image-size-safe identity changed");
+  gate(JSON.stringify(model.decodeUriComponent) === JSON.stringify(expectedDecodeUriComponent),
+    "DECODE_URI_COMPONENT_SAFE_IDENTITY_CHANGED", "Every query-string consumer must resolve the reviewed CommonJS-compatible fixed decoder package");
   gate(model.overrides.nanoid === expectedNanoid.version
     && model.nanoid.version === expectedNanoid.version
     && model.nanoid.resolved === expectedNanoid.resolved
@@ -176,6 +191,7 @@ function npmProblems() {
 
 function actualModel() {
   const image = packages["node_modules/image-size"] ?? {};
+  const decoder = packages["node_modules/decode-uri-component"] ?? {};
   const nanoid = packages["node_modules/nanoid"] ?? {};
   return {
     overrides: clone(packageJson.overrides ?? {}),
@@ -191,6 +207,18 @@ function actualModel() {
       version: image.version,
       resolved: image.resolved,
       integrity: image.integrity,
+    },
+    decodeUriComponent: {
+      declaration: packageJson.dependencies?.["decode-uri-component"],
+      override: packageJson.overrides?.["decode-uri-component"],
+      name: decoder.name,
+      version: decoder.version,
+      resolved: decoder.resolved,
+      integrity: decoder.integrity,
+      parents: Object.entries(packages)
+        .filter(([, metadata]) => typeof metadata?.dependencies?.["decode-uri-component"] === "string")
+        .map(([entryPath]) => entryPath)
+        .sort(),
     },
     nanoid: {
       version: nanoid.version,
@@ -322,6 +350,9 @@ function killNegativeControls(base) {
     ["ACCEPT_NPM_LS_PROBLEM", "NPM_LS_PROBLEMS_PRESENT", (m) => { m.npmProblems = ["invalid dependency"]; }],
     ["DIVERGE_LOCK_FROM_OVERRIDE", "LOCK_OVERRIDE_GRAPH_MISMATCH", (m) => { m.braceExpansion["node_modules/minimatch/node_modules/brace-expansion"] = "5.0.9"; }],
     ["CHANGE_IMAGE_SIZE_SAFE", "IMAGE_SIZE_SAFE_IDENTITY_CHANGED", (m) => { m.imageSize.version = "1.2.1"; }],
+    ["RESTORE_DECODE_URI_COMPONENT_0_2_2", "DECODE_URI_COMPONENT_SAFE_IDENTITY_CHANGED", (m) => { m.decodeUriComponent.version = "0.2.2"; }],
+    ["REMOVE_DECODE_URI_COMPONENT_OVERRIDE", "DECODE_URI_COMPONENT_SAFE_IDENTITY_CHANGED", (m) => { delete m.decodeUriComponent.override; }],
+    ["CHANGE_DECODE_URI_COMPONENT_PARENT_SET", "DECODE_URI_COMPONENT_SAFE_IDENTITY_CHANGED", (m) => { m.decodeUriComponent.parents = []; }],
     ["RESTORE_NANOID_3_3_17", "NANOID_VERSION_VULNERABLE", (m) => { m.overrides.nanoid = "3.3.17"; m.nanoid.version = "3.3.17"; }],
     ["CHANGE_NANOID_PARENT_SET", "NANOID_PARENT_SET_CHANGED", (m) => { m.nanoid.parents = m.nanoid.parents.slice(1); }],
     ["RESTORE_XMLDOM_0_8_13", "DEPENDENCY_ADVISORY_CLOSURE_INVALID", (m) => { m.dependencyAdvisoryClosure["node_modules/@xmldom/xmldom"] = "0.8.13"; }],
@@ -363,6 +394,7 @@ const output = {
   postinstallMutation: false,
   trackedRepositoryChanges: 0,
   imageSizeSafePreserved: true,
+  decodeUriComponentSafePreserved: true,
   unrelatedPackageGraphSha256: model.unrelatedPackageGraphSha256,
 };
 output.resultSha256 = sha256(JSON.stringify(output));
