@@ -496,29 +496,36 @@ test("Official Rachi retains an uploaded image while an ambiguous profile RPC is
   const subject = { accessToken: "operator-a-token", authority };
   let rpcError = { message: "account_bound_rpc_timeout" };
   let deleteRequests = 0;
-  let verificationRequests = 0;
+  let copiedTo = null;
+  let uploadedUri = null;
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (_url, init = {}) => {
     if (init.method === "DELETE") {
       deleteRequests += 1;
       return { ok: true };
     }
-    verificationRequests += 1;
-    return { ok: true, arrayBuffer: async () => new Uint8Array([1]).buffer };
+    throw new Error("unexpected_fetch");
   };
 
   try {
     const api = loadStubbed("_lib/officialRachi.ts", {
       "expo-file-system/legacy": {
+        cacheDirectory: "file:///cache/",
         FileSystemUploadType: { BINARY_CONTENT: 0 },
+        copyAsync: async ({ to }) => { copiedTo = to; },
+        deleteAsync: async () => {},
         getInfoAsync: async () => ({ exists: true, size: 100 }),
-        uploadAsync: async () => ({ status: 200 }),
+        uploadAsync: async (url, uri) => {
+          uploadedUri = uri;
+          const key = decodeURIComponent(url.split("/profile-media/")[1]);
+          return { status: 200, body: JSON.stringify({ Key: `profile-media/${key}`, Id: "object-id" }) };
+        },
       },
       "./officialAccounts": { RACHI_OFFICIAL_ACCOUNT: { userId: authority.userId } },
       "./creatorVideos": {},
       "./profilePosts": {},
       "./profileMedia": {
-        pickProfileMediaImage: async () => ({ uri: "file:///selected.jpg", mimeType: "image/jpeg", size: 100 }),
+        pickProfileMediaImage: async () => ({ uri: "content://selected.jpg", mimeType: "image/jpeg", size: 100 }),
         PROFILE_AVATAR_MAX_BYTES: 10_000_000,
         PROFILE_MEDIA_BUCKET: "profile-media",
       },
@@ -548,7 +555,8 @@ test("Official Rachi retains an uploaded image while an ambiguous profile RPC is
       api.chooseOfficialRachiProfileImageFromGallery(),
       /still being verified/u,
     );
-    assert.equal(verificationRequests, 1, "the upload must be byte-readable before the privileged RPC runs");
+    assert.match(copiedTo, /^file:\/\/\/cache\/official-rachi-/u);
+    assert.equal(uploadedUri, copiedTo, "Android content media must upload from the measured cache copy");
     assert.equal(deleteRequests, 0, "an unknown commit outcome must retain the uploaded object");
 
     rpcError = { message: "permission_denied" };
@@ -556,14 +564,13 @@ test("Official Rachi retains an uploaded image while an ambiguous profile RPC is
       api.chooseOfficialRachiProfileImageFromGallery(),
       (error) => error?.message === "permission_denied",
     );
-    assert.equal(verificationRequests, 2);
     assert.equal(deleteRequests, 1, "a definitive rejection may remove its unreferenced upload");
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test("Official Rachi rejects and removes an uploaded object whose bytes cannot be read back", async () => {
+test("Official Rachi rejects and removes an upload whose provider identity is not exact", async () => {
   const authority = {
     userId: "11111111-1111-4111-8111-111111111111",
     accountId: "11111111-1111-4111-8111-111111111111",
@@ -581,7 +588,7 @@ test("Official Rachi rejects and removes an uploaded object whose bytes cannot b
       deleteRequests += 1;
       return { ok: true };
     }
-    return { ok: true, arrayBuffer: async () => new ArrayBuffer(0) };
+    throw new Error("unexpected_fetch");
   };
 
   try {
@@ -591,7 +598,7 @@ test("Official Rachi rejects and removes an uploaded object whose bytes cannot b
         getInfoAsync: async () => ({ exists: true, size: 100 }),
         uploadAsync: async (_url, _uri, options) => {
           uploadOptions = options;
-          return { status: 200 };
+          return { status: 200, body: JSON.stringify({ Key: "profile-media/other/path.jpg", Id: "object-id" }) };
         },
       },
       "./officialAccounts": { RACHI_OFFICIAL_ACCOUNT: { userId: authority.userId } },
@@ -633,6 +640,67 @@ test("Official Rachi rejects and removes an uploaded object whose bytes cannot b
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("Official Rachi rejects empty prepared gallery bytes before upload or privileged RPC", async () => {
+  const authority = {
+    userId: "11111111-1111-4111-8111-111111111111",
+    accountId: "11111111-1111-4111-8111-111111111111",
+    sessionGeneration: "operator-a",
+    state: "ACTIVE",
+    restoreOnly: false,
+  };
+  const subject = { accessToken: "operator-a-token", authority };
+  let uploadCalls = 0;
+  let rpcCalls = 0;
+  const api = loadStubbed("_lib/officialRachi.ts", {
+    "expo-file-system/legacy": {
+      cacheDirectory: "file:///cache/",
+      FileSystemUploadType: { BINARY_CONTENT: "binary" },
+      copyAsync: async () => {},
+      deleteAsync: async () => {},
+      getInfoAsync: async (uri) => uri.startsWith("content://")
+        ? ({ exists: true, size: 100 })
+        : ({ exists: true, size: 0 }),
+      uploadAsync: async () => {
+        uploadCalls += 1;
+        return { status: 200, body: "{}" };
+      },
+    },
+    "./officialAccounts": { RACHI_OFFICIAL_ACCOUNT: { userId: authority.userId } },
+    "./creatorVideos": {},
+    "./profilePosts": {},
+    "./profileMedia": {
+      pickProfileMediaImage: async () => ({ uri: "content://selected.jpg", mimeType: "image/jpeg", size: 100 }),
+      PROFILE_AVATAR_MAX_BYTES: 10_000_000,
+      PROFILE_MEDIA_BUCKET: "profile-media",
+    },
+    "./accountSessionAuthority": {
+      getCurrentAccountSessionAuthoritySnapshot: () => authority,
+      sameAccountSessionAuthority: (left, right) => left?.sessionGeneration === right?.sessionGeneration,
+    },
+    "./accountBoundSupabaseMutation": {
+      assertAccountBoundSupabaseMutationSubjectCurrent: () => {},
+      captureAccountBoundSupabaseMutationSubject: async () => subject,
+      invokeAccountBoundSupabaseMutationRpc: async () => {
+        rpcCalls += 1;
+        return { data: null, error: null };
+      },
+      isAccountBoundSupabaseMutationOutcomeAmbiguous: () => false,
+    },
+    "./supabase": {
+      SUPABASE_ANON_KEY: "anon",
+      SUPABASE_URL: "https://example.supabase.co",
+    },
+    "./userData": {},
+  });
+
+  await assert.rejects(
+    api.chooseOfficialRachiProfileImageFromGallery(),
+    /did not contain readable image data/u,
+  );
+  assert.equal(uploadCalls, 0);
+  assert.equal(rpcCalls, 0);
 });
 
 test("creator sandbox setup cannot transfer account-A input to account B during eligibility", async () => {

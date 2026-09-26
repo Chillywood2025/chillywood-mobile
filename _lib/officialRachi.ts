@@ -137,6 +137,17 @@ const getPreparedOfficialRachiProfileMediaSize = async (
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };
 
+const officialRachiUploadResponseMatches = (body: string, objectKey: string) => {
+  try {
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    const responseKey = toText(parsed.Key ?? parsed.key);
+    const responseId = toText(parsed.Id ?? parsed.id);
+    return responseId.length > 0 && responseKey === `${PROFILE_MEDIA_BUCKET}/${objectKey}`;
+  } catch {
+    return false;
+  }
+};
+
 const extractOfficialRachiProfileMediaKey = (url?: string | null) => {
   const normalizedUrl = toText(url);
   const proxyMarker = "/functions/v1/profile-media-public?";
@@ -233,27 +244,12 @@ const uploadOfficialRachiProfileMedia = async (
       RACHI_PROFILE_MEDIA_UPLOAD_TIMEOUT_MS,
       "Rachi's profile picture upload took too long. Try again.",
     );
-    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
     if (result.status < 200 || result.status >= 300) {
       throw new Error("Unable to upload Rachi's profile picture right now.");
     }
     uploaded = true;
-
-    const verifyUrl = `${SUPABASE_URL.replace(/\/+$/g, "")}/storage/v1/object/authenticated/${PROFILE_MEDIA_BUCKET}/${encodeStoragePath(objectKey)}`;
-    const response = await withTimeout(
-      fetch(verifyUrl, {
-        headers: {
-          Authorization: `Bearer ${subject.accessToken}`,
-          apikey: SUPABASE_ANON_KEY,
-          Range: "bytes=0-0",
-        },
-      }),
-      20000,
-      "Rachi's profile picture verification took too long. Try again.",
-    );
     assertAccountBoundSupabaseMutationSubjectCurrent(subject);
-    const body = response.ok ? await response.arrayBuffer() : null;
-    if (!response.ok || !body || body.byteLength <= 0) {
+    if (!officialRachiUploadResponseMatches(result.body, objectKey)) {
       throw new Error("Rachi's profile picture could not be verified after upload.");
     }
   } catch (error) {
