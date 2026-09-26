@@ -116,7 +116,7 @@ export default function ForgotPassword() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <ChillywoodBrandReserve compact testID="auth-forgot-password-branding-clearance" />
+          <ChillywoodBrandReserve testID="auth-forgot-password-branding-clearance" />
           <ChillywoodGlassPanel testID="auth-forgot-password-glass-panel">
             <View style={styles.headerRow}>
               <Text style={styles.kicker}>CHI&apos;LLYWOOD</Text>
