@@ -496,16 +496,24 @@ test("Official Rachi retains an uploaded image while an ambiguous profile RPC is
   const subject = { accessToken: "operator-a-token", authority };
   let rpcError = { message: "account_bound_rpc_timeout" };
   let deleteRequests = 0;
+  let verificationRequests = 0;
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => {
-    deleteRequests += 1;
-    return { ok: true };
+  globalThis.fetch = async (_url, init = {}) => {
+    if (init.method === "DELETE") {
+      deleteRequests += 1;
+      return { ok: true };
+    }
+    verificationRequests += 1;
+    return { ok: true, arrayBuffer: async () => new Uint8Array([1]).buffer };
   };
 
   try {
     const api = loadStubbed("_lib/officialRachi.ts", {
-      "expo-file-system": { File: class { constructor(uri) { this.uri = uri; } } },
-      "expo-file-system/legacy": {},
+      "expo-file-system/legacy": {
+        FileSystemUploadType: { BINARY_CONTENT: 0 },
+        getInfoAsync: async () => ({ exists: true, size: 100 }),
+        uploadAsync: async () => ({ status: 200 }),
+      },
       "./officialAccounts": { RACHI_OFFICIAL_ACCOUNT: { userId: authority.userId } },
       "./creatorVideos": {},
       "./profilePosts": {},
@@ -530,11 +538,6 @@ test("Official Rachi retains an uploaded image while an ambiguous profile RPC is
       "./supabase": {
         SUPABASE_ANON_KEY: "anon",
         SUPABASE_URL: "https://example.supabase.co",
-        supabase: {
-          storage: {
-            from: () => ({ upload: async () => ({ error: null }) }),
-          },
-        },
       },
       "./userData": {
         readUserProfileByUserId: async () => ({ avatarUrl: "https://example.test/previous.jpg" }),
@@ -545,6 +548,7 @@ test("Official Rachi retains an uploaded image while an ambiguous profile RPC is
       api.chooseOfficialRachiProfileImageFromGallery(),
       /still being verified/u,
     );
+    assert.equal(verificationRequests, 1, "the upload must be byte-readable before the privileged RPC runs");
     assert.equal(deleteRequests, 0, "an unknown commit outcome must retain the uploaded object");
 
     rpcError = { message: "permission_denied" };
@@ -552,7 +556,80 @@ test("Official Rachi retains an uploaded image while an ambiguous profile RPC is
       api.chooseOfficialRachiProfileImageFromGallery(),
       (error) => error?.message === "permission_denied",
     );
+    assert.equal(verificationRequests, 2);
     assert.equal(deleteRequests, 1, "a definitive rejection may remove its unreferenced upload");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Official Rachi rejects and removes an uploaded object whose bytes cannot be read back", async () => {
+  const authority = {
+    userId: "11111111-1111-4111-8111-111111111111",
+    accountId: "11111111-1111-4111-8111-111111111111",
+    sessionGeneration: "operator-a",
+    state: "ACTIVE",
+    restoreOnly: false,
+  };
+  const subject = { accessToken: "operator-a-token", authority };
+  let rpcCalls = 0;
+  let deleteRequests = 0;
+  let uploadOptions = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, init = {}) => {
+    if (init.method === "DELETE") {
+      deleteRequests += 1;
+      return { ok: true };
+    }
+    return { ok: true, arrayBuffer: async () => new ArrayBuffer(0) };
+  };
+
+  try {
+    const api = loadStubbed("_lib/officialRachi.ts", {
+      "expo-file-system/legacy": {
+        FileSystemUploadType: { BINARY_CONTENT: "binary" },
+        getInfoAsync: async () => ({ exists: true, size: 100 }),
+        uploadAsync: async (_url, _uri, options) => {
+          uploadOptions = options;
+          return { status: 200 };
+        },
+      },
+      "./officialAccounts": { RACHI_OFFICIAL_ACCOUNT: { userId: authority.userId } },
+      "./creatorVideos": {},
+      "./profilePosts": {},
+      "./profileMedia": {
+        pickProfileMediaImage: async () => ({ uri: "file:///selected.jpg", mimeType: "image/jpeg", size: 100 }),
+        PROFILE_AVATAR_MAX_BYTES: 10_000_000,
+        PROFILE_MEDIA_BUCKET: "profile-media",
+      },
+      "./accountSessionAuthority": {
+        getCurrentAccountSessionAuthoritySnapshot: () => authority,
+        sameAccountSessionAuthority: (left, right) => left?.sessionGeneration === right?.sessionGeneration,
+      },
+      "./accountBoundSupabaseMutation": {
+        assertAccountBoundSupabaseMutationSubjectCurrent: () => {},
+        captureAccountBoundSupabaseMutationSubject: async () => subject,
+        invokeAccountBoundSupabaseMutationRpc: async () => {
+          rpcCalls += 1;
+          return { data: null, error: null };
+        },
+        isAccountBoundSupabaseMutationOutcomeAmbiguous: () => false,
+      },
+      "./supabase": {
+        SUPABASE_ANON_KEY: "anon",
+        SUPABASE_URL: "https://example.supabase.co",
+      },
+      "./userData": {},
+    });
+
+    await assert.rejects(
+      api.chooseOfficialRachiProfileImageFromGallery(),
+      /could not be verified after upload/u,
+    );
+    assert.equal(uploadOptions.uploadType, "binary");
+    assert.equal(uploadOptions.headers.Authorization, "Bearer operator-a-token");
+    assert.equal(rpcCalls, 0, "unreadable media must never reach the privileged profile RPC");
+    assert.equal(deleteRequests, 1, "the unreadable uploaded object must be removed");
   } finally {
     globalThis.fetch = originalFetch;
   }

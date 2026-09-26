@@ -1,4 +1,3 @@
-import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 
 import type { Json } from "../supabase/database.types";
@@ -12,7 +11,7 @@ import {
   type ProfileMediaImageFile,
 } from "./profileMedia";
 import { readProfilePosts, type ProfilePost } from "./profilePosts";
-import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "./supabase";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./supabase";
 import {
   assertAccountBoundSupabaseMutationSubjectCurrent,
   captureAccountBoundSupabaseMutationSubject,
@@ -51,6 +50,7 @@ export const createOfficialRachiPostOperationKey = () => {
 
 const RACHI_PROFILE_MEDIA_PREFIX = "official/rachi/avatar";
 const RACHI_PROFILE_ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const RACHI_PROFILE_MEDIA_UPLOAD_TIMEOUT_MS = 60000;
 
 const createClientId = () =>
   "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
@@ -75,12 +75,66 @@ const imageExtensionForMimeType = (mimeType: string) => {
   return "jpg";
 };
 
+const encodeStoragePath = (path: string) => path.split("/").map(encodeURIComponent).join("/");
+
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
 const getImageFileSize = async (file: ProfileMediaImageFile) => {
   const explicit = Number(file.size);
   if (Number.isFinite(explicit) && explicit > 0) return explicit;
   const info = await FileSystem.getInfoAsync(file.uri).catch(() => null);
   const size = Number(info && "size" in info ? info.size : 0);
   return Number.isFinite(size) && size > 0 ? size : null;
+};
+
+const prepareOfficialRachiProfileMediaUpload = async (
+  file: ProfileMediaImageFile,
+  mimeType: string,
+) => {
+  const sourceUri = toText(file.uri);
+  if (!sourceUri) throw new Error("Choose a photo before saving Rachi's profile picture.");
+
+  if (!sourceUri.startsWith("content://") || !FileSystem.cacheDirectory) {
+    return { uri: sourceUri, cleanup: async () => undefined };
+  }
+
+  const cacheUri = `${FileSystem.cacheDirectory}official-rachi-${createClientId()}.${imageExtensionForMimeType(mimeType)}`;
+  await withTimeout(
+    FileSystem.copyAsync({ from: sourceUri, to: cacheUri }),
+    20000,
+    "Rachi's profile picture took too long to prepare. Try again.",
+  );
+  return {
+    uri: cacheUri,
+    cleanup: async () => {
+      await FileSystem.deleteAsync(cacheUri, { idempotent: true }).catch(() => undefined);
+    },
+  };
+};
+
+const getPreparedOfficialRachiProfileMediaSize = async (
+  uri: string,
+  fallback?: number | null,
+) => {
+  const info = await FileSystem.getInfoAsync(uri).catch(() => null);
+  if (info) {
+    const size = Number("size" in info ? info.size : 0);
+    return Number.isFinite(size) && size > 0 ? size : 0;
+  }
+  const parsed = Number(fallback);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };
 
 const extractOfficialRachiProfileMediaKey = (url?: string | null) => {
@@ -144,33 +198,71 @@ const uploadOfficialRachiProfileMedia = async (
     throw new Error("Choose a JPG, PNG, or WebP image.");
   }
 
-  const size = await getImageFileSize(file);
+  const selectedSize = await getImageFileSize(file);
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
-  if (typeof size === "number" && size > PROFILE_AVATAR_MAX_BYTES) {
+  if (typeof selectedSize === "number" && selectedSize > PROFILE_AVATAR_MAX_BYTES) {
     throw new Error("Rachi profile pictures can be 10 MB or smaller.");
   }
 
   const objectKey = `${RACHI_PROFILE_MEDIA_PREFIX}/${Date.now()}-${createClientId()}.${imageExtensionForMimeType(mimeType)}`;
-  const uploadBody = new File(uri);
-  const { error: uploadError } = await supabase.storage
-    .from(PROFILE_MEDIA_BUCKET)
-    .upload(objectKey, uploadBody as unknown as Blob, {
-      contentType: mimeType,
-      upsert: false,
-      headers: {
-        Authorization: `Bearer ${subject.accessToken}`,
-        apikey: SUPABASE_ANON_KEY,
-      },
-    });
-
-  if (uploadError) {
-    throw new Error(uploadError.message || "Unable to upload Rachi's profile picture right now.");
-  }
-
   const publicUrl = `${SUPABASE_URL.replace(/\/+$/g, "")}/functions/v1/profile-media-public?ownerUserId=${RACHI_OFFICIAL_ACCOUNT.userId}&objectKey=${objectKey}`;
-  if (!publicUrl) {
-    await removeOfficialRachiProfileMediaObject(subject, publicUrl).catch(() => undefined);
-    throw new Error("Unable to prepare Rachi's profile picture for display.");
+  const prepared = await prepareOfficialRachiProfileMediaUpload(file, mimeType);
+  let uploaded = false;
+  try {
+    const preparedSize = await getPreparedOfficialRachiProfileMediaSize(prepared.uri, selectedSize);
+    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    if (preparedSize <= 0) {
+      throw new Error("Rachi's selected profile picture did not contain readable image data.");
+    }
+    if (preparedSize > PROFILE_AVATAR_MAX_BYTES) {
+      throw new Error("Rachi profile pictures can be 10 MB or smaller.");
+    }
+
+    const uploadUrl = `${SUPABASE_URL.replace(/\/+$/g, "")}/storage/v1/object/${PROFILE_MEDIA_BUCKET}/${encodeStoragePath(objectKey)}`;
+    const result = await withTimeout(
+      FileSystem.uploadAsync(uploadUrl, prepared.uri, {
+        httpMethod: "POST",
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+        headers: {
+          Authorization: `Bearer ${subject.accessToken}`,
+          apikey: SUPABASE_ANON_KEY,
+          "Content-Type": mimeType,
+          "x-upsert": "false",
+        },
+      }),
+      RACHI_PROFILE_MEDIA_UPLOAD_TIMEOUT_MS,
+      "Rachi's profile picture upload took too long. Try again.",
+    );
+    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    if (result.status < 200 || result.status >= 300) {
+      throw new Error("Unable to upload Rachi's profile picture right now.");
+    }
+    uploaded = true;
+
+    const verifyUrl = `${SUPABASE_URL.replace(/\/+$/g, "")}/storage/v1/object/authenticated/${PROFILE_MEDIA_BUCKET}/${encodeStoragePath(objectKey)}`;
+    const response = await withTimeout(
+      fetch(verifyUrl, {
+        headers: {
+          Authorization: `Bearer ${subject.accessToken}`,
+          apikey: SUPABASE_ANON_KEY,
+          Range: "bytes=0-0",
+        },
+      }),
+      20000,
+      "Rachi's profile picture verification took too long. Try again.",
+    );
+    assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+    const body = response.ok ? await response.arrayBuffer() : null;
+    if (!response.ok || !body || body.byteLength <= 0) {
+      throw new Error("Rachi's profile picture could not be verified after upload.");
+    }
+  } catch (error) {
+    if (uploaded) {
+      await removeOfficialRachiProfileMediaObject(subject, publicUrl).catch(() => undefined);
+    }
+    throw error;
+  } finally {
+    await prepared.cleanup();
   }
 
   return { objectKey, publicUrl };
