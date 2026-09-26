@@ -72,9 +72,9 @@ const expectedDependencyAdvisoryClosure = Object.freeze({
   "node_modules/js-yaml": "4.3.2",
 });
 // Exact reviewed lock graph after the bounded browserslist, fast-uri, js-yaml,
-// xmldom, @humanfs/node, and PostCSS advisory closures.
+// xmldom, @humanfs/node, PostCSS, and xcode-scoped uuid advisory closures.
 // Any later package identity drift still fails closed at this digest.
-const expectedUnrelatedPackageGraphSha256 = "610d88d96fadb25efe0adc46e88b92ac448259acd0fe6b575a8a357ea62974a9";
+const expectedUnrelatedPackageGraphSha256 = "9b9ce7d07356dc791f1663c5fed1a84dc3c64ff76f8ef5034a245676d8654b08";
 const compatibilityClosurePaths = new Set([
   "node_modules/concat-map",
   "node_modules/expo/node_modules/balanced-match",
