@@ -447,12 +447,19 @@ const dependencyTree = JSON.parse(execFileSync(
 assert.deepEqual(dependencyTree.problems ?? [], []);
 
 let hermesSyntax = "NOT_AVAILABLE";
-const hermesCompiler = [
-  "osx-bin/hermesc",
-  "linux64-bin/hermesc",
-  "win64-bin/hermesc.exe",
-].map((relative) => path.join(root, "node_modules/react-native/sdks/hermesc", relative))
-  .find((candidate) => fs.existsSync(candidate));
+const hermesCompilerRelative = process.platform === "darwin"
+  ? "osx-bin/hermesc"
+  : process.platform === "linux"
+    ? "linux64-bin/hermesc"
+    : process.platform === "win32"
+      ? "win64-bin/hermesc.exe"
+      : undefined;
+const hermesCompilerCandidate = hermesCompilerRelative
+  ? path.join(root, "node_modules/react-native/sdks/hermesc", hermesCompilerRelative)
+  : undefined;
+const hermesCompiler = hermesCompilerCandidate && fs.existsSync(hermesCompilerCandidate)
+  ? hermesCompilerCandidate
+  : undefined;
 if (hermesCompiler) {
   const hermesRoot = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-decoder-hermes-"));
   try {
