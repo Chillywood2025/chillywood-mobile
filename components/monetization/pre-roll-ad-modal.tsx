@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Modal, StyleSheet, Text, View } from "react-native";
+import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 
 type PreRollAdModalProps = {
   visible: boolean;
@@ -62,14 +63,14 @@ const styles = StyleSheet.create({
     width: "100%",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(18,18,18,0.98)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     paddingHorizontal: 16,
     paddingVertical: 16,
     gap: 6,
   },
   kicker: {
-    color: "#888",
+    color: CHILLYWOOD_VISUAL.accentBlue,
     fontSize: 10,
     letterSpacing: 1,
     fontWeight: "800",
@@ -80,7 +81,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   sub: {
-    color: "#aaa",
+    color: CHILLYWOOD_VISUAL.textMuted,
     fontSize: 13,
   },
 });

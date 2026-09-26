@@ -31,6 +31,7 @@ import {
 } from "../_lib/peopleSearchNormalization";
 import { searchPublicPeople, type PublicPeopleSearchResult } from "../_lib/publicPeopleSearch";
 import { useSession } from "../_lib/session";
+import { buildUserChannelProfile, readUserProfileByUserId } from "../_lib/userData";
 import { getUserFacingErrorMessage } from "../_lib/userFacingErrors";
 import { ProfileMediaImage as Image } from "../components/ui/ProfileMediaImage";
 import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
@@ -103,6 +104,7 @@ export default function ChillyCircleScreen() {
   const [peopleLoading, setPeopleLoading] = useState(false);
   const [peopleError, setPeopleError] = useState<string | null>(null);
   const [peopleResults, setPeopleResults] = useState<PublicPeopleSearchResult[]>([]);
+  const [rachiAvatarUrl, setRachiAvatarUrl] = useState<string | null>(RACHI_OFFICIAL_ACCOUNT.avatarUrl ?? null);
   const [collapsedSections, setCollapsedSections] = useState<Partial<Record<CircleSectionKey, boolean>>>({});
 
   const normalizedNeedle = normalizeCircleSearchNeedle(debouncedSearchQuery);
@@ -139,14 +141,21 @@ export default function ChillyCircleScreen() {
     setLoading(true);
     setNotice(null);
     try {
-      const [nextCircle, nextIncoming, nextOutgoing] = await Promise.all([
+      const [nextCircle, nextIncoming, nextOutgoing, rachiProfile] = await Promise.all([
         listMyChillyCircle({ limit: 100 }),
         listIncomingChillyCircleRequests({ limit: 100 }),
         listOutgoingChillyCircleRequests({ limit: 100 }),
+        readUserProfileByUserId(RACHI_OFFICIAL_ACCOUNT.userId).catch(() => null),
       ]);
       setCircle(nextCircle);
       setIncoming(nextIncoming);
       setOutgoing(nextOutgoing);
+      const officialProfile = buildUserChannelProfile({
+        id: RACHI_OFFICIAL_ACCOUNT.userId,
+        profile: rachiProfile,
+        fallbackDisplayName: RACHI_OFFICIAL_ACCOUNT.displayName,
+      });
+      setRachiAvatarUrl(String(officialProfile.avatarUrl ?? RACHI_OFFICIAL_ACCOUNT.avatarUrl ?? "").trim() || null);
     } catch (error) {
       setCircle([]);
       setIncoming([]);
@@ -288,7 +297,7 @@ export default function ChillyCircleScreen() {
             "official-rachi",
             RACHI_OFFICIAL_ACCOUNT.displayName,
             "Official Chi'llywood updates and Originals.",
-            RACHI_OFFICIAL_ACCOUNT.avatarUrl ?? null,
+            rachiAvatarUrl,
             () => openProfile(RACHI_OFFICIAL_ACCOUNT.userId),
           ),
         ],
@@ -301,7 +310,7 @@ export default function ChillyCircleScreen() {
         rows: group.rows.filter((row) => matchesPeopleSearchValues([row.title, row.subtitle], normalizedNeedle)),
       }))
       .filter((group) => group.rows.length > 0);
-  }, [circleSearchResults, incomingSearchResults, outgoingSearchResults, hasSearchQuery, isOfficialSuggestionMatch, normalizedNeedle, openProfile, peopleResults]);
+  }, [circleSearchResults, incomingSearchResults, outgoingSearchResults, hasSearchQuery, isOfficialSuggestionMatch, normalizedNeedle, openProfile, peopleResults, rachiAvatarUrl]);
 
   const hasAnySuggestions = suggestionGroups.some((group) => group.rows.length > 0);
 
@@ -534,8 +543,8 @@ export default function ChillyCircleScreen() {
         onPress={() => openProfile(RACHI_OFFICIAL_ACCOUNT.userId)}
       >
         <View style={[styles.avatar, styles.officialAvatar]}>
-          {RACHI_OFFICIAL_ACCOUNT.avatarUrl ? (
-            <Image source={{ uri: RACHI_OFFICIAL_ACCOUNT.avatarUrl }} style={styles.avatarImage} />
+          {rachiAvatarUrl ? (
+            <Image source={{ uri: rachiAvatarUrl }} style={styles.avatarImage} />
           ) : (
             <Text style={[styles.avatarInitial, styles.officialAvatarInitial]}>R</Text>
           )}

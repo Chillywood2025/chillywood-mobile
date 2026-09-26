@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../ui/chillywood-visual-system";
 
 const DIGITAL_STORE_NAME = Platform.OS === "ios" ? "the App Store" : "Google Play";
 
@@ -362,6 +363,7 @@ export function MoneyScopeInfoButton({
               onPress={() => setVisible(false)}
               style={styles.closeButton}
             >
+              <ChillywoodPrimaryActionFill radius={14} />
               <Text style={styles.closeText}>Got it</Text>
             </Pressable>
           </View>
@@ -408,8 +410,8 @@ const styles = StyleSheet.create({
     gap: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(126,215,255,0.22)",
-    backgroundColor: "rgba(126,215,255,0.10)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 12,
   },
   buttonCompact: {
@@ -432,7 +434,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 14,
-    backgroundColor: "#DC143C",
+    backgroundColor: CHILLYWOOD_VISUAL.accentPurple,
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    overflow: "hidden",
   },
   closeText: {
     color: "#FFFFFF",
@@ -482,8 +487,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   listCardMuted: {
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
   },
   listItem: {
     color: "#C7D2E4",
@@ -506,8 +511,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "#101722",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     padding: 18,
     paddingBottom: 24,
     gap: 14,

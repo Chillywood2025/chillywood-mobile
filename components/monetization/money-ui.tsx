@@ -2,6 +2,7 @@ import React from "react";
 import { StyleSheet, Text, View, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
 
 import { ProfileMediaImage as Image } from "../ui/ProfileMediaImage";
+import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 
 export type MoneyTone = "neutral" | "premium" | "success" | "warning" | "danger" | "vip";
 
@@ -105,7 +106,7 @@ export function CreatorMoneyHeader({
         styles.creatorHeader,
         {
           borderColor: `${toneAccent[tone]}38`,
-          backgroundColor: tone === "vip" ? "rgba(28,18,42,0.92)" : "rgba(15,19,29,0.96)",
+          backgroundColor: tone === "vip" ? "rgba(24,12,48,0.93)" : CHILLYWOOD_VISUAL.glassBackground,
         },
       ]}
     >
@@ -199,7 +200,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#20283A",
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
   },
   creatorImage: {
     width: "100%",
@@ -240,8 +241,8 @@ const styles = StyleSheet.create({
   offerCard: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(12,16,25,0.96)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     padding: 15,
     gap: 9,
   },
@@ -291,8 +292,8 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   scopeCardMuted: {
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.045)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
   },
   scopeTitle: {
     color: "#F8FAFF",

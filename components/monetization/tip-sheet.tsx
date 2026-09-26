@@ -30,6 +30,7 @@ import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
 import { useSession } from "../../_lib/session";
 import { MoneyScopeInfoButton } from "./MoneyScopeInfoButton";
 import { CreatorMoneyHeader, MoneyScopeStrip, MoneyStatusChip, MoneySuccessReceipt } from "./money-ui";
+import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../ui/chillywood-visual-system";
 
 type TipSheetProps = {
   visible: boolean;
@@ -359,6 +360,7 @@ export function TipSheet({
             accessibilityLabel={`Tip ${creatorName || "creator"} ${formatMonetizationCurrency(amountCents, tipStatus?.currency ?? "usd")}. This supports the creator and does not unlock access.`}
             accessibilityState={{ disabled: busy, busy }}
           >
+            <ChillywoodPrimaryActionFill radius={14} />
             {busy ? (
               <View style={styles.busyRow}>
                 <ActivityIndicator color="#fff" />
@@ -394,9 +396,9 @@ const styles = StyleSheet.create({
     maxHeight: "92%",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    backgroundColor: "#111722",
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
   },
   sheetContent: {
     padding: 20,
@@ -423,7 +425,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#243043",
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
   },
   avatar: {
     width: "100%",
@@ -477,8 +479,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
   },
   amountButtonActive: {
     borderColor: "#7ED7FF",
@@ -496,8 +498,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     color: "#F8FAFF",
     paddingHorizontal: 13,
     fontSize: 15,
@@ -525,7 +527,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 14,
-    backgroundColor: "#E84367",
+    backgroundColor: CHILLYWOOD_VISUAL.accentPurple,
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    overflow: "hidden",
   },
   primaryButtonDisabled: {
     opacity: 0.48,

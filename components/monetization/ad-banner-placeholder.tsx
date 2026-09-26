@@ -1,5 +1,6 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 
 type AdBannerPlaceholderProps = {
   label?: string;
@@ -21,14 +22,14 @@ const styles = StyleSheet.create({
     marginTop: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 2,
   },
   kicker: {
-    color: "#888",
+    color: CHILLYWOOD_VISUAL.accentBlue,
     fontSize: 9,
     letterSpacing: 1,
     fontWeight: "800",
@@ -39,7 +40,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   sub: {
-    color: "#999",
+    color: CHILLYWOOD_VISUAL.textMuted,
     fontSize: 11,
   },
 });

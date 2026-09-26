@@ -1,5 +1,6 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { CHILLYWOOD_VISUAL } from "../ui/chillywood-visual-system";
 
 type MidRollAdMarkerProps = {
   visible: boolean;
@@ -22,8 +23,8 @@ const styles = StyleSheet.create({
     top: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.22)",
-    backgroundColor: "rgba(0,0,0,0.48)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
