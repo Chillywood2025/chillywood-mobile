@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -35,21 +35,49 @@ export default function ChannelSubscriptionScreen() {
   const creatorId = normalizeParam(params.creatorId);
   const { isLoading: sessionLoading, user } = useSession();
   const viewerUserId = String(user?.id ?? "").trim();
+  const accessIdentityKey = useMemo(
+    () => JSON.stringify([creatorId, sessionLoading, viewerUserId]),
+    [creatorId, sessionLoading, viewerUserId],
+  );
   const isOwner = !!creatorId && viewerUserId === creatorId;
   const [access, setAccess] = useState<ChannelSubscriptionAccess | null>(null);
   const [creatorName, setCreatorName] = useState("Creator");
   const [loading, setLoading] = useState(true);
+  const [loadedAccessIdentityKey, setLoadedAccessIdentityKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const activeAccessIdentityKeyRef = useRef<string | null>(null);
+  const accessRequestGenerationRef = useRef(0);
+  const actionGenerationRef = useRef(0);
 
-  const loadAccess = async () => {
-    if (!creatorId || sessionLoading) return;
+  const loadAccess = useCallback(async () => {
+    if (activeAccessIdentityKeyRef.current !== accessIdentityKey) return;
+    const requestGeneration = ++accessRequestGenerationRef.current;
+    const ownsRequest = () => (
+      activeAccessIdentityKeyRef.current === accessIdentityKey
+      && accessRequestGenerationRef.current === requestGeneration
+    );
+
+    if (!creatorId || sessionLoading) {
+      if (ownsRequest()) {
+        setAccess(null);
+        setCreatorName("Creator");
+        setNotice(null);
+        setLoadedAccessIdentityKey(sessionLoading ? null : accessIdentityKey);
+        setLoading(sessionLoading);
+      }
+      return;
+    }
     setLoading(true);
     setNotice(null);
+    setAccess(null);
+    setCreatorName("Creator");
+    setLoadedAccessIdentityKey(null);
     const [nextAccess, profile] = await Promise.all([
       resolveChannelSubscriptionAccess(creatorId).catch(() => null),
       readUserProfileByUserId(creatorId).catch(() => null),
     ]);
+    if (!ownsRequest()) return;
     setAccess(nextAccess);
     const channelProfile = buildUserChannelProfile({
       id: creatorId,
@@ -61,12 +89,22 @@ export default function ChannelSubscriptionScreen() {
       profile,
       fallbackDisplayName: "Untitled Platform",
     }).displayName);
+    setLoadedAccessIdentityKey(accessIdentityKey);
     setLoading(false);
-  };
+  }, [accessIdentityKey, creatorId, sessionLoading]);
 
   useEffect(() => {
+    activeAccessIdentityKeyRef.current = accessIdentityKey;
+    actionGenerationRef.current += 1;
+    setBusy(false);
     void loadAccess();
-  }, [creatorId, sessionLoading]);
+    return () => {
+      if (activeAccessIdentityKeyRef.current === accessIdentityKey) {
+        activeAccessIdentityKeyRef.current = null;
+      }
+      accessRequestGenerationRef.current += 1;
+    };
+  }, [accessIdentityKey, loadAccess]);
 
   const handleSubscribe = async () => {
     if (!creatorId || busy) return;
@@ -78,18 +116,27 @@ export default function ChannelSubscriptionScreen() {
       Alert.alert("Subscribe", "Sign in to subscribe to this creator Platform.");
       return;
     }
+    const actionIdentityKey = accessIdentityKey;
+    const actionGeneration = ++actionGenerationRef.current;
+    const ownsAction = () => (
+      activeAccessIdentityKeyRef.current === actionIdentityKey
+      && actionGenerationRef.current === actionGeneration
+    );
     try {
       setBusy(true);
       const result = await purchaseChannelSubscription({
         creatorId,
         sourceSurface: "creator_channel_subscriber_area",
       });
+      if (!ownsAction()) return;
       setAccess(result.access);
+      setLoadedAccessIdentityKey(actionIdentityKey);
       setNotice(result.message);
       if (!result.ok) {
         Alert.alert("Subscribe", result.message);
       }
     } catch (error) {
+      if (!ownsAction()) return;
       Alert.alert(
         "Subscribe",
         error instanceof Error && error.message
@@ -98,7 +145,7 @@ export default function ChannelSubscriptionScreen() {
       );
       await loadAccess();
     } finally {
-      setBusy(false);
+      if (ownsAction()) setBusy(false);
     }
   };
 
@@ -108,17 +155,26 @@ export default function ChannelSubscriptionScreen() {
       Alert.alert("Restore", "Sign in before restoring a Platform Subscription.");
       return;
     }
+    const actionIdentityKey = accessIdentityKey;
+    const actionGeneration = ++actionGenerationRef.current;
+    const ownsAction = () => (
+      activeAccessIdentityKeyRef.current === actionIdentityKey
+      && actionGenerationRef.current === actionGeneration
+    );
     try {
       setBusy(true);
       setNotice("Restoring subscriptions for this account…");
       const result = await restoreChannelSubscription(creatorId);
+      if (!ownsAction()) return;
       setAccess(result.access);
+      setLoadedAccessIdentityKey(actionIdentityKey);
       setNotice(result.message);
       if (!result.ok) Alert.alert("Restore", result.message);
     } catch {
+      if (!ownsAction()) return;
       setNotice("Platform Subscription restore is not available right now.");
     } finally {
-      setBusy(false);
+      if (ownsAction()) setBusy(false);
     }
   };
 
@@ -130,9 +186,12 @@ export default function ChannelSubscriptionScreen() {
     } as unknown as Parameters<typeof router.push>[0]);
   };
 
-  const offer = access?.offer ?? null;
-  const subscribed = access?.allowed === true || isOwner;
-  const needsPurchase = !isOwner && access?.requiresPurchase === true && !!offer;
+  const currentAccess = loadedAccessIdentityKey === accessIdentityKey ? access : null;
+  const currentCreatorName = loadedAccessIdentityKey === accessIdentityKey ? creatorName : "Creator";
+  const accessLoading = loading || sessionLoading || loadedAccessIdentityKey !== accessIdentityKey;
+  const offer = currentAccess?.offer ?? null;
+  const subscribed = currentAccess?.allowed === true || isOwner;
+  const needsPurchase = !isOwner && currentAccess?.requiresPurchase === true && !!offer;
 
   return (
     <View style={styles.screen} testID="screen-channel-subscription">
@@ -157,7 +216,7 @@ export default function ChannelSubscriptionScreen() {
           <Text style={styles.headerTitle}>Platform Subscription</Text>
         </View>
 
-        {loading || sessionLoading ? (
+        {accessLoading ? (
           <View style={styles.card}>
             <ActivityIndicator color="#DC143C" />
             <Text style={styles.body}>Checking subscriber status...</Text>
@@ -173,7 +232,7 @@ export default function ChannelSubscriptionScreen() {
               />
             </View>
             <Text style={styles.title}>Platform Subscription active</Text>
-            <Text style={styles.platformName}>{creatorName}</Text>
+            <Text style={styles.platformName}>{currentCreatorName}</Text>
 	            <Text style={styles.body}>
 	              {"Your recurring creator subscription is active for this Platform and includes this creator's ordinary Paid Videos while access remains active."}
 	            </Text>
@@ -184,8 +243,8 @@ export default function ChannelSubscriptionScreen() {
               excludesTestID="subscriber-area-does-not-include-list"
             />
             <MoneyScopeInfoButton scope="channel_subscription" label="What does this include?" />
-            {access?.currentPeriodEnd ? (
-              <Text style={styles.meta}>Current period ends {new Date(access.currentPeriodEnd).toLocaleString()}.</Text>
+            {currentAccess?.currentPeriodEnd ? (
+              <Text style={styles.meta}>Current period ends {new Date(currentAccess.currentPeriodEnd).toLocaleString()}.</Text>
             ) : null}
             <Text style={styles.meta}>Included video access ends when the subscription becomes inactive. Paid Videos purchased separately keep their own grant lifecycle.</Text>
             <Text style={styles.meta}>{"This does not include Chi'llywood Premium or VIP-only content."}</Text>
@@ -224,7 +283,7 @@ export default function ChannelSubscriptionScreen() {
             <Text style={styles.title}>{offer?.title ?? "Platform Subscription"}</Text>
             <Text style={styles.body}>
               {needsPurchase
-                ? `Start a recurring Platform Subscription to ${creatorName}'s Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. While active, it includes this creator's subscriber access and ordinary Paid Videos. It does not include VIP-only content, Premium, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, or other creators.`
+                ? `Start a recurring Platform Subscription to ${currentCreatorName}'s Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. While active, it includes this creator's subscriber access and ordinary Paid Videos. It does not include VIP-only content, Premium, Party Room Passes, Live Stage Passes, Live Stage Seat Passes, Event Passes, or other creators.`
                 : "Platform Subscription purchases are temporarily unavailable while setup is being finalized. Subscriber access stays locked until access is verified."}
             </Text>
             <MoneyScopeStrip

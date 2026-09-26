@@ -52,6 +52,7 @@ const getPostKicker = (item: Extract<ProfileSocialFeedItem, { type: "chilly_circ
   item.type === "chilly_circle_post" ? "CHI'LLY CIRCLE" : "FOLLOWING"
 );
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained feed presentation contract; the current render path intentionally does not call it.
 const getVideoKicker = (item: Extract<ProfileSocialFeedItem, { type: "creator_video" | "public_profile_creator_video" }>) => {
   if (item.type === "public_profile_creator_video") return "CREATOR VIDEO";
   switch (item.sourceContext) {

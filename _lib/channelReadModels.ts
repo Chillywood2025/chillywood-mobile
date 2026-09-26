@@ -155,7 +155,7 @@ const normalizePublicActivityVisibility = (value: unknown): ChannelPublicActivit
   }
   return null;
 };
-const pickLatestIso = (...values: Array<string | null | undefined>) => {
+const pickLatestIso = (...values: (string | null | undefined)[]) => {
   const sorted = values
     .map((value) => normalizeText(value))
     .filter(Boolean)

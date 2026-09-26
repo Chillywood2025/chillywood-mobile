@@ -45,17 +45,6 @@ export type AdminActionRegistryEntry = {
   highRisk: boolean;
 };
 
-const ALL_NON_OWNER_ROLES: readonly PlatformAuthorityRole[] = [
-  "anonymous",
-  "signed_in_user",
-  "creator/channel_owner",
-  "moderator",
-  "operator",
-  "admin",
-  "rachi",
-  "autonomous_operator",
-];
-
 const STAFF_ROLES: readonly PlatformAuthorityRole[] = ["moderator", "operator", "admin", "super_admin", "owner"];
 const OWNER_ROLES: readonly PlatformAuthorityRole[] = ["owner", "super_admin"];
 const ADMIN_ROLES: readonly PlatformAuthorityRole[] = ["operator", "admin", "super_admin", "owner"];

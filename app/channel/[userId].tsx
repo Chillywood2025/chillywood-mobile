@@ -953,14 +953,17 @@ export default function PublicChannelScreen() {
     );
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Platform source contract; the current render path intentionally does not call it.
   const getPublicClipCardTitle = (video: CreatorVideo) => (
     getPublicClipMetadata(video)?.titleText || video.title
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Platform source contract; the current render path intentionally does not call it.
   const getPublicClipCardSubtitle = (video: CreatorVideo) => (
     getPublicClipMetadata(video)?.subtitleText || video.description
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Platform source contract; the current render path intentionally does not call it.
   const renderPublicClipTemplateBadge = (video: CreatorVideo) => {
     const metadata = getPublicClipMetadata(video);
     const templateLabel = formatPublicClipTemplateLabel(metadata?.templatePreset ?? null);
@@ -972,6 +975,7 @@ export default function PublicChannelScreen() {
     );
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Platform source contract; the current render path intentionally does not call it.
   const renderPublicClipMetadataOverlay = (video: CreatorVideo, variant: "featured" | "shelf") => {
     const metadata = getPublicClipMetadata(video);
     const title = metadata?.titleText.trim() ?? "";
@@ -997,6 +1001,7 @@ export default function PublicChannelScreen() {
     );
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Platform source contract; the current render path intentionally does not call it.
   const renderOwnerVideoActionButton = (video: CreatorVideo) => (
     showOwnerControls ? (
       <TouchableOpacity
@@ -1138,6 +1143,7 @@ export default function PublicChannelScreen() {
     </AppSection>
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Platform source contract; the current render path intentionally does not call it.
   const renderMiniPlatformCommerce = () => {
     const products = commerceSurface?.products ?? [];
     return (
@@ -1177,6 +1183,7 @@ export default function PublicChannelScreen() {
     );
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Platform source contract; the current render path intentionally does not call it.
   const renderSandboxTesterSurface = () => {
     if (!sandboxTesterActive || platformMode !== "sandbox_tester_mode") return null;
 
@@ -1291,6 +1298,7 @@ export default function PublicChannelScreen() {
     );
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Platform source contract; the current render path intentionally does not call it.
   const renderChannelSubscription = () => {
     if (sandboxTesterActive && !isOwnerPlatformMode(platformMode)) return null;
     const offer = subscriptionAccess?.offer ?? null;
@@ -1358,6 +1366,7 @@ export default function PublicChannelScreen() {
     );
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Platform source contract; the current render path intentionally does not call it.
   const renderVipPass = () => {
     if (sandboxTesterActive && !isOwnerPlatformMode(platformMode)) return null;
     const offer = vipAccess?.offer ?? null;

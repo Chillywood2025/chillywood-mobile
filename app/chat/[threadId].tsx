@@ -1896,8 +1896,6 @@ export default function ChillyChatThreadScreen() {
     completeTrustedIosNativeAnswer,
     currentUserId,
     loadThreadState,
-    requestedNativeCallAction,
-    requestedNativeCallUuid,
     threadId,
   ]);
 
@@ -1978,7 +1976,6 @@ export default function ChillyChatThreadScreen() {
     currentUserId,
     loadThreadState,
     readAcceptableIncomingInvite,
-    requestedNativeCallAction,
     requestedNativeCallUuid,
     threadId,
   ]);

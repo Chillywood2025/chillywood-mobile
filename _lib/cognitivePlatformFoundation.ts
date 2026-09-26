@@ -1468,7 +1468,7 @@ const boundedFragmentReconstructions = (
 };
 
 type PositionedFragmentScan = {
-  fragments: Array<{ position: number; value: string }>;
+  fragments: { position: number; value: string }[];
   invalid: boolean;
 };
 const POSITION_ALIAS_LABELS = new Set([
@@ -2044,7 +2044,7 @@ type UrlFragmentReconstructions = {
 };
 const appendOrderedFragmentAlternatives = (
   output: string[],
-  fragments: ReadonlyArray<{ position: number; value: string }>,
+  fragments: readonly { position: number; value: string }[],
 ): void => {
   if (fragments.length < 2 || fragments.length > 128) return;
   const groups = new Map<number, string[]>();
@@ -2073,8 +2073,8 @@ const appendOrderedFragmentAlternatives = (
 };
 
 const reconstructNamedUrlFragments = (searchParams: URLSearchParams): UrlFragmentReconstructions => {
-  const groups = new Map<string, Array<{ position: number; value: string }>>();
-  const allIndexed: Array<{ position: number; value: string }> = [];
+  const groups = new Map<string, { position: number; value: string }[]>();
+  const allIndexed: { position: number; value: string }[] = [];
   const entries = [...searchParams.entries()].slice(0, 128);
   const candidates: string[] = [];
   const structured: string[] = [];
@@ -2098,7 +2098,7 @@ const reconstructNamedUrlFragments = (searchParams: URLSearchParams): UrlFragmen
   if (entries.length >= 2) {
     appendSequenceCandidates(entries.flatMap(([key, value]) => [key, value]));
   }
-  const pairedFragments: Array<{ position: number; value: string }> = [];
+  const pairedFragments: { position: number; value: string }[] = [];
   let pendingPosition: number | null = null;
   for (const [key, value] of entries) {
     const normalizedKey = normalizeSecurityText(key).slice(0, 128);
@@ -2180,7 +2180,7 @@ const pathFragmentCandidates = (pathname: string): UrlFragmentReconstructions =>
   });
   candidates.push(...boundedPermutationReconstructions(segments, 2_048));
   const structured: string[] = [];
-  const positioned: Array<{ position: number; value: string }> = [];
+  const positioned: { position: number; value: string }[] = [];
   for (let index = 0; index < segments.length - 1; index += 1) {
     const position = semanticOrderIndex(segments[index].split("=", 1)[0]);
     if (position !== null) {

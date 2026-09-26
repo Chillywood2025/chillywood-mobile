@@ -119,7 +119,7 @@ export function InternalInviteSheet({
       setSendingUserId("");
       setError(null);
     }
-  }, [visible]);
+  }, [sourceSurface, title, visible]);
 
   useEffect(() => {
     if (!visible) return;
@@ -184,7 +184,7 @@ export function InternalInviteSheet({
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [query, visible]);
+  }, [query, sourceSurface, visible]);
 
   const emptyText = useMemo(() => {
     if (!normalizePeopleSearchQuery(query).searchable) return "Type at least 2 characters to find a Chi'llywood member.";
@@ -243,7 +243,7 @@ export function InternalInviteSheet({
     } finally {
       setSendingUserId("");
     }
-  }, [appConfig.runtimeControls.chat_enabled, inviteMessage, onClose, onInviteSent]);
+  }, [appConfig.runtimeControls.chat_enabled, inviteMessage, onClose, onInviteSent, sourceSurface]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>

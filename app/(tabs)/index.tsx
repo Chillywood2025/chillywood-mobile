@@ -489,6 +489,7 @@ export default function HomeScreen() {
     });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Home source contract; the current render path intentionally does not call it.
   function openChannel(userId?: string | null) {
     const safeUserId = String(userId ?? "").trim();
     if (!safeUserId) return;
@@ -600,6 +601,7 @@ export default function HomeScreen() {
     [circleSpectatorItems],
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Home source contract; the current render path intentionally does not call it.
   function renderHomeHero() {
     const heroItem = continueWatchingHeroItem;
     const progress = heroItem ? watchProgress[String(heroItem.id)] : undefined;

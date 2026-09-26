@@ -136,7 +136,6 @@ type PlatformBrandAssetInsert = TablesInsert<"platform_brand_assets">;
 type PlatformBrandAssetUpdate = TablesUpdate<"platform_brand_assets">;
 type PlatformBrandProfileRow = Tables<"platform_brand_profiles">;
 type PlatformBrandProfileInsert = TablesInsert<"platform_brand_profiles">;
-type PlatformBrandProfileUpdate = TablesUpdate<"platform_brand_profiles">;
 
 type PublicPlatformBrandProfileRow = Omit<PlatformBrandProfileRow, "created_at">;
 

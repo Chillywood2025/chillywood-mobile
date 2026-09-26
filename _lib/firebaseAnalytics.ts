@@ -42,6 +42,8 @@ const getAnalyticsModule = () => {
   if (!ensureFirebaseDefaultApp()) return null;
 
   cachedAnalyticsModule ??=
+    // Firebase native modules must load only after the platform/app guard succeeds.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     require("@react-native-firebase/analytics").default as typeof import("@react-native-firebase/analytics").default;
 
   return cachedAnalyticsModule;

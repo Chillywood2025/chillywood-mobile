@@ -231,7 +231,7 @@
     "test:sign-in-presentation": "node --test ./tests/sign-in-presentation.test.mjs",
     "proof:ios-voip-policy": "node ./scripts/proof-ios-voip-policy.mjs",
     "proof:ios-voip-token-lifecycle": "node ./scripts/proof-ios-voip-token-lifecycle.mjs",
-    "lint": "expo lint -- --concurrency off",
+    "lint": "expo lint app components hooks _lib constants --max-warnings 0 -- --concurrency off",
     "guard:refresh-policy": "node ./scripts/guard-refresh-policy.mjs",
     "guard:payment-rail-policy": "node ./scripts/guard-payment-rail-policy.mjs",
     "guard:money-center-policy": "node ./scripts/guard-money-center-policy.mjs",
@@ -682,6 +682,7 @@
         "brace-expansion": "5.0.9"
       }
     },
+    "@humanfs/node": "0.16.8",
     "fast-uri": "3.1.6",
     "glob@13.0.6": {
       "minimatch@10.2.4": {
@@ -697,7 +698,7 @@
       "brace-expansion": "2.1.4"
     },
     "nanoid": "3.3.18",
-    "postcss": "8.5.22"
+    "postcss": "8.5.23"
   },
   "private": true
 }

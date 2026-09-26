@@ -579,6 +579,8 @@ function LiveKitStageMediaContent({
   }, [
     cameraTrack,
     connectionState,
+    currentIdentitySet,
+    currentParticipantIdentity,
     isCameraEnabled,
     isMicrophoneEnabled,
     joinContract.participantRole,
@@ -591,7 +593,7 @@ function LiveKitStageMediaContent({
     publishLocalAudio,
     publishedLocalCameraTrackRef,
     primaryRemoteTrack,
-    bubbleGridItems.length,
+    bubbleGridItems,
     bubbleGridTracks.length,
     bubbleGridTracks,
     bubbleGridTrackMappings,
@@ -812,6 +814,9 @@ export function LiveKitStageMediaSurface({
   const connectOptions = useMemo(() => ({ autoSubscribe: true }), []);
   const roomKey = `${joinContract.roomName}:${joinContract.participantToken}`;
   const room = useMemo(() => {
+    // Layout changes intentionally create a fresh Room so track placement and
+    // reconnection state are rebuilt together for the new presentation mode.
+    void layout;
     void roomKey;
     const nextRoom = new Room(createLiveKitV1RoomOptions({ adaptiveStream: true, dynacast: true }));
     patchLiveKitSignalReadingLoop(

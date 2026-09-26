@@ -42,7 +42,6 @@ import {
 } from "./communicationCallMediaPolicy.mjs";
 import { reportRuntimeError } from "./logger";
 import { UserFacingError } from "./userFacingErrors";
-import { withAuthorityReadDeadline } from "./entitlementAuthority";
 
 export const CHAT_THREADS_TABLE = "chat_threads";
 export const CHAT_THREAD_MEMBERS_TABLE = "chat_thread_members";

@@ -20,6 +20,8 @@ const getPerformanceModule = () => {
   if (!ensureFirebaseDefaultApp()) return null;
 
   cachedPerformanceModule ??=
+    // Firebase native modules must load only after the platform/app guard succeeds.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     require("@react-native-firebase/perf").default as typeof import("@react-native-firebase/perf").default;
 
   return cachedPerformanceModule;

@@ -478,7 +478,7 @@ const DENIAL_REVERSAL = /\b(?:remove|disable|bypass|override|reverse)\b[\s\S]{0,
 
 const collectProviderEntries = (
   value: unknown,
-  entries: Array<readonly [string, string]> = [],
+  entries: (readonly [string, string])[] = [],
   parent = "",
   depth = 0,
 ): readonly (readonly [string, string])[] => {

@@ -1351,9 +1351,11 @@ export default function WatchPartyLiveStageScreen({
     }
   }, [isHost, modeParamValue, requireHybridModePremium, router, stageOverlayMotion]);
 
+  const stageRoomIdentity = room?.partyId ?? "";
+
   useEffect(() => {
     const normalizedRouteMode = normalizeSharedRoomMode(modeParamValue, "live");
-    if (!room || !myUserId) {
+    if (!stageRoomIdentity || !myUserId) {
       if (normalizedRouteMode !== "hybrid") {
         setStageMode((currentMode) => (currentMode === normalizedRouteMode ? currentMode : normalizedRouteMode));
       }
@@ -1393,7 +1395,7 @@ export default function WatchPartyLiveStageScreen({
     return () => {
       cancelled = true;
     };
-  }, [isHost, modeParamValue, myUserId, requireHybridModePremium, room?.partyId, router]);
+  }, [isHost, modeParamValue, myUserId, requireHybridModePremium, router, stageRoomIdentity]);
 
   useEffect(() => {
     setLiveSurface("room");
@@ -2988,6 +2990,8 @@ export default function WatchPartyLiveStageScreen({
   const communityCardCountLabel = communityCardParticipants.length > 0
     ? `${communityCardParticipants.length} ${communityCardParticipants.length === 1 ? "member" : "members"}`
     : "Feeds syncing";
+  const liveKitJoinContractPresent = !!liveKitJoinContract;
+  const liveKitJoinUnavailablePresent = !!liveKitJoinUnavailable;
   useEffect(() => {
     if (Platform.OS === "web" || liveSurface !== "stage") return;
     debugLog("livekit", "live-stage member feed authority state", {
@@ -3015,7 +3019,7 @@ export default function WatchPartyLiveStageScreen({
       liveSurface,
       stageMode,
       roomEntryErrorPresent: !!roomEntryError,
-      activeContractPresent: !!liveKitJoinContract,
+      activeContractPresent: liveKitJoinContractPresent,
       renderableContractPresent: !!liveKitRenderableJoinContract,
       surfaceContractPresent: !!liveKitStageSurfaceContract,
       shouldRenderLiveKitStage,
@@ -3036,7 +3040,7 @@ export default function WatchPartyLiveStageScreen({
       ? liveKitParticipantRole
       : "viewer";
     const telemetryBase = {
-      activeContractPresent: !!liveKitJoinContract,
+      activeContractPresent: liveKitJoinContractPresent,
       bubbleGridItemCount: communityCardParticipants.length,
       bubbleGridTrackCount: shouldRenderLiveKitStage && publishLocalStageCamera ? 1 : 0,
       canPublish: liveKitParticipantRole !== "viewer" && !isCurrentStageParticipantMuted,
@@ -3049,7 +3053,7 @@ export default function WatchPartyLiveStageScreen({
       shouldRenderSurface: shouldRenderLiveKitStage,
       surface: "live_stage" as const,
     };
-    if (liveKitJoinContract) {
+    if (liveKitJoinContractPresent) {
       emitLiveKitRenderTelemetryEvent("livekit_token_contract_present", telemetryBase);
     }
     if (liveKitRenderableJoinContract || liveKitStageSurfaceContract) {
@@ -3057,7 +3061,7 @@ export default function WatchPartyLiveStageScreen({
     }
     if (shouldRenderLiveKitStage) {
       emitLiveKitRenderTelemetryEvent("livekit_surface_mount_attempt", telemetryBase);
-    } else if (liveKitJoinUnavailable) {
+    } else if (liveKitJoinUnavailablePresent) {
       emitLiveKitRenderTelemetryEvent("livekit_render_contract_missing", telemetryBase);
     }
   }, [
@@ -3069,6 +3073,8 @@ export default function WatchPartyLiveStageScreen({
     liveKitJoinUnavailable?.reason,
     liveKitJoinUnavailable?.responseError,
     liveKitJoinUnavailable?.responseStatus,
+    liveKitJoinContractPresent,
+    liveKitJoinUnavailablePresent,
     liveKitJoinContract?.participantRole,
     liveKitJoinContract?.requestedGrants.canPublish,
     liveKitJoinContract?.roomName,
@@ -3276,7 +3282,7 @@ export default function WatchPartyLiveStageScreen({
         roomMessagesChannelRef.current = null;
       }
     };
-  }, [canUseBetaStage, fetchHybridComments, mergeHybridCommentsIfChanged, partyId, usesSharedStageCommentLane]);
+  }, [canUseBetaStage, fetchHybridComments, mapLiveStageCommentRow, mergeHybridCommentsIfChanged, partyId, usesSharedStageCommentLane]);
 
   useEffect(() => {
     if (!canUseBetaStage || !isFocused || !partyId || !usesSharedStageCommentLane || liveSurface !== "stage") return;
@@ -3696,6 +3702,7 @@ export default function WatchPartyLiveStageScreen({
         desiredCanPublish,
         contractParticipantRole: liveKitJoinContract?.participantRole ?? null,
         contractCanPublish: liveKitJoinContract?.requestedGrants.canPublish ?? null,
+        stalePublishContract,
         refreshReason,
         membershipAuthority: currentMembershipAuthoritySignature,
       });

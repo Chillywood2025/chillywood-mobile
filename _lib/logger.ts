@@ -4,7 +4,7 @@ import { trackEvent, type AnalyticsPayload } from "./analytics";
 
 type SerializableMeta = AnalyticsPayload | Record<string, unknown> | undefined;
 
-const SENSITIVE_TEXT_PATTERNS: Array<[RegExp, string]> = [
+const SENSITIVE_TEXT_PATTERNS: [RegExp, string][] = [
   [/(Bearer\s+)[A-Za-z0-9._~+/-]+=*/gi, "$1[redacted]"],
   [/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[redacted-jwt]"],
   [/([?&](?:access_token|refresh_token|token|apikey|key|signature|expires|expires_in)=)[^&\s]+/gi, "$1[redacted]"],

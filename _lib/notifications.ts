@@ -1269,7 +1269,7 @@ export async function dismissChillyChatCallNotificationRows(input: {
 
   const { data, error } = await query
     .select("id")
-    .returns<Array<{ id: string }>>();
+    .returns<{ id: string }[]>();
 
   const matchedCount = error || !data ? 0 : data.length;
   if (!callInviteId && !threadId) return matchedCount;
@@ -1285,7 +1285,7 @@ export async function dismissChillyChatCallNotificationRows(input: {
     .eq("category", "chilly_chat_call")
     .is("dismissed_at", null)
     .select("id")
-    .returns<Array<{ id: string }>>();
+    .returns<{ id: string }[]>();
 
   return matchedCount + (staleError || !staleData ? 0 : staleData.length);
 }

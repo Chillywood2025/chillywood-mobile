@@ -188,6 +188,7 @@ import {
 } from "../_lib/monetization";
 import {
   hasPlatformRoleMembership,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   hasPlatformStaffPermission,
   readMyPlatformRoleMemberships,
   type PlatformRoleMembership,
@@ -224,6 +225,7 @@ import {
   isCreatorVideoPubliclyShareable,
 } from "../_lib/creatorVideoLinks";
 import {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   formatCreatorReplaySourceLabel,
   formatCreatorReplayStatusLabel,
   formatCreatorReplayVisibilityLabel,
@@ -291,6 +293,7 @@ import { CreatorContentActionSheet, type CreatorContentActionSheetVisibilityActi
 import { MoneyScopeInfoButton, type MoneyScopeKey } from "../components/monetization/MoneyScopeInfoButton";
 import { NotificationBellButton } from "../components/notifications/notification-bell-button";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
 import { AppActionButton, AppEmptyState, AppStickyActionBar } from "../components/ui/app-surface";
 import {
   CHILLYWOOD_VISUAL,
@@ -576,6 +579,7 @@ const formatChannelRoomAccessValue = (value?: ChannelAccessResolution["watchPart
   return "Public";
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
 const formatRoomDefaultAccessLabel = (value: "open" | "party_pass" | "premium") => {
   if (value === "party_pass") return "Party Room Pass";
   if (value === "premium") return "Premium";
@@ -589,8 +593,11 @@ const formatChannelRoleLabel = (value?: UserChannelRole | null) => {
   return "";
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
 const formatJoinPolicyLabel = (value: "open" | "locked") => (value === "locked" ? "Locked" : "Open");
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
 const formatReactionsPolicyLabel = (value: "enabled" | "muted") => (value === "muted" ? "Muted" : "Enabled");
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
 const formatCapturePolicyLabel = (value: "best_effort" | "host_managed") => (
   value === "host_managed" ? "Host Managed" : "Best Effort"
 );
@@ -734,6 +741,7 @@ const formatBrandThemeLabel = (value?: PlatformBrandThemePreset | null) => {
   return option?.label ?? "City Night";
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
 const formatPlatformBrandAssetTypeLabel = (value?: PlatformBrandAssetType | null) => {
   switch (value) {
     case "background_image":
@@ -819,6 +827,7 @@ const formatAudienceActionStatus = (value: ChannelAudienceActionStatus) =>
 const formatReadModelStatusValue = (value: Exclude<ChannelReadModelFieldStatus, "available">) =>
   value.replaceAll("_", " ").replace(/\b\w/g, (match: string) => match.toUpperCase());
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
 const getCreatorFacingPayoutSetupBody = (summary: CreatorPayoutDashboardReadModel) => {
   switch (summary.setupStatus) {
     case "provider_not_configured":
@@ -842,6 +851,7 @@ const getCreatorFacingPayoutSetupBody = (summary: CreatorPayoutDashboardReadMode
   }
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
 const formatStudioSectionStatusLabel = (status: ChannelSettingsSectionStatus) => {
   if (status === "current") return "CURRENT";
   if (status === "near_term") return "STATUS PATH";
@@ -898,6 +908,7 @@ const STUDIO_TABS: readonly { id: StudioTabId; label: string }[] = [
   { id: "brand", label: "Brand" },
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
 const CONTENT_STATUS_FILTERS: readonly { id: ContentStatusFilter; label: string }[] = [
   { id: "all", label: "All" },
   { id: "uploads", label: "Uploads" },
@@ -911,6 +922,7 @@ const CONTENT_STATUS_FILTERS: readonly { id: ContentStatusFilter; label: string 
   { id: "needs_attention", label: "Needs Attention" },
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
 const CONTENT_SORT_OPTIONS: readonly { id: ContentSortId; label: string }[] = [
   { id: "newest", label: "Newest" },
   { id: "oldest", label: "Oldest" },
@@ -1323,6 +1335,7 @@ export function ChannelStudioScreen() {
   );
   const [contentStatusFilter, setContentStatusFilter] = useState<ContentStatusFilter>("all");
   const [contentSearchQuery, setContentSearchQuery] = useState("");
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const [contentSort, setContentSort] = useState<ContentSortId>("newest");
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [platformVisibilitySaving, setPlatformVisibilitySaving] = useState<AccessVisibility | null>(null);
@@ -1450,6 +1463,7 @@ export function ChannelStudioScreen() {
       : videoTitleReady
         ? ""
         : "Enter a title to enable upload.";
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const isVideoSubmitDisabled = videoSaving || !!videoSubmitRequirement;
   const canUseChannelSettings = isSignedIn && isActive && !!user?.id;
   const hasOwnerOperatorStudioAccess = useMemo(
@@ -1474,6 +1488,7 @@ export function ChannelStudioScreen() {
     providerReadinessSummary,
   ]);
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Platform Studio");
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const subscriberMutationSupport = getChannelSubscriberRelationshipActionSupport();
   const openStudioTab = (
     tab: StudioTabId,
@@ -2708,6 +2723,7 @@ export function ChannelStudioScreen() {
     setClipNotice(`${formatClipStudioTemplateLabel(templateConfig.preset)} template selected. Preview updated.`);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const resetClipStudio = () => {
     clipSaveInFlightRef.current = false;
     setClipEditor(createEmptyClipStudioEditorState());
@@ -3088,7 +3104,7 @@ export function ChannelStudioScreen() {
     }
   };
 
-  const loadPlatformBranding = async () => {
+  const loadPlatformBranding = useCallback(async () => {
     const ownerUserId = String(user?.id ?? "").trim();
     if (!ownerUserId) {
       setPlatformBranding(null);
@@ -3108,7 +3124,7 @@ export function ChannelStudioScreen() {
     } finally {
       setBrandLoading(false);
     }
-  };
+  }, [user?.id]);
 
   const resetVideoEditor = (nextLifecycleState: VideoLifecycleState = "idle") => {
     setVideoEditor(createEmptyVideoEditorState());
@@ -3337,6 +3353,7 @@ export function ChannelStudioScreen() {
     });
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const onPickVideoFile = () => {
     openUploadSourceChooser("legacy_video");
   };
@@ -3569,6 +3586,7 @@ export function ChannelStudioScreen() {
     return { bundle, readback };
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const publishBrandDraft = async () => {
     if (brandProfileSaveInFlightRef.current) return;
     brandProfileSaveInFlightRef.current = true;
@@ -3654,7 +3672,7 @@ export function ChannelStudioScreen() {
     }
   };
 
-  const publishSpotlightVideo = async (video: CreatorVideo | null) => {
+  const publishSpotlightVideo = useCallback(async (video: CreatorVideo | null) => {
     const ownerUserId = String(user?.id ?? "").trim();
     if (!ownerUserId) {
       setVideoNotice("Sign in before changing your featured Platform video.");
@@ -3685,7 +3703,7 @@ export function ChannelStudioScreen() {
     } finally {
       setBrandSaving(false);
     }
-  };
+  }, [brandDraft, loadPlatformBranding, platformBranding, user?.id]);
 
   useEffect(() => {
     const routedSpotlightVideoId = String(
@@ -3829,6 +3847,7 @@ export function ChannelStudioScreen() {
     setVideoNotice(null);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const onSaveVideo = async () => {
     if (!videoEditor.title.trim()) {
       logCreatorVideoUploadUi("submit_blocked", { reason: "missing_title" });
@@ -4629,6 +4648,7 @@ export function ChannelStudioScreen() {
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const onSave = async () => {
     if (!profile) return;
 
@@ -4643,6 +4663,7 @@ export function ChannelStudioScreen() {
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const studioSectionGroups: readonly ChannelSettingsSectionGroup[] = [
     {
       title: "Content",
@@ -4762,23 +4783,27 @@ export function ChannelStudioScreen() {
       ],
     },
   ];
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const designSectionHighlights = [
     "Hero treatment",
     "Avatar framing",
     "Accent direction",
     "Brand presence",
   ] as const;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const layoutSectionHighlights = [
     "Home block order",
     "Default tab emphasis",
     "Shelf hierarchy",
     "Live module priority",
   ] as const;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const accessSummary = {
     title: channelAccessResolution?.label ?? "Loading Access",
     body: getChannelAccessSummaryBody(channelAccessResolution),
   };
   const resolvedCreatorPermissions = channelAccessResolution?.creatorPermissions ?? creatorPermissions;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const accessSummaryDetails: readonly ChannelAccessSummaryDetail[] = [
     {
       label: "Watch Party",
@@ -4791,6 +4816,7 @@ export function ChannelStudioScreen() {
       body: "Chi'lly Chat stays canonical even when default room access is gated",
     },
   ];
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const creatorGrantDetails: readonly ChannelAccessSummaryDetail[] = [
     {
       label: "Paid Party Rooms",
@@ -4841,6 +4867,7 @@ export function ChannelStudioScreen() {
       body: "Blocked audience entries are supported for this Platform.",
     },
   ];
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const audienceVisibilityCards: readonly SummaryMetricCard[] = [
     {
       label: "Public Activity",
@@ -4858,6 +4885,7 @@ export function ChannelStudioScreen() {
       body: "Shows whether subscriber visibility can appear on this Platform.",
     },
   ];
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const audienceUnavailableCards: readonly SummaryMetricCard[] = [
     {
       label: "VIP / Mod / Co-Host",
@@ -4926,6 +4954,7 @@ export function ChannelStudioScreen() {
       body: "Subscriber signal from creator/Platform subscriber truth.",
     },
   ];
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const analyticsUnavailableCards: readonly SummaryMetricCard[] = analyticsUnavailableMetricDefinitions.reduce<SummaryMetricCard[]>((cards, definition) => {
       const status = creatorAnalyticsSummary?.dataStatus?.[definition.key] ?? "missing";
       if (status === "available") {
@@ -4939,6 +4968,7 @@ export function ChannelStudioScreen() {
       });
       return cards;
     }, []);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const safetySummaryCards: readonly SummaryMetricCard[] = [
     {
       label: "Actor Role",
@@ -4963,6 +4993,7 @@ export function ChannelStudioScreen() {
         : "No official or operator audit key is attached to this Platform context.",
     },
   ];
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const safetySummarySecondaryCards: readonly SummaryMetricCard[] = [
     {
       label: "Platform Roles",
@@ -5169,12 +5200,14 @@ export function ChannelStudioScreen() {
   const circleVideoCount = creatorVideos.filter((video) => video.visibility === "circle").length;
   const draftVideoCount = creatorVideos.filter((video) => video.visibility === "draft").length;
   const replayCount = creatorReplays.length;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const processingReplayCount = creatorReplays.filter((replay) => (
     replay.saveStatus === "processing_replay"
     || replay.saveStatus === "recording_active"
     || replay.saveStatus === "recording_stopping"
     || replay.saveStatus === "requested"
   )).length;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const needsAttentionReplayCount = creatorReplays.filter((replay) => (
     replay.saveStatus === "failed" || replay.saveStatus === "recording_not_started" || replay.moderationStatus === "hidden"
   )).length;
@@ -5200,6 +5233,7 @@ export function ChannelStudioScreen() {
     });
     return map;
   }, [enabledCreatorPaidEventOffers]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const filteredCreatorVideos = useMemo(() => {
     const query = contentSearchQuery.trim().toLowerCase();
     return creatorVideos
@@ -5217,6 +5251,7 @@ export function ChannelStudioScreen() {
         return contentSort === "oldest" ? diff : -diff;
       });
   }, [contentSearchQuery, contentSort, contentStatusFilter, creatorVideos, paidVideoOfferByVideoId]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const filteredCreatorReplays = useMemo(() => {
     const query = contentSearchQuery.trim().toLowerCase();
     return creatorReplays
@@ -5237,6 +5272,7 @@ export function ChannelStudioScreen() {
         return contentSort === "oldest" ? diff : -diff;
       });
   }, [contentSearchQuery, contentSort, contentStatusFilter, creatorReplays]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const videoLifecycleCopy = getVideoLifecycleCopy({
     editingVideoId: videoEditor.editingVideoId,
     selectedFile: selectedVideoFile,
@@ -6599,6 +6635,7 @@ export function ChannelStudioScreen() {
     </TouchableOpacity>
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const renderHomeActionCard = ({
     title,
     body,
@@ -7631,6 +7668,7 @@ export function ChannelStudioScreen() {
         : monetizationActive ? "Active"
           : creatorSetupModeActive ? "Setup mode"
             : "Not active";
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
     const topStatus = moneyCenterStatus;
     const tipsFlag = moneyFlag("tips_enabled");
     const watchPartyTicketsFlag = moneyFlag("watch_party_tickets_enabled");
@@ -7878,6 +7916,7 @@ export function ChannelStudioScreen() {
         tone: switchTone(providerWebhooksFlag.state) === "default" ? "default" : "unavailable",
       },
     ];
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
     const overviewEvents = creatorMoneyAuditEvents.filter((event) => (
       event.category === "kill_switches"
       || event.category === "provider_readiness"

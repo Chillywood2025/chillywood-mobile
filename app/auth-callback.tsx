@@ -98,6 +98,24 @@ const parseAuthCallbackUrl = (url: string | null) => {
   }
 };
 
+const resolveOtpType = (flowOrType?: string) => {
+  const normalized = String(flowOrType ?? "").trim().toLowerCase();
+  if (normalized === "signup" || normalized === "email" || normalized === "email_change" || normalized === "invite" || normalized === "magiclink") {
+    return normalized as
+      | "signup"
+      | "email"
+      | "email_change"
+      | "invite"
+      | "magiclink";
+  }
+
+  if (normalized === "recovery" || normalized === "recover") {
+    return "recovery";
+  }
+
+  return "signup";
+};
+
 export default function AuthCallbackScreen() {
   const params = useLocalSearchParams<AuthCallbackParams>();
   const router = useRouter();
@@ -107,21 +125,44 @@ export default function AuthCallbackScreen() {
   const [message, setMessage] = useState("Opening your Chi'llywood email verification...");
   const [urlState, setUrlState] = useState<AuthCallbackState | null>(null);
   const [urlHydrated, setUrlHydrated] = useState(false);
-  const processingStartedRef = useRef(false);
+
+  const routeCode = firstParam(params.code);
+  const routeToken = firstParam(params.token);
+  const routeTokenHash = firstParam(params.token_hash);
+  const routeAccessToken = firstParam(params.access_token);
+  const routeRefreshToken = firstParam(params.refresh_token);
+  const routeError = firstParam(params.error);
+  const routeErrorCode = firstParam(params.error_code);
+  const routeErrorDescription = firstParam(params.error_description);
+  const routeEmail = firstParam(params.email);
+  const routeFlow = firstParam(params.flow);
+  const routeType = firstParam(params.type);
 
   const routeState = useMemo<AuthCallbackState>(() => ({
-    code: firstParam(params.code),
-    token: firstParam(params.token),
-    tokenHash: firstParam(params.token_hash),
-    accessToken: firstParam(params.access_token),
-    refreshToken: firstParam(params.refresh_token),
-    error: firstParam(params.error),
-    errorCode: firstParam(params.error_code),
-    errorDescription: firstParam(params.error_description),
-    email: firstParam(params.email),
-    flow: firstParam(params.flow),
-    type: firstParam(params.type),
-  }), [params]);
+    code: routeCode,
+    token: routeToken,
+    tokenHash: routeTokenHash,
+    accessToken: routeAccessToken,
+    refreshToken: routeRefreshToken,
+    error: routeError,
+    errorCode: routeErrorCode,
+    errorDescription: routeErrorDescription,
+    email: routeEmail,
+    flow: routeFlow,
+    type: routeType,
+  }), [
+    routeAccessToken,
+    routeCode,
+    routeEmail,
+    routeError,
+    routeErrorCode,
+    routeErrorDescription,
+    routeFlow,
+    routeRefreshToken,
+    routeToken,
+    routeTokenHash,
+    routeType,
+  ]);
 
   const callbackState = useMemo(() => hasAuthCallbackState(routeState) ? routeState : urlState ?? routeState, [routeState, urlState]);
 
@@ -169,47 +210,54 @@ export default function AuthCallbackScreen() {
     return query.toString();
   }, [callbackState]);
 
-  const resolveOtpType = (flowOrType?: string) => {
-    const normalized = String(flowOrType ?? "").trim().toLowerCase();
-    if (normalized === "signup" || normalized === "email" || normalized === "email_change" || normalized === "invite" || normalized === "magiclink") {
-      return normalized as
-        | "signup"
-        | "email"
-        | "email_change"
-        | "invite"
-        | "magiclink";
-    }
+  const callbackKey = useMemo(() => JSON.stringify(callbackState), [callbackState]);
+  const activeCallbackKeyRef = useRef<string | null>(null);
+  const processedCallbackKeysRef = useRef(new Set<string>());
+  const processingQueueRef = useRef<Promise<void>>(Promise.resolve());
 
-    if (normalized === "recovery" || normalized === "recover") {
-      return "recovery";
-    }
+  const goToLogin = useCallback(() => {
+    router.replace("/(auth)/login");
+  }, [router]);
 
-    return "signup";
-  };
-
-  const finishWithAuthSuccess = () => {
+  const finishWithAuthSuccess = useCallback(() => {
     setTitle("Email verified");
     setMessage("Your account is verified. Sign in with your email and password to continue.");
     goToLogin();
-  };
+  }, [goToLogin]);
 
-  const finishWithFailure = (text: string, reason?: string) => {
+  const finishWithFailure = useCallback((text: string, reason?: string) => {
     setTitle("Verification link problem");
     setMessage(text || "This email link could not be verified. Try signing in or request a fresh email.");
     trackEvent("auth_email_callback_failed", {
       reason: reason || "unknown",
     });
-  };
-
-  const goToLogin = () => {
-    router.replace("/(auth)/login");
-  };
+  }, []);
 
   useEffect(() => {
-    let active = true;
+    if (!urlHydrated) return;
+
+    activeCallbackKeyRef.current = callbackKey;
+
+    if (processedCallbackKeysRef.current.has(callbackKey)) {
+      return () => {
+        if (activeCallbackKeyRef.current === callbackKey) activeCallbackKeyRef.current = null;
+      };
+    }
+    processedCallbackKeysRef.current.add(callbackKey);
+    setChecking(true);
+    setTitle("Confirming your account");
+    setMessage("Opening your Chi'llywood email verification...");
 
     const finishCallback = async () => {
-      if (!urlHydrated || processingStartedRef.current) return;
+      const callbackState = JSON.parse(callbackKey) as AuthCallbackState;
+      const isCurrentCallback = () => activeCallbackKeyRef.current === callbackKey;
+      const finishCurrentFailure = (text: string, reason?: string) => {
+        if (isCurrentCallback()) {
+          finishWithFailure(text, reason);
+        } else {
+          trackEvent("auth_email_callback_failed", { reason: reason || "unknown" });
+        }
+      };
 
       try {
         if (isRecoveryCallback) {
@@ -225,26 +273,24 @@ export default function AuthCallbackScreen() {
           if (hasRecoveryLinkData) {
             const targetRoute = recoveryRouteQuery ? `/reset-password?${recoveryRouteQuery}` : "/reset-password";
             if (parseApplicationLink(targetRoute)?.kind !== "password_reset") {
-              finishWithFailure("This recovery link is malformed. Request a fresh link.", "malformed_recovery_link");
+              finishCurrentFailure("This recovery link is malformed. Request a fresh link.", "malformed_recovery_link");
               return;
             }
-            processingStartedRef.current = true;
-            router.replace(targetRoute as Parameters<typeof router.replace>[0]);
-            if (!active) return;
-            setChecking(false);
+            if (isCurrentCallback()) {
+              router.replace(targetRoute as Parameters<typeof router.replace>[0]);
+            }
             return;
           }
         }
 
         const callbackRoute = recoveryRouteQuery ? `/auth-callback?${recoveryRouteQuery}` : "/auth-callback";
         if (!consumeApplicationAuthInput(callbackRoute, "auth_callback")) {
-          finishWithFailure("This verification link is malformed or was already used.", "invalid_or_replayed_link");
+          finishCurrentFailure("This verification link is malformed or was already used.", "invalid_or_replayed_link");
           return;
         }
-        processingStartedRef.current = true;
 
         if (callbackState.error || callbackState.errorCode) {
-          finishWithFailure(
+          finishCurrentFailure(
             callbackState.errorDescription || "This email link could not be verified. Try signing in or request a fresh email.",
             callbackState.errorCode || callbackState.error || "unknown",
           );
@@ -258,7 +304,7 @@ export default function AuthCallbackScreen() {
           });
 
           if (error) {
-            finishWithFailure(
+            finishCurrentFailure(
               "This email link could not be opened. Request a fresh link if your email is still unverified.",
               error.message,
             );
@@ -276,7 +322,7 @@ export default function AuthCallbackScreen() {
         if (callbackState.code) {
           const { error } = await supabase.auth.exchangeCodeForSession(callbackState.code);
           if (error) {
-            finishWithFailure(
+            finishCurrentFailure(
               "This email link could not be opened. Try signing in, or request a fresh email if the account is still unverified.",
               error.message,
             );
@@ -289,7 +335,7 @@ export default function AuthCallbackScreen() {
           });
 
           if (error) {
-            finishWithFailure(
+            finishCurrentFailure(
               "This email link could not be opened. Request a fresh link if your email is still unverified.",
               error.message,
             );
@@ -303,23 +349,26 @@ export default function AuthCallbackScreen() {
           });
 
           if (error) {
-            finishWithFailure(
+            finishCurrentFailure(
               "This email link could not be opened. Request a fresh link if your email is still unverified.",
               error.message,
             );
             return;
           }
         } else if (callbackState.token && !callbackState.email) {
-          setMessage("This verification link is missing an email value. Request a fresh link if needed.");
+          if (isCurrentCallback()) {
+            setMessage("This verification link is missing an email value. Request a fresh link if needed.");
+          }
           trackEvent("auth_email_callback_failed", {
             reason: "missing_email_for_token",
           });
           return;
         } else if (!hasVerificationCredential) {
-          if (!active) return;
-          setTitle("Go to login");
-          setMessage("Use this screen after confirming your email. Sign in to continue.");
-          goToLogin();
+          if (isCurrentCallback()) {
+            setTitle("Go to login");
+            setMessage("Use this screen after confirming your email. Sign in to continue.");
+            goToLogin();
+          }
           return;
         }
 
@@ -330,36 +379,46 @@ export default function AuthCallbackScreen() {
           || capturedSession.user.id !== verifiedAuthority.userId
           || !await clearExactLocalAuthSession(supabase.auth as unknown as LockedLocalAuthClient,
             verifiedAuthority.userId, capturedSession.access_token)) {
-          finishWithFailure("The verified account session changed before completion. Sign in again.", "stale_session");
+          finishCurrentFailure("The verified account session changed before completion. Sign in again.", "stale_session");
           return;
         }
-        if (!active) return;
 
-        finishWithAuthSuccess();
+        if (isCurrentCallback()) finishWithAuthSuccess();
         trackEvent("auth_email_callback_success", {
           flow: callbackState.flow || callbackState.type || "signup",
           method: callbackState.code ? "code" : callbackState.tokenHash ? "token_hash" : callbackState.token ? "token" : "no_credentials",
         });
       } catch (error) {
-        if (!active) return;
         reportRuntimeError("auth-email-callback", error, {
           flow: callbackState.flow || callbackState.type || "unknown",
         });
-        finishWithFailure(
+        finishCurrentFailure(
           "Unable to finish email verification right now. Try signing in, or request a fresh email if needed.",
           "runtime_error",
         );
       } finally {
-        if (active) setChecking(false);
+        if (isCurrentCallback()) setChecking(false);
       }
     };
 
-    void finishCallback();
+    const queued = processingQueueRef.current
+      .catch(() => undefined)
+      .then(finishCallback);
+    processingQueueRef.current = queued;
 
     return () => {
-      active = false;
+      if (activeCallbackKeyRef.current === callbackKey) activeCallbackKeyRef.current = null;
     };
-  }, [callbackState, urlHydrated]);
+  }, [
+    callbackKey,
+    finishWithAuthSuccess,
+    finishWithFailure,
+    goToLogin,
+    isRecoveryCallback,
+    recoveryRouteQuery,
+    router,
+    urlHydrated,
+  ]);
 
   return (
     <ChillywoodBrandedSurface testID="auth-callback-branded-surface">

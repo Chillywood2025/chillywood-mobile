@@ -1333,6 +1333,7 @@ export default function SettingsScreen() {
     openLocalLegalRoute(policy.path);
   }, [openLocalLegalRoute]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Settings navigation contract; the current render path intentionally does not call it.
   const onPressPrivacyPolicy = useCallback(() => {
     trackEvent("settings_legal_opened", {
       source: "settings",
@@ -1343,6 +1344,7 @@ export default function SettingsScreen() {
     openLocalLegalRoute("/privacy");
   }, [legalConfig.privacyPolicyUrl, openLocalLegalRoute]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Settings navigation contract; the current render path intentionally does not call it.
   const onPressTerms = useCallback(() => {
     trackEvent("settings_legal_opened", {
       source: "settings",
@@ -1449,6 +1451,7 @@ export default function SettingsScreen() {
     );
   }, [isSignedIn]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Settings navigation contract; the current render path intentionally does not call it.
   const onPressCommunityGuidelines = useCallback(() => {
     trackEvent("settings_legal_opened", {
       source: "settings",
@@ -1459,6 +1462,7 @@ export default function SettingsScreen() {
     openLocalLegalRoute("/community-guidelines");
   }, [openLocalLegalRoute]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Settings navigation contract; the current render path intentionally does not call it.
   const onPressCreatorRules = useCallback(() => {
     trackEvent("settings_legal_opened", {
       source: "settings",
@@ -1469,6 +1473,7 @@ export default function SettingsScreen() {
     openLocalLegalRoute("/creator-rules");
   }, [openLocalLegalRoute]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Settings navigation contract; the current render path intentionally does not call it.
   const onPressCopyright = useCallback(() => {
     trackEvent("settings_legal_opened", {
       source: "settings",
@@ -1505,6 +1510,7 @@ export default function SettingsScreen() {
     router.push("/counter-notice" as Parameters<typeof router.push>[0]);
   }, [router]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Settings navigation contract; the current render path intentionally does not call it.
   const onPressSupport = useCallback(() => {
     trackEvent("settings_legal_opened", {
       source: "settings",

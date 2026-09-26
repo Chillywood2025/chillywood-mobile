@@ -1507,7 +1507,6 @@ export function useLiveKitChatCallSession({
   }, [
     cameraEnabled,
     clearReconciliationWarning,
-    disableCameraOrTerminate,
     emitStage,
     enqueueSessionMediaWrite,
     isCommittedSessionCurrent,

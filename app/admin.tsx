@@ -1639,6 +1639,7 @@ const defaultCapabilities: AdminCapabilities = {
 };
 
 const autonomousApprovalFoundationSummary = buildAutonomousApprovalFoundationSummary();
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Admin source contract; the current render path intentionally does not call it.
 const autonomousApprovalRequiredSurfaces = listAutonomousApprovalRequiredSurfaces();
 
 type AutonomousApprovalRequestReadModel = {
@@ -2157,6 +2158,7 @@ const ownerSecurityStatusLabel = (status: unknown) => {
   return formatModerationToken(text);
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Admin source contract; the current render path intentionally does not call it.
 const ownerSecurityMetricValue = (value: unknown) => (
   value === null || value === undefined || value === "" ? "Not Connected" : String(value)
 );
@@ -2166,6 +2168,7 @@ const ownerSecurityCountTone = (value: unknown): OwnerControlTone => {
   return Number(value) > 0 ? "manual" : "success";
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Admin source contract; the current render path intentionally does not call it.
 const ownerSecurityRiskTone = (value: unknown): OwnerControlTone => {
   if (value === null || value === undefined) return "locked";
   return Number(value) > 0 ? "danger" : "success";
@@ -3055,6 +3058,7 @@ const formatMoneyAuditCategory = (category: MoneyAuditCategory) => (
   ADMIN_MONEY_AUDIT_FILTERS.find((option) => option.id === category)?.label ?? formatModerationToken(category)
 );
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Admin source contract; the current render path intentionally does not call it.
 const formatImmutableAuditCount = (value: number | null, loading: boolean) => {
   if (loading) return "Loading";
   return formatAdminAuditFoundationCount(value);
@@ -3479,6 +3483,7 @@ export default function AdminStudioScreen() {
   const [roleAuditLoading, setRoleAuditLoading] = useState(false);
   const [roleAuditFilter, setRoleAuditFilter] = useState<RoleAuditFilterKey>("all");
   const [roleConfirm, setRoleConfirm] = useState<RoleConfirmState | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Admin source contract; the current render path intentionally does not call it.
   const [adminAuditLog, setAdminAuditLog] = useState<AdminAuditLogEntry[]>([]);
   const [adminAuditLogSummary, setAdminAuditLogSummary] =
     useState<AdminAuditLogReadModel["summary"] | null>(null);
@@ -5235,8 +5240,8 @@ export default function AdminStudioScreen() {
     };
   }, [liveCostGuardActions, liveCostGuardEvents, liveCostGuardSettingsForm]);
 
-  const liveOpsIncidents = liveOpsReadModel?.incidents ?? [];
-  const liveOpsAudits = liveOpsReadModel?.audits ?? [];
+  const liveOpsIncidents = useMemo(() => liveOpsReadModel?.incidents ?? [], [liveOpsReadModel?.incidents]);
+  const liveOpsAudits = useMemo(() => liveOpsReadModel?.audits ?? [], [liveOpsReadModel?.audits]);
   const liveOpsOpenCount = liveOpsIncidents.filter((incident) =>
     incident.status === "detected" || incident.status === "waiting_approval"
   ).length;
@@ -9044,7 +9049,10 @@ export default function AdminStudioScreen() {
   const ownerSecurityCurrentDevice = ownerSecurityStatus?.currentDevice ?? null;
   const ownerSecurityDevices = ownerSecurityStatus?.devices ?? [];
   const ownerSecurityTemporaryGrants = ownerSecurityStatus?.temporaryGrants ?? [];
-  const ownerSecurityAuditEvents = ownerSecurityStatus?.auditEvents ?? [];
+  const ownerSecurityAuditEvents = useMemo(
+    () => ownerSecurityStatus?.auditEvents ?? [],
+    [ownerSecurityStatus?.auditEvents],
+  );
   const ownerSecurityLiveOpsFlags = ownerSecurityStatus?.liveOpsFlags ?? [];
   const ownerSecurityChecklist = ownerSecurityStatus?.checklist ?? [];
   const ownerSecurityLoaded = !!ownerSecurityStatus;
@@ -9054,9 +9062,13 @@ export default function AdminStudioScreen() {
   );
   const ownerSecurityOpenAlerts = ownerSecurityOverview?.openSecurityAlertsCount;
   const ownerSecurityActiveGrantsCount = ownerSecurityStatus?.activeTemporaryGrantsCount ?? ownerSecurityOverview?.activeTemporaryGrantsCount;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Admin source contract; the current render path intentionally does not call it.
   const ownerSecurityHighRiskActions = ownerSecurityOverview?.recentHighRiskActionsCount;
   const ownerSecurityLastRefresh = ownerSecurityOverview?.lastSecurityRefreshAt ?? null;
-  const ownerSecuritySourceStates = ownerSecurityStatus?.sourceStates ?? {};
+  const ownerSecuritySourceStates = useMemo(
+    () => ownerSecurityStatus?.sourceStates ?? {},
+    [ownerSecurityStatus?.sourceStates],
+  );
   const ownerSecuritySourceStatus = useCallback((key: string) => {
     const state = ownerSecuritySourceStates[key];
     return String(state?.status ?? (ownerSecurityLoaded ? "not_connected" : "not_connected"));
@@ -9205,7 +9217,7 @@ export default function AdminStudioScreen() {
       ],
     );
   }, [
-    canManagePrivilegedWrites,
+    canAccessLiveOps,
     liveCostGuardActionBusy,
     liveCostGuardActionReason,
     liveCostGuardParticipantIdentity,
@@ -11261,6 +11273,7 @@ export default function AdminStudioScreen() {
     const webhooksSwitch = getPlatformMoneyKillSwitch(moneySwitches, "provider_webhooks_enabled");
     const sponsorshipsSwitch = getPlatformMoneyKillSwitch(moneySwitches, "sponsorships_enabled");
     const adsRevenueSwitch = getPlatformMoneyKillSwitch(moneySwitches, "ads_revenue_enabled");
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Admin source contract; the current render path intentionally does not call it.
     const stripeConnectSwitch = getPlatformMoneyKillSwitch(moneySwitches, "stripe_connect_enabled");
     const liveMoneyOff = liveMoneySwitch.state !== "on";
     const moneyFlowControlSummary = getMoneyFlowControlSummary();
