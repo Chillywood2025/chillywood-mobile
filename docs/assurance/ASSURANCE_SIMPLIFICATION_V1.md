@@ -42,14 +42,17 @@ are ignored.
 The unprivileged source workflow never receives production credentials. Its
 final summary always runs. The protected-main publisher independently reads the
 complete PR file list and source-run jobs, recomputes applicability, verifies
-the current base/head, requires every applicable result, and publishes
-`Chi'llywood / Required Validation` on that exact head. A changed head cannot
-reuse the result. Policy changes additionally require an exact-head approval by
-a trusted reviewer other than the author. The publisher uses the existing
-dedicated GitHub App only for a short-lived, repository-scoped `checks:write`
-token. The App has no contents permission and is not a ruleset bypass actor, so
-pull-request workflows cannot forge the App-bound result and the App cannot
-merge source.
+the repository identity and current base/head, requires every applicable
+result, and publishes `Chi'llywood / Required Validation` on that exact head. A
+changed head cannot reuse the result. Policy changes require either a
+GitHub-verified personal repository owner as the author or an exact-head
+approval by a trusted reviewer other than the author. Owner authorship is
+recorded as owner authorization, not independent review, and is derived from
+trusted repository and user metadata rather than a label, comment, association,
+or branch-controlled claim. The publisher uses the existing dedicated GitHub
+App only for a short-lived, repository-scoped `checks:write` token. The App has
+no contents permission and is not a ruleset bypass actor, so pull-request
+workflows cannot forge the App-bound result and the App cannot merge source.
 
 ## Retained safety coverage
 
@@ -61,7 +64,7 @@ merge source.
 | migrations and RLS database behavior | `Validation / Database` |
 | native, OTA and release provenance | `Validation / Native and Release` |
 | autonomous operator and cognitive safety | `Validation / Autonomous` using direct substantive checks |
-| CI/policy integrity | `Validation / Policy` plus protected publisher review requirement |
+| CI/policy integrity | `Validation / Policy` plus protected publisher owner-or-review authorization |
 | unresolved late review findings | `scripts/release-review-gate.mjs` in action-specific workflows |
 | OTA/Apple/physical provenance | #490 release-control helpers and regression tests |
 
