@@ -174,7 +174,9 @@ const mutateAfter = (value, marker, from, to) => {
 };
 
 const mutants = [
-  ["HEARTBEAT_BYPASSES_STRICT_LEASE", (value) => value.replace(
+  ["HEARTBEAT_BYPASSES_STRICT_LEASE", (value) => mutateAfter(
+    value,
+    "      heartbeat = setInterval",
     "void scheduleLatestMediaReconciliation(false).then((reconciled) => {",
     "void performMembershipMediaWrite(false, false); Promise.resolve(false).then((reconciled) => {",
   )],
