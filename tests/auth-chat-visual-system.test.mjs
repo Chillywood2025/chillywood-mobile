@@ -47,14 +47,16 @@ test("Sign In, Sign Up, and Forgot Password render the shared branded auth famil
   ], "Sign In");
   assertIncludes(source.signup, [
     '<ChillywoodBrandedSurface testID="auth-signup-branded-surface">',
-    'testID="auth-signup-branding-clearance"',
+    '<ChillywoodBrandReserve testID="auth-signup-branding-clearance" />',
     'testID="auth-signup-glass-panel"',
   ], "Sign Up");
   assertIncludes(source.forgot, [
     '<ChillywoodBrandedSurface testID="auth-forgot-password-branded-surface">',
-    'testID="auth-forgot-password-branding-clearance"',
+    '<ChillywoodBrandReserve testID="auth-forgot-password-branding-clearance" />',
     'testID="auth-forgot-password-glass-panel"',
   ], "Forgot Password");
+  assert.doesNotMatch(source.signup, /<ChillywoodBrandReserve\s+compact/);
+  assert.doesNotMatch(source.forgot, /<ChillywoodBrandReserve\s+compact/);
 });
 test("visible auth callback and password recovery states use the branded responsive shell", () => {
   assertIncludes(source.callback, [

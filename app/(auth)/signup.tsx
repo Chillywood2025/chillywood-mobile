@@ -351,7 +351,7 @@ export default function Signup() {
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          <ChillywoodBrandReserve compact testID="auth-signup-branding-clearance" />
+          <ChillywoodBrandReserve testID="auth-signup-branding-clearance" />
           <ChillywoodGlassPanel style={styles.card} testID="auth-signup-glass-panel">
             <View style={styles.headerRow}>
               <Text style={styles.kicker}>Chi&apos;llywood</Text>
