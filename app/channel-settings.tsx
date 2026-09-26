@@ -12177,15 +12177,15 @@ const styles = StyleSheet.create({
     minWidth: 110,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 12,
     paddingVertical: 12,
     gap: 4,
   },
   summaryCardUnavailable: {
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: "rgba(17,15,42,0.48)",
   },
   moneyFeatureCard: {
     flexBasis: "47%",
@@ -12198,8 +12198,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   moneyFocusedCard: {
-    borderColor: "rgba(220,20,60,0.52)",
-    backgroundColor: "rgba(220,20,60,0.12)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    backgroundColor: "rgba(110,33,255,0.22)",
   },
   moneyFeatureManagerInline: {
     flexBasis: "100%",
@@ -12346,8 +12346,8 @@ const styles = StyleSheet.create({
   moneyAuditBadge: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
@@ -12359,8 +12359,8 @@ const styles = StyleSheet.create({
   moneyAuditDetailRow: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.035)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 10,
     paddingVertical: 9,
     gap: 3,
@@ -12380,8 +12380,8 @@ const styles = StyleSheet.create({
   eventEmptyCard: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     paddingHorizontal: 12,
     paddingVertical: 12,
     marginBottom: 10,

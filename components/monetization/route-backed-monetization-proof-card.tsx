@@ -5,6 +5,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import type { RouteBackedMonetizationProofConfig } from "../../_lib/routeBackedMonetizationVisualProof";
 import { getCreatorAccessProductPublicName } from "../../_lib/accessProductPresentation";
 import { MoneyScopeInfoButton, type MoneyScopeKey } from "./MoneyScopeInfoButton";
+import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../ui/chillywood-visual-system";
 
 type Props = {
   config: RouteBackedMonetizationProofConfig | null;
@@ -71,6 +72,7 @@ export function RouteBackedMonetizationProofCard({ config, surface }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Open money support and status"
         >
+          <ChillywoodPrimaryActionFill radius={12} />
           <Text style={styles.primaryButtonText}>Open status / support</Text>
         </TouchableOpacity>
       </View>
@@ -108,8 +110,8 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(11,18,28,0.96)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     padding: 14,
     gap: 9,
   },
@@ -118,7 +120,10 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     borderRadius: 12,
-    backgroundColor: "#E43D5C",
+    backgroundColor: CHILLYWOOD_VISUAL.accentPurple,
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    overflow: "hidden",
     paddingHorizontal: 12,
     paddingVertical: 10,
   },

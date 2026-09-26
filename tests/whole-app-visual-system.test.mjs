@@ -5,11 +5,14 @@ import test from "node:test";
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
 const sources = {
+  adBanner: read("components/monetization/ad-banner-placeholder.tsx"),
   appLayout: read("app/_layout.tsx"),
   appSurface: read("components/ui/app-surface.tsx"),
   authCallback: read("app/auth-callback.tsx"),
   betaAccess: read("components/system/beta-access-screen.tsx"),
   circle: read("app/chilly-circle.tsx"),
+  chatInbox: read("app/chat/index.tsx"),
+  channelSubscription: read("app/channel-subscription/[creatorId].tsx"),
   explore: read("app/(tabs)/explore.tsx"),
   forgot: read("app/(auth)/forgot-password.tsx"),
   home: read("app/(tabs)/index.tsx"),
@@ -24,11 +27,18 @@ const sources = {
   settings: read("app/settings.tsx"),
   signup: read("app/(auth)/signup.tsx"),
   subscribe: read("app/subscribe.tsx"),
+  tipSheet: read("components/monetization/tip-sheet.tsx"),
+  tipStatus: read("app/tip-status.tsx"),
   studio: read("app/channel-settings.tsx"),
   tabs: read("app/(tabs)/_layout.tsx"),
   thread: read("app/chat/[threadId].tsx"),
   title: read("app/title/[id].tsx"),
   visual: read("components/ui/chillywood-visual-system.tsx"),
+  vipPass: read("app/vip-pass/[creatorId].tsx"),
+  moneyScope: read("components/monetization/MoneyScopeInfoButton.tsx"),
+  moneyUi: read("components/monetization/money-ui.tsx"),
+  midRollAd: read("components/monetization/mid-roll-ad-marker.tsx"),
+  preRollAd: read("components/monetization/pre-roll-ad-modal.tsx"),
   partyRoom: read("app/watch-party/[partyId].tsx"),
   liveStage: read("app/watch-party/live-stage/[partyId].tsx"),
   watchParty: read("app/watch-party/index.tsx"),
@@ -109,6 +119,8 @@ test("physically observed half-migrated surfaces use the Sign In-derived surface
   assert.match(sources.settings, /settingsRow:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.controlBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.controlBackground,/);
   assert.match(sources.circle, /sectionCard:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground,/);
   assert.match(sources.explore, /scopeChipActive:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.primaryBorder,[\s\S]+rgba\(110,33,255,0\.28\)/);
+  assert.match(sources.explore, /discoverySection:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground,/);
+  assert.match(sources.explore, /titleCard:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground,/);
   assert.match(sources.library, /scopePill:[^\n]+CHILLYWOOD_VISUAL\.controlBorder[^\n]+CHILLYWOOD_VISUAL\.controlBackground/);
   assert.match(sources.live, /primaryButton:[^\n]+CHILLYWOOD_VISUAL\.accentPurple[^\n]+CHILLYWOOD_VISUAL\.primaryBorder/);
   assert.match(sources.watchParty, /primaryButton:[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.accentPurple,[\s\S]+borderColor: CHILLYWOOD_VISUAL\.primaryBorder,/);
@@ -152,6 +164,38 @@ test("physically observed half-migrated surfaces use the Sign In-derived surface
   assert.match(sources.player, /shared-player-comment-send[\s\S]+<ChillywoodPrimaryActionFill radius=\{999\} \/>/);
   assert.match(sources.notifications, /traySheet:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground,/);
   assert.match(sources.notifications, /notification-tray-open-settings[\s\S]+<ChillywoodPrimaryActionFill radius=\{21\} \/>/);
+});
+
+test("official Rachi media stays consistent across Circle and Chi'lly Chat consumers", () => {
+  assert.match(sources.circle, /readUserProfileByUserId\(RACHI_OFFICIAL_ACCOUNT\.userId\)/);
+  assert.match(sources.circle, /setRachiAvatarUrl\(String\(officialProfile\.avatarUrl/);
+  assert.match(sources.circle, /rachiAvatarUrl \? \(/);
+  assert.doesNotMatch(sources.chatInbox, /officialAccount \? undefined : (?:otherMember|person|other\?)\.avatarUrl/);
+  assert.doesNotMatch(sources.thread, /officialAccount \? undefined : otherMember\?\.avatarUrl/);
+  assert.match(sources.chatInbox, /const avatarUrl = otherMember\.avatarUrl/);
+  assert.match(sources.thread, /const otherMemberAvatarUrl = otherMember\?\.avatarUrl/);
+});
+
+test("viewer and creator monetization surfaces share the canonical glass and primary-action roles", () => {
+  for (const [label, source] of [
+    ["Platform Subscription", sources.channelSubscription],
+    ["VIP Pass", sources.vipPass],
+    ["Tip status", sources.tipStatus],
+  ]) {
+    assert.match(source, /screen:[\s\S]+backgroundColor: "transparent"/, `${label} must reveal the inherited Chicago-night route shell`);
+    assert.match(source, /ChillywoodPrimaryActionFill/, `${label} lacks the canonical primary action`);
+    assert.match(source, /CHILLYWOOD_VISUAL\.glassBorder/, `${label} lacks canonical glass panels`);
+  }
+  assert.match(sources.tipSheet, /<ChillywoodPrimaryActionFill radius=\{14\} \/>/);
+  assert.match(sources.tipSheet, /backgroundColor: CHILLYWOOD_VISUAL\.glassBackground/);
+  assert.match(sources.moneyScope, /<ChillywoodPrimaryActionFill radius=\{14\} \/>/);
+  assert.match(sources.moneyScope, /backgroundColor: CHILLYWOOD_VISUAL\.glassBackground/);
+  assert.match(sources.moneyUi, /offerCard:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.glassBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.glassBackground,/);
+  assert.match(sources.studio, /moneyFocusedCard:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.primaryBorder,[\s\S]+rgba\(110,33,255,0\.22\)/);
+  assert.match(sources.studio, /moneyAuditDetailRow:[\s\S]+borderColor: CHILLYWOOD_VISUAL\.controlBorder,[\s\S]+backgroundColor: CHILLYWOOD_VISUAL\.controlBackground,/);
+  for (const [label, source] of [["banner ad", sources.adBanner], ["mid-roll ad", sources.midRollAd], ["pre-roll ad", sources.preRollAd]]) {
+    assert.match(source, /CHILLYWOOD_VISUAL/, `${label} does not use canonical visual roles`);
+  }
 });
 
 test("Watch-Party setup guidance is useful human copy without changing room authority", () => {

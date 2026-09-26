@@ -24,6 +24,7 @@ import { buildUserChannelProfile, readUserProfileByUserId } from "../../_lib/use
 import { useSession } from "../../_lib/session";
 import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
 import { MoneyScopeStrip, MoneyStatusChip } from "../../components/monetization/money-ui";
+import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
 
 const normalizeParam = (value: string | string[] | undefined) =>
   String(Array.isArray(value) ? value[0] : value ?? "").trim();
@@ -302,6 +303,7 @@ export default function ChannelSubscriptionScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={needsPurchase ? "Start Platform Subscription" : "Refresh Platform Subscription status"}
               >
+                <ChillywoodPrimaryActionFill radius={14} />
                 {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{needsPurchase ? "Start Platform Subscription" : "Refresh status"}</Text>}
               </TouchableOpacity>
               {!isOwner ? (
@@ -339,7 +341,7 @@ export default function ChannelSubscriptionScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#07080D",
+    backgroundColor: "transparent",
   },
   content: {
     paddingHorizontal: 18,
@@ -357,9 +359,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
   },
   backButtonText: {
     color: "#F8FAFF",
@@ -374,8 +376,8 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(13,17,27,0.96)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     padding: 18,
     gap: 12,
   },
@@ -475,11 +477,14 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     minHeight: 48,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#DC143C",
+    backgroundColor: CHILLYWOOD_VISUAL.accentPurple,
     paddingHorizontal: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
   },
   primaryButtonText: {
     color: "#fff",
@@ -491,9 +496,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
     paddingHorizontal: 16,
   },
   secondaryButtonText: {

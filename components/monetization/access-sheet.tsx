@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { ChillywoodPrimaryActionFill } from "../ui/chillywood-visual-system";
+import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../ui/chillywood-visual-system";
 
 import { trackEvent } from "../../_lib/analytics";
 import {
@@ -745,8 +745,8 @@ const styles = StyleSheet.create({
     width: "100%",
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(10,12,18,0.98)",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     paddingHorizontal: 18,
     paddingVertical: 18,
     gap: 8,
@@ -778,8 +778,8 @@ const styles = StyleSheet.create({
     marginTop: 6,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     padding: 14,
     gap: 4,
   },
@@ -951,10 +951,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#DC143C",
+    backgroundColor: CHILLYWOOD_VISUAL.accentPurple,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(91,214,255,0.72)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
   },
   primaryButtonDisabled: {
     opacity: 0.68,

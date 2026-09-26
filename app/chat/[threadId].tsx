@@ -1476,7 +1476,7 @@ export default function ChillyChatThreadScreen() {
 
   const otherMember = thread?.otherMember;
   const officialAccount = getOfficialPlatformAccount(otherMember?.userId);
-  const otherMemberAvatarUrl = officialAccount ? undefined : otherMember?.avatarUrl;
+  const otherMemberAvatarUrl = otherMember?.avatarUrl;
   const otherMemberDisplayName = officialAccount?.displayName ?? otherMember?.displayName ?? "Direct Thread";
   const otherMemberHandle = officialAccount?.handle ?? formatUsernameHandle(otherMember?.username);
   const otherMemberTagline = officialAccount?.tagline ?? otherMember?.tagline;

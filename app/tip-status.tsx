@@ -11,6 +11,7 @@ import {
 import { trackEvent } from "../_lib/analytics";
 import { formatMonetizationCurrency } from "../_lib/creatorMonetization";
 import { readMyTipTransactionStatus } from "../_lib/creatorTips";
+import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
 
 const normalizeParam = (value: string | string[] | undefined) =>
   String(Array.isArray(value) ? value[0] : value ?? "").trim();
@@ -110,7 +111,7 @@ export default function TipStatusScreen() {
   const currency = String(status?.currency ?? "usd");
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} testID="screen-tip-status">
       <View style={styles.card}>
         {presentation.tone === "pending" ? <ActivityIndicator color="#DC143C" /> : null}
         <Text style={[styles.title, presentation.tone === "success" && styles.titleSuccess]}>{presentation.title}</Text>
@@ -119,6 +120,7 @@ export default function TipStatusScreen() {
         ) : null}
         <Text style={styles.body}>{presentation.body}</Text>
         <TouchableOpacity style={styles.button} activeOpacity={0.86} onPress={() => router.back()}>
+          <ChillywoodPrimaryActionFill radius={14} />
           <Text style={styles.buttonText}>Done</Text>
         </TouchableOpacity>
       </View>
@@ -132,15 +134,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 22,
-    backgroundColor: "#07080D",
+    backgroundColor: "transparent",
   },
   card: {
     width: "100%",
     maxWidth: 460,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "#111722",
+    borderColor: CHILLYWOOD_VISUAL.glassBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.glassBackground,
     padding: 24,
     alignItems: "center",
     gap: 14,
@@ -174,7 +176,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 14,
-    backgroundColor: "#DC143C",
+    backgroundColor: CHILLYWOOD_VISUAL.accentPurple,
+    borderWidth: 1,
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
+    overflow: "hidden",
   },
   buttonText: {
     color: "#FFFFFF",

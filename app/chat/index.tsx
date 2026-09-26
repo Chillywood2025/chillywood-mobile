@@ -316,7 +316,7 @@ export default function ChillyChatInboxScreen() {
     const otherMember = thread.otherMember;
     if (!otherMember?.userId) return;
     const officialAccount = getOfficialPlatformAccount(otherMember.userId);
-    const avatarUrl = officialAccount ? undefined : otherMember.avatarUrl;
+    const avatarUrl = otherMember.avatarUrl;
 
     trackEvent("chat_inbox_profile_open_requested", {
       surface: "chat-inbox",
@@ -380,7 +380,7 @@ export default function ChillyChatInboxScreen() {
 
   const openProfileByPerson = useCallback((person: PublicPeopleSearchResult) => {
     const officialAccount = getOfficialPlatformAccount(person.userId);
-    const avatarUrl = officialAccount ? undefined : person.avatarUrl;
+    const avatarUrl = person.avatarUrl;
 
     router.push({
       pathname: "/profile/[userId]",
@@ -826,7 +826,7 @@ export default function ChillyChatInboxScreen() {
         renderItem={({ item }) => {
           const other = item.otherMember;
           const officialAccount = getOfficialPlatformAccount(other?.userId);
-          const avatarUrl = officialAccount ? undefined : other?.avatarUrl;
+          const avatarUrl = other?.avatarUrl;
           const unreadCount = item.currentMember?.unreadCount ?? 0;
           const preview = buildPreview(item);
           const identityLabel = getIdentityLabel(item);
