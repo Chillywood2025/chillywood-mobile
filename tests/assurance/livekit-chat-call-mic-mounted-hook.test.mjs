@@ -100,6 +100,56 @@ const runOperation = async (harness, callback) => (
   settleOperation(await harness.startOperation(callback), harness)
 );
 
+const prepareLateCaptureCleanup = async (t, kind = "audio", runtimeOptions = {}) => {
+  const cameraEnabled = kind === "video";
+  const hookOptions = {
+    initialMediaPreferences: { cameraEnabled, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: cameraEnabled ? "video" : "audio" },
+  };
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: cameraEnabled,
+    initialMic: true,
+    cameraPermissionState: "granted",
+    microphonePermissionState: "granted",
+    platformOS: "ios",
+    ...runtimeOptions,
+  }, defaultHookOptions(hookOptions));
+  const oldCleanup = deferred();
+  const queueCapture = kind === "video" ? runtime.queueCamera : runtime.queueNative;
+  queueCapture({ gate: oldCleanup, interruptLatestOnCompletion: true, outcome: "success" });
+  await harness.fireStopper("manual");
+  await harness.commitRender(defaultHookOptions({
+    ...hookOptions,
+    invite: { ...hookOptions.invite, id: "invite-2" },
+  }));
+  await waitFor(harness, () => runtime.rooms.length === 2, "replacement Room created");
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement live");
+  return { harness, oldCleanup, runtime };
+};
+
+const preparePendingForegroundRecovery = async (t, allowBackgroundAudio, gateKind) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+    cameraPermissionState: "granted",
+    microphonePermissionState: "granted",
+    platformOS: "ios",
+  }, defaultHookOptions({
+    allowBackgroundAudio,
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  runtime.interruptLocalCapture("microphone");
+  const permissionReadsBefore = runtime.microphonePermissionReads;
+  const gate = gateKind === "permission" ? runtime.deferMicrophonePermission("granted") : deferred();
+  if (gateKind === "restart") runtime.queueTrackRestart({ gate, outcome: "success" });
+  await harness.fireHeartbeat();
+  await waitFor(harness, () => gateKind === "permission"
+    ? runtime.microphonePermissionReads > permissionReadsBefore
+    : runtime.trackRestarts.length === 1, "foreground microphone recovery is awaiting native work");
+  return { gate, harness, runtime };
+};
+
 test("matrix 1: a heartbeat started before a strict toggle cannot overwrite the final durable microphone state", async (t) => {
   const runtime = createLiveKitMountedRuntime();
   const harness = await mountLiveKitHook(runtime);
@@ -761,6 +811,8 @@ test("cleanup support: cleanup started before same-row replacement cannot leave 
 
 test("cleanup support: late old capture shutdown cannot stop a same-row replacement", async (t) => {
   const { harness, runtime } = await mountCase(t, {
+    cameraPermissionState: "granted",
+    microphonePermissionState: "granted",
     initialCamera: true,
     initialMic: true,
   }, defaultHookOptions({
@@ -798,6 +850,8 @@ test("cleanup support: late old capture shutdown cannot stop a same-row replacem
 
   assert.equal(runtime.rooms.at(-1).localParticipant.cameraEnabled, true);
   assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, true);
+  assert.equal(runtime.rooms.at(-1).localParticipant.cameraTrack.mediaStreamTrack.readyState, "live");
+  assert.equal(runtime.rooms.at(-1).localParticipant.micTrack.mediaStreamTrack.readyState, "live");
   assert.equal(runtime.durableCamera, true);
   assert.equal(runtime.durableMic, true);
   assert.equal(harness.getResult().cameraEnabled, true);
@@ -807,6 +861,8 @@ test("cleanup support: late old capture shutdown cannot stop a same-row replacem
 
 test("cleanup support: late old capture shutdown preserves newer replacement media intent", async (t) => {
   const { harness, runtime } = await mountCase(t, {
+    cameraPermissionState: "granted",
+    microphonePermissionState: "granted",
     initialCamera: true,
     initialMic: true,
   }, defaultHookOptions({
@@ -844,6 +900,8 @@ test("cleanup support: late old capture shutdown preserves newer replacement med
 
   assert.equal(runtime.rooms.at(-1).localParticipant.cameraEnabled, true);
   assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, false);
+  assert.equal(runtime.rooms.at(-1).localParticipant.cameraTrack.mediaStreamTrack.readyState, "live");
+  assert.equal(runtime.trackRestarts.some(({ kind }) => kind === "audio"), false);
   assert.equal(runtime.durableCamera, true);
   assert.equal(runtime.durableMic, false);
   assert.equal(harness.getResult().cameraEnabled, true);
@@ -853,6 +911,8 @@ test("cleanup support: late old capture shutdown preserves newer replacement med
 
 test("cleanup support: late rejected capture shutdown still repairs the current replacement", async (t) => {
   const { harness, runtime } = await mountCase(t, {
+    cameraPermissionState: "granted",
+    microphonePermissionState: "granted",
     initialCamera: true,
     initialMic: true,
   }, defaultHookOptions({
@@ -885,6 +945,8 @@ test("cleanup support: late rejected capture shutdown still repairs the current 
 
   assert.equal(runtime.rooms.at(-1).localParticipant.cameraEnabled, true);
   assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, true);
+  assert.equal(runtime.rooms.at(-1).localParticipant.cameraTrack.mediaStreamTrack.readyState, "live");
+  assert.equal(runtime.rooms.at(-1).localParticipant.micTrack.mediaStreamTrack.readyState, "live");
   assert.equal(runtime.durableCamera, true);
   assert.equal(runtime.durableMic, true);
   assert.equal(harness.getResult().channelState, "live");
@@ -892,6 +954,8 @@ test("cleanup support: late rejected capture shutdown still repairs the current 
 
 test("cleanup support: late capture shutdown reconciles a different-room replacement", async (t) => {
   const { harness, runtime } = await mountCase(t, {
+    cameraPermissionState: "granted",
+    microphonePermissionState: "granted",
     initialCamera: true,
     initialMic: true,
   }, defaultHookOptions({
@@ -917,11 +981,15 @@ test("cleanup support: late capture shutdown reconciles a different-room replace
 
   assert.equal(runtime.rooms.at(-1).localParticipant.cameraEnabled, true);
   assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, true);
+  assert.equal(runtime.rooms.at(-1).localParticipant.cameraTrack.mediaStreamTrack.readyState, "live");
+  assert.equal(runtime.rooms.at(-1).localParticipant.micTrack.mediaStreamTrack.readyState, "live");
   assert.equal(harness.getResult().channelState, "live");
 });
 
 test("cleanup support: late capture shutdown uses only replacement-account media intent", async (t) => {
   const { harness, runtime } = await mountCase(t, {
+    cameraPermissionState: "granted",
+    microphonePermissionState: "granted",
     initialCamera: true,
     initialMic: true,
   }, defaultHookOptions({
@@ -953,6 +1021,8 @@ test("cleanup support: late capture shutdown uses only replacement-account media
 
   assert.equal(runtime.rooms.at(-1).localParticipant.cameraEnabled, false);
   assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, true);
+  assert.equal(runtime.rooms.at(-1).localParticipant.micTrack.mediaStreamTrack.readyState, "live");
+  assert.equal(runtime.trackRestarts.some(({ kind }) => kind === "video"), false);
   assert.equal(runtime.durableCamera, false);
   assert.equal(runtime.durableMic, true);
   assert.equal(harness.getResult().channelState, "live");
@@ -981,6 +1051,408 @@ test("cleanup support: late capture shutdown with no replacement stays terminal"
   assert.equal(runtime.rooms[0].localParticipant.micEnabled, false);
   assert.notEqual(harness.getResult().channelState, "live");
 });
+
+for (const outcome of ["reject", "mismatch"]) {
+  test(`SDK capture recovery: ${outcome} restart reports the stopped microphone instead of false success`, async (t) => {
+    const { harness, oldCleanup, runtime } = await prepareLateCaptureCleanup(t);
+    runtime.queueTrackRestart({ outcome });
+    await harness.resolveDeferred(oldCleanup);
+    await harness.flush(96);
+
+    const participant = runtime.rooms.at(-1).localParticipant;
+    assert.equal(runtime.trackRestarts.length, 1, "current ended track receives one bounded restart attempt");
+    assert.equal(participant.micTrack.mediaStreamTrack.readyState, "ended");
+    assert.equal(harness.getResult().micEnabled, false, "UI reflects unavailable native capture");
+    assert.equal(runtime.durableMic, false, "membership does not claim the stopped microphone is live");
+    assert.ok(harness.getResult().mediaReconciliationMessage, "failed repair remains visible");
+  });
+}
+
+for (const permissionState of ["denied", "undetermined"]) {
+  test(`SDK capture recovery: ${permissionState} microphone permission prevents reacquisition`, async (t) => {
+    const { harness, oldCleanup, runtime } = await prepareLateCaptureCleanup(t);
+    runtime.microphonePermissionState = permissionState;
+    await harness.resolveDeferred(oldCleanup);
+    await harness.flush(96);
+
+    assert.equal(runtime.trackRestarts.length, 0);
+    assert.equal(runtime.rooms.at(-1).localParticipant.micTrack.mediaStreamTrack.readyState, "ended");
+    assert.equal(harness.getResult().micEnabled, false);
+    assert.equal(runtime.durableMic, false);
+  });
+}
+
+test("SDK capture recovery: background replacement does not restart a microphone without background authority", async (t) => {
+  const { harness, oldCleanup, runtime } = await prepareLateCaptureCleanup(t);
+  await harness.fireAppState("background");
+  await harness.resolveDeferred(oldCleanup);
+  await harness.flush(96);
+
+  assert.equal(runtime.trackRestarts.length, 0);
+  assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, false);
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(runtime.durableMic, false);
+});
+
+test("SDK capture recovery: a restart completing after replacement cannot keep its old track live", async (t) => {
+  const { harness, oldCleanup, runtime } = await prepareLateCaptureCleanup(t);
+  const restartGate = deferred();
+  runtime.queueTrackRestart({ gate: restartGate, outcome: "success" });
+  await harness.resolveDeferred(oldCleanup);
+  await waitFor(harness, () => runtime.trackRestarts.length === 1, "ended microphone restart entered");
+  const oldRestartTrack = runtime.trackRestarts[0].track;
+
+  await harness.commitRender(defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, id: "invite-3" },
+  }));
+  await waitFor(harness, () => runtime.rooms.length === 3, "newer replacement Room created");
+  await harness.resolveDeferred(restartGate);
+  await waitFor(harness, () => harness.getResult().channelState === "live", "newer replacement remains live");
+  await harness.flush(96);
+
+  assert.equal(oldRestartTrack.mediaStreamTrack.readyState, "ended", "obsolete restarted capture is stopped");
+  assert.equal(runtime.rooms.at(-1).localParticipant.micTrack.mediaStreamTrack.readyState, "live");
+  assert.equal(harness.getResult().micEnabled, true);
+  assert.equal(runtime.durableMic, true);
+});
+
+test("SDK capture recovery: unmount during pending restart cannot leave capture running", async (t) => {
+  const { oldCleanup, runtime, harness } = await prepareLateCaptureCleanup(t);
+  const restartGate = deferred();
+  runtime.queueTrackRestart({ gate: restartGate, outcome: "success" });
+  try {
+    await harness.resolveDeferred(oldCleanup);
+    await waitFor(harness, () => runtime.trackRestarts.length === 1, "ended microphone restart entered");
+    const oldRestartTrack = runtime.trackRestarts[0].track;
+    await harness.unmount();
+    await harness.resolveDeferred(restartGate);
+    await harness.flush(96);
+    assert.equal(oldRestartTrack.mediaStreamTrack.readyState, "ended");
+    assert.equal(runtime.rooms.at(-1).state, "disconnected");
+  } finally {
+    restartGate.resolve();
+    await harness.flush(48);
+  }
+});
+
+test("SDK capture recovery: camera permission revoked after replacement prevents reacquisition", async (t) => {
+  const { harness, oldCleanup, runtime } = await prepareLateCaptureCleanup(t, "video");
+  runtime.cameraPermissionState = "denied";
+  const cameraCommandsBefore = runtime.cameraCalls.length;
+  await harness.resolveDeferred(oldCleanup);
+  await harness.flush(96);
+
+  assert.equal(runtime.trackRestarts.some(({ kind }) => kind === "video"), false);
+  assert.equal(runtime.cameraCalls.slice(cameraCommandsBefore).includes(true), false);
+  assert.equal(runtime.rooms.at(-1).localParticipant.cameraTrack.mediaStreamTrack.readyState, "ended");
+  assert.equal(harness.getResult().cameraEnabled, false);
+  assert.equal(runtime.durableCamera, false);
+});
+
+for (const microphoneFailure of ["denied", "reject", "held-permission", "held-restart"]) {
+  test(`SDK capture recovery: background camera stops before ${microphoneFailure} microphone recovery`, async (t) => {
+    const { harness, runtime } = await mountCase(t, {
+      initialCamera: true,
+      initialMic: true,
+      cameraPermissionState: "granted",
+      microphonePermissionState: "granted",
+      platformOS: "ios",
+    }, defaultHookOptions({
+      allowBackgroundAudio: true,
+      initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+      invite: { ...defaultHookOptions().invite, callType: "video" },
+    }));
+    const participant = runtime.rooms.at(-1).localParticipant;
+    const cameraTrack = participant.cameraTrack;
+    runtime.interruptLocalCapture("microphone");
+    let pending;
+    if (microphoneFailure === "denied") runtime.microphonePermissionState = "denied";
+    if (microphoneFailure === "reject") runtime.queueTrackRestart({ outcome: "reject" });
+    if (microphoneFailure === "held-permission") pending = runtime.deferMicrophonePermission("granted");
+    if (microphoneFailure === "held-restart") {
+      pending = deferred();
+      runtime.queueTrackRestart({ gate: pending, outcome: "success" });
+    }
+    try {
+      await harness.fireAppState("background");
+      await harness.flush(96);
+      assert.equal(cameraTrack.mediaStreamTrack.readyState, "ended", "camera shutdown cannot wait for audio recovery");
+      assert.equal(participant.getTrackPublication("camera"), undefined);
+      assert.equal(harness.getResult().cameraEnabled, false, "UI reflects completed camera shutdown while audio waits");
+      if (pending) {
+        assert.equal(participant.micTrack.mediaStreamTrack.readyState, "ended", "microphone acquisition is still pending");
+        await harness.resolveDeferred(pending);
+        await harness.flush(96);
+      } else {
+        const microphoneUsable = participant.micEnabled
+          && participant.micTrack.mediaStreamTrack.readyState !== "ended";
+        assert.equal(harness.getResult().micEnabled, microphoneUsable);
+        assert.equal(runtime.durableMic, microphoneUsable);
+        if (microphoneFailure === "denied") assert.equal(microphoneUsable, false);
+      }
+      assert.equal(runtime.durableCamera, false);
+      assert.equal(participant.getTrackPublication("camera"), undefined);
+    } finally {
+      pending?.resolve();
+      await harness.flush(48);
+    }
+  });
+}
+
+for (const entrypoint of ["AppState", "stopper"]) {
+  for (const allowBackgroundAudio of [false, true]) {
+    for (const gateKind of ["permission", "restart"]) {
+      test(`background privacy: ${entrypoint} stops camera during foreground ${gateKind} wait with background audio ${allowBackgroundAudio}`, async (t) => {
+        const { gate, harness, runtime } = await preparePendingForegroundRecovery(t, allowBackgroundAudio, gateKind);
+        const participant = runtime.rooms.at(-1).localParticipant;
+        const cameraTrack = participant.cameraTrack;
+        try {
+          if (entrypoint === "AppState") await harness.fireAppState("background");
+          else {
+            runtime.appState = "background";
+            await harness.fireStopper("app_background");
+          }
+
+          assert.equal(cameraTrack.mediaStreamTrack.readyState, "ended", "foreground audio wait cannot postpone camera privacy shutdown");
+          assert.equal(harness.getResult().cameraEnabled, false, "UI reflects immediate native shutdown");
+          assert.equal(participant.micTrack.mediaStreamTrack.readyState, "ended", "foreground microphone operation remains pending");
+          assert.equal(runtime.rooms.length, 1);
+
+          await harness.resolveDeferred(gate);
+          await harness.flush(128);
+          assert.equal(participant.getTrackPublication("camera"), undefined);
+          assert.equal(runtime.durableCamera, false);
+          assert.equal(runtime.durableMic, allowBackgroundAudio);
+          assert.equal(harness.getResult().micEnabled, allowBackgroundAudio);
+          assert.equal(runtime.rooms.length, 1);
+        } finally {
+          gate.resolve();
+          await harness.flush(48);
+        }
+      });
+    }
+  }
+}
+
+test("background privacy: foreground return before microphone recovery settles preserves latest camera intent", async (t) => {
+  const { gate, harness, runtime } = await preparePendingForegroundRecovery(t, true, "restart");
+  const participant = runtime.rooms.at(-1).localParticipant;
+  const originalCameraTrack = participant.cameraTrack;
+  try {
+    await harness.fireAppState("background");
+    assert.equal(originalCameraTrack.mediaStreamTrack.readyState, "ended");
+    assert.equal(harness.getResult().cameraEnabled, false);
+    await harness.fireAppState("active");
+    await harness.resolveDeferred(gate);
+    await harness.flush(160);
+
+    assert.equal(runtime.rooms.length, 1);
+    assert.equal(runtime.providerTokenCalls, 1);
+    assert.equal(runtime.rooms[0].localParticipant, participant);
+    assert.equal(participant.cameraTrack.mediaStreamTrack.readyState, "live");
+    assert.equal(participant.micTrack.mediaStreamTrack.readyState, "live");
+    assert.equal(harness.getResult().cameraEnabled, true);
+    assert.equal(harness.getResult().micEnabled, true);
+    assert.equal(runtime.durableCamera, true);
+    assert.equal(runtime.durableMic, true);
+  } finally {
+    gate.resolve();
+    await harness.flush(48);
+  }
+});
+
+for (const stopFailure of ["throw", "ineffective"]) {
+  test(`background privacy: ${stopFailure} camera stop starts exact-Room termination before microphone recovery finishes`, async (t) => {
+    const { gate, harness, runtime } = await preparePendingForegroundRecovery(t, true, "permission");
+    const room = runtime.rooms.at(-1);
+    const cameraTrack = room.localParticipant.cameraTrack;
+    const originalStop = cameraTrack.stop.bind(cameraTrack);
+    let firstStop = true;
+    cameraTrack.stop = () => {
+      if (firstStop) {
+        firstStop = false;
+        if (stopFailure === "throw") throw new Error("fixture first native camera stop rejected");
+        return;
+      }
+      originalStop();
+    };
+    try {
+      await harness.fireAppState("background");
+      await harness.flush(48);
+      assert.ok(runtime.roomDisconnects >= 1, "termination starts independently of pending microphone permission");
+      assert.equal(room.state, "disconnected");
+      assert.equal(cameraTrack.mediaStreamTrack.readyState, "ended");
+      assert.equal(harness.getResult().cameraEnabled, false);
+      assert.ok(runtime.errors.length > 0, "failed first stop is reported instead of silent success");
+      assert.equal(runtime.trackRestarts.length, 0, "microphone recovery remains pending");
+      await harness.resolveDeferred(gate);
+      await harness.flush(96);
+      assert.equal(runtime.rooms.length, 1);
+      assert.equal(room.state, "disconnected");
+    } finally {
+      cameraTrack.stop = originalStop;
+      gate.resolve();
+      await harness.flush(48);
+    }
+  });
+}
+
+test("background privacy: ineffective stop and disconnect remain an explicit unproved shutdown", async (t) => {
+  const { gate, harness, runtime } = await preparePendingForegroundRecovery(t, true, "permission");
+  const room = runtime.rooms.at(-1);
+  const cameraTrack = room.localParticipant.cameraTrack;
+  const originalStop = cameraTrack.stop.bind(cameraTrack);
+  cameraTrack.stop = () => undefined;
+  runtime.queueDisconnect({ outcome: "mismatch" });
+  runtime.queueDisconnect({ outcome: "mismatch" });
+  try {
+    await harness.fireAppState("background");
+    await harness.flush(48);
+    assert.equal(cameraTrack.mediaStreamTrack.readyState, "live", "fixture deliberately cannot stop capture");
+    assert.equal(room.state, "connected", "fixture deliberately cannot disconnect");
+    assert.equal(harness.getResult().cameraEnabled, true, "UI cannot falsely claim camera shutdown succeeded");
+    assert.match(harness.getResult().mediaReconciliationMessage, /Camera safety/u);
+    assert.ok(runtime.errors.some(({ scope }) => scope === "chat-call-livekit-camera-safety-terminal"));
+  } finally {
+    cameraTrack.stop = originalStop;
+    gate.resolve();
+    await harness.flush(96);
+  }
+});
+
+test("background privacy: old recovery completion cannot stop a newer call's foreground camera", async (t) => {
+  const { gate, harness, runtime } = await preparePendingForegroundRecovery(t, true, "restart");
+  const oldParticipant = runtime.rooms.at(-1).localParticipant;
+  try {
+    await harness.fireAppState("background");
+    assert.equal(oldParticipant.cameraTrack.mediaStreamTrack.readyState, "ended");
+    await harness.fireAppState("active");
+    await harness.commitRender(defaultHookOptions({
+      allowBackgroundAudio: true,
+      initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+      invite: { ...defaultHookOptions().invite, callType: "video", id: "invite-2" },
+    }));
+    await waitFor(harness, () => runtime.rooms.length === 2, "replacement call created");
+    const currentParticipant = runtime.rooms.at(-1).localParticipant;
+    await harness.resolveDeferred(gate);
+    await harness.flush(160);
+
+    assert.equal(oldParticipant.cameraTrack.mediaStreamTrack.readyState, "ended");
+    assert.equal(oldParticipant.micTrack.mediaStreamTrack.readyState, "ended");
+    assert.equal(currentParticipant.cameraTrack.mediaStreamTrack.readyState, "live");
+    assert.equal(currentParticipant.micTrack.mediaStreamTrack.readyState, "live");
+    assert.equal(runtime.durableCamera, true);
+    assert.equal(runtime.durableMic, true);
+    assert.equal(harness.getResult().cameraEnabled, true);
+    assert.equal(harness.getResult().channelState, "live");
+  } finally {
+    gate.resolve();
+    await harness.flush(48);
+  }
+});
+
+test("background privacy: delayed fallback termination cannot project its camera state into a replacement", async (t) => {
+  const { gate, harness, runtime } = await preparePendingForegroundRecovery(t, true, "permission");
+  const oldRoom = runtime.rooms.at(-1);
+  const oldCamera = oldRoom.localParticipant.cameraTrack;
+  const originalStop = oldCamera.stop.bind(oldCamera);
+  let firstStop = true;
+  oldCamera.stop = () => {
+    if (firstStop) {
+      firstStop = false;
+      throw new Error("fixture first camera stop rejected");
+    }
+    originalStop();
+  };
+  const disconnectGate = deferred();
+  runtime.queueDisconnect({ gate: disconnectGate, outcome: "success" });
+  try {
+    await harness.fireAppState("background");
+    await waitFor(harness, () => runtime.roomDisconnects >= 1, "old termination awaits disconnect");
+    await harness.fireAppState("active");
+    await harness.commitRender(defaultHookOptions({
+      initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+      invite: { ...defaultHookOptions().invite, callType: "video", id: "invite-2" },
+    }));
+    await harness.resolveDeferred(gate);
+    await waitFor(harness, () => runtime.rooms.length === 2 && harness.getResult().cameraEnabled, "replacement camera live");
+    const currentRoom = runtime.rooms.at(-1);
+    await harness.resolveDeferred(disconnectGate);
+    await harness.flush(128);
+
+    assert.equal(oldCamera.mediaStreamTrack.readyState, "ended");
+    assert.equal(currentRoom.state, "connected");
+    assert.equal(currentRoom.localParticipant.cameraTrack.mediaStreamTrack.readyState, "live");
+    assert.equal(harness.getResult().cameraEnabled, true);
+    assert.equal(runtime.durableCamera, true);
+  } finally {
+    oldCamera.stop = originalStop;
+    gate.resolve();
+    disconnectGate.resolve();
+    await harness.flush(48);
+  }
+});
+
+test("SDK capture recovery: permission read resolving after replacement cannot restart the old track", async (t) => {
+  const { harness, oldCleanup, runtime } = await prepareLateCaptureCleanup(t);
+  const interruptedParticipant = runtime.rooms.at(-1).localParticipant;
+  const permissionReads = runtime.microphonePermissionReads;
+  const permissionGate = runtime.deferMicrophonePermission("granted");
+  await harness.resolveDeferred(oldCleanup);
+  await waitFor(harness, () => runtime.microphonePermissionReads > permissionReads, "recovery checks permission");
+  await harness.commitRender(defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, id: "invite-3" },
+  }));
+  await waitFor(harness, () => runtime.rooms.length === 3, "newer Room owns the hook");
+  await harness.resolveDeferred(permissionGate);
+  await harness.flush(96);
+
+  assert.equal(runtime.trackRestarts.some(({ participant }) => participant === interruptedParticipant), false);
+  assert.equal(interruptedParticipant.micTrack.mediaStreamTrack.readyState, "ended");
+  assert.equal(runtime.rooms.at(-1).localParticipant.micTrack.mediaStreamTrack.readyState, "live");
+  assert.equal(harness.getResult().micEnabled, true);
+});
+
+for (const platformOS of ["android", "ios"]) {
+  test(`SDK capture recovery: healthy ${platformOS} controls and foreground recovery do not restart tracks`, async (t) => {
+    const { harness, runtime } = await mountCase(t, {
+      initialCamera: true,
+      initialMic: true,
+      cameraPermissionState: "granted",
+      microphonePermissionState: "granted",
+      platformOS,
+    }, defaultHookOptions({
+      initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+      invite: { ...defaultHookOptions().invite, callType: "video" },
+    }));
+    const room = runtime.rooms.at(-1);
+    const participant = room.localParticipant;
+    for (let iteration = 0; iteration < 2; iteration += 1) {
+      assert.equal(await runOperation(harness, () => harness.getResult().setMicrophoneEnabled(false)), true);
+      assert.equal(await runOperation(harness, () => harness.getResult().setMicrophoneEnabled(true)), true);
+      assert.equal(await runOperation(harness, () => harness.getResult().setCameraEnabled(false)), true);
+      assert.equal(await runOperation(harness, () => harness.getResult().setCameraEnabled(true)), true);
+    }
+    await harness.fireAppState("background");
+    await harness.fireAppState("active");
+    await harness.flush(96);
+
+    assert.equal(runtime.rooms.length, 1);
+    assert.equal(runtime.rooms.at(-1), room);
+    assert.equal(participant.identity, "local-user");
+    assert.equal(runtime.providerTokenCalls, 1);
+    assert.equal(runtime.trackRestarts.length, 0, "healthy publications need no explicit restart");
+    assert.equal(participant.cameraTrack.mediaStreamTrack.readyState, "live");
+    assert.equal(participant.micTrack.mediaStreamTrack.readyState, "live");
+    assert.equal(runtime.durableCamera, true);
+    assert.equal(runtime.durableMic, true);
+    assert.equal(harness.getResult().cameraEnabled, true);
+    assert.equal(harness.getResult().micEnabled, true);
+    assert.equal(harness.getResult().channelState, "live");
+  });
+}
 
 test("cleanup support: a late same-row leave is repaired for the exact replacement session", async (t) => {
   const { harness, runtime } = await mountCase(t, {
@@ -2437,6 +2909,57 @@ test("an awaited retired Room audio callback cannot change replacement-call spea
 
   assert.equal(harness.getResult().speakerEnabled, false);
   assert.equal(harness.getResult().channelState, "live");
+});
+
+test("media recovery rechecks call ownership after actual audio-route enumeration before microphone enable", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialMic: true,
+    platformOS: "ios",
+    useActualAudioRouting: true,
+  }, defaultHookOptions({ initialMediaPreferences: { cameraEnabled: false, micEnabled: true } }));
+  const oldRoom = runtime.rooms.at(-1);
+  const calls = [];
+  const setMicrophone = oldRoom.localParticipant.setMicrophoneEnabled.bind(oldRoom.localParticipant);
+  oldRoom.localParticipant.setMicrophoneEnabled = async (enabled) => {
+    calls.push({ enabled, state: oldRoom.state, current: runtime.rooms.at(-1) === oldRoom });
+    return setMicrophone(enabled);
+  };
+  await harness.fireAppState("background");
+  const enumeration = runtime.deferAudioOutputEnumeration();
+  await harness.fireAppState("active");
+  await harness.flush(48);
+  await harness.commitRender(defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, id: "invite-2" },
+  }));
+  await waitFor(harness, () => runtime.rooms.length === 2, "replacement owns the hook");
+  await harness.resolveDeferred(enumeration);
+  await harness.flush(96);
+
+  assert.equal(calls.some((call) => call.enabled && (!call.current || call.state === "disconnected")), false);
+  assert.equal(harness.getResult().channelState, "live");
+  assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, true);
+});
+
+test("media recovery rechecks foreground intent after audio-route enumeration before microphone enable", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialMic: true,
+    platformOS: "ios",
+    useActualAudioRouting: true,
+  }, defaultHookOptions({ initialMediaPreferences: { cameraEnabled: false, micEnabled: true } }));
+  await harness.fireAppState("background");
+  const enumeration = runtime.deferAudioOutputEnumeration();
+  await harness.fireAppState("active");
+  await harness.flush(48);
+  await harness.fireAppState("background");
+  const callCountAtBackground = runtime.micCalls.length;
+  await harness.resolveDeferred(enumeration);
+  await harness.flush(96);
+
+  assert.equal(runtime.micCalls.slice(callCountAtBackground).includes(true), false, "stale foreground repair cannot enable capture");
+  assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, false);
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(runtime.durableMic, false);
 });
 
 test("the actual audio helper rejects an old route after replacement during enumeration", async (t) => {

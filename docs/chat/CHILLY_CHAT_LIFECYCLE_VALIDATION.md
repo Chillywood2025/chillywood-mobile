@@ -43,9 +43,71 @@ republished the last compatible PR #526 source
 
 A focused rollback comparison retained remote video through the same iPhone
 mute/unmute sequence, although PR #526 still showed an imperfect iPhone unmute
-state. This comparison isolates the PR #528 regression to late retired-call
-capture cleanup affecting the replacement call; it does not represent PR #526
-as fully qualified.
+state. This comparison narrows the regression to the changed source range; it
+does not isolate the native mechanism. Late retired-call capture cleanup is a
+working hypothesis until a trace connects that operation to the interrupted
+current track. PR #526 is not represented as fully qualified.
+
+## SDK-faithful recovery correction
+
+The follow-up source correction is based on merged PR #529
+`e66c1a5829c07dbb82d3a946853e0ca26832b090`. It closes independently reproduced
+source-level gaps; it has not established the physical incident's root cause or
+passed physical qualification.
+
+- Recovery rechecks exact call/Room ownership and current foreground/media
+  intent after asynchronous setup and immediately before native mutations.
+- An ended but still-unmuted SDK publication is explicitly restarted through
+  the installed SDK's supported `restartTrack()` method. Automatic reacquisition
+  requires a read-only permission result of granted; it does not prompt.
+- Healthy publications are preserved. A restart that outlives its owner or
+  foreground intent retires its exact track and cannot mark a new call ready.
+- Failed recovery projects observed publication state into the UI and durable
+  membership while retaining a warning, rather than reporting the requested
+  state as successful.
+- Required camera shutdown precedes microphone permission/restart waits so
+  background video cannot remain active because microphone recovery fails.
+  Background events also stop the exact current camera track synchronously,
+  before queued work, when microphone recovery was already pending. The SDK
+  sender remains available for normal publication retirement; failed capture
+  shutdown initiates exact-Room termination independently of that queue.
+  This immediately stops local capture and updates local UI; peer membership
+  projection still follows serialized reconciliation after pending work settles.
+
+The mounted tests separate publication mute state from native-track lifetime.
+`tests/livekit-track-lifetime.test.mjs` also exercises the real locked LiveKit
+enable/unmute/restart implementations with only the native capture boundary
+stubbed. Healthy Android/iOS control loops verify that working tracks do not
+restart and that Room, account, and provider identity remain unchanged.
+
+These are source and SDK-contract proofs. Native hardware shutdown, two-way
+speech, moving remote video, and device-specific ordering still require the
+physical steps below.
+
+### Run the observed failure before the full matrix
+
+After a separate authorization for the exact corrected internal source, verify
+both installed update IDs and use the designated consenting accounts:
+
+1. Cold-launch both apps with no preceding call. Establish Android-to-iPhone
+   video, moving remote video and two-way speech; perform three iPhone
+   microphone mute/unmute cycles.
+2. End, immediately start a new same-thread video call, and repeat. Compare with
+   a new call after cleanup has visibly settled; a timer is not cancellation.
+3. Repeat the focused sequence in the reverse direction.
+4. If a failure occurs, record a short sanitized timeline of operation
+   start/settlement, current/retired Room and track identity, app/audio state,
+   actual sending/receiving/decoded frames where available, and visible video.
+   Do not record tokens, message contents or private account identifiers.
+5. If a cold first call fails without any retired operation, do not attribute
+   it solely to late cleanup. Use the trace to distinguish capture, publication,
+   receiver and rendering failures before making another correction.
+
+Only after this focused sequence passes should the operator finish the
+remaining matrix on the same exact candidate. Source tests do not convert any
+physical row from NOT RUN to PASS. If a source defect is found, preserve the
+evidence for the implementation owner rather than making parallel code changes
+during device qualification.
 
 ## Lifecycle coverage
 

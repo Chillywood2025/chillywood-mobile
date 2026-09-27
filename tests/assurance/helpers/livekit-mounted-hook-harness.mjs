@@ -195,6 +195,8 @@ export function createLiveKitMountedRuntime(options = {}) {
     remoteDurableMic: options.remoteMic ?? true,
     remoteCameraConverged: true,
     nativeActions: [],
+    trackRestartActions: [],
+    trackRestarts: [],
     nextSnapshotActions: [],
     nextTouchActions: [],
     providerTokenCalls: 0,
@@ -238,9 +240,25 @@ export function createLiveKitMountedRuntime(options = {}) {
   runtime.queueMembershipLeave = (action) => runtime.membershipLeaveActions.push(action);
   runtime.queueNativeApplicationActive = (action) => runtime.nativeApplicationActiveActions.push(action);
   runtime.queueNative = (action) => runtime.nativeActions.push(action);
+  runtime.queueTrackRestart = (action) => runtime.trackRestartActions.push(action);
   runtime.queueMicrophonePermission = (action) => runtime.microphonePermissionActions.push(action);
   runtime.queueSnapshot = (action) => runtime.nextSnapshotActions.push(action);
   runtime.queueTouch = (action) => runtime.nextTouchActions.push(action);
+  runtime.interruptLocalCapture = (source) => {
+    const participant = runtime.rooms.at(-1)?.localParticipant;
+    if (!participant) throw new Error("MOUNTED_LIVEKIT_ROOM_NOT_READY");
+    const wasUnmuted = participant.getTrackPublication(source)?.isMuted === false;
+    if (source === "camera") {
+      participant.cameraTrack.stop();
+      participant.cameraEnabled = false;
+      participant.interruptedUnmutedCameraPublication = wasUnmuted;
+      runtime.remoteCameraConverged = false;
+    } else {
+      participant.micTrack.stop();
+      participant.micEnabled = false;
+      participant.interruptedUnmutedMicrophonePublication = wasUnmuted;
+    }
+  };
   runtime.publishCameraLate = () => {
     const room = runtime.rooms.at(-1);
     if (!room) throw new Error("MOUNTED_LIVEKIT_ROOM_NOT_READY");
@@ -347,15 +365,63 @@ export function createLiveKitMountedRuntime(options = {}) {
       this.cameraPublicationPresent = runtime.durableCamera;
       this.cameraWasMuted = false;
       this.micEnabled = runtime.durableMic;
-      this.cameraTrack = makeTrack("video", () => {
-        this.cameraEnabled = false;
+      this.cameraTrack = this.createLocalTrack("video");
+      this.micTrack = this.createLocalTrack("audio");
+    }
+
+    createLocalTrack(kind) {
+      const participant = this;
+      let stopGeneration = 0;
+      const track = makeTrack(kind, () => {
+        stopGeneration += 1;
+        // LocalTrack.stop ends capture but does not mute/remove its publication.
+        // An obsolete track object cannot change a newer publication's state.
+        if (kind === "video" && participant.cameraTrack === track) {
+          participant.interruptedUnmutedCameraPublication ||= participant.cameraEnabled;
+          participant.cameraEnabled = false;
+        } else if (kind === "audio" && participant.micTrack === track) {
+          participant.interruptedUnmutedMicrophonePublication ||= participant.micEnabled;
+          participant.micEnabled = false;
+        }
       });
-      this.micTrack = makeTrack("audio", () => {
-        this.micEnabled = false;
-      });
+      track.restartTrack = async () => {
+        const generationBeforeRestart = stopGeneration;
+        runtime.trackRestarts.push({ kind, participant, track });
+        const action = runtime.trackRestartActions.shift() ?? { outcome: "success" };
+        if (action.gate) await action.gate.promise;
+        if (action.outcome === "reject") throw new Error("native track restart rejected");
+        if (action.outcome === "mismatch") return;
+        // A supported SDK restart acquires a new underlying track. Merely asking
+        // an already-unmuted publication to enable itself does not do this.
+        track.mediaStreamTrack = { readyState: "live" };
+        // LocalTrack.restart itself stops newly acquired capture when stop()
+        // arrived while getUserMedia/setMediaStreamTrack was pending.
+        if (stopGeneration !== generationBeforeRestart) {
+          track.stop();
+          return;
+        }
+        if (kind === "video" && participant.cameraTrack === track) {
+          participant.cameraEnabled = true;
+          participant.interruptedUnmutedCameraPublication = false;
+          runtime.remoteCameraConverged = true;
+        } else if (kind === "audio" && participant.micTrack === track) {
+          participant.micEnabled = true;
+          participant.interruptedUnmutedMicrophonePublication = false;
+        }
+      };
+      return track;
     }
 
     getTrackPublication(source) {
+      // LocalTrack mute state and underlying MediaStreamTrack lifetime are
+      // separate in the locked SDK. Native capture ending does not unpublish or
+      // mute an existing publication, and its unmute method can remain a no-op.
+      if (source === "camera" && this.interruptedUnmutedCameraPublication) {
+        return { isMuted: false, source, track: this.cameraTrack };
+      }
+      if (source === "microphone" && this.interruptedUnmutedMicrophonePublication) {
+        return { isMuted: false, source, track: this.micTrack };
+      }
       if (
         source === "camera"
         && options.retainMutedCameraPublication
@@ -375,14 +441,15 @@ export function createLiveKitMountedRuntime(options = {}) {
     async setCameraEnabled(enabled) {
       runtime.cameraCalls.push(enabled);
       runtime.cameraLifecycleEvents.push(`set-camera:${enabled}`);
+      if (enabled && this.interruptedUnmutedCameraPublication) {
+        return this.getTrackPublication("camera");
+      }
       const action = runtime.cameraActions.shift() ?? { outcome: "success" };
       if (action.gate) await action.gate.promise;
       if (action.interruptLatestOnCompletion) {
         const latestParticipant = runtime.rooms.at(-1)?.localParticipant;
         if (latestParticipant && latestParticipant !== this) {
-          latestParticipant.cameraTrack.stop();
-          latestParticipant.cameraEnabled = false;
-          runtime.remoteCameraConverged = false;
+          runtime.interruptLocalCapture("camera");
         }
       }
       if (action.outcome === "permission-denied") {
@@ -397,20 +464,21 @@ export function createLiveKitMountedRuntime(options = {}) {
         && this.cameraWasMuted;
       if (nextEnabled && !this.cameraPublicationPresent) {
         this.cameraGeneration += 1;
-        this.cameraTrack = makeTrack("video", () => {
-          this.cameraEnabled = false;
-        });
+        this.cameraTrack = this.createLocalTrack("video");
         this.cameraPublicationPresent = true;
       }
       this.cameraEnabled = nextEnabled;
       if (this.cameraEnabled) {
-        this.cameraTrack.mediaStreamTrack.readyState = "live";
+        if (this.cameraTrack.mediaStreamTrack.readyState === "ended") {
+          this.cameraTrack.mediaStreamTrack = { readyState: "live" };
+        }
         runtime.remoteCameraConverged = !(
           options.managedCameraUnmuteStallsRemote
           && reusedMutedPublication
         );
         this.cameraWasMuted = false;
       } else if (enabled === false && action.outcome !== "mismatch") {
+        this.interruptedUnmutedCameraPublication = false;
         this.cameraWasMuted = true;
         this.cameraTrack.stop();
         runtime.remoteCameraConverged = false;
@@ -434,6 +502,7 @@ export function createLiveKitMountedRuntime(options = {}) {
         this.cameraTrack.stop();
         this.cameraEnabled = false;
         this.cameraPublicationPresent = false;
+        this.interruptedUnmutedCameraPublication = false;
         runtime.remoteCameraConverged = false;
       }
       if (action.outcome === "reject-after-removal") {
@@ -444,13 +513,15 @@ export function createLiveKitMountedRuntime(options = {}) {
 
     async setMicrophoneEnabled(enabled) {
       runtime.micCalls.push(enabled);
+      if (enabled && this.interruptedUnmutedMicrophonePublication) {
+        return this.getTrackPublication("microphone");
+      }
       const action = runtime.nativeActions.shift() ?? { outcome: "success" };
       if (action.gate) await action.gate.promise;
       if (action.interruptLatestOnCompletion) {
         const latestParticipant = runtime.rooms.at(-1)?.localParticipant;
         if (latestParticipant && latestParticipant !== this) {
-          latestParticipant.micTrack.stop();
-          latestParticipant.micEnabled = false;
+          runtime.interruptLocalCapture("microphone");
         }
       }
       if (action.outcome === "permission-denied") {
@@ -460,7 +531,10 @@ export function createLiveKitMountedRuntime(options = {}) {
       }
       if (action.outcome === "reject") throw new Error("native microphone rejected");
       this.micEnabled = action.outcome === "mismatch" ? !enabled : enabled;
-      if (this.micEnabled) this.micTrack.mediaStreamTrack.readyState = "live";
+      if (!this.micEnabled) this.interruptedUnmutedMicrophonePublication = false;
+      if (this.micEnabled && this.micTrack.mediaStreamTrack.readyState === "ended") {
+        this.micTrack.mediaStreamTrack = { readyState: "live" };
+      }
       if (action.outcome === "missing") return undefined;
       return makePublication(enabled, "audio", this.micTrack);
     }
@@ -511,7 +585,9 @@ export function createLiveKitMountedRuntime(options = {}) {
       if (stopTracks) {
         this.localParticipant.cameraTrack.stop();
         this.localParticipant.cameraPublicationPresent = false;
+        this.localParticipant.interruptedUnmutedCameraPublication = false;
         this.localParticipant.micTrack.stop();
+        this.localParticipant.interruptedUnmutedMicrophonePublication = false;
       }
       this.state = "disconnected";
     }
