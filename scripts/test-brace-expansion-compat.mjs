@@ -86,7 +86,7 @@ const expectedDependencyAdvisoryClosure = Object.freeze({
 // excluded below and verified by their own exact identity witness; the LiveKit
 // identities remain in this digest and are also bound by their focused test.
 // Any later package identity drift still fails closed at this digest.
-const expectedUnrelatedPackageGraphSha256 = "a9c73b05274edfd52613d93cc9ceec025b21850cc498654028b57b982dcd7e7e";
+const expectedUnrelatedPackageGraphSha256 = "2b54605b2b296b71d8a11de00b24b63ea798303bf80d0c3fb3e1e085e8d0a521";
 const compatibilityClosurePaths = new Set([
   "node_modules/concat-map",
   "node_modules/decode-uri-component",

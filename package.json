@@ -635,7 +635,7 @@
     "expo-video": "~3.0.16",
     "expo-web-browser": "~15.0.11",
     "image-size": "file:vendor/image-size-safe/chillywood-image-size-safe-1.2.1-chillywood.1.tgz",
-    "livekit-client": "2.18.8",
+    "livekit-client": "2.22.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
