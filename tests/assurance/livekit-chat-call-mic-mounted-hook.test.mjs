@@ -759,6 +759,229 @@ test("cleanup support: cleanup started before same-row replacement cannot leave 
   assert.equal(harness.getResult().channelState, "live");
 });
 
+test("cleanup support: late old capture shutdown cannot stop a same-row replacement", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const oldCameraCleanup = deferred();
+  const oldMicrophoneCleanup = deferred();
+  runtime.queueCamera({
+    gate: oldCameraCleanup,
+    interruptLatestOnCompletion: true,
+    outcome: "success",
+  });
+  runtime.queueNative({
+    gate: oldMicrophoneCleanup,
+    interruptLatestOnCompletion: true,
+    outcome: "success",
+  });
+
+  await harness.fireStopper("manual");
+  await harness.commitRender(defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: {
+      ...defaultHookOptions().invite,
+      callType: "video",
+      id: "invite-2",
+    },
+  }));
+  await waitFor(harness, () => runtime.rooms.length === 2, "same-row replacement Room created");
+  await waitFor(harness, () => harness.getResult().channelState === "live", "same-row replacement live");
+
+  oldCameraCleanup.resolve();
+  oldMicrophoneCleanup.resolve();
+  await harness.flush(48);
+
+  assert.equal(runtime.rooms.at(-1).localParticipant.cameraEnabled, true);
+  assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, true);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.durableMic, true);
+  assert.equal(harness.getResult().cameraEnabled, true);
+  assert.equal(harness.getResult().micEnabled, true);
+  assert.equal(harness.getResult().channelState, "live");
+});
+
+test("cleanup support: late old capture shutdown preserves newer replacement media intent", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const oldCameraCleanup = deferred();
+  const oldMicrophoneCleanup = deferred();
+  runtime.queueCamera({
+    gate: oldCameraCleanup,
+    interruptLatestOnCompletion: true,
+    outcome: "success",
+  });
+  runtime.queueNative({
+    gate: oldMicrophoneCleanup,
+    interruptLatestOnCompletion: true,
+    outcome: "success",
+  });
+
+  await harness.fireStopper("manual");
+  await harness.commitRender(defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: {
+      ...defaultHookOptions().invite,
+      callType: "video",
+      id: "invite-2",
+    },
+  }));
+  await waitFor(harness, () => harness.getResult().channelState === "live", "same-row replacement live");
+  assert.equal(await runOperation(harness, () => harness.getResult().setMicrophoneEnabled(false)), true);
+
+  oldCameraCleanup.resolve();
+  oldMicrophoneCleanup.resolve();
+  await harness.flush(48);
+
+  assert.equal(runtime.rooms.at(-1).localParticipant.cameraEnabled, true);
+  assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, false);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.durableMic, false);
+  assert.equal(harness.getResult().cameraEnabled, true);
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(harness.getResult().channelState, "live");
+});
+
+test("cleanup support: late rejected capture shutdown still repairs the current replacement", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const oldCameraCleanup = deferred();
+  const oldMicrophoneCleanup = deferred();
+  runtime.queueCamera({
+    gate: oldCameraCleanup,
+    interruptLatestOnCompletion: true,
+    outcome: "reject",
+  });
+  runtime.queueNative({
+    gate: oldMicrophoneCleanup,
+    interruptLatestOnCompletion: true,
+    outcome: "reject",
+  });
+
+  await harness.fireStopper("manual");
+  await harness.commitRender(defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video", id: "invite-2" },
+  }));
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement live");
+
+  oldCameraCleanup.resolve();
+  oldMicrophoneCleanup.resolve();
+  await harness.flush(48);
+
+  assert.equal(runtime.rooms.at(-1).localParticipant.cameraEnabled, true);
+  assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, true);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.durableMic, true);
+  assert.equal(harness.getResult().channelState, "live");
+});
+
+test("cleanup support: late capture shutdown reconciles a different-room replacement", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const oldCameraCleanup = deferred();
+  const oldMicrophoneCleanup = deferred();
+  runtime.queueCamera({ gate: oldCameraCleanup, interruptLatestOnCompletion: true, outcome: "success" });
+  runtime.queueNative({ gate: oldMicrophoneCleanup, interruptLatestOnCompletion: true, outcome: "success" });
+
+  await harness.fireStopper("manual");
+  runtime.roomId = "ROOM-2";
+  await harness.commitRender(replacementOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...replacementOptions().invite, callType: "video" },
+  }));
+  await waitFor(harness, () => harness.getResult().channelState === "live", "different-room replacement live");
+
+  oldCameraCleanup.resolve();
+  oldMicrophoneCleanup.resolve();
+  await harness.flush(48);
+
+  assert.equal(runtime.rooms.at(-1).localParticipant.cameraEnabled, true);
+  assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, true);
+  assert.equal(harness.getResult().channelState, "live");
+});
+
+test("cleanup support: late capture shutdown uses only replacement-account media intent", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const oldCameraCleanup = deferred();
+  const oldMicrophoneCleanup = deferred();
+  runtime.queueCamera({ gate: oldCameraCleanup, interruptLatestOnCompletion: true, outcome: "success" });
+  runtime.queueNative({ gate: oldMicrophoneCleanup, interruptLatestOnCompletion: true, outcome: "success" });
+
+  await harness.fireStopper("manual");
+  runtime.userId = "replacement-user";
+  await harness.commitRender(defaultHookOptions({
+    authenticatedUserId: "replacement-user",
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: {
+      ...defaultHookOptions().invite,
+      calleeUserId: "replacement-user",
+      callType: "video",
+      id: "invite-2",
+    },
+  }));
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement account live");
+
+  oldCameraCleanup.resolve();
+  oldMicrophoneCleanup.resolve();
+  await harness.flush(48);
+
+  assert.equal(runtime.rooms.at(-1).localParticipant.cameraEnabled, false);
+  assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, true);
+  assert.equal(runtime.durableCamera, false);
+  assert.equal(runtime.durableMic, true);
+  assert.equal(harness.getResult().channelState, "live");
+});
+
+test("cleanup support: late capture shutdown with no replacement stays terminal", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const oldCameraCleanup = deferred();
+  const oldMicrophoneCleanup = deferred();
+  runtime.queueCamera({ gate: oldCameraCleanup, outcome: "success" });
+  runtime.queueNative({ gate: oldMicrophoneCleanup, outcome: "success" });
+
+  await harness.fireStopper("manual");
+  oldCameraCleanup.resolve();
+  oldMicrophoneCleanup.resolve();
+  await harness.flush(48);
+
+  assert.equal(runtime.rooms.length, 1);
+  assert.equal(runtime.rooms[0].localParticipant.cameraEnabled, false);
+  assert.equal(runtime.rooms[0].localParticipant.micEnabled, false);
+  assert.notEqual(harness.getResult().channelState, "live");
+});
+
 test("cleanup support: a late same-row leave is repaired for the exact replacement session", async (t) => {
   const { harness, runtime } = await mountCase(t, {
     initialCamera: true,

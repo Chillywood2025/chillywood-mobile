@@ -1,10 +1,51 @@
 # Chi'lly Chat lifecycle validation map
 
 This map covers the lifecycle source and follow-up correction based on protected
-main `ee6ef44afdd923a141a5f63c51e6241f318a4b9d`. It is a source-validation map, not
-an installed-device closeout. The qualification source is the eventual
-protected-main merge of the lifecycle pull request; its exact commit, OTA IDs,
-and installed update IDs must be recorded before any physical result counts.
+main `ee6ef44afdd923a141a5f63c51e6241f318a4b9d`, plus the physical qualification
+attempt for PR #528. Source tests and physical evidence remain separate: a row
+counts only for the exact installed update and observations recorded below.
+
+## PR #528 internal qualification record
+
+The qualified source was protected merge
+`cb35e0a2984d98f0e7c9f88b55676dd9671552ce`, tree
+`9188268b86ecdd6f816b5168817b2a6d88847644`, from validated PR head
+`26339eb8c1f4df9597733bad390044a49e47635d`. Required Validation run
+`36304651616` succeeded for that head.
+
+| Platform | Existing signed binary | Installed PR #528 update | Runtime / internal channel | Uptake proof |
+| --- | --- | --- | --- | --- |
+| Android | build 92; EAS build `b88caea9-17e8-4abf-b8c5-837f233a0f7f`; artifact SHA-256 `538959defd5cebe4b640d3469b0ba19aae49c912e385efedde18c9bd1cead270` | update `01a0e30f-d8bb-77e6-b115-e8154aaf057e`; group `9b81aa15-a317-40e7-bfed-ece01a48173d` | `1.0.0-android-production-v2` / `android-internal-v2` | Physical App Info readback on the designated Samsung test device; embedded=false; emergency=false; stable cold launch |
+| iOS | build 21; EAS build `dca98686-b7cb-490e-9aa4-b69078bbe69c`; artifact SHA-256 `8c42429b4918597b098a298693cc3e5f573adff5f6b7091eb2406b9119a23d2f`; native-call capability verified | update `01a0e314-4be0-7223-bfa5-7047b55867d2`; group `ca8bce31-080e-401d-b580-ce1348435095` | `1.0.0-ios-production-v2` / `ios-internal-v2` | Physical App Info readback on the designated iPhone test device; embedded=false; emergency=false; stable cold launch |
+
+Both calls exercised below used the invite's LiveKit provider. A private message
+sent from Android before the calls arrived in the designated iPhone thread.
+Publication and uptake did not reach a public or production channel.
+
+### Confirmed regression and rollback
+
+An Android-to-iPhone same-thread video call initially connected and rendered
+moving remote video. After the iPhone microphone was muted and unmuted, Android
+lost the iPhone video and remained at `Camera Connecting` beyond the 15-second
+fallback while the endpoints disagreed about the call/media state. A second
+call reproduced the same remote-video loss. This is an application failure, not
+an automation selector failure.
+
+The matrix stopped at that serious regression. The canonical rollback path
+republished the last compatible PR #526 source
+`691814ec8ff8dd863f014add0255a4110117cf23`, tree
+`bb1aba7117c80cdf6ce85e3a6483c0c324f75cd5`, to the same internal audiences:
+
+| Platform | Rollback update / group | Installed readback |
+| --- | --- | --- |
+| Android | `01a0e339-d49f-7538-a71a-d40104901c05` / `0040d1b5-f6db-40ba-83ec-4b208443b202` | build 92, exact rollback update, expected runtime/channel, embedded=false, emergency=false, two stable cold launches |
+| iOS | `01a0e33a-0c9a-7c48-8457-772b1e59f760` / `3ccbfe1f-e6bb-43d8-b34d-d0bdd6d40550` | build 21, exact rollback update, expected runtime/channel, native-call capability retained, embedded=false, emergency=false, two stable cold launches |
+
+A focused rollback comparison retained remote video through the same iPhone
+mute/unmute sequence, although PR #526 still showed an imperfect iPhone unmute
+state. This comparison isolates the PR #528 regression to late retired-call
+capture cleanup affecting the replacement call; it does not represent PR #526
+as fully qualified.
 
 ## Lifecycle coverage
 
@@ -72,7 +113,7 @@ moving remote video in both directions rather than camera labels alone.
 | Android → iPhone | voice | Elsewhere in the app | NOT RUN |
 | Android → iPhone | voice | Backgrounded | NOT RUN |
 | Android → iPhone | voice | Terminated | NOT RUN |
-| Android → iPhone | video | Same Chi'lly Chat thread | NOT RUN |
+| Android → iPhone | video | Same Chi'lly Chat thread | FAIL — remote iPhone video was lost after microphone recovery and did not recover within 15 seconds |
 | Android → iPhone | video | Elsewhere in the app | NOT RUN |
 | Android → iPhone | video | Backgrounded | NOT RUN |
 | Android → iPhone | video | Terminated | NOT RUN |
@@ -92,8 +133,8 @@ moving remote video in both directions rather than camera labels alone.
 | Caller cancels before answer, each direction and media type | Receiver UI closes once; no Room/capture/membership remains | NOT RUN |
 | Receiver declines, each direction and media type | Caller and receiver close once; no provider connection starts afterward | NOT RUN |
 | Invite expires unanswered, foreground/background/terminated receiver | Native and app UI clear at expiry; late Answer cannot connect | NOT RUN |
-| Remote End from Android, then from iPhone | Peer exits live UI; capture, durable membership, transport, and native UI clear | NOT RUN |
-| Repeated microphone transitions from each endpoint | Two-way speech follows every mute/unmute; durable and UI state agree | NOT RUN |
+| Remote End from Android, then from iPhone | Peer exits live UI; capture, durable membership, transport, and native UI clear | NOT RUN — iPhone End cleaned both endpoints once; reverse direction was not run |
+| Repeated microphone transitions from each endpoint | Two-way speech follows every mute/unmute; durable and UI state agree | FAIL — iPhone unmute on PR #528 caused persistent Android remote-video loss and endpoint state disagreement |
 | Repeated camera transitions and flip from each endpoint | Moving remote video closes/reopens; direction changes without duplicate publication | NOT RUN |
 | Established peer disappears while foregrounded | Remaining endpoint stays Reconnecting, not Live, while peer is absent | NOT RUN |
 | Absent peer returns | Recovery occurs only after peer presence/media return and within recorded timing | NOT RUN |
@@ -105,9 +146,10 @@ moving remote video in both directions rather than camera labels alone.
 | Cleanup followed by fresh video call, each direction | Capture/native UI/membership clear, then moving video succeeds | NOT RUN |
 | Same-account call replacement on the same room membership | Late cleanup cannot mute/leave the replacement; UI/native/durable state agree | NOT RUN |
 | Account replacement while old work settles | Old account callbacks/mutations cannot affect the new account | NOT RUN |
-| Adjacent messaging during cancel/decline/End/replacement | Existing messages remain isolated and new private messages deliver correctly | NOT RUN |
+| Adjacent messaging during cancel/decline/End/replacement | Existing messages remain isolated and new private messages deliver correctly | NOT RUN — one Android-to-iPhone pre-call message delivered; post-call and lifecycle combinations were not run |
 
 Expected compatibility namespaces remain
 `1.0.0-android-production-v2` and `1.0.0-ios-production-v2`, subject to a fresh
-binary/source compatibility check. No OTA, build, installation, or physical
-qualification is authorized or claimed by this source document.
+binary/source compatibility check. No source correction after PR #528 has been
+delivered or physically qualified by this record. A new exact delivery decision
+is required before testing any corrected merge on these devices.

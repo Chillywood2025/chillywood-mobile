@@ -1908,59 +1908,98 @@ export function useLiveKitChatCallSession({
         return scheduleLatestMediaReconciliation(false);
       };
 
+      const protectCurrentReplacementCapture = async () => {
+        const replacementBinding = committedSessionRef.current;
+        if (
+          !replacementBinding
+          || sameCommittedAuthority(replacementBinding, binding)
+          || !isCommittedSessionCurrent(replacementBinding)
+        ) return true;
+        // Camera and microphone capture are process-scoped native resources on
+        // supported clients. A retired Room's delayed disable can therefore
+        // settle after a replacement call owns capture. Reconcile through the
+        // replacement's exact authority and latest requested/permission state;
+        // never restore values remembered by the retired session.
+        return scheduleLatestMediaReconciliation(true);
+      };
+
+      const reconcileReplacementAfterCaptureSettlement = (
+        operation: Promise<boolean>,
+        scope: string,
+      ) => {
+        void operation.then(
+          protectCurrentReplacementCapture,
+          protectCurrentReplacementCapture,
+        ).catch((reconciliationError) => {
+          reportRuntimeError(scope, reconciliationError, {
+            roomId: binding.normalizedRoomId,
+          });
+        });
+      };
+
       let cameraShutdown: Promise<boolean> = Promise.resolve(true);
       let microphoneShutdown: Promise<boolean> = Promise.resolve(true);
       let transportShutdown: Promise<boolean> = Promise.resolve(true);
       if (liveKitRoom) {
-        cameraShutdown = runBoundedCleanupOperation(
-          "chat-call-livekit-cleanup-camera",
-          async () => {
+        const cameraShutdownOperation = (async () => {
+          try {
+            await liveKitRoom.localParticipant.setCameraEnabled(false);
+          } catch (cameraError) {
+            reportRuntimeError("chat-call-livekit-cleanup-camera", cameraError, {
+              roomId: binding.normalizedRoomId,
+            });
+          }
+          const publication = liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera);
+          if (publicationIsUsable(publication)) {
             try {
-              await liveKitRoom.localParticipant.setCameraEnabled(false);
-            } catch (cameraError) {
-              reportRuntimeError("chat-call-livekit-cleanup-camera", cameraError, {
+              publication?.track?.stop();
+            } catch (trackError) {
+              reportRuntimeError("chat-call-livekit-cleanup-camera-track", trackError, {
                 roomId: binding.normalizedRoomId,
               });
             }
-            const publication = liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera);
-            if (publicationIsUsable(publication)) {
-              try {
-                publication?.track?.stop();
-              } catch (trackError) {
-                reportRuntimeError("chat-call-livekit-cleanup-camera-track", trackError, {
-                  roomId: binding.normalizedRoomId,
-                });
-              }
+          }
+          return !publicationIsUsable(
+            liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+          );
+        })();
+        reconcileReplacementAfterCaptureSettlement(
+          cameraShutdownOperation,
+          "chat-call-livekit-cleanup-camera-replacement-reconciliation",
+        );
+        cameraShutdown = runBoundedCleanupOperation(
+          "chat-call-livekit-cleanup-camera",
+          () => cameraShutdownOperation,
+        );
+        const microphoneShutdownOperation = (async () => {
+          try {
+            await liveKitRoom.localParticipant.setMicrophoneEnabled(false);
+          } catch (microphoneError) {
+            reportRuntimeError("chat-call-livekit-cleanup-microphone", microphoneError, {
+              roomId: binding.normalizedRoomId,
+            });
+          }
+          const publication = liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone);
+          if (publicationIsUsable(publication)) {
+            try {
+              publication?.track?.stop();
+            } catch (trackError) {
+              reportRuntimeError("chat-call-livekit-cleanup-microphone-track", trackError, {
+                roomId: binding.normalizedRoomId,
+              });
             }
-            return !publicationIsUsable(
-              liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
-            );
-          },
+          }
+          return !publicationIsUsable(
+            liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
+          );
+        })();
+        reconcileReplacementAfterCaptureSettlement(
+          microphoneShutdownOperation,
+          "chat-call-livekit-cleanup-microphone-replacement-reconciliation",
         );
         microphoneShutdown = runBoundedCleanupOperation(
           "chat-call-livekit-cleanup-microphone",
-          async () => {
-            try {
-              await liveKitRoom.localParticipant.setMicrophoneEnabled(false);
-            } catch (microphoneError) {
-              reportRuntimeError("chat-call-livekit-cleanup-microphone", microphoneError, {
-                roomId: binding.normalizedRoomId,
-              });
-            }
-            const publication = liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone);
-            if (publicationIsUsable(publication)) {
-              try {
-                publication?.track?.stop();
-              } catch (trackError) {
-                reportRuntimeError("chat-call-livekit-cleanup-microphone-track", trackError, {
-                  roomId: binding.normalizedRoomId,
-                });
-              }
-            }
-            return !publicationIsUsable(
-              liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
-            );
-          },
+          () => microphoneShutdownOperation,
         );
         transportShutdown = runBoundedCleanupOperation(
           "chat-call-livekit-cleanup-transport",
