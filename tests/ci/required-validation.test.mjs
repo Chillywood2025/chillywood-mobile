@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import test from "node:test";
 
 import { computeValidationPlan, evaluateRun, evaluateWorkflowSnapshot, expectedJobs, isVerifiedRepositoryOwnerAuthor, validatePublisherAppIdentity } from "../../scripts/ci/required-validation.mjs";
@@ -54,6 +55,30 @@ test("auth, database, native, release and CI paths select proportionate strict c
   assert.equal(computeValidationPlan(["scripts/publish-internal-v2-ota.mjs"]).categories.nativeRelease, true);
   assert.equal(computeValidationPlan([".github/workflows/required-validation.yml"]).categories.policy, true);
   assert.equal(computeValidationPlan(["lib/autonomous/operator.ts"]).categories.database, true);
+});
+
+test("call lifecycle hooks select sensitive, database, and native validation and execute regressions", () => {
+  for (const hookPath of [
+    "hooks/use-livekit-chat-call-session.ts",
+    "hooks/use-communication-room-session.ts",
+    "hooks/use-chat-call-media-session.ts",
+  ]) {
+    const plan = computeValidationPlan([hookPath]);
+    assert.equal(plan.categories.product, true, hookPath);
+    assert.equal(plan.categories.sensitive, true, hookPath);
+    assert.equal(plan.categories.database, true, hookPath);
+    assert.equal(plan.categories.nativeRelease, true, hookPath);
+  }
+
+  const workflow = fs.readFileSync(".github/workflows/required-validation.yml", "utf8");
+  for (const regression of [
+    "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs",
+    "tests/assurance/communication-operation-error-truth.test.mjs",
+    "tests/assurance/android-chat-call-mic-control.test.mjs",
+  ]) {
+    assert.match(workflow, new RegExp(`node --test ${regression.replaceAll(".", "\\.")}`, "u"));
+  }
+  assert.match(workflow, /npm run test:communication-room-realtime-delivery/u);
 });
 
 test("non-owner policy changes require a trusted exact-head review from someone other than author", () => {

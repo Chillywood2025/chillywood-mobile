@@ -76,7 +76,11 @@ jobs:
         with: { node-version: 20, cache: npm }
       - run: npm ci
       - name: Run product and navigation regression tests
-        run: node --test tests/*.test.mjs
+        run: |
+          node --test tests/*.test.mjs
+          node --test tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs
+          node --test tests/assurance/communication-operation-error-truth.test.mjs
+          node --test tests/assurance/android-chat-call-mic-control.test.mjs
 
   sensitive:
     name: Validation / Sensitive
@@ -126,6 +130,7 @@ jobs:
           supabase start
           supabase db reset
           supabase test db
+          npm run test:communication-room-realtime-delivery
           npm run test:revenuecat-premium-quarantine-concurrency
           npm run test:cognitive-net-acl-guard-concurrency
           npm run test:cognitive-db-concurrency

@@ -898,11 +898,12 @@ export async function endCommunicationRoom(roomId: string, authenticatedUserId?:
     last_activity_at: new Date().toISOString(),
   };
 
-  await supabase
+  const { error } = await supabase
     .from(COMMUNICATION_ROOMS_TABLE)
     .update(updates)
     .eq("room_id", normalizedRoomId)
     .eq("host_user_id", writableUserId);
+  if (error) throw createCommunicationOperationError("room end", error);
 }
 
 export async function readCommunicationIdentity(authenticatedUserId?: string): Promise<CommunicationIdentity> {

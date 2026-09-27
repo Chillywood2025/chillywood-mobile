@@ -45,6 +45,11 @@ const invariants = (candidate, candidateContract = contract) => {
     "  const enqueueSessionMediaWrite",
     "  const refreshParticipantViews",
   );
+  const livePromotionSlice = slice(
+    candidate,
+    "  const promoteCommittedSessionIfReady",
+    "  const enqueueSessionMediaWrite",
+  );
   const nativeReconciliationSlice = slice(
     candidate,
     "  const reconcileLatestCommittedNativeMedia",
@@ -106,9 +111,14 @@ const invariants = (candidate, candidateContract = contract) => {
   assert.match(transportRecoverySlice, /!reconciled[\s\S]{0,180}micReconciliationBlockedRef\.current/u);
   assert.ok(
     transportRecoverySlice.indexOf("scheduleLatestMediaReconciliation(true)")
-      < transportRecoverySlice.indexOf("setCommittedRoomState(effectBinding, \"active\")"),
+      < transportRecoverySlice.indexOf("promoteCommittedSessionIfReady(recoveryBinding)"),
     "Reconnected proves durable convergence before live promotion",
   );
+  assert.match(livePromotionSlice, /reconnectAwaitingRemoteRef\.current/u);
+  assert.match(livePromotionSlice, /remoteParticipantSeenRef\.current/u);
+  assert.match(livePromotionSlice, /liveKitRoom\.remoteParticipants\.size === 0/u);
+  assert.match(livePromotionSlice, /setCommittedRoomState\(binding, "active"\)/u);
+  assert.match(livePromotionSlice, /setChannelState\("live"\)/u);
   assert.match(candidate, /const bindingStillCurrent = sameCommittedAuthority\(committedSessionRef\.current, binding\)/u);
   assert.match(cleanupSlice, /if \(replacementReusesDurableAuthority\) return null;/u);
   assert.match(cleanupSlice, /const endContext = currentDurableContext\(\);/u);
@@ -121,7 +131,7 @@ const invariants = (candidate, candidateContract = contract) => {
   assert.doesNotMatch(candidate, /\n    allowBackgroundAudio,\n/u);
   assert.match(initialMembershipSlice, /if \(!initialMembership\) \{[\s\S]{0,180}setChannelState\("reconnecting"\)/u);
   assert.ok(
-    initialMembershipSlice.indexOf("setChannelState(\"live\")")
+    initialMembershipSlice.indexOf("promoteCommittedSessionIfReady(effectBinding)")
       > initialMembershipSlice.indexOf("} else {"),
     "initial session becomes live only after durable convergence",
   );
