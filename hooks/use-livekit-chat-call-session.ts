@@ -104,6 +104,7 @@ type NativeMediaReconciliationResult = Readonly<{
   cameraTarget: boolean;
   membershipState: "active" | "reconnecting";
   microphoneTarget: boolean;
+  reconciled: boolean;
 }>;
 
 type DeferredNativeMediaReconciliation = {
@@ -310,6 +311,9 @@ export function useLiveKitChatCallSession({
   const audioOutputRequestSerialRef = useRef(0);
   const deferredMediaReconciliationRef = useRef<DeferredMediaReconciliation | null>(null);
   const deferredNativeMediaReconciliationRef = useRef<DeferredNativeMediaReconciliation | null>(null);
+  const reconcileCurrentMediaRef = useRef<(native: boolean) => Promise<boolean>>(
+    async () => false,
+  );
   const pendingMicToggleRef = useRef(false);
   const pendingMicOwnerRef = useRef<MediaControlOwner | null>(null);
   const micReconciliationBlockedRef = useRef(false);
@@ -1046,9 +1050,10 @@ export function useLiveKitChatCallSession({
       true,
       LIVE_VIDEO_CAPTURE_OPTIONS,
     );
+    const stillActive = await readApplicationActiveForMedia();
     const stillAuthorized = applicationStateGenerationRef.current === applicationStateGeneration
       && isCommittedSessionCurrent(binding)
-      && await readApplicationActiveForMedia();
+      && stillActive;
     if (
       stillAuthorized
       && publication
@@ -1099,6 +1104,57 @@ export function useLiveKitChatCallSession({
     return false;
   }, [disableCameraOrTerminate, publishCameraForCurrentForeground, terminateRoomForCameraSafety]);
 
+  const restartEndedLocalPublication = useCallback(async (
+    binding: CommittedSession,
+    source: Track.Source.Camera | Track.Source.Microphone,
+    operationIsCurrent: () => boolean,
+  ) => {
+    if (!operationIsCurrent() || !binding.liveKitRoom) return false;
+    const participant = binding.liveKitRoom.localParticipant;
+    const track = participant.getTrackPublication(source)?.track;
+    if (!track || track.mediaStreamTrack.readyState !== "ended") return true;
+
+    // enable(true) only unmutes an existing SDK publication. An already-unmuted
+    // publication with an ended native track needs explicit reacquisition.
+    // Automatic recovery may read permission but must never prompt for it.
+    const kind = source === Track.Source.Camera ? "camera" : "microphone";
+    const permission = await (kind === "camera"
+      ? Camera.getCameraPermissionsAsync()
+      : Camera.getMicrophonePermissionsAsync()).catch(() => null);
+    if (!operationIsCurrent() || participant.getTrackPublication(source)?.track !== track) return false;
+    const permissionState = resolveMediaPermission(permission).state;
+    if (permissionState !== "granted") {
+      if (permissionState === "denied" || permissionState === "restricted") {
+        setConfirmedPermissionDenied(kind);
+      }
+      setReconciliationWarning("Local media recovery needs current permission. Open Settings or retry the control.");
+      return false;
+    }
+
+    try {
+      await track.restartTrack(kind === "camera" ? LIVE_VIDEO_CAPTURE_OPTIONS : undefined);
+    } finally {
+      if (!operationIsCurrent() || participant.getTrackPublication(source)?.track !== track) {
+        // A pending native acquisition can outlive its call or foreground
+        // authority. Retire that exact SDK track, never the replacement's.
+        try {
+          track.stop();
+        } catch (stopError) {
+          reportRuntimeError("chat-call-livekit-retired-track-restart", stopError);
+          void binding.liveKitRoom.disconnect(true).catch((disconnectError) => {
+            reportRuntimeError("chat-call-livekit-retired-track-disconnect", disconnectError);
+          });
+        }
+        void reconcileCurrentMediaRef.current(true).catch((reconciliationError) => {
+          reportRuntimeError("chat-call-livekit-late-track-reconciliation", reconciliationError);
+        });
+      }
+    }
+    return operationIsCurrent()
+      && participant.getTrackPublication(source)?.track === track
+      && track.mediaStreamTrack.readyState !== "ended";
+  }, [setConfirmedPermissionDenied, setReconciliationWarning]);
+
   const reconcileLatestCommittedNativeMedia = useCallback(async (
     binding: CommittedSession,
     reconcileNative: boolean,
@@ -1106,15 +1162,34 @@ export function useLiveKitChatCallSession({
     if (!isCommittedSessionCurrent(binding) || !binding.liveKitRoom) return null;
     const bindingStillCurrent = sameCommittedAuthority(committedSessionRef.current, binding);
     const liveKitRoom = binding.liveKitRoom ?? (bindingStillCurrent ? roomRef.current : null);
+    const applicationStateGeneration = applicationStateGenerationRef.current;
+    const requestedCamera = cameraRequestedRef.current;
+    const requestedMicrophone = micRequestedRef.current;
+    const allowBackgroundAudioNow = allowBackgroundAudioRef.current;
+    const operationIsCurrent = () => isCommittedSessionCurrent(binding)
+      && applicationStateGenerationRef.current === applicationStateGeneration
+      && cameraRequestedRef.current === requestedCamera
+      && micRequestedRef.current === requestedMicrophone
+      && allowBackgroundAudioRef.current === allowBackgroundAudioNow;
     // CallKit can foreground a terminated application before React Native
     // reports the matching AppState transition. The invite witness can bridge
     // that stale value only while the native module confirms UIKit is active.
     const appActive = await readApplicationActiveForMedia();
+    if (!operationIsCurrent()) return null;
     const nextState = appActive ? "active" : appStateRef.current;
-    const cameraTarget = cameraRequestedRef.current && appActive;
-    const allowBackgroundAudioNow = allowBackgroundAudioRef.current;
-    const microphoneTarget = micRequestedRef.current && (appActive || allowBackgroundAudioNow);
+    const cameraTarget = requestedCamera && appActive;
+    const microphoneTarget = requestedMicrophone && (appActive || allowBackgroundAudioNow);
     const membershipState = appActive || allowBackgroundAudioNow ? "active" : "reconnecting";
+    const failedReconciliation = (): NativeMediaReconciliationResult | null => {
+      if (!isCommittedSessionCurrent(binding)
+        || applicationStateGenerationRef.current !== applicationStateGeneration) return null;
+      const cameraObserved = publicationIsUsable(liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera));
+      const microphoneObserved = publicationIsUsable(liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone));
+      setCameraEnabledState(cameraObserved);
+      setMicEnabledState(microphoneObserved);
+      refreshParticipantViews();
+      return { cameraTarget: cameraObserved, microphoneTarget: microphoneObserved, membershipState, reconciled: false };
+    };
     const nativeMicrophoneBefore = publicationIsUsable(
       liveKitRoom.localParticipant.getTrackPublication(Track.Source.Microphone),
     );
@@ -1131,20 +1206,45 @@ export function useLiveKitChatCallSession({
     }
 
     if (nativeReconciliationRequired) {
+      // Privacy shutdown must not wait for microphone permission, capture, or
+      // audio routing. A failing background-audio recovery cannot keep video on.
+      if (!cameraTarget) {
+        const cameraStopped = await disableCameraOrTerminate(
+          liveKitRoom,
+          "chat-call-livekit-camera-background-compensation",
+        );
+        if (!cameraStopped) {
+          if (sameCommittedAuthority(committedSessionRef.current, binding)
+            && roomRef.current === liveKitRoom) {
+            setReconciliationWarning("Camera safety could not be restored. The call was disconnected.");
+          }
+          return failedReconciliation();
+        }
+        if (!operationIsCurrent()) return null;
+        setCameraEnabledState(false);
+      }
       try {
         if (nextState === "active") {
           await LiveKitAudioSession.startAudioSession();
+          if (!operationIsCurrent()) return null;
           await setSpeaker(speakerRequestedRef.current);
         } else if (microphoneTarget) {
           await LiveKitAudioSession.startAudioSession();
         }
+        if (!operationIsCurrent()) return null;
+        if (microphoneTarget && !await restartEndedLocalPublication(binding, Track.Source.Microphone, operationIsCurrent)) {
+          if (!operationIsCurrent()) return null;
+          setReconciliationWarning("Local microphone could not be reconciled. The call remains connected.");
+          return failedReconciliation();
+        }
+        if (!operationIsCurrent()) return null;
         await liveKitRoom.localParticipant.setMicrophoneEnabled(microphoneTarget);
       } catch (microphoneError) {
-        if (!isCommittedSessionCurrent(binding)) return null;
+        if (!operationIsCurrent()) return null;
         const permissionDenial = await classifyNativePermissionDenial(
           "microphone",
           microphoneError,
-          () => isCommittedSessionCurrent(binding),
+          operationIsCurrent,
         );
         if (permissionDenial === "stale") return null;
         if (permissionDenial === "confirmed") {
@@ -1153,32 +1253,30 @@ export function useLiveKitChatCallSession({
           setReconciliationWarning("Local media could not be reconciled. The call remains connected.");
         }
         reportRuntimeError("chat-call-livekit-media-reconciliation", microphoneError);
-        return null;
+        return failedReconciliation();
       }
-      if (!isCommittedSessionCurrent(binding)) return null;
+      if (!operationIsCurrent()) return null;
       try {
         if (cameraTarget) {
+          if (!await restartEndedLocalPublication(binding, Track.Source.Camera, operationIsCurrent)) {
+            if (!operationIsCurrent()) return null;
+            setReconciliationWarning("Local camera could not be reconciled. The call remains connected.");
+            return failedReconciliation();
+          }
+          if (!operationIsCurrent()) return null;
           const cameraPublication = await publishCameraForCurrentForeground(liveKitRoom, binding);
+          if (!operationIsCurrent()) return null;
           if (!cameraPublication) {
             setReconciliationWarning("Local camera could not be reconciled. The call remains connected.");
-            return null;
-          }
-        } else {
-          const cameraStopped = await disableCameraOrTerminate(
-            liveKitRoom,
-            "chat-call-livekit-camera-background-compensation",
-          );
-          if (!cameraStopped) {
-            setReconciliationWarning("Camera safety could not be restored. The call was disconnected.");
-            return null;
+            return failedReconciliation();
           }
         }
       } catch (cameraError) {
-        if (!isCommittedSessionCurrent(binding)) return null;
+        if (!operationIsCurrent()) return null;
         const permissionDenial = await classifyNativePermissionDenial(
           "camera",
           cameraError,
-          () => isCommittedSessionCurrent(binding),
+          operationIsCurrent,
         );
         if (permissionDenial === "stale") return null;
         if (permissionDenial === "confirmed") {
@@ -1189,9 +1287,9 @@ export function useLiveKitChatCallSession({
           setReconciliationWarning("Local media could not be reconciled. The call remains connected.");
         }
         reportRuntimeError("chat-call-livekit-media-reconciliation", cameraError);
-        return null;
+        return failedReconciliation();
       }
-      if (!isCommittedSessionCurrent(binding)) return null;
+      if (!operationIsCurrent()) return null;
     }
 
     // A native publication can finish after setCameraEnabled()/setMicrophoneEnabled()
@@ -1215,7 +1313,7 @@ export function useLiveKitChatCallSession({
       } else {
         setReconciliationWarning("Local media could not be reconciled. The call remains connected.");
       }
-      return null;
+      return failedReconciliation();
     }
     setMicEnabledState(microphoneTarget);
     setCameraEnabledState(cameraTarget);
@@ -1228,13 +1326,15 @@ export function useLiveKitChatCallSession({
       setCameraPermissionMessage(null);
     }
 
-    return { cameraTarget, membershipState, microphoneTarget };
+    return { cameraTarget, membershipState, microphoneTarget, reconciled: true };
   }, [
     applySpeakerOutput,
     disableCameraOrTerminate,
     isCommittedSessionCurrent,
     publishCameraForCurrentForeground,
     readApplicationActiveForMedia,
+    refreshParticipantViews,
+    restartEndedLocalPublication,
     setConfirmedPermissionDenied,
     setReconciliationWarning,
     terminateRoomForCameraSafety,
@@ -1293,6 +1393,7 @@ export function useLiveKitChatCallSession({
       return false;
     }
     broadcastCommittedMediaState(binding, membership);
+    if (!nativeResult.reconciled) return false;
     micReconciliationBlockedRef.current = false;
     clearReconciliationWarning();
     return true;
@@ -1339,6 +1440,11 @@ export function useLiveKitChatCallSession({
     });
     return request.promise;
   }, [enqueueSessionMediaWrite, isCommittedSessionCurrent, reconcileLatestCommittedMedia]);
+
+  useLayoutEffect(() => {
+    reconcileCurrentMediaRef.current = scheduleLatestMediaReconciliation;
+    return () => { reconcileCurrentMediaRef.current = async () => false; };
+  }, [scheduleLatestMediaReconciliation]);
 
   const setSpeaker = useCallback(async (
     nextSpeakerEnabled: boolean,
@@ -1915,11 +2021,10 @@ export function useLiveKitChatCallSession({
           || sameCommittedAuthority(replacementBinding, binding)
           || !isCommittedSessionCurrent(replacementBinding)
         ) return true;
-        // Camera and microphone capture are process-scoped native resources on
-        // supported clients. A retired Room's delayed disable can therefore
-        // settle after a replacement call owns capture. Reconcile through the
-        // replacement's exact authority and latest requested/permission state;
-        // never restore values remembered by the retired session.
+        // Native operations can settle after a replacement owns media. Re-read
+        // its actual publications using current authority and media intent.
+        // This is defensive convergence, not proof that every old per-track
+        // shutdown affects a replacement's capture.
         return scheduleLatestMediaReconciliation(true);
       };
 

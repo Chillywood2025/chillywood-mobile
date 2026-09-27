@@ -28,11 +28,11 @@ const invariants = (candidate, candidateContract = contract) => {
   const renderPrefix = slice(
     candidate,
     "export function useLiveKitChatCallSession",
-    "  useLayoutEffect(() => {",
+    "  useLayoutEffect(() => {\n    const current = committedSessionRef.current;",
   );
   const commitSlice = slice(
     candidate,
-    "  useLayoutEffect(() => {",
+    "  useLayoutEffect(() => {\n    const current = committedSessionRef.current;",
     "  useEffect(() => {\n    onRoomEndedRef.current = onRoomEnded;",
   );
   const schedulerSlice = slice(
