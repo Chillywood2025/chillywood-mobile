@@ -868,10 +868,38 @@ export function useLiveKitChatCallSession({
     } catch (cameraError) {
       disableFailure = cameraError;
     }
-    if (!publicationIsUsable(
-      liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
-    )) return true;
-    await terminateRoomForCameraSafety(liveKitRoom, failureScope, disableFailure);
+    const disabledPublication = liveKitRoom.localParticipant.getTrackPublication(
+      Track.Source.Camera,
+    );
+    if (publicationIsUsable(disabledPublication)) {
+      await terminateRoomForCameraSafety(liveKitRoom, failureScope, disableFailure);
+      return false;
+    }
+
+    // LiveKit's managed camera mute stops the native track but retains its
+    // publication. Re-enabling then replaces the sender track inside that same
+    // publication, a path that can leave the remote mobile subscriber waiting
+    // even though the local publication looks usable. Retire the stopped
+    // publication so the next authorized enable creates and publishes a fresh
+    // track with an explicit remote publish/subscribe lifecycle.
+    const disabledTrack = disabledPublication?.track;
+    if (!disabledTrack) return true;
+    let unpublishFailure: unknown = null;
+    try {
+      await liveKitRoom.localParticipant.unpublishTrack(disabledTrack);
+    } catch (cameraError) {
+      unpublishFailure = cameraError;
+    }
+    if (unpublishFailure) {
+      await terminateRoomForCameraSafety(liveKitRoom, failureScope, unpublishFailure);
+      return false;
+    }
+    if (!liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera)) return true;
+    await terminateRoomForCameraSafety(
+      liveKitRoom,
+      failureScope,
+      disableFailure ?? new Error("camera_publication_retirement_unconfirmed"),
+    );
     return false;
   }, [terminateRoomForCameraSafety]);
 
@@ -1466,12 +1494,15 @@ export function useLiveKitChatCallSession({
       let publication: TrackPublication | undefined;
       let forwardError: unknown = null;
       try {
-        publication = nextEnabled
-          ? await publishCameraForCurrentForeground(liveKitRoom, binding)
-          : await liveKitRoom.localParticipant.setCameraEnabled(
-            false,
-            LIVE_VIDEO_CAPTURE_OPTIONS,
+        if (nextEnabled) {
+          publication = await publishCameraForCurrentForeground(liveKitRoom, binding);
+        } else {
+          const cameraStopped = await disableCameraOrTerminate(
+            liveKitRoom,
+            "chat-call-livekit-camera-disable",
           );
+          if (!cameraStopped) return false;
+        }
       } catch (cameraError) {
         forwardError = cameraError;
       }
@@ -1570,6 +1601,7 @@ export function useLiveKitChatCallSession({
   }, [
     cameraEnabled,
     clearReconciliationWarning,
+    disableCameraOrTerminate,
     emitStage,
     enqueueSessionMediaWrite,
     isCommittedSessionCurrent,

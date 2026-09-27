@@ -121,6 +121,8 @@ export function createLiveKitMountedRuntime(options = {}) {
     appStateListener: null,
     cameraActions: [],
     cameraCalls: [],
+    cameraUnpublishActions: [],
+    cameraUnpublishes: [],
     cameraPermissionActions: [],
     cameraPermissionReads: 0,
     cameraPermissionState: options.cameraPermissionState ?? "denied",
@@ -143,6 +145,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     nativeApplicationActiveReads: 0,
     platformOS: options.platformOS ?? "android",
     remoteUserId: "remote-user",
+    remoteCameraConverged: true,
     nativeActions: [],
     nextSnapshotActions: [],
     nextTouchActions: [],
@@ -175,6 +178,7 @@ export function createLiveKitMountedRuntime(options = {}) {
   };
 
   runtime.queueCamera = (action) => runtime.cameraActions.push(action);
+  runtime.queueCameraUnpublish = (action) => runtime.cameraUnpublishActions.push(action);
   runtime.queueCameraPermission = (action) => runtime.cameraPermissionActions.push(action);
   runtime.queueDisconnect = (action) => runtime.disconnectActions.push(action);
   runtime.queueNativeApplicationActive = (action) => runtime.nativeApplicationActiveActions.push(action);
@@ -186,6 +190,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     const room = runtime.rooms.at(-1);
     if (!room) throw new Error("MOUNTED_LIVEKIT_ROOM_NOT_READY");
     room.localParticipant.cameraEnabled = true;
+    room.localParticipant.cameraPublicationPresent = true;
     room.localParticipant.cameraTrack.mediaStreamTrack.readyState = "live";
     return {
       isMuted: false,
@@ -197,6 +202,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     const room = runtime.rooms.at(-1);
     if (!room) throw new Error("MOUNTED_LIVEKIT_ROOM_NOT_READY");
     room.localParticipant.cameraEnabled = false;
+    room.localParticipant.cameraPublicationPresent = false;
     room.localParticipant.cameraTrack.mediaStreamTrack.readyState = "ended";
   };
   runtime.deferNative = () => {
@@ -257,6 +263,9 @@ export function createLiveKitMountedRuntime(options = {}) {
       this.identity = runtime.userId;
       this.name = "Local";
       this.cameraEnabled = runtime.durableCamera;
+      this.cameraGeneration = runtime.durableCamera ? 1 : 0;
+      this.cameraPublicationPresent = runtime.durableCamera;
+      this.cameraWasMuted = false;
       this.micEnabled = runtime.durableMic;
       this.cameraTrack = makeTrack("video", () => {
         this.cameraEnabled = false;
@@ -267,6 +276,17 @@ export function createLiveKitMountedRuntime(options = {}) {
     }
 
     getTrackPublication(source) {
+      if (
+        source === "camera"
+        && options.retainMutedCameraPublication
+        && this.cameraPublicationPresent
+      ) {
+        return {
+          isMuted: !this.cameraEnabled,
+          source: "camera",
+          track: this.cameraTrack,
+        };
+      }
       return source === "camera"
         ? makePublication(this.cameraEnabled, "video", this.cameraTrack)
         : makePublication(this.micEnabled, "audio", this.micTrack);
@@ -282,10 +302,49 @@ export function createLiveKitMountedRuntime(options = {}) {
         throw error;
       }
       if (action.outcome === "reject") throw new Error("native camera rejected");
-      this.cameraEnabled = action.outcome === "mismatch" ? !enabled : enabled;
-      if (this.cameraEnabled) this.cameraTrack.mediaStreamTrack.readyState = "live";
+      const nextEnabled = action.outcome === "mismatch" ? !enabled : enabled;
+      const reusedMutedPublication = enabled
+        && this.cameraPublicationPresent
+        && this.cameraWasMuted;
+      if (nextEnabled && !this.cameraPublicationPresent) {
+        this.cameraGeneration += 1;
+        this.cameraTrack = makeTrack("video", () => {
+          this.cameraEnabled = false;
+        });
+        this.cameraPublicationPresent = true;
+      }
+      this.cameraEnabled = nextEnabled;
+      if (this.cameraEnabled) {
+        this.cameraTrack.mediaStreamTrack.readyState = "live";
+        runtime.remoteCameraConverged = !(
+          options.managedCameraUnmuteStallsRemote
+          && reusedMutedPublication
+        );
+        this.cameraWasMuted = false;
+      } else if (enabled === false && action.outcome !== "mismatch") {
+        this.cameraWasMuted = true;
+        this.cameraTrack.stop();
+        runtime.remoteCameraConverged = false;
+      }
       if (action.outcome === "missing") return undefined;
-      return makePublication(enabled, "video", this.cameraTrack);
+      return this.getTrackPublication("camera");
+    }
+
+    async unpublishTrack(track) {
+      runtime.cameraUnpublishes.push({ generation: this.cameraGeneration, track });
+      const action = runtime.cameraUnpublishActions.shift() ?? { outcome: "success" };
+      if (action.gate) await action.gate.promise;
+      if (action.outcome === "reject") throw new Error("native camera unpublish rejected");
+      if (action.outcome === "mismatch") return undefined;
+      if (track === this.cameraTrack) {
+        this.cameraTrack.stop();
+        this.cameraEnabled = false;
+        this.cameraPublicationPresent = false;
+      }
+      if (action.outcome === "reject-after-removal") {
+        throw new Error("native camera unpublish negotiation rejected");
+      }
+      return { isMuted: true, source: "camera", track };
     }
 
     async setMicrophoneEnabled(enabled) {
@@ -338,6 +397,7 @@ export function createLiveKitMountedRuntime(options = {}) {
       if (action.outcome === "mismatch") return;
       if (stopTracks) {
         this.localParticipant.cameraTrack.stop();
+        this.localParticipant.cameraPublicationPresent = false;
         this.localParticipant.micTrack.stop();
       }
       this.state = "disconnected";

@@ -1149,6 +1149,53 @@ test("camera enable compensates without durable publication when the app backgro
   assert.equal(runtime.membershipTouches.some((entry) => entry.cameraEnabled === true), false);
 });
 
+test("camera off and on replaces the stopped publication instead of trusting a stalled managed unmute", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    managedCameraUnmuteStallsRemote: true,
+    nativeApplicationActive: true,
+    retainMutedCameraPublication: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const initialGeneration = runtime.rooms.at(-1).localParticipant.cameraGeneration;
+  const initialMicCalls = runtime.micCalls.length;
+  const initialProviderTokenCalls = runtime.providerTokenCalls;
+
+  assert.equal(await runOperation(harness, () => harness.getResult().setCameraEnabled(false)), true);
+  assert.equal(runtime.remoteCameraConverged, false);
+  assert.equal(await runOperation(harness, () => harness.getResult().setCameraEnabled(true)), true);
+
+  assert.equal(runtime.cameraUnpublishes.length, 1);
+  assert.equal(runtime.rooms.at(-1).localParticipant.cameraGeneration, initialGeneration + 1);
+  assert.equal(runtime.remoteCameraConverged, true);
+  assert.equal(runtime.micCalls.length, initialMicCalls);
+  assert.equal(runtime.providerTokenCalls, initialProviderTokenCalls);
+  assert.equal(runtime.roomDisconnects ?? 0, 0);
+});
+
+test("camera disable disconnects when the stopped publication cannot be retired", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    nativeApplicationActive: true,
+    retainMutedCameraPublication: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  // LiveKit removes the publication from its local maps before awaiting the
+  // final negotiation, so a late rejection must not be mistaken for proof
+  // that the remote side observed the retirement.
+  runtime.queueCameraUnpublish({ outcome: "reject-after-removal" });
+
+  assert.equal(await runOperation(harness, () => harness.getResult().setCameraEnabled(false)), false);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.rooms.at(-1).state, "disconnected");
+  assert.equal(runtime.rooms.at(-1).localParticipant.getTrackPublication("camera"), undefined);
+  assert.equal(runtime.errors.some((entry) => entry.scope === "chat-call-livekit-camera-disable"), true);
+});
+
 test("camera enable disconnects when a failed membership write cannot disable capture", async (t) => {
   const { harness, runtime } = await mountCase(t, { nativeApplicationActive: true, platformOS: "ios" }, defaultHookOptions({
     initialMediaPreferences: { cameraEnabled: false, micEnabled: true },

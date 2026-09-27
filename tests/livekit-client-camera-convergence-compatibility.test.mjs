@@ -19,17 +19,26 @@ test("the installed LiveKit client contains the bounded camera-publish convergen
     path.join(root, "node_modules/livekit-client/src/room/track/LocalVideoTrack.ts"),
     "utf8",
   );
+  const rtcEngine = fs.readFileSync(
+    path.join(root, "node_modules/livekit-client/src/room/RTCEngine.ts"),
+    "utf8",
+  );
+  const room = fs.readFileSync(
+    path.join(root, "node_modules/livekit-client/src/room/Room.ts"),
+    "utf8",
+  );
 
-  assert.equal(lock.packages["node_modules/livekit-client"].version, "2.18.8");
+  assert.equal(lock.packages["node_modules/livekit-client"].version, "2.22.0");
   assert.equal(
     lock.packages["node_modules/livekit-client"].integrity,
-    "sha512-E+bSpnBVng/1xG4RfL1Q51dHUpBwL14Wix4sR5bS0djEzKMEtrxcUyhWLltdwQ0USf1t0PaxW6WL4oVb2s4Fsw==",
+    "sha512-GLtYQfRh/RsvXaOX1x609bFZ17yyKmKWDqu9JmkMKn9vIFLi2GsapRv9gT8OJO/1R2dsitrkbGmloyUfxWQsaA==",
   );
-  assert.equal(lock.packages["node_modules/webrtc-adapter"].version, "9.0.5");
+  assert.equal(lock.packages["node_modules/webrtc-adapter"].version, "9.0.6");
   assert.equal(
     lock.packages["node_modules/webrtc-adapter"].integrity,
-    "sha512-U9vjByy/sK2OMXu5mmfuZFKTMIUQe34c0JXRO+oDrxJTsntdYT2iIFwYMOV7HhMTuktcZLGf2W1N/OcSf9ssWg==",
+    "sha512-CHbl2ZQbxx164IgWRgzJno4hWtM4tFbRam1QfI3Yxhs3w/DvqluVxVWeXs3oL5/fbGkSNLKo0Ty5MgUWceNhog==",
   );
+  assert.equal(lock.packages["node_modules/machina"], undefined);
   assert.equal(reactNativePackage.version, "2.10.0");
   assert.equal(reactNativePackage.peerDependencies["livekit-client"], "^2.15.8");
 
@@ -45,6 +54,15 @@ test("the installed LiveKit client contains the bounded camera-publish convergen
   // sender encodings after an explicit camera/device track restart.
   assert.match(localVideoTrack, /private async refreshSenderEncodings\(\)/u);
   assert.match(localVideoTrack, /await this\.applyEncodingsToSender\(this\.sender, newEncodings\)/u);
+
+  // Upstream PR #2030 makes a server-observed dead publisher and a transport
+  // stuck in CONNECTING converge through the normal full-reconnect lifecycle
+  // instead of waiting indefinitely or terminally tearing down the room.
+  assert.match(rtcEngine, /const connectionQualityLostTimeout = 10 \* 1000;/u);
+  assert.match(rtcEngine, /private scheduleLostQualityReconnect\(\)/u);
+  assert.match(rtcEngine, /this\.fullReconnectOnNext = true;/u);
+  assert.match(rtcEngine, /transport stuck in connecting state/u);
+  assert.match(room, /detected connection state mismatch, attempting full reconnect/u);
 });
 
 test("managed camera mute and unmute retain privacy and replace the sender track", async (t) => {
