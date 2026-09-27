@@ -377,6 +377,14 @@ export function createLiveKitMountedRuntime(options = {}) {
       runtime.cameraLifecycleEvents.push(`set-camera:${enabled}`);
       const action = runtime.cameraActions.shift() ?? { outcome: "success" };
       if (action.gate) await action.gate.promise;
+      if (action.interruptLatestOnCompletion) {
+        const latestParticipant = runtime.rooms.at(-1)?.localParticipant;
+        if (latestParticipant && latestParticipant !== this) {
+          latestParticipant.cameraTrack.stop();
+          latestParticipant.cameraEnabled = false;
+          runtime.remoteCameraConverged = false;
+        }
+      }
       if (action.outcome === "permission-denied") {
         const error = new Error("camera permission denied");
         error.name = "NotAllowedError";
@@ -438,6 +446,13 @@ export function createLiveKitMountedRuntime(options = {}) {
       runtime.micCalls.push(enabled);
       const action = runtime.nativeActions.shift() ?? { outcome: "success" };
       if (action.gate) await action.gate.promise;
+      if (action.interruptLatestOnCompletion) {
+        const latestParticipant = runtime.rooms.at(-1)?.localParticipant;
+        if (latestParticipant && latestParticipant !== this) {
+          latestParticipant.micTrack.stop();
+          latestParticipant.micEnabled = false;
+        }
+      }
       if (action.outcome === "permission-denied") {
         const error = new Error("microphone permission denied");
         error.name = "NotAllowedError";

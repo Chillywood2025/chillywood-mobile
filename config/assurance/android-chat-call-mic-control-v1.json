@@ -4,9 +4,9 @@
   "targetId": "livekit-mic-post-merge-correction",
   "classification": "D2A_LIVEKIT_MIC_POST_MERGE_CORRECTION",
   "sourceBindings": {
-    "hooks/use-livekit-chat-call-session.ts": "4dbf6f0a2b67bb9fca7a53d9c30a2697910f561b0797ee8de938f2ba291cce85",
-    "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs": "7ce2e50472e06bf32c8c65d25533635eb4110ece218c2fc88e5031c01604902e",
-    "tests/assurance/helpers/livekit-mounted-hook-harness.mjs": "a559102c606fc4073c57d2c7ce307184d4a9524bc211c20ee7aa9669cc41f3d5",
+    "hooks/use-livekit-chat-call-session.ts": "f4ba660d5410969442194b6bbf2f043bb774aab171f4de671999106539eb907d",
+    "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs": "5c5fbc1ff0a1838b7389f017c01727a5381dcf6e86fa61db9811f7c891ae6bc1",
+    "tests/assurance/helpers/livekit-mounted-hook-harness.mjs": "0c6ba82444907611a54c88fd9d00714062d307fcc0f86cadb531539b5fa31396",
     "tests/assurance/android-chat-call-mic-exact-hook.test.mjs": "ecd73230132d54a6daa3c3618e47e6dc243abbeb7b7f1a87b5a4ec8ecce6d142"
   },
   "sourceSlices": {
@@ -40,7 +40,8 @@
     "SAME_ROOM_OBJECT_REFRESH_RETIRED_TRANSACTION",
     "ABANDONED_RENDER_RETIRED_ACTIVE_SESSION",
     "MEMBERSHIP_FAILURE_REPORTED_PERMISSION_DENIAL",
-    "T2_USED_EXTRACTED_ADAPTER_NOT_MOUNTED_HOOK"
+    "T2_USED_EXTRACTED_ADAPTER_NOT_MOUNTED_HOOK",
+    "LATE_RETIRED_CAPTURE_INTERRUPTED_REPLACEMENT"
   ],
   "requiredCaseMatrix": [
     "01_OLD_HEARTBEAT_CANNOT_OVERWRITE_ENABLE",
