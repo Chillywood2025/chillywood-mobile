@@ -14,6 +14,8 @@ type MutableNavigatorIdentity = {
 
 type MutableNativeModule = Record<string, unknown>;
 
+export type WebRtcAudioSessionLifecycle = "activated" | "deactivated";
+
 export function ensureReactNativeNavigatorUserAgent(
   navigatorIdentity: MutableNavigatorIdentity | null | undefined,
 ) {
@@ -48,4 +50,18 @@ export function installLegacyWebRtcAudioLifecycleShims(
     installed.push(method);
   });
   return installed;
+}
+
+export function notifyWebRtcAudioSessionLifecycle(
+  webRtcModule: MutableNativeModule | null | undefined,
+  lifecycle: WebRtcAudioSessionLifecycle,
+) {
+  if (!webRtcModule || typeof webRtcModule !== "object") return false;
+  const method = lifecycle === "activated"
+    ? "audioSessionDidActivate"
+    : "audioSessionDidDeactivate";
+  const notify = webRtcModule[method];
+  if (typeof notify !== "function") return false;
+  notify.call(webRtcModule);
+  return true;
 }

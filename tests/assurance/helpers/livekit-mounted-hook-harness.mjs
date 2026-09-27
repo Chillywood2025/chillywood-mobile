@@ -142,6 +142,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     nativeApplicationActiveActions: [],
     nativeApplicationActiveReads: 0,
     platformOS: options.platformOS ?? "android",
+    remoteUserId: "remote-user",
     nativeActions: [],
     nextSnapshotActions: [],
     nextTouchActions: [],
@@ -234,6 +235,23 @@ export function createLiveKitMountedRuntime(options = {}) {
     return gate;
   };
 
+  class FakeRemoteParticipant {
+    constructor() {
+      this.identity = runtime.remoteUserId;
+      this.name = "Remote";
+      this.cameraEnabled = options.remoteCamera ?? true;
+      this.micEnabled = options.remoteMic ?? true;
+      this.cameraTrack = makeTrack("video");
+      this.micTrack = makeTrack("audio");
+    }
+
+    getTrackPublication(source) {
+      return source === "camera"
+        ? makePublication(this.cameraEnabled, "video", this.cameraTrack)
+        : makePublication(this.micEnabled, "audio", this.micTrack);
+    }
+  }
+
   class FakeLocalParticipant {
     constructor() {
       this.identity = runtime.userId;
@@ -307,6 +325,10 @@ export function createLiveKitMountedRuntime(options = {}) {
 
     async connect() {
       this.state = "connected";
+      if (options.initialRemoteParticipant) {
+        const remote = new FakeRemoteParticipant();
+        this.remoteParticipants.set(remote.identity, remote);
+      }
     }
 
     async disconnect(stopTracks = true) {
@@ -322,6 +344,25 @@ export function createLiveKitMountedRuntime(options = {}) {
     }
   }
 
+  runtime.removeRemoteParticipant = () => {
+    const room = runtime.rooms.at(-1);
+    const remote = room?.remoteParticipants.get(runtime.remoteUserId);
+    room?.remoteParticipants.delete(runtime.remoteUserId);
+    return remote ?? null;
+  };
+  runtime.restoreRemoteParticipant = () => {
+    const room = runtime.rooms.at(-1);
+    if (!room) throw new Error("MOUNTED_LIVEKIT_ROOM_NOT_READY");
+    const remote = new FakeRemoteParticipant();
+    room.remoteParticipants.set(remote.identity, remote);
+    return remote;
+  };
+  runtime.setRoomState = (state) => {
+    const room = runtime.rooms.at(-1);
+    if (!room) throw new Error("MOUNTED_LIVEKIT_ROOM_NOT_READY");
+    room.state = state;
+  };
+
   const getSnapshot = async () => {
     runtime.snapshotReads += 1;
     const action = runtime.nextSnapshotActions.shift() ?? { outcome: "active" };
@@ -331,8 +372,19 @@ export function createLiveKitMountedRuntime(options = {}) {
     const resolvedRoomId = action.outcome === "changed-room" ? "ROOM-2" : runtime.roomId;
     const resolvedStatus = action.outcome === "terminal" ? "ended" : "active";
     const resolvedUserId = action.outcome === "changed-user" ? "replacement-user" : runtime.userId;
+    const memberships = [membership(runtime, { roomId: resolvedRoomId, userId: resolvedUserId })];
+    if (options.initialRemoteParticipant) {
+      memberships.push(membership(runtime, {
+        cameraEnabled: options.remoteCamera ?? true,
+        displayName: "Remote",
+        micEnabled: options.remoteMic ?? true,
+        role: "host",
+        roomId: resolvedRoomId,
+        userId: runtime.remoteUserId,
+      }));
+    }
     return {
-      memberships: [membership(runtime, { roomId: resolvedRoomId, userId: resolvedUserId })],
+      memberships,
       room: productRoom(runtime, { roomId: resolvedRoomId, roomCode: resolvedRoomId, status: resolvedStatus }),
     };
   };
@@ -654,6 +706,10 @@ export async function mountLiveKitHook(runtime, initialOptions = defaultHookOpti
     flush: async (turns = 24) => act(async () => settle(turns)),
     getResult: () => committedResult,
     getRenderCount: () => renderCount,
+    resolveDeferred: async (gate, value) => act(async () => {
+      gate.resolve(value);
+      await settle(24);
+    }),
     emitRoom: async (event, value) => act(async () => {
       runtime.rooms.at(-1)?.handlers.get(event)?.(value);
       await settle(24);

@@ -96,6 +96,18 @@ type DeferredMediaReconciliation = {
   reconcileNative: boolean;
 };
 
+type NativeMediaReconciliationResult = Readonly<{
+  cameraTarget: boolean;
+  membershipState: "active" | "reconnecting";
+  microphoneTarget: boolean;
+}>;
+
+type DeferredNativeMediaReconciliation = {
+  binding: CommittedSession;
+  promise: Promise<NativeMediaReconciliationResult | null>;
+  reconcileNative: boolean;
+};
+
 const MEDIA_WRITE_PREDECESSOR_DRAIN_TIMEOUT_MS = 2_000;
 const MEDIA_WRITE_OPERATION_TIMEOUT_MS = 4_000;
 const INITIAL_CAMERA_TRANSIENT_RETRY_DELAYS_MS = [350, 900, 1_500] as const;
@@ -286,9 +298,12 @@ export function useLiveKitChatCallSession({
   const mediaControlOwnerRef = useRef<MediaControlOwner | null>(null);
   const mediaWriteTailsRef = useRef<Map<string, Promise<void>>>(new Map());
   const deferredMediaReconciliationRef = useRef<DeferredMediaReconciliation | null>(null);
+  const deferredNativeMediaReconciliationRef = useRef<DeferredNativeMediaReconciliation | null>(null);
   const pendingMicToggleRef = useRef(false);
   const pendingMicOwnerRef = useRef<MediaControlOwner | null>(null);
   const micReconciliationBlockedRef = useRef(false);
+  const remoteParticipantSeenRef = useRef(false);
+  const reconnectAwaitingRemoteRef = useRef(false);
   const ownsIosAudioConfigurationRef = useRef(false);
   const onRoomEndedRef = useRef(onRoomEnded);
   const telemetryStartedAtRef = useRef(Date.now());
@@ -928,11 +943,11 @@ export function useLiveKitChatCallSession({
     return false;
   }, [disableCameraOrTerminate, publishCameraForCurrentForeground, terminateRoomForCameraSafety]);
 
-  const reconcileLatestCommittedMedia = useCallback(async (
+  const reconcileLatestCommittedNativeMedia = useCallback(async (
     binding: CommittedSession,
     reconcileNative: boolean,
-  ) => {
-    if (!isCommittedSessionCurrent(binding) || !binding.liveKitRoom) return false;
+  ): Promise<NativeMediaReconciliationResult | null> => {
+    if (!isCommittedSessionCurrent(binding) || !binding.liveKitRoom) return null;
     const bindingStillCurrent = sameCommittedAuthority(committedSessionRef.current, binding);
     const liveKitRoom = binding.liveKitRoom ?? (bindingStillCurrent ? roomRef.current : null);
     // CallKit can foreground a terminated application before React Native
@@ -968,28 +983,28 @@ export function useLiveKitChatCallSession({
         }
         await liveKitRoom.localParticipant.setMicrophoneEnabled(microphoneTarget);
       } catch (microphoneError) {
-        if (!isCommittedSessionCurrent(binding)) return false;
+        if (!isCommittedSessionCurrent(binding)) return null;
         const permissionDenial = await classifyNativePermissionDenial(
           "microphone",
           microphoneError,
           () => isCommittedSessionCurrent(binding),
         );
-        if (permissionDenial === "stale") return false;
+        if (permissionDenial === "stale") return null;
         if (permissionDenial === "confirmed") {
           setConfirmedPermissionDenied("microphone");
         } else {
           setReconciliationWarning("Local media could not be reconciled. The call remains connected.");
         }
         reportRuntimeError("chat-call-livekit-media-reconciliation", microphoneError);
-        return false;
+        return null;
       }
-      if (!isCommittedSessionCurrent(binding)) return false;
+      if (!isCommittedSessionCurrent(binding)) return null;
       try {
         if (cameraTarget) {
           const cameraPublication = await publishCameraForCurrentForeground(liveKitRoom, binding);
           if (!cameraPublication) {
             setReconciliationWarning("Local camera could not be reconciled. The call remains connected.");
-            return false;
+            return null;
           }
         } else {
           const cameraStopped = await disableCameraOrTerminate(
@@ -998,17 +1013,17 @@ export function useLiveKitChatCallSession({
           );
           if (!cameraStopped) {
             setReconciliationWarning("Camera safety could not be restored. The call was disconnected.");
-            return false;
+            return null;
           }
         }
       } catch (cameraError) {
-        if (!isCommittedSessionCurrent(binding)) return false;
+        if (!isCommittedSessionCurrent(binding)) return null;
         const permissionDenial = await classifyNativePermissionDenial(
           "camera",
           cameraError,
           () => isCommittedSessionCurrent(binding),
         );
-        if (permissionDenial === "stale") return false;
+        if (permissionDenial === "stale") return null;
         if (permissionDenial === "confirmed") {
           cameraRequestedRef.current = false;
           setCameraEnabledState(false);
@@ -1017,9 +1032,9 @@ export function useLiveKitChatCallSession({
           setReconciliationWarning("Local media could not be reconciled. The call remains connected.");
         }
         reportRuntimeError("chat-call-livekit-media-reconciliation", cameraError);
-        return false;
+        return null;
       }
-      if (!isCommittedSessionCurrent(binding)) return false;
+      if (!isCommittedSessionCurrent(binding)) return null;
     }
 
     // A native publication can finish after setCameraEnabled()/setMicrophoneEnabled()
@@ -1043,7 +1058,7 @@ export function useLiveKitChatCallSession({
       } else {
         setReconciliationWarning("Local media could not be reconciled. The call remains connected.");
       }
-      return false;
+      return null;
     }
     setMicEnabledState(microphoneTarget);
     setCameraEnabledState(cameraTarget);
@@ -1056,10 +1071,63 @@ export function useLiveKitChatCallSession({
       setCameraPermissionMessage(null);
     }
 
+    return { cameraTarget, membershipState, microphoneTarget };
+  }, [
+    applySpeakerOutput,
+    disableCameraOrTerminate,
+    isCommittedSessionCurrent,
+    publishCameraForCurrentForeground,
+    readApplicationActiveForMedia,
+    setConfirmedPermissionDenied,
+    setReconciliationWarning,
+    terminateRoomForCameraSafety,
+  ]);
+
+  const scheduleLatestNativeMediaReconciliation = useCallback((reconcileNative = false) => {
+    const binding = committedSessionRef.current;
+    if (!binding || !isCommittedSessionCurrent(binding)) return Promise.resolve(null);
+    const existing = deferredNativeMediaReconciliationRef.current;
+    if (existing && sameCommittedAuthority(existing.binding, binding)) {
+      existing.reconcileNative = existing.reconcileNative || reconcileNative;
+      return existing.promise;
+    }
+    const request: DeferredNativeMediaReconciliation = {
+      binding,
+      promise: Promise.resolve(null),
+      reconcileNative,
+    };
+    request.promise = (async () => {
+      let result: NativeMediaReconciliationResult | null = null;
+      while (true) {
+        const reconcileNativeNow = request.reconcileNative;
+        request.reconcileNative = false;
+        result = await reconcileLatestCommittedNativeMedia(binding, reconcileNativeNow);
+        if (request.reconcileNative && isCommittedSessionCurrent(binding)) continue;
+        if (deferredNativeMediaReconciliationRef.current === request) {
+          deferredNativeMediaReconciliationRef.current = null;
+        }
+        return result;
+      }
+    })();
+    deferredNativeMediaReconciliationRef.current = request;
+    void request.promise.finally(() => {
+      if (deferredNativeMediaReconciliationRef.current === request) {
+        deferredNativeMediaReconciliationRef.current = null;
+      }
+    });
+    return request.promise;
+  }, [isCommittedSessionCurrent, reconcileLatestCommittedNativeMedia]);
+
+  const reconcileLatestCommittedMedia = useCallback(async (
+    binding: CommittedSession,
+    reconcileNative: boolean,
+  ) => {
+    const nativeResult = await scheduleLatestNativeMediaReconciliation(reconcileNative);
+    if (!nativeResult || !isCommittedSessionCurrent(binding)) return false;
     const membership = await performMembershipMediaWrite(
-      cameraTarget,
-      microphoneTarget,
-      membershipState,
+      nativeResult.cameraTarget,
+      nativeResult.microphoneTarget,
+      nativeResult.membershipState,
       true,
       binding,
     );
@@ -1071,16 +1139,11 @@ export function useLiveKitChatCallSession({
     clearReconciliationWarning();
     return true;
   }, [
-    applySpeakerOutput,
     clearReconciliationWarning,
-    disableCameraOrTerminate,
     isCommittedSessionCurrent,
     performMembershipMediaWrite,
-    publishCameraForCurrentForeground,
-    readApplicationActiveForMedia,
-    setConfirmedPermissionDenied,
+    scheduleLatestNativeMediaReconciliation,
     setReconciliationWarning,
-    terminateRoomForCameraSafety,
   ]);
 
   const scheduleLatestMediaReconciliation = useCallback((reconcileNative = false) => {
@@ -1716,6 +1779,8 @@ export function useLiveKitChatCallSession({
     firstAudioRef.current = false;
     firstVideoRef.current = false;
     tokenValidatedRef.current = false;
+    remoteParticipantSeenRef.current = false;
+    reconnectAwaitingRemoteRef.current = false;
     cameraFacingRef.current = "user";
     speakerRequestedRef.current = inviteCallType === "video";
     manualDisconnectRef.current = false;
@@ -1841,10 +1906,39 @@ export function useLiveKitChatCallSession({
       }
 
       const refresh = () => refreshParticipantViews();
+      const completeTransportRecovery = () => {
+        void scheduleLatestMediaReconciliation(true).then((reconciled) => {
+          if (
+            !reconciled
+            || !active
+            || micReconciliationBlockedRef.current
+            || !isCommittedSessionCurrent(effectBinding)
+          ) return;
+          const waitingForKnownRemote = reconnectAwaitingRemoteRef.current
+            && remoteParticipantSeenRef.current
+            && liveKitRoom.remoteParticipants.size === 0;
+          if (waitingForKnownRemote) {
+            setChannelState("reconnecting");
+            refresh();
+            return;
+          }
+          reconnectAwaitingRemoteRef.current = false;
+          if (!setCommittedRoomState(effectBinding, "active")) return;
+          setChannelState("live");
+          emitStage("recovered", { connectionState: "connected" });
+          void setSpeaker(speakerRequestedRef.current);
+          refresh();
+        });
+      };
       liveKitRoom
         .on(RoomEvent.ParticipantConnected, () => {
+          remoteParticipantSeenRef.current = true;
           emitStage("remote_participant_joined", { connectionState: String(liveKitRoom.state) });
           refresh();
+          if (
+            reconnectAwaitingRemoteRef.current
+            && liveKitRoom.state === ConnectionState.Connected
+          ) completeTransportRecovery();
         })
         .on(RoomEvent.ParticipantDisconnected, refresh)
         .on(RoomEvent.TrackPublished, refresh)
@@ -1900,12 +1994,16 @@ export function useLiveKitChatCallSession({
         })
         .on(RoomEvent.Reconnecting, () => {
           if (!active) return;
+          reconnectAwaitingRemoteRef.current = remoteParticipantSeenRef.current
+            || liveKitRoom.remoteParticipants.size > 0;
           if (!setCommittedRoomState(effectBinding, "reconnecting")) return;
           setChannelState("reconnecting");
           emitStage("reconnecting", { connectionState: "reconnecting" });
         })
         .on(RoomEvent.SignalReconnecting, () => {
           if (!active) return;
+          reconnectAwaitingRemoteRef.current = remoteParticipantSeenRef.current
+            || liveKitRoom.remoteParticipants.size > 0;
           if (!setCommittedRoomState(effectBinding, "reconnecting")) return;
           setChannelState("reconnecting");
           emitStage("reconnecting", { connectionState: "signal_reconnecting" });
@@ -1914,19 +2012,7 @@ export function useLiveKitChatCallSession({
           if (!active) return;
           if (!setCommittedRoomState(effectBinding, "reconnecting")) return;
           setChannelState("reconnecting");
-          void scheduleLatestMediaReconciliation(true).then((reconciled) => {
-            if (
-              !reconciled
-              || !active
-              || micReconciliationBlockedRef.current
-              || !isCommittedSessionCurrent(effectBinding)
-            ) return;
-            if (!setCommittedRoomState(effectBinding, "active")) return;
-            setChannelState("live");
-            emitStage("recovered", { connectionState: "connected" });
-            void setSpeaker(speakerRequestedRef.current);
-            refresh();
-          });
+          completeTransportRecovery();
         })
         .on(RoomEvent.ConnectionStateChanged, (connectionState) => {
           if (!active) return;
@@ -1948,6 +2034,9 @@ export function useLiveKitChatCallSession({
       await liveKitRoom.connect(tokenResult.serverUrl, tokenResult.participantToken, {
         autoSubscribe: true,
       });
+      if (liveKitRoom.remoteParticipants.size > 0) {
+        remoteParticipantSeenRef.current = true;
+      }
       if (!active) return;
       emitStage("websocket_connected", { connectionState: String(liveKitRoom.state) });
       emitStage("ice_state", { connectionState: String(liveKitRoom.state) });
@@ -2280,6 +2369,17 @@ export function useLiveKitChatCallSession({
       emitStage(nextState === "active" ? "foregrounded" : "backgrounded", {
         connectionState: String(liveKitRoom.state),
       });
+      if (!mediaControlRef.current) {
+        // App suspension can stall the durable membership RPC that follows
+        // native camera shutdown. Keep the current-session native convergence
+        // on its own single-flight lane so foreground capture can recover as
+        // soon as UIKit is active instead of waiting for a network timeout or
+        // the 15-second heartbeat. Durable state remains serialized below.
+        void scheduleLatestNativeMediaReconciliation(true).then((nativeResult) => {
+          if (!nativeResult || roomRef.current !== liveKitRoom) return;
+          refreshParticipantViews();
+        });
+      }
       void scheduleLatestMediaReconciliation(true).then((reconciled) => {
         if (!reconciled) return;
         setChannelState(
@@ -2296,6 +2396,7 @@ export function useLiveKitChatCallSession({
     emitStage,
     refreshParticipantViews,
     scheduleLatestMediaReconciliation,
+    scheduleLatestNativeMediaReconciliation,
     sessionKey,
   ]);
 
