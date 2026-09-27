@@ -18,6 +18,31 @@ const compiledHook = ts.transpileModule(hookSource, {
   fileName: "hooks/use-livekit-chat-call-session.ts",
 }).outputText;
 
+const audioRoutingSource = fs.readFileSync("_lib/livekit/audioRouting.ts", "utf8");
+const compiledAudioRouting = ts.transpileModule(audioRoutingSource, {
+  compilerOptions: {
+    esModuleInterop: true,
+    module: ts.ModuleKind.CommonJS,
+    target: ts.ScriptTarget.ES2022,
+  },
+  fileName: "_lib/livekit/audioRouting.ts",
+}).outputText;
+
+const loadActualAudioRouting = (LiveKitAudioSession, platformOS) => {
+  const commonJsModule = { exports: {} };
+  vm.runInNewContext(compiledAudioRouting, {
+    console,
+    exports: commonJsModule.exports,
+    module: commonJsModule,
+    require: (specifier) => {
+      if (specifier === "./react-native-module") return { LiveKitAudioSession };
+      if (specifier === "react-native") return { Platform: { OS: platformOS } };
+      throw new Error(`UNEXPECTED_AUDIO_ROUTING_IMPORT:${specifier}`);
+    },
+  }, { filename: "_lib/livekit/audioRouting.ts" });
+  return commonJsModule.exports;
+};
+
 export const deferred = () => {
   let resolve;
   let reject;
@@ -121,10 +146,17 @@ export function createLiveKitMountedRuntime(options = {}) {
     appStateListener: null,
     audioOutputActions: [],
     audioOutputCalls: [],
+    audioOutputEnumerationActions: [],
+    audioOutputEnumerations: 0,
+    nativeAudioOutput: null,
+    nativeAudioOutputCommands: [],
+    nativeAudioSelectionActions: [],
     audioResetActions: [],
     audioResetCalls: 0,
     audioStopActions: [],
     audioStopCalls: 0,
+    iosAudioConfigurationActive: false,
+    nativeAudioSessionActive: false,
     cameraActions: [],
     cameraCalls: [],
     cameraLifecycleEvents: [],
@@ -199,6 +231,8 @@ export function createLiveKitMountedRuntime(options = {}) {
   runtime.queueCameraPermission = (action) => runtime.cameraPermissionActions.push(action);
   runtime.queueDisconnect = (action) => runtime.disconnectActions.push(action);
   runtime.queueAudioOutput = (action) => runtime.audioOutputActions.push(action);
+  runtime.queueAudioOutputEnumeration = (action) => runtime.audioOutputEnumerationActions.push(action);
+  runtime.queueNativeAudioSelection = (action) => runtime.nativeAudioSelectionActions.push(action);
   runtime.queueAudioReset = (action) => runtime.audioResetActions.push(action);
   runtime.queueAudioStop = (action) => runtime.audioStopActions.push(action);
   runtime.queueMembershipLeave = (action) => runtime.membershipLeaveActions.push(action);
@@ -234,6 +268,26 @@ export function createLiveKitMountedRuntime(options = {}) {
   runtime.deferAudioOutput = () => {
     const gate = deferred();
     runtime.queueAudioOutput({ gate, outcome: "success" });
+    return gate;
+  };
+  runtime.deferAudioOutputEnumeration = () => {
+    const gate = deferred();
+    runtime.queueAudioOutputEnumeration({ gate, outcome: "success" });
+    return gate;
+  };
+  runtime.deferNativeAudioSelection = () => {
+    const gate = deferred();
+    runtime.queueNativeAudioSelection({ gate, outcome: "success" });
+    return gate;
+  };
+  runtime.deferAudioStop = () => {
+    const gate = deferred();
+    runtime.queueAudioStop({ gate, outcome: "success" });
+    return gate;
+  };
+  runtime.deferAudioReset = () => {
+    const gate = deferred();
+    runtime.queueAudioReset({ gate, outcome: "success" });
     return gate;
   };
   runtime.deferNativeApplicationActive = (outcome = true) => {
@@ -604,6 +658,34 @@ export function createLiveKitMountedRuntime(options = {}) {
     }
   }
 
+  const liveKitAudioSession = {
+    getAudioOutputs: async () => {
+      runtime.audioOutputEnumerations += 1;
+      const action = runtime.audioOutputEnumerationActions.shift() ?? { outcome: "success" };
+      if (action.gate) await action.gate.promise;
+      if (action.outcome === "reject") throw new Error("audio output enumeration rejected");
+      return action.outputs ?? ["bluetooth", "default", "earpiece", "force_speaker", "headset", "speaker"];
+    },
+    selectAudioOutput: async (output) => {
+      runtime.nativeAudioOutputCommands.push(output);
+      const action = runtime.nativeAudioSelectionActions.shift() ?? { outcome: "success" };
+      if (action.gate) await action.gate.promise;
+      if (action.outcome === "reject") throw new Error("native audio output rejected");
+      if (action.outcome !== "mismatch") runtime.nativeAudioOutput = output;
+    },
+    startAudioSession: async () => {
+      runtime.nativeAudioSessionActive = true;
+    },
+    stopAudioSession: async () => {
+      runtime.audioStopCalls += 1;
+      const action = runtime.audioStopActions.shift() ?? { outcome: "success" };
+      if (action.gate) await action.gate.promise;
+      if (action.outcome === "reject") throw new Error("audio stop rejected");
+      runtime.nativeAudioSessionActive = false;
+    },
+  };
+  const actualAudioRouting = loadActualAudioRouting(liveKitAudioSession, runtime.platformOS);
+
   const moduleMocks = {
     "expo-camera": {
       Camera: {
@@ -689,7 +771,7 @@ export function createLiveKitMountedRuntime(options = {}) {
       },
       touchCommunicationRoomSession: touchMembership,
     },
-    "../_lib/livekit/audioRouting": {
+    "../_lib/livekit/audioRouting": options.useActualAudioRouting ? actualAudioRouting : {
       selectLiveKitAudioOutput: async (output) => {
         runtime.audioOutputCalls.push(output);
         const action = runtime.audioOutputActions.shift() ?? { outcome: "success" };
@@ -699,21 +781,16 @@ export function createLiveKitMountedRuntime(options = {}) {
       },
     },
     "../_lib/livekit/react-native-module": {
-      configureLiveKitIosAudioSession: async () => undefined,
-      LiveKitAudioSession: {
-        startAudioSession: async () => undefined,
-        stopAudioSession: async () => {
-          runtime.audioStopCalls += 1;
-          const action = runtime.audioStopActions.shift() ?? { outcome: "success" };
-          if (action.gate) await action.gate.promise;
-          if (action.outcome === "reject") throw new Error("audio stop rejected");
-        },
+      configureLiveKitIosAudioSession: async () => {
+        runtime.iosAudioConfigurationActive = true;
       },
+      LiveKitAudioSession: liveKitAudioSession,
       resetLiveKitIosAudioSession: async () => {
         runtime.audioResetCalls += 1;
         const action = runtime.audioResetActions.shift() ?? { outcome: "success" };
         if (action.gate) await action.gate.promise;
         if (action.outcome === "reject") throw new Error("audio reset rejected");
+        runtime.iosAudioConfigurationActive = false;
       },
     },
     "../_lib/livekit/token-contract": {

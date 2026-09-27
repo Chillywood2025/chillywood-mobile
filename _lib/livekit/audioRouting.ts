@@ -26,9 +26,12 @@ export const readLiveKitAudioOutputs = async (): Promise<LiveKitAudioOutput[]> =
   ));
 };
 
-export const selectLiveKitAudioOutput = async (output: LiveKitAudioOutput) => {
+export const selectLiveKitAudioOutput = async (
+  output: LiveKitAudioOutput,
+  selectionIsCurrent: () => boolean = () => true,
+) => {
   const available = await readLiveKitAudioOutputs();
-  if (!available.includes(output)) return false;
+  if (!selectionIsCurrent() || !available.includes(output)) return false;
   await LiveKitAudioSession.selectAudioOutput(output);
   return true;
 };
