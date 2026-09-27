@@ -81,11 +81,12 @@ const expectedDependencyAdvisoryClosure = Object.freeze({
   "node_modules/js-yaml": "4.3.2",
 });
 // Exact reviewed lock graph after the bounded browserslist, fast-uri, js-yaml,
-// xmldom, @humanfs/node, PostCSS, xcode-scoped uuid, and decoder advisory
-// closures. The decoder package paths are excluded below and verified by their
-// own exact identity witness.
+// xmldom, @humanfs/node, PostCSS, xcode-scoped uuid, decoder advisory, and
+// LiveKit camera-convergence dependency closures. The decoder package paths are
+// excluded below and verified by their own exact identity witness; the LiveKit
+// identities remain in this digest and are also bound by their focused test.
 // Any later package identity drift still fails closed at this digest.
-const expectedUnrelatedPackageGraphSha256 = "c737c9fa4c26f18be212847e1012ec34aa98353121c723563e7bf5d6b966ddf7";
+const expectedUnrelatedPackageGraphSha256 = "a9c73b05274edfd52613d93cc9ceec025b21850cc498654028b57b982dcd7e7e";
 const compatibilityClosurePaths = new Set([
   "node_modules/concat-map",
   "node_modules/decode-uri-component",

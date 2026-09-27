@@ -25,6 +25,11 @@ test("the installed LiveKit client contains the bounded camera-publish convergen
     lock.packages["node_modules/livekit-client"].integrity,
     "sha512-E+bSpnBVng/1xG4RfL1Q51dHUpBwL14Wix4sR5bS0djEzKMEtrxcUyhWLltdwQ0USf1t0PaxW6WL4oVb2s4Fsw==",
   );
+  assert.equal(lock.packages["node_modules/webrtc-adapter"].version, "9.0.5");
+  assert.equal(
+    lock.packages["node_modules/webrtc-adapter"].integrity,
+    "sha512-U9vjByy/sK2OMXu5mmfuZFKTMIUQe34c0JXRO+oDrxJTsntdYT2iIFwYMOV7HhMTuktcZLGf2W1N/OcSf9ssWg==",
+  );
   assert.equal(reactNativePackage.version, "2.10.0");
   assert.equal(reactNativePackage.peerDependencies["livekit-client"], "^2.15.8");
 
