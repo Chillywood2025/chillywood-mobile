@@ -795,6 +795,178 @@ test("cleanup support: a late same-row leave is repaired for the exact replaceme
   assert.equal(runtime.rooms.at(-1).state, "connected");
 });
 
+test("cleanup support: a timed-out leave cannot overwrite newer replacement media intent", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const delayedMembershipLeave = deferred();
+  runtime.queueMembershipLeave({ gate: delayedMembershipLeave, outcome: "success" });
+  const cleanup = await harness.startOperation(() => (
+    harness.getResult().leaveRoom().then(() => null, (cleanupError) => cleanupError)
+  ));
+  await waitFor(harness, () => runtime.membershipLeaves === 1, "old membership leave started");
+  await harness.fireLatestTimeout();
+  const cleanupError = await settleOperation(cleanup, harness);
+  assert.match(cleanupError.message, /Unable to prove/u);
+
+  await harness.commitRender(defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: {
+      ...defaultHookOptions().invite,
+      callType: "video",
+      id: "invite-2",
+    },
+  }));
+  await waitFor(harness, () => runtime.rooms.length === 2, "same-row replacement Room created");
+  await waitFor(harness, () => harness.getResult().channelState === "live", "same-row replacement live");
+  assert.equal(await runOperation(harness, () => harness.getResult().setMicrophoneEnabled(false)), true);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.durableMic, false);
+  const touchesBeforeLateLeave = runtime.membershipTouches.length;
+
+  await harness.resolveDeferred(delayedMembershipLeave);
+  await waitFor(
+    harness,
+    () => runtime.durableCamera === true && runtime.durableMic === false,
+    "late leave reconciled to the replacement's latest media intent",
+  );
+
+  const replacementRoom = runtime.rooms.at(-1);
+  assert.equal(replacementRoom.localParticipant.cameraEnabled, true);
+  assert.equal(replacementRoom.localParticipant.micEnabled, false);
+  assert.equal(harness.getResult().cameraEnabled, true);
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(harness.getResult().channelState, "live");
+  assert.equal(runtime.membershipTouches.length > touchesBeforeLateLeave, true);
+});
+
+test("cleanup support: repeated End reuses an unresolved membership leave", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  const delayedMembershipLeave = deferred();
+  runtime.queueMembershipLeave({ gate: delayedMembershipLeave, outcome: "success" });
+  const firstCleanup = await harness.startOperation(() => (
+    harness.getResult().leaveRoom().then(() => null, (cleanupError) => cleanupError)
+  ));
+  await waitFor(harness, () => runtime.membershipLeaves === 1, "membership leave started");
+  await harness.fireLatestTimeout();
+  assert.match((await settleOperation(firstCleanup, harness)).message, /Unable to prove/u);
+
+  const repeatedCleanup = await harness.startOperation(() => (
+    harness.getResult().leaveRoom().then(() => null, (cleanupError) => cleanupError)
+  ));
+  await harness.flush();
+  assert.equal(runtime.membershipLeaves, 1);
+  await harness.fireLatestTimeout();
+  assert.match((await settleOperation(repeatedCleanup, harness)).message, /Unable to prove/u);
+
+  await harness.resolveDeferred(delayedMembershipLeave);
+  await harness.flush(48);
+  assert.equal(runtime.membershipLeaves, 1);
+  assert.equal(runtime.durableCamera, false);
+  assert.equal(runtime.durableMic, false);
+});
+
+test("cleanup support: late leave rejection never mutates a replacement or triggers restoration", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const delayedMembershipLeave = deferred();
+  runtime.queueMembershipLeave({ gate: delayedMembershipLeave, outcome: "reject" });
+  const cleanup = await harness.startOperation(() => (
+    harness.getResult().leaveRoom().then(() => null, (cleanupError) => cleanupError)
+  ));
+  await waitFor(harness, () => runtime.membershipLeaves === 1, "membership leave started");
+  await harness.fireLatestTimeout();
+  assert.match((await settleOperation(cleanup, harness)).message, /Unable to prove/u);
+
+  runtime.roomId = "ROOM-2";
+  await harness.commitRender(replacementOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  }));
+  await waitFor(harness, () => harness.getResult().channelState === "live", "different-room replacement live");
+  const touchesBeforeRejection = runtime.membershipTouches.length;
+
+  await harness.resolveDeferred(delayedMembershipLeave);
+  await harness.flush(48);
+
+  assert.equal(runtime.membershipTouches.length, touchesBeforeRejection);
+  assert.equal(harness.getResult().channelState, "live");
+  assert.equal(runtime.rooms.at(-1).state, "connected");
+});
+
+test("cleanup support: a late successful leave with no replacement stays terminal", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const delayedMembershipLeave = deferred();
+  runtime.queueMembershipLeave({ gate: delayedMembershipLeave, outcome: "success" });
+  const cleanup = await harness.startOperation(() => (
+    harness.getResult().leaveRoom().then(() => null, (cleanupError) => cleanupError)
+  ));
+  await waitFor(harness, () => runtime.membershipLeaves === 1, "membership leave started");
+  await harness.fireLatestTimeout();
+  assert.match((await settleOperation(cleanup, harness)).message, /Unable to prove/u);
+  const touchesBeforeSettlement = runtime.membershipTouches.length;
+
+  await harness.resolveDeferred(delayedMembershipLeave);
+  await harness.flush(48);
+
+  assert.equal(runtime.membershipTouches.length, touchesBeforeSettlement);
+  assert.equal(runtime.durableCamera, false);
+  assert.equal(runtime.durableMic, false);
+  assert.equal(harness.getResult().channelState, "error");
+});
+
+test("cleanup support: an old-account leave cannot restore media for a replacement account", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const delayedMembershipLeave = deferred();
+  runtime.queueMembershipLeave({ gate: delayedMembershipLeave, outcome: "success" });
+  const cleanup = await harness.startOperation(() => (
+    harness.getResult().leaveRoom().then(() => null, (cleanupError) => cleanupError)
+  ));
+  await waitFor(harness, () => runtime.membershipLeaves === 1, "old-account leave started");
+  await harness.fireLatestTimeout();
+  assert.match((await settleOperation(cleanup, harness)).message, /Unable to prove/u);
+
+  runtime.userId = "replacement-user";
+  await harness.commitRender(defaultHookOptions({
+    authenticatedUserId: "replacement-user",
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: {
+      ...defaultHookOptions().invite,
+      calleeUserId: "replacement-user",
+      id: "invite-2",
+    },
+  }));
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement account live");
+  const touchesBeforeOldSettlement = runtime.membershipTouches.length;
+
+  await harness.resolveDeferred(delayedMembershipLeave);
+  await harness.flush(48);
+
+  assert.equal(runtime.membershipTouches.length, touchesBeforeOldSettlement);
+  assert.equal(harness.getResult().channelState, "live");
+  assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, true);
+});
+
 test("cleanup support: pre-initialization unmount is bounded and produces no rejected cleanup", async () => {
   const runtime = createLiveKitMountedRuntime();
   const pendingSnapshot = runtime.deferSnapshot();
@@ -1964,6 +2136,62 @@ test("retired Room media callbacks and render acknowledgments cannot contaminate
   assert.equal(runtime.snapshotReads, snapshotReadsBeforeStaleCallbacks);
 });
 
+test("the current Room reports an unexpected disconnect after LiveKit changes transport state", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const room = runtime.rooms.at(-1);
+
+  room.state = "disconnected";
+  await harness.emitRoom("Disconnected");
+  await harness.fireHeartbeat();
+
+  assert.equal(harness.getResult().channelState, "error");
+  assert.match(harness.getResult().error, /LiveKit call disconnected/u);
+  assert.equal(runtime.stages.filter((stage) => stage === "disconnected").length, 1);
+  assert.equal(runtime.stages.includes("cleanup_complete"), false);
+  assert.equal(runtime.membershipLeaves, 0);
+
+  await harness.emitRoom("Disconnected");
+  assert.equal(runtime.stages.filter((stage) => stage === "disconnected").length, 1);
+});
+
+test("a current Room disconnect is accepted during recovery", async (t) => {
+  const { harness, runtime } = await mountCase(t, { initialRemoteParticipant: true });
+  runtime.setRoomState("reconnecting");
+  await harness.emitRoom("Reconnecting");
+  assert.equal(harness.getResult().channelState, "reconnecting");
+
+  runtime.setRoomState("disconnected");
+  await harness.emitRoom("Disconnected");
+
+  assert.equal(harness.getResult().channelState, "error");
+  assert.match(harness.getResult().error, /LiveKit call disconnected/u);
+});
+
+test("a current Room disconnect is accepted while initial media is still pending", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ initialMic: true });
+  const initialMicrophone = runtime.deferNative();
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  }), { requireLive: false, turns: 8 });
+  t.after(() => harness.unmount());
+  await waitFor(harness, () => runtime.rooms.length === 1, "initial Room created");
+
+  runtime.setRoomState("disconnected");
+  await harness.emitRoom("Disconnected");
+  await harness.resolveDeferred(initialMicrophone);
+  await harness.flush(48);
+
+  assert.equal(harness.getResult().channelState, "error");
+  assert.match(harness.getResult().error, /LiveKit call disconnected/u);
+  assert.equal(runtime.stages.includes("cleanup_complete"), false);
+});
+
 test("an awaited retired Room audio callback cannot change replacement-call speaker state", async (t) => {
   const runtime = createLiveKitMountedRuntime({ initialRemoteParticipant: true });
   const harness = await mountLiveKitHook(runtime, defaultHookOptions({
@@ -1979,13 +2207,95 @@ test("an awaited retired Room audio callback cannot change replacement-call spea
   await harness.flush();
   await harness.commitRender(replacementOptions());
   await waitFor(harness, () => runtime.rooms.length === 2, "replacement Room committed");
-  await waitFor(harness, () => harness.getResult().speakerEnabled === false, "replacement audio route selected");
 
   await harness.resolveDeferred(staleAudioOutput);
+  await waitFor(harness, () => harness.getResult().speakerEnabled === false, "replacement audio route selected");
   await harness.flush(48);
 
   assert.equal(harness.getResult().speakerEnabled, false);
   assert.equal(harness.getResult().channelState, "live");
+});
+
+test("the actual audio helper rejects an old route after replacement during enumeration", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ useActualAudioRouting: true });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  t.after(() => harness.unmount());
+  assert.equal(runtime.nativeAudioOutput, "speaker");
+  const oldEnumeration = runtime.deferAudioOutputEnumeration();
+  const oldRoute = await harness.startOperation(() => harness.getResult().setSpeaker(true));
+  await waitFor(harness, () => runtime.audioOutputEnumerations >= 2, "old route enumerating");
+
+  await harness.commitRender(replacementOptions());
+  await harness.resolveDeferred(oldEnumeration);
+  assert.equal(await settleOperation(oldRoute, harness), false);
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement became live");
+  await waitFor(harness, () => runtime.nativeAudioOutput === "earpiece", "replacement earpiece selected");
+
+  assert.equal(harness.getResult().speakerEnabled, false);
+  assert.equal(runtime.nativeAudioOutput, "earpiece");
+  assert.notEqual(runtime.nativeAudioOutputCommands.at(-1), "speaker");
+});
+
+test("an already-issued old native route is followed by the current replacement route", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ useActualAudioRouting: true });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  t.after(() => harness.unmount());
+  const oldSelection = runtime.deferNativeAudioSelection();
+  const oldRoute = await harness.startOperation(() => harness.getResult().setSpeaker(true));
+  await waitFor(
+    harness,
+    () => runtime.nativeAudioOutputCommands.filter((output) => output === "speaker").length >= 2,
+    "old speaker command issued",
+  );
+
+  await harness.commitRender(replacementOptions());
+  await harness.resolveDeferred(oldSelection);
+  assert.equal(await settleOperation(oldRoute, harness), false);
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement became live");
+  await waitFor(harness, () => runtime.nativeAudioOutput === "earpiece", "replacement route reconciled");
+
+  assert.deepEqual(runtime.nativeAudioOutputCommands.slice(-2), ["speaker", "earpiece"]);
+  assert.equal(harness.getResult().speakerEnabled, false);
+});
+
+test("a newer user audio-route request wins after an older native request settles", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ useActualAudioRouting: true });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  t.after(() => harness.unmount());
+  const oldSelection = runtime.deferNativeAudioSelection();
+  const oldRoute = await harness.startOperation(() => harness.getResult().setSpeaker(true));
+  await waitFor(
+    harness,
+    () => runtime.nativeAudioOutputCommands.filter((output) => output === "speaker").length >= 2,
+    "old speaker command issued",
+  );
+  const newerRoute = await harness.startOperation(() => harness.getResult().setSpeaker(false));
+
+  await harness.resolveDeferred(oldSelection);
+  assert.equal(await settleOperation(oldRoute, harness), false);
+  assert.equal(await settleOperation(newerRoute, harness), true);
+
+  assert.equal(runtime.nativeAudioOutput, "earpiece");
+  assert.equal(harness.getResult().speakerEnabled, false);
+});
+
+test("actual audio routing falls back only within the current request", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ useActualAudioRouting: true });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions());
+  t.after(() => harness.unmount());
+  runtime.queueNativeAudioSelection({ outcome: "reject" });
+
+  assert.equal(await runOperation(harness, () => harness.getResult().setSpeaker(true)), true);
+
+  assert.deepEqual(runtime.nativeAudioOutputCommands.slice(-2), ["speaker", "force_speaker"]);
+  assert.equal(runtime.nativeAudioOutput, "force_speaker");
+  assert.equal(harness.getResult().speakerEnabled, true);
 });
 
 test("cleanup does not claim completion when local capture and transport shutdown are unproved", async (t) => {
@@ -2162,6 +2472,55 @@ test("cleanup waiting on an old Room disconnect never stops replacement-call aud
   assert.equal(runtime.audioStopCalls, audioStopsBeforeReplacement);
   assert.equal(harness.getResult().channelState, "live");
   assert.equal(runtime.rooms.at(-1).state, "connected");
+});
+
+test("a timed-out old audio stop completion restores the current replacement session", async (t) => {
+  const { harness, runtime } = await mountCase(t, { useActualAudioRouting: true });
+  const delayedAudioStop = runtime.deferAudioStop();
+  const cleanup = await harness.startOperation(() => (
+    harness.getResult().leaveRoom().then(() => null, (cleanupError) => cleanupError)
+  ));
+  await waitFor(harness, () => runtime.audioStopCalls === 1, "old audio stop started");
+  await harness.fireLatestTimeout();
+  assert.match((await settleOperation(cleanup, harness)).message, /Unable to prove/u);
+
+  runtime.roomId = "ROOM-2";
+  await harness.commitRender(replacementOptions());
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement call live");
+  assert.equal(runtime.nativeAudioSessionActive, true);
+
+  await harness.resolveDeferred(delayedAudioStop);
+  await waitFor(harness, () => runtime.nativeAudioSessionActive, "replacement audio session restored");
+  assert.equal(runtime.nativeAudioOutput, "earpiece");
+  assert.equal(harness.getResult().channelState, "live");
+});
+
+test("a timed-out old iOS audio reset reconfigures only the current replacement session", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    platformOS: "ios",
+    useActualAudioRouting: true,
+  });
+  const delayedAudioReset = runtime.deferAudioReset();
+  const cleanup = await harness.startOperation(() => (
+    harness.getResult().leaveRoom().then(() => null, (cleanupError) => cleanupError)
+  ));
+  await waitFor(harness, () => runtime.audioResetCalls === 1, "old iOS audio reset started");
+  await harness.fireLatestTimeout();
+  assert.match((await settleOperation(cleanup, harness)).message, /Unable to prove/u);
+
+  runtime.roomId = "ROOM-2";
+  await harness.commitRender(replacementOptions());
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement iOS call live");
+  assert.equal(runtime.iosAudioConfigurationActive, true);
+
+  await harness.resolveDeferred(delayedAudioReset);
+  await waitFor(
+    harness,
+    () => runtime.iosAudioConfigurationActive && runtime.nativeAudioSessionActive,
+    "replacement iOS audio configuration restored",
+  );
+  assert.equal(runtime.nativeAudioOutput, "earpiece");
+  assert.equal(harness.getResult().channelState, "live");
 });
 
 test("resolved-but-ineffective disconnect remains a transport cleanup failure", async (t) => {

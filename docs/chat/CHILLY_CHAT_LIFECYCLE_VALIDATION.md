@@ -1,7 +1,7 @@
 # Chi'lly Chat lifecycle validation map
 
-This map covers the bounded lifecycle correction that follows protected main
-`691814ec8ff8dd863f014add0255a4110117cf23`. It is a source-validation map, not
+This map covers the lifecycle source and follow-up correction based on protected
+main `ee6ef44afdd923a141a5f63c51e6241f318a4b9d`. It is a source-validation map, not
 an installed-device closeout. The qualification source is the eventual
 protected-main merge of the lifecycle pull request; its exact commit, OTA IDs,
 and installed update IDs must be recorded before any physical result counts.
@@ -48,24 +48,64 @@ removal. These tests are complementary; neither is physical-device proof.
 
 ## Finite two-device qualification matrix
 
-Timing targets must be set before the run: event-driven media projection within
-2 seconds, heartbeat fallback within 15 seconds, recovered status only after
-the peer is present, and End/capture shutdown within the bounded cleanup window
-or an explicit retryable failure.
+The test operator records the exact protected source, OTA/build/update identity,
+installed readback, devices, accounts, invite id, provider stamped on that
+invite, and start/end timestamps before changing any row from `NOT RUN`.
+Timing expectations are fixed before execution: incoming UI within 5 seconds of
+the invite notification, event-driven media projection within 2 seconds,
+heartbeat fallback within 15 seconds, recovered status only after the peer is
+present, and End/capture/native-UI shutdown within the 4-second cleanup wait or
+an explicit retryable failure. An automation selector, element lookup, tunnel,
+or device-control failure is recorded as `AUTOMATION BLOCKED`; it is not an
+application failure. A reproduced application result is `PASS` or `FAIL`.
+
+### Direction × media × receiver state
+
+Each row requires one ring/answer path, actual two-way audio, exactly one active
+Room per endpoint, the invite's fixed provider on both endpoints, and adjacent
+thread messaging before and after the call. Video rows additionally require
+moving remote video in both directions rather than camera labels alone.
+
+| Direction | Media | Receiver location/state | Status |
+| --- | --- | --- | --- |
+| Android → iPhone | voice | Same Chi'lly Chat thread | NOT RUN |
+| Android → iPhone | voice | Elsewhere in the app | NOT RUN |
+| Android → iPhone | voice | Backgrounded | NOT RUN |
+| Android → iPhone | voice | Terminated | NOT RUN |
+| Android → iPhone | video | Same Chi'lly Chat thread | NOT RUN |
+| Android → iPhone | video | Elsewhere in the app | NOT RUN |
+| Android → iPhone | video | Backgrounded | NOT RUN |
+| Android → iPhone | video | Terminated | NOT RUN |
+| iPhone → Android | voice | Same Chi'lly Chat thread | NOT RUN |
+| iPhone → Android | voice | Elsewhere in the app | NOT RUN |
+| iPhone → Android | voice | Backgrounded | NOT RUN |
+| iPhone → Android | voice | Terminated | NOT RUN |
+| iPhone → Android | video | Same Chi'lly Chat thread | NOT RUN |
+| iPhone → Android | video | Elsewhere in the app | NOT RUN |
+| iPhone → Android | video | Backgrounded | NOT RUN |
+| iPhone → Android | video | Terminated | NOT RUN |
+
+### Terminal, recovery, permission, route, and replacement cases
 
 | Scenario | Required observation | Status |
 | --- | --- | --- |
-| Android → iPhone voice; foreground incoming | Ring/answer once, audible speech in both directions, repeated mute/unmute | NOT RUN |
-| iPhone → Android voice; background and terminated incoming | Native answer handoff, two-way audio, no duplicate connection | NOT RUN |
-| Android → iPhone video | Moving remote video both ways; camera off/on and flip update the other endpoint | NOT RUN |
-| iPhone → Android video | Moving remote video both ways; repeat camera and microphone transitions | NOT RUN |
-| Foreground after established peer disappears | Remains Reconnecting while peer is absent; measured recovery after peer returns | NOT RUN |
-| Background/resume and supported screen-lock transition | No false Connected state, stale capture, or duplicate Room | NOT RUN |
-| Permission denial and return from Settings | Accurate mic/camera state, privacy stop, and successful authorized retry | NOT RUN |
-| Supported audio-route interruption | Audio route and microphone recover without duplicate publication | NOT RUN |
-| Android Ends; iPhone Ends | Capture stops, transport disconnects, native UI clears, durable membership leaves | NOT RUN |
-| Fresh call after each End | A new call in both directions has clean ownership and working media | NOT RUN |
-| Account/call replacement plus messaging | Old callbacks do not affect the replacement; adjacent private messaging remains intact | NOT RUN |
+| Caller cancels before answer, each direction and media type | Receiver UI closes once; no Room/capture/membership remains | NOT RUN |
+| Receiver declines, each direction and media type | Caller and receiver close once; no provider connection starts afterward | NOT RUN |
+| Invite expires unanswered, foreground/background/terminated receiver | Native and app UI clear at expiry; late Answer cannot connect | NOT RUN |
+| Remote End from Android, then from iPhone | Peer exits live UI; capture, durable membership, transport, and native UI clear | NOT RUN |
+| Repeated microphone transitions from each endpoint | Two-way speech follows every mute/unmute; durable and UI state agree | NOT RUN |
+| Repeated camera transitions and flip from each endpoint | Moving remote video closes/reopens; direction changes without duplicate publication | NOT RUN |
+| Established peer disappears while foregrounded | Remaining endpoint stays Reconnecting, not Live, while peer is absent | NOT RUN |
+| Absent peer returns | Recovery occurs only after peer presence/media return and within recorded timing | NOT RUN |
+| Background/resume and supported screen-lock transition | No false Live state, stale capture, duplicate Room, or lost fixed-provider binding | NOT RUN |
+| Microphone denial and return from Settings, each OS | Accurate denial UI; no bypass; authorized retry restores real audio | NOT RUN |
+| Camera denial and return from Settings, each OS | Accurate denial UI; no bypass; authorized retry restores moving video | NOT RUN |
+| Speaker/earpiece/Bluetooth or supported route interruption | Current call's intended native route wins; microphone remains singular and usable | NOT RUN |
+| Cleanup followed by fresh voice call, each direction | Capture/native UI/membership clear, then a clean call succeeds | NOT RUN |
+| Cleanup followed by fresh video call, each direction | Capture/native UI/membership clear, then moving video succeeds | NOT RUN |
+| Same-account call replacement on the same room membership | Late cleanup cannot mute/leave the replacement; UI/native/durable state agree | NOT RUN |
+| Account replacement while old work settles | Old account callbacks/mutations cannot affect the new account | NOT RUN |
+| Adjacent messaging during cancel/decline/End/replacement | Existing messages remain isolated and new private messages deliver correctly | NOT RUN |
 
 Expected compatibility namespaces remain
 `1.0.0-android-production-v2` and `1.0.0-ios-production-v2`, subject to a fresh
