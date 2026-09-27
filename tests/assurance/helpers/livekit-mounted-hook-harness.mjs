@@ -121,6 +121,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     appStateListener: null,
     cameraActions: [],
     cameraCalls: [],
+    cameraLifecycleEvents: [],
     cameraUnpublishActions: [],
     cameraUnpublishes: [],
     cameraPermissionActions: [],
@@ -294,6 +295,7 @@ export function createLiveKitMountedRuntime(options = {}) {
 
     async setCameraEnabled(enabled) {
       runtime.cameraCalls.push(enabled);
+      runtime.cameraLifecycleEvents.push(`set-camera:${enabled}`);
       const action = runtime.cameraActions.shift() ?? { outcome: "success" };
       if (action.gate) await action.gate.promise;
       if (action.outcome === "permission-denied") {
@@ -330,8 +332,13 @@ export function createLiveKitMountedRuntime(options = {}) {
       return this.getTrackPublication("camera");
     }
 
-    async unpublishTrack(track) {
-      runtime.cameraUnpublishes.push({ generation: this.cameraGeneration, track });
+    async unpublishTrack(track, stopOnUnpublish) {
+      runtime.cameraUnpublishes.push({
+        generation: this.cameraGeneration,
+        stopOnUnpublish,
+        track,
+      });
+      runtime.cameraLifecycleEvents.push(`unpublish-camera:${this.cameraGeneration}`);
       const action = runtime.cameraUnpublishActions.shift() ?? { outcome: "success" };
       if (action.gate) await action.gate.promise;
       if (action.outcome === "reject") throw new Error("native camera unpublish rejected");
@@ -340,6 +347,7 @@ export function createLiveKitMountedRuntime(options = {}) {
         this.cameraTrack.stop();
         this.cameraEnabled = false;
         this.cameraPublicationPresent = false;
+        runtime.remoteCameraConverged = false;
       }
       if (action.outcome === "reject-after-removal") {
         throw new Error("native camera unpublish negotiation rejected");

@@ -40,10 +40,15 @@ const invariants = (candidate, candidateContract = contract) => {
     "  const scheduleLatestMediaReconciliation",
     "  const setSpeaker",
   );
-  const reconciliationSlice = slice(
+  const writeCoordinatorSlice = slice(
     candidate,
-    "  const reconcileLatestCommittedMedia",
-    "  const scheduleLatestMediaReconciliation",
+    "  const enqueueSessionMediaWrite",
+    "  const refreshParticipantViews",
+  );
+  const nativeReconciliationSlice = slice(
+    candidate,
+    "  const reconcileLatestCommittedNativeMedia",
+    "  const scheduleLatestNativeMediaReconciliation",
   );
   const microphoneSlice = slice(candidate, "  const setMicrophoneEnabled", "  const setCameraEnabled");
   const heartbeatSlice = slice(candidate, "      heartbeat = setInterval", "    };\n\n    void initialize()");
@@ -53,6 +58,11 @@ const invariants = (candidate, candidateContract = contract) => {
     candidate,
     "        .on(RoomEvent.Reconnected, () => {",
     "        .on(RoomEvent.ConnectionStateChanged, (connectionState) => {",
+  );
+  const transportRecoverySlice = slice(
+    candidate,
+    "      const completeTransportRecovery = () => {",
+    "      liveKitRoom\n        .on(RoomEvent.ParticipantConnected, () => {",
   );
   const initialMembershipSlice = slice(candidate, "      const initialMembership", "      heartbeat = setInterval");
   const reconciliationWarningOnly = slice(
@@ -71,8 +81,8 @@ const invariants = (candidate, candidateContract = contract) => {
   assert.match(schedulerSlice, /request\.reconcileNative = false/u);
   assert.match(schedulerSlice, /reconciled = await reconcileLatestCommittedMedia\(binding, reconcileNativeNow\)/u);
   assert.match(schedulerSlice, /if \(request\.reconcileNative && isCommittedSessionCurrent\(binding\)\) continue/u);
-  assert.match(reconciliationSlice, /cameraRequestedRef\.current/u);
-  assert.match(reconciliationSlice, /micRequestedRef\.current/u);
+  assert.match(nativeReconciliationSlice, /cameraRequestedRef\.current/u);
+  assert.match(nativeReconciliationSlice, /micRequestedRef\.current/u);
   assert.match(heartbeatSlice, /scheduleLatestMediaReconciliation\(false\)/u);
   assert.doesNotMatch(heartbeatSlice, /performMembershipMediaWrite\(/u);
   assert.doesNotMatch(candidate, /productRoomRef\.current\s*===/u);
@@ -89,13 +99,14 @@ const invariants = (candidate, candidateContract = contract) => {
   assert.match(candidate, /predecessorTimedOut && predecessor[\s\S]{0,160}mediaWriteTailsRef\.current\.set\(writeKey, predecessor\)/u);
   assert.match(candidate, /void predecessor\.then\(releaseReservation, releaseReservation\)/u);
   assert.doesNotMatch(candidate, /blockedMediaWriteKeysRef/u);
-  assert.match(candidate, /if \(!isCommittedSessionCurrent\(binding\)\) return null;/u);
+  assert.match(writeCoordinatorSlice, /if \(!isCommittedSessionCurrent\(binding\)\) return null;/u);
   assert.match(candidate, /current\.roomState === "terminal" && roomState !== "terminal"/u);
-  assert.match(reconnectedSlice, /scheduleLatestMediaReconciliation\(true\)\.then\(\(reconciled\) => \{/u);
-  assert.match(reconnectedSlice, /!reconciled[\s\S]{0,180}micReconciliationBlockedRef\.current/u);
+  assert.match(reconnectedSlice, /completeTransportRecovery\(\)/u);
+  assert.match(transportRecoverySlice, /scheduleLatestMediaReconciliation\(true\)\.then\(\(reconciled\) => \{/u);
+  assert.match(transportRecoverySlice, /!reconciled[\s\S]{0,180}micReconciliationBlockedRef\.current/u);
   assert.ok(
-    reconnectedSlice.indexOf("scheduleLatestMediaReconciliation(true)")
-      < reconnectedSlice.indexOf("setCommittedRoomState(effectBinding, \"active\")"),
+    transportRecoverySlice.indexOf("scheduleLatestMediaReconciliation(true)")
+      < transportRecoverySlice.indexOf("setCommittedRoomState(effectBinding, \"active\")"),
     "Reconnected proves durable convergence before live promotion",
   );
   assert.match(candidate, /const bindingStillCurrent = sameCommittedAuthority\(committedSessionRef\.current, binding\)/u);
@@ -270,7 +281,9 @@ const mutants = [
     "void predecessor.then(releaseReservation, releaseReservation);",
     "releaseReservation();",
   )],
-  ["NATIVE_RECONCILIATION_ESCALATION_DROPPED", (value) => value.replace(
+  ["NATIVE_RECONCILIATION_ESCALATION_DROPPED", (value) => mutateAfter(
+    value,
+    "  const scheduleLatestMediaReconciliation",
     "if (request.reconcileNative && isCommittedSessionCurrent(binding)) continue;",
     "if (false) continue;",
   )],
@@ -282,9 +295,11 @@ const mutants = [
     "const transactionStillCurrent = () => operationCurrent() && originStillCurrent();",
     "const transactionStillCurrent = () => originStillCurrent();",
   )],
-  ["RECONNECTED_BYPASSES_DURABLE_CONVERGENCE", (value) => value.replace(
-    "!reconciled\n              || !active",
-    "false\n              || !active",
+  ["RECONNECTED_BYPASSES_DURABLE_CONVERGENCE", (value) => mutateAfter(
+    value,
+    "      const completeTransportRecovery = () => {",
+    "!reconciled\n            || !active",
+    "false\n            || !active",
   )],
   ["ALLOW_BACKGROUND_AUDIO_RESTARTS_SESSION", (value) => value.replace(
     "    activateCommittedSession,\n    authenticatedUserId,",

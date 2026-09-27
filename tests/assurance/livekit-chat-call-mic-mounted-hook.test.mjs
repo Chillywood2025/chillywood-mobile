@@ -1162,12 +1162,23 @@ test("camera off and on replaces the stopped publication instead of trusting a s
   const initialGeneration = runtime.rooms.at(-1).localParticipant.cameraGeneration;
   const initialMicCalls = runtime.micCalls.length;
   const initialProviderTokenCalls = runtime.providerTokenCalls;
+  const lifecycleBaseline = runtime.cameraLifecycleEvents.length;
 
   assert.equal(await runOperation(harness, () => harness.getResult().setCameraEnabled(false)), true);
   assert.equal(runtime.remoteCameraConverged, false);
+  assert.deepEqual(
+    runtime.cameraLifecycleEvents.slice(lifecycleBaseline),
+    [`unpublish-camera:${initialGeneration}`],
+    "an active publication must be retired before a managed mute can detach its sender",
+  );
   assert.equal(await runOperation(harness, () => harness.getResult().setCameraEnabled(true)), true);
 
   assert.equal(runtime.cameraUnpublishes.length, 1);
+  assert.equal(
+    runtime.cameraUnpublishes[0].stopOnUnpublish,
+    true,
+    "retiring the publication must also stop its physical capture track",
+  );
   assert.equal(runtime.rooms.at(-1).localParticipant.cameraGeneration, initialGeneration + 1);
   assert.equal(runtime.remoteCameraConverged, true);
   assert.equal(runtime.micCalls.length, initialMicCalls);
@@ -1196,13 +1207,13 @@ test("camera disable disconnects when the stopped publication cannot be retired"
   assert.equal(runtime.errors.some((entry) => entry.scope === "chat-call-livekit-camera-disable"), true);
 });
 
-test("camera enable disconnects when a failed membership write cannot disable capture", async (t) => {
+test("camera enable disconnects when a failed membership write cannot retire capture", async (t) => {
   const { harness, runtime } = await mountCase(t, { nativeApplicationActive: true, platformOS: "ios" }, defaultHookOptions({
     initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
     invite: { ...defaultHookOptions().invite, callType: "video" },
   }));
   runtime.queueCamera({ outcome: "success" });
-  runtime.queueCamera({ outcome: "reject" });
+  runtime.queueCameraUnpublish({ outcome: "reject" });
   runtime.queueTouch({ outcome: "null" });
 
   assert.equal(await runOperation(harness, () => harness.getResult().setCameraEnabled(true)), false);
@@ -1213,13 +1224,13 @@ test("camera enable disconnects when a failed membership write cannot disable ca
   assert.equal(runtime.errors.some((entry) => entry.scope === "chat-call-livekit-camera-compensation"), true);
 });
 
-test("camera compensation terminalizes when disable resolves without stopping capture", async (t) => {
+test("camera compensation terminalizes when unpublish resolves without retiring capture", async (t) => {
   const { harness, runtime } = await mountCase(t, { nativeApplicationActive: true, platformOS: "ios" }, defaultHookOptions({
     initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
     invite: { ...defaultHookOptions().invite, callType: "video" },
   }));
   runtime.queueCamera({ outcome: "success" });
-  runtime.queueCamera({ outcome: "mismatch" });
+  runtime.queueCameraUnpublish({ outcome: "mismatch" });
   runtime.queueTouch({ outcome: "null" });
   runtime.queueDisconnect({ outcome: "reject" });
 
@@ -1284,18 +1295,22 @@ test("camera rollback cannot re-enable capture after the app backgrounds", async
     invite: { ...defaultHookOptions().invite, callType: "video" },
   }));
   const touch = runtime.deferTouch("null");
-  const cameraCallBaseline = runtime.cameraCalls.length;
+  const cameraLifecycleBaseline = runtime.cameraLifecycleEvents.length;
   const operation = await harness.startOperation(() => harness.getResult().setCameraEnabled(false));
-  await waitFor(harness, () => runtime.cameraCalls.length > cameraCallBaseline, "camera disable reached native boundary");
+  await waitFor(
+    harness,
+    () => runtime.cameraLifecycleEvents.length > cameraLifecycleBaseline,
+    "camera retirement reached native boundary",
+  );
 
   runtime.nativeApplicationActive = false;
   await harness.fireAppState("background");
   touch.resolve();
   assert.equal(await settleOperation(operation, harness), false);
 
-  const transitionCalls = runtime.cameraCalls.slice(cameraCallBaseline);
-  assert.equal(transitionCalls[0], false);
-  assert.equal(transitionCalls.includes(true), false);
+  const transitionEvents = runtime.cameraLifecycleEvents.slice(cameraLifecycleBaseline);
+  assert.match(transitionEvents[0], /^unpublish-camera:/u);
+  assert.equal(transitionEvents.includes("set-camera:true"), false);
   assert.equal(runtime.roomDisconnects, 1);
   assert.equal(runtime.rooms.at(-1).state, "disconnected");
 });
