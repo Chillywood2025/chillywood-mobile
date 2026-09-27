@@ -1380,7 +1380,7 @@ assert.match(
 );
 assert.match(
   chatThreadSource,
-  /showControls=\{outgoingCallRinging \|\| activeCallInvite\?\.status === "accepted"\}/u,
+  /showControls=\{outgoingCallRinging \|\| activeCallInvite\?\.status === "accepted" \|\| TERMINAL_CHAT_CALL_INVITE_STATUSES\.has\(activeCallInvite\?\.status \?\? ""\)\}/u,
   "the cancel-call action remains visible before acceptance",
 );
 assert.match(
@@ -1521,10 +1521,19 @@ assert.ok(
     < appWideOpenCallBlock.indexOf("const acceptedInvite ="),
   "native-owned foreground Answer must delegate to CallKit before any fallback server acceptance",
 );
+const nativeForegroundAnswerBlock = nativeCoordinatorSource.slice(
+  nativeCoordinatorSource.indexOf("public func requestAnswer(callUuid: String, inviteId: String)"),
+  nativeCoordinatorSource.indexOf("public func completeTerminalTransition(callUuid: String)"),
+);
 assert.match(
-  nativeCoordinatorSource,
-  /requestAnswer\(callUuid: String, inviteId: String\)[\s\S]{0,760}call\.inviteId == normalizedInviteId[\s\S]{0,520}requestedAnswerTransactions\.contains\(uuid\)[\s\S]{0,420}CXAnswerCallAction\(call: uuid\)/u,
+  nativeForegroundAnswerBlock,
+  /requestAnswer\(callUuid: String, inviteId: String\)[\s\S]*?call\.inviteId == normalizedInviteId[\s\S]*?requestedAnswerTransactions\.contains\(uuid\)[\s\S]*?CXAnswerCallAction\(call: uuid\)/u,
   "native foreground Answer is exact-invite bound, single-flight, and requested through CXAnswerCallAction",
+);
+assert.match(
+  nativeForegroundAnswerBlock,
+  /call\.ringingDeadline\?\.wakeup\([\s\S]*?== \.expire\s*\{[\s\S]*?timeoutCall\(uuid, generation: call\.generation\)[\s\S]*?continuation\.resume\(throwing:[\s\S]*?return\s*\}[\s\S]*?requestedAnswerCompletions\[uuid/u,
+  "expired native Answer cannot register or start a fresh CallKit transaction",
 );
 assert.match(
   nativeCoordinatorSource,
@@ -1627,15 +1636,15 @@ assert.match(
 );
 assert.match(
   chatThreadSource,
-  /const invite = await resolveRequestedInvite\(\);[\s\S]{0,160}activeNativeCallActionRequestKeyRef\.current !== requestKey/u,
-  "a hydrated native action must be invalidated only when its exact request changes",
+  /const isCurrent = \(\) => ownsContext\(\) && activeNativeCallActionRequestKeyRef\.current === requestKey;[\s\S]{0,1400}const invite = await resolveRequestedInvite\(\);\s*if \(!isCurrent\(\)\) return;/u,
+  "a hydrated native action must retain its exact request and account/session/thread context",
 );
 assert.doesNotMatch(
   chatThreadSource,
   /nativeCallActionHandledRef\.current = requestKey;[\s\S]{0,120}let canceled = false/u,
   "an unrelated rerender must not cancel an already claimed native Answer transition",
 );
-assert.match(rootLayoutSource, /current\?\.invite \? current : current \? \{ \.\.\.current, \.\.\.nextAlert \} : nextAlert/u, "database readback must hydrate a notification-first banner before Decline");
+assert.match(rootLayoutSource, /setAlert\(\(current\) => mergeIncomingCallAlert\(current, nextAlert\)\)/u, "database readback hydrates notification-first banners through the stable semantic invite merge");
 assert.match(chatThreadSource, /subscribeToChillyChatCallInvite\(visibleInvite\.id/u, "incoming presentation must follow authoritative invite state");
 assert.match(
   chatThreadSource,
@@ -1649,7 +1658,7 @@ assert.match(
 );
 assert.match(
   chatThreadSource,
-  /TERMINAL_CHAT_CALL_INVITE_STATUSES\.has\(latestInvite\.status\)[\s\S]{0,520}setOutgoingCallInvite\(null\)/u,
+  /TERMINAL_CHAT_CALL_INVITE_STATUSES\.has\(latestInvite\.status\)[\s\S]{0,400}finishTerminalInviteCleanup\(latestInvite, true, ownsContext\)/u,
   "a caller that misses the realtime terminal update clears the stale ringing surface from authoritative terminal truth",
 );
 assert.doesNotMatch(
@@ -1657,7 +1666,16 @@ assert.doesNotMatch(
   /outgoingCallTimeoutRef\.current = setTimeout[\s\S]{0,900}updateChillyChatCallInviteStatus\([\s\S]{0,260}\.finally\(/u,
   "a rejected missed transition cannot unconditionally clear an accepted call",
 );
-assert.match(chatThreadSource, /setIosNativeCallAudioRoute\(route\)/u, "iOS chat calls must apply the call-type audio route");
+assert.match(
+  chatThreadSource,
+  /const route = resolveIosChatCallAudioRoute\(thread\?\.activeCallType\);[\s\S]{0,160}applyCallAudioRoute\(shouldUseSpeaker, true\)/u,
+  "call initialization must select the call-type route through the shared owned route operation",
+);
+assert.match(
+  chatThreadSource,
+  /if \(!ownsRoute\(\)\) return;[\s\S]{0,180}setIosNativeCallAudioRoute\(intent\.speaker \? "speaker" : "receiver"\)[\s\S]{0,100}if \(!ownsRoute\(\)\) return;/u,
+  "native audio route application and completion must retain current call and route-intent ownership",
+);
 assert.match(
   liveKitBootstrapSource,
   /installLegacyWebRtcAudioLifecycleShims\([\s\S]{0,180}NativeModules\.WebRTCModule/u,
@@ -1670,7 +1688,7 @@ assert.match(
 );
 assert.match(
   chatThreadSource,
-  /const acceptedInvite = await updateChillyChatCallInviteStatus[\s\S]{0,620}completeTrustedIosNativeAnswer\(acceptedInvite\)[\s\S]{0,260}applyAcceptedIncomingInviteState\(acceptedInvite\)/u,
+  /const acceptedInvite = currentInvite\.status === "accepted"[\s\S]{0,120}await updateChillyChatCallInviteStatus[\s\S]{0,1100}completeTrustedIosNativeAnswer\(acceptedInvite, \(\) => isAnswerOperationCurrent\(operation\)\)[\s\S]{0,300}applyAcceptedIncomingInviteState\(acceptedInvite\)/u,
   "a server-accepted CallKit answer completes the trusted native orchestrator before accepted media state can publish",
 );
 assert.match(chatThreadSource, /completeIosAcceptedNativeAnswer\([\s\S]{0,520}completeNative: completeIosNativeCallAnswer/u, "the trusted completion helper delegates to the executable provenance-bound CallKit orchestrator");
@@ -1784,7 +1802,7 @@ const liveKitConnectedTransitionBlock = liveKitChatCallSessionSource.slice(
 );
 assert.match(
   liveKitConnectedTransitionBlock,
-  /reconnectAwaitingRemoteRef\.current[\s\S]{0,180}remoteParticipantSeenRef\.current[\s\S]{0,180}remoteParticipants\.size === 0[\s\S]{0,260}setChannelState\("reconnecting"\)/u,
+  /const waitingForKnownRemote = remoteParticipantSeenRef\.current\s*&& liveKitRoom\.remoteParticipants\.size === 0;[\s\S]{0,260}setChannelState\("reconnecting"\)/u,
   "the shared connected transition cannot report recovery while a previously connected peer remains absent",
 );
 assert.equal(
@@ -1819,8 +1837,13 @@ assert.match(
 );
 assert.match(
   chatThreadSource,
-  /setIncomingCallInvite\(visibleIncomingInvite\);[\s\S]{0,180}if \(resumableAcceptedInvite\)[\s\S]{0,120}applyAcceptedIncomingInviteState\(resumableAcceptedInvite\)/u,
+  /if \(resumableAcceptedInvite && !cleanupPending\) \{\s*applyAcceptedIncomingInviteState\(resumableAcceptedInvite, true\)/u,
   "thread-state loading opens accepted receiver media without another Answer or Join tap",
+);
+assert.match(
+  chatThreadSource,
+  /const loadThreadState = useCallback\(async \(\) => \{[\s\S]{0,200}const read = beginThreadRead\(\)[\s\S]{0,140}isThreadReadCurrent\(read\)[\s\S]{0,1250}if \(!isCurrent\(\)\) return;[\s\S]{0,180}reconcileEndedCallState\(loadedThread, isCurrent\)/u,
+  "thread-state loading rejects obsolete session/read generations before call reconciliation",
 );
 assert.match(
   chatThreadSource,
@@ -1857,10 +1880,18 @@ assert.match(
   /UIApplication\.shared\.beginBackgroundTask[\s\S]{0,900}DispatchQueue\.main\.asyncAfter\(deadline: \.now\(\) \+ 15/u,
   "the native terminal execution lease must expire after a bounded interval",
 );
+const iosTerminalActionSource = rootLayoutSource.match(
+  /const settleNativeTerminalAction = async \([\s\S]*?(?=\n    const handleNativeCallEvent = async)/u,
+)?.[0] ?? "";
 assert.match(
-  rootLayoutSource,
-  /settled = true;[\s\S]{0,900}completeIosNativeCallTerminalTransition\(String\(event\.callUuid/u,
-  "the authenticated bridge must release the exact native lease only after the authoritative transition settles",
+  iosTerminalActionSource,
+  /if \(!settled \|\| !ownsAuthority\(\)\) return false;[\s\S]*await completeIosNativeCallTerminalTransition\(String\(event\.callUuid/u,
+  "the authenticated bridge releases the exact native lease only after authoritative settlement and current ownership; statement length is not authority",
+);
+assert.match(
+  iosTerminalActionSource,
+  /await updateChillyChatCallInviteStatus\([\s\S]*?if \(!ownsAuthority\(\)\) return false;[\s\S]*?if \(updated\?\.status === status\)/u,
+  "a delayed terminal transition result is rechecked against the bridge owner before cleanup",
 );
 assert.match(
   rootLayoutSource,
@@ -1932,7 +1963,7 @@ assert.match(
 );
 assert.match(
   chatThreadSource,
-  /const activeCallRoomId = resolveAcceptedChatCallRoomId\(\{[\s\S]{0,180}inviteRoomId: activeCallInvite\?\.communicationRoomId/u,
+  /const activeCallRoomId = activeCallInvite && TERMINAL_CHAT_CALL_INVITE_STATUSES\.has\(activeCallInvite\.status\)\s*\? activeCallInvite\.communicationRoomId \?\? ""\s*: resolveAcceptedChatCallRoomId\(\{\s*inviteRoomId: activeCallInvite\?\.communicationRoomId/u,
   "accepted-invite room authority must survive a stale empty thread refresh",
 );
 assert.match(
@@ -1950,7 +1981,7 @@ assert.doesNotMatch(
 );
 assert.match(
   chatThreadSource,
-  /showMediaControls=\{!outgoingCallRinging && !callError && !callLoading\}/u,
+  /showMediaControls=\{activeCallInvite\?\.status === "accepted" && !outgoingCallRinging && !callError && !callLoading\}/u,
   "mic and camera controls stay hidden until the receiver accepts",
 );
 assert.match(
@@ -1970,7 +2001,7 @@ assert.match(
 );
 assert.match(
   chatThreadSource,
-  /showControls=\{outgoingCallRinging \|\| activeCallInvite\?\.status === "accepted"\}/u,
+  /showControls=\{outgoingCallRinging \|\| activeCallInvite\?\.status === "accepted" \|\| TERMINAL_CHAT_CALL_INVITE_STATUSES\.has\(activeCallInvite\?\.status \?\? ""\)\}/u,
   "accepted callers can always end a call even when LiveKit is not ready",
 );
 for (const permanentTestId of [
@@ -1999,7 +2030,7 @@ for (const permanentSurfaceId of [
 }
 assert.match(
   chatThreadSource,
-  /mediaControlMessage=\{callControlError\}/u,
+  /mediaControlMessage=\{callControlError \?\? mediaControlError\}/u,
   "call-control failures remain visible inside the fullscreen call surface",
 );
 assert.match(
@@ -2128,8 +2159,8 @@ assert.match(
 );
 assert.match(
   communicationSessionSource,
-  /legacySessionRestartSerial,\s*requestLegacySessionRestart,\s*\]\);/u,
-  "legacy foreground recovery serial invalidates the exact media-session initialization effect",
+  /legacySessionRestartSerial,\s*requestLegacySessionRestart,\s*runSerializedMediaControl,\s*\]\);/u,
+  "legacy initialization observes both foreground recovery and ownership-bound media serialization",
 );
 assert.match(communicationSessionSource, /CHANNEL_ERROR[\s\S]{0,600}requestLegacySessionRestart\(status === "CHANNEL_ERROR"/u, "Realtime terminal and error states rebuild the transport instead of only changing UI state");
 assert.match(communicationSessionSource, /mappedState === "failed"\) requestLegacySessionRestart\("peer_failed", generation\)[\s\S]{0,140}mappedState === "disconnected"\) requestLegacySessionRestart\("peer_disconnected", generation\)/u, "peer failures enter the same generation-bound recovery supervisor");
@@ -2154,8 +2185,8 @@ assert.match(
 );
 assert.match(
   activeInviteReconciliationSource,
-  /reportIosNativeCallRemoteEnd/u,
-  "remote terminal invite state must close native and media state",
+  /finishTerminalInviteCleanup\(latestInvite, isHost, ownsContext, `invite_\$\{latestInvite\.status\}`\)/u,
+  "remote terminal invite state enters the exact owned native/media cleanup operation",
 );
 assert.match(
   chatThreadSource,

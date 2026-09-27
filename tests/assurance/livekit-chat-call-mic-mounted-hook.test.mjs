@@ -498,6 +498,83 @@ test("established iOS video restores native foreground media before a suspended 
   assert.equal(harness.getResult().cameraEnabled, true);
 });
 
+test("plain peer departure demotes a connected transport until the established peer returns", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialMic: true,
+    initialRemoteParticipant: true,
+  }, defaultHookOptions({
+    allowBackgroundAudio: true,
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  }));
+  const room = runtime.rooms.at(-1);
+  assert.equal(harness.getResult().channelState, "live");
+
+  const removedRemote = runtime.removeRemoteParticipant();
+  await harness.emitRoom("ParticipantDisconnected", removedRemote);
+
+  assert.equal(room.state, "connected", "the local transport never entered reconnecting");
+  assert.equal(harness.getResult().participantCount, 1);
+  assert.equal(harness.getResult().channelState, "reconnecting");
+  await harness.fireHeartbeat();
+  await harness.fireAppState("background");
+  await harness.fireAppState("active");
+  assert.equal(harness.getResult().channelState, "reconnecting");
+  assert.equal(runtime.stages.filter((stage) => stage === "recovered").length, 0);
+  assert.equal(room.state, "connected", "peer loss does not disconnect an otherwise usable local transport");
+  assert.equal(harness.getResult().micEnabled, true, "peer loss does not change local microphone intent");
+
+  const restoredRemote = runtime.restoreRemoteParticipant();
+  await harness.emitRoom("ParticipantConnected", restoredRemote);
+  await waitFor(harness, () => harness.getResult().channelState === "live", "plain peer departure recovered");
+  assert.equal(harness.getResult().participantCount, 2);
+});
+
+test("heartbeat readiness notices an established peer missing without a disconnect callback", async (t) => {
+  const { harness, runtime } = await mountCase(t, { initialRemoteParticipant: true });
+  runtime.removeRemoteParticipant();
+
+  await harness.fireHeartbeat();
+
+  assert.equal(runtime.rooms.at(-1).state, "connected");
+  assert.equal(harness.getResult().participantCount, 1);
+  assert.equal(harness.getResult().channelState, "reconnecting");
+  const restoredRemote = runtime.restoreRemoteParticipant();
+  await harness.emitRoom("ParticipantConnected", restoredRemote);
+  await waitFor(harness, () => harness.getResult().channelState === "live", "missed callback recovery completed");
+});
+
+test("initial waiting does not become an established-peer loss on an empty disconnect event", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  await harness.emitRoom("ParticipantDisconnected", { identity: runtime.remoteUserId });
+  await harness.fireHeartbeat();
+
+  assert.equal(harness.getResult().channelState, "live");
+  assert.equal(harness.getResult().participantCount, 1);
+  const remote = runtime.restoreRemoteParticipant();
+  await harness.emitRoom("ParticipantConnected", remote);
+  assert.equal(harness.getResult().channelState, "live");
+  assert.equal(harness.getResult().participantCount, 2);
+});
+
+test("a retired Room's peer departure cannot demote its connected replacement", async (t) => {
+  const { harness, runtime } = await mountCase(t, { initialRemoteParticipant: true });
+  const oldRoom = runtime.rooms.at(-1);
+  const staleParticipantDisconnected = oldRoom.handlers.get("ParticipantDisconnected");
+  const oldRemote = oldRoom.remoteParticipants.get(runtime.remoteUserId);
+  await harness.commitRender(replacementOptions());
+  await waitFor(harness, () => runtime.rooms.length === 2 && harness.getResult().channelState === "live", "replacement connected");
+  oldRoom.remoteParticipants.clear();
+  const stagesBefore = runtime.stages.length;
+
+  staleParticipantDisconnected(oldRemote);
+  await harness.flush();
+
+  assert.equal(harness.getResult().room?.roomId, "ROOM-2");
+  assert.equal(harness.getResult().channelState, "live");
+  assert.equal(harness.getResult().participantCount, 2);
+  assert.equal(runtime.stages.length, stagesBefore);
+});
+
 test("an established two-participant call stays reconnecting until the known remote participant returns", async (t) => {
   const hookOptions = defaultHookOptions({
     initialMediaPreferences: { cameraEnabled: true, micEnabled: true },

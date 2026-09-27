@@ -825,6 +825,37 @@ export async function leaveCommunicationRoomSession(options: {
   });
 }
 
+export async function heartbeatCommunicationRoomSession(options: {
+  roomId: string;
+  userId: string;
+}): Promise<CommunicationRoomMembership | null> {
+  const roomId = formatCommunicationRoomCode(options.roomId);
+  const userId = String(options.userId ?? "").trim();
+  if (!roomId || !userId) return null;
+  const now = new Date().toISOString();
+  // Liveness is not media intent or membership admission. A delayed heartbeat
+  // must neither undo a newer mute nor reactivate a membership that has left.
+  const { data, error } = await supabase
+    .from(COMMUNICATION_ROOM_MEMBERSHIPS_TABLE)
+    .update({ last_seen_at: now, updated_at: now })
+    .eq("room_id", roomId)
+    .eq("user_id", userId)
+    .in("membership_state", ["active", "reconnecting"])
+    .is("left_at", null)
+    .select(COMMUNICATION_ROOM_MEMBERSHIP_SELECT)
+    .returns<CommunicationMembershipRow>()
+    .maybeSingle();
+  if (error) throw createCommunicationOperationError("membership heartbeat", error);
+  if (!data) return null;
+  const membership = parseCommunicationMembershipPayload(data);
+  if (membership) {
+    void getCommunicationRoom(roomId)
+      .then((room) => room ? touchActiveCommunicationRoomHeartbeat(room) : undefined)
+      .catch(() => undefined);
+  }
+  return membership;
+}
+
 export async function getLinkedCommunicationRoom(linkedPartyId: string): Promise<CommunicationRoomState | null> {
   const normalizedPartyId = formatCommunicationRoomCode(linkedPartyId);
   if (!normalizedPartyId) return null;

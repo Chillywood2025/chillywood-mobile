@@ -102,6 +102,7 @@ export function useChatCallMediaSession(options: UseChatCallMediaSessionOptions)
   if (mediaProvider === "livekit") {
     return {
       ...liveKitSession,
+      mediaControlError: liveKitSession.mediaReconciliationMessage,
       mediaProvider,
       legacyTransportActive: false,
       liveKitTransportActive: shouldEnableLiveKit,

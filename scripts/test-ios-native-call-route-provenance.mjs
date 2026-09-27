@@ -458,6 +458,11 @@ const replaceRequired = (source, search, replacement, label) => {
   assert.ok(source.includes(search), `${label} must replace an exact current production-source fragment`);
   return source.replace(search, replacement);
 };
+const cameraSafetyTerminationBlock = (source) => {
+  const start = source.indexOf("const terminateRoomForCameraSafety = useCallback(");
+  const end = source.indexOf("const disableCameraOrTerminate = useCallback(", start);
+  return start >= 0 && end > start ? source.slice(start, end) : "";
+};
 let policyFixtureSerial = 100;
 const consumedClaimFixture = async () => {
   let destination = "";
@@ -791,7 +796,7 @@ const validateProductionGate = async ({code, productionSources}) => {
       || !mediaSource.includes("await liveKitRoom.disconnect(true);")
     );
   } else if (code === "IOS_CAMERA_FAILSAFE_TERMINATION_BYPASS") {
-    const mediaSource = productionSources["hooks/use-livekit-chat-call-session.ts"];
+    const mediaSource = cameraSafetyTerminationBlock(productionSources["hooks/use-livekit-chat-call-session.ts"]);
     report(
       !mediaSource.includes("activePublication?.track?.stop();")
       || !mediaSource.includes("await liveKitRoom.disconnect(true);")
@@ -870,7 +875,7 @@ const negativeControls = [
   control("IOS_NATIVE_CLAIM_PERSISTENCE_INVALID", "_lib/nativeCallTransitionProvenance.mjs", `${sources["_lib/nativeCallTransitionProvenance.mjs"]}\nvoid AsyncStorage;\n`),
   replaceControl("IOS_NATIVE_EVENT_DUPLICATE_EXTENDS_AUTHORITY", "_lib/nativeCallTransitionProvenance.mjs", "      if (activeEventKeys.has(eventKey) || seenEventKeys.has(eventKey)) {\n        return Object.freeze({status: \"duplicate\"});\n      }", "      if (false) return Object.freeze({status: \"duplicate\"});", "duplicate event tombstone"),
   replaceControl("IOS_NATIVE_CLAIM_BINDING_MISMATCH_ACCEPTED", "_lib/communicationCallMediaPolicy.mjs", "    && claim.threadId === threadId\n", "", "thread claim binding"),
-  replaceControl("IOS_CALLKIT_COMPLETION_BEFORE_SERVER_AUTHORITY", "app/chat/[threadId].tsx", "      const acceptedInvite = await updateChillyChatCallInviteStatus({", "      await completeIosNativeCallAnswer(requestedNativeCallUuid, true);\n      const acceptedInvite = await updateChillyChatCallInviteStatus({", "CallKit completion ordering"),
+  replaceControl("IOS_CALLKIT_COMPLETION_BEFORE_SERVER_AUTHORITY", "app/chat/[threadId].tsx", '      const acceptedInvite = currentInvite.status === "accepted"', '      await completeIosNativeCallAnswer(requestedNativeCallUuid, true);\n      const acceptedInvite = currentInvite.status === "accepted"', "CallKit completion ordering"),
   replaceControl("IOS_FOREGROUND_NATIVE_PRESENTATION_TIMEOUT_FAILS_OPEN", "_lib/nativeCallTransitionProvenance.mjs", '  return "blocked";\n};\n\nexport function createNativeCallTransitionProvenanceRegistry', '  return "foreground_answer";\n};\n\nexport function createNativeCallTransitionProvenanceRegistry', "late native presentation fail-closed arbitration"),
   replaceControl("IOS_NATIVE_PENDING_EVENT_EARLY_DRAIN", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "      DispatchQueue.main.async { [weak self] in\n        guard let self, let eventSink = self.eventSink else { return }\n        self.drainPendingEvents().forEach { eventSink($0) }\n      }", "      drainPendingEvents().forEach { eventSink?($0) }", "synchronous observer-start event drain"),
   replaceControl("IOS_NATIVE_ANSWER_EVENT_NOT_DURABLE", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "        self.persistPendingAnswerEvent(event)\n", "", "durable exact-UUID Answer replay"),
@@ -882,7 +887,11 @@ const negativeControls = [
   replaceControl("IOS_NATIVE_CURRENT_APPLICATION_STATE_OLD_BUILD_FAIL_OPEN", "_lib/iosNativeCalls.ts", '    || typeof NativeCallsModule.isApplicationActiveAsync !== "function"\n', "", "old-build native method gate"),
   replaceControl("IOS_NATIVE_CURRENT_APPLICATION_STATE_MEDIA_BYPASS", "hooks/use-livekit-chat-call-session.ts", "    const nativeApplicationActive = await readIosNativeApplicationActive();\n", "    const nativeApplicationActive = true;\n", "current native foreground enforcement"),
   replaceControl("IOS_CAMERA_ROLLBACK_DYNAMIC_ENABLE_BYPASS", "hooks/use-livekit-chat-call-session.ts", "          await restoreCameraPublicationForCurrentSession(liveKitRoom, binding, priorActual);\n", "          await liveKitRoom.localParticipant.setCameraEnabled(priorActual, LIVE_VIDEO_CAPTURE_OPTIONS);\n", "dynamic camera rollback bypass"),
-  replaceControl("IOS_CAMERA_FAILSAFE_TERMINATION_BYPASS", "hooks/use-livekit-chat-call-session.ts", "        await liveKitRoom.disconnect(true);\n", "        await Promise.resolve();\n", "camera fail-safe room termination"),
+  replaceControl("IOS_CAMERA_FAILSAFE_TERMINATION_BYPASS", "hooks/use-livekit-chat-call-session.ts",
+    cameraSafetyTerminationBlock(sources["hooks/use-livekit-chat-call-session.ts"]),
+    replaceRequired(cameraSafetyTerminationBlock(sources["hooks/use-livekit-chat-call-session.ts"]),
+      "        await liveKitRoom.disconnect(true);\n", "        await Promise.resolve();\n", "camera fail-safe room termination"),
+    "exact camera fail-safe callback"),
   replaceControl("IOS_CAMERA_DURABLE_ROLLBACK_PROOF_BYPASS", "hooks/use-livekit-chat-call-session.ts", "          const compensationProved = nativeRestored\n            && durableCompensationProved\n            && callStillValid;\n", "          const compensationProved = nativeRestored && callStillValid;\n", "camera durable rollback proof"),
   replaceControl("IOS_CALLKIT_COMPLETION_FAILURE_ORPHANS_ACCEPTED_INVITE", "_lib/communicationCallMediaPolicy.mjs", '  const terminal = await terminateIosAcceptedNativeAnswer({...input, reason: completed ? "accepted_media_descriptor_denied" : "callkit_answer_completion_failed"}, operations.terminal);', "  const terminal = false;", "completion failure settlement"),
   control("IOS_NATIVE_CLAIM_MEDIA_AUTHORITY_VIOLATION", "_lib/nativeCallTransitionProvenance.mjs", `${sources["_lib/nativeCallTransitionProvenance.mjs"]}\nrequestLiveKitParticipantToken();\n`),

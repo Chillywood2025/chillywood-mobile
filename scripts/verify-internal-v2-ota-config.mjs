@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createOtaPublicationPlan, validateOtaPublicationPlan } from "./release-control-plane-lib.mjs";
+import { deriveOtaNativeSourceCompatibility } from "./ota-native-source-compatibility.mjs";
 
 const valueAfter = (name) => {
   const index = process.argv.indexOf(name);
@@ -16,6 +17,12 @@ const binaryReceiptPath = valueAfter("--binary-receipt");
 assert.match(sourceSha, /^[0-9a-f]{40}$/u, "--source-sha must be exact");
 assert.match(sourceTree, /^[0-9a-f]{40}$/u, "--source-tree must be exact");
 assert.ok(binaryReceiptPath, "--binary-receipt is required");
+
+const signedBinary = JSON.parse(fs.readFileSync(path.resolve(binaryReceiptPath), "utf8"));
+const nativeCompatibility = deriveOtaNativeSourceCompatibility({ platform, sourceSha, sourceTree, signedBinary });
+const candidate = createOtaPublicationPlan({ platform, sourceSha, sourceTree, runtimeVersion: signedBinary.runtimeVersion, signedBinary, nativeCompatibility });
+const nativeValidation = validateOtaPublicationPlan(candidate);
+assert.equal(nativeValidation.ok, true, nativeValidation.findings.join(","));
 
 const result = spawnSync("npx", ["expo", "config", "--type", "public", "--json"], {
   cwd: process.cwd(),
@@ -45,8 +52,7 @@ if (platform === "ios") {
   assert.match(String(config?.android?.runtimeVersion ?? ""), /^1\.0\.0-android-production-v2$/u, "Android internal-v2 OTA runtime must match installed tester binaries");
 }
 
-const signedBinary = JSON.parse(fs.readFileSync(path.resolve(binaryReceiptPath), "utf8"));
-const plan = createOtaPublicationPlan({ platform, sourceSha, sourceTree, runtimeVersion, signedBinary });
+const plan = createOtaPublicationPlan({ platform, sourceSha, sourceTree, runtimeVersion, signedBinary, nativeCompatibility });
 const validation = validateOtaPublicationPlan(plan);
 assert.equal(validation.ok, true, validation.findings.join(","));
 

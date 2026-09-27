@@ -1,5 +1,13 @@
 # Chi'lly Chat complete-system closure ledger
 
+> Historical snapshot: this ledger records the August 2026 PR #306–#318 work.
+> Its final zero-blocker totals and physical proof apply only to that candidate
+> and the environment recorded then. They do not certify later source, binary,
+> provider or device changes. Use
+> [Chi'lly Chat lifecycle validation](CHILLY_CHAT_LIFECYCLE_VALIDATION.md) for
+> current investigation and qualification. Preserve this ledger as history;
+> do not revive its superseded assurance workflow as an implementation gate.
+
 Updated: 2026-08-30 (America/Chicago)
 Closure method: recursive grouped closure; a merge is not physical proof.
 

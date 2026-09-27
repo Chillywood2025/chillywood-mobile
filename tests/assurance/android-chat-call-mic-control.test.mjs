@@ -150,6 +150,8 @@ function createLegacyMountedRuntime(options = {}) {
     errors: [],
     intervals: [],
     joinCalls: [],
+    leaveActions: [],
+    leaveCalls: 0,
     localStreams: [],
     mediaActions: [],
     mediaSessionStopper: null,
@@ -175,6 +177,7 @@ function createLegacyMountedRuntime(options = {}) {
     removedChannels: [],
     sendActions: [],
     snapshotActions: [],
+    snapshotReads: 0,
     timeoutHandles: [],
     timeoutCallbacks: [],
     tokenRequests: 0,
@@ -267,7 +270,11 @@ function createLegacyMountedRuntime(options = {}) {
       runtime.senderRemoves += 1;
       this.senders = this.senders.filter((candidate) => candidate !== sender);
     }
-    close() { this.connectionState = "closed"; }
+    close() {
+      if (this.deferNativeClose) return;
+      this.connectionState = "closed";
+      this.emit("connectionstatechange");
+    }
     async createAnswer() { return { sdp: "answer", type: "answer" }; }
     async createOffer() {
       this.offerCalls += 1;
@@ -279,7 +286,7 @@ function createLegacyMountedRuntime(options = {}) {
     getStats() { return Promise.resolve([]); }
     getTransceivers() { return []; }
     removeEventListener(event, listener) { this.listeners.get(event)?.delete(listener); }
-    emit(event) { for (const listener of this.listeners.get(event) ?? []) listener(); }
+    emit(event, payload) { for (const listener of this.listeners.get(event) ?? []) listener(payload); }
     async setLocalDescription(description) {
       if (this.failSetLocalDescription && description?.type !== "rollback") throw new Error("setLocalDescription rejected");
       if (this.failRollback && description?.type === "rollback") throw new Error("rollback rejected");
@@ -321,6 +328,7 @@ function createLegacyMountedRuntime(options = {}) {
   const createMediaStream = async ({ audio, video }) => {
     runtime.mediaCreateCalls.push({ audio, video });
     const action = runtime.mediaActions.shift() ?? {};
+    if (action.wait) await action.wait;
     if (action.outcome === "reject") throw new Error("media creation rejected");
     if (action.outcome === "missing") return null;
     const tracks = [];
@@ -471,6 +479,7 @@ function createLegacyMountedRuntime(options = {}) {
       endCommunicationRoom: async () => { runtime.roomEndCalls += 1; return null; },
       getActiveCommunicationMemberships: (memberships) => memberships.filter((membership) => !membership.leftAt),
       getCommunicationRoomSnapshot: async () => {
+        runtime.snapshotReads += 1;
         const action = runtime.snapshotActions.shift() ?? {};
         action.mutate?.({ runtime });
         if (action.wait) await action.wait;
@@ -484,6 +493,18 @@ function createLegacyMountedRuntime(options = {}) {
       getCommunicationRTCModule: () => rtc,
       getCommunicationStreamURL: (stream) => stream?.toURL?.() ?? "",
       getCommunicationTrack: getTrack,
+      heartbeatCommunicationRoomSession: async (input) => {
+        const action = runtime.membershipActions.shift() ?? {};
+        if (action.wait) await action.wait;
+        if (action.outcome === "reject") throw new Error("heartbeat rejected");
+        if (action.outcome === "null") return null;
+        return makeMembership(runtime, {
+          cameraEnabled: runtime.durableCamera,
+          micEnabled: runtime.durableMic,
+          roomId: input.roomId,
+          userId: input.userId,
+        });
+      },
       joinCommunicationRoomSession: async (input) => {
         runtime.joinCalls.push({ ...input });
         return makeMembership(runtime, {
@@ -492,8 +513,13 @@ function createLegacyMountedRuntime(options = {}) {
         });
       },
       leaveCommunicationRoomSession: async () => {
+        runtime.leaveCalls += 1;
+        const action = runtime.leaveActions.shift() ?? {};
         await options.leaveBarrier;
-        return null;
+        if (action.wait) await action.wait;
+        if (action.outcome === "reject") throw new Error("durable leave unavailable");
+        if (action.outcome === "null") return null;
+        return makeMembership(runtime, { membershipState: "left", cameraEnabled: false, micEnabled: false, leftAt: new Date().toISOString() });
       },
       readCommunicationIdentity: async () => ({ avatarUrl: null, displayName: "Local", userId: runtime.userId }),
       setCommunicationTrackEnabled: (stream, kind, enabled) => {
@@ -593,7 +619,7 @@ function createLegacyMountedRuntime(options = {}) {
   const commonJsModule = { exports: {} };
   const sandbox = {
     __DEV__: false,
-    clearInterval: () => undefined,
+    clearInterval: (id) => { runtime.intervals[id - 1] = null; },
     clearTimeout: (id) => {
       runtime.timeoutCallbacks[id - 1] = null;
       if (runtime.timeoutHandles[id - 1]) hostClearTimeout(runtime.timeoutHandles[id - 1]);
@@ -605,8 +631,8 @@ function createLegacyMountedRuntime(options = {}) {
       if (Object.hasOwn(moduleMocks, specifier)) return moduleMocks[specifier];
       throw new Error(`UNEXPECTED_LEGACY_HOOK_IMPORT:${specifier}`);
     },
-    setInterval: (callback) => {
-      runtime.intervals.push(callback);
+    setInterval: (callback, delay) => {
+      runtime.intervals.push({ callback, delay });
       return runtime.intervals.length;
     },
     setTimeout: (callback, delay) => {
@@ -627,6 +653,8 @@ async function mountLegacyHook(runtime, optionOverrides = {}) {
   const root = createRoot(container);
   let committedResult = null;
   const options = {
+    authenticatedAccessToken: "controlled-test-token",
+    authenticatedUserId: runtime.userId,
     allowBackgroundAudio: false,
     enabled: false,
     initialMediaPreferences: { cameraEnabled: false, micEnabled: false },
@@ -658,18 +686,27 @@ async function mountLegacyHook(runtime, optionOverrides = {}) {
     refs.setChannelState("live");
     await settle(48);
   });
-  assert.equal(committedResult?.channelState, "live", "legacy exact hook reaches the release media state");
+  if (options.analyticsContext?.surface !== "chat-thread") {
+    assert.equal(committedResult?.channelState, "live", "legacy exact hook reaches the release media state");
+  }
   assert.ok(runtime.peers.length >= 1, "legacy exact hook creates the expected existing remote peer");
 
   return {
     getResult: () => committedResult,
     refs,
+    rerender: async (nextOptions) => act(async () => {
+      Object.assign(options, nextOptions);
+      root.render(React.createElement(Harness));
+      await settle(96);
+    }),
     run: async (operation) => {
       let value;
+      let rejection;
       await act(async () => {
-        value = await operation();
+        try { value = await operation(); } catch (error) { rejection = error; }
         await settle(48);
       });
+      if (rejection) throw rejection;
       return value;
     },
     unmount: async () => act(async () => { root.unmount(); await settle(24); }),
@@ -1540,4 +1577,525 @@ test("legacy call-domain closure: stale cleanup preserves replacement session re
   assert.equal(runtime.removedChannels.includes(oldChannel), true);
   assert.equal(runtime.removedChannels.includes(replacementChannel), false);
   assert.equal(oldPeer.connectionState, "closed");
+});
+
+test("legacy chat readiness: a subscribed signaling channel does not prove a connected peer", async (t) => {
+  const runtime = createLegacyMountedRuntime({ peerConnectionState: "connecting" });
+  const harness = await mountLegacyHook(runtime, { enabled: true, analyticsContext: { surface: "chat-thread" } });
+  t.after(() => harness.unmount());
+  assert.equal(harness.getResult().channelState, "connecting");
+  assert.equal(harness.getResult().participantCount, 1);
+});
+
+test("legacy chat readiness: peer loss stays reconnecting across signaling resubscription and only current peer recovery restores Connected", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true, analyticsContext: { surface: "chat-thread" } });
+  t.after(() => harness.unmount());
+  const peer = harness.refs.peerConnectionsRef.current[runtime.remoteUserId];
+  await harness.run(async () => peer.emit("connectionstatechange"));
+  assert.equal(harness.getResult().channelState, "live");
+  assert.equal(harness.getResult().participantCount, 2);
+  await harness.run(async () => {
+    peer.connectionState = "disconnected";
+    peer.emit("connectionstatechange");
+  });
+  assert.equal(harness.getResult().channelState, "reconnecting");
+  assert.equal(harness.getResult().participantCount, 1);
+  await harness.run(() => harness.refs.channelRef.current.emitSubscriptionStatus("SUBSCRIBED"));
+  assert.equal(harness.getResult().channelState, "reconnecting");
+  await harness.run(async () => {
+    peer.connectionState = "connected";
+    peer.emit("connectionstatechange");
+  });
+  assert.equal(harness.getResult().channelState, "live");
+  assert.equal(harness.getResult().participantCount, 2);
+});
+
+test("legacy control ownership: queued mute belongs to its original call and cannot mute a replacement", async (t) => {
+  let releaseMembership;
+  const membershipBarrier = new Promise((resolve) => { releaseMembership = resolve; });
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  seedLocalTrack(runtime, harness, { enabled: false }, { sender: true });
+  runtime.queueMembership({ wait: membershipBarrier });
+  let first;
+  let queued;
+  await act(async () => {
+    first = harness.getResult().setMicrophoneEnabled(true);
+    await settle(12);
+    queued = harness.getResult().setMicrophoneEnabled(false);
+  });
+  const replacementPeer = runtime.createPeer();
+  const replacementTrack = runtime.createTrack("audio", { enabled: true });
+  const replacementStream = runtime.createStream([replacementTrack]);
+  replacementPeer.addTrack(replacementTrack, replacementStream);
+  harness.refs.legacySessionGenerationRef.current += 1;
+  harness.refs.channelRef.current = runtime.createChannel("replacement-control-queue");
+  harness.refs.localStreamRef.current = replacementStream;
+  harness.refs.peerConnectionsRef.current[runtime.remoteUserId] = replacementPeer;
+  releaseMembership();
+  assert.equal(await harness.run(() => first), false);
+  assert.equal(await harness.run(() => queued), false);
+  assert.equal(replacementTrack.enabled, true);
+  assert.equal(replacementTrack.readyState, "live");
+});
+
+test("legacy recoverable control: compensated synchronization failure remains retryable without a fatal room error", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { initialMediaPreferences: { cameraEnabled: false, micEnabled: true }, analyticsContext: { surface: "chat-thread" } });
+  t.after(() => harness.unmount());
+  seedLocalTrack(runtime, harness, { enabled: true }, { sender: true });
+  runtime.durableMic = true;
+  runtime.queueMembership({ outcome: "null" });
+  assert.equal(await harness.run(() => harness.getResult().setMicrophoneEnabled(false)), false);
+  assert.equal(harness.getResult().error, null);
+  assert.match(harness.getResult().mediaControlError, /could not be synchronized/u);
+  assert.equal(await harness.run(() => harness.getResult().setMicrophoneEnabled(false)), true);
+  assert.equal(harness.getResult().mediaControlError, null);
+  assert.equal(harness.getResult().micEnabled, false);
+});
+
+test("legacy shared rooms: existing non-chat consumers still receive media synchronization feedback", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { initialMediaPreferences: { cameraEnabled: false, micEnabled: true } });
+  t.after(() => harness.unmount());
+  seedLocalTrack(runtime, harness, { enabled: true }, { sender: true });
+  runtime.durableMic = true;
+  runtime.queueMembership({ outcome: "null" });
+  assert.equal(await harness.run(() => harness.getResult().setMicrophoneEnabled(false)), false);
+  assert.match(harness.getResult().error, /could not be synchronized/u);
+  assert.equal(await harness.run(() => harness.getResult().setMicrophoneEnabled(false)), true);
+  assert.equal(harness.getResult().error, null);
+});
+
+test("legacy chat readiness: a receiver track before transport connection cannot advertise Connected", async (t) => {
+  const runtime = createLegacyMountedRuntime({ peerConnectionState: "connecting" });
+  const harness = await mountLegacyHook(runtime, { enabled: true, analyticsContext: { surface: "chat-thread" } });
+  t.after(() => harness.unmount());
+  const peer = harness.refs.peerConnectionsRef.current[runtime.remoteUserId];
+  const track = runtime.createTrack("video");
+  await harness.run(async () => peer.emit("track", { track, streams: [runtime.createStream([track])] }));
+  assert.equal(harness.getResult().channelState, "connecting");
+  assert.equal(harness.getResult().participantCount, 1);
+});
+
+test("legacy media recovery: an ended camera track is replaced instead of committing a false camera-on state", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  const ended = runtime.createTrack("video", { enabled: false, readyState: "ended" });
+  const stream = runtime.createStream([ended]);
+  harness.refs.localStreamRef.current = stream;
+  runtime.peers[0].addTrack(ended, stream);
+  assert.equal(await harness.run(() => harness.getResult().toggleCamera()), true);
+  const sender = runtime.peers[0].getSenders().find((entry) => entry.track?.kind === "video");
+  assert.notEqual(sender.track, ended);
+  assert.equal(sender.track.readyState, "live");
+  assert.equal(sender.track.enabled, true);
+  assert.equal(runtime.durableCamera, true);
+});
+
+test("legacy control serialization: queued mic state preserves the camera state committed ahead of it", async (t) => {
+  let releaseMembership;
+  const membershipBarrier = new Promise((resolve) => { releaseMembership = resolve; });
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  seedLocalTrack(runtime, harness, { enabled: false }, { sender: true });
+  runtime.queueMembership({ wait: membershipBarrier });
+  let camera;
+  let microphone;
+  await act(async () => {
+    camera = harness.getResult().toggleCamera();
+    await settle(48);
+    microphone = harness.getResult().setMicrophoneEnabled(true);
+  });
+  releaseMembership();
+  assert.equal(await harness.run(() => camera), true);
+  assert.equal(await harness.run(() => microphone), true);
+  assert.equal(harness.getResult().cameraEnabled, true);
+  assert.equal(runtime.durableCamera, true);
+});
+
+test("legacy privacy: End stops capture before waiting for the server and rejects further controls", async (t) => {
+  let releaseLeave;
+  const leaveBarrier = new Promise((resolve) => { releaseLeave = resolve; });
+  const runtime = createLegacyMountedRuntime({ leaveBarrier });
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  const { track } = seedLocalTrack(runtime, harness, { enabled: true }, { sender: true });
+  let leave;
+  await act(async () => {
+    leave = harness.getResult().leaveRoom();
+    await settle(24);
+  });
+  const endedBeforeServerResponse = track.readyState;
+  const restarted = await harness.run(() => harness.getResult().setMicrophoneEnabled(true));
+  releaseLeave();
+  await harness.run(() => leave);
+  assert.equal(endedBeforeServerResponse, "ended");
+  assert.equal(restarted, false);
+});
+
+test("legacy privacy: a camera acquisition completing after backgrounding is discarded", async (t) => {
+  let releaseMedia;
+  const mediaBarrier = new Promise((resolve) => { releaseMedia = resolve; });
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  runtime.queueMedia({ wait: mediaBarrier });
+  let camera;
+  await act(async () => {
+    camera = harness.getResult().toggleCamera();
+    await settle(24);
+    runtime.appState = "background";
+    harness.refs.appStateLifecycleHandlerRef.current("background");
+  });
+  releaseMedia();
+  assert.equal(await harness.run(() => camera), false);
+  assert.equal(runtime.localStreams.flatMap((stream) => stream.getVideoTracks()).every((track) => track.readyState === "ended"), true);
+  assert.equal(runtime.durableCamera, false);
+});
+
+test("legacy chat readiness: ICE loss demotes a previously connected peer before aggregate connection state changes", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true, analyticsContext: { surface: "chat-thread" } });
+  t.after(() => harness.unmount());
+  const peer = harness.refs.peerConnectionsRef.current[runtime.remoteUserId];
+  await harness.run(async () => peer.emit("connectionstatechange"));
+  assert.equal(harness.getResult().channelState, "live");
+  await harness.run(async () => {
+    peer.iceConnectionState = "disconnected";
+    peer.emit("iceconnectionstatechange");
+  });
+  assert.equal(harness.getResult().channelState, "reconnecting");
+  assert.equal(harness.getResult().participantCount, 1);
+  await harness.run(async () => {
+    peer.iceConnectionState = "connected";
+    peer.emit("iceconnectionstatechange");
+  });
+  assert.equal(harness.getResult().channelState, "live");
+});
+
+test("legacy heartbeat: a late liveness response cannot overwrite a newer mute", async (t) => {
+  let releaseHeartbeat;
+  const heartbeatBarrier = new Promise((resolve) => { releaseHeartbeat = resolve; });
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true, initialMediaPreferences: { cameraEnabled: false, micEnabled: true } });
+  t.after(() => harness.unmount());
+  runtime.queueMembership({ wait: heartbeatBarrier });
+  await harness.run(async () => {
+    const heartbeat = runtime.intervals.filter((entry) => entry?.delay === 15_000).at(-1);
+    assert.ok(heartbeat);
+    heartbeat.callback();
+    await settle(24);
+  });
+  assert.equal(await harness.run(() => harness.getResult().setMicrophoneEnabled(false)), true);
+  assert.equal(runtime.durableMic, false);
+  releaseHeartbeat();
+  await harness.run(async () => settle(24));
+  assert.equal(runtime.durableMic, false);
+});
+
+test("legacy heartbeat: a retired heartbeat cannot read its old room into a replacement session", async (t) => {
+  let releaseHeartbeat;
+  const heartbeatBarrier = new Promise((resolve) => { releaseHeartbeat = resolve; });
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true });
+  t.after(() => harness.unmount());
+  runtime.queueMembership({ wait: heartbeatBarrier });
+  await harness.run(async () => {
+    runtime.intervals.filter((entry) => entry?.delay === 15_000).at(-1).callback();
+    await settle(12);
+  });
+  const replacement = { ...harness.refs.roomRef.current, roomId: "ROOM-REPLACEMENT" };
+  harness.refs.legacySessionGenerationRef.current += 1;
+  harness.refs.roomRef.current = replacement;
+  const readsBefore = runtime.snapshotReads;
+  releaseHeartbeat();
+  await harness.run(async () => settle(24));
+  assert.equal(runtime.snapshotReads, readsBefore);
+  assert.equal(harness.refs.roomRef.current, replacement);
+});
+
+for (const outcome of ["reject", "null"]) {
+  test(`legacy End retry: ${outcome} is explicit and permits a later durable retry after capture stopped`, async (t) => {
+    const runtime = createLegacyMountedRuntime();
+    const harness = await mountLegacyHook(runtime);
+    t.after(() => harness.unmount());
+    const { track } = seedLocalTrack(runtime, harness, { enabled: true }, { sender: true });
+    runtime.leaveActions.push({ outcome });
+    await assert.rejects(harness.run(() => harness.getResult().leaveRoom()));
+    assert.equal(track.readyState, "ended");
+    assert.match(harness.getResult().error, /retry End/u);
+    await harness.run(() => harness.getResult().leaveRoom());
+    assert.equal(runtime.leaveCalls, 2);
+    assert.equal(harness.getResult().error, null);
+    await harness.run(() => harness.getResult().leaveRoom());
+    assert.equal(runtime.leaveCalls, 2, "completed End is idempotent");
+  });
+}
+
+test("legacy End retry: repeated End reuses the in-flight durable operation", async (t) => {
+  let releaseLeave;
+  const leaveBarrier = new Promise((resolve) => { releaseLeave = resolve; });
+  const runtime = createLegacyMountedRuntime({ leaveBarrier });
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  let first;
+  let second;
+  await act(async () => {
+    first = harness.getResult().leaveRoom();
+    second = harness.getResult().leaveRoom();
+    await settle(12);
+  });
+  assert.equal(runtime.leaveCalls, 1);
+  releaseLeave();
+  await harness.run(() => Promise.all([first, second]));
+  assert.equal(runtime.leaveCalls, 1);
+});
+
+test("legacy media serialization: delayed subscription promotion cannot overwrite a later mute", async (t) => {
+  let release;
+  const barrier = new Promise((resolve) => { release = resolve; });
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true, initialMediaPreferences: { cameraEnabled: false, micEnabled: true } });
+  t.after(() => harness.unmount());
+  runtime.queueMembership({ wait: barrier });
+  let mute;
+  await harness.run(async () => {
+    const channel = harness.refs.channelRef.current;
+    assert.equal(typeof channel.subscriptionCallback, "function", "actual initialized Realtime subscription");
+    void channel.emitSubscriptionStatus("SUBSCRIBED");
+    await settle(24);
+    assert.equal(runtime.membershipActions.length, 0, "promotion is waiting at its durable write");
+    mute = harness.getResult().setMicrophoneEnabled(false);
+    await settle(24);
+  });
+  release();
+  assert.equal(await harness.run(() => mute), true);
+  assert.equal(runtime.durableMic, false);
+  assert.equal(harness.getResult().micEnabled, false);
+});
+
+test("legacy End privacy: ineffective native stop is explicit and the retained track can be retried", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  const { track } = seedLocalTrack(runtime, harness, { enabled: true, refuseStop: true }, { sender: true });
+  await assert.rejects(harness.run(() => harness.getResult().leaveRoom()));
+  assert.equal(track.enabled, false, "disable is the privacy fallback while native stop is unproved");
+  assert.match(harness.getResult().error, /shutdown|cleanup/u);
+  track.refuseStop = false;
+  await harness.run(() => harness.getResult().leaveRoom());
+  assert.equal(track.readyState, "ended");
+  assert.equal(harness.getResult().error, null);
+});
+
+test("legacy End ownership: a same-row replacement waits for the old pending leave before joining", async (t) => {
+  let releaseLeave;
+  const leaveBarrier = new Promise((resolve) => { releaseLeave = resolve; });
+  const runtime = createLegacyMountedRuntime({ leaveBarrier });
+  const harness = await mountLegacyHook(runtime, { enabled: true });
+  t.after(() => harness.unmount());
+  let leave;
+  await act(async () => {
+    leave = harness.getResult().leaveRoom();
+    await settle(12);
+  });
+  const previousJoins = runtime.joinCalls.length;
+  await harness.rerender({ authenticatedAccessToken: "replacement-test-token" });
+  const joinsBeforeOldLeaveSettled = runtime.joinCalls.length;
+  releaseLeave();
+  await harness.run(() => leave);
+  assert.equal(joinsBeforeOldLeaveSettled, previousJoins);
+  assert.equal(runtime.joinCalls.length, previousJoins + 1);
+});
+
+for (const nativeCloseTiming of ["during durable leave", "after durable leave"]) {
+  test(`legacy End native ordering: observes asynchronous SDK close ${nativeCloseTiming}`, async (t) => {
+    const sdkSource = fs.readFileSync(require.resolve("@livekit/react-native-webrtc/src/RTCPeerConnection.ts"), "utf8");
+    const closeBody = sdkSource.slice(sdkSource.indexOf("    close(): void {"), sdkSource.indexOf("    restartIce(): void {"));
+    assert.match(closeBody, /WebRTCModule\.peerConnectionClose\(this\._pcId\)/u);
+    assert.doesNotMatch(closeBody, /this\.connectionState\s*=(?!=)/u, "locked SDK reports closure asynchronously");
+    let releaseLeave;
+    const leaveBarrier = new Promise((resolve) => { releaseLeave = resolve; });
+    const runtime = createLegacyMountedRuntime({ leaveBarrier });
+    const harness = await mountLegacyHook(runtime);
+    t.after(() => harness.unmount());
+    const peer = runtime.peers.at(-1);
+    peer.deferNativeClose = true;
+    let completed = false;
+    let leaveResult;
+    await harness.run(async () => {
+      leaveResult = harness.getResult().leaveRoom().then(() => { completed = true; return null; }, (error) => error);
+      await settle(24);
+    });
+    assert.equal(peer.connectionState, "connected", "native close request does not synchronously update state");
+    assert.equal(completed, false);
+    if (nativeCloseTiming === "after durable leave") {
+      releaseLeave();
+      await harness.run(async () => settle(24));
+      assert.equal(completed, false, "must await observed native closure");
+    }
+    await harness.run(async () => {
+      peer.connectionState = "closed";
+      peer.emit("connectionstatechange");
+      releaseLeave();
+      await settle(24);
+    });
+    assert.equal(await harness.run(() => leaveResult), null);
+    assert.equal(completed, true);
+    assert.equal(harness.getResult().error, null);
+    assert.equal(peer.listeners.get("connectionstatechange")?.size ?? 0, 0, "temporary shutdown listeners released");
+  });
+}
+
+test("legacy End native ordering: missing native closure remains a bounded failure and retries retained peers", async (t) => {
+  const runtime = createLegacyMountedRuntime({ fireOperationTimeouts: true });
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  const peer = runtime.peers.at(-1);
+  peer.deferNativeClose = true;
+  await assert.rejects(harness.run(() => harness.getResult().leaveRoom()));
+  await new Promise((resolve) => hostSetTimeout(resolve, 5));
+  await harness.run(async () => settle(24));
+  assert.match(harness.getResult().error, /cleanup|shutdown/u);
+  assert.equal(peer.listeners.get("connectionstatechange")?.size ?? 0, 0, "timeout releases shutdown listener");
+  peer.connectionState = "closed";
+  peer.emit("connectionstatechange");
+  await harness.run(() => harness.getResult().leaveRoom());
+  assert.equal(harness.getResult().error, null);
+  assert.equal(runtime.leaveCalls, 1, "retry does not duplicate a proved durable leave");
+});
+
+test("legacy End disabled transition: retry retains failed native capture after terminal media deactivation", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true });
+  t.after(() => harness.unmount());
+  const { track } = seedLocalTrack(runtime, harness, { enabled: true, refuseStop: true }, { sender: true });
+  await assert.rejects(harness.run(() => harness.getResult().leaveRoom()));
+  await harness.rerender({ enabled: false });
+  assert.equal(harness.refs.roomRef.current, null, "terminal projection is disabled");
+  await assert.rejects(harness.run(() => harness.getResult().leaveRoom()), /shutdown|cleanup/u);
+  assert.equal(runtime.leaveCalls, 1, "already verified membership is not left again");
+  track.refuseStop = false;
+  await harness.run(() => harness.getResult().leaveRoom());
+  assert.equal(track.readyState, "ended", "retry observes the original retained native track");
+});
+
+test("legacy End disabled transition: durable failure retries the original membership after deactivation", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true });
+  t.after(() => harness.unmount());
+  runtime.leaveActions.push({ outcome: "reject" });
+  await assert.rejects(harness.run(() => harness.getResult().leaveRoom()));
+  await harness.rerender({ enabled: false });
+  await harness.run(() => harness.getResult().leaveRoom());
+  assert.equal(runtime.leaveCalls, 2, "retry performs the unverified original membership leave");
+});
+
+test("legacy End disabled transition: server-terminal disable preserves resources before the first End callback", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true });
+  t.after(() => harness.unmount());
+  const { track } = seedLocalTrack(runtime, harness, { enabled: true, refuseStop: true }, { sender: true });
+  await harness.rerender({ enabled: false });
+  assert.equal(runtime.leaveCalls, 0, "passive teardown does not initiate a durable mutation");
+  await assert.rejects(harness.run(() => harness.getResult().leaveRoom()), /shutdown|cleanup/u);
+  assert.equal(runtime.leaveCalls, 1, "first explicit End still leaves its captured original membership");
+  track.refuseStop = false;
+  await harness.run(() => harness.getResult().leaveRoom());
+  assert.equal(track.readyState, "ended");
+});
+
+test("legacy End disabled transition: an old saved End cannot operate on a replacement account", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true });
+  t.after(() => harness.unmount());
+  const oldEnd = harness.getResult().leaveRoom;
+  runtime.userId = "replacement-user";
+  await harness.rerender({ authenticatedUserId: runtime.userId, authenticatedAccessToken: "replacement-token" });
+  const { track } = seedLocalTrack(runtime, harness, { enabled: true }, { sender: true });
+  await assert.rejects(harness.run(() => oldEnd()), /changed/u);
+  assert.equal(track.readyState, "live", "old callback must not stop the replacement's capture");
+  assert.equal(runtime.leaveCalls, 0);
+});
+
+test("legacy End disabled transition: duplicate End still awaits the single original pending leave", async (t) => {
+  let releaseLeave;
+  const wait = new Promise((resolve) => { releaseLeave = resolve; });
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true });
+  t.after(() => harness.unmount());
+  runtime.leaveActions.push({ wait });
+  let first;
+  let second;
+  await harness.run(async () => { first = harness.getResult().leaveRoom(); await settle(24); });
+  await harness.rerender({ enabled: false });
+  await harness.run(async () => { second = harness.getResult().leaveRoom(); await settle(24); });
+  assert.equal(runtime.leaveCalls, 1);
+  releaseLeave();
+  await harness.run(() => Promise.all([first, second]));
+  assert.equal(runtime.leaveCalls, 1);
+  assert.equal(harness.getResult().error, null);
+});
+
+test("legacy End disabled transition: a fresh enabled call must clean its own resources after a completed old End", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true });
+  t.after(() => harness.unmount());
+  await harness.run(() => harness.getResult().leaveRoom());
+  await harness.rerender({ enabled: false });
+  await harness.rerender({ enabled: true });
+  const { track } = seedLocalTrack(runtime, harness, { enabled: true }, { sender: true });
+  await harness.run(() => harness.getResult().leaveRoom());
+  assert.equal(track.readyState, "ended");
+  assert.equal(runtime.leaveCalls, 2, "fresh generation cannot reuse a completed older cleanup as proof");
+});
+
+test("legacy End disabled transition: a saved old End cannot stop a same-context reenabled session", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true });
+  t.after(() => harness.unmount());
+  const oldEnd = harness.getResult().leaveRoom;
+  await harness.run(() => oldEnd());
+  await harness.rerender({ enabled: false });
+  await harness.rerender({ enabled: true });
+  const { track } = seedLocalTrack(runtime, harness, { enabled: true }, { sender: true });
+  await assert.rejects(harness.run(() => oldEnd()), /changed/u);
+  assert.equal(track.readyState, "live");
+  assert.equal(runtime.leaveCalls, 1);
+  await harness.run(() => harness.getResult().leaveRoom());
+  assert.equal(track.readyState, "ended");
+  assert.equal(runtime.leaveCalls, 2);
+});
+
+test("legacy End disabled transition: the original delayed End still owns its terminal disabled call", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true });
+  t.after(() => harness.unmount());
+  const delayedEnd = harness.getResult().leaveRoom;
+  await harness.rerender({ enabled: false });
+  await harness.run(() => delayedEnd());
+  assert.equal(runtime.leaveCalls, 1, "same-call deactivation must not strand its legitimate End callback");
+});
+
+test("legacy remote End: retained capture remains verifiable after the authenticated room-end broadcast", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  let ended = 0;
+  const harness = await mountLegacyHook(runtime, { enabled: true, onRoomEnded: () => { ended += 1; } });
+  t.after(() => harness.unmount());
+  const { track } = seedLocalTrack(runtime, harness, { enabled: true, refuseStop: true }, { sender: true });
+  const channel = harness.refs.channelRef.current;
+  await harness.run(() => channel.emitBroadcast("room:end", { fromUserId: runtime.remoteUserId, roomId: runtime.roomId, reason: "host-left" }));
+  assert.equal(ended, 1);
+  assert.equal(runtime.leaveCalls, 0, "broadcast captures cleanup, explicit End owns the durable mutation");
+  await harness.rerender({ enabled: false });
+  await assert.rejects(harness.run(() => harness.getResult().leaveRoom()), /cleanup|shutdown/u);
+  assert.equal(runtime.leaveCalls, 1);
+  track.refuseStop = false;
+  await harness.run(() => harness.getResult().leaveRoom());
+  assert.equal(track.readyState, "ended");
 });

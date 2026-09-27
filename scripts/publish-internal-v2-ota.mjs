@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { validatePublishedUpdateReadback } from "./release-control-plane-lib.mjs";
 
@@ -45,6 +46,14 @@ const localVerification = JSON.parse(run(process.execPath, ["scripts/verify-inte
 run("npx", ["eas-cli", "env:exec", "production", `CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM=${platform} node scripts/verify-internal-v2-ota-config.mjs --platform ${platform} --source-sha ${head} --source-tree ${tree} --binary-receipt ${binaryReceipt}`], {
   env: targetEnv,
 });
+// Remote-environment preflight can take time. Bind the mutation to the same
+// checked-out source and receipt that passed validation, not a newer checkout
+// or an edited worktree left by another task while preflight was running.
+assert.equal(run("git", ["ls-remote", "origin", "refs/heads/main"], { capture: true }).split(/\s+/u)[0], head, "OTA_PROTECTED_MAIN_CHANGED_DURING_PREFLIGHT");
+assert.equal(run("git", ["status", "--porcelain"], { capture: true }), "", "OTA_SOURCE_CHANGED_DURING_PREFLIGHT");
+assert.equal(run("git", ["rev-parse", "HEAD"], { capture: true }), head, "OTA_SOURCE_CHANGED_DURING_PREFLIGHT");
+assert.equal(run("git", ["rev-parse", "HEAD^{tree}"], { capture: true }), tree, "OTA_SOURCE_CHANGED_DURING_PREFLIGHT");
+assert.deepEqual(JSON.parse(fs.readFileSync(binaryReceipt, "utf8")), localVerification.plan.signedBinary, "OTA_BINARY_RECEIPT_CHANGED_DURING_PREFLIGHT");
 const sourceBoundMessage = `${message} [source:${head} tree:${tree} plan:${localVerification.planHash}]`;
 const published = run("npx", [
   "eas-cli",

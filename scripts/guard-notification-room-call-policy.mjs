@@ -2,6 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
@@ -119,13 +120,71 @@ assertIncludes(notifications, ".eq(\"category\", \"chilly_chat_call\")", "call n
 assertIncludes(notifications, ".eq(\"user_id\", viewerUserId)", "call notification row cleanup must be scoped to current user");
 assertIncludes(notifications, "staleData", "call notification row cleanup must remove older active incoming rows for the current user");
 assertIncludes(notifications, "status: \"dismissed\"", "call notification row cleanup must make rows non-actionable");
-assertIncludes(layout, "await clearEndedChatThreadCall(declinedInvite.threadId).catch(() => null);", "room-safe decline must clear active thread call state only after authoritative terminal readback");
-assertIncludes(layout, "await dismissPresentedChillyChatCallNotifications({\n      callInviteId: declinedInvite.id,\n      dismissAllPresentedNotificationsFallback: true,\n      dismissIncomingCallFallback: true,\n      path: alert.path,\n      presentedNotificationId: alert.presentedNotificationId ?? null,\n      threadId: declinedInvite.threadId,\n    }).catch(() => 0);", "room-safe decline must retry presented Android call notification cleanup after authoritative terminal readback");
-assertIncludes(layout, "await dismissChillyChatCallNotificationRows({\n      callInviteId: declinedInvite.id,\n      threadId: declinedInvite.threadId,\n    }).catch(() => 0);", "room-safe decline must retry persisted call row cleanup after authoritative terminal readback");
-assertIncludes(layout, "presentedNotificationId: alert.presentedNotificationId ?? null", "room-safe actions must pass the exact presented Android notification id");
-assertIncludes(layout, "dismissIncomingCallFallback: true", "room-safe actions must enable the limited incoming-call title fallback only after an explicit user action");
-assertIncludes(layout, "dismissAllPresentedNotificationsFallback: true", "room-safe actions must enable the final Android presented-notification cleanup only after an explicit user action");
-assertIncludes(layout, "dismissAllPresentedNotificationsFallback: true,\n          dismissIncomingCallFallback: true,", "delayed call cleanup must retry both presented Android notifications and persisted rows");
+// Inspect each actual cleanup call rather than accepting unrelated matching
+// text elsewhere in the file or requiring one particular indentation style.
+const layoutAst = ts.createSourceFile("_layout.tsx", layout, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const compact = (node) => node?.getText(layoutAst).replace(/\s+/g, "") ?? "";
+const findDeclaration = (parent, name) => {
+  let found;
+  const visit = (node) => {
+    if ((ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) && node.name?.getText(layoutAst) === name) found = node;
+    else ts.forEachChild(node, visit);
+  };
+  if (parent) visit(parent);
+  return found;
+};
+const callsNamed = (parent, name) => {
+  const calls = [];
+  const visit = (node) => {
+    if (ts.isCallExpression(node) && node.expression.getText(layoutAst) === name) calls.push(node);
+    ts.forEachChild(node, visit);
+  };
+  if (parent) visit(parent);
+  return calls;
+};
+const objectProperty = (node, name) => ts.isObjectLiteralExpression(node)
+  ? node.properties.find((property) => ts.isPropertyAssignment(property) && property.name.getText(layoutAst) === name)?.initializer
+  : null;
+const incomingBridge = findDeclaration(layoutAst, "IncomingCallNotificationBridge");
+const decline = findDeclaration(incomingBridge, "decline");
+const nativeBridge = findDeclaration(layoutAst, "IosNativeCallsBridge");
+const terminalAction = findDeclaration(nativeBridge, "settleNativeTerminalAction");
+for (const [scope, label, roomCall, inviteExpression, userExpression] of [
+  [decline, "global Decline", "declinedInvite.threadId,declinedInvite.communicationRoomId,authority", "declinedInvite.id", "actorUserId"],
+  [terminalAction, "native terminal action", "threadId,settledRoomId,authority", "inviteId", "currentUserId"],
+]) {
+  assert(callsNamed(scope, "clearEndedChatThreadCall").some((call) => call.arguments.map(compact).join(",") === roomCall), `${label} must compare-and-clear its exact room and account authority`);
+  for (const name of ["dismissPresentedChillyChatCallNotifications", "dismissChillyChatCallNotificationRows"]) {
+    const calls = callsNamed(scope, name);
+    assert(calls.length > 0, `${label} must perform ${name}`);
+    calls.forEach((call) => {
+      const argument = call.arguments[0];
+      assert(argument && compact(objectProperty(argument, "callInviteId")) === inviteExpression && compact(objectProperty(argument, "exactInviteOnly")) === "true", `${label} ${name} must own exactly the terminal invite`);
+      if (name === "dismissChillyChatCallNotificationRows") assert(argument && compact(objectProperty(argument, "userId")) === userExpression, `${label} persisted cleanup must bind the initiating user`);
+    });
+  }
+}
+const cleanup = findDeclaration(incomingBridge, "cleanupChillyChatCallNotifications");
+const exactInput = findDeclaration(cleanup, "exactInput");
+assert(compact(objectProperty(exactInput?.initializer, "exactInviteOnly")) === "true", "delayed cleanup must use exact-invite matching");
+assertIncludes(compact(cleanup), 'if(!callInviteId||!userId)return;', "delayed cleanup must reject missing identity");
+assert(callsNamed(cleanup, "dismissPresentedChillyChatCallNotifications").length === 2
+  && callsNamed(cleanup, "dismissPresentedChillyChatCallNotifications").every((call) => compact(call.arguments[0]) === "exactInput"), "immediate and delayed presented cleanup must keep their original invite");
+assert(callsNamed(cleanup, "dismissChillyChatCallNotificationRows").length === 2
+  && callsNamed(cleanup, "dismissChillyChatCallNotificationRows").every((call) => compact(call.arguments[0]) === "{...exactInput,userId}"), "immediate and delayed row cleanup must keep their original invite and user");
+assertNotIncludes(compact(incomingBridge), "dismissIncomingCallFallback:true", "call lifecycle actions must not dismiss another call by title");
+assertNotIncludes(compact(incomingBridge), "dismissAllPresentedNotificationsFallback:true", "call lifecycle actions must not sweep unrelated notifications");
+const notificationAst = ts.createSourceFile("notifications.ts", notifications, ts.ScriptTarget.Latest, true);
+const notificationFunction = (name) => notificationAst.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === name)?.getText(notificationAst).replace(/\s+/g, "") ?? "";
+const rowCleanup = notificationFunction("dismissChillyChatCallNotificationRows");
+const presentedCleanup = notificationFunction("dismissPresentedChillyChatCallNotifications");
+assertIncludes(rowCleanup, 'if(exactInviteOnly&&!callInviteId)return0;', "exact row cleanup must reject a missing invite");
+assertIncludes(rowCleanup, 'if(exactInviteOnly){query=query.eq("source_id",callInviteId);}', "exact row cleanup must filter the original invite");
+assertIncludes(rowCleanup, 'if(exactInviteOnly||(!callInviteId&&!threadId))returnmatchedCount;', "exact row cleanup must stop before compatibility stale-row sweeping");
+assertIncludes(presentedCleanup, 'if(exactInviteOnly&&!targetInviteId)return0;', "exact presented cleanup must reject a missing invite");
+assertIncludes(presentedCleanup, 'constcanUseIncomingTitleFallback=!exactInviteOnly&&', "exact presented cleanup must disable title and all-notification fallback");
+assertIncludes(presentedCleanup, 'if(targetPresentedNotificationId&&!exactInviteOnly)', "an exact cleanup cannot dismiss a reused identifier before verifying invite data");
+assertIncludes(presentedCleanup, 'if(exactInviteOnly){if(!matchesInvite)return;}', "exact presented cleanup must match the invite itself");
 assertIncludes(layout, "playChillyChatCallSound", "app-wide incoming call bridge must ring outside the same chat thread");
 assertIncludes(layout, "Vibration.vibrate", "app-wide incoming call bridge must vibrate outside the same chat thread");
 assertIncludes(layout, "alreadyOnSameThread", "app-wide ringing must avoid double-ringing when receiver is already inside that chat thread");
@@ -267,7 +326,7 @@ assertIncludes(nativeCallPlugin, "readFullScreenCallAlertStatus", "native module
 assertIncludes(nativeCallPlugin, "openFullScreenCallAlertSettings", "native module must expose full-screen permission settings route");
 assertIncludes(nativeCallPlugin, "fun consumePendingNativeCallAction(promise: Promise)", "the native module must expose one-time action consumption");
 assertIncludes(nativeCallPlugin, "removePending(preferences.edit())", "native action consumption must clear persisted state before routing");
-assertIncludes(nativeCallPlugin, "MAX_ACTION_AGE_MS = 45_000L", "persisted call actions must not outlive the bounded invite window");
+assertIncludes(nativeCallPlugin, "MAX_ACTION_AGE_MS = 45_000L", "persisted call actions must retain their separate 45-second replay bound");
 assertIncludes(nativeCallPlugin, "MessageDigest.getInstance(\"SHA-256\")", "native duplicate and replay checks must use a deterministic request-key hash");
 assertIncludes(nativeCallPlugin, "KEY_LAST_CONSUMED_REQUEST_KEY", "consumed native actions must retain a bounded replay tombstone");
 assertIncludes(nativeCallPlugin, "SCHEMA_VERSION = 2", "native pending actions must carry the provenance-safe schema");
