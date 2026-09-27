@@ -862,6 +862,33 @@ export function useLiveKitChatCallSession({
     liveKitRoom: Room,
     failureScope: string,
   ) => {
+    const activePublication = liveKitRoom.localParticipant.getTrackPublication(
+      Track.Source.Camera,
+    );
+    const activeTrack = activePublication?.track;
+    if (activeTrack) {
+      let unpublishFailure: unknown = null;
+      try {
+        // Retire the active sender before managed mute can replace its track
+        // with null. On iOS, muting first can detach the sender that
+        // unpublishTrack needs to negotiate the removal to remote peers.
+        await liveKitRoom.localParticipant.unpublishTrack(activeTrack, true);
+      } catch (cameraError) {
+        unpublishFailure = cameraError;
+      }
+      if (
+        !unpublishFailure
+        && !liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera)
+        && activeTrack.mediaStreamTrack.readyState === "ended"
+      ) return true;
+      await terminateRoomForCameraSafety(
+        liveKitRoom,
+        failureScope,
+        unpublishFailure ?? new Error("active_camera_publication_retirement_unconfirmed"),
+      );
+      return false;
+    }
+
     let disableFailure: unknown = null;
     try {
       await liveKitRoom.localParticipant.setCameraEnabled(false, LIVE_VIDEO_CAPTURE_OPTIONS);
@@ -876,17 +903,23 @@ export function useLiveKitChatCallSession({
       return false;
     }
 
-    // LiveKit's managed camera mute stops the native track but retains its
-    // publication. Re-enabling then replaces the sender track inside that same
-    // publication, a path that can leave the remote mobile subscriber waiting
-    // even though the local publication looks usable. Retire the stopped
-    // publication so the next authorized enable creates and publishes a fresh
-    // track with an explicit remote publish/subscribe lifecycle.
+    // A publication that appeared while a disable was pending still needs the
+    // same retirement. If it has no track, LiveKit exposes no supported sender
+    // handle to retire; disconnect rather than leave a remote peer bound to a
+    // stale publication or claim that camera shutdown converged.
     const disabledTrack = disabledPublication?.track;
-    if (!disabledTrack) return true;
+    if (!disabledTrack) {
+      if (!disabledPublication && !disableFailure) return true;
+      await terminateRoomForCameraSafety(
+        liveKitRoom,
+        failureScope,
+        disableFailure ?? new Error("trackless_camera_publication_retirement_unavailable"),
+      );
+      return false;
+    }
     let unpublishFailure: unknown = null;
     try {
-      await liveKitRoom.localParticipant.unpublishTrack(disabledTrack);
+      await liveKitRoom.localParticipant.unpublishTrack(disabledTrack, true);
     } catch (cameraError) {
       unpublishFailure = cameraError;
     }
