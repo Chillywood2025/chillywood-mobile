@@ -119,6 +119,12 @@ export function createLiveKitMountedRuntime(options = {}) {
   const runtime = {
     appState: "active",
     appStateListener: null,
+    audioOutputActions: [],
+    audioOutputCalls: [],
+    audioResetActions: [],
+    audioResetCalls: 0,
+    audioStopActions: [],
+    audioStopCalls: 0,
     cameraActions: [],
     cameraCalls: [],
     cameraLifecycleEvents: [],
@@ -136,6 +142,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     identityReads: 0,
     intervalsCleared: 0,
     liveKitDataPublishes: [],
+    membershipLeaveActions: [],
     membershipLeaves: 0,
     membershipTouches: [],
     mediaBroadcasts: [],
@@ -151,7 +158,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     realtimeChannels: [],
     realtimeRemovedChannels: [],
     remoteIncludedInSnapshot: options.snapshotRemoteParticipant ?? options.initialRemoteParticipant ?? false,
-    remoteUserId: "remote-user",
+    remoteUserId: options.remoteUserId ?? "remote-user",
     remoteDurableCamera: options.remoteCamera ?? true,
     remoteDurableMic: options.remoteMic ?? true,
     remoteCameraConverged: true,
@@ -166,7 +173,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     settingsCalls: 0,
     timeoutCallbacks: [],
     timeoutDelays: [],
-    userId: "local-user",
+    userId: options.userId ?? "local-user",
   };
 
   runtime.createAcceptedMediaDescriptor = (overrides = {}) => {
@@ -191,6 +198,10 @@ export function createLiveKitMountedRuntime(options = {}) {
   runtime.queueCameraUnpublish = (action) => runtime.cameraUnpublishActions.push(action);
   runtime.queueCameraPermission = (action) => runtime.cameraPermissionActions.push(action);
   runtime.queueDisconnect = (action) => runtime.disconnectActions.push(action);
+  runtime.queueAudioOutput = (action) => runtime.audioOutputActions.push(action);
+  runtime.queueAudioReset = (action) => runtime.audioResetActions.push(action);
+  runtime.queueAudioStop = (action) => runtime.audioStopActions.push(action);
+  runtime.queueMembershipLeave = (action) => runtime.membershipLeaveActions.push(action);
   runtime.queueNativeApplicationActive = (action) => runtime.nativeApplicationActiveActions.push(action);
   runtime.queueNative = (action) => runtime.nativeActions.push(action);
   runtime.queueMicrophonePermission = (action) => runtime.microphonePermissionActions.push(action);
@@ -218,6 +229,11 @@ export function createLiveKitMountedRuntime(options = {}) {
   runtime.deferNative = () => {
     const gate = deferred();
     runtime.queueNative({ gate, outcome: "success" });
+    return gate;
+  };
+  runtime.deferAudioOutput = () => {
+    const gate = deferred();
+    runtime.queueAudioOutput({ gate, outcome: "success" });
     return gate;
   };
   runtime.deferNativeApplicationActive = (outcome = true) => {
@@ -420,6 +436,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     async disconnect(stopTracks = true) {
       runtime.roomDisconnects = (runtime.roomDisconnects ?? 0) + 1;
       const action = runtime.disconnectActions.shift() ?? { outcome: "success" };
+      if (action.gate) await action.gate.promise;
       if (action.outcome === "reject") throw new Error("room disconnect rejected");
       if (action.outcome === "mismatch") return;
       if (stopTracks) {
@@ -634,10 +651,13 @@ export function createLiveKitMountedRuntime(options = {}) {
       broadcastCommunicationRoomSignal: async (request) => {
         runtime.mediaBroadcasts.push(request);
         if (options.rejectMediaBroadcast) throw new Error("fixture media broadcast rejected");
+        if (options.broadcastCommunicationRoomSignal) {
+          return options.broadcastCommunicationRoomSignal(request);
+        }
         return true;
       },
       buildCommunicationChannelName: (roomId) => `comm-room-${roomId}`,
-      endCommunicationRoom: async () => null,
+      endCommunicationRoom: async () => undefined,
       getActiveCommunicationMemberships: (memberships) => memberships.filter((entry) => !entry.leftAt),
       getCommunicationRoomSnapshot: getSnapshot,
       joinCommunicationRoomSession: async (joinOptions) => membership(runtime, {
@@ -646,21 +666,55 @@ export function createLiveKitMountedRuntime(options = {}) {
         roomId: joinOptions.roomId,
         userId: joinOptions.userId,
       }),
-      leaveCommunicationRoomSession: async () => { runtime.membershipLeaves += 1; return null; },
+      leaveCommunicationRoomSession: async ({ roomId, userId }) => {
+        runtime.membershipLeaves += 1;
+        const action = runtime.membershipLeaveActions.shift() ?? { outcome: "success" };
+        if (action.gate) await action.gate.promise;
+        if (action.outcome === "reject") throw new Error("membership leave rejected");
+        if (action.outcome === "null") return null;
+        runtime.durableCamera = false;
+        runtime.durableMic = false;
+        return membership(runtime, {
+          cameraEnabled: false,
+          leftAt: "2026-08-11T00:01:00.000Z",
+          membershipState: "left",
+          micEnabled: false,
+          roomId,
+          userId,
+        });
+      },
       readCommunicationIdentity: async () => {
         runtime.identityReads += 1;
         return { avatarUrl: null, displayName: "Local", userId: runtime.userId };
       },
       touchCommunicationRoomSession: touchMembership,
     },
-    "../_lib/livekit/audioRouting": { selectLiveKitAudioOutput: async () => true },
+    "../_lib/livekit/audioRouting": {
+      selectLiveKitAudioOutput: async (output) => {
+        runtime.audioOutputCalls.push(output);
+        const action = runtime.audioOutputActions.shift() ?? { outcome: "success" };
+        if (action.gate) await action.gate.promise;
+        if (action.outcome === "reject") throw new Error("audio output rejected");
+        return action.outcome !== "mismatch";
+      },
+    },
     "../_lib/livekit/react-native-module": {
       configureLiveKitIosAudioSession: async () => undefined,
       LiveKitAudioSession: {
         startAudioSession: async () => undefined,
-        stopAudioSession: async () => undefined,
+        stopAudioSession: async () => {
+          runtime.audioStopCalls += 1;
+          const action = runtime.audioStopActions.shift() ?? { outcome: "success" };
+          if (action.gate) await action.gate.promise;
+          if (action.outcome === "reject") throw new Error("audio stop rejected");
+        },
       },
-      resetLiveKitIosAudioSession: async () => undefined,
+      resetLiveKitIosAudioSession: async () => {
+        runtime.audioResetCalls += 1;
+        const action = runtime.audioResetActions.shift() ?? { outcome: "success" };
+        if (action.gate) await action.gate.promise;
+        if (action.outcome === "reject") throw new Error("audio reset rejected");
+      },
     },
     "../_lib/livekit/token-contract": {
       requestLiveKitParticipantToken: async (request) => {

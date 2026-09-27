@@ -1779,8 +1779,8 @@ assert.match(
   "media invalidations received during any active refresh retain a subsequent authoritative read",
 );
 const liveKitConnectedTransitionBlock = liveKitChatCallSessionSource.slice(
-  liveKitChatCallSessionSource.indexOf("const markTransportConnectedIfReady"),
-  liveKitChatCallSessionSource.indexOf("const completeTransportRecovery"),
+  liveKitChatCallSessionSource.indexOf("const promoteCommittedSessionIfReady"),
+  liveKitChatCallSessionSource.indexOf("const enqueueSessionMediaWrite"),
 );
 assert.match(
   liveKitConnectedTransitionBlock,
@@ -1794,7 +1794,7 @@ assert.equal(
 );
 assert.match(
   liveKitHeartbeatBlock,
-  /markTransportConnectedIfReady\(heartbeatBinding\)/u,
+  /promoteCommittedSessionIfReady\(heartbeatBinding\)/u,
   "the heartbeat uses the shared connected transition",
 );
 assert.match(
@@ -2031,13 +2031,13 @@ for (const permanentVideoId of [
 }
 assert.match(
   liveKitChatCallSessionSource,
-  /TrackSubscribed[\s\S]{0,260}track\.kind === Track\.Kind\.Audio[\s\S]{0,260}setSpeaker\(speakerRequestedRef\.current\)/u,
-  "a subscribed remote audio track reasserts the platform audio session and video speaker route",
+  /TrackSubscribed[\s\S]{0,320}track\.kind === Track\.Kind\.Audio[\s\S]{0,320}setSpeaker\(speakerRequestedRef\.current, effectBinding\)/u,
+  "a subscribed remote audio track reasserts the platform audio session and video speaker route for its exact session",
 );
 assert.match(
   liveKitChatCallSessionSource,
-  /local_video_published[\s\S]{0,220}await setSpeaker\(speakerRequestedRef\.current\)/u,
-  "camera publication cannot leave the video receiver on a stale audio route",
+  /local_video_published[\s\S]{0,260}await setSpeaker\(speakerRequestedRef\.current, binding\)/u,
+  "camera publication cannot leave the exact video session on a stale audio route",
 );
 assert.match(
   liveKitChatCallSessionSource,
@@ -2046,7 +2046,7 @@ assert.match(
 );
 assert.match(
   liveKitChatCallSessionSource,
-  /const setCameraEnabled[\s\S]{0,720}local_video_published[\s\S]{0,180}await setSpeaker\(speakerRequestedRef\.current\)/u,
+  /const setCameraEnabled[\s\S]{0,720}local_video_published[\s\S]{0,220}await setSpeaker\(speakerRequestedRef\.current, binding\)/u,
   "turning the camera back on preserves the selected audio output",
 );
 assert.match(

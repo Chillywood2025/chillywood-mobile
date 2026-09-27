@@ -63,6 +63,9 @@
       "components/room/**",
       "components/safety/**",
       "components/watch-party-live/**",
+      "hooks/use-chat-call-media-session.ts",
+      "hooks/use-communication-room-session.ts",
+      "hooks/use-livekit-chat-call-session.ts",
       "lib/auth/**",
       "lib/chat/**",
       "lib/commerce/**",
@@ -77,11 +80,18 @@
       "tests/wave1/**"
     ],
     "database": [
-      "supabase/**"
+      "supabase/**",
+      "hooks/use-chat-call-media-session.ts",
+      "hooks/use-communication-room-session.ts",
+      "hooks/use-livekit-chat-call-session.ts",
+      "scripts/test-communication-room-realtime-delivery.mjs"
     ],
     "nativeRelease": [
       "android/**",
       "ios/**",
+      "hooks/use-chat-call-media-session.ts",
+      "hooks/use-communication-room-session.ts",
+      "hooks/use-livekit-chat-call-session.ts",
       "eas.json",
       "app.json",
       "app.config.*",

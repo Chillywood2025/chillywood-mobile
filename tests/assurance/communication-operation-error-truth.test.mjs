@@ -165,3 +165,15 @@ test("communication membership update preserves database failure evidence", asyn
     userId: "11111111-1111-4111-8111-111111111111",
   }), /membership update unavailable/u);
 });
+
+test("communication room end preserves durable update failure evidence", async () => {
+  const { api, runtime } = loadCommunication();
+  runtime.queryResponses.set("communication_rooms", { data: null, error: { message: "room end unavailable" } });
+  await assert.rejects(
+    api.endCommunicationRoom(
+      "ROOM-ERROR",
+      "11111111-1111-4111-8111-111111111111",
+    ),
+    /room end unavailable/u,
+  );
+});

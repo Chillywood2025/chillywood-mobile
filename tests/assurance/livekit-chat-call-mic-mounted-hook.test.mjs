@@ -2,7 +2,9 @@
 
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import test from "node:test";
+import vm from "node:vm";
 
 import {
   createLiveKitMountedRuntime,
@@ -11,6 +13,65 @@ import {
   mountLiveKitHook,
   settleOperation,
 } from "./helpers/livekit-mounted-hook-harness.mjs";
+
+const require = createRequire(import.meta.url);
+const ts = require("typescript");
+
+const loadActualCommunicationBroadcaster = (rpc) => {
+  const source = fs.readFileSync("_lib/communication.ts", "utf8");
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      esModuleInterop: true,
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: "_lib/communication.ts",
+  }).outputText;
+  const supabase = {
+    auth: { getUser: async () => ({ data: { user: null } }) },
+    from: () => {
+      throw new Error("UNEXPECTED_COMMUNICATION_TABLE_ACCESS");
+    },
+    rpc,
+  };
+  const moduleMocks = {
+    "./accountBoundSupabaseMutation": {
+      runExactSessionAccountBoundSupabaseMutationRpc: async () => ({ data: null, error: null }),
+    },
+    "./appConfig": { readAppConfig: async () => null, resolveRoomDefaultConfig: () => ({ communication: {} }) },
+    "./monetization": { readCreatorPermissions: async () => null, sanitizeCreatorRoomAccessRule: (value) => value },
+    "./performancePolicy": { ROOM_ACTIVITY_ACTIVE_WINDOW_MS: 60_000, ROOM_HEARTBEAT_MS: 15_000 },
+    "./roomRules": {
+      ROOM_MEMBERSHIP_ACTIVE_WINDOW_MILLIS: 60_000,
+      buildRoomCapabilities: (value) => value,
+      evaluateRoomAccess: async () => ({ isAllowed: true }),
+      normalizeCapturePolicy: (value) => value ?? "no_recording",
+      normalizeContentAccessRule: (value) => value ?? "participants_only",
+      normalizeRoomMembershipState: (value) => value ?? "active",
+    },
+    "./supabase": { supabase },
+    "./userData": { buildUserChannelProfile: () => ({ displayName: "User" }), readUserProfile: async () => null },
+    "./watchParty": {
+      createPartyIdentifier: () => "ROOM-1",
+      getWritablePartyUserId: async () => "remote-user",
+    },
+    "expo-constants": { __esModule: true, default: { expoConfig: { extra: {} } } },
+    "react-native": { Platform: { OS: "ios" } },
+  };
+  const commonJsModule = { exports: {} };
+  vm.runInNewContext(compiled, {
+    console,
+    exports: commonJsModule.exports,
+    module: commonJsModule,
+    process: { env: {} },
+    require: (specifier) => {
+      if (Object.hasOwn(moduleMocks, specifier)) return moduleMocks[specifier];
+      throw new Error(`UNEXPECTED_COMMUNICATION_IMPORT:${specifier}`);
+    },
+    setTimeout,
+  }, { filename: "_lib/communication.ts" });
+  return commonJsModule.exports.broadcastCommunicationRoomSignal;
+};
 
 const waitFor = async (harness, predicate, label) => {
   for (let turn = 0; turn < 32 && !predicate(); turn += 1) await harness.flush(2);
@@ -430,6 +491,42 @@ test("an established two-participant call stays reconnecting until the known rem
   assert.equal(harness.getResult().participantCount, 2);
 });
 
+test("foreground reconciliation cannot report an established call recovered while its peer is absent", async (t) => {
+  const hookOptions = defaultHookOptions({
+    allowBackgroundAudio: true,
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  });
+  const { harness, runtime } = await mountCase(t, {
+    initialMic: true,
+    initialRemoteParticipant: true,
+  }, hookOptions);
+
+  runtime.setRoomState("reconnecting");
+  await harness.emitRoom("Reconnecting");
+  const removedRemote = runtime.removeRemoteParticipant();
+  await harness.emitRoom("ParticipantDisconnected", removedRemote);
+  runtime.setRoomState("connected");
+  await harness.emitRoom("Reconnected");
+  await harness.fireHeartbeat();
+  assert.equal(harness.getResult().channelState, "reconnecting");
+
+  await harness.fireAppState("background");
+  await harness.fireAppState("active");
+
+  assert.equal(harness.getResult().participantCount, 1);
+  assert.equal(
+    harness.getResult().channelState,
+    "reconnecting",
+    "foreground recovery must use the same established-peer readiness rule as heartbeat recovery",
+  );
+  assert.equal(
+    runtime.stages.filter((stage) => stage === "recovered").length,
+    0,
+    "recovery telemetry must not precede actual current-session readiness",
+  );
+});
+
 test("a reconnect before any peer has joined does not invent a missing-participant blocker", async (t) => {
   const { harness, runtime } = await mountCase(t);
   assert.equal(harness.getResult().participantCount, 1);
@@ -645,7 +742,7 @@ test("cleanup support: cleanup started before same-row replacement cannot leave 
   const oldCameraCleanup = runtime.deferCamera();
   const oldMicrophoneCleanup = runtime.deferNative();
   await harness.fireStopper("manual");
-  assert.equal(runtime.membershipLeaves, 0);
+  const oldSessionLeaves = runtime.membershipLeaves;
   await harness.commitRender(defaultHookOptions({
     invite: { ...defaultHookOptions().invite, id: "invite-2" },
   }));
@@ -654,8 +751,48 @@ test("cleanup support: cleanup started before same-row replacement cannot leave 
   oldCameraCleanup.resolve();
   oldMicrophoneCleanup.resolve();
   await harness.flush(48);
-  assert.equal(runtime.membershipLeaves, 0);
+  assert.equal(
+    runtime.membershipLeaves,
+    oldSessionLeaves,
+    "late old-session cleanup cannot leave the replacement membership",
+  );
   assert.equal(harness.getResult().channelState, "live");
+});
+
+test("cleanup support: a late same-row leave is repaired for the exact replacement session", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const delayedMembershipLeave = deferred();
+  runtime.queueMembershipLeave({ gate: delayedMembershipLeave, outcome: "success" });
+
+  await harness.fireStopper("manual");
+  await waitFor(harness, () => runtime.membershipLeaves === 1, "old membership leave started");
+  await harness.commitRender(defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: {
+      ...defaultHookOptions().invite,
+      callType: "video",
+      id: "invite-2",
+    },
+  }));
+  await waitFor(harness, () => runtime.rooms.length === 2, "same-row replacement Room created");
+  await waitFor(harness, () => harness.getResult().channelState === "live", "same-row replacement live");
+
+  await harness.resolveDeferred(delayedMembershipLeave);
+  await waitFor(
+    harness,
+    () => runtime.durableCamera === true && runtime.durableMic === true,
+    "replacement durable media restored after late leave",
+  );
+
+  assert.equal(runtime.membershipLeaves, 1);
+  assert.equal(harness.getResult().channelState, "live");
+  assert.equal(runtime.rooms.at(-1).state, "connected");
 });
 
 test("cleanup support: pre-initialization unmount is bounded and produces no rejected cleanup", async () => {
@@ -1364,6 +1501,36 @@ test("older heartbeat snapshot cannot overwrite a newer remote camera projection
   assert.equal(readRemote()?.liveKitVideoTrackReference, undefined);
 });
 
+test("an older microphone preflight read cannot overwrite a newer remote camera projection", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialRemoteParticipant: true,
+    remoteCamera: true,
+    snapshotRemoteParticipant: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: false },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const readRemote = () => harness.getResult().participants.find((entry) => !entry.isSelf);
+  const oldPreflight = runtime.deferSnapshot();
+  runtime.nextSnapshotActions.at(-1).remoteCamera = true;
+  const micToggle = await harness.startOperation(() => harness.getResult().setMicrophoneEnabled(true));
+  await waitFor(harness, () => runtime.nextSnapshotActions.length === 0, "microphone preflight read started");
+
+  runtime.remoteDurableCamera = false;
+  runtime.queueSnapshot({ outcome: "active", remoteCamera: false });
+  await harness.fireMembershipChange();
+  assert.equal(readRemote()?.cameraOn, false);
+
+  await harness.resolveDeferred(oldPreflight);
+  assert.equal(await settleOperation(micToggle, harness), true);
+  assert.equal(harness.getResult().micEnabled, true);
+  assert.equal(
+    readRemote()?.cameraOn,
+    false,
+    "a local control preflight must not replace a newer unrelated participant projection",
+  );
+});
+
 test("media invalidation bursts use one immediate and one paced authoritative snapshot", async (t) => {
   const { harness, runtime } = await mountCase(t, {
     initialRemoteParticipant: true,
@@ -1547,6 +1714,81 @@ test("local camera commits an authenticated media invalidation after durable sta
   assert.equal(harness.getResult().cameraEnabled, false);
 });
 
+test("camera action reaches the peer through the actual RPC broadcaster and authoritative refresh", async (t) => {
+  let senderRuntime;
+  let receiverRuntime;
+  const rpcCalls = [];
+  const actualBroadcast = loadActualCommunicationBroadcaster(function rpc(functionName, args) {
+    rpcCalls.push({ args, functionName });
+    assert.equal(functionName, "broadcast_communication_room_signal");
+    assert.equal(args.p_event, "media:update");
+    receiverRuntime.remoteDurableCamera = senderRuntime.durableCamera;
+    receiverRuntime.remoteDurableMic = senderRuntime.durableMic;
+    receiverRuntime.emitMembershipChange({
+      cameraOn: args.p_payload.cameraOn,
+      fromUserId: senderRuntime.userId,
+      micOn: args.p_payload.micOn,
+      roomId: args.p_room_id,
+    });
+    return Promise.resolve({
+      data: {
+        event: args.p_event,
+        roomId: args.p_room_id,
+        senderUserId: senderRuntime.userId,
+        sent: true,
+      },
+      error: null,
+    });
+  });
+
+  receiverRuntime = createLiveKitMountedRuntime({
+    initialRemoteParticipant: true,
+    remoteCamera: true,
+    remoteUserId: "remote-user",
+    snapshotRemoteParticipant: true,
+    userId: "local-user",
+  });
+  const receiverHarness = await mountLiveKitHook(receiverRuntime, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  t.after(() => receiverHarness.unmount());
+
+  senderRuntime = createLiveKitMountedRuntime({
+    broadcastCommunicationRoomSignal: actualBroadcast,
+    initialCamera: true,
+    initialMic: true,
+    initialRemoteParticipant: true,
+    remoteUserId: "local-user",
+    snapshotRemoteParticipant: true,
+    userId: "remote-user",
+  });
+  const senderHarness = await mountLiveKitHook(senderRuntime, defaultHookOptions({
+    authenticatedUserId: "remote-user",
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: {
+      ...defaultHookOptions().invite,
+      callType: "video",
+      calleeUserId: "local-user",
+      callerUserId: "remote-user",
+    },
+  }));
+  t.after(() => senderHarness.unmount());
+  const readReceiverRemote = () => receiverHarness.getResult().participants.find((entry) => !entry.isSelf);
+  const receiverReadsBeforeAction = receiverRuntime.snapshotReads;
+  assert.equal(readReceiverRemote()?.cameraOn, true);
+
+  assert.equal(await runOperation(senderHarness, () => senderHarness.getResult().setCameraEnabled(false)), true);
+  assert.equal(senderRuntime.durableCamera, false, "the sender committed authoritative camera state first");
+  if (readReceiverRemote()?.cameraOn !== false) await receiverHarness.fireLatestTimeout();
+  await waitFor(receiverHarness, () => readReceiverRemote()?.cameraOn === false, "peer camera projection refreshed");
+
+  assert.ok(rpcCalls.length >= 1, "the actual communication broadcaster reached the RPC boundary");
+  assert.ok(receiverRuntime.snapshotReads > receiverReadsBeforeAction, "the peer performed an authoritative read");
+  assert.equal(readReceiverRemote()?.cameraOn, false);
+  assert.equal(readReceiverRemote()?.liveKitVideoTrackReference, undefined);
+});
+
 test("LiveKit data invalidation failure preserves the connected call and other fallbacks", async (t) => {
   const { harness, runtime } = await mountCase(t, {
     initialCamera: true,
@@ -1667,6 +1909,309 @@ test("a replaced room's participant callback cannot make an empty replacement re
     "empty replacement recovered without a stale-peer blocker",
   );
   assert.equal(harness.getResult().participantCount, 1);
+});
+
+test("retired Room media callbacks and render acknowledgments cannot contaminate a replacement call", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ initialRemoteParticipant: true });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  t.after(() => harness.unmount());
+  const oldRoom = runtime.rooms.at(-1);
+  const oldRemoteView = harness.getResult().participants.find((entry) => !entry.isSelf);
+  const staleLocalTrackPublished = oldRoom.handlers.get("LocalTrackPublished");
+  const staleTrackSubscribed = oldRoom.handlers.get("TrackSubscribed");
+  const staleActiveSpeakersChanged = oldRoom.handlers.get("ActiveSpeakersChanged");
+  const staleDataReceived = oldRoom.handlers.get("DataReceived");
+  const staleDisconnected = oldRoom.handlers.get("Disconnected");
+
+  await harness.commitRender(replacementOptions());
+  await waitFor(harness, () => runtime.rooms.length === 2, "replacement LiveKit Room committed");
+  assert.deepEqual({ ...harness.getResult().firstMediaState }, {
+    firstAudio: false,
+    firstVideo: false,
+    localAudioPublished: false,
+    localVideoPublished: false,
+    remoteAudioSubscribed: false,
+    remoteVideoSubscribed: false,
+  });
+  const stagesBeforeStaleCallbacks = runtime.stages.length;
+  const snapshotReadsBeforeStaleCallbacks = runtime.snapshotReads;
+
+  staleLocalTrackPublished({ source: "microphone" });
+  staleTrackSubscribed({ kind: "audio" });
+  staleActiveSpeakersChanged([{ identity: runtime.remoteUserId }]);
+  staleDataReceived(
+    new Uint8Array([1]),
+    { identity: runtime.remoteUserId },
+    undefined,
+    "chillywood.media-state.v1",
+  );
+  staleDisconnected();
+  harness.getResult().markParticipantVideoRendered(oldRemoteView);
+  await harness.flush();
+
+  assert.deepEqual({ ...harness.getResult().firstMediaState }, {
+    firstAudio: false,
+    firstVideo: false,
+    localAudioPublished: false,
+    localVideoPublished: false,
+    remoteAudioSubscribed: false,
+    remoteVideoSubscribed: false,
+  });
+  assert.equal(harness.getResult().channelState, "live");
+  assert.equal(runtime.stages.length, stagesBeforeStaleCallbacks);
+  assert.equal(runtime.snapshotReads, snapshotReadsBeforeStaleCallbacks);
+});
+
+test("an awaited retired Room audio callback cannot change replacement-call speaker state", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ initialRemoteParticipant: true });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  t.after(() => harness.unmount());
+  assert.equal(harness.getResult().speakerEnabled, true);
+  const oldRoom = runtime.rooms.at(-1);
+  const staleTrackSubscribed = oldRoom.handlers.get("TrackSubscribed");
+  const staleAudioOutput = runtime.deferAudioOutput();
+
+  await harness.startOperation(() => staleTrackSubscribed({ kind: "audio" }));
+  await harness.flush();
+  await harness.commitRender(replacementOptions());
+  await waitFor(harness, () => runtime.rooms.length === 2, "replacement Room committed");
+  await waitFor(harness, () => harness.getResult().speakerEnabled === false, "replacement audio route selected");
+
+  await harness.resolveDeferred(staleAudioOutput);
+  await harness.flush(48);
+
+  assert.equal(harness.getResult().speakerEnabled, false);
+  assert.equal(harness.getResult().channelState, "live");
+});
+
+test("cleanup does not claim completion when local capture and transport shutdown are unproved", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  runtime.queueCamera({ outcome: "reject" });
+  runtime.queueNative({ outcome: "reject" });
+  runtime.queueDisconnect({ outcome: "reject" });
+  runtime.queueDisconnect({ outcome: "reject" });
+
+  const cleanup = await harness.startOperation(() => (
+    harness.getResult().leaveRoom().then(() => null, (cleanupError) => cleanupError)
+  ));
+  const cleanupError = await settleOperation(cleanup, harness);
+  assert.match(cleanupError.message, /Unable to prove that this call shut down safely/u);
+
+  const room = runtime.rooms.at(-1);
+  assert.equal(room.state, "connected");
+  assert.equal(room.localParticipant.cameraEnabled, false);
+  assert.equal(room.localParticipant.micEnabled, false);
+  assert.equal(runtime.stages.includes("cleanup_complete"), false);
+  assert.notEqual(harness.getResult().channelState, "idle");
+});
+
+test("cleanup_complete follows proved capture, transport, audio, and durable membership shutdown", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+
+  assert.equal(await runOperation(harness, () => harness.getResult().leaveRoom()), true);
+
+  const room = runtime.rooms.at(-1);
+  assert.equal(room.state, "disconnected");
+  assert.equal(room.localParticipant.cameraEnabled, false);
+  assert.equal(room.localParticipant.micEnabled, false);
+  assert.equal(runtime.audioStopCalls, 1);
+  assert.equal(runtime.membershipLeaves, 1);
+  assert.equal(runtime.stages.filter((stage) => stage === "cleanup_complete").length, 1);
+  assert.equal(harness.getResult().channelState, "idle");
+});
+
+test("remote End uses the same proved cleanup postconditions", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+
+  await harness.fireStopper("remote_end");
+  await waitFor(harness, () => harness.getResult().channelState === "idle", "remote End cleanup completed");
+
+  const room = runtime.rooms.at(-1);
+  assert.equal(room.state, "disconnected");
+  assert.equal(room.localParticipant.cameraEnabled, false);
+  assert.equal(room.localParticipant.micEnabled, false);
+  assert.equal(runtime.audioStopCalls, 1);
+  assert.equal(runtime.membershipLeaves, 1);
+  assert.equal(runtime.stages.filter((stage) => stage === "cleanup_complete").length, 1);
+});
+
+test("audio cleanup failure remains retryable and cannot emit cleanup_complete early", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  runtime.queueAudioStop({ outcome: "reject" });
+  const firstCleanup = await harness.startOperation(() => (
+    harness.getResult().leaveRoom().then(() => null, (cleanupError) => cleanupError)
+  ));
+  const firstError = await settleOperation(firstCleanup, harness);
+
+  assert.match(firstError.message, /Unable to prove/u);
+  assert.equal(runtime.stages.includes("cleanup_complete"), false);
+  assert.equal(harness.getResult().channelState, "error");
+
+  assert.equal(await runOperation(harness, () => harness.getResult().leaveRoom()), true);
+  assert.equal(runtime.audioStopCalls, 2);
+  assert.equal(runtime.stages.filter((stage) => stage === "cleanup_complete").length, 1);
+  assert.equal(harness.getResult().channelState, "idle");
+});
+
+test("durable membership cleanup failure is distinct from proved local media shutdown", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  runtime.queueMembershipLeave({ outcome: "reject" });
+  const cleanup = await harness.startOperation(() => (
+    harness.getResult().leaveRoom().then(() => null, (cleanupError) => cleanupError)
+  ));
+  const cleanupError = await settleOperation(cleanup, harness);
+
+  assert.match(cleanupError.message, /Unable to prove/u);
+  assert.equal(runtime.rooms.at(-1).state, "disconnected");
+  assert.equal(runtime.rooms.at(-1).localParticipant.cameraEnabled, false);
+  assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, false);
+  assert.match(harness.getResult().error, /membership/u);
+  assert.equal(runtime.stages.includes("cleanup_complete"), false);
+});
+
+test("a never-settling durable membership leave is bounded after local shutdown", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const stalledMembershipLeave = deferred();
+  runtime.queueMembershipLeave({ gate: stalledMembershipLeave, outcome: "success" });
+  const cleanup = await harness.startOperation(() => (
+    harness.getResult().leaveRoom().then(() => null, (cleanupError) => cleanupError)
+  ));
+  await waitFor(harness, () => runtime.membershipLeaves === 1, "durable leave started");
+
+  await harness.fireLatestTimeout();
+  const cleanupError = await settleOperation(cleanup, harness);
+
+  assert.match(cleanupError.message, /Unable to prove/u);
+  assert.equal(runtime.rooms.at(-1).state, "disconnected");
+  assert.equal(runtime.rooms.at(-1).localParticipant.cameraEnabled, false);
+  assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, false);
+  assert.match(harness.getResult().error, /membership/u);
+  assert.equal(runtime.stages.includes("cleanup_complete"), false);
+
+  stalledMembershipLeave.resolve();
+  await harness.flush();
+});
+
+test("a stalled media-disable promise cannot prevent transport and durable cleanup", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const stalledCameraDisable = runtime.deferCamera();
+
+  assert.equal(await runOperation(harness, () => harness.getResult().leaveRoom()), true);
+  assert.equal(runtime.rooms.at(-1).state, "disconnected");
+  assert.equal(runtime.membershipLeaves, 1);
+  assert.equal(runtime.stages.includes("cleanup_complete"), true);
+
+  stalledCameraDisable.resolve();
+  await harness.flush();
+  assert.equal(harness.getResult().channelState, "idle");
+});
+
+test("cleanup waiting on an old Room disconnect never stops replacement-call audio", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  const oldDisconnect = deferred();
+  runtime.queueDisconnect({ gate: oldDisconnect, outcome: "success" });
+  await harness.fireStopper("manual");
+  const audioStopsBeforeReplacement = runtime.audioStopCalls;
+
+  runtime.roomId = "ROOM-2";
+  await harness.commitRender(replacementOptions());
+  await waitFor(harness, () => runtime.rooms.length === 2, "replacement room initialized");
+  oldDisconnect.resolve();
+  await harness.flush(48);
+
+  assert.equal(runtime.audioStopCalls, audioStopsBeforeReplacement);
+  assert.equal(harness.getResult().channelState, "live");
+  assert.equal(runtime.rooms.at(-1).state, "connected");
+});
+
+test("resolved-but-ineffective disconnect remains a transport cleanup failure", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  runtime.queueCamera({ outcome: "mismatch" });
+  runtime.queueNative({ outcome: "mismatch" });
+  runtime.queueDisconnect({ outcome: "mismatch" });
+  runtime.queueDisconnect({ outcome: "mismatch" });
+  const cleanup = await harness.startOperation(() => (
+    harness.getResult().leaveRoom().then(() => null, (cleanupError) => cleanupError)
+  ));
+  const cleanupError = await settleOperation(cleanup, harness);
+
+  assert.match(cleanupError.message, /Unable to prove/u);
+  assert.equal(runtime.rooms.at(-1).state, "connected");
+  assert.equal(runtime.rooms.at(-1).localParticipant.cameraEnabled, false);
+  assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, false);
+  assert.equal(runtime.stages.includes("cleanup_complete"), false);
+  assert.equal(runtime.errors.some((entry) => entry.scope === "chat-call-livekit-cleanup-transport-postcondition"), true);
+});
+
+test("never-settling disconnect is bounded and repeated End does not start duplicate cleanup", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  const stalledDisconnect = deferred();
+  runtime.queueDisconnect({ gate: stalledDisconnect, outcome: "success" });
+  const firstCleanup = await harness.startOperation(() => (
+    harness.getResult().leaveRoom().then(() => null, (cleanupError) => cleanupError)
+  ));
+  await waitFor(harness, () => runtime.roomDisconnects === 1, "transport shutdown started");
+  const repeatedCleanup = await harness.startOperation(() => (
+    harness.getResult().leaveRoom().then(() => null, (cleanupError) => cleanupError)
+  ));
+  const repeatedError = await settleOperation(repeatedCleanup, harness);
+  assert.match(repeatedError.message, /Unable to prove/u);
+  assert.equal(runtime.roomDisconnects, 1);
+
+  await harness.fireLatestTimeout();
+  const firstError = await settleOperation(firstCleanup, harness);
+  assert.match(firstError.message, /Unable to prove/u);
+  assert.equal(runtime.stages.includes("cleanup_complete"), false);
+  assert.equal(runtime.membershipLeaves, 1);
+
+  stalledDisconnect.resolve();
+  await harness.flush();
 });
 
 test("membership subscription refuses a session token owned by another account", async (t) => {
