@@ -4,9 +4,9 @@
   "targetId": "livekit-mic-post-merge-correction",
   "classification": "D2A_LIVEKIT_MIC_POST_MERGE_CORRECTION",
   "sourceBindings": {
-    "hooks/use-livekit-chat-call-session.ts": "5ba0869d01b4bb3e8aea0c14bee17e164c1ca8fc321230bc8588c795d1d0e7ba",
-    "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs": "23de5dd5f0539e3157c5f62a35ceaa7c1d2b0875079210fd1d7f43359727fcc9",
-    "tests/assurance/helpers/livekit-mounted-hook-harness.mjs": "4e16c8ee7d010d864b28a1a44920b2859666ea8c344e2a3ada6248ad63505c7b",
+    "hooks/use-livekit-chat-call-session.ts": "1e3231b6944c81df6237b07a4258b4e048d133a705fef38c9ee702ce910e075f",
+    "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs": "b4a0d8dffcdda3b2f641116eec4230830b1c692459d5ce3d578a20ef2ecbf678",
+    "tests/assurance/helpers/livekit-mounted-hook-harness.mjs": "412c3d980bf3cb2f829822965835346e5f221b46f58911586c67330cf3812e85",
     "tests/assurance/android-chat-call-mic-exact-hook.test.mjs": "b8f7f4ef97d428c31b3ab493a61114b35f942c1cec579de9f9e11d3e765f9d47"
   },
   "sourceSlices": {
@@ -121,6 +121,7 @@
     "mockedBoundaries": [
       "LIVEKIT_ROOM_PARTICIPANT",
       "MEMBERSHIP_API",
+      "MEMBERSHIP_REALTIME",
       "AUDIO_SESSION",
       "APPSTATE",
       "TIMERS",
