@@ -1750,6 +1750,35 @@ assert.match(
   "the LiveKit heartbeat preserves reconnecting-on-miss behavior through the shared ordered snapshot reader",
 );
 assert.match(
+  liveKitChatCallSessionSource,
+  /publishData\([\s\S]{0,180}reliable: true, topic: LIVEKIT_MEDIA_INVALIDATION_TOPIC/u,
+  "a committed local media change uses the reliable LiveKit data plane for prompt peer invalidation",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /RoomEvent\.DataReceived[\s\S]{0,620}topic !== LIVEKIT_MEDIA_INVALIDATION_TOPIC[\s\S]{0,620}queueLiveKitMediaSnapshotRefresh/u,
+  "LiveKit media invalidations are topic-bound and trigger only an authoritative membership refresh",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /const LIVEKIT_MEDIA_INVALIDATION_REFRESH_INTERVAL_MS = 1_000;/u,
+  "LiveKit media invalidations use the reviewed one-second peer-read budget",
+);
+const liveKitMediaRateLimitBlock = liveKitChatCallSessionSource.slice(
+  liveKitChatCallSessionSource.indexOf("const queueLiveKitMediaSnapshotRefresh"),
+  liveKitChatCallSessionSource.indexOf("const subscribeToMembershipState"),
+);
+assert.match(
+  liveKitMediaRateLimitBlock,
+  /queueMediaSnapshotRefresh\(scope\)[\s\S]{0,1000}liveKitMediaRefreshTimer = setTimeout[\s\S]{0,700}queueMediaSnapshotRefresh\(queuedScope\)/u,
+  "LiveKit media invalidations retain an immediate refresh while coalescing paced peer reads",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /RoomEvent\.ParticipantConnected[\s\S]{0,360}queueMediaSnapshotRefresh\("chat-call-livekit-participant-connected-snapshot"\)/u,
+  "a newly connected peer closes a missed initial-media invalidation without waiting for heartbeat",
+);
+assert.match(
   chatThreadSource,
   /invite\.status === "accepted"[\s\S]{0,120}await resumeAcceptedIncomingInvite\(invite\)[\s\S]{0,120}await acceptIncomingInvite\(invite\)/u,
   "native Answer resumes a server-accepted invite instead of attempting a second acceptance",

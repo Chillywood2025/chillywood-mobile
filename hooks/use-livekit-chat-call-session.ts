@@ -117,6 +117,9 @@ const MEDIA_WRITE_OPERATION_TIMEOUT_MS = 4_000;
 const INITIAL_CAMERA_TRANSIENT_RETRY_DELAYS_MS = [350, 900, 1_500] as const;
 const POST_COMMIT_CAMERA_TRANSIENT_RETRY_DELAYS_MS = [250, 750, 1_500, 3_000, 5_000] as const;
 const NATIVE_MEDIA_ACTIVATION_RETRY_DELAYS_MS = [0, 250, 750, 1_500, 3_000] as const;
+const LIVEKIT_MEDIA_INVALIDATION_TOPIC = "chillywood.media-state.v1";
+const LIVEKIT_MEDIA_INVALIDATION_PAYLOAD = new Uint8Array([1]);
+const LIVEKIT_MEDIA_INVALIDATION_REFRESH_INTERVAL_MS = 1_000;
 
 type UseLiveKitChatCallSessionOptions = {
   authenticatedUserId: string;
@@ -779,6 +782,17 @@ export function useLiveKitChatCallSession({
     membership: CommunicationRoomMembership,
   ) => {
     if (!isCommittedSessionCurrent(binding)) return;
+    const liveKitRoom = binding.liveKitRoom;
+    if (liveKitRoom?.state === ConnectionState.Connected) {
+      void liveKitRoom.localParticipant.publishData(
+        new Uint8Array(LIVEKIT_MEDIA_INVALIDATION_PAYLOAD),
+        { reliable: true, topic: LIVEKIT_MEDIA_INVALIDATION_TOPIC },
+      ).catch((broadcastError) => {
+        reportRuntimeError("chat-call-livekit-media-data-broadcast", broadcastError, {
+          roomId: binding.normalizedRoomId,
+        });
+      });
+    }
     void broadcastCommunicationRoomSignal({
       roomId: binding.normalizedRoomId,
       event: "media:update",
@@ -1873,6 +1887,9 @@ export function useLiveKitChatCallSession({
     let mediaSnapshotRefreshPhase: "idle" | "leading" | "trailing" = "idle";
     let mediaSnapshotRefreshQueued = false;
     let mediaSnapshotRefreshQueuedScope = "";
+    let liveKitMediaRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let liveKitMediaRefreshQueuedScope = "";
+    let lastLiveKitMediaRefreshAt = 0;
     let effectBinding = committedSessionRef.current;
     const cleanupToken = Symbol("livekit-session-effect");
     telemetryStartedAtRef.current = Date.now();
@@ -1973,6 +1990,32 @@ export function useLiveKitChatCallSession({
           mediaSnapshotRefreshQueuedScope = "";
         }
       })();
+    };
+
+    const queueLiveKitMediaSnapshotRefresh = (scope: string) => {
+      const binding = effectBinding;
+      if (!active || !binding || !isCommittedSessionCurrent(binding)) return;
+      const now = Date.now();
+      const elapsed = Math.max(0, now - lastLiveKitMediaRefreshAt);
+      if (
+        lastLiveKitMediaRefreshAt === 0
+        || elapsed >= LIVEKIT_MEDIA_INVALIDATION_REFRESH_INTERVAL_MS
+      ) {
+        lastLiveKitMediaRefreshAt = now;
+        queueMediaSnapshotRefresh(scope);
+        return;
+      }
+
+      liveKitMediaRefreshQueuedScope = scope;
+      if (liveKitMediaRefreshTimer) return;
+      liveKitMediaRefreshTimer = setTimeout(() => {
+        liveKitMediaRefreshTimer = null;
+        const queuedScope = liveKitMediaRefreshQueuedScope || scope;
+        liveKitMediaRefreshQueuedScope = "";
+        if (!active || !isCommittedSessionCurrent(binding)) return;
+        lastLiveKitMediaRefreshAt = Date.now();
+        queueMediaSnapshotRefresh(queuedScope);
+      }, Math.max(1, LIVEKIT_MEDIA_INVALIDATION_REFRESH_INTERVAL_MS - elapsed));
     };
 
     const subscribeToMembershipState = async (binding: CommittedSession) => {
@@ -2183,6 +2226,7 @@ export function useLiveKitChatCallSession({
           remoteParticipantSeenRef.current = true;
           emitStage("remote_participant_joined", { connectionState: String(liveKitRoom.state) });
           refresh();
+          queueMediaSnapshotRefresh("chat-call-livekit-participant-connected-snapshot");
           if (
             reconnectAwaitingRemoteRef.current
             && liveKitRoom.state === ConnectionState.Connected
@@ -2240,6 +2284,20 @@ export function useLiveKitChatCallSession({
             emitStage("first_audio", { connectionState: String(liveKitRoom.state) });
           }
         })
+        .on(RoomEvent.DataReceived, (...args) => {
+          const [payload, participant, , topic] = args;
+          const senderUserId = String(participant?.identity ?? "").trim();
+          if (
+            !active
+            || !senderUserId
+            || topic !== LIVEKIT_MEDIA_INVALIDATION_TOPIC
+            || payload.byteLength !== LIVEKIT_MEDIA_INVALIDATION_PAYLOAD.byteLength
+            || payload[0] !== LIVEKIT_MEDIA_INVALIDATION_PAYLOAD[0]
+            || senderUserId === effectBinding?.userId
+            || (senderUserId !== inviteCallerUserId && senderUserId !== inviteCalleeUserId)
+          ) return;
+          queueLiveKitMediaSnapshotRefresh("chat-call-livekit-media-data-snapshot-refresh");
+        })
         .on(RoomEvent.Reconnecting, () => {
           if (!active) return;
           reconnectAwaitingRemoteRef.current = remoteParticipantSeenRef.current
@@ -2284,6 +2342,7 @@ export function useLiveKitChatCallSession({
       });
       if (liveKitRoom.remoteParticipants.size > 0) {
         remoteParticipantSeenRef.current = true;
+        queueMediaSnapshotRefresh("chat-call-livekit-connected-peer-snapshot");
       }
       if (!active) return;
       emitStage("websocket_connected", { connectionState: String(liveKitRoom.state) });
@@ -2538,6 +2597,9 @@ export function useLiveKitChatCallSession({
       active = false;
       membershipSnapshotRequestSerial += 1;
       if (heartbeat) clearInterval(heartbeat);
+      if (liveKitMediaRefreshTimer) clearTimeout(liveKitMediaRefreshTimer);
+      liveKitMediaRefreshTimer = null;
+      liveKitMediaRefreshQueuedScope = "";
       if (mediaStateChannel) {
         supabase.removeChannel(mediaStateChannel);
         mediaStateChannel = null;

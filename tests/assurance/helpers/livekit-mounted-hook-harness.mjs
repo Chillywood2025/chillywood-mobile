@@ -135,6 +135,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     heartbeatCallbacks: [],
     identityReads: 0,
     intervalsCleared: 0,
+    liveKitDataPublishes: [],
     membershipLeaves: 0,
     membershipTouches: [],
     mediaBroadcasts: [],
@@ -164,6 +165,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     stages: [],
     settingsCalls: 0,
     timeoutCallbacks: [],
+    timeoutDelays: [],
     userId: "local-user",
   };
 
@@ -378,6 +380,16 @@ export function createLiveKitMountedRuntime(options = {}) {
       return makePublication(enabled, "audio", this.micTrack);
     }
 
+    async publishData(data, publishOptions) {
+      runtime.liveKitDataPublishes.push({
+        data: Array.from(data),
+        options: { ...publishOptions },
+      });
+      if (options.rejectLiveKitDataBroadcast) {
+        throw new Error("fixture LiveKit data broadcast rejected");
+      }
+    }
+
     getTrackPublications() {
       return [];
     }
@@ -459,6 +471,22 @@ export function createLiveKitMountedRuntime(options = {}) {
     const channel = runtime.realtimeChannels.findLast((candidate) => !candidate.removed);
     if (!channel) throw new Error("MOUNTED_MEMBERSHIP_CHANNEL_NOT_READY");
     channel.subscriptionCallback?.(status, error);
+  };
+
+  runtime.emitLiveKitMediaInvalidation = (overrides = {}) => {
+    const room = runtime.rooms.at(-1);
+    if (!room) throw new Error("MOUNTED_LIVEKIT_ROOM_NOT_READY");
+    const handler = room.handlers.get("DataReceived");
+    if (!handler) throw new Error("MOUNTED_LIVEKIT_DATA_HANDLER_NOT_READY");
+    const participant = overrides.missingParticipant
+      ? undefined
+      : { identity: overrides.fromUserId ?? runtime.remoteUserId };
+    handler(
+      new Uint8Array(overrides.payload ?? [1]),
+      participant,
+      undefined,
+      overrides.topic ?? "chillywood.media-state.v1",
+    );
   };
 
   const getSnapshot = async (requestedRoomId = runtime.roomId) => {
@@ -728,8 +756,9 @@ export function createLiveKitMountedRuntime(options = {}) {
       runtime.heartbeatCallbacks.push(callback);
       return runtime.heartbeatCallbacks.length;
     },
-    setTimeout: (callback) => {
+    setTimeout: (callback, delay) => {
       runtime.timeoutCallbacks.push(callback);
+      runtime.timeoutDelays.push(delay);
       return runtime.timeoutCallbacks.length;
     },
   };
@@ -849,6 +878,20 @@ export async function mountLiveKitHook(runtime, initialOptions = defaultHookOpti
         await settle(24);
       });
     },
+    fireLiveKitMediaInvalidation: async (overrides) => {
+      await act(async () => {
+        runtime.emitLiveKitMediaInvalidation(overrides);
+        await settle(24);
+      });
+    },
+    fireLiveKitMediaInvalidationBurst: async (count, overrides) => {
+      await act(async () => {
+        for (let index = 0; index < count; index += 1) {
+          runtime.emitLiveKitMediaInvalidation(overrides);
+        }
+        await settle(24);
+      });
+    },
     fireMediaWriteTimeout: async () => {
       const callback = runtime.timeoutCallbacks.find((candidate) => typeof candidate === "function");
       if (!callback) throw new Error("MOUNTED_MEDIA_WRITE_TIMEOUT_NOT_REGISTERED");
@@ -867,6 +910,18 @@ export async function mountLiveKitHook(runtime, initialOptions = defaultHookOpti
       runtime.timeoutCallbacks[selected.index] = null;
       await act(async () => {
         selected.callback();
+        await settle(24);
+      });
+    },
+    fireLatestTimeout: async () => {
+      const selectedIndex = runtime.timeoutCallbacks.findLastIndex(
+        (callback) => typeof callback === "function",
+      );
+      if (selectedIndex < 0) throw new Error("MOUNTED_TIMEOUT_NOT_REGISTERED");
+      const callback = runtime.timeoutCallbacks[selectedIndex];
+      runtime.timeoutCallbacks[selectedIndex] = null;
+      await act(async () => {
+        callback();
         await settle(24);
       });
     },
