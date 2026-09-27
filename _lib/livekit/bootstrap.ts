@@ -6,6 +6,8 @@ import { reportRuntimeError } from "../logger";
 import {
   ensureReactNativeNavigatorUserAgent,
   installLegacyWebRtcAudioLifecycleShims,
+  notifyWebRtcAudioSessionLifecycle,
+  type WebRtcAudioSessionLifecycle,
 } from "./react-native-bootstrap-compat";
 
 type LiveKitReactNativeModule = {
@@ -13,6 +15,21 @@ type LiveKitReactNativeModule = {
 };
 
 let didRegisterLiveKitGlobals = false;
+
+export function synchronizeLiveKitCallKitAudioSession(
+  lifecycle: WebRtcAudioSessionLifecycle,
+) {
+  if (Platform.OS !== "ios") return false;
+  try {
+    return notifyWebRtcAudioSessionLifecycle(
+      NativeModules.WebRTCModule as Record<string, unknown> | undefined,
+      lifecycle,
+    );
+  } catch (error) {
+    reportRuntimeError("livekit-callkit-audio-session", error, { lifecycle });
+    return false;
+  }
+}
 
 export function bootstrapLiveKitFoundation() {
   if (didRegisterLiveKitGlobals || Platform.OS === "web") return;

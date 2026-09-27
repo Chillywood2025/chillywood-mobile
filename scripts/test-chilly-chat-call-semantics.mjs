@@ -467,6 +467,31 @@ assert.equal(
 for (const method of liveKitBootstrapCompat.WEBRTC_AUDIO_LIFECYCLE_ACTIVE_METHODS) {
   assert.equal(typeof legacyWebRtcModule[method], "function", `${method} is callable after compatibility setup`);
 }
+const callKitAudioLifecycleCalls = [];
+const callKitWebRtcModule = {
+  audioSessionDidActivate() {
+    callKitAudioLifecycleCalls.push("activated");
+  },
+  audioSessionDidDeactivate() {
+    callKitAudioLifecycleCalls.push("deactivated");
+  },
+};
+assert.equal(
+  liveKitBootstrapCompat.notifyWebRtcAudioSessionLifecycle(callKitWebRtcModule, "activated"),
+  true,
+  "CallKit activation reaches the installed WebRTC audio session",
+);
+assert.equal(
+  liveKitBootstrapCompat.notifyWebRtcAudioSessionLifecycle(callKitWebRtcModule, "deactivated"),
+  true,
+  "CallKit deactivation reaches the installed WebRTC audio session",
+);
+assert.deepEqual(callKitAudioLifecycleCalls, ["activated", "deactivated"]);
+assert.equal(
+  liveKitBootstrapCompat.notifyWebRtcAudioSessionLifecycle({}, "activated"),
+  false,
+  "an older binary without the WebRTC lifecycle method fails closed",
+);
 const navigatorIdentity = { product: "ReactNative" };
 assert.equal(liveKitBootstrapCompat.ensureReactNativeNavigatorUserAgent(navigatorIdentity), true);
 assert.equal(
@@ -1464,6 +1489,11 @@ assert.match(rootLayoutSource, /waitForIosNativeCallPresentation\(invite\.id\)[\
 assert.match(chatThreadSource, /waitForIosNativeCallPresentation\(invite\.id\)[\s\S]{0,240}resolveIosForegroundIncomingAnswerAuthority[\s\S]{0,680}answerAuthority === "blocked"/u, "same-thread Answer uses the same late CallKit ownership arbitration");
 assert.match(iosNativeCallsSource, /typeof NativeCallsModule\.requestAnswerAsync !== "function"/u, "older same-runtime native binaries fail closed instead of invoking an unavailable Answer API");
 assert.match(iosNativeCallsSource, /"reportFailed"/u, "failed CallKit reporting releases fallback presentation ownership");
+assert.match(
+  iosNativeCallsSource,
+  /event\.type === "audioSessionActivated"[\s\S]{0,180}synchronizeLiveKitCallKitAudioSession\("activated"\)[\s\S]{0,180}event\.type === "audioSessionDeactivated"[\s\S]{0,180}synchronizeLiveKitCallKitAudioSession\("deactivated"\)/u,
+  "trusted CallKit activation and deactivation events close the installed WebRTC audio-session lifecycle",
+);
 assert.doesNotMatch(rootLayoutSource, /<Modal/u, "background/full-screen presentation remains native rather than a React modal");
 assert.match(rootLayoutSource, /presentation === "native_background"/u, "background state defers to native CallStyle or CallKit");
 assert.match(rootLayoutSource, /presentation === "native_ios"/u, "an exact CallKit record continues to own background and terminated presentation");

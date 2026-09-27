@@ -9,11 +9,12 @@ import {
   isCurrentAccountSessionAuthority,
   type AccountSessionAuthorityBinding,
 } from "./accountSessionAuthority";
+import { shouldReuseIosNativeCallReadiness } from "./iosNativeCallBridgeLifecycle.mjs";
+import { synchronizeLiveKitCallKitAudioSession } from "./livekit/bootstrap";
 import {
   clearNativeCallTransitionClaims,
   waitForIosCallKitAnswerRouteReadiness,
 } from "./nativeCallTransitionProvenance.mjs";
-import { shouldReuseIosNativeCallReadiness } from "./iosNativeCallBridgeLifecycle.mjs";
 import {
   createPushOwnershipOperationKey,
   getNotificationInstallId,
@@ -347,6 +348,11 @@ const handleNativeEvent = (
     iosNativeApplicationActiveSerial = iosNativeApplicationActiveSerial >= Number.MAX_SAFE_INTEGER
       ? 1
       : iosNativeApplicationActiveSerial + 1;
+  }
+  if (event.type === "audioSessionActivated") {
+    synchronizeLiveKitCallKitAudioSession("activated");
+  } else if (event.type === "audioSessionDeactivated") {
+    synchronizeLiveKitCallKitAudioSession("deactivated");
   }
   const eventInviteId = toText(event.callInviteId);
   if (event.type === "answerRequested" && eventInviteId) {

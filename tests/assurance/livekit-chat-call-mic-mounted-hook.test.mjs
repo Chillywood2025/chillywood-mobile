@@ -334,12 +334,118 @@ test("AppState support: native reconciliation escalation is not lost inside a ru
   await harness.fireHeartbeat();
   const nativeCallCount = runtime.micCalls.length;
   await harness.fireAppState("background");
-  assert.equal(runtime.micCalls.length, nativeCallCount);
+  assert.ok(runtime.micCalls.length > nativeCallCount);
+  assert.equal(runtime.micCalls.at(-1), false, "background native privacy is not blocked by the durable heartbeat");
+  assert.equal(runtime.durableMic, true, "durable state remains serialized behind the earlier writer");
   heartbeatGate.resolve();
-  await waitFor(harness, () => runtime.micCalls.at(-1) === false, "background native reconciliation ran");
   await waitFor(harness, () => runtime.durableMic === false, "background durable reconciliation ran");
   assert.equal(harness.getResult().micEnabled, false);
   assert.equal(harness.getResult().channelState, "reconnecting");
+});
+
+test("established iOS video restores native foreground media before a suspended background membership write drains", async (t) => {
+  const hookOptions = defaultHookOptions({
+    allowBackgroundAudio: true,
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: {
+      ...defaultHookOptions().invite,
+      callType: "video",
+    },
+  });
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+    platformOS: "ios",
+  }, hookOptions);
+  const backgroundMembershipWrite = runtime.deferTouch();
+
+  await harness.fireAppState("background");
+  await waitFor(
+    harness,
+    () => runtime.membershipTouches.at(-1)?.cameraEnabled === false,
+    "background membership write started",
+  );
+  assert.equal(runtime.cameraCalls.at(-1), false, "background privacy stops native camera first");
+  const cameraCallsBeforeForeground = runtime.cameraCalls.length;
+
+  await harness.fireAppState("active");
+  await waitFor(
+    harness,
+    () => runtime.cameraCalls.length > cameraCallsBeforeForeground,
+    "foreground native camera recovery started without waiting for the network writer",
+  );
+  assert.equal(runtime.cameraCalls.at(-1), true);
+  assert.equal(
+    runtime.durableCamera,
+    true,
+    "the unresolved background write has not been allowed to publish stale durable state",
+  );
+
+  await harness.resolveDeferred(backgroundMembershipWrite);
+  await waitFor(harness, () => runtime.durableCamera === true, "latest foreground membership converged");
+  assert.equal(harness.getResult().cameraEnabled, true);
+});
+
+test("an established two-participant call stays reconnecting until the known remote participant returns", async (t) => {
+  const hookOptions = defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: {
+      ...defaultHookOptions().invite,
+      callType: "video",
+    },
+  });
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+    initialRemoteParticipant: true,
+  }, hookOptions);
+  assert.equal(harness.getResult().participantCount, 2);
+
+  runtime.setRoomState("reconnecting");
+  await harness.emitRoom("Reconnecting");
+  const removedRemote = runtime.removeRemoteParticipant();
+  await harness.emitRoom("ParticipantDisconnected", removedRemote);
+  runtime.setRoomState("connected");
+  await harness.emitRoom("Reconnected");
+  await harness.flush(48);
+
+  assert.equal(harness.getResult().participantCount, 1);
+  assert.equal(
+    harness.getResult().channelState,
+    "reconnecting",
+    "a transport reconnect is not presented as recovered while its established peer is absent",
+  );
+
+  const restoredRemote = runtime.restoreRemoteParticipant();
+  await harness.emitRoom("ParticipantConnected", restoredRemote);
+  await waitFor(harness, () => harness.getResult().channelState === "live", "remote participant recovery completed");
+  assert.equal(harness.getResult().participantCount, 2);
+});
+
+test("a reconnect before any peer has joined does not invent a missing-participant blocker", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  assert.equal(harness.getResult().participantCount, 1);
+
+  runtime.setRoomState("reconnecting");
+  await harness.emitRoom("Reconnecting");
+  runtime.setRoomState("connected");
+  await harness.emitRoom("Reconnected");
+  await waitFor(harness, () => harness.getResult().channelState === "live", "empty-room transport recovered");
+  assert.equal(harness.getResult().participantCount, 1);
+});
+
+test("a signal reconnect with its established peer retained returns to live", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialRemoteParticipant: true,
+  });
+  assert.equal(harness.getResult().participantCount, 2);
+
+  runtime.setRoomState("reconnecting");
+  await harness.emitRoom("SignalReconnecting");
+  runtime.setRoomState("connected");
+  await harness.emitRoom("Reconnected");
+  await waitFor(harness, () => harness.getResult().channelState === "live", "signal transport recovered");
+  assert.equal(harness.getResult().participantCount, 2);
 });
 
 test("matrix 8: native-audio activation reconciliation cannot race a strict toggle", async (t) => {

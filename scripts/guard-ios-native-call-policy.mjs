@@ -153,7 +153,7 @@ for (const mode of ["audio", "remote-notification", "voip"]) {
 for (const framework of ["CallKit", "PushKit", "AVFAudio", "UIKit"]) {
   requireText(coordinator, `import ${framework}`, `The native bridge must use ${framework}.`);
 }
-for (const event of ["answerRequested", "answered", "declined", "timeout", "providerReset", "audioSessionActivated", "audioInterruptionBegan"]) {
+for (const event of ["answerRequested", "answered", "declined", "timeout", "providerReset", "audioSessionActivated", "audioSessionDeactivated", "audioInterruptionBegan"]) {
   requireText(coordinator, `\"${event}\"`, `The native bridge must expose ${event} lifecycle state.`);
 }
 requireText(coordinator, "existing = activeCalls.values.first", "Duplicate incoming invites must reuse the active CallKit call.");
@@ -295,6 +295,8 @@ requireText(rootLayout, "reportIosNativeCallRemoteEnd", "Realtime invite termina
 requireText(rootLayout, 'event.type === "remoteEnded"', "Remote terminal VoIP actions must clear the JavaScript invite subscription.");
 requireText(chatThread, "subscribeToIosNativeCallEvents", "The chat call screen must reconcile media after native audio-session activation.");
 requireText(chatThread, 'event.type === "audioSessionActivated"', "The chat call screen must react to CallKit AVAudioSession activation.");
+requireText(facade, 'synchronizeLiveKitCallKitAudioSession("activated")', "CallKit activation must notify the installed WebRTC audio session.");
+requireText(facade, 'synchronizeLiveKitCallKitAudioSession("deactivated")', "CallKit deactivation must notify the installed WebRTC audio session.");
 requireText(chatThread, 'event.type === "applicationActive"', "The chat call screen must restore foreground video after a native answer.");
 requireText(chatThread, "readIosNativeApplicationActiveSerial(requestedCallInviteId)", "The chat call screen must recover an activation drained before it mounted.");
 requireText(chatThread, 'requestedNativeCallAction === "answer" && requestedNativeCallOwnsTransition', "Only an attested exact native Answer may carry a foreground witness into media.");
