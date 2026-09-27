@@ -78,6 +78,6 @@ assert.equal(chatQaReleaseManifest.deliveryConstraints?.additionalOta, false);
 assert.equal(lockedVersion("@livekit/react-native"), "2.10.0");
 assert.equal(lockedVersion("@livekit/react-native-expo-plugin"), "1.0.2");
 assert.equal(lockedVersion("@livekit/react-native-webrtc"), "144.0.0");
-assert.equal(lockedVersion("livekit-client"), "2.18.3");
+assert.equal(lockedVersion("livekit-client"), "2.18.8");
 
 console.log("Chi'lly Chat LiveKit Android internal build profile guard passed with production-v2 isolation.");
