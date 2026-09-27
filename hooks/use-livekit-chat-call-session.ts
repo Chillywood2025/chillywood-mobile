@@ -20,6 +20,8 @@ import {
   doesIosAcceptedCallKitMediaDescriptorOwnSession,
 } from "../_lib/communicationCallMediaPolicy.mjs";
 import {
+  broadcastCommunicationRoomSignal,
+  buildCommunicationChannelName,
   endCommunicationRoom,
   getActiveCommunicationMemberships,
   getCommunicationRoomSnapshot,
@@ -772,6 +774,25 @@ export function useLiveKitChatCallSession({
     return membership;
   }, [isCommittedSessionCurrent, readCurrentMembershipMediaState]);
 
+  const broadcastCommittedMediaState = useCallback((
+    binding: CommittedSession,
+    membership: CommunicationRoomMembership,
+  ) => {
+    if (!isCommittedSessionCurrent(binding)) return;
+    void broadcastCommunicationRoomSignal({
+      roomId: binding.normalizedRoomId,
+      event: "media:update",
+      payload: {
+        cameraOn: membership.cameraEnabled,
+        micOn: membership.micEnabled,
+      },
+    }).catch((broadcastError) => {
+      reportRuntimeError("chat-call-livekit-media-state-broadcast", broadcastError, {
+        roomId: binding.normalizedRoomId,
+      });
+    });
+  }, [isCommittedSessionCurrent]);
+
   const applySpeakerOutput = useCallback(async (nextSpeakerEnabled: boolean) => {
     for (const output of getAudioOutputCandidates(nextSpeakerEnabled)) {
       const selected = await selectLiveKitAudioOutput(output).catch(() => false);
@@ -1200,11 +1221,13 @@ export function useLiveKitChatCallSession({
       setReconciliationWarning();
       return false;
     }
+    broadcastCommittedMediaState(binding, membership);
     micReconciliationBlockedRef.current = false;
     clearReconciliationWarning();
     return true;
   }, [
     clearReconciliationWarning,
+    broadcastCommittedMediaState,
     isCommittedSessionCurrent,
     performMembershipMediaWrite,
     scheduleLatestNativeMediaReconciliation,
@@ -1469,6 +1492,7 @@ export function useLiveKitChatCallSession({
           await liveKitRoom.localParticipant.setMicrophoneEnabled(priorActual).catch(() => undefined);
           return false;
         }
+        broadcastCommittedMediaState(binding, membership);
         return true;
       } finally {
         if (
@@ -1485,6 +1509,7 @@ export function useLiveKitChatCallSession({
     return result === true;
   }, [
     cameraEnabled,
+    broadcastCommittedMediaState,
     channelState,
     clearReconciliationWarning,
     emitStage,
@@ -1629,6 +1654,7 @@ export function useLiveKitChatCallSession({
       }
       clearReconciliationWarning();
       refreshParticipantViews();
+      broadcastCommittedMediaState(binding, membership);
       if (nextEnabled) {
         await finalizeCameraEnable(liveKitRoom);
       }
@@ -1637,6 +1663,7 @@ export function useLiveKitChatCallSession({
     return result === true;
   }, [
     cameraEnabled,
+    broadcastCommittedMediaState,
     clearReconciliationWarning,
     disableCameraOrTerminate,
     emitStage,
@@ -1841,8 +1868,11 @@ export function useLiveKitChatCallSession({
 
     let active = true;
     let heartbeat: ReturnType<typeof setInterval> | null = null;
-    let membershipStateChannel: RealtimeChannel | null = null;
+    let mediaStateChannel: RealtimeChannel | null = null;
     let membershipSnapshotRequestSerial = 0;
+    let mediaSnapshotRefreshPhase: "idle" | "leading" | "trailing" = "idle";
+    let mediaSnapshotRefreshQueued = false;
+    let mediaSnapshotRefreshQueuedScope = "";
     let effectBinding = committedSessionRef.current;
     const cleanupToken = Symbol("livekit-session-effect");
     telemetryStartedAtRef.current = Date.now();
@@ -1869,7 +1899,10 @@ export function useLiveKitChatCallSession({
     setLoading(true);
     setChannelState("connecting");
 
-    const refreshMembershipSnapshot = async (scope: string) => {
+    const refreshMembershipSnapshot = async (
+      scope: string,
+      options: { reconnectingOnMissing?: boolean } = {},
+    ) => {
       const binding = effectBinding;
       const requestSerial = membershipSnapshotRequestSerial + 1;
       membershipSnapshotRequestSerial = requestSerial;
@@ -1884,7 +1917,13 @@ export function useLiveKitChatCallSession({
         || requestSerial !== membershipSnapshotRequestSerial
         || !isCommittedSessionCurrent(binding)
       ) return;
-      if (!latestSnapshot) return;
+      if (!latestSnapshot) {
+        if (options.reconnectingOnMissing) {
+          setCommittedRoomState(binding, "reconnecting");
+          setChannelState("reconnecting");
+        }
+        return;
+      }
       if (
         normalizeRoomId(latestSnapshot.room.roomId) !== binding.normalizedRoomId
         || latestSnapshot.room.status !== "active"
@@ -1898,6 +1937,42 @@ export function useLiveKitChatCallSession({
       productRoomRef.current = latestSnapshot.room;
       setRoom(latestSnapshot.room);
       refreshParticipantViews();
+    };
+
+    const queueMediaSnapshotRefresh = (scope: string) => {
+      const binding = effectBinding;
+      if (!active || !binding || !isCommittedSessionCurrent(binding)) return;
+      // Bound an accepted peer's invalidation burst to one active read plus
+      // one trailing durable read. Events received during the trailing read
+      // are represented by that authoritative snapshot; the heartbeat stays
+      // available if a provider delivers an event after its read boundary.
+      if (mediaSnapshotRefreshPhase === "trailing") return;
+      if (mediaSnapshotRefreshPhase === "leading") {
+        mediaSnapshotRefreshQueued = true;
+        mediaSnapshotRefreshQueuedScope = scope;
+        return;
+      }
+
+      mediaSnapshotRefreshPhase = "leading";
+      void (async () => {
+        try {
+          await refreshMembershipSnapshot(scope);
+          if (
+            !active
+            || !isCommittedSessionCurrent(binding)
+            || !mediaSnapshotRefreshQueued
+          ) return;
+          const trailingScope = mediaSnapshotRefreshQueuedScope || scope;
+          mediaSnapshotRefreshQueued = false;
+          mediaSnapshotRefreshQueuedScope = "";
+          mediaSnapshotRefreshPhase = "trailing";
+          await refreshMembershipSnapshot(trailingScope);
+        } finally {
+          mediaSnapshotRefreshPhase = "idle";
+          mediaSnapshotRefreshQueued = false;
+          mediaSnapshotRefreshQueuedScope = "";
+        }
+      })();
     };
 
     const subscribeToMembershipState = async (binding: CommittedSession) => {
@@ -1929,27 +2004,39 @@ export function useLiveKitChatCallSession({
       );
       if (!realtimeAuthReady || !active || !isCommittedSessionCurrent(binding)) return;
       const channel = supabase
-        .channel(`chat-call-livekit-memberships-${binding.normalizedRoomId}-${binding.generation}`)
+        .channel(buildCommunicationChannelName(binding.normalizedRoomId), {
+          config: { private: true },
+        })
         .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "communication_room_memberships",
-            filter: `room_id=eq.${binding.normalizedRoomId}`,
-          },
-          () => {
+          "broadcast",
+          { event: "media:update" },
+          ({ payload }: { payload: Record<string, unknown> }) => {
             if (!active || !isCommittedSessionCurrent(binding)) return;
-            void refreshMembershipSnapshot("chat-call-livekit-membership-snapshot-refresh");
+            const eventRoomId = normalizeRoomId(String(payload?.roomId ?? ""));
+            const senderUserId = String(payload?.fromUserId ?? "").trim();
+            if (
+              eventRoomId !== binding.normalizedRoomId
+              || !senderUserId
+              || senderUserId === binding.userId
+            ) return;
+            queueMediaSnapshotRefresh("chat-call-livekit-membership-snapshot-refresh");
           },
         );
       if (!active || !isCommittedSessionCurrent(binding)) {
         supabase.removeChannel(channel);
         return;
       }
-      membershipStateChannel = channel;
+      mediaStateChannel = channel;
       channel.subscribe((status, subscriptionError) => {
         if (!active || !isCommittedSessionCurrent(binding)) return;
+        if (status === "SUBSCRIBED") {
+          // The peer may have committed and announced its initial media state
+          // while this private channel was still joining. Re-read the durable
+          // snapshot at subscription readiness so that a missed early
+          // invalidation cannot strand the remote feed until the heartbeat.
+          queueMediaSnapshotRefresh("chat-call-livekit-media-subscription-refresh");
+          return;
+        }
         if (status !== "CHANNEL_ERROR" && status !== "TIMED_OUT" && status !== "CLOSED") return;
         reportRuntimeError(
           "chat-call-livekit-membership-subscription",
@@ -2346,6 +2433,7 @@ export function useLiveKitChatCallSession({
         micReconciliationBlockedRef.current = false;
         setCameraEnabledState(effectiveCameraEnabled);
         setMicEnabledState(effectiveMicEnabled);
+        broadcastCommittedMediaState(effectBinding, initialMembership);
         setLoading(false);
         setChannelState("live");
         setError(null);
@@ -2429,35 +2517,10 @@ export function useLiveKitChatCallSession({
           ) return;
           setChannelState("live");
         });
-        void getCommunicationRoomSnapshot(heartbeatBinding.normalizedRoomId)
-          .then((latestSnapshot) => {
-            if (
-              !active
-              || !sameCommittedAuthority(committedSessionRef.current, heartbeatBinding)
-            ) return;
-            if (!latestSnapshot) {
-              setCommittedRoomState(heartbeatBinding, "reconnecting");
-              setChannelState("reconnecting");
-              return;
-            }
-            if (
-              normalizeRoomId(latestSnapshot.room.roomId) !== heartbeatBinding.normalizedRoomId
-              || latestSnapshot.room.status !== "active"
-            ) {
-              setCommittedRoomState(heartbeatBinding, "terminal");
-              void onRoomEndedRef.current?.("ended");
-              return;
-            }
-            membershipsRef.current = latestSnapshot.memberships;
-            setRoom(latestSnapshot.room);
-            productRoomRef.current = latestSnapshot.room;
-            refreshParticipantViews();
-          })
-          .catch((snapshotError) => {
-            reportRuntimeError("chat-call-livekit-heartbeat-snapshot", snapshotError, {
-              roomId: heartbeatBinding.normalizedRoomId,
-            });
-          });
+        void refreshMembershipSnapshot(
+          "chat-call-livekit-heartbeat-snapshot",
+          { reconnectingOnMissing: true },
+        );
       }, ROOM_HEARTBEAT_MS);
     };
 
@@ -2475,15 +2538,16 @@ export function useLiveKitChatCallSession({
       active = false;
       membershipSnapshotRequestSerial += 1;
       if (heartbeat) clearInterval(heartbeat);
-      if (membershipStateChannel) {
-        supabase.removeChannel(membershipStateChannel);
-        membershipStateChannel = null;
+      if (mediaStateChannel) {
+        supabase.removeChannel(mediaStateChannel);
+        mediaStateChannel = null;
       }
       void cleanupSession({ leaveMembership: true }, effectBinding, cleanupToken);
     };
   }, [
     activateCommittedSession,
     authenticatedUserId,
+    broadcastCommittedMediaState,
     clearReconciliationWarning,
     cleanupSession,
     emitStage,

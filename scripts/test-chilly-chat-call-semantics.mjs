@@ -1730,15 +1730,24 @@ const liveKitHeartbeatBlock = liveKitChatCallSessionSource.slice(
   liveKitChatCallSessionSource.indexOf("heartbeat = setInterval"),
   liveKitChatCallSessionSource.indexOf("}, ROOM_HEARTBEAT_MS)", liveKitChatCallSessionSource.indexOf("heartbeat = setInterval")),
 );
+const liveKitSnapshotRefreshBlock = liveKitChatCallSessionSource.slice(
+  liveKitChatCallSessionSource.indexOf("const refreshMembershipSnapshot = async"),
+  liveKitChatCallSessionSource.indexOf("const queueMediaSnapshotRefresh"),
+);
 assert.match(
-  liveKitHeartbeatBlock,
-  /if \(!latestSnapshot\) \{[\s\S]{0,220}setCommittedRoomState\(heartbeatBinding, "reconnecting"\)[\s\S]{0,160}return;/u,
+  liveKitSnapshotRefreshBlock,
+  /if \(!latestSnapshot\) \{[\s\S]{0,160}options\.reconnectingOnMissing[\s\S]{0,160}setCommittedRoomState\(binding, "reconnecting"\)[\s\S]{0,160}return;/u,
   "a transient LiveKit snapshot miss is reconnecting rather than terminal",
 );
 assert.doesNotMatch(
-  liveKitHeartbeatBlock,
+  liveKitSnapshotRefreshBlock,
   /if \(!latestSnapshot\)[\s\S]{0,240}onRoomEndedRef/u,
   "a transient LiveKit snapshot miss cannot end an accepted invite",
+);
+assert.match(
+  liveKitHeartbeatBlock,
+  /refreshMembershipSnapshot\([\s\S]{0,120}reconnectingOnMissing: true/u,
+  "the LiveKit heartbeat preserves reconnecting-on-miss behavior through the shared ordered snapshot reader",
 );
 assert.match(
   chatThreadSource,

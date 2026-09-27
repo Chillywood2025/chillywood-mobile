@@ -137,6 +137,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     intervalsCleared: 0,
     membershipLeaves: 0,
     membershipTouches: [],
+    mediaBroadcasts: [],
     micCalls: [],
     microphonePermissionReads: 0,
     microphonePermissionState: options.microphonePermissionState ?? "denied",
@@ -148,6 +149,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     realtimeAuthTokens: [],
     realtimeChannels: [],
     realtimeRemovedChannels: [],
+    remoteIncludedInSnapshot: options.snapshotRemoteParticipant ?? options.initialRemoteParticipant ?? false,
     remoteUserId: "remote-user",
     remoteDurableCamera: options.remoteCamera ?? true,
     remoteDurableMic: options.remoteMic ?? true,
@@ -436,13 +438,21 @@ export function createLiveKitMountedRuntime(options = {}) {
     room.state = state;
   };
 
-  runtime.emitMembershipChange = () => {
+  runtime.emitMembershipChange = (payloadOverrides = {}) => {
     const channel = runtime.realtimeChannels.findLast((candidate) => !candidate.removed);
     if (!channel) throw new Error("MOUNTED_MEMBERSHIP_CHANNEL_NOT_READY");
     channel.handlers
-      .filter((entry) => entry.event === "postgres_changes")
-      .filter((entry) => entry.filter?.table === "communication_room_memberships")
-      .forEach((entry) => entry.callback({}));
+      .filter((entry) => entry.event === "broadcast")
+      .filter((entry) => entry.filter?.event === "media:update")
+      .forEach((entry) => entry.callback({
+        payload: {
+          cameraOn: runtime.remoteDurableCamera,
+          fromUserId: runtime.remoteUserId,
+          micOn: runtime.remoteDurableMic,
+          roomId: runtime.roomId,
+          ...payloadOverrides,
+        },
+      }));
   };
 
   runtime.emitMembershipSubscriptionStatus = (status, error) => {
@@ -463,7 +473,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     const resolvedStatus = action.outcome === "terminal" ? "ended" : "active";
     const resolvedUserId = action.outcome === "changed-user" ? "replacement-user" : runtime.userId;
     const memberships = [membership(runtime, { roomId: resolvedRoomId, userId: resolvedUserId })];
-    if (options.initialRemoteParticipant) {
+    if (runtime.remoteIncludedInSnapshot) {
       memberships.push(membership(runtime, {
         cameraEnabled: action.remoteCamera ?? runtime.remoteDurableCamera,
         displayName: "Remote",
@@ -529,7 +539,8 @@ export function createLiveKitMountedRuntime(options = {}) {
   };
 
   class FakeRealtimeChannel {
-    constructor(topic) {
+    constructor(topic, config) {
+      this.config = config;
       this.handlers = [];
       this.removed = false;
       this.subscriptionCallback = null;
@@ -543,7 +554,7 @@ export function createLiveKitMountedRuntime(options = {}) {
 
     subscribe(callback) {
       this.subscriptionCallback = callback;
-      callback?.("SUBSCRIBED");
+      if (!options.deferRealtimeSubscribe) callback?.("SUBSCRIBED");
       return this;
     }
   }
@@ -592,6 +603,12 @@ export function createLiveKitMountedRuntime(options = {}) {
       ),
     },
     "../_lib/communication": {
+      broadcastCommunicationRoomSignal: async (request) => {
+        runtime.mediaBroadcasts.push(request);
+        if (options.rejectMediaBroadcast) throw new Error("fixture media broadcast rejected");
+        return true;
+      },
+      buildCommunicationChannelName: (roomId) => `comm-room-${roomId}`,
       endCommunicationRoom: async () => null,
       getActiveCommunicationMemberships: (memberships) => memberships.filter((entry) => !entry.leftAt),
       getCommunicationRoomSnapshot: getSnapshot,
@@ -667,8 +684,8 @@ export function createLiveKitMountedRuntime(options = {}) {
             },
           }),
         },
-        channel: (topic) => {
-          const channel = new FakeRealtimeChannel(topic);
+        channel: (topic, config) => {
+          const channel = new FakeRealtimeChannel(topic, config);
           runtime.realtimeChannels.push(channel);
           return channel;
         },
@@ -812,9 +829,17 @@ export async function mountLiveKitHook(runtime, initialOptions = defaultHookOpti
         await settle(24);
       });
     },
-    fireMembershipChange: async () => {
+    fireMembershipChange: async (payloadOverrides) => {
       await act(async () => {
-        runtime.emitMembershipChange();
+        runtime.emitMembershipChange(payloadOverrides);
+        await settle(24);
+      });
+    },
+    fireMembershipChangeBurst: async (count, payloadOverrides) => {
+      await act(async () => {
+        for (let index = 0; index < count; index += 1) {
+          runtime.emitMembershipChange(payloadOverrides);
+        }
         await settle(24);
       });
     },
