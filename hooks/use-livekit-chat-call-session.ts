@@ -1,5 +1,6 @@
 import "../_lib/livekit/dom-exception-polyfill";
 
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   ConnectionState,
   Room,
@@ -53,6 +54,7 @@ import {
   type MediaPermissionState,
 } from "../_lib/mediaPermissions";
 import { registerActiveMediaSessionStopper } from "../_lib/mediaSessionLifecycle";
+import { supabase } from "../_lib/supabase";
 import { readIosNativeApplicationActive } from "../_lib/iosNativeCalls";
 import {
   createLiveKitV1RoomOptions,
@@ -620,7 +622,9 @@ export function useLiveKitChatCallSession({
         const membership = membershipByUserId.get(resolvedIdentity);
         const cameraPublication = participant.getTrackPublication(Track.Source.Camera);
         const microphonePublication = participant.getTrackPublication(Track.Source.Microphone);
-        const liveKitVideoTrackReference = publicationIsUsable(cameraPublication)
+        const cameraOn = publicationIsUsable(cameraPublication)
+          && (isSelf || membership?.cameraEnabled === true);
+        const liveKitVideoTrackReference = cameraOn
           ? {
             participant,
             publication: cameraPublication as TrackPublication,
@@ -634,7 +638,7 @@ export function useLiveKitChatCallSession({
             ? currentIdentity.displayName
             : membership?.displayName || String(participant.name ?? "").trim() || "Call participant",
           avatarUrl: isSelf ? currentIdentity.avatarUrl : membership?.avatarUrl,
-          cameraOn: publicationIsUsable(cameraPublication),
+          cameraOn,
           micOn: publicationIsUsable(microphonePublication),
           joinedAt: membership?.joinedAt ?? new Date().toISOString(),
           isHost: resolvedIdentity === productRoom.hostUserId,
@@ -1837,6 +1841,8 @@ export function useLiveKitChatCallSession({
 
     let active = true;
     let heartbeat: ReturnType<typeof setInterval> | null = null;
+    let membershipStateChannel: RealtimeChannel | null = null;
+    let membershipSnapshotRequestSerial = 0;
     let effectBinding = committedSessionRef.current;
     const cleanupToken = Symbol("livekit-session-effect");
     telemetryStartedAtRef.current = Date.now();
@@ -1862,6 +1868,96 @@ export function useLiveKitChatCallSession({
     setError(null);
     setLoading(true);
     setChannelState("connecting");
+
+    const refreshMembershipSnapshot = async (scope: string) => {
+      const binding = effectBinding;
+      const requestSerial = membershipSnapshotRequestSerial + 1;
+      membershipSnapshotRequestSerial = requestSerial;
+      if (!active || !binding || !isCommittedSessionCurrent(binding)) return;
+      const latestSnapshot = await getCommunicationRoomSnapshot(binding.normalizedRoomId)
+        .catch((snapshotError) => {
+          reportRuntimeError(scope, snapshotError, { roomId: binding.normalizedRoomId });
+          return null;
+        });
+      if (
+        !active
+        || requestSerial !== membershipSnapshotRequestSerial
+        || !isCommittedSessionCurrent(binding)
+      ) return;
+      if (!latestSnapshot) return;
+      if (
+        normalizeRoomId(latestSnapshot.room.roomId) !== binding.normalizedRoomId
+        || latestSnapshot.room.status !== "active"
+      ) {
+        if (setCommittedRoomState(binding, "terminal")) {
+          void onRoomEndedRef.current?.("ended");
+        }
+        return;
+      }
+      membershipsRef.current = latestSnapshot.memberships;
+      productRoomRef.current = latestSnapshot.room;
+      setRoom(latestSnapshot.room);
+      refreshParticipantViews();
+    };
+
+    const subscribeToMembershipState = async (binding: CommittedSession) => {
+      const { data } = await supabase.auth.getSession().catch((sessionError) => {
+        reportRuntimeError("chat-call-livekit-membership-subscription-auth", sessionError, {
+          roomId: binding.normalizedRoomId,
+        });
+        return { data: { session: null } };
+      });
+      if (!active || !isCommittedSessionCurrent(binding)) return;
+      const realtimeAccessToken = String(data.session?.access_token ?? "").trim();
+      const realtimeUserId = String(data.session?.user?.id ?? "").trim();
+      if (!realtimeAccessToken || realtimeUserId !== binding.userId) {
+        reportRuntimeError(
+          "chat-call-livekit-membership-subscription-auth",
+          new Error("chat_call_livekit_realtime_auth_required"),
+          { roomId: binding.normalizedRoomId },
+        );
+        return;
+      }
+      const realtimeAuthReady = await supabase.realtime.setAuth(realtimeAccessToken).then(
+        () => true,
+        (authError) => {
+          reportRuntimeError("chat-call-livekit-membership-subscription-auth", authError, {
+            roomId: binding.normalizedRoomId,
+          });
+          return false;
+        },
+      );
+      if (!realtimeAuthReady || !active || !isCommittedSessionCurrent(binding)) return;
+      const channel = supabase
+        .channel(`chat-call-livekit-memberships-${binding.normalizedRoomId}-${binding.generation}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "communication_room_memberships",
+            filter: `room_id=eq.${binding.normalizedRoomId}`,
+          },
+          () => {
+            if (!active || !isCommittedSessionCurrent(binding)) return;
+            void refreshMembershipSnapshot("chat-call-livekit-membership-snapshot-refresh");
+          },
+        );
+      if (!active || !isCommittedSessionCurrent(binding)) {
+        supabase.removeChannel(channel);
+        return;
+      }
+      membershipStateChannel = channel;
+      channel.subscribe((status, subscriptionError) => {
+        if (!active || !isCommittedSessionCurrent(binding)) return;
+        if (status !== "CHANNEL_ERROR" && status !== "TIMED_OUT" && status !== "CLOSED") return;
+        reportRuntimeError(
+          "chat-call-livekit-membership-subscription",
+          subscriptionError ?? new Error(`chat_call_livekit_membership_subscription_${status.toLowerCase()}`),
+          { roomId: binding.normalizedRoomId, status },
+        );
+      });
+    };
 
     const initialize = async () => {
       let currentIdentity = await readCommunicationIdentity(authenticatedUserId);
@@ -2105,6 +2201,13 @@ export function useLiveKitChatCallSession({
       if (!active) return;
       emitStage("websocket_connected", { connectionState: String(liveKitRoom.state) });
       emitStage("ice_state", { connectionState: String(liveKitRoom.state) });
+      if (effectBinding) {
+        void subscribeToMembershipState(effectBinding).catch((subscriptionError) => {
+          reportRuntimeError("chat-call-livekit-membership-subscription", subscriptionError, {
+            roomId: effectBinding?.normalizedRoomId ?? normalizedRoomId,
+          });
+        });
+      }
 
       let effectiveMicEnabled = initialMicEnabled;
       let initialMicrophonePermissionDenied = false;
@@ -2370,7 +2473,12 @@ export function useLiveKitChatCallSession({
 
     return () => {
       active = false;
+      membershipSnapshotRequestSerial += 1;
       if (heartbeat) clearInterval(heartbeat);
+      if (membershipStateChannel) {
+        supabase.removeChannel(membershipStateChannel);
+        membershipStateChannel = null;
+      }
       void cleanupSession({ leaveMembership: true }, effectBinding, cleanupToken);
     };
   }, [

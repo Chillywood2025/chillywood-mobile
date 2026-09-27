@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   createLiveKitMountedRuntime,
   defaultHookOptions,
+  deferred,
   mountLiveKitHook,
   settleOperation,
 } from "./helpers/livekit-mounted-hook-harness.mjs";
@@ -1184,6 +1185,152 @@ test("camera off and on replaces the stopped publication instead of trusting a s
   assert.equal(runtime.micCalls.length, initialMicCalls);
   assert.equal(runtime.providerTokenCalls, initialProviderTokenCalls);
   assert.equal(runtime.roomDisconnects ?? 0, 0);
+});
+
+test("remote camera projection closes promptly from durable membership even when LiveKit keeps a stale publication", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialRemoteParticipant: true,
+    remoteCamera: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const readRemote = () => harness.getResult().participants.find((entry) => !entry.isSelf);
+
+  assert.equal(readRemote()?.cameraOn, true);
+  assert.ok(readRemote()?.liveKitVideoTrackReference);
+
+  runtime.remoteDurableCamera = false;
+  await harness.fireMembershipChange();
+
+  assert.equal(readRemote()?.cameraOn, false);
+  assert.equal(readRemote()?.liveKitVideoTrackReference, undefined);
+  assert.equal(
+    runtime.rooms.at(-1).remoteParticipants.get(runtime.remoteUserId).cameraEnabled,
+    true,
+    "the regression must retain a stale provider publication while membership closes rendering",
+  );
+});
+
+test("remote camera projection never opens from membership without a usable LiveKit publication", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialRemoteParticipant: true,
+    remoteCamera: false,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const readRemote = () => harness.getResult().participants.find((entry) => !entry.isSelf);
+
+  runtime.remoteDurableCamera = true;
+  await harness.fireMembershipChange();
+
+  assert.equal(readRemote()?.cameraOn, false);
+  assert.equal(readRemote()?.liveKitVideoTrackReference, undefined);
+});
+
+test("older membership snapshot cannot overwrite a newer remote camera projection", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialRemoteParticipant: true,
+    remoteCamera: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const readRemote = () => harness.getResult().participants.find((entry) => !entry.isSelf);
+  const oldSnapshot = deferred();
+  runtime.queueSnapshot({ gate: oldSnapshot, outcome: "active", remoteCamera: false });
+
+  await harness.fireMembershipChange();
+  runtime.queueSnapshot({ outcome: "active", remoteCamera: true });
+  await harness.fireMembershipChange();
+  assert.equal(readRemote()?.cameraOn, true);
+
+  await harness.resolveDeferred(oldSnapshot);
+  assert.equal(readRemote()?.cameraOn, true);
+  assert.ok(readRemote()?.liveKitVideoTrackReference);
+});
+
+test("membership subscription failure keeps the call live with heartbeat fallback", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialRemoteParticipant: true,
+    remoteCamera: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+
+  await harness.fireMembershipSubscriptionStatus("CHANNEL_ERROR", new Error("fixture realtime error"));
+  assert.equal(harness.getResult().channelState, "live");
+  assert.equal(
+    runtime.errors.some((entry) => entry.scope === "chat-call-livekit-membership-subscription"),
+    true,
+  );
+
+  runtime.remoteDurableCamera = false;
+  await harness.fireHeartbeat();
+  const remote = harness.getResult().participants.find((entry) => !entry.isSelf);
+  assert.equal(remote?.cameraOn, false);
+  assert.equal(remote?.liveKitVideoTrackReference, undefined);
+});
+
+test("unmount removes only the exact LiveKit membership channel", async () => {
+  const runtime = createLiveKitMountedRuntime({ initialRemoteParticipant: true });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const channel = runtime.realtimeChannels.at(-1);
+
+  assert.ok(channel);
+  await harness.unmount();
+
+  assert.deepEqual(runtime.realtimeRemovedChannels, [channel]);
+  assert.equal(channel.removed, true);
+});
+
+test("replacement removes the old membership channel and its callback cannot read for the new room", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ initialRemoteParticipant: true });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  t.after(() => harness.unmount());
+  const oldChannel = runtime.realtimeChannels.at(-1);
+  const oldCallback = oldChannel.handlers.find((entry) => (
+    entry.filter?.table === "communication_room_memberships"
+  )).callback;
+
+  await harness.commitRender(replacementOptions());
+  await waitFor(
+    harness,
+    () => runtime.realtimeChannels.some((entry) => entry !== oldChannel && !entry.removed),
+    "replacement membership channel subscribed",
+  );
+  assert.equal(oldChannel.removed, true);
+  const readsBeforeStaleCallback = runtime.snapshotReads;
+
+  oldCallback({});
+  await harness.flush();
+
+  assert.equal(runtime.snapshotReads, readsBeforeStaleCallback);
+  assert.equal(harness.getResult().room?.roomId, "ROOM-2");
+});
+
+test("membership subscription refuses a session token owned by another account", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialRemoteParticipant: true,
+    realtimeSessionUserId: "different-user",
+  }, defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+
+  assert.equal(runtime.realtimeChannels.length, 0);
+  assert.equal(runtime.realtimeAuthTokens.length, 0);
+  assert.equal(
+    runtime.errors.some((entry) => entry.scope === "chat-call-livekit-membership-subscription-auth"),
+    true,
+  );
+  await harness.fireHeartbeat();
+  assert.equal(harness.getResult().channelState, "live");
 });
 
 test("camera disable disconnects when the stopped publication cannot be retired", async (t) => {
