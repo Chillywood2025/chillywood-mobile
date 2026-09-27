@@ -2237,6 +2237,13 @@ export function useLiveKitChatCallSession({
       };
       liveKitRoom
         .on(RoomEvent.ParticipantConnected, () => {
+          const participantBinding = effectBinding;
+          if (
+            !active
+            || !participantBinding
+            || participantBinding.liveKitRoom !== liveKitRoom
+            || !isCommittedSessionCurrent(participantBinding)
+          ) return;
           remoteParticipantSeenRef.current = true;
           emitStage("remote_participant_joined", { connectionState: String(liveKitRoom.state) });
           refresh();
@@ -2354,11 +2361,11 @@ export function useLiveKitChatCallSession({
       await liveKitRoom.connect(tokenResult.serverUrl, tokenResult.participantToken, {
         autoSubscribe: true,
       });
+      if (!active || !effectBinding || !isCommittedSessionCurrent(effectBinding)) return;
       if (liveKitRoom.remoteParticipants.size > 0) {
         remoteParticipantSeenRef.current = true;
         queueMediaSnapshotRefresh("chat-call-livekit-connected-peer-snapshot");
       }
-      if (!active) return;
       emitStage("websocket_connected", { connectionState: String(liveKitRoom.state) });
       emitStage("ice_state", { connectionState: String(liveKitRoom.state) });
       if (effectBinding) {

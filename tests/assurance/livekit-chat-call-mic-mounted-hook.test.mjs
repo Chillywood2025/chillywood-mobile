@@ -1640,6 +1640,35 @@ test("replacement removes the old membership channel and its callback cannot rea
   assert.equal(harness.getResult().room?.roomId, "ROOM-2");
 });
 
+test("a replaced room's participant callback cannot make an empty replacement reconnect wait for a ghost peer", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ initialRemoteParticipant: false });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  t.after(() => harness.unmount());
+  const oldRoom = runtime.rooms.at(-1);
+  const staleParticipantConnected = oldRoom.handlers.get("ParticipantConnected");
+
+  await harness.commitRender(replacementOptions());
+  await waitFor(harness, () => runtime.rooms.length === 2, "replacement LiveKit room connected");
+  assert.equal(harness.getResult().channelState, "live");
+
+  staleParticipantConnected({ identity: runtime.remoteUserId });
+  await harness.flush();
+  const replacementRoom = runtime.rooms.at(-1);
+  replacementRoom.state = "reconnecting";
+  await harness.emitRoom("Reconnecting");
+  replacementRoom.state = "connected";
+  await harness.emitRoom("Reconnected");
+
+  await waitFor(
+    harness,
+    () => harness.getResult().channelState === "live",
+    "empty replacement recovered without a stale-peer blocker",
+  );
+  assert.equal(harness.getResult().participantCount, 1);
+});
+
 test("membership subscription refuses a session token owned by another account", async (t) => {
   const { harness, runtime } = await mountCase(t, {
     initialRemoteParticipant: true,

@@ -1799,8 +1799,13 @@ assert.match(
 );
 assert.match(
   liveKitChatCallSessionSource,
-  /RoomEvent\.ParticipantConnected[\s\S]{0,360}queueMediaSnapshotRefresh\("chat-call-livekit-participant-connected-snapshot"\)/u,
-  "a newly connected peer closes a missed initial-media invalidation without waiting for heartbeat",
+  /RoomEvent\.ParticipantConnected[\s\S]{0,360}participantBinding\.liveKitRoom !== liveKitRoom[\s\S]{0,360}queueMediaSnapshotRefresh\("chat-call-livekit-participant-connected-snapshot"\)/u,
+  "only the exact current peer callback closes a missed initial-media invalidation",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /await liveKitRoom\.connect[\s\S]{0,220}!active[\s\S]{0,120}!effectBinding[\s\S]{0,160}!isCommittedSessionCurrent\(effectBinding\)[\s\S]{0,220}remoteParticipantSeenRef\.current = true/u,
+  "an obsolete connection completion cannot mark a peer seen for a replacement session",
 );
 assert.match(
   chatThreadSource,
