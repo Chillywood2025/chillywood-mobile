@@ -530,10 +530,12 @@ export function useLiveKitChatCallSession({
       || !isCommittedSessionCurrent(binding)
       || liveKitRoom.state !== ConnectionState.Connected
     ) return false;
-    const waitingForKnownRemote = reconnectAwaitingRemoteRef.current
-      && remoteParticipantSeenRef.current
+    // Local transport connectivity does not establish that the other endpoint
+    // is still present. Peer departure need not emit a local reconnect event.
+    const waitingForKnownRemote = remoteParticipantSeenRef.current
       && liveKitRoom.remoteParticipants.size === 0;
     if (waitingForKnownRemote) {
+      reconnectAwaitingRemoteRef.current = true;
       setCommittedRoomState(binding, "reconnecting");
       setChannelState("reconnecting");
       return false;
@@ -2795,7 +2797,16 @@ export function useLiveKitChatCallSession({
             && liveKitRoom.state === ConnectionState.Connected
           ) completeTransportRecovery();
         })
-        .on(RoomEvent.ParticipantDisconnected, refresh)
+        .on(RoomEvent.ParticipantDisconnected, () => {
+          if (!roomCallbackIsCurrent()) return;
+          if (remoteParticipantSeenRef.current && liveKitRoom.remoteParticipants.size === 0) {
+            reconnectAwaitingRemoteRef.current = true;
+            if (!setCommittedRoomState(effectBinding, "reconnecting")) return;
+            setChannelState("reconnecting");
+            emitStage("reconnecting", { connectionState: "peer_absent" });
+          }
+          refresh();
+        })
         .on(RoomEvent.TrackPublished, refresh)
         .on(RoomEvent.TrackUnpublished, refresh)
         .on(RoomEvent.TrackMuted, refresh)

@@ -209,6 +209,11 @@ const parseInvite = (row: CallInviteRow | null): ChillyChatCallInvite | null => 
   const callerUserId = toText(row.caller_user_id);
   const calleeUserId = toText(row.callee_user_id);
   if (!id || !threadId || !callerUserId || !calleeUserId) return null;
+  const createdAt = toText(row.created_at);
+  const expiresAt = toText(row.expires_at);
+  // Missing or malformed server timestamps do not grant another ringing
+  // interval. Preserve valid expired dates for terminal/accepted-call reads.
+  if (!Number.isFinite(Date.parse(createdAt)) || !Number.isFinite(Date.parse(expiresAt))) return null;
   return {
     id,
     threadId,
@@ -218,8 +223,8 @@ const parseInvite = (row: CallInviteRow | null): ChillyChatCallInvite | null => 
     callType: normalizeCallType(row.call_type),
     mediaProvider: normalizeChillyChatCallMediaProvider(row.chat_call_media_provider),
     status: normalizeStatus(row.status),
-    createdAt: toText(row.created_at) || new Date().toISOString(),
-    expiresAt: toText(row.expires_at) || new Date(Date.now() + 45_000).toISOString(),
+    createdAt,
+    expiresAt,
     acceptedAt: toText(row.accepted_at) || null,
     endedAt: toText(row.ended_at) || null,
   };

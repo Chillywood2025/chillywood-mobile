@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "description": "Read-only aggregate diagnostic context; not a release or physical qualification receipt.",
+  "observedAt": "2026-09-27T21:47:57.891Z",
+  "testedSource": "2d96b5396391b0822cb4e10d6b3509639be117f3",
+  "window": {
+    "from": "2026-09-27T17:11:00Z",
+    "until": "2026-09-27T21:31:00Z"
+  },
+  "totalInvites": 33,
+  "groups": [
+    {
+      "provider": "legacy_webrtc",
+      "call_type": "video",
+      "status": "canceled",
+      "invite_count": 7,
+      "min_window_seconds": "90.000000",
+      "max_window_seconds": "90.000000"
+    },
+    {
+      "provider": "legacy_webrtc",
+      "call_type": "video",
+      "status": "declined",
+      "invite_count": 4,
+      "min_window_seconds": "90.000000",
+      "max_window_seconds": "90.000000"
+    },
+    {
+      "provider": "legacy_webrtc",
+      "call_type": "video",
+      "status": "ended",
+      "invite_count": 3,
+      "min_window_seconds": "90.000000",
+      "max_window_seconds": "90.000000"
+    },
+    {
+      "provider": "legacy_webrtc",
+      "call_type": "video",
+      "status": "missed",
+      "invite_count": 2,
+      "min_window_seconds": "90.000000",
+      "max_window_seconds": "90.000000"
+    },
+    {
+      "provider": "legacy_webrtc",
+      "call_type": "voice",
+      "status": "canceled",
+      "invite_count": 4,
+      "min_window_seconds": "90.000000",
+      "max_window_seconds": "90.000000"
+    },
+    {
+      "provider": "legacy_webrtc",
+      "call_type": "voice",
+      "status": "declined",
+      "invite_count": 5,
+      "min_window_seconds": "90.000000",
+      "max_window_seconds": "90.000000"
+    },
+    {
+      "provider": "legacy_webrtc",
+      "call_type": "voice",
+      "status": "ended",
+      "invite_count": 3,
+      "min_window_seconds": "90.000000",
+      "max_window_seconds": "90.000000"
+    },
+    {
+      "provider": "legacy_webrtc",
+      "call_type": "voice",
+      "status": "missed",
+      "invite_count": 5,
+      "min_window_seconds": "90.000000",
+      "max_window_seconds": "90.000000"
+    }
+  ],
+  "rolloutAtReadback": {
+    "publicDefaultProvider": "legacy_webrtc",
+    "canaryProvider": "livekit",
+    "canaryEnabled": true,
+    "livekitEmergencyStop": false
+  },
+  "deployedMigrationVersions": [
+    "20260918040126",
+    "20260919223835"
+  ],
+  "deployedFunctionObservations": {
+    "beginChillyChatCallContains90SecondWindow": true,
+    "transitionRejectsEarlyMissedStatus": true
+  },
+  "limits": [
+    "Aggregate rows do not include user, room or invite identifiers.",
+    "This readback proves persisted provider stamps, not every client transport startup.",
+    "No rollout settings, invitations, permissions or database state were modified."
+  ]
+}

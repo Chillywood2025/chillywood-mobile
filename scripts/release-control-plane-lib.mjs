@@ -66,6 +66,15 @@ export function validateOtaPublicationPlan(plan) {
   if (!SHA256.test(binary?.artifactSha256 ?? "")) findings.push("OTA_BINARY_DIGEST_INVALID");
   if (!SHA40.test(binary?.sourceSha ?? "") || !SHA40.test(binary?.sourceTree ?? "")) findings.push("OTA_BINARY_SOURCE_INVALID");
   if (binary?.revoked === true || binary?.valid !== true) findings.push("OTA_BINARY_INVALID");
+  const native = plan?.nativeCompatibility;
+  if (native?.schemaVersion !== 1 || native?.algorithm !== "git-native-inputs/v1" || native?.platform !== platform
+    || !SHA256.test(native?.sourceDigest ?? "") || !SHA256.test(native?.binaryDigest ?? "")) findings.push("OTA_NATIVE_SOURCE_PROOF_INVALID");
+  else if (native.sourceDigest !== native.binaryDigest) findings.push("OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE");
+  const cohortAlgorithm = platform === "android" ? "android-native-compatibility/v1" : "git-native-inputs/v1";
+  if (native?.cohortAlgorithm !== cohortAlgorithm || !SHA256.test(native?.cohortDigest ?? "")
+    || !SHA256.test(native?.cohortSourceDigest ?? "") || (platform === "ios" && (!SHA40.test(native?.cohortSourceSha ?? "")
+      || native?.cohortSourceDigest !== native?.sourceDigest))) findings.push("OTA_NATIVE_COHORT_PROOF_INVALID");
+  else if (native.cohortSourceDigest !== native.cohortDigest) findings.push("OTA_RUNTIME_NATIVE_COHORT_INCOMPATIBLE");
   const required = [...new Set(plan?.requiredNativeCapabilities ?? [])].sort();
   const provided = new Set(binary?.nativeCapabilities ?? []);
   if (required.some((capability) => !provided.has(capability))) findings.push("OTA_NATIVE_CAPABILITY_MISMATCH");
@@ -79,13 +88,14 @@ export function validateOtaPublicationPlan(plan) {
     activation: plan?.activation,
     source: plan?.source,
     signedBinary: binary,
+    nativeCompatibility: native,
     requiredNativeCapabilities: required,
   });
   if (plan?.planHash !== expectedPlanHash) findings.push("OTA_PLAN_HASH_INVALID");
   return { ok: findings.length === 0, findings: [...new Set(findings)].sort(), planHash: expectedPlanHash };
 }
 
-export function createOtaPublicationPlan({ platform, sourceSha, sourceTree, runtimeVersion, signedBinary, clean = true, protectedMain = true }) {
+export function createOtaPublicationPlan({ platform, sourceSha, sourceTree, runtimeVersion, signedBinary, nativeCompatibility, clean = true, protectedMain = true }) {
   const plan = {
     schemaVersion: 1,
     platform,
@@ -95,6 +105,7 @@ export function createOtaPublicationPlan({ platform, sourceSha, sourceTree, runt
     activation: "APP_OWNED",
     source: { sha: sourceSha, tree: sourceTree, clean, protectedMain },
     signedBinary,
+    nativeCompatibility,
     requiredNativeCapabilities: platform === "ios" ? ["ios-native-calls"] : [],
   };
   plan.planHash = releaseHash(plan);

@@ -468,6 +468,16 @@ export function hasIosNativeCallPresentation(inviteId: string | null | undefined
   return !!normalizedInviteId && nativePresentedCallUuidsByInviteId.has(normalizedInviteId);
 }
 
+// Already-observed presentations can outlive a React bridge effect. Reattach
+// terminal watchers without fabricating or replaying an Answer event.
+export function readIosNativeCallPresentations() {
+  if (!voipRegistrationActive || !voipAuthorityContext) return [];
+  return Array.from(nativePresentedCallUuidsByInviteId, ([callInviteId, callUuid]) => ({
+    callInviteId,
+    callUuid,
+  }));
+}
+
 export function subscribeToIosNativeCallPresentation(listener: () => void) {
   nativePresentationSubscribers.add(listener);
   return () => {

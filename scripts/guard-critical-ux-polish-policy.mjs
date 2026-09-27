@@ -207,7 +207,29 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
     if (expressionPath.isIdentifier()) return rawResultBindings.has(getBinding(expressionPath));
     return false;
   };
-  const resolveContainerMember = (containerPath, propertyName, seen = new Set()) => {
+  // Bindings alone do not bound mutually recursive producers/ref members: a
+  // member lookup can re-enter a producer before reaching another identifier.
+  // Track only the active resolution path, not a global visited set, so another
+  // branch (or another property on the same object) can still expose a callback.
+  const cycleAwareResolver = (resolve, empty, resolutionKey = () => null) => {
+    const active = new Map();
+    return (candidatePath, ...args) => {
+      candidatePath = unwrapExpression(candidatePath);
+      if (!candidatePath?.node) return empty();
+      const key = resolutionKey(...args);
+      const keys = active.get(candidatePath.node) ?? new Set();
+      if (keys.has(key)) return empty();
+      keys.add(key);
+      active.set(candidatePath.node, keys);
+      try {
+        return resolve(candidatePath, ...args);
+      } finally {
+        keys.delete(key);
+        if (keys.size === 0) active.delete(candidatePath.node);
+      }
+    };
+  };
+  const resolveContainerMember = cycleAwareResolver((containerPath, propertyName, seen = new Set()) => {
     containerPath = unwrapExpression(containerPath);
     if (!containerPath?.node) return null;
     const definitionName = (item) => { const key = item?.get?.("key"); return !item?.node?.computed && key?.isIdentifier?.() ? key.node.name : getStaticString(key); };
@@ -254,7 +276,7 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
       return owner?.get("body.body").find((item) => definitionName(item) === propertyName) ?? null;
     }
     return null;
-  };
+  }, () => null, (propertyName) => propertyName);
   const resolvePatternBindingValue = (patternPath, sourcePath, binding, seen = new Set()) => {
     patternPath = unwrapExpression(patternPath); sourcePath = unwrapExpression(sourcePath);
     if (!patternPath?.node) return null;
@@ -273,7 +295,7 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
     }
     return null;
   };
-  const resolveCallback = (candidatePath, seen = new Set()) => {
+  const resolveCallback = cycleAwareResolver((candidatePath, seen = new Set()) => {
     candidatePath = unwrapExpression(candidatePath);
     if (candidatePath?.isFunction?.()) return candidatePath;
     if (candidatePath?.isSequenceExpression?.()) {
@@ -329,8 +351,8 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
       if (value?.isFunction?.()) return value;
     }
     return null;
-  };
-  const resolveAllContainerCallbacks = (containerPath, seen = new Set()) => {
+  }, () => null);
+  const resolveAllContainerCallbacks = cycleAwareResolver((containerPath, seen = new Set()) => {
     containerPath = unwrapExpression(containerPath); if (!containerPath?.node) return [];
     if (containerPath.isIdentifier?.()) {
       const binding = getBinding(containerPath); if (!binding || seen.has(binding)) return []; seen.add(binding);
@@ -363,8 +385,8 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
     }
     if (containerPath.isNewExpression?.() && unwrapExpression(containerPath.get("callee"))?.isIdentifier?.({ name: "Map" })) { let entries = unwrapExpression(containerPath.get("arguments")[0]); if (entries?.isIdentifier?.()) { const binding = getBinding(entries); const owner = binding?.path?.isVariableDeclarator?.() ? binding.path : binding?.path?.findParent?.((item) => item.isVariableDeclarator?.()); entries = unwrapExpression(owner?.get("init")); } return entries?.isArrayExpression?.() ? entries.get("elements").flatMap((item) => item?.isArrayExpression?.() ? resolveCallbacks(item.get("elements")[1], new Set(seen)) : []) : []; }
     return resolveCallbacks(containerPath, seen);
-  };
-  const resolveCallbacks = (candidatePath, seen = new Set()) => {
+  }, () => []);
+  const resolveCallbacks = cycleAwareResolver((candidatePath, seen = new Set()) => {
     candidatePath = unwrapExpression(candidatePath);
     if (!candidatePath?.node) return [];
     if (candidatePath.isConditionalExpression?.()) return [candidatePath.get("consequent"), candidatePath.get("alternate")].flatMap((item) => resolveCallbacks(item, new Set(seen)));
@@ -405,7 +427,7 @@ const collectCustomerErrorBoundaryViolations = (source, file, sourceFile) => {
       }
     }
     const resolved = resolveCallback(candidatePath, seen); return resolved ? [resolved] : [];
-  };
+  }, () => []);
   const markCallbackParameters = (candidatePath, result, start = 0) => {
     const callbacks = [...new Map(resolveCallbacks(candidatePath).map((item) => [item.node, item])).values()];
     for (const callback of callbacks) for (const parameter of callback.get("params").slice(start)) {
@@ -1601,6 +1623,29 @@ for (const violation of collectCustomerErrorBoundaryViolations(safeSanitizerAlia
 const safeReflectedPresentationSource = `${login}\nfunction __safeReflectedPresentation(textRef) { const args = [{ text: "Unable to continue right now." }]; Reflect.apply(textRef.current.setNativeProps, textRef.current, args); }`;
 for (const violation of collectCustomerErrorBoundaryViolations(safeReflectedPresentationSource, "Safe reflected presentation behavior", "app/(auth)/login.tsx")) {
   fail(`customer error-boundary proof rejected a safe reflected presentation call: ${violation}`);
+}
+// The ref assignment forms a valid static cycle even though each queued promise
+// uses the previous runtime value. Analyze neutral parameter names so the unsafe
+// controls require callback reachability, rather than the error-name heuristic.
+const cyclicQueueFixture = `
+  const queue = useRef(Promise.resolve());
+  const operation = queue.current.catch(() => undefined).then(async () => undefined);
+  queue.current = operation;
+`;
+for (const [label, body] of [
+  ["promise ref queue", `${cyclicQueueFixture} operation.catch(packet => setError(COPY));`],
+  ["cyclic container before callback", `${cyclicQueueFixture} const callbacks = Object.assign({}, { fail: packet => setError(COPY) }, operation); action().catch(callbacks.fail);`],
+  ["callback before cyclic container", `${cyclicQueueFixture} const callbacks = Object.assign({}, operation, { fail: packet => setError(COPY) }); action().catch(callbacks.fail);`],
+  ["recursive producer before callback", `const state = read.current(); const read = { current: () => { if (flag) return { error: packet => setError(COPY) }; return state; } }; stream.subscribe(state);`],
+  ["callback before recursive producer", `const state = read.current(); const read = { current: () => { if (flag) return state; return { error: packet => setError(COPY) }; } }; stream.subscribe(state);`],
+  ["assigned ref callback", `${cyclicQueueFixture} const callback = useRef(null); callback.current = packet => setError(COPY); operation.catch(callback.current);`],
+]) {
+  for (const unsafe of [false, true]) {
+    const source = `function cycleFixture(setError, action, stream, flag) { ${body.replaceAll("COPY", unsafe ? "packet.message" : '"Unable to continue right now."')} }`;
+    const violations = collectCustomerErrorBoundaryViolations(source, label, "app/(auth)/login.tsx");
+    if (unsafe && violations.length === 0) fail(`callback cycle proof lost reachable raw presentation: ${label}`);
+    if (!unsafe && violations.length > 0) fail(`callback cycle proof rejected safe presentation: ${label}: ${violations.join("; ")}`);
+  }
 }
 for (const [label, source, unsafeExpression] of [
   ["Login", login, "Alert.alert(\"Login Error\", error.message)"],

@@ -8,6 +8,7 @@ import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
+const { createClient } = require("@supabase/supabase-js");
 const source = fs.readFileSync("_lib/communication.ts", "utf8");
 const compiled = ts.transpileModule(source, {
   compilerOptions: {
@@ -33,7 +34,7 @@ const roomRow = {
   updated_at: "2026-08-30T00:00:00.000Z",
 };
 
-function loadCommunication() {
+function loadCommunication(clientOverride) {
   const runtime = {
     accountBoundError: null,
     accountBoundRpcCalls: [],
@@ -83,7 +84,7 @@ function loadCommunication() {
       normalizeContentAccessRule: (value) => value ?? "participants_only",
       normalizeRoomMembershipState: (value) => value ?? "active",
     },
-    "./supabase": { supabase },
+    "./supabase": { supabase: clientOverride ?? supabase },
     "./userData": { buildUserChannelProfile: () => ({ displayName: "User" }), readUserProfile: async () => null },
     "./watchParty": {
       createPartyIdentifier: () => "ROOM-ERROR",
@@ -176,4 +177,89 @@ test("communication room end preserves durable update failure evidence", async (
     ),
     /room end unavailable/u,
   );
+});
+
+function createHeartbeatSdkHarness() {
+  let release;
+  const barrier = new Promise((resolve) => { release = resolve; });
+  let requestStarted;
+  const started = new Promise((resolve) => { requestStarted = resolve; });
+  const row = {
+    room_id: "ROOM-ERROR",
+    user_id: "11111111-1111-4111-8111-111111111111",
+    role: "participant",
+    membership_state: "active",
+    camera_enabled: true,
+    mic_enabled: true,
+    joined_at: "2026-09-27T00:00:00.000Z",
+    last_seen_at: "2026-09-27T00:00:00.000Z",
+    left_at: null,
+  };
+  const runtime = { row, requests: [], error: null };
+  const client = createClient("http://localhost:54321", "test-public-key", {
+    auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
+    global: {
+      fetch: async (input, init) => {
+        const request = new Request(input, init);
+        const url = new URL(request.url);
+        if (!url.pathname.endsWith("/communication_room_memberships")) {
+          return new Response("null", { headers: { "Content-Type": "application/json" } });
+        }
+        const patch = JSON.parse(await request.text());
+        runtime.requests.push({ method: request.method, patch, url });
+        requestStarted();
+        await barrier;
+        if (runtime.error) return new Response(JSON.stringify({ message: runtime.error }), {
+          headers: { "Content-Type": "application/json" }, status: 403,
+        });
+        // This boundary checks the installed SDK's real PATCH/filter request;
+        // the in-memory row models concurrent server state, not RLS proof.
+        const matches = url.searchParams.get("room_id") === `eq.${row.room_id}`
+          && url.searchParams.get("user_id") === `eq.${row.user_id}`
+          && url.searchParams.get("membership_state") === "in.(active,reconnecting)"
+          && url.searchParams.get("left_at") === "is.null"
+          && ["active", "reconnecting"].includes(row.membership_state)
+          && row.left_at === null;
+        if (matches) Object.assign(row, patch);
+        return new Response(JSON.stringify(matches ? row : null), { headers: { "Content-Type": "application/json" } });
+      },
+    },
+  });
+  return { ...loadCommunication(client), release, started, heartbeatRuntime: runtime };
+}
+
+test("communication heartbeat uses the installed SDK to update only current membership liveness", async () => {
+  const { api, release, started, heartbeatRuntime: runtime } = createHeartbeatSdkHarness();
+  const pending = api.heartbeatCommunicationRoomSession({ roomId: runtime.row.room_id, userId: runtime.row.user_id });
+  await started;
+  runtime.row.camera_enabled = false;
+  runtime.row.mic_enabled = false;
+  release();
+  const membership = await pending;
+  assert.equal(runtime.requests[0].method, "PATCH");
+  assert.deepEqual(Object.keys(runtime.requests[0].patch).sort(), ["last_seen_at", "updated_at"]);
+  assert.equal(membership.cameraEnabled, false);
+  assert.equal(membership.micEnabled, false);
+  assert.equal(runtime.row.membership_state, "active");
+});
+
+test("communication heartbeat cannot revive a membership that leaves before the delayed request applies", async () => {
+  const { api, release, started, heartbeatRuntime: runtime } = createHeartbeatSdkHarness();
+  const pending = api.heartbeatCommunicationRoomSession({ roomId: runtime.row.room_id, userId: runtime.row.user_id });
+  await started;
+  runtime.row.membership_state = "left";
+  runtime.row.left_at = "2026-09-27T00:01:00.000Z";
+  const snapshot = { ...runtime.row };
+  release();
+  assert.equal(await pending, null);
+  assert.deepEqual(runtime.row, snapshot);
+});
+
+test("communication heartbeat preserves a server rejection without manufacturing membership success", async () => {
+  const { api, release, started, heartbeatRuntime: runtime } = createHeartbeatSdkHarness();
+  runtime.error = "heartbeat authorization rejected";
+  const pending = api.heartbeatCommunicationRoomSession({ roomId: runtime.row.room_id, userId: runtime.row.user_id });
+  await started;
+  release();
+  await assert.rejects(pending, /heartbeat authorization rejected/u);
 });

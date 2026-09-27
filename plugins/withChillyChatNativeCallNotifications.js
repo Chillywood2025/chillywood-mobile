@@ -15,6 +15,55 @@ const TRANSIENT_ACTION_PREFERENCES_FILE = "chilly_chat_native_call_action_v1.xml
 const LEGACY_BACKUP_RESOURCE_NAME = "chillywood_native_call_full_backup_rules";
 const MODERN_BACKUP_RESOURCE_NAME = "chillywood_native_call_data_extraction_rules";
 const NATIVE_FILES = {
+  "ChillyChatIncomingCallDeadline.kt": String.raw`package com.chillywood.mobile
+
+import java.text.ParsePosition
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
+
+/** Presentation deadline only. Invite acceptance still requires current server authority. */
+internal object ChillyChatIncomingCallDeadline {
+  // The server currently issues 90-second invites. Permit bounded device clock skew,
+  // but never turn missing/invalid payloads into a new locally invented lifetime.
+  private const val MAX_SERVER_REMAINDER_MS = 120_000L
+  private val SERVER_DATE = Regex(
+    "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})(?:\\.(\\d{1,9}))?(Z|[+-]\\d{2}:?\\d{2})$",
+  )
+
+  data class Deadline(val expiresAtMs: Long, val elapsedDeadlineMs: Long, val remainingMs: Long)
+
+  fun resolve(
+    expiresAt: String?,
+    nowMs: Long,
+    elapsedNowMs: Long,
+    previousExpiresAtMs: Long? = null,
+    previousElapsedDeadlineMs: Long? = null,
+  ): Deadline? {
+    val match = SERVER_DATE.matchEntire(expiresAt?.trim().orEmpty()) ?: return null
+    val fraction = match.groupValues[2].padEnd(3, '0').take(3)
+    val offset = match.groupValues[3].let { if (it == "Z") "+0000" else it.replace(":", "") }
+    val normalized = match.groupValues[1] + "." + fraction + offset
+    val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US).apply {
+      isLenient = false
+      timeZone = TimeZone.getTimeZone("UTC")
+    }
+    val position = ParsePosition(0)
+    val parsed = format.parse(normalized, position) ?: return null
+    if (position.index != normalized.length || elapsedNowMs < 0L) return null
+    val payloadDeadline = parsed.time
+    if (payloadDeadline <= nowMs || payloadDeadline - nowMs > MAX_SERVER_REMAINDER_MS) return null
+    val expiresAtMs = previousExpiresAtMs?.let { minOf(it, payloadDeadline) } ?: payloadDeadline
+    val remainder = expiresAtMs - nowMs
+    if (remainder !in 1..MAX_SERVER_REMAINDER_MS || elapsedNowMs > Long.MAX_VALUE - remainder) return null
+    val elapsedDeadlineMs = previousElapsedDeadlineMs?.let { minOf(it, elapsedNowMs + remainder) }
+      ?: (elapsedNowMs + remainder)
+    val remainingMs = minOf(remainder, elapsedDeadlineMs - elapsedNowMs)
+    if (remainingMs <= 0L) return null
+    return Deadline(expiresAtMs, elapsedDeadlineMs, remainingMs)
+  }
+}
+`,
   "ChillyChatNativeCallActionStore.kt": String.raw`package com.chillywood.mobile
 
 import android.content.Context
@@ -256,6 +305,7 @@ object ChillyChatNativeCallActionStore {
   "ChillyChatCallNotifications.kt": String.raw`package com.chillywood.mobile
 
 import android.Manifest
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -266,6 +316,8 @@ import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -278,7 +330,11 @@ object ChillyChatCallNotifications {
   const val CALL_CHANNEL_ID = "chilly_chat_calls_fullscreen_v1"
   const val ACTION_ANSWER = "com.chillywood.mobile.action.ANSWER_CHILLY_CHAT_CALL"
   const val ACTION_DECLINE = "com.chillywood.mobile.action.DECLINE_CHILLY_CHAT_CALL"
+  const val ACTION_EXPIRE = "com.chillywood.mobile.action.EXPIRE_CHILLY_CHAT_CALL"
   private const val NOTIFICATION_ID_BASE = 770000
+  private const val EXTRA_INVITE_DEADLINE = "chillywood.invite.expiresAtMs"
+  private const val EXTRA_ELAPSED_DEADLINE = "chillywood.invite.elapsedDeadlineMs"
+  private const val EXTRA_THREAD_SCOPE = "chillywood.invite.threadId"
   private val RING_VIBRATION_PATTERN = longArrayOf(0, 480, 220, 480, 220, 720)
 
   fun shouldHandleNativeIncomingCall(data: Map<String, String>): Boolean {
@@ -339,12 +395,28 @@ object ChillyChatCallNotifications {
     }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
   }
 
+  @Synchronized
   fun showIncomingCallNotification(context: Context, data: Map<String, String>) {
-    ensureCallChannel(context)
-
     val inviteId = data["callInviteId"].orEmpty()
     val threadId = data["threadId"].orEmpty()
     if (inviteId.isBlank() || threadId.isBlank()) return
+    val notificationManager = context.getSystemService(NotificationManager::class.java)
+    val previous = notificationManager.activeNotifications
+      .firstOrNull { it.tag == notificationTagForInvite(inviteId) && it.id == notificationIdForInvite(inviteId) }?.notification?.extras
+    if (previous?.containsKey(EXTRA_THREAD_SCOPE) == true && previous.getString(EXTRA_THREAD_SCOPE) != threadId) return
+    // Keep the first deadline even when the same FCM payload is redelivered or the
+    // process restarts. Elapsed time prevents a wall-clock adjustment extending it.
+    val deadline = ChillyChatIncomingCallDeadline.resolve(
+      data["expiresAt"],
+      System.currentTimeMillis(),
+      SystemClock.elapsedRealtime(),
+      previous?.takeIf { it.containsKey(EXTRA_INVITE_DEADLINE) }?.getLong(EXTRA_INVITE_DEADLINE),
+      previous?.takeIf { it.containsKey(EXTRA_ELAPSED_DEADLINE) }?.getLong(EXTRA_ELAPSED_DEADLINE),
+    ) ?: run {
+      clearIncomingCallNotification(context, inviteId)
+      return
+    }
+    ensureCallChannel(context)
 
     val callType = data["callType"].orEmpty().ifBlank { "voice" }
     val callerName = data["callerName"].orEmpty().ifBlank { "Someone" }
@@ -380,8 +452,13 @@ object ChillyChatCallNotifications {
       .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
       .setOngoing(true)
       .setAutoCancel(false)
-      .setOnlyAlertOnce(false)
-      .setTimeoutAfter(45_000)
+      .setOnlyAlertOnce(true)
+      .setTimeoutAfter(deadline.remainingMs)
+      .addExtras(Bundle().apply {
+        putLong(EXTRA_INVITE_DEADLINE, deadline.expiresAtMs)
+        putLong(EXTRA_ELAPSED_DEADLINE, deadline.elapsedDeadlineMs)
+        putString(EXTRA_THREAD_SCOPE, threadId)
+      })
       .setContentIntent(contentIntent)
       .setDeleteIntent(buildActionPendingIntent(context, data, ACTION_DECLINE, 4))
       .setFullScreenIntent(fullScreenIntent, canUseFullScreenIntent(context))
@@ -395,13 +472,60 @@ object ChillyChatCallNotifications {
       Build.VERSION.SDK_INT < 33
       || ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
     ) {
-      NotificationManagerCompat.from(context).notify(notificationIdForInvite(inviteId), notification)
+      NotificationManagerCompat.from(context).notify(notificationTagForInvite(inviteId), notificationIdForInvite(inviteId), notification)
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+        // Notification timeoutAfter is a no-op before Android 8. These supported
+        // Android 7 versions permit exact idle alarms without the later permission.
+        val expirationIntent = Intent(context, ChillyChatCallNotificationActionReceiver::class.java).apply {
+          action = ACTION_EXPIRE
+          this.data = buildActionIdentity(inviteId, ACTION_EXPIRE)
+          putExtra("callInviteId", inviteId)
+          putExtra(EXTRA_INVITE_DEADLINE, deadline.expiresAtMs)
+        }
+        val expiration = PendingIntent.getBroadcast(
+          context, notificationIdForInvite(inviteId) + 5, expirationIntent,
+          PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        context.getSystemService(AlarmManager::class.java).setExactAndAllowWhileIdle(
+          AlarmManager.ELAPSED_REALTIME_WAKEUP, deadline.elapsedDeadlineMs, expiration,
+        )
+      }
     }
   }
 
+  @Synchronized
   fun clearIncomingCallNotification(context: Context, inviteId: String?) {
     if (inviteId.isNullOrBlank()) return
-    NotificationManagerCompat.from(context).cancel(notificationIdForInvite(inviteId))
+    NotificationManagerCompat.from(context).cancel(notificationTagForInvite(inviteId), notificationIdForInvite(inviteId))
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+      val intent = Intent(context, ChillyChatCallNotificationActionReceiver::class.java).apply {
+        action = ACTION_EXPIRE
+        data = buildActionIdentity(inviteId, ACTION_EXPIRE)
+      }
+      val expiration = PendingIntent.getBroadcast(
+        context, notificationIdForInvite(inviteId) + 5, intent,
+        PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+      )
+      if (expiration != null) {
+        context.getSystemService(AlarmManager::class.java).cancel(expiration)
+        expiration.cancel()
+      }
+    }
+  }
+
+  @Synchronized
+  fun expireIncomingCallNotification(context: Context, intent: Intent) {
+    val inviteId = intent.getStringExtra("callInviteId") ?: return
+    val previous = context.getSystemService(NotificationManager::class.java).activeNotifications
+      .firstOrNull { it.tag == notificationTagForInvite(inviteId) && it.id == notificationIdForInvite(inviteId) }?.notification?.extras ?: return
+    // An old alarm cannot dismiss a different presentation. This only removes
+    // native UI; it does not synthesize Answer/Decline or change server status.
+    val expiresAt = previous.getLong(EXTRA_INVITE_DEADLINE, 0L)
+    val elapsedDeadline = previous.getLong(EXTRA_ELAPSED_DEADLINE, 0L)
+    if (expiresAt > 0L && expiresAt == intent.getLongExtra(EXTRA_INVITE_DEADLINE, -1L)
+      && (expiresAt <= System.currentTimeMillis() || elapsedDeadline in 1..SystemClock.elapsedRealtime())) {
+      clearIncomingCallNotification(context, inviteId)
+    }
   }
 
   private fun buildNavigationPendingIntent(
@@ -439,6 +563,7 @@ object ChillyChatCallNotifications {
   ): PendingIntent {
     val intent = Intent(context, ChillyChatCallNotificationActionReceiver::class.java).apply {
       this.action = action
+      this.data = buildActionIdentity(data["callInviteId"].orEmpty(), action)
       putExtra("callInviteId", data["callInviteId"])
       putExtra("threadId", data["threadId"])
       putExtra("callType", data["callType"])
@@ -463,6 +588,15 @@ object ChillyChatCallNotifications {
 
   private fun notificationIdForInvite(inviteId: String): Int =
     NOTIFICATION_ID_BASE + (inviteId.hashCode() and 0x0FFFFFFF)
+
+  private fun notificationTagForInvite(inviteId: String): String = "chilly_chat_call:" + inviteId
+
+  private fun buildActionIdentity(inviteId: String, action: String): Uri = Uri.Builder()
+    .scheme("chillywoodinternal")
+    .authority("call-action")
+    .appendPath(inviteId)
+    .appendPath(action)
+    .build()
 
   fun launchAfterTrustedAction(context: Context, inviteId: String?, threadId: String?, nativeAction: String) {
     if (!ChillyChatNativeCallActionStore.captureTrustedNotificationAction(
@@ -517,6 +651,10 @@ import android.content.Intent
 
 class ChillyChatCallNotificationActionReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
+    if (intent.action == ChillyChatCallNotifications.ACTION_EXPIRE) {
+      ChillyChatCallNotifications.expireIncomingCallNotification(context, intent)
+      return
+    }
     val inviteId = intent.getStringExtra("callInviteId")
     val threadId = intent.getStringExtra("threadId")
     val nativeAction = when (intent.action) {
@@ -986,4 +1124,5 @@ module.exports = createRunOncePlugin(
 module.exports.__test = {
   composeLegacyBackupRules,
   composeModernBackupRules,
+  nativeFiles: Object.freeze({ ...NATIVE_FILES }),
 };

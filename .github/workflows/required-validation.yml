@@ -81,6 +81,7 @@ jobs:
           node --test tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs
           node --test tests/assurance/communication-operation-error-truth.test.mjs
           node --test tests/assurance/android-chat-call-mic-control.test.mjs
+          node --test tests/assurance/chat-thread-answer-mounted.test.mjs tests/assurance/ios-native-call-bridge-mounted.test.mjs
 
   sensitive:
     name: Validation / Sensitive
@@ -143,7 +144,9 @@ jobs:
     name: Validation / Native and Release
     if: needs.plan.outputs.nativeRelease == 'true'
     needs: plan
-    runs-on: ubuntu-latest
+    # This lane compiles the actual deadline policy with the bundled Swift
+    # toolchain; keep its platform explicit across ubuntu-latest migrations.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -160,6 +163,8 @@ jobs:
           npm run guard:chilly-chat-livekit-android-build-profile
           npm run guard:chilly-chat-livekit-migration-readback
           npm run test:chilly-chat-native-call-action-handoff
+          node scripts/test-ios-native-call-deadline.mjs
+          JAVA_HOME="$JAVA_HOME_17_X64" node scripts/test-android-incoming-call-deadline.mjs --android
           npm run guard:android-signing-secret-policy
           npm run guard:payment-rail-policy
           npm run guard:notification-room-call-policy

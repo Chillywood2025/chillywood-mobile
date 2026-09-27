@@ -123,7 +123,6 @@ const communicationHook = read("hooks/use-communication-room-session.ts");
 [
   "pauseLocalMediaCapture",
   "stopLocalMediaKind",
-  'membershipState: "reconnecting"',
   "cameraEnabled: false",
   "micEnabled: false",
   'ensureTrackKind("video", {',
@@ -135,6 +134,36 @@ const communicationHook = read("hooks/use-communication-room-session.ts");
   "Linking.openSettings",
   "_switchCamera",
 ].forEach((expected) => includes(communicationHook, expected, "communication media lifecycle"));
+
+// A transport reconnect retains the recovery supervisor, but its heartbeat
+// cannot re-publish a captured camera/microphone intent or revive a left row.
+const communicationSource = read("_lib/communication.ts");
+const heartbeatSource = communicationSource.slice(
+  communicationSource.indexOf("export async function heartbeatCommunicationRoomSession"),
+  communicationSource.indexOf("export async function getLinkedCommunicationRoom"),
+);
+[
+  ".update({ last_seen_at: now, updated_at: now })",
+  '.eq("room_id", roomId)',
+  '.eq("user_id", userId)',
+  '.in("membership_state", ["active", "reconnecting"])',
+  '.is("left_at", null)',
+  "if (!data) return null",
+].forEach((expected) => includes(heartbeatSource, expected, "ownership-preserving liveness heartbeat"));
+for (const mediaField of ["camera_enabled:", "mic_enabled:", "membership_state:", "left_at:"]) {
+  excludes(heartbeatSource, mediaField, "heartbeat cannot overwrite media or admission state");
+}
+const reconnectSource = communicationHook.slice(
+  communicationHook.indexOf('if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED")'),
+  communicationHook.indexOf("void init().catch"),
+);
+[
+  'setChannelState("reconnecting")',
+  'requestLegacySessionRestart(status === "CHANNEL_ERROR"',
+  "await heartbeatCommunicationRoomSession({",
+  "if (!isActiveGeneration()) return",
+].forEach((expected) => includes(reconnectSource, expected, "generation-bound transport recovery"));
+excludes(reconnectSource, "touchCommunicationRoomSession({", "reconnect cannot replay captured media state");
 
 const sessionProvider = read("_lib/session.tsx");
 includes(sessionProvider, 'stopActiveMediaSessions("sign_out")', "sign-out media teardown");

@@ -192,7 +192,11 @@ requireText(coordinator, 'url.scheme?.lowercased() == "https"', "CallKit present
 requireText(coordinator, 'url.host?.lowercased() == presentationAckHost', "CallKit presentation acknowledgement must remain bound to the canonical backend host.");
 requireText(coordinator, 'url.port == nil || url.port == 443', "CallKit presentation acknowledgement must reject a non-standard backend port.");
 requireText(coordinator, 'url.path.hasSuffix("/functions/v1/ios-voip-call-dispatch")', "CallKit presentation acknowledgement must target only the canonical Edge Function.");
-if (coordinator.lastIndexOf("self?.acknowledgeIncomingCallPresentation(") < coordinator.indexOf("provider.reportNewIncomingCall")) {
+const incomingReportCompletion = coordinator.slice(
+  coordinator.indexOf("provider.reportNewIncomingCall(with: callUuid, update: update)"),
+  coordinator.indexOf("private func normalizedCallAction"),
+);
+if (!/DispatchQueue\.main\.async\s*\{[\s\S]*?self\.activeCalls\[callUuid\]\?\.generation == call\.generation[\s\S]*?if let error\s*\{[\s\S]*?completion\?\(error\)\s*return\s*\}\s*self\.acknowledgeIncomingCallPresentation\(/u.test(incomingReportCompletion)) {
   failures.push("CallKit presentation acknowledgement must occur only after reportNewIncomingCall succeeds.");
 }
 requireText(coordinator, "#if DEBUG", "The local CallKit trigger must compile only in debug builds.");
@@ -289,7 +293,11 @@ rejectText(rootLayout, 'nativeCallAction: "answer"', "CallKit navigation must no
 requireText(rootLayout, 'settleNativeTerminalAction(event, "declined")', "CallKit Decline must use a direct server-authoritative transition.");
 requireText(rootLayout, 'settleNativeTerminalAction(event, "ended")', "CallKit End must use a direct server-authoritative transition.");
 requireText(rootLayout, "completeIosNativeCallTerminalTransition(String(event.callUuid", "A successful server-authoritative terminal transition must release its exact native background lease.");
-requireText(rootLayout, "router.replace(destination", "CallKit Answer must replace the current route for deterministic cold-start recovery.");
+const iosNativeBridge = rootLayout.match(/function IosNativeCallsBridge\(\) \{[\s\S]*?(?=\nfunction DefaultOrientationLock)/u)?.[0] ?? "";
+requireText(iosNativeBridge, "createIosCallKitAnswerRouteHandler({", "CallKit Answer must retain the canonical native-authority route handler.");
+requireText(iosNativeBridge, "isActive: () => active && authorityStatus === \"active\"", "A retired or unknown bridge cannot authorize native Answer navigation.");
+requireText(iosNativeBridge, "useEffect(() => { routerRef.current = router; }, [router])", "The native bridge must use the current committed router without restarting its authority lifecycle.");
+requireText(iosNativeBridge, "routerRef.current.replace(destination", "CallKit Answer must replace the current route for deterministic cold-start recovery.");
 requireText(rootLayout, "subscribeToChillyChatCallInvite", "Caller cancel and invite terminal states must stop active CallKit UI.");
 requireText(rootLayout, "reportIosNativeCallRemoteEnd", "Realtime invite terminal states must report a distinct remote CallKit end.");
 requireText(rootLayout, 'event.type === "remoteEnded"', "Remote terminal VoIP actions must clear the JavaScript invite subscription.");

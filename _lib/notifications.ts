@@ -1223,13 +1223,16 @@ export async function dismissNotification(
 
 export async function dismissChillyChatCallNotificationRows(input: {
   callInviteId?: string | null;
+  exactInviteOnly?: boolean;
   threadId?: string | null;
   userId?: string;
 }): Promise<number> {
+  const callInviteId = normalizeText(input.callInviteId);
+  const exactInviteOnly = input.exactInviteOnly === true;
+  if (exactInviteOnly && !callInviteId) return 0;
   const viewerUserId = await readSessionUserId(input.userId);
   if (!viewerUserId) return 0;
 
-  const callInviteId = normalizeText(input.callInviteId);
   const threadId = normalizeText(input.threadId);
 
   const now = new Date().toISOString();
@@ -1244,9 +1247,13 @@ export async function dismissChillyChatCallNotificationRows(input: {
     .eq("category", "chilly_chat_call")
     .is("dismissed_at", null);
 
-  // Dismiss every active incoming-call row for this user. Older rows can be
-  // keyed by prior invite ids but still appear as answerable after Decline.
-  if (callInviteId && threadId) {
+  // Lifecycle completion owns one invite. A newer invite can already exist
+  // in the same thread by the time an old terminal operation finishes.
+  // Preserve the broad legacy cleanup only for callers that explicitly keep
+  // the existing default behavior.
+  if (exactInviteOnly) {
+    query = query.eq("source_id", callInviteId);
+  } else if (callInviteId && threadId) {
     query = query.or(`source_id.eq.${callInviteId},target_entity_id.eq.${threadId}`);
   } else if (callInviteId) {
     query = query.eq("source_id", callInviteId);
@@ -1272,7 +1279,7 @@ export async function dismissChillyChatCallNotificationRows(input: {
     .returns<{ id: string }[]>();
 
   const matchedCount = error || !data ? 0 : data.length;
-  if (!callInviteId && !threadId) return matchedCount;
+  if (exactInviteOnly || (!callInviteId && !threadId)) return matchedCount;
 
   const { data: staleData, error: staleError } = await supabase
     .from(NOTIFICATIONS_TABLE)
@@ -2586,6 +2593,7 @@ export function subscribeToNotificationResponses(onPath: (path: string) => void)
 
 export async function dismissPresentedChillyChatCallNotifications(input: {
   callInviteId?: string | null;
+  exactInviteOnly?: boolean;
   dismissAllPresentedNotificationsFallback?: boolean;
   dismissIncomingCallFallback?: boolean;
   path?: string | null;
@@ -2595,17 +2603,19 @@ export async function dismissPresentedChillyChatCallNotifications(input: {
   if (Platform.OS === "web") return 0;
 
   const targetInviteId = normalizeText(input.callInviteId);
+  const exactInviteOnly = input.exactInviteOnly === true;
+  if (exactInviteOnly && !targetInviteId) return 0;
   const targetPresentedNotificationId = normalizeText(input.presentedNotificationId);
   const targetPath = normalizeNotificationPath(input.path);
   const targetThreadId = normalizeText(input.threadId);
-  const canUseIncomingTitleFallback = input.dismissIncomingCallFallback === true
+  const canUseIncomingTitleFallback = !exactInviteOnly && input.dismissIncomingCallFallback === true
     && (!!targetInviteId || !!targetPath || !!targetThreadId || !!targetPresentedNotificationId);
   const canUsePresentedNotificationSweep = input.dismissAllPresentedNotificationsFallback === true
     && canUseIncomingTitleFallback;
 
   try {
     let dismissed = 0;
-    if (targetPresentedNotificationId) {
+    if (targetPresentedNotificationId && !exactInviteOnly) {
       await Notifications.dismissNotificationAsync(targetPresentedNotificationId).then(() => {
         dismissed += 1;
       }).catch(() => null);
@@ -2630,7 +2640,9 @@ export async function dismissPresentedChillyChatCallNotifications(input: {
       const matchesPath = !!targetPath && path === targetPath;
       const matchesThread = !!targetThreadId && !!path && path.startsWith(`/chat/${targetThreadId}`);
       const matchesIncomingFallback = canUseIncomingTitleFallback && isIncomingChillyChatCallTitle;
-      if (!matchesPresentedIdentifier && !matchesInvite && !matchesPath && !matchesThread && !matchesIncomingFallback) return;
+      if (exactInviteOnly) {
+        if (!matchesInvite) return;
+      } else if (!matchesPresentedIdentifier && !matchesInvite && !matchesPath && !matchesThread && !matchesIncomingFallback) return;
 
       await Notifications.dismissNotificationAsync(notification.request.identifier);
       dismissed += 1;

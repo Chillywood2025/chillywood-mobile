@@ -1,217 +1,243 @@
-# Chi'lly Chat lifecycle validation map
+# Chi'lly Chat lifecycle validation
 
-This map covers the lifecycle source and follow-up correction based on protected
-main `ee6ef44afdd923a141a5f63c51e6241f318a4b9d`, plus the physical qualification
-attempt for PR #528. Source tests and physical evidence remain separate: a row
-counts only for the exact installed update and observations recorded below.
+Updated: 2026-09-27. This is the current testing and troubleshooting entry point.
+The installed PR #530 candidate is **not physically qualified**. Source fixes,
+passing CI, a completed checklist, and an older physical pass do not qualify a
+different installed candidate. This document grants no delivery or provider
+configuration authority.
 
-## PR #528 internal qualification record
+## Confirm the implementation before diagnosing it
 
-The qualified source was protected merge
-`cb35e0a2984d98f0e7c9f88b55676dd9671552ce`, tree
-`9188268b86ecdd6f816b5168817b2a6d88847644`, from validated PR head
-`26339eb8c1f4df9597733bad390044a49e47635d`. Required Validation run
-`36304651616` succeeded for that head.
+The sanitized [server readback](PR530_SERVER_READBACK_2026-09-27.json) covers
+33 invites created in the PR #530 test window. Every invite used `legacy_webrtc` media
+and had a 90-second authoritative ringing interval. At readback, the public
+provider was `legacy_webrtc`; the enabled canary provider was `livekit`, with emergency
+stop false. This is a dated observation, not a permanent rollout guarantee. It
+supersedes the inference that #530 device calls tested LiveKit. The readback
+also confirmed deployed late-delivery migrations and rejection of an early
+`missed` transition.
 
-| Platform | Existing signed binary | Installed PR #528 update | Runtime / internal channel | Uptake proof |
-| --- | --- | --- | --- | --- |
-| Android | build 92; EAS build `b88caea9-17e8-4abf-b8c5-837f233a0f7f`; artifact SHA-256 `538959defd5cebe4b640d3469b0ba19aae49c912e385efedde18c9bd1cead270` | update `01a0e30f-d8bb-77e6-b115-e8154aaf057e`; group `9b81aa15-a317-40e7-bfed-ece01a48173d` | `1.0.0-android-production-v2` / `android-internal-v2` | Physical App Info readback on the designated Samsung test device; embedded=false; emergency=false; stable cold launch |
-| iOS | build 21; EAS build `dca98686-b7cb-490e-9aa4-b69078bbe69c`; artifact SHA-256 `8c42429b4918597b098a298693cc3e5f573adff5f6b7091eb2406b9119a23d2f`; native-call capability verified | update `01a0e314-4be0-7223-bfa5-7047b55867d2`; group `ca8bce31-080e-401d-b580-ce1348435095` | `1.0.0-ios-production-v2` / `ios-internal-v2` | Physical App Info readback on the designated iPhone test device; embedded=false; emergency=false; stable cold launch |
+Both implementations remain active source. **Do not delete legacy transport or
+switch provider configuration as warning cleanup.** The server stamps a provider
+on an invite; the client retains that provider for that invite. LiveKit tests
+do not prove a legacy call works, or vice versa. Unknown provider identity makes
+provider-specific qualification incomplete.
 
-Both calls exercised below used the invite's LiveKit provider. A private message
-sent from Android before the calls arrived in the designated iPhone thread.
-Publication and uptake did not reach a public or production channel.
+| Responsibility | Source to inspect |
+| --- | --- |
+| Invite creation, provider, transitions and expiry authority | `_lib/chat.ts`, `_lib/chillyChatCalls.ts`, deployed begin/transition functions |
+| Fixed provider selection | `hooks/use-chat-call-media-session.ts` |
+| Legacy peer, capture, negotiation and control lifecycle | `hooks/use-communication-room-session.ts` |
+| LiveKit Room, publication, capture and control lifecycle | `hooks/use-livekit-chat-call-session.ts` |
+| In-thread/global Answer and message projection | `app/chat/[threadId].tsx`, `app/_layout.tsx` |
+| iOS presentation, Answer transactions, mute and audio route | `_lib/iosNativeCalls.ts`, `modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift` |
+| Membership, authoritative media and Realtime hints | `_lib/communication.ts`, private room signaling RPCs |
 
-### Confirmed regression and rollback
+## Evidence corrections from PR #530
 
-An Android-to-iPhone same-thread video call initially connected and rendered
-moving remote video. After the iPhone microphone was muted and unmuted, Android
-lost the iPhone video and remained at `Camera Connecting` beyond the 15-second
-fallback while the endpoints disagreed about the call/media state. A second
-call reproduced the same remote-video loss. This is an application failure, not
-an automation selector failure.
+The original archive is preserved in PR #531 at commit
+`a035aa2726038398f2874faf55fe6517334bdec9`, path
+`docs/release/evidence/pr-530/Chillywood_PR530_Evidence_2026-09-27.zip`.
+SHA-256: `1636b746d8bd7e974a88c83b7961240c3a68ad5504cbb850d1f2f880af5973c8`.
+The archive and all 410 manifest entries were verified during review. Keep the
+original observations unchanged; use these corrections when interpreting them.
+Original row IDs are evidence references, not current results.
 
-The matrix stopped at that serious regression. The canonical rollback path
-republished the last compatible PR #526 source
-`691814ec8ff8dd863f014add0255a4110117cf23`, tree
-`bb1aba7117c80cdf6ce85e3a6483c0c324f75cd5`, to the same internal audiences:
+| Original claim or observation | Correct interpretation and next observation |
+| --- | --- |
+| 32 FAIL rows | These are recorded row verdicts, not 32 independently established defects. Some share one failure; others have invalid or ambiguous test oracles. |
+| #530 exercises LiveKit fixes | Server readback identifies the test-window invites as legacy. Correlate each client's transport with its persisted invite before attributing a symptom to a hook. |
+| EX01–EX04 ring beyond 45 seconds | The invites had 90-second deadlines. Measure each `expires_at`, including delayed delivery. Native retirement before server expiry is a separate cross-layer defect to test. |
+| BL12 has no Android incoming notification | Its screenshot shows Answer and Decline over the launcher; launcher XML omitted the overlay. Arrival time and Answer success remain separate questions. |
+| BL04 receiver delivery failed | The caller reported failure to save/start the invite. Preserve the begin-call error before investigating receiver delivery. |
+| Incoming UI took 6–23 seconds | Saved `wait-click` timing includes lookup and click completion. It does not establish first appearance. Record arrival and action separately. |
+| CM01 camera-on tap failed | “Camera Off” labels a static tile and a button. Preserve the button's unique ID, enabled state, bounds and handler outcome. |
+| iPhone-to-Android messages were lost | Android captures stayed at older messages. Correlate committed message ID, authenticated recipient read and newest visible item. Optimistic text and offscreen XML searches are insufficient. |
+| iPhone Answer/unmute errors | The visible failures remain meaningful. Native presentation/transaction and legacy operation traces are needed to locate the failing stage. |
+| Connected remains after peer disappearance | Preserve this unresolved physical observation. The independently reproduced LiveKit plain-peer-departure gap does not explain a legacy call by itself. |
+| Android returns to launcher after remote End | Foreground/activity change is observed; a crash is unproved. Collect process/activity and crash/ANR evidence for the exact repeat. |
+| Speech, moving video and clean End all proved | Silent recordings do not prove speech; stationary frames do not establish moving video. Idle UI does not prove capture, transport, native UI and membership stopped. Some closure timing is missing. |
 
-| Platform | Rollback update / group | Installed readback |
+Missing provider/native traces are evidence gaps, not proof of success or
+failure. The archive index references intentionally excluded private files;
+do not claim those files were reviewed or restore private payloads to a public
+report.
+
+## Record one coherent case
+
+Use the existing matrix/evidence files for each delivery. This is ordinary
+test evidence, not a new admission, receipt or task lifecycle. Record:
+
+- Exact source/tree, binary/build, runtime/channel, loaded update,
+  embedded/emergency state and OS version for each endpoint.
+- Stable sanitized account/device/thread/invite/room aliases; persisted
+  provider, each selected provider and actual transport/Room identity.
+- Server `created_at`, `expires_at`, invite status and acceptance result.
+  Ringing expiry is distinct from accepted-room liveness.
+- Receiver app/system surface and preconditions; control ID, label, bounds,
+  enabled/visible state, action time and handler/native result. A
+  `clicked:true` response is not proof that the handler ran. Missing app XML
+  does not prove a system notification is absent.
+- A short event timeline: creation/dispatch → notification → presentation →
+  action → native result → acceptance → route → media. Measure durations with
+  one monotonic clock; record clock correlation/uncertainty across endpoints.
+- For controls: latest requested intent, native/SDK result, actual capture or
+  publication, durable membership and peer projection for the same operation.
+  Preserve the first error and later recovery separately.
+- For messaging: unique nonprivate marker, committed message ID, sender
+  acknowledgment, authenticated recipient read and a viewport at the newest
+  item. Include keyboard/scroll state.
+- For End: capture shutdown, transport disposal, native audio/UI cleanup,
+  durable membership/room state and a fresh call afterward. Idle UI alone is
+  insufficient.
+
+Do not record access tokens, push credentials, private message bodies, raw
+device identifiers or provider secrets. Prove two-way speech with a consenting
+observer or an explicitly authorized audible check. Prove moving video with an
+unmistakable motion/camera-flip challenge seen at the remote endpoint. Report
+the observation rather than inferring it from a label or silent recording.
+
+## Timing and result rules
+
+Existing performance objectives remain incoming presentation within five
+seconds, event-driven peer projection within two seconds, heartbeat recovery
+within fifteen seconds, and cleanup within four seconds or an explicit
+retryable failure. Record precise start/end events. Invite-to-presentation and
+notification-arrival-to-presentation are different intervals; report both when
+available. Lookup/click duration is automation latency. Missing start events or
+clock correlation leave a timing assertion unmeasured, not failed or passed.
+
+Unanswered expiry follows the **actual server deadline**, currently 90 seconds
+in the readback window, rather than the former 45-second assumption. Test just
+before and after that deadline and measure presentation cleanup separately.
+Delayed notification delivery receives only the remaining interval. Accepted
+calls follow room liveness, not their former ringing deadline. Reject late or
+unauthorized Answer; do not extend server authority to accommodate native UI.
+
+Separate verdicts for presentation, Answer, connection, speech, video, controls
+and cleanup. A case is not fully PASS when a required assertion is unmeasured.
+Use `PASS`, `FAIL`, `AUTOMATION BLOCKED`, `DEPENDENCY BLOCKED` and `NOT RUN`
+accurately. Record each blocked prerequisite. Preserve first attempts and link
+confirmation/retries rather than replacing their results.
+
+Continue independent safe cases after a failure. Block dependent cases with
+contaminated state or failed prerequisites. Security/privacy failures,
+uncontrolled capture or unusable devices require stopping the affected path
+and using the authorized recovery procedure. Device qualification does not
+authorize source repairs or provider/rollout changes during the run.
+
+## Qualification sequence and matrix
+
+First establish both directions on the intended provider: voice and video,
+reliable Answer, audible speech, clear moving video, repeated mic/camera
+controls, End and a fresh call. Capture provider/deadline before diagnosing a
+failure. If prerequisites fail, identify the first failed stage and continue
+only independent cases.
+
+Then expand every applicable variant below into an individual row. Every row
+for a new candidate begins `NOT RUN`; historical outcomes never populate it.
+Repeat provider-specific coverage for an authorized LiveKit canary if that
+provider is being qualified. Do not enable a canary or alter public routing
+merely to satisfy the matrix.
+
+| Family | Required variants and observations |
+| --- | --- |
+| Incoming/Answer | Both directions × voice/video × same thread/elsewhere/background/terminated: 16 base cases per intended provider; native/app surfaces, one accept/join, adjacent messages. Record OS eviction versus swipe dismissal versus force-stop; delivery restrictions differ. |
+| Caller creation | Fresh and same-thread calls, busy/duplicate attempts, failed begin; no orphan room or false receiver-delivery claim; original server result preserved. |
+| Cancel/decline | Both directions and media types; action/notification races and duplicate callbacks; no late join after dismissal. |
+| Unanswered expiry | Both directions/media types and supported receiver states; actual deadline, delayed delivery, late Answer and a fresh invite afterward. |
+| Microphone | Three cycles per endpoint in voice/video, in-app and supported native controls; audible results, singular capture and durable/local/remote convergence. |
+| Camera | Repeated off/on and flip per endpoint; unique controls, moving remote frames, correct direction, no duplicate or stranded track. |
+| Peer absence/return | Plain peer departure with local transport connected, transport reconnect, peer process disappearance and return; no false Connected recovery for an absent established peer. |
+| Lifecycle/permissions | Background/resume, supported lock/unlock, mic/camera denial, revocation and Settings recovery on each OS; restore original permissions; no hidden capture or bypass. |
+| Audio route | Speaker/receiver, available Bluetooth, interruptions and native activation/deactivation; actual route and audible output. Missing hardware remains blocked. |
+| End/replacement | Either endpoint Ends, repeated/remote End, fresh voice/video, same-row replacement, late cleanup and account replacement. Old work cannot affect new authority. |
+| Messaging/navigation | Bidirectional acknowledged messages before/during/after calls, latest-item visibility, unread/read, keyboard/scroll, reopen and account isolation; correct thread retained. |
+| OS outcome | Cold launch, native handoff, return from calls, process/activity changes, crash/ANR evidence and resource shutdown per endpoint. Launcher alone is not crash proof. |
+
+Source and native changes use applicable tests and protected CI. Swift/Kotlin
+or native-capability changes require a compatible binary; an OTA cannot replace
+native code. Use current compatibility checks rather than assuming builds
+92/21 carry every repair. Delivery and physical operations require their
+appropriate separate authorization.
+
+## Source and integration coverage
+
+The recovery branch adds executable regressions for both active providers,
+screen/native action ownership, exact-invite notification cleanup, and native
+deadline handling. It removes the invented client 45-second ringing fallback;
+the separate Android native-action replay limit remains intact. Legacy
+heartbeats now carry liveness only, and subscription promotion shares the media
+control queue. Old completions cannot project into a replacement call, thread,
+or account in the covered regression cases. Retryable control warnings remain separate from fatal privacy
+failures on Chat; other room surfaces retain their existing feedback.
+
+Run the new screen and bridge mounted suites in ordinary Product CI, the
+actual Swift deadline/callback tests and generated Kotlin notification tests
+in Native/Release CI, and the existing provider, account and database suites.
+Mocked shutdown checks establish SDK state and ownership behavior; installed
+capture indicators, audible output and native timing remain physical evidence.
+The plain-peer tests do not establish a five/15-second disappearance deadline
+before the native SDK emits a disconnect/presence event.
+
+Native source approval and OTA compatibility are separate checks. The canonical
+internal publisher now compares the target's native inputs with both the signed
+binary's source and the existing runtime cohort before any publication. It
+rechecks source and receipt identity after remote preflight. This correction
+changes Android and iOS native code, so builds 92/21 and their existing runtime
+cohorts cannot deliver the complete correction. New compatible binaries and a
+separately qualified runtime generation are required before physical proof.
+The source comparison is deliberately conservative for lockfile/configuration
+changes: a JavaScript-only dependency change can require compatibility review
+without itself technically requiring a native rebuild. No runtime/channel,
+binary record or provider rollout is changed by this source maintenance.
+
+| Area | Existing evidence to retain/run when affected | Physical evidence it does not replace |
 | --- | --- | --- |
-| Android | `01a0e339-d49f-7538-a71a-d40104901c05` / `0040d1b5-f6db-40ba-83ec-4b208443b202` | build 92, exact rollback update, expected runtime/channel, embedded=false, emergency=false, two stable cold launches |
-| iOS | `01a0e33a-0c9a-7c48-8457-772b1e59f760` / `3ccbfe1f-e6bb-43d8-b34d-d0bdd6d40550` | build 21, exact rollback update, expected runtime/channel, native-call capability retained, embedded=false, emergency=false, two stable cold launches |
+| Invite/status/provider authority | Call-semantics and Supabase begin/transition/expiry/liveness/cleanup tests | Deployed provider, native presentation and real Answer |
+| Native handoff | Native-action handoff tests, native tests/compile checks | Installed transactions, app-state ordering and audible routing |
+| Legacy media | Android exact-hook, communication operation-error and mounted control tests | Legacy negotiation, native capture and both endpoint projections |
+| LiveKit media | Mounted LiveKit lifecycle and real SDK track-lifetime tests | Installed capture, ordinary peer departure and recovery |
+| Realtime hints | Local authenticated Realtime delivery plus each provider's receiver/projection tests | Device event → durable commit → private hint → current read → visible media |
+| Messaging | Product, account-bound mutation and thread read/projection tests | Server-acknowledged bidirectional delivery and current visibility |
 
-A focused rollback comparison retained remote video through the same iPhone
-mute/unmute sequence, although PR #526 still showed an imperfect iPhone unmute
-state. This comparison narrows the regression to the changed source range; it
-does not isolate the native mechanism. Late retired-call capture cleanup is a
-working hypothesis until a trace connects that operation to the interrupted
-current track. PR #526 is not represented as fully qualified.
+Peer notifications are refresh hints; durable membership is authoritative.
+Server-validated private hints cause an authoritative read; only the newest
+response owned by the current session projects. Legacy streams and LiveKit
+tracks have different transport/rendering lifecycles. Preserve account,
+ownership, permission, replay, cleanup and release guards while removing stale
+assertions from active instructions.
 
-## SDK-faithful recovery correction
+## Historical delivery record — not current qualification
 
-The follow-up source correction is based on merged PR #529
-`e66c1a5829c07dbb82d3a946853e0ca26832b090`. It closes independently reproduced
-source-level gaps; it has not established the physical incident's root cause or
-passed physical qualification.
+The [August complete-system ledger](CHILLY_CHAT_COMPLETE_SYSTEM_CLOSURE_LEDGER.md)
+covers PR #318 and its environment. Its zero-blocker totals do not certify later
+source, binaries, providers or devices.
 
-- Recovery rechecks exact call/Room ownership and current foreground/media
-  intent after asynchronous setup and immediately before native mutations.
-- An ended but still-unmuted SDK publication is explicitly restarted through
-  the installed SDK's supported `restartTrack()` method. Automatic reacquisition
-  requires a read-only permission result of granted; it does not prompt.
-- Healthy publications are preserved. A restart that outlives its owner or
-  foreground intent retires its exact track and cannot mark a new call ready.
-- Failed recovery projects observed publication state into the UI and durable
-  membership while retaining a warning, rather than reporting the requested
-  state as successful.
-- Required camera shutdown precedes microphone permission/restart waits so
-  background video cannot remain active because microphone recovery fails.
-  Background events also stop the exact current camera track synchronously,
-  before queued work, when microphone recovery was already pending. The SDK
-  sender remains available for normal publication retirement; failed capture
-  shutdown initiates exact-Room termination independently of that queue.
-  This immediately stops local capture and updates local UI; peer membership
-  projection still follows serialized reconciliation after pending work settles.
-
-The mounted tests separate publication mute state from native-track lifetime.
-`tests/livekit-track-lifetime.test.mjs` also exercises the real locked LiveKit
-enable/unmute/restart implementations with only the native capture boundary
-stubbed. Healthy Android/iOS control loops verify that working tracks do not
-restart and that Room, account, and provider identity remain unchanged.
-
-These are source and SDK-contract proofs. Native hardware shutdown, two-way
-speech, moving remote video, and device-specific ordering still require the
-physical steps below.
-
-### Run the observed failure before the full matrix
-
-After a separate authorization for the exact corrected internal source, verify
-both installed update IDs and use the designated consenting accounts:
-
-1. Cold-launch both apps with no preceding call. Establish Android-to-iPhone
-   video, moving remote video and two-way speech; perform three iPhone
-   microphone mute/unmute cycles.
-2. End, immediately start a new same-thread video call, and repeat. Compare with
-   a new call after cleanup has visibly settled; a timer is not cancellation.
-3. Repeat the focused sequence in the reverse direction.
-4. If a failure occurs, record a short sanitized timeline of operation
-   start/settlement, current/retired Room and track identity, app/audio state,
-   actual sending/receiving/decoded frames where available, and visible video.
-   Do not record tokens, message contents or private account identifiers.
-5. If a cold first call fails without any retired operation, do not attribute
-   it solely to late cleanup. Use the trace to distinguish capture, publication,
-   receiver and rendering failures before making another correction.
-
-Only after this focused sequence passes should the operator finish the
-remaining matrix on the same exact candidate. Source tests do not convert any
-physical row from NOT RUN to PASS. If a source defect is found, preserve the
-evidence for the implementation owner rather than making parallel code changes
-during device qualification.
-
-## Lifecycle coverage
-
-| Lifecycle area | Owning implementation | Required regression evidence | Remaining integration or device evidence |
-| --- | --- | --- | --- |
-| Start, accept, decline, cancel, expiry, remote End | `_lib/chillyChatCalls.ts`, `app/chat/[threadId].tsx`, provider hook cleanup | `scripts/test-chilly-chat-call-semantics.mjs`, native-action handoff test, mounted remote-End cleanup | Both directions and every terminal action on the exact installed candidate |
-| Fixed provider per invite; legacy/LiveKit isolation | `hooks/use-chat-call-media-session.ts` | call-semantics/provider guards and mounted no-crossover cases | Confirm both test accounts enter the provider stamped on the invite |
-| Account, invite, room, membership, and `Room` ownership | both media hooks; committed-session binding in `use-livekit-chat-call-session.ts` | mounted account/room/invite/generation replacement, stale callback, stale render-ack, and same-row cleanup cases | Account switch and fresh call after replacement on both devices |
-| Initial microphone/camera publication | LiveKit initialization and strict membership write | mounted initial publication, permission, durable convergence, and fail-closed cases | Actual two-way audio and moving video, not labels alone |
-| Mute/unmute, camera off/on, camera flip | provider control methods and shared communication controls | mounted strict control/compensation matrix; Android microphone exact-hook suite | Repeated controls from both endpoints; observe remote media and camera direction |
-| Permission denial and return from Settings | media permission reconciliation in both provider hooks | mounted confirmed-denial, transient failure, Settings, and reconciliation cases | Deny/restore mic and camera on each OS; restore prior permission state afterward |
-| Snapshot ordering and media notifications | monotonic snapshot ownership, `broadcastCommunicationRoomSignal`, private room Broadcast, LiveKit data hint | mounted old-read race; actual-hook two-peer camera projection; localhost two-client RPC/Realtime/read test | Measure event-driven peer update and the 15-second fallback on installed devices |
-| Background, foreground, screen lock, native activation | AppState/native activation reconciliation | mounted background/foreground, foreground-with-absent-peer, CallKit activation, and native handoff suites | Foreground/background/terminated incoming calls and supported lock transitions |
-| Reconnect, peer departure, peer return | shared `promoteCommittedSessionIfReady` readiness decision | mounted heartbeat, AppState, Reconnected, initialization, absent-peer and returning-peer cases | Measure recovery while peer is absent and after it actually returns |
-| Room/account replacement | committed binding plus callback/listener ownership | mounted stale Room callbacks, post-await speaker callback, data event, cleanup, and participant/render ownership | Replace an account/call, then complete a new call without old media or UI |
-| Cleanup, timers, listeners, retry | `cleanupSession`, effect disposal, membership subscription cleanup | independent/combined failure, ineffective result, timeout, repeated End, remote End, unmount, and replacement cases | Either endpoint Ends; capture, transport, native UI, and a subsequent fresh call are verified |
-| Connected status, first media, rendered video | shared live-promotion decision; exact Room/publication render acknowledgment | mounted absent-peer recovery, old callback, first-audio, and stale-render cases | Record actual moving remote video and two-way audio before calling the session recovered |
-| Adjacent messaging and native answer handoff | chat thread/inbox plus native action bridge | product suite, communication error suite, call semantics, native handoff | Private messages before/after calls; incoming foreground/background/terminated answer |
-
-## Notification contract
-
-Peer notifications are refresh hints. Durable membership remains authoritative.
-The supported chain is:
-
-1. The current session proves the local media transition and commits its exact
-   membership state.
-2. `_lib/communication.ts` calls the authenticated
-   `broadcast_communication_room_signal` RPC.
-3. The database derives sender and room authority and invokes
-   `realtime.send` on the private `comm-room-<room>` topic.
-4. The current receiver subscription validates the room and sender, then queues
-   a paced authoritative snapshot read.
-5. Only the newest current-session response updates participant projection; an
-   exact current LiveKit track is rendered or removed from the peer tile.
-
-`scripts/test-communication-room-realtime-delivery.mjs` exercises steps 1-4
-against a localhost Supabase stack with two authenticated temporary users and
-the real private Realtime delivery mechanism. The mounted LiveKit suite executes
-the actual hook and proves steps 1, 4, and 5 together, including visible camera
-removal. These tests are complementary; neither is physical-device proof.
-
-## Finite two-device qualification matrix
-
-The test operator records the exact protected source, OTA/build/update identity,
-installed readback, devices, accounts, invite id, provider stamped on that
-invite, and start/end timestamps before changing any row from `NOT RUN`.
-Timing expectations are fixed before execution: incoming UI within 5 seconds of
-the invite notification, event-driven media projection within 2 seconds,
-heartbeat fallback within 15 seconds, recovered status only after the peer is
-present, and End/capture/native-UI shutdown within the 4-second cleanup wait or
-an explicit retryable failure. An automation selector, element lookup, tunnel,
-or device-control failure is recorded as `AUTOMATION BLOCKED`; it is not an
-application failure. A reproduced application result is `PASS` or `FAIL`.
-
-### Direction × media × receiver state
-
-Each row requires one ring/answer path, actual two-way audio, exactly one active
-Room per endpoint, the invite's fixed provider on both endpoints, and adjacent
-thread messaging before and after the call. Video rows additionally require
-moving remote video in both directions rather than camera labels alone.
-
-| Direction | Media | Receiver location/state | Status |
-| --- | --- | --- | --- |
-| Android → iPhone | voice | Same Chi'lly Chat thread | NOT RUN |
-| Android → iPhone | voice | Elsewhere in the app | NOT RUN |
-| Android → iPhone | voice | Backgrounded | NOT RUN |
-| Android → iPhone | voice | Terminated | NOT RUN |
-| Android → iPhone | video | Same Chi'lly Chat thread | FAIL — remote iPhone video was lost after microphone recovery and did not recover within 15 seconds |
-| Android → iPhone | video | Elsewhere in the app | NOT RUN |
-| Android → iPhone | video | Backgrounded | NOT RUN |
-| Android → iPhone | video | Terminated | NOT RUN |
-| iPhone → Android | voice | Same Chi'lly Chat thread | NOT RUN |
-| iPhone → Android | voice | Elsewhere in the app | NOT RUN |
-| iPhone → Android | voice | Backgrounded | NOT RUN |
-| iPhone → Android | voice | Terminated | NOT RUN |
-| iPhone → Android | video | Same Chi'lly Chat thread | NOT RUN |
-| iPhone → Android | video | Elsewhere in the app | NOT RUN |
-| iPhone → Android | video | Backgrounded | NOT RUN |
-| iPhone → Android | video | Terminated | NOT RUN |
-
-### Terminal, recovery, permission, route, and replacement cases
-
-| Scenario | Required observation | Status |
+| Candidate | Source / tree | Historical disposition |
 | --- | --- | --- |
-| Caller cancels before answer, each direction and media type | Receiver UI closes once; no Room/capture/membership remains | NOT RUN |
-| Receiver declines, each direction and media type | Caller and receiver close once; no provider connection starts afterward | NOT RUN |
-| Invite expires unanswered, foreground/background/terminated receiver | Native and app UI clear at expiry; late Answer cannot connect | NOT RUN |
-| Remote End from Android, then from iPhone | Peer exits live UI; capture, durable membership, transport, and native UI clear | NOT RUN — iPhone End cleaned both endpoints once; reverse direction was not run |
-| Repeated microphone transitions from each endpoint | Two-way speech follows every mute/unmute; durable and UI state agree | FAIL — iPhone unmute on PR #528 caused persistent Android remote-video loss and endpoint state disagreement |
-| Repeated camera transitions and flip from each endpoint | Moving remote video closes/reopens; direction changes without duplicate publication | NOT RUN |
-| Established peer disappears while foregrounded | Remaining endpoint stays Reconnecting, not Live, while peer is absent | NOT RUN |
-| Absent peer returns | Recovery occurs only after peer presence/media return and within recorded timing | NOT RUN |
-| Background/resume and supported screen-lock transition | No false Live state, stale capture, duplicate Room, or lost fixed-provider binding | NOT RUN |
-| Microphone denial and return from Settings, each OS | Accurate denial UI; no bypass; authorized retry restores real audio | NOT RUN |
-| Camera denial and return from Settings, each OS | Accurate denial UI; no bypass; authorized retry restores moving video | NOT RUN |
-| Speaker/earpiece/Bluetooth or supported route interruption | Current call's intended native route wins; microphone remains singular and usable | NOT RUN |
-| Cleanup followed by fresh voice call, each direction | Capture/native UI/membership clear, then a clean call succeeds | NOT RUN |
-| Cleanup followed by fresh video call, each direction | Capture/native UI/membership clear, then moving video succeeds | NOT RUN |
-| Same-account call replacement on the same room membership | Late cleanup cannot mute/leave the replacement; UI/native/durable state agree | NOT RUN |
-| Account replacement while old work settles | Old account callbacks/mutations cannot affect the new account | NOT RUN |
-| Adjacent messaging during cancel/decline/End/replacement | Existing messages remain isolated and new private messages deliver correctly | NOT RUN — one Android-to-iPhone pre-call message delivered; post-call and lifecycle combinations were not run |
+| #526 | `691814ec8ff8dd863f014add0255a4110117cf23` / `bb1aba7117c80cdf6ce85e3a6483c0c324f75cd5` | Compatible rollback; comparison still reported imperfect iPhone unmute. Not fully qualified. |
+| #528 | `cb35e0a2984d98f0e7c9f88b55676dd9671552ce` / `9188268b86ecdd6f816b5168817b2a6d88847644` | Repeated remote-video loss reported after iPhone mute/unmute; rollback performed. Prior text identified LiveKit, but that provider claim is not independently established here or transferable to #530. |
+| #529 | `e66c1a5829c07dbb82d3a946853e0ca26832b090` / `a539c4e46fce2b9261e224210a1aa1eff9dd8b95` | Source late-operation correction; source tests did not establish physical causality. |
+| #530 | `2d96b5396391b0822cb4e10d6b3509639be117f3` / `63802aa5f2c67b9bed1476252069e81413f061c7` | Exact uptake proved; 104 original rows (14 PASS, 32 FAIL, 6 automation blocked, 52 dependency blocked), subject to the corrections above. Not physically qualified. |
 
-Expected compatibility namespaces remain
-`1.0.0-android-production-v2` and `1.0.0-ios-production-v2`, subject to a fresh
-binary/source compatibility check. No source correction after PR #528 has been
-delivered or physically qualified by this record. A new exact delivery decision
-is required before testing any corrected merge on these devices.
+Historical update identities are evidence references, not publication or
+rollback instructions:
+
+| Platform / binary | #528 update | #526 rollback update | #530 update |
+| --- | --- | --- | --- |
+| Android 92 | `01a0e30f-d8bb-77e6-b115-e8154aaf057e` | `01a0e339-d49f-7538-a71a-d40104901c05` | `01a0e3d9-ddb3-7bf0-a949-ee863be858d4` |
+| iOS 21 | `01a0e314-4be0-7223-bfa5-7047b55867d2` | `01a0e33a-0c9a-7c48-8457-772b1e59f760` | `01a0e3dc-b375-7dd4-a455-20c1b4ed905c` |
+
+These used `1.0.0-android-production-v2` / `android-internal-v2` and
+`1.0.0-ios-production-v2` / `ios-internal-v2`. The #530 report records no rollback
+and idle final devices; read back later installed state again. Its iOS signing
+report includes `CSSMERR_TP_NOT_TRUSTED`; other package/profile/install checks
+are separate. Do not relabel them full trust/revocation verification or reuse a
+receipt without resolving its evidence.
+
+The previous document's #528 matrix, release details and SDK-correction narrative
+remain in Git history at #530. They were removed from active instructions
+because mixing old outcomes with future rows and calling tested source
+“qualified” obscured what was proved. Original evidence and working provider
+implementations remain intact.

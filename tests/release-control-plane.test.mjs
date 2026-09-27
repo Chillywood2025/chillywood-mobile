@@ -16,6 +16,12 @@ import {
 
 const sha = (character) => character.repeat(40);
 const digest = (character) => character.repeat(64);
+const nativeCompatibility = (platform) => ({
+  schemaVersion: 1, algorithm: "git-native-inputs/v1", platform,
+  sourceDigest: digest("e"), binaryDigest: digest("e"),
+  cohortAlgorithm: platform === "android" ? "android-native-compatibility/v1" : "git-native-inputs/v1",
+  cohortSourceDigest: digest("e"), cohortDigest: digest("e"), cohortSourceSha: platform === "ios" ? sha("a") : null,
+});
 const binary = (platform) => ({
   artifactSha256: digest("c"),
   nativeCapabilities: platform === "ios" ? ["ios-native-calls"] : [],
@@ -32,6 +38,7 @@ const plan = (platform) => createOtaPublicationPlan({
   sourceTree: sha("b"),
   runtimeVersion: `1.0.0-${platform}-production-v2`,
   signedBinary: binary(platform),
+  nativeCompatibility: nativeCompatibility(platform),
 });
 const artifact = { artifactId: "artifact-1", sha256: digest("d"), sourceSha: sha("e"), sourceTree: sha("f"), buildNumber: "42", valid: true, revoked: false };
 const ref = (state, extra = {}) => ({ artifactId: artifact.artifactId, artifactSha256: artifact.sha256, state, ...extra });
@@ -50,6 +57,9 @@ for (const [name, mutate, finding] of [
   ["wrong binary platform", (value) => ({ ...value, signedBinary: { ...value.signedBinary, platform: "ios" } }), "OTA_BINARY_PLATFORM_MISMATCH"],
   ["incompatible binary", (value) => ({ ...value, signedBinary: { ...value.signedBinary, runtimeVersion: "old" } }), "OTA_BINARY_RUNTIME_INCOMPATIBLE"],
   ["invalid artifact digest", (value) => ({ ...value, signedBinary: { ...value.signedBinary, artifactSha256: "bad" } }), "OTA_BINARY_DIGEST_INVALID"],
+  ["missing native source proof", (value) => ({ ...value, nativeCompatibility: null }), "OTA_NATIVE_SOURCE_PROOF_INVALID"],
+  ["different binary native source", (value) => ({ ...value, nativeCompatibility: { ...value.nativeCompatibility, binaryDigest: digest("d") } }), "OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE"],
+  ["new binary in an old runtime cohort", (value) => ({ ...value, nativeCompatibility: { ...value.nativeCompatibility, cohortDigest: digest("d") } }), "OTA_RUNTIME_NATIVE_COHORT_INCOMPATIBLE"],
   ["non-app-owned activation", (value) => ({ ...value, activation: "AUTOMATIC" }), "OTA_ACTIVATION_POLICY_INVALID"],
 ]) test(`OTA rejects ${name}`, () => assert.ok(validateOtaPublicationPlan(mutate(plan("android"))).findings.includes(finding)));
 

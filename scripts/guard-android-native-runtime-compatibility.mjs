@@ -41,8 +41,8 @@ assert.equal(
   manifest.nativeCompatibility?.digest,
   "historical installed Android digest must remain bound to the existing production manifest",
 );
-assert.equal(productionOtaGeneration.nativeCompatibility?.androidDigest, compatibility.digest,
-  "production-v2 must bind the exact current Android compatibility input digest");
+assert.match(productionOtaGeneration.nativeCompatibility?.androidDigest ?? "", /^[0-9a-f]{64}$/u,
+  "production-v2 must retain its historical native compatibility input digest");
 assert.equal(productionOtaGeneration.nativeCompatibility?.compatibilityInputsChanged, true);
 assert.equal(productionOtaGeneration.nativeCompatibility?.nativeModuleSetChanged, false);
 assert.equal(productionOtaGeneration.nativeCompatibility?.iosNativeModuleSetChanged, false);
@@ -217,4 +217,5 @@ assert.match(generatedContract.IOS_INTERNAL_V2_RELEASE_MANIFEST.currentOtaUpdate
 assert.doesNotMatch(JSON.stringify(generatedContract.IOS_INTERNAL_V2_RELEASE_MANIFEST), /ios-qa|iosqa1/u,
   "the internal-v2 candidate manifest must reject obsolete iOS QA identity");
 
-console.log(`Android native runtime compatibility guard passed (${compatibility.summary.nativePackageCount} native packages; production OTA generation ${productionOtaGeneration.generation}; digest ${compatibility.digest.slice(0, 12)}…).`);
+const currentMatchesInstalledGeneration = productionOtaGeneration.nativeCompatibility.androidDigest === compatibility.digest;
+console.log(`Android native runtime source guard passed (${compatibility.summary.nativePackageCount} native packages; historical OTA generation ${productionOtaGeneration.generation}; current digest ${compatibility.digest.slice(0, 12)}…; ${currentMatchesInstalledGeneration ? "generation input match; publication still needs binary proof" : "native source changed; existing-runtime OTA blocked; separately qualified native generation required"}).`);

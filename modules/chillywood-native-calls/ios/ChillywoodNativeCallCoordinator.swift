@@ -17,11 +17,12 @@ enum ChillywoodNativeCallError: Error {
 }
 
 private struct ActiveNativeCall {
+  let generation = UUID()
   let uuid: UUID
   let inviteId: String
   let threadId: String
   let callType: String
-  let expiresAt: Date?
+  let ringingDeadline: ChillywoodIncomingCallDeadline?
   var answered: Bool
   var timeoutWorkItem: DispatchWorkItem?
 }
@@ -357,6 +358,8 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     debugPayload["threadId"] = (payload["threadId"] as? String) ?? "local-debug-thread"
     debugPayload["callerName"] = (payload["callerName"] as? String) ?? "Chi'llywood Test Caller"
     debugPayload["callType"] = (payload["callType"] as? String) ?? "voice"
+    debugPayload["expiresAt"] = payload["expiresAt"]
+      ?? ISO8601DateFormatter().string(from: Date().addingTimeInterval(90))
     debugPayload["debug"] = true
     guard isBuildEnabled else { throw ChillywoodNativeCallError.buildDisabled }
     return try await withCheckedThrowingContinuation { continuation in
@@ -420,7 +423,10 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     guard let provider else { throw ChillywoodNativeCallError.providerUnavailable }
 
     let callType = payload["callType"] as? String == "video" ? "video" : "voice"
-    let expiresAt = parseServerDate(payload["expiresAt"])
+    guard let ringingDeadline = ChillywoodIncomingCallDeadline(
+      serverExpiresAt: parseServerDate(payload["expiresAt"]),
+      now: Date()
+    ) else { throw ChillywoodNativeCallError.invalidPayload }
     let update = CXCallUpdate()
     update.remoteHandle = CXHandle(type: .generic, value: (payload["callerName"] as? String) ?? "Chi'llywood caller")
     update.localizedCallerName = (payload["callerName"] as? String) ?? "Chi'llywood caller"
@@ -430,39 +436,39 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     update.supportsUngrouping = false
     update.supportsDTMF = false
 
-    var call = ActiveNativeCall(
+    let call = ActiveNativeCall(
       uuid: callUuid,
       inviteId: inviteId,
       threadId: threadId,
       callType: callType,
-      expiresAt: expiresAt,
+      ringingDeadline: ringingDeadline,
       answered: false,
       timeoutWorkItem: nil
     )
-    let timeoutWorkItem = DispatchWorkItem { [weak self] in
-      self?.timeoutCall(callUuid)
-    }
-    call.timeoutWorkItem = timeoutWorkItem
     activeCalls[callUuid] = call
     persistActiveCallDescriptors()
 
     provider.reportNewIncomingCall(with: callUuid, update: update) { [weak self] error in
-      if let error {
-        self?.removeCall(callUuid)
-        self?.emit(type: "reportFailed", call: call, reason: String(describing: type(of: error)))
-        completion?(error)
-        return
+      DispatchQueue.main.async {
+        guard let self, self.activeCalls[callUuid]?.generation == call.generation else {
+          completion?(error ?? ChillywoodNativeCallError.callUnavailable)
+          return
+        }
+        if let error {
+          self.removeCall(callUuid)
+          self.emit(type: "reportFailed", call: call, reason: String(describing: type(of: error)))
+          completion?(error)
+          return
+        }
+        self.acknowledgeIncomingCallPresentation(
+          payload: payload,
+          callUuid: callUuid,
+          inviteId: inviteId
+        )
+        self.emit(type: "incoming", call: call)
+        self.timeoutCall(callUuid, generation: call.generation)
+        completion?(nil)
       }
-      self?.acknowledgeIncomingCallPresentation(
-        payload: payload,
-        callUuid: callUuid,
-        inviteId: inviteId
-      )
-      self?.emit(type: "incoming", call: call)
-      let serverRemainder = expiresAt?.timeIntervalSinceNow ?? 45
-      let timeoutSeconds = min(45, max(0.1, serverRemainder))
-      DispatchQueue.main.asyncAfter(deadline: .now() + timeoutSeconds, execute: timeoutWorkItem)
-      completion?(nil)
     }
     return callUuid
   }
@@ -535,7 +541,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private func handleTerminalVoipAction(
     input: [String: Any],
     action: String,
-    completion: @escaping () -> Void,
+    completion: @escaping () -> Void
   ) {
     let inviteId = toText(input["callInviteId"])
     let threadId = toText(input["threadId"])
@@ -625,6 +631,13 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
         }
         if call.answered || self.pendingAnswerActions[uuid] != nil {
           continuation.resume()
+          return
+        }
+        if call.ringingDeadline?.wakeup(
+          now: Date(), ownsCall: true, answered: false, answerPending: false
+        ) == .expire {
+          self.timeoutCall(uuid, generation: call.generation)
+          continuation.resume(throwing: ChillywoodNativeCallError.callUnavailable)
           return
         }
 
@@ -891,8 +904,12 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
         "callType": call.callType,
         "answered": call.answered,
       ]
-      if let expiresAt = call.expiresAt {
-        descriptor["expiresAt"] = ISO8601DateFormatter().string(from: expiresAt)
+      if let deadline = call.ringingDeadline {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        descriptor["expiresAt"] = formatter.string(from: deadline.expiresAt)
+        descriptor["ringingDeadlineUptime"] = deadline.uptimeDeadline
+        descriptor["ringingObservedUptime"] = ProcessInfo.processInfo.systemUptime
       }
       return descriptor
     }
@@ -913,33 +930,60 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
         let threadId = descriptor["threadId"] as? String,
         !threadId.isEmpty
       else { continue }
-      var restoredCall = ActiveNativeCall(
+      let answered = descriptor["answered"] as? Bool == true
+      let ringingDeadline = ChillywoodIncomingCallDeadline(
+        serverExpiresAt: parseServerDate(descriptor["expiresAt"]),
+        now: Date(),
+        previousUptimeDeadline: descriptor["ringingDeadlineUptime"] as? TimeInterval,
+        previousObservedUptime: descriptor["ringingObservedUptime"] as? TimeInterval
+      )
+      // Old/corrupt descriptors without a usable deadline must not gain a new
+      // ringing window. End locally as invalid, never claim server expiry.
+      guard answered || ringingDeadline != nil else {
+        provider?.reportCall(with: uuid, endedAt: Date(), reason: .failed)
+        markTerminalInvite(inviteId)
+        continue
+      }
+      let restoredCall = ActiveNativeCall(
         uuid: uuid,
         inviteId: inviteId,
         threadId: threadId,
         callType: descriptor["callType"] as? String == "video" ? "video" : "voice",
-        expiresAt: parseServerDate(descriptor["expiresAt"]),
-        answered: descriptor["answered"] as? Bool == true,
+        ringingDeadline: ringingDeadline,
+        answered: answered,
         timeoutWorkItem: nil
       )
-      if !restoredCall.answered {
-        let timeout = DispatchWorkItem { [weak self] in self?.timeoutCall(uuid) }
-        restoredCall.timeoutWorkItem = timeout
-        let serverRemainder = restoredCall.expiresAt?.timeIntervalSinceNow ?? 1
-        DispatchQueue.main.asyncAfter(
-          deadline: .now() + min(45, max(0.1, serverRemainder)),
-          execute: timeout
-        )
-      }
       activeCalls[uuid] = restoredCall
+      timeoutCall(uuid, generation: restoredCall.generation)
     }
     persistActiveCallDescriptors()
     retainPendingAnswerEvents(for: Set(activeCalls.keys))
     activeCalls.values.forEach { emit(type: "recovered", call: $0) }
   }
 
-  private func timeoutCall(_ uuid: UUID) {
-    guard let call = activeCalls[uuid], !call.answered else { return }
+  private func timeoutCall(_ uuid: UUID, generation: UUID) {
+    dispatchPrecondition(condition: .onQueue(.main))
+    guard var call = activeCalls[uuid], let deadline = call.ringingDeadline else { return }
+    switch deadline.wakeup(
+      now: Date(),
+      ownsCall: call.generation == generation,
+      answered: call.answered,
+      answerPending: pendingAnswerActions[uuid] != nil
+    ) {
+    case .ignore:
+      return
+    case .wait(let delay):
+      call.timeoutWorkItem?.cancel()
+      let timeout = DispatchWorkItem { [weak self] in
+        self?.timeoutCall(uuid, generation: generation)
+      }
+      call.timeoutWorkItem = timeout
+      activeCalls[uuid] = call
+      DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: timeout)
+      return
+    case .expire:
+      break
+    }
     failPendingAnswer(uuid)
     markTerminalInvite(call.inviteId)
     provider?.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
@@ -1036,7 +1080,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       inviteId: inviteId,
       threadId: "invalid",
       callType: "voice",
-      expiresAt: Date(),
+      ringingDeadline: nil,
       answered: false,
       timeoutWorkItem: nil
     )
@@ -1110,7 +1154,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       handleTerminalVoipAction(
         input: normalizedPayload,
         action: action,
-        completion: completion,
+        completion: completion
       )
     } catch {
       reportInvalidVoipPushOnMain(completion: completion)
@@ -1146,6 +1190,14 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     requestedAnswerTransactions.remove(action.callUUID)
     guard let call = activeCalls[action.callUUID] else {
       settleRequestedAnswers(action.callUUID, result: .failure(ChillywoodNativeCallError.callUnavailable))
+      action.fail()
+      return
+    }
+    if call.ringingDeadline?.wakeup(
+      now: Date(), ownsCall: true, answered: call.answered,
+      answerPending: pendingAnswerActions[action.callUUID] != nil
+    ) == .expire {
+      timeoutCall(action.callUUID, generation: call.generation)
       action.fail()
       return
     }

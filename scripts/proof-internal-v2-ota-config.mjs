@@ -54,7 +54,16 @@ const binaryFor = (platform, runtimeVersion) => ({
 });
 for (const [platform, config] of [["ios", iosInternal], ["android", androidInternal]]) {
   const runtimeVersion = platform === "ios" ? config.ios.runtimeVersion : config.android.runtimeVersion;
-  const plan = createOtaPublicationPlan({ platform, sourceSha, sourceTree, runtimeVersion, signedBinary: binaryFor(platform, runtimeVersion) });
+  // Synthetic native evidence exercises the pure plan contract only. Actual
+  // publication derives both digests from Git and the retained runtime cohort.
+  const nativeCompatibility = {
+    schemaVersion: 1, algorithm: "git-native-inputs/v1", platform,
+    sourceDigest: "4".repeat(64), binaryDigest: "4".repeat(64),
+    cohortAlgorithm: platform === "ios" ? "git-native-inputs/v1" : "android-native-compatibility/v1",
+    cohortSourceDigest: "4".repeat(64), cohortDigest: "4".repeat(64),
+    cohortSourceSha: platform === "ios" ? sourceSha : null,
+  };
+  const plan = createOtaPublicationPlan({ platform, sourceSha, sourceTree, runtimeVersion, signedBinary: binaryFor(platform, runtimeVersion), nativeCompatibility });
   assert.deepEqual(validateOtaPublicationPlan(plan).findings, [], `${platform} exact provenance must pass`);
   assert.ok(validateOtaPublicationPlan({ ...plan, channel: `${platform === "ios" ? "android" : "ios"}-internal-v2` }).findings.includes("OTA_CHANNEL_PLATFORM_MISMATCH"));
   assert.ok(validateOtaPublicationPlan({ ...plan, signedBinary: { ...plan.signedBinary, platform: platform === "ios" ? "android" : "ios" } }).findings.includes("OTA_BINARY_PLATFORM_MISMATCH"));

@@ -1,6 +1,6 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, AppState, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -90,6 +90,7 @@ import {
   drainIosNativeCallPendingEvents,
   hasIosNativeCallPresentation,
   isIosNativeCallsRuntimeEnabled,
+  readIosNativeCallPresentations,
   reportIosNativeCallRemoteEnd,
   requestIosNativeCallAnswer,
   revokeIosVoipRegistration,
@@ -456,11 +457,99 @@ const buildIncomingCallAlertFromInvite = async (invite: ChillyChatCallInvite): P
   };
 };
 
+function useIncomingCallActionOwnership(contextKey: string) {
+  type ActionOwner = { key: string; pending: boolean; settled: boolean };
+  const ownerRef = useRef<ActionOwner | null>(null);
+  useLayoutEffect(() => {
+    const owner = contextKey ? { key: contextKey, pending: false, settled: false } : null;
+    ownerRef.current = owner;
+    return () => {
+      if (ownerRef.current === owner) ownerRef.current = null;
+    };
+  }, [contextKey]);
+  return {
+    begin: () => {
+      const owner = ownerRef.current;
+      // A retained callback cannot borrow a replacement context. Reserve this
+      // owner synchronously so two taps cannot race before React commits.
+      if (!owner || owner.key !== contextKey || owner.pending || owner.settled) return null;
+      owner.pending = true;
+      return owner;
+    },
+    isCurrent: (owner: ActionOwner | null) => !!owner && ownerRef.current === owner,
+    finish: (owner: ActionOwner, settled: boolean) => {
+      if (ownerRef.current !== owner) return;
+      owner.pending = false;
+      // Failed actions remain retryable; successful ones stay retired through
+      // the interval between clearAlert() and the next committed render.
+      owner.settled = settled;
+    },
+  };
+}
+
+function useIncomingCallAlertDeadline(
+  alert: IncomingCallAlert | null,
+  setAlert: React.Dispatch<React.SetStateAction<IncomingCallAlert | null>>,
+  timerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>,
+) {
+  const inviteId = alert?.invite?.id ?? "";
+  const status = alert?.invite?.status;
+  const expiresAt = alert?.invite?.expiresAt ?? "";
+  useEffect(() => {
+    // A notification is only a hint until server readback supplies its invite.
+    // It cannot invent or renew a ringing lifetime. Accepted calls are governed
+    // by room liveness, not by the former ringing deadline.
+    if (!inviteId || status !== "ringing") return;
+    const deadline = Date.parse(expiresAt);
+    const clearExactRingingAlert = () => {
+      setAlert((current) => current?.invite?.id === inviteId
+        && current.invite.status === "ringing" && current.invite.expiresAt === expiresAt
+        ? null : current);
+    };
+    if (!Number.isFinite(deadline) || deadline <= Date.now()) {
+      clearExactRingingAlert();
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (timerRef.current !== timer) return;
+      timerRef.current = null;
+      clearExactRingingAlert();
+    }, deadline - Date.now());
+    timerRef.current = timer;
+    return () => {
+      clearTimeout(timer);
+      if (timerRef.current === timer) timerRef.current = null;
+    };
+  }, [expiresAt, inviteId, setAlert, status, timerRef]);
+}
+
+function mergeIncomingCallAlert(current: IncomingCallAlert | null, nextAlert: IncomingCallAlert) {
+  if (!current) return nextAlert;
+  const merged = { ...current, ...nextAlert };
+  const sameInvite = current.invite === merged.invite || (!!current.invite && !!merged.invite
+    && Object.keys(current.invite).length === Object.keys(merged.invite).length
+    && (Object.keys(merged.invite) as (keyof ChillyChatCallInvite)[])
+      .every((key) => current.invite?.[key] === merged.invite?.[key]));
+  const samePresentation = (Object.keys(merged) as (keyof IncomingCallAlert)[])
+    .every((key) => key === "invite" || current[key] === merged[key]);
+  // Preserve effect identity across unchanged polling readbacks so attention
+  // does not stop/restart every three seconds. Real status/deadline changes win.
+  return sameInvite && samePresentation ? current : merged;
+}
+
 function IncomingCallNotificationBridge() {
   const router = useRouter();
   const pathname = usePathname();
-  const { isSignedIn, user } = useSession();
+  const { authority, isSignedIn, user } = useSession();
   const [alert, setAlert] = useState<IncomingCallAlert | null>(null);
+  const currentAlertInviteId = String(alert?.invite?.id ?? alert?.inviteId ?? "").trim();
+  const currentAlertUserId = String(user?.id ?? "").trim();
+  const incomingActionKey = isSignedIn && authority?.state === "ACTIVE"
+    && authority.restoreOnly === false && authority.userId === currentAlertUserId
+    && authority.accountId === currentAlertUserId && authority.sessionGeneration && currentAlertInviteId
+    ? JSON.stringify([currentAlertUserId, authority.accountId, authority.sessionGeneration, currentAlertInviteId])
+    : "";
+  const incomingActionOwner = useIncomingCallActionOwnership(incomingActionKey);
   const [appState, setAppState] = useState(AppState.currentState);
   const [callPreferences, setCallPreferences] = useState<NotificationPreferenceSettings | null>(null);
   const [iosNativePresentationRevision, bumpIosNativePresentationRevision] = useState(0);
@@ -468,6 +557,7 @@ function IncomingCallNotificationBridge() {
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const incomingCallSoundRef = useRef<ChillyChatPlayingSound | null>(null);
   const latestInviteAlertIdRef = useRef("");
+  useIncomingCallAlertDeadline(alert, setAlert, dismissTimeoutRef);
 
   useEffect(() => {
     if (Platform.OS !== "ios") return () => {};
@@ -502,17 +592,13 @@ function IncomingCallNotificationBridge() {
   const showAlert = (nextAlert: IncomingCallAlert) => {
     if (nextAlert.inviteId && latestInviteAlertIdRef.current === nextAlert.inviteId) {
       if (nextAlert.invite) {
-        setAlert((current) => current?.invite ? current : current ? { ...current, ...nextAlert } : nextAlert);
+        // Refresh semantic status/deadline even when the invite ID is stable.
+        setAlert((current) => mergeIncomingCallAlert(current, nextAlert));
       }
       return;
     }
     if (nextAlert.inviteId) latestInviteAlertIdRef.current = nextAlert.inviteId;
     setAlert(nextAlert);
-    if (dismissTimeoutRef.current) clearTimeout(dismissTimeoutRef.current);
-    dismissTimeoutRef.current = setTimeout(() => {
-      setAlert(null);
-      dismissTimeoutRef.current = null;
-    }, 45_000);
   };
 
   useEffect(() => {
@@ -686,158 +772,190 @@ function IncomingCallNotificationBridge() {
     presentedNotificationId?: string | null;
     threadId?: string | null;
   }) => {
-    void dismissPresentedChillyChatCallNotifications({
+    const callInviteId = String(input.callInviteId ?? "").trim();
+    const userId = String(user?.id ?? "").trim();
+    if (!callInviteId || !userId) return;
+    const exactInput = {
       ...input,
-      dismissAllPresentedNotificationsFallback: true,
-      dismissIncomingCallFallback: true,
-    });
-    void dismissChillyChatCallNotificationRows(input);
+      callInviteId,
+      exactInviteOnly: true,
+    };
+    void dismissPresentedChillyChatCallNotifications(exactInput);
+    void dismissChillyChatCallNotificationRows({ ...exactInput, userId });
     [750, 1800, 5000].forEach((delayMs) => {
       setTimeout(() => {
-        void dismissPresentedChillyChatCallNotifications({
-          ...input,
-          dismissAllPresentedNotificationsFallback: true,
-          dismissIncomingCallFallback: true,
-        });
-        void dismissChillyChatCallNotificationRows(input);
+        void dismissPresentedChillyChatCallNotifications(exactInput);
+        void dismissChillyChatCallNotificationRows({ ...exactInput, userId });
       }, delayMs);
     });
   };
 
   const openCall = async () => {
-    const actorUserId = String(user?.id ?? "").trim();
-    const inviteId = String(alert.invite?.id ?? alert.inviteId ?? "").trim();
-    const invite = inviteId
-      ? await readChillyChatCallInvite(inviteId).catch(() => null)
-      : null;
-    if (
-      !actorUserId
-      || !invite
-      || invite.calleeUserId !== actorUserId
-      || invite.callerUserId === actorUserId
-      || (invite.status !== "ringing" && invite.status !== "accepted")
-    ) {
-      Alert.alert("Call unavailable", "This Chi'lly Chat call can no longer be answered.");
-      return;
-    }
-    const nativePresentationWaitOutcome = Platform.OS === "ios"
-      ? await waitForIosNativeCallPresentation(invite.id)
-      : "not_expected";
-    const answerAuthority = resolveIosForegroundIncomingAnswerAuthority(nativePresentationWaitOutcome);
-    if (answerAuthority === "native_answer") {
-      const nativeAnswerRequested = await requestIosNativeCallAnswer(invite.id);
-      if (!nativeAnswerRequested) {
+    const operation = incomingActionOwner.begin();
+    if (!operation) return;
+    let completed = false;
+    try {
+      const actorUserId = String(user?.id ?? "").trim();
+      const inviteId = String(alert.invite?.id ?? alert.inviteId ?? "").trim();
+      const invite = inviteId
+        ? await readChillyChatCallInvite(inviteId).catch(() => null)
+        : null;
+      if (!incomingActionOwner.isCurrent(operation)) return;
+      if (
+        !actorUserId
+        || !invite
+        || invite.id !== inviteId
+        || invite.calleeUserId !== actorUserId
+        || invite.callerUserId === actorUserId
+        || (invite.status !== "ringing" && invite.status !== "accepted")
+      ) {
+        Alert.alert("Call unavailable", "This Chi'lly Chat call can no longer be answered.");
+        return;
+      }
+      const nativePresentationWaitOutcome = Platform.OS === "ios"
+        ? await waitForIosNativeCallPresentation(invite.id)
+        : "not_expected";
+      if (!incomingActionOwner.isCurrent(operation)) return;
+      const answerAuthority = resolveIosForegroundIncomingAnswerAuthority(nativePresentationWaitOutcome);
+      if (answerAuthority === "native_answer") {
+        const nativeAnswerRequested = await requestIosNativeCallAnswer(invite.id);
+        if (!incomingActionOwner.isCurrent(operation)) return;
+        if (!nativeAnswerRequested) {
+          Alert.alert("Unable to answer", "The call remains available if it is still ringing. Try again from the chat thread.");
+          return;
+        }
+        cleanupChillyChatCallNotifications({
+          callInviteId: invite.id,
+          path: alert.path,
+          presentedNotificationId: alert.presentedNotificationId ?? null,
+          threadId: invite.threadId,
+        });
+        clearAlert();
+        completed = true;
+        return;
+      }
+      if (answerAuthority === "blocked") {
+        Alert.alert(
+          "Still preparing this call",
+          "iPhone is still preparing the incoming call. Answer from the iPhone call alert when it appears.",
+        );
+        return;
+      }
+      const acceptedInvite = invite.status === "accepted"
+        ? invite
+        : await updateChillyChatCallInviteStatus({
+          actorUserId,
+          invite,
+          status: "accepted",
+        }).catch(() => null);
+      if (!incomingActionOwner.isCurrent(operation)) return;
+      if (!acceptedInvite || acceptedInvite.status !== "accepted"
+        || acceptedInvite.id !== inviteId || acceptedInvite.threadId !== invite.threadId) {
         Alert.alert("Unable to answer", "The call remains available if it is still ringing. Try again from the chat thread.");
         return;
       }
+      const trustedUiIntent = createForegroundAuthenticatedUiCallIntent({
+        action: "open_call",
+        authenticated: true,
+        authenticatedUserId: actorUserId,
+        inviteId: acceptedInvite.id,
+        roomId: acceptedInvite.communicationRoomId,
+        threadId: acceptedInvite.threadId,
+      });
+      if (trustedUiIntent.status !== "created" || !trustedUiIntent.claimId) {
+        Alert.alert("Unable to open", "The call remains accepted. Open it from the chat thread.");
+        return;
+      }
+      const path = `/chat/${encodeURIComponent(acceptedInvite.threadId)}`;
       cleanupChillyChatCallNotifications({
-        callInviteId: invite.id,
-        path: alert.path,
+        callInviteId: acceptedInvite.id,
+        path,
         presentedNotificationId: alert.presentedNotificationId ?? null,
-        threadId: invite.threadId,
+        threadId: acceptedInvite.threadId,
       });
       clearAlert();
-      return;
+      completed = true;
+      router.push({
+        pathname: "/chat/[threadId]",
+        params: {
+          callInviteId: acceptedInvite.id,
+          foregroundCallClaim: trustedUiIntent.claimId,
+          openCall: "1",
+          threadId: acceptedInvite.threadId,
+        },
+      });
+    } finally {
+      incomingActionOwner.finish(operation, completed);
     }
-    if (answerAuthority === "blocked") {
-      Alert.alert(
-        "Still preparing this call",
-        "iPhone is still preparing the incoming call. Answer from the iPhone call alert when it appears.",
-      );
-      return;
-    }
-    const acceptedInvite = invite.status === "accepted"
-      ? invite
-      : await updateChillyChatCallInviteStatus({
-        actorUserId,
-        invite,
-        status: "accepted",
-      }).catch(() => null);
-    if (!acceptedInvite || acceptedInvite.status !== "accepted") {
-      Alert.alert("Unable to answer", "The call remains available if it is still ringing. Try again from the chat thread.");
-      return;
-    }
-    const trustedUiIntent = createForegroundAuthenticatedUiCallIntent({
-      action: "open_call",
-      authenticated: true,
-      authenticatedUserId: actorUserId,
-      inviteId: acceptedInvite.id,
-      roomId: acceptedInvite.communicationRoomId,
-      threadId: acceptedInvite.threadId,
-    });
-    if (trustedUiIntent.status !== "created" || !trustedUiIntent.claimId) {
-      Alert.alert("Unable to open", "The call remains accepted. Open it from the chat thread.");
-      return;
-    }
-    const path = `/chat/${encodeURIComponent(acceptedInvite.threadId)}`;
-    cleanupChillyChatCallNotifications({
-      callInviteId: acceptedInvite.id,
-      path,
-      presentedNotificationId: alert.presentedNotificationId ?? null,
-      threadId: acceptedInvite.threadId,
-    });
-    clearAlert();
-    router.push({
-      pathname: "/chat/[threadId]",
-      params: {
-        callInviteId: acceptedInvite.id,
-        foregroundCallClaim: trustedUiIntent.claimId,
-        openCall: "1",
-        threadId: acceptedInvite.threadId,
-      },
-    });
   };
 
   const decline = async () => {
-    const inviteId = String(alert.invite?.id ?? alert.inviteId ?? "").trim();
-    const actorUserId = String(user?.id ?? "").trim();
-    const invite = inviteId
-      ? await readChillyChatCallInvite(inviteId).catch(() => null)
-      : null;
-    const exactRecipient = !!invite
-      && !!actorUserId
-      && invite.calleeUserId === actorUserId
-      && invite.callerUserId !== actorUserId;
-    if (!exactRecipient || !invite) {
-      Alert.alert("Unable to decline", "The call state could not be verified. Open the chat thread and try again.");
-      return;
+    if (!authority) return;
+    const operation = incomingActionOwner.begin();
+    if (!operation) return;
+    let completed = false;
+    try {
+      const inviteId = String(alert.invite?.id ?? alert.inviteId ?? "").trim();
+      const actorUserId = String(user?.id ?? "").trim();
+      const invite = inviteId
+        ? await readChillyChatCallInvite(inviteId).catch(() => null)
+        : null;
+      if (!incomingActionOwner.isCurrent(operation)) return;
+      const exactRecipient = !!invite
+        && invite.id === inviteId
+        && !!actorUserId
+        && invite.calleeUserId === actorUserId
+        && invite.callerUserId !== actorUserId;
+      if (!exactRecipient || !invite) {
+        Alert.alert("Unable to decline", "The call state could not be verified. Open the chat thread and try again.");
+        return;
+      }
+      const declinedInvite = invite.status === "ringing"
+        ? await updateChillyChatCallInviteStatus({
+          actorUserId,
+          invite,
+          status: "declined",
+        }).catch(() => null)
+        : invite;
+      if (!incomingActionOwner.isCurrent(operation)) return;
+      const terminal = declinedInvite?.status === "declined"
+        || declinedInvite?.status === "missed"
+        || declinedInvite?.status === "canceled"
+        || declinedInvite?.status === "ended"
+        || declinedInvite?.status === "busy";
+      if (!terminal || !declinedInvite || declinedInvite.id !== inviteId
+        || declinedInvite.threadId !== invite.threadId) {
+        Alert.alert("Unable to decline", "The call is still changing state. Try again from the chat thread.");
+        return;
+      }
+      await clearEndedChatThreadCall(declinedInvite.threadId, declinedInvite.communicationRoomId, authority).catch(() => null);
+      if (!incomingActionOwner.isCurrent(operation)) return;
+      await dismissPresentedChillyChatCallNotifications({
+        callInviteId: declinedInvite.id,
+        exactInviteOnly: true,
+        path: alert.path,
+        presentedNotificationId: alert.presentedNotificationId ?? null,
+        threadId: declinedInvite.threadId,
+      }).catch(() => 0);
+      if (!incomingActionOwner.isCurrent(operation)) return;
+      await dismissChillyChatCallNotificationRows({
+        callInviteId: declinedInvite.id,
+        exactInviteOnly: true,
+        threadId: declinedInvite.threadId,
+        userId: actorUserId,
+      }).catch(() => 0);
+      if (!incomingActionOwner.isCurrent(operation)) return;
+      cleanupChillyChatCallNotifications({
+        callInviteId: declinedInvite.id,
+        path: alert.path,
+        presentedNotificationId: alert.presentedNotificationId ?? null,
+        threadId: declinedInvite.threadId,
+      });
+      clearAlert();
+      completed = true;
+    } finally {
+      incomingActionOwner.finish(operation, completed);
     }
-    const declinedInvite = invite.status === "ringing"
-      ? await updateChillyChatCallInviteStatus({
-        actorUserId,
-        invite,
-        status: "declined",
-      }).catch(() => null)
-      : invite;
-    const terminal = declinedInvite?.status === "declined"
-      || declinedInvite?.status === "missed"
-      || declinedInvite?.status === "canceled"
-      || declinedInvite?.status === "ended"
-      || declinedInvite?.status === "busy";
-    if (!terminal || !declinedInvite) {
-      Alert.alert("Unable to decline", "The call is still changing state. Try again from the chat thread.");
-      return;
-    }
-    cleanupChillyChatCallNotifications({
-      callInviteId: declinedInvite.id,
-      path: alert.path,
-      presentedNotificationId: alert.presentedNotificationId ?? null,
-      threadId: declinedInvite.threadId,
-    });
-    clearAlert();
-    await clearEndedChatThreadCall(declinedInvite.threadId).catch(() => null);
-    await dismissPresentedChillyChatCallNotifications({
-      callInviteId: declinedInvite.id,
-      dismissAllPresentedNotificationsFallback: true,
-      dismissIncomingCallFallback: true,
-      path: alert.path,
-      presentedNotificationId: alert.presentedNotificationId ?? null,
-      threadId: declinedInvite.threadId,
-    }).catch(() => 0);
-    await dismissChillyChatCallNotificationRows({
-      callInviteId: declinedInvite.id,
-      threadId: declinedInvite.threadId,
-    }).catch(() => 0);
   };
 
   const replyInChat = () => {
@@ -1124,14 +1242,24 @@ function RevenueCatBootstrap() {
 
 function IosNativeCallsBridge() {
   const router = useRouter();
-  const { authority, authorityStatus, user } = useSession();
+  const { authority: sessionAuthority, authorityStatus, user } = useSession();
+  const currentUserId = String(user?.id ?? "").trim();
+  const authorityUserId = sessionAuthority?.userId ?? "";
+  const authorityAccountId = sessionAuthority?.accountId ?? "";
+  const authorityGeneration = sessionAuthority?.sessionGeneration ?? "";
+  const authorityState = sessionAuthority?.state;
+  const authorityRestoreOnly = sessionAuthority?.restoreOnly;
+  const authority = useMemo(() => authorityState === "ACTIVE" && typeof authorityRestoreOnly === "boolean"
+    ? { userId: authorityUserId, accountId: authorityAccountId, sessionGeneration: authorityGeneration, state: authorityState, restoreOnly: authorityRestoreOnly }
+    : null, [authorityAccountId, authorityGeneration, authorityRestoreOnly, authorityState, authorityUserId]);
+  const routerRef = useRef(router);
+  useEffect(() => { routerRef.current = router; }, [router]);
   const inviteSubscriptionsRef = useRef(new Map<string, () => void>());
-  const nativeCallDescriptorsRef = useRef(new Map<string, { callUuid: string; threadId: string }>());
+  const nativeCallDescriptorsRef = useRef(new Map<string, { callUuid: string }>());
   const activeNativeAuthorityKeyRef = useRef("");
 
   useEffect(() => {
     let active = true;
-    const currentUserId = String(user?.id ?? "").trim();
     const lifecycle = resolveIosNativeCallBridgeLifecycle({
       authority,
       authorityStatus,
@@ -1166,19 +1294,22 @@ function IosNativeCallsBridge() {
     }
 
     activeNativeAuthorityKeyRef.current = lifecycle.bindingKey;
+    const ownsAuthority = () => active
+      && activeNativeAuthorityKeyRef.current === lifecycle.bindingKey;
 
-    const watchInviteLifecycle = (event: SanitizedNativeCallEvent) => {
+    const watchInviteLifecycle = (event: Pick<SanitizedNativeCallEvent, "callInviteId" | "callUuid">) => {
       const inviteId = String(event.callInviteId ?? "").trim();
       const callUuid = String(event.callUuid ?? "").trim();
-      if (!inviteId || !callUuid || inviteSubscriptionsRef.current.has(inviteId)) return;
-      nativeCallDescriptorsRef.current.set(inviteId, {
-        callUuid,
-        threadId: String(event.threadId ?? "").trim(),
-      });
+      if (!active || !inviteId || !callUuid) return;
+      if (nativeCallDescriptorsRef.current.get(inviteId)?.callUuid === callUuid
+        && inviteSubscriptionsRef.current.has(inviteId)) return;
+      clearInviteSubscription(inviteId);
+      const descriptor = { callUuid };
+      nativeCallDescriptorsRef.current.set(inviteId, descriptor);
 
       const reconcileInvite = async () => {
         const invite = await readChillyChatCallInvite(inviteId).catch(() => null);
-        if (!active || !invite) return;
+        if (!active || !invite || nativeCallDescriptorsRef.current.get(inviteId) !== descriptor) return;
         if (invite.status === "ringing" || invite.status === "accepted") return;
         clearInviteSubscription(inviteId);
         await reportIosNativeCallRemoteEnd(callUuid, `invite_${invite.status}`).catch(() => false);
@@ -1198,7 +1329,7 @@ function IosNativeCallsBridge() {
       getAuthenticatedUserId: () => currentUserId,
       isActive: () => active && authorityStatus === "active",
       replace: (destination: string) => {
-        router.replace(destination as Parameters<typeof router.replace>[0]);
+        routerRef.current.replace(destination as Parameters<typeof routerRef.current.replace>[0]);
       },
     });
 
@@ -1213,18 +1344,20 @@ function IosNativeCallsBridge() {
     ) => {
       const inviteId = String(event.callInviteId ?? "").trim();
       const threadId = String(event.threadId ?? "").trim();
-      if (!inviteId || !threadId) return false;
+      if (!ownsAuthority() || !inviteId || !threadId) return false;
       const actionKey = `${inviteId}:${status}`;
       pendingNativeTerminalActions.set(actionKey, { event, status });
       if (nativeTerminalActionsInFlight.has(actionKey)) return false;
       nativeTerminalActionsInFlight.add(actionKey);
 
       let settled = false;
+      let settledRoomId: string | null = null;
       try {
-        for (let attempt = 0; active && attempt < 3; attempt += 1) {
+        for (let attempt = 0; ownsAuthority() && attempt < 3; attempt += 1) {
           const invite = await readChillyChatCallInvite(inviteId).catch(() => null);
-          if (!active) return false;
+          if (!ownsAuthority()) return false;
           if (!invite || invite.threadId !== threadId) break;
+          settledRoomId = invite.communicationRoomId;
 
           const actorIsParticipant =
             invite.callerUserId === currentUserId
@@ -1246,6 +1379,10 @@ function IosNativeCallsBridge() {
             invite,
             status,
           }).catch(() => null);
+          // The server operation may finish after sign-out or account/session
+          // replacement. Its result cannot authorize this retired bridge to
+          // clear the replacement's thread or notification state.
+          if (!ownsAuthority()) return false;
           if (updated?.status === status) {
             settled = true;
             break;
@@ -1255,22 +1392,26 @@ function IosNativeCallsBridge() {
           }
         }
 
-        if (!settled) return false;
+        if (!settled || !ownsAuthority()) return false;
         pendingNativeTerminalActions.delete(actionKey);
         clearInviteSubscription(inviteId);
-        await clearEndedChatThreadCall(threadId).catch(() => null);
+        await clearEndedChatThreadCall(threadId, settledRoomId, authority).catch(() => null);
+        if (!ownsAuthority()) return false;
         await dismissPresentedChillyChatCallNotifications({
           callInviteId: inviteId,
-          dismissAllPresentedNotificationsFallback: true,
-          dismissIncomingCallFallback: true,
+          exactInviteOnly: true,
           threadId,
         }).catch(() => 0);
+        if (!ownsAuthority()) return false;
         await dismissChillyChatCallNotificationRows({
           callInviteId: inviteId,
+          exactInviteOnly: true,
           threadId,
+          userId: currentUserId,
         }).catch(() => 0);
+        if (!ownsAuthority()) return false;
         await completeIosNativeCallTerminalTransition(String(event.callUuid ?? "").trim()).catch(() => false);
-        return true;
+        return ownsAuthority();
       } finally {
         nativeTerminalActionsInFlight.delete(actionKey);
       }
@@ -1324,7 +1465,10 @@ function IosNativeCallsBridge() {
       }
     };
 
-    void startIosNativeCallsReadiness(authority, handleNativeCallEvent);
+    void startIosNativeCallsReadiness(authority, handleNativeCallEvent).then((readiness) => {
+      if (!active || readiness.status !== "started") return;
+      readIosNativeCallPresentations().forEach(watchInviteLifecycle);
+    }).catch((error) => reportRuntimeError("ios-native-call-readiness", error));
     const activationSubscription = AppState.addEventListener("change", (state) => {
       if (state !== "active") return;
       void drainIosNativeCallPendingEvents();
@@ -1334,7 +1478,8 @@ function IosNativeCallsBridge() {
       nativeCallDescriptorsRef.current.forEach((descriptor, inviteId) => {
         void readChillyChatCallInvite(inviteId)
           .then((invite) => {
-            if (!invite || invite.status === "ringing" || invite.status === "accepted") return;
+            if (!active || nativeCallDescriptorsRef.current.get(inviteId) !== descriptor
+              || !invite || invite.status === "ringing" || invite.status === "accepted") return;
             clearInviteSubscription(inviteId);
             return reportIosNativeCallRemoteEnd(descriptor.callUuid, `activation_${invite.status}`);
           })
@@ -1350,8 +1495,7 @@ function IosNativeCallsBridge() {
   }, [
     authority,
     authorityStatus,
-    router,
-    user?.id,
+    currentUserId,
   ]);
 
   return null;
