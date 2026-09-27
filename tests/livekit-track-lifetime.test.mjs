@@ -155,12 +155,19 @@ test('installed LiveKit capture lifetime contract', { concurrency: false }, asyn
       });
     });
 
-    await t.test(`${kind}: explicit restart replaces an unmuted ended track on its sender`, async () => {
+    await t.test(`${kind}: local stop preserves publication and sender for explicit restart`, async () => {
       await withPublishedTrack(kind, async ({ track, original, publication, captures, senderReplacements }) => {
-        original.stop();
+        const sender = track.sender;
+        track.stop();
+        assert.equal(original.readyState, 'ended');
+        assert.equal(track.sender, sender, 'stop does not detach the sender required by unpublishTrack');
+        assert.equal(publication.track, track, 'stop does not remove its publication association');
+        assert.equal(track.isMuted, false, 'stop and SDK mute state are separate');
+        assert.equal(senderReplacements.length, 0, 'stop does not replace the sender with null');
         await track.restartTrack();
         assert.equal(captures.length, 1);
         assert.equal(publication.track, track);
+        assert.equal(track.sender, sender);
         assert.equal(track.mediaStreamTrack, captures[0]);
         assert.equal(track.mediaStreamTrack.readyState, 'live');
         assert.equal(track.mediaStreamTrack.enabled, true);

@@ -67,6 +67,12 @@ passed physical qualification.
   state as successful.
 - Required camera shutdown precedes microphone permission/restart waits so
   background video cannot remain active because microphone recovery fails.
+  Background events also stop the exact current camera track synchronously,
+  before queued work, when microphone recovery was already pending. The SDK
+  sender remains available for normal publication retirement; failed capture
+  shutdown initiates exact-Room termination independently of that queue.
+  This immediately stops local capture and updates local UI; peer membership
+  projection still follows serialized reconciliation after pending work settles.
 
 The mounted tests separate publication mute state from native-track lifetime.
 `tests/livekit-track-lifetime.test.mjs` also exercises the real locked LiveKit

@@ -1035,6 +1035,47 @@ export function useLiveKitChatCallSession({
     return false;
   }, [terminateRoomForCameraSafety]);
 
+  const stopCurrentCameraForBackground = useCallback(() => {
+    if (appStateRef.current === "active") return;
+    const binding = committedSessionRef.current;
+    const liveKitRoom = binding?.liveKitRoom;
+    if (!binding || !liveKitRoom || !committedSessionOwnsCurrentRoom(binding)) return;
+    const track = liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera)?.track;
+    if (!track) return;
+
+    // Privacy cannot queue behind an in-flight microphone acquisition. This
+    // exact-track stop is synchronous and preserves the SDK sender for the
+    // ordinary unpublish/reconciliation path. Requested camera intent stays
+    // intact so a later authorized foreground can reacquire capture.
+    let stopFailure: unknown = null;
+    try {
+      track.stop();
+    } catch (error) {
+      stopFailure = error;
+    }
+    if (!stopFailure && track.mediaStreamTrack.readyState === "ended") {
+      setCameraEnabledState(false);
+      refreshParticipantViews();
+      return;
+    }
+
+    setReconciliationWarning("Camera safety could not be restored. The call is disconnecting.");
+    void terminateRoomForCameraSafety(
+      liveKitRoom,
+      "chat-call-livekit-immediate-background-camera-stop",
+      stopFailure ?? new Error("background_camera_capture_stop_unconfirmed"),
+    ).then(() => {
+      if (!sameCommittedAuthority(committedSessionRef.current, binding)
+        || roomRef.current !== liveKitRoom) return;
+      setCameraEnabledState(publicationIsUsable(
+        liveKitRoom.localParticipant.getTrackPublication(Track.Source.Camera),
+      ));
+      refreshParticipantViews();
+    }).catch((error) => {
+      reportRuntimeError("chat-call-livekit-immediate-background-camera-termination", error);
+    });
+  }, [committedSessionOwnsCurrentRoom, refreshParticipantViews, setReconciliationWarning, terminateRoomForCameraSafety]);
+
   const publishCameraForCurrentForeground = useCallback(async (
     liveKitRoom: Room,
     binding: CommittedSession,
@@ -3176,12 +3217,13 @@ export function useLiveKitChatCallSession({
         applicationStateGenerationRef.current += 1;
         nativeForegroundWitnessRef.current = null;
         appStateRef.current = "background";
+        stopCurrentCameraForBackground();
         void scheduleLatestMediaReconciliation(true);
         return;
       }
       void cleanupSession({ leaveMembership: true });
     });
-  }, [cleanupSession, scheduleLatestMediaReconciliation, sessionKey]);
+  }, [cleanupSession, scheduleLatestMediaReconciliation, sessionKey, stopCurrentCameraForBackground]);
 
   useEffect(() => {
     if (!sessionKey) return undefined;
@@ -3191,6 +3233,7 @@ export function useLiveKitChatCallSession({
       const nativeWitnessRevoked = nextState !== "active" && !!nativeForegroundWitnessRef.current;
       if (nextState !== "active") nativeForegroundWitnessRef.current = null;
       appStateRef.current = nextState;
+      if (nextState !== "active") stopCurrentCameraForBackground();
       if ((nextState === previousState && !nativeWitnessRevoked) || !roomRef.current) return;
       const liveKitRoom = roomRef.current;
       const lifecycleBinding = committedSessionRef.current;
@@ -3233,6 +3276,7 @@ export function useLiveKitChatCallSession({
     scheduleLatestMediaReconciliation,
     scheduleLatestNativeMediaReconciliation,
     sessionKey,
+    stopCurrentCameraForBackground,
   ]);
 
   useEffect(() => {

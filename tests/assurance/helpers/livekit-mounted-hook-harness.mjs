@@ -374,8 +374,15 @@ export function createLiveKitMountedRuntime(options = {}) {
       let stopGeneration = 0;
       const track = makeTrack(kind, () => {
         stopGeneration += 1;
-        if (kind === "video") participant.cameraEnabled = false;
-        else participant.micEnabled = false;
+        // LocalTrack.stop ends capture but does not mute/remove its publication.
+        // An obsolete track object cannot change a newer publication's state.
+        if (kind === "video" && participant.cameraTrack === track) {
+          participant.interruptedUnmutedCameraPublication ||= participant.cameraEnabled;
+          participant.cameraEnabled = false;
+        } else if (kind === "audio" && participant.micTrack === track) {
+          participant.interruptedUnmutedMicrophonePublication ||= participant.micEnabled;
+          participant.micEnabled = false;
+        }
       });
       track.restartTrack = async () => {
         const generationBeforeRestart = stopGeneration;
@@ -393,11 +400,11 @@ export function createLiveKitMountedRuntime(options = {}) {
           track.stop();
           return;
         }
-        if (kind === "video") {
+        if (kind === "video" && participant.cameraTrack === track) {
           participant.cameraEnabled = true;
           participant.interruptedUnmutedCameraPublication = false;
           runtime.remoteCameraConverged = true;
-        } else {
+        } else if (kind === "audio" && participant.micTrack === track) {
           participant.micEnabled = true;
           participant.interruptedUnmutedMicrophonePublication = false;
         }
@@ -578,7 +585,9 @@ export function createLiveKitMountedRuntime(options = {}) {
       if (stopTracks) {
         this.localParticipant.cameraTrack.stop();
         this.localParticipant.cameraPublicationPresent = false;
+        this.localParticipant.interruptedUnmutedCameraPublication = false;
         this.localParticipant.micTrack.stop();
+        this.localParticipant.interruptedUnmutedMicrophonePublication = false;
       }
       this.state = "disconnected";
     }

@@ -4,9 +4,9 @@
   "targetId": "livekit-mic-post-merge-correction",
   "classification": "D2A_LIVEKIT_MIC_POST_MERGE_CORRECTION",
   "sourceBindings": {
-    "hooks/use-livekit-chat-call-session.ts": "3188d85cc4ee56ddc1d75507f3320f01f9bbe685a40ad7da094ac3c539f89b1a",
-    "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs": "44e3d9b0bbf42df6ce641976b58f5352f2db5c1af482e747c666e996be8785b8",
-    "tests/assurance/helpers/livekit-mounted-hook-harness.mjs": "e47d49ea7d018e5df53809b6006a9f0f1a2d087763c959efe3f23e0559744957",
+    "hooks/use-livekit-chat-call-session.ts": "86e79fb2e38b081ec54cf1d15072f90e2f75fd2aedb08d5cabc69b7b35675b0e",
+    "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs": "6f59951af8112ed2bd45b313c784bc4816643c2250ba60c98b0fe11340099b4c",
+    "tests/assurance/helpers/livekit-mounted-hook-harness.mjs": "3657050b5041c81a5c9924c381dee4a27307b689eb3d68ca61e6b28e3d6cdfbf",
     "tests/assurance/android-chat-call-mic-exact-hook.test.mjs": "5f8f806458829335c7329ef99aa44fc1a5322ce21221b4a42080f494905f2ad5"
   },
   "sourceSlices": {
