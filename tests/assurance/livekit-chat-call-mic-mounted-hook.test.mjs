@@ -417,6 +417,13 @@ test("an established two-participant call stays reconnecting until the known rem
     "a transport reconnect is not presented as recovered while its established peer is absent",
   );
 
+  await harness.fireHeartbeat();
+  assert.equal(
+    harness.getResult().channelState,
+    "reconnecting",
+    "the heartbeat cannot declare recovery while the known remote participant is still absent",
+  );
+
   const restoredRemote = runtime.restoreRemoteParticipant();
   await harness.emitRoom("ParticipantConnected", restoredRemote);
   await waitFor(harness, () => harness.getResult().channelState === "live", "remote participant recovery completed");
@@ -1357,7 +1364,7 @@ test("older heartbeat snapshot cannot overwrite a newer remote camera projection
   assert.equal(readRemote()?.liveKitVideoTrackReference, undefined);
 });
 
-test("media invalidation bursts use one leading and one trailing snapshot", async (t) => {
+test("media invalidation bursts use one immediate and one paced authoritative snapshot", async (t) => {
   const { harness, runtime } = await mountCase(t, {
     initialRemoteParticipant: true,
     remoteCamera: true,
@@ -1376,12 +1383,49 @@ test("media invalidation bursts use one leading and one trailing snapshot", asyn
   assert.equal(runtime.snapshotReads, readsBeforeBurst + 1);
 
   await harness.resolveDeferred(leadingSnapshot);
+  assert.equal(runtime.snapshotReads, readsBeforeBurst + 1);
+  await harness.fireLatestTimeout();
   assert.equal(runtime.snapshotReads, readsBeforeBurst + 2);
   assert.equal(readRemote()?.cameraOn, false);
   assert.equal(readRemote()?.liveKitVideoTrackReference, undefined);
 });
 
-test("LiveKit data invalidation bursts share the bounded leading and trailing reader", async (t) => {
+test("a LiveKit invalidation received during each active refresh is not stranded until heartbeat", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialRemoteParticipant: true,
+    remoteCamera: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const readRemote = () => harness.getResult().participants.find((entry) => !entry.isSelf);
+  const leadingSnapshot = deferred();
+  const trailingSnapshot = deferred();
+  runtime.queueSnapshot({ gate: leadingSnapshot, outcome: "active", remoteCamera: true });
+  runtime.queueSnapshot({ gate: trailingSnapshot, outcome: "active", remoteCamera: true });
+  runtime.queueSnapshot({ outcome: "active", remoteCamera: false });
+  runtime.remoteDurableCamera = false;
+  const readsBeforeEvents = runtime.snapshotReads;
+
+  await harness.fireLiveKitMediaInvalidation();
+  assert.equal(runtime.snapshotReads, readsBeforeEvents + 1);
+  await harness.fireLiveKitMediaInvalidation();
+  await harness.fireLatestTimeout();
+  assert.equal(runtime.snapshotReads, readsBeforeEvents + 1);
+
+  await harness.resolveDeferred(leadingSnapshot);
+  assert.equal(runtime.snapshotReads, readsBeforeEvents + 2);
+  await harness.fireLiveKitMediaInvalidation();
+  await harness.fireLatestTimeout();
+  assert.equal(runtime.snapshotReads, readsBeforeEvents + 2);
+
+  await harness.resolveDeferred(trailingSnapshot);
+  assert.equal(runtime.snapshotReads, readsBeforeEvents + 3);
+  assert.equal(readRemote()?.cameraOn, false);
+  assert.equal(readRemote()?.liveKitVideoTrackReference, undefined);
+});
+
+test("LiveKit data invalidation bursts share the paced authoritative reader", async (t) => {
   const { harness, runtime } = await mountCase(t, {
     initialRemoteParticipant: true,
     remoteCamera: true,

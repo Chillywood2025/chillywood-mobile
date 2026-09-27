@@ -1756,22 +1756,46 @@ assert.match(
 );
 assert.match(
   liveKitChatCallSessionSource,
-  /RoomEvent\.DataReceived[\s\S]{0,620}topic !== LIVEKIT_MEDIA_INVALIDATION_TOPIC[\s\S]{0,620}queueLiveKitMediaSnapshotRefresh/u,
+  /RoomEvent\.DataReceived[\s\S]{0,620}topic !== LIVEKIT_MEDIA_INVALIDATION_TOPIC[\s\S]{0,620}queuePeerMediaSnapshotRefresh/u,
   "LiveKit media invalidations are topic-bound and trigger only an authoritative membership refresh",
 );
 assert.match(
   liveKitChatCallSessionSource,
-  /const LIVEKIT_MEDIA_INVALIDATION_REFRESH_INTERVAL_MS = 1_000;/u,
-  "LiveKit media invalidations use the reviewed one-second peer-read budget",
+  /const MEDIA_INVALIDATION_REFRESH_INTERVAL_MS = 1_000;/u,
+  "peer media invalidations use the reviewed one-second read budget",
 );
 const liveKitMediaRateLimitBlock = liveKitChatCallSessionSource.slice(
-  liveKitChatCallSessionSource.indexOf("const queueLiveKitMediaSnapshotRefresh"),
+  liveKitChatCallSessionSource.indexOf("const queuePeerMediaSnapshotRefresh"),
   liveKitChatCallSessionSource.indexOf("const subscribeToMembershipState"),
 );
 assert.match(
   liveKitMediaRateLimitBlock,
-  /queueMediaSnapshotRefresh\(scope\)[\s\S]{0,1000}liveKitMediaRefreshTimer = setTimeout[\s\S]{0,700}queueMediaSnapshotRefresh\(queuedScope\)/u,
-  "LiveKit media invalidations retain an immediate refresh while coalescing paced peer reads",
+  /queueMediaSnapshotRefresh\(scope\)[\s\S]{0,1000}peerMediaRefreshTimer = setTimeout[\s\S]{0,700}queueMediaSnapshotRefresh\(queuedScope\)/u,
+  "peer media invalidations retain an immediate refresh while coalescing paced reads",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /if \(mediaSnapshotRefreshInFlight\)[\s\S]{0,240}mediaSnapshotRefreshQueued = true[\s\S]{0,900}while \(active && isCommittedSessionCurrent\(binding\)\)[\s\S]{0,500}mediaSnapshotRefreshQueuedScope/u,
+  "media invalidations received during any active refresh retain a subsequent authoritative read",
+);
+const liveKitConnectedTransitionBlock = liveKitChatCallSessionSource.slice(
+  liveKitChatCallSessionSource.indexOf("const markTransportConnectedIfReady"),
+  liveKitChatCallSessionSource.indexOf("const completeTransportRecovery"),
+);
+assert.match(
+  liveKitConnectedTransitionBlock,
+  /reconnectAwaitingRemoteRef\.current[\s\S]{0,180}remoteParticipantSeenRef\.current[\s\S]{0,180}remoteParticipants\.size === 0[\s\S]{0,260}setChannelState\("reconnecting"\)/u,
+  "the shared connected transition cannot report recovery while a previously connected peer remains absent",
+);
+assert.equal(
+  [...liveKitChatCallSessionSource.matchAll(/setChannelState\("live"\)/gu)].length,
+  1,
+  "every LiveKit connected transition uses the same missing-peer recovery rule",
+);
+assert.match(
+  liveKitHeartbeatBlock,
+  /markTransportConnectedIfReady\(heartbeatBinding\)/u,
+  "the heartbeat uses the shared connected transition",
 );
 assert.match(
   liveKitChatCallSessionSource,
