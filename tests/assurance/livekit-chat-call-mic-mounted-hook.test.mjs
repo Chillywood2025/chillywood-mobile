@@ -417,6 +417,13 @@ test("an established two-participant call stays reconnecting until the known rem
     "a transport reconnect is not presented as recovered while its established peer is absent",
   );
 
+  await harness.fireHeartbeat();
+  assert.equal(
+    harness.getResult().channelState,
+    "reconnecting",
+    "the heartbeat cannot declare recovery while the known remote participant is still absent",
+  );
+
   const restoredRemote = runtime.restoreRemoteParticipant();
   await harness.emitRoom("ParticipantConnected", restoredRemote);
   await waitFor(harness, () => harness.getResult().channelState === "live", "remote participant recovery completed");
@@ -1259,6 +1266,53 @@ test("media invalidation rejects wrong-room and self-sender payloads before auth
   assert.equal(readRemote()?.cameraOn, false);
 });
 
+test("LiveKit data invalidation refreshes only from a connected peer and ignores claimed media values", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialRemoteParticipant: true,
+    remoteCamera: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const readRemote = () => harness.getResult().participants.find((entry) => !entry.isSelf);
+  const readsBeforeInvalidEvents = runtime.snapshotReads;
+  runtime.remoteDurableCamera = false;
+
+  await harness.fireLiveKitMediaInvalidation({ topic: "unrelated" });
+  await harness.fireLiveKitMediaInvalidation({ payload: [2] });
+  await harness.fireLiveKitMediaInvalidation({ fromUserId: runtime.userId });
+  await harness.fireLiveKitMediaInvalidation({ fromUserId: "unrelated-user" });
+  await harness.fireLiveKitMediaInvalidation({ missingParticipant: true });
+
+  assert.equal(runtime.snapshotReads, readsBeforeInvalidEvents);
+  assert.equal(readRemote()?.cameraOn, true);
+
+  await harness.fireLiveKitMediaInvalidation({ cameraOn: true });
+  assert.equal(readRemote()?.cameraOn, false);
+  assert.equal(readRemote()?.liveKitVideoTrackReference, undefined);
+});
+
+test("LiveKit participant connection closes a missed initial-media invalidation without heartbeat", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialRemoteParticipant: false,
+    remoteCamera: true,
+    snapshotRemoteParticipant: false,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const readsBeforeConnection = runtime.snapshotReads;
+  runtime.remoteIncludedInSnapshot = true;
+  const remote = runtime.restoreRemoteParticipant();
+
+  await harness.emitRoom("ParticipantConnected", remote);
+
+  assert.equal(runtime.snapshotReads, readsBeforeConnection + 1);
+  const projectedRemote = harness.getResult().participants.find((entry) => !entry.isSelf);
+  assert.equal(projectedRemote?.cameraOn, true);
+  assert.ok(projectedRemote?.liveKitVideoTrackReference);
+});
+
 test("subscription readiness closes the initial peer-join race without waiting for heartbeat", async (t) => {
   const { harness, runtime } = await mountCase(t, {
     deferRealtimeSubscribe: true,
@@ -1310,7 +1364,7 @@ test("older heartbeat snapshot cannot overwrite a newer remote camera projection
   assert.equal(readRemote()?.liveKitVideoTrackReference, undefined);
 });
 
-test("media invalidation bursts use one leading and one trailing snapshot", async (t) => {
+test("media invalidation bursts use one immediate and one paced authoritative snapshot", async (t) => {
   const { harness, runtime } = await mountCase(t, {
     initialRemoteParticipant: true,
     remoteCamera: true,
@@ -1329,9 +1383,117 @@ test("media invalidation bursts use one leading and one trailing snapshot", asyn
   assert.equal(runtime.snapshotReads, readsBeforeBurst + 1);
 
   await harness.resolveDeferred(leadingSnapshot);
+  assert.equal(runtime.snapshotReads, readsBeforeBurst + 1);
+  await harness.fireLatestTimeout();
   assert.equal(runtime.snapshotReads, readsBeforeBurst + 2);
   assert.equal(readRemote()?.cameraOn, false);
   assert.equal(readRemote()?.liveKitVideoTrackReference, undefined);
+});
+
+test("a LiveKit invalidation received during each active refresh is not stranded until heartbeat", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialRemoteParticipant: true,
+    remoteCamera: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const readRemote = () => harness.getResult().participants.find((entry) => !entry.isSelf);
+  const leadingSnapshot = deferred();
+  const trailingSnapshot = deferred();
+  runtime.queueSnapshot({ gate: leadingSnapshot, outcome: "active", remoteCamera: true });
+  runtime.queueSnapshot({ gate: trailingSnapshot, outcome: "active", remoteCamera: true });
+  runtime.queueSnapshot({ outcome: "active", remoteCamera: false });
+  runtime.remoteDurableCamera = false;
+  const readsBeforeEvents = runtime.snapshotReads;
+
+  await harness.fireLiveKitMediaInvalidation();
+  assert.equal(runtime.snapshotReads, readsBeforeEvents + 1);
+  await harness.fireLiveKitMediaInvalidation();
+  await harness.fireLatestTimeout();
+  assert.equal(runtime.snapshotReads, readsBeforeEvents + 1);
+
+  await harness.resolveDeferred(leadingSnapshot);
+  assert.equal(runtime.snapshotReads, readsBeforeEvents + 2);
+  await harness.fireLiveKitMediaInvalidation();
+  await harness.fireLatestTimeout();
+  assert.equal(runtime.snapshotReads, readsBeforeEvents + 2);
+
+  await harness.resolveDeferred(trailingSnapshot);
+  assert.equal(runtime.snapshotReads, readsBeforeEvents + 3);
+  assert.equal(readRemote()?.cameraOn, false);
+  assert.equal(readRemote()?.liveKitVideoTrackReference, undefined);
+});
+
+test("LiveKit data invalidation bursts share the paced authoritative reader", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialRemoteParticipant: true,
+    remoteCamera: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const readRemote = () => harness.getResult().participants.find((entry) => !entry.isSelf);
+  const leadingSnapshot = deferred();
+  runtime.queueSnapshot({ gate: leadingSnapshot, outcome: "active", remoteCamera: true });
+  runtime.queueSnapshot({ outcome: "active", remoteCamera: false });
+  runtime.remoteDurableCamera = false;
+  const readsBeforeBurst = runtime.snapshotReads;
+
+  await harness.fireLiveKitMediaInvalidationBurst(50);
+  assert.equal(runtime.snapshotReads, readsBeforeBurst + 1);
+
+  await harness.resolveDeferred(leadingSnapshot);
+  assert.equal(runtime.snapshotReads, readsBeforeBurst + 1);
+  await harness.fireLatestTimeout();
+  assert.equal(runtime.snapshotReads, readsBeforeBurst + 2);
+  assert.equal(readRemote()?.cameraOn, false);
+  assert.equal(readRemote()?.liveKitVideoTrackReference, undefined);
+});
+
+test("LiveKit data invalidation rate-limits paced peer reads and cancels delayed cleanup work", async () => {
+  const runtime = createLiveKitMountedRuntime({
+    initialRemoteParticipant: true,
+    remoteCamera: true,
+  });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const readsBeforeEvents = runtime.snapshotReads;
+  runtime.remoteDurableCamera = false;
+
+  await harness.fireLiveKitMediaInvalidation();
+  assert.equal(runtime.snapshotReads, readsBeforeEvents + 1);
+
+  for (let index = 0; index < 50; index += 1) {
+    await harness.fireLiveKitMediaInvalidation();
+  }
+  assert.equal(runtime.snapshotReads, readsBeforeEvents + 1);
+
+  const firstTimerIndex = runtime.timeoutCallbacks.findLastIndex(
+    (callback) => typeof callback === "function",
+  );
+  assert.ok(firstTimerIndex >= 0);
+  assert.ok(runtime.timeoutDelays[firstTimerIndex] > 0);
+  assert.ok(runtime.timeoutDelays[firstTimerIndex] <= 1_000);
+  await harness.fireLatestTimeout();
+  assert.equal(runtime.snapshotReads, readsBeforeEvents + 2);
+
+  await harness.fireLiveKitMediaInvalidation();
+  const cleanupTimerIndex = runtime.timeoutCallbacks.findLastIndex(
+    (callback) => typeof callback === "function",
+  );
+  const staleTimer = runtime.timeoutCallbacks[cleanupTimerIndex];
+  assert.ok(cleanupTimerIndex >= 0);
+  assert.equal(typeof staleTimer, "function");
+  const readsBeforeUnmount = runtime.snapshotReads;
+
+  await harness.unmount();
+  assert.equal(runtime.timeoutCallbacks[cleanupTimerIndex], null);
+  staleTimer();
+  await Promise.resolve();
+  assert.equal(runtime.snapshotReads, readsBeforeUnmount);
 });
 
 test("membership subscription failure keeps the call live with heartbeat fallback", async (t) => {
@@ -1366,10 +1528,16 @@ test("local camera commits an authenticated media invalidation after durable sta
     invite: { ...defaultHookOptions().invite, callType: "video" },
   }));
   const broadcastsBeforeToggle = runtime.mediaBroadcasts.length;
+  const dataBroadcastsBeforeToggle = runtime.liveKitDataPublishes.length;
 
   assert.equal(await runOperation(harness, () => harness.getResult().setCameraEnabled(false)), true);
 
   assert.equal(runtime.mediaBroadcasts.length, broadcastsBeforeToggle + 1);
+  assert.equal(runtime.liveKitDataPublishes.length, dataBroadcastsBeforeToggle + 1);
+  assert.deepEqual(runtime.liveKitDataPublishes.at(-1), {
+    data: [1],
+    options: { reliable: true, topic: "chillywood.media-state.v1" },
+  });
   const committedBroadcast = runtime.mediaBroadcasts.at(-1);
   assert.equal(committedBroadcast?.event, "media:update");
   assert.equal(committedBroadcast?.roomId, "ROOM-1");
@@ -1377,6 +1545,30 @@ test("local camera commits an authenticated media invalidation after durable sta
   assert.equal(committedBroadcast?.payload?.micOn, true);
   assert.equal(runtime.durableCamera, false);
   assert.equal(harness.getResult().cameraEnabled, false);
+});
+
+test("LiveKit data invalidation failure preserves the connected call and other fallbacks", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialRemoteParticipant: true,
+    rejectLiveKitDataBroadcast: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+
+  assert.equal(await runOperation(harness, () => harness.getResult().setCameraEnabled(false)), true);
+  await harness.flush();
+
+  assert.equal(harness.getResult().channelState, "live");
+  assert.equal(harness.getResult().cameraEnabled, false);
+  assert.equal(runtime.mediaBroadcasts.at(-1)?.event, "media:update");
+  assert.equal(
+    runtime.errors.some((entry) => entry.scope === "chat-call-livekit-media-data-broadcast"),
+    true,
+  );
+  await harness.fireHeartbeat();
+  assert.equal(harness.getResult().channelState, "live");
 });
 
 test("media invalidation failure preserves the connected call and heartbeat fallback", async (t) => {
@@ -1446,6 +1638,35 @@ test("replacement removes the old membership channel and its callback cannot rea
 
   assert.equal(runtime.snapshotReads, readsBeforeStaleCallback);
   assert.equal(harness.getResult().room?.roomId, "ROOM-2");
+});
+
+test("a replaced room's participant callback cannot make an empty replacement reconnect wait for a ghost peer", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ initialRemoteParticipant: false });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  t.after(() => harness.unmount());
+  const oldRoom = runtime.rooms.at(-1);
+  const staleParticipantConnected = oldRoom.handlers.get("ParticipantConnected");
+
+  await harness.commitRender(replacementOptions());
+  await waitFor(harness, () => runtime.rooms.length === 2, "replacement LiveKit room connected");
+  assert.equal(harness.getResult().channelState, "live");
+
+  staleParticipantConnected({ identity: runtime.remoteUserId });
+  await harness.flush();
+  const replacementRoom = runtime.rooms.at(-1);
+  replacementRoom.state = "reconnecting";
+  await harness.emitRoom("Reconnecting");
+  replacementRoom.state = "connected";
+  await harness.emitRoom("Reconnected");
+
+  await waitFor(
+    harness,
+    () => harness.getResult().channelState === "live",
+    "empty replacement recovered without a stale-peer blocker",
+  );
+  assert.equal(harness.getResult().participantCount, 1);
 });
 
 test("membership subscription refuses a session token owned by another account", async (t) => {

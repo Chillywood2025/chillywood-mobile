@@ -1750,6 +1750,64 @@ assert.match(
   "the LiveKit heartbeat preserves reconnecting-on-miss behavior through the shared ordered snapshot reader",
 );
 assert.match(
+  liveKitChatCallSessionSource,
+  /publishData\([\s\S]{0,180}reliable: true, topic: LIVEKIT_MEDIA_INVALIDATION_TOPIC/u,
+  "a committed local media change uses the reliable LiveKit data plane for prompt peer invalidation",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /RoomEvent\.DataReceived[\s\S]{0,620}topic !== LIVEKIT_MEDIA_INVALIDATION_TOPIC[\s\S]{0,620}queuePeerMediaSnapshotRefresh/u,
+  "LiveKit media invalidations are topic-bound and trigger only an authoritative membership refresh",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /const MEDIA_INVALIDATION_REFRESH_INTERVAL_MS = 1_000;/u,
+  "peer media invalidations use the reviewed one-second read budget",
+);
+const liveKitMediaRateLimitBlock = liveKitChatCallSessionSource.slice(
+  liveKitChatCallSessionSource.indexOf("const queuePeerMediaSnapshotRefresh"),
+  liveKitChatCallSessionSource.indexOf("const subscribeToMembershipState"),
+);
+assert.match(
+  liveKitMediaRateLimitBlock,
+  /queueMediaSnapshotRefresh\(scope\)[\s\S]{0,1000}peerMediaRefreshTimer = setTimeout[\s\S]{0,700}queueMediaSnapshotRefresh\(queuedScope\)/u,
+  "peer media invalidations retain an immediate refresh while coalescing paced reads",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /if \(mediaSnapshotRefreshInFlight\)[\s\S]{0,240}mediaSnapshotRefreshQueued = true[\s\S]{0,900}while \(active && isCommittedSessionCurrent\(binding\)\)[\s\S]{0,500}mediaSnapshotRefreshQueuedScope/u,
+  "media invalidations received during any active refresh retain a subsequent authoritative read",
+);
+const liveKitConnectedTransitionBlock = liveKitChatCallSessionSource.slice(
+  liveKitChatCallSessionSource.indexOf("const markTransportConnectedIfReady"),
+  liveKitChatCallSessionSource.indexOf("const completeTransportRecovery"),
+);
+assert.match(
+  liveKitConnectedTransitionBlock,
+  /reconnectAwaitingRemoteRef\.current[\s\S]{0,180}remoteParticipantSeenRef\.current[\s\S]{0,180}remoteParticipants\.size === 0[\s\S]{0,260}setChannelState\("reconnecting"\)/u,
+  "the shared connected transition cannot report recovery while a previously connected peer remains absent",
+);
+assert.equal(
+  [...liveKitChatCallSessionSource.matchAll(/setChannelState\("live"\)/gu)].length,
+  1,
+  "every LiveKit connected transition uses the same missing-peer recovery rule",
+);
+assert.match(
+  liveKitHeartbeatBlock,
+  /markTransportConnectedIfReady\(heartbeatBinding\)/u,
+  "the heartbeat uses the shared connected transition",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /RoomEvent\.ParticipantConnected[\s\S]{0,360}participantBinding\.liveKitRoom !== liveKitRoom[\s\S]{0,360}queueMediaSnapshotRefresh\("chat-call-livekit-participant-connected-snapshot"\)/u,
+  "only the exact current peer callback closes a missed initial-media invalidation",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /await liveKitRoom\.connect[\s\S]{0,220}!active[\s\S]{0,120}!effectBinding[\s\S]{0,160}!isCommittedSessionCurrent\(effectBinding\)[\s\S]{0,220}remoteParticipantSeenRef\.current = true/u,
+  "an obsolete connection completion cannot mark a peer seen for a replacement session",
+);
+assert.match(
   chatThreadSource,
   /invite\.status === "accepted"[\s\S]{0,120}await resumeAcceptedIncomingInvite\(invite\)[\s\S]{0,120}await acceptIncomingInvite\(invite\)/u,
   "native Answer resumes a server-accepted invite instead of attempting a second acceptance",
