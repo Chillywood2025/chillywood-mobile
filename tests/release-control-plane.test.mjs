@@ -16,18 +16,23 @@ import {
 
 const sha = (character) => character.repeat(40);
 const digest = (character) => character.repeat(64);
+const internalGeneration = JSON.parse(fs.readFileSync(
+  new URL("../config/release/internal-native-generation.json", import.meta.url),
+  "utf8",
+));
+const runtimeFor = (platform) => internalGeneration.runtimeVersions[platform];
 const nativeCompatibility = (platform) => ({
   schemaVersion: 1, algorithm: "git-native-inputs/v1", platform,
   sourceDigest: digest("e"), binaryDigest: digest("e"),
-  cohortAlgorithm: platform === "android" ? "android-native-compatibility/v1" : "git-native-inputs/v1",
-  cohortSourceDigest: digest("e"), cohortDigest: digest("e"), cohortSourceSha: platform === "ios" ? sha("a") : null,
+  cohortAlgorithm: "git-native-inputs/v1",
+  cohortSourceDigest: digest("e"), cohortDigest: digest("e"), cohortSourceSha: sha("a"),
 });
 const binary = (platform) => ({
   artifactSha256: digest("c"),
   nativeCapabilities: platform === "ios" ? ["ios-native-calls"] : [],
   platform,
   revoked: false,
-  runtimeVersion: `1.0.0-${platform}-production-v2`,
+  runtimeVersion: runtimeFor(platform),
   sourceSha: sha("a"),
   sourceTree: sha("b"),
   valid: true,
@@ -36,7 +41,7 @@ const plan = (platform) => createOtaPublicationPlan({
   platform,
   sourceSha: sha("a"),
   sourceTree: sha("b"),
-  runtimeVersion: `1.0.0-${platform}-production-v2`,
+  runtimeVersion: runtimeFor(platform),
   signedBinary: binary(platform),
   nativeCompatibility: nativeCompatibility(platform),
 });
@@ -52,7 +57,7 @@ test("exact Android and iOS OTA provenance passes", () => {
 for (const [name, mutate, finding] of [
   ["wrong platform", (value) => ({ ...value, platform: "windows" }), "OTA_PLATFORM_INVALID"],
   ["wrong channel", (value) => ({ ...value, channel: "ios-internal-v2" }), "OTA_CHANNEL_PLATFORM_MISMATCH"],
-  ["wrong runtime", (value) => ({ ...value, runtimeVersion: "1.0.0-ios-production-v2" }), "OTA_RUNTIME_PLATFORM_MISMATCH"],
+  ["wrong runtime", (value) => ({ ...value, runtimeVersion: "1.0.0-android-production-v2" }), "OTA_RUNTIME_PLATFORM_MISMATCH"],
   ["stale source", (value) => ({ ...value, source: { ...value.source, protectedMain: false } }), "OTA_SOURCE_NOT_EXACT_PROTECTED_MAIN"],
   ["wrong binary platform", (value) => ({ ...value, signedBinary: { ...value.signedBinary, platform: "ios" } }), "OTA_BINARY_PLATFORM_MISMATCH"],
   ["incompatible binary", (value) => ({ ...value, signedBinary: { ...value.signedBinary, runtimeVersion: "old" } }), "OTA_BINARY_RUNTIME_INCOMPATIBLE"],

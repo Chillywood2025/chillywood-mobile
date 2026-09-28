@@ -95,6 +95,7 @@
       "eas.json",
       "app.json",
       "app.config.*",
+      "config/release/**",
       "plugins/**",
       "scripts/publish-*",
       "scripts/*release*",

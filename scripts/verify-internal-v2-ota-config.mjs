@@ -19,6 +19,8 @@ assert.match(sourceTree, /^[0-9a-f]{40}$/u, "--source-tree must be exact");
 assert.ok(binaryReceiptPath, "--binary-receipt is required");
 
 const signedBinary = JSON.parse(fs.readFileSync(path.resolve(binaryReceiptPath), "utf8"));
+const generation = JSON.parse(fs.readFileSync(new URL("../config/release/internal-native-generation.json", import.meta.url), "utf8"));
+const expectedRuntimeVersion = generation.runtimeVersions?.[platform];
 const nativeCompatibility = deriveOtaNativeSourceCompatibility({ platform, sourceSha, sourceTree, signedBinary });
 const candidate = createOtaPublicationPlan({ platform, sourceSha, sourceTree, runtimeVersion: signedBinary.runtimeVersion, signedBinary, nativeCompatibility });
 const nativeValidation = validateOtaPublicationPlan(candidate);
@@ -47,9 +49,9 @@ const runtimeVersion = platform === "ios" ? config?.ios?.runtimeVersion : config
 
 if (platform === "ios") {
   assert.equal(runtime?.communication?.iosNativeCallsEnabled, true, "iOS internal-v2 OTA must keep native calls enabled");
-  assert.match(String(config?.ios?.runtimeVersion ?? ""), /^1\.0\.0-ios-production-v2$/u, "iOS internal-v2 OTA runtime must match installed tester binaries");
+  assert.equal(config?.ios?.runtimeVersion, expectedRuntimeVersion, "iOS internal-v2 OTA runtime must match the qualified internal native generation");
 } else {
-  assert.match(String(config?.android?.runtimeVersion ?? ""), /^1\.0\.0-android-production-v2$/u, "Android internal-v2 OTA runtime must match installed tester binaries");
+  assert.equal(config?.android?.runtimeVersion, expectedRuntimeVersion, "Android internal-v2 OTA runtime must match the qualified internal native generation");
 }
 
 const plan = createOtaPublicationPlan({ platform, sourceSha, sourceTree, runtimeVersion, signedBinary, nativeCompatibility });

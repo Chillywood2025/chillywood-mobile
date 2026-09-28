@@ -28,6 +28,12 @@ const PRODUCTION_OTA_GENERATION_PATH = path.join(
   "release",
   "production-ota-generation.json",
 );
+const INTERNAL_NATIVE_GENERATION_PATH = path.join(
+  CONFIG_DIR,
+  "config",
+  "release",
+  "internal-native-generation.json",
+);
 const ANDROID_CHAT_QA_RELEASE_MANIFEST_PATH = path.join(
   CONFIG_DIR,
   "config",
@@ -231,6 +237,39 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   ) {
     throw new Error("Production OTA generation contract is incomplete.");
   }
+  const internalNativeGeneration = JSON.parse(
+    fs.readFileSync(INTERNAL_NATIVE_GENERATION_PATH, "utf8"),
+  ) as {
+    schemaVersion?: unknown;
+    generation?: unknown;
+    channels?: { android?: unknown; ios?: unknown };
+    runtimeVersions?: { android?: unknown; ios?: unknown };
+    policy?: { internalOnly?: unknown };
+  };
+  const internalNativeGenerationName = normalizeText(internalNativeGeneration.generation);
+  const internalAndroidChannel = normalizeText(internalNativeGeneration.channels?.android);
+  const internalIosChannel = normalizeText(internalNativeGeneration.channels?.ios);
+  const internalAndroidRuntimeVersion = normalizeText(internalNativeGeneration.runtimeVersions?.android);
+  const internalIosRuntimeVersion = normalizeText(internalNativeGeneration.runtimeVersions?.ios);
+  if (
+    internalNativeGeneration.schemaVersion !== 1
+    || internalNativeGeneration.policy?.internalOnly !== true
+    || !internalNativeGenerationName
+    || internalAndroidChannel !== "android-internal-v2"
+    || internalIosChannel !== "ios-internal-v2"
+    || !internalAndroidRuntimeVersion
+    || !internalIosRuntimeVersion
+    || internalAndroidRuntimeVersion === productionAndroidRuntimeVersion
+    || internalIosRuntimeVersion === productionIosRuntimeVersion
+  ) {
+    throw new Error("Internal native generation contract is incomplete or not isolated.");
+  }
+  const selectedAndroidRuntimeVersion = internalV2OtaPlatform
+    ? internalAndroidRuntimeVersion
+    : productionAndroidRuntimeVersion;
+  const selectedIosRuntimeVersion = internalV2OtaPlatform
+    ? internalIosRuntimeVersion
+    : productionIosRuntimeVersion;
   const androidReleaseManifest = JSON.parse(
     fs.readFileSync(ANDROID_RELEASE_MANIFEST_PATH, "utf8"),
   ) as { packageIdentifier?: unknown; runtimeVersion?: unknown };
@@ -293,7 +332,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     android: {
       ...base.android,
-      runtimeVersion: androidChatQaRuntimeVersion || productionAndroidRuntimeVersion,
+      runtimeVersion: androidChatQaRuntimeVersion || selectedAndroidRuntimeVersion,
       ...(androidGoogleServicesFile ? { googleServicesFile: androidGoogleServicesFile } : {}),
       intentFilters: [
         ...(Array.isArray(existingAndroid.intentFilters) ? existingAndroid.intentFilters : []),
@@ -302,7 +341,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     ios: {
       ...base.ios,
-      runtimeVersion: iosQaRuntimeVersion || productionIosRuntimeVersion,
+      runtimeVersion: iosQaRuntimeVersion || selectedIosRuntimeVersion,
       ...(iosGoogleServicesFile ? { googleServicesFile: iosGoogleServicesFile } : {}),
       associatedDomains: iosAssociatedDomains,
       privacyManifests: iosPrivacyManifests,
@@ -350,12 +389,20 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       runtime: {
         ...existingRuntime,
         ...(internalV2OtaPlatform ? { internalV2OtaPlatform } : {}),
-        otaGeneration: {
-          generation: productionOtaGenerationName,
-          channel: productionOtaChannel,
-          iosRuntimeVersion: productionIosRuntimeVersion,
-          androidRuntimeVersion: productionAndroidRuntimeVersion,
-        },
+        otaGeneration: internalV2OtaPlatform
+          ? {
+            generation: internalNativeGenerationName,
+            channel: internalV2OtaPlatform === "ios" ? internalIosChannel : internalAndroidChannel,
+            iosRuntimeVersion: internalIosRuntimeVersion,
+            androidRuntimeVersion: internalAndroidRuntimeVersion,
+            internalOnly: true,
+          }
+          : {
+            generation: productionOtaGenerationName,
+            channel: productionOtaChannel,
+            iosRuntimeVersion: productionIosRuntimeVersion,
+            androidRuntimeVersion: productionAndroidRuntimeVersion,
+          },
         supabaseUrl: normalizeText(process.env.EXPO_PUBLIC_SUPABASE_URL || existingRuntime.supabaseUrl),
         supabaseFunctionsUrl: normalizeText(
           process.env.EXPO_PUBLIC_SUPABASE_FUNCTIONS_URL

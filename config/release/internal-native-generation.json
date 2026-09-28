@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "generation": "internal-native-v3",
+  "channels": {
+    "android": "android-internal-v2",
+    "ios": "ios-internal-v2"
+  },
+  "runtimeVersions": {
+    "android": "1.0.0-android-production-v3",
+    "ios": "1.0.0-ios-production-v3"
+  },
+  "supersedes": {
+    "androidRuntimeVersion": "1.0.0-android-production-v2",
+    "iosRuntimeVersion": "1.0.0-ios-production-v2"
+  },
+  "nativeCompatibility": {
+    "algorithm": "git-native-inputs/v1",
+    "androidDigest": "0a38aebd3a23ca0ff980ead0baee2104041c06ba7840d3db5711b6c847b370bc",
+    "iosDigest": "9afdf1051eb070efe4a66738d466cd2ee5e143066ef722d0d1d87d25f2bdf0a9"
+  },
+  "policy": {
+    "internalOnly": true,
+    "appOwnedUpdateGateRequired": true,
+    "nativeAutomaticActivationDisabled": true,
+    "publicOrStoreDistributionAuthorized": false,
+    "reason": "PR #532 changes the Android incoming-call plugin and the iOS native-call coordinator/deadline implementation. These internal-only runtimes prevent the corrected binaries from joining either incompatible v2 native cohort."
+  }
+}

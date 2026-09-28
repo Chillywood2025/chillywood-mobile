@@ -24,6 +24,17 @@ const commit = (root) => {
   return { sha: git(root, "rev-parse", "HEAD"), tree: git(root, "rev-parse", "HEAD^{tree}") };
 };
 
+test("internal native generation binds both platform cohorts to the exact Git-native inputs", () => {
+  const sourceSha = git(repo, "rev-parse", "HEAD");
+  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+  for (const platform of ["android", "ios"]) {
+    assert.equal(
+      generation.nativeCompatibility[`${platform}Digest`],
+      nativeSourceSnapshot({ repositoryRoot: repo, platform, sourceSha }).digest,
+    );
+  }
+});
+
 function fixture(t) {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "chilly-native-publication-"));
   const root = path.join(temp, "repo");
@@ -44,18 +55,18 @@ function fixture(t) {
   for (const name of ["publish-internal-v2-ota.mjs", "verify-internal-v2-ota-config.mjs", "release-control-plane-lib.mjs", "ota-native-source-compatibility.mjs", "android-native-compatibility.mjs"]) {
     write(root, `scripts/${name}`, fs.readFileSync(path.join(repo, "scripts", name)));
   }
-  // The fixture has no node_modules; bind its own deterministic baseline rather
-  // than pretending that its synthetic environment represents an installed app.
-  const generationPath = path.join(root, "config/release/production-ota-generation.json");
+  const initial = commit(root);
+  const generationPath = path.join(root, "config/release/internal-native-generation.json");
   const generation = JSON.parse(fs.readFileSync(generationPath, "utf8"));
-  generation.nativeCompatibility.androidDigest = JSON.parse(run(root, process.execPath, ["scripts/android-native-compatibility.mjs", "--json"])).digest;
-  fs.writeFileSync(generationPath, JSON.stringify(generation));
+  for (const platform of ["android", "ios"]) {
+    generation.nativeCompatibility[`${platform}Digest`] = nativeSourceSnapshot({
+      repositoryRoot: root,
+      platform,
+      sourceSha: initial.sha,
+    }).digest;
+  }
+  fs.writeFileSync(generationPath, `${JSON.stringify(generation, null, 2)}\n`);
   const baseline = commit(root);
-  const iosPath = path.join(root, "config/release/ios-internal-v2.json");
-  const ios = JSON.parse(fs.readFileSync(iosPath, "utf8"));
-  ios.expectedBinarySourceCommit = baseline.sha;
-  fs.writeFileSync(iosPath, JSON.stringify(ios));
-  commit(root);
   const providerLog = path.join(temp, "provider.log");
   const npx = path.join(temp, "bin/npx");
   write(temp, "bin/npx", `#!/usr/bin/env node
@@ -64,7 +75,8 @@ const {spawnSync} = require('node:child_process');
 const args = process.argv.slice(2);
 fs.appendFileSync(process.env.PROVIDER_LOG, JSON.stringify(args)+'\\n');
 const platform = process.env.CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM;
-const runtimeVersion = '1.0.0-'+platform+'-production-v2';
+const generation = JSON.parse(fs.readFileSync('config/release/internal-native-generation.json','utf8'));
+const runtimeVersion = generation.runtimeVersions[platform];
 if (args[0] === 'expo' && args[1] === 'config') {
   console.log(JSON.stringify({updates:{checkAutomatically:'NEVER'},[platform]:{runtimeVersion},extra:{runtime:{internalV2OtaPlatform:platform,communication:{iosNativeCallsEnabled:platform==='ios'}}}}));
 } else if (args[0] === 'eas-cli' && args[1] === 'env:exec') {
@@ -94,7 +106,8 @@ if (args[0] === 'expo' && args[1] === 'config') {
   const publish = (platform, binary = baseline, extra = {}, preflightMutation = "") => {
     fs.writeFileSync(providerLog, "");
     const receipt = path.join(temp, "receipt.json");
-    fs.writeFileSync(receipt, JSON.stringify({ platform, runtimeVersion: `1.0.0-${platform}-production-v2`, artifactSha256: "c".repeat(64), sourceSha: binary.sha, sourceTree: binary.tree, nativeCapabilities: platform === "ios" ? ["ios-native-calls"] : [], revoked: false, valid: true, ...extra }));
+    const generation = JSON.parse(fs.readFileSync(path.join(root, "config/release/internal-native-generation.json"), "utf8"));
+    fs.writeFileSync(receipt, JSON.stringify({ platform, runtimeVersion: generation.runtimeVersions[platform], artifactSha256: "c".repeat(64), sourceSha: binary.sha, sourceTree: binary.tree, nativeCapabilities: platform === "ios" ? ["ios-native-calls"] : [], revoked: false, valid: true, ...extra }));
     const result = spawnSync(process.execPath, ["scripts/publish-internal-v2-ota.mjs", "--platform", platform, "--message", "isolated-test", "--binary-receipt", receipt], {
       cwd: root, encoding: "utf8", env: { ...process.env, PATH: `${path.dirname(npx)}:${process.env.PATH}`, PROVIDER_LOG: providerLog, PREFLIGHT_MUTATION: preflightMutation },
     });
