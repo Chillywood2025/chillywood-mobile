@@ -47,9 +47,11 @@ const diagnostics = (state) => redact(JSON.stringify({
   roomId: state?.roomId,
   errors: state?.errors,
   reportedErrors: state?.events?.filter((event) => event.kind === "reported-error").slice(-20),
+  presenceDiffs: state?.presenceDiffs,
+  operationResults: state?.operationResults,
   endpoints: state?.endpoints?.map((endpoint) => ({
     userId: endpoint.userId, instanceId: endpoint.instanceId, channelState: endpoint.channelState,
-    error: endpoint.error, appState: endpoint.appState, cameraEnabled: endpoint.cameraEnabled,
+    error: endpoint.error, mediaControlError: endpoint.mediaControlError, appState: endpoint.appState, cameraEnabled: endpoint.cameraEnabled,
     micEnabled: endpoint.micEnabled, membership: endpoint.membership, peers: endpoint.peers,
     tracks: endpoint.tracks, stats: endpoint.stats, audioReceivers: endpoint.audioReceivers, pixels: endpoint.pixels,
   })),
@@ -101,7 +103,7 @@ async function main() {
   secrets.add(password);
   let threadId, browser, context, page, server;
   let failed = false;
-  const networkFailures = [], browserErrors = [];
+  const networkFailures = [], browserErrors = [], presenceDiffs = [];
   const browserRequests = new Map();
   let realtimeSockets = 0;
 
@@ -109,6 +111,7 @@ async function main() {
     assert.deepEqual(networkFailures, [], "browser network stays within the local fixture/API allowlist");
     assert.deepEqual(browserErrors, [], "browser must not throw");
     const state = await page.evaluate(() => window.__pairedCall.read());
+    state.presenceDiffs = presenceDiffs;
     assert.equal(state.authenticatedBackend, true, "this gate requires the actual authenticated backend adapter");
     assert.deepEqual(state.errors, [], `browser fixture errors: ${diagnostics(state)}`);
     return state;
@@ -122,6 +125,11 @@ async function main() {
       await pause(100);
     }
     throw new Error(`${label}: ${diagnostics(state)}`);
+  };
+  const control = async (userId, name, value, label) => {
+    const result = await page.evaluate(({ id, name, value }) => window.__pairedCall.control(id, name, value),
+      { id: userId, name, value });
+    assert.equal(result, true, `${label} for ${userId}: ${result === true ? "confirmed" : diagnostics(await read())}`);
   };
   const rows = async (roomId) => requireData(await admin.from("communication_room_memberships")
     .select("user_id,membership_generation,membership_admission_attempt,membership_state,camera_enabled,mic_enabled,left_at")
@@ -253,6 +261,24 @@ async function main() {
     });
     page = await context.newPage();
     page.on("pageerror", (error) => browserErrors.push(redact(error.message)));
+    page.on("websocket", (socket) => socket.on("framereceived", ({ payload }) => {
+      try {
+        const message = JSON.parse(String(payload));
+        const event = Array.isArray(message) ? message[3] : message.event;
+        const diff = Array.isArray(message) ? message[4] : message.payload;
+        if (event !== "presence_diff" || !diff || typeof diff !== "object") return;
+        // Retain wire ref identities/counts only. Never copy subscription
+        // credentials, arbitrary Presence metadata, SDP, or raw frames.
+        const refs = (entries) => Object.entries(entries ?? {}).map(([key, presence]) => ({
+          key, refs: (presence?.metas ?? []).map((meta) => ({
+            ref: typeof meta.phx_ref === "string" ? meta.phx_ref : null,
+            previousRef: typeof meta.phx_ref_prev === "string" ? meta.phx_ref_prev : null,
+          })),
+        }));
+        presenceDiffs.push({ joins: refs(diff.joins), leaves: refs(diff.leaves) });
+        if (presenceDiffs.length > 20) presenceDiffs.shift();
+      } catch { /* Non-JSON socket frames do not contain Presence diagnostics. */ }
+    }));
     await page.goto(fixtureOrigin);
     await page.evaluate((backend) => window.__pairedCall.start({ callType: "video", backend }), {
       apiUrl: apiOrigin, anonKey: environment.ANON_KEY, roomId: initialCall.roomId, hostUserId: users[0], endpoints,
@@ -268,7 +294,7 @@ async function main() {
     console.log("PASS: authenticated production hooks -> owned PostgreSQL admission -> private SDK Realtime -> real received RTP/PCM/video");
 
     for (const userId of users) {
-      assert.equal(await page.evaluate((id) => window.__pairedCall.control(id, "setMicrophoneEnabled", false), userId), true);
+      await control(userId, "setMicrophoneEnabled", false, "authenticated microphone mute");
       let projected = await wait((state) => state.endpoints.every((endpoint) => endpoint.participants.some((participant) => participant.userId === userId && participant.micOn === false)),
         "authenticated mute must project through both production hooks");
       await proveOwnedRows(initialCall.roomId, projected, (id) => ({ mic: id !== userId, camera: true }));
@@ -278,8 +304,8 @@ async function main() {
       const silentEnd = (await read()).endpoints.find((endpoint) => endpoint.userId !== userId);
       assert.ok(samples(silentEnd) > samples(silentStart) && packets(silentEnd) > packets(silentStart), "mute preserves actual received PCM samples and RTP for the silence measurement");
       assert.ok(energy(silentEnd) - energy(silentStart) < 0.0001, "actual receiver observes muted PCM silence");
-      assert.equal(await page.evaluate((id) => window.__pairedCall.control(id, "setMicrophoneEnabled", true), userId), true);
-      assert.equal(await page.evaluate((id) => window.__pairedCall.control(id, "toggleCamera"), userId), true);
+      await control(userId, "setMicrophoneEnabled", true, "authenticated microphone unmute");
+      await control(userId, "toggleCamera", undefined, "authenticated camera off");
       projected = await wait((state) => state.endpoints.every((endpoint) => endpoint.participants.some((participant) => participant.userId === userId && participant.cameraOn === false && participant.micOn === true)),
         "authenticated camera-off and unmute project through both hooks");
       await proveOwnedRows(initialCall.roomId, projected, (id) => ({ mic: true, camera: id !== userId }));
@@ -287,7 +313,7 @@ async function main() {
         const receiver = state.endpoints.find((endpoint) => endpoint.userId !== userId);
         return receiver.pixels.length > 0 && receiver.pixels.every((frame) => frame.brightness < 5);
       }, "camera off must remove the actual picture at the receiving endpoint");
-      assert.equal(await page.evaluate((id) => window.__pairedCall.control(id, "toggleCamera"), userId), true);
+      await control(userId, "toggleCamera", undefined, "authenticated camera on");
       const baseline = await read();
       const restored = await wait((state) => state.endpoints.every((endpoint) => hasMedia(endpoint)
         && advances(endpoint, baseline.endpoints.find((old) => old.userId === endpoint.userId))),

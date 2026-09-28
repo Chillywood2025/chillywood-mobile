@@ -116,6 +116,7 @@
       "scripts/ios-delivery-control.mjs",
       "scripts/physical-automation-control.mjs",
       "scripts/test-webrtc-native-sender-contract.mjs",
+      "tests/native/**",
       "tests/release-control-plane.test.mjs",
       ".github/workflows/*release*",
       ".github/workflows/*build*",

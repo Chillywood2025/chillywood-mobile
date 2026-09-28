@@ -290,6 +290,27 @@ at its recorded Git source, reject incompatible publication, and exercise the
 real call limit before continuing the same thread in the reverse direction.
 Neither release protection nor the call limit was relaxed.
 
+The subsequent connected run exposed an installed SDK defect too: Supabase
+Realtime 2.100.0 mutates Phoenix's internal Presence references while creating
+callback payloads. Repeated metadata changes then leave departed devices in the
+Presence state. The reproduction executes the installed source, CommonJS,
+module and embedded browser implementations with actual Phoenix state handling.
+Upstream fixed this in `supabase/supabase-js#2566`; the candidate uses a narrow,
+reproducible packaged backport, preserving Node 20 compatibility and the ban on
+install-time dependency rewrites. The original implementations must fail the
+regressions and the installed backport must pass. Hosted received-media and
+authenticated backend checks remain required; this dependency correction alone
+does not establish call qualification.
+
+The 104-row review also identified two test boundaries that could be joined
+without devices. Android root routing now runs with the production native-action
+buffer, shared provenance and actual destination screen. The existing macOS
+job compiles actual Swift audio-route, activation and observer methods with
+controlled native API receipts and connects separate real JS root/facade tests.
+Native OS delivery, actual navigation transport, selected hardware output and
+Bluetooth/physical audio remain explicit limits. These additions verify existing
+application behavior; they do not add unsupported Android speaker controls.
+
 Keep this regression standard for future physical findings: reproduce the
 mechanism at the lowest faithful automated boundary, demonstrate that the
 former source fails it, and run the correction through its applicable connected

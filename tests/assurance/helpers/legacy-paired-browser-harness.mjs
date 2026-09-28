@@ -330,7 +330,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
   } });
   const hub = {
     channels: [], roomId: "BROWSER-CALL-1", serial: 0, callSerial: 1, endpointSerial: 0, peerSerial: 0,
-    roomStatus: "active", callType: "video", hostUserId: "alice", dropAnswers: false, events: [], errors: [], endpoints: [], retiredEndpoints: [], heldSignals: [], holdNext: null,
+    roomStatus: "active", callType: "video", hostUserId: "alice", dropAnswers: false, events: [], operationResults: [], errors: [], endpoints: [], retiredEndpoints: [], heldSignals: [], holdNext: null,
     backend: false, backendRuntimes: new Map(), captureRetirementModules: new Map(),
     dispatch(message, sender) {
       for (const channel of this.channels.filter((candidate) => candidate.active && candidate.endpoint.userId !== sender.userId && candidate.topic === `comm-room-${message.roomId}`)) {
@@ -423,6 +423,36 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       hub.captureRetirementModules.set(userId, captureRetirement);
     }
     const endpoint = { userId, instanceId: ++hub.endpointSerial, appState: "active", appStateListeners: new Set(), peers: [], streams: [], acquiredTracks: [], audioContexts: [], drawTimers: [], receivedVideos: [], receivedAudio: [], output: null, root: null, current: true, mounted: true, pendingControl: null };
+    const observeOperation = (operation, method) => function (...args) {
+      const started = performance.now();
+      const action = endpoint.controlLabel ?? "startup";
+      const record = (status) => {
+        try {
+          hub.operationResults.push({ endpoint: userId === hub.hostUserId ? "host" : "participant", action, operation, status, elapsedMs: Math.round(performance.now() - started) });
+          if (hub.operationResults.length > 40) hub.operationResults.shift();
+        } catch { /* Diagnostics never alter SDK settlement. */ }
+      };
+      const status = (value) => ["ok", "error", "timed out"].includes(value) ? value
+        : value === true ? "confirmed" : value === false ? "unconfirmed" : value == null ? "empty" : "returned";
+      try {
+        const result = Reflect.apply(method, this, args);
+        if (result && typeof result.then === "function") void result.then((value) => record(status(value)), () => record("rejected"));
+        else record(status(result));
+        return result;
+      } catch (error) { record("threw"); throw error; }
+    };
+    if (backendRuntime) {
+      const originalChannel = backendRuntime.client.channel;
+      const observed = new WeakSet();
+      backendRuntime.client.channel = function (...args) {
+        const channel = Reflect.apply(originalChannel, this, args);
+        if (!observed.has(channel)) {
+          observed.add(channel);
+          for (const operation of ["track", "send"]) channel[operation] = observeOperation(`sdk.${operation}`, channel[operation]);
+        }
+        return channel;
+      };
+    }
     hub.endpoints.push(endpoint);
     if (seed) membershipStore.seed({ roomId: hub.roomId, userId, displayName: userId, role: userId === hub.hostUserId ? "host" : "participant", membershipGeneration: crypto.randomUUID(), membershipAdmissionAttempt: null, membershipState: "active", cameraEnabled: hub.callType === "video", micEnabled: true, joinedAt: "2026-09-28T00:00:00Z", leftAt: null, lastSeenAt: "2026-09-28T00:00:00Z" });
     const rtc = {
@@ -505,6 +535,9 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       // Construct from actual exports, rather than retaining any simulated
       // membership/signaling method when a production API changes its name.
       communication = { ...backendRuntime.api, ...platformMedia, COMMUNICATION_DEFAULT_ICE_SERVERS: [] };
+      for (const operation of ["touchCommunicationRoomSession", "heartbeatCommunicationRoomSession", "broadcastCommunicationRoomSignal"]) {
+        communication[operation] = observeOperation(operation, communication[operation]);
+      }
       const broadcast = communication.broadcastCommunicationRoomSignal;
       communication.broadcastCommunicationRoomSignal = async (input) => {
         const result = await broadcast(input);
@@ -714,12 +747,12 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       const memberships = hub.backend
         ? await hub.backendRuntimes.values().next().value.api.listCommunicationRoomMemberships(hub.roomId)
         : membershipStore.snapshot(hub.roomId);
-      return { authenticatedBackend: hub.backend, roomId: hub.roomId, callType: hub.callType, hostUserId: hub.hostUserId, memberships, errors: [...hub.errors], events: clone(hub.events), heldSignals: hub.heldSignals.map(({ message, sender }) => ({ event: message.event, sender: sender.userId, generation: message.payload.membershipGeneration })), retiredEndpoints: hub.retiredEndpoints.map((endpoint) => ({ userId: endpoint.userId, instanceId: endpoint.instanceId, pendingControl: clone(endpoint.pendingControl), ...resources(endpoint) })), endpoints: await Promise.all(hub.endpoints.map(async (endpoint) => ({
-      userId: endpoint.userId, instanceId: endpoint.instanceId, appState: endpoint.appState, membership: memberships.find((membership) => membership.userId === endpoint.userId), channelState: endpoint.output?.channelState, error: endpoint.output?.error, micEnabled: endpoint.output?.micEnabled, cameraEnabled: endpoint.output?.cameraEnabled,
+      return { authenticatedBackend: hub.backend, roomId: hub.roomId, callType: hub.callType, hostUserId: hub.hostUserId, memberships, errors: [...hub.errors], events: clone(hub.events), operationResults: clone(hub.operationResults), heldSignals: hub.heldSignals.map(({ message, sender }) => ({ event: message.event, sender: sender.userId, generation: message.payload.membershipGeneration })), retiredEndpoints: hub.retiredEndpoints.map((endpoint) => ({ userId: endpoint.userId, instanceId: endpoint.instanceId, pendingControl: clone(endpoint.pendingControl), ...resources(endpoint) })), endpoints: await Promise.all(hub.endpoints.map(async (endpoint) => ({
+      userId: endpoint.userId, instanceId: endpoint.instanceId, appState: endpoint.appState, membership: memberships.find((membership) => membership.userId === endpoint.userId), channelState: endpoint.output?.channelState, error: endpoint.output?.error, mediaControlError: endpoint.output?.mediaControlError, micEnabled: endpoint.output?.micEnabled, cameraEnabled: endpoint.output?.cameraEnabled,
       participants: endpoint.output?.participants?.map(({ streamURL: _url, ...rest }) => rest), ...await stats(endpoint), pixels: receivedPixels(endpoint),
       ...resources(endpoint),
     }))) }; },
-    async control(userId, name, value) { const endpoint = hub.endpoints.find((item) => item.userId === userId); if (!endpoint?.output || typeof endpoint.output[name] !== "function") throw new Error(`Missing control ${name}`); return endpoint.output[name](value); },
+    async control(userId, name, value) { const endpoint = hub.endpoints.find((item) => item.userId === userId); if (!endpoint?.output || typeof endpoint.output[name] !== "function") throw new Error(`Missing control ${name}`); endpoint.controlLabel = `${name}:${typeof value === "boolean" ? value : "toggle"}`; return endpoint.output[name](value); },
     async end() { await Promise.all(hub.endpoints.map((endpoint) => endpoint.output.leaveRoom())); },
     async dispose() { for (const endpoint of [...hub.endpoints, ...hub.retiredEndpoints]) { if (endpoint.mounted) endpoint.root.unmount(); endpoint.mounted = false; endpoint.drawTimers.forEach(clearInterval); endpoint.acquiredTracks.forEach((track) => track.stop()); endpoint.peers.forEach((peer) => peer.close()); for (const { receiver } of endpoint.receivedAudio) await receiver.dispose(); for (const context of endpoint.audioContexts) if (context.state !== "closed") await context.close(); } for (const runtime of hub.backendRuntimes.values()) await runtime.client.removeAllChannels(); },
   };

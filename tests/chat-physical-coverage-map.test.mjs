@@ -26,10 +26,16 @@ function commandsFor(lane, source = workflow) {
 
 function executes(file, commands) {
   const nodeCommands = commands.filter((line) => /^(?:[A-Z_][A-Z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+)*node\s/u.test(line));
-  if (file === "tests/native/ChillywoodIncomingCallDeadlineTests.swift") {
-    const runner = "scripts/test-ios-native-call-deadline.mjs";
+  if (["tests/native/ChillywoodIncomingCallDeadlineTests.swift", "tests/native/ChillywoodNativeAudioTests.swift"].includes(file)) {
+    const runner = file.endsWith("NativeAudioTests.swift")
+      ? "scripts/test-ios-native-call-audio.mjs" : "scripts/test-ios-native-call-deadline.mjs";
     return commands.some((line) => /^node\s/u.test(line) && line.split(/\s+/u).includes(runner))
       && fs.readFileSync(runner, "utf8").includes(`readFileSync(join(root, "${file}"), "utf8")`);
+  }
+  if (file === "tests/assurance/ios-native-audio-root-mounted.test.mjs") {
+    const runner = "scripts/test-ios-native-call-audio.mjs";
+    return nodeCommands.some((line) => line.split(/\s+/u).includes(runner))
+      && fs.readFileSync(runner, "utf8").includes(`["--test", "${file}"]`);
   }
   if (file.startsWith("supabase/tests/") && file.endsWith(".sql")) {
     return commands.some((line) => /^supabase\s+test\s+db(?:\s|$)/u.test(line));

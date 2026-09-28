@@ -933,12 +933,47 @@
           "file": "tools/android-native-call-harness/ChillyChatIncomingCallNotificationTest.kt",
           "anchor": "actualAnswerPendingIntentDispatchesReceiverAndCreatesOneConsumableStoreAction",
           "ci_lane": "Validation / Native and Release"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root consumes native store Answer and the destination screen accepts once before capture",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root defers background native availability until foreground then hands off from elsewhere",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root lets the focused same-thread screen consume Answer without replacing its route",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root retires a deferred native receipt after account replacement without navigation or capture",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root leaves queued native Answer untouched during auth loading then drains on sign-in",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root revokes the exact Answer claim when router transport rejects",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "Android root handoff mutation control detects a retired effect routing the old account receipt",
+          "ci_lane": "Validation / Product"
         }
       ],
-      "software_proof": "Production screen/adapter/legacy hook requires accepted server response before acquisition. Separate browser peers prove actual SDP/ICE/RTP, received PCM and decoded video, controls and cleanup; this is not one continuous native-to-server-to-remote-device test. Android JS provenance registry and generated notification construction execute; generated Answer dispatch to the store is separately exercised below. Complete production call dispatcher and nested iOS VoIP dispatcher execute with their payload/authority policy modules, testing exact invite/type/deadline, duplicate/fallback/error and explicit presentation receipt behavior. New generated Android Answer PendingIntent dispatch reaches the private receiver and one-use store under Robolectric; native CI execution still required on final head.",
-      "controlled_assumptions": "Full screen service APIs, native events, permissions, SDK media and transport are controlled fixtures. Browser capture is synthetic, signaling/membership in-memory, no OS notification delivery. The expanded browser suite has voice/video × both host assignments, and its required candidate-head hosted run must pass; generic host assignment is not native Android↔iPhone direction. Dispatcher database SDK receipts, provider HTTP and clock are controlled; a supplied presentation receipt is not actual native presentation or database authorization proof. Robolectric stops at native store/JS boundary; no installed Activity/RN bridge or FCM is exercised.",
+      "software_proof": "Production screen/adapter/legacy hook requires accepted server response before acquisition. Separate browser peers prove actual SDP/ICE/RTP, received PCM and decoded video, controls and cleanup; this is not one continuous native-to-server-to-remote-device test. Android JS provenance registry and generated notification construction execute; generated Answer dispatch to the store is separately exercised below. Complete production call dispatcher and nested iOS VoIP dispatcher execute with their payload/authority policy modules, testing exact invite/type/deadline, duplicate/fallback/error and explicit presentation receipt behavior. New generated Android Answer PendingIntent dispatch reaches the private receiver and one-use store under Robolectric; native CI execution still required on final head. The complete production AndroidNativeCallRouteBridge effect and chillyChatNativeCallRouteBuffer now execute with the shared production provenance registry and the actual destination screen. Native-store receipts route once and trigger server acceptance before controlled capture; an already-focused same-thread screen consumes the claim without root navigation. For an already-mounted root, availability events received while backgrounded wait for foreground. Auth loading preserves queued native work, delayed old-account receipts cannot route, and rejected navigation revokes its exact claim. A source mutation disabling effect retirement demonstrably violates the no-stale-navigation postcondition.",
+      "controlled_assumptions": "Full screen service APIs, native events, permissions, SDK media and transport are controlled fixtures. Browser capture is synthetic, signaling/membership in-memory, no OS notification delivery. The expanded browser suite has voice/video × both host assignments, and its required candidate-head hosted run must pass; generic host assignment is not native Android↔iPhone direction. Dispatcher database SDK receipts, provider HTTP and clock are controlled; a supplied presentation receipt is not actual native presentation or database authorization proof. Robolectric stops at native store/JS boundary; no installed Activity/RN bridge or FCM is exercised. The Android composition controls native store replies, DeviceEventEmitter, auth state, AppState and router.replace. The unmodified root-issued destination is fed to the actual mounted screen; this executes application handoff logic, not Expo navigation, Android Activity launch, installed React Native bridging, OS process survival or notification delivery. The background receipt case mounts the root while active, then backgrounds it before receipt. These assertions do not establish foreground deferral for an initially backgrounded root or an in-flight native-store consumption that resolves after backgrounding; actual OS cold-launch ordering remains outside the fixture.",
       "physical_remainder": "Android receiving voice from the other actual platform while same thread; real notification/CallKit presentation and timing, Answer, audible speech, moving video if applicable, and capture/native cleanup.",
-      "software_gap": "Complete installed bridge, app-shell routing, native UI and real delivery are not joined to the browser/backend seams in a single test. Existing separate layers must not be described as one installed end-to-end proof."
+      "software_gap": "Production Android root, complete native buffer, shared provenance and destination screen are now composed under explicit controlled native/auth/router boundaries. No device-only deferral remains for the tested JS cold/warm/elsewhere/account-replacement/navigation-failure mechanism. Installed Activity/RN bridge, actual Expo/native navigation, genuine notification delivery and process-launch behavior remain separate qualification requirements. Required candidate-head tests must pass; this is not installed end-to-end proof."
     },
     {
       "case_id": "BL10",
@@ -980,12 +1015,47 @@
           "file": "tools/android-native-call-harness/ChillyChatIncomingCallNotificationTest.kt",
           "anchor": "actualAnswerPendingIntentDispatchesReceiverAndCreatesOneConsumableStoreAction",
           "ci_lane": "Validation / Native and Release"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root consumes native store Answer and the destination screen accepts once before capture",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root defers background native availability until foreground then hands off from elsewhere",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root lets the focused same-thread screen consume Answer without replacing its route",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root retires a deferred native receipt after account replacement without navigation or capture",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root leaves queued native Answer untouched during auth loading then drains on sign-in",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root revokes the exact Answer claim when router transport rejects",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "Android root handoff mutation control detects a retired effect routing the old account receipt",
+          "ci_lane": "Validation / Product"
         }
       ],
-      "software_proof": "Production screen/adapter/legacy hook requires accepted server response before acquisition. Separate browser peers prove actual SDP/ICE/RTP, received PCM and decoded video, controls and cleanup; this is not one continuous native-to-server-to-remote-device test. Android JS provenance registry and generated notification construction execute; generated Answer dispatch to the store is separately exercised below. Complete production call dispatcher and nested iOS VoIP dispatcher execute with their payload/authority policy modules, testing exact invite/type/deadline, duplicate/fallback/error and explicit presentation receipt behavior. New generated Android Answer PendingIntent dispatch reaches the private receiver and one-use store under Robolectric; native CI execution still required on final head.",
-      "controlled_assumptions": "Full screen service APIs, native events, permissions, SDK media and transport are controlled fixtures. Browser capture is synthetic, signaling/membership in-memory, no OS notification delivery. The expanded browser suite has voice/video × both host assignments, and its required candidate-head hosted run must pass; generic host assignment is not native Android↔iPhone direction. Dispatcher database SDK receipts, provider HTTP and clock are controlled; a supplied presentation receipt is not actual native presentation or database authorization proof. Robolectric stops at native store/JS boundary; no installed Activity/RN bridge or FCM is exercised.",
+      "software_proof": "Production screen/adapter/legacy hook requires accepted server response before acquisition. Separate browser peers prove actual SDP/ICE/RTP, received PCM and decoded video, controls and cleanup; this is not one continuous native-to-server-to-remote-device test. Android JS provenance registry and generated notification construction execute; generated Answer dispatch to the store is separately exercised below. Complete production call dispatcher and nested iOS VoIP dispatcher execute with their payload/authority policy modules, testing exact invite/type/deadline, duplicate/fallback/error and explicit presentation receipt behavior. New generated Android Answer PendingIntent dispatch reaches the private receiver and one-use store under Robolectric; native CI execution still required on final head. The complete production AndroidNativeCallRouteBridge effect and chillyChatNativeCallRouteBuffer now execute with the shared production provenance registry and the actual destination screen. Native-store receipts route once and trigger server acceptance before controlled capture; an already-focused same-thread screen consumes the claim without root navigation. For an already-mounted root, availability events received while backgrounded wait for foreground. Auth loading preserves queued native work, delayed old-account receipts cannot route, and rejected navigation revokes its exact claim. A source mutation disabling effect retirement demonstrably violates the no-stale-navigation postcondition.",
+      "controlled_assumptions": "Full screen service APIs, native events, permissions, SDK media and transport are controlled fixtures. Browser capture is synthetic, signaling/membership in-memory, no OS notification delivery. The expanded browser suite has voice/video × both host assignments, and its required candidate-head hosted run must pass; generic host assignment is not native Android↔iPhone direction. Dispatcher database SDK receipts, provider HTTP and clock are controlled; a supplied presentation receipt is not actual native presentation or database authorization proof. Robolectric stops at native store/JS boundary; no installed Activity/RN bridge or FCM is exercised. The Android composition controls native store replies, DeviceEventEmitter, auth state, AppState and router.replace. The unmodified root-issued destination is fed to the actual mounted screen; this executes application handoff logic, not Expo navigation, Android Activity launch, installed React Native bridging, OS process survival or notification delivery. The background receipt case mounts the root while active, then backgrounds it before receipt. These assertions do not establish foreground deferral for an initially backgrounded root or an in-flight native-store consumption that resolves after backgrounding; actual OS cold-launch ordering remains outside the fixture.",
       "physical_remainder": "Android receiving voice from the other actual platform while elsewhere in app; real notification/CallKit presentation and timing, Answer, audible speech, moving video if applicable, and capture/native cleanup.",
-      "software_gap": "Complete installed bridge, app-shell routing, native UI and real delivery are not joined to the browser/backend seams in a single test. Existing separate layers must not be described as one installed end-to-end proof. Elsewhere-in-app native navigation remains unexecuted; direct screen mount and JS route construction are narrower proof."
+      "software_gap": "Production Android root, complete native buffer, shared provenance and destination screen are now composed under explicit controlled native/auth/router boundaries. No device-only deferral remains for the tested JS cold/warm/elsewhere/account-replacement/navigation-failure mechanism. Installed Activity/RN bridge, actual Expo/native navigation, genuine notification delivery and process-launch behavior remain separate qualification requirements. Required candidate-head tests must pass; this is not installed end-to-end proof."
     },
     {
       "case_id": "BL11",
@@ -1027,12 +1097,47 @@
           "file": "tools/android-native-call-harness/ChillyChatIncomingCallNotificationTest.kt",
           "anchor": "actualAnswerPendingIntentDispatchesReceiverAndCreatesOneConsumableStoreAction",
           "ci_lane": "Validation / Native and Release"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root consumes native store Answer and the destination screen accepts once before capture",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root defers background native availability until foreground then hands off from elsewhere",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root lets the focused same-thread screen consume Answer without replacing its route",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root retires a deferred native receipt after account replacement without navigation or capture",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root leaves queued native Answer untouched during auth loading then drains on sign-in",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root revokes the exact Answer claim when router transport rejects",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "Android root handoff mutation control detects a retired effect routing the old account receipt",
+          "ci_lane": "Validation / Product"
         }
       ],
-      "software_proof": "Production screen/adapter/legacy hook requires accepted server response before acquisition. Separate browser peers prove actual SDP/ICE/RTP, received PCM and decoded video, controls and cleanup; this is not one continuous native-to-server-to-remote-device test. Android JS provenance registry and generated notification construction execute; generated Answer dispatch to the store is separately exercised below. Complete production call dispatcher and nested iOS VoIP dispatcher execute with their payload/authority policy modules, testing exact invite/type/deadline, duplicate/fallback/error and explicit presentation receipt behavior. New generated Android Answer PendingIntent dispatch reaches the private receiver and one-use store under Robolectric; native CI execution still required on final head.",
-      "controlled_assumptions": "Full screen service APIs, native events, permissions, SDK media and transport are controlled fixtures. Browser capture is synthetic, signaling/membership in-memory, no OS notification delivery. The expanded browser suite has voice/video × both host assignments, and its required candidate-head hosted run must pass; generic host assignment is not native Android↔iPhone direction. Dispatcher database SDK receipts, provider HTTP and clock are controlled; a supplied presentation receipt is not actual native presentation or database authorization proof. Robolectric stops at native store/JS boundary; no installed Activity/RN bridge or FCM is exercised.",
+      "software_proof": "Production screen/adapter/legacy hook requires accepted server response before acquisition. Separate browser peers prove actual SDP/ICE/RTP, received PCM and decoded video, controls and cleanup; this is not one continuous native-to-server-to-remote-device test. Android JS provenance registry and generated notification construction execute; generated Answer dispatch to the store is separately exercised below. Complete production call dispatcher and nested iOS VoIP dispatcher execute with their payload/authority policy modules, testing exact invite/type/deadline, duplicate/fallback/error and explicit presentation receipt behavior. New generated Android Answer PendingIntent dispatch reaches the private receiver and one-use store under Robolectric; native CI execution still required on final head. The complete production AndroidNativeCallRouteBridge effect and chillyChatNativeCallRouteBuffer now execute with the shared production provenance registry and the actual destination screen. Native-store receipts route once and trigger server acceptance before controlled capture; an already-focused same-thread screen consumes the claim without root navigation. For an already-mounted root, availability events received while backgrounded wait for foreground. Auth loading preserves queued native work, delayed old-account receipts cannot route, and rejected navigation revokes its exact claim. A source mutation disabling effect retirement demonstrably violates the no-stale-navigation postcondition.",
+      "controlled_assumptions": "Full screen service APIs, native events, permissions, SDK media and transport are controlled fixtures. Browser capture is synthetic, signaling/membership in-memory, no OS notification delivery. The expanded browser suite has voice/video × both host assignments, and its required candidate-head hosted run must pass; generic host assignment is not native Android↔iPhone direction. Dispatcher database SDK receipts, provider HTTP and clock are controlled; a supplied presentation receipt is not actual native presentation or database authorization proof. Robolectric stops at native store/JS boundary; no installed Activity/RN bridge or FCM is exercised. The Android composition controls native store replies, DeviceEventEmitter, auth state, AppState and router.replace. The unmodified root-issued destination is fed to the actual mounted screen; this executes application handoff logic, not Expo navigation, Android Activity launch, installed React Native bridging, OS process survival or notification delivery. The background receipt case mounts the root while active, then backgrounds it before receipt. These assertions do not establish foreground deferral for an initially backgrounded root or an in-flight native-store consumption that resolves after backgrounding; actual OS cold-launch ordering remains outside the fixture.",
       "physical_remainder": "Android receiving voice from the other actual platform while backgrounded; real notification/CallKit presentation and timing, Answer, audible speech, moving video if applicable, and capture/native cleanup.",
-      "software_gap": "Complete installed bridge, app-shell routing, native UI and real delivery are not joined to the browser/backend seams in a single test. Existing separate layers must not be described as one installed end-to-end proof."
+      "software_gap": "Production Android root, complete native buffer, shared provenance and destination screen are now composed under explicit controlled native/auth/router boundaries. No device-only deferral remains for the tested JS cold/warm/elsewhere/account-replacement/navigation-failure mechanism. Installed Activity/RN bridge, actual Expo/native navigation, genuine notification delivery and process-launch behavior remain separate qualification requirements. Required candidate-head tests must pass; this is not installed end-to-end proof."
     },
     {
       "case_id": "BL12",
@@ -1074,12 +1179,47 @@
           "file": "tools/android-native-call-harness/ChillyChatIncomingCallNotificationTest.kt",
           "anchor": "actualAnswerPendingIntentDispatchesReceiverAndCreatesOneConsumableStoreAction",
           "ci_lane": "Validation / Native and Release"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root consumes native store Answer and the destination screen accepts once before capture",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root defers background native availability until foreground then hands off from elsewhere",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root lets the focused same-thread screen consume Answer without replacing its route",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root retires a deferred native receipt after account replacement without navigation or capture",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root leaves queued native Answer untouched during auth loading then drains on sign-in",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root revokes the exact Answer claim when router transport rejects",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "Android root handoff mutation control detects a retired effect routing the old account receipt",
+          "ci_lane": "Validation / Product"
         }
       ],
-      "software_proof": "Production screen/adapter/legacy hook requires accepted server response before acquisition. Separate browser peers prove actual SDP/ICE/RTP, received PCM and decoded video, controls and cleanup; this is not one continuous native-to-server-to-remote-device test. Android JS provenance registry and generated notification construction execute; generated Answer dispatch to the store is separately exercised below. Complete production call dispatcher and nested iOS VoIP dispatcher execute with their payload/authority policy modules, testing exact invite/type/deadline, duplicate/fallback/error and explicit presentation receipt behavior. New generated Android Answer PendingIntent dispatch reaches the private receiver and one-use store under Robolectric; native CI execution still required on final head.",
-      "controlled_assumptions": "Full screen service APIs, native events, permissions, SDK media and transport are controlled fixtures. Browser capture is synthetic, signaling/membership in-memory, no OS notification delivery. The expanded browser suite has voice/video × both host assignments, and its required candidate-head hosted run must pass; generic host assignment is not native Android↔iPhone direction. Dispatcher database SDK receipts, provider HTTP and clock are controlled; a supplied presentation receipt is not actual native presentation or database authorization proof. Robolectric stops at native store/JS boundary; no installed Activity/RN bridge or FCM is exercised.",
+      "software_proof": "Production screen/adapter/legacy hook requires accepted server response before acquisition. Separate browser peers prove actual SDP/ICE/RTP, received PCM and decoded video, controls and cleanup; this is not one continuous native-to-server-to-remote-device test. Android JS provenance registry and generated notification construction execute; generated Answer dispatch to the store is separately exercised below. Complete production call dispatcher and nested iOS VoIP dispatcher execute with their payload/authority policy modules, testing exact invite/type/deadline, duplicate/fallback/error and explicit presentation receipt behavior. New generated Android Answer PendingIntent dispatch reaches the private receiver and one-use store under Robolectric; native CI execution still required on final head. The complete production AndroidNativeCallRouteBridge effect and chillyChatNativeCallRouteBuffer now execute with the shared production provenance registry and the actual destination screen. Native-store receipts route once and trigger server acceptance before controlled capture; an already-focused same-thread screen consumes the claim without root navigation. For an already-mounted root, availability events received while backgrounded wait for foreground. Auth loading preserves queued native work, delayed old-account receipts cannot route, and rejected navigation revokes its exact claim. A source mutation disabling effect retirement demonstrably violates the no-stale-navigation postcondition.",
+      "controlled_assumptions": "Full screen service APIs, native events, permissions, SDK media and transport are controlled fixtures. Browser capture is synthetic, signaling/membership in-memory, no OS notification delivery. The expanded browser suite has voice/video × both host assignments, and its required candidate-head hosted run must pass; generic host assignment is not native Android↔iPhone direction. Dispatcher database SDK receipts, provider HTTP and clock are controlled; a supplied presentation receipt is not actual native presentation or database authorization proof. Robolectric stops at native store/JS boundary; no installed Activity/RN bridge or FCM is exercised. The Android composition controls native store replies, DeviceEventEmitter, auth state, AppState and router.replace. The unmodified root-issued destination is fed to the actual mounted screen; this executes application handoff logic, not Expo navigation, Android Activity launch, installed React Native bridging, OS process survival or notification delivery. The background receipt case mounts the root while active, then backgrounds it before receipt. These assertions do not establish foreground deferral for an initially backgrounded root or an in-flight native-store consumption that resolves after backgrounding; actual OS cold-launch ordering remains outside the fixture.",
       "physical_remainder": "Android receiving voice from the other actual platform while terminated or force-stopped; real notification/CallKit presentation and timing, Answer, audible speech, moving video if applicable, and capture/native cleanup. Android force-stop suppresses delivery differently from ordinary swipe-away/OS termination; retain both distinct scenarios and do not infer one from the other.",
-      "software_gap": "Complete installed bridge, app-shell routing, native UI and real delivery are not joined to the browser/backend seams in a single test. Existing separate layers must not be described as one installed end-to-end proof."
+      "software_gap": "Production Android root, complete native buffer, shared provenance and destination screen are now composed under explicit controlled native/auth/router boundaries. No device-only deferral remains for the tested JS cold/warm/elsewhere/account-replacement/navigation-failure mechanism. Installed Activity/RN bridge, actual Expo/native navigation, genuine notification delivery and process-launch behavior remain separate qualification requirements. Required candidate-head tests must pass; this is not installed end-to-end proof."
     },
     {
       "case_id": "BL13",
@@ -1121,12 +1261,47 @@
           "file": "tools/android-native-call-harness/ChillyChatIncomingCallNotificationTest.kt",
           "anchor": "actualAnswerPendingIntentDispatchesReceiverAndCreatesOneConsumableStoreAction",
           "ci_lane": "Validation / Native and Release"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root consumes native store Answer and the destination screen accepts once before capture",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root defers background native availability until foreground then hands off from elsewhere",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root lets the focused same-thread screen consume Answer without replacing its route",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root retires a deferred native receipt after account replacement without navigation or capture",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root leaves queued native Answer untouched during auth loading then drains on sign-in",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root revokes the exact Answer claim when router transport rejects",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "Android root handoff mutation control detects a retired effect routing the old account receipt",
+          "ci_lane": "Validation / Product"
         }
       ],
-      "software_proof": "Production screen/adapter/legacy hook requires accepted server response before acquisition. Separate browser peers prove actual SDP/ICE/RTP, received PCM and decoded video, controls and cleanup; this is not one continuous native-to-server-to-remote-device test. Android JS provenance registry and generated notification construction execute; generated Answer dispatch to the store is separately exercised below. Complete production call dispatcher and nested iOS VoIP dispatcher execute with their payload/authority policy modules, testing exact invite/type/deadline, duplicate/fallback/error and explicit presentation receipt behavior. New generated Android Answer PendingIntent dispatch reaches the private receiver and one-use store under Robolectric; native CI execution still required on final head.",
-      "controlled_assumptions": "Full screen service APIs, native events, permissions, SDK media and transport are controlled fixtures. Browser capture is synthetic, signaling/membership in-memory, no OS notification delivery. The expanded browser suite has voice/video × both host assignments, and its required candidate-head hosted run must pass; generic host assignment is not native Android↔iPhone direction. Dispatcher database SDK receipts, provider HTTP and clock are controlled; a supplied presentation receipt is not actual native presentation or database authorization proof. Robolectric stops at native store/JS boundary; no installed Activity/RN bridge or FCM is exercised.",
+      "software_proof": "Production screen/adapter/legacy hook requires accepted server response before acquisition. Separate browser peers prove actual SDP/ICE/RTP, received PCM and decoded video, controls and cleanup; this is not one continuous native-to-server-to-remote-device test. Android JS provenance registry and generated notification construction execute; generated Answer dispatch to the store is separately exercised below. Complete production call dispatcher and nested iOS VoIP dispatcher execute with their payload/authority policy modules, testing exact invite/type/deadline, duplicate/fallback/error and explicit presentation receipt behavior. New generated Android Answer PendingIntent dispatch reaches the private receiver and one-use store under Robolectric; native CI execution still required on final head. The complete production AndroidNativeCallRouteBridge effect and chillyChatNativeCallRouteBuffer now execute with the shared production provenance registry and the actual destination screen. Native-store receipts route once and trigger server acceptance before controlled capture; an already-focused same-thread screen consumes the claim without root navigation. For an already-mounted root, availability events received while backgrounded wait for foreground. Auth loading preserves queued native work, delayed old-account receipts cannot route, and rejected navigation revokes its exact claim. A source mutation disabling effect retirement demonstrably violates the no-stale-navigation postcondition.",
+      "controlled_assumptions": "Full screen service APIs, native events, permissions, SDK media and transport are controlled fixtures. Browser capture is synthetic, signaling/membership in-memory, no OS notification delivery. The expanded browser suite has voice/video × both host assignments, and its required candidate-head hosted run must pass; generic host assignment is not native Android↔iPhone direction. Dispatcher database SDK receipts, provider HTTP and clock are controlled; a supplied presentation receipt is not actual native presentation or database authorization proof. Robolectric stops at native store/JS boundary; no installed Activity/RN bridge or FCM is exercised. The Android composition controls native store replies, DeviceEventEmitter, auth state, AppState and router.replace. The unmodified root-issued destination is fed to the actual mounted screen; this executes application handoff logic, not Expo navigation, Android Activity launch, installed React Native bridging, OS process survival or notification delivery. The background receipt case mounts the root while active, then backgrounds it before receipt. These assertions do not establish foreground deferral for an initially backgrounded root or an in-flight native-store consumption that resolves after backgrounding; actual OS cold-launch ordering remains outside the fixture.",
       "physical_remainder": "Android receiving video from the other actual platform while same thread; real notification/CallKit presentation and timing, Answer, audible speech, moving video if applicable, and capture/native cleanup.",
-      "software_gap": "Complete installed bridge, app-shell routing, native UI and real delivery are not joined to the browser/backend seams in a single test. Existing separate layers must not be described as one installed end-to-end proof."
+      "software_gap": "Production Android root, complete native buffer, shared provenance and destination screen are now composed under explicit controlled native/auth/router boundaries. No device-only deferral remains for the tested JS cold/warm/elsewhere/account-replacement/navigation-failure mechanism. Installed Activity/RN bridge, actual Expo/native navigation, genuine notification delivery and process-launch behavior remain separate qualification requirements. Required candidate-head tests must pass; this is not installed end-to-end proof."
     },
     {
       "case_id": "BL14",
@@ -1168,12 +1343,47 @@
           "file": "tools/android-native-call-harness/ChillyChatIncomingCallNotificationTest.kt",
           "anchor": "actualAnswerPendingIntentDispatchesReceiverAndCreatesOneConsumableStoreAction",
           "ci_lane": "Validation / Native and Release"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root consumes native store Answer and the destination screen accepts once before capture",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root defers background native availability until foreground then hands off from elsewhere",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root lets the focused same-thread screen consume Answer without replacing its route",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root retires a deferred native receipt after account replacement without navigation or capture",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root leaves queued native Answer untouched during auth loading then drains on sign-in",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root revokes the exact Answer claim when router transport rejects",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "Android root handoff mutation control detects a retired effect routing the old account receipt",
+          "ci_lane": "Validation / Product"
         }
       ],
-      "software_proof": "Production screen/adapter/legacy hook requires accepted server response before acquisition. Separate browser peers prove actual SDP/ICE/RTP, received PCM and decoded video, controls and cleanup; this is not one continuous native-to-server-to-remote-device test. Android JS provenance registry and generated notification construction execute; generated Answer dispatch to the store is separately exercised below. Complete production call dispatcher and nested iOS VoIP dispatcher execute with their payload/authority policy modules, testing exact invite/type/deadline, duplicate/fallback/error and explicit presentation receipt behavior. New generated Android Answer PendingIntent dispatch reaches the private receiver and one-use store under Robolectric; native CI execution still required on final head.",
-      "controlled_assumptions": "Full screen service APIs, native events, permissions, SDK media and transport are controlled fixtures. Browser capture is synthetic, signaling/membership in-memory, no OS notification delivery. The expanded browser suite has voice/video × both host assignments, and its required candidate-head hosted run must pass; generic host assignment is not native Android↔iPhone direction. Dispatcher database SDK receipts, provider HTTP and clock are controlled; a supplied presentation receipt is not actual native presentation or database authorization proof. Robolectric stops at native store/JS boundary; no installed Activity/RN bridge or FCM is exercised.",
+      "software_proof": "Production screen/adapter/legacy hook requires accepted server response before acquisition. Separate browser peers prove actual SDP/ICE/RTP, received PCM and decoded video, controls and cleanup; this is not one continuous native-to-server-to-remote-device test. Android JS provenance registry and generated notification construction execute; generated Answer dispatch to the store is separately exercised below. Complete production call dispatcher and nested iOS VoIP dispatcher execute with their payload/authority policy modules, testing exact invite/type/deadline, duplicate/fallback/error and explicit presentation receipt behavior. New generated Android Answer PendingIntent dispatch reaches the private receiver and one-use store under Robolectric; native CI execution still required on final head. The complete production AndroidNativeCallRouteBridge effect and chillyChatNativeCallRouteBuffer now execute with the shared production provenance registry and the actual destination screen. Native-store receipts route once and trigger server acceptance before controlled capture; an already-focused same-thread screen consumes the claim without root navigation. For an already-mounted root, availability events received while backgrounded wait for foreground. Auth loading preserves queued native work, delayed old-account receipts cannot route, and rejected navigation revokes its exact claim. A source mutation disabling effect retirement demonstrably violates the no-stale-navigation postcondition.",
+      "controlled_assumptions": "Full screen service APIs, native events, permissions, SDK media and transport are controlled fixtures. Browser capture is synthetic, signaling/membership in-memory, no OS notification delivery. The expanded browser suite has voice/video × both host assignments, and its required candidate-head hosted run must pass; generic host assignment is not native Android↔iPhone direction. Dispatcher database SDK receipts, provider HTTP and clock are controlled; a supplied presentation receipt is not actual native presentation or database authorization proof. Robolectric stops at native store/JS boundary; no installed Activity/RN bridge or FCM is exercised. The Android composition controls native store replies, DeviceEventEmitter, auth state, AppState and router.replace. The unmodified root-issued destination is fed to the actual mounted screen; this executes application handoff logic, not Expo navigation, Android Activity launch, installed React Native bridging, OS process survival or notification delivery. The background receipt case mounts the root while active, then backgrounds it before receipt. These assertions do not establish foreground deferral for an initially backgrounded root or an in-flight native-store consumption that resolves after backgrounding; actual OS cold-launch ordering remains outside the fixture.",
       "physical_remainder": "Android receiving video from the other actual platform while elsewhere in app; real notification/CallKit presentation and timing, Answer, audible speech, moving video if applicable, and capture/native cleanup.",
-      "software_gap": "Complete installed bridge, app-shell routing, native UI and real delivery are not joined to the browser/backend seams in a single test. Existing separate layers must not be described as one installed end-to-end proof. Elsewhere-in-app native navigation remains unexecuted; direct screen mount and JS route construction are narrower proof."
+      "software_gap": "Production Android root, complete native buffer, shared provenance and destination screen are now composed under explicit controlled native/auth/router boundaries. No device-only deferral remains for the tested JS cold/warm/elsewhere/account-replacement/navigation-failure mechanism. Installed Activity/RN bridge, actual Expo/native navigation, genuine notification delivery and process-launch behavior remain separate qualification requirements. Required candidate-head tests must pass; this is not installed end-to-end proof."
     },
     {
       "case_id": "BL15",
@@ -1215,12 +1425,47 @@
           "file": "tools/android-native-call-harness/ChillyChatIncomingCallNotificationTest.kt",
           "anchor": "actualAnswerPendingIntentDispatchesReceiverAndCreatesOneConsumableStoreAction",
           "ci_lane": "Validation / Native and Release"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root consumes native store Answer and the destination screen accepts once before capture",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root defers background native availability until foreground then hands off from elsewhere",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root lets the focused same-thread screen consume Answer without replacing its route",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root retires a deferred native receipt after account replacement without navigation or capture",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root leaves queued native Answer untouched during auth loading then drains on sign-in",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root revokes the exact Answer claim when router transport rejects",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "Android root handoff mutation control detects a retired effect routing the old account receipt",
+          "ci_lane": "Validation / Product"
         }
       ],
-      "software_proof": "Production screen/adapter/legacy hook requires accepted server response before acquisition. Separate browser peers prove actual SDP/ICE/RTP, received PCM and decoded video, controls and cleanup; this is not one continuous native-to-server-to-remote-device test. Android JS provenance registry and generated notification construction execute; generated Answer dispatch to the store is separately exercised below. Complete production call dispatcher and nested iOS VoIP dispatcher execute with their payload/authority policy modules, testing exact invite/type/deadline, duplicate/fallback/error and explicit presentation receipt behavior. New generated Android Answer PendingIntent dispatch reaches the private receiver and one-use store under Robolectric; native CI execution still required on final head.",
-      "controlled_assumptions": "Full screen service APIs, native events, permissions, SDK media and transport are controlled fixtures. Browser capture is synthetic, signaling/membership in-memory, no OS notification delivery. The expanded browser suite has voice/video × both host assignments, and its required candidate-head hosted run must pass; generic host assignment is not native Android↔iPhone direction. Dispatcher database SDK receipts, provider HTTP and clock are controlled; a supplied presentation receipt is not actual native presentation or database authorization proof. Robolectric stops at native store/JS boundary; no installed Activity/RN bridge or FCM is exercised.",
+      "software_proof": "Production screen/adapter/legacy hook requires accepted server response before acquisition. Separate browser peers prove actual SDP/ICE/RTP, received PCM and decoded video, controls and cleanup; this is not one continuous native-to-server-to-remote-device test. Android JS provenance registry and generated notification construction execute; generated Answer dispatch to the store is separately exercised below. Complete production call dispatcher and nested iOS VoIP dispatcher execute with their payload/authority policy modules, testing exact invite/type/deadline, duplicate/fallback/error and explicit presentation receipt behavior. New generated Android Answer PendingIntent dispatch reaches the private receiver and one-use store under Robolectric; native CI execution still required on final head. The complete production AndroidNativeCallRouteBridge effect and chillyChatNativeCallRouteBuffer now execute with the shared production provenance registry and the actual destination screen. Native-store receipts route once and trigger server acceptance before controlled capture; an already-focused same-thread screen consumes the claim without root navigation. For an already-mounted root, availability events received while backgrounded wait for foreground. Auth loading preserves queued native work, delayed old-account receipts cannot route, and rejected navigation revokes its exact claim. A source mutation disabling effect retirement demonstrably violates the no-stale-navigation postcondition.",
+      "controlled_assumptions": "Full screen service APIs, native events, permissions, SDK media and transport are controlled fixtures. Browser capture is synthetic, signaling/membership in-memory, no OS notification delivery. The expanded browser suite has voice/video × both host assignments, and its required candidate-head hosted run must pass; generic host assignment is not native Android↔iPhone direction. Dispatcher database SDK receipts, provider HTTP and clock are controlled; a supplied presentation receipt is not actual native presentation or database authorization proof. Robolectric stops at native store/JS boundary; no installed Activity/RN bridge or FCM is exercised. The Android composition controls native store replies, DeviceEventEmitter, auth state, AppState and router.replace. The unmodified root-issued destination is fed to the actual mounted screen; this executes application handoff logic, not Expo navigation, Android Activity launch, installed React Native bridging, OS process survival or notification delivery. The background receipt case mounts the root while active, then backgrounds it before receipt. These assertions do not establish foreground deferral for an initially backgrounded root or an in-flight native-store consumption that resolves after backgrounding; actual OS cold-launch ordering remains outside the fixture.",
       "physical_remainder": "Android receiving video from the other actual platform while backgrounded; real notification/CallKit presentation and timing, Answer, audible speech, moving video if applicable, and capture/native cleanup.",
-      "software_gap": "Complete installed bridge, app-shell routing, native UI and real delivery are not joined to the browser/backend seams in a single test. Existing separate layers must not be described as one installed end-to-end proof."
+      "software_gap": "Production Android root, complete native buffer, shared provenance and destination screen are now composed under explicit controlled native/auth/router boundaries. No device-only deferral remains for the tested JS cold/warm/elsewhere/account-replacement/navigation-failure mechanism. Installed Activity/RN bridge, actual Expo/native navigation, genuine notification delivery and process-launch behavior remain separate qualification requirements. Required candidate-head tests must pass; this is not installed end-to-end proof."
     },
     {
       "case_id": "BL16",
@@ -1262,12 +1507,47 @@
           "file": "tools/android-native-call-harness/ChillyChatIncomingCallNotificationTest.kt",
           "anchor": "actualAnswerPendingIntentDispatchesReceiverAndCreatesOneConsumableStoreAction",
           "ci_lane": "Validation / Native and Release"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root consumes native store Answer and the destination screen accepts once before capture",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root defers background native availability until foreground then hands off from elsewhere",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root lets the focused same-thread screen consume Answer without replacing its route",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root retires a deferred native receipt after account replacement without navigation or capture",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root leaves queued native Answer untouched during auth loading then drains on sign-in",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "actual Android root revokes the exact Answer claim when router transport rejects",
+          "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/assurance/chat-thread-integration-mounted.test.mjs",
+          "anchor": "Android root handoff mutation control detects a retired effect routing the old account receipt",
+          "ci_lane": "Validation / Product"
         }
       ],
-      "software_proof": "Production screen/adapter/legacy hook requires accepted server response before acquisition. Separate browser peers prove actual SDP/ICE/RTP, received PCM and decoded video, controls and cleanup; this is not one continuous native-to-server-to-remote-device test. Android JS provenance registry and generated notification construction execute; generated Answer dispatch to the store is separately exercised below. Complete production call dispatcher and nested iOS VoIP dispatcher execute with their payload/authority policy modules, testing exact invite/type/deadline, duplicate/fallback/error and explicit presentation receipt behavior. New generated Android Answer PendingIntent dispatch reaches the private receiver and one-use store under Robolectric; native CI execution still required on final head.",
-      "controlled_assumptions": "Full screen service APIs, native events, permissions, SDK media and transport are controlled fixtures. Browser capture is synthetic, signaling/membership in-memory, no OS notification delivery. The expanded browser suite has voice/video × both host assignments, and its required candidate-head hosted run must pass; generic host assignment is not native Android↔iPhone direction. Dispatcher database SDK receipts, provider HTTP and clock are controlled; a supplied presentation receipt is not actual native presentation or database authorization proof. Robolectric stops at native store/JS boundary; no installed Activity/RN bridge or FCM is exercised.",
+      "software_proof": "Production screen/adapter/legacy hook requires accepted server response before acquisition. Separate browser peers prove actual SDP/ICE/RTP, received PCM and decoded video, controls and cleanup; this is not one continuous native-to-server-to-remote-device test. Android JS provenance registry and generated notification construction execute; generated Answer dispatch to the store is separately exercised below. Complete production call dispatcher and nested iOS VoIP dispatcher execute with their payload/authority policy modules, testing exact invite/type/deadline, duplicate/fallback/error and explicit presentation receipt behavior. New generated Android Answer PendingIntent dispatch reaches the private receiver and one-use store under Robolectric; native CI execution still required on final head. The complete production AndroidNativeCallRouteBridge effect and chillyChatNativeCallRouteBuffer now execute with the shared production provenance registry and the actual destination screen. Native-store receipts route once and trigger server acceptance before controlled capture; an already-focused same-thread screen consumes the claim without root navigation. For an already-mounted root, availability events received while backgrounded wait for foreground. Auth loading preserves queued native work, delayed old-account receipts cannot route, and rejected navigation revokes its exact claim. A source mutation disabling effect retirement demonstrably violates the no-stale-navigation postcondition.",
+      "controlled_assumptions": "Full screen service APIs, native events, permissions, SDK media and transport are controlled fixtures. Browser capture is synthetic, signaling/membership in-memory, no OS notification delivery. The expanded browser suite has voice/video × both host assignments, and its required candidate-head hosted run must pass; generic host assignment is not native Android↔iPhone direction. Dispatcher database SDK receipts, provider HTTP and clock are controlled; a supplied presentation receipt is not actual native presentation or database authorization proof. Robolectric stops at native store/JS boundary; no installed Activity/RN bridge or FCM is exercised. The Android composition controls native store replies, DeviceEventEmitter, auth state, AppState and router.replace. The unmodified root-issued destination is fed to the actual mounted screen; this executes application handoff logic, not Expo navigation, Android Activity launch, installed React Native bridging, OS process survival or notification delivery. The background receipt case mounts the root while active, then backgrounds it before receipt. These assertions do not establish foreground deferral for an initially backgrounded root or an in-flight native-store consumption that resolves after backgrounding; actual OS cold-launch ordering remains outside the fixture.",
       "physical_remainder": "Android receiving video from the other actual platform while terminated or force-stopped; real notification/CallKit presentation and timing, Answer, audible speech, moving video if applicable, and capture/native cleanup. Android force-stop suppresses delivery differently from ordinary swipe-away/OS termination; retain both distinct scenarios and do not infer one from the other.",
-      "software_gap": "Complete installed bridge, app-shell routing, native UI and real delivery are not joined to the browser/backend seams in a single test. Existing separate layers must not be described as one installed end-to-end proof."
+      "software_gap": "Production Android root, complete native buffer, shared provenance and destination screen are now composed under explicit controlled native/auth/router boundaries. No device-only deferral remains for the tested JS cold/warm/elsewhere/account-replacement/navigation-failure mechanism. Installed Activity/RN bridge, actual Expo/native navigation, genuine notification delivery and process-launch behavior remain separate qualification requirements. Required candidate-head tests must pass; this is not installed end-to-end proof."
     },
     {
       "case_id": "CA01",
@@ -3789,12 +4069,32 @@
           "file": "tests/assurance/chat-call-native-state-mounted.test.mjs",
           "anchor": "legacy iOS screen and actual JS native facade restore current route after a retired issued command",
           "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/native/ChillywoodNativeAudioTests.swift",
+          "anchor": "// Actual coordinator routing and failure propagation",
+          "ci_lane": "Validation / Native SDK Contracts"
+        },
+        {
+          "file": "tests/native/ChillywoodNativeAudioTests.swift",
+          "anchor": "// Real observer registration/closures",
+          "ci_lane": "Validation / Native SDK Contracts"
+        },
+        {
+          "file": "tests/assurance/ios-native-audio-root-mounted.test.mjs",
+          "anchor": "actual iOS root audio interruption receipts retain the current Answer route and presentation",
+          "ci_lane": "Validation / Native SDK Contracts"
+        },
+        {
+          "file": "tests/assurance/ios-native-audio-root-mounted.test.mjs",
+          "anchor": "actual iOS root delayed audio receipts cannot erase or navigate a replacement CallKit UUID",
+          "ci_lane": "Validation / Native SDK Contracts"
         }
       ],
-      "software_proof": "Production screen route handler executes the complete production iosNativeCalls JS facade; rejected native command leaves UI unchanged and allows retry; issued old command is followed by current replacement receiver choice. Native command sequence and UI acknowledgement are asserted.",
-      "controlled_assumptions": "Native module setAudioRouteAsync is the controlled seam. No AVAudioSession command implementation, output observer or audible route is executed; the screen harness extracts production routing/ownership callbacks rather than rendering RN UI.",
+      "software_proof": "Production screen route handler executes the complete production iosNativeCalls JS facade; rejected native command leaves UI unchanged and allows retry; issued old command is followed by current replacement receiver choice. Native command sequence and UI acknowledgement are asserted. The required macOS probe compiles complete actual Swift routing, activation/deactivation, interruption and observer-registration methods. Controlled AVAudioSession receipts exercise requested routes, rejection propagation, ordering and exact current call descriptors; real Foundation notifications execute actual observer closures. Production JS root/facade tests reject duplicate navigation or terminal actions from audio events and preserve replacement UUID ownership.",
+      "controlled_assumptions": "Screen/native-facade calls, AVAudioSession and CallKit API receipts are controlled. Swift method bodies and registered observer closures are actual source, with a recorded emitRaw sink; asynchronous native sink persistence is outside this probe. It does not load iOS AVFoundation/CallKit or exercise physical output selection. The JS root receives controlled native events. Native deactivation is best effort and its callback is not proof that setActive(false) or capture shutdown succeeded. Android legacy app route selection remains unsupported.",
       "physical_remainder": "iPhone speaker/receiver selection during voice; actual native route and audible destination, interruptions and restoration.",
-      "software_gap": "Native route availability/interruption callback and actual AVAudioSession output remain outside executed coverage; do not count acknowledged command as proof of physical route change."
+      "software_gap": "Concrete app-owned route/interruption mechanisms have required executable assertions, pending candidate exact-head macOS results. Hardware output readback, audible audio, Bluetooth attach/detach and actual OS interruptions still require device qualification. Successful command acknowledgement cannot establish physical routing."
     },
     {
       "case_id": "AR03",
@@ -3838,12 +4138,32 @@
           "file": "tests/assurance/chat-call-native-state-mounted.test.mjs",
           "anchor": "legacy iOS screen and actual JS native facade restore current route after a retired issued command",
           "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/native/ChillywoodNativeAudioTests.swift",
+          "anchor": "// Actual coordinator routing and failure propagation",
+          "ci_lane": "Validation / Native SDK Contracts"
+        },
+        {
+          "file": "tests/native/ChillywoodNativeAudioTests.swift",
+          "anchor": "// Real observer registration/closures",
+          "ci_lane": "Validation / Native SDK Contracts"
+        },
+        {
+          "file": "tests/assurance/ios-native-audio-root-mounted.test.mjs",
+          "anchor": "actual iOS root audio interruption receipts retain the current Answer route and presentation",
+          "ci_lane": "Validation / Native SDK Contracts"
+        },
+        {
+          "file": "tests/assurance/ios-native-audio-root-mounted.test.mjs",
+          "anchor": "actual iOS root delayed audio receipts cannot erase or navigate a replacement CallKit UUID",
+          "ci_lane": "Validation / Native SDK Contracts"
         }
       ],
-      "software_proof": "Production screen route handler executes the complete production iosNativeCalls JS facade; rejected native command leaves UI unchanged and allows retry; issued old command is followed by current replacement receiver choice. Native command sequence and UI acknowledgement are asserted.",
-      "controlled_assumptions": "Native module setAudioRouteAsync is the controlled seam. No AVAudioSession command implementation, output observer or audible route is executed; the screen harness extracts production routing/ownership callbacks rather than rendering RN UI.",
+      "software_proof": "Production screen route handler executes the complete production iosNativeCalls JS facade; rejected native command leaves UI unchanged and allows retry; issued old command is followed by current replacement receiver choice. Native command sequence and UI acknowledgement are asserted. The required macOS probe compiles complete actual Swift routing, activation/deactivation, interruption and observer-registration methods. Controlled AVAudioSession receipts exercise requested routes, rejection propagation, ordering and exact current call descriptors; real Foundation notifications execute actual observer closures. Production JS root/facade tests reject duplicate navigation or terminal actions from audio events and preserve replacement UUID ownership.",
+      "controlled_assumptions": "Screen/native-facade calls, AVAudioSession and CallKit API receipts are controlled. Swift method bodies and registered observer closures are actual source, with a recorded emitRaw sink; asynchronous native sink persistence is outside this probe. It does not load iOS AVFoundation/CallKit or exercise physical output selection. The JS root receives controlled native events. Native deactivation is best effort and its callback is not proof that setActive(false) or capture shutdown succeeded. Android legacy app route selection remains unsupported.",
       "physical_remainder": "iPhone speaker/receiver selection during video; actual native route and audible destination, interruptions and restoration.",
-      "software_gap": "Native route availability/interruption callback and actual AVAudioSession output remain outside executed coverage; do not count acknowledged command as proof of physical route change."
+      "software_gap": "Concrete app-owned route/interruption mechanisms have required executable assertions, pending candidate exact-head macOS results. Hardware output readback, audible audio, Bluetooth attach/detach and actual OS interruptions still require device qualification. Successful command acknowledgement cannot establish physical routing."
     },
     {
       "case_id": "BT01",
@@ -3872,12 +4192,32 @@
           "file": "tests/assurance/chat-thread-answer-mounted.test.mjs",
           "anchor": "reconnection preserves the current call's manual audio route",
           "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "tests/native/ChillywoodNativeAudioTests.swift",
+          "anchor": "// Actual coordinator routing and failure propagation",
+          "ci_lane": "Validation / Native SDK Contracts"
+        },
+        {
+          "file": "tests/native/ChillywoodNativeAudioTests.swift",
+          "anchor": "// Real observer registration/closures",
+          "ci_lane": "Validation / Native SDK Contracts"
+        },
+        {
+          "file": "tests/assurance/ios-native-audio-root-mounted.test.mjs",
+          "anchor": "actual iOS root audio interruption receipts retain the current Answer route and presentation",
+          "ci_lane": "Validation / Native SDK Contracts"
+        },
+        {
+          "file": "tests/assurance/ios-native-audio-root-mounted.test.mjs",
+          "anchor": "actual iOS root delayed audio receipts cannot erase or navigate a replacement CallKit UUID",
+          "ci_lane": "Validation / Native SDK Contracts"
         }
       ],
-      "software_proof": "Generic screen reconnect preserves chosen route state. This does not exercise any Bluetooth interruption, headset removal, OS route event, or legacy Android route control.",
-      "controlled_assumptions": "No current Bluetooth event test; a fixture list containing bluetooth is not behavioral proof. Native routing is controlled and Android legacy app route selection is unavailable.",
+      "software_proof": "Generic screen reconnect preserves the chosen route. The required macOS probe compiles complete actual Swift routing, activation/deactivation, interruption and observer-registration methods. Controlled AVAudioSession receipts exercise requested routes, rejection propagation, ordering and exact current call descriptors; real Foundation notifications execute actual observer closures. Production JS root/facade tests reject duplicate navigation or terminal actions from audio events and preserve replacement UUID ownership.",
+      "controlled_assumptions": "Screen/native-facade calls, AVAudioSession and CallKit API receipts are controlled. Swift method bodies and registered observer closures are actual source, with a recorded emitRaw sink; asynchronous native sink persistence is outside this probe. It does not load iOS AVFoundation/CallKit or exercise physical output selection. The JS root receives controlled native events. Native deactivation is best effort and its callback is not proof that setActive(false) or capture shutdown succeeded. Android legacy app route selection remains unsupported.",
       "physical_remainder": "iPhone actual Bluetooth headset connection/disconnection and interruption during owned call, correct audible route, microphone recovery, no unwanted capture, and latest intended route.",
-      "software_gap": "Document supported system-route behavior and execute actual audio route callback/availability-change policy at native seam if an app-owned handler exists. Do not add invented Bluetooth support or count generic reconnect as this scenario."
+      "software_gap": "Concrete app-owned route/interruption mechanisms have required executable assertions, pending candidate exact-head macOS results. Hardware output readback, audible audio, Bluetooth attach/detach and actual OS interruptions still require device qualification. Successful command acknowledgement cannot establish physical routing."
     },
     {
       "case_id": "FI01",

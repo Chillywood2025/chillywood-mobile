@@ -171,6 +171,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Compile and execute pinned WebRTC sender methods and former-source controls
         run: node scripts/test-webrtc-native-sender-contract.mjs
+      - name: Execute actual Swift audio routing, observers, and JS call ownership
+        run: node scripts/test-ios-native-call-audio.mjs
 
   native-release:
     name: Validation / Native and Release

@@ -125,6 +125,23 @@ test("integration runner and coverage-only edits still select their executing la
   assert.ok(jobs.database.steps.some((step) => step.run?.includes("node scripts/test-chilly-chat-real-peer-http.mjs")));
 });
 
+test("native fixture-only edits require their compiled validation lane", () => {
+  for (const file of [
+    "tests/native/ChillywoodNativeAudioTests.swift",
+    "tests/native/ChillywoodIncomingCallDeadlineTests.swift",
+  ]) {
+    const plan = computeValidationPlan([file]);
+    assert.equal(plan.categories.nativeRelease, true, file);
+    assert.ok(expectedJobs(plan).includes("Validation / Native and Release"), file);
+    const jobs = successfulJobs([file]);
+    jobs.find((job) => job.name === "Validation / Native and Release").conclusion = "skipped";
+    assert.equal(evaluate([file], { jobs }).ok, false, file);
+  }
+  const { jobs } = parse(fs.readFileSync(".github/workflows/required-validation.yml", "utf8"));
+  assert.ok(jobs["native-sdk"].steps.some((step) => step.run === "node scripts/test-ios-native-call-audio.mjs"));
+  assert.ok(jobs["native-release"].steps.some((step) => step.run?.includes("node scripts/test-ios-native-call-deadline.mjs")));
+});
+
 test("non-owner policy changes require a trusted exact-head review from someone other than author", () => {
   const paths = [".github/workflows/required-validation.yml"];
   const jobs = successfulJobs(paths);

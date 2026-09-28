@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createDurableChatThreadFixture, mountFullChatThread } from "./helpers/chat-thread-full-mounted-harness.mjs";
 import { mountIosRoot, nativeIds as rootNativeIds, makeNativeEvent } from "./helpers/ios-root-thread-handoff-harness.mjs";
+import { androidAction, androidIds, mountAndroidRoot } from "./helpers/android-root-thread-handoff-harness.mjs";
+import * as nativeProvenance from "../../_lib/nativeCallTransitionProvenance.mjs";
 
 test("full screen Answer activates the actual legacy adapter once, only after server acceptance", async () => {
   const h = await mountFullChatThread();
@@ -583,4 +585,113 @@ test("actual root-issued native Answer route cannot be consumed by a replacement
   assert.equal(screen.runtime.media.joinCalls.length, 0);
   assert.equal(screen.runtime.media.localStreams.length, 0);
   assert.equal(screen.runtime.snapshot.activeCallInvite, null);
+});
+
+async function consumeAndroidRootDestination(t, root, options = {}) {
+  assert.equal(root.destinations.length, 1);
+  const destination = new URL(root.destinations[0], "https://test.invalid");
+  assert.equal(destination.pathname, `/chat/${androidIds.thread}`);
+  const screen = await mountFullChatThread({ userId: androidIds.user, remoteUserId: androidIds.other,
+    threadId: androidIds.thread, platform: "android", invite: { id: androidIds.invite },
+    routeParams: Object.fromEntries(destination.searchParams), ...options });
+  t.after(() => screen.unmount());
+  return screen;
+}
+
+test("actual Android root consumes native store Answer and the destination screen accepts once before capture", async t => {
+  const payload = androidAction();
+  const root = await mountAndroidRoot(t, { pending: [payload] });
+  const screen = await consumeAndroidRootDestination(t, root);
+  assert.deepEqual(screen.runtime.transitions.map(({ status }) => status), ["accepted"]);
+  assert.equal(screen.runtime.snapshot.activeCallInvite.id, androidIds.invite);
+  assert.equal(screen.runtime.media.joinCalls.length, 1);
+  assert.equal(screen.runtime.media.localStreams.length, 1);
+  assert.equal(screen.runtime.snapshot.participants.find(participant => !participant.isSelf).connectionState, "connecting",
+    "native-store handoff does not fabricate received media proof");
+  root.pending.push(payload);
+  await screen.run(() => root.emit());
+  assert.equal(root.destinations.length, 1, "repeated native receipt cannot create a second route");
+  assert.equal(screen.runtime.transitions.length, 1);
+  assert.equal(screen.runtime.media.localStreams.length, 1);
+});
+
+test("actual Android root defers background native availability until foreground then hands off from elsewhere", async t => {
+  const root = await mountAndroidRoot(t);
+  await root.appState("background");
+  const attemptsBefore = root.attempts.length;
+  root.pending.push(androidAction());
+  await root.emit();
+  assert.equal(root.attempts.length, attemptsBefore);
+  assert.equal(root.destinations.length, 0, "no destination screen exists while the app is elsewhere/backgrounded");
+  await root.appState("active");
+  const screen = await consumeAndroidRootDestination(t, root);
+  assert.deepEqual(screen.runtime.transitions.map(({ status }) => status), ["accepted"]);
+  assert.equal(screen.runtime.media.joinCalls.length, 1);
+  await root.appState("active");
+  await root.emit();
+  assert.equal(root.destinations.length, 1);
+});
+
+test("actual Android root lets the focused same-thread screen consume Answer without replacing its route", async t => {
+  const root = await mountAndroidRoot(t);
+  const screen = await mountFullChatThread({ userId: androidIds.user, remoteUserId: androidIds.other,
+    threadId: androidIds.thread, platform: "android", invite: { id: androidIds.invite } });
+  t.after(() => screen.unmount());
+  root.pending.push(androidAction());
+  await screen.run(() => root.emit());
+  assert.equal(root.destinations.length, 0, "the actual focused screen consumes the shared production claim synchronously");
+  assert.deepEqual(screen.runtime.transitions.map(({ status }) => status), ["accepted"]);
+  assert.equal(screen.runtime.media.joinCalls.length, 1);
+});
+
+test("actual Android root retires a deferred native receipt after account replacement without navigation or capture", async t => {
+  const held = deferredMessageWrite();
+  const root = await mountAndroidRoot(t, { pending: [() => held.wait.then(() => androidAction())] });
+  await root.rerender({ user: { id: androidIds.other } });
+  await root.run(() => held.release());
+  assert.equal(root.destinations.length, 0);
+  const screen = await mountFullChatThread({ userId: androidIds.other, remoteUserId: androidIds.user,
+    threadId: androidIds.thread, platform: "android", invite: { id: androidIds.invite, calleeUserId: androidIds.user } });
+  t.after(() => screen.unmount());
+  assert.equal(screen.runtime.transitions.length, 0);
+  assert.equal(screen.runtime.media.localStreams.length, 0);
+});
+
+test("actual Android root leaves queued native Answer untouched during auth loading then drains on sign-in", async t => {
+  const root = await mountAndroidRoot(t, { pending: [androidAction()], session: { isLoading: true, isSignedIn: false, user: null } });
+  assert.equal(root.attempts.length, 0);
+  assert.equal(root.destinations.length, 0);
+  await root.rerender({ isLoading: false, isSignedIn: true, user: { id: androidIds.user } });
+  const screen = await consumeAndroidRootDestination(t, root);
+  assert.equal(screen.runtime.transitions.length, 1);
+  assert.equal(screen.runtime.media.joinCalls.length, 1);
+});
+
+test("actual Android root revokes the exact Answer claim when router transport rejects", async t => {
+  const observed = [];
+  const root = await mountAndroidRoot(t, { rejectNavigation: true });
+  const remove = nativeProvenance.subscribeToTrustedAndroidNativeActionRoutes(route => { observed.push(route); return false; });
+  t.after(remove);
+  root.pending.push(androidAction());
+  await root.emit();
+  assert.equal(observed.length, 1);
+  assert.equal(root.destinations.length, 0);
+  assert.deepEqual(root.errors.map(({ message }) => message), ["Android native call route unavailable."]);
+  const route = observed[0];
+  assert.equal(nativeProvenance.consumeMountedAndroidNativeCallRoute({ authenticatedUserId: androidIds.user,
+    authLoading: false, isSignedIn: true, platform: "android", claimId: route.claimId,
+    inviteId: route.inviteId, requestKey: route.nativeIdentity, threadId: route.threadId }), null,
+  "a failed navigation cannot leave an actionable claim for a later screen");
+});
+
+test("Android root handoff mutation control detects a retired effect routing the old account receipt", async t => {
+  const held = deferredMessageWrite();
+  const root = await mountAndroidRoot(t, { pending: [() => held.wait.then(() => androidAction())], mutateRoot: source => {
+    assert.equal(source.split("active = false;").length, 2);
+    return source.replace("active = false;", "active = true;");
+  } });
+  await root.rerender({ user: { id: androidIds.other } });
+  await root.run(() => held.release());
+  assert.equal(root.destinations.length, 1,
+    "removing actual effect retirement violates the passing test's no-stale-navigation postcondition");
 });

@@ -607,7 +607,8 @@
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
-    "@supabase/supabase-js": "2.100.0",
+    "@supabase/realtime-js": "file:vendor/supabase-presence-backport/realtime-js-2.100.0-chillywood.1.tgz",
+    "@supabase/supabase-js": "file:vendor/supabase-presence-backport/supabase-js-2.100.0-chillywood.1.tgz",
     "decode-uri-component": "file:vendor/decode-uri-component-safe/chillywood-decode-uri-component-safe-0.5.0-chillywood.1.tgz",
     "expo": "~54.0.37",
     "expo-application": "~7.0.8",
@@ -690,6 +691,7 @@
       }
     },
     "@humanfs/node": "0.16.8",
+    "@supabase/realtime-js": "$@supabase/realtime-js",
     "decode-uri-component": "$decode-uri-component",
     "fast-uri": "3.1.6",
     "glob@13.0.6": {
