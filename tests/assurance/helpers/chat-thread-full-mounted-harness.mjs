@@ -68,6 +68,76 @@ function container() {
   return element();
 }
 
+// Stateful API-boundary fixture shared by two actual mounted screens. It keeps
+// messages separate from call rows, enforces member/actor/terminal ownership,
+// and can reject or hold writes. SQL/transport behavior has an independent
+// authenticated-local integration test; this fixture does not stand in for it.
+export function createDurableChatThreadFixture({ threadId = "thread", userIds = ["local-user", "remote-user"] } = {}) {
+  const store = { threadId, userIds, messages: [], invite: null, rooms: new Map(),
+    transitions: [], sends: [], writeActions: [], listeners: new Set(), serial: 0, reads: [] };
+  const member = (userId, requestedThreadId) => {
+    if (requestedThreadId !== threadId || !userIds.includes(userId)) throw Error("thread account is not a member");
+  };
+  store.notify = () => { for (const listener of store.listeners) listener(); };
+  store.thread = (userId) => {
+    member(userId, threadId);
+    const active = store.invite && ["ringing", "accepted"].includes(store.invite.status);
+    return { threadId, activeCommunicationRoomId: active ? store.invite.communicationRoomId : null,
+      activeCallType: active ? store.invite.callType : null, members: userIds.map(id => ({ userId: id })),
+      currentMember: { userId }, otherMember: { userId: userIds.find(id => id !== userId), displayName: "Other" } };
+  };
+  store.list = (userId, requestedThreadId) => {
+    member(userId, requestedThreadId);
+    store.reads.push({ userId, threadId: requestedThreadId });
+    return store.messages.map(message => ({ ...message }));
+  };
+  store.send = async (userId, requestedThreadId, body, attachment) => {
+    member(userId, requestedThreadId);
+    if (!String(body).trim() || attachment) throw Error("fixture requires a nonempty text message");
+    const action = store.writeActions.shift() ?? {};
+    const request = { userId, threadId: requestedThreadId, body: body.trim() };
+    store.sends.push(request);
+    if (action.wait) await action.wait;
+    if (action.reject) throw Error(action.reject);
+    const message = { id: `message-${++store.serial}`, threadId, senderUserId: userId,
+      body: body.trim(), messageType: "text", createdAt: new Date(1_790_000_000_000 + store.serial).toISOString(),
+      attachments: [], moderationStatus: "clean", isModerationHidden: false };
+    store.messages.push(message);
+    store.notify();
+    return { ...message };
+  };
+  store.start = (userId, requestedThreadId, callType) => {
+    member(userId, requestedThreadId);
+    if (store.invite && ["ringing", "accepted"].includes(store.invite.status)) throw Error("call already active");
+    if (!["voice", "video"].includes(callType)) throw Error("invalid call type");
+    const roomId = `FIXTURE-ROOM-${++store.serial}`;
+    store.invite = { id: `invite-${store.serial}`, threadId, communicationRoomId: roomId,
+      callerUserId: userId, calleeUserId: userIds.find(id => id !== userId), callType,
+      mediaProvider: "legacy_webrtc", status: "ringing", expiresAt: new Date(Date.now() + 90_000).toISOString() };
+    store.rooms.set(roomId, { status: "active", callType, hostUserId: userId });
+    store.notify();
+    return { ...store.invite };
+  };
+  store.transition = (userId, expectedInvite, status) => {
+    member(userId, expectedInvite.threadId);
+    const current = store.invite;
+    if (!current || expectedInvite.id !== current.id || expectedInvite.communicationRoomId !== current.communicationRoomId) throw Error("stale invite ownership");
+    if (current.status === status) return { ...current };
+    if (status === "accepted" && (current.status !== "ringing" || userId !== current.calleeUserId || Date.parse(current.expiresAt) <= Date.now())) throw Error("accept authority rejected");
+    if (status === "canceled" && (current.status !== "ringing" || userId !== current.callerUserId)) throw Error("cancel authority rejected");
+    if (status === "declined" && (current.status !== "ringing" || userId !== current.calleeUserId)) throw Error("decline authority rejected");
+    if (status === "ended" && current.status !== "accepted") throw Error("end authority rejected");
+    if (status === "missed" && (current.status !== "ringing" || Date.parse(current.expiresAt) > Date.now())) throw Error("expiry authority rejected");
+    if (!["accepted", "canceled", "declined", "ended", "missed"].includes(status)) throw Error("unsupported transition");
+    store.invite = { ...current, status };
+    store.transitions.push({ id: current.id, status, userId });
+    if (status !== "accepted") store.rooms.get(current.communicationRoomId).status = "ended";
+    store.notify();
+    return { ...store.invite };
+  };
+  return store;
+}
+
 export async function mountFullChatThread(options = {}) {
   const runtime = {
     userId: "local-user", remoteUserId: "remote-user", threadId: "thread", roomId: "ROOM-LEGACY",
@@ -82,6 +152,11 @@ export async function mountFullChatThread(options = {}) {
   runtime.thread = { threadId: runtime.threadId, activeCommunicationRoomId: runtime.roomId,
     activeCallType: runtime.invite.callType, members: [], otherMember: { userId: runtime.remoteUserId, displayName: "Other" } };
   if (options.noActiveCall) { runtime.thread.activeCommunicationRoomId = null; runtime.thread.activeCallType = null; }
+  const durableThread = options.durableThread;
+  if (durableThread) {
+    Object.defineProperty(runtime, "invite", { get: () => durableThread.invite, set: value => { durableThread.invite = value; } });
+    Object.defineProperty(runtime, "thread", { get: () => durableThread.thread(runtime.userId) });
+  }
   runtime.params = { threadId: runtime.threadId, ...options.routeParams };
   runtime.nativeCompletions = [];
   if (options.nativeAnswer) {
@@ -102,13 +177,17 @@ export async function mountFullChatThread(options = {}) {
   const notifyInvite = async () => { for (const fn of runtime.subscriptions) fn(); await settle(); };
   const inviteApi = {
     listChillyChatCallEvents: async () => [],
-    readChillyChatCallInvite: async () => runtime.readInvite ? runtime.readInvite() : ({ ...runtime.invite }),
-    readLatestChillyChatCallInviteForRoom: async () => ({ ...runtime.invite }),
-    readLatestRingingChillyChatCallInvite: async () => runtime.invite.status === "ringing" ? { ...runtime.invite } : null,
+    readChillyChatCallInvite: async (id) => runtime.readInvite ? runtime.readInvite(id)
+      : runtime.invite?.id === id ? ({ ...runtime.invite }) : null,
+    readLatestChillyChatCallInviteForRoom: async (roomId) => runtime.invite?.communicationRoomId === roomId ? ({ ...runtime.invite }) : null,
+    readLatestRingingChillyChatCallInvite: async (threadId) => runtime.invite?.threadId === threadId
+      && runtime.invite?.status === "ringing" ? { ...runtime.invite } : null,
     subscribeToChillyChatCallInvite: (_id, fn) => { runtime.subscriptions.add(fn); return () => runtime.subscriptions.delete(fn); },
-    updateChillyChatCallInviteStatus: async ({ invite, status }) => {
+    updateChillyChatCallInviteStatus: async ({ invite, status, actorUserId }) => {
+      assert.equal(actorUserId, runtime.userId, "transition must carry the mounted authenticated actor");
       runtime.transitions.push({ id: invite.id, status });
       if (runtime.transition) return runtime.transition({ invite, status });
+      if (durableThread) return durableThread.transition(actorUserId, invite, status);
       runtime.invite = { ...runtime.invite, status };
       if (["ended", "canceled", "missed", "declined"].includes(status)) {
         runtime.thread.activeCommunicationRoomId = null;
@@ -121,21 +200,37 @@ export async function mountFullChatThread(options = {}) {
     endCommunicationRoom: async () => { runtime.hostEnds += 1; throw Error("closed room is no longer available to direct host update"); },
     leaveCommunicationRoomSession: async (input) => {
       runtime.leaves.push(input);
-      if (input.roomId !== runtime.roomId || input.userId !== runtime.userId
+      if ((durableThread ? !durableThread.rooms.has(input.roomId) : input.roomId !== runtime.roomId) || input.userId !== runtime.userId
         || input.expectedMembershipGeneration !== media.membershipGeneration) {
         throw Error("leave does not own current authenticated membership");
       }
       if (runtime.leaveFailure) throw Error("durable cleanup unavailable");
       if (runtime.leaveBarrier) await runtime.leaveBarrier;
-      return { roomId: runtime.roomId, userId: runtime.userId, membershipGeneration: input.expectedMembershipGeneration, membershipState: "left", leftAt: new Date().toISOString(), micEnabled: false, cameraEnabled: false };
+      return { roomId: input.roomId, userId: runtime.userId, membershipGeneration: input.expectedMembershipGeneration, membershipState: "left", leftAt: new Date().toISOString(), micEnabled: false, cameraEnabled: false };
     },
   });
   Object.assign(media, { userId: runtime.userId, remoteUserId: runtime.remoteUserId, roomId: runtime.roomId });
   runtime.media = media;
+  const prepareAdmission = media.api.prepareCommunicationRoomAdmission;
+  media.api.prepareCommunicationRoomAdmission = async (input) => {
+    if (durableThread) {
+      assert.equal(input.userId, runtime.userId, "admission account must match the mounted session");
+      assert.equal(durableThread.rooms.get(input.roomId)?.status, "active", "only an active room can admit capture");
+      assert.equal(durableThread.invite?.communicationRoomId, input.roomId, "admission must own the active invite room");
+      assert.equal(durableThread.invite?.status, "accepted", "ringing cannot admit capture");
+      media.roomId = input.roomId;
+      runtime.roomId = input.roomId;
+    }
+    return prepareAdmission(input);
+  };
   const readSnapshot = media.api.getCommunicationRoomSnapshot;
   media.api.getCommunicationRoomSnapshot = async (...args) => {
     const snapshot = await readSnapshot(...args);
-    return { ...snapshot, room: { ...snapshot.room, hostUserId: runtime.invite.callerUserId } };
+    if (!durableThread) return { ...snapshot, room: { ...snapshot.room, hostUserId: runtime.invite?.callerUserId } };
+    const room = durableThread.rooms.get(args[0]);
+    if (!room) return null;
+    return { ...snapshot, memberships: snapshot.memberships.map(member => ({ ...member, roomId: args[0] })),
+      room: { ...snapshot.room, ...room, roomId: args[0], roomCode: args[0] } };
   };
   // Scenario-specific state belongs at the modeled API boundary. The screen,
   // adapter, admission coordinator, and legacy hook still execute unchanged.
@@ -147,10 +242,24 @@ export async function mountFullChatThread(options = {}) {
     "./use-livekit-chat-call-session": { useLiveKitChatCallSession: idleLiveKit },
   });
   const chat = {
-    getChatThread: async () => ({ ...runtime.thread }), listChatMessages: async () => [],
-    markChatThreadRead: async () => {}, subscribeToThread: (_id, fn) => { runtime.threadSubscriptions.add(fn); return () => runtime.threadSubscriptions.delete(fn); },
+    getChatThread: async (id) => durableThread && id !== durableThread.threadId ? null : ({ ...runtime.thread }),
+    listChatMessages: async (id) => durableThread ? durableThread.list(runtime.userId, id) : [],
+    sendChatMessage: async (id, body, attachment) => {
+      if (!durableThread) throw Error("message writes require the durable thread fixture");
+      return durableThread.send(runtime.userId, id, body, attachment);
+    },
+    markChatThreadRead: async () => {}, subscribeToThread: (_id, fn) => {
+      runtime.threadSubscriptions.add(fn); durableThread?.listeners.add(fn);
+      return () => { runtime.threadSubscriptions.delete(fn); durableThread?.listeners.delete(fn); };
+    },
     clearEndedChatThreadCall: async (...args) => { runtime.clears.push(args); return { cleared: true, reason: "ended" }; },
-    startChatThreadCall: async () => {
+    startChatThreadCall: async (id, callType) => {
+      if (durableThread) {
+        const invite = durableThread.start(runtime.userId, id, callType);
+        runtime.roomId = invite.communicationRoomId;
+        media.roomId = runtime.roomId;
+        return { thread: { ...runtime.thread }, roomId: runtime.roomId, role: "caller", invite, delivery: {} };
+      }
       runtime.thread.activeCommunicationRoomId = runtime.roomId;
       runtime.thread.activeCallType = runtime.invite.callType;
       return { thread: { ...runtime.thread }, roomId: runtime.roomId, role: "caller", invite: { ...runtime.invite }, delivery: {} };
@@ -171,6 +280,9 @@ export async function mountFullChatThread(options = {}) {
     },
     setIosNativeCallAudioRoute: async () => true, setIosNativeCallMuted: async () => true,
   };
+  // Root-to-thread composition may share the actual production JS native facade.
+  // Existing isolated cases keep their explicit native-module boundary fixture.
+  if (options.nativeFacade) Object.assign(native, options.nativeFacade);
   const defaults = { runtimeControls: { chat_enabled: true, chat_attachments_enabled: true } };
   const router = { setParams: patch => Object.assign(runtime.params, patch), push: noop, replace: noop, back: noop };
   const modules = {
@@ -181,7 +293,10 @@ export async function mountFullChatThread(options = {}) {
     "react-native-safe-area-context": { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
     "../../_lib/analytics": { trackEvent: noop }, "../../_lib/appConfig": { DEFAULT_APP_CONFIG: defaults, readAppConfig: async () => defaults },
     "../../_lib/chillyChatCalls": inviteApi, "../../_lib/chat": chat,
-    "../../_lib/communication": { getCommunicationRoomSnapshot: async () => ({ room: { status: runtime.invite.status === "ended" ? "ended" : "active" } }) },
+    "../../_lib/communication": { getCommunicationRoomSnapshot: async (roomId) => ({ room: {
+      status: durableThread ? durableThread.rooms.get(roomId)?.status ?? "ended"
+        : ["ended", "canceled", "declined", "missed", "busy"].includes(runtime.invite?.status) ? "ended" : "active",
+    } }) },
     "../../_lib/communicationCallMediaPolicy.mjs": mediaPolicy,
     "../../_lib/chillyChatNativeCallRoutes.mjs": nativeRoutes,
     "../../_lib/communicationRoomIdentifier.mjs": { normalizeCommunicationRoomIdentifier: (v) => String(v ?? "").trim() },
@@ -216,10 +331,10 @@ export async function mountFullChatThread(options = {}) {
     useLayoutEffect(() => { runtime.snapshot = { loading, error, callControlError,
       callBusy, callPanelOpen, activeCallInvite, activeCallRoomId, incomingCallInvite,
       callChannelState, cameraEnabled, micEnabled, participantCount, participants,
-      callTitle, callBody, initialCallMediaPreferences,
+      callTitle, callBody, initialCallMediaPreferences, messages, renderedMessages, draft, sending, setDraft,
       handleAcceptIncomingCall, handleJoinOrCloseCall, handleStartCall, handleToggleCallMic,
       handleToggleCallCamera, handleSwitchCallCamera, handleToggleNativeAudioRoute,
-      loadThreadState }; });
+      loadThreadState, handleSend, handleDeclineIncomingCall }; });
     return null;
   }`;
   for (const match of source.matchAll(/from "([^\"]+)"/g)) {
@@ -234,13 +349,18 @@ export async function mountFullChatThread(options = {}) {
   const root = createRoot(container());
   const render = async () => React.act(async () => { root.render(React.createElement(screen.default)); await settle(); });
   await render();
+  if (durableThread) durableThread.listeners.add(notifyInvite);
   return { runtime, act: React.act,
     async run(fn) { let result; await React.act(async () => { result = await fn(); await settle(); }); return result; },
     async flush() { await React.act(settle); },
     async fireTimer(timer) { timer.canceled = true; await React.act(async () => { await timer.fn(); await settle(); }); },
     async nativeEvent(event) { await React.act(async () => { for (const listener of nativeListeners) listener(event); await settle(); }); },
-    async rerender(patch) { Object.assign(runtime, patch); await render(); },
+    async rerender(patch) {
+      Object.assign(runtime, patch);
+      if (durableThread) Object.assign(media, { userId: runtime.userId, remoteUserId: runtime.remoteUserId });
+      await render();
+    },
     async terminal(status = "ended") { await React.act(async () => { runtime.invite = { ...runtime.invite, status }; runtime.thread.activeCommunicationRoomId = null; runtime.thread.activeCallType = null; await notifyInvite(); }); },
-    async unmount() { await React.act(async () => { root.unmount(); await settle(); }); },
+    async unmount() { durableThread?.listeners.delete(notifyInvite); await React.act(async () => { root.unmount(); await settle(); }); },
   };
 }

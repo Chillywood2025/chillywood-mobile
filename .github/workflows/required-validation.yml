@@ -87,6 +87,9 @@ jobs:
           node --test tests/assurance/android-chat-call-mic-control.test.mjs
           node --test tests/assurance/chat-thread-answer-mounted.test.mjs tests/assurance/ios-native-call-bridge-mounted.test.mjs
           node --test tests/assurance/chat-thread-integration-mounted.test.mjs
+          node --test tests/assurance/chat-call-native-state-mounted.test.mjs
+          node --test tests/assurance/chat-call-dispatch-integration.test.mjs
+          node --test tests/assurance/chat-call-sdk-contract.test.mjs
           npm run test:communication-terminal-postgres
           npm run test:chilly-chat-real-peer
 
@@ -135,10 +138,14 @@ jobs:
       - run: npm ci
       - name: Rebuild and test the local database
         run: |
+          npm ci --prefix tests/integration/real-peer-browser --ignore-scripts
+          node tests/integration/real-peer-browser/node_modules/playwright/cli.js install --with-deps chromium --only-shell
           supabase start
           supabase db reset
           supabase test db
           npm run test:communication-terminal-http
+          npm run test:chat-message-call-lifecycle-http
+          node scripts/test-chilly-chat-real-peer-http.mjs
           npm run test:communication-room-realtime-delivery
           npm run test:revenuecat-premium-quarantine-concurrency
           npm run test:cognitive-net-acl-guard-concurrency
@@ -148,10 +155,27 @@ jobs:
           npm run test:cognitive-product-sentinel-concurrency
           npm run test:cognitive-runtime-login-integration
 
+  native-sdk:
+    name: Validation / Native SDK Contracts
+    if: needs.plan.outputs.nativeRelease == 'true'
+    needs: plan
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 20, cache: npm }
+      - run: npm ci --ignore-scripts
+      - name: Compile and execute pinned WebRTC sender methods and former-source controls
+        run: node scripts/test-webrtc-native-sender-contract.mjs
+
   native-release:
     name: Validation / Native and Release
     if: needs.plan.outputs.nativeRelease == 'true'
-    needs: plan
+    # The existing required lane must not succeed unless the actual SDK
+    # Java/Objective-C contracts succeeded on this same source run.
+    needs: [plan, native-sdk]
     # This lane compiles the actual deadline policy with the bundled Swift
     # toolchain; keep its platform explicit across ubuntu-latest migrations.
     runs-on: ubuntu-24.04
@@ -345,7 +369,7 @@ jobs:
   result:
     name: Validation / Results
     if: always()
-    needs: [plan, core, product, sensitive, database, native-release, autonomous, policy]
+    needs: [plan, core, product, sensitive, database, native-sdk, native-release, autonomous, policy]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:

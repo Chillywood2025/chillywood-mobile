@@ -6,6 +6,13 @@ bundle containing the new membership, admission, media and signaling RPCs. A pro
 does not deploy that migration or qualify the phones. No production database
 mutation, build, or OTA is authorized by the source repair task.
 
+This candidate also corrects the pinned WebRTC native sender-replacement
+acknowledgment. The Expo plugin changes native inputs on both platforms.
+Android 94 and iOS 29 do not contain that native correction. **This candidate
+requires new internal binaries and a compatible new runtime generation, not
+an OTA onto the old v3 binaries.** Existing native-source digest checks must
+reject that mismatch; do not update historical binary receipts to make it pass.
+
 ## Contract and compatibility
 
 The migration adds server-owned membership generations, admission identity,
@@ -68,10 +75,12 @@ an explicit server denial is different from an unknown mutation outcome.
    migration history/parity, the column/default, restricted function grants,
    trigger ordering, unchanged row policies, and PostgREST schema availability.
    Use designated test accounts for any authorized functional readback.
-3. Confirm legacy-owned old-v3 compatibility and migrated API checks before authorizing the
-   corrected source for compatible internal delivery. Publish through the
-   existing platform-specific release tooling only after separate approval.
-4. Verify each installed update/source identity and rerun the physical matrix.
+3. Confirm legacy-owned old-v3 compatibility and migrated API checks. Under
+   separate native-build/delivery authority, generate both native projects,
+   verify the version/hash-bound SDK patch and native inputs, select the new
+   compatible internal runtime generation, and build through the canonical
+   platform tooling. Review exact artifacts and capabilities before delivery.
+4. Verify each installed binary, runtime and source identity and rerun the physical matrix.
    In particular: End after accepted invite terminal transition, both endpoint
    cleanup, repeated End, fresh calls, same-room replacement, account switch,
    and delayed cleanup during newer media intent.
@@ -91,9 +100,13 @@ rollback does not establish that its known physical defects are resolved.
 | `communication_terminal_self_leave_test.sql` | Focused pgTAP checks on the complete migrated local database: grants, RLS, old-client requests, rotation, revoked session, terminal visibility and immutable generation. |
 | `test-communication-terminal-http.mjs` | Actual application communication/authority/mutation modules and frozen-JWT HTTP transport against local Auth/PostgREST and the complete migration stack. Covers both terminal endpoints, idempotent retry, concurrent old-leave/rejoin, outsider, missing identity and revoked-session rejection. It refuses non-loopback API origins. |
 | `account-bound-room-settlement.test.mjs` | Actual mutation and deadline modules plus actual transport with a controlled response; proves join/leave retain late results, other RPC deadlines remain bounded, and account replacement or transport failure cannot manufacture cleanup success. |
+| `test-chat-message-call-lifecycle-http.mjs` | Actual messaging, call-begin and account-bound client modules against disposable Auth/PostgREST/RLS. Proves persisted messages across terminal call transitions, exact stored expiry, rejected writes and account replacement. It does not invoke production delivery workers. |
+| `test-chilly-chat-real-peer-http.mjs` | Two actual legacy hooks use real authenticated SDK channels, owned database admission/signaling, and real Chromium SDP/ICE/RTP. Measures received PCM/video, both endpoints' media controls, actual membership cleanup and a fresh call. Capture is synthetic; server invite setup uses the canonical service transaction. Edge delivery and phones remain outside this gate. |
 | Physical device matrix | Native capture release, audio-session teardown, CallKit dismissal and successful next calls on the installed iPhone/Android binaries. Source/SQL tests cannot substitute for this evidence. |
 
-At source preparation, local SQL and API/settlement tests pass. This workspace
-has no Docker/local Supabase service, so the full-stack HTTP and pgTAP runs are
-left to the required Database CI job; they are not reported as local passes.
+This workspace has no Docker/local Supabase service. Actual full-stack HTTP
+and pgTAP execution is required in the Database CI job and must be identified
+by exact head in the PR; local module-wiring checks are not backend passes.
+The compiled native-method contracts use controlled RTC/bridge edges. They
+do not substitute for full native builds or installed-device media proof.
 Deployment and physical qualification remain separate, explicit work.

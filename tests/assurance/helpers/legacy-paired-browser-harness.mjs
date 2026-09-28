@@ -227,7 +227,7 @@ export function createLegacyBrowserMembershipStore({ onCommit = () => {} } = {})
   };
 }
 
-export function buildLegacyPairedBrowserBundle({ sourceRoot = process.cwd() } = {}) {
+export function buildLegacyPairedBrowserBundle({ sourceRoot = process.cwd(), authenticatedBackend = false } = {}) {
   const read = (name) => fs.readFileSync(path.join(sourceRoot, name), "utf8");
   const compile = (source, fileName) => ts.transpileModule(source, {
     fileName,
@@ -247,7 +247,11 @@ export function buildLegacyPairedBrowserBundle({ sourceRoot = process.cwd() } = 
     modules[`./${name}.mjs`] = compile(read(`_lib/${name}.mjs`), `${name}.ts`);
   }
   const hook = compile(read("hooks/use-communication-room-session.ts"), "use-communication-room-session.ts");
-  return `(() => {
+  const captureRetirementSource = compile(read("_lib/communicationCaptureRetirement.ts"), "communicationCaptureRetirement.ts");
+  const backendSources = authenticatedBackend ? Object.fromEntries([
+    "communication", "accountSessionAuthority", "accountBoundSupabaseMutation", "entitlementAuthority", "roomRules", "performancePolicy",
+  ].map((name) => [`./${name}`, compile(read(`_lib/${name}.ts`), `${name}.ts`)])) : null;
+  return `${authenticatedBackend ? read("node_modules/@supabase/supabase-js/dist/umd/supabase.js") : ""}\n(() => {
     const sources = ${JSON.stringify(modules)};
     const cache = {};
     const require = (name) => {
@@ -265,11 +269,56 @@ export function buildLegacyPairedBrowserBundle({ sourceRoot = process.cwd() } = 
     const membershipAdmission = require('membership-admission');
     const accountBoundRpc = require('./accountBoundSupabaseRpc.mjs');
     const hookSource = ${JSON.stringify(hook)};
-    (${installLegacyPairedBrowser.toString()})({React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, membershipStoreFactory: (${createLegacyBrowserMembershipStore.toString()}), audioSourceFactory: (${createLegacyBrowserAudioSource.toString()}), audioReceiverFactory: (${createLegacyBrowserAudioReceiver.toString()}), audioControlFactory: (${createLegacyBrowserAudioControl.toString()})});
+    (${installLegacyPairedBrowser.toString()})({React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, captureRetirementSource: ${JSON.stringify(captureRetirementSource)}, backendSources: ${JSON.stringify(backendSources)}, authenticatedRuntimeFactory: (${createAuthenticatedBrowserRuntime.toString()}), membershipStoreFactory: (${createLegacyBrowserMembershipStore.toString()}), audioSourceFactory: (${createLegacyBrowserAudioSource.toString()}), audioReceiverFactory: (${createLegacyBrowserAudioReceiver.toString()}), audioControlFactory: (${createLegacyBrowserAudioControl.toString()})});
   })();`;
 }
 
-function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, membershipStoreFactory, audioSourceFactory, audioReceiverFactory, audioControlFactory }) {
+async function createAuthenticatedBrowserRuntime({ sources, connection, endpoint, boundRpc, checkSourceOnly = false }) {
+  const url = new URL(connection.apiUrl);
+  if (url.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(url.hostname)) throw new Error("Authenticated browser fixture requires disposable loopback Supabase");
+  if (!sources || typeof window.supabase?.createClient !== "function") throw new Error("Authenticated browser bundle is required");
+  const client = window.supabase.createClient(connection.apiUrl, connection.anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: `browser-fixture-${endpoint.userId}` },
+  });
+  const bootstrap = { supabase: client, SUPABASE_URL: connection.apiUrl, SUPABASE_ANON_KEY: connection.anonKey };
+  const unavailable = (label) => new Proxy({}, { get(_target, name) { throw new Error(`Unexpected ${label} dependency: ${String(name)}`); } });
+  const imports = {
+    "./supabase": bootstrap,
+    "./accountBoundSupabaseRpc.mjs": boundRpc,
+    "react-native": { Platform: { OS: "web" } },
+    "expo-constants": { __esModule: true, default: { expoConfig: { extra: {} } } },
+    "./appConfig": unavailable("room creation"),
+    "./monetization": unavailable("monetization"),
+    "./watchParty": unavailable("fallback identity"),
+    // Only display metadata is controlled. readCommunicationIdentity still
+    // executes production source and actual SDK auth.getUser; membership and
+    // mutation authority bind the supplied UUID to the real signed-in session.
+    "./userData": {
+      readUserProfile: async () => ({ username: endpoint.displayName, avatarIndex: 0 }),
+      buildUserChannelProfile: ({ profile, avatarUrl }) => ({ displayName: profile.username, avatarUrl, tagline: "" }),
+    },
+  };
+  const cache = {};
+  const load = (name) => {
+    if (Object.hasOwn(imports, name)) return imports[name];
+    if (cache[name]) return cache[name].exports;
+    if (!sources[name]) throw new Error(`Unmapped authenticated browser application module: ${name}`);
+    const module = { exports: {} }; cache[name] = module;
+    new Function("module", "exports", "require", "process", sources[name])(module, module.exports, load, { env: {} });
+    return module.exports;
+  };
+  const authority = load("./accountSessionAuthority");
+  const api = load("./communication");
+  if (checkSourceOnly) return { api };
+  const signedIn = await client.auth.setSession(endpoint.session);
+  if (signedIn.error || signedIn.data.user?.id !== endpoint.userId) throw new Error("Authenticated browser endpoint session was not confirmed");
+  const binding = await authority.readCurrentAccountSessionAuthority();
+  if (!binding || binding.userId !== endpoint.userId) throw new Error("Actual server current-session authority was not confirmed");
+  authority.publishAccountSessionAuthoritySnapshot(binding);
+  return { client, api, accessToken: signedIn.data.session.access_token, authority };
+}
+
+function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, captureRetirementSource, backendSources, authenticatedRuntimeFactory, membershipStoreFactory, audioSourceFactory, audioReceiverFactory, audioControlFactory }) {
   const clone = (value) => structuredClone(value);
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const granted = { granted: true, canAskAgain: true, status: "granted" };
@@ -281,7 +330,8 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
   } });
   const hub = {
     channels: [], roomId: "BROWSER-CALL-1", serial: 0, callSerial: 1, endpointSerial: 0, peerSerial: 0,
-    roomStatus: "active", dropAnswers: false, events: [], errors: [], endpoints: [], retiredEndpoints: [], heldSignals: [], holdNext: null,
+    roomStatus: "active", callType: "video", hostUserId: "alice", dropAnswers: false, events: [], errors: [], endpoints: [], retiredEndpoints: [], heldSignals: [], holdNext: null,
+    backend: false, backendRuntimes: new Map(), captureRetirementModules: new Map(),
     dispatch(message, sender) {
       for (const channel of this.channels.filter((candidate) => candidate.active && candidate.endpoint.userId !== sender.userId && candidate.topic === `comm-room-${message.roomId}`)) {
         // Delivery is independent of send acknowledgement, like Realtime.
@@ -304,7 +354,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       this.dispatch(message, sender);
       return true;
     },
-    snapshot() { return { room: { roomId: this.roomId, roomCode: this.roomId, status: this.roomStatus, hostUserId: "alice", callType: "video", createdAt: "2026-09-28T00:00:00Z" }, memberships: membershipStore.snapshot(this.roomId) }; },
+    snapshot() { return { room: { roomId: this.roomId, roomCode: this.roomId, status: this.roomStatus, hostUserId: this.hostUserId, callType: this.callType, createdAt: "2026-09-28T00:00:00Z" }, memberships: membershipStore.snapshot(this.roomId) }; },
     async membership(endpoint, operation, input) {
       // HTTP acknowledgement is a later task, never an in-stack Promise.
       await delay(2);
@@ -362,10 +412,19 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     }
     async send(message) { await hub.deliver({ ...message, roomId: this.topic.replace(/^comm-room-/u, "") }, this.endpoint); return "ok"; }
   }
-  function createEndpoint(userId, { seed = true } = {}) {
-    const endpoint = { userId, instanceId: ++hub.endpointSerial, peers: [], streams: [], acquiredTracks: [], audioContexts: [], drawTimers: [], receivedVideos: [], receivedAudio: [], output: null, root: null, current: true, mounted: true, pendingControl: null };
+  function createEndpoint(userId, { seed = true, backendRuntime = null } = {}) {
+    let captureRetirement = hub.captureRetirementModules.get(userId);
+    if (!captureRetirement) {
+      const module = { exports: {} };
+      new Function("module", "exports", captureRetirementSource)(module, module.exports);
+      captureRetirement = module.exports;
+      // Each endpoint models a separate device/process; its remounted hook
+      // retains the actual process coordinator, without sharing it with peers.
+      hub.captureRetirementModules.set(userId, captureRetirement);
+    }
+    const endpoint = { userId, instanceId: ++hub.endpointSerial, appState: "active", appStateListeners: new Set(), peers: [], streams: [], acquiredTracks: [], audioContexts: [], drawTimers: [], receivedVideos: [], receivedAudio: [], output: null, root: null, current: true, mounted: true, pendingControl: null };
     hub.endpoints.push(endpoint);
-    if (seed) membershipStore.seed({ roomId: hub.roomId, userId, displayName: userId, role: userId === "alice" ? "host" : "participant", membershipGeneration: crypto.randomUUID(), membershipAdmissionAttempt: null, membershipState: "active", cameraEnabled: true, micEnabled: true, joinedAt: "2026-09-28T00:00:00Z", leftAt: null, lastSeenAt: "2026-09-28T00:00:00Z" });
+    if (seed) membershipStore.seed({ roomId: hub.roomId, userId, displayName: userId, role: userId === hub.hostUserId ? "host" : "participant", membershipGeneration: crypto.randomUUID(), membershipAdmissionAttempt: null, membershipState: "active", cameraEnabled: hub.callType === "video", micEnabled: true, joinedAt: "2026-09-28T00:00:00Z", leftAt: null, lastSeenAt: "2026-09-28T00:00:00Z" });
     const rtc = {
       RTCPeerConnection: class extends NativePeer {
         constructor(config) {
@@ -413,7 +472,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       return stream;
     };
     const track = (stream, kind) => stream?.getTracks().find((item) => item.kind === kind) ?? null;
-    const communication = {
+    let communication = {
       broadcastCommunicationRoomSignal: (input) => hub.deliver(input, endpoint),
       buildCommunicationChannelName: (roomId) => `comm-room-${roomId}`,
       buildCommunicationPresencePayload: ({ identity, media }) => ({ userId: identity.userId, displayName: identity.displayName, cameraOn: media.cameraEnabled, micOn: media.micEnabled, joinedAt: "2026-09-28T00:00:00Z" }),
@@ -434,16 +493,46 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       stopCommunicationStream: (stream) => stream?.getTracks().forEach((item) => item.stop()),
       setCommunicationTrackEnabled: (stream, kind, enabled) => { const found = track(stream, kind); if (!found) return false; found.enabled = enabled; return true; },
     };
+    if (backendRuntime) {
+      const platformMedia = Object.fromEntries([
+        "createCommunicationMediaStream", "getCommunicationRTCModule", "getCommunicationStreamURL",
+        "getCommunicationTrack", "stopCommunicationStream", "setCommunicationTrackEnabled",
+      ].map((name) => [name, communication[name]]));
+      for (const name of Object.keys(communication)) {
+        if (!Object.hasOwn(platformMedia, name) && name !== "COMMUNICATION_DEFAULT_ICE_SERVERS"
+          && !Object.hasOwn(backendRuntime.api, name)) throw new Error(`Missing production communication export: ${name}`);
+      }
+      // Construct from actual exports, rather than retaining any simulated
+      // membership/signaling method when a production API changes its name.
+      communication = { ...backendRuntime.api, ...platformMedia, COMMUNICATION_DEFAULT_ICE_SERVERS: [] };
+      const broadcast = communication.broadcastCommunicationRoomSignal;
+      communication.broadcastCommunicationRoomSignal = async (input) => {
+        const result = await broadcast(input);
+        hub.events.push({ kind: "authenticated-broadcast", event: input.event, sender: userId });
+        return result;
+      };
+    }
     const getPermission = async () => granted;
     const mocks = {
       react: React,
-      "react-native": { AppState: { currentState: "active", addEventListener: () => ({ remove() {} }) }, Linking: { openSettings: async () => {} } },
+      "react-native": { AppState: {
+        get currentState() { return endpoint.appState; },
+        addEventListener(event, callback) {
+          if (event !== "change") throw new Error(`Unsupported browser AppState event: ${event}`);
+          endpoint.appStateListeners.add(callback);
+          return { remove: () => endpoint.appStateListeners.delete(callback) };
+        },
+      }, Linking: { openSettings: async () => {} } },
       "expo-av": { Audio: { getPermissionsAsync: async () => granted, requestPermissionsAsync: async () => granted } },
       "expo-camera": { useCameraPermissions: () => [granted, getPermission, getPermission] },
-      "../_lib/accessEntitlements": { resolveRoomAccess: async () => ({ isAllowed: true }) },
+      "../_lib/accessEntitlements": { resolveRoomAccess: async () => {
+        if (backendRuntime) throw new Error("Authenticated browser admission failed; client access fallback is outside this baseline");
+        return { isAllowed: true };
+      } },
       "../_lib/analytics": { trackEvent() {} },
       "../_lib/communication": communication,
       "../_lib/communicationMembershipAdmission": membershipAdmission,
+      "../_lib/communicationCaptureRetirement": captureRetirement,
       "../_lib/accountBoundSupabaseRpc.mjs": accountBoundRpc,
       "../_lib/communicationCallMediaPolicy.mjs": mediaPolicy,
       "../_lib/logger": { reportRuntimeError: (scope, error) => hub.events.push({ kind: "reported-error", userId, scope, error: String(error?.message ?? error) }) },
@@ -451,7 +540,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       "../_lib/mediaSessionLifecycle": { registerActiveMediaSessionStopper: () => () => {} },
       "../_lib/performancePolicy": { ROOM_HEARTBEAT_MS: 15_000 },
       "../_lib/roomRules": { normalizeRoomMembershipState: (value) => value },
-      "../_lib/supabase": { supabase: {
+      "../_lib/supabase": { supabase: backendRuntime?.client ?? {
         channel: (topic, config) => new Channel(endpoint, topic, config),
         getChannels: () => hub.channels.filter((channel) => channel.active && channel.endpoint === endpoint),
         realtime: { setAuth: async () => {} },
@@ -465,7 +554,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     }, false);
     endpoint.useHook = module.exports.useCommunicationRoomSession;
     const App = () => {
-      endpoint.output = endpoint.useHook({ roomId: hub.roomId, authenticatedUserId: userId, authenticatedAccessToken: `synthetic-${userId}`, initialMediaPreferences: { cameraEnabled: true, micEnabled: true }, analyticsContext: { surface: "chat-thread" }, restartDisconnectedSession: false, enabled: endpoint.current });
+      endpoint.output = endpoint.useHook({ roomId: hub.roomId, authenticatedUserId: userId, authenticatedAccessToken: backendRuntime?.accessToken ?? `synthetic-${userId}`, initialMediaPreferences: { cameraEnabled: hub.callType === "video", micEnabled: true }, analyticsContext: { surface: "chat-thread" }, restartDisconnectedSession: false, enabled: endpoint.current });
       return null;
     };
     const container = document.createElement("div"); document.body.appendChild(container);
@@ -495,15 +584,46 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     return { peerId: peer.fixturePeerId, brightness: brightness / (pixels.length / 4 * 3), fingerprint, mediaTime: video.currentTime };
   });
   const resources = (endpoint) => ({
-    peers: endpoint.peers.map((peer) => ({ id: peer.fixturePeerId, connection: peer.connectionState, signaling: peer.signalingState, gathering: peer.iceGatheringState, localType: peer.localDescription?.type, remoteType: peer.remoteDescription?.type, remoteDescriptionApplications: peer.remoteDescriptionApplications, senders: peer.getSenders().map((sender) => sender.track?.kind ?? "none") })),
+    peers: endpoint.peers.map((peer) => ({ id: peer.fixturePeerId, connection: peer.connectionState, ice: peer.iceConnectionState, signaling: peer.signalingState, gathering: peer.iceGatheringState, localType: peer.localDescription?.type, remoteType: peer.remoteDescription?.type, remoteDescriptionApplications: peer.remoteDescriptionApplications, senders: peer.getSenders().map((sender) => sender.track?.kind ?? "none") })),
     // Acquisition identities survive stream.removeTrack during hook rollback.
     tracks: endpoint.acquiredTracks.map((item) => ({ id: item.id, kind: item.kind, state: item.readyState, enabled: item.enabled })),
     audioReceivers: endpoint.receivedAudio.map(({ peer, track, receiver }) => ({ peerId: peer.fixturePeerId, connection: peer.connectionState, contextState: receiver.context.state, trackState: track.readyState, trackEnabled: track.enabled, playbackPaused: receiver.playback.paused, playbackReadyState: receiver.playback.readyState, pcmSamples: receiver.samples, pcmEnergy: receiver.energy, error: receiver.error })),
   });
   window.__pairedCall = {
+    async checkAuthenticatedSource() {
+      const { api } = await authenticatedRuntimeFactory({ sources: backendSources, boundRpc: accountBoundRpc, checkSourceOnly: true,
+        connection: { apiUrl: "http://127.0.0.1:54321", anonKey: "source-check-not-a-key" },
+        endpoint: { userId: "00000000-0000-4000-8000-000000000001", displayName: "Source check" } });
+      return ["prepareCommunicationRoomAdmission", "joinCommunicationRoomSession", "touchCommunicationRoomSession", "getCommunicationRoomSnapshot", "broadcastCommunicationRoomSignal", "leaveCommunicationRoomSession"].every((name) => typeof api[name] === "function");
+    },
     async startAudioControl() { window.__pairedAudioControl = await audioControlFactory({ audioSourceFactory, audioReceiverFactory }); },
-    async start({ dropAnswers = false } = {}) { hub.dropAnswers = dropAnswers; createEndpoint("alice"); createEndpoint("bob"); await delay(0); },
+    async start({ dropAnswers = false, callType = "video", hostUserId = "alice", backend } = {}) {
+      if (backend) {
+        if (hub.endpoints.length || dropAnswers || callType !== "video" || backend.endpoints?.length !== 2) throw new Error("Invalid authenticated browser baseline configuration");
+        hub.backend = true; hub.roomId = backend.roomId; hub.hostUserId = backend.hostUserId; hub.callType = callType;
+        for (const configuration of backend.endpoints) {
+          const runtime = await authenticatedRuntimeFactory({ sources: backendSources, connection: backend, endpoint: configuration, boundRpc: accountBoundRpc });
+          hub.backendRuntimes.set(configuration.userId, runtime);
+        }
+        for (const configuration of backend.endpoints) createEndpoint(configuration.userId, { seed: false, backendRuntime: hub.backendRuntimes.get(configuration.userId) });
+        await delay(0);
+        return;
+      }
+      if (!["audio", "video"].includes(callType) || !["alice", "bob"].includes(hostUserId)) throw new Error("Invalid paired-call scenario");
+      hub.dropAnswers = dropAnswers; hub.callType = callType; hub.hostUserId = hostUserId;
+      createEndpoint("alice"); createEndpoint("bob"); await delay(0);
+    },
+    async setAppState(userId, nextState) {
+      if (!["active", "background"].includes(nextState)) throw new Error("Invalid browser AppState transition");
+      const endpoint = hub.endpoints.find((item) => item.userId === userId);
+      if (!endpoint) throw new Error(`Missing endpoint ${userId}`);
+      endpoint.appState = nextState;
+      hub.events.push({ kind: "injected-app-state", userId, state: nextState });
+      for (const callback of [...endpoint.appStateListeners]) callback(nextState);
+      await delay(0);
+    },
     holdNextSignal(userId, event) {
+      if (hub.backend) throw new Error("Synthetic signal holds are unavailable with the authenticated backend");
       if (hub.holdNext) throw new Error("A signal hold is already armed");
       hub.holdNext = { userId, event };
     },
@@ -525,20 +645,45 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
         pending.settled = true; pending.result = result;
       }, (error) => { pending.settled = true; hub.errors.push(String(error.stack ?? error)); });
     },
-    async restartEndpoint(userId) {
+    async departEndpoint(userId) {
+      if (hub.backend) throw new Error("Endpoint departure injection is outside the authenticated baseline");
       const previous = hub.endpoints.find((endpoint) => endpoint.userId === userId);
       if (!previous) throw new Error(`Missing endpoint ${userId}`);
       const previousMembershipGeneration = membershipStore.read({ roomId: hub.roomId, userId })?.membershipGeneration;
       previous.current = false; previous.root.unmount(); previous.mounted = false;
       hub.endpoints = hub.endpoints.filter((endpoint) => endpoint !== previous);
       hub.retiredEndpoints.push(previous);
-      // Preserve the durable ACTIVE row, like a process restart without End.
-      // Only the new production hook's owned join can replace its generation.
+      // Keep the durable row. Actual hook cleanup stops capture, closes native
+      // peers and removes signaling presence; RTC determines remote liveness.
+      await delay(0);
+      return { roomId: hub.roomId, retiredInstanceId: previous.instanceId, previousMembershipGeneration };
+    },
+    async restartEndpoint(userId) {
+      if (hub.backend) throw new Error("Endpoint restart injection is outside the authenticated baseline");
+      const previous = hub.endpoints.find((endpoint) => endpoint.userId === userId);
+      if (!previous) throw new Error(`Missing endpoint ${userId}`);
+      const previousMembershipGeneration = membershipStore.read({ roomId: hub.roomId, userId })?.membershipGeneration;
+      previous.current = false; previous.root.unmount(); previous.mounted = false;
+      hub.endpoints = hub.endpoints.filter((endpoint) => endpoint !== previous);
+      hub.retiredEndpoints.push(previous);
+      // Preserve the original immediate replacement timing: mount the new
+      // owner in this task, without awaiting remote RTC absence detection.
       const replacement = createEndpoint(userId, { seed: false });
       await delay(0);
       return { roomId: hub.roomId, retiredInstanceId: previous.instanceId, replacementInstanceId: replacement.instanceId, previousMembershipGeneration };
     },
+    async returnEndpoint(userId) {
+      if (hub.backend) throw new Error("Endpoint return injection is outside the authenticated baseline");
+      if (hub.endpoints.some((endpoint) => endpoint.userId === userId)) throw new Error(`Endpoint ${userId} is still mounted`);
+      const previous = hub.retiredEndpoints.findLast((endpoint) => endpoint.userId === userId);
+      if (!previous) throw new Error(`No departed endpoint ${userId}`);
+      // Only the new production hook's owned join can replace its generation.
+      const replacement = createEndpoint(userId, { seed: false });
+      await delay(0);
+      return { roomId: hub.roomId, retiredInstanceId: previous.instanceId, replacementInstanceId: replacement.instanceId };
+    },
     async releaseHeldSignals() {
+      if (hub.backend) throw new Error("Synthetic signal release is unavailable with the authenticated backend");
       const queued = hub.heldSignals.splice(0);
       for (const { message, sender } of queued) {
         hub.events.push({ kind: "released-signal", event: message.event, sender: sender.userId, generation: message.payload.membershipGeneration });
@@ -547,8 +692,15 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       await delay(0);
       return queued.length;
     },
-    async freshCall() {
+    async freshCall(options = {}) {
       if ([...hub.endpoints, ...hub.retiredEndpoints].some((endpoint) => endpoint.peers.some((peer) => peer.connectionState !== "closed") || endpoint.acquiredTracks.some((track) => track.readyState !== "ended"))) throw new Error("Previous native resources must be closed before a fresh call");
+      if (hub.backend) {
+        if (typeof options.roomId !== "string" || !options.roomId || options.roomId === hub.roomId) throw new Error("A separately accepted fresh backend room is required");
+        hub.roomId = options.roomId;
+        for (const endpoint of hub.endpoints) endpoint.render();
+        await delay(0);
+        return;
+      }
       const previousRoomId = hub.roomId;
       hub.roomId = `BROWSER-CALL-${++hub.callSerial}`; hub.roomStatus = "active";
       for (const endpoint of hub.endpoints) {
@@ -558,13 +710,17 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       for (const endpoint of hub.endpoints) endpoint.render();
       await delay(0);
     },
-    async read() { return { roomId: hub.roomId, errors: [...hub.errors], events: clone(hub.events), heldSignals: hub.heldSignals.map(({ message, sender }) => ({ event: message.event, sender: sender.userId, generation: message.payload.membershipGeneration })), retiredEndpoints: hub.retiredEndpoints.map((endpoint) => ({ userId: endpoint.userId, instanceId: endpoint.instanceId, pendingControl: clone(endpoint.pendingControl), ...resources(endpoint) })), endpoints: await Promise.all(hub.endpoints.map(async (endpoint) => ({
-      userId: endpoint.userId, instanceId: endpoint.instanceId, membership: membershipStore.read({ roomId: hub.roomId, userId: endpoint.userId }), channelState: endpoint.output?.channelState, error: endpoint.output?.error, micEnabled: endpoint.output?.micEnabled, cameraEnabled: endpoint.output?.cameraEnabled,
+    async read() {
+      const memberships = hub.backend
+        ? await hub.backendRuntimes.values().next().value.api.listCommunicationRoomMemberships(hub.roomId)
+        : membershipStore.snapshot(hub.roomId);
+      return { authenticatedBackend: hub.backend, roomId: hub.roomId, callType: hub.callType, hostUserId: hub.hostUserId, memberships, errors: [...hub.errors], events: clone(hub.events), heldSignals: hub.heldSignals.map(({ message, sender }) => ({ event: message.event, sender: sender.userId, generation: message.payload.membershipGeneration })), retiredEndpoints: hub.retiredEndpoints.map((endpoint) => ({ userId: endpoint.userId, instanceId: endpoint.instanceId, pendingControl: clone(endpoint.pendingControl), ...resources(endpoint) })), endpoints: await Promise.all(hub.endpoints.map(async (endpoint) => ({
+      userId: endpoint.userId, instanceId: endpoint.instanceId, appState: endpoint.appState, membership: memberships.find((membership) => membership.userId === endpoint.userId), channelState: endpoint.output?.channelState, error: endpoint.output?.error, micEnabled: endpoint.output?.micEnabled, cameraEnabled: endpoint.output?.cameraEnabled,
       participants: endpoint.output?.participants?.map(({ streamURL: _url, ...rest }) => rest), ...await stats(endpoint), pixels: receivedPixels(endpoint),
       ...resources(endpoint),
     }))) }; },
     async control(userId, name, value) { const endpoint = hub.endpoints.find((item) => item.userId === userId); if (!endpoint?.output || typeof endpoint.output[name] !== "function") throw new Error(`Missing control ${name}`); return endpoint.output[name](value); },
     async end() { await Promise.all(hub.endpoints.map((endpoint) => endpoint.output.leaveRoom())); },
-    async dispose() { for (const endpoint of [...hub.endpoints, ...hub.retiredEndpoints]) { if (endpoint.mounted) endpoint.root.unmount(); endpoint.mounted = false; endpoint.drawTimers.forEach(clearInterval); endpoint.acquiredTracks.forEach((track) => track.stop()); endpoint.peers.forEach((peer) => peer.close()); for (const { receiver } of endpoint.receivedAudio) await receiver.dispose(); for (const context of endpoint.audioContexts) if (context.state !== "closed") await context.close(); } },
+    async dispose() { for (const endpoint of [...hub.endpoints, ...hub.retiredEndpoints]) { if (endpoint.mounted) endpoint.root.unmount(); endpoint.mounted = false; endpoint.drawTimers.forEach(clearInterval); endpoint.acquiredTracks.forEach((track) => track.stop()); endpoint.peers.forEach((peer) => peer.close()); for (const { receiver } of endpoint.receivedAudio) await receiver.dispose(); for (const context of endpoint.audioContexts) if (context.state !== "closed") await context.close(); } for (const runtime of hub.backendRuntimes.values()) await runtime.client.removeAllChannels(); },
   };
 }

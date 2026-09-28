@@ -1057,6 +1057,7 @@ export const getCommunicationRoomCapabilities = async (options: {
 export async function createCommunicationMediaStream(options: {
   audio: boolean;
   video: boolean;
+  facingMode?: "user" | "environment";
 }): Promise<MediaStream | null> {
   const rtc = getCommunicationRTCModule();
   if (!rtc) return null;
@@ -1066,7 +1067,10 @@ export async function createCommunicationMediaStream(options: {
     audio: options.audio,
     video: options.video
       ? {
-          facingMode: "user",
+          // The native SDK binds a camera when it creates the track. Changing
+          // lens therefore reacquires video with this explicit preference;
+          // applying constraints to an existing track cannot switch cameras.
+          facingMode: options.facingMode ?? "user",
           width: { ideal: 640, max: 1280 },
           height: { ideal: 480, max: 720 },
           frameRate: { ideal: 15, max: 24 },

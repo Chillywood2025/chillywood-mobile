@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
+import { parse } from "yaml";
 
 import { computeValidationPlan, evaluateRun, evaluateWorkflowSnapshot, expectedJobs, isVerifiedRepositoryOwnerAuthor, validatePublisherAppIdentity } from "../../scripts/ci/required-validation.mjs";
 
@@ -81,15 +82,47 @@ test("call lifecycle hooks select sensitive, database, and native validation and
     "tests/assurance/communication-operation-error-truth.test.mjs",
     "tests/assurance/android-chat-call-mic-control.test.mjs",
     "tests/assurance/chat-thread-integration-mounted.test.mjs",
+    "tests/assurance/chat-call-native-state-mounted.test.mjs",
+    "tests/assurance/chat-call-dispatch-integration.test.mjs",
+    "tests/assurance/chat-call-sdk-contract.test.mjs",
   ]) {
     assert.match(workflow, new RegExp(`node --test ${regression.replaceAll(".", "\\.")}`, "u"));
   }
   assert.match(workflow, /npm run test:communication-room-realtime-delivery/u);
   assert.match(workflow, /npm run test:communication-terminal-postgres/u);
   assert.match(workflow, /npm run test:communication-terminal-http/u);
+  assert.match(workflow, /npm run test:chat-message-call-lifecycle-http/u);
   assert.match(workflow, /npm run test:chilly-chat-real-peer/u);
   assert.match(workflow, /npm ci --prefix tests\/integration\/real-peer-browser --ignore-scripts/u);
   assert.match(workflow, /node tests\/integration\/real-peer-browser\/node_modules\/playwright\/cli\.js install --with-deps chromium --only-shell/u);
+});
+
+test("native validation depends on executing actual SDK contracts on the same run", () => {
+  const { jobs } = parse(fs.readFileSync(".github/workflows/required-validation.yml", "utf8"));
+  const sdk = jobs["native-sdk"];
+  assert.equal(sdk["runs-on"], "macos-15");
+  assert.equal(sdk.if, jobs["native-release"].if);
+  assert.equal(sdk.needs, "plan");
+  assert.ok(sdk.steps.some((step) => step.run === "node scripts/test-webrtc-native-sender-contract.mjs"));
+  assert.ok(!sdk["continue-on-error"] && sdk.steps.every((step) => !step["continue-on-error"]));
+  assert.deepEqual(jobs["native-release"].needs, ["plan", "native-sdk"]);
+  assert.ok(jobs.result.needs.includes("native-sdk"));
+  const failed = successfulJobs(["hooks/use-communication-room-session.ts"]);
+  failed.find((job) => job.name === "Validation / Native and Release").conclusion = "skipped";
+  assert.equal(evaluate(["hooks/use-communication-room-session.ts"], { jobs: failed }).ok, false);
+});
+
+test("integration runner and coverage-only edits still select their executing lanes", () => {
+  assert.equal(computeValidationPlan(["scripts/test-chilly-chat-real-peer-integration.mjs"]).categories.product, true);
+  assert.equal(computeValidationPlan(["scripts/test-chilly-chat-real-peer-http.mjs"]).categories.database, true);
+  const native = computeValidationPlan(["scripts/test-webrtc-native-sender-contract.mjs"]);
+  assert.equal(native.categories.nativeRelease, true);
+  assert.equal(native.categories.product, true);
+  for (const file of ["docs/chat/PR532_AUTOMATED_COVERAGE.json", "docs/chat/PR532_AUDITED_CASES.tsv"]) {
+    assert.equal(computeValidationPlan([file]).categories.product, true);
+  }
+  const { jobs } = parse(fs.readFileSync(".github/workflows/required-validation.yml", "utf8"));
+  assert.ok(jobs.database.steps.some((step) => step.run?.includes("node scripts/test-chilly-chat-real-peer-http.mjs")));
 });
 
 test("non-owner policy changes require a trusted exact-head review from someone other than author", () => {

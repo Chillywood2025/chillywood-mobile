@@ -55,6 +55,15 @@ const compiledLegacyHook = ts.transpileModule(instrumentedLegacyHookSource, {
   },
   fileName: "hooks/use-communication-room-session.ts",
 }).outputText;
+const compiledCaptureRetirement = ts.transpileModule(fs.readFileSync("_lib/communicationCaptureRetirement.ts", "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+function createCaptureRetirementCoordinator() {
+  const exports = {};
+  vm.runInNewContext(compiledCaptureRetirement, { exports });
+  return exports;
+}
+
 const compiledAdmissionCoordinator = ts.transpileModule(fs.readFileSync("_lib/communicationMembershipAdmission.ts", "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
@@ -513,6 +522,7 @@ function createLegacyMountedRuntime(options = {}) {
   const moduleMocks = {
     "../_lib/accountBoundSupabaseRpc.mjs": { isAccountBoundSupabaseRpcOutcomeAmbiguous },
     "../_lib/communicationMembershipAdmission": options.admissionCoordinator ?? createAdmissionCoordinator(),
+    "../_lib/communicationCaptureRetirement": options.captureRetirementCoordinator ?? createCaptureRetirementCoordinator(),
     "../_lib/accessEntitlements": { resolveRoomAccess: async () => ({ isAllowed: true }) },
     "../_lib/analytics": { trackEvent: () => undefined },
     "../_lib/communication": {
@@ -3105,8 +3115,10 @@ test("legacy ending generation: getUserMedia begun before End disposes its late 
   assert.equal(runtime.mediaCreateCalls.length, 1, "actual initial acquisition is pending");
   assert.equal(runtime.localStreams.length, 0);
   assert.ok(harness.refs.joinedMembershipRef.current, "authority was admitted before acquisition");
-  await harness.run(() => harness.getResult().leaveRoom());
+  await assert.rejects(() => harness.run(() => harness.getResult().leaveRoom()), /shutdown/,
+    "End cannot claim native completion before the pending acquisition returns");
   await act(async () => { release(); await settle(160); });
+  await harness.run(() => harness.getResult().leaveRoom());
   assert.equal(runtime.localStreams.length, 1, "the delayed native result actually arrived");
   assertEndedGenerationHasNoMedia(runtime, harness, 1, 0);
   assert.equal(runtime.channels.length, 0, "retired initialization cannot subscribe after capture arrives");

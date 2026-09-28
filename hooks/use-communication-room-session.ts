@@ -36,6 +36,7 @@ import {
   type CommunicationRoomState,
 } from "../_lib/communication";
 import { reportRuntimeError } from "../_lib/logger";
+import { reserveCommunicationCapture, retireCommunicationCaptures, retryRetiredCommunicationCaptures } from "../_lib/communicationCaptureRetirement";
 import { reserveCommunicationMembershipAdmission } from "../_lib/communicationMembershipAdmission";
 import { isAccountBoundSupabaseRpcOutcomeAmbiguous as isAmbiguousMembershipOutcome } from "../_lib/accountBoundSupabaseRpc.mjs";
 import {
@@ -479,10 +480,32 @@ export function useCommunicationRoomSession({
   const legacySessionRestartRequestedGenerationRef = useRef<number | null>(null);
   const mediaControlTailRef = useRef<Promise<void>>(Promise.resolve());
   const pendingMediaControlCountRef = useRef(0);
+  const mediaControlGenerationRef = useRef(0);
+  const foregroundMediaRestorationRef = useRef<{ generation: number; revision: number; promise: Promise<boolean> } | null>(null);
+  const captureRetirementOwnerRef = useRef<object>({});
   const endingGenerationRef = useRef<number | null>(null);
   const isActiveLegacyGeneration = useCallback((generation: number) => (
     generation === legacySessionGenerationRef.current && endingGenerationRef.current !== generation
   ), []);
+  const acquireOwnedLegacyMedia = useCallback(async (options: Parameters<typeof createCommunicationMediaStream>[0]) => {
+    if (!retryRetiredCommunicationCaptures()) throw new Error("LEGACY_CAPTURE_RETIREMENT_UNVERIFIED");
+    const generation = legacySessionGenerationRef.current;
+    const owner = captureRetirementOwnerRef.current;
+    const reservation = reserveCommunicationCapture(owner);
+    let stream: MediaStream | null;
+    try {
+      stream = await createCommunicationMediaStream(options);
+    } catch (captureError) {
+      reservation.rejected();
+      throw captureError;
+    }
+    if (!reservation.received(stream?.getTracks() ?? [])) return null;
+    if (!stream || owner !== captureRetirementOwnerRef.current || !isActiveLegacyGeneration(generation)) {
+      reservation.retire();
+      return null;
+    }
+    return { stream, reservation };
+  }, [isActiveLegacyGeneration]);
   const leaveContextRef = useRef({ authenticatedAccessToken, authenticatedUserId, enabled, roomId });
   if (leaveContextRef.current.authenticatedAccessToken !== authenticatedAccessToken
     || leaveContextRef.current.authenticatedUserId !== authenticatedUserId
@@ -515,6 +538,7 @@ export function useCommunicationRoomSession({
   const connectedRemoteSeenRef = useRef(false);
   const cameraFacingRef = useRef<"front" | "environment">("front");
   const appStateRef = useRef(AppState.currentState);
+  const appStateTransitionSerialRef = useRef(0);
   const allowBackgroundAudioRef = useRef(allowBackgroundAudio);
   const nativePermissionRequestDepthRef = useRef(0);
   const suppressedPermissionAppStateRef = useRef<AppStateStatus | null>(null);
@@ -1114,6 +1138,7 @@ export function useCommunicationRoomSession({
         offerRetryTimers: Object.entries(offerRetryTimersRef.current),
         peers: Object.entries(peerConnectionsRef.current),
       };
+      const captureOwner = captureRetirementOwnerRef.current;
       const capturedTracks = new Set<any>([
         ...(capturedMedia.localStream?.getTracks() ?? []),
         ...capturedMedia.auxiliaryStreams.flatMap((stream) => stream.getTracks()),
@@ -1124,6 +1149,7 @@ export function useCommunicationRoomSession({
       const tracksStopped = () => [...capturedTracks].every((track) => String(track.readyState ?? "").toLowerCase() === "ended");
       const peersClosed = () => capturedMedia.peers.every(([, peer]) => String(peer.connectionState ?? "") === "closed");
       const stopNativeCapture = () => {
+        const pendingCaptureStopped = retireCommunicationCaptures(captureOwner);
         capturedTracks.forEach((track) => {
           try { track.enabled = false; } catch { /* verified below */ }
           try { track.stop(); } catch { /* verified below */ }
@@ -1131,9 +1157,10 @@ export function useCommunicationRoomSession({
         capturedMedia.peers.forEach(([, peer]) => {
           try { peer.close(); } catch { /* verified below */ }
         });
-        return tracksStopped() && peersClosed();
+        return pendingCaptureStopped && tracksStopped() && peersClosed();
       };
       const waitForNativeShutdown = async () => {
+        if (!retireCommunicationCaptures(captureOwner)) return false;
         if (!tracksStopped()) return false;
         if (peersClosed()) return true;
         const closingPeers = capturedMedia.peers.map(([, peer]) => peer)
@@ -1345,6 +1372,13 @@ export function useCommunicationRoomSession({
 
   const runSerializedMediaControl = useCallback(<T,>(task: () => Promise<T>) => {
     const generation = legacySessionGenerationRef.current;
+    if (mediaControlGenerationRef.current !== generation) {
+      // The old native command still settles through its captured ownership
+      // checks, but it cannot hold a replacement call's control queue hostage.
+      mediaControlGenerationRef.current = generation;
+      mediaControlTailRef.current = Promise.resolve();
+      pendingMediaControlCountRef.current = 0;
+    }
     const channel = channelRef.current;
     const userId = identityRef.current?.userId;
     const activeRoomId = roomRef.current?.roomId;
@@ -1364,6 +1398,7 @@ export function useCommunicationRoomSession({
     const result = mediaControlTailRef.current.then(runIfOwned, runIfOwned);
     mediaControlTailRef.current = result.then(() => undefined, () => undefined);
     return result.finally(() => {
+      if (mediaControlGenerationRef.current !== generation) return;
       pendingMediaControlCountRef.current = Math.max(0, pendingMediaControlCountRef.current - 1);
       if (pendingMediaControlCountRef.current === 0) setMediaControlsBusy(false);
     });
@@ -1424,13 +1459,14 @@ export function useCommunicationRoomSession({
       return null;
     }
 
-    const stream = await createCommunicationMediaStream({
+    const acquisition = await acquireOwnedLegacyMedia({
       audio: canUseMic,
       video: canUseCamera,
     }).catch(() => null);
+    const stream = acquisition?.stream ?? null;
 
     if (!isActiveLegacyGeneration(generation)) {
-      stopCommunicationStream(stream);
+      acquisition?.reservation.retire();
       return null;
     }
 
@@ -1460,7 +1496,7 @@ export function useCommunicationRoomSession({
       setMicEnabled(false);
     }
     if (!cameraTrackReady && !microphoneTrackReady) {
-      stopCommunicationStream(stream);
+      acquisition?.reservation.retire();
       setLocalStreamURL("");
       logChatRtc("local_stream_missing_requested_tracks", {
         roomId,
@@ -1471,6 +1507,7 @@ export function useCommunicationRoomSession({
     }
 
     localStreamRef.current = stream;
+    if (!acquisition?.reservation.adopt()) return null;
     setLocalStreamURL(getCommunicationStreamURL(stream));
     setLocalVideoStreamURL(getRenderableVideoStreamURL(stream));
     logChatRtc("local_stream_success", {
@@ -1480,7 +1517,7 @@ export function useCommunicationRoomSession({
       streamURL: getCommunicationStreamURL(stream),
     });
     return stream;
-  }, [ensureCameraPermission, ensureMicrophonePermission, isActiveLegacyGeneration, roomId]);
+  }, [acquireOwnedLegacyMedia, ensureCameraPermission, ensureMicrophonePermission, isActiveLegacyGeneration, roomId]);
 
   const attachMissingLocalTracks = useCallback(async (
     peerConnection: any,
@@ -2050,7 +2087,8 @@ export function useCommunicationRoomSession({
           && identityRef.current?.userId === leaving.identity?.userId)
           || (!currentContext.enabled && !roomRef.current && !identityRef.current));
     };
-    if (leaving.completed) return;
+    if (leaving.completed && leaving.stopNativeCapture()) return;
+    leaving.completed = false;
     if (!leaving.pending) {
       const pending = (async () => {
         try {
@@ -2132,6 +2170,8 @@ export function useCommunicationRoomSession({
     let active = true;
     const sessionGeneration = legacySessionGenerationRef.current + 1;
     legacySessionGenerationRef.current = sessionGeneration;
+    const captureOwner = {};
+    captureRetirementOwnerRef.current = captureOwner;
     connectedRemoteSeenRef.current = false;
     setMediaControlError(null);
     legacySessionRestartRequestedGenerationRef.current = null;
@@ -2174,6 +2214,9 @@ export function useCommunicationRoomSession({
 
       let resolvedIdentity = await readCommunicationIdentity(authenticatedUserId);
       if (!isActiveGeneration()) return;
+      if (!retryRetiredCommunicationCaptures()) {
+        throw new Error("Previous native camera acquisition or shutdown is unverified. Retry after it settles.");
+      }
       const previousLeave = leaveOperationRef.current;
       if (previousLeave?.pending
         && formatRoomId(previousLeave.room?.roomId ?? "") === formatRoomId(roomId)
@@ -2902,6 +2945,7 @@ export function useCommunicationRoomSession({
 
     return () => {
       active = false;
+      retireCommunicationCaptures(captureOwner);
       const currentContext = leaveContextRef.current;
       if (enabled && !currentContext.enabled
         && currentContext.authenticatedAccessToken === authenticatedAccessToken
@@ -3106,19 +3150,21 @@ export function useCommunicationRoomSession({
     const canUseKind = kind === "video" ? await ensureCameraPermission() : await ensureMicrophonePermission();
     if (!canUseKind || !isExpectedGenerationCurrent()) return null;
 
-    const extraStream = await createCommunicationMediaStream({
+    const acquisition = await acquireOwnedLegacyMedia({
       audio: kind === "audio",
       video: kind === "video",
+      ...(kind === "video" ? { facingMode: cameraFacingRef.current === "environment" ? "environment" as const : "user" as const } : {}),
     }).catch(() => null);
+    const extraStream = acquisition?.stream ?? null;
     if (!extraStream) return null;
     if (!isExpectedGenerationCurrent() || localStreamRef.current !== expectedLocalStream) {
-      stopCommunicationStream(extraStream);
+      acquisition?.reservation.retire();
       return null;
     }
 
     const track = getCommunicationTrack(extraStream, kind);
     if (!track || String(track.readyState ?? "").toLowerCase() === "ended") {
-      stopCommunicationStream(extraStream);
+      acquisition?.reservation.retire();
       return null;
     }
     existingTracks.forEach((endedTrack) => {
@@ -3133,7 +3179,7 @@ export function useCommunicationRoomSession({
       }
       if (localStreamRef.current === extraStream) localStreamRef.current = null;
       auxiliaryStreamsRef.current = auxiliaryStreamsRef.current.filter((stream) => stream !== extraStream);
-      stopCommunicationStream(extraStream);
+      acquisition?.reservation.retire();
     };
 
     if (!expectedLocalStream) {
@@ -3151,6 +3197,7 @@ export function useCommunicationRoomSession({
       discardRecoveredTrack();
       return null;
     }
+    if (!acquisition?.reservation.adopt()) { discardRecoveredTrack(); return null; }
     if (options?.attachToPeers === false) return track;
 
     let senderTopologyChanged = false;
@@ -3169,6 +3216,10 @@ export function useCommunicationRoomSession({
       ));
       if (endedSender) {
         await endedSender.replaceTrack(track);
+        if (endedSender.track !== track) {
+          discardRecoveredTrack();
+          return null;
+        }
       } else {
         peerConnection.addTrack(track, (expectedLocalStream ?? extraStream) as MediaStream);
       }
@@ -3188,73 +3239,108 @@ export function useCommunicationRoomSession({
     }
 
     return track;
-  }, [ensureCameraPermission, ensureMicrophonePermission, isActiveLegacyGeneration, renegotiateAllPeers]);
+  }, [acquireOwnedLegacyMedia, ensureCameraPermission, ensureMicrophonePermission, isActiveLegacyGeneration, renegotiateAllPeers]);
 
-  const restoreLocalMediaAfterForeground = useCallback(async () => {
+  const restoreLocalMediaAfterForeground = useCallback(() => {
     const generation = legacySessionGenerationRef.current;
-    if (!isActiveLegacyGeneration(generation)) return false;
-    const requestedMic = micEnabledRef.current || resumeMicAfterForegroundRef.current;
-    const [nextCameraPermission, nextMicrophonePermission] = await Promise.all([
-      getCameraPermission().catch(() => null),
-      Audio.getPermissionsAsync().catch(() => null),
-    ]);
-    if (!isActiveLegacyGeneration(generation)) return false;
-
-    if (nextCameraPermission) {
-      const snapshot = resolveMediaPermission(nextCameraPermission);
-      cameraPermissionSnapshotRef.current = snapshot;
+    if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return Promise.resolve(false);
+    const pending = foregroundMediaRestorationRef.current;
+    if (pending?.generation === generation) {
+      pending.revision += 1;
+      return pending.promise;
     }
-    if (nextMicrophonePermission) {
-      const snapshot = resolveMediaPermission(nextMicrophonePermission);
-      microphonePermissionRef.current = snapshot;
-      setMicrophonePermission(snapshot);
-    }
-
-    if (cameraEnabledRef.current && cameraPermissionSnapshotRef.current.state === "undetermined") {
-      await ensureCameraPermission();
-      if (!isActiveLegacyGeneration(generation)) return false;
-    }
-    if (requestedMic && microphonePermissionRef.current.state === "undetermined") {
-      await ensureMicrophonePermission();
-      if (!isActiveLegacyGeneration(generation)) return false;
-    }
-
-    const nextCameraEnabled = cameraEnabledRef.current
-      && cameraPermissionSnapshotRef.current.state === "granted";
-    const nextMicEnabled = requestedMic && microphonePermissionRef.current.state === "granted";
-
-    if (cameraEnabledRef.current !== nextCameraEnabled) {
-      cameraEnabledRef.current = nextCameraEnabled;
-      setCameraEnabled(nextCameraEnabled);
-    }
-    if (nextCameraEnabled) {
-      const restoredCameraTrack = await ensureTrackKind("video", {
-        attachToPeers: false,
-        expectedGeneration: generation,
-      });
-      if (!isActiveLegacyGeneration(generation)) return false;
-      if (!restoredCameraTrack) {
-        cameraEnabledRef.current = false;
-        setCameraEnabled(false);
-        return false;
+    const restoration = { generation, revision: 0, promise: Promise.resolve(false) };
+    foregroundMediaRestorationRef.current = restoration;
+    const operation = (async () => {
+      let permissionRevision = restoration.revision;
+      let permissions = await Promise.all([
+        getCameraPermission().catch(() => null),
+        Audio.getPermissionsAsync().catch(() => null),
+      ]);
+      // Another foreground request may follow a Settings change while the
+      // previous native read is pending. Re-read before applying stale values.
+      while (permissionRevision !== restoration.revision) {
+        if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
+        permissionRevision = restoration.revision;
+        permissions = await Promise.all([
+          getCameraPermission().catch(() => null),
+          Audio.getPermissionsAsync().catch(() => null),
+        ]);
       }
-      await Promise.all(
-        Object.values(peerConnectionsRef.current).map((peerConnection) => (
-          attachMissingLocalTracks(peerConnection, false, generation)
-        )),
-      );
-      if (!isActiveLegacyGeneration(generation)) return false;
-      if (!await renegotiateAllPeers(true)) return false;
-      if (!isActiveLegacyGeneration(generation)) return false;
-    }
+      if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
+      const [nextCameraPermission, nextMicrophonePermission] = permissions;
 
-    const micResult = nextMicEnabled
-      ? await legacyMicControlRef.current?.(true) ?? false
-      : await legacyMicControlRef.current?.(false) ?? false;
-    if (!isActiveLegacyGeneration(generation)) return false;
-    resumeMicAfterForegroundRef.current = nextMicEnabled && !micResult;
-    return micResult || !requestedMic;
-  }, [attachMissingLocalTracks, ensureCameraPermission, ensureMicrophonePermission, ensureTrackKind, getCameraPermission, isActiveLegacyGeneration, renegotiateAllPeers]);
+      if (nextCameraPermission) {
+        const snapshot = resolveMediaPermission(nextCameraPermission);
+        cameraPermissionSnapshotRef.current = snapshot;
+      }
+      if (nextMicrophonePermission) {
+        const snapshot = resolveMediaPermission(nextMicrophonePermission);
+        microphonePermissionRef.current = snapshot;
+        setMicrophonePermission(snapshot);
+      }
+
+      if (cameraEnabledRef.current && cameraPermissionSnapshotRef.current.state === "undetermined") {
+        await ensureCameraPermission();
+        if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
+      }
+      if ((micEnabledRef.current || resumeMicAfterForegroundRef.current) && microphonePermissionRef.current.state === "undetermined") {
+        await ensureMicrophonePermission();
+        if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
+      }
+
+      const nextCameraEnabled = cameraEnabledRef.current
+        && cameraPermissionSnapshotRef.current.state === "granted";
+
+      if (cameraEnabledRef.current !== nextCameraEnabled) {
+        cameraEnabledRef.current = nextCameraEnabled;
+        setCameraEnabled(nextCameraEnabled);
+      }
+      if (nextCameraEnabled) {
+        const restoredCameraTrack = await ensureTrackKind("video", {
+          attachToPeers: false,
+          expectedGeneration: generation,
+        });
+        if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
+        if (!restoredCameraTrack) {
+          cameraEnabledRef.current = false;
+          setCameraEnabled(false);
+          return false;
+        }
+        await Promise.all(
+          Object.values(peerConnectionsRef.current).map((peerConnection) => (
+            attachMissingLocalTracks(peerConnection, false, generation)
+          )),
+        );
+        if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
+        if (!Object.values(peerConnectionsRef.current).every((peerConnection) => (
+          peerConnection.getSenders().some((sender: any) => sender.track === restoredCameraTrack)
+        ))) {
+          stopLocalMediaKind("video");
+          cameraEnabledRef.current = false;
+          setCameraEnabled(false);
+          await updatePresence(false, micEnabledRef.current);
+          if (isActiveLegacyGeneration(generation)) setMediaControlError("Camera recovery failed. Turn the camera on to try again.");
+          return false;
+        }
+        if (!await renegotiateAllPeers(true)) return false;
+        if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
+      }
+
+      const requestedMic = micEnabledRef.current || resumeMicAfterForegroundRef.current;
+      const nextMicEnabled = requestedMic && microphonePermissionRef.current.state === "granted";
+      const micResult = nextMicEnabled
+        ? await legacyMicControlRef.current?.(true) ?? false
+        : await legacyMicControlRef.current?.(false) ?? false;
+      if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
+      resumeMicAfterForegroundRef.current = nextMicEnabled && !micResult;
+      return micResult || !requestedMic;
+    })().finally(() => {
+      if (foregroundMediaRestorationRef.current?.promise === operation) foregroundMediaRestorationRef.current = null;
+    });
+    restoration.promise = operation;
+    return operation;
+  }, [attachMissingLocalTracks, ensureCameraPermission, ensureMicrophonePermission, ensureTrackKind, getCameraPermission, isActiveLegacyGeneration, renegotiateAllPeers, stopLocalMediaKind, updatePresence]);
 
   useEffect(() => {
     if (!enabled || loading || channelState !== "live" || !roomRef.current || !identityRef.current) return;
@@ -3320,6 +3406,7 @@ export function useCommunicationRoomSession({
       const previousState = appStateRef.current;
       appStateRef.current = nextState;
       if (nextState === previousState) return;
+      appStateTransitionSerialRef.current += 1;
 
       const currentRoom = roomRef.current;
       const currentIdentity = identityRef.current;
@@ -3873,8 +3960,15 @@ export function useCommunicationRoomSession({
     strictlyCommitLegacyMicPresence,
   ]);
 
+  const canAcquireLegacyMicrophone = useCallback(() => appStateRef.current === "active"
+    || canAttemptNativeCallBackgroundAudio({
+      appState: appStateRef.current,
+      allowBackgroundAudio: allowBackgroundAudioRef.current,
+      micRequested: true,
+    }), []);
+
   const prepareLegacyMicrophoneTrack = useCallback(async (authority: LegacyMicSessionAuthority) => {
-    if (!isLegacyMicSessionAuthorityCurrent(authority)) return null;
+    if (!isLegacyMicSessionAuthorityCurrent(authority) || !canAcquireLegacyMicrophone()) return null;
     const topology = collectLegacyMicTopology();
     const streams = topology.streams;
     const usableTracks = topology.tracks;
@@ -3883,6 +3977,7 @@ export function useCommunicationRoomSession({
     const previousLocalStream = localStreamRef.current;
     const previousAuxiliaryStreams = [...auxiliaryStreamsRef.current];
     let createdStream: MediaStream | null = null;
+    let acquisition: Awaited<ReturnType<typeof acquireOwnedLegacyMedia>> = null;
     let createdCaptureTracks: any[] = [];
     let track: ReturnType<typeof getCommunicationTrack> = usableTracks.find((candidate) => (
       [...streams].some((stream) => stream.getAudioTracks().some((streamTrack) => streamTrack === candidate))
@@ -3907,7 +4002,8 @@ export function useCommunicationRoomSession({
         try { capturedTrack.enabled = false; } catch { /* Verify stop below. */ }
         try { capturedTrack.stop(); } catch { /* Verify the actual postcondition. */ }
       }
-      return createdCaptureTracks.every((capturedTrack) => {
+      const retirementProved = acquisition?.reservation.retire() ?? true;
+      return retirementProved && createdCaptureTracks.every((capturedTrack) => {
         try { return String(capturedTrack.readyState ?? "").trim().toLowerCase() === "ended"; }
         catch { return false; }
       });
@@ -3948,11 +4044,12 @@ export function useCommunicationRoomSession({
 
     if (!track) {
       if (!await ensureMicrophonePermission()) return null;
-      if (!isLegacyMicSessionAuthorityCurrent(authority)) return null;
-      createdStream = await createCommunicationMediaStream({ audio: true, video: false }).catch(() => null);
+      if (!isLegacyMicSessionAuthorityCurrent(authority) || !canAcquireLegacyMicrophone()) return null;
+      acquisition = await acquireOwnedLegacyMedia({ audio: true, video: false }).catch(() => null);
+      createdStream = acquisition?.stream ?? null;
       createdCaptureTracks = createdStream?.getTracks() ?? [];
       track = getCommunicationTrack(createdStream, "audio");
-      if (!isLegacyMicSessionAuthorityCurrent(authority)) {
+      if (!isLegacyMicSessionAuthorityCurrent(authority) || !canAcquireLegacyMicrophone()) {
         cancelRetiredPreparation();
         return null;
       }
@@ -3975,6 +4072,7 @@ export function useCommunicationRoomSession({
         previousLocalStream.addTrack(track);
         addedCreatedTrackToPreviousLocalStream = true;
       }
+      if (!acquisition?.reservation.adopt()) { cancelRetiredPreparation(); return null; }
       setLocalStreamURL(getCommunicationStreamURL(localStreamRef.current));
     } else {
       track.enabled = false;
@@ -4123,7 +4221,7 @@ export function useCommunicationRoomSession({
         return audioSenders.length === 1 && audioSenders[0]?.track === targetTrack;
       }),
     };
-  }, [collectLegacyMicTopology, ensureMicrophonePermission, isLegacyMicSessionAuthorityCurrent, strictlyRenegotiateLegacyMicPeer]);
+  }, [acquireOwnedLegacyMedia, canAcquireLegacyMicrophone, collectLegacyMicTopology, ensureMicrophonePermission, isLegacyMicSessionAuthorityCurrent, strictlyRenegotiateLegacyMicPeer]);
 
   const setCameraCaptureEnabled = useCallback((nextEnabled: boolean) => runSerializedMediaControl(async () => {
     const authority = captureLegacyMicSessionAuthority();
@@ -4242,11 +4340,13 @@ export function useCommunicationRoomSession({
   ) => runSerializedMediaControl(async () => {
     const authority = captureLegacyMicSessionAuthority();
     if (!authority) return false;
-    const cameraEnabledOverride = requestedCameraOverride ?? cameraEnabledRef.current;
+    const cameraEnabledOverride = requestedCameraOverride
+      ?? (appStateRef.current === "active" && cameraEnabledRef.current);
     if (!nextEnabled) resumeMicAfterForegroundRef.current = false;
     if (nextEnabled) {
+      if (!canAcquireLegacyMicrophone()) return false;
       const prepared = await prepareLegacyMicrophoneTrack(authority);
-      if (!isLegacyMicSessionAuthorityCurrent(authority)) {
+      if (!isLegacyMicSessionAuthorityCurrent(authority) || !canAcquireLegacyMicrophone()) {
         prepared?.cancel();
         return false;
       }
@@ -4397,6 +4497,7 @@ export function useCommunicationRoomSession({
     }
     return false;
   }), [
+    canAcquireLegacyMicrophone,
     captureLegacyMicSessionAuthority,
     collectLegacyMicTopology,
     commitProvedLegacyMicMute,
@@ -4417,35 +4518,131 @@ export function useCommunicationRoomSession({
   }, [setMicrophoneEnabled]);
 
   const switchCamera = useCallback(async () => {
-    const videoTrack = getCommunicationTrack(localStreamRef.current, "video")
-      ?? auxiliaryStreamsRef.current
-        .map((stream) => getCommunicationTrack(stream, "video"))
-        .find(Boolean);
-    if (!videoTrack || !cameraEnabledRef.current) return false;
+    const authority = captureLegacyMicSessionAuthority();
+    if (!authority) return false;
+    return runSerializedMediaControl(async () => {
+      const appStateSerial = appStateTransitionSerialRef.current;
+      const ownsIntent = () => appStateSerial === appStateTransitionSerialRef.current
+        && isActiveLegacyGeneration(authority.generation)
+        && isLegacyMicSessionAuthorityCurrent(authority)
+        && appStateRef.current === "active"
+        && cameraEnabledRef.current;
+      const streams = new Set<MediaStream>([
+        ...(localStreamRef.current ? [localStreamRef.current] : []),
+        ...auxiliaryStreamsRef.current,
+      ]);
+      const videoTracks = [...new Set([...streams].flatMap((stream) => stream.getVideoTracks()))]
+        .filter((track) => track.enabled !== false && String(track.readyState).toLowerCase() !== "ended");
+      if (!ownsIntent() || videoTracks.length !== 1) return false;
+      const oldTrack = videoTracks[0];
+      const targetStream = [...streams].find((stream) => stream.getVideoTracks().includes(oldTrack));
+      if (!targetStream) return false;
+      const currentFacing = oldTrack.getSettings?.().facingMode === "environment" ? "environment"
+        : oldTrack.getSettings?.().facingMode === "user" ? "front" : cameraFacingRef.current;
+      const nextFacing = currentFacing === "front" ? "environment" : "front";
+      const facingMode = nextFacing === "front" ? "user" : "environment";
+      const peers = Object.entries(peerConnectionsRef.current).map(([remoteUserId, peerConnection]) => ({
+        remoteUserId,
+        peerConnection,
+        senders: peerConnection.getSenders().filter((sender: any) => sender?.track === oldTrack),
+      }));
+      const ownsPeers = () => peers.every(({ remoteUserId, peerConnection, senders }) => (
+        peerConnectionsRef.current[remoteUserId] === peerConnection
+        && peerConnection.connectionState !== "closed"
+        && senders.length === 1
+        && peerConnection.getSenders().includes(senders[0])
+      ));
+      if (!ownsPeers()) return false;
+      let acquiredStream: MediaStream | null = null;
+      let acquiredTracks: any[] = [];
+      let captureReservation: ReturnType<typeof reserveCommunicationCapture> | null = null;
+      let oldCaptureStopped = false;
+      const disposeAcquiredCapture = () => captureReservation?.retire() ?? true;
 
-    const switchableTrack = videoTrack as typeof videoTrack & {
-      _switchCamera?: () => void;
-      applyConstraints?: (constraints: Record<string, unknown>) => Promise<void>;
-    };
-    const nextFacing = cameraFacingRef.current === "front" ? "environment" : "front";
-
-    try {
-      if (typeof switchableTrack._switchCamera === "function") {
-        switchableTrack._switchCamera();
-      } else if (typeof switchableTrack.applyConstraints === "function") {
-        await switchableTrack.applyConstraints({
-          facingMode: { ideal: nextFacing },
-        });
-      } else {
+      try {
+        if (!await ensureCameraPermission() || !ownsIntent() || !ownsPeers()) return false;
+        // This SDK deliberately does not switch lenses through applyConstraints.
+        // Restart only video capture and replace the current video senders;
+        // preserve microphone capture, the admitted call and peer connections.
+        oldTrack.enabled = false;
+        oldTrack.stop();
+        oldCaptureStopped = String(oldTrack.readyState).toLowerCase() === "ended";
+        if (!oldCaptureStopped) throw new Error("LEGACY_CAMERA_OLD_CAPTURE_STOP_UNVERIFIED");
+        setLocalVideoStreamURL("");
+        const acquisition = await acquireOwnedLegacyMedia({ audio: false, video: true, facingMode });
+        acquiredStream = acquisition?.stream ?? null;
+        captureReservation = acquisition?.reservation ?? null;
+        acquiredTracks = acquiredStream?.getTracks() ?? [];
+        if (!ownsIntent() || !ownsPeers()) throw new Error("LEGACY_CAMERA_OWNER_CHANGED");
+        // Retain acquisition identity before native sender work, so End owns
+        // cleanup even when replaceTrack remains pending or rejects late.
+        if (acquiredStream) auxiliaryStreamsRef.current.push(acquiredStream);
+        const nextTrack = getCommunicationTrack(acquiredStream, "video");
+        if (!nextTrack || acquiredTracks.length !== 1 || nextTrack.enabled === false
+          || String(nextTrack.readyState).toLowerCase() === "ended"
+          || nextTrack.getSettings?.().facingMode !== facingMode) {
+          throw new Error("LEGACY_CAMERA_REQUESTED_FACING_UNVERIFIED");
+        }
+        for (const { senders } of peers) {
+          if (!ownsIntent() || !ownsPeers()) throw new Error("LEGACY_CAMERA_OWNER_CHANGED");
+          await senders[0].replaceTrack(nextTrack);
+          // The pinned JS SDK can swallow a native replacement rejection.
+          // Native acknowledgement and this JS identity must both agree.
+          if (!ownsIntent() || !ownsPeers() || senders[0].track !== nextTrack) {
+            throw new Error("LEGACY_CAMERA_SENDER_REPLACEMENT_UNVERIFIED");
+          }
+        }
+        if (!ownsIntent() || String(nextTrack.readyState).toLowerCase() === "ended") {
+          throw new Error("LEGACY_CAMERA_OWNER_CHANGED");
+        }
+        streams.forEach((stream) => stream.removeTrack(oldTrack));
+        acquiredStream?.removeTrack(nextTrack);
+        targetStream.addTrack(nextTrack);
+        if (!captureReservation?.adopt()) throw new Error("LEGACY_CAMERA_CAPTURE_RETIRED");
+        auxiliaryStreamsRef.current = auxiliaryStreamsRef.current.filter((stream) => stream !== acquiredStream);
+        cameraFacingRef.current = nextFacing;
+        setLocalStreamURL(getCommunicationStreamURL(localStreamRef.current));
+        setLocalVideoStreamURL(getRenderableVideoStreamURL(targetStream));
+        setMediaControlError(null);
+        return true;
+      } catch (switchError) {
+        const disposed = disposeAcquiredCapture();
+        if (!isLegacyMicSessionAuthorityCurrent(authority)) {
+          if (!disposed) reportRuntimeError("communication-switch-camera-retired-capture", switchError, { roomId: authority.roomId });
+          return false;
+        }
+        reportRuntimeError("communication-switch-camera", switchError, { roomId: authority.roomId });
+        if (disposed && appStateSerial !== appStateTransitionSerialRef.current) {
+          // Background owns the temporary privacy stop; its foreground
+          // restoration keeps the latest retained camera intent.
+          auxiliaryStreamsRef.current = auxiliaryStreamsRef.current.filter((stream) => stream !== acquiredStream);
+          return false;
+        }
+        if (!disposed || !oldCaptureStopped) {
+          setError("Camera shutdown could not be verified. Leave the call before continuing.");
+          return false;
+        }
+        streams.forEach((stream) => stream.removeTrack(oldTrack));
+        if (acquiredStream) {
+          acquiredTracks.forEach((track) => acquiredStream?.removeTrack(track));
+          auxiliaryStreamsRef.current = auxiliaryStreamsRef.current.filter((stream) => stream !== acquiredStream);
+        }
+        cameraEnabledRef.current = false;
+        setCameraEnabled(false);
+        setLocalVideoStreamURL("");
+        const presence = await strictlyCommitLegacyMicPresence(authority, micEnabledRef.current, false);
+        const broadcast = await strictlyBroadcastLegacyMicState(authority, micEnabledRef.current, false);
+        if (isLegacyMicSessionAuthorityCurrent(authority)) {
+          setMediaControlError(presence.ok && broadcast.ok
+            ? "Camera switch failed. Turn the camera on to try again."
+            : "Camera is off, but call state could not be synchronized. Try again.");
+        }
         return false;
       }
-      cameraFacingRef.current = nextFacing;
-      return true;
-    } catch (switchError) {
-      reportRuntimeError("communication-switch-camera", switchError, { roomId });
-      return false;
-    }
-  }, [roomId]);
+    });
+  }, [acquireOwnedLegacyMedia, captureLegacyMicSessionAuthority, ensureCameraPermission, isActiveLegacyGeneration,
+    isLegacyMicSessionAuthorityCurrent, runSerializedMediaControl, strictlyBroadcastLegacyMicState,
+    strictlyCommitLegacyMicPresence]);
 
   const participants = useMemo<CommunicationParticipantView[]>(() => {
     const localUserId = identity?.userId ?? "";

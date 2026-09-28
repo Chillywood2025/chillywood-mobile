@@ -2153,7 +2153,9 @@ const foregroundMediaRestoreSource = communicationSessionSource.slice(
 );
 const preservesVideoForegroundRecovery = (source) => (
   /nextCameraEnabled[\s\S]{0,500}ensureTrackKind\("video", \{[\s\S]{0,140}attachToPeers: false,[\s\S]{0,140}expectedGeneration: generation,[\s\S]{0,260}if \(!restoredCameraTrack\)[\s\S]{0,180}setCameraEnabled\(false\)[\s\S]{0,120}return false;/u.test(source)
-  && /attachMissingLocalTracks\(peerConnection, false\)[\s\S]{0,260}renegotiateAllPeers\(true\)/u.test(source)
+  && source.includes("attachMissingLocalTracks(peerConnection, false, generation)")
+  && source.indexOf("renegotiateAllPeers(true)") > source.indexOf("attachMissingLocalTracks(peerConnection, false, generation)")
+  && source.includes("sender.track === restoredCameraTrack")
   && !/nextCameraEnabled[\s\S]{0,260}ensureInitialLocalStream\(false\)/u.test(source)
 );
 const trackKindRecoverySource = communicationSessionSource.slice(
@@ -2163,7 +2165,7 @@ const trackKindRecoverySource = communicationSessionSource.slice(
 const preservesGenerationBoundTrackRecovery = (source) => (
   /expectedGeneration = options\?\.expectedGeneration \?\? legacySessionGenerationRef\.current/u.test(source)
   && /expectedPeerConnections = Object\.values\(peerConnectionsRef\.current\)/u.test(source)
-  && /!isExpectedGenerationCurrent\(\) \|\| localStreamRef\.current !== expectedLocalStream[\s\S]{0,160}stopCommunicationStream\(extraStream\)/u.test(source)
+  && /!isExpectedGenerationCurrent\(\) \|\| localStreamRef\.current !== expectedLocalStream[\s\S]{0,160}acquisition\?\.reservation\.retire\(\)/u.test(source)
   && /for \(const peerConnection of expectedPeerConnections\)[\s\S]{0,120}if \(!isExpectedGenerationCurrent\(\)\)/u.test(source)
 );
 assert.equal(
@@ -2179,6 +2181,18 @@ assert.equal(
   "the regression guard kills the audio-only early-return mutant that drops video after background or CallKit Answer",
 );
 assert.equal(
+  preservesVideoForegroundRecovery(
+    foregroundMediaRestoreSource.replace("attachMissingLocalTracks(peerConnection, false, generation)", "attachMissingLocalTracks(peerConnection, false)"),
+  ),
+  false,
+  "the regression guard rejects foreground attachment without its captured call generation",
+);
+assert.equal(
+  preservesVideoForegroundRecovery(foregroundMediaRestoreSource.replace("sender.track === restoredCameraTrack", "true")),
+  false,
+  "the regression guard rejects successful foreground recovery without sender readback",
+);
+assert.equal(
   preservesGenerationBoundTrackRecovery(trackKindRecoverySource),
   true,
   "async media recovery binds capture and peer attachment to the exact accepted-call generation",
@@ -2189,6 +2203,11 @@ assert.equal(
   ),
   false,
   "the regression guard kills the stale-generation media-attachment mutant",
+);
+assert.equal(
+  preservesGenerationBoundTrackRecovery(trackKindRecoverySource.replaceAll("acquisition?.reservation.retire()", "void 0")),
+  false,
+  "retired acquisition disposal must remain owned for failure and explicit retry",
 );
 assert.match(
   legacyAppStateBlock,

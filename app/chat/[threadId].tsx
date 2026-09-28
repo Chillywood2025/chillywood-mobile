@@ -413,6 +413,23 @@ export default function ChillyChatThreadScreen() {
   const [attachmentFile, setAttachmentFile] = useState<SocialAttachmentFile | null>(null);
   const [attachmentSheetVisible, setAttachmentSheetVisible] = useState(false);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
+  const messageSendContext = useMemo(() => ({
+    userId: currentUserId, threadId, sessionGeneration: authority?.sessionGeneration ?? "", isSignedIn,
+  }), [authority?.sessionGeneration, currentUserId, isSignedIn, threadId]);
+  const mountedMessageSendContextRef = useRef<typeof messageSendContext | null>(null);
+  const messageSendOperationRef = useRef<{ context: typeof messageSendContext } | null>(null);
+  useLayoutEffect(() => {
+    mountedMessageSendContextRef.current = messageSendContext;
+    messageSendOperationRef.current = null;
+    setSending(false);
+    setDraft("");
+    setAttachmentFile(null);
+    return () => {
+      if (mountedMessageSendContextRef.current !== messageSendContext) return;
+      mountedMessageSendContextRef.current = null;
+      messageSendOperationRef.current = null;
+    };
+  }, [messageSendContext]);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [messageReportTarget, setMessageReportTarget] = useState<ChatMessage | null>(null);
@@ -1906,6 +1923,12 @@ export default function ChillyChatThreadScreen() {
   }, [handlePickAttachment]);
 
   const handleSend = useCallback(async (bodyOverride?: string) => {
+    // A stale event handler must not submit using the replacement session.
+    // An already-dispatched write may settle for its original account, but its
+    // completion must never update a different screen/account/session context.
+    if (mountedMessageSendContextRef.current !== messageSendContext
+      || !messageSendContext.isSignedIn || !messageSendContext.userId
+      || messageSendOperationRef.current) return;
     const trimmedDraft = String(bodyOverride ?? draft).trim();
     const selectedAttachment = bodyOverride ? null : attachmentFile;
     if (!threadId || (!trimmedDraft && !selectedAttachment) || sending || !thread) return;
@@ -1917,6 +1940,11 @@ export default function ChillyChatThreadScreen() {
       setError("Chat attachments are temporarily paused. You can still send text messages.");
       return;
     }
+
+    const operation = { context: messageSendContext };
+    messageSendOperationRef.current = operation;
+    const isCurrent = () => mountedMessageSendContextRef.current === operation.context
+      && messageSendOperationRef.current === operation;
 
     const tempId = `temp-${Date.now()}`;
     const optimistic: ChatMessage = {
@@ -1938,6 +1966,7 @@ export default function ChillyChatThreadScreen() {
 
     try {
       const sent = await sendChatMessage(threadId, trimmedDraft, selectedAttachment);
+      if (!isCurrent()) return;
       trackEvent("chat_message_sent", {
         surface: "chat-thread",
         threadId,
@@ -1946,6 +1975,7 @@ export default function ChillyChatThreadScreen() {
       setMessages((prev) => prev.map((message) => (message.id === tempId ? sent : message)));
       await markThreadReadWithThrottle();
     } catch (sendError) {
+      if (!isCurrent()) return;
       setMessages((prev) => prev.filter((message) => message.id !== tempId));
       if (selectedAttachment) setAttachmentFile(selectedAttachment);
       const message = getUserFacingErrorMessage(sendError, "Unable to send Chi'lly Chat message.");
@@ -1954,9 +1984,12 @@ export default function ChillyChatThreadScreen() {
         threadId,
       });
     } finally {
-      setSending(false);
+      if (isCurrent()) {
+        messageSendOperationRef.current = null;
+        setSending(false);
+      }
     }
-  }, [appConfig.runtimeControls.chat_attachments_enabled, appConfig.runtimeControls.chat_enabled, attachmentFile, currentUserId, draft, markThreadReadWithThrottle, sending, thread, threadId]);
+  }, [appConfig.runtimeControls.chat_attachments_enabled, appConfig.runtimeControls.chat_enabled, attachmentFile, currentUserId, draft, markThreadReadWithThrottle, messageSendContext, sending, thread, threadId]);
 
   const handleStartCall = useCallback(async (mode: ChatCallType) => {
     logChatCall("handle_start_call", {

@@ -43,13 +43,89 @@ retains every original case/status and names its remaining proof. Its IDs
 refer to the findings and evidence corrections below; it does not invent
 new physical verdicts or silently delete untested cases.
 
+## What automated coverage means for each physical case
+
+The [individual automated coverage map](PR532_AUTOMATED_COVERAGE.json) accounts
+for all 104 original rows. Each row retains its scenario and historical result,
+names the exact automated assertion and required CI lane, describes the software
+behavior it proves, lists controlled assumptions, and identifies remaining
+software or physical proof. A row with related tests but an unexercised mechanism
+is explicitly partial. A capability unavailable from the selected provider is
+listed as unsupported, rather than passed or merely device-blocked.
+
+This map is not a claim of 104 automated end-to-end phone tests. The browser
+gate runs the actual legacy hooks with real SDP/ICE/RTP and measured received
+audio/video, but synthetic capture and a controlled signaling/membership adapter.
+An additional required Database baseline connects two production hooks through
+the actual authenticated SDK, disposable Auth/PostgREST/RLS and private Realtime,
+then measures received browser RTP, PCM and decoded video. It checks both
+endpoints' media-control writes and received media, terminal cleanup, and a fresh
+accepted call. Synthetic capture and service-side invite setup are explicit;
+this does not exercise Edge push delivery or phone-native capture. Complete push handlers execute with
+controlled provider receipts. Native and mounted tests name their own platform
+boundaries. Their combination is materially stronger than a successful mock at
+each call site; it still does not certify the installed operating system or
+hardware chain.
+
+The coverage-inventory test prevents a row, assertion reference or CI entry
+point from silently disappearing. It cannot judge whether an assertion is
+sufficient. That requires source/harness review, failure controls, and the
+observed results of the actual tests. Final exact-head execution results belong
+in the PR; source coverage declarations do not manufacture successful runs.
+
+The additional case-by-case review exposed more application mechanisms:
+a camera flip could acknowledge an already retired track, and a pending message
+send could retain busy/error state across an account or session replacement.
+Backgrounding during microphone recovery could publish stale camera intent;
+overlapping foreground restoration could acquire duplicate camera tracks. The
+new cases preserve the finite event orders and reproduce the former behavior.
+
+The pinned SDK itself also matters. Its deprecated camera wrapper discards the
+completion promise, and both native implementations intentionally prohibit lens
+changes through `applyConstraints`. Camera switching therefore needs supported
+video-only reacquisition and sender replacement, preserving audio and current
+ownership. A further native sender-attachment boundary can falsely acknowledge
+failure. Its correction requires native code and new binaries; a JavaScript OTA
+cannot install that fix. Actual SDK JavaScript and compiled native-method tests
+cover these contracts with controlled bridge/RTC edges. Neither is physical
+camera, audio, or RTP proof from an installed phone.
+
+All four legacy capture producers now share one acquisition/retirement boundary:
+initial startup, foreground recovery, microphone reacquisition and camera flip.
+The record exists before native acquisition starts and survives hook unmount.
+Unresolved or unsuccessfully stopped capture prevents false End completion and
+replacement admission; adopted capture transfers to the existing session cleanup.
+Failed rollback retains the exact acquired tracks for another disposal attempt.
+Tests distinguish an unresolved acquisition from an already-issued sender command,
+so a retired logical control queue cannot unnecessarily own the next call.
+
+Native contract provenance is pinned to `@livekit/react-native-webrtc` 144.0.0.
+Its camera behavior follows the intentional upstream
+[camera-constraint restriction](https://github.com/livekit/react-native-webrtc/commit/d7dfbaecdd980364ce9591cbc83a75b5ca3a6db4).
+The iOS WebRTC-SDK 144.7559.01 line's
+[native sender implementation](https://github.com/webrtc-sdk/webrtc/blob/30d5e63ae91da483e06577b5c35ee91cc5e5c3db/sdk/objc/api/peerconnection/RTCRtpSender.mm)
+reads the current native track in its getter; its void setter logs a failed
+attachment. `withWebRtcSenderAcknowledgment` checks that postcondition on iOS
+and the actual `setTrack` boolean on Android. Full-file hashes, package version,
+idempotence, same-method failing-before controls and required compiled-method
+execution bind this repair. The patch must be reviewed or retired when the SDK
+changes; an upstream version change cannot silently reuse these assumptions.
+
+For future device failures, first preserve the actual source, provider,
+binary/runtime, case identity and evidence. Reproduce the mechanism in the
+lowest faithful automated layer available, then retain a regression that fails
+the defective implementation and passes the correction. If reproduction needs
+the real OS, peripheral, provider or hardware, keep that requirement explicit;
+do not replace it with an always-successful mock. Existing protections and the
+ordinary protected PR workflow remain unchanged.
+
 ## Product findings and deduplication
 
 | ID | Retained observation / affected cases | Status and boundary to test | Physical closure still required |
 | --- | --- | --- | --- |
-| D1 | End leaves retained call UI and explicit retryable cleanup error. EN04/EN05/EN07; also follows F01/F04. | SOURCE REPAIRED; qualification open. Real SQL reproduces already-completed server cleanup followed by RLS-hidden client readback. Exact-generation self-leave confirms the terminal row without reopening ordinary reads; the screen no longer repeats the host mutation after verified terminal invite authority. Both media hooks retain late admission/cleanup ownership and retry state. T1/T5 cover the cooperating boundaries; full HTTP CI is still pending. | Each resource postcondition separately: local capture, peer transport, native UI/audio, exact membership/room state; then fresh voice/video. An error alone does not prove capture continued. |
-| D2 | Mic sequences precede loss of connected peers/Connecting. F01 and MC04 are one iPhone sequence; F04 and MC03 are one Android sequence. | SOURCE REPAIRED; qualification open. The legacy hook now distinguishes a Presence metadata replacement from departure, serializes SDP changes, correlates pending offers/answers, handles simultaneous offers, and bounds early ICE buffering. Pinned Presence tests reproduce the metadata-replacement failure. T2's real two-endpoint browser gate is implemented but has not passed in this environment. This identifies source defects, not the exact historical third-cycle cause. | Audible recovery and moving video on both endpoints during repeated native/in-app mic cycles, followed by clean End; correlate operation order. |
-| D3 | Android self Camera Off disagrees with iOS peer Cam On/Video connected. CM01. | SOURCE REPAIRED AT IDENTIFIED BOUNDARIES; qualification open. Metadata changes no longer discard a valid peer; negotiation and replacement ownership are covered alongside durable/local/remote state convergence. The new browser lane asserts decoded camera-off pixels and restored changing video, not just a UI flag. Its actual RTP run remains CI-pending. A static disagreement still does not prove historical capture or server state. | Capture/publication state, durable media state and received moving/removed video agree after off/on, with correlated timing. |
+| D1 | End leaves retained call UI and explicit retryable cleanup error. EN04/EN05/EN07; also follows F01/F04. | SOURCE REPAIRED; qualification open. Real SQL reproduces already-completed server cleanup followed by RLS-hidden client readback. Exact-generation self-leave confirms the terminal row without reopening ordinary reads; the screen no longer repeats the host mutation after verified terminal invite authority. Both media hooks retain late admission/cleanup ownership and retry state. T1/T5 cover the cooperating boundaries; exact-head authenticated HTTP execution is required in the PR validation record. | Each resource postcondition separately: local capture, peer transport, native UI/audio, exact membership/room state; then fresh voice/video. An error alone does not prove capture continued. |
+| D2 | Mic sequences precede loss of connected peers/Connecting. F01 and MC04 are one iPhone sequence; F04 and MC03 are one Android sequence. | SOURCE REPAIRED; qualification open. The legacy hook now distinguishes a Presence metadata replacement from departure, serializes SDP changes, correlates pending offers/answers, handles simultaneous offers, and bounds early ICE buffering. Pinned Presence tests reproduce the metadata-replacement failure. T2's real two-endpoint browser gate is required; its expanded scenarios must pass on the final candidate. This identifies source defects, not the exact historical third-cycle cause. | Audible recovery and moving video on both endpoints during repeated native/in-app mic cycles, followed by clean End; correlate operation order. |
+| D3 | Android self Camera Off disagrees with iOS peer Cam On/Video connected. CM01. | SOURCE REPAIRED AT IDENTIFIED BOUNDARIES; qualification open. Metadata changes no longer discard a valid peer; negotiation and replacement ownership are covered alongside durable/local/remote state convergence. The new browser lane asserts decoded camera-off pixels and restored changing video, not just a UI flag. Received RTP/media assertions must pass in the final candidate's required browser lane. A static disagreement still does not prove historical capture or server state. | Capture/publication state, durable media state and received moving/removed video agree after off/on, with correlated timing. |
 | D4 | Background incoming presentation succeeds on some attempts; a failure is reported. BL03; expiry claims EX01/EX02 need their own proof. | PARTIAL SOURCE REPAIR; delivery open. Caller and callee expiry now retry transient reads/transitions against exact invite/account ownership and the actual server deadline. iOS startup binds native authority before consuming queued events, and Answer readiness waits briefly for its exact presentation. No source test proves APNs/PushKit delivery or the historical five-second/156-second claims. | Server deadline → push receipt → native presentation/action → terminal UI timeline for the same invite; late Answer rejected. |
 | D5 | Operator reports native Answer opened a stranded one-participant call. No explicit FAIL matrix row; all three cited attachments missing. | SOURCE HANDOFF COVERAGE ADDED; evidence incomplete. Actual JS facade + bridge + provenance tests cover Answer-first replay and account/UUID ownership. Full-screen tests consume real attested routes, accept through the server boundary, wait for exact audio activation, then start the actual legacy hook. Neither result certifies connected remote media; the full-screen SDK edge is controlled. Missing originals still prevent attributing this historical failure to one repaired boundary. | Native transaction, current JS/account readiness, server acceptance, navigation, actual peer negotiation/media, and cleanup tied to one case. Add an explicit row to the next matrix. |
 | D6 | Operator reports orphan CallKit UI after cancel. CA01; later clean voice/video confirmations do not erase the report. | SOURCE REPAIRED; qualification open. Native terminal observers retain ownership and bounded retries until the exact completion event, rather than treating dispatched native work as removal. Stale UUIDs cannot erase replacement presentation; replacement/unmount cancels owned retry work. Original cancellation causality is not proved by the retained initial UI alone. | Correlated caller cancel commit and receiver native removal; duplicate/late push must not resurrect canceled UI. |
@@ -96,8 +172,8 @@ locations. `incoming3` is a different retained capture and is not an alias for
 
 | ID | Existing test's valid scope | Missing boundary / owning coverage |
 | --- | --- | --- |
-| T1 | Exact-hook tests simulate membership leave returning a left row; thread tests simulate leaveRoom independently. | Added `scripts/test-communication-terminal-postgres.mjs`: disposable PostgreSQL executes checked-in authority/RLS/terminal-trigger/join bodies and the new migration, reproduces the former closed-read failure and verifies self-only idempotent cleanup/generation rejection. `scripts/test-communication-terminal-http.mjs` additionally loads the production client API against disposable authenticated Supabase/PostgREST and races old leave with rejoin. SQL proof is locally verified; full-stack HTTP proof is CI-pending. No production database mutation occurred. |
-| T2 | Legacy harness auto-supplies an answer and can start ICE connected. Useful for selected callback ownership tests. | Added `scripts/test-chilly-chat-real-peer-integration.mjs` and `tests/assurance/helpers/legacy-paired-browser-harness.mjs`: two actual production hooks use real Chromium peers, SDP/ICE, received audio energy and decoded moving video. No preconnected state or fabricated answer; dropped answers are a negative control. Repeated controls, decoded camera-off privacy, cleanup and same-page fresh-call reuse are required. Browser transport is CI-pending; local native ICE produced no candidates even in an independent control. This is not native-device WebRTC proof. |
+| T1 | Exact-hook tests simulate membership leave returning a left row; thread tests simulate leaveRoom independently. | Added `scripts/test-communication-terminal-postgres.mjs`: disposable PostgreSQL executes checked-in authority/RLS/terminal-trigger/join bodies and the new migration, reproduces the former closed-read failure and verifies self-only idempotent cleanup/generation rejection. `scripts/test-communication-terminal-http.mjs` additionally loads the production client API against disposable authenticated Supabase/PostgREST and races old leave with rejoin. SQL proof is locally verified; full-stack HTTP proof is required in the exact-head Database lane. No production database mutation occurred. |
+| T2 | Legacy harness auto-supplies an answer and can start ICE connected. Useful for selected callback ownership tests. | Added `scripts/test-chilly-chat-real-peer-integration.mjs` and `tests/assurance/helpers/legacy-paired-browser-harness.mjs`: two actual production hooks use real Chromium peers, SDP/ICE, received audio energy and decoded moving video. No preconnected state or fabricated answer; dropped answers are a negative control. Repeated controls, decoded camera-off privacy, cleanup and same-page fresh-call reuse are required. Browser transport must pass in the exact-head Product lane; local native ICE produced no candidates even in an independent control. This is not native-device WebRTC proof. |
 | T3 | Camera projection test writes a simulated remote value and emits a receiver hint. | The two-hook browser test now drives actual sender controls through simulated membership/signaling boundaries and pinned Presence semantics into the receiver hook and real RTP. Existing authenticated private-Realtime tests independently cover server delivery/read authority. These are complementary boundary tests, not a claimed single device → production server → device trace. Real capture and correlated physical projection remain required. |
 | T4 | Swift/Kotlin seams and JS bridge mocks prove selected deadline/action ownership logic. | `tests/assurance/ios-native-call-bridge-mounted.test.mjs` composes the actual production JS facade, bridge, provenance and readiness with a controlled OS/service edge: Answer-first replay, same-account cold launch, retired-account rejection, exact UUID and bounded terminal retry. Full-screen native tests add actual route consumption and media activation. Retain platform compile/contract tests. No successful mocked OS call counts as installed Answer, push delivery or audible route success. |
 | T5 | Unit tests check individual callback cleanup and state changes. | Added `tests/assurance/chat-thread-integration-mounted.test.mjs` with the complete production screen hook/effect graph, actual provider adapter and legacy hook; only JSX rendering and service/SDK edges are controlled. It covers server Answer, exact terminal response, completed-server-cleanup ordering, retryable End, retained video identity, both expiry timers and native audio gating. Both provider suites also cover late joins, membership generations and retired cleanup. The focused tests have failing-before/passing-after cases; service mocks are not server or physical certification. |

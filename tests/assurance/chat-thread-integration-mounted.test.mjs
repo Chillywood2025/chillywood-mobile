@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mountFullChatThread } from "./helpers/chat-thread-full-mounted-harness.mjs";
+import { createDurableChatThreadFixture, mountFullChatThread } from "./helpers/chat-thread-full-mounted-harness.mjs";
+import { mountIosRoot, nativeIds as rootNativeIds, makeNativeEvent } from "./helpers/ios-root-thread-handoff-harness.mjs";
 
 test("full screen Answer activates the actual legacy adapter once, only after server acceptance", async () => {
   const h = await mountFullChatThread();
@@ -263,4 +264,323 @@ test("full iPhone screen rejects unissued route claims without accepting or capt
     assert.equal(h.runtime.nativeCompletions.length, 0);
     assert.equal(h.runtime.snapshot.activeCallInvite, null);
   } finally { await h.unmount(); }
+});
+
+async function mountMessagingPair(t) {
+  const store = createDurableChatThreadFixture();
+  const caller = await mountFullChatThread({ durableThread: store, noActiveCall: true });
+  // These paired screens prove participant-role and message/call state changes.
+  // Both use the JS Answer path; the real-provenance iOS cases above independently
+  // cover native handoff. Two mounted screens are not two physical platforms.
+  const callee = await mountFullChatThread({ durableThread: store, noActiveCall: true,
+    userId: "remote-user", remoteUserId: "local-user" });
+  t.after(async () => { await caller.unmount(); await callee.unmount(); });
+  return { store, caller, callee };
+}
+
+async function exchangeScreenMessages(store, caller, callee, label) {
+  await caller.run(() => caller.runtime.snapshot.handleSend(`${label}:caller`));
+  await callee.flush();
+  await callee.run(() => callee.runtime.snapshot.handleSend(`${label}:callee`));
+  await caller.flush();
+  const expected = store.messages.map(({ id, body, senderUserId }) => ({ id, body, senderUserId }));
+  for (const screen of [caller, callee]) {
+    assert.deepEqual(screen.runtime.snapshot.messages.map(({ id, body, senderUserId }) => ({ id, body, senderUserId })), expected);
+    assert.equal(screen.runtime.snapshot.messages.some(message => message.id.startsWith("temp-")), false);
+  }
+}
+
+for (const terminal of ["cancel", "decline", "End", "replacement"]) {
+  test(`actual paired screens preserve durable bidirectional messages before and after ${terminal}`, async (t) => {
+    const { store, caller, callee } = await mountMessagingPair(t);
+    await exchangeScreenMessages(store, caller, callee, "before");
+    await caller.run(() => caller.runtime.snapshot.handleStartCall("video"));
+    await callee.flush();
+    assert.equal(store.invite.status, "ringing");
+    assert.equal(caller.runtime.media.localStreams.length, 0, "ringing caller must not capture");
+    assert.equal(callee.runtime.media.localStreams.length, 0, "ringing callee must not capture");
+    if (["End", "replacement"].includes(terminal)) {
+      await callee.run(() => callee.runtime.snapshot.handleAcceptIncomingCall());
+      await caller.flush();
+      assert.equal(store.invite.status, "accepted");
+      assert.ok(caller.runtime.media.localStreams.length > 0);
+      assert.ok(callee.runtime.media.localStreams.length > 0);
+    }
+    if (terminal === "decline") await callee.run(() => callee.runtime.snapshot.handleDeclineIncomingCall());
+    else await caller.run(() => caller.runtime.snapshot.handleJoinOrCloseCall());
+    await caller.flush(); await callee.flush();
+    assert.equal(store.invite.status, terminal === "cancel" ? "canceled" : terminal === "decline" ? "declined" : "ended");
+    assert.equal(caller.runtime.snapshot.callPanelOpen, false);
+    assert.equal(callee.runtime.snapshot.callPanelOpen, false);
+    for (const screen of [caller, callee]) for (const stream of screen.runtime.media.localStreams) {
+      for (const track of stream.getTracks()) assert.equal(track.readyState, "ended");
+    }
+    if (terminal === "replacement") {
+      const oldInvite = store.invite.id;
+      await callee.run(() => callee.runtime.snapshot.handleStartCall("voice"));
+      await caller.flush();
+      assert.notEqual(store.invite.id, oldInvite);
+      await caller.run(() => caller.runtime.snapshot.handleAcceptIncomingCall());
+      await callee.flush();
+      assert.equal(store.invite.status, "accepted");
+      assert.equal(store.invite.callType, "voice");
+    }
+    await exchangeScreenMessages(store, caller, callee, "after");
+    assert.equal(store.messages.length, 4, "call cleanup/replacement must preserve all committed messages");
+    assert.equal(new Set(store.messages.map(message => message.id)).size, 4);
+  });
+}
+
+for (const mode of ["voice", "video"]) {
+  test(`full same-thread fresh ${mode} call starts only after terminal cleanup with preserved messages`, async (t) => {
+    const { store, caller, callee } = await mountMessagingPair(t);
+    await exchangeScreenMessages(store, caller, callee, "retained");
+    await caller.run(() => caller.runtime.snapshot.handleStartCall(mode));
+    await callee.flush();
+    await callee.run(() => callee.runtime.snapshot.handleAcceptIncomingCall());
+    await caller.flush();
+    const oldRoom = store.invite.communicationRoomId;
+    await callee.run(() => callee.runtime.snapshot.handleJoinOrCloseCall());
+    await caller.flush();
+    for (const screen of [caller, callee]) for (const stream of screen.runtime.media.localStreams) {
+      for (const track of stream.getTracks()) assert.equal(track.readyState, "ended");
+    }
+    await caller.run(() => caller.runtime.snapshot.handleStartCall(mode));
+    await callee.flush();
+    assert.notEqual(store.invite.communicationRoomId, oldRoom);
+    await callee.run(() => callee.runtime.snapshot.handleAcceptIncomingCall());
+    await caller.flush();
+    assert.equal(store.invite.status, "accepted");
+    for (const screen of [caller, callee]) {
+      assert.equal(screen.runtime.snapshot.initialCallMediaPreferences.cameraEnabled, mode === "video");
+      const current = screen.runtime.media.localStreams.filter(stream => stream.getTracks().some(track => track.readyState === "live"));
+      assert.ok(current.length > 0);
+      assert.equal(current.some(stream => stream.getVideoTracks().some(track => track.readyState === "live")), mode === "video");
+      assert.equal(screen.runtime.snapshot.messages.length, 2);
+    }
+  });
+}
+
+test("full screen rejected message write removes only its optimistic row and preserves committed history", async (t) => {
+  const { store, caller, callee } = await mountMessagingPair(t);
+  await exchangeScreenMessages(store, caller, callee, "committed");
+  store.writeActions.push({ reject: "message write rejected" });
+  await caller.run(() => caller.runtime.snapshot.handleSend("uncommitted"));
+  assert.equal(store.messages.length, 2);
+  assert.equal(caller.runtime.snapshot.messages.length, 2);
+  assert.equal(caller.runtime.snapshot.sending, false);
+  assert.match(caller.runtime.snapshot.error, /message write rejected/);
+  await exchangeScreenMessages(store, caller, callee, "retry");
+  assert.equal(store.messages.length, 4);
+});
+
+function deferredMessageWrite() {
+  let release;
+  const wait = new Promise(resolve => { release = resolve; });
+  return { wait, release };
+}
+
+test("full screen account replacement releases the retired send slot without inheriting its error", async (t) => {
+  const { store, caller } = await mountMessagingPair(t);
+  const oldWrite = deferredMessageWrite();
+  store.writeActions.push({ wait: oldWrite.wait, reject: "retired account write rejected" });
+  let oldOperation;
+  await caller.run(() => { oldOperation = caller.runtime.snapshot.handleSend("old account pending"); });
+  assert.equal(caller.runtime.snapshot.sending, true);
+  await caller.rerender({ userId: "remote-user", remoteUserId: "local-user", sessionGeneration: "session-2" });
+  const replacementWasBlocked = caller.runtime.snapshot.sending;
+  await caller.run(async () => { oldWrite.release(); await oldOperation; });
+  assert.equal(replacementWasBlocked, false, "a new account must not inherit the old account's in-flight send slot");
+  assert.equal(caller.runtime.snapshot.error, null, "a retired write failure cannot become the replacement account's error");
+  assert.equal(store.messages.length, 0);
+  assert.equal(caller.runtime.snapshot.messages.length, 0);
+});
+
+test("full screen late retired message failure cannot alter a replacement account's pending send", async (t) => {
+  const { store, caller } = await mountMessagingPair(t);
+  const oldWrite = deferredMessageWrite();
+  const newWrite = deferredMessageWrite();
+  store.writeActions.push({ wait: oldWrite.wait, reject: "retired account write rejected" });
+  let oldOperation;
+  await caller.run(() => { oldOperation = caller.runtime.snapshot.handleSend("old account pending"); });
+  await caller.rerender({ userId: "remote-user", remoteUserId: "local-user", sessionGeneration: "session-2" });
+  store.writeActions.push({ wait: newWrite.wait });
+  let newOperation;
+  await caller.run(() => { newOperation = caller.runtime.snapshot.handleSend("new account pending"); });
+  const newWriteStarted = store.sends.length === 2;
+  await caller.run(async () => { oldWrite.release(); await oldOperation; });
+  const replacementStillSending = caller.runtime.snapshot.sending;
+  const replacementError = caller.runtime.snapshot.error;
+  await caller.run(async () => { newWrite.release(); await newOperation; });
+  assert.equal(newWriteStarted, true, "the replacement account can issue its own controlled write");
+  assert.equal(replacementStillSending, true, "old finally cannot release the new account's send slot");
+  assert.equal(replacementError, null, "old catch cannot overwrite the replacement's state");
+  assert.deepEqual(store.messages.map(message => [message.senderUserId, message.body]), [["remote-user", "new account pending"]]);
+  assert.equal(caller.runtime.snapshot.sending, false);
+});
+
+for (const replacement of ["account", "session"]) {
+  test(`full screen retained send callback cannot submit after ${replacement} replacement`, async (t) => {
+    const { store, caller } = await mountMessagingPair(t);
+    const staleSend = caller.runtime.snapshot.handleSend;
+    await caller.rerender(replacement === "account"
+      ? { userId: "remote-user", remoteUserId: "local-user", sessionGeneration: "session-2" }
+      : { sessionGeneration: "session-2" });
+    await caller.run(() => staleSend("stale callback"));
+    assert.equal(store.sends.length, 0, "a callback from retired identity cannot start a mutation");
+    await caller.run(() => caller.runtime.snapshot.handleSend("current callback"));
+    assert.equal(store.sends.length, 1);
+    assert.equal(store.messages[0].senderUserId, caller.runtime.userId);
+    assert.equal(store.messages[0].body, "current callback");
+  });
+}
+
+test("full screen same-account renewed session preserves its pending send when an older successful write settles", async (t) => {
+  const { store, caller } = await mountMessagingPair(t);
+  const oldWrite = deferredMessageWrite();
+  const newWrite = deferredMessageWrite();
+  store.writeActions.push({ wait: oldWrite.wait });
+  let oldOperation;
+  await caller.run(() => { oldOperation = caller.runtime.snapshot.handleSend("old dispatched write"); });
+  await caller.rerender({ sessionGeneration: "session-2" });
+  store.writeActions.push({ wait: newWrite.wait });
+  let newOperation;
+  await caller.run(() => { newOperation = caller.runtime.snapshot.handleSend("new dispatched write"); });
+  await caller.run(() => caller.runtime.snapshot.setDraft("new session next draft"));
+  await caller.run(async () => { oldWrite.release(); await oldOperation; });
+  assert.equal(store.messages[0].body, "old dispatched write", "a dispatched original write may commit normally");
+  assert.equal(caller.runtime.snapshot.sending, true, "retired success/finally cannot unlock the current operation");
+  assert.equal(caller.runtime.snapshot.draft, "new session next draft");
+  await caller.run(async () => { newWrite.release(); await newOperation; });
+  assert.deepEqual(store.messages.map(message => message.body), ["old dispatched write", "new dispatched write"]);
+  assert.equal(caller.runtime.snapshot.sending, false);
+});
+
+test("full caller Cancel keeps the exact ringing invite after rejection and retries without capture or message loss", async (t) => {
+  const { store, caller, callee } = await mountMessagingPair(t);
+  await exchangeScreenMessages(store, caller, callee, "retained");
+  await caller.run(() => caller.runtime.snapshot.handleStartCall("voice"));
+  await callee.flush();
+  const inviteId = store.invite.id;
+  caller.runtime.transition = async () => { throw Error("cancel transaction unavailable"); };
+  await caller.run(() => caller.runtime.snapshot.handleJoinOrCloseCall());
+  assert.equal(store.invite.id, inviteId);
+  assert.equal(store.invite.status, "ringing");
+  assert.equal(caller.runtime.snapshot.callPanelOpen, true);
+  assert.equal(callee.runtime.snapshot.incomingCallInvite.id, inviteId);
+  assert.equal(caller.runtime.media.localStreams.length, 0);
+  assert.equal(callee.runtime.media.localStreams.length, 0);
+  assert.equal(store.messages.length, 2);
+  caller.runtime.transition = null;
+  await caller.run(() => caller.runtime.snapshot.handleJoinOrCloseCall());
+  await callee.flush();
+  assert.equal(store.invite.status, "canceled");
+  assert.equal(store.transitions.filter(transition => transition.status === "canceled").length, 1);
+  assert.equal(caller.runtime.snapshot.callPanelOpen, false);
+  assert.equal(callee.runtime.snapshot.incomingCallInvite, null);
+  await exchangeScreenMessages(store, caller, callee, "after retry");
+});
+
+for (const [mode, endRole] of [["voice", "callee"], ["video", "caller"]]) {
+  test(`full paired screens block fresh ${mode} start while ${endRole} End cleanup is unresolved`, async (t) => {
+    const { store, caller, callee } = await mountMessagingPair(t);
+    await caller.run(() => caller.runtime.snapshot.handleStartCall(mode));
+    await callee.flush();
+    await callee.run(() => callee.runtime.snapshot.handleAcceptIncomingCall());
+    await caller.flush();
+    assert.equal(store.invite.status, "accepted");
+    const retiredInviteId = store.invite.id;
+    const retiredRoomId = store.invite.communicationRoomId;
+    const ending = endRole === "caller" ? caller : callee;
+    const other = endRole === "caller" ? callee : caller;
+    const cleanup = deferredMessageWrite();
+    ending.runtime.leaveBarrier = cleanup.wait;
+    let pendingEnd;
+    await ending.run(() => { pendingEnd = ending.runtime.snapshot.handleJoinOrCloseCall(); });
+    await other.flush();
+    assert.equal(store.invite.status, "ended", "the server terminal response alone cannot settle local cleanup");
+    assert.ok(ending.runtime.leaves.length > 0, "actual hook must reach the held exact membership cleanup");
+    assert.equal(ending.runtime.snapshot.callPanelOpen, true);
+    const acquisitions = ending.runtime.media.localStreams.length;
+    const roomCount = store.rooms.size;
+    await ending.run(() => ending.runtime.snapshot.handleStartCall(mode));
+    assert.equal(store.rooms.size, roomCount, "pending End must not create a replacement invite/room");
+    assert.equal(store.invite.id, retiredInviteId);
+    assert.equal(ending.runtime.media.localStreams.length, acquisitions, "pending End cannot acquire replacement capture");
+    for (const stream of ending.runtime.media.localStreams) {
+      for (const track of stream.getTracks()) assert.equal(track.readyState, "ended", "local privacy stop precedes the held backend leave");
+    }
+    await ending.run(async () => { cleanup.release(); await pendingEnd; });
+    await other.flush();
+    assert.equal(ending.runtime.snapshot.callPanelOpen, false);
+    ending.runtime.leaveBarrier = null;
+    await ending.run(() => ending.runtime.snapshot.handleStartCall(mode));
+    await other.flush();
+    assert.notEqual(store.invite.id, retiredInviteId);
+    assert.notEqual(store.invite.communicationRoomId, retiredRoomId);
+    assert.equal(store.rooms.size, roomCount + 1);
+    await other.run(() => other.runtime.snapshot.handleAcceptIncomingCall());
+    await ending.flush();
+    assert.equal(store.invite.status, "accepted");
+    for (const screen of [ending, other]) {
+      assert.equal(screen.runtime.snapshot.initialCallMediaPreferences.cameraEnabled, mode === "video");
+      assert.ok(screen.runtime.media.localStreams.some(stream => stream.getAudioTracks().some(track => track.readyState === "live")),
+        "settled cleanup permits real hook initialization of the fresh call");
+    }
+  });
+}
+
+test("actual root native Answer route is consumed by the actual screen once and waits for its exact audio activation", async (t) => {
+  const root = await mountIosRoot(t, { realFacade: true });
+  assert.equal(root.routes.length, 0, "no chat screen is mounted before the root event");
+  await root.event(makeNativeEvent("incoming"));
+  await root.event(makeNativeEvent("answerRequested"));
+  await root.event(makeNativeEvent("answerRequested"));
+  assert.equal(root.routes.length, 1, "duplicate native Answer emits one root navigation intent");
+  const destination = new URL(root.routes[0], "https://test.invalid");
+  assert.equal(destination.pathname, `/chat/${rootNativeIds.thread}`);
+  // The router boundary is explicit: feed its unmodified production destination
+  // into the destination screen. No claim is reissued or generated by this test.
+  const screen = await mountFullChatThread({ userId: rootNativeIds.user,
+    remoteUserId: "00000000-0000-4000-8000-000000000099", threadId: rootNativeIds.thread,
+    platform: "ios", sessionGeneration: rootNativeIds.session,
+    invite: { id: rootNativeIds.invite },
+    routeParams: Object.fromEntries(destination.searchParams), nativeFacade: root.facade });
+  t.after(() => screen.unmount());
+  assert.deepEqual(screen.runtime.transitions.map(({ status }) => status), ["accepted"]);
+  assert.equal(screen.runtime.snapshot.activeCallInvite.id, rootNativeIds.invite);
+  assert.deepEqual(Array.from(root.nativeSteps).filter(step => step.name === "answer").map(({ uuid, connected }) => ({ uuid, connected })),
+    [{ uuid: rootNativeIds.uuid, connected: true }], "the screen completes the same native Answer through the shared production facade");
+  assert.equal(screen.runtime.media.localStreams.length, 0, "root navigation and server acceptance are not media readiness");
+  await screen.run(() => root.event(makeNativeEvent("audioSessionActivated", { callUuid: rootNativeIds.replacementUuid })));
+  assert.equal(screen.runtime.media.localStreams.length, 0, "another native UUID cannot activate this call");
+  await screen.run(() => root.event(makeNativeEvent("audioSessionActivated")));
+  assert.equal(screen.runtime.media.joinCalls.length, 1);
+  assert.equal(screen.runtime.media.localStreams.length, 1);
+  assert.equal(screen.runtime.media.localStreams[0].getAudioTracks()[0].readyState, "live");
+  assert.equal(screen.runtime.snapshot.participants.find(participant => !participant.isSelf).connectionState, "connecting",
+    "successful JS handoff does not fabricate remote media or physical connection proof");
+  await screen.run(() => root.event(makeNativeEvent("answerRequested")));
+  assert.equal(root.routes.length, 1);
+  assert.equal(screen.runtime.transitions.length, 1);
+  assert.equal(screen.runtime.media.localStreams.length, 1);
+});
+
+test("actual root-issued native Answer route cannot be consumed by a replacement-account screen", async (t) => {
+  const root = await mountIosRoot(t, { realFacade: true });
+  await root.event(makeNativeEvent("incoming"));
+  await root.event(makeNativeEvent("answerRequested"));
+  assert.equal(root.routes.length, 1);
+  const destination = new URL(root.routes[0], "https://test.invalid");
+  const screen = await mountFullChatThread({ userId: "00000000-0000-4000-8000-000000000098",
+    remoteUserId: "00000000-0000-4000-8000-000000000099", threadId: rootNativeIds.thread,
+    platform: "ios", sessionGeneration: "replacement-session",
+    invite: { id: rootNativeIds.invite, calleeUserId: rootNativeIds.user },
+    routeParams: Object.fromEntries(destination.searchParams), nativeFacade: root.facade });
+  t.after(() => screen.unmount());
+  await screen.run(() => root.event(makeNativeEvent("audioSessionActivated")));
+  assert.equal(screen.runtime.transitions.length, 0, "a real claim is still restricted to its original account");
+  assert.equal(screen.runtime.media.joinCalls.length, 0);
+  assert.equal(screen.runtime.media.localStreams.length, 0);
+  assert.equal(screen.runtime.snapshot.activeCallInvite, null);
 });

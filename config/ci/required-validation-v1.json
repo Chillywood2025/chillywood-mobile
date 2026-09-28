@@ -38,6 +38,10 @@
       "hooks/**",
       "lib/**",
       "plugins/**",
+      "scripts/test-chilly-chat-real-peer-integration.mjs",
+      "scripts/test-webrtc-native-sender-contract.mjs",
+      "docs/chat/PR532_AUTOMATED_COVERAGE.json",
+      "docs/chat/PR532_AUDITED_CASES.tsv",
       "tests/**"
     ],
     "sensitive": [
@@ -87,7 +91,8 @@
       "hooks/use-chat-call-media-session.ts",
       "hooks/use-communication-room-session.ts",
       "hooks/use-livekit-chat-call-session.ts",
-      "scripts/test-communication-room-realtime-delivery.mjs"
+      "scripts/test-communication-room-realtime-delivery.mjs",
+      "scripts/test-chilly-chat-real-peer-http.mjs"
     ],
     "nativeRelease": [
       "android/**",
@@ -110,6 +115,7 @@
       "scripts/release-control-plane-lib.mjs",
       "scripts/ios-delivery-control.mjs",
       "scripts/physical-automation-control.mjs",
+      "scripts/test-webrtc-native-sender-contract.mjs",
       "tests/release-control-plane.test.mjs",
       ".github/workflows/*release*",
       ".github/workflows/*build*",
