@@ -3038,3 +3038,133 @@ test("legacy retired microphone: a late permission grant cannot acquire capture"
   assert.deepEqual(await settlement, { value: false });
   assert.equal(runtime.mediaCreateCalls.length, capturesBefore, "retired permission completion cannot start native capture");
 });
+
+async function mountEndingGenerationCase(t) {
+  const runtime = createLegacyMountedRuntime({ remoteDurableCamera: true, remoteDurableMic: true });
+  const harness = await mountLegacyHook(runtime, {
+    enabled: true,
+    naturalLifecycle: true,
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+  assert.equal(harness.getResult().channelState, "live");
+  assert.ok(runtime.localStreams.some((stream) => stream.getTracks().some((track) => track.readyState === "live")));
+  return { runtime, harness };
+}
+
+function assertEndedGenerationHasNoMedia(runtime, harness, captures, peers) {
+  assert.equal(harness.getResult().channelState, "idle");
+  assert.equal(runtime.mediaCreateCalls.length, captures, "the retained ending generation cannot acquire new capture");
+  assert.equal(runtime.peers.length, peers, "the retained ending generation cannot create a new native peer");
+  assert.ok(runtime.localStreams.every((stream) => stream.getTracks().every((track) => track.readyState === "ended")));
+  assert.ok(runtime.peers.every((peer) => peer.connectionState === "closed"));
+}
+
+test("legacy ending generation: post-End snapshot and presence render cannot resurrect capture", async (t) => {
+  const { runtime, harness } = await mountEndingGenerationCase(t);
+  const captures = runtime.mediaCreateCalls.length;
+  const peers = runtime.peers.length;
+  const channel = harness.refs.channelRef.current;
+  await harness.run(() => harness.getResult().leaveRoom());
+  const reads = runtime.snapshotReads;
+  await harness.run(() => harness.refs.refreshSnapshot(runtime.roomId));
+  await harness.run(() => channel.emitPresenceState({
+    [runtime.remoteUserId]: { metas: [{ phx_ref: "remote-after-end", cameraOn: true, micOn: true }] },
+  }));
+  assertEndedGenerationHasNoMedia(runtime, harness, captures, peers);
+  assert.equal(runtime.snapshotReads, reads, "ended retained state must not launch another authoritative read");
+});
+
+test("legacy ending generation: a pending Presence render cannot start peers after End", async (t) => {
+  const { runtime, harness } = await mountEndingGenerationCase(t);
+  const captures = runtime.mediaCreateCalls.length;
+  const peers = runtime.peers.length;
+  const channel = harness.refs.channelRef.current;
+  await act(async () => {
+    channel.emitPresenceState({
+      [runtime.remoteUserId]: { metas: [{ phx_ref: "remote-at-end", cameraOn: true, micOn: true }] },
+      [runtime.userId]: { metas: [{ phx_ref: "local-at-end", cameraOn: true, micOn: true }] },
+    });
+    await harness.getResult().leaveRoom();
+    await settle(160);
+  });
+  assertEndedGenerationHasNoMedia(runtime, harness, captures, peers);
+});
+
+test("legacy ending generation: getUserMedia begun before End disposes its late capture", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  let release;
+  const barrier = new Promise((resolve) => { release = resolve; });
+  runtime.queueMedia({ wait: barrier });
+  const harness = await mountLegacyHook(runtime, {
+    enabled: true,
+    naturalLifecycle: true,
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+  assert.equal(runtime.mediaCreateCalls.length, 1, "actual initial acquisition is pending");
+  assert.equal(runtime.localStreams.length, 0);
+  assert.ok(harness.refs.joinedMembershipRef.current, "authority was admitted before acquisition");
+  await harness.run(() => harness.getResult().leaveRoom());
+  await act(async () => { release(); await settle(160); });
+  assert.equal(runtime.localStreams.length, 1, "the delayed native result actually arrived");
+  assertEndedGenerationHasNoMedia(runtime, harness, 1, 0);
+  assert.equal(runtime.channels.length, 0, "retired initialization cannot subscribe after capture arrives");
+});
+
+test("legacy ending generation: a snapshot queued before End cannot project afterward", async (t) => {
+  const { runtime, harness } = await mountEndingGenerationCase(t);
+  let release;
+  const barrier = new Promise((resolve) => { release = resolve; });
+  runtime.queueSnapshot({ wait: barrier });
+  let pending;
+  await act(async () => { pending = harness.refs.refreshSnapshot(runtime.roomId); await settle(32); });
+  const captures = runtime.mediaCreateCalls.length;
+  const peers = runtime.peers.length;
+  await harness.run(() => harness.getResult().leaveRoom());
+  await act(async () => { release(); await pending; await settle(160); });
+  assertEndedGenerationHasNoMedia(runtime, harness, captures, peers);
+});
+
+test("legacy ending generation: foreground and retained heartbeat after End cannot restart work", async (t) => {
+  const { runtime, harness } = await mountEndingGenerationCase(t);
+  const captures = runtime.mediaCreateCalls.length;
+  const peers = runtime.peers.length;
+  const heartbeatCallbacks = runtime.intervals.filter((entry) => entry?.delay === 15_000).map((entry) => entry.callback);
+  assert.ok(heartbeatCallbacks.length, "actual mounted lifecycle installed its membership heartbeat");
+  await harness.run(() => harness.getResult().leaveRoom());
+  const heartbeats = runtime.heartbeatCalls.length;
+  await harness.run(() => runtime.emitAppState("background"));
+  await harness.run(() => runtime.emitAppState("active"));
+  await harness.run(() => { for (const callback of heartbeatCallbacks) callback(); });
+  assertEndedGenerationHasNoMedia(runtime, harness, captures, peers);
+  assert.equal(runtime.heartbeatCalls.length, heartbeats);
+});
+
+test("legacy ending generation: failed End stays terminal locally and exact End remains retryable", async (t) => {
+  const { runtime, harness } = await mountEndingGenerationCase(t);
+  runtime.leaveActions.push({ outcome: "reject" });
+  const captures = runtime.mediaCreateCalls.length;
+  const peers = runtime.peers.length;
+  await assert.rejects(harness.run(() => harness.getResult().leaveRoom()), /durable leave unavailable/u);
+  await harness.run(() => harness.refs.refreshSnapshot(runtime.roomId));
+  assertEndedGenerationHasNoMedia(runtime, harness, captures, peers);
+  await harness.run(() => harness.getResult().leaveRoom());
+  assert.equal(runtime.leaveCalls, 2);
+  assert.equal(runtime.leaveRequests[1].expectedMembershipGeneration, runtime.leaveRequests[0].expectedMembershipGeneration);
+  assertEndedGenerationHasNoMedia(runtime, harness, captures, peers);
+});
+
+test("legacy ending generation: an explicit new room can establish fresh media after End", async (t) => {
+  const { runtime, harness } = await mountEndingGenerationCase(t);
+  await harness.run(() => harness.getResult().leaveRoom());
+  const captures = runtime.mediaCreateCalls.length;
+  const peers = runtime.peers.length;
+  runtime.roomId = "ROOM-FRESH-AFTER-END";
+  await harness.rerender({ roomId: runtime.roomId });
+  assert.equal(harness.getResult().channelState, "live");
+  assert.ok(runtime.mediaCreateCalls.length > captures);
+  assert.ok(runtime.peers.length > peers);
+  assert.ok(runtime.localStreams.some((stream) => stream.getTracks().some((track) => track.readyState === "live")));
+  assert.equal(runtime.joinCalls.at(-1).roomId, runtime.roomId);
+});

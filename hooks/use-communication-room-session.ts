@@ -480,6 +480,9 @@ export function useCommunicationRoomSession({
   const mediaControlTailRef = useRef<Promise<void>>(Promise.resolve());
   const pendingMediaControlCountRef = useRef(0);
   const endingGenerationRef = useRef<number | null>(null);
+  const isActiveLegacyGeneration = useCallback((generation: number) => (
+    generation === legacySessionGenerationRef.current && endingGenerationRef.current !== generation
+  ), []);
   const leaveContextRef = useRef({ authenticatedAccessToken, authenticatedUserId, enabled, roomId });
   if (leaveContextRef.current.authenticatedAccessToken !== authenticatedAccessToken
     || leaveContextRef.current.authenticatedUserId !== authenticatedUserId
@@ -1028,6 +1031,7 @@ export function useCommunicationRoomSession({
 
   const applyParticipantsFromSources = useCallback(async (presenceByUserId?: Record<string, PresenceStatePayload>) => {
     const generation = legacySessionGenerationRef.current;
+    if (!isActiveLegacyGeneration(generation)) return [];
     const resolvedIdentity = identityRef.current;
     const resolvedRoom = roomRef.current;
     if (!resolvedIdentity || !resolvedRoom) return [];
@@ -1065,7 +1069,7 @@ export function useCommunicationRoomSession({
     }).filter(Boolean) as CommunicationParticipantPresence[];
 
     if (
-      generation !== legacySessionGenerationRef.current
+      !isActiveLegacyGeneration(generation)
       || String(identityRef.current?.userId ?? "").trim() !== resolvedIdentity.userId
       || formatRoomId(roomRef.current?.roomId ?? "") !== resolvedRoom.roomId
     ) return [];
@@ -1081,7 +1085,7 @@ export function useCommunicationRoomSession({
       })),
     });
     return nextParticipants;
-  }, [roomId]);
+  }, [isActiveLegacyGeneration, roomId]);
 
   const captureLeaveOperation = useCallback(() => {
     const currentContext = leaveContextRef.current;
@@ -1186,13 +1190,14 @@ export function useCommunicationRoomSession({
 
   const refreshSnapshot = useCallback(async (targetRoomId?: string) => {
     const generation = legacySessionGenerationRef.current;
+    if (!isActiveLegacyGeneration(generation)) return null;
     const requestSerial = snapshotRefreshSerialRef.current + 1;
     snapshotRefreshSerialRef.current = requestSerial;
     const resolvedRoomId = formatRoomId(targetRoomId ?? roomRef.current?.roomId ?? roomId);
     if (!resolvedRoomId) return null;
 
     const snapshot = await getCommunicationRoomSnapshot(resolvedRoomId);
-    if (generation !== legacySessionGenerationRef.current) return null;
+    if (!isActiveLegacyGeneration(generation)) return null;
     if (!snapshot) {
       logChatRtc("snapshot_missing", {
         roomId: resolvedRoomId,
@@ -1252,7 +1257,7 @@ export function useCommunicationRoomSession({
       membershipCount: snapshot.memberships.length,
     });
     return snapshot;
-  }, [applyParticipantsFromSources, captureLeaveOperation, cleanupRemotePeer, roomId]);
+  }, [applyParticipantsFromSources, captureLeaveOperation, cleanupRemotePeer, isActiveLegacyGeneration, roomId]);
 
   const updatePresence = useCallback(async (nextCameraEnabled: boolean, nextMicEnabled: boolean) => {
     const generation = legacySessionGenerationRef.current;
@@ -1364,8 +1369,11 @@ export function useCommunicationRoomSession({
     });
   }, []);
 
-  const ensureInitialLocalStream = useCallback(async (requestMissingPermissions = true) => {
-    const generation = legacySessionGenerationRef.current;
+  const ensureInitialLocalStream = useCallback(async (
+    requestMissingPermissions = true,
+    generation = legacySessionGenerationRef.current,
+  ) => {
+    if (!isActiveLegacyGeneration(generation)) return null;
     if (localStreamRef.current) return localStreamRef.current;
     const appIsActive = appStateRef.current === "active";
     const backgroundAudioAllowed = canAttemptNativeCallBackgroundAudio({
@@ -1389,13 +1397,13 @@ export function useCommunicationRoomSession({
         ? await ensureCameraPermission()
         : cameraPermissionSnapshotRef.current.state === "granted"
       : false;
-    if (generation !== legacySessionGenerationRef.current) return null;
+    if (!isActiveLegacyGeneration(generation)) return null;
     const canUseMic = wantsMic
       ? requestMissingPermissions && appIsActive
         ? await ensureMicrophonePermission()
         : microphonePermissionRef.current.state === "granted"
       : false;
-    if (generation !== legacySessionGenerationRef.current) return null;
+    if (!isActiveLegacyGeneration(generation)) return null;
 
     if (appIsActive && requestedCamera && !canUseCamera) {
       cameraEnabledRef.current = false;
@@ -1421,7 +1429,7 @@ export function useCommunicationRoomSession({
       video: canUseCamera,
     }).catch(() => null);
 
-    if (generation !== legacySessionGenerationRef.current) {
+    if (!isActiveLegacyGeneration(generation)) {
       stopCommunicationStream(stream);
       return null;
     }
@@ -1472,16 +1480,20 @@ export function useCommunicationRoomSession({
       streamURL: getCommunicationStreamURL(stream),
     });
     return stream;
-  }, [ensureCameraPermission, ensureMicrophonePermission, roomId]);
+  }, [ensureCameraPermission, ensureMicrophonePermission, isActiveLegacyGeneration, roomId]);
 
   const attachMissingLocalTracks = useCallback(async (
     peerConnection: any,
     requestMissingPermissions = true,
+    generation = legacySessionGenerationRef.current,
   ) => {
-    const localStream = await ensureInitialLocalStream(requestMissingPermissions);
-    if (!localStream) return;
+    const canAttach = () => isActiveLegacyGeneration(generation) && String(peerConnection?.connectionState ?? "") !== "closed";
+    if (!canAttach()) return;
+    const localStream = await ensureInitialLocalStream(requestMissingPermissions, generation);
+    if (!localStream || !canAttach()) return;
     const senders = typeof peerConnection.getSenders === "function" ? peerConnection.getSenders() : [];
     for (const track of localStream.getTracks()) {
+      if (!canAttach()) return;
       if (String(track.readyState ?? "").trim().toLowerCase() === "ended") continue;
       const alreadyAdded = senders.some((sender: any) => sender?.track?.id === track.id);
       if (alreadyAdded) continue;
@@ -1493,6 +1505,7 @@ export function useCommunicationRoomSession({
       ));
       if (endedSender) {
         await endedSender.replaceTrack(track);
+        if (!canAttach()) return;
         continue;
       }
 
@@ -1503,7 +1516,7 @@ export function useCommunicationRoomSession({
       localStream: describeStream(localStream),
       peer: describePeerConnection(peerConnection),
     });
-  }, [ensureInitialLocalStream, roomId]);
+  }, [ensureInitialLocalStream, isActiveLegacyGeneration, roomId]);
 
   const logInboundVideoDiagnostics = useCallback(async (remoteUserId: string, peerConnection: any, reason: string) => {
     if (!__DEV__) return;
@@ -1536,6 +1549,7 @@ export function useCommunicationRoomSession({
 
   const ensurePeerConnection = useCallback(async (remoteUserId: string) => {
     const generation = legacySessionGenerationRef.current;
+    if (!isActiveLegacyGeneration(generation)) return null;
     const remoteGeneration = membershipsRef.current.find((membership) => membership.userId === remoteUserId)?.membershipGeneration;
     const ownsRemoteGeneration = () => remoteGeneration === membershipsRef.current.find((membership) => membership.userId === remoteUserId)?.membershipGeneration;
     const pending = peerConnectionTasksRef.current[remoteUserId];
@@ -1551,9 +1565,9 @@ export function useCommunicationRoomSession({
         roomId,
         remoteUserId,
       });
-      await attachMissingLocalTracks(existingPeerConnection);
+      await attachMissingLocalTracks(existingPeerConnection, true, generation);
       if (
-        generation !== legacySessionGenerationRef.current
+        !isActiveLegacyGeneration(generation)
         || !ownsRemoteGeneration()
         || peerConnectionsRef.current[remoteUserId] !== existingPeerConnection
       ) return null;
@@ -1568,13 +1582,13 @@ export function useCommunicationRoomSession({
       remoteUserId,
     });
 
-    await attachMissingLocalTracks(peerConnection);
-    if (generation !== legacySessionGenerationRef.current || identityRef.current !== resolvedIdentity || !ownsRemoteGeneration()) {
+    await attachMissingLocalTracks(peerConnection, true, generation);
+    if (!isActiveLegacyGeneration(generation) || identityRef.current !== resolvedIdentity || !ownsRemoteGeneration()) {
       peerConnection.close();
       return null;
     }
     const isCurrentPeer = () => (
-      generation === legacySessionGenerationRef.current
+      isActiveLegacyGeneration(generation)
       && ownsRemoteGeneration()
       && peerConnectionsRef.current[remoteUserId] === peerConnection
     );
@@ -1731,7 +1745,7 @@ export function useCommunicationRoomSession({
       });
     });
 
-    if (generation !== legacySessionGenerationRef.current || identityRef.current !== resolvedIdentity || !ownsRemoteGeneration()) {
+    if (!isActiveLegacyGeneration(generation) || identityRef.current !== resolvedIdentity || !ownsRemoteGeneration()) {
       peerConnection.close();
       return null;
     }
@@ -1750,7 +1764,7 @@ export function useCommunicationRoomSession({
     } finally {
       if (peerConnectionTasksRef.current[remoteUserId] === reservation) delete peerConnectionTasksRef.current[remoteUserId];
     }
-  }, [attachMissingLocalTracks, clearOfferRetry, logInboundVideoDiagnostics, requestLegacySessionRestart, roomId, sendBroadcast]);
+  }, [attachMissingLocalTracks, clearOfferRetry, isActiveLegacyGeneration, logInboundVideoDiagnostics, requestLegacySessionRestart, roomId, sendBroadcast]);
 
   const broadcastOfferDescription = useCallback(async (remoteUserId: string, description: { type?: unknown; sdp?: unknown } | null | undefined) => {
     const generation = legacySessionGenerationRef.current;
@@ -1913,8 +1927,8 @@ export function useCommunicationRoomSession({
   const syncPeerConnections = useCallback(async (nextParticipants: CommunicationParticipantPresence[]) => {
     const generation = legacySessionGenerationRef.current;
     const resolvedIdentity = identityRef.current;
-    if (!resolvedIdentity) return;
-    const isCurrent = () => generation === legacySessionGenerationRef.current && identityRef.current === resolvedIdentity;
+    if (!resolvedIdentity || !isActiveLegacyGeneration(generation)) return;
+    const isCurrent = () => isActiveLegacyGeneration(generation) && identityRef.current === resolvedIdentity;
 
     logChatRtc("sync_peer_connections", {
       roomId,
@@ -1959,7 +1973,7 @@ export function useCommunicationRoomSession({
       });
       const existingPeerConnection = peerConnectionsRef.current[participant.userId];
       if (existingPeerConnection) {
-        await attachMissingLocalTracks(existingPeerConnection);
+        await attachMissingLocalTracks(existingPeerConnection, true, generation);
         if (!isCurrent() || peerConnectionsRef.current[participant.userId] !== existingPeerConnection) return;
         if (shouldInitiateOffer) {
           const connectionState = String(existingPeerConnection.connectionState ?? "");
@@ -1990,6 +2004,7 @@ export function useCommunicationRoomSession({
     cleanupSessionMedia,
     createAndSendOffer,
     ensurePeerConnection,
+    isActiveLegacyGeneration,
     roomId,
   ]);
 
@@ -2004,7 +2019,7 @@ export function useCommunicationRoomSession({
   const setPresenceFromChannel = useCallback(async () => {
     const generation = legacySessionGenerationRef.current;
     const channel = channelRef.current;
-    if (!channel) return;
+    if (!channel || !isActiveLegacyGeneration(generation)) return;
 
     const mapped = mapPresenceState(channel.presenceState<PresenceStatePayload>());
     presenceStateRef.current = mapped;
@@ -2014,9 +2029,9 @@ export function useCommunicationRoomSession({
       participantIds: Object.keys(mapped),
     });
     const nextParticipants = await applyParticipantsFromSources(mapped);
-    if (generation !== legacySessionGenerationRef.current || channelRef.current !== channel) return;
+    if (!isActiveLegacyGeneration(generation) || channelRef.current !== channel) return;
     await syncPeerConnections(nextParticipants);
-  }, [applyParticipantsFromSources, roomId, syncPeerConnections]);
+  }, [applyParticipantsFromSources, isActiveLegacyGeneration, roomId, syncPeerConnections]);
 
   const leaveRoom = useCallback(async (options?: { endRoomIfHost?: boolean }) => {
     if (leaveContextRef.current !== leaveCallbackOwner) {
@@ -2974,12 +2989,13 @@ export function useCommunicationRoomSession({
     if (!room || !identity || loading) return;
 
     const generation = legacySessionGenerationRef.current;
+    if (!isActiveLegacyGeneration(generation)) return;
     const admission = joinedMembershipRef.current;
     const membershipGeneration = admission?.roomId === room.roomId && admission.userId === identity.userId
       ? admission.membershipGeneration : undefined;
     if (!membershipGeneration) return;
     const ownsHeartbeat = () => (
-      generation === legacySessionGenerationRef.current
+      isActiveLegacyGeneration(generation)
       && roomRef.current?.roomId === room.roomId
       && identityRef.current?.userId === identity.userId
       && joinedMembershipRef.current?.membershipGeneration === membershipGeneration
@@ -2998,11 +3014,13 @@ export function useCommunicationRoomSession({
     }, HEARTBEAT_INTERVAL_MILLIS);
 
     return () => clearInterval(interval);
-  }, [enabled, identity, loading, refreshSnapshot, room]);
+  }, [enabled, identity, isActiveLegacyGeneration, loading, refreshSnapshot, room]);
 
   useEffect(() => {
     if (!enabled) return;
     if (!room?.roomId || !identity?.userId || loading) return;
+    const generation = legacySessionGenerationRef.current;
+    if (!isActiveLegacyGeneration(generation)) return;
 
     const localUserId = identity.userId;
     const alreadyHasRemoteMember = getActiveCommunicationMemberships(membershipsRef.current)
@@ -3022,6 +3040,7 @@ export function useCommunicationRoomSession({
     };
 
     const refreshDuringWarmup = async () => {
+      if (!isActiveLegacyGeneration(generation)) { clearWarmup(); return; }
       if (inFlight) return;
       attempts += 1;
       inFlight = true;
@@ -3032,6 +3051,7 @@ export function useCommunicationRoomSession({
         return null;
       });
       inFlight = false;
+      if (!isActiveLegacyGeneration(generation)) { clearWarmup(); return; }
 
       const activeMemberships = getActiveCommunicationMemberships(snapshot?.memberships ?? membershipsRef.current);
       const hasRemoteMember = activeMemberships.some((membership) => membership.userId !== localUserId);
@@ -3048,16 +3068,19 @@ export function useCommunicationRoomSession({
     }, SNAPSHOT_WARMUP_INTERVAL_MILLIS);
 
     return clearWarmup;
-  }, [enabled, identity?.userId, loading, refreshSnapshot, room?.roomId]);
+  }, [enabled, identity?.userId, isActiveLegacyGeneration, loading, refreshSnapshot, room?.roomId]);
 
   const renegotiateAllPeers = useCallback(async (forceRenegotiation = false) => {
+    const generation = legacySessionGenerationRef.current;
+    if (!isActiveLegacyGeneration(generation)) return false;
     const remoteUserIds = Object.keys(peerConnectionsRef.current);
     let completed = true;
     for (const remoteUserId of remoteUserIds) {
+      if (!isActiveLegacyGeneration(generation)) return false;
       completed = await createAndSendOffer(remoteUserId, forceRenegotiation) && completed;
     }
-    return completed;
-  }, [createAndSendOffer]);
+    return completed && isActiveLegacyGeneration(generation);
+  }, [createAndSendOffer, isActiveLegacyGeneration]);
 
   const ensureTrackKind = useCallback(async (
     kind: "audio" | "video",
@@ -3070,7 +3093,7 @@ export function useCommunicationRoomSession({
     const expectedLocalStream = localStreamRef.current;
     const expectedPeerConnections = Object.values(peerConnectionsRef.current);
     const isExpectedGenerationCurrent = () => (
-      legacySessionGenerationRef.current === expectedGeneration
+      isActiveLegacyGeneration(expectedGeneration)
       && (kind !== "video" || appStateRef.current === "active")
     );
     if (!isExpectedGenerationCurrent()) return null;
@@ -3165,16 +3188,17 @@ export function useCommunicationRoomSession({
     }
 
     return track;
-  }, [ensureCameraPermission, ensureMicrophonePermission, renegotiateAllPeers]);
+  }, [ensureCameraPermission, ensureMicrophonePermission, isActiveLegacyGeneration, renegotiateAllPeers]);
 
   const restoreLocalMediaAfterForeground = useCallback(async () => {
     const generation = legacySessionGenerationRef.current;
+    if (!isActiveLegacyGeneration(generation)) return false;
     const requestedMic = micEnabledRef.current || resumeMicAfterForegroundRef.current;
     const [nextCameraPermission, nextMicrophonePermission] = await Promise.all([
       getCameraPermission().catch(() => null),
       Audio.getPermissionsAsync().catch(() => null),
     ]);
-    if (generation !== legacySessionGenerationRef.current) return false;
+    if (!isActiveLegacyGeneration(generation)) return false;
 
     if (nextCameraPermission) {
       const snapshot = resolveMediaPermission(nextCameraPermission);
@@ -3188,11 +3212,11 @@ export function useCommunicationRoomSession({
 
     if (cameraEnabledRef.current && cameraPermissionSnapshotRef.current.state === "undetermined") {
       await ensureCameraPermission();
-      if (generation !== legacySessionGenerationRef.current) return false;
+      if (!isActiveLegacyGeneration(generation)) return false;
     }
     if (requestedMic && microphonePermissionRef.current.state === "undetermined") {
       await ensureMicrophonePermission();
-      if (generation !== legacySessionGenerationRef.current) return false;
+      if (!isActiveLegacyGeneration(generation)) return false;
     }
 
     const nextCameraEnabled = cameraEnabledRef.current
@@ -3208,7 +3232,7 @@ export function useCommunicationRoomSession({
         attachToPeers: false,
         expectedGeneration: generation,
       });
-      if (generation !== legacySessionGenerationRef.current) return false;
+      if (!isActiveLegacyGeneration(generation)) return false;
       if (!restoredCameraTrack) {
         cameraEnabledRef.current = false;
         setCameraEnabled(false);
@@ -3216,21 +3240,21 @@ export function useCommunicationRoomSession({
       }
       await Promise.all(
         Object.values(peerConnectionsRef.current).map((peerConnection) => (
-          attachMissingLocalTracks(peerConnection, false)
+          attachMissingLocalTracks(peerConnection, false, generation)
         )),
       );
-      if (generation !== legacySessionGenerationRef.current) return false;
+      if (!isActiveLegacyGeneration(generation)) return false;
       if (!await renegotiateAllPeers(true)) return false;
-      if (generation !== legacySessionGenerationRef.current) return false;
+      if (!isActiveLegacyGeneration(generation)) return false;
     }
 
     const micResult = nextMicEnabled
       ? await legacyMicControlRef.current?.(true) ?? false
       : await legacyMicControlRef.current?.(false) ?? false;
-    if (generation !== legacySessionGenerationRef.current) return false;
+    if (!isActiveLegacyGeneration(generation)) return false;
     resumeMicAfterForegroundRef.current = nextMicEnabled && !micResult;
     return micResult || !requestedMic;
-  }, [attachMissingLocalTracks, ensureCameraPermission, ensureMicrophonePermission, ensureTrackKind, getCameraPermission, renegotiateAllPeers]);
+  }, [attachMissingLocalTracks, ensureCameraPermission, ensureMicrophonePermission, ensureTrackKind, getCameraPermission, isActiveLegacyGeneration, renegotiateAllPeers]);
 
   useEffect(() => {
     if (!enabled || loading || channelState !== "live" || !roomRef.current || !identityRef.current) return;
@@ -3238,7 +3262,8 @@ export function useCommunicationRoomSession({
 
     let cancelled = false;
     const generation = legacySessionGenerationRef.current;
-    const isCurrent = () => !cancelled && generation === legacySessionGenerationRef.current;
+    const isCurrent = () => !cancelled && isActiveLegacyGeneration(generation);
+    if (!isCurrent()) return;
     const reconcileNativeAnswerMedia = async () => {
       const currentAppState = AppState.currentState;
       appStateRef.current = currentAppState;
@@ -3279,6 +3304,7 @@ export function useCommunicationRoomSession({
     channelState,
     enabled,
     identity?.userId,
+    isActiveLegacyGeneration,
     loading,
     mediaActivationSerial,
     restoreLocalMediaAfterForeground,
@@ -3297,10 +3323,10 @@ export function useCommunicationRoomSession({
 
       const currentRoom = roomRef.current;
       const currentIdentity = identityRef.current;
-      if (!currentRoom || !currentIdentity) return;
+      const generation = legacySessionGenerationRef.current;
+      if (!currentRoom || !currentIdentity || !isActiveLegacyGeneration(generation)) return;
 
       if (nextState === "active") {
-        const generation = legacySessionGenerationRef.current;
         if (reconnectTrackedRef.current) {
           reconnectTrackedRef.current = false;
           trackEvent("communication_connect", {
@@ -3327,7 +3353,7 @@ export function useCommunicationRoomSession({
         void restoreLocalMediaAfterForeground()
           .then(() => {
             if (
-              generation !== legacySessionGenerationRef.current
+              !isActiveLegacyGeneration(generation)
               || formatRoomId(roomRef.current?.roomId ?? "") !== currentRoom.roomId
               || String(identityRef.current?.userId ?? "").trim() !== currentIdentity.userId
             ) return null;
@@ -3378,17 +3404,19 @@ export function useCommunicationRoomSession({
         LEGACY_BACKGROUND_MEDIA_STATE.cameraEnabled,
       ) ?? Promise.resolve(false))
         .then((controlled) => {
+          if (!isActiveLegacyGeneration(generation)) return;
           if (!controlled) legacyMicLocalPrivacyStopRef.current?.();
           resumeMicAfterForegroundRef.current = shouldResumeMic;
         })
         .catch((error) => {
+          if (!isActiveLegacyGeneration(generation)) return;
           legacyMicLocalPrivacyStopRef.current?.();
           resumeMicAfterForegroundRef.current = shouldResumeMic;
           reportRuntimeError("communication-appstate-background", error, {
             roomId: currentRoom.roomId,
           });
         });
-  }, [analyticsRole, analyticsSurface, hasUsableLocalTrack, refreshSnapshot, requestLegacySessionRestart, restartDisconnectedSession, restoreLocalMediaAfterForeground, stopLocalMediaKind]);
+  }, [analyticsRole, analyticsSurface, hasUsableLocalTrack, isActiveLegacyGeneration, refreshSnapshot, requestLegacySessionRestart, restartDisconnectedSession, restoreLocalMediaAfterForeground, stopLocalMediaKind]);
 
   appStateLifecycleHandlerRef.current = handleAppStateLifecycleChange;
 

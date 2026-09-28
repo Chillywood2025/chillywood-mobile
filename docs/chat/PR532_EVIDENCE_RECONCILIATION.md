@@ -168,6 +168,13 @@ restore old sender state or re-enable an older track. Unproved capture disposal
 and genuine current-owner rollback failures remain explicit failures. The
 browser fixture retains every acquired track identity even after removal from
 a stream, so removed capture cannot disappear from cleanup assertions.
+Its End stage also exposed a delayed Presence render starting a new peer and
+capture after the original resources had closed. Capture, peer synchronization,
+snapshot projection, heartbeat and foreground continuations now reject the
+ending generation. End retains its retry context; only an explicitly initialized
+new generation may acquire media again. Mounted tests reproduce the old
+post-End reacquisition and preserve delayed-capture disposal and fresh-room
+startup; the real-browser End and fresh-call stages remain required CI gates.
 A JavaScript timeout does not prove an HTTP/native operation was canceled;
 unsettled work remains owned and a retry cannot assert capture or membership
 success without the required postcondition. Permanent network/native failure
