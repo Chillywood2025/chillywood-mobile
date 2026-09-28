@@ -15,14 +15,25 @@
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
-    "androidDigest": "0a38aebd3a23ca0ff980ead0baee2104041c06ba7840d3db5711b6c847b370bc",
-    "iosDigest": "9afdf1051eb070efe4a66738d466cd2ee5e143066ef722d0d1d87d25f2bdf0a9"
+    "androidDigest": "dba8c0cf8cb6c70453f7edc82a0dc5f38da1bfd99cbcfbbcb2886dc36676e890",
+    "iosDigest": "3d1f37dc61e79c8fd087c8a9b37a569cadaca4789b0b1427f0b8d73c6ec77925"
   },
   "policy": {
     "internalOnly": true,
     "appOwnedUpdateGateRequired": true,
     "nativeAutomaticActivationDisabled": true,
-    "publicOrStoreDistributionAuthorized": false,
-    "reason": "PR #532 changes the Android incoming-call plugin and the iOS native-call coordinator/deadline implementation. These internal-only runtimes prevent the corrected binaries from joining either incompatible v2 native cohort."
+    "publicReleaseAuthorized": false,
+    "storeSubmissionOutsideInternalTestersAuthorized": false,
+    "internalTesterDistribution": {
+      "android": {
+        "channel": "android-internal-v2",
+        "track": "internal"
+      },
+      "ios": {
+        "channel": "ios-internal-v2",
+        "group": "Chillywood Internal"
+      }
+    },
+    "reason": "PR #532 changes the Android incoming-call plugin and the iOS native-call coordinator/deadline implementation. These runtimes remain restricted to the existing Google Play and TestFlight internal tester audiences and cannot join either incompatible v2 native cohort."
   }
 }
