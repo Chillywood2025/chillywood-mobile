@@ -506,6 +506,16 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       if (hub.holdNext) throw new Error("A signal hold is already armed");
       hub.holdNext = { userId, event };
     },
+    stopLocalCapture(userId, kind) {
+      const endpoint = hub.endpoints.find((item) => item.userId === userId);
+      const tracks = [...new Set(endpoint?.streams.flatMap((stream) => stream.getTracks()) ?? [])]
+        .filter((track) => track.kind === kind && track.readyState === "live");
+      if (tracks.length !== 1) throw new Error(`Expected one live ${kind} capture for ${userId}, found ${tracks.length}`);
+      tracks[0].stop();
+      if (tracks[0].readyState !== "ended") throw new Error(`Actual ${kind} capture did not end for ${userId}`);
+      hub.events.push({ kind: "capture-ended", userId, trackKind: kind });
+      return { count: tracks.length, kind, state: tracks[0].readyState };
+    },
     beginControl(userId, name, value) {
       const endpoint = hub.endpoints.find((item) => item.userId === userId);
       if (!endpoint?.output || typeof endpoint.output[name] !== "function") throw new Error(`Missing control ${name}`);

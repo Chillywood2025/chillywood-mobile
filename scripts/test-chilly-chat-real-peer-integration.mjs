@@ -107,10 +107,14 @@ try {
     const oldPeerIds = beforeRestart.endpoints.flatMap((endpoint) => endpoint.peers.map((peer) => peer.id));
     const originalAlice = beforeRestart.endpoints.find((endpoint) => endpoint.userId === "alice");
     const originalBob = beforeRestart.endpoints.find((endpoint) => endpoint.userId === "bob");
-    await page.evaluate(() => {
+    assert.deepEqual(await page.evaluate(() => {
       window.__pairedCall.holdNextSignal("bob", "webrtc:offer");
-      window.__pairedCall.beginControl("bob", "setMicrophoneEnabled", false);
-    });
+      // Ordinary mute preserves sender topology and needs no SDP. Ending the
+      // actual capture forces the hook to reacquire and replace its track.
+      const stopped = window.__pairedCall.stopLocalCapture("bob", "audio");
+      window.__pairedCall.beginControl("bob", "setMicrophoneEnabled", true);
+      return stopped;
+    }), { count: 1, kind: "audio", state: "ended" }, "End exactly one real Bob audio capture before exercising strict reacquisition");
     await wait(page, (state) => state.heldSignals.some((signal) => signal.sender === "bob" && signal.event === "webrtc:offer" && signal.generation === originalBob.membership.membershipGeneration), "Hold an actual, server-admitted Bob SDP offer before its first delivery");
     const replacement = await page.evaluate(() => window.__pairedCall.restartEndpoint("bob"));
     assert.equal(replacement.roomId, beforeRestart.roomId, "Restart must stay in the same room");
