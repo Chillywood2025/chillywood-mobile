@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -143,16 +144,26 @@ const heartbeatSource = communicationSource.slice(
   communicationSource.indexOf("export async function getLinkedCommunicationRoom"),
 );
 [
-  ".update({ last_seen_at: now, updated_at: now })",
-  '.eq("room_id", roomId)',
-  '.eq("user_id", userId)',
-  '.in("membership_state", ["active", "reconnecting"])',
-  '.is("left_at", null)',
-  "if (!data) return null",
+  "expectedMembershipGeneration: string",
+  "return touchCommunicationRoomSession(options)",
 ].forEach((expected) => includes(heartbeatSource, expected, "ownership-preserving liveness heartbeat"));
-for (const mediaField of ["camera_enabled:", "mic_enabled:", "membership_state:", "left_at:"]) {
+for (const mediaField of ["cameraEnabled:", "micEnabled:", "membershipState:", "camera_enabled:", "mic_enabled:", "membership_state:", "left_at:"]) {
   excludes(heartbeatSource, mediaField, "heartbeat cannot overwrite media or admission state");
 }
+const touchSource = communicationSource.slice(
+  communicationSource.indexOf("export async function touchCommunicationRoomSession"),
+  communicationSource.indexOf("export async function leaveCommunicationRoomSession"),
+);
+[
+  "runExactSessionAccountBoundSupabaseMutationRpc",
+  '>("touch_owned_communication_room_session", {',
+  "p_expected_membership_generation: generation",
+  "p_membership_state: options.membershipState === undefined ? null",
+  "p_camera_enabled: options.cameraEnabled === undefined ? null",
+  "p_mic_enabled: options.micEnabled === undefined ? null",
+  "membership.membershipGeneration !== generation",
+  "row?.left_at !== null",
+].forEach((expected) => includes(touchSource, expected, "generation-bound owned heartbeat RPC"));
 const reconnectSource = communicationHook.slice(
   communicationHook.indexOf('if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED")'),
   communicationHook.indexOf("void init().catch"),
@@ -164,6 +175,31 @@ const reconnectSource = communicationHook.slice(
   "if (!isActiveGeneration()) return",
 ].forEach((expected) => includes(reconnectSource, expected, "generation-bound transport recovery"));
 excludes(reconnectSource, "touchCommunicationRoomSession({", "reconnect cannot replay captured media state");
+
+// Execute the current API, mounted-hook, and SQL regressions instead of treating
+// source markers as proof of asynchronous or database behavior. These runners
+// use controlled local transports and disposable PostgreSQL, never providers.
+const runLivenessProof = (args, label) => {
+  const result = spawnSync(process.execPath, args, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 120_000,
+    killSignal: "SIGKILL",
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, `${label} failed:\n${result.stdout}\n${result.stderr}`);
+  return result.stdout;
+};
+const heartbeatProof = runLivenessProof([
+  "--test", "--test-reporter=tap", "--test-name-pattern", "heartbeat",
+  "tests/assurance/communication-operation-error-truth.test.mjs",
+  "tests/assurance/android-chat-call-mic-control.test.mjs",
+], "actual API and mounted heartbeat regressions");
+const passedHeartbeatCases = Number(heartbeatProof.match(/^# pass (\d+)$/mu)?.[1] ?? 0);
+assert.ok(passedHeartbeatCases > 0, "heartbeat selection must execute behavioral assertions");
+runLivenessProof(["scripts/test-communication-terminal-postgres.mjs"], "actual SQL membership ownership regressions");
+console.log(`Owned heartbeat proof passed: ${passedHeartbeatCases} actual API/mounted cases and the actual-SQL ownership suite.`);
 
 const sessionProvider = read("_lib/session.tsx");
 includes(sessionProvider, 'stopActiveMediaSessions("sign_out")', "sign-out media teardown");

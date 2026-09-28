@@ -200,6 +200,8 @@ try {
   const calleeOwned = await ownedJoin(callee, attempts[3], null);
   const signal = (user, gen, payload) => asUser(user, "select public.broadcast_owned_communication_room_signal('OWNED1',$1::uuid,'webrtc:offer',$2::jsonb) as receipt", [gen, JSON.stringify(payload)]);
   const offer = { targetUserId: callee, description: { type: "offer", sdp: "v=0\r\nm=audio 9 RTP/AVP 0\r\na=sendrecv\r\n" }, fromUserId: outsider, membershipGeneration: ownedFirst.membership_generation };
+  await assert.rejects(asUser(outsider, "select public.broadcast_communication_room_signal('OWNED1','media:update','{\"cameraOn\":true,\"micOn\":true}'::jsonb)"), /communication_signal_authority_required/u); checks++;
+  await assert.rejects(signal(outsider, restarted.membership_generation, offer), /communication_signal_authority_required/u); checks++;
   const sent = (await signal(caller, restarted.membership_generation, offer)).rows[0].receipt;
   check(sent.sent && sent.fromUserId === caller && sent.membershipGeneration === restarted.membership_generation, "owned relay acknowledges canonical authenticated sender generation");
   const packet = (await db.query("select * from realtime.fixture_messages order by ctid desc limit 1")).rows[0];

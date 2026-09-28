@@ -25,7 +25,7 @@ const wait = async (page, predicate, description, timeout = 20_000) => {
   }
   throw new Error(`${description}\n${JSON.stringify(state, null, 2)}`);
 };
-const media = (endpoint, kind) => endpoint.stats.filter((report) => report.kind === kind).reduce((sum, report) => sum + (kind === "video" ? report.frames : report.energy), 0);
+const media = (endpoint, kind) => endpoint.stats.filter((report) => report.kind === kind).reduce((sum, report) => sum + (kind === "video" ? report.frames : Number.isFinite(report.energy) ? report.energy : Number.NaN), 0);
 const hasColor = (endpoint) => endpoint.pixels.some((frame) => frame.brightness > 20);
 try {
   browser = await chromium.launch({ headless: true, executablePath: process.env.CHILLY_CHAT_CHROMIUM_PATH || undefined, args: ["--no-sandbox", "--autoplay-policy=no-user-gesture-required", "--allow-loopback-in-peer-connection"] });

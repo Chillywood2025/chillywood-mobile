@@ -11,6 +11,17 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
 
+export function createLegacyBrowserAudioReceiver(track) {
+  const context = new AudioContext();
+  const source = context.createMediaStreamSource(new MediaStream([track]));
+  const output = context.createGain();
+  // Pull actual decoded remote audio without making the test tone audible.
+  // RTP packet arrival alone does not start Chromium's audio playout path.
+  output.gain.value = 0;
+  source.connect(output); output.connect(context.destination);
+  return { context, source, output, ready: context.resume() };
+}
+
 // The browser uses this same store as the offline adapter contract checks.
 // It models durable admission ownership; database/RLS proof runs separately.
 export function createLegacyBrowserMembershipStore({ onCommit = () => {} } = {}) {
@@ -154,11 +165,11 @@ export function buildLegacyPairedBrowserBundle({ sourceRoot = process.cwd() } = 
     const membershipAdmission = require('membership-admission');
     const accountBoundRpc = require('./accountBoundSupabaseRpc.mjs');
     const hookSource = ${JSON.stringify(hook)};
-    (${installLegacyPairedBrowser.toString()})({React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, membershipStoreFactory: (${createLegacyBrowserMembershipStore.toString()})});
+    (${installLegacyPairedBrowser.toString()})({React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, membershipStoreFactory: (${createLegacyBrowserMembershipStore.toString()}), audioReceiverFactory: (${createLegacyBrowserAudioReceiver.toString()})});
   })();`;
 }
 
-function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, membershipStoreFactory }) {
+function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, membershipStoreFactory, audioReceiverFactory }) {
   const clone = (value) => structuredClone(value);
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const granted = { granted: true, canAskAgain: true, status: "granted" };
@@ -252,7 +263,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     async send(message) { await hub.deliver({ ...message, roomId: this.topic.replace(/^comm-room-/u, "") }, this.endpoint); return "ok"; }
   }
   function createEndpoint(userId, { seed = true } = {}) {
-    const endpoint = { userId, instanceId: ++hub.endpointSerial, peers: [], streams: [], audioContexts: [], drawTimers: [], receivedVideos: [], output: null, root: null, current: true, mounted: true, pendingControl: null };
+    const endpoint = { userId, instanceId: ++hub.endpointSerial, peers: [], streams: [], audioContexts: [], drawTimers: [], receivedVideos: [], receivedAudio: [], output: null, root: null, current: true, mounted: true, pendingControl: null };
     hub.endpoints.push(endpoint);
     if (seed) membershipStore.seed({ roomId: hub.roomId, userId, displayName: userId, role: userId === "alice" ? "host" : "participant", membershipGeneration: crypto.randomUUID(), membershipAdmissionAttempt: null, membershipState: "active", cameraEnabled: true, micEnabled: true, joinedAt: "2026-09-28T00:00:00Z", leftAt: null, lastSeenAt: "2026-09-28T00:00:00Z" });
     const rtc = {
@@ -262,6 +273,13 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
           this.fixturePeerId = ++hub.peerSerial; this.remoteDescriptionApplications = 0;
           this.addEventListener("icecandidate", (event) => hub.events.push({ kind: "ice-candidate", userId, present: !!event.candidate }));
           this.addEventListener("track", (event) => {
+            if (event.track.kind === "audio") {
+              const receiver = audioReceiverFactory(event.track);
+              endpoint.audioContexts.push(receiver.context);
+              endpoint.receivedAudio.push({ peer: this, track: event.track, ...receiver });
+              void receiver.ready.catch((error) => hub.errors.push(`Receiver audio playout: ${error}`));
+              return;
+            }
             if (event.track.kind !== "video") return;
             const video = document.createElement("video");
             video.muted = true; video.autoplay = true; video.playsInline = true;
@@ -362,7 +380,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     const reports = [];
     for (const peer of endpoint.peers.filter((candidate) => candidate.connectionState === "connected")) {
       for (const report of (await peer.getStats()).values()) {
-        if (report.type === "inbound-rtp" && !report.isRemote) reports.push({ peerId: peer.fixturePeerId, kind: report.kind, bytes: report.bytesReceived ?? 0, packets: report.packetsReceived ?? 0, frames: report.framesDecoded ?? 0, energy: report.totalAudioEnergy ?? 0, samples: report.totalSamplesReceived ?? 0 });
+        if (report.type === "inbound-rtp" && !report.isRemote) reports.push({ peerId: peer.fixturePeerId, kind: report.kind, bytes: report.bytesReceived ?? 0, packets: report.packetsReceived ?? 0, frames: report.framesDecoded ?? 0, energy: Number.isFinite(report.totalAudioEnergy) ? report.totalAudioEnergy : null, samples: Number.isFinite(report.totalSamplesReceived) ? report.totalSamplesReceived : null, samplesDuration: Number.isFinite(report.totalSamplesDuration) ? report.totalSamplesDuration : null });
       }
     }
     return reports;
@@ -381,6 +399,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
   const resources = (endpoint) => ({
     peers: endpoint.peers.map((peer) => ({ id: peer.fixturePeerId, connection: peer.connectionState, signaling: peer.signalingState, gathering: peer.iceGatheringState, localType: peer.localDescription?.type, remoteType: peer.remoteDescription?.type, remoteDescriptionApplications: peer.remoteDescriptionApplications, senders: peer.getSenders().map((sender) => sender.track?.kind ?? "none") })),
     tracks: endpoint.streams.flatMap((stream) => stream.getTracks().map((item) => ({ kind: item.kind, state: item.readyState, enabled: item.enabled }))),
+    audioReceivers: endpoint.receivedAudio.map(({ peer, track, context }) => ({ peerId: peer.fixturePeerId, contextState: context.state, trackState: track.readyState, trackEnabled: track.enabled })),
   });
   window.__pairedCall = {
     async start({ dropAnswers = false } = {}) { hub.dropAnswers = dropAnswers; createEndpoint("alice"); createEndpoint("bob"); await delay(0); },

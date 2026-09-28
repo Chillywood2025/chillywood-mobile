@@ -611,6 +611,13 @@ begin
   perform 1 from public.communication_rooms where room_id = v_room_id for update;
   select * into v_sender from public.communication_room_memberships
     where room_id = v_room_id and user_id = v_actor_user_id for update;
+  -- Preserve the canonical authority denial before exposing ownership details.
+  -- Authorized senders still pass every generation/state check below.
+  if not public."can_access_communication_realtime_topic"(
+    'comm-room-' || v_room_id
+  ) then
+    raise exception 'communication_signal_authority_required';
+  end if;
   if v_event <> 'room:end' then
     if p_expected_membership_generation is null then
       if v_sender.membership_admission_attempt is not null then
@@ -627,12 +634,6 @@ begin
   elsif p_expected_membership_generation is not null then
     raise exception 'communication_signal_event_invalid';
   end if;
-  if not public."can_access_communication_realtime_topic"(
-    'comm-room-' || v_room_id
-  ) then
-    raise exception 'communication_signal_authority_required';
-  end if;
-
   select exists (
     select 1
     from public."communication_rooms" communication_room
