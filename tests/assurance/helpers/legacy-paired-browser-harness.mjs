@@ -363,7 +363,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     async send(message) { await hub.deliver({ ...message, roomId: this.topic.replace(/^comm-room-/u, "") }, this.endpoint); return "ok"; }
   }
   function createEndpoint(userId, { seed = true } = {}) {
-    const endpoint = { userId, instanceId: ++hub.endpointSerial, peers: [], streams: [], audioContexts: [], drawTimers: [], receivedVideos: [], receivedAudio: [], output: null, root: null, current: true, mounted: true, pendingControl: null };
+    const endpoint = { userId, instanceId: ++hub.endpointSerial, peers: [], streams: [], acquiredTracks: [], audioContexts: [], drawTimers: [], receivedVideos: [], receivedAudio: [], output: null, root: null, current: true, mounted: true, pendingControl: null };
     hub.endpoints.push(endpoint);
     if (seed) membershipStore.seed({ roomId: hub.roomId, userId, displayName: userId, role: userId === "alice" ? "host" : "participant", membershipGeneration: crypto.randomUUID(), membershipAdmissionAttempt: null, membershipState: "active", cameraEnabled: true, micEnabled: true, joinedAt: "2026-09-28T00:00:00Z", leftAt: null, lastSeenAt: "2026-09-28T00:00:00Z" });
     const rtc = {
@@ -403,11 +403,11 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
         const context = canvas.getContext("2d"); let frame = 0;
         const draw = () => { frame += 1; context.fillStyle = userId === "alice" ? "#ff1010" : "#1020ff"; context.fillRect(0, 0, 160, 120); context.fillStyle = "white"; context.fillRect(frame % 140, 20, 20, 80); };
         draw(); endpoint.drawTimers.push(setInterval(draw, 40));
-        canvas.captureStream(25).getVideoTracks().forEach((track) => stream.addTrack(track));
+        canvas.captureStream(25).getVideoTracks().forEach((track) => { stream.addTrack(track); endpoint.acquiredTracks.push(track); });
       }
       if (audio) {
         const source = await audioSourceFactory(userId === "alice" ? 440 : 660);
-        stream.addTrack(source.track); endpoint.audioContexts.push(source.context);
+        stream.addTrack(source.track); endpoint.acquiredTracks.push(source.track); endpoint.audioContexts.push(source.context);
       }
       endpoint.streams.push(stream);
       return stream;
@@ -496,7 +496,8 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
   });
   const resources = (endpoint) => ({
     peers: endpoint.peers.map((peer) => ({ id: peer.fixturePeerId, connection: peer.connectionState, signaling: peer.signalingState, gathering: peer.iceGatheringState, localType: peer.localDescription?.type, remoteType: peer.remoteDescription?.type, remoteDescriptionApplications: peer.remoteDescriptionApplications, senders: peer.getSenders().map((sender) => sender.track?.kind ?? "none") })),
-    tracks: endpoint.streams.flatMap((stream) => stream.getTracks().map((item) => ({ kind: item.kind, state: item.readyState, enabled: item.enabled }))),
+    // Acquisition identities survive stream.removeTrack during hook rollback.
+    tracks: endpoint.acquiredTracks.map((item) => ({ id: item.id, kind: item.kind, state: item.readyState, enabled: item.enabled })),
     audioReceivers: endpoint.receivedAudio.map(({ peer, track, receiver }) => ({ peerId: peer.fixturePeerId, connection: peer.connectionState, contextState: receiver.context.state, trackState: track.readyState, trackEnabled: track.enabled, playbackPaused: receiver.playback.paused, playbackReadyState: receiver.playback.readyState, pcmSamples: receiver.samples, pcmEnergy: receiver.energy, error: receiver.error })),
   });
   window.__pairedCall = {
@@ -508,7 +509,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     },
     stopLocalCapture(userId, kind) {
       const endpoint = hub.endpoints.find((item) => item.userId === userId);
-      const tracks = [...new Set(endpoint?.streams.flatMap((stream) => stream.getTracks()) ?? [])]
+      const tracks = [...new Set(endpoint?.acquiredTracks ?? [])]
         .filter((track) => track.kind === kind && track.readyState === "live");
       if (tracks.length !== 1) throw new Error(`Expected one live ${kind} capture for ${userId}, found ${tracks.length}`);
       tracks[0].stop();
@@ -547,7 +548,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       return queued.length;
     },
     async freshCall() {
-      if ([...hub.endpoints, ...hub.retiredEndpoints].some((endpoint) => endpoint.peers.some((peer) => peer.connectionState !== "closed") || endpoint.streams.some((stream) => stream.getTracks().some((track) => track.readyState !== "ended")))) throw new Error("Previous native resources must be closed before a fresh call");
+      if ([...hub.endpoints, ...hub.retiredEndpoints].some((endpoint) => endpoint.peers.some((peer) => peer.connectionState !== "closed") || endpoint.acquiredTracks.some((track) => track.readyState !== "ended"))) throw new Error("Previous native resources must be closed before a fresh call");
       const previousRoomId = hub.roomId;
       hub.roomId = `BROWSER-CALL-${++hub.callSerial}`; hub.roomStatus = "active";
       for (const endpoint of hub.endpoints) {
@@ -564,6 +565,6 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     }))) }; },
     async control(userId, name, value) { const endpoint = hub.endpoints.find((item) => item.userId === userId); if (!endpoint?.output || typeof endpoint.output[name] !== "function") throw new Error(`Missing control ${name}`); return endpoint.output[name](value); },
     async end() { await Promise.all(hub.endpoints.map((endpoint) => endpoint.output.leaveRoom())); },
-    async dispose() { for (const endpoint of [...hub.endpoints, ...hub.retiredEndpoints]) { if (endpoint.mounted) endpoint.root.unmount(); endpoint.mounted = false; endpoint.drawTimers.forEach(clearInterval); endpoint.streams.forEach((stream) => stream.getTracks().forEach((item) => item.stop())); endpoint.peers.forEach((peer) => peer.close()); for (const { receiver } of endpoint.receivedAudio) await receiver.dispose(); for (const context of endpoint.audioContexts) if (context.state !== "closed") await context.close(); } },
+    async dispose() { for (const endpoint of [...hub.endpoints, ...hub.retiredEndpoints]) { if (endpoint.mounted) endpoint.root.unmount(); endpoint.mounted = false; endpoint.drawTimers.forEach(clearInterval); endpoint.acquiredTracks.forEach((track) => track.stop()); endpoint.peers.forEach((peer) => peer.close()); for (const { receiver } of endpoint.receivedAudio) await receiver.dispose(); for (const context of endpoint.audioContexts) if (context.state !== "closed") await context.close(); } },
   };
 }

@@ -25,7 +25,7 @@ const hostClearTimeout = globalThis.clearTimeout;
 const hostSetTimeout = globalThis.setTimeout;
 
 const contract = JSON.parse(fs.readFileSync("config/assurance/android-chat-call-mic-control-v1.json", "utf8"));
-const legacyHookSource = fs.readFileSync("hooks/use-communication-room-session.ts", "utf8");
+const legacyHookSource = fs.readFileSync(process.env.CHILLY_LEGACY_HOOK_TEST_SOURCE ?? "hooks/use-communication-room-session.ts", "utf8");
 const legacyRefMarker = "  const microphonePermissionRef = useRef<MediaPermissionSnapshot>(microphonePermission);";
 assert.equal(legacyHookSource.split(legacyRefMarker).length - 1, 1, "unique legacy ref exposure marker");
 const legacyOfferQueueMarker = "  const cleanupRemotePeer = useCallback";
@@ -707,7 +707,9 @@ function createLegacyMountedRuntime(options = {}) {
             runtime.appState = "active";
             runtime.readAssuranceRefs().appStateLifecycleHandlerRef.current?.("active");
           }
-          runtime.microphonePermission = runtime.permissionActions.shift() ?? runtime.microphonePermission;
+          const pendingPermission = runtime.permissionActions.shift();
+          if (pendingPermission?.wait) await pendingPermission.wait;
+          runtime.microphonePermission = pendingPermission?.permission ?? pendingPermission ?? runtime.microphonePermission;
           return runtime.microphonePermission;
         },
       },
@@ -2886,4 +2888,153 @@ test("legacy remote End: retained capture remains verifiable after the authentic
   track.refuseStop = false;
   await harness.run(() => harness.getResult().leaveRoom());
   assert.equal(track.readyState, "ended");
+});
+
+
+// Actual mounted hook lifecycle with controlled SDK scheduling. These cases
+// exercise cancellation and resource ownership, not native-device teardown.
+async function mountRetiredMicrophoneCase(t) {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+  assert.equal(harness.getResult().channelState, "live", "normal admission/channel startup must establish the call");
+  const peer = harness.refs.peerConnectionsRef.current[runtime.remoteUserId];
+  assert.ok(peer, "actual startup creates the remote peer without forcing live refs");
+  let retired = false;
+  const retire = async () => { if (!retired) { retired = true; await harness.unmount(); } };
+  t.after(retire);
+  return { runtime, harness, peer, retire };
+}
+
+async function startPendingMicrophone(harness) {
+  let settlement;
+  await act(async () => {
+    settlement = harness.getResult().setMicrophoneEnabled(true)
+      .then((value) => ({ value }), (error) => ({ error: String(error?.message ?? error) }));
+    await settle(160);
+  });
+  return { settlement };
+}
+
+test("legacy retired microphone: pending forward SDP cancels without touching closed senders", async (t) => {
+  const { runtime, harness, peer, retire } = await mountRetiredMicrophoneCase(t);
+  seedLocalTrack(runtime, harness, { enabled: false, readyState: "ended" }, { sender: true });
+  const sender = peer.getSenders().find((item) => item.track?.kind === "audio");
+  const originalReplace = sender.replaceTrack;
+  let closedSenderWrites = 0;
+  sender.replaceTrack = async (track) => {
+    if (peer.connectionState === "closed") { closedSenderWrites++; throw Error("closed sender cannot restore tracks"); }
+    return originalReplace(track);
+  };
+  runtime.queueSend({ event: "webrtc:offer", answer: false });
+  const { settlement } = await startPendingMicrophone(harness);
+  assert.ok(runtime.negotiationTimeline.some((entry) => entry.event === "offer"));
+  const acquired = peer.getSenders().find((item) => item.track?.kind === "audio").track;
+  await retire();
+  assert.deepEqual(await settlement, { value: false });
+  assert.equal(closedSenderWrites, 0);
+  assert.equal(acquired.readyState, "ended", "a target moved out of its created stream is still disposed");
+  assert.equal(acquired.enabled, false);
+});
+
+test("legacy retired microphone: replacement-track completion cannot restore a retired transaction", async (t) => {
+  const { runtime, harness, peer, retire } = await mountRetiredMicrophoneCase(t);
+  seedLocalTrack(runtime, harness, { enabled: false, readyState: "ended" }, { sender: true });
+  const sender = peer.getSenders().find((item) => item.track?.kind === "audio");
+  const originalReplace = sender.replaceTrack;
+  let release;
+  const barrier = new Promise((resolve) => { release = resolve; });
+  let writes = 0;
+  let acquired;
+  sender.replaceTrack = async (track) => { writes++; acquired = track; await barrier; return originalReplace(track); };
+  const { settlement } = await startPendingMicrophone(harness);
+  assert.equal(writes, 1);
+  await retire();
+  await act(async () => { release(); await settle(160); });
+  assert.deepEqual(await settlement, { value: false });
+  assert.equal(writes, 1, "late completion cannot issue a second sender restoration");
+  assert.equal(acquired.readyState, "ended");
+});
+
+test("legacy retired microphone: retirement during awaited rollback prevents later sender restorations", async (t) => {
+  const { runtime, harness, peer, retire } = await mountRetiredMicrophoneCase(t);
+  const { track, stream } = seedLocalTrack(runtime, harness, { enabled: false, readyState: "ended" }, { sender: true });
+  const secondPeer = runtime.createPeer();
+  harness.refs.peerConnectionsRef.current["zz-remote"] = secondPeer;
+  const secondSender = secondPeer.addTrack(track, stream);
+  const firstSender = peer.getSenders().find((item) => item.track?.kind === "audio");
+  const firstReplace = firstSender.replaceTrack;
+  const secondReplace = secondSender.replaceTrack;
+  let firstWrites = 0;
+  let secondWrites = 0;
+  let release;
+  const barrier = new Promise((resolve) => { release = resolve; });
+  firstSender.replaceTrack = async (next) => { firstWrites++; return firstReplace(next); };
+  secondSender.replaceTrack = async (next) => {
+    secondWrites++;
+    if (secondWrites === 2) await barrier;
+    return secondReplace(next);
+  };
+  runtime.queueSend({ event: "webrtc:offer", outcome: "error" });
+  const { settlement } = await startPendingMicrophone(harness);
+  assert.equal(secondWrites, 2, "the current owner reached its genuine rollback before retirement");
+  assert.equal(firstWrites, 1);
+  await retire();
+  await act(async () => { release(); await settle(160); });
+  assert.deepEqual(await settlement, { value: false });
+  assert.equal(firstWrites, 1, "retirement during one native await prevents rollback of the next old sender");
+});
+
+test("legacy retired microphone: stale restore never re-enables a previously enabled captured track", async (t) => {
+  const { runtime, harness, retire } = await mountRetiredMicrophoneCase(t);
+  const { track } = seedLocalTrack(runtime, harness, { enabled: true });
+  runtime.queueSend({ event: "webrtc:offer", answer: false });
+  const { settlement } = await startPendingMicrophone(harness);
+  assert.equal(track.enabled, false, "preparation locally mutes the existing track");
+  await retire();
+  assert.deepEqual(await settlement, { value: false });
+  assert.equal(track.enabled, false, "retired rollback cannot replay the older enabled bit");
+  assert.equal(track.readyState, "ended");
+});
+
+test("legacy retired microphone: unproved transaction capture disposal remains an explicit failure", async (t) => {
+  const { runtime, harness, retire } = await mountRetiredMicrophoneCase(t);
+  runtime.queueMedia({ audio: { refuseStop: true } });
+  runtime.queueSend({ event: "webrtc:offer", answer: false });
+  const { settlement } = await startPendingMicrophone(harness);
+  const acquired = harness.refs.localStreamRef.current.getAudioTracks()[0];
+  t.after(() => { acquired.refuseStop = false; acquired.stop(); });
+  await retire();
+  assert.deepEqual(await settlement, { error: "LEGACY_MIC_RETIRED_CAPTURE_DISPOSAL_UNVERIFIED" });
+  assert.equal(acquired.readyState, "live", "an ignored native stop is not cleanup proof");
+});
+
+test("legacy current microphone: genuine rollback failure retains fail-closed error", async (t) => {
+  const { runtime, harness, peer } = await mountRetiredMicrophoneCase(t);
+  seedLocalTrack(runtime, harness, { enabled: false, readyState: "ended" }, { sender: true });
+  const sender = peer.getSenders().find((item) => item.track?.kind === "audio");
+  const originalReplace = sender.replaceTrack;
+  let writes = 0;
+  sender.replaceTrack = async (track) => { writes++; if (writes > 1) throw Error("native restoration rejected"); return originalReplace(track); };
+  runtime.queueSend({ event: "webrtc:offer", outcome: "error" });
+  const { settlement } = await startPendingMicrophone(harness);
+  assert.deepEqual(await settlement, { error: "LEGACY_MIC_ROLLBACK_UNVERIFIED" });
+  assert.equal(harness.refs.channelStateRef.current, "live", "this failure was not cancellation of a retired owner");
+  assert.equal(runtime.durableMic, false);
+  for (const stream of runtime.localStreams) for (const track of stream.getAudioTracks()) assert.equal(track.enabled, false);
+});
+
+test("legacy retired microphone: a late permission grant cannot acquire capture", async (t) => {
+  const { runtime, harness, retire } = await mountRetiredMicrophoneCase(t);
+  runtime.microphonePermission = deniedPermission();
+  let release;
+  const barrier = new Promise((resolve) => { release = resolve; });
+  runtime.queuePermission({ wait: barrier, permission: grantedPermission() });
+  const capturesBefore = runtime.mediaCreateCalls.length;
+  const requestsBefore = runtime.permissionRequestCalls;
+  const { settlement } = await startPendingMicrophone(harness);
+  assert.equal(runtime.permissionRequestCalls, requestsBefore + 1, "the real permission await is in flight");
+  await retire();
+  await act(async () => { release(); await settle(160); });
+  assert.deepEqual(await settlement, { value: false });
+  assert.equal(runtime.mediaCreateCalls.length, capturesBefore, "retired permission completion cannot start native capture");
 });

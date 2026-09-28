@@ -161,6 +161,13 @@ delivered before takeover cannot recreate a retired peer. A same-generation
 Presence metadata update still preserves the current peer. The browser lane
 requires one endpoint to restart in the same room, then receive real media with
 the surviving endpoint while a held retired offer is rejected.
+That real-browser scenario also exposed an old microphone reacquisition trying
+to roll back an already-retired peer. Retired transactions now dispose only
+their own newly acquired capture and return a failed control result; they cannot
+restore old sender state or re-enable an older track. Unproved capture disposal
+and genuine current-owner rollback failures remain explicit failures. The
+browser fixture retains every acquired track identity even after removal from
+a stream, so removed capture cannot disappear from cleanup assertions.
 A JavaScript timeout does not prove an HTTP/native operation was canceled;
 unsettled work remains owned and a retry cannot assert capture or membership
 success without the required postcondition. Permanent network/native failure

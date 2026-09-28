@@ -3855,6 +3855,7 @@ export function useCommunicationRoomSession({
     const previousLocalStream = localStreamRef.current;
     const previousAuxiliaryStreams = [...auxiliaryStreamsRef.current];
     let createdStream: MediaStream | null = null;
+    let createdCaptureTracks: any[] = [];
     let track: ReturnType<typeof getCommunicationTrack> = usableTracks.find((candidate) => (
       [...streams].some((stream) => stream.getAudioTracks().some((streamTrack) => streamTrack === candidate))
     )) ?? null;
@@ -3871,8 +3872,25 @@ export function useCommunicationRoomSession({
     const removedEndedTracks: { stream: MediaStream; track: any }[] = [];
     let addedCreatedTrackToPreviousLocalStream = false;
 
+    const disposeCreatedCapture = () => {
+      // The target can move out of createdStream. Retain its acquisition
+      // identity so a cancelled transaction cannot lose track of live capture.
+      for (const capturedTrack of createdCaptureTracks) {
+        try { capturedTrack.enabled = false; } catch { /* Verify stop below. */ }
+        try { capturedTrack.stop(); } catch { /* Verify the actual postcondition. */ }
+      }
+      return createdCaptureTracks.every((capturedTrack) => {
+        try { return String(capturedTrack.readyState ?? "").trim().toLowerCase() === "ended"; }
+        catch { return false; }
+      });
+    };
+    const cancelRetiredPreparation = () => {
+      if (!disposeCreatedCapture()) throw new Error("LEGACY_MIC_RETIRED_CAPTURE_DISPOSAL_UNVERIFIED");
+      return true;
+    };
     const restoreLocalMedia = () => {
-      const authorityCurrent = isLegacyMicSessionAuthorityCurrent(authority);
+      if (!isLegacyMicSessionAuthorityCurrent(authority)) return cancelRetiredPreparation();
+      let captureDisposed = true;
       if (createdStream) {
         if (addedCreatedTrackToPreviousLocalStream && track) {
           try {
@@ -3880,21 +3898,12 @@ export function useCommunicationRoomSession({
           } catch {
             // noop
           }
-          try {
-            track.stop();
-          } catch {
-            // noop
-          }
         }
-        try {
-          stopCommunicationStream(createdStream);
-        } catch {
-          // noop
-        }
+        captureDisposed = disposeCreatedCapture();
       } else if (track) {
         track.enabled = previousTrackEnabled;
       }
-      if (authorityCurrent) {
+      if (isLegacyMicSessionAuthorityCurrent(authority)) {
         removedEndedTracks.forEach(({ stream, track: endedTrack }) => {
           try {
             stream.addTrack(endedTrack);
@@ -3906,18 +3915,21 @@ export function useCommunicationRoomSession({
         auxiliaryStreamsRef.current = previousAuxiliaryStreams;
         setLocalStreamURL(getCommunicationStreamURL(previousLocalStream));
       }
+      return captureDisposed;
     };
 
     if (!track) {
       if (!await ensureMicrophonePermission()) return null;
+      if (!isLegacyMicSessionAuthorityCurrent(authority)) return null;
       createdStream = await createCommunicationMediaStream({ audio: true, video: false }).catch(() => null);
+      createdCaptureTracks = createdStream?.getTracks() ?? [];
       track = getCommunicationTrack(createdStream, "audio");
       if (!isLegacyMicSessionAuthorityCurrent(authority)) {
-        stopCommunicationStream(createdStream);
+        cancelRetiredPreparation();
         return null;
       }
       if (!createdStream || !track || String(track.readyState ?? "").trim().toLowerCase() === "ended") {
-        if (createdStream) stopCommunicationStream(createdStream);
+        if (!disposeCreatedCapture()) throw new Error("LEGACY_MIC_CAPTURE_DISPOSAL_UNVERIFIED");
         return null;
       }
       track.enabled = false;
@@ -3945,7 +3957,7 @@ export function useCommunicationRoomSession({
       ?? [...streams].find((stream) => stream.getAudioTracks().some((candidate) => candidate === targetTrack))
       ?? createdStream;
     if (!targetMediaStream) {
-      restoreLocalMedia();
+      if (!restoreLocalMedia()) throw new Error("LEGACY_MIC_CAPTURE_DISPOSAL_UNVERIFIED");
       return null;
     }
     const peerEntries = Object.entries(peerConnectionsRef.current).sort(([left], [right]) => left.localeCompare(right));
@@ -3963,7 +3975,7 @@ export function useCommunicationRoomSession({
         || String(peerConnection?.connectionState ?? "") === "closed"
         || typeof peerConnection?.getSenders !== "function"
       ) {
-        restoreLocalMedia();
+        if (!restoreLocalMedia()) throw new Error("LEGACY_MIC_CAPTURE_DISPOSAL_UNVERIFIED");
         return null;
       }
       const audioSenders = peerConnection.getSenders().filter((sender: any) => sender?.track?.kind === "audio");
@@ -3973,21 +3985,26 @@ export function useCommunicationRoomSession({
         || (audioSenders.length === 0 && (typeof peerConnection?.addTrack !== "function" || typeof peerConnection?.removeTrack !== "function"))
         || (audioSenders.length === 1 && audioSenders[0]?.track !== targetTrack && typeof audioSenders[0]?.replaceTrack !== "function")
       ) {
-        restoreLocalMedia();
+        if (!restoreLocalMedia()) throw new Error("LEGACY_MIC_CAPTURE_DISPOSAL_UNVERIFIED");
         return null;
       }
     }
 
     const rollbackSenders = async () => {
       for (const change of [...senderChanges].reverse()) {
+        if (!isLegacyMicSessionAuthorityCurrent(authority)) return false;
+        if (peerConnectionsRef.current[change.remoteUserId] !== change.peerConnection
+          || String(change.peerConnection?.connectionState ?? "") === "closed") return false;
         if (change.added) {
           change.peerConnection.removeTrack(change.sender);
         } else {
           await change.sender.replaceTrack(change.previousTrack);
+          if (!isLegacyMicSessionAuthorityCurrent(authority)) return false;
         }
       }
       return peerEntries.every(([remoteUserId, peerConnection]) => {
-        if (peerConnectionsRef.current[remoteUserId] !== peerConnection) return false;
+        if (!isLegacyMicSessionAuthorityCurrent(authority)
+          || peerConnectionsRef.current[remoteUserId] !== peerConnection) return false;
         const audioSenders = peerConnection.getSenders().filter((sender: any) => sender?.track?.kind === "audio");
         const snapshots = peerSenderSnapshots.get(peerConnection) ?? [];
         return audioSenders.length === snapshots.length && snapshots.every((snapshot) => (
@@ -3998,25 +4015,30 @@ export function useCommunicationRoomSession({
 
     const negotiatedPeers: { peerConnection: any; remoteUserId: string }[] = [];
     const rollbackPreparedTrack = async () => {
+      if (!isLegacyMicSessionAuthorityCurrent(authority)) return cancelRetiredPreparation();
       const sendersRestored = await rollbackSenders().catch(() => false);
+      if (!isLegacyMicSessionAuthorityCurrent(authority)) return cancelRetiredPreparation();
       let compensated = true;
       if (senderChanges.length > 0) {
         for (const peer of negotiatedPeers) {
+          if (!isLegacyMicSessionAuthorityCurrent(authority)) return cancelRetiredPreparation();
           const result = await strictlyRenegotiateLegacyMicPeer({
             authority,
             peerConnection: peer.peerConnection,
             remoteUserId: peer.remoteUserId,
             phase: "compensate",
           });
+          if (!isLegacyMicSessionAuthorityCurrent(authority)) return cancelRetiredPreparation();
           compensated = compensated && result;
         }
       }
-      restoreLocalMedia();
-      return sendersRestored && compensated;
+      const localMediaRestored = restoreLocalMedia();
+      return sendersRestored && compensated && localMediaRestored;
     };
 
     try {
       for (const [remoteUserId, peerConnection] of peerEntries) {
+        if (!isLegacyMicSessionAuthorityCurrent(authority)) throw new Error("LEGACY_MIC_SESSION_AUTHORITY_CHANGED");
         const audioSenders = peerConnection.getSenders().filter((sender: any) => sender?.track?.kind === "audio");
         if (audioSenders.length === 0) {
           const sender = peerConnection.addTrack(targetTrack, targetMediaStream);
@@ -4039,6 +4061,7 @@ export function useCommunicationRoomSession({
           remoteUserId,
           phase: "forward",
         });
+        if (!isLegacyMicSessionAuthorityCurrent(authority)) throw new Error("LEGACY_MIC_SESSION_AUTHORITY_CHANGED");
         if (!renegotiated) throw new Error("LEGACY_MIC_RENEGOTIATION_FAILED");
         negotiatedPeers.push({ peerConnection, remoteUserId });
       }
@@ -4046,7 +4069,15 @@ export function useCommunicationRoomSession({
       reportRuntimeError("communication-legacy-media-track-preparation", preparationError, {
         roomId: authority.roomId,
       });
+      if (!isLegacyMicSessionAuthorityCurrent(authority)) {
+        cancelRetiredPreparation();
+        return null;
+      }
       const rolledBack = await rollbackPreparedTrack();
+      if (!isLegacyMicSessionAuthorityCurrent(authority)) {
+        cancelRetiredPreparation();
+        return null;
+      }
       if (
         !rolledBack
         || (preparationError instanceof Error && preparationError.message === "LEGACY_MIC_LOCAL_OFFER_ROLLBACK_UNVERIFIED")
@@ -4057,6 +4088,7 @@ export function useCommunicationRoomSession({
     return {
       track: targetTrack,
       rollback: rollbackPreparedTrack,
+      cancel: cancelRetiredPreparation,
       senderInvariant: () => peerEntries.every(([remoteUserId, peerConnection]) => {
         if (peerConnectionsRef.current[remoteUserId] !== peerConnection) return false;
         const audioSenders = peerConnection.getSenders().filter((sender: any) => sender?.track?.kind === "audio");
@@ -4186,6 +4218,10 @@ export function useCommunicationRoomSession({
     if (!nextEnabled) resumeMicAfterForegroundRef.current = false;
     if (nextEnabled) {
       const prepared = await prepareLegacyMicrophoneTrack(authority);
+      if (!isLegacyMicSessionAuthorityCurrent(authority)) {
+        prepared?.cancel();
+        return false;
+      }
       if (!prepared) {
         if (microphonePermissionRef.current.state === "granted") {
           reportRuntimeError(
@@ -4236,6 +4272,10 @@ export function useCommunicationRoomSession({
         setMediaControlError(null);
         return true;
       } catch (microphoneCommitError) {
+        if (!isLegacyMicSessionAuthorityCurrent(authority)) {
+          prepared.cancel();
+          return false;
+        }
         reportRuntimeError("communication-legacy-microphone-commit", microphoneCommitError, {
           roomId: authority.roomId,
         });
@@ -4243,13 +4283,25 @@ export function useCommunicationRoomSession({
         let compensated = true;
         if (broadcastCommitted) {
           const broadcastCompensation = await strictlyBroadcastLegacyMicState(authority, false, cameraEnabledOverride);
+          if (!isLegacyMicSessionAuthorityCurrent(authority)) {
+            prepared.cancel();
+            return false;
+          }
           compensated = broadcastCompensation.ok && compensated;
         }
         if (durableCommitted) {
           const presenceCompensation = await strictlyCommitLegacyMicPresence(authority, false, cameraEnabledOverride);
+          if (!isLegacyMicSessionAuthorityCurrent(authority)) {
+            prepared.cancel();
+            return false;
+          }
           compensated = presenceCompensation.ok && compensated;
         }
         const rolledBack = await prepared.rollback();
+        if (!isLegacyMicSessionAuthorityCurrent(authority)) {
+          prepared.cancel();
+          return false;
+        }
         const muted = await commitProvedLegacyMicMute(authority, cameraEnabledOverride);
         if (muted.privacyProved && !muted.committed && isLegacyMicSessionAuthorityCurrent(authority)) {
           await updatePresence(cameraEnabledOverride, false);
