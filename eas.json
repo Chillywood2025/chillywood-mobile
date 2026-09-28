@@ -36,6 +36,9 @@
       "channel": "android-internal-v2",
       "distribution": "store",
       "environment": "production",
+      "env": {
+        "CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM": "android"
+      },
       "android": {
         "buildType": "app-bundle"
       }
@@ -56,6 +59,7 @@
       "distribution": "store",
       "environment": "production",
       "env": {
+        "CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM": "ios",
         "IOS_NATIVE_CALLS_ENABLED": "true",
         "EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED": "true",
         "EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED": "true",

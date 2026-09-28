@@ -84,7 +84,12 @@ assert(internalNativeGeneration.channels?.ios === "ios-internal-v2", "iOS intern
 assert(internalNativeGeneration.runtimeVersions?.android === "1.0.0-android-production-v3", "Android internal v3 runtime is incorrect");
 assert(internalNativeGeneration.runtimeVersions?.ios === "1.0.0-ios-production-v3", "iOS internal v3 runtime is incorrect");
 assert(internalNativeGeneration.policy?.internalOnly === true, "internal native generation must remain internal only");
-assert(internalNativeGeneration.policy?.publicOrStoreDistributionAuthorized === false, "internal native generation cannot authorize store distribution");
+assert(internalNativeGeneration.policy?.publicReleaseAuthorized === false, "internal native generation cannot authorize public release");
+assert(internalNativeGeneration.policy?.storeSubmissionOutsideInternalTestersAuthorized === false, "internal native generation cannot authorize store distribution beyond internal testers");
+assert(internalNativeGeneration.policy?.internalTesterDistribution?.android?.channel === "android-internal-v2", "Android internal tester generation must stay on its private channel");
+assert(internalNativeGeneration.policy?.internalTesterDistribution?.android?.track === "internal", "Android internal tester generation must stay on the Google Play internal track");
+assert(internalNativeGeneration.policy?.internalTesterDistribution?.ios?.channel === "ios-internal-v2", "iOS internal tester generation must stay on its private channel");
+assert(internalNativeGeneration.policy?.internalTesterDistribution?.ios?.group === "Chillywood Internal", "iOS internal tester generation must stay in the named TestFlight internal group");
 
 assert(appConfigSource.includes("process.env.IOS_GOOGLE_SERVICES_FILE"), "app.config.ts must support IOS_GOOGLE_SERVICES_FILE");
 assert(appConfigSource.includes('"./GoogleService-Info.plist"'), "app.config.ts must support the ignored local Firebase plist fallback");
@@ -117,6 +122,16 @@ assert(easJson.build?.preview?.environment === "preview", "EAS preview must use 
 assert(easJson.build?.production?.environment === "production", "EAS production must use the production environment");
 assert(easJson.build?.production?.channel === productionOtaGeneration.channel, "EAS production must use the canonical fresh OTA channel");
 assert(easJson.build?.["production-apk"]?.channel === productionOtaGeneration.channel, "EAS production APK must use the canonical fresh OTA channel");
+const androidInternalTesterProfile = easJson.build?.["android-internal-v2"];
+assert(androidInternalTesterProfile?.distribution === "store", "Android internal tester build must use Play distribution signing");
+assert(androidInternalTesterProfile?.channel === internalNativeGeneration.channels?.android, "Android internal tester build must use the v3 internal channel");
+assert(androidInternalTesterProfile?.env?.CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM === "android", "Android internal tester build must select Android v3 provenance");
+assert(easJson.submit?.["android-internal-v2"]?.android?.track === "internal", "Android internal tester submit must remain on the Play internal track");
+const iosInternalTesterProfile = easJson.build?.["ios-internal-v2"];
+assert(iosInternalTesterProfile?.distribution === "store", "iOS internal tester build must use App Store distribution signing");
+assert(iosInternalTesterProfile?.channel === internalNativeGeneration.channels?.ios, "iOS internal tester build must use the v3 internal channel");
+assert(iosInternalTesterProfile?.env?.CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM === "ios", "iOS internal tester build must select iOS v3 provenance");
+assertEqual(easJson.submit?.["ios-internal-v2"]?.ios?.groups, ["Chillywood Internal"], "iOS internal tester submit must remain in the named TestFlight internal group");
 const androidInternalDeviceProfile = easJson.build?.["android-internal-device-v3"];
 assert(androidInternalDeviceProfile?.extends === "android-internal-v2", "Android internal device v3 must inherit the governed internal lane");
 assert(androidInternalDeviceProfile?.distribution === "internal", "Android internal device v3 must not use store distribution");

@@ -35,6 +35,20 @@ test("internal native generation binds both platform cohorts to the exact Git-na
   }
 });
 
+test("internal tester store profiles bind v3 runtimes only to their private audiences", () => {
+  const eas = JSON.parse(fs.readFileSync(path.join(repo, "eas.json"), "utf8"));
+  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+  assert.equal(generation.policy?.internalOnly, true);
+  assert.equal(generation.policy?.publicReleaseAuthorized, false);
+  assert.equal(generation.policy?.storeSubmissionOutsideInternalTestersAuthorized, false);
+  assert.equal(eas.build?.["android-internal-v2"]?.env?.CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM, "android");
+  assert.equal(eas.submit?.["android-internal-v2"]?.android?.track, generation.policy?.internalTesterDistribution?.android?.track);
+  assert.equal(eas.build?.["ios-internal-v2"]?.env?.CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM, "ios");
+  assert.deepEqual(eas.submit?.["ios-internal-v2"]?.ios?.groups, [generation.policy?.internalTesterDistribution?.ios?.group]);
+  assert.notEqual(eas.build?.["android-internal-v2"]?.channel, eas.build?.production?.channel);
+  assert.notEqual(eas.build?.["ios-internal-v2"]?.channel, eas.build?.production?.channel);
+});
+
 function fixture(t) {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "chilly-native-publication-"));
   const root = path.join(temp, "repo");

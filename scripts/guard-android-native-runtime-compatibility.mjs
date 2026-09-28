@@ -62,7 +62,22 @@ assert.equal(internalNativeGeneration.channels?.ios, "ios-internal-v2");
 assert.equal(internalNativeGeneration.runtimeVersions?.android, "1.0.0-android-production-v3");
 assert.equal(internalNativeGeneration.runtimeVersions?.ios, "1.0.0-ios-production-v3");
 assert.equal(internalNativeGeneration.policy?.internalOnly, true);
-assert.equal(internalNativeGeneration.policy?.publicOrStoreDistributionAuthorized, false);
+assert.equal(internalNativeGeneration.policy?.publicReleaseAuthorized, false);
+assert.equal(internalNativeGeneration.policy?.storeSubmissionOutsideInternalTestersAuthorized, false);
+assert.deepEqual(internalNativeGeneration.policy?.internalTesterDistribution?.android, {
+  channel: "android-internal-v2",
+  track: "internal",
+});
+assert.deepEqual(internalNativeGeneration.policy?.internalTesterDistribution?.ios, {
+  channel: "ios-internal-v2",
+  group: "Chillywood Internal",
+});
+assert.equal(easJson.build?.["android-internal-v2"]?.distribution, "store");
+assert.equal(easJson.build?.["android-internal-v2"]?.env?.CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM, "android");
+assert.equal(easJson.submit?.["android-internal-v2"]?.android?.track, "internal");
+assert.equal(easJson.build?.["ios-internal-v2"]?.distribution, "store");
+assert.equal(easJson.build?.["ios-internal-v2"]?.env?.CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM, "ios");
+assert.deepEqual(easJson.submit?.["ios-internal-v2"]?.ios?.groups, ["Chillywood Internal"]);
 assert.equal(easJson.build?.["android-internal-device-v3"]?.distribution, "internal");
 assert.equal(easJson.build?.["android-internal-device-v3"]?.channel, undefined);
 assert.equal(easJson.build?.["android-internal-device-v3"]?.extends, "android-internal-v2");
