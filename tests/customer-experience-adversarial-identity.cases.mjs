@@ -14,7 +14,7 @@ import {
   MAX_EXTERNAL_NAVIGATION_INPUT_LENGTH,
   sanitizeExternalNavigationInput,
 } from "../_lib/externalNavigationInputSafety.mjs";
-import { invokeAccountBoundSupabaseRpc } from "../_lib/accountBoundSupabaseRpc.mjs";
+import { invokeAccountBoundSupabaseRpc, isAccountBoundSupabaseRpcOutcomeAmbiguous } from "../_lib/accountBoundSupabaseRpc.mjs";
 
 test("malformed or oversized external routes fail closed before navigation query decoding", () => {
   const valid = "chillywoodmobile://event/123?source=notification&title=Chi%27llywood";
@@ -220,6 +220,7 @@ test("scheduled-deletion restoration is the only restore-only mutation escape an
         && left.restoreOnly === right.restoreOnly,
     },
     "./accountBoundSupabaseRpc.mjs": {
+      isAccountBoundSupabaseRpcOutcomeAmbiguous,
       invokeAccountBoundSupabaseRpc: async (input) => {
         calls.push(input);
         return input.functionName === "wave1_session_authority_readback"

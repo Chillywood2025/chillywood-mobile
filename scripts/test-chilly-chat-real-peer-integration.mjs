@@ -4,8 +4,8 @@ import http from "node:http";
 import { createRequire } from "node:module";
 import { buildLegacyPairedBrowserBundle } from "../tests/assurance/helpers/legacy-paired-browser-harness.mjs";
 
-const require = createRequire(import.meta.url);
-const { chromium } = require("playwright");
+const require = createRequire(new URL("../tests/integration/real-peer-browser/package.json", import.meta.url));
+const { chromium } = require("./node_modules/playwright");
 const bundle = buildLegacyPairedBrowserBundle({ sourceRoot: process.env.CHILLY_CHAT_SOURCE_ROOT || process.cwd() });
 const server = http.createServer((request, response) => {
   if (request.url === "/fixture.js") { response.setHeader("Content-Type", "application/javascript"); response.end(bundle); }
@@ -67,6 +67,50 @@ try {
         await wait(page, (state) => state.endpoints.every((endpoint, index) => media(endpoint, "video") > media(baseline.endpoints[index], "video") + 3 && media(endpoint, "audio") > media(baseline.endpoints[index], "audio") && hasColor(endpoint) && endpoint.peers.filter((peer) => peer.connection === "connected").length === 1), `${userId} cycle ${cycle + 1} must preserve real received media and one peer`);
       }
     }
+    const beforeRestart = await page.evaluate(() => window.__pairedCall.read());
+    const oldPeerIds = beforeRestart.endpoints.flatMap((endpoint) => endpoint.peers.map((peer) => peer.id));
+    const originalAlice = beforeRestart.endpoints.find((endpoint) => endpoint.userId === "alice");
+    const originalBob = beforeRestart.endpoints.find((endpoint) => endpoint.userId === "bob");
+    await page.evaluate(() => {
+      window.__pairedCall.holdNextSignal("bob", "webrtc:offer");
+      window.__pairedCall.beginControl("bob", "setMicrophoneEnabled", false);
+    });
+    await wait(page, (state) => state.heldSignals.some((signal) => signal.sender === "bob" && signal.event === "webrtc:offer" && signal.generation === originalBob.membership.membershipGeneration), "Hold an actual, server-admitted Bob SDP offer before its first delivery");
+    const replacement = await page.evaluate(() => window.__pairedCall.restartEndpoint("bob"));
+    assert.equal(replacement.roomId, beforeRestart.roomId, "Restart must stay in the same room");
+    assert.equal(replacement.retiredInstanceId, originalBob.instanceId);
+    const restarted = await wait(page, (state) => {
+      const alice = state.endpoints.find((endpoint) => endpoint.userId === "alice");
+      const bob = state.endpoints.find((endpoint) => endpoint.userId === "bob");
+      const retired = state.retiredEndpoints.find((endpoint) => endpoint.instanceId === originalBob.instanceId);
+      return alice?.instanceId === originalAlice.instanceId
+        && bob?.instanceId === replacement.replacementInstanceId
+        && bob.membership.membershipGeneration !== originalBob.membership.membershipGeneration
+        && retired?.peers.every((peer) => peer.connection === "closed")
+        && retired.tracks.every((track) => track.state === "ended")
+        && retired.pendingControl?.settled && retired.pendingControl.result === false
+        && state.endpoints.every((endpoint) => endpoint.channelState === "live"
+          && endpoint.peers.filter((peer) => peer.connection === "connected" && peer.signaling === "stable" && !oldPeerIds.includes(peer.id)).length === 1
+          && endpoint.peers.filter((peer) => oldPeerIds.includes(peer.id)).every((peer) => peer.connection === "closed")
+          && endpoint.stats.every((report) => !oldPeerIds.includes(report.peerId))
+          && endpoint.pixels.every((frame) => !oldPeerIds.includes(frame.peerId))
+          && media(endpoint, "video") > 5 && media(endpoint, "audio") > 0 && hasColor(endpoint));
+    }, "Same-room Bob app restart must retire old resources and make unchanged Alice receive real media through a new peer");
+    const advanced = await wait(page, (state) => state.endpoints.every((endpoint) => {
+      const baseline = restarted.endpoints.find((candidate) => candidate.instanceId === endpoint.instanceId);
+      return baseline && media(endpoint, "video") > media(baseline, "video") + 3
+        && media(endpoint, "audio") > media(baseline, "audio")
+        && endpoint.pixels.some((frame) => frame.fingerprint !== baseline.pixels[0]?.fingerprint);
+    }), "Replacement peers must receive advancing audio, decoded frames, and changing pixels independently of retired statistics");
+    const aliceBeforeOldPacket = advanced.endpoints.find((endpoint) => endpoint.userId === "alice");
+    assert.equal(await page.evaluate(() => window.__pairedCall.releaseHeldSignals()), 1, "Release the original delayed offer with its original admission stamp");
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const afterOldPacket = await page.evaluate(() => window.__pairedCall.read());
+    assert.deepEqual(afterOldPacket.errors, []);
+    const aliceAfterOldPacket = afterOldPacket.endpoints.find((endpoint) => endpoint.userId === "alice");
+    assert.deepEqual(aliceAfterOldPacket.peers.map(({ id, remoteDescriptionApplications }) => ({ id, remoteDescriptionApplications })), aliceBeforeOldPacket.peers.map(({ id, remoteDescriptionApplications }) => ({ id, remoteDescriptionApplications })), "Old-generation SDP must neither create a peer nor reach setRemoteDescription after the replacement is authoritative");
+    assert.ok(media(aliceAfterOldPacket, "video") > media(aliceBeforeOldPacket, "video") && media(aliceAfterOldPacket, "audio") > media(aliceBeforeOldPacket, "audio"), "Alice must keep receiving actual replacement media after dropping the stale offer");
+    console.log("PASS: same-room one-endpoint app restart, new-peer received media, retired resources, and delayed old-generation SDP rejection");
     const beforeEnd = await page.evaluate(() => window.__pairedCall.read());
     assert.ok(beforeEnd.events.some((event) => event.kind === "presence-leave" && event.remaining > 0), "exercise real SDK metadata-replacement leave events");
     await page.evaluate(() => window.__pairedCall.end());

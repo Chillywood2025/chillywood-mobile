@@ -1,0 +1,10 @@
+{
+  "name": "@chillywood/real-peer-browser-integration",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Isolated browser tooling for the mandatory real paired call integration gate.",
+  "devDependencies": {
+    "playwright": "1.61.1"
+  }
+}

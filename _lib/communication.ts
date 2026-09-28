@@ -17,10 +17,7 @@ import {
   type RoomAccessDecision,
   type RoomMembershipState,
 } from "./roomRules";
-import {
-  ROOM_ACTIVITY_ACTIVE_WINDOW_MS,
-  ROOM_HEARTBEAT_MS,
-} from "./performancePolicy";
+import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "./performancePolicy";
 import { supabase } from "./supabase";
 import { buildUserChannelProfile, readUserProfile } from "./userData";
 import { createPartyIdentifier, getWritablePartyUserId } from "./watchParty";
@@ -52,7 +49,7 @@ const COMMUNICATION_ROOM_BASE_SELECT =
 const COMMUNICATION_ROOM_SELECT =
   `${COMMUNICATION_ROOM_BASE_SELECT},content_access_rule,capture_policy,last_activity_at`;
 const COMMUNICATION_ROOM_MEMBERSHIP_SELECT =
-  "room_id,user_id,role,membership_state,membership_generation,camera_enabled,mic_enabled,display_name,avatar_url,joined_at,last_seen_at,left_at,updated_at";
+  "room_id,user_id,role,membership_state,membership_generation,membership_admission_attempt,camera_enabled,mic_enabled,display_name,avatar_url,joined_at,last_seen_at,left_at,updated_at";
 
 export type CommunicationRoomStatus = "active" | "ended";
 export type CommunicationLinkedRoomMode = "live" | "hybrid";
@@ -79,6 +76,7 @@ export type CommunicationRoomMembership = {
   role: CommunicationMembershipRole;
   membershipState: RoomMembershipState;
   membershipGeneration?: string;
+  membershipAdmissionAttempt?: string;
   cameraEnabled: boolean;
   micEnabled: boolean;
   displayName?: string;
@@ -157,6 +155,7 @@ type CommunicationMembershipRow = Pick<
   | "role"
   | "membership_state"
   | "membership_generation"
+  | "membership_admission_attempt"
   | "camera_enabled"
   | "mic_enabled"
   | "display_name"
@@ -181,7 +180,6 @@ type CommunicationRoomBaseInsert = Pick<
   | "linked_room_mode"
 >;
 type CommunicationRoomUpdate = TablesUpdate<"communication_rooms">;
-type CommunicationMembershipUpdate = TablesUpdate<"communication_room_memberships">;
 
 type CommunicationRoomCreateOptions = {
   hostUserId?: string;
@@ -371,16 +369,44 @@ const createCommunicationOperationError = (operation: string, cause: unknown) =>
   const detail = typeof cause === "object" && cause && "message" in cause
     ? String((cause as { message?: unknown }).message ?? "").trim()
     : "";
-  return new Error(detail || `Communication ${operation} failed.`);
+  const code = typeof cause === "object" && cause && "code" in cause
+    ? String((cause as { code?: unknown }).code ?? "").trim()
+    : "";
+  return Object.assign(new Error(detail || `Communication ${operation} failed.`), code ? { code } : {});
 };
 
 export async function broadcastCommunicationRoomSignal(options: {
   roomId: string;
   event: CommunicationRoomSignalEvent;
   payload: Record<string, unknown>;
+  userId?: string;
+  expectedMembershipGeneration?: string;
 }): Promise<boolean> {
   const roomId = formatCommunicationRoomCode(options.roomId);
   if (!roomId) return false;
+
+  if (options.expectedMembershipGeneration !== undefined) {
+    const generation = String(options.expectedMembershipGeneration).trim();
+    const userId = normalizeAuthenticatedUserId(options.userId ?? await getWritablePartyUserId());
+    if (!userId || !AUTHENTICATED_USER_ID_PATTERN.test(generation)) {
+      throw createCommunicationOperationError("signal broadcast", { message: "signal membership identity required" });
+    }
+    const payload = { ...options.payload };
+    delete payload.fromUserId;
+    delete payload.membershipGeneration;
+    const { data, error } = await runExactSessionAccountBoundSupabaseMutationRpc<{
+      sent?: unknown; event?: unknown; roomId?: unknown; fromUserId?: unknown; membershipGeneration?: unknown;
+    }>("broadcast_owned_communication_room_signal", {
+      p_room_id: roomId, p_expected_membership_generation: generation,
+      p_event: options.event, p_payload: payload,
+    }, userId);
+    if (error) throw createCommunicationOperationError("signal broadcast", error);
+    if (data?.sent !== true || data.event !== options.event || data.roomId !== roomId
+      || data.fromUserId !== userId || data.membershipGeneration !== generation) {
+      throw createCommunicationOperationError("signal broadcast", { message: "Communication signal broadcast returned an invalid response." });
+    }
+    return true;
+  }
 
   const rpc = supabase.rpc.bind(supabase) as unknown as (
     fn: "broadcast_communication_room_signal",
@@ -474,6 +500,7 @@ export const parseCommunicationMembershipPayload = (row: CommunicationMembership
     role,
     membershipState: normalizeRoomMembershipState(row.membership_state),
     membershipGeneration: String(row.membership_generation ?? "").trim() || undefined,
+    membershipAdmissionAttempt: String(row.membership_admission_attempt ?? "").trim() || undefined,
     cameraEnabled: !!row.camera_enabled,
     micEnabled: typeof row.mic_enabled === "boolean" ? row.mic_enabled : true,
     displayName: String(row.display_name ?? "").trim() || undefined,
@@ -693,27 +720,6 @@ export const getActiveCommunicationMemberships = (memberships: CommunicationRoom
     return Date.now() - lastSeenAt <= COMMUNICATION_ACTIVE_MEMBER_WINDOW_MILLIS;
   });
 
-async function touchActiveCommunicationRoomHeartbeat(room: CommunicationRoomState): Promise<void> {
-  if (!isCommunicationRoomActive(room)) return;
-
-  const activityMillis = getCommunicationRoomActivityMillis(room);
-  if (activityMillis !== null && Date.now() - activityMillis < ROOM_HEARTBEAT_MS * 2) return;
-
-  try {
-    const updates: CommunicationRoomUpdate = {
-      last_activity_at: new Date().toISOString(),
-    };
-
-    await supabase
-      .from(COMMUNICATION_ROOMS_TABLE)
-      .update(updates)
-      .eq("room_id", room.roomId)
-      .eq("status", "active");
-  } catch {
-    // Membership heartbeat still records presence; room activity is best-effort under RLS.
-  }
-}
-
 export async function evaluateCommunicationRoomAccess(options: {
   room: CommunicationRoomState;
   membership?: CommunicationRoomMembership | null;
@@ -730,48 +736,98 @@ export async function evaluateCommunicationRoomAccess(options: {
   });
 }
 
+export type CommunicationRoomAdmission = Readonly<{
+  roomId: string;
+  userId: string;
+  attemptId: string;
+  expectedPreviousGeneration: string | null;
+}>;
+
+const createCommunicationAdmissionAttemptId = () => {
+  if (typeof globalThis.crypto?.getRandomValues !== "function") {
+    throw createCommunicationOperationError("membership admission", { message: "Secure device randomness is unavailable." });
+  }
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
+export async function prepareCommunicationRoomAdmission(options: {
+  roomId: string;
+  userId?: string;
+}): Promise<CommunicationRoomAdmission> {
+  const roomId = formatCommunicationRoomCode(options.roomId);
+  const userId = normalizeAuthenticatedUserId(options.userId ?? await getWritablePartyUserId());
+  if (!roomId || !userId) throw createCommunicationOperationError("membership admission", { message: "admission identity required" });
+  // This exact-session read distinguishes a genuinely absent own row from an
+  // RLS-hidden row. Capture its CAS precondition once, before the mutation.
+  const { data, error } = await runExactSessionAccountBoundSupabaseMutationRpc<{
+    roomId?: unknown; userId?: unknown; previousGeneration?: unknown;
+  }>("read_communication_room_admission", { p_room_id: roomId }, userId);
+  if (error) throw createCommunicationOperationError("membership admission", error);
+  if (!data || typeof data !== "object" || Array.isArray(data)
+    || data.roomId !== roomId || data.userId !== userId
+    || !(data.previousGeneration === null || (typeof data.previousGeneration === "string"
+      && AUTHENTICATED_USER_ID_PATTERN.test(data.previousGeneration)))) {
+    throw createCommunicationOperationError("membership admission", { message: "admission snapshot not confirmed" });
+  }
+  return Object.freeze({ roomId, userId, attemptId: createCommunicationAdmissionAttemptId(),
+    expectedPreviousGeneration: data.previousGeneration as string | null });
+}
+
 export async function joinCommunicationRoomSession(options: {
   roomId: string;
   userId?: string;
+  admission: CommunicationRoomAdmission;
   displayName?: string;
   avatarUrl?: string;
   cameraEnabled?: boolean;
   micEnabled?: boolean;
 }): Promise<CommunicationRoomMembership | null> {
   const roomId = formatCommunicationRoomCode(options.roomId);
-  // Chat surfaces already hold an exact, current SessionProvider subject. Do
-  // not gate the authoritative RPC on a second async auth read: on installed
-  // clients that lookup can transiently return empty during accepted-call
-  // mounting and suppress the request entirely. The RPC derives auth.uid(),
-  // verifies the exact current session, and binds accepted invite membership.
-  const requestedUserId = normalizeAuthenticatedUserId(
-    options.userId ?? await getWritablePartyUserId(),
-  );
-  if (!roomId || !requestedUserId) return null;
-
+  const requestedUserId = normalizeAuthenticatedUserId(options.userId ?? await getWritablePartyUserId());
+  const admission = options.admission;
+  if (!roomId || !requestedUserId || !admission
+    || admission.roomId !== roomId || admission.userId !== requestedUserId
+    || !AUTHENTICATED_USER_ID_PATTERN.test(admission.attemptId)
+    || !(admission.expectedPreviousGeneration === null
+      || AUTHENTICATED_USER_ID_PATTERN.test(admission.expectedPreviousGeneration))) {
+    throw createCommunicationOperationError("membership join", { message: "prepared admission identity required" });
+  }
   const { data, error } = await runExactSessionAccountBoundSupabaseMutationRpc<
     CommunicationMembershipRow[] | CommunicationMembershipRow
-  >(
-    "join_communication_room_session",
-    {
-      p_room_id: roomId,
-      p_display_name: String(options.displayName ?? "").trim() || null,
-      p_avatar_url: String(options.avatarUrl ?? "").trim() || null,
-      p_camera_enabled: !!options.cameraEnabled,
-      p_mic_enabled: typeof options.micEnabled === "boolean" ? options.micEnabled : true,
-    },
-    requestedUserId,
-  );
-  const row = Array.isArray(data) ? data[0] ?? null : data;
+  >("join_owned_communication_room_session", {
+    p_room_id: roomId,
+    p_admission_attempt: admission.attemptId,
+    p_expected_previous_generation: admission.expectedPreviousGeneration,
+    p_display_name: String(options.displayName ?? "").trim() || null,
+    p_avatar_url: String(options.avatarUrl ?? "").trim() || null,
+    p_camera_enabled: !!options.cameraEnabled,
+    p_mic_enabled: typeof options.micEnabled === "boolean" ? options.micEnabled : true,
+  }, requestedUserId);
+  const row = Array.isArray(data) ? data.length === 1 ? data[0] : null : data;
   if (error) throw createCommunicationOperationError("membership join", error);
-  if (!row) return null;
-  const membership = parseCommunicationMembershipPayload(row);
-  return membership?.userId === requestedUserId ? membership : null;
+  const membership = row && typeof row === "object" ? parseCommunicationMembershipPayload(row) : null;
+  if (!membership || membership.roomId !== roomId || membership.userId !== requestedUserId
+    || !AUTHENTICATED_USER_ID_PATTERN.test(membership.membershipGeneration ?? "")
+    || membership.membershipAdmissionAttempt !== admission.attemptId
+    || !["active", "reconnecting"].includes(String(row?.membership_state))
+    || typeof row?.camera_enabled !== "boolean" || typeof row?.mic_enabled !== "boolean"
+    || row?.left_at !== null) {
+    throw createCommunicationOperationError("membership join", {
+      message: "admission postcondition not confirmed", code: "account_bound_rpc_outcome_unknown",
+    });
+  }
+  return membership;
 }
 
 export async function touchCommunicationRoomSession(options: {
   roomId: string;
   userId?: string;
+  expectedMembershipGeneration: string;
   membershipState?: RoomMembershipState;
   cameraEnabled?: boolean;
   micEnabled?: boolean;
@@ -779,38 +835,35 @@ export async function touchCommunicationRoomSession(options: {
   avatarUrl?: string;
 }): Promise<CommunicationRoomMembership | null> {
   const roomId = formatCommunicationRoomCode(options.roomId);
-  const writableUserId = String(options.userId ?? await getWritablePartyUserId()).trim();
-  if (!roomId || !writableUserId) return null;
-
-  const now = new Date().toISOString();
-  const membershipState = normalizeRoomMembershipState(options.membershipState);
-  const updates: CommunicationMembershipUpdate = {
-    membership_state: membershipState,
-    last_seen_at: now,
-    updated_at: now,
-  };
-
-  if (options.cameraEnabled !== undefined) updates.camera_enabled = !!options.cameraEnabled;
-  if (options.micEnabled !== undefined) updates.mic_enabled = !!options.micEnabled;
-  if (options.displayName !== undefined) updates.display_name = String(options.displayName ?? "").trim() || null;
-  if (options.avatarUrl !== undefined) updates.avatar_url = String(options.avatarUrl ?? "").trim() || null;
-
-  const { data, error } = await supabase
-    .from(COMMUNICATION_ROOM_MEMBERSHIPS_TABLE)
-    .update(updates)
-    .eq("room_id", roomId)
-    .eq("user_id", writableUserId)
-    .select(COMMUNICATION_ROOM_MEMBERSHIP_SELECT)
-    .returns<CommunicationMembershipRow>()
-    .single();
-
+  const userId = normalizeAuthenticatedUserId(options.userId ?? await getWritablePartyUserId());
+  const generation = String(options.expectedMembershipGeneration ?? "").trim();
+  if (!roomId || !userId || !AUTHENTICATED_USER_ID_PATTERN.test(generation)) {
+    throw createCommunicationOperationError("membership update", { message: "membership update identity required" });
+  }
+  const { data, error } = await runExactSessionAccountBoundSupabaseMutationRpc<
+    CommunicationMembershipRow[] | CommunicationMembershipRow
+  >("touch_owned_communication_room_session", {
+    p_room_id: roomId, p_expected_membership_generation: generation,
+    p_membership_state: options.membershipState === undefined ? null : normalizeRoomMembershipState(options.membershipState),
+    p_camera_enabled: options.cameraEnabled === undefined ? null : !!options.cameraEnabled,
+    p_mic_enabled: options.micEnabled === undefined ? null : !!options.micEnabled,
+    p_display_name: options.displayName === undefined ? null : String(options.displayName).trim() || null,
+    p_avatar_url: options.avatarUrl === undefined ? null : String(options.avatarUrl).trim() || null,
+    p_update_display_name: options.displayName !== undefined,
+    p_update_avatar_url: options.avatarUrl !== undefined,
+  }, userId);
   if (error) throw createCommunicationOperationError("membership update", error);
-  if (!data) return null;
-  const membership = parseCommunicationMembershipPayload(data);
-  if (membership && (membershipState === "active" || membershipState === "reconnecting")) {
-    void getCommunicationRoom(roomId)
-      .then((room) => room ? touchActiveCommunicationRoomHeartbeat(room) : undefined)
-      .catch(() => undefined);
+  const row = Array.isArray(data) ? data.length === 1 ? data[0] : null : data;
+  const membership = row && typeof row === "object" ? parseCommunicationMembershipPayload(row) : null;
+  if (!membership || membership.roomId !== roomId || membership.userId !== userId
+    || membership.membershipGeneration !== generation
+    || !AUTHENTICATED_USER_ID_PATTERN.test(membership.membershipAdmissionAttempt ?? "")
+    || !["active", "reconnecting"].includes(String(row?.membership_state))
+    || typeof row?.camera_enabled !== "boolean" || typeof row?.mic_enabled !== "boolean"
+    || row?.left_at !== null) {
+    throw createCommunicationOperationError("membership update", {
+      message: "membership update postcondition not confirmed", code: "account_bound_rpc_outcome_unknown",
+    });
   }
   return membership;
 }
@@ -834,12 +887,16 @@ export async function leaveCommunicationRoomSession(options: {
   }, userId);
   if (error) throw createCommunicationOperationError("membership leave", error);
   const row = Array.isArray(data) ? data.length === 1 ? data[0] : null : data;
-  const membership = row ? parseCommunicationMembershipPayload(row) : null;
+  const membership = row && typeof row === "object" ? parseCommunicationMembershipPayload(row) : null;
   if (!membership || membership.roomId !== roomId || membership.userId !== userId
     || membership.membershipGeneration !== generation
     || !["left", "removed"].includes(membership.membershipState)
-    || membership.cameraEnabled || membership.micEnabled || !membership.leftAt) {
-    throw createCommunicationOperationError("membership leave", { message: "cleanup postcondition not confirmed" });
+    || row?.camera_enabled !== false || row?.mic_enabled !== false
+    || !membership.leftAt || !Number.isFinite(Date.parse(membership.leftAt))) {
+    throw createCommunicationOperationError("membership leave", {
+      message: "cleanup postcondition not confirmed",
+      code: "account_bound_rpc_outcome_unknown",
+    });
   }
   return membership;
 }
@@ -847,32 +904,11 @@ export async function leaveCommunicationRoomSession(options: {
 export async function heartbeatCommunicationRoomSession(options: {
   roomId: string;
   userId: string;
+  expectedMembershipGeneration: string;
 }): Promise<CommunicationRoomMembership | null> {
-  const roomId = formatCommunicationRoomCode(options.roomId);
-  const userId = String(options.userId ?? "").trim();
-  if (!roomId || !userId) return null;
-  const now = new Date().toISOString();
-  // Liveness is not media intent or membership admission. A delayed heartbeat
-  // must neither undo a newer mute nor reactivate a membership that has left.
-  const { data, error } = await supabase
-    .from(COMMUNICATION_ROOM_MEMBERSHIPS_TABLE)
-    .update({ last_seen_at: now, updated_at: now })
-    .eq("room_id", roomId)
-    .eq("user_id", userId)
-    .in("membership_state", ["active", "reconnecting"])
-    .is("left_at", null)
-    .select(COMMUNICATION_ROOM_MEMBERSHIP_SELECT)
-    .returns<CommunicationMembershipRow>()
-    .maybeSingle();
-  if (error) throw createCommunicationOperationError("membership heartbeat", error);
-  if (!data) return null;
-  const membership = parseCommunicationMembershipPayload(data);
-  if (membership) {
-    void getCommunicationRoom(roomId)
-      .then((room) => room ? touchActiveCommunicationRoomHeartbeat(room) : undefined)
-      .catch(() => undefined);
-  }
-  return membership;
+  // A heartbeat must preserve the current media/state. The owned RPC reads
+  // those values under lock; no delayed client snapshot is written back.
+  return touchCommunicationRoomSession(options);
 }
 
 export async function getLinkedCommunicationRoom(linkedPartyId: string): Promise<CommunicationRoomState | null> {

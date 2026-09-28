@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import vm from "node:vm";
+import { webcrypto } from "node:crypto";
 import ts from "typescript";
-import { invokeAccountBoundSupabaseRpc } from "../../../_lib/accountBoundSupabaseRpc.mjs";
+import { invokeAccountBoundSupabaseRpc, isAccountBoundSupabaseRpcOutcomeAmbiguous } from "../../../_lib/accountBoundSupabaseRpc.mjs";
 
 function loadSource(file, imports) {
   const compiled = ts.transpileModule(fs.readFileSync(file, "utf8"), {
@@ -10,7 +11,7 @@ function loadSource(file, imports) {
   }).outputText;
   const module = { exports: {} };
   vm.runInNewContext(compiled, {
-    module, exports: module.exports, console, setTimeout, clearTimeout,
+    module, exports: module.exports, console, setTimeout, clearTimeout, crypto: webcrypto,
     process: { env: {} },
     require: (name) => {
       if (!Object.hasOwn(imports, name)) throw new Error(`unexpected API dependency: ${name}`);
@@ -35,7 +36,7 @@ export async function loadAuthenticatedCommunicationApiSource(client, { apiUrl, 
     "./supabase": bootstrap,
     "./entitlementAuthority": deadlines,
     "./accountSessionAuthority": authority,
-    "./accountBoundSupabaseRpc.mjs": { invokeAccountBoundSupabaseRpc },
+    "./accountBoundSupabaseRpc.mjs": { invokeAccountBoundSupabaseRpc, isAccountBoundSupabaseRpcOutcomeAmbiguous },
     "react-native": { Platform: { OS: "ios" } },
   });
   return {

@@ -34,6 +34,59 @@ test("full screen rejects a failed server Answer without starting capture", asyn
   } finally { await h.unmount(); }
 });
 
+test("full screen resumes an accepted call through a fresh admission and keeps controls on its returned generation", async () => {
+  const priorGeneration = "12000000-0000-4000-8000-000000000099";
+  const h = await mountFullChatThread({
+    invite: { status: "accepted" },
+    configureMedia: (media) => {
+      media.ownedAdmission = true;
+      media.membershipGeneration = priorGeneration;
+      media.currentAdmissionAttemptId = "13000000-0000-4000-8000-000000000099";
+      media.admissionAttempts.set(media.currentAdmissionAttemptId, priorGeneration);
+    },
+  });
+  try {
+    const media = h.runtime.media;
+    assert.equal(media.admissionPrepareCalls.length, 1);
+    assert.equal(media.joinCalls.length, 1);
+    assert.equal(media.admissionPrepareCalls[0].expectedPreviousGeneration, priorGeneration);
+    assert.strictEqual(media.joinCalls[0].admission, media.admissionPrepareCalls[0]);
+    assert.notEqual(media.membershipGeneration, priorGeneration,
+      "an accepted invite on a fresh screen cannot inherit the previous durable owner");
+    assert.equal(media.localStreams.length, 1);
+    const currentGeneration = media.membershipGeneration;
+    await h.run(() => h.runtime.snapshot.handleToggleCallMic());
+    assert.ok(media.membershipTouches.length > 0);
+    for (const request of media.membershipTouches) {
+      assert.equal(request.expectedMembershipGeneration, currentGeneration);
+    }
+    await h.run(() => h.runtime.snapshot.handleJoinOrCloseCall());
+    assert.equal(h.runtime.leaves.length, 1);
+    assert.equal(h.runtime.leaves[0].expectedMembershipGeneration, currentGeneration);
+    assert.equal(h.runtime.snapshot.callPanelOpen, false);
+    for (const stream of media.localStreams) for (const track of stream.getTracks()) assert.equal(track.readyState, "ended");
+  } finally { await h.unmount(); }
+});
+
+test("full screen cannot start capture from an accepted invite when admission preparation fails", async () => {
+  const h = await mountFullChatThread({
+    invite: { status: "accepted" },
+    configureMedia: (media) => {
+      media.ownedAdmission = true;
+      media.admissionPrepareActions.push({ outcome: "reject", message: "admission snapshot offline" });
+    },
+  });
+  try {
+    assert.equal(h.runtime.snapshot.activeCallInvite.status, "accepted");
+    assert.equal(h.runtime.media.admissionPrepareCalls.length, 1);
+    assert.equal(h.runtime.media.joinCalls.length, 0);
+    assert.equal(h.runtime.media.localStreams.length, 0);
+    assert.equal(h.runtime.media.membershipTouches.length, 0);
+    assert.equal(h.runtime.leaves.length, 0);
+    assert.notEqual(h.runtime.snapshot.callChannelState, "live");
+  } finally { await h.unmount(); }
+});
+
 test("full caller screen End after terminal confirmation never repeats a closed-room host mutation", async () => {
   const h = await mountFullChatThread({ invite: { callerUserId: "local-user", calleeUserId: "remote-user", status: "accepted" } });
   try {

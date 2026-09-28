@@ -137,6 +137,9 @@ export async function mountFullChatThread(options = {}) {
     const snapshot = await readSnapshot(...args);
     return { ...snapshot, room: { ...snapshot.room, hostUserId: runtime.invite.callerUserId } };
   };
+  // Scenario-specific state belongs at the modeled API boundary. The screen,
+  // adapter, admission coordinator, and legacy hook still execute unchanged.
+  options.configureMedia?.(media);
   const idleLiveKit = () => ({});
   const adapter = compile(fs.readFileSync("hooks/use-chat-call-media-session.ts", "utf8"), "hooks/use-chat-call-media-session.ts", {
     react: React, "../_lib/chatCallMediaProviderPolicy": compile(fs.readFileSync("_lib/chatCallMediaProviderPolicy.ts", "utf8"), "_lib/chatCallMediaProviderPolicy.ts", {}),

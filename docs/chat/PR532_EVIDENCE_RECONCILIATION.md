@@ -129,12 +129,15 @@ partial local test counts do not stand in for these gates.
 
 The forward migration
 `supabase/migrations/20260928164743_communication_terminal_self_leave.sql`
-adds `membership_generation` and the exact-session self-leave RPC consumed by
+adds durable membership/admission identity and exact-session admission, media,
+signaling and self-leave RPCs consumed by
 the corrected client. **That migration must be deployed and verified before
 publishing/installing the corrected client bundle.** There is no silent fallback
 to a weaker client leave when the RPC or generation is absent. The migration is
-additive and has tests for older clients' active-room reads/media updates and
-ordinary self-leave; this is compatibility evidence, not a production rollout.
+additive and has tests for older clients' reads/media updates and ordinary
+self-leave on legacy-owned rows; an old client must start a fresh call after
+rollback rather than resume a modern-owned membership. This is compatibility
+evidence, not a production rollout.
 Production migration, internal delivery and device work each still require
 their appropriate separate authorization and canonical checks.
 
@@ -142,6 +145,22 @@ The source changes preserve the invite's fixed provider, ordinary RLS closure,
 account/session checks, permissions, app navigation and release safeguards.
 Both providers' pending admissions are coordinated by exact account/room
 ownership so a retired join must settle before a same-row replacement starts.
+The retirement reservation starts before asynchronous native teardown, so a
+full unmount/remount cannot slip a new ACTIVE join ahead of the old leave.
+That process-local coordination is not a server fence after an app restart.
+Modern admission therefore also carries a stable attempt identity and an
+observed-generation comparison. New ownership rotates the durable generation;
+replaying the same current attempt preserves media intent, while a superseded
+attempt cannot adopt a newer generation. Media updates and heartbeats carry the
+captured generation as well as leave. Seeing a newer owner retires only the old
+local resources, not the shared accepted invite. Legacy-owned rows retain the
+old client contract; older bundles cannot safely resume modern-owned rows.
+The server also stamps the authenticated sender's generation on owned signals.
+The receiver rechecks it before queued native SDP/ICE work, so a packet already
+delivered before takeover cannot recreate a retired peer. A same-generation
+Presence metadata update still preserves the current peer. The browser lane
+requires one endpoint to restart in the same room, then receive real media with
+the surviving endpoint while a held retired offer is rejected.
 A JavaScript timeout does not prove an HTTP/native operation was canceled;
 unsettled work remains owned and a retry cannot assert capture or membership
 success without the required postcondition. Permanent network/native failure

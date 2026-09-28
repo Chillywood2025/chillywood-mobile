@@ -25,7 +25,24 @@ tracked upgrade. No critical advisory may remain.
 
 ## Reviewed result
 
-The repository has two npm trees.
+The advisory guard audits four independently locked npm trees in both full and
+production scopes: the root application, `ops/alert-automation`,
+`isolated-runtime/cloudflare`, and `tests/integration/real-peer-browser`.
+
+The real-peer browser tree pins Playwright 1.61.1 as a development dependency for
+the two-browser WebRTC integration test. Its separate lockfile keeps the test
+toolchain out of the mobile dependency and native compatibility identities. It
+receives the same full audit reporting and production critical/high gate as the
+other trees; isolation does not waive advisory review or grant a count-based
+exception. Full-audit findings remain subject to the development-tooling review
+requirements above.
+
+The guard requires a successful audit response with complete, valid vulnerability
+totals. An npm error response, missing report data, or failed audit process blocks
+validation; none is interpreted as a zero-advisory result. npm's ordinary nonzero
+exit for genuine findings still uses the existing scope-specific thresholds.
+
+Historical reviewed mobile and alert-automation results:
 
 | Tree | Before | Reviewed change | After |
 |---|---|---|---|

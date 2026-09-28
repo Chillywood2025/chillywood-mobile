@@ -2,6 +2,18 @@ const RPC_NAME_PATTERN = /^[a-z][a-z0-9_]{0,127}$/u;
 
 const normalizedText = (value) => String(value ?? "").trim();
 
+export const isAccountBoundSupabaseRpcOutcomeAmbiguous = (error) => {
+  const record = error && typeof error === "object" && !Array.isArray(error) ? error : null;
+  const message = normalizedText(record?.message ?? error);
+  return normalizedText(record?.code) === "account_bound_rpc_outcome_unknown"
+    || /(?:^|:\s*)account_bound_rpc_(?:timeout|unavailable|outcome_unknown|failed)$/u.test(message);
+};
+
+const unknownOutcome = () => ({
+  data: null,
+  error: { message: "account_bound_rpc_outcome_unknown", code: "account_bound_rpc_outcome_unknown" },
+});
+
 const isAllowedSupabaseOrigin = (value) => {
   try {
     const url = new URL(value);
@@ -66,13 +78,26 @@ export async function invokeAccountBoundSupabaseRpc({
       const code = payload && typeof payload === "object" && !Array.isArray(payload)
         ? normalizedText(payload.code)
         : "";
+      // A gateway error or unusable response does not prove the server rolled
+      // back its mutation. Preserve only a structured PostgREST/SQL rejection
+      // from a client-error response as definitive. In particular, JSON or
+      // HTML 502/504 bodies may arrive after the database already committed.
+      const definitiveRejection = Number.isInteger(response?.status)
+        && response.status >= 400 && response.status < 500
+        && ![408, 499].includes(response.status)
+        && /^(?:[0-9A-Z]{5}|PGRST[0-9]{3})$/u.test(code)
+        && Boolean(message);
+      if (!definitiveRejection) return unknownOutcome();
       return {
         data: null,
         error: {
-          message: message || "account_bound_rpc_failed",
-          ...(code ? { code } : {}),
+          message,
+          code,
         },
       };
+    }
+    if (!Number.isInteger(response.status) || response.status < 200 || response.status >= 300) {
+      return unknownOutcome();
     }
     const data = response.status === 204 ? null : await response.json();
     return { data, error: null };

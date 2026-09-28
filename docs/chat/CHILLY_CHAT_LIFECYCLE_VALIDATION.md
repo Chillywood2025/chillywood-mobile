@@ -268,6 +268,9 @@ those valid narrow results must not be summarized as end-to-end negotiation.
 The separate browser lane has no fabricated SDP answer or Connected state and
 requires received audio energy, changing decoded video, camera-off privacy,
 cleanup, same-page fresh-call reuse and a dropped-answer negative control.
+It also restarts one endpoint in the same durable room, requires fresh peer
+identities and received media with the surviving endpoint, and rejects a held
+old-generation offer without creating another peer or native SDP operation.
 Its membership/signaling services are simulated. Authenticated SQL/private
 Realtime lanes prove their own server boundaries separately.
 
@@ -279,12 +282,13 @@ appendix. The original #532 candidate remains **NOT QUALIFIED**.
 
 The corrected client requires
 `supabase/migrations/20260928164743_communication_terminal_self_leave.sql`,
-including its new `membership_generation` column and exact-session self-leave
-RPC. **Deploy and verify the additive migration before distributing the
+including durable admission/generation identity and exact-session admission,
+media, signaling and self-leave RPCs. **Deploy and verify the additive migration before distributing the
 corrected client.** A missing migration must not be worked around by bypassing
 RLS or accepting an unverified client cleanup. Older-client compatibility is
-covered for active-room reads/media updates and ordinary self-leave; rollout
-verification must still use the actual deployed schema.
+covered for legacy-owned rows' reads/media updates and ordinary self-leave.
+After a rollback, an older bundle must start a fresh call instead of resuming a
+modern-owned row. Rollout verification must still use the actual deployed schema.
 
 Source approval does not authorize production migration or delivery. After
 separate appropriate authorization, verify migration readback, source/native

@@ -5,10 +5,11 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
 import vm from "node:vm";
+import { webcrypto } from "node:crypto";
+import { invokeAccountBoundSupabaseRpc, isAccountBoundSupabaseRpcOutcomeAmbiguous } from "../../_lib/accountBoundSupabaseRpc.mjs";
 
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
-const { createClient } = require("@supabase/supabase-js");
 const source = fs.readFileSync("_lib/communication.ts", "utf8");
 const compiled = ts.transpileModule(source, {
   compilerOptions: {
@@ -34,7 +35,7 @@ const roomRow = {
   updated_at: "2026-08-30T00:00:00.000Z",
 };
 
-function loadCommunication(clientOverride) {
+function loadCommunication(clientOverride, runExactSessionOverride) {
   const runtime = {
     accountBoundError: null,
     accountBoundRpcCalls: [],
@@ -70,6 +71,7 @@ function loadCommunication(clientOverride) {
       runExactSessionAccountBoundSupabaseMutationRpc: async (functionName, args, expectedUserId) => {
         runtime.accountBoundRpcCalls.push({ args, expectedUserId, functionName });
         if (runtime.accountBoundError) throw runtime.accountBoundError;
+        if (runExactSessionOverride) return runExactSessionOverride(functionName, args, expectedUserId);
         return runtime.rpcResponse;
       },
     },
@@ -96,6 +98,7 @@ function loadCommunication(clientOverride) {
   const commonJsModule = { exports: {} };
   vm.runInNewContext(compiled, {
     console,
+    crypto: webcrypto,
     exports: commonJsModule.exports,
     module: commonJsModule,
     process: { env: {} },
@@ -139,12 +142,13 @@ test("communication membership join preserves RPC failure evidence", async () =>
   await assert.rejects(api.joinCommunicationRoomSession({
     roomId: "ROOM-ERROR",
     userId: "11111111-1111-4111-8111-111111111111",
+    admission: cleanupIdentity.admission,
   }), /join denied operationally/u);
   assert.deepEqual(
     runtime.accountBoundRpcCalls.map(({ expectedUserId, functionName }) => ({ expectedUserId, functionName })),
     [{
       expectedUserId: "11111111-1111-4111-8111-111111111111",
-      functionName: "join_communication_room_session",
+      functionName: "join_owned_communication_room_session",
     }],
   );
 });
@@ -155,15 +159,17 @@ test("communication membership join preserves account replacement rejection", as
   await assert.rejects(api.joinCommunicationRoomSession({
     roomId: "ROOM-ERROR",
     userId: "11111111-1111-4111-8111-111111111111",
+    admission: cleanupIdentity.admission,
   }), /signed-in account changed/u);
 });
 
 test("communication membership update preserves database failure evidence", async () => {
   const { api, runtime } = loadCommunication();
-  runtime.queryResponses.set("communication_room_memberships", { data: null, error: { message: "membership update unavailable" } });
+  runtime.rpcResponse = { data: null, error: { message: "membership update unavailable" } };
   await assert.rejects(api.touchCommunicationRoomSession({
     roomId: "ROOM-ERROR",
     userId: "11111111-1111-4111-8111-111111111111",
+    expectedMembershipGeneration: cleanupIdentity.expectedMembershipGeneration,
   }), /membership update unavailable/u);
 });
 
@@ -183,6 +189,8 @@ const cleanupIdentity = {
   roomId: "ROOM-ERROR",
   userId: "11111111-1111-4111-8111-111111111111",
   expectedMembershipGeneration: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  admission: Object.freeze({ roomId: "ROOM-ERROR", userId: "11111111-1111-4111-8111-111111111111",
+    attemptId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", expectedPreviousGeneration: null }),
 };
 const terminalMembership = {
   room_id: cleanupIdentity.roomId,
@@ -190,6 +198,7 @@ const terminalMembership = {
   role: "host",
   membership_state: "left",
   membership_generation: cleanupIdentity.expectedMembershipGeneration,
+  membership_admission_attempt: cleanupIdentity.admission.attemptId,
   camera_enabled: false,
   mic_enabled: false,
   joined_at: "2026-09-28T12:00:00Z",
@@ -237,11 +246,64 @@ test("terminal leave never treats null, missing, wrong-identity, or active-media
     { ...terminalMembership, camera_enabled: true },
     { ...terminalMembership, mic_enabled: true },
     { ...terminalMembership, left_at: null },
+    { ...terminalMembership, left_at: "invalid-time" },
+    { ...terminalMembership, camera_enabled: undefined },
   ];
   for (const data of invalid) {
     runtime.rpcResponse = { data, error: null };
-    await assert.rejects(api.leaveCommunicationRoomSession(cleanupIdentity), /cleanup postcondition/u);
+    await assert.rejects(api.leaveCommunicationRoomSession(cleanupIdentity), (error) => {
+      assert.match(error.message, /cleanup postcondition/u);
+      assert.equal(isAccountBoundSupabaseRpcOutcomeAmbiguous(error), true);
+      return true;
+    });
   }
+});
+
+test("unusable successful join receipts retain uncertainty instead of authorizing replacement admission", async () => {
+  const { api, runtime } = loadCommunication();
+  const joined = { ...terminalMembership, membership_state: "active", left_at: null };
+  const invalid = [
+    null, [], [joined, joined], "not a row", {},
+    { ...joined, user_id: "22222222-2222-4222-8222-222222222222" },
+    { ...joined, room_id: "OTHER-ROOM" },
+    { ...joined, membership_generation: null },
+    { ...joined, membership_admission_attempt: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" },
+    { ...joined, membership_state: "left" },
+    { ...joined, camera_enabled: undefined },
+    { ...joined, left_at: terminalMembership.left_at },
+  ];
+  for (const data of invalid) {
+    runtime.rpcResponse = { data, error: null };
+    await assert.rejects(api.joinCommunicationRoomSession(cleanupIdentity), (error) => {
+      assert.match(error.message, /admission postcondition/u);
+      assert.equal(isAccountBoundSupabaseRpcOutcomeAmbiguous(error), true);
+      return true;
+    });
+  }
+  runtime.rpcResponse = { data: [joined], error: null };
+  assert.equal((await api.joinCommunicationRoomSession(cleanupIdentity)).membershipGeneration, cleanupIdentity.expectedMembershipGeneration);
+});
+
+test("actual gateway error identity survives the communication wrapper for join and leave", async () => {
+  const { api, runtime } = loadCommunication();
+  runtime.rpcResponse = await invokeAccountBoundSupabaseRpc({
+    supabaseUrl: "http://127.0.0.1:54321", anonKey: "local", accessToken: "test",
+    functionName: "leave_communication_room_session",
+    fetchImpl: async () => ({ ok: false, status: 504, json: async () => { throw new Error("HTML timeout"); } }),
+  });
+  for (const operation of [api.joinCommunicationRoomSession, api.leaveCommunicationRoomSession]) {
+    await assert.rejects(operation(cleanupIdentity), (error) => {
+      assert.equal(error.code, "account_bound_rpc_outcome_unknown");
+      assert.equal(isAccountBoundSupabaseRpcOutcomeAmbiguous(error), true);
+      return true;
+    });
+  }
+  runtime.rpcResponse = { data: null, error: { code: "P0001", message: "communication_membership_cleanup_generation_changed" } };
+  await assert.rejects(api.leaveCommunicationRoomSession(cleanupIdentity), (error) => {
+    assert.equal(error.code, "P0001");
+    assert.equal(isAccountBoundSupabaseRpcOutcomeAmbiguous(error), false);
+    return true;
+  });
 });
 
 test("terminal leave accepts removed/off as terminal without converting its authority to left", async () => {
@@ -250,87 +312,141 @@ test("terminal leave accepts removed/off as terminal without converting its auth
   assert.equal((await api.leaveCommunicationRoomSession(cleanupIdentity)).membershipState, "removed");
 });
 
-function createHeartbeatSdkHarness() {
+function createHeartbeatRpcHarness() {
   let release;
   const barrier = new Promise((resolve) => { release = resolve; });
   let requestStarted;
   const started = new Promise((resolve) => { requestStarted = resolve; });
-  const row = {
-    room_id: "ROOM-ERROR",
-    user_id: "11111111-1111-4111-8111-111111111111",
-    role: "participant",
-    membership_state: "active",
-    camera_enabled: true,
-    mic_enabled: true,
-    joined_at: "2026-09-27T00:00:00.000Z",
-    last_seen_at: "2026-09-27T00:00:00.000Z",
-    left_at: null,
-  };
+  const row = { ...terminalMembership, membership_state: "active", camera_enabled: true, mic_enabled: true, left_at: null };
   const runtime = { row, requests: [], error: null };
-  const client = createClient("http://localhost:54321", "test-public-key", {
-    auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
-    global: {
-      fetch: async (input, init) => {
-        const request = new Request(input, init);
-        const url = new URL(request.url);
-        if (!url.pathname.endsWith("/communication_room_memberships")) {
-          return new Response("null", { headers: { "Content-Type": "application/json" } });
-        }
-        const patch = JSON.parse(await request.text());
-        runtime.requests.push({ method: request.method, patch, url });
-        requestStarted();
-        await barrier;
-        if (runtime.error) return new Response(JSON.stringify({ message: runtime.error }), {
-          headers: { "Content-Type": "application/json" }, status: 403,
-        });
-        // This boundary checks the installed SDK's real PATCH/filter request;
-        // the in-memory row models concurrent server state, not RLS proof.
-        const matches = url.searchParams.get("room_id") === `eq.${row.room_id}`
-          && url.searchParams.get("user_id") === `eq.${row.user_id}`
-          && url.searchParams.get("membership_state") === "in.(active,reconnecting)"
-          && url.searchParams.get("left_at") === "is.null"
-          && ["active", "reconnecting"].includes(row.membership_state)
-          && row.left_at === null;
-        if (matches) Object.assign(row, patch);
-        return new Response(JSON.stringify(matches ? row : null), { headers: { "Content-Type": "application/json" } });
-      },
+  const runExactSession = (functionName, args, expectedUserId) => invokeAccountBoundSupabaseRpc({
+    supabaseUrl: "http://localhost:54321", anonKey: "test-public-key", accessToken: "frozen-initiating-token",
+    functionName, args,
+    fetchImpl: async (input, init) => {
+      const request = new Request(input, init);
+      const url = new URL(request.url);
+      assert.equal(expectedUserId, row.user_id);
+      assert.equal(request.headers.get("Authorization"), "Bearer frozen-initiating-token");
+      const patch = JSON.parse(await request.text());
+      runtime.requests.push({ method: request.method, patch, url });
+      requestStarted();
+      await barrier;
+      let error = runtime.error;
+      if (patch.p_expected_membership_generation !== row.membership_generation) error = "communication_membership_generation_changed";
+      if (!["active", "reconnecting"].includes(row.membership_state) || row.left_at !== null) error = "communication_membership_inactive";
+      if (error) return new Response(JSON.stringify({ message: error, code: "P0001" }), {
+        headers: { "Content-Type": "application/json" }, status: 400,
+      });
+      // Controlled server boundary only: this proves the actual frozen-JWT RPC
+      // shape carries no stale media intent. Database tests prove SQL behavior.
+      row.last_seen_at = new Date().toISOString();
+      return new Response(JSON.stringify([row]), { headers: { "Content-Type": "application/json" } });
     },
   });
-  return { ...loadCommunication(client), release, started, heartbeatRuntime: runtime };
+  return { ...loadCommunication(undefined, runExactSession), release, started, heartbeatRuntime: runtime };
 }
 
-test("communication heartbeat uses the installed SDK to update only current membership liveness", async () => {
-  const { api, release, started, heartbeatRuntime: runtime } = createHeartbeatSdkHarness();
-  const pending = api.heartbeatCommunicationRoomSession({ roomId: runtime.row.room_id, userId: runtime.row.user_id });
+test("communication heartbeat sends only owned liveness intent through the real frozen-JWT RPC transport", async () => {
+  const { api, release, started, heartbeatRuntime: runtime } = createHeartbeatRpcHarness();
+  const pending = api.heartbeatCommunicationRoomSession(cleanupIdentity);
   await started;
   runtime.row.camera_enabled = false;
   runtime.row.mic_enabled = false;
   release();
   const membership = await pending;
-  assert.equal(runtime.requests[0].method, "PATCH");
-  assert.deepEqual(Object.keys(runtime.requests[0].patch).sort(), ["last_seen_at", "updated_at"]);
+  const request = runtime.requests[0];
+  assert.equal(request.method, "POST");
+  assert.equal(request.url.pathname, "/rest/v1/rpc/touch_owned_communication_room_session");
+  assert.equal(request.patch.p_expected_membership_generation, cleanupIdentity.expectedMembershipGeneration);
+  for (const field of ["p_camera_enabled", "p_mic_enabled", "p_membership_state", "p_display_name", "p_avatar_url"]) assert.equal(request.patch[field], null);
+  assert.equal(request.patch.p_update_display_name, false);
+  assert.equal(request.patch.p_update_avatar_url, false);
   assert.equal(membership.cameraEnabled, false);
   assert.equal(membership.micEnabled, false);
   assert.equal(runtime.row.membership_state, "active");
 });
 
-test("communication heartbeat cannot revive a membership that leaves before the delayed request applies", async () => {
-  const { api, release, started, heartbeatRuntime: runtime } = createHeartbeatSdkHarness();
-  const pending = api.heartbeatCommunicationRoomSession({ roomId: runtime.row.room_id, userId: runtime.row.user_id });
+test("communication heartbeat cannot revive a membership that leaves before its owned request applies", async () => {
+  const { api, release, started, heartbeatRuntime: runtime } = createHeartbeatRpcHarness();
+  const pending = api.heartbeatCommunicationRoomSession(cleanupIdentity);
   await started;
   runtime.row.membership_state = "left";
   runtime.row.left_at = "2026-09-27T00:01:00.000Z";
   const snapshot = { ...runtime.row };
   release();
-  assert.equal(await pending, null);
+  await assert.rejects(pending, /membership_inactive/u);
   assert.deepEqual(runtime.row, snapshot);
 });
 
-test("communication heartbeat preserves a server rejection without manufacturing membership success", async () => {
-  const { api, release, started, heartbeatRuntime: runtime } = createHeartbeatSdkHarness();
+test("communication heartbeat preserves server rejection without manufacturing membership success", async () => {
+  const { api, release, started, heartbeatRuntime: runtime } = createHeartbeatRpcHarness();
   runtime.error = "heartbeat authorization rejected";
-  const pending = api.heartbeatCommunicationRoomSession({ roomId: runtime.row.room_id, userId: runtime.row.user_id });
+  const pending = api.heartbeatCommunicationRoomSession(cleanupIdentity);
   await started;
   release();
   await assert.rejects(pending, /heartbeat authorization rejected/u);
+});
+
+test("admission preparation uses the exact-session read and freezes one CAS snapshot and secure attempt", async () => {
+  const { api, runtime } = loadCommunication();
+  runtime.rpcResponse = { data: { roomId: cleanupIdentity.roomId, userId: cleanupIdentity.userId,
+    previousGeneration: cleanupIdentity.expectedMembershipGeneration }, error: null };
+  const first = await api.prepareCommunicationRoomAdmission(cleanupIdentity);
+  const second = await api.prepareCommunicationRoomAdmission(cleanupIdentity);
+  assert.equal(Object.isFrozen(first), true);
+  assert.equal(first.expectedPreviousGeneration, cleanupIdentity.expectedMembershipGeneration);
+  assert.match(first.attemptId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u);
+  assert.notEqual(first.attemptId, second.attemptId);
+  assert.equal(runtime.accountBoundRpcCalls[0].functionName, "read_communication_room_admission");
+  assert.equal(runtime.accountBoundRpcCalls[0].expectedUserId, cleanupIdentity.userId);
+  for (const data of [null, {}, { ...runtime.rpcResponse.data, previousGeneration: undefined },
+    { ...runtime.rpcResponse.data, userId: "other" }, { ...runtime.rpcResponse.data, roomId: "OTHER-ROOM" }]) {
+    runtime.rpcResponse = { data, error: null };
+    await assert.rejects(api.prepareCommunicationRoomAdmission(cleanupIdentity), /admission snapshot not confirmed/u);
+  }
+});
+
+test("owned join never rereads or replaces its prepared CAS identity", async () => {
+  const { api, runtime } = loadCommunication();
+  runtime.rpcResponse = { data: [{ ...terminalMembership, membership_state: "active", left_at: null }], error: null };
+  await api.joinCommunicationRoomSession(cleanupIdentity);
+  await api.joinCommunicationRoomSession(cleanupIdentity);
+  assert.equal(runtime.accountBoundRpcCalls.length, 2);
+  for (const call of runtime.accountBoundRpcCalls) {
+    assert.equal(call.functionName, "join_owned_communication_room_session");
+    assert.equal(call.args.p_admission_attempt, cleanupIdentity.admission.attemptId);
+    assert.equal(call.args.p_expected_previous_generation, null);
+  }
+  await assert.rejects(api.joinCommunicationRoomSession({ ...cleanupIdentity, admission: undefined }), /prepared admission identity/u);
+  await assert.rejects(api.joinCommunicationRoomSession({ ...cleanupIdentity, admission: { ...cleanupIdentity.admission, userId: "other" } }), /prepared admission identity/u);
+  assert.equal(runtime.accountBoundRpcCalls.length, 2);
+});
+
+test("owned media and heartbeat fail closed on missing generation or a replacement response", async () => {
+  const { api, runtime } = loadCommunication();
+  for (const operation of [api.touchCommunicationRoomSession, api.heartbeatCommunicationRoomSession]) {
+    await assert.rejects(operation({ ...cleanupIdentity, expectedMembershipGeneration: undefined }), /membership update identity/u);
+    runtime.rpcResponse = { data: [{ ...terminalMembership, membership_state: "active", left_at: null,
+      membership_generation: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }], error: null };
+    await assert.rejects(operation(cleanupIdentity), /membership update postcondition/u);
+  }
+});
+
+test("owned signaling binds sender and generation and strips caller-supplied authority", async () => {
+  const { api, runtime } = loadCommunication();
+  const receipt = { sent: true, event: "webrtc:offer", roomId: cleanupIdentity.roomId,
+    fromUserId: cleanupIdentity.userId, membershipGeneration: cleanupIdentity.expectedMembershipGeneration };
+  runtime.rpcResponse = { data: receipt, error: null };
+  const options = { ...cleanupIdentity, event: "webrtc:offer", payload: { fromUserId: "forged", membershipGeneration: "forged", description: { type: "offer", sdp: "fixture" } } };
+  assert.equal(await api.broadcastCommunicationRoomSignal(options), true);
+  const call = runtime.accountBoundRpcCalls[0];
+  assert.equal(call.functionName, "broadcast_owned_communication_room_signal");
+  assert.equal(call.expectedUserId, cleanupIdentity.userId);
+  assert.equal(call.args.p_payload.fromUserId, undefined);
+  assert.equal(call.args.p_payload.membershipGeneration, undefined);
+  assert.equal(call.args.p_expected_membership_generation, cleanupIdentity.expectedMembershipGeneration);
+  for (const changed of [{ fromUserId: "other" }, { membershipGeneration: "other" }, { roomId: "OTHER-ROOM" }, { sent: false }]) {
+    runtime.rpcResponse = { data: { ...receipt, ...changed }, error: null };
+    await assert.rejects(api.broadcastCommunicationRoomSignal(options), /invalid response/u);
+  }
 });

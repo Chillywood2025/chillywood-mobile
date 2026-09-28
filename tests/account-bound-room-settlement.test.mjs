@@ -3,7 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
-import { invokeAccountBoundSupabaseRpc } from "../_lib/accountBoundSupabaseRpc.mjs";
+import { invokeAccountBoundSupabaseRpc, isAccountBoundSupabaseRpcOutcomeAmbiguous } from "../_lib/accountBoundSupabaseRpc.mjs";
 
 const deferred = () => {
   let resolve;
@@ -42,6 +42,7 @@ function harness() {
       sameAccountSessionAuthority: (left, right) => Boolean(right) && left.userId === right.userId && left.sessionGeneration === right.sessionGeneration,
     },
     "./accountBoundSupabaseRpc.mjs": {
+      isAccountBoundSupabaseRpcOutcomeAmbiguous,
       invokeAccountBoundSupabaseRpc: (options) => invokeAccountBoundSupabaseRpc({
         ...options,
         fetchImpl: async (_url, request) => {
@@ -70,7 +71,7 @@ function harness() {
   };
 }
 
-for (const name of ["join_communication_room_session", "leave_communication_room_session"]) {
+for (const name of ["join_communication_room_session", "join_owned_communication_room_session", "touch_owned_communication_room_session", "leave_communication_room_session"]) {
   test(`${name} retains real transport completion after the former read deadline`, async () => {
     const h = harness();
     let settled = false;
@@ -86,13 +87,15 @@ for (const name of ["join_communication_room_session", "leave_communication_room
   });
 }
 
-test("other exact-session RPCs retain the existing bounded deadline", async () => {
-  const h = harness();
-  const pending = h.helper.runExactSessionAccountBoundSupabaseMutationRpc("heartbeat_watch_party_room_session", {}, "test-user");
-  await h.passReadDeadline();
-  assert.equal((await pending).error.message, "account_bound_rpc_timeout");
-  h.response.resolve({ ok: true, status: 200, json: async () => [] });
-});
+for (const name of ["heartbeat_watch_party_room_session", "read_communication_room_admission"]) {
+  test(`${name} retains the existing bounded read deadline`, async () => {
+    const h = harness();
+    const pending = h.helper.runExactSessionAccountBoundSupabaseMutationRpc(name, {}, "test-user");
+    await h.passReadDeadline();
+    assert.equal((await pending).error.message, "account_bound_rpc_timeout");
+    h.response.resolve({ ok: true, status: 200, json: async () => [] });
+  });
+}
 
 test("late room result cannot become a success for a replacement account", async () => {
   const h = harness();
@@ -113,3 +116,41 @@ test("a real transport failure remains an ambiguous error, never invented cleanu
   assert.equal(result.error.message, "account_bound_rpc_unavailable");
   assert.equal(h.helper.isAccountBoundSupabaseMutationOutcomeAmbiguous(result.error), true);
 });
+
+for (const [label, response] of [
+  ["HTML gateway 502", { ok: false, status: 502, json: async () => { throw new Error("HTML gateway response"); } }],
+  ["JSON gateway 504", { ok: false, status: 504, json: async () => ({ message: "upstream timeout", code: "P0001" }) }],
+  ["unstructured HTTP 400", { ok: false, status: 400, json: async () => ({ message: "request failed" }) }],
+  ["HTTP 408", { ok: false, status: 408, json: async () => ({ message: "request timed out", code: "57014" }) }],
+  ["missing response", null],
+]) {
+  for (const name of ["join_communication_room_session", "join_owned_communication_room_session", "touch_owned_communication_room_session", "leave_communication_room_session"]) {
+    test(`${name} retains uncertain ownership after ${label}`, async () => {
+      const h = harness();
+      const pending = h.helper.runExactSessionAccountBoundSupabaseMutationRpc(name, {}, "test-user");
+      await flush();
+      h.response.resolve(response);
+      const result = await pending;
+      assert.equal(result.data, null);
+      assert.equal(result.error.code, "account_bound_rpc_outcome_unknown");
+      assert.equal(h.helper.isAccountBoundSupabaseMutationOutcomeAmbiguous(result.error), true);
+    });
+  }
+}
+
+for (const [status, code, message] of [
+  [400, "P0001", "communication_membership_cleanup_generation_changed"],
+  [403, "42501", "permission denied for function leave_communication_room_session"],
+  [401, "PGRST301", "JWT expired"],
+]) {
+  test(`structured ${code} rejection remains definitive and keeps its server identity`, async () => {
+    const h = harness();
+    const pending = h.helper.runExactSessionAccountBoundSupabaseMutationRpc("leave_communication_room_session", {}, "test-user");
+    await flush();
+    h.response.resolve({ ok: false, status, json: async () => ({ code, message, details: null, hint: null }) });
+    const result = await pending;
+    assert.equal(result.error.code, code);
+    assert.equal(result.error.message, message);
+    assert.equal(h.helper.isAccountBoundSupabaseMutationOutcomeAmbiguous(result.error), false);
+  });
+}

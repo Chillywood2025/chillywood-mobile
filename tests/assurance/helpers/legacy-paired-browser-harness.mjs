@@ -11,6 +11,111 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
 
+// The browser uses this same store as the offline adapter contract checks.
+// It models durable admission ownership; database/RLS proof runs separately.
+export function createLegacyBrowserMembershipStore({ onCommit = () => {} } = {}) {
+  const memberships = new Map();
+  const clone = (value) => structuredClone(value);
+  const key = ({ roomId, userId }) => JSON.stringify([roomId, userId]);
+  const reject = (message) => { throw Object.assign(new Error(message), { code: "P0001" }); };
+  const isActive = (membership) => membership && !membership.leftAt
+    && ["active", "reconnecting"].includes(membership.membershipState);
+  const read = (identity) => memberships.get(key(identity)) ?? null;
+  const commit = (membership, operation) => {
+    memberships.set(key(membership), clone(membership));
+    onCommit(clone(membership), operation);
+    return clone(membership);
+  };
+  return {
+    seed(membership) { memberships.set(key(membership), clone(membership)); },
+    read(identity) { return clone(read(identity)); },
+    snapshot(roomId) { return clone([...memberships.values()].filter((membership) => membership.roomId === roomId)); },
+    prepare({ roomId, userId }) {
+      return { roomId, userId, attemptId: crypto.randomUUID(), expectedPreviousGeneration: read({ roomId, userId })?.membershipGeneration ?? null };
+    },
+    join(input) {
+      const { admission } = input;
+      if (!admission || admission.roomId !== input.roomId || admission.userId !== input.userId
+        || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(admission.attemptId ?? "")) {
+        reject("communication_membership_admission_conflict");
+      }
+      const previous = read(input);
+      if (previous?.membershipAdmissionAttempt === admission.attemptId) {
+        if (!isActive(previous)) reject("communication_membership_admission_retired");
+        return clone(previous);
+      }
+      if ((previous?.membershipGeneration ?? null) !== admission.expectedPreviousGeneration) {
+        reject("communication_membership_admission_conflict");
+      }
+      const now = new Date().toISOString();
+      return commit({
+        ...previous, roomId: input.roomId, userId: input.userId,
+        displayName: input.displayName ?? previous?.displayName ?? input.userId,
+        avatarUrl: input.avatarUrl ?? previous?.avatarUrl,
+        role: previous?.role ?? "participant", membershipState: "active", leftAt: null,
+        cameraEnabled: !!input.cameraEnabled, micEnabled: typeof input.micEnabled === "boolean" ? input.micEnabled : true,
+        joinedAt: previous?.joinedAt ?? now, lastSeenAt: now,
+        membershipGeneration: crypto.randomUUID(), membershipAdmissionAttempt: admission.attemptId,
+      }, "join");
+    },
+    touch(input) {
+      if (input.membershipState !== undefined && !["active", "reconnecting"].includes(input.membershipState)) {
+        reject("communication_membership_state_invalid");
+      }
+      const previous = read(input);
+      if (!input.expectedMembershipGeneration || previous?.membershipGeneration !== input.expectedMembershipGeneration) {
+        reject("communication_membership_generation_changed");
+      }
+      if (!previous.membershipAdmissionAttempt) reject("communication_membership_owned_admission_required");
+      if (!isActive(previous)) reject("communication_membership_not_active");
+      const changes = Object.fromEntries(["membershipState", "cameraEnabled", "micEnabled", "displayName", "avatarUrl"]
+        .filter((name) => input[name] !== undefined).map((name) => [name, input[name]]));
+      return commit({ ...previous, ...changes, lastSeenAt: new Date().toISOString() }, "touch");
+    },
+    heartbeat(input) {
+      const previous = read(input);
+      if (!input.expectedMembershipGeneration || previous?.membershipGeneration !== input.expectedMembershipGeneration) {
+        reject("communication_membership_generation_changed");
+      }
+      if (!previous.membershipAdmissionAttempt) reject("communication_membership_owned_admission_required");
+      if (!isActive(previous)) reject("communication_membership_not_active");
+      return commit({ ...previous, lastSeenAt: new Date().toISOString() }, "heartbeat");
+    },
+    signal(input) {
+      const membership = read(input);
+      if (input.event === "room:end") {
+        if (input.expectedMembershipGeneration !== undefined) reject("communication_signal_event_invalid");
+        if (membership?.role !== "host") reject("communication_signal_host_required");
+      } else {
+        if (!input.expectedMembershipGeneration && membership?.membershipAdmissionAttempt) {
+          reject("communication_membership_owned_signal_required");
+        }
+        if (input.expectedMembershipGeneration && membership?.membershipGeneration !== input.expectedMembershipGeneration) {
+          reject("communication_membership_generation_changed");
+        }
+        if (!isActive(membership)) reject("communication_membership_not_active");
+      }
+      const payload = { ...clone(input.payload), roomId: input.roomId, fromUserId: input.userId };
+      delete payload.senderUserId;
+      if (input.event === "room:end") delete payload.membershipGeneration;
+      else payload.membershipGeneration = membership.membershipGeneration;
+      return {
+        event: input.event, roomId: input.roomId,
+        payload,
+      };
+    },
+    leave(input) {
+      const previous = read(input);
+      if (!input.expectedMembershipGeneration || previous?.membershipGeneration !== input.expectedMembershipGeneration) {
+        reject("cleanup_generation_changed");
+      }
+      if (["left", "removed"].includes(previous.membershipState) && previous.leftAt
+        && previous.cameraEnabled === false && previous.micEnabled === false) return clone(previous);
+      return commit({ ...previous, membershipState: "left", cameraEnabled: false, micEnabled: false, leftAt: new Date().toISOString() }, "leave");
+    },
+  };
+}
+
 export function buildLegacyPairedBrowserBundle({ sourceRoot = process.cwd() } = {}) {
   const read = (name) => fs.readFileSync(path.join(sourceRoot, name), "utf8");
   const compile = (source, fileName) => ts.transpileModule(source, {
@@ -27,7 +132,7 @@ export function buildLegacyPairedBrowserBundle({ sourceRoot = process.cwd() } = 
     "presence-adapter": read("node_modules/@supabase/realtime-js/dist/main/phoenix/presenceAdapter.js"),
     "membership-admission": compile(read("_lib/communicationMembershipAdmission.ts"), "communicationMembershipAdmission.ts"),
   };
-  for (const name of ["communicationCallMediaPolicy", "nativeCallTransitionProvenance", "communicationRoomIdentifier"]) {
+  for (const name of ["communicationCallMediaPolicy", "nativeCallTransitionProvenance", "communicationRoomIdentifier", "accountBoundSupabaseRpc"]) {
     modules[`./${name}.mjs`] = compile(read(`_lib/${name}.mjs`), `${name}.ts`);
   }
   const hook = compile(read("hooks/use-communication-room-session.ts"), "use-communication-room-session.ts");
@@ -47,40 +152,53 @@ export function buildLegacyPairedBrowserBundle({ sourceRoot = process.cwd() } = 
     const PresenceAdapter = require('presence-adapter').default;
     const mediaPolicy = require('./communicationCallMediaPolicy.mjs');
     const membershipAdmission = require('membership-admission');
+    const accountBoundRpc = require('./accountBoundSupabaseRpc.mjs');
     const hookSource = ${JSON.stringify(hook)};
-    (${installLegacyPairedBrowser.toString()})({React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, hookSource});
+    (${installLegacyPairedBrowser.toString()})({React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, membershipStoreFactory: (${createLegacyBrowserMembershipStore.toString()})});
   })();`;
 }
 
-function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, hookSource }) {
+function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, membershipStoreFactory }) {
   const clone = (value) => structuredClone(value);
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const granted = { granted: true, canAskAgain: true, status: "granted" };
   const permissions = { state: "granted", shouldOpenSettings: false, canAskAgain: true };
   const NativePeer = RTCPeerConnection;
+  const membershipStore = membershipStoreFactory({ onCommit: (membership, operation) => {
+    hub.events.push({ kind: "commit", operation, userId: membership.userId, mic: membership.micEnabled, camera: membership.cameraEnabled, state: membership.membershipState, generation: membership.membershipGeneration, admissionAttempt: membership.membershipAdmissionAttempt });
+    for (const channel of hub.channels.filter((candidate) => candidate.active)) setTimeout(() => channel.emit("postgres_changes", "*", {}), 0);
+  } });
   const hub = {
-    channels: [], memberships: new Map(), roomId: "BROWSER-CALL-1", serial: 0, callSerial: 1,
-    roomStatus: "active", dropAnswers: false, events: [], errors: [], endpoints: [],
-    async deliver(message, sender) {
-      this.events.push({ kind: "broadcast", event: message.event, sender: sender.userId, at: performance.now() });
-      if (this.dropAnswers && message.event === "webrtc:answer") return true;
-      for (const channel of this.channels.filter((candidate) => candidate.active && candidate.endpoint !== sender && candidate.topic.startsWith("comm-room-"))) {
+    channels: [], roomId: "BROWSER-CALL-1", serial: 0, callSerial: 1, endpointSerial: 0, peerSerial: 0,
+    roomStatus: "active", dropAnswers: false, events: [], errors: [], endpoints: [], retiredEndpoints: [], heldSignals: [], holdNext: null,
+    dispatch(message, sender) {
+      for (const channel of this.channels.filter((candidate) => candidate.active && candidate.endpoint.userId !== sender.userId && candidate.topic === `comm-room-${message.roomId}`)) {
         // Delivery is independent of send acknowledgement, like Realtime.
-        setTimeout(() => channel.emit("broadcast", message.event, { payload: { ...clone(message.payload), roomId: this.roomId, fromUserId: sender.userId } }), 0);
+        // Preserve the admission stamped when the relay accepted this packet,
+        // including packets delayed across a later same-user app restart.
+        setTimeout(() => channel.emit("broadcast", message.event, { payload: clone(message.payload) }), 0);
       }
+    },
+    async deliver(input, sender) {
+      if (input.userId && input.userId !== sender.userId) throw new Error("browser signal account identity changed");
+      const message = membershipStore.signal({ ...input, userId: sender.userId });
+      this.events.push({ kind: "broadcast", event: message.event, sender: sender.userId, generation: message.payload.membershipGeneration, at: performance.now() });
+      if (this.dropAnswers && message.event === "webrtc:answer") return true;
+      if (this.holdNext?.userId === sender.userId && this.holdNext.event === message.event) {
+        this.holdNext = null;
+        this.heldSignals.push({ message: clone(message), sender });
+        this.events.push({ kind: "held-signal", event: message.event, sender: sender.userId, generation: message.payload.membershipGeneration });
+        return true;
+      }
+      this.dispatch(message, sender);
       return true;
     },
-    snapshot() { return { room: { roomId: this.roomId, roomCode: this.roomId, status: this.roomStatus, hostUserId: "alice", callType: "video", createdAt: "2026-09-28T00:00:00Z" }, memberships: clone([...this.memberships.values()]) }; },
-    async membership(endpoint, input) {
+    snapshot() { return { room: { roomId: this.roomId, roomCode: this.roomId, status: this.roomStatus, hostUserId: "alice", callType: "video", createdAt: "2026-09-28T00:00:00Z" }, memberships: membershipStore.snapshot(this.roomId) }; },
+    async membership(endpoint, operation, input) {
       // HTTP acknowledgement is a later task, never an in-stack Promise.
       await delay(2);
-      const previous = this.memberships.get(endpoint.userId);
-      const next = { ...previous, ...input, userId: endpoint.userId, roomId: this.roomId };
-      if (!next.membershipGeneration || (previous?.membershipState === "left" && input.membershipState === "active")) next.membershipGeneration = crypto.randomUUID();
-      this.memberships.set(endpoint.userId, next);
-      this.events.push({ kind: "commit", userId: endpoint.userId, mic: next.micEnabled, camera: next.cameraEnabled, state: next.membershipState });
-      for (const channel of this.channels.filter((candidate) => candidate.active)) setTimeout(() => channel.emit("postgres_changes", "*", {}), 0);
-      return clone(next);
+      if (input.userId !== endpoint.userId) throw new Error("browser membership account identity changed");
+      return membershipStore[operation](input);
     },
   };
   class Channel {
@@ -131,16 +249,17 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       }
       return "ok";
     }
-    async send(message) { await hub.deliver(message, this.endpoint); return "ok"; }
+    async send(message) { await hub.deliver({ ...message, roomId: this.topic.replace(/^comm-room-/u, "") }, this.endpoint); return "ok"; }
   }
-  function createEndpoint(userId) {
-    const endpoint = { userId, peers: [], streams: [], audioContexts: [], drawTimers: [], receivedVideos: [], output: null, root: null, current: true };
+  function createEndpoint(userId, { seed = true } = {}) {
+    const endpoint = { userId, instanceId: ++hub.endpointSerial, peers: [], streams: [], audioContexts: [], drawTimers: [], receivedVideos: [], output: null, root: null, current: true, mounted: true, pendingControl: null };
     hub.endpoints.push(endpoint);
-    hub.memberships.set(userId, { roomId: hub.roomId, userId, displayName: userId, role: userId === "alice" ? "host" : "participant", membershipGeneration: crypto.randomUUID(), membershipState: "active", cameraEnabled: true, micEnabled: true, joinedAt: "2026-09-28T00:00:00Z", leftAt: null, lastSeenAt: "2026-09-28T00:00:00Z" });
+    if (seed) membershipStore.seed({ roomId: hub.roomId, userId, displayName: userId, role: userId === "alice" ? "host" : "participant", membershipGeneration: crypto.randomUUID(), membershipAdmissionAttempt: null, membershipState: "active", cameraEnabled: true, micEnabled: true, joinedAt: "2026-09-28T00:00:00Z", leftAt: null, lastSeenAt: "2026-09-28T00:00:00Z" });
     const rtc = {
       RTCPeerConnection: class extends NativePeer {
         constructor(config) {
           super(config); endpoint.peers.push(this);
+          this.fixturePeerId = ++hub.peerSerial; this.remoteDescriptionApplications = 0;
           this.addEventListener("icecandidate", (event) => hub.events.push({ kind: "ice-candidate", userId, present: !!event.candidate }));
           this.addEventListener("track", (event) => {
             if (event.track.kind !== "video") return;
@@ -151,6 +270,10 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
             endpoint.receivedVideos.push({ peer: this, video, canvas });
             void video.play().catch((error) => hub.errors.push(`Receiver playback: ${error}`));
           });
+        }
+        async setRemoteDescription(description) {
+          this.remoteDescriptionApplications += 1;
+          return super.setRemoteDescription(description);
         }
       },
       RTCSessionDescription, RTCIceCandidate, MediaStream,
@@ -176,7 +299,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     };
     const track = (stream, kind) => stream?.getTracks().find((item) => item.kind === kind) ?? null;
     const communication = {
-      broadcastCommunicationRoomSignal: (input) => hub.deliver({ event: input.event, payload: input.payload }, endpoint),
+      broadcastCommunicationRoomSignal: (input) => hub.deliver(input, endpoint),
       buildCommunicationChannelName: (roomId) => `comm-room-${roomId}`,
       buildCommunicationPresencePayload: ({ identity, media }) => ({ userId: identity.userId, displayName: identity.displayName, cameraOn: media.cameraEnabled, micOn: media.micEnabled, joinedAt: "2026-09-28T00:00:00Z" }),
       COMMUNICATION_DEFAULT_ICE_SERVERS: [], COMMUNICATION_ROOM_MAX_PARTICIPANTS: 4,
@@ -187,13 +310,11 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       getActiveCommunicationMemberships: (members) => members.filter((member) => !member.leftAt && member.membershipState !== "left"),
       getCommunicationRoomSnapshot: async () => { await delay(2); return hub.snapshot(); },
       readCommunicationIdentity: async () => ({ userId, displayName: userId }),
-      joinCommunicationRoomSession: (input) => hub.membership(endpoint, input),
-      touchCommunicationRoomSession: (input) => hub.membership(endpoint, input),
-      heartbeatCommunicationRoomSession: async () => clone(hub.memberships.get(userId)),
-      leaveCommunicationRoomSession: ({ expectedMembershipGeneration }) => {
-        if (!expectedMembershipGeneration || hub.memberships.get(userId)?.membershipGeneration !== expectedMembershipGeneration) return Promise.resolve(null);
-        return hub.membership(endpoint, { membershipState: "left", micEnabled: false, cameraEnabled: false, leftAt: new Date().toISOString() });
-      },
+      prepareCommunicationRoomAdmission: (input) => hub.membership(endpoint, "prepare", input),
+      joinCommunicationRoomSession: (input) => hub.membership(endpoint, "join", input),
+      touchCommunicationRoomSession: (input) => hub.membership(endpoint, "touch", input),
+      heartbeatCommunicationRoomSession: (input) => hub.membership(endpoint, "heartbeat", input),
+      leaveCommunicationRoomSession: (input) => hub.membership(endpoint, "leave", input),
       endCommunicationRoom: async () => { hub.roomStatus = "ended"; return hub.snapshot().room; },
       stopCommunicationStream: (stream) => stream?.getTracks().forEach((item) => item.stop()),
       setCommunicationTrackEnabled: (stream, kind, enabled) => { const found = track(stream, kind); if (!found) return false; found.enabled = enabled; return true; },
@@ -208,6 +329,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       "../_lib/analytics": { trackEvent() {} },
       "../_lib/communication": communication,
       "../_lib/communicationMembershipAdmission": membershipAdmission,
+      "../_lib/accountBoundSupabaseRpc.mjs": accountBoundRpc,
       "../_lib/communicationCallMediaPolicy.mjs": mediaPolicy,
       "../_lib/logger": { reportRuntimeError: (scope, error) => hub.events.push({ kind: "reported-error", userId, scope, error: String(error?.message ?? error) }) },
       "../_lib/mediaPermissions": { UNDETERMINED_MEDIA_PERMISSION: permissions, resolveMediaPermission: () => permissions, getMediaPermissionRecoveryMessage: () => null },
@@ -238,14 +360,14 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
   }
   const stats = async (endpoint) => {
     const reports = [];
-    for (const peer of endpoint.peers) {
+    for (const peer of endpoint.peers.filter((candidate) => candidate.connectionState === "connected")) {
       for (const report of (await peer.getStats()).values()) {
-        if (report.type === "inbound-rtp" && !report.isRemote) reports.push({ kind: report.kind, bytes: report.bytesReceived ?? 0, packets: report.packetsReceived ?? 0, frames: report.framesDecoded ?? 0, energy: report.totalAudioEnergy ?? 0, samples: report.totalSamplesReceived ?? 0 });
+        if (report.type === "inbound-rtp" && !report.isRemote) reports.push({ peerId: peer.fixturePeerId, kind: report.kind, bytes: report.bytesReceived ?? 0, packets: report.packetsReceived ?? 0, frames: report.framesDecoded ?? 0, energy: report.totalAudioEnergy ?? 0, samples: report.totalSamplesReceived ?? 0 });
       }
     }
     return reports;
   };
-  const receivedPixels = (endpoint) => endpoint.receivedVideos.filter(({ peer, video }) => peer.connectionState !== "closed" && video.readyState >= 2).map(({ video, canvas }) => {
+  const receivedPixels = (endpoint) => endpoint.receivedVideos.filter(({ peer, video }) => peer.connectionState !== "closed" && video.readyState >= 2).map(({ peer, video, canvas }) => {
     const context = canvas.getContext("2d", { willReadFrequently: true });
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
@@ -254,28 +376,66 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       brightness += pixels[i] + pixels[i + 1] + pixels[i + 2];
       fingerprint = (Math.imul(fingerprint, 31) + pixels[i] + 3 * pixels[i + 1] + 7 * pixels[i + 2]) >>> 0;
     }
-    return { brightness: brightness / (pixels.length / 4 * 3), fingerprint, mediaTime: video.currentTime };
+    return { peerId: peer.fixturePeerId, brightness: brightness / (pixels.length / 4 * 3), fingerprint, mediaTime: video.currentTime };
+  });
+  const resources = (endpoint) => ({
+    peers: endpoint.peers.map((peer) => ({ id: peer.fixturePeerId, connection: peer.connectionState, signaling: peer.signalingState, gathering: peer.iceGatheringState, localType: peer.localDescription?.type, remoteType: peer.remoteDescription?.type, remoteDescriptionApplications: peer.remoteDescriptionApplications, senders: peer.getSenders().map((sender) => sender.track?.kind ?? "none") })),
+    tracks: endpoint.streams.flatMap((stream) => stream.getTracks().map((item) => ({ kind: item.kind, state: item.readyState, enabled: item.enabled }))),
   });
   window.__pairedCall = {
     async start({ dropAnswers = false } = {}) { hub.dropAnswers = dropAnswers; createEndpoint("alice"); createEndpoint("bob"); await delay(0); },
+    holdNextSignal(userId, event) {
+      if (hub.holdNext) throw new Error("A signal hold is already armed");
+      hub.holdNext = { userId, event };
+    },
+    beginControl(userId, name, value) {
+      const endpoint = hub.endpoints.find((item) => item.userId === userId);
+      if (!endpoint?.output || typeof endpoint.output[name] !== "function") throw new Error(`Missing control ${name}`);
+      const pending = { name, settled: false, result: null }; endpoint.pendingControl = pending;
+      void Promise.resolve(endpoint.output[name](value)).then((result) => {
+        pending.settled = true; pending.result = result;
+      }, (error) => { pending.settled = true; hub.errors.push(String(error.stack ?? error)); });
+    },
+    async restartEndpoint(userId) {
+      const previous = hub.endpoints.find((endpoint) => endpoint.userId === userId);
+      if (!previous) throw new Error(`Missing endpoint ${userId}`);
+      const previousMembershipGeneration = membershipStore.read({ roomId: hub.roomId, userId })?.membershipGeneration;
+      previous.current = false; previous.root.unmount(); previous.mounted = false;
+      hub.endpoints = hub.endpoints.filter((endpoint) => endpoint !== previous);
+      hub.retiredEndpoints.push(previous);
+      // Preserve the durable ACTIVE row, like a process restart without End.
+      // Only the new production hook's owned join can replace its generation.
+      const replacement = createEndpoint(userId, { seed: false });
+      await delay(0);
+      return { roomId: hub.roomId, retiredInstanceId: previous.instanceId, replacementInstanceId: replacement.instanceId, previousMembershipGeneration };
+    },
+    async releaseHeldSignals() {
+      const queued = hub.heldSignals.splice(0);
+      for (const { message, sender } of queued) {
+        hub.events.push({ kind: "released-signal", event: message.event, sender: sender.userId, generation: message.payload.membershipGeneration });
+        hub.dispatch(message, sender);
+      }
+      await delay(0);
+      return queued.length;
+    },
     async freshCall() {
-      if (hub.endpoints.some((endpoint) => endpoint.peers.some((peer) => peer.connectionState !== "closed") || endpoint.streams.some((stream) => stream.getTracks().some((track) => track.readyState !== "ended")))) throw new Error("Previous native resources must be closed before a fresh call");
+      if ([...hub.endpoints, ...hub.retiredEndpoints].some((endpoint) => endpoint.peers.some((peer) => peer.connectionState !== "closed") || endpoint.streams.some((stream) => stream.getTracks().some((track) => track.readyState !== "ended")))) throw new Error("Previous native resources must be closed before a fresh call");
+      const previousRoomId = hub.roomId;
       hub.roomId = `BROWSER-CALL-${++hub.callSerial}`; hub.roomStatus = "active";
       for (const endpoint of hub.endpoints) {
-        const previous = hub.memberships.get(endpoint.userId);
-        hub.memberships.set(endpoint.userId, { ...previous, roomId: hub.roomId, membershipGeneration: crypto.randomUUID(), membershipState: "active", leftAt: null, cameraEnabled: false, micEnabled: false });
+        const previous = membershipStore.read({ roomId: previousRoomId, userId: endpoint.userId });
+        membershipStore.seed({ ...previous, roomId: hub.roomId, membershipGeneration: crypto.randomUUID(), membershipAdmissionAttempt: null, membershipState: "active", leftAt: null, cameraEnabled: false, micEnabled: false });
       }
       for (const endpoint of hub.endpoints) endpoint.render();
       await delay(0);
     },
-    async read() { return { errors: [...hub.errors], events: clone(hub.events), endpoints: await Promise.all(hub.endpoints.map(async (endpoint) => ({
-      userId: endpoint.userId, channelState: endpoint.output?.channelState, error: endpoint.output?.error, micEnabled: endpoint.output?.micEnabled, cameraEnabled: endpoint.output?.cameraEnabled,
+    async read() { return { roomId: hub.roomId, errors: [...hub.errors], events: clone(hub.events), heldSignals: hub.heldSignals.map(({ message, sender }) => ({ event: message.event, sender: sender.userId, generation: message.payload.membershipGeneration })), retiredEndpoints: hub.retiredEndpoints.map((endpoint) => ({ userId: endpoint.userId, instanceId: endpoint.instanceId, pendingControl: clone(endpoint.pendingControl), ...resources(endpoint) })), endpoints: await Promise.all(hub.endpoints.map(async (endpoint) => ({
+      userId: endpoint.userId, instanceId: endpoint.instanceId, membership: membershipStore.read({ roomId: hub.roomId, userId: endpoint.userId }), channelState: endpoint.output?.channelState, error: endpoint.output?.error, micEnabled: endpoint.output?.micEnabled, cameraEnabled: endpoint.output?.cameraEnabled,
       participants: endpoint.output?.participants?.map(({ streamURL: _url, ...rest }) => rest), stats: await stats(endpoint), pixels: receivedPixels(endpoint),
-      peers: endpoint.peers.map((peer) => ({ connection: peer.connectionState, signaling: peer.signalingState, gathering: peer.iceGatheringState, localType: peer.localDescription?.type, remoteType: peer.remoteDescription?.type, senders: peer.getSenders().map((sender) => sender.track?.kind ?? "none") })),
-      tracks: endpoint.streams.flatMap((stream) => stream.getTracks().map((item) => ({ kind: item.kind, state: item.readyState, enabled: item.enabled }))),
+      ...resources(endpoint),
     }))) }; },
     async control(userId, name, value) { const endpoint = hub.endpoints.find((item) => item.userId === userId); if (!endpoint?.output || typeof endpoint.output[name] !== "function") throw new Error(`Missing control ${name}`); return endpoint.output[name](value); },
     async end() { await Promise.all(hub.endpoints.map((endpoint) => endpoint.output.leaveRoom())); },
-    async dispose() { for (const endpoint of hub.endpoints) { endpoint.root.unmount(); endpoint.drawTimers.forEach(clearInterval); endpoint.streams.forEach((stream) => stream.getTracks().forEach((item) => item.stop())); endpoint.peers.forEach((peer) => peer.close()); for (const context of endpoint.audioContexts) await context.close(); } },
+    async dispose() { for (const endpoint of [...hub.endpoints, ...hub.retiredEndpoints]) { if (endpoint.mounted) endpoint.root.unmount(); endpoint.mounted = false; endpoint.drawTimers.forEach(clearInterval); endpoint.streams.forEach((stream) => stream.getTracks().forEach((item) => item.stop())); endpoint.peers.forEach((peer) => peer.close()); for (const context of endpoint.audioContexts) await context.close(); } },
   };
 }

@@ -4,9 +4,10 @@ type MembershipAdmissionReservation = Readonly<{
   release: () => void;
 }>;
 
-// An ACTIVE rejoin can reuse the durable membership generation. Keep an older
-// join and its compensating leave ahead of replacement admission, including
-// when a component unmounts or switches media providers in the same process.
+// Keep an older join and its compensating leave ahead of replacement admission,
+// including component remounts or provider switches in the same process.
+// The server's admission CAS separately fences ownership across app restarts;
+// this queue is coordination, never a substitute for that durable generation.
 const admissionTails = new Map<string, Promise<void>>();
 
 export function reserveCommunicationMembershipAdmission(options: {

@@ -5,6 +5,8 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
 import vm from "node:vm";
+import { invokeAccountBoundSupabaseRpc } from "../../_lib/accountBoundSupabaseRpc.mjs";
+import { loadCommunicationApiSource } from "./helpers/communication-api-source.mjs";
 
 import {
   createLiveKitMountedRuntime,
@@ -36,7 +38,7 @@ const loadActualCommunicationBroadcaster = (rpc) => {
   };
   const moduleMocks = {
     "./accountBoundSupabaseMutation": {
-      runExactSessionAccountBoundSupabaseMutationRpc: async () => ({ data: null, error: null }),
+      runExactSessionAccountBoundSupabaseMutationRpc: (functionName, args, userId) => rpc(functionName, args, userId),
     },
     "./appConfig": { readAppConfig: async () => null, resolveRoomDefaultConfig: () => ({ communication: {} }) },
     "./monetization": { readCreatorPermissions: async () => null, sanitizeCreatorRoomAccessRule: (value) => value },
@@ -2657,25 +2659,69 @@ test("local camera commits an authenticated media invalidation after durable sta
   const committedBroadcast = runtime.mediaBroadcasts.at(-1);
   assert.equal(committedBroadcast?.event, "media:update");
   assert.equal(committedBroadcast?.roomId, "ROOM-1");
+  assert.equal(committedBroadcast?.userId, runtime.userId);
+  assert.equal(committedBroadcast?.expectedMembershipGeneration, runtime.membershipGeneration);
   assert.equal(committedBroadcast?.payload?.cameraOn, false);
   assert.equal(committedBroadcast?.payload?.micOn, true);
   assert.equal(runtime.durableCamera, false);
   assert.equal(harness.getResult().cameraEnabled, false);
 });
 
+test("late committed media response cannot relay through a same-room replacement owner", async (t) => {
+  const preferences = { cameraEnabled: true, micEnabled: true };
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true, initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: preferences,
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const oldGeneration = runtime.membershipGeneration;
+  const pendingResponse = deferred();
+  runtime.queueTouch({ afterCommitGate: pendingResponse });
+  const oldAction = await harness.startOperation(() => harness.getResult().setCameraEnabled(false));
+  await waitFor(harness, () => runtime.durableCamera === false, "old camera write committed before delayed response");
+
+  await harness.unmount();
+  const replacementRuntime = createLiveKitMountedRuntime({
+    durableMembershipStore: runtime.durableMembershipStore, initialCamera: true, initialMic: true,
+  });
+  const replacementHarness = await mountLiveKitHook(replacementRuntime, defaultHookOptions({
+    initialMediaPreferences: preferences,
+    invite: { ...defaultHookOptions().invite, id: "replacement-invite", callType: "video" },
+  }));
+  t.after(() => replacementHarness.unmount());
+  const currentGeneration = replacementRuntime.membershipGeneration;
+  assert.notEqual(currentGeneration, oldGeneration);
+  const broadcastsBeforeOldResponse = runtime.mediaBroadcasts.length;
+  await harness.resolveDeferred(pendingResponse);
+  assert.equal(await settleOperation(oldAction, harness), false);
+  assert.equal(runtime.mediaBroadcasts.length, broadcastsBeforeOldResponse, "retired callback cannot borrow the replacement's relay authority");
+  assert.equal(runtime.durableCamera, true);
+
+  assert.equal(await runOperation(replacementHarness, () => replacementHarness.getResult().setCameraEnabled(false)), true);
+  assert.equal(replacementRuntime.mediaBroadcasts.at(-1)?.userId, replacementRuntime.userId);
+  assert.equal(replacementRuntime.mediaBroadcasts.at(-1)?.expectedMembershipGeneration, currentGeneration);
+  assert.equal(replacementRuntime.errors.some((entry) => entry.scope === "chat-call-livekit-media-state-broadcast"), false);
+});
+
 test("camera action reaches the peer through the actual RPC broadcaster and authoritative refresh", async (t) => {
+  const senderUserId = "11111111-1111-4111-8111-111111111111";
+  const receiverUserId = "22222222-2222-4222-8222-222222222222";
   let senderRuntime;
   let receiverRuntime;
   const rpcCalls = [];
-  const actualBroadcast = loadActualCommunicationBroadcaster(function rpc(functionName, args) {
-    rpcCalls.push({ args, functionName });
-    assert.equal(functionName, "broadcast_communication_room_signal");
+  const actualBroadcast = loadActualCommunicationBroadcaster(function rpc(functionName, args, userId) {
+    rpcCalls.push({ args, functionName, userId });
+    assert.equal(functionName, "broadcast_owned_communication_room_signal");
+    assert.equal(userId, senderUserId);
+    assert.equal(args.p_expected_membership_generation, senderRuntime.membershipGeneration);
     assert.equal(args.p_event, "media:update");
     receiverRuntime.remoteDurableCamera = senderRuntime.durableCamera;
     receiverRuntime.remoteDurableMic = senderRuntime.durableMic;
     receiverRuntime.emitMembershipChange({
       cameraOn: args.p_payload.cameraOn,
       fromUserId: senderRuntime.userId,
+      membershipGeneration: args.p_expected_membership_generation,
       micOn: args.p_payload.micOn,
       roomId: args.p_room_id,
     });
@@ -2683,7 +2729,8 @@ test("camera action reaches the peer through the actual RPC broadcaster and auth
       data: {
         event: args.p_event,
         roomId: args.p_room_id,
-        senderUserId: senderRuntime.userId,
+        fromUserId: senderRuntime.userId,
+        membershipGeneration: args.p_expected_membership_generation,
         sent: true,
       },
       error: null,
@@ -2693,13 +2740,14 @@ test("camera action reaches the peer through the actual RPC broadcaster and auth
   receiverRuntime = createLiveKitMountedRuntime({
     initialRemoteParticipant: true,
     remoteCamera: true,
-    remoteUserId: "remote-user",
+    remoteUserId: senderUserId,
     snapshotRemoteParticipant: true,
-    userId: "local-user",
+    userId: receiverUserId,
   });
   const receiverHarness = await mountLiveKitHook(receiverRuntime, defaultHookOptions({
+    authenticatedUserId: receiverUserId,
     initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
-    invite: { ...defaultHookOptions().invite, callType: "video" },
+    invite: { ...defaultHookOptions().invite, callType: "video", callerUserId: senderUserId, calleeUserId: receiverUserId },
   }));
   t.after(() => receiverHarness.unmount());
 
@@ -2708,18 +2756,18 @@ test("camera action reaches the peer through the actual RPC broadcaster and auth
     initialCamera: true,
     initialMic: true,
     initialRemoteParticipant: true,
-    remoteUserId: "local-user",
+    remoteUserId: receiverUserId,
     snapshotRemoteParticipant: true,
-    userId: "remote-user",
+    userId: senderUserId,
   });
   const senderHarness = await mountLiveKitHook(senderRuntime, defaultHookOptions({
-    authenticatedUserId: "remote-user",
+    authenticatedUserId: senderUserId,
     initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
     invite: {
       ...defaultHookOptions().invite,
       callType: "video",
-      calleeUserId: "local-user",
-      callerUserId: "remote-user",
+      calleeUserId: receiverUserId,
+      callerUserId: senderUserId,
     },
   }));
   t.after(() => senderHarness.unmount());
@@ -3179,8 +3227,8 @@ test("generation cleanup: a join returning after unmount retires only its captur
   const runtime = createLiveKitMountedRuntime();
   const pendingJoin = deferred();
   runtime.queueMembershipJoin({ gate: pendingJoin });
-  const joinedGeneration = runtime.membershipGeneration;
   const harness = await mountLiveKitHook(runtime, defaultHookOptions(), { requireLive: false });
+  const joinedGeneration = runtime.membershipGeneration;
   assert.equal(runtime.membershipJoinRequests.length, 1);
   await harness.unmount();
   await harness.resolveDeferred(pendingJoin);
@@ -3196,13 +3244,13 @@ test("generation cleanup: replacement admission waits for late old join cleanup 
   const runtime = createLiveKitMountedRuntime({ initialMic: true });
   const pendingJoin = deferred();
   const pendingLeave = deferred();
-  const oldGeneration = runtime.membershipGeneration;
   const nextGeneration = "20000000-0000-4000-8000-000000000002";
   runtime.queueMembershipJoin({ gate: pendingJoin });
   runtime.queueMembershipJoin({ generation: nextGeneration });
   runtime.queueMembershipLeave({ gate: pendingLeave });
   const harness = await mountLiveKitHook(runtime, defaultHookOptions(), { requireLive: false });
   t.after(() => harness.unmount());
+  const oldGeneration = runtime.membershipGeneration;
   await harness.commitRender(defaultHookOptions({
     initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
     invite: { ...defaultHookOptions().invite, id: "invite-2" },
@@ -3346,6 +3394,37 @@ for (const replacement of ["room", "account"]) {
   });
 }
 
+for (const outcome of ["gateway response", "invalid successful receipt"]) {
+  test(`generation cleanup: actual ${outcome} retains the uncertain admission barrier`, async (t) => {
+    const userId = "11111111-1111-4111-8111-111111111111";
+    const runRpc = async () => outcome === "gateway response"
+      ? invokeAccountBoundSupabaseRpc({
+        supabaseUrl: "https://fixture.supabase.co", anonKey: "public-test", accessToken: "fixture-token",
+        functionName: "join_communication_room_session", fetchImpl: async () => ({
+          ok: false, status: 502, json: async () => ({ message: "gateway failed" }),
+        }),
+      })
+      : { data: { room_id: "ROOM-1", user_id: userId, membership_state: "active" }, error: null };
+    const api = loadCommunicationApiSource({}, runRpc);
+    const runtime = createLiveKitMountedRuntime({ userId });
+    runtime.queueMembershipJoin({ api: api.joinCommunicationRoomSession });
+    const opts = defaultHookOptions({
+      authenticatedUserId: userId,
+      invite: { ...defaultHookOptions().invite, calleeUserId: userId },
+    });
+    const harness = await mountLiveKitHook(runtime, opts, { requireLive: false });
+    t.after(() => harness.unmount());
+    assert.equal(harness.getResult().channelState, "error");
+    await harness.commitRender({ ...opts, invite: { ...opts.invite, id: "invite-2" } });
+    assert.equal(runtime.membershipJoinRequests.length, 1, "unconfirmed server outcome does not release same-row ownership");
+    assert.equal(runtime.rooms.length, 0);
+    await harness.fireLatestTimeout();
+    assert.equal(runtime.membershipJoinRequests.length, 1, "deadline does not cancel unknown server operation");
+    assert.equal(runtime.rooms.length, 0);
+    assert.equal(harness.getResult().channelState, "error");
+  });
+}
+
 test("generation cleanup: ambiguous leave retries exact generation before permitting replacement", async (t) => {
   const { harness, runtime } = await mountCase(t);
   runtime.queueMembershipLeave({ outcome: "reject", message: "account_bound_rpc_unavailable" });
@@ -3394,6 +3473,150 @@ test("generation cleanup: pending End remains reserved across full unmount and r
   assert.equal(oldRuntime.membershipLeaves, 1);
 });
 
+for (const nativePhase of ["disconnect", "audio-stop"]) {
+  test(`generation cleanup: full remount waits before old ${nativePhase} settles, not just after leave starts`, async (t) => {
+    const { harness: oldHarness, runtime: oldRuntime } = await mountCase(t);
+    const nativeGate = deferred();
+    if (nativePhase === "disconnect") oldRuntime.queueDisconnect({ gate: nativeGate });
+    else oldRuntime.queueAudioStop({ gate: nativeGate });
+    await oldHarness.unmount();
+    assert.equal(oldRuntime.membershipLeaves, 0, "old cleanup has not yet reached durable leave");
+    const runtime = createLiveKitMountedRuntime({
+      membershipAdmissionCoordinator: oldRuntime.membershipAdmissionCoordinator,
+      membershipGeneration: "20000000-0000-4000-8000-000000000002",
+    });
+    const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+      invite: { ...defaultHookOptions().invite, id: "invite-remounted" },
+    }), { requireLive: false });
+    t.after(() => harness.unmount());
+    assert.equal(runtime.membershipJoinRequests.length, 0,
+      "synchronous retirement must reserve the row before asynchronous native cleanup");
+    await oldHarness.resolveDeferred(nativeGate);
+    await waitFor(harness, () => harness.getResult().channelState === "live", "replacement joins after native cleanup and exact old leave");
+    assert.equal(oldRuntime.membershipLeaves, 1);
+    assert.equal(runtime.membershipJoinRequests.length, 1);
+  });
+}
+
+test("owned admission: late old leave cannot retire a resumed call in a fresh process", async (t) => {
+  const { harness: oldHarness, runtime: oldRuntime } = await mountCase(t, { initialCamera: true, initialMic: true },
+    defaultHookOptions({ initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+      invite: { ...defaultHookOptions().invite, callType: "video" } }));
+  const oldGeneration = oldRuntime.membershipGeneration;
+  const pendingLeave = deferred();
+  oldRuntime.queueMembershipLeave({ gate: pendingLeave });
+  const leaving = await oldHarness.startOperation(() => oldHarness.getResult().leaveRoom().then(() => null, error => error));
+  await waitFor(oldHarness, () => oldRuntime.membershipLeaves === 1, "old process dispatched leave");
+  await oldHarness.unmount();
+  const runtime = createLiveKitMountedRuntime({ durableMembershipStore: oldRuntime.durableMembershipStore,
+    initialCamera: true, initialMic: true });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  t.after(() => harness.unmount());
+  const replacementGeneration = runtime.membershipGeneration;
+  assert.notEqual(replacementGeneration, oldGeneration, "new process claims a new owner even while old row remains ACTIVE");
+  assert.notEqual(runtime.membershipAdmissionCoordinator, oldRuntime.membershipAdmissionCoordinator);
+  await oldHarness.resolveDeferred(pendingLeave);
+  assert.match((await settleOperation(leaving, oldHarness)).message, /Unable to prove/u);
+  assert.equal(runtime.membershipGeneration, replacementGeneration);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.durableMic, true);
+  assert.equal(harness.getResult().channelState, "live");
+});
+
+test("owned admission: late old media write cannot replace a restarted owner's media state", async (t) => {
+  const { harness: oldHarness, runtime: oldRuntime } = await mountCase(t, { initialCamera: true, initialMic: true },
+    defaultHookOptions({ initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+      invite: { ...defaultHookOptions().invite, callType: "video" } }));
+  const oldGeneration = oldRuntime.membershipGeneration;
+  const pendingWrite = deferred();
+  oldRuntime.queueTouch({ gate: pendingWrite });
+  const before = oldRuntime.membershipTouches.length;
+  const muting = await oldHarness.startOperation(() => oldHarness.getResult().setMicrophoneEnabled(false));
+  await waitFor(oldHarness, () => oldRuntime.membershipTouches.length > before, "old media request dispatched");
+  assert.equal(oldRuntime.membershipTouches.at(-1).expectedMembershipGeneration, oldGeneration);
+  await oldHarness.unmount();
+  const runtime = createLiveKitMountedRuntime({ durableMembershipStore: oldRuntime.durableMembershipStore,
+    initialCamera: true, initialMic: true });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  t.after(() => harness.unmount());
+  assert.notEqual(runtime.membershipGeneration, oldGeneration);
+  await oldHarness.resolveDeferred(pendingWrite);
+  assert.equal(await settleOperation(muting, oldHarness), false);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.durableMic, true);
+  assert.equal(harness.getResult().channelState, "live");
+});
+
+test("owned admission: stale join CAS cannot reclaim membership after another process resumes", async (t) => {
+  const oldRuntime = createLiveKitMountedRuntime();
+  const beforeCommit = deferred();
+  oldRuntime.queueMembershipJoin({ beforeCommitGate: beforeCommit });
+  const oldHarness = await mountLiveKitHook(oldRuntime, defaultHookOptions(), { requireLive: false });
+  await oldHarness.unmount();
+  const runtime = createLiveKitMountedRuntime({ durableMembershipStore: oldRuntime.durableMembershipStore });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions());
+  t.after(() => harness.unmount());
+  const currentGeneration = runtime.membershipGeneration;
+  await oldHarness.resolveDeferred(beforeCommit);
+  await oldHarness.flush(48);
+  assert.equal(oldRuntime.rooms.length, 0);
+  assert.equal(oldRuntime.membershipLeaves, 0, "failed old CAS never acquired an owner to clean up");
+  assert.equal(runtime.membershipGeneration, currentGeneration);
+  assert.equal(harness.getResult().channelState, "live");
+});
+
+test("owned admission: newer generation during initialization prevents native media acquisition", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ initialCamera: true, initialMic: true });
+  const pendingSnapshot = runtime.deferSnapshot();
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }), { requireLive: false });
+  t.after(() => harness.unmount());
+  const oldGeneration = runtime.membershipGeneration;
+  runtime.membershipGeneration = "30000000-0000-4000-8000-000000000003";
+  await harness.resolveDeferred(pendingSnapshot);
+  await harness.flush(48);
+  assert.equal(runtime.rooms.length, 0);
+  assert.equal(runtime.providerTokenCalls, 0);
+  assert.equal(harness.getResult().channelState, "error");
+  assert.equal(runtime.membershipLeaveRequests[0].expectedMembershipGeneration, oldGeneration);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.durableMic, true);
+});
+
+test("owned admission: a same-attempt retry preserves its original CAS and owner identity", async (t) => {
+  const runtime = createLiveKitMountedRuntime();
+  runtime.queueMembershipJoin({ outcome: "null" });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions(), { requireLive: false });
+  t.after(() => harness.unmount());
+  const initialGeneration = runtime.membershipGeneration;
+  await harness.fireLatestTimeout();
+  await waitFor(harness, () => harness.getResult().channelState === "live", "same admitted attempt returns on retry");
+  assert.equal(runtime.membershipPrepareRequests.length, 1);
+  assert.equal(runtime.membershipJoinRequests.length, 2);
+  assert.equal(runtime.membershipJoinRequests[0].admission, runtime.membershipJoinRequests[1].admission);
+  assert.equal(runtime.membershipGeneration, initialGeneration, "retry doesn't acquire yet another generation");
+});
+
+test("owned admission: preparation resolving after unmount cannot dispatch a join", async () => {
+  const runtime = createLiveKitMountedRuntime();
+  const pendingPrepare = deferred();
+  runtime.queueMembershipPrepare({ gate: pendingPrepare });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions(), { requireLive: false });
+  await harness.unmount();
+  await harness.resolveDeferred(pendingPrepare);
+  assert.equal(runtime.membershipPrepareRequests.length, 1);
+  assert.equal(runtime.membershipJoinRequests.length, 0);
+  assert.equal(runtime.rooms.length, 0);
+});
+
 test("generation cleanup: a join without cleanup identity never starts native media", async (t) => {
   const runtime = createLiveKitMountedRuntime({ membershipGeneration: null });
   const harness = await mountLiveKitHook(runtime, defaultHookOptions(), { requireLive: false });
@@ -3434,15 +3657,14 @@ test("generation cleanup: refreshing a newer durable row cannot donate its gener
   const { harness, runtime } = await mountCase(t, { initialMic: true }, defaultHookOptions({
     initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
   }));
-  const joinedGeneration = runtime.membershipGeneration;
   runtime.membershipGeneration = "20000000-0000-4000-8000-000000000002";
   await harness.fireHeartbeat();
   await harness.flush(48);
-  const error = await runOperation(harness, () => harness.getResult().leaveRoom().then(() => null, failure => failure));
-  assert.match(error.message, /Unable to prove/u);
-  assert.equal(runtime.membershipLeaveRequests[0].expectedMembershipGeneration, joinedGeneration);
+  assert.equal(runtime.membershipLeaveRequests.length, 0, "observing a new owner stops local resources without touching its membership");
+  assert.equal(runtime.rooms.at(-1).state, "disconnected");
+  assert.equal(harness.getResult().channelState, "error");
+  assert.match(harness.getResult().error, /continued in another session/u);
   assert.equal(runtime.durableMic, true, "old generation cannot retire the newer durable admission");
-  assert.equal(runtime.stages.includes("cleanup_complete"), false);
 });
 
 test("generation cleanup: an old pending leave cannot retire a same-room replacement generation", async (t) => {

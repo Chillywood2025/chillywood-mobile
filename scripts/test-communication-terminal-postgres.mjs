@@ -40,6 +40,10 @@ try {
     set timezone = 'UTC';
     create role authenticated; create role anon; create role service_role;
     create schema auth;
+    create schema realtime;
+    create table realtime.fixture_messages(payload jsonb,event text,topic text,private boolean);
+    create function realtime.send(payload jsonb,event text,topic text,private boolean)
+      returns void language sql as $$ insert into realtime.fixture_messages values(payload,event,topic,private) $$;
     create table auth.sessions(id uuid primary key,user_id uuid,not_after timestamptz);
     create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
     create function auth.uid() returns uuid language sql stable as $$ select (auth.jwt()->>'sub')::uuid $$;
@@ -74,7 +78,7 @@ try {
   `);
   for (const [source, names] of [
     [session, ["wave1_session_authority_readback"]],
-    [authority, ["whole_app_exact_current_session_authority_internal", "whole_app_exact_current_session_authority", "can_access_chat_thread", "can_read_communication_room_authority", "enforce_communication_membership_identity", "join_communication_room_session"]],
+    [authority, ["whole_app_exact_current_session_authority_internal", "whole_app_exact_current_session_authority", "can_access_chat_thread", "can_read_communication_room_authority", "can_access_communication_realtime_topic", "communication_sdp_is_receive_only_internal", "enforce_communication_membership_identity", "join_communication_room_session"]],
     [terminal, ["cleanup_terminal_chilly_chat_call_product_state", "prevent_ended_communication_room_membership_reactivation"]],
   ]) {
     for (const name of names) await db.exec(extractFunction(source, name));
@@ -91,7 +95,7 @@ try {
     alter table public.communication_room_memberships enable row level security;
     alter table public.communication_room_memberships force row level security;
     grant select on public.communication_rooms,public.communication_room_memberships to authenticated;
-    grant update(membership_state,camera_enabled,mic_enabled,last_seen_at,updated_at) on public.communication_room_memberships to authenticated;
+    grant update(membership_state,camera_enabled,mic_enabled,last_seen_at,updated_at,display_name,avatar_url) on public.communication_room_memberships to authenticated;
   `);
   for (const name of ["communication_rooms_select_policy", "communication_room_memberships_select_policy", "communication_room_memberships_self_update_policy"]) {
     const start = authority.indexOf(`create policy "${name}"`);
@@ -157,6 +161,69 @@ try {
   await db.query("update public.communication_room_memberships set membership_state='removed',camera_enabled=false,mic_enabled=false,left_at=now() where room_id='REJOIN1' and user_id=$1", [caller]);
   check((await rpc(caller, "REJOIN1", finalReplacement.membership_generation)).rows[0].membership_state === "removed", "removed row is verified without resurrection");
   await assert.rejects(join(), /membership_removed/u); checks++;
+  // Reproduce the process-restart boundary with the retained old client RPC:
+  // a second logical process resumes an ACTIVE row, so a delayed old leave
+  // still owns that same legacy generation. Modern admission must rotate it.
+  await db.query("insert into public.communication_rooms(room_id,room_code,host_user_id,status) values ('RESTART0','RESTART0',$1,'active'),('OWNED1','OWNED1',$1,'active')", [caller]);
+  const oldProcess = (await asUser(caller, "select * from public.join_communication_room_session('RESTART0',null,null,true,true)")).rows[0];
+  const oldResume = (await asUser(caller, "select * from public.join_communication_room_session('RESTART0',null,null,true,true)")).rows[0];
+  check(oldProcess.membership_generation === oldResume.membership_generation, "BEFORE old-client active resume reuses old generation across process restart");
+  check((await rpc(caller, "RESTART0", oldProcess.membership_generation)).rows[0].membership_state === "left", "BEFORE delayed old leave terminates the unfenced resumed legacy row");
+
+  const prepare = async (user, room = "OWNED1") => (await asUser(user, "select public.read_communication_room_admission($1) as snapshot", [room])).rows[0].snapshot;
+  const ownedJoin = async (user, attempt, previous, camera = true, mic = true, room = "OWNED1") => (await asUser(user,
+    "select * from public.join_owned_communication_room_session($1,$2::uuid,$3::uuid,null,null,$4,$5)", [room, attempt, previous, camera, mic])).rows[0];
+  const ownedTouch = async (user, generation, camera = null, mic = null) => (await asUser(user,
+    "select * from public.touch_owned_communication_room_session('OWNED1',$1::uuid,null,$2,$3)", [generation, camera, mic])).rows[0];
+  const attempts = ["44444444-4444-4444-8444-444444444441", "44444444-4444-4444-8444-444444444442", "44444444-4444-4444-8444-444444444443", "44444444-4444-4444-8444-444444444444"];
+  const initialSnapshot = await prepare(caller);
+  check(initialSnapshot.roomId === "OWNED1" && initialSnapshot.userId === caller && initialSnapshot.previousGeneration === null, "authorized snapshot proves initial own row absent");
+  const ownedFirst = await ownedJoin(caller, attempts[0], initialSnapshot.previousGeneration);
+  check(ownedFirst.membership_admission_attempt === attempts[0] && ownedFirst.membership_state === "active", "owned admission records attempt and fresh generation");
+  await ownedTouch(caller, ownedFirst.membership_generation, false, false);
+  const ownedRetry = await ownedJoin(caller, attempts[0], null, true, true);
+  check(!ownedRetry.camera_enabled && !ownedRetry.mic_enabled && ownedRetry.membership_generation === ownedFirst.membership_generation, "same admission retry reads current media unchanged instead of replaying flags");
+  const restartSnapshot = await prepare(caller);
+  const restarted = await ownedJoin(caller, attempts[1], restartSnapshot.previousGeneration);
+  check(restarted.membership_generation !== ownedFirst.membership_generation && +restarted.joined_at === +ownedFirst.joined_at, "AFTER process restart ACTIVE takeover rotates ownership while preserving historical join");
+  await assert.rejects(rpc(caller, "OWNED1", ownedFirst.membership_generation), /cleanup_generation_changed/u); checks++;
+  await assert.rejects(ownedTouch(caller, ownedFirst.membership_generation, false, false), /membership_generation_changed/u); checks++;
+  await assert.rejects(ownedTouch(caller, ownedFirst.membership_generation), /membership_generation_changed/u); checks++;
+  await assert.rejects(ownedJoin(caller, attempts[0], initialSnapshot.previousGeneration), /admission_conflict/u); checks++;
+  await assert.rejects(ownedJoin(caller, attempts[2], restartSnapshot.previousGeneration), /admission_conflict/u); checks++;
+  check((await prepare(caller)).previousGeneration === restarted.membership_generation, "late old join/leave/media/heartbeat and competing CAS cannot change replacement ownership");
+  await assert.rejects(asUser(caller, "select * from public.join_communication_room_session('OWNED1',null,null,true,true)"), /owned_admission_required/u); checks++;
+  await assert.rejects(asUser(caller, "update public.communication_room_memberships set mic_enabled=false where room_id='OWNED1' and user_id=$1", [caller]), /owned_write_required/u); checks++;
+  const metadataBefore = (await asUser(caller, "select * from public.communication_room_memberships where room_id='OWNED1' and user_id=$1", [caller])).rows[0];
+  const metadataAfter = (await asUser(caller, "update public.communication_room_memberships set display_name='Updated profile',avatar_url='https://example.invalid/avatar.png',updated_at=now() where room_id='OWNED1' and user_id=$1 returning *", [caller])).rows[0];
+  check(metadataAfter.display_name === 'Updated profile' && +metadataBefore.last_seen_at === +metadataAfter.last_seen_at && metadataAfter.membership_generation === restarted.membership_generation, "metadata-only profile sync retains media ownership and does not refresh liveness");
+  const calleeOwned = await ownedJoin(callee, attempts[3], null);
+  const signal = (user, gen, payload) => asUser(user, "select public.broadcast_owned_communication_room_signal('OWNED1',$1::uuid,'webrtc:offer',$2::jsonb) as receipt", [gen, JSON.stringify(payload)]);
+  const offer = { targetUserId: callee, description: { type: "offer", sdp: "v=0\r\nm=audio 9 RTP/AVP 0\r\na=sendrecv\r\n" }, fromUserId: outsider, membershipGeneration: ownedFirst.membership_generation };
+  const sent = (await signal(caller, restarted.membership_generation, offer)).rows[0].receipt;
+  check(sent.sent && sent.fromUserId === caller && sent.membershipGeneration === restarted.membership_generation, "owned relay acknowledges canonical authenticated sender generation");
+  const packet = (await db.query("select * from realtime.fixture_messages order by ctid desc limit 1")).rows[0];
+  check(packet.payload.fromUserId === caller && packet.payload.membershipGeneration === restarted.membership_generation && packet.private && packet.topic === 'comm-room-OWNED1', "relay overwrites spoofed sender/generation with actual owner and preserves private canonical delivery");
+  await assert.rejects(signal(caller, ownedFirst.membership_generation, offer), /membership_generation_changed/u); checks++;
+  await assert.rejects(asUser(caller, "select public.broadcast_communication_room_signal('OWNED1','webrtc:offer',$1::jsonb)", [JSON.stringify(offer)]), /owned_signal_required/u); checks++;
+  check((await db.query("select count(*)::int as count from realtime.fixture_messages")).rows[0].count === 1, "old relay and delayed old owner cannot emit packets after takeover");
+  await rpc(caller, "OWNED1", restarted.membership_generation);
+  await assert.rejects(ownedJoin(caller, attempts[1], restartSnapshot.previousGeneration), /admission_retired/u); checks++;
+  await assert.rejects(ownedTouch(caller, restarted.membership_generation), /membership_not_active/u); checks++;
+  const leftSnapshot = await prepare(caller);
+  check(leftSnapshot.previousGeneration === restarted.membership_generation, "LEFT own row remains distinguishable from absence through exact authorized snapshot");
+  const third = await ownedJoin(caller, attempts[2], leftSnapshot.previousGeneration);
+  await assert.rejects(rpc(caller, "OWNED1", restarted.membership_generation), /cleanup_generation_changed/u); checks++;
+  check(third.membership_state === 'active' && third.membership_generation !== restarted.membership_generation, "LEFT rejoin obtains a distinct durable owner unaffected by late old cleanup");
+  await db.query("delete from auth.sessions where id=$1", [sessionId(caller)]);
+  await assert.rejects(prepare(caller), /current_session_required/u); checks++;
+  await assert.rejects(ownedJoin(caller, attempts[2], leftSnapshot.previousGeneration), /current_session_required/u); checks++;
+  await assert.rejects(ownedTouch(caller, third.membership_generation), /current_session_required/u); checks++;
+  await assert.rejects(signal(caller, third.membership_generation, offer), /current_session_required/u); checks++;
+  await db.query("insert into auth.sessions(id,user_id) values($1,$2)", [sessionId(caller), caller]);
+  const privateAcls = (await db.query("select has_function_privilege('authenticated','public.authorize_communication_room_admission_internal(text)','EXECUTE') as admission,has_function_privilege('authenticated','public.broadcast_communication_room_signal_internal(text,text,jsonb,uuid)','EXECUTE') as signal,has_column_privilege('authenticated','public.communication_room_memberships','membership_admission_attempt','UPDATE') as attempt")).rows[0];
+  check(!privateAcls.admission && !privateAcls.signal && !privateAcls.attempt, "private authorization/relay helpers and direct admission identity remain inaccessible");
+  check(calleeOwned.membership_generation !== third.membership_generation, "members have independent ownership generations");
   const acl = (await db.query("select has_function_privilege('anon','public.leave_communication_room_session(text,uuid)','EXECUTE') as anon, has_function_privilege('service_role','public.leave_communication_room_session(text,uuid)','EXECUTE') as service, has_column_privilege('authenticated','public.communication_room_memberships','membership_generation','UPDATE') as writable")).rows[0];
   check(!acl.anon && !acl.service && !acl.writable, "no anonymous/service RPC or client generation rewrite grants");
   console.log(`communication terminal PostgreSQL: ${checks} checks PASS; original terminal readback mismatch reproduced before repair`);

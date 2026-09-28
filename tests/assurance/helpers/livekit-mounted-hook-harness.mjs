@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import vm from "node:vm";
+import { randomUUID } from "node:crypto";
+import { isAccountBoundSupabaseRpcOutcomeAmbiguous } from "../../../_lib/accountBoundSupabaseRpc.mjs";
 
 const require = createRequire(import.meta.url);
 const React = require("react");
@@ -188,6 +190,8 @@ export function createLiveKitMountedRuntime(options = {}) {
     intervalsCleared: 0,
     liveKitDataPublishes: [],
     membershipAdmissionCoordinator: options.membershipAdmissionCoordinator ?? loadMembershipAdmission(),
+    membershipPrepareActions: [],
+    membershipPrepareRequests: [],
     membershipJoinActions: [],
     membershipJoinRequests: [],
     membershipLeaveActions: [],
@@ -230,6 +234,22 @@ export function createLiveKitMountedRuntime(options = {}) {
     userId: options.userId ?? "local-user",
   };
 
+  // Sharing only this durable row models independent application processes:
+  // their hook refs/coordinators/native Rooms remain separate.
+  runtime.durableMembershipStore = options.durableMembershipStore ?? {
+    membershipGeneration: runtime.membershipGeneration,
+    durableCamera: runtime.durableCamera,
+    durableMic: runtime.durableMic,
+    admissionAttemptId: null,
+  };
+  for (const key of ["membershipGeneration", "durableCamera", "durableMic"]) {
+    Object.defineProperty(runtime, key, {
+      configurable: true, enumerable: true,
+      get: () => runtime.durableMembershipStore[key],
+      set: (value) => { runtime.durableMembershipStore[key] = value; },
+    });
+  }
+
   runtime.createAcceptedMediaDescriptor = (overrides = {}) => {
     const descriptor = Object.freeze({
       authenticatedUserId: runtime.userId,
@@ -257,6 +277,7 @@ export function createLiveKitMountedRuntime(options = {}) {
   runtime.queueNativeAudioSelection = (action) => runtime.nativeAudioSelectionActions.push(action);
   runtime.queueAudioReset = (action) => runtime.audioResetActions.push(action);
   runtime.queueAudioStop = (action) => runtime.audioStopActions.push(action);
+  runtime.queueMembershipPrepare = (action) => runtime.membershipPrepareActions.push(action);
   runtime.queueMembershipJoin = (action) => runtime.membershipJoinActions.push(action);
   runtime.queueMembershipLeave = (action) => runtime.membershipLeaveActions.push(action);
   runtime.queueNativeApplicationActive = (action) => runtime.nativeApplicationActiveActions.push(action);
@@ -707,6 +728,10 @@ export function createLiveKitMountedRuntime(options = {}) {
     if (action.gate) await action.gate.promise;
     if (action.outcome === "reject") throw new Error("membership rejected");
     if (action.outcome === "null") return null;
+    if (!touchOptions.expectedMembershipGeneration
+      || touchOptions.expectedMembershipGeneration !== runtime.membershipGeneration) {
+      throw new Error("communication_membership_cleanup_generation_changed");
+    }
     if (action.outcome === "lost") {
       runtime.durableCamera = !!touchOptions.cameraEnabled;
       runtime.durableMic = !!touchOptions.micEnabled;
@@ -720,13 +745,15 @@ export function createLiveKitMountedRuntime(options = {}) {
     }
     runtime.durableCamera = !!touchOptions.cameraEnabled;
     runtime.durableMic = !!touchOptions.micEnabled;
-    return membership(runtime, {
+    const committedMembership = membership(runtime, {
       cameraEnabled: runtime.durableCamera,
       membershipState: touchOptions.membershipState,
       micEnabled: runtime.durableMic,
       roomId: touchOptions.roomId,
       userId: touchOptions.userId,
     });
+    if (action.afterCommitGate) await action.afterCommitGate.promise;
+    return committedMembership;
   };
 
   const AppState = {
@@ -842,9 +869,15 @@ export function createLiveKitMountedRuntime(options = {}) {
       ),
     },
     "../_lib/communicationMembershipAdmission": runtime.membershipAdmissionCoordinator,
+    "../_lib/accountBoundSupabaseRpc.mjs": { isAccountBoundSupabaseRpcOutcomeAmbiguous },
     "../_lib/communication": {
       broadcastCommunicationRoomSignal: async (request) => {
         runtime.mediaBroadcasts.push(request);
+        if (request.event === "media:update" && (request.userId !== runtime.userId
+          || !request.expectedMembershipGeneration
+          || request.expectedMembershipGeneration !== runtime.membershipGeneration)) {
+          throw new Error("communication_signal_membership_generation_changed");
+        }
         if (options.rejectMediaBroadcast) throw new Error("fixture media broadcast rejected");
         if (options.broadcastCommunicationRoomSignal) {
           return options.broadcastCommunicationRoomSignal(request);
@@ -855,10 +888,29 @@ export function createLiveKitMountedRuntime(options = {}) {
       endCommunicationRoom: async () => undefined,
       getActiveCommunicationMemberships: (memberships) => memberships.filter((entry) => !entry.leftAt),
       getCommunicationRoomSnapshot: getSnapshot,
+      prepareCommunicationRoomAdmission: async ({ roomId, userId }) => {
+        const prepared = Object.freeze({ roomId, userId, attemptId: randomUUID(), expectedPreviousGeneration: runtime.membershipGeneration });
+        runtime.membershipPrepareRequests.push(prepared);
+        const action = runtime.membershipPrepareActions.shift() ?? {};
+        if (action.gate) await action.gate.promise;
+        if (action.outcome === "reject") throw new Error("admission prepare rejected");
+        return prepared;
+      },
       joinCommunicationRoomSession: async (joinOptions) => {
         runtime.membershipJoinRequests.push(joinOptions);
         const action = runtime.membershipJoinActions.shift() ?? {};
-        if (action.generation) runtime.membershipGeneration = action.generation;
+        const admission = joinOptions.admission;
+        if (!admission || admission.roomId !== joinOptions.roomId || admission.userId !== joinOptions.userId) {
+          throw new Error("communication_membership_admission_identity_required");
+        }
+        if (action.beforeCommitGate) await action.beforeCommitGate.promise;
+        if (runtime.durableMembershipStore.admissionAttemptId !== admission.attemptId) {
+          if (admission.expectedPreviousGeneration !== runtime.membershipGeneration) {
+            throw new Error("communication_membership_admission_generation_changed");
+          }
+          if (runtime.membershipGeneration) runtime.membershipGeneration = action.generation ?? randomUUID();
+          runtime.durableMembershipStore.admissionAttemptId = admission.attemptId;
+        }
         const joined = membership(runtime, {
           cameraEnabled: !!joinOptions.cameraEnabled,
           micEnabled: !!joinOptions.micEnabled,
@@ -868,7 +920,9 @@ export function createLiveKitMountedRuntime(options = {}) {
         // Capture the committed row before delaying its response. A newer
         // admission must not donate its identity to an old pending response.
         if (action.gate) await action.gate.promise;
-        if (action.outcome === "reject") throw new Error(action.message ?? "membership join rejected");
+        if (action.outcome === "reject") throw Object.assign(new Error(action.message ?? "membership join rejected"), { code: action.code });
+        if (action.api) return action.api(joinOptions);
+        if (action.outcome === "null") return null;
         return joined;
       },
       leaveCommunicationRoomSession: async ({ roomId, userId, expectedMembershipGeneration }) => {
@@ -876,7 +930,7 @@ export function createLiveKitMountedRuntime(options = {}) {
         runtime.membershipLeaveRequests.push({ roomId, userId, expectedMembershipGeneration });
         const action = runtime.membershipLeaveActions.shift() ?? { outcome: "success" };
         if (action.gate) await action.gate.promise;
-        if (action.outcome === "reject") throw new Error(action.message ?? "membership leave rejected");
+        if (action.outcome === "reject") throw Object.assign(new Error(action.message ?? "membership leave rejected"), { code: action.code });
         if (action.outcome === "null") return null;
         if (options.requireExactLeaveAccount && userId !== runtime.userId) {
           throw new Error("account-bound membership leave rejected");

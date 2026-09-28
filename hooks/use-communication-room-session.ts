@@ -23,6 +23,7 @@ import {
   heartbeatCommunicationRoomSession,
   joinCommunicationRoomSession,
   leaveCommunicationRoomSession,
+  prepareCommunicationRoomAdmission,
   readCommunicationIdentity,
   setCommunicationTrackEnabled,
   stopCommunicationStream,
@@ -36,6 +37,7 @@ import {
 } from "../_lib/communication";
 import { reportRuntimeError } from "../_lib/logger";
 import { reserveCommunicationMembershipAdmission } from "../_lib/communicationMembershipAdmission";
+import { isAccountBoundSupabaseRpcOutcomeAmbiguous as isAmbiguousMembershipOutcome } from "../_lib/accountBoundSupabaseRpc.mjs";
 import {
   canAttemptNativeCallBackgroundAudio,
   resolveLegacyChatSessionRecovery,
@@ -97,6 +99,7 @@ type LegacyMicSessionAuthority = {
   generation: number;
   roomId: string;
   userId: string;
+  membershipGeneration: string;
 };
 
 type LegacyMicAnswerWaiter = {
@@ -361,11 +364,6 @@ const waitForRealtimeOperation = async <T,>(operation: Promise<T>, timeoutMillis
   }
 };
 
-const isAmbiguousMembershipOutcome = (error: unknown) => {
-  const message = error && typeof error === "object" && "message" in error ? String(error.message) : "";
-  return /(?:^|:\s*)account_bound_rpc_(?:unavailable|timeout)$/u.test(message);
-};
-
 const waitForLegacyPeerSignalingStable = async (
   peerConnection: any,
   isCurrent: () => boolean,
@@ -457,11 +455,12 @@ export function useCommunicationRoomSession({
   const localStreamRef = useRef<MediaStream | null>(null);
   const auxiliaryStreamsRef = useRef<MediaStream[]>([]);
   const peerConnectionsRef = useRef<Record<string, any>>({});
-  const peerConnectionTasksRef = useRef<Record<string, { generation: number; task: Promise<any> }>>({});
+  const peerConnectionTasksRef = useRef<Record<string, { generation: number; remoteGeneration: string | undefined; task: Promise<any> }>>({});
   const peerSignalingTailsRef = useRef<Record<string, Promise<void>>>({});
   const peerLocalOffersRef = useRef<Record<string, { generation: number; peerConnection: any; sdp: string; negotiationId: string }>>({});
   const pendingPeerIceRef = useRef<Record<string, {
     generation: number;
+    membershipGeneration: string;
     peerConnection: any;
     candidates: { key: string; value: any }[];
   }>>({});
@@ -673,6 +672,9 @@ export function useCommunicationRoomSession({
     for (const { value } of pending.candidates) {
       if (pending.generation !== legacySessionGenerationRef.current
         || pending.peerConnection !== peerConnection
+        || !getActiveCommunicationMemberships(membershipsRef.current).some((membership) => (
+          membership.userId === remoteUserId && membership.membershipGeneration === pending.membershipGeneration
+        ))
         || peerConnectionsRef.current[remoteUserId] !== peerConnection) return;
       await peerConnection.addIceCandidate(value).catch((iceError: unknown) => {
         reportRuntimeError("communication-webrtc-ice-candidate", iceError, { roomId, remoteUserId });
@@ -710,6 +712,9 @@ export function useCommunicationRoomSession({
     });
     if (!expectedPeerConnection || peerConnectionsRef.current[userId] === expectedPeerConnection) {
       clearOfferRetry(userId);
+      delete peerConnectionTasksRef.current[userId];
+      delete peerSignalingTailsRef.current[userId];
+      delete lastOfferSentAtRef.current[userId];
       delete peerOfferInFlightRef.current[userId];
       delete peerOfferTailRef.current[userId];
       delete peerLocalOffersRef.current[userId];
@@ -1004,8 +1009,12 @@ export function useCommunicationRoomSession({
       && event !== "media:update"
       && event !== "room:end"
     ) return false;
+    const admission = joinedMembershipRef.current;
+    if (event !== "room:end" && (!admission?.membershipGeneration
+      || admission.roomId !== activeRoom.roomId || admission.userId !== identity.userId)) return false;
     return broadcastCommunicationRoomSignal({
       roomId: activeRoom.roomId,
+      ...(event !== "room:end" ? { userId: identity.userId, expectedMembershipGeneration: admission!.membershipGeneration } : {}),
       event,
       payload,
     }).catch((broadcastError) => {
@@ -1074,6 +1083,107 @@ export function useCommunicationRoomSession({
     return nextParticipants;
   }, [roomId]);
 
+  const captureLeaveOperation = useCallback(() => {
+    const currentContext = leaveContextRef.current;
+    if (currentContext.authenticatedAccessToken !== authenticatedAccessToken
+      || currentContext.authenticatedUserId !== authenticatedUserId
+      || currentContext.roomId !== roomId) {
+      throw new Error("The call changed before cleanup could start.");
+    }
+    const generation = legacySessionGenerationRef.current;
+    const resolvedRoom = roomRef.current;
+    const resolvedIdentity = identityRef.current;
+    let operation = leaveOperationRef.current;
+    const isDisabledRetainedOperation = operation
+      && !currentContext.enabled
+      && operation.authenticatedAccessToken === authenticatedAccessToken
+      && operation.authenticatedUserId === authenticatedUserId
+      && operation.requestedRoomId === roomId
+      && !channelRef.current && !roomRef.current && !identityRef.current;
+    if (!operation || (operation.generation !== generation && !isDisabledRetainedOperation)) {
+      const capturedChannel = channelRef.current;
+      const capturedSnapshotChannel = snapshotChannelRef.current;
+      const capturedMedia = {
+        answerWaiters: Object.entries(legacyMicAnswerWaitersRef.current),
+        auxiliaryStreams: [...auxiliaryStreamsRef.current],
+        localStream: localStreamRef.current,
+        offerRetryTimers: Object.entries(offerRetryTimersRef.current),
+        peers: Object.entries(peerConnectionsRef.current),
+      };
+      const capturedTracks = new Set<any>([
+        ...(capturedMedia.localStream?.getTracks() ?? []),
+        ...capturedMedia.auxiliaryStreams.flatMap((stream) => stream.getTracks()),
+        ...capturedMedia.peers.flatMap(([, peer]) => (
+          typeof peer.getSenders === "function" ? peer.getSenders().map((sender: any) => sender.track).filter(Boolean) : []
+        )),
+      ]);
+      const tracksStopped = () => [...capturedTracks].every((track) => String(track.readyState ?? "").toLowerCase() === "ended");
+      const peersClosed = () => capturedMedia.peers.every(([, peer]) => String(peer.connectionState ?? "") === "closed");
+      const stopNativeCapture = () => {
+        capturedTracks.forEach((track) => {
+          try { track.enabled = false; } catch { /* verified below */ }
+          try { track.stop(); } catch { /* verified below */ }
+        });
+        capturedMedia.peers.forEach(([, peer]) => {
+          try { peer.close(); } catch { /* verified below */ }
+        });
+        return tracksStopped() && peersClosed();
+      };
+      const waitForNativeShutdown = async () => {
+        if (!tracksStopped()) return false;
+        if (peersClosed()) return true;
+        const closingPeers = capturedMedia.peers.map(([, peer]) => peer)
+          .filter((peer) => String(peer.connectionState ?? "") !== "closed");
+        if (closingPeers.some((peer) => typeof peer.addEventListener !== "function")) return false;
+        let observeClosure = () => {};
+        const closure = new Promise<boolean>((resolve) => {
+          observeClosure = () => {
+            if (peersClosed()) resolve(true);
+          };
+        });
+        try {
+          // The native SDK queues close(); connectionState changes only when
+          // its later event arrives. Observe postconditions, not call return.
+          closingPeers.forEach((peer) => peer.addEventListener("connectionstatechange", observeClosure));
+          observeClosure();
+          const closed = await waitForRealtimeOperation(closure);
+          return closed === true && tracksStopped() && peersClosed();
+        } finally {
+          closingPeers.forEach((peer) => peer.removeEventListener?.("connectionstatechange", observeClosure));
+        }
+      };
+      legacySessionGenerationRef.current += 1;
+      endingGenerationRef.current = legacySessionGenerationRef.current;
+      channelStateRef.current = "idle";
+      setChannelState("idle");
+      // Local privacy cannot wait on a database write or Realtime untrack.
+      stopNativeCapture();
+      cleanupSessionMedia(capturedMedia);
+      cleanupSnapshotChannel(capturedSnapshotChannel);
+      operation = {
+        authenticatedAccessToken,
+        authenticatedUserId,
+        requestedRoomId: roomId,
+        generation: legacySessionGenerationRef.current,
+        room: resolvedRoom,
+        identity: resolvedIdentity,
+        membershipGeneration: joinedMembershipRef.current?.roomId === resolvedRoom?.roomId
+          && joinedMembershipRef.current?.userId === resolvedIdentity?.userId
+          ? joinedMembershipRef.current?.membershipGeneration
+          : undefined,
+        pending: null,
+        completed: false,
+        nativeCleanup: cleanupChannel(capturedChannel),
+        stopNativeCapture,
+        waitForNativeShutdown,
+        durableLeft: false,
+        durableReservation: null,
+      };
+      leaveOperationRef.current = operation;
+    }
+    return operation;
+  }, [authenticatedAccessToken, authenticatedUserId, cleanupChannel, cleanupSessionMedia, cleanupSnapshotChannel, roomId]);
+
   const refreshSnapshot = useCallback(async (targetRoomId?: string) => {
     const generation = legacySessionGenerationRef.current;
     const requestSerial = snapshotRefreshSerialRef.current + 1;
@@ -1097,6 +1207,40 @@ export function useCommunicationRoomSession({
     if (requestSerial !== snapshotRefreshSerialRef.current) return snapshot;
     if (formatRoomId(snapshot.room.roomId) !== resolvedRoomId) return null;
 
+    const admitted = joinedMembershipRef.current;
+    const observedSelf = admitted && snapshot.memberships.find((membership) => membership.userId === admitted.userId);
+    if (admitted?.roomId === resolvedRoomId && admitted.membershipGeneration
+      && observedSelf?.membershipGeneration && observedSelf.membershipGeneration !== admitted.membershipGeneration) {
+      // Another process/device acquired the durable row. Stop only this old
+      // owner's capture and transport; do not end its replacement's invite or
+      // borrow the new generation for a media write or leave. The retained
+      // cleanup operation can still retry a native stop that was not proved.
+      const retiring = captureLeaveOperation();
+      const nativeStopped = retiring.stopNativeCapture();
+      cameraEnabledRef.current = false;
+      micEnabledRef.current = false;
+      setCameraEnabled(false);
+      setMicEnabled(false);
+      channelStateRef.current = "error";
+      setChannelState("error");
+      setLoading(false);
+      setError(nativeStopped
+        ? "This call session was replaced. Its local media was stopped."
+        : "This call session was replaced; local media shutdown is unverified. Retry End.");
+      return null;
+    }
+
+    // A same-user process restart is a new media endpoint, even when the row
+    // stayed ACTIVE. Retire only its old peer/queues; Presence metadata changes
+    // with the same durable generation must continue to preserve healthy media.
+    for (const previous of membershipsRef.current) {
+      if (previous.userId === admitted?.userId) continue;
+      const replacement = snapshot.memberships.find((membership) => membership.userId === previous.userId);
+      if (previous.membershipGeneration && replacement?.membershipGeneration
+        && previous.membershipGeneration !== replacement.membershipGeneration) {
+        cleanupRemotePeer(previous.userId);
+      }
+    }
     roomRef.current = snapshot.room;
     membershipsRef.current = snapshot.memberships;
     setRoom(snapshot.room);
@@ -1108,7 +1252,7 @@ export function useCommunicationRoomSession({
       membershipCount: snapshot.memberships.length,
     });
     return snapshot;
-  }, [applyParticipantsFromSources, roomId]);
+  }, [applyParticipantsFromSources, captureLeaveOperation, cleanupRemotePeer, roomId]);
 
   const updatePresence = useCallback(async (nextCameraEnabled: boolean, nextMicEnabled: boolean) => {
     const generation = legacySessionGenerationRef.current;
@@ -1118,18 +1262,24 @@ export function useCommunicationRoomSession({
     if (!channel || !resolvedRoom || !resolvedIdentity) return false;
     const resolvedRoomId = formatRoomId(resolvedRoom.roomId);
     const resolvedUserId = String(resolvedIdentity.userId ?? "").trim();
+    const admitted = joinedMembershipRef.current;
+    const membershipGeneration = admitted?.roomId === resolvedRoomId && admitted.userId === resolvedUserId
+      ? admitted.membershipGeneration : undefined;
+    if (!membershipGeneration) return false;
     const isCurrentAuthority = () => {
       const sessionState = channelStateRef.current;
       return generation === legacySessionGenerationRef.current
         && channelRef.current === channel
         && formatRoomId(roomRef.current?.roomId ?? "") === resolvedRoomId
         && String(identityRef.current?.userId ?? "").trim() === resolvedUserId
+        && joinedMembershipRef.current?.membershipGeneration === membershipGeneration
         && (sessionState === "connecting" || sessionState === "live" || sessionState === "reconnecting");
     };
 
     const membership = await touchCommunicationRoomSession({
       roomId: resolvedRoom.roomId,
       userId: resolvedIdentity.userId,
+      expectedMembershipGeneration: membershipGeneration,
       membershipState: channelStateRef.current === "reconnecting" ? "reconnecting" : "active",
       cameraEnabled: nextCameraEnabled,
       micEnabled: nextMicEnabled,
@@ -1145,6 +1295,7 @@ export function useCommunicationRoomSession({
       !membership
       || formatRoomId(membership.roomId) !== resolvedRoomId
       || membership.userId !== resolvedUserId
+      || membership.membershipGeneration !== membershipGeneration
       || membership.cameraEnabled !== nextCameraEnabled
       || membership.micEnabled !== nextMicEnabled
       || !isCurrentAuthority()
@@ -1170,6 +1321,8 @@ export function useCommunicationRoomSession({
 
     const broadcastResult = await broadcastCommunicationRoomSignal({
       roomId: resolvedRoom.roomId,
+      userId: resolvedUserId,
+      expectedMembershipGeneration: membershipGeneration,
       event: "media:update",
       payload: {
         cameraOn: nextCameraEnabled,
@@ -1383,8 +1536,10 @@ export function useCommunicationRoomSession({
 
   const ensurePeerConnection = useCallback(async (remoteUserId: string) => {
     const generation = legacySessionGenerationRef.current;
+    const remoteGeneration = membershipsRef.current.find((membership) => membership.userId === remoteUserId)?.membershipGeneration;
+    const ownsRemoteGeneration = () => remoteGeneration === membershipsRef.current.find((membership) => membership.userId === remoteUserId)?.membershipGeneration;
     const pending = peerConnectionTasksRef.current[remoteUserId];
-    if (pending?.generation === generation) return pending.task;
+    if (pending?.generation === generation && pending.remoteGeneration === remoteGeneration) return pending.task;
     const createOrReuse = async () => {
     const rtc = getCommunicationRTCModule();
     const resolvedIdentity = identityRef.current;
@@ -1399,6 +1554,7 @@ export function useCommunicationRoomSession({
       await attachMissingLocalTracks(existingPeerConnection);
       if (
         generation !== legacySessionGenerationRef.current
+        || !ownsRemoteGeneration()
         || peerConnectionsRef.current[remoteUserId] !== existingPeerConnection
       ) return null;
       return existingPeerConnection;
@@ -1413,12 +1569,13 @@ export function useCommunicationRoomSession({
     });
 
     await attachMissingLocalTracks(peerConnection);
-    if (generation !== legacySessionGenerationRef.current || identityRef.current !== resolvedIdentity) {
+    if (generation !== legacySessionGenerationRef.current || identityRef.current !== resolvedIdentity || !ownsRemoteGeneration()) {
       peerConnection.close();
       return null;
     }
     const isCurrentPeer = () => (
       generation === legacySessionGenerationRef.current
+      && ownsRemoteGeneration()
       && peerConnectionsRef.current[remoteUserId] === peerConnection
     );
 
@@ -1574,7 +1731,7 @@ export function useCommunicationRoomSession({
       });
     });
 
-    if (generation !== legacySessionGenerationRef.current || identityRef.current !== resolvedIdentity) {
+    if (generation !== legacySessionGenerationRef.current || identityRef.current !== resolvedIdentity || !ownsRemoteGeneration()) {
       peerConnection.close();
       return null;
     }
@@ -1586,7 +1743,7 @@ export function useCommunicationRoomSession({
     return peerConnection;
     };
     const task = createOrReuse();
-    const reservation = { generation, task };
+    const reservation = { generation, remoteGeneration, task };
     peerConnectionTasksRef.current[remoteUserId] = reservation;
     try {
       return await task;
@@ -1861,107 +2018,6 @@ export function useCommunicationRoomSession({
     await syncPeerConnections(nextParticipants);
   }, [applyParticipantsFromSources, roomId, syncPeerConnections]);
 
-  const captureLeaveOperation = useCallback(() => {
-    const currentContext = leaveContextRef.current;
-    if (currentContext.authenticatedAccessToken !== authenticatedAccessToken
-      || currentContext.authenticatedUserId !== authenticatedUserId
-      || currentContext.roomId !== roomId) {
-      throw new Error("The call changed before cleanup could start.");
-    }
-    const generation = legacySessionGenerationRef.current;
-    const resolvedRoom = roomRef.current;
-    const resolvedIdentity = identityRef.current;
-    let operation = leaveOperationRef.current;
-    const isDisabledRetainedOperation = operation
-      && !currentContext.enabled
-      && operation.authenticatedAccessToken === authenticatedAccessToken
-      && operation.authenticatedUserId === authenticatedUserId
-      && operation.requestedRoomId === roomId
-      && !channelRef.current && !roomRef.current && !identityRef.current;
-    if (!operation || (operation.generation !== generation && !isDisabledRetainedOperation)) {
-      const capturedChannel = channelRef.current;
-      const capturedSnapshotChannel = snapshotChannelRef.current;
-      const capturedMedia = {
-        answerWaiters: Object.entries(legacyMicAnswerWaitersRef.current),
-        auxiliaryStreams: [...auxiliaryStreamsRef.current],
-        localStream: localStreamRef.current,
-        offerRetryTimers: Object.entries(offerRetryTimersRef.current),
-        peers: Object.entries(peerConnectionsRef.current),
-      };
-      const capturedTracks = new Set<any>([
-        ...(capturedMedia.localStream?.getTracks() ?? []),
-        ...capturedMedia.auxiliaryStreams.flatMap((stream) => stream.getTracks()),
-        ...capturedMedia.peers.flatMap(([, peer]) => (
-          typeof peer.getSenders === "function" ? peer.getSenders().map((sender: any) => sender.track).filter(Boolean) : []
-        )),
-      ]);
-      const tracksStopped = () => [...capturedTracks].every((track) => String(track.readyState ?? "").toLowerCase() === "ended");
-      const peersClosed = () => capturedMedia.peers.every(([, peer]) => String(peer.connectionState ?? "") === "closed");
-      const stopNativeCapture = () => {
-        capturedTracks.forEach((track) => {
-          try { track.enabled = false; } catch { /* verified below */ }
-          try { track.stop(); } catch { /* verified below */ }
-        });
-        capturedMedia.peers.forEach(([, peer]) => {
-          try { peer.close(); } catch { /* verified below */ }
-        });
-        return tracksStopped() && peersClosed();
-      };
-      const waitForNativeShutdown = async () => {
-        if (!tracksStopped()) return false;
-        if (peersClosed()) return true;
-        const closingPeers = capturedMedia.peers.map(([, peer]) => peer)
-          .filter((peer) => String(peer.connectionState ?? "") !== "closed");
-        if (closingPeers.some((peer) => typeof peer.addEventListener !== "function")) return false;
-        let observeClosure = () => {};
-        const closure = new Promise<boolean>((resolve) => {
-          observeClosure = () => {
-            if (peersClosed()) resolve(true);
-          };
-        });
-        try {
-          // The native SDK queues close(); connectionState changes only when
-          // its later event arrives. Observe postconditions, not call return.
-          closingPeers.forEach((peer) => peer.addEventListener("connectionstatechange", observeClosure));
-          observeClosure();
-          const closed = await waitForRealtimeOperation(closure);
-          return closed === true && tracksStopped() && peersClosed();
-        } finally {
-          closingPeers.forEach((peer) => peer.removeEventListener?.("connectionstatechange", observeClosure));
-        }
-      };
-      legacySessionGenerationRef.current += 1;
-      endingGenerationRef.current = legacySessionGenerationRef.current;
-      channelStateRef.current = "idle";
-      setChannelState("idle");
-      // Local privacy cannot wait on a database write or Realtime untrack.
-      stopNativeCapture();
-      cleanupSessionMedia(capturedMedia);
-      cleanupSnapshotChannel(capturedSnapshotChannel);
-      operation = {
-        authenticatedAccessToken,
-        authenticatedUserId,
-        requestedRoomId: roomId,
-        generation: legacySessionGenerationRef.current,
-        room: resolvedRoom,
-        identity: resolvedIdentity,
-        membershipGeneration: joinedMembershipRef.current?.roomId === resolvedRoom?.roomId
-          && joinedMembershipRef.current?.userId === resolvedIdentity?.userId
-          ? joinedMembershipRef.current?.membershipGeneration
-          : undefined,
-        pending: null,
-        completed: false,
-        nativeCleanup: cleanupChannel(capturedChannel),
-        stopNativeCapture,
-        waitForNativeShutdown,
-        durableLeft: false,
-        durableReservation: null,
-      };
-      leaveOperationRef.current = operation;
-    }
-    return operation;
-  }, [authenticatedAccessToken, authenticatedUserId, cleanupChannel, cleanupSessionMedia, cleanupSnapshotChannel, roomId]);
-
   const leaveRoom = useCallback(async (options?: { endRoomIfHost?: boolean }) => {
     if (leaveContextRef.current !== leaveCallbackOwner) {
       throw new Error("The call changed before cleanup could start.");
@@ -2116,19 +2172,24 @@ export function useCommunicationRoomSession({
       }
       let admissionRetired = false;
       let admissionUncertain = false;
+      let admissionMutationStarted = false;
       const admission = reserveCommunicationMembershipAdmission({ roomId, userId: resolvedIdentity.userId });
       const joinTask = (async () => {
         await admission.predecessor;
+        if (!isActiveGeneration() || admissionRetired) return null;
+        const preparedAdmission = await prepareCommunicationRoomAdmission({ roomId, userId: resolvedIdentity.userId });
         if (!isActiveGeneration() || admissionRetired) return null;
         let joinedMembership: CommunicationRoomMembership | null = null;
         for (let attempt = 0; attempt < 3 && !joinedMembership; attempt += 1) {
           if (!isActiveGeneration()) return null;
           if (resolvedIdentity.userId) {
+            admissionMutationStarted = true;
             joinedMembership = await joinCommunicationRoomSession({
               roomId,
               userId: resolvedIdentity.userId,
               displayName: resolvedIdentity.displayName,
               avatarUrl: resolvedIdentity.avatarUrl,
+              admission: preparedAdmission,
               // Joining establishes authority, not capture truth. Media is
               // promoted only after native tracks and Realtime are both proved.
               cameraEnabled: false,
@@ -2176,7 +2237,7 @@ export function useCommunicationRoomSession({
         }
         return joinedMembership;
       })().catch((admissionError) => {
-        if (isAmbiguousMembershipOutcome(admissionError)) admissionUncertain = true;
+        if (admissionMutationStarted && isAmbiguousMembershipOutcome(admissionError)) admissionUncertain = true;
         throw admissionError;
       });
       void joinTask.finally(() => {
@@ -2187,6 +2248,7 @@ export function useCommunicationRoomSession({
       const admissionResult = await waitForRealtimeOperation(joinTask.then((membership) => ({ membership })));
       if (!admissionResult) {
         admissionRetired = true;
+        if (!admissionMutationStarted) admission.release();
         throw new Error("The call admission is still pending. Try again after cleanup completes.");
       }
       const joinedMembership = admissionResult.membership;
@@ -2386,6 +2448,32 @@ export function useCommunicationRoomSession({
       const isExactInboundRoom = (payload: Record<string, unknown>) => (
         formatRoomId(String(payload?.roomId ?? "")) === snapshot.room.roomId
       );
+      const isCurrentInboundOwner = (payload: Record<string, unknown>) => {
+        const fromUserId = String(payload?.fromUserId ?? "").trim();
+        const membershipGeneration = String(payload?.membershipGeneration ?? "").trim();
+        return isActiveGeneration() && isExactInboundRoom(payload) && !!membershipGeneration
+          && isAuthorizedInboundParticipant(fromUserId)
+          && membershipsRef.current.some((membership) => membership.userId === fromUserId
+            && membership.membershipGeneration === membershipGeneration);
+      };
+      const inboundOwnerRefreshes = new Map<string, { generation: string; task: Promise<unknown> }>();
+      const verifyInboundOwner = async (payload: Record<string, unknown>) => {
+        if (isCurrentInboundOwner(payload)) return true;
+        const fromUserId = String(payload?.fromUserId ?? "").trim();
+        const membershipGeneration = String(payload?.membershipGeneration ?? "").trim();
+        if (!isActiveGeneration() || !isExactInboundRoom(payload) || !membershipGeneration
+          || membershipGeneration.length > 128 || !isAuthorizedInboundParticipant(fromUserId)) return false;
+        // A new owner's first SDP can precede the membership notification.
+        // Read authoritative state once for that sender/token, never adopt the
+        // packet's generation itself. Queued old packets stay rejected.
+        let refresh = inboundOwnerRefreshes.get(fromUserId);
+        if (!refresh || refresh.generation !== membershipGeneration) {
+          refresh = { generation: membershipGeneration, task: refreshSnapshot(snapshot.room.roomId).catch(() => null) };
+          inboundOwnerRefreshes.set(fromUserId, refresh);
+        }
+        await refresh.task;
+        return isCurrentInboundOwner(payload);
+      };
 
       channel.on("presence", { event: "sync" }, () => {
         if (!isActiveGeneration()) return;
@@ -2434,6 +2522,7 @@ export function useCommunicationRoomSession({
           || targetUserId !== currentIdentity.userId
           || !isAuthorizedInboundParticipant(fromUserId)
         ) return;
+        if (!await verifyInboundOwner(payload)) return;
         logChatRtc("offer_received", {
           roomId: snapshot.room.roomId,
           fromUserId,
@@ -2444,7 +2533,7 @@ export function useCommunicationRoomSession({
         if (!peerConnection || !isActiveGeneration()) return;
 
         const normalizedAnswer = await runSerializedPeerSignaling(fromUserId, async () => {
-          if (!isActiveGeneration() || peerConnectionsRef.current[fromUserId] !== peerConnection) return null;
+          if (!isCurrentInboundOwner(payload) || peerConnectionsRef.current[fromUserId] !== peerConnection) return null;
           const description = payload?.description as { type?: string; sdp?: string } | undefined;
           if (description?.type !== "offer" || !description.sdp) return null;
           const offerSdp = description.sdp;
@@ -2462,13 +2551,13 @@ export function useCommunicationRoomSession({
               if (waiter.peerConnection === peerConnection) waiter.resolve(false);
             }
           }
-          if (!isActiveGeneration() || peerConnectionsRef.current[fromUserId] !== peerConnection) return null;
+          if (!isCurrentInboundOwner(payload) || peerConnectionsRef.current[fromUserId] !== peerConnection) return null;
           await peerConnection.setRemoteDescription(new rtc.RTCSessionDescription({ type: "offer", sdp: offerSdp }));
-          if (!isActiveGeneration()) return null;
+          if (!isCurrentInboundOwner(payload) || peerConnectionsRef.current[fromUserId] !== peerConnection) return null;
           await flushPendingPeerIce(fromUserId, peerConnection);
-          if (!isActiveGeneration() || peerConnectionsRef.current[fromUserId] !== peerConnection) return null;
+          if (!isCurrentInboundOwner(payload) || peerConnectionsRef.current[fromUserId] !== peerConnection) return null;
           const answer = await peerConnection.createAnswer();
-          if (!isActiveGeneration()) return null;
+          if (!isCurrentInboundOwner(payload) || peerConnectionsRef.current[fromUserId] !== peerConnection) return null;
           const normalized = { ...answer, sdp: preferVideoCodecInSdp(answer.sdp, PREFERRED_VIDEO_CODEC) };
           await peerConnection.setLocalDescription(normalized);
           return normalized;
@@ -2476,7 +2565,7 @@ export function useCommunicationRoomSession({
           reportRuntimeError("communication-inbound-offer", signalingError, { roomId: snapshot.room.roomId });
           return null;
         });
-        if (!normalizedAnswer || !isActiveGeneration() || peerConnectionsRef.current[fromUserId] !== peerConnection) return;
+        if (!normalizedAnswer || !isCurrentInboundOwner(payload) || peerConnectionsRef.current[fromUserId] !== peerConnection) return;
         await sendBroadcast("webrtc:answer", {
           // Route the answer back to the original offer sender.
           targetUserId: fromUserId,
@@ -2505,6 +2594,7 @@ export function useCommunicationRoomSession({
           || targetUserId !== currentIdentity.userId
           || !isAuthorizedInboundParticipant(fromUserId)
         ) return;
+        if (!await verifyInboundOwner(payload)) return;
         const correlatedWaiter = negotiationId ? legacyMicAnswerWaitersRef.current[negotiationId] : null;
         const localOffer = peerLocalOffersRef.current[fromUserId];
         if (negotiationId && !correlatedWaiter && (localOffer?.negotiationId !== negotiationId
@@ -2530,7 +2620,7 @@ export function useCommunicationRoomSession({
         if (!peerConnection || !isActiveGeneration()) return;
         clearOfferRetry(fromUserId);
         const applied = await runSerializedPeerSignaling(fromUserId, async () => {
-          if (!isActiveGeneration() || peerConnectionsRef.current[fromUserId] !== peerConnection) return false;
+          if (!isCurrentInboundOwner(payload) || peerConnectionsRef.current[fromUserId] !== peerConnection) return false;
           // The queue may have run another offer after the event was received.
           // Correlation must still belong to the offer immediately before the
           // native SDP command, not only at the JavaScript event boundary.
@@ -2584,6 +2674,7 @@ export function useCommunicationRoomSession({
           || !isAuthorizedInboundParticipant(fromUserId)
           || !payload?.candidate
         ) return;
+        if (!await verifyInboundOwner(payload)) return;
         logChatRtc("ice_received", {
           roomId: snapshot.room.roomId,
           fromUserId,
@@ -2601,7 +2692,7 @@ export function useCommunicationRoomSession({
           usernameFragment: typeof candidate.usernameFragment === "string" ? candidate.usernameFragment.slice(0, 256) : undefined,
         };
         await runSerializedPeerSignaling(fromUserId, async () => {
-          if (!isActiveGeneration() || peerConnectionsRef.current[fromUserId] !== peerConnection) return;
+          if (!isCurrentInboundOwner(payload) || peerConnectionsRef.current[fromUserId] !== peerConnection) return;
           const value = new rtc.RTCIceCandidate(normalizedCandidate);
           // The private relay can deliver ICE before SDP. Keep a bounded queue
           // for this exact native peer; dropping the early candidates can leave
@@ -2609,7 +2700,7 @@ export function useCommunicationRoomSession({
           if (!peerConnection.remoteDescription) {
             let pending = pendingPeerIceRef.current[fromUserId];
             if (!pending || pending.generation !== sessionGeneration || pending.peerConnection !== peerConnection) {
-              pending = { generation: sessionGeneration, peerConnection, candidates: [] };
+              pending = { generation: sessionGeneration, membershipGeneration: String(payload.membershipGeneration), peerConnection, candidates: [] };
               pendingPeerIceRef.current[fromUserId] = pending;
             }
             const key = JSON.stringify(normalizedCandidate);
@@ -2627,10 +2718,11 @@ export function useCommunicationRoomSession({
         });
       });
 
-      channel.on("broadcast", { event: "media:update" }, ({ payload }: { payload: Record<string, unknown> }) => {
+      channel.on("broadcast", { event: "media:update" }, async ({ payload }: { payload: Record<string, unknown> }) => {
         if (!isActiveGeneration()) return;
         const fromUserId = String(payload?.fromUserId ?? "").trim();
         if (!isExactInboundRoom(payload) || !isAuthorizedInboundParticipant(fromUserId)) return;
+        if (!await verifyInboundOwner(payload)) return;
         void refreshSnapshot(snapshot.room.roomId).catch((mediaProjectionError) => {
           reportRuntimeError("communication-media-projection-refresh", mediaProjectionError, {
             roomId: snapshot.room.roomId,
@@ -2757,10 +2849,13 @@ export function useCommunicationRoomSession({
           }
           const currentRoom = roomRef.current;
           const currentIdentity = identityRef.current;
-          if (currentRoom && currentIdentity) {
+          const currentAdmission = joinedMembershipRef.current;
+          if (currentRoom && currentIdentity && currentAdmission?.roomId === currentRoom.roomId
+            && currentAdmission.userId === currentIdentity.userId && currentAdmission.membershipGeneration) {
             await heartbeatCommunicationRoomSession({
               roomId: currentRoom.roomId,
               userId: currentIdentity.userId,
+              expectedMembershipGeneration: currentAdmission.membershipGeneration,
             }).catch((reconnectMembershipError) => {
               reportRuntimeError("communication-reconnect-membership", reconnectMembershipError, {
                 roomId: currentRoom.roomId,
@@ -2879,16 +2974,22 @@ export function useCommunicationRoomSession({
     if (!room || !identity || loading) return;
 
     const generation = legacySessionGenerationRef.current;
+    const admission = joinedMembershipRef.current;
+    const membershipGeneration = admission?.roomId === room.roomId && admission.userId === identity.userId
+      ? admission.membershipGeneration : undefined;
+    if (!membershipGeneration) return;
     const ownsHeartbeat = () => (
       generation === legacySessionGenerationRef.current
       && roomRef.current?.roomId === room.roomId
       && identityRef.current?.userId === identity.userId
+      && joinedMembershipRef.current?.membershipGeneration === membershipGeneration
     );
     const interval = setInterval(() => {
       if (!ownsHeartbeat()) return;
       void heartbeatCommunicationRoomSession({
         roomId: room.roomId,
         userId: identity.userId,
+        expectedMembershipGeneration: membershipGeneration,
       }).then(() => ownsHeartbeat() ? refreshSnapshot(room.roomId) : null).catch((heartbeatError) => {
         reportRuntimeError("communication-membership-heartbeat", heartbeatError, {
           roomId: room.roomId,
@@ -3302,12 +3403,16 @@ export function useCommunicationRoomSession({
     const channel = channelRef.current;
     const resolvedRoomId = formatRoomId(roomRef.current?.roomId ?? "");
     const userId = String(identityRef.current?.userId ?? "").trim();
+    const admission = joinedMembershipRef.current;
+    const membershipGeneration = admission?.roomId === resolvedRoomId && admission.userId === userId
+      ? admission.membershipGeneration : undefined;
     const sessionState = channelStateRef.current;
     if (
       !channel
       || !resolvedRoomId
       || resolvedRoomId !== formatRoomId(roomId)
       || !userId
+      || !membershipGeneration
       || (sessionState !== "live" && sessionState !== "reconnecting")
     ) return null;
     return {
@@ -3315,6 +3420,7 @@ export function useCommunicationRoomSession({
       generation: legacySessionGenerationRef.current,
       roomId: resolvedRoomId,
       userId,
+      membershipGeneration,
     };
   }, [roomId]);
 
@@ -3326,6 +3432,7 @@ export function useCommunicationRoomSession({
       channelRef.current === authority.channel
       && formatRoomId(roomRef.current?.roomId ?? "") === authority.roomId
       && String(identityRef.current?.userId ?? "").trim() === authority.userId
+      && joinedMembershipRef.current?.membershipGeneration === authority.membershipGeneration
       && (sessionState === "live" || sessionState === "reconnecting")
     );
   }, []);
@@ -3395,11 +3502,14 @@ export function useCommunicationRoomSession({
         return normalized;
       });
       if (!normalizedOffer) throw new Error("LEGACY_MIC_SIGNALING_CHANGED");
-      if (!isLegacyMicSessionAuthorityCurrent(authority)) throw new Error("LEGACY_MIC_SESSION_AUTHORITY_CHANGED");
+      if (!isLegacyMicSessionAuthorityCurrent(authority)
+        || peerConnectionsRef.current[remoteUserId] !== peerConnection) throw new Error("LEGACY_MIC_SESSION_AUTHORITY_CHANGED");
       peerLocalOffersRef.current[remoteUserId] = { generation: authority.generation, peerConnection, sdp: normalizedOffer.sdp ?? "", negotiationId };
       const sendResult = await waitForRealtimeOperation(
         broadcastCommunicationRoomSignal({
           roomId: authority.roomId,
+          userId: authority.userId,
+          expectedMembershipGeneration: authority.membershipGeneration,
           event: "webrtc:offer",
           payload: {
             targetUserId: remoteUserId,
@@ -3451,6 +3561,7 @@ export function useCommunicationRoomSession({
     const membership = await touchCommunicationRoomSession({
       roomId: authority.roomId,
       userId: authority.userId,
+      expectedMembershipGeneration: authority.membershipGeneration,
       membershipState,
       cameraEnabled: nextCameraEnabled,
       micEnabled: nextMicEnabled,
@@ -3466,6 +3577,7 @@ export function useCommunicationRoomSession({
       !membership
       || formatRoomId(membership.roomId) !== authority.roomId
       || membership.userId !== authority.userId
+      || membership.membershipGeneration !== authority.membershipGeneration
       || membership.cameraEnabled !== nextCameraEnabled
       || membership.micEnabled !== nextMicEnabled
       || normalizeRoomMembershipState(membership.membershipState) !== membershipState
@@ -3502,6 +3614,8 @@ export function useCommunicationRoomSession({
     if (!isLegacyMicSessionAuthorityCurrent(authority)) return { ok: false, sent: false };
     const result = await waitForRealtimeOperation(broadcastCommunicationRoomSignal({
       roomId: authority.roomId,
+      userId: authority.userId,
+      expectedMembershipGeneration: authority.membershipGeneration,
       event: "media:update",
       payload: {
         cameraOn: nextCameraEnabled,

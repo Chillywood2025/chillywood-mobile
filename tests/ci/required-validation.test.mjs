@@ -88,7 +88,8 @@ test("call lifecycle hooks select sensitive, database, and native validation and
   assert.match(workflow, /npm run test:communication-terminal-postgres/u);
   assert.match(workflow, /npm run test:communication-terminal-http/u);
   assert.match(workflow, /npm run test:chilly-chat-real-peer/u);
-  assert.match(workflow, /playwright install --with-deps chromium --only-shell/u);
+  assert.match(workflow, /npm ci --prefix tests\/integration\/real-peer-browser --ignore-scripts/u);
+  assert.match(workflow, /node tests\/integration\/real-peer-browser\/node_modules\/playwright\/cli\.js install --with-deps chromium --only-shell/u);
 });
 
 test("non-owner policy changes require a trusted exact-head review from someone other than author", () => {
