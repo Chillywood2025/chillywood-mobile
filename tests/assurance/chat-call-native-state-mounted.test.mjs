@@ -665,3 +665,108 @@ test("adopted camera recovery retains failed rollback disposal after sender reje
   assert.equal(retained.readyState, "ended");
   assert.equal(coordinator.retryRetiredCommunicationCaptures(), true);
 });
+
+for (const backgroundAudio of [false, true]) {
+  test(`legacy current-camera projection follows stopped WebRTC tracks while retaining foreground intent: background audio ${backgroundAudio}`, async t => {
+    const { runtime, h } = await start(t, { backgroundAudio });
+    const video = live(runtime, "video")[0];
+    assert.equal(h.getResult().cameraEnabled, true);
+    assert.equal(h.getResult().participants.find(participant => participant.isSelf)?.cameraOn, true);
+    // The real browser WebRTC stop() receipt keeps enabled=true while ended.
+    // Check both public projection and capture; enabled alone is not liveness.
+    video.stop = () => { video.readyState = "ended"; };
+    await h.run(() => runtime.emitAppState("background"));
+    assert.equal(video.readyState, "ended");
+    assert.equal(video.enabled, false, "suppress outgoing frames before stop; the stop receipt itself does not change enabled");
+    assert.equal(runtime.durableCamera, false);
+    assert.equal(h.getResult().cameraEnabled, false, "public control state must describe current capture rather than retained resume intent");
+    assert.equal(h.getResult().participants.find(participant => participant.isSelf)?.cameraOn, false);
+    assert.equal(h.refs.cameraEnabledRef.current, true, "retain the admitted call's camera preference for foreground recovery");
+    await h.run(() => runtime.emitAppState("active"));
+    const restored = live(runtime, "video")[0];
+    assert.ok(restored);
+    assert.notEqual(restored, video);
+    assert.equal(live(runtime, "video").length, 1);
+    assert.equal(h.getResult().cameraEnabled, true);
+    assert.equal(h.getResult().participants.find(participant => participant.isSelf)?.cameraOn, true);
+    assert.equal(runtime.durableCamera, true);
+    assert.equal(runtime.joinCalls.length, 1, "projection repair must not re-admit or replace the call");
+  });
+}
+
+test("legacy camera toggle follows the public off state when foreground capture has ended", async t => {
+  const { runtime, h } = await start(t);
+  const previous = live(runtime, "video")[0];
+  previous.stop = () => { previous.readyState = "ended"; };
+  previous.stop();
+  await h.rerender({});
+  assert.equal(h.getResult().cameraEnabled, false);
+  assert.equal(h.getResult().participants.find(participant => participant.isSelf)?.cameraOn, false);
+  assert.equal(await h.run(() => h.getResult().toggleCamera()), true);
+  const recovered = live(runtime, "video")[0];
+  assert.ok(recovered, "one user enable action must reacquire the ended camera shown as off");
+  assert.notEqual(recovered, previous);
+  assert.equal(h.getResult().cameraEnabled, true);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.joinCalls.length, 1);
+});
+
+for (const backgroundAudio of [false, true]) {
+ for (const refuseDisable of [false, true]) {
+  test(`legacy background failed camera stop remains visible and owned until exact End retry: background audio ${backgroundAudio}, disable failure ${refuseDisable}`, async t => {
+    const { runtime, h } = await start(t, { backgroundAudio });
+    const video = live(runtime, "video")[0];
+    video.refuseStop = true;
+    video.refuseDisable = refuseDisable;
+    for (const peer of runtime.peers) {
+      for (const sender of peer.getSenders()) if (sender.track === video) peer.removeTrack(sender);
+    }
+    await h.run(() => runtime.emitAppState("background"));
+    assert.equal(video.readyState, "live");
+    assert.equal(video.enabled, refuseDisable, "disable outgoing frames even if the independent hardware stop is unproved");
+    assert.equal(runtime.durableCamera, refuseDisable, "media state must match the disable receipt without claiming capture shutdown");
+    assert.equal(h.getResult().cameraEnabled, refuseDisable, "actual still-enabled capture cannot be hidden by background intent");
+    assert.equal(h.getResult().participants.find(participant => participant.isSelf)?.cameraOn, refuseDisable);
+    assert.ok(h.refs.localStreamRef.current?.getVideoTracks().includes(video)
+      || h.refs.auxiliaryStreamsRef.current.some(stream => stream.getVideoTracks().includes(video)),
+    "an unbound failed-stop track must remain owned even when no RTP sender references it");
+    assert.match(h.getResult().error ?? "", /camera.*(shutdown|stop).*verified/i);
+    await assert.rejects(() => h.run(() => h.getResult().leaveRoom()), /shutdown/);
+    video.refuseStop = false;
+    video.refuseDisable = false;
+    await h.run(() => h.getResult().leaveRoom());
+    assert.equal(video.readyState, "ended");
+    assert.equal(h.getResult().cameraEnabled, false);
+    runtime.roomId = "FRESH-AFTER-CAMERA-STOP";
+    await h.run(() => runtime.emitAppState("active"));
+    await h.rerender({ roomId: runtime.roomId });
+    assert.equal(live(runtime, "video").length, 1);
+    assert.notEqual(live(runtime, "video")[0], video);
+  });
+ }
+}
+
+test("adopted failed-stop camera remains process-owned across full hook unmount and replacement admission", async t => {
+  const coordinator = module.exports.createCaptureRetirementCoordinator();
+  const { runtime, h } = await start(t, { captureRetirementCoordinator: coordinator, backgroundAudio: true });
+  const video = live(runtime, "video")[0];
+  video.refuseStop = true;
+  await h.run(() => runtime.emitAppState("background"));
+  await h.unmount();
+  assert.equal(video.readyState, "live");
+  const replacement = createRuntime({ captureRetirementCoordinator: coordinator });
+  replacement.roomId = "ADOPTED-CAPTURE-REPLACEMENT";
+  const next = await mount(replacement, { enabled: true, naturalLifecycle: true,
+    analyticsContext: { surface: "chat-thread" }, initialMediaPreferences: { micEnabled: true, cameraEnabled: true } });
+  t.after(() => next.unmount());
+  assert.equal(replacement.joinCalls.length, 0, "unmount must not erase an adopted native capture whose shutdown is unproved");
+  assert.equal(replacement.mediaCreateCalls.length, 0);
+  video.refuseStop = false;
+  await next.rerender({ enabled: false });
+  await next.rerender({ enabled: true });
+  assert.equal(video.readyState, "ended");
+  assert.equal(replacement.joinCalls.length, 1);
+  assert.equal(live(replacement, "video").length, 1);
+  assert.equal(coordinator.retryRetiredCommunicationCaptures(), true);
+  assert.equal(live(replacement, "video").length, 1, "retirement retry cannot stop an adopted replacement owner's track");
+});

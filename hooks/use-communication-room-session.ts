@@ -1,7 +1,7 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { Audio } from "expo-av";
 import { useCameraPermissions } from "expo-camera";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { AppState, Linking, type AppStateStatus } from "react-native";
 import type { MediaStream } from "@livekit/react-native-webrtc";
 
@@ -432,6 +432,7 @@ export function useCommunicationRoomSession({
   const [micEnabled, setMicEnabled] = useState(initialMediaPreferences?.micEnabled ?? true);
   const [presenceParticipants, setPresenceParticipants] = useState<CommunicationParticipantPresence[]>([]);
   const [localStreamURL, setLocalStreamURL] = useState("");
+  const [, notifyLocalMediaProjection] = useReducer((revision: number) => revision + 1, 0);
   const [localVideoStreamURL, setLocalVideoStreamURL] = useState("");
   const [remoteStreamsByUserId, setRemoteStreamsByUserId] = useState<Record<string, MediaStream>>({});
   const [connectionStateByUserId, setConnectionStateByUserId] = useState<Record<string, PeerConnectionState>>({});
@@ -804,13 +805,23 @@ export function useCommunicationRoomSession({
       ...auxiliaryStreamsRef.current,
     ]);
 
+    let stopped = true;
     streams.forEach((stream) => {
       const tracks = kind === "audio" ? stream.getAudioTracks() : stream.getVideoTracks();
       tracks.forEach((track) => {
         try {
+          track.enabled = false;
+        } catch {
+          // Best-effort suppression is separate from proving capture shutdown.
+        }
+        try {
           track.stop();
         } catch {
           // noop
+        }
+        if (String(track.readyState ?? "").toLowerCase() !== "ended") {
+          stopped = false;
+          return;
         }
         try {
           stream.removeTrack(track);
@@ -827,7 +838,12 @@ export function useCommunicationRoomSession({
     } else if (localStreamRef.current) {
       setLocalStreamURL(getCommunicationStreamURL(localStreamRef.current));
     }
-    if (kind === "video") setLocalVideoStreamURL("");
+    if (kind === "video") {
+      if (stopped) setLocalVideoStreamURL("");
+      notifyLocalMediaProjection();
+    }
+    if (!stopped) setError(`${kind === "video" ? "Camera" : "Microphone"} shutdown could not be verified. Retry End.`);
+    return stopped;
   }, []);
 
   const setLocalMediaKindEnabled = useCallback((kind: "audio" | "video", enabled: boolean) => {
@@ -906,11 +922,11 @@ export function useCommunicationRoomSession({
           return;
         }
         const shouldResumeMic = micEnabledRef.current;
-        stopLocalMediaKind("video");
+        const cameraStopped = stopLocalMediaKind("video");
         try {
           const controlled = await legacyMicControlRef.current?.(
             LEGACY_BACKGROUND_MEDIA_STATE.micEnabled,
-            LEGACY_BACKGROUND_MEDIA_STATE.cameraEnabled,
+            cameraStopped ? LEGACY_BACKGROUND_MEDIA_STATE.cameraEnabled : hasUsableLocalTrack("video"),
           ) ?? false;
           if (!controlled) legacyMicLocalPrivacyStopRef.current?.();
         } catch (error) {
@@ -924,7 +940,7 @@ export function useCommunicationRoomSession({
       }
       cleanupSessionMedia();
     });
-  }, [cleanupSessionMedia, enabled, roomId, stopLocalMediaKind]);
+  }, [cleanupSessionMedia, enabled, hasUsableLocalTrack, roomId, stopLocalMediaKind]);
 
   const cleanupChannel = useCallback(async (expectedChannel?: RealtimeChannel | null) => {
     const channel = expectedChannel ?? channelRef.current;
@@ -1082,7 +1098,7 @@ export function useCommunicationRoomSession({
         ).trim() || "Participant",
         avatarUrl: String(membership?.avatarUrl ?? presence?.avatarUrl ?? "").trim() || undefined,
         cameraOn: participantId === resolvedIdentity.userId
-          ? cameraEnabledRef.current
+          ? hasUsableLocalTrack("video")
           : (membership?.cameraEnabled ?? (typeof presence?.cameraOn === "boolean" ? presence.cameraOn : false)),
         micOn: participantId === resolvedIdentity.userId
           ? micEnabledRef.current
@@ -1109,7 +1125,7 @@ export function useCommunicationRoomSession({
       })),
     });
     return nextParticipants;
-  }, [isActiveLegacyGeneration, roomId]);
+  }, [hasUsableLocalTrack, isActiveLegacyGeneration, roomId]);
 
   const captureLeaveOperation = useCallback(() => {
     const currentContext = leaveContextRef.current;
@@ -3461,11 +3477,11 @@ export function useCommunicationRoomSession({
         hasUsableAudioTrack: hasUsableLocalTrack("audio"),
       });
       if (preserveNativeCallAudio) {
-        stopLocalMediaKind("video");
+        const cameraStopped = stopLocalMediaKind("video");
         channelStateRef.current = "live";
         setChannelState("live");
-        setError(null);
-        void legacyMicControlRef.current?.(true, false).catch((error) => {
+        setError(cameraStopped ? null : "Camera shutdown could not be verified. Retry End.");
+        void legacyMicControlRef.current?.(true, !cameraStopped && hasUsableLocalTrack("video")).catch((error) => {
           reportRuntimeError("communication-appstate-background-audio", error, {
             roomId: currentRoom.roomId,
           });
@@ -3474,7 +3490,7 @@ export function useCommunicationRoomSession({
       }
 
       const shouldResumeMic = micEnabledRef.current;
-      stopLocalMediaKind("video");
+      const cameraStopped = stopLocalMediaKind("video");
       channelStateRef.current = "reconnecting";
       setChannelState("reconnecting");
       if (!reconnectTrackedRef.current) {
@@ -3488,7 +3504,7 @@ export function useCommunicationRoomSession({
       }
       void (legacyMicControlRef.current?.(
         LEGACY_BACKGROUND_MEDIA_STATE.micEnabled,
-        LEGACY_BACKGROUND_MEDIA_STATE.cameraEnabled,
+        cameraStopped ? LEGACY_BACKGROUND_MEDIA_STATE.cameraEnabled : hasUsableLocalTrack("video"),
       ) ?? Promise.resolve(false))
         .then((controlled) => {
           if (!isActiveLegacyGeneration(generation)) return;
@@ -4281,6 +4297,7 @@ export function useCommunicationRoomSession({
     if (presenceCommit.ok && broadcastCommit.ok && isLegacyMicSessionAuthorityCurrent(authority)) {
       cameraEnabledRef.current = nextEnabled;
       setCameraEnabled(nextEnabled);
+      notifyLocalMediaProjection();
       setMediaControlError(null);
       return true;
     }
@@ -4331,8 +4348,9 @@ export function useCommunicationRoomSession({
   ]);
 
   const toggleCamera = useCallback(async () => {
-    return setCameraCaptureEnabled(!cameraEnabledRef.current);
-  }, [setCameraCaptureEnabled]);
+    const currentlyEnabled = hasUsableLocalTrack("video");
+    return setCameraCaptureEnabled(!currentlyEnabled);
+  }, [hasUsableLocalTrack, setCameraCaptureEnabled]);
 
   const setMicrophoneEnabled = useCallback((
     nextEnabled: boolean,
@@ -4644,6 +4662,10 @@ export function useCommunicationRoomSession({
     isLegacyMicSessionAuthorityCurrent, runSerializedMediaControl, strictlyBroadcastLegacyMicState,
     strictlyCommitLegacyMicPresence]);
 
+  // The retained foreground preference is not proof of live capture. Equally,
+  // background/disabled intent cannot hide a track whose stop is unproved.
+  const currentCameraEnabled = hasUsableLocalTrack("video");
+
   const participants = useMemo<CommunicationParticipantView[]>(() => {
     const localUserId = identity?.userId ?? "";
     const activeMemberships = getActiveCommunicationMemberships(memberships);
@@ -4659,7 +4681,7 @@ export function useCommunicationRoomSession({
         return {
           ...participant,
           isSelf,
-          cameraOn: isSelf ? cameraEnabled : participant.cameraOn,
+          cameraOn: isSelf ? currentCameraEnabled : participant.cameraOn,
           micOn: isSelf ? micEnabled : participant.micOn,
           streamURL: isSelf
             ? localVideoStreamURL || undefined
@@ -4689,7 +4711,7 @@ export function useCommunicationRoomSession({
         userId: identity.userId,
         displayName: identity.displayName,
         avatarUrl: identity.avatarUrl,
-        cameraOn: cameraEnabled,
+        cameraOn: currentCameraEnabled,
         micOn: micEnabled,
         joinedAt: localJoinedAtRef.current,
         isHost: room?.hostUserId === identity.userId,
@@ -4699,7 +4721,7 @@ export function useCommunicationRoomSession({
       },
       ...merged,
     ];
-  }, [cameraEnabled, connectionStateByUserId, identity, localVideoStreamURL, memberships, micEnabled, presenceParticipants, remoteStreamsByUserId, room?.hostUserId]);
+  }, [currentCameraEnabled, connectionStateByUserId, identity, localVideoStreamURL, memberships, micEnabled, presenceParticipants, remoteStreamsByUserId, room?.hostUserId]);
 
   useEffect(() => {
     if (!__DEV__) return;
@@ -4766,7 +4788,7 @@ export function useCommunicationRoomSession({
     mediaControlError,
     channelState: displayedChannelState,
     isRtcAvailable,
-    cameraEnabled,
+    cameraEnabled: currentCameraEnabled,
     micEnabled,
     mediaControlsBusy,
     cameraPermissionState,

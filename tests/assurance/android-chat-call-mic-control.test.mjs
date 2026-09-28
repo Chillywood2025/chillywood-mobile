@@ -1525,13 +1525,13 @@ test("legacy call-domain closure: unprovable quarantine never claims muted succe
   assert.equal(runtime.membershipTouches.some((touch) => touch.micEnabled === false), false);
 });
 
-test("legacy call-domain closure: background lifecycle commits camera false and catches controller rejection", () => {
+test("legacy call-domain closure: background lifecycle commits proved camera state and catches controller rejection", () => {
   const stopperBlock = legacyHookSource.match(/registerActiveMediaSessionStopper\(async \(reason\) => \{[\s\S]*?\n    \}\);/u)?.[0] ?? "";
-  assert.match(stopperBlock, /try \{[\s\S]*?await legacyMicControlRef\.current\?\.\(\s*LEGACY_BACKGROUND_MEDIA_STATE\.micEnabled,\s*LEGACY_BACKGROUND_MEDIA_STATE\.cameraEnabled,\s*\)[\s\S]*?\} catch \(error\) \{/u);
+  assert.match(stopperBlock, /try \{[\s\S]*?await legacyMicControlRef\.current\?\.\(\s*LEGACY_BACKGROUND_MEDIA_STATE\.micEnabled,\s*cameraStopped \? LEGACY_BACKGROUND_MEDIA_STATE\.cameraEnabled : hasUsableLocalTrack\("video"\),\s*\)[\s\S]*?\} catch \(error\) \{/u);
   assert.match(stopperBlock, /catch \(error\) \{\s*legacyMicLocalPrivacyStopRef\.current\?\.\(\);/u);
   assert.match(stopperBlock, /reportRuntimeError\("communication-media-session-background"/u);
   assert.match(legacyHookSource, /const LEGACY_BACKGROUND_MEDIA_STATE = \{\s*cameraEnabled: false,\s*micEnabled: false,/u);
-  assert.match(legacyHookSource, /legacyMicControlRef\.current\?\.\(true, false\)/u);
+  assert.match(legacyHookSource, /legacyMicControlRef\.current\?\.\(true, !cameraStopped && hasUsableLocalTrack\("video"\)\)/u);
 });
 
 test("legacy call-domain closure: background pause converges durable camera false without erasing foreground intent", async (t) => {

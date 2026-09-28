@@ -311,7 +311,7 @@
       "automated_refs": [
         {
           "file": "tests/assurance/android-chat-call-mic-control.test.mjs",
-          "anchor": "legacy call-domain closure: background lifecycle commits camera false and catches controller rejection",
+          "anchor": "legacy call-domain closure: background lifecycle commits proved camera state and catches controller rejection",
           "ci_lane": "Validation / Product"
         },
         {
@@ -413,7 +413,7 @@
         },
         {
           "file": "tests/assurance/android-chat-call-mic-control.test.mjs",
-          "anchor": "legacy call-domain closure: background lifecycle commits camera false and catches controller rejection",
+          "anchor": "legacy call-domain closure: background lifecycle commits proved camera state and catches controller rejection",
           "ci_lane": "Validation / Product"
         },
         {
@@ -5085,7 +5085,7 @@
       "automated_refs": [
         {
           "file": "tests/assurance/android-chat-call-mic-control.test.mjs",
-          "anchor": "legacy call-domain closure: background lifecycle commits camera false and catches controller rejection",
+          "anchor": "legacy call-domain closure: background lifecycle commits proved camera state and catches controller rejection",
           "ci_lane": "Validation / Product"
         },
         {
@@ -5296,7 +5296,7 @@
         },
         {
           "file": "tests/assurance/android-chat-call-mic-control.test.mjs",
-          "anchor": "legacy call-domain closure: background lifecycle commits camera false and catches controller rejection",
+          "anchor": "legacy call-domain closure: background lifecycle commits proved camera state and catches controller rejection",
           "ci_lane": "Validation / Product"
         },
         {

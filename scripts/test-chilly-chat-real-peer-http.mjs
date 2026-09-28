@@ -46,9 +46,11 @@ const advances = (endpoint, baseline) => packets(endpoint) > packets(baseline) &
 const diagnostics = (state) => redact(JSON.stringify({
   roomId: state?.roomId,
   errors: state?.errors,
+  reportedErrors: state?.events?.filter((event) => event.kind === "reported-error").slice(-20),
   endpoints: state?.endpoints?.map((endpoint) => ({
     userId: endpoint.userId, instanceId: endpoint.instanceId, channelState: endpoint.channelState,
-    error: endpoint.error, membership: endpoint.membership, peers: endpoint.peers,
+    error: endpoint.error, appState: endpoint.appState, cameraEnabled: endpoint.cameraEnabled,
+    micEnabled: endpoint.micEnabled, membership: endpoint.membership, peers: endpoint.peers,
     tracks: endpoint.tracks, stats: endpoint.stats, audioReceivers: endpoint.audioReceivers, pixels: endpoint.pixels,
   })),
 }));

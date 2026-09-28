@@ -262,6 +262,41 @@ Bluetooth prerequisites and the rest of the unexecuted matrix remain open.
 These limitations are not hidden by zero-warning lint, additional assertions,
 or the source repairs above.
 
+## Additional defects exposed by connected validation
+
+The first expanded required runs did not establish qualification. They exposed
+two software defects that narrower passing tests had missed:
+
+- The real-browser background test stopped camera capture, but local UI state
+  still projected retained foreground camera intent as current capture. The
+  hook now derives public camera state from actual enabled, non-ended tracks.
+  Tests preserve the browser's stopped-but-still-enabled track semantics,
+  foreground recovery, and one-toggle recovery. Related shutdown tests retain
+  failed-stop resources through End and full hook replacement, rather than
+  losing them when a stream or screen is removed.
+- The authenticated backend/media test negotiated real peers, but the callee's
+  media promotion rolled back. Its owned-membership RPC also attempted a
+  host-only room timestamp write. The correction leaves the room trigger and
+  RLS unchanged: only the host updates room liveness; each admitted participant
+  updates its own exact membership. The PostgreSQL harness now includes the
+  actual room trigger and policy, reproduces the former rollback, and checks
+  host, participant, outsider and retired-generation cases. Required HTTP and
+  browser tests exercise the full disposable Supabase stack.
+
+The new test fixtures also had two incorrect assumptions: that current native
+inputs still matched historical v3 binaries, and that one caller could initiate
+more than three calls in five minutes. Tests now verify the historical cohort
+at its recorded Git source, reject incompatible publication, and exercise the
+real call limit before continuing the same thread in the reverse direction.
+Neither release protection nor the call limit was relaxed.
+
+Keep this regression standard for future physical findings: reproduce the
+mechanism at the lowest faithful automated boundary, demonstrate that the
+former source fails it, and run the correction through its applicable connected
+gates. If that mechanism requires an actual OS/device/provider observation,
+record that remainder explicitly. A case inventory, mocked success, or a
+Connected label cannot substitute for observed media or physical qualification.
+
 ## Next candidate proof, without redoing a blocked full matrix first
 
 1. Finish exact-head protected validation, including the new authenticated
@@ -269,7 +304,9 @@ or the source repairs above.
 2. Under explicit production database authorization, apply and verify the
    forward self-leave migration before any corrected client delivery. Preserve
    the D1–D6/T1–T6 mapping and keep original evidence recovery E01 separate.
-3. Under separate appropriate delivery authority, prove exact installed source
+3. Under separate appropriate delivery authority, build new Android/iOS binaries
+   and a new runtime generation for the native sender patch; existing v3 binaries
+   cannot receive that patch by OTA. Prove exact installed source
    and run both directions: Answer → audible and moving media → repeated mic
    and camera controls → End postconditions → a fresh call. Begin with clean,
    owned call state; preserve first failures.

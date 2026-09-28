@@ -547,8 +547,12 @@ begin
     or v_membership.left_at is not null then
     raise exception 'communication_membership_not_active';
   end if;
+  -- Membership liveness belongs to every admitted participant; room liveness
+  -- remains a host action under enforce_communication_room_identity. A
+  -- participant must not attempt that host write and roll back its own media
+  -- update. Do not widen the room trigger or host-only UPDATE policy.
   update public.communication_rooms set last_activity_at = v_now, updated_at = v_now
-    where room_id = v_room_id and status = 'active';
+    where room_id = v_room_id and status = 'active' and host_user_id = v_actor;
   return next v_membership;
 end;
 $$;

@@ -1,25 +1,35 @@
 type CaptureTrack = { enabled: boolean; readyState: string; stop: () => void };
-type PendingCapture = { owner: object; retired: boolean; tracks: CaptureTrack[] | null };
+type OwnedCapture = { owner: object; retired: boolean; tracks: CaptureTrack[] | null };
 
 // Process-owned because native capture can finish after the React hook unmounts.
-// Only still-pending acquisitions live here; adopted streams belong to the
-// existing session cleanup, and retired records retain their exact track objects.
-const pendingCaptures = new Set<PendingCapture>();
+// Retain adopted capture too: hook-local cleanup cannot erase an unproved stop
+// when the component unmounts. Only retired records block new acquisition;
+// fully ended records are pruned without touching another owner's tracks.
+const ownedCaptures = new Set<OwnedCapture>();
 
-function dispose(record: PendingCapture): boolean {
+function pruneEndedCaptures() {
+  for (const record of ownedCaptures) {
+    if (record.tracks !== null && record.tracks.every((track) => String(track.readyState).toLowerCase() === "ended")) {
+      ownedCaptures.delete(record);
+    }
+  }
+}
+
+function dispose(record: OwnedCapture): boolean {
   if (record.tracks === null) return false;
   for (const track of record.tracks) {
     try { track.enabled = false; } catch { /* Inspect stop below. */ }
     try { track.stop(); } catch { /* Keep the record for an explicit retry. */ }
   }
   const stopped = record.tracks.every((track) => String(track.readyState).toLowerCase() === "ended");
-  if (stopped) pendingCaptures.delete(record);
+  if (stopped) ownedCaptures.delete(record);
   return stopped;
 }
 
 export function reserveCommunicationCapture(owner: object) {
-  const record: PendingCapture = { owner, retired: false, tracks: null };
-  pendingCaptures.add(record);
+  pruneEndedCaptures();
+  const record: OwnedCapture = { owner, retired: false, tracks: null };
+  ownedCaptures.add(record);
   return {
     received(tracks: CaptureTrack[]) {
       record.tracks = [...tracks];
@@ -29,24 +39,25 @@ export function reserveCommunicationCapture(owner: object) {
     rejected() {
       // Rejection delivered no track; an earlier native success must instead
       // go through received()/retire(), never be discarded as a rejection.
-      if (record.tracks === null) { record.tracks = []; pendingCaptures.delete(record); }
+      if (record.tracks === null) { record.tracks = []; ownedCaptures.delete(record); }
     },
     adopt() {
       if (record.retired || record.tracks === null) return false;
-      pendingCaptures.delete(record);
-      return true;
+      pruneEndedCaptures();
+      return ownedCaptures.has(record);
     },
     retire() {
       record.retired = true;
-      pendingCaptures.add(record);
+      ownedCaptures.add(record);
       return dispose(record);
     },
   };
 }
 
 export function retireCommunicationCaptures(owner: object): boolean {
+  pruneEndedCaptures();
   let proved = true;
-  for (const record of [...pendingCaptures]) {
+  for (const record of [...ownedCaptures]) {
     if (record.owner !== owner) continue;
     record.retired = true;
     proved = dispose(record) && proved;
@@ -55,8 +66,9 @@ export function retireCommunicationCaptures(owner: object): boolean {
 }
 
 export function retryRetiredCommunicationCaptures(): boolean {
+  pruneEndedCaptures();
   let proved = true;
-  for (const record of [...pendingCaptures]) {
+  for (const record of [...ownedCaptures]) {
     if (record.retired) proved = dispose(record) && proved;
   }
   return proved;

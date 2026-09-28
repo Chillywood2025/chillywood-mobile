@@ -78,12 +78,14 @@ try {
   `);
   for (const [source, names] of [
     [session, ["wave1_session_authority_readback"]],
-    [authority, ["whole_app_exact_current_session_authority_internal", "whole_app_exact_current_session_authority", "can_access_chat_thread", "can_read_communication_room_authority", "can_access_communication_realtime_topic", "communication_sdp_is_receive_only_internal", "enforce_communication_membership_identity", "join_communication_room_session"]],
+    [authority, ["whole_app_exact_current_session_authority_internal", "whole_app_exact_current_session_authority", "can_access_chat_thread", "can_read_communication_room_authority", "can_access_communication_realtime_topic", "communication_sdp_is_receive_only_internal", "enforce_communication_room_identity", "enforce_communication_membership_identity", "join_communication_room_session"]],
     [terminal, ["cleanup_terminal_chilly_chat_call_product_state", "prevent_ended_communication_room_membership_reactivation"]],
   ]) {
     for (const name of names) await db.exec(extractFunction(source, name));
   }
   await db.exec(`
+    create trigger enforce_communication_room_identity before insert or update on public.communication_rooms
+      for each row execute function public.enforce_communication_room_identity();
     create trigger cleanup_terminal_chilly_chat_call_product_state after update of status on public.chat_call_invites
       for each row execute function public.cleanup_terminal_chilly_chat_call_product_state();
     create trigger enforce_communication_membership_identity before update on public.communication_room_memberships
@@ -95,9 +97,10 @@ try {
     alter table public.communication_room_memberships enable row level security;
     alter table public.communication_room_memberships force row level security;
     grant select on public.communication_rooms,public.communication_room_memberships to authenticated;
+    grant update(status,updated_at,last_activity_at) on public.communication_rooms to authenticated;
     grant update(membership_state,camera_enabled,mic_enabled,last_seen_at,updated_at,display_name,avatar_url) on public.communication_room_memberships to authenticated;
   `);
-  for (const name of ["communication_rooms_select_policy", "communication_room_memberships_select_policy", "communication_room_memberships_self_update_policy"]) {
+  for (const name of ["communication_rooms_select_policy", "communication_rooms_host_update_policy", "communication_room_memberships_select_policy", "communication_room_memberships_self_update_policy"]) {
     const start = authority.indexOf(`create policy "${name}"`);
     await db.exec(authority.slice(start, authority.indexOf(";", start) + 1));
   }
@@ -198,6 +201,45 @@ try {
   const metadataAfter = (await asUser(caller, "update public.communication_room_memberships set display_name='Updated profile',avatar_url='https://example.invalid/avatar.png',updated_at=now() where room_id='OWNED1' and user_id=$1 returning *", [caller])).rows[0];
   check(metadataAfter.display_name === 'Updated profile' && +metadataBefore.last_seen_at === +metadataAfter.last_seen_at && metadataAfter.membership_generation === restarted.membership_generation, "metadata-only profile sync retains media ownership and does not refresh liveness");
   const calleeOwned = await ownedJoin(callee, attempts[3], null);
+  // The old PGlite fixture omitted the actual room identity trigger. Its
+  // host-only touch cases therefore missed the callee's transaction rollback.
+  // Execute that exact trigger, reproduce the former unconditional room write,
+  // then restore the corrected production body and exercise both actors.
+  const touchStart = repair.indexOf("create function public.touch_owned_communication_room_session(");
+  const touchBody = repair.slice(touchStart, repair.indexOf("$$;", touchStart) + 3)
+    .replace("create function", "create or replace function");
+  const formerTouchBody = touchBody.replace(" and host_user_id = v_actor;", ";");
+  assert.notEqual(formerTouchBody, touchBody, "host room-write predicate mutation is active");
+  await db.exec(formerTouchBody);
+  await assert.rejects(ownedTouch(callee, calleeOwned.membership_generation, false, false), /communication_room_current_session_required/u); checks++;
+  const afterFailedTouch = (await db.query("select * from public.communication_room_memberships where room_id='OWNED1' and user_id=$1", [callee])).rows[0];
+  check(afterFailedTouch.camera_enabled && afterFailedTouch.mic_enabled,
+    "BEFORE non-host room write rolled back the entire membership media update");
+  await db.exec(touchBody);
+  await db.exec("update public.communication_rooms set last_activity_at=now()-interval '1 minute',updated_at=now()-interval '1 minute' where room_id='OWNED1'");
+  const roomBeforeParticipant = (await db.query("select * from public.communication_rooms where room_id='OWNED1'")).rows[0];
+  const participantMuted = await ownedTouch(callee, calleeOwned.membership_generation, false, false);
+  check(participantMuted.user_id === callee && participantMuted.role === "participant" && !participantMuted.camera_enabled && !participantMuted.mic_enabled,
+    "AFTER non-host media touch commits its own exact-generation membership");
+  const participantHeartbeat = await ownedTouch(callee, calleeOwned.membership_generation);
+  check(!participantHeartbeat.camera_enabled && !participantHeartbeat.mic_enabled && +participantHeartbeat.last_seen_at >= +participantMuted.last_seen_at,
+    "non-host heartbeat advances own liveness without replaying media preferences");
+  const roomAfterParticipant = (await db.query("select * from public.communication_rooms where room_id='OWNED1'")).rows[0];
+  check(+roomBeforeParticipant.last_activity_at === +roomAfterParticipant.last_activity_at && +roomBeforeParticipant.updated_at === +roomAfterParticipant.updated_at,
+    "non-host membership touch leaves host-owned room timestamps unchanged");
+  const deniedRoomUpdate = await asUser(callee, "update public.communication_rooms set status='ended' where room_id='OWNED1' returning room_id");
+  check(deniedRoomUpdate.rows.length === 0, "actual room RLS still denies direct participant room mutation");
+  const participantRestored = await ownedTouch(callee, calleeOwned.membership_generation, true, true);
+  check(participantRestored.camera_enabled && participantRestored.mic_enabled, "non-host camera/microphone can re-enable after mute");
+  await assert.rejects(ownedTouch(outsider, calleeOwned.membership_generation, false, false), /membership_generation_changed/u); checks++;
+  await assert.rejects(ownedTouch(callee, restarted.membership_generation, false, false), /membership_generation_changed/u); checks++;
+  const calleeReplacement = await ownedJoin(callee, "44444444-4444-4444-8444-444444444445", calleeOwned.membership_generation);
+  await assert.rejects(ownedTouch(callee, calleeOwned.membership_generation, false, false), /membership_generation_changed/u); checks++;
+  check((await ownedTouch(callee, calleeReplacement.membership_generation)).mic_enabled, "retired non-host generation cannot overwrite replacement intent");
+  await ownedTouch(caller, restarted.membership_generation);
+  const roomAfterHost = (await db.query("select * from public.communication_rooms where room_id='OWNED1'")).rows[0];
+  check(+roomAfterHost.last_activity_at > +roomBeforeParticipant.last_activity_at && roomAfterHost.host_user_id === caller && roomAfterHost.status === "active",
+    "current host heartbeat still refreshes room liveness without changing room authority");
   const signal = (user, gen, payload) => asUser(user, "select public.broadcast_owned_communication_room_signal('OWNED1',$1::uuid,'webrtc:offer',$2::jsonb) as receipt", [gen, JSON.stringify(payload)]);
   const offer = { targetUserId: callee, description: { type: "offer", sdp: "v=0\r\nm=audio 9 RTP/AVP 0\r\na=sendrecv\r\n" }, fromUserId: outsider, membershipGeneration: ownedFirst.membership_generation };
   await assert.rejects(asUser(outsider, "select public.broadcast_communication_room_signal('OWNED1','media:update','{\"cameraOn\":true,\"micOn\":true}'::jsonb)"), /communication_signal_authority_required/u); checks++;

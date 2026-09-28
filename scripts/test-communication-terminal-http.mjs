@@ -58,8 +58,49 @@ try {
   const callerAdmission = await callerApi.prepareCommunicationRoomAdmission({ roomId, userId: caller });
   const calleeAdmission = await calleeApi.prepareCommunicationRoomAdmission({ roomId, userId: callee });
   const callerMembership = await callerApi.joinCommunicationRoomSession({ roomId, userId: caller, admission: callerAdmission, cameraEnabled: true, micEnabled: true });
-  const calleeMembership = await calleeApi.joinCommunicationRoomSession({ roomId, userId: callee, admission: calleeAdmission, cameraEnabled: true, micEnabled: true });
+  let calleeMembership = await calleeApi.joinCommunicationRoomSession({ roomId, userId: callee, admission: calleeAdmission, cameraEnabled: true, micEnabled: true });
   check(Boolean(callerMembership.membershipGeneration && calleeMembership.membershipGeneration), "actual join returns server generation");
+  // Run the non-host path against the full trigger/RLS stack, not just the
+  // host path: an unconditional room UPDATE used to roll back this own-row
+  // media write because room liveness is a separate host-only action.
+  const roomBeforeParticipant = requireData(await admin.from("communication_rooms")
+    .select("last_activity_at,updated_at,status,host_user_id").eq("room_id", roomId).single(), "room timestamp baseline");
+  const participantIdentity = { roomId, userId: callee, expectedMembershipGeneration: calleeMembership.membershipGeneration };
+  const participantMuted = await calleeApi.touchCommunicationRoomSession({ ...participantIdentity, cameraEnabled: false, micEnabled: false });
+  check(participantMuted.userId === callee && !participantMuted.cameraEnabled && !participantMuted.micEnabled,
+    "real non-host media touch commits rather than rolling back through the room trigger");
+  const participantHeartbeat = await calleeApi.heartbeatCommunicationRoomSession(participantIdentity);
+  check(!participantHeartbeat.cameraEnabled && !participantHeartbeat.micEnabled
+    && Date.parse(participantHeartbeat.lastSeenAt) >= Date.parse(participantMuted.lastSeenAt),
+  "non-host heartbeat refreshes only its own liveness and preserves muted intent");
+  const roomAfterParticipant = requireData(await admin.from("communication_rooms")
+    .select("last_activity_at,updated_at,status,host_user_id").eq("room_id", roomId).single(), "room after participant heartbeat");
+  check(JSON.stringify(roomBeforeParticipant) === JSON.stringify(roomAfterParticipant),
+    "participant media and heartbeat do not change host-owned room authority or timestamps");
+  const directParticipantRoomWrite = requireData(await calleeClient.from("communication_rooms")
+    .update({ status: "ended" }).eq("room_id", roomId).select("room_id"), "participant room mutation remains RLS filtered");
+  check(directParticipantRoomWrite.length === 0, "participant cannot directly end the host-owned room");
+  const participantRestored = await calleeApi.touchCommunicationRoomSession({ ...participantIdentity, cameraEnabled: true, micEnabled: true });
+  check(participantRestored.cameraEnabled && participantRestored.micEnabled, "real non-host camera and microphone re-enable after mute");
+  for (const [client, generation] of [[outsiderClient, calleeMembership.membershipGeneration], [calleeClient, callerMembership.membershipGeneration]]) {
+    const deniedTouch = await client.rpc("touch_owned_communication_room_session", {
+      p_room_id: roomId, p_expected_membership_generation: generation, p_camera_enabled: false, p_mic_enabled: false,
+    });
+    check(deniedTouch.error?.code === "P0001" && deniedTouch.error.message === "communication_membership_generation_changed",
+      "outsider or another member's generation cannot authorize media changes");
+  }
+  const { api: replacementCalleeApi } = await loadAuthenticatedCommunicationApiSource(calleeClient, connection);
+  const replacementCalleeAdmission = await replacementCalleeApi.prepareCommunicationRoomAdmission({ roomId, userId: callee });
+  calleeMembership = await replacementCalleeApi.joinCommunicationRoomSession({ roomId, userId: callee, admission: replacementCalleeAdmission, cameraEnabled: true, micEnabled: true });
+  await assert.rejects(() => calleeApi.touchCommunicationRoomSession({ ...participantIdentity, cameraEnabled: false, micEnabled: false }),
+    /membership_generation_changed/u, "retired non-host generation cannot overwrite the replacement"); checks++;
+  const currentParticipant = await replacementCalleeApi.heartbeatCommunicationRoomSession({ ...participantIdentity, expectedMembershipGeneration: calleeMembership.membershipGeneration });
+  check(currentParticipant.cameraEnabled && currentParticipant.micEnabled, "new non-host generation retains its latest media state");
+  await callerApi.heartbeatCommunicationRoomSession({ roomId, userId: caller, expectedMembershipGeneration: callerMembership.membershipGeneration });
+  const roomAfterHost = requireData(await admin.from("communication_rooms")
+    .select("last_activity_at,updated_at,status,host_user_id").eq("room_id", roomId).single(), "host heartbeat room readback");
+  check(Date.parse(roomAfterHost.last_activity_at) > Date.parse(roomBeforeParticipant.last_activity_at)
+    && roomAfterHost.host_user_id === caller && roomAfterHost.status === "active", "current host heartbeat continues to refresh room liveness");
   requireData(await admin.rpc("transition_chilly_chat_call_invite", { p_invite_id: inviteId, p_actor_user_id: caller, p_target_status: "ended", p_duration_seconds: 1 }), "screen's server terminal transition");
   const authoritative = requireData(await admin.from("communication_room_memberships").select("*").eq("room_id", roomId), "observe terminal server postcondition");
   check(authoritative.length === 2 && authoritative.every((row) => row.membership_state === "left" && !row.camera_enabled && !row.mic_enabled), "server completed both memberships before redundant client cleanup");

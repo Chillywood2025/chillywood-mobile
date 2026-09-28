@@ -1,5 +1,5 @@
 begin;
-select plan(74);
+select plan(85);
 
 select has_column('public', 'communication_room_memberships', 'membership_generation', 'membership cleanup has a server generation');
 select col_not_null('public', 'communication_room_memberships', 'membership_generation', 'existing and new rows receive a generation');
@@ -196,6 +196,47 @@ select throws_ok($$select public.touch_owned_communication_room_session('OWNGEN1
   'communication_membership_not_active','heartbeat cannot reactivate a left membership');
 select throws_ok($$select public.join_communication_room_session('OWNGEN1',null,null,true,true)$$,
   'communication_membership_owned_admission_required','old installed client cannot reactivate a retired modern owner');
+
+-- Own membership heartbeat/media is valid for participants as well as hosts.
+-- The room timestamp write stays host-only under the original identity trigger
+-- and RLS; neither guard is widened to make a participant media write succeed.
+insert into public.communication_rooms (room_id,room_code,host_user_id,status,content_access_rule)
+values ('OWNPART1','OWNPART1','d9111111-1111-4111-8111-111111111111','active','open');
+select set_config('test.part_host_generation',(select membership_generation::text
+  from public.join_owned_communication_room_session('OWNPART1','d9333333-3333-4333-8333-333333333341',null,null,null,true,true)),true);
+reset role;
+update public.communication_rooms set last_activity_at=now()-interval '1 minute',updated_at=now()-interval '1 minute' where room_id='OWNPART1';
+select set_config('test.part_room_activity',(select last_activity_at::text from public.communication_rooms where room_id='OWNPART1'),true);
+set local role authenticated;
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"d9222222-2222-4222-8222-222222222222","session_id":"d9222222-2222-4222-8222-222222222220"}', true);
+select throws_ok($$select public.touch_owned_communication_room_session('OWNPART1',current_setting('test.part_host_generation')::uuid,null,false,false)$$,
+  'communication_membership_generation_changed','nonmember cannot touch a host membership using its generation');
+select set_config('test.part_generation_one',(select membership_generation::text
+  from public.join_owned_communication_room_session('OWNPART1','d9333333-3333-4333-8333-333333333342',null,null,null,true,true)),true);
+select results_eq($$select user_id,camera_enabled,mic_enabled from public.touch_owned_communication_room_session('OWNPART1',current_setting('test.part_generation_one')::uuid,null,false,false)$$,
+  $$values ('d9222222-2222-4222-8222-222222222222'::text,false,false)$$,
+  'non-host media write commits without attempting a host-only room write');
+select results_eq($$select camera_enabled,mic_enabled,last_seen_at=now() from public.touch_owned_communication_room_session('OWNPART1',current_setting('test.part_generation_one')::uuid)$$,
+  $$values (false,false,true)$$,'non-host heartbeat refreshes membership liveness and preserves muted state');
+select is((select last_activity_at::text from public.communication_rooms where room_id='OWNPART1'),current_setting('test.part_room_activity'),
+  'non-host heartbeat leaves host-owned room liveness unchanged');
+select results_eq($$update public.communication_rooms set status='ended' where room_id='OWNPART1' returning room_id$$,
+  $$select null::text where false$$,'non-host direct room mutation remains denied by the existing RLS policy');
+select results_eq($$select camera_enabled,mic_enabled from public.touch_owned_communication_room_session('OWNPART1',current_setting('test.part_generation_one')::uuid,null,true,true)$$,
+  $$values (true,true)$$,'non-host camera and microphone can re-enable after mute');
+select throws_ok($$select public.touch_owned_communication_room_session('OWNPART1',current_setting('test.part_host_generation')::uuid,null,false,false)$$,
+  'communication_membership_generation_changed','participant cannot use another member generation');
+select set_config('test.part_generation_two',(select membership_generation::text
+  from public.join_owned_communication_room_session('OWNPART1','d9333333-3333-4333-8333-333333333343',current_setting('test.part_generation_one')::uuid,null,null,true,true)),true);
+select throws_ok($$select public.touch_owned_communication_room_session('OWNPART1',current_setting('test.part_generation_one')::uuid,null,false,false)$$,
+  'communication_membership_generation_changed','retired participant generation cannot overwrite replacement media');
+select results_eq($$select camera_enabled,mic_enabled from public.touch_owned_communication_room_session('OWNPART1',current_setting('test.part_generation_two')::uuid)$$,
+  $$values (true,true)$$,'current participant generation retains replacement media intent');
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"d9111111-1111-4111-8111-111111111111","session_id":"d9111111-1111-4111-8111-111111111110"}', true);
+select results_eq($$select user_id,camera_enabled,mic_enabled from public.touch_owned_communication_room_session('OWNPART1',current_setting('test.part_host_generation')::uuid)$$,
+  $$values ('d9111111-1111-4111-8111-111111111111'::text,true,true)$$,'current host heartbeat retains its own media');
+select ok((select last_activity_at=now() and host_user_id='d9111111-1111-4111-8111-111111111111' and status='active'
+  from public.communication_rooms where room_id='OWNPART1'),'current host heartbeat still refreshes room liveness without changing authority');
 reset role;
 delete from auth.sessions where id='d9111111-1111-4111-8111-111111111110';
 set local role authenticated;
