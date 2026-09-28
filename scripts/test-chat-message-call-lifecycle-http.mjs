@@ -156,6 +156,11 @@ const expectedMessages = [];
 let threadId;
 let checks = 0;
 let failed = false;
+let currentPhase = "local fixture setup";
+const phase = (label) => {
+  currentPhase = label;
+  console.log(`chat message/call lifecycle HTTP phase: ${label}`);
+};
 const requireData = (result, label) => {
   assert.equal(result.error, null, `${label}: ${result.error?.message ?? "error"}`);
   return result.data;
@@ -166,6 +171,7 @@ const transition = (invite, actor, status) => admin.rpc("transition_chilly_chat_
   p_duration_seconds: status === "ended" ? 1 : null,
 });
 try {
+  phase("create authenticated disposable participants");
   for (const label of ["caller", "callee", "outsider"]) {
     const email = `message-lifecycle-${label}-${nonce}@example.invalid`;
     const created = requireData(await admin.auth.admin.createUser({ email, password, email_confirm: true }), "create isolated user");
@@ -180,6 +186,10 @@ try {
   const [caller, callee, outsider] = users;
   const [callerClient, calleeClient, outsiderClient] = clients;
   const [callerApi, calleeApi, outsiderApi] = await Promise.all(clients.map((client) => loadChatSource(client, connection)));
+  const participants = new Map([
+    [caller, { client: callerClient, api: callerApi, otherUser: callee }],
+    [callee, { client: calleeClient, api: calleeApi, otherUser: caller }],
+  ]);
   const thread = await callerApi.chat.getOrCreateDirectThread({ userId: callee });
   threadId = thread.threadId;
   check(thread.currentMember.userId === caller && thread.otherMember.userId === callee, "production API returns exact direct participants");
@@ -205,19 +215,25 @@ try {
         `${stage}: other authenticated account reads exact message once through production API`);
     }
   }
-  async function createRoom(label) {
+  async function createRoom(label, host = caller) {
+    const participant = participants.get(host);
+    assert.ok(participant, "room host must be an authenticated test participant");
     const roomId = `MSG${nonce}${label}`.toUpperCase();
-    requireData(await callerClient.from("communication_rooms").insert({ room_id: roomId, room_code: roomId,
-      host_user_id: caller, status: "active", content_access_rule: "open" }), "authenticated room creation");
+    requireData(await participant.client.from("communication_rooms").insert({ room_id: roomId, room_code: roomId,
+      host_user_id: host, status: "active", content_access_rule: "open" }), "authenticated room creation");
     roomIds.push(roomId);
     return roomId;
   }
-  async function begin(label) {
-    const roomId = await createRoom(label);
-    const started = await callerApi.calls.beginChillyChatCall({ actorUserId: caller,
+  async function begin(label, initiator = caller) {
+    const participant = participants.get(initiator);
+    assert.ok(participant, "call initiator must be an authenticated test participant");
+    const roomId = await createRoom(label, initiator);
+    const started = await participant.api.calls.beginChillyChatCall({ actorUserId: initiator,
       threadId, communicationRoomId: roomId, callType: "video" });
     check(started.created === true && started.invite.communicationRoomId === roomId && started.invite.status === "ringing",
       `${label}: actual account-bound API starts a distinct call`);
+    check(started.invite.callerUserId === initiator && started.invite.calleeUserId === participant.otherUser,
+      `${label}: server invitation retains the authenticated initiator and exact other participant`);
     check(Date.parse(started.invite.expiresAt) - Date.parse(started.invite.createdAt) === 90_000,
       `${label}: server declares a 90-second deadline, not an inferred UI timeout`);
     return started.invite;
@@ -236,6 +252,7 @@ try {
   }
 
   for (const status of ["canceled", "declined"]) {
+    phase(`${status}: messages, call transition, and retry`);
     await messagesBothWays(`before-${status}`);
     const invite = await begin(status);
     await messagesBothWays(`ringing-${status}`);
@@ -249,6 +266,7 @@ try {
     await messagesBothWays(`after-${status}`);
   }
 
+  phase("accepted call: concurrent End and durable cleanup");
   await messagesBothWays("before-end");
   const acceptedInvite = await begin("ended");
   requireData(await transition(acceptedInvite, callee, "accepted"), "canonical server Answer transaction");
@@ -271,8 +289,24 @@ try {
     "End commits both participants' durable media cleanup before subsequent messaging");
   await messagesBothWays("after-end");
 
-  const replacement = await begin("replacement");
-  requireData(await transition(replacement, callee, "accepted"), "same-thread fresh Answer");
+  // The real invite trigger permits three initiations per caller/thread/callee
+  // in 300 seconds, and room creation permits five per host in 600 seconds.
+  // This single-thread sequence uses three calls in each direction instead of
+  // exempting fixtures, clearing throttle history, or sleeping for five minutes.
+  // First prove a fourth initiation in the original direction remains blocked.
+  phase("fourth original-direction invite is rate limited");
+  const limitedRoom = await createRoom("limited");
+  await assert.rejects(callerApi.calls.beginChillyChatCall({ actorUserId: caller,
+    threadId, communicationRoomId: limitedRoom, callType: "video" }),
+  (error) => error?.code === "P0001" && error?.message === "rate_limited"); checks++;
+  const blockedInvites = requireData(await callerClient.from("chat_call_invites").select("id")
+    .eq("communication_room_id", limitedRoom), "rate-limited invite readback");
+  check(blockedInvites.length === 0, "rate rejection creates no invite");
+  await assertTerminal(acceptedInvite, "ended");
+
+  phase("reverse-direction same-thread replacement preserves old-End isolation");
+  const replacement = await begin("replacement", callee);
+  requireData(await transition(replacement, replacement.calleeUserId, "accepted"), "same-thread fresh Answer");
   const newAdmission = await callerApi.communication.prepareCommunicationRoomAdmission({ roomId: replacement.communicationRoomId, userId: caller });
   const newMembership = await callerApi.communication.joinCommunicationRoomSession({ roomId: replacement.communicationRoomId,
     userId: caller, admission: newAdmission, cameraEnabled: true, micEnabled: true });
@@ -288,16 +322,17 @@ try {
   // The immutable deadline cannot be rewritten, even by the service API.
   // Build an isolated expired fixture with the same canonical thread/room and
   // the original 90-second interval in the past; do not disable any trigger.
-  const expiredRoom = await createRoom("expired");
+  phase("immutable expired invite rejects late Answer");
+  const expiredRoom = await createRoom("expired", callee);
   const createdAt = new Date(Date.parse(replacement.createdAt) - 120_000).toISOString();
   const expiresAt = new Date(Date.parse(createdAt) + 90_000).toISOString();
   const expired = requireData(await admin.from("chat_call_invites").insert({ thread_id: threadId,
-    communication_room_id: expiredRoom, caller_user_id: caller, callee_user_id: callee,
+    communication_room_id: expiredRoom, caller_user_id: callee, callee_user_id: caller,
     call_type: "video", status: "ringing", chat_call_media_provider: replacement.mediaProvider,
     created_at: createdAt, expires_at: expiresAt }).select("*").single(), "local expired fixture");
   requireData(await admin.from("chat_threads").update({ active_communication_room_id: expiredRoom, active_call_type: "video" })
     .eq("id", threadId), "local expired fixture thread binding");
-  const late = await transition(expired, callee, "accepted");
+  const late = await transition(expired, expired.callee_user_id, "accepted");
   check(late.error?.message === "transition_accept_forbidden", "ACTUAL SERVER rejects Answer after expires_at");
   const unaccepted = requireData(await callerClient.from("chat_call_invites").select("status,accepted_at")
     .eq("id", expired.id).single(), "expired Answer rejection readback");
@@ -305,12 +340,15 @@ try {
   const lateEvents = requireData(await callerClient.from("chat_call_events").select("event_type")
     .eq("call_invite_id", expired.id), "expired event readback");
   check(!lateEvents.some((row) => row.event_type === "accepted"), "late Answer creates no accepted event");
-  requireData(await transition(expired, caller, "missed"), "server expiry terminal transaction");
+  requireData(await transition(expired, expired.caller_user_id, "missed"), "server expiry terminal transaction");
   await assertTerminal(expired, "missed");
   await messagesBothWays("after-authoritative-expiry");
 
-  const race = await begin("cancelrace");
-  const [answerRace, cancelRace] = await Promise.all([transition(race, callee, "accepted"), transition(race, caller, "canceled")]);
+  phase("reverse-direction concurrent Answer/Cancel");
+  const race = await begin("cancelrace", callee);
+  const [answerRace, cancelRace] = await Promise.all([
+    transition(race, race.calleeUserId, "accepted"), transition(race, race.callerUserId, "canceled"),
+  ]);
   check([answerRace, cancelRace].filter((result) => result.error === null).length === 1,
     "concurrent Answer/Cancel has exactly one legal winner");
   const raceState = requireData(await callerClient.from("chat_call_invites").select("status")
@@ -323,6 +361,7 @@ try {
   if (raceState.status === "accepted") requireData(await transition(race, caller, "ended"), "finish race winner");
   await messagesBothWays("after-terminal-race");
 
+  phase("real authorization rejection and account replacement");
   // Actual authorization negatives: a client cannot call the service-only
   // transition, spoof a sender, read private messages, or send into this thread.
   const clientTransition = await outsiderClient.rpc("transition_chilly_chat_call_invite", {
@@ -365,6 +404,12 @@ try {
   await assert.rejects(callerApi.mutation.invokeAccountBoundSupabaseMutationRpc(frozenSubject,
     "begin_chilly_chat_call", { p_thread_id: threadId, p_communication_room_id: expiredRoom, p_call_type: "video" }), /account changed/iu); checks++;
 
+  phase("final committed messages and invite budgets");
+  const inviteRows = requireData(await admin.from("chat_call_invites").select("caller_user_id,callee_user_id")
+    .eq("thread_id", threadId), "final invite budget readback");
+  check(inviteRows.length === 6 && [caller, callee].every((initiator) => inviteRows.filter((row) =>
+    row.caller_user_id === initiator && row.callee_user_id === participants.get(initiator).otherUser).length === 3),
+  "three committed invites per direction include the expired fixture, with no rate-limit bypass");
   const finalRows = requireData(await admin.from("chat_messages").select("id,sender_user_id,body").eq("thread_id", threadId), "final committed message readback");
   check(finalRows.length === expectedMessages.length, "no duplicate, missing, rejected, or stale-account message was committed");
   for (const expected of expectedMessages) {
@@ -375,6 +420,8 @@ try {
   console.log(`chat message/call lifecycle HTTP integration: ${checks} checks PASS; actual local Auth/PostgREST/RLS and server transition transaction; Edge delivery and physical/native behavior NOT TESTED`);
 } catch (error) {
   failed = true;
+  // Phase labels contain no credentials, user IDs, message bodies, or payloads.
+  console.error(`chat message/call lifecycle HTTP failed during: ${currentPhase}`);
   throw error;
 } finally {
   const cleanupErrors = [];

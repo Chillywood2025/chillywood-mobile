@@ -24,14 +24,31 @@ const commit = (root) => {
   return { sha: git(root, "rev-parse", "HEAD"), tree: git(root, "rev-parse", "HEAD^{tree}") };
 };
 
-test("internal native generation binds both platform cohorts to the exact Git-native inputs", () => {
-  const sourceSha = git(repo, "rev-parse", "HEAD");
+// Recorded v3-compatible source from PR #534 and
+// docs/chat/PR532_EVIDENCE_RECONCILIATION.md. This pins Git-native inputs,
+// not independently verified binary provenance or a physical qualification.
+const recordedV3Source = {
+  sha: "442f9c6d1d3ed23a7626474cdecd7cf606d3c1d3",
+  tree: "bd6833408192d1ea547a7317f764b231dd08a422",
+};
+
+test("recorded internal v3 cohorts retain their historical Git-native inputs", () => {
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+  const recorded = JSON.parse(git(repo, "show", `${recordedV3Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(recorded.generation, "internal-native-v3");
+  assert.equal(recorded.nativeCompatibility.algorithm, "git-native-inputs/v1");
   for (const platform of ["android", "ios"]) {
+    const recordedDigest = recorded.nativeCompatibility[`${platform}Digest`];
     assert.equal(
-      generation.nativeCompatibility[`${platform}Digest`],
-      nativeSourceSnapshot({ repositoryRoot: repo, platform, sourceSha }).digest,
+      recordedDigest,
+      nativeSourceSnapshot({ repositoryRoot: repo, platform, sourceSha: recordedV3Source.sha, sourceTree: recordedV3Source.tree }).digest,
     );
+    // A new native generation may legitimately move forward. Reusing the old
+    // runtime string must never rewrite its cohort to match a newer HEAD.
+    if (generation.runtimeVersions[platform] === recorded.runtimeVersions[platform]) {
+      assert.equal(generation.nativeCompatibility.algorithm, recorded.nativeCompatibility.algorithm);
+      assert.equal(generation.nativeCompatibility[`${platform}Digest`], recordedDigest);
+    }
   }
 });
 
@@ -49,7 +66,7 @@ test("internal tester store profiles bind v3 runtimes only to their private audi
   assert.notEqual(eas.build?.["ios-internal-v2"]?.channel, eas.build?.production?.channel);
 });
 
-function fixture(t) {
+function fixture(t, sourceSha = "HEAD") {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "chilly-native-publication-"));
   const root = path.join(temp, "repo");
   fs.mkdirSync(root);
@@ -58,11 +75,11 @@ function fixture(t) {
   git(root, "config", "user.name", "Local test");
   git(root, "config", "user.email", "test@example.invalid");
   git(root, "remote", "add", "origin", root); // ls-remote stays entirely local.
-  const paths = git(repo, "ls-tree", "-r", "--name-only", "HEAD").split("\n").filter((name) =>
+  const paths = git(repo, "ls-tree", "-r", "--name-only", sourceSha).split("\n").filter((name) =>
     /^(?:plugins|modules|assets|vendor|config\/ios|config\/release)\//u.test(name)
     || ["package.json", "package-lock.json", "app.json", "app.config.ts", "eas.json", ".easignore", "google-services.json"].includes(name));
   for (const name of paths) {
-    const value = spawnSync("git", ["show", `HEAD:${name}`], { cwd: repo, maxBuffer: 32 * 1024 * 1024 });
+    const value = spawnSync("git", ["show", `${sourceSha}:${name}`], { cwd: repo, maxBuffer: 32 * 1024 * 1024 });
     assert.equal(value.status, 0);
     write(root, name, value.stdout);
   }
@@ -131,6 +148,26 @@ if (args[0] === 'expo' && args[1] === 'config') {
 }
 
 for (const platform of ["android", "ios"]) {
+  test(`${platform}: current sender patch rejects the recorded v3 binary and runtime cohort`, (t) => {
+    const { root, publish } = fixture(t, recordedV3Source.sha);
+    for (const name of ["app.config.ts", "plugins/withWebRtcSenderAcknowledgment.js"]) {
+      const value = spawnSync("git", ["show", `HEAD:${name}`], { cwd: repo, maxBuffer: 32 * 1024 * 1024 });
+      assert.equal(value.status, 0);
+      write(root, name, value.stdout);
+    }
+    const changedSource = commit(root);
+    const oldBinary = publish(platform);
+    assert.notEqual(oldBinary.status, 0);
+    assert.match(oldBinary.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(oldBinary.calls, [], "native mismatch stops before Expo or provider calls");
+
+    const rebuiltInOldRuntime = publish(platform, changedSource);
+    assert.notEqual(rebuiltInOldRuntime.status, 0);
+    assert.match(rebuiltInOldRuntime.stderr, /OTA_RUNTIME_NATIVE_COHORT_INCOMPATIBLE/u);
+    assert.doesNotMatch(rebuiltInOldRuntime.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(rebuiltInOldRuntime.calls, [], "a matching new binary cannot repurpose the old runtime");
+  });
+
   test(`${platform}: real canonical publisher permits JS-only source and ignores receipt-history-only changes`, (t) => {
     const { root, publish } = fixture(t);
     write(root, "hooks/ordinary-ui-change.ts", "export const value = 2;\n");
