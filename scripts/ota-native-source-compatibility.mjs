@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { releaseHash } from "./release-control-plane-lib.mjs";
 
 const SHA40 = /^[0-9a-f]{40}$/u;
-const REQUIRED = ["package.json", "package-lock.json", "app.json", "app.config.ts", "eas.json", ".easignore", "config/release/production-ota-generation.json"];
+const REQUIRED = ["package.json", "package-lock.json", "app.json", "app.config.ts", "eas.json", ".easignore", "config/release/production-ota-generation.json", "config/release/internal-native-generation.json"];
 const runGit = (root, args) => {
   const result = spawnSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
   assert.equal(result.status, 0, "OTA_NATIVE_SOURCE_GIT_OBJECT_UNAVAILABLE");
@@ -32,7 +32,7 @@ export function nativeSourceSnapshot({ repositoryRoot = process.cwd(), platform,
     : "plugins/withChillyChatNativeCallNotifications.js"];
   for (const name of required) assert.ok(paths.has(name), `OTA_NATIVE_SOURCE_INPUT_MISSING:${name}`);
   const included = (name) => {
-    if (["package.json", "config/release/production-ota-generation.json"].includes(name)) return false;
+    if (["package.json", "config/release/production-ota-generation.json", "config/release/internal-native-generation.json"].includes(name)) return false;
     if (REQUIRED.includes(name) || [".npmrc", "google-services.json", "GoogleService-Info.plist"].includes(name)) return true;
     if (/^app\.config\./u.test(name) || /^(?:patches|vendor)\//u.test(name)) return true;
     if (name.startsWith(`${platform}/`) || name.startsWith(`config/${platform}/`)) return true;
@@ -55,7 +55,11 @@ export function nativeSourceSnapshot({ repositoryRoot = process.cwd(), platform,
   // These are app.config.ts inputs, not historical binary receipts. Including
   // receipt digests/build IDs here would make a release readback self-invalidating.
   const generation = readJson(repositoryRoot, sourceSha, "config/release/production-ota-generation.json");
-  const generationInputs = { schemaVersion: generation.schemaVersion, generation: generation.generation, channel: generation.channel, runtimeVersion: generation[`${platform}RuntimeVersion`] };
+  const internalGeneration = readJson(repositoryRoot, sourceSha, "config/release/internal-native-generation.json");
+  const generationInputs = {
+    production: { schemaVersion: generation.schemaVersion, generation: generation.generation, channel: generation.channel, runtimeVersion: generation[`${platform}RuntimeVersion`] },
+    internal: { schemaVersion: internalGeneration.schemaVersion, generation: internalGeneration.generation, channel: internalGeneration.channels?.[platform], runtimeVersion: internalGeneration.runtimeVersions?.[platform] },
+  };
   const androidManifestInputs = platform === "android" ? ["android-production", "android-chat-livekit-qa"].map((name) => {
     const value = readJson(repositoryRoot, sourceSha, `config/release/${name}.json`);
     return { name, packageIdentifier: value.packageIdentifier, runtimeVersion: value.runtimeVersion, nativeBuildSource: value.nativeBuildSource ?? null };
@@ -68,24 +72,11 @@ export function deriveOtaNativeSourceCompatibility({ repositoryRoot = process.cw
   const source = nativeSourceSnapshot({ repositoryRoot, platform, sourceSha, sourceTree });
   assert.match(signedBinary?.sourceTree ?? "", SHA40, "OTA_BINARY_SOURCE_TREE_INVALID");
   const binary = nativeSourceSnapshot({ repositoryRoot, platform, sourceSha: signedBinary?.sourceSha, sourceTree: signedBinary?.sourceTree });
-  let cohortDigest = null;
-  let cohortSourceSha = null;
-  let cohortSourceDigest = source.digest;
-  let cohortAlgorithm = "git-native-inputs/v1";
-  if (platform === "ios") {
-    const cohort = readJson(repositoryRoot, sourceSha, "config/release/ios-internal-v2.json");
-    assert.equal(cohort.runtimeVersion, "1.0.0-ios-production-v2", "OTA_NATIVE_COHORT_RUNTIME_INVALID");
-    // This historical runtime member is not represented as the current device.
-    // A newer receipt cannot silently redefine the existing runtime cohort.
-    cohortSourceSha = cohort.expectedBinarySourceCommit;
-    cohortDigest = nativeSourceSnapshot({ repositoryRoot, platform, sourceSha: cohortSourceSha }).digest;
-  } else {
-    assert.equal(runGit(repositoryRoot, ["rev-parse", "HEAD"]).trim(), sourceSha, "OTA_NATIVE_SOURCE_NOT_CHECKED_OUT");
-    const computed = spawnSync(process.execPath, [new URL("./android-native-compatibility.mjs", import.meta.url).pathname, "--json"], { cwd: repositoryRoot, encoding: "utf8" });
-    assert.equal(computed.status, 0, "OTA_NATIVE_COHORT_COMPUTATION_FAILED");
-    cohortSourceDigest = JSON.parse(computed.stdout).digest;
-    cohortDigest = readJson(repositoryRoot, sourceSha, "config/release/production-ota-generation.json").nativeCompatibility?.androidDigest;
-    cohortAlgorithm = "android-native-compatibility/v1";
-  }
+  const generation = readJson(repositoryRoot, sourceSha, "config/release/internal-native-generation.json");
+  assert.equal(signedBinary?.runtimeVersion, generation.runtimeVersions?.[platform], "OTA_BINARY_RUNTIME_GENERATION_INVALID");
+  const cohortDigest = generation.nativeCompatibility?.[`${platform}Digest`];
+  const cohortSourceSha = signedBinary.sourceSha;
+  const cohortSourceDigest = binary.digest;
+  const cohortAlgorithm = "git-native-inputs/v1";
   return { schemaVersion: 1, algorithm: "git-native-inputs/v1", platform, sourceDigest: source.digest, binaryDigest: binary.digest, cohortAlgorithm, cohortDigest, cohortSourceDigest, cohortSourceSha };
 }

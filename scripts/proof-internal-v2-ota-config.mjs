@@ -59,9 +59,9 @@ for (const [platform, config] of [["ios", iosInternal], ["android", androidInter
   const nativeCompatibility = {
     schemaVersion: 1, algorithm: "git-native-inputs/v1", platform,
     sourceDigest: "4".repeat(64), binaryDigest: "4".repeat(64),
-    cohortAlgorithm: platform === "ios" ? "git-native-inputs/v1" : "android-native-compatibility/v1",
+    cohortAlgorithm: "git-native-inputs/v1",
     cohortSourceDigest: "4".repeat(64), cohortDigest: "4".repeat(64),
-    cohortSourceSha: platform === "ios" ? sourceSha : null,
+    cohortSourceSha: sourceSha,
   };
   const plan = createOtaPublicationPlan({ platform, sourceSha, sourceTree, runtimeVersion, signedBinary: binaryFor(platform, runtimeVersion), nativeCompatibility });
   assert.deepEqual(validateOtaPublicationPlan(plan).findings, [], `${platform} exact provenance must pass`);

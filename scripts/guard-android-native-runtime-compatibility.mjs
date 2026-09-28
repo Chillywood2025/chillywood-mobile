@@ -10,6 +10,7 @@ const readJson = (relativePath) => JSON.parse(fs.readFileSync(path.join(root, re
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 const manifest = readJson("config/release/android-production.json");
 const productionOtaGeneration = readJson("config/release/production-ota-generation.json");
+const internalNativeGeneration = readJson("config/release/internal-native-generation.json");
 const chatQaManifest = readJson("config/release/android-chat-livekit-qa.json");
 const d2bContract = readJson("config/assurance/android-native-call-origin-backup-v1.json");
 const appJson = readJson("app.json").expo;
@@ -54,12 +55,26 @@ assert.notEqual(easJson.build?.["android-chat-livekit-qa"]?.channel, productionO
 assert.notEqual(easJson.build?.["ios-qa"]?.channel, productionOtaGeneration.channel);
 assert.notEqual(productionOtaGeneration.iosRuntimeVersion, appJson.runtimeVersion);
 assert.notEqual(productionOtaGeneration.androidRuntimeVersion, manifest.runtimeVersion);
+assert.equal(internalNativeGeneration.schemaVersion, 1);
+assert.equal(internalNativeGeneration.generation, "internal-native-v3");
+assert.equal(internalNativeGeneration.channels?.android, "android-internal-v2");
+assert.equal(internalNativeGeneration.channels?.ios, "ios-internal-v2");
+assert.equal(internalNativeGeneration.runtimeVersions?.android, "1.0.0-android-production-v3");
+assert.equal(internalNativeGeneration.runtimeVersions?.ios, "1.0.0-ios-production-v3");
+assert.equal(internalNativeGeneration.policy?.internalOnly, true);
+assert.equal(internalNativeGeneration.policy?.publicOrStoreDistributionAuthorized, false);
+assert.equal(easJson.build?.["android-internal-device-v3"]?.distribution, "internal");
+assert.equal(easJson.build?.["android-internal-device-v3"]?.channel, undefined);
+assert.equal(easJson.build?.["android-internal-device-v3"]?.extends, "android-internal-v2");
+assert.equal(easJson.build?.["ios-internal-device-v3"]?.distribution, "internal");
+assert.equal(easJson.build?.["ios-internal-device-v3"]?.extends, "ios-internal-v2");
 assert.match(appConfig, /checkAutomatically:\s*"NEVER"/u,
   "native Expo automatic update activation must remain disabled so the app gate owns activation");
-assert.match(appConfig, /runtimeVersion:\s*androidChatQaRuntimeVersion\s*\|\|\s*productionAndroidRuntimeVersion/u);
-assert.match(appConfig, /runtimeVersion:\s*iosQaRuntimeVersion\s*\|\|\s*productionIosRuntimeVersion/u);
+assert.match(appConfig, /runtimeVersion:\s*androidChatQaRuntimeVersion\s*\|\|\s*selectedAndroidRuntimeVersion/u);
+assert.match(appConfig, /runtimeVersion:\s*iosQaRuntimeVersion\s*\|\|\s*selectedIosRuntimeVersion/u);
 assert.match(appConfig, /PRODUCTION_OTA_GENERATION_PATH/u);
-assert.match(appConfig, /otaGeneration:\s*\{/u);
+assert.match(appConfig, /INTERNAL_NATIVE_GENERATION_PATH/u);
+assert.match(appConfig, /otaGeneration:\s*internalV2OtaPlatform/u);
 
 assert.equal(manifest.platform, "android");
 assert.equal(manifest.packageIdentifier, "com.chillywood.mobile");

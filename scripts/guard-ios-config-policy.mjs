@@ -31,6 +31,7 @@ const assertEqual = (actual, expected, message) => {
 const appJson = readJson("app.json");
 const easJson = readJson("eas.json");
 const productionOtaGeneration = readJson("config/release/production-ota-generation.json");
+const internalNativeGeneration = readJson("config/release/internal-native-generation.json");
 const packageJson = readJson("package.json");
 const appConfigSource = read("app.config.ts");
 const liveKitIosCompatibilityPlugin = read("plugins/withLiveKitIosStaticFrameworkCompatibility.js");
@@ -76,6 +77,14 @@ assert(productionOtaGeneration.policy?.requireFreshRuntimeForNewProductionGenera
 assert(productionOtaGeneration.policy?.nativeAutomaticActivationDisabled === true, "production generation must disable native automatic OTA activation");
 assert(productionOtaGeneration.policy?.appOwnedUpdateGateRequired === true, "production generation must retain the app-owned update gate");
 assert(productionOtaGeneration.iosRuntimeVersion !== expo.runtimeVersion, "replacement iOS runtime must quarantine the legacy production runtime");
+assert(internalNativeGeneration.schemaVersion === 1, "internal native generation schema must remain v1");
+assert(internalNativeGeneration.generation === "internal-native-v3", "internal native builds must use the reviewed v3 generation");
+assert(internalNativeGeneration.channels?.android === "android-internal-v2", "Android internal generation must stay on its private channel");
+assert(internalNativeGeneration.channels?.ios === "ios-internal-v2", "iOS internal generation must stay on its private channel");
+assert(internalNativeGeneration.runtimeVersions?.android === "1.0.0-android-production-v3", "Android internal v3 runtime is incorrect");
+assert(internalNativeGeneration.runtimeVersions?.ios === "1.0.0-ios-production-v3", "iOS internal v3 runtime is incorrect");
+assert(internalNativeGeneration.policy?.internalOnly === true, "internal native generation must remain internal only");
+assert(internalNativeGeneration.policy?.publicOrStoreDistributionAuthorized === false, "internal native generation cannot authorize store distribution");
 
 assert(appConfigSource.includes("process.env.IOS_GOOGLE_SERVICES_FILE"), "app.config.ts must support IOS_GOOGLE_SERVICES_FILE");
 assert(appConfigSource.includes('"./GoogleService-Info.plist"'), "app.config.ts must support the ignored local Firebase plist fallback");
@@ -108,6 +117,15 @@ assert(easJson.build?.preview?.environment === "preview", "EAS preview must use 
 assert(easJson.build?.production?.environment === "production", "EAS production must use the production environment");
 assert(easJson.build?.production?.channel === productionOtaGeneration.channel, "EAS production must use the canonical fresh OTA channel");
 assert(easJson.build?.["production-apk"]?.channel === productionOtaGeneration.channel, "EAS production APK must use the canonical fresh OTA channel");
+const androidInternalDeviceProfile = easJson.build?.["android-internal-device-v3"];
+assert(androidInternalDeviceProfile?.extends === "android-internal-v2", "Android internal device v3 must inherit the governed internal lane");
+assert(androidInternalDeviceProfile?.distribution === "internal", "Android internal device v3 must not use store distribution");
+assert(androidInternalDeviceProfile?.android?.buildType === "apk", "Android internal device v3 must produce an installable APK");
+assert(androidInternalDeviceProfile?.env?.CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM === "android", "Android internal device v3 must select only Android provenance");
+const iosInternalDeviceProfile = easJson.build?.["ios-internal-device-v3"];
+assert(iosInternalDeviceProfile?.extends === "ios-internal-v2", "iOS internal device v3 must inherit the governed internal lane");
+assert(iosInternalDeviceProfile?.distribution === "internal", "iOS internal device v3 must not use store distribution");
+assert(iosInternalDeviceProfile?.env?.CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM === "ios", "iOS internal device v3 must select only iOS provenance");
 assert(easJson.build?.["development-simulator"]?.extends === "development", "EAS iOS simulator profile must extend development");
 assert(easJson.build?.["development-simulator"]?.ios?.simulator === true, "EAS iOS simulator profile must set ios.simulator=true");
 const iosQaProfile = easJson.build?.["ios-qa"];

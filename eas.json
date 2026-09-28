@@ -40,12 +40,33 @@
         "buildType": "app-bundle"
       }
     },
+    "android-internal-device-v3": {
+      "extends": "android-internal-v2",
+      "distribution": "internal",
+      "env": {
+        "CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM": "android"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
     "ios-internal-v2": {
       "autoIncrement": true,
       "channel": "ios-internal-v2",
       "distribution": "store",
       "environment": "production",
       "env": {
+        "IOS_NATIVE_CALLS_ENABLED": "true",
+        "EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED": "true",
+        "EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED": "true",
+        "EXPO_PUBLIC_REVENUECAT_APP_STORE_ENABLED": "true"
+      }
+    },
+    "ios-internal-device-v3": {
+      "extends": "ios-internal-v2",
+      "distribution": "internal",
+      "env": {
+        "CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM": "ios",
         "IOS_NATIVE_CALLS_ENABLED": "true",
         "EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED": "true",
         "EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED": "true",

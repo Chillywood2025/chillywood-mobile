@@ -53,6 +53,7 @@ test("auth, database, native, release and CI paths select proportionate strict c
   assert.equal(computeValidationPlan(["supabase/migrations/1.sql"]).categories.database, true);
   assert.equal(computeValidationPlan(["ios/AppDelegate.swift"]).categories.nativeRelease, true);
   assert.equal(computeValidationPlan(["scripts/publish-internal-v2-ota.mjs"]).categories.nativeRelease, true);
+  assert.equal(computeValidationPlan(["config/release/internal-native-generation.json"]).categories.nativeRelease, true);
   assert.equal(computeValidationPlan([".github/workflows/required-validation.yml"]).categories.policy, true);
   assert.equal(computeValidationPlan(["lib/autonomous/operator.ts"]).categories.database, true);
 });
