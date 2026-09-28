@@ -332,7 +332,9 @@ const updateNativePresentationOwnership = (event: SanitizedNativeCallEvent) => {
     "remoteEnded",
     "reportFailed",
     "timeout",
-  ].includes(event.type) && nativePresentedCallUuidsByInviteId.delete(inviteId)) {
+  ].includes(event.type)
+    && nativePresentedCallUuidsByInviteId.get(inviteId) === toText(event.callUuid).toLowerCase()
+    && nativePresentedCallUuidsByInviteId.delete(inviteId)) {
     notifyNativePresentationSubscribers();
   }
 };
@@ -367,7 +369,8 @@ const handleNativeEvent = (
     "providerReset",
     "remoteEnded",
     "timeout",
-  ].includes(event.type)) {
+  ].includes(event.type)
+    && nativePresentedCallUuidsByInviteId.get(eventInviteId) === toText(event.callUuid).toLowerCase()) {
     iosNativeAnswerApplicationActiveBaselines.delete(eventInviteId);
   }
 
@@ -426,7 +429,14 @@ export async function waitForIosNativeCallAnswerRouteReadiness(
 ) {
   const generation = voipLifecycleGeneration;
   const context = voipAuthorityContext;
-  if (!context) return false;
+  if (!context || event.nativeEventGeneration !== generation) return false;
+  // Swift replays durable Answer before its one-shot incoming/recovered
+  // events, both through the observer and the explicit pending-event drain.
+  // Wait briefly for that presentation rather than reject a valid Answer at
+  // the first missing JS map entry. This grants no routing authority: the
+  // exact UUID/account/generation and stable foreground checks still follow.
+  const presentation = await waitForIosNativeCallPresentation(event.callInviteId, 2_000);
+  if (presentation !== "presented") return false;
   const readiness = await waitForIosCallKitAnswerRouteReadiness(event, {
     isApplicationActive: readIosNativeApplicationActive,
     isExactContextCurrent: async (candidateEvent: unknown) => {
@@ -596,20 +606,11 @@ export async function startIosNativeCallsReadiness(
       revocationCredential: await getNotificationRevocationCredential(),
     };
 
-    voipRegistrationActive = true;
-    voipAuthorityContext = context;
-    eventListener = listener ?? null;
-    nativeSubscription = NativeCallsModule.addListener(
-      "onNativeCallEvent",
-      (event) => {
-        handleNativeEvent(event, generation, context);
-        if (event.type === "applicationActive") {
-          void drainPendingEventsForExactLifecycle(generation, context);
-        }
-      },
-    );
-
-    await drainPendingEventsForExactLifecycle(generation, context);
+    // Native startup compares its persisted authority and clears old-account
+    // calls/events only when that binding differs. Bind first: addListener can
+    // synchronously schedule pending-event replay, so listening before this
+    // reset could reinterpret an old Answer under the new JS account. A
+    // same-authority cold launch deliberately retains its legitimate queue.
     const started = await NativeCallsModule.startVoipRegistrationAsync(
       context.authority.userId,
       context.authority.accountId,
@@ -620,10 +621,24 @@ export async function startIosNativeCallsReadiness(
     if ((!started || !authorityStillCurrent) && generation === voipLifecycleGeneration) {
       voipRegistrationActive = false;
       voipAuthorityContext = null;
-      nativeSubscription?.remove();
       nativeSubscription = null;
       eventListener = null;
       await NativeCallsModule.stopVoipRegistrationAsync().catch(() => false);
+    }
+    if (started && authorityStillCurrent && generation === voipLifecycleGeneration) {
+      voipRegistrationActive = true;
+      voipAuthorityContext = context;
+      eventListener = listener ?? null;
+      nativeSubscription = NativeCallsModule.addListener(
+        "onNativeCallEvent",
+        (event) => {
+          handleNativeEvent(event, generation, context);
+          if (event.type === "applicationActive") {
+            void drainPendingEventsForExactLifecycle(generation, context);
+          }
+        },
+      );
+      await drainPendingEventsForExactLifecycle(generation, context);
     }
     return {
       apnsEnvironment,

@@ -715,7 +715,7 @@ const validateProductionGate = async ({code, productionSources}) => {
     const facadeSource = productionSources["_lib/iosNativeCalls.ts"];
     report(
       !facadeSource.includes("drainPendingEventsForExactLifecycle")
-      || !facadeSource.includes('if (event.type === "applicationActive") {\n          void drainPendingEventsForExactLifecycle(generation, context);\n        }')
+      || !/if \(event\.type === "applicationActive"\) \{\s+void drainPendingEventsForExactLifecycle\(generation, context\);\s+\}/u.test(facadeSource)
       || !rootSource.includes("void drainIosNativeCallPendingEvents()"),
     );
   } else if (code === "IOS_NATIVE_ANSWER_BACKGROUND_LEASE_MISSING") {
@@ -879,7 +879,7 @@ const negativeControls = [
   replaceControl("IOS_FOREGROUND_NATIVE_PRESENTATION_TIMEOUT_FAILS_OPEN", "_lib/nativeCallTransitionProvenance.mjs", '  return "blocked";\n};\n\nexport function createNativeCallTransitionProvenanceRegistry', '  return "foreground_answer";\n};\n\nexport function createNativeCallTransitionProvenanceRegistry', "late native presentation fail-closed arbitration"),
   replaceControl("IOS_NATIVE_PENDING_EVENT_EARLY_DRAIN", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "      DispatchQueue.main.async { [weak self] in\n        guard let self, let eventSink = self.eventSink else { return }\n        self.drainPendingEvents().forEach { eventSink($0) }\n      }", "      drainPendingEvents().forEach { eventSink?($0) }", "synchronous observer-start event drain"),
   replaceControl("IOS_NATIVE_ANSWER_EVENT_NOT_DURABLE", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "        self.persistPendingAnswerEvent(event)\n", "", "durable exact-UUID Answer replay"),
-  replaceControl("IOS_NATIVE_PENDING_EVENT_ACTIVATION_REPLAY_MISSING", "_lib/iosNativeCalls.ts", '        if (event.type === "applicationActive") {\n          void drainPendingEventsForExactLifecycle(generation, context);\n        }\n', "", "activation replay"),
+  replaceControl("IOS_NATIVE_PENDING_EVENT_ACTIVATION_REPLAY_MISSING", "_lib/iosNativeCalls.ts", '          if (event.type === "applicationActive") {\n            void drainPendingEventsForExactLifecycle(generation, context);\n          }\n', "", "activation replay"),
   replaceControl("IOS_NATIVE_ANSWER_BACKGROUND_LEASE_MISSING", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "    beginAnswerTransitionBackgroundTask(action.callUUID)\n", "", "terminated Answer execution lease"),
   replaceControl("IOS_NATIVE_ANSWER_BACKGROUND_LEASE_CLEANUP_MISSING", "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "    endAnswerTransitionBackgroundTask(uuid)\n    guard let action = pendingAnswerActions.removeValue(forKey: uuid) else { return }", "    guard let action = pendingAnswerActions.removeValue(forKey: uuid) else { return }", "successful Answer lease cleanup"),
   replaceControl("IOS_NATIVE_APPLICATION_ACTIVE_FOREGROUND_WITNESS_MISSING", "_lib/iosNativeCalls.ts", "    iosNativeAnswerApplicationActiveBaselines.set(\n      eventInviteId,\n      iosNativeApplicationActiveSerial,\n    );\n", "", "exact Answer activation baseline"),

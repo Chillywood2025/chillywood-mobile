@@ -179,6 +179,77 @@ test("communication room end preserves durable update failure evidence", async (
   );
 });
 
+const cleanupIdentity = {
+  roomId: "ROOM-ERROR",
+  userId: "11111111-1111-4111-8111-111111111111",
+  expectedMembershipGeneration: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+};
+const terminalMembership = {
+  room_id: cleanupIdentity.roomId,
+  user_id: cleanupIdentity.userId,
+  role: "host",
+  membership_state: "left",
+  membership_generation: cleanupIdentity.expectedMembershipGeneration,
+  camera_enabled: false,
+  mic_enabled: false,
+  joined_at: "2026-09-28T12:00:00Z",
+  left_at: "2026-09-28T12:01:00Z",
+  last_seen_at: "2026-09-28T12:01:00Z",
+};
+
+test("terminal leave confirms the exact real RPC row instead of repeating an invisible table update", async () => {
+  const { api, runtime } = loadCommunication();
+  runtime.queryResponses.set("communication_room_memberships", { data: null, error: { message: "terminal table inaccessible" } });
+  runtime.rpcResponse = { data: [terminalMembership], error: null };
+  const left = await api.leaveCommunicationRoomSession(cleanupIdentity);
+  assert.equal(left.membershipState, "left");
+  assert.equal(left.membershipGeneration, cleanupIdentity.expectedMembershipGeneration);
+  assert.equal(runtime.accountBoundRpcCalls[0].functionName, "leave_communication_room_session");
+  assert.equal(runtime.accountBoundRpcCalls[0].expectedUserId, cleanupIdentity.userId);
+  assert.equal(runtime.accountBoundRpcCalls[0].args.p_expected_membership_generation, cleanupIdentity.expectedMembershipGeneration);
+});
+
+test("terminal leave preserves current-account and stale-generation rejection", async () => {
+  const { api, runtime } = loadCommunication();
+  runtime.accountBoundError = new Error("The signed-in account changed before this action finished.");
+  await assert.rejects(api.leaveCommunicationRoomSession(cleanupIdentity), /signed-in account changed/u);
+  runtime.accountBoundError = null;
+  runtime.rpcResponse = { data: null, error: { message: "communication_membership_cleanup_generation_changed" } };
+  await assert.rejects(api.leaveCommunicationRoomSession(cleanupIdentity), /generation_changed/u);
+});
+
+test("terminal leave fails before sending when exact generation is missing", async () => {
+  const { api, runtime } = loadCommunication();
+  for (const expectedMembershipGeneration of [undefined, "", "not-a-generation"]) {
+    await assert.rejects(api.leaveCommunicationRoomSession({ ...cleanupIdentity, expectedMembershipGeneration }), /cleanup identity/u);
+  }
+  assert.equal(runtime.accountBoundRpcCalls.length, 0);
+});
+
+test("terminal leave never treats null, missing, wrong-identity, or active-media responses as success", async () => {
+  const { api, runtime } = loadCommunication();
+  const invalid = [
+    null, [], [terminalMembership, terminalMembership],
+    { ...terminalMembership, user_id: "22222222-2222-4222-8222-222222222222" },
+    { ...terminalMembership, room_id: "OTHER-ROOM" },
+    { ...terminalMembership, membership_generation: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+    { ...terminalMembership, membership_state: "active" },
+    { ...terminalMembership, camera_enabled: true },
+    { ...terminalMembership, mic_enabled: true },
+    { ...terminalMembership, left_at: null },
+  ];
+  for (const data of invalid) {
+    runtime.rpcResponse = { data, error: null };
+    await assert.rejects(api.leaveCommunicationRoomSession(cleanupIdentity), /cleanup postcondition/u);
+  }
+});
+
+test("terminal leave accepts removed/off as terminal without converting its authority to left", async () => {
+  const { api, runtime } = loadCommunication();
+  runtime.rpcResponse = { data: [{ ...terminalMembership, membership_state: "removed" }], error: null };
+  assert.equal((await api.leaveCommunicationRoomSession(cleanupIdentity)).membershipState, "removed");
+});
+
 function createHeartbeatSdkHarness() {
   let release;
   const barrier = new Promise((resolve) => { release = resolve; });

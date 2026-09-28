@@ -35,6 +35,7 @@ import {
   type CommunicationRoomState,
 } from "../_lib/communication";
 import { reportRuntimeError } from "../_lib/logger";
+import { reserveCommunicationMembershipAdmission } from "../_lib/communicationMembershipAdmission";
 import {
   canAttemptNativeCallBackgroundAudio,
   resolveLegacyChatSessionRecovery,
@@ -360,6 +361,11 @@ const waitForRealtimeOperation = async <T,>(operation: Promise<T>, timeoutMillis
   }
 };
 
+const isAmbiguousMembershipOutcome = (error: unknown) => {
+  const message = error && typeof error === "object" && "message" in error ? String(error.message) : "";
+  return /(?:^|:\s*)account_bound_rpc_(?:unavailable|timeout)$/u.test(message);
+};
+
 const waitForLegacyPeerSignalingStable = async (
   peerConnection: any,
   isCurrent: () => boolean,
@@ -439,6 +445,7 @@ export function useCommunicationRoomSession({
   const roomRef = useRef<CommunicationRoomState | null>(null);
   const identityRef = useRef<CommunicationIdentity | null>(null);
   const membershipsRef = useRef<CommunicationRoomMembership[]>([]);
+  const joinedMembershipRef = useRef<CommunicationRoomMembership | null>(null);
   const presenceStateRef = useRef<Record<string, PresenceStatePayload>>({});
   const cameraEnabledRef = useRef(cameraEnabled);
   const micEnabledRef = useRef(micEnabled);
@@ -450,6 +457,14 @@ export function useCommunicationRoomSession({
   const localStreamRef = useRef<MediaStream | null>(null);
   const auxiliaryStreamsRef = useRef<MediaStream[]>([]);
   const peerConnectionsRef = useRef<Record<string, any>>({});
+  const peerConnectionTasksRef = useRef<Record<string, { generation: number; task: Promise<any> }>>({});
+  const peerSignalingTailsRef = useRef<Record<string, Promise<void>>>({});
+  const peerLocalOffersRef = useRef<Record<string, { generation: number; peerConnection: any; sdp: string; negotiationId: string }>>({});
+  const pendingPeerIceRef = useRef<Record<string, {
+    generation: number;
+    peerConnection: any;
+    candidates: { key: string; value: any }[];
+  }>>({});
   const offerRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const lastOfferSentAtRef = useRef<Record<string, number>>({});
   const peerOfferInFlightRef = useRef<Record<string, Promise<boolean>>>({});
@@ -485,12 +500,14 @@ export function useCommunicationRoomSession({
     generation: number;
     room: CommunicationRoomState | null;
     identity: CommunicationIdentity | null;
+    membershipGeneration: string | undefined;
     pending: Promise<void> | null;
     completed: boolean;
     nativeCleanup: Promise<void>;
     stopNativeCapture: () => boolean;
     waitForNativeShutdown: () => Promise<boolean>;
     durableLeft: boolean;
+    durableReservation: ReturnType<typeof reserveCommunicationMembershipAdmission> | null;
   } | null>(null);
   const reconnectTrackedRef = useRef(false);
   const connectedRemoteSeenRef = useRef(false);
@@ -634,6 +651,35 @@ export function useCommunicationRoomSession({
     delete offerRetryTimersRef.current[userId];
   }, []);
 
+  // WebRTC's SDP state is shared by incoming offers/answers and local media
+  // recovery. Serialize only the native SDP operation; never hold this lock
+  // while waiting for a remote answer, which must itself acquire the lock.
+  const runSerializedPeerSignaling = useCallback(<T,>(remoteUserId: string, operation: () => Promise<T>) => {
+    const generation = legacySessionGenerationRef.current;
+    const previous = peerSignalingTailsRef.current[remoteUserId] ?? Promise.resolve();
+    const task = previous.then(() => generation === legacySessionGenerationRef.current ? operation() : null);
+    const tail = task.then(() => undefined, () => undefined);
+    peerSignalingTailsRef.current[remoteUserId] = tail;
+    void tail.then(() => {
+      if (peerSignalingTailsRef.current[remoteUserId] === tail) delete peerSignalingTailsRef.current[remoteUserId];
+    });
+    return task;
+  }, []);
+
+  const flushPendingPeerIce = useCallback(async (remoteUserId: string, peerConnection: any) => {
+    const pending = pendingPeerIceRef.current[remoteUserId];
+    if (!pending) return;
+    delete pendingPeerIceRef.current[remoteUserId];
+    for (const { value } of pending.candidates) {
+      if (pending.generation !== legacySessionGenerationRef.current
+        || pending.peerConnection !== peerConnection
+        || peerConnectionsRef.current[remoteUserId] !== peerConnection) return;
+      await peerConnection.addIceCandidate(value).catch((iceError: unknown) => {
+        reportRuntimeError("communication-webrtc-ice-candidate", iceError, { roomId, remoteUserId });
+      });
+    }
+  }, [roomId]);
+
   const runSerializedPeerOffer = useCallback((
     remoteUserId: string,
     operation: () => Promise<boolean>,
@@ -666,6 +712,10 @@ export function useCommunicationRoomSession({
       clearOfferRetry(userId);
       delete peerOfferInFlightRef.current[userId];
       delete peerOfferTailRef.current[userId];
+      delete peerLocalOffersRef.current[userId];
+    }
+    if (!expectedPeerConnection || pendingPeerIceRef.current[userId]?.peerConnection === expectedPeerConnection) {
+      delete pendingPeerIceRef.current[userId];
     }
     Object.entries(legacyMicAnswerWaitersRef.current).forEach(([negotiationId, waiter]) => {
       if (
@@ -1333,6 +1383,9 @@ export function useCommunicationRoomSession({
 
   const ensurePeerConnection = useCallback(async (remoteUserId: string) => {
     const generation = legacySessionGenerationRef.current;
+    const pending = peerConnectionTasksRef.current[remoteUserId];
+    if (pending?.generation === generation) return pending.task;
+    const createOrReuse = async () => {
     const rtc = getCommunicationRTCModule();
     const resolvedIdentity = identityRef.current;
     if (!rtc || !resolvedIdentity) return null;
@@ -1531,6 +1584,15 @@ export function useCommunicationRoomSession({
       [remoteUserId]: "connecting",
     }));
     return peerConnection;
+    };
+    const task = createOrReuse();
+    const reservation = { generation, task };
+    peerConnectionTasksRef.current[remoteUserId] = reservation;
+    try {
+      return await task;
+    } finally {
+      if (peerConnectionTasksRef.current[remoteUserId] === reservation) delete peerConnectionTasksRef.current[remoteUserId];
+    }
   }, [attachMissingLocalTracks, clearOfferRetry, logInboundVideoDiagnostics, requestLegacySessionRestart, roomId, sendBroadcast]);
 
   const broadcastOfferDescription = useCallback(async (remoteUserId: string, description: { type?: unknown; sdp?: unknown } | null | undefined) => {
@@ -1540,10 +1602,19 @@ export function useCommunicationRoomSession({
 
     const descriptionType = String(description.type ?? "").trim();
     if (descriptionType !== "offer") return false;
+    const sdp = String(description.sdp ?? "");
+    const peerConnection = peerConnectionsRef.current[remoteUserId];
+    if (!peerConnection || !sdp) return false;
+    let pending = peerLocalOffersRef.current[remoteUserId];
+    if (!pending || pending.generation !== generation || pending.peerConnection !== peerConnection || pending.sdp !== sdp) {
+      pending = { generation, peerConnection, sdp, negotiationId: `legacy-offer:${generation}:${++legacyMicNegotiationSerialRef.current}` };
+      peerLocalOffersRef.current[remoteUserId] = pending;
+    }
 
     const sent = await sendBroadcast("webrtc:offer", {
       targetUserId: remoteUserId,
       fromUserId: resolvedIdentity.userId,
+      negotiationId: pending.negotiationId,
       description: {
         type: descriptionType,
         sdp: typeof description.sdp === "string" ? description.sdp : null,
@@ -1645,21 +1716,21 @@ export function useCommunicationRoomSession({
       const lastOfferSentAt = lastOfferSentAtRef.current[remoteUserId] ?? 0;
       if (!forceRenegotiation && Date.now() - lastOfferSentAt < OFFER_RETRY_MIN_INTERVAL_MILLIS) return true;
 
-      const offer = await peerConnection.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true,
+      const normalizedOffer = await runSerializedPeerSignaling(remoteUserId, async () => {
+        if (generation !== legacySessionGenerationRef.current || peerConnectionsRef.current[remoteUserId] !== peerConnection
+          || String(peerConnection.signalingState ?? "stable") !== "stable") return null;
+        const offer = await peerConnection.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+        if (generation !== legacySessionGenerationRef.current || peerConnectionsRef.current[remoteUserId] !== peerConnection) return null;
+        const normalized = { ...offer, sdp: preferVideoCodecInSdp(offer.sdp, PREFERRED_VIDEO_CODEC) };
+        await peerConnection.setLocalDescription(normalized);
+        return normalized;
       });
-      if (generation !== legacySessionGenerationRef.current || peerConnectionsRef.current[remoteUserId] !== peerConnection) return false;
-      const normalizedOffer = {
-        ...offer,
-        sdp: preferVideoCodecInSdp(offer.sdp, PREFERRED_VIDEO_CODEC),
-      };
+      if (!normalizedOffer) return false;
       logChatRtc("offer_created", {
         roomId,
         remoteUserId,
         peer: describePeerConnection(peerConnection),
       });
-      await peerConnection.setLocalDescription(normalizedOffer);
       if (generation !== legacySessionGenerationRef.current || peerConnectionsRef.current[remoteUserId] !== peerConnection) return false;
       const sent = await broadcastOfferDescription(remoteUserId, normalizedOffer);
       if (!sent || generation !== legacySessionGenerationRef.current || peerConnectionsRef.current[remoteUserId] !== peerConnection) return false;
@@ -1678,6 +1749,7 @@ export function useCommunicationRoomSession({
     ensurePeerConnection,
     roomId,
     runSerializedPeerOffer,
+    runSerializedPeerSignaling,
     scheduleOfferRetry,
   ]);
 
@@ -1873,12 +1945,17 @@ export function useCommunicationRoomSession({
         generation: legacySessionGenerationRef.current,
         room: resolvedRoom,
         identity: resolvedIdentity,
+        membershipGeneration: joinedMembershipRef.current?.roomId === resolvedRoom?.roomId
+          && joinedMembershipRef.current?.userId === resolvedIdentity?.userId
+          ? joinedMembershipRef.current?.membershipGeneration
+          : undefined,
         pending: null,
         completed: false,
         nativeCleanup: cleanupChannel(capturedChannel),
         stopNativeCapture,
         waitForNativeShutdown,
         durableLeft: false,
+        durableReservation: null,
       };
       leaveOperationRef.current = operation;
     }
@@ -1908,28 +1985,48 @@ export function useCommunicationRoomSession({
         try {
           leaving.stopNativeCapture();
           if (leaving.room && leaving.identity && !leaving.durableLeft) {
-            if (!ownsLeave()) throw new Error("The call changed before cleanup could finish.");
-            if (options?.endRoomIfHost && leaving.room.hostUserId === leaving.identity.userId) {
-              await broadcastCommunicationRoomSignal({
-                roomId: leaving.room.roomId, event: "room:end", payload: { reason: "host-left" },
-              }).catch(() => false);
-              if (!ownsLeave()) throw new Error("The call changed before cleanup could finish.");
-              await endCommunicationRoom(leaving.room.roomId, leaving.identity.userId);
-              if (!ownsLeave()) throw new Error("The call changed before cleanup could finish.");
-            }
-            const membership = await leaveCommunicationRoomSession({
-              roomId: leaving.room.roomId,
-              userId: leaving.identity.userId,
+            const durableReservation = leaving.durableReservation ?? reserveCommunicationMembershipAdmission({
+              roomId: leaving.room.roomId, userId: leaving.identity.userId,
             });
-            if (
-              !membership
-              || formatRoomId(membership.roomId) !== formatRoomId(leaving.room.roomId)
-              || membership.userId !== leaving.identity.userId
-              || normalizeRoomMembershipState(membership.membershipState) !== "left"
-              || membership.cameraEnabled
-              || membership.micEnabled
-            ) throw new Error("Durable call cleanup could not be verified.");
-            leaving.durableLeft = true;
+            leaving.durableReservation = durableReservation;
+            let durableUncertain = false;
+            try {
+              await durableReservation.predecessor;
+              if (!ownsLeave()) throw new Error("The call changed before cleanup could finish.");
+              if (options?.endRoomIfHost && leaving.room.hostUserId === leaving.identity.userId) {
+                await broadcastCommunicationRoomSignal({
+                  roomId: leaving.room.roomId, event: "room:end", payload: { reason: "host-left" },
+                }).catch(() => false);
+                if (!ownsLeave()) throw new Error("The call changed before cleanup could finish.");
+                await endCommunicationRoom(leaving.room.roomId, leaving.identity.userId);
+                if (!ownsLeave()) throw new Error("The call changed before cleanup could finish.");
+              }
+              const membership = await leaveCommunicationRoomSession({
+                roomId: leaving.room.roomId,
+                userId: leaving.identity.userId,
+                expectedMembershipGeneration: leaving.membershipGeneration,
+              });
+              if (
+                !membership
+                || formatRoomId(membership.roomId) !== formatRoomId(leaving.room.roomId)
+                || membership.userId !== leaving.identity.userId
+                || !leaving.membershipGeneration
+                || membership.membershipGeneration !== leaving.membershipGeneration
+                || !["left", "removed"].includes(normalizeRoomMembershipState(membership.membershipState))
+                || !membership.leftAt
+                || membership.cameraEnabled
+                || membership.micEnabled
+              ) throw new Error("Durable call cleanup could not be verified.");
+              leaving.durableLeft = true;
+            } catch (durableError) {
+              durableUncertain = isAmbiguousMembershipOutcome(durableError);
+              throw durableError;
+            } finally {
+              if (!durableUncertain) {
+                durableReservation.release();
+                if (leaving.durableReservation === durableReservation) leaving.durableReservation = null;
+              }
+            }
           }
           await leaving.nativeCleanup;
           const nativeStopped = await leaving.waitForNativeShutdown();
@@ -2002,8 +2099,10 @@ export function useCommunicationRoomSession({
       setLoading(true);
       setError(null);
       setChannelState("connecting");
+      joinedMembershipRef.current = null;
 
       let resolvedIdentity = await readCommunicationIdentity(authenticatedUserId);
+      if (!isActiveGeneration()) return;
       const previousLeave = leaveOperationRef.current;
       if (previousLeave?.pending
         && formatRoomId(previousLeave.room?.roomId ?? "") === formatRoomId(roomId)
@@ -2015,34 +2114,85 @@ export function useCommunicationRoomSession({
       if (previousLeave && !previousLeave.completed && !previousLeave.stopNativeCapture()) {
         throw new Error("The previous call's media shutdown is unverified. Retry End before starting another call.");
       }
-      let joinedMembership: CommunicationRoomMembership | null = null;
-      for (let attempt = 0; attempt < 3 && !joinedMembership; attempt += 1) {
-        if (!isActiveGeneration()) return;
-        if (resolvedIdentity.userId) {
-          joinedMembership = await joinCommunicationRoomSession({
-            roomId,
-            userId: resolvedIdentity.userId,
-            displayName: resolvedIdentity.displayName,
-            avatarUrl: resolvedIdentity.avatarUrl,
-            // Joining establishes authority, not capture truth. Media is
-            // promoted only after native tracks and Realtime are both proved.
-            cameraEnabled: false,
-            micEnabled: false,
-          }).catch((error) => {
-            logChatRtc("join_room_failed", {
+      let admissionRetired = false;
+      let admissionUncertain = false;
+      const admission = reserveCommunicationMembershipAdmission({ roomId, userId: resolvedIdentity.userId });
+      const joinTask = (async () => {
+        await admission.predecessor;
+        if (!isActiveGeneration() || admissionRetired) return null;
+        let joinedMembership: CommunicationRoomMembership | null = null;
+        for (let attempt = 0; attempt < 3 && !joinedMembership; attempt += 1) {
+          if (!isActiveGeneration()) return null;
+          if (resolvedIdentity.userId) {
+            joinedMembership = await joinCommunicationRoomSession({
               roomId,
-              message: error instanceof Error ? error.message : "unknown_error",
+              userId: resolvedIdentity.userId,
+              displayName: resolvedIdentity.displayName,
+              avatarUrl: resolvedIdentity.avatarUrl,
+              // Joining establishes authority, not capture truth. Media is
+              // promoted only after native tracks and Realtime are both proved.
+              cameraEnabled: false,
+              micEnabled: false,
+            }).catch((error) => {
+              logChatRtc("join_room_failed", {
+                roomId,
+                message: error instanceof Error ? error.message : "unknown_error",
+              });
+              if (isAmbiguousMembershipOutcome(error)) {
+                // No response cannot prove whether the server committed. Keep
+                // this same-row admission unresolved instead of repeating a
+                // join that could overwrite a newly admitted media intent.
+                admissionUncertain = true;
+                throw error;
+              }
+              return null;
             });
+          }
+          if (joinedMembership && (!isActiveGeneration() || admissionRetired)) {
+            // Retain the returned admission even if React retired us while the
+            // RPC was pending. The helper binds the original user to the current
+            // exact account session; it cannot mutate through a replacement user.
+            const exactCleanup = {
+              roomId: joinedMembership.roomId,
+              userId: joinedMembership.userId,
+              expectedMembershipGeneration: joinedMembership.membershipGeneration,
+            };
+            try {
+              await leaveCommunicationRoomSession(exactCleanup);
+            } catch (cleanupError) {
+              if (!isAmbiguousMembershipOutcome(cleanupError)) throw cleanupError;
+              // The old screen may already be gone, so there is no End button
+              // to retry. One idempotent exact-token read/write can prove LEFT
+              // after a lost response without changing a replacement admission.
+              await leaveCommunicationRoomSession(exactCleanup);
+            }
             return null;
-          });
+          }
+          if (!joinedMembership && attempt < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 250));
+            if (!isActiveGeneration()) return null;
+            resolvedIdentity = await readCommunicationIdentity(authenticatedUserId);
+          }
         }
-        if (!joinedMembership && attempt < 2) {
-          await new Promise((resolve) => setTimeout(resolve, 250));
-          resolvedIdentity = await readCommunicationIdentity(authenticatedUserId);
-        }
+        return joinedMembership;
+      })().catch((admissionError) => {
+        if (isAmbiguousMembershipOutcome(admissionError)) admissionUncertain = true;
+        throw admissionError;
+      });
+      void joinTask.finally(() => {
+        if (!admissionUncertain) admission.release();
+      }).catch((admissionError) => {
+        reportRuntimeError("communication-retired-admission-cleanup", admissionError, { roomId });
+      });
+      const admissionResult = await waitForRealtimeOperation(joinTask.then((membership) => ({ membership })));
+      if (!admissionResult) {
+        admissionRetired = true;
+        throw new Error("The call admission is still pending. Try again after cleanup completes.");
       }
+      const joinedMembership = admissionResult.membership;
       if (!isActiveGeneration()) return;
 
+      joinedMembershipRef.current = joinedMembership;
       identityRef.current = resolvedIdentity;
       setIdentity(resolvedIdentity);
       localJoinedAtRef.current = new Date().toISOString();
@@ -2242,17 +2392,30 @@ export function useCommunicationRoomSession({
         void setPresenceFromChannel();
       });
 
-      channel.on("presence", { event: "leave" }, ({ key }: { key: string }) => {
+      channel.on("presence", { event: "leave" }, ({ key, currentPresences }: { key: string; currentPresences?: unknown[] }) => {
         if (!isActiveGeneration()) return;
         const departingUserId = String(key ?? "").trim();
         if (!departingUserId) return;
+        // Supabase replaces a presence ref when track() updates mic/camera
+        // metadata. That produces join + leave while the user remains here.
+        // The SDK's remaining presences are computed after the replacement;
+        // treating the removed ref as a departure destroys a healthy call.
+        // Unknown event shape also cannot prove departure; sync owns its
+        // final state and the peer transport retains its own liveness checks.
+        if (!Array.isArray(currentPresences) || currentPresences.length > 0) return;
         logChatRtc("presence_leave", {
           roomId: snapshot.room.roomId,
           userId: departingUserId,
         });
-        cleanupRemotePeer(departingUserId);
-        delete presenceStateRef.current[departingUserId];
-        void applyParticipantsFromSources();
+        // Signaling presence can disappear while the peer's media transport
+        // remains healthy (for example during a Realtime reconnect). Read
+        // authoritative membership before retiring media. Snapshot projection
+        // prunes a departed membership; RTC events govern transport liveness.
+        void refreshSnapshot(snapshot.room.roomId).catch((presenceError) => {
+          reportRuntimeError("communication-presence-leave-refresh", presenceError, {
+            roomId: snapshot.room.roomId,
+          });
+        });
       });
 
       channel.on("broadcast", { event: "webrtc:offer" }, async ({ payload }: { payload: Record<string, unknown> }) => {
@@ -2280,26 +2443,40 @@ export function useCommunicationRoomSession({
         const peerConnection = await ensurePeerConnection(fromUserId);
         if (!peerConnection || !isActiveGeneration()) return;
 
-        await peerConnection.setRemoteDescription(new rtc.RTCSessionDescription(payload?.description as any));
-        if (!isActiveGeneration()) return;
-        logChatRtc("diag_offer_remote_description_set", {
-          roomId: snapshot.room.roomId,
-          fromUserId,
-          peer: describePeerConnection(peerConnection),
+        const normalizedAnswer = await runSerializedPeerSignaling(fromUserId, async () => {
+          if (!isActiveGeneration() || peerConnectionsRef.current[fromUserId] !== peerConnection) return null;
+          const description = payload?.description as { type?: string; sdp?: string } | undefined;
+          if (description?.type !== "offer" || !description.sdp) return null;
+          const offerSdp = description.sdp;
+          // A reliable relay/retry can deliver the same offer twice. Reuse the
+          // already-created answer instead of racing a second SDP transaction.
+          if (String(peerConnection.signalingState) === "stable"
+            && peerConnection.remoteDescription?.sdp === offerSdp
+            && peerConnection.localDescription?.type === "answer") return peerConnection.localDescription;
+          if (String(peerConnection.signalingState) === "have-local-offer") {
+            // Both peers can add/recover tracks concurrently. A deterministic
+            // polite endpoint rolls back its offer; the other keeps its offer.
+            if (shouldInitiatePeerOffer({ localUserId: currentIdentity.userId, remoteUserId: fromUserId, hostUserId: snapshot.room.hostUserId })) return null;
+            await peerConnection.setLocalDescription({ type: "rollback" });
+            for (const waiter of Object.values(legacyMicAnswerWaitersRef.current)) {
+              if (waiter.peerConnection === peerConnection) waiter.resolve(false);
+            }
+          }
+          if (!isActiveGeneration() || peerConnectionsRef.current[fromUserId] !== peerConnection) return null;
+          await peerConnection.setRemoteDescription(new rtc.RTCSessionDescription({ type: "offer", sdp: offerSdp }));
+          if (!isActiveGeneration()) return null;
+          await flushPendingPeerIce(fromUserId, peerConnection);
+          if (!isActiveGeneration() || peerConnectionsRef.current[fromUserId] !== peerConnection) return null;
+          const answer = await peerConnection.createAnswer();
+          if (!isActiveGeneration()) return null;
+          const normalized = { ...answer, sdp: preferVideoCodecInSdp(answer.sdp, PREFERRED_VIDEO_CODEC) };
+          await peerConnection.setLocalDescription(normalized);
+          return normalized;
+        }).catch((signalingError) => {
+          reportRuntimeError("communication-inbound-offer", signalingError, { roomId: snapshot.room.roomId });
+          return null;
         });
-        void logInboundVideoDiagnostics(fromUserId, peerConnection, "offer_remote_description_set");
-        const answer = await peerConnection.createAnswer();
-        if (!isActiveGeneration()) return;
-        const normalizedAnswer = {
-          ...answer,
-          sdp: preferVideoCodecInSdp(answer.sdp, PREFERRED_VIDEO_CODEC),
-        };
-        logChatRtc("answer_created", {
-          roomId: snapshot.room.roomId,
-          fromUserId,
-        });
-        await peerConnection.setLocalDescription(normalizedAnswer);
-        if (!isActiveGeneration()) return;
+        if (!normalizedAnswer || !isActiveGeneration() || peerConnectionsRef.current[fromUserId] !== peerConnection) return;
         await sendBroadcast("webrtc:answer", {
           // Route the answer back to the original offer sender.
           targetUserId: fromUserId,
@@ -2329,7 +2506,9 @@ export function useCommunicationRoomSession({
           || !isAuthorizedInboundParticipant(fromUserId)
         ) return;
         const correlatedWaiter = negotiationId ? legacyMicAnswerWaitersRef.current[negotiationId] : null;
-        if (negotiationId && !correlatedWaiter) return;
+        const localOffer = peerLocalOffersRef.current[fromUserId];
+        if (negotiationId && !correlatedWaiter && (localOffer?.negotiationId !== negotiationId
+          || localOffer.generation !== sessionGeneration || localOffer.peerConnection !== peerConnectionsRef.current[fromUserId])) return;
         if (
           correlatedWaiter
           && (
@@ -2350,7 +2529,23 @@ export function useCommunicationRoomSession({
         const peerConnection = await ensurePeerConnection(fromUserId);
         if (!peerConnection || !isActiveGeneration()) return;
         clearOfferRetry(fromUserId);
-        await peerConnection.setRemoteDescription(new rtc.RTCSessionDescription(payload?.description as any));
+        const applied = await runSerializedPeerSignaling(fromUserId, async () => {
+          if (!isActiveGeneration() || peerConnectionsRef.current[fromUserId] !== peerConnection) return false;
+          // The queue may have run another offer after the event was received.
+          // Correlation must still belong to the offer immediately before the
+          // native SDP command, not only at the JavaScript event boundary.
+          if (peerLocalOffersRef.current[fromUserId] !== localOffer
+            || (correlatedWaiter && legacyMicAnswerWaitersRef.current[negotiationId] !== correlatedWaiter)) return false;
+          // Ignore duplicate/late answers after this offer was already settled.
+          if (String(peerConnection.signalingState ?? "stable") !== "have-local-offer") return false;
+          await peerConnection.setRemoteDescription(new rtc.RTCSessionDescription(payload?.description as any));
+          await flushPendingPeerIce(fromUserId, peerConnection);
+          return true;
+        }).catch((signalingError) => {
+          reportRuntimeError("communication-inbound-answer", signalingError, { roomId: snapshot.room.roomId });
+          return false;
+        });
+        if (!applied) return;
         if (!isActiveGeneration()) return;
         const waiter = correlatedWaiter;
         if (
@@ -2397,7 +2592,34 @@ export function useCommunicationRoomSession({
 
         const peerConnection = await ensurePeerConnection(fromUserId);
         if (!peerConnection || !isActiveGeneration()) return;
-        await peerConnection.addIceCandidate(new rtc.RTCIceCandidate(payload.candidate as any)).catch((iceError: unknown) => {
+        const candidate = payload.candidate as { candidate?: unknown; sdpMid?: unknown; sdpMLineIndex?: unknown; usernameFragment?: unknown };
+        if (typeof candidate?.candidate !== "string" || candidate.candidate.length > 4096) return;
+        const normalizedCandidate = {
+          candidate: candidate.candidate,
+          sdpMid: typeof candidate.sdpMid === "string" ? candidate.sdpMid.slice(0, 256) : null,
+          sdpMLineIndex: typeof candidate.sdpMLineIndex === "number" ? candidate.sdpMLineIndex : null,
+          usernameFragment: typeof candidate.usernameFragment === "string" ? candidate.usernameFragment.slice(0, 256) : undefined,
+        };
+        await runSerializedPeerSignaling(fromUserId, async () => {
+          if (!isActiveGeneration() || peerConnectionsRef.current[fromUserId] !== peerConnection) return;
+          const value = new rtc.RTCIceCandidate(normalizedCandidate);
+          // The private relay can deliver ICE before SDP. Keep a bounded queue
+          // for this exact native peer; dropping the early candidates can leave
+          // both endpoints permanently connecting despite a successful answer.
+          if (!peerConnection.remoteDescription) {
+            let pending = pendingPeerIceRef.current[fromUserId];
+            if (!pending || pending.generation !== sessionGeneration || pending.peerConnection !== peerConnection) {
+              pending = { generation: sessionGeneration, peerConnection, candidates: [] };
+              pendingPeerIceRef.current[fromUserId] = pending;
+            }
+            const key = JSON.stringify(normalizedCandidate);
+            if (pending.candidates.length < 64 && !pending.candidates.some((item) => item.key === key)) {
+              pending.candidates.push({ key, value });
+            }
+            return;
+          }
+          await peerConnection.addIceCandidate(value);
+        }).catch((iceError: unknown) => {
           reportRuntimeError("communication-webrtc-ice-candidate", iceError, {
             roomId: snapshot.room.roomId,
             remoteUserId: fromUserId,
@@ -2625,7 +2847,6 @@ export function useCommunicationRoomSession({
   }, [
     applyParticipantsFromSources,
     cleanupChannel,
-    cleanupRemotePeer,
     cleanupSessionMedia,
     captureLeaveOperation,
     cleanupSnapshotChannel,
@@ -2649,6 +2870,8 @@ export function useCommunicationRoomSession({
     legacySessionRestartSerial,
     requestLegacySessionRestart,
     runSerializedMediaControl,
+    runSerializedPeerSignaling,
+    flushPendingPeerIce,
   ]);
 
   useEffect(() => {
@@ -3107,8 +3330,11 @@ export function useCommunicationRoomSession({
     );
   }, []);
 
-  const rollbackLegacyMicLocalOffer = useCallback(async (peerConnection: any) => {
-    if (String(peerConnection?.signalingState ?? "stable") === "stable") return true;
+  const rollbackLegacyMicLocalOffer = useCallback(async (remoteUserId: string, peerConnection: any) => runSerializedPeerSignaling(remoteUserId, async () => {
+    // An inbound offer/answer may have superseded our transaction. Roll back
+    // only a local pending offer on the same live peer, never its remote SDP.
+    if (peerConnectionsRef.current[remoteUserId] !== peerConnection) return true;
+    if (String(peerConnection?.signalingState ?? "stable") !== "have-local-offer") return true;
     if (typeof peerConnection?.setLocalDescription !== "function") return false;
     try {
       await peerConnection.setLocalDescription({ type: "rollback" });
@@ -3116,7 +3342,7 @@ export function useCommunicationRoomSession({
       return false;
     }
     return String(peerConnection?.signalingState ?? "stable") === "stable";
-  }, []);
+  }), [runSerializedPeerSignaling]);
 
   const strictlyRenegotiateLegacyMicPeer = useCallback(({
     authority,
@@ -3159,17 +3385,18 @@ export function useCommunicationRoomSession({
 
     let completed = false;
     try {
-      const offer = await peerConnection.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true,
+      const normalizedOffer = await runSerializedPeerSignaling(remoteUserId, async () => {
+        if (!isLegacyMicSessionAuthorityCurrent(authority) || peerConnectionsRef.current[remoteUserId] !== peerConnection
+          || String(peerConnection.signalingState ?? "stable") !== "stable") return null;
+        const offer = await peerConnection.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+        if (!isLegacyMicSessionAuthorityCurrent(authority)) throw new Error("LEGACY_MIC_SESSION_AUTHORITY_CHANGED");
+        const normalized = { ...offer, sdp: preferVideoCodecInSdp(offer.sdp, PREFERRED_VIDEO_CODEC) };
+        await peerConnection.setLocalDescription(normalized);
+        return normalized;
       });
+      if (!normalizedOffer) throw new Error("LEGACY_MIC_SIGNALING_CHANGED");
       if (!isLegacyMicSessionAuthorityCurrent(authority)) throw new Error("LEGACY_MIC_SESSION_AUTHORITY_CHANGED");
-      const normalizedOffer = {
-        ...offer,
-        sdp: preferVideoCodecInSdp(offer.sdp, PREFERRED_VIDEO_CODEC),
-      };
-      await peerConnection.setLocalDescription(normalizedOffer);
-      if (!isLegacyMicSessionAuthorityCurrent(authority)) throw new Error("LEGACY_MIC_SESSION_AUTHORITY_CHANGED");
+      peerLocalOffersRef.current[remoteUserId] = { generation: authority.generation, peerConnection, sdp: normalizedOffer.sdp ?? "", negotiationId };
       const sendResult = await waitForRealtimeOperation(
         broadcastCommunicationRoomSignal({
           roomId: authority.roomId,
@@ -3205,10 +3432,10 @@ export function useCommunicationRoomSession({
     delete legacyMicAnswerWaitersRef.current[negotiationId];
     if (
       String(peerConnection?.signalingState ?? "stable") !== "stable"
-      && !await rollbackLegacyMicLocalOffer(peerConnection)
+      && !await rollbackLegacyMicLocalOffer(remoteUserId, peerConnection)
     ) throw new Error("LEGACY_MIC_LOCAL_OFFER_ROLLBACK_UNVERIFIED");
     return completed;
-  }, false), [isLegacyMicSessionAuthorityCurrent, rollbackLegacyMicLocalOffer, runSerializedPeerOffer]);
+  }, false), [isLegacyMicSessionAuthorityCurrent, rollbackLegacyMicLocalOffer, runSerializedPeerOffer, runSerializedPeerSignaling]);
 
   const strictlyCommitLegacyMicPresence = useCallback(async (
     authority: LegacyMicSessionAuthority,

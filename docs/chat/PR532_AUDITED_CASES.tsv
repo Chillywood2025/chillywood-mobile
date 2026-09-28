@@ -1,0 +1,105 @@
+case_id	reported_status	original_scenario	finding_ids	evidence_corrections	remaining_proof
+F01	FAIL	Cold Android to iPhone video; three iPhone mic cycles	D1,D2	E03,E10	Repeat an isolated owned call, requested mic sequence, endpoint media, and settled cleanup.
+F02	DEPENDENCY BLOCKED	Immediate same-thread Android to iPhone video replacement	D1	E12	Repeat an isolated owned call, requested mic sequence, endpoint media, and settled cleanup.
+F03	DEPENDENCY BLOCKED	Settled-cleanup Android to iPhone video replacement	D1	E10,E12	Repeat an isolated owned call, requested mic sequence, endpoint media, and settled cleanup.
+F04	FAIL	Cold iPhone to Android video; three Android mic cycles	D1,D2	E03	Repeat an isolated owned call, requested mic sequence, endpoint media, and settled cleanup.
+F05	DEPENDENCY BLOCKED	Immediate same-thread iPhone to Android video replacement	D1	E12	Repeat an isolated owned call, requested mic sequence, endpoint media, and settled cleanup.
+F06	DEPENDENCY BLOCKED	Settled-cleanup iPhone to Android video replacement	D1	E10,E12	Repeat an isolated owned call, requested mic sequence, endpoint media, and settled cleanup.
+F07	NOT RUN	Android background before/during mic recovery; foreground before settle	D2	E12	Repeat an isolated owned call, requested mic sequence, endpoint media, and settled cleanup.
+F08	NOT RUN	iPhone background before/during mic recovery; foreground before settle	D2	E12	Repeat an isolated owned call, requested mic sequence, endpoint media, and settled cleanup.
+BL01	DEPENDENCY BLOCKED	Android to iPhone voice; receiver same thread	-	E07,E08,E12	Establish this exact direction/media/app-state variant with Answer, both endpoint media, and cleanup.
+BL02	DEPENDENCY BLOCKED	Android to iPhone voice; receiver elsewhere in app	-	E02,E07,E12	Video incoming capture retained; voice/elsewhere presentation and the full answered scenario remain unproven.
+BL03	FAIL	Android to iPhone voice; receiver backgrounded	D4	E01,E03,E07	Establish this exact direction/media/app-state variant with Answer, both endpoint media, and cleanup.
+BL04	DEPENDENCY BLOCKED	Android to iPhone voice; receiver terminated	-	E02,E07,E12	Video native incoming capture retained; voice/terminated presentation and answered speech remain unproven.
+BL05	DEPENDENCY BLOCKED	Android to iPhone video; receiver same thread	-	E07,E08,E12	Establish this exact direction/media/app-state variant with Answer, both endpoint media, and cleanup.
+BL06	NOT RUN	Android to iPhone video; receiver elsewhere in app	-	E07,E12	Establish this exact direction/media/app-state variant with Answer, both endpoint media, and cleanup.
+BL07	NOT RUN	Android to iPhone video; receiver backgrounded	-	E07,E12	Establish this exact direction/media/app-state variant with Answer, both endpoint media, and cleanup.
+BL08	DEPENDENCY BLOCKED	Android to iPhone video; receiver terminated	-	E07,E12	Establish this exact direction/media/app-state variant with Answer, both endpoint media, and cleanup.
+BL09	DEPENDENCY BLOCKED	iPhone to Android voice; receiver same thread	-	E07,E08,E12	Establish this exact direction/media/app-state variant with Answer, both endpoint media, and cleanup.
+BL10	DEPENDENCY BLOCKED	iPhone to Android voice; receiver elsewhere in app	-	E07,E12	Establish this exact direction/media/app-state variant with Answer, both endpoint media, and cleanup.
+BL11	DEPENDENCY BLOCKED	iPhone to Android voice; receiver backgrounded	-	E02,E07,E12	Video Android incoming capture retained; voice/background presentation and answered speech remain unproven.
+BL12	DEPENDENCY BLOCKED	iPhone to Android voice; receiver force-stopped	-	E07,E09,E12	Force-stop observed; keep ordinary swipe/OS-termination as a separate unexecuted case.
+BL13	DEPENDENCY BLOCKED	iPhone to Android video; receiver same thread	-	E07,E08,E12	Establish this exact direction/media/app-state variant with Answer, both endpoint media, and cleanup.
+BL14	NOT RUN	iPhone to Android video; receiver elsewhere in app	-	E07,E12	Establish this exact direction/media/app-state variant with Answer, both endpoint media, and cleanup.
+BL15	DEPENDENCY BLOCKED	iPhone to Android video; receiver backgrounded	-	E07,E12	Establish this exact direction/media/app-state variant with Answer, both endpoint media, and cleanup.
+BL16	NOT RUN	iPhone to Android video; receiver force-stopped	-	E07,E09,E12	Force-stop not run; original ordinary-termination variant also remains unexecuted.
+CA01	FAIL	Android to iPhone voice cancel before answer	D6	-	Correlate this exact terminal action with both endpoints, authoritative status/deadline, and resource cleanup.
+CA02	PASS	Android to iPhone video cancel before answer	-	-	Correlate this exact terminal action with both endpoints, authoritative status/deadline, and resource cleanup.
+CA03	PASS	iPhone to Android voice cancel before answer	-	E04	Android idle snapshot retained; paired iPhone terminal state and cleanup timing remain unproved.
+CA04	PASS	iPhone to Android video cancel before answer	-	E04	Android idle snapshot retained; paired iPhone terminal state and cleanup timing remain unproved.
+DE01	NOT RUN	Android to iPhone voice decline	-	E12	Correlate this exact terminal action with both endpoints, authoritative status/deadline, and resource cleanup.
+DE02	NOT RUN	Android to iPhone video decline	-	E12	Correlate this exact terminal action with both endpoints, authoritative status/deadline, and resource cleanup.
+DE03	PASS	iPhone to Android voice decline	-	-	Correlate this exact terminal action with both endpoints, authoritative status/deadline, and resource cleanup.
+DE04	PASS	iPhone to Android video decline	-	-	Correlate this exact terminal action with both endpoints, authoritative status/deadline, and resource cleanup.
+EX01	PASS	Android to iPhone voice expiry and late Answer	D4	E03	Idle state observed; exact expiry, late Answer rejection and timing remain unproved.
+EX02	PASS	Android to iPhone video expiry and late Answer	D4	E02,E03	Idle state plus a fresh voice invite observed; no exact video expiry/late Answer timeline.
+EX03	NOT RUN	iPhone to Android voice expiry and late Answer	-	E12	Correlate this exact terminal action with both endpoints, authoritative status/deadline, and resource cleanup.
+EX04	NOT RUN	iPhone to Android video expiry and late Answer	-	E12	Correlate this exact terminal action with both endpoints, authoritative status/deadline, and resource cleanup.
+EN01	NOT RUN	Android to iPhone voice; Android End and repeated End	-	E12	Correlate this exact terminal action with both endpoints, authoritative status/deadline, and resource cleanup.
+EN02	NOT RUN	Android to iPhone voice; iPhone End and repeated End	-	E12	Correlate this exact terminal action with both endpoints, authoritative status/deadline, and resource cleanup.
+EN03	NOT RUN	Android to iPhone video; Android End and repeated End	-	E12	Correlate this exact terminal action with both endpoints, authoritative status/deadline, and resource cleanup.
+EN04	FAIL	Android to iPhone video; iPhone End and repeated End	D1	E10	Correlate this exact terminal action with both endpoints, authoritative status/deadline, and resource cleanup.
+EN05	FAIL	iPhone to Android voice; iPhone End and repeated End	D1	E03	Correlate this exact terminal action with both endpoints, authoritative status/deadline, and resource cleanup.
+EN06	NOT RUN	iPhone to Android voice; Android End and repeated End	-	E12	Correlate this exact terminal action with both endpoints, authoritative status/deadline, and resource cleanup.
+EN07	FAIL	iPhone to Android video; iPhone End and repeated End	D1	E10	Correlate this exact terminal action with both endpoints, authoritative status/deadline, and resource cleanup.
+EN08	NOT RUN	iPhone to Android video; Android End and repeated End	-	E12	Correlate this exact terminal action with both endpoints, authoritative status/deadline, and resource cleanup.
+MC01	NOT RUN	Android mic cycles in voice call	-	E12	Observe requested control, actual capture, durable commit, receiver projection, and continuing remote media.
+MC02	NOT RUN	iPhone mic cycles in voice call	-	E12	Observe requested control, actual capture, durable commit, receiver projection, and continuing remote media.
+MC03	FAIL	Android mic cycles in video call	D2	E03	Observe requested control, actual capture, durable commit, receiver projection, and continuing remote media.
+MC04	FAIL	iPhone mic cycles in video call	D2	E03,E10	Observe requested control, actual capture, durable commit, receiver projection, and continuing remote media.
+CM01	FAIL	Android camera off/on in Android-originated video	D3	E03	Observe requested control, actual capture, durable commit, receiver projection, and continuing remote media.
+CM02	AUTOMATION BLOCKED	Android camera flip in Android-originated video	-	E08,E12	Observe requested control, actual capture, durable commit, receiver projection, and continuing remote media.
+CM03	NOT RUN	iPhone camera off/on in iPhone-originated video	-	E12	Observe requested control, actual capture, durable commit, receiver projection, and continuing remote media.
+CM04	NOT RUN	iPhone camera flip in iPhone-originated video	-	E12	Observe requested control, actual capture, durable commit, receiver projection, and continuing remote media.
+PR01	PASS	Android absent/returns during voice	-	E02,E03,E08	Voice recovery remains unproven; cited captures establish video return labels only. No measured recovery deadline or audible recovery.
+PR02	NOT RUN	iPhone absent/returns during voice	-	E12	Correlate absence/return or app/lock transition with real peer media and current ownership.
+PR03	DEPENDENCY BLOCKED	Android absent/returns during video	-	E08,E12	Correlate absence/return or app/lock transition with real peer media and current ownership.
+PR04	NOT RUN	iPhone absent/returns during video	-	E12	Correlate absence/return or app/lock transition with real peer media and current ownership.
+BG01	NOT RUN	Android background/resume during voice	-	E12	Correlate absence/return or app/lock transition with real peer media and current ownership.
+BG02	NOT RUN	iPhone background/resume during voice	-	E12	Correlate absence/return or app/lock transition with real peer media and current ownership.
+BG03	NOT RUN	Android background/resume during video	-	E12	Correlate absence/return or app/lock transition with real peer media and current ownership.
+BG04	NOT RUN	iPhone background/resume during video	-	E12	Correlate absence/return or app/lock transition with real peer media and current ownership.
+LK01	NOT RUN	Android lock/unlock during voice	-	E12	Correlate absence/return or app/lock transition with real peer media and current ownership.
+LK02	NOT RUN	iPhone lock/unlock during voice	-	E12	Correlate absence/return or app/lock transition with real peer media and current ownership.
+LK03	NOT RUN	Android lock/unlock during video	-	E12	Correlate absence/return or app/lock transition with real peer media and current ownership.
+LK04	NOT RUN	iPhone lock/unlock during video	-	E12	Correlate absence/return or app/lock transition with real peer media and current ownership.
+PM01	PASS	Android microphone denial and Settings recovery	-	E05	Android denied permission plus idle state retained; restored permission/app-op receipt and recovered media are missing.
+PM02	PASS	iPhone microphone denial and Settings recovery	-	E05	iOS guidance and enabled Settings switch retained; actual recovered speech/capture safety needs independent evidence.
+PC01	AUTOMATION BLOCKED	Android camera denial and Settings recovery	-	E05,E12	Preserve Settings/package permission disagreement as automation-blocked; retain restored OS state and safe recovery proof.
+PC02	PASS	iPhone camera denial and Settings recovery	-	E05	iOS guidance and enabled Settings switch retained; actual recovered camera/capture safety needs independent evidence.
+AR01	NOT RUN	Android speaker/earpiece during voice	-	E08,E12	Use designated route hardware and an audible observer; retain native actual route and recovery.
+AR02	NOT RUN	iPhone speaker/earpiece during voice	-	E08,E12	Use designated route hardware and an audible observer; retain native actual route and recovery.
+AR03	NOT RUN	Android speaker routing during video	-	E08,E12	Use designated route hardware and an audible observer; retain native actual route and recovery.
+AR04	NOT RUN	iPhone speaker routing during video	-	E08,E12	Use designated route hardware and an audible observer; retain native actual route and recovery.
+BT01	DEPENDENCY BLOCKED	Android Bluetooth interruption	-	E08,E12	Use designated route hardware and an audible observer; retain native actual route and recovery.
+BT02	DEPENDENCY BLOCKED	iPhone Bluetooth interruption	-	E08,E12	Use designated route hardware and an audible observer; retain native actual route and recovery.
+FI01	DEPENDENCY BLOCKED	Immediate fresh Android to iPhone voice after cleanup	D1	E12	First prove capture/native/server cleanup, then observe the exact fresh-call variant.
+FI02	DEPENDENCY BLOCKED	Immediate fresh Android to iPhone video after cleanup	D1	E12	First prove capture/native/server cleanup, then observe the exact fresh-call variant.
+FI03	DEPENDENCY BLOCKED	Immediate fresh iPhone to Android voice after cleanup	D1	E12	First prove capture/native/server cleanup, then observe the exact fresh-call variant.
+FI04	DEPENDENCY BLOCKED	Immediate fresh iPhone to Android video after cleanup	D1	E12	First prove capture/native/server cleanup, then observe the exact fresh-call variant.
+FS01	DEPENDENCY BLOCKED	Settled fresh Android to iPhone voice	D1	E12	First prove capture/native/server cleanup, then observe the exact fresh-call variant.
+FS02	DEPENDENCY BLOCKED	Settled fresh Android to iPhone video	D1	E12	First prove capture/native/server cleanup, then observe the exact fresh-call variant.
+FS03	DEPENDENCY BLOCKED	Settled fresh iPhone to Android voice	D1	E12	First prove capture/native/server cleanup, then observe the exact fresh-call variant.
+FS04	DEPENDENCY BLOCKED	Settled fresh iPhone to Android video	D1	E12	First prove capture/native/server cleanup, then observe the exact fresh-call variant.
+SR01	DEPENDENCY BLOCKED	Android to iPhone same-membership voice replacement	D1	E12	Prove safe same-membership replacement without old work acting on the replacement.
+SR02	DEPENDENCY BLOCKED	Android to iPhone same-membership video replacement	D1	E12	Prove safe same-membership replacement without old work acting on the replacement.
+SR03	DEPENDENCY BLOCKED	iPhone to Android same-membership voice replacement	D1	E12	Prove safe same-membership replacement without old work acting on the replacement.
+SR04	DEPENDENCY BLOCKED	iPhone to Android same-membership video replacement	D1	E12	Prove safe same-membership replacement without old work acting on the replacement.
+AC01	NOT RUN	Android account replacement while voice work settles	D1	E12	Prove cleanup and old/new account isolation during the specified replacement.
+AC02	NOT RUN	Android account replacement while video work settles	D1	E12	Prove cleanup and old/new account isolation during the specified replacement.
+AC03	NOT RUN	iPhone account replacement while voice work settles	D1	E12	Prove cleanup and old/new account isolation during the specified replacement.
+AC04	NOT RUN	iPhone account replacement while video work settles	D1	E12	Prove cleanup and old/new account isolation during the specified replacement.
+MS01	NOT RUN	Android to iPhone messaging before/after cancel	-	E12	Observe committed bidirectional messages at newest viewport around this exact lifecycle variant.
+MS02	NOT RUN	iPhone to Android messaging before/after cancel	-	E12	Observe committed bidirectional messages at newest viewport around this exact lifecycle variant.
+MS03	NOT RUN	Android to iPhone messaging before/after decline	-	E12	Observe committed bidirectional messages at newest viewport around this exact lifecycle variant.
+MS04	NOT RUN	iPhone to Android messaging before/after decline	-	E12	Observe committed bidirectional messages at newest viewport around this exact lifecycle variant.
+MS05	PASS	Android to iPhone messaging before/after End	-	E11	Post-failure delivery/reopen observation retained; before-call and every terminal/replacement variant are not implied.
+MS06	PASS	iPhone to Android messaging before/after End	-	E11	Post-failure delivery/reopen/scroll observation retained; before-call and every terminal/replacement variant are not implied.
+MS07	DEPENDENCY BLOCKED	Android to iPhone messaging around replacement	D1	E12	Observe committed bidirectional messages at newest viewport around this exact lifecycle variant.
+MS08	DEPENDENCY BLOCKED	iPhone to Android messaging around replacement	D1	E12	Observe committed bidirectional messages at newest viewport around this exact lifecycle variant.
+RB01	NOT RUN	Android background before mic recovery starts	-	E12	Induce and trace the specific pending native operation ordering without fabricating device proof.
+RB02	NOT RUN	Android background while mic recovery pending	-	E12	Induce and trace the specific pending native operation ordering without fabricating device proof.
+RB03	NOT RUN	Android foreground before mic recovery settles	-	E12	Induce and trace the specific pending native operation ordering without fabricating device proof.
+RB04	NOT RUN	iPhone background before mic recovery starts	-	E12	Induce and trace the specific pending native operation ordering without fabricating device proof.
+RB05	NOT RUN	iPhone background while mic recovery pending	-	E12	Induce and trace the specific pending native operation ordering without fabricating device proof.
+RB06	NOT RUN	iPhone foreground before mic recovery settles	-	E12	Induce and trace the specific pending native operation ordering without fabricating device proof.

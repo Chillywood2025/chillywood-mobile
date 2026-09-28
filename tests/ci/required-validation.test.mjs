@@ -60,6 +60,10 @@ test("auth, database, native, release and CI paths select proportionate strict c
 
 test("call lifecycle hooks select sensitive, database, and native validation and execute regressions", () => {
   for (const hookPath of [
+    "app/_layout.tsx",
+    "app/chat/[threadId].tsx",
+    "_lib/communication.ts",
+    "_lib/communicationMembershipAdmission.ts",
     "hooks/use-livekit-chat-call-session.ts",
     "hooks/use-communication-room-session.ts",
     "hooks/use-chat-call-media-session.ts",
@@ -76,10 +80,15 @@ test("call lifecycle hooks select sensitive, database, and native validation and
     "tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs",
     "tests/assurance/communication-operation-error-truth.test.mjs",
     "tests/assurance/android-chat-call-mic-control.test.mjs",
+    "tests/assurance/chat-thread-integration-mounted.test.mjs",
   ]) {
     assert.match(workflow, new RegExp(`node --test ${regression.replaceAll(".", "\\.")}`, "u"));
   }
   assert.match(workflow, /npm run test:communication-room-realtime-delivery/u);
+  assert.match(workflow, /npm run test:communication-terminal-postgres/u);
+  assert.match(workflow, /npm run test:communication-terminal-http/u);
+  assert.match(workflow, /npm run test:chilly-chat-real-peer/u);
+  assert.match(workflow, /playwright install --with-deps chromium --only-shell/u);
 });
 
 test("non-owner policy changes require a trusted exact-head review from someone other than author", () => {

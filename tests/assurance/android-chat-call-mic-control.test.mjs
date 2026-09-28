@@ -19,6 +19,7 @@ const React = require("react");
 const ts = require("typescript");
 const { act, useLayoutEffect } = React;
 const { createRoot } = require("react-dom/client");
+const { RealtimePresence } = require("@supabase/realtime-js");
 const hostClearTimeout = globalThis.clearTimeout;
 const hostSetTimeout = globalThis.setTimeout;
 
@@ -34,10 +35,10 @@ const legacyPeerSyncMarker = "  const syncPeerConnections = useCallback";
 assert.equal(legacyHookSource.split(legacyPeerSyncMarker).length - 1, 1, "unique legacy peer sync exposure marker");
 const instrumentedLegacyHookSource = legacyHookSource.replace(
   legacyRefMarker,
-  `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { appStateLifecycleHandlerRef, auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, legacyMicAnswerWaitersRef, legacyMicControlRef, legacyMicLocalPrivacyStopRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, nativePermissionRequestDepthRef, peerConnectionsRef, roomRef, setChannelState, setLoading };`,
+  `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { appStateLifecycleHandlerRef, auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, joinedMembershipRef, legacyMicAnswerWaitersRef, legacyMicControlRef, legacyMicLocalPrivacyStopRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, nativePermissionRequestDepthRef, peerConnectionsRef, roomRef, setChannelState, setLoading };`,
 ).replace(
   legacyOfferQueueMarker,
-  `  (globalThis as any).__chillywoodLegacyMicAssuranceRefs.runSerializedPeerOffer = runSerializedPeerOffer;\n${legacyOfferQueueMarker}`,
+  `  Object.assign((globalThis as any).__chillywoodLegacyMicAssuranceRefs, { runSerializedPeerOffer, runSerializedPeerSignaling, peerLocalOffersRef });\n${legacyOfferQueueMarker}`,
 ).replace(
   legacySnapshotMarker,
   `  (globalThis as any).__chillywoodLegacyMicAssuranceRefs.refreshSnapshot = refreshSnapshot;\n${legacySnapshotMarker}`,
@@ -53,6 +54,14 @@ const compiledLegacyHook = ts.transpileModule(instrumentedLegacyHookSource, {
   },
   fileName: "hooks/use-communication-room-session.ts",
 }).outputText;
+const compiledAdmissionCoordinator = ts.transpileModule(fs.readFileSync("_lib/communicationMembershipAdmission.ts", "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const createAdmissionCoordinator = () => {
+  const coordinatorModule = { exports: {} };
+  vm.runInNewContext(compiledAdmissionCoordinator, { module: coordinatorModule, exports: coordinatorModule.exports });
+  return coordinatorModule.exports;
+};
 
 const settle = async (turns = 32) => {
   for (let turn = 0; turn < turns; turn += 1) await Promise.resolve();
@@ -121,6 +130,7 @@ const makeMembership = (runtime, overrides = {}) => ({
   lastSeenAt: "2026-08-11T00:00:00.000Z",
   leftAt: null,
   membershipState: "active",
+  membershipGeneration: runtime.membershipGeneration,
   micEnabled: false,
   role: overrides.userId === runtime.remoteUserId ? "host" : "participant",
   roomId: runtime.roomId,
@@ -150,13 +160,16 @@ function createLegacyMountedRuntime(options = {}) {
     errors: [],
     intervals: [],
     joinCalls: [],
+    joinActions: [],
     leaveActions: [],
     leaveCalls: 0,
+    leaveRequests: [],
     localStreams: [],
     mediaActions: [],
     mediaSessionStopper: null,
     mediaCreateCalls: [],
     membershipActions: [],
+    membershipGeneration: "12000000-0000-4000-8000-000000000001",
     membershipTouches: [],
     microphonePermission: options.microphonePermission ?? grantedPermission(),
     permissionRequestCalls: 0,
@@ -240,6 +253,8 @@ function createLegacyMountedRuntime(options = {}) {
       this.offerCalls = 0;
       this.pendingLocalDescription = null;
       this.receivers = [];
+      this.remoteDescriptionCalls = [];
+      this.iceCandidates = [];
       this.senders = [];
       this.signalingState = "stable";
       runtime.peers.push(this);
@@ -250,7 +265,10 @@ function createLegacyMountedRuntime(options = {}) {
       listeners.add(listener);
       this.listeners.set(event, listeners);
     }
-    addIceCandidate() { return Promise.resolve(); }
+    async addIceCandidate(candidate) {
+      if (!this.remoteDescription) throw new Error("remote SDP required before ICE");
+      this.iceCandidates.push(candidate);
+    }
     addTrack(track) {
       if (this.failAddTrack) throw new Error("addTrack rejected");
       runtime.senderAdds += 1;
@@ -292,6 +310,7 @@ function createLegacyMountedRuntime(options = {}) {
       if (this.failRollback && description?.type === "rollback") throw new Error("rollback rejected");
       this.localDescription = description;
       if (description?.type === "offer") this.signalingState = "have-local-offer";
+      if (description?.type === "answer") this.signalingState = "stable";
       if (description?.type === "rollback") {
         this.localDescription = null;
         this.signalingState = "stable";
@@ -299,7 +318,10 @@ function createLegacyMountedRuntime(options = {}) {
       this.emit("signalingstatechange");
     }
     async setRemoteDescription(description) {
+      this.remoteDescription = description;
+      this.remoteDescriptionCalls.push(description);
       if (description?.type === "answer") this.signalingState = "stable";
+      if (description?.type === "offer") this.signalingState = "have-remote-offer";
       this.emit("signalingstatechange");
     }
   }
@@ -363,6 +385,26 @@ function createLegacyMountedRuntime(options = {}) {
       this.subscriptionCallback = null;
       this.topic = topic;
       runtime.channels.push(this);
+      // Use the installed Presence implementation for metadata reconciliation
+      // cases. It emits join + leave when a presence ref is replaced by track(),
+      // even though the participant is still present. The old success-only
+      // track mock could not expose transport teardown at this boundary.
+      const sdkHandlers = new Map();
+      this.sdkPresenceTransport = {
+        joinRef: () => "test-subscription",
+        on: (event, callback) => sdkHandlers.set(event, callback),
+        trigger: (event, payload) => {
+          if (event === "presence") {
+            for (const [type, filter, callback] of this.handlers) {
+              if (type === "presence" && filter.event === payload.event) callback(payload);
+            }
+          } else sdkHandlers.get(event)?.(payload);
+        },
+      };
+      this.sdkPresence = new RealtimePresence({
+        channelAdapter: { getChannel: () => this.sdkPresenceTransport },
+      });
+      this.sdkPresenceEnabled = false;
     }
 
     on(...args) { this.handlers.push(args); return this; }
@@ -373,6 +415,7 @@ function createLegacyMountedRuntime(options = {}) {
       for (const callback of callbacks) await callback({ payload });
     }
     presenceState() {
+      if (this.sdkPresenceEnabled) return this.sdkPresence.state;
       return {
         [runtime.userId]: [{
           cameraOn: options.staleLocalPresence ? false : runtime.durableCamera,
@@ -390,6 +433,13 @@ function createLegacyMountedRuntime(options = {}) {
           userId: runtime.remoteUserId,
         }],
       };
+    }
+    emitPresenceState(state) {
+      this.sdkPresenceEnabled = true;
+      this.sdkPresenceTransport.trigger("presence_state", state);
+    }
+    emitPresenceDiff(diff) {
+      this.sdkPresenceTransport.trigger("presence_diff", diff);
     }
     async send(message) {
       runtime.broadcasts.push(message);
@@ -449,6 +499,7 @@ function createLegacyMountedRuntime(options = {}) {
   const getCameraPermission = async () => runtime.cameraPermission;
 
   const moduleMocks = {
+    "../_lib/communicationMembershipAdmission": options.admissionCoordinator ?? createAdmissionCoordinator(),
     "../_lib/accessEntitlements": { resolveRoomAccess: async () => ({ isAllowed: true }) },
     "../_lib/analytics": { trackEvent: () => undefined },
     "../_lib/communication": {
@@ -507,19 +558,28 @@ function createLegacyMountedRuntime(options = {}) {
       },
       joinCommunicationRoomSession: async (input) => {
         runtime.joinCalls.push({ ...input });
-        return makeMembership(runtime, {
+        const admitted = makeMembership(runtime, {
           cameraEnabled: !!input.cameraEnabled,
           micEnabled: !!input.micEnabled,
+          roomId: input.roomId,
+          userId: input.userId,
         });
+        const action = runtime.joinActions.shift() ?? {};
+        if (action.wait) await action.wait;
+        if (action.outcome === "reject") throw new Error(action.message ?? "join unavailable");
+        return action.membership ?? admitted;
       },
-      leaveCommunicationRoomSession: async () => {
+      leaveCommunicationRoomSession: async (input) => {
         runtime.leaveCalls += 1;
+        runtime.leaveRequests.push({ ...input });
+        if (input.userId !== runtime.userId) throw new Error("cleanup account changed");
+        if (input.expectedMembershipGeneration !== runtime.membershipGeneration) throw new Error("cleanup membership generation changed");
         const action = runtime.leaveActions.shift() ?? {};
         await options.leaveBarrier;
         if (action.wait) await action.wait;
-        if (action.outcome === "reject") throw new Error("durable leave unavailable");
+        if (action.outcome === "reject") throw new Error(action.message ?? "durable leave unavailable");
         if (action.outcome === "null") return null;
-        return makeMembership(runtime, { membershipState: "left", cameraEnabled: false, micEnabled: false, leftAt: new Date().toISOString() });
+        return action.membership ?? makeMembership(runtime, { membershipState: "left", cameraEnabled: false, micEnabled: false, leftAt: new Date().toISOString() });
       },
       readCommunicationIdentity: async () => ({ avatarUrl: null, displayName: "Local", userId: runtime.userId }),
       setCommunicationTrackEnabled: (stream, kind, enabled) => {
@@ -676,20 +736,23 @@ async function mountLegacyHook(runtime, optionOverrides = {}) {
   });
   const refs = runtime.readAssuranceRefs();
   assert.ok(refs, "legacy exact hook exposes only its mutable test boundary");
-  refs.channelRef.current ??= runtime.createChannel("legacy-mic-exact-channel");
-  refs.channelStateRef.current = "live";
-  refs.identityRef.current ??= { avatarUrl: null, displayName: "Local", userId: runtime.userId };
-  refs.roomRef.current ??= makeRoom(runtime);
-  refs.peerConnectionsRef.current[runtime.remoteUserId] ??= runtime.createPeer();
-  await act(async () => {
-    refs.setLoading(false);
-    refs.setChannelState("live");
-    await settle(48);
-  });
-  if (options.analyticsContext?.surface !== "chat-thread") {
-    assert.equal(committedResult?.channelState, "live", "legacy exact hook reaches the release media state");
+  if (!optionOverrides.naturalLifecycle) {
+    refs.channelRef.current ??= runtime.createChannel("legacy-mic-exact-channel");
+    refs.channelStateRef.current = "live";
+    refs.identityRef.current ??= { avatarUrl: null, displayName: "Local", userId: runtime.userId };
+    refs.joinedMembershipRef.current ??= makeMembership(runtime);
+    refs.roomRef.current ??= makeRoom(runtime);
+    refs.peerConnectionsRef.current[runtime.remoteUserId] ??= runtime.createPeer();
+    await act(async () => {
+      refs.setLoading(false);
+      refs.setChannelState("live");
+      await settle(48);
+    });
+    if (options.analyticsContext?.surface !== "chat-thread") {
+      assert.equal(committedResult?.channelState, "live", "legacy exact hook reaches the release media state");
+    }
+    assert.ok(runtime.peers.length >= 1, "legacy exact hook creates the expected existing remote peer");
   }
-  assert.ok(runtime.peers.length >= 1, "legacy exact hook creates the expected existing remote peer");
 
   return {
     getResult: () => committedResult,
@@ -2080,6 +2143,422 @@ test("legacy End disabled transition: the original delayed End still owns its te
   await harness.rerender({ enabled: false });
   await harness.run(() => delayedEnd());
   assert.equal(runtime.leaveCalls, 1, "same-call deactivation must not strand its legitimate End callback");
+});
+
+test("legacy SDK Presence: a remote metadata ref replacement retains the existing peer and video receiver", async (t) => {
+  const runtime = createLegacyMountedRuntime({ remoteDurableCamera: true, remoteDurableMic: true });
+  const harness = await mountLegacyHook(runtime, { enabled: true, analyticsContext: { surface: "chat-thread" } });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  await harness.run(() => channel.emitPresenceState({
+    [runtime.remoteUserId]: { metas: [{ phx_ref: "remote-before", cameraOn: true, micOn: true }] },
+    [runtime.userId]: { metas: [{ phx_ref: "local-before", cameraOn: false, micOn: false }] },
+  }));
+  const peer = harness.refs.peerConnectionsRef.current[runtime.remoteUserId];
+  const remoteVideo = runtime.createTrack("video", { enabled: true });
+  peer.receivers = [{ track: remoteVideo }];
+  await harness.run(() => peer.emit("track", { track: remoteVideo, streams: [runtime.createStream([remoteVideo])] }));
+  const streamURL = harness.getResult().participants.find((participant) => participant.userId === runtime.remoteUserId)?.streamURL;
+  assert.ok(streamURL, "test has a bound remote video receiver before metadata change");
+  const generation = harness.refs.legacySessionGenerationRef.current;
+  const originalJoins = runtime.joinCalls.length;
+  for (let index = 0; index < 6; index += 1) {
+    const previousRef = index === 0 ? "remote-before" : `remote-update-${index - 1}`;
+    await harness.run(() => channel.emitPresenceDiff({
+      joins: { [runtime.remoteUserId]: { metas: [{ phx_ref: `remote-update-${index}`, micOn: index % 2 === 0, cameraOn: true }] } },
+      leaves: { [runtime.remoteUserId]: { metas: [{ phx_ref: previousRef }] } },
+    }));
+    assert.equal(harness.refs.peerConnectionsRef.current[runtime.remoteUserId], peer, "metadata replacement must not rebuild transport");
+    assert.notEqual(peer.connectionState, "closed", "metadata leave is not participant departure");
+    assert.equal(harness.getResult().participants.find((participant) => participant.userId === runtime.remoteUserId)?.streamURL, streamURL);
+  }
+  assert.equal(harness.refs.legacySessionGenerationRef.current, generation);
+  assert.equal(runtime.joinCalls.length, originalJoins);
+});
+
+test("legacy SDK Presence: removing one of two presences does not disconnect the remaining same-user endpoint", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  await harness.run(() => channel.emitPresenceState({
+    [runtime.remoteUserId]: { metas: [{ phx_ref: "remote-1" }, { phx_ref: "remote-2" }] },
+  }));
+  const peer = harness.refs.peerConnectionsRef.current[runtime.remoteUserId];
+  await harness.run(() => channel.emitPresenceDiff({ joins: {}, leaves: {
+    [runtime.remoteUserId]: { metas: [{ phx_ref: "remote-1" }] },
+  } }));
+  assert.equal(harness.refs.peerConnectionsRef.current[runtime.remoteUserId], peer);
+  assert.notEqual(peer.connectionState, "closed");
+});
+
+test("legacy SDK Presence: a signaling-only departure preserves media, but authoritative member leave retires it", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  await harness.run(() => channel.emitPresenceState({
+    [runtime.remoteUserId]: { metas: [{ phx_ref: "remote-before" }] },
+  }));
+  const peer = harness.refs.peerConnectionsRef.current[runtime.remoteUserId];
+  await harness.run(() => channel.emitPresenceState({}));
+  assert.equal(harness.refs.peerConnectionsRef.current[runtime.remoteUserId], peer, "Realtime presence alone cannot override a healthy authorized RTC connection");
+  assert.notEqual(peer.connectionState, "closed");
+  await harness.run(() => channel.emitPresenceState({
+    [runtime.remoteUserId]: { metas: [{ phx_ref: "remote-returned" }] },
+  }));
+  runtime.queueSnapshot({ memberships: [
+    makeMembership(runtime),
+    makeMembership(runtime, { userId: runtime.remoteUserId, membershipState: "left", leftAt: "2026-09-28T16:00:00Z" }),
+  ] });
+  await harness.run(() => channel.emitPresenceState({}));
+  assert.equal(peer.connectionState, "closed", "authoritative departure must still retire transport");
+  assert.equal(harness.refs.peerConnectionsRef.current[runtime.remoteUserId], undefined);
+});
+
+test("legacy SDK Presence: a retired channel's departure cannot refresh or close replacement media", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true });
+  t.after(() => harness.unmount());
+  const retiredChannel = harness.refs.channelRef.current;
+  await harness.run(() => retiredChannel.emitPresenceState({
+    [runtime.remoteUserId]: { metas: [{ phx_ref: "retired-peer" }] },
+  }));
+  runtime.roomId = "ROOM-REPLACEMENT";
+  await harness.rerender({ roomId: runtime.roomId });
+  const currentPeer = harness.refs.peerConnectionsRef.current[runtime.remoteUserId];
+  const reads = runtime.snapshotReads;
+  await harness.run(() => retiredChannel.emitPresenceState({}));
+  assert.equal(runtime.snapshotReads, reads);
+  assert.equal(harness.refs.peerConnectionsRef.current[runtime.remoteUserId], currentPeer);
+  assert.notEqual(currentPeer.connectionState, "closed");
+});
+
+test("legacy cleanup generation: terminal deactivation retains the actual admitted membership token", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true });
+  t.after(() => harness.unmount());
+  const generation = runtime.membershipGeneration;
+  await harness.rerender({ enabled: false });
+  // A later snapshot/ref update is not permission for this retained End to
+  // substitute a newer same-room user's admission token.
+  harness.refs.joinedMembershipRef.current = makeMembership(runtime, {
+    membershipGeneration: "12000000-0000-4000-8000-000000000002",
+  });
+  await harness.run(() => harness.getResult().leaveRoom());
+  assert.equal(runtime.leaveRequests[0].expectedMembershipGeneration, generation);
+});
+
+test("legacy delayed admission: successful join after unmount leaves its exact admitted row without starting capture", async () => {
+  const runtime = createLegacyMountedRuntime();
+  let finishJoin;
+  runtime.joinActions.push({ wait: new Promise((resolve) => { finishJoin = resolve; }) });
+  const generation = runtime.membershipGeneration;
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+  assert.equal(runtime.joinCalls.length, 1);
+  assert.equal(runtime.mediaCreateCalls.length, 0);
+  await harness.unmount();
+  await act(async () => { finishJoin(); await settle(96); });
+  assert.equal(runtime.leaveCalls, 1);
+  assert.equal(runtime.leaveRequests[0].expectedMembershipGeneration, generation);
+  assert.equal(runtime.leaveRequests[0].userId, "local-user");
+  assert.equal(runtime.mediaCreateCalls.length, 0);
+});
+
+test("legacy delayed admission: same-row replacement waits for the retired join and exact cleanup", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  let finishJoin;
+  let finishLeave;
+  runtime.joinActions.push({ wait: new Promise((resolve) => { finishJoin = resolve; }) });
+  runtime.leaveActions.push({ wait: new Promise((resolve) => { finishLeave = resolve; }) });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+  t.after(() => harness.unmount());
+  await harness.rerender({ enabled: false });
+  await harness.rerender({ enabled: true });
+  assert.equal(runtime.joinCalls.length, 1, "replacement cannot share the pending retired admission");
+  await act(async () => { finishJoin(); await settle(96); });
+  assert.equal(runtime.leaveCalls, 1);
+  assert.equal(runtime.joinCalls.length, 1, "replacement waits for the exact leave result");
+  await act(async () => { finishLeave(); await settle(256); });
+  assert.equal(runtime.joinCalls.length, 2);
+  assert.equal(harness.refs.joinedMembershipRef.current?.userId, runtime.userId);
+});
+
+test("legacy delayed admission: account replacement never cleans through the new account or changes its media", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  let finishJoin;
+  runtime.joinActions.push({ wait: new Promise((resolve) => { finishJoin = resolve; }) });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+  t.after(() => harness.unmount());
+  runtime.userId = "replacement-user";
+  await harness.rerender({ authenticatedUserId: runtime.userId, authenticatedAccessToken: "replacement-token" });
+  const currentMembership = harness.refs.joinedMembershipRef.current;
+  const currentPeer = harness.refs.peerConnectionsRef.current[runtime.remoteUserId];
+  await act(async () => { finishJoin(); await settle(128); });
+  assert.equal(runtime.leaveRequests[0].userId, "local-user", "retired result retains its initiating identity");
+  assert.equal(harness.refs.joinedMembershipRef.current, currentMembership);
+  assert.equal(harness.refs.peerConnectionsRef.current[runtime.remoteUserId], currentPeer);
+  assert.ok(runtime.errors.some((entry) => entry.scope === "communication-retired-admission-cleanup"));
+});
+
+test("legacy delayed admission: an unresolved retired join bounds replacement waiting and still cleans a late success", async (t) => {
+  const runtime = createLegacyMountedRuntime({ fireOperationTimeouts: true });
+  let finishJoin;
+  runtime.joinActions.push({ wait: new Promise((resolve) => { finishJoin = resolve; }) });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+  t.after(() => harness.unmount());
+  await harness.rerender({ enabled: false });
+  await harness.rerender({ enabled: true });
+  await harness.run(() => new Promise((resolve) => hostSetTimeout(resolve, 5)));
+  assert.equal(harness.getResult().loading, false);
+  assert.equal(harness.getResult().channelState, "error");
+  assert.equal(runtime.joinCalls.length, 1);
+  await act(async () => { finishJoin(); await settle(128); });
+  assert.equal(runtime.leaveCalls, 1, "timeout must not discard eventual cleanup ownership");
+  assert.equal(runtime.joinCalls.length, 1, "late completion cannot restart a failed replacement invisibly");
+});
+
+test("legacy delayed admission: initial loading times out while an eventual successful join is still compensated", async (t) => {
+  const runtime = createLegacyMountedRuntime({ fireOperationTimeouts: true });
+  let finishJoin;
+  runtime.joinActions.push({ wait: new Promise((resolve) => { finishJoin = resolve; }) });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+  t.after(() => harness.unmount());
+  await harness.run(() => new Promise((resolve) => hostSetTimeout(resolve, 5)));
+  assert.equal(harness.getResult().loading, false);
+  assert.equal(harness.getResult().channelState, "error");
+  await act(async () => { finishJoin(); await settle(128); });
+  assert.equal(runtime.leaveCalls, 1);
+  assert.equal(runtime.mediaCreateCalls.length, 0);
+  assert.equal(harness.refs.joinedMembershipRef.current, null);
+});
+
+test("legacy ambiguous admission: missing transport outcome cannot silently repeat the same room/user join", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  runtime.joinActions.push({ outcome: "reject", message: "account_bound_rpc_unavailable" });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+  t.after(() => harness.unmount());
+  assert.equal(harness.getResult().channelState, "error");
+  assert.equal(runtime.joinCalls.length, 1);
+  await harness.rerender({ enabled: false });
+  await harness.rerender({ enabled: true });
+  assert.equal(runtime.joinCalls.length, 1, "ambiguous failure retains the exact same-row reservation");
+  runtime.roomId = "NEW-INDEPENDENT-ROOM";
+  await harness.rerender({ roomId: runtime.roomId });
+  assert.equal(runtime.joinCalls.length, 2, "another room has independent admission authority");
+});
+
+test("legacy admission across mounts: a replacement cannot pass a retired join and its cleanup", async (t) => {
+  const admissionCoordinator = createAdmissionCoordinator();
+  const oldRuntime = createLegacyMountedRuntime({ admissionCoordinator });
+  let finishJoin;
+  oldRuntime.joinActions.push({ wait: new Promise((resolve) => { finishJoin = resolve; }) });
+  const oldHarness = await mountLegacyHook(oldRuntime, { enabled: true, naturalLifecycle: true });
+  await oldHarness.unmount();
+  const newRuntime = createLegacyMountedRuntime({ admissionCoordinator });
+  const replacement = await mountLegacyHook(newRuntime, { enabled: true, naturalLifecycle: true });
+  t.after(() => replacement.unmount());
+  assert.equal(newRuntime.joinCalls.length, 0);
+  await act(async () => { finishJoin(); await settle(256); });
+  assert.equal(oldRuntime.leaveCalls, 1);
+  assert.equal(newRuntime.joinCalls.length, 1);
+  assert.equal(oldRuntime.mediaCreateCalls.length, 0);
+});
+
+test("legacy retired admission: one ambiguous cleanup response retries the exact token before releasing replacement", async (t) => {
+  const admissionCoordinator = createAdmissionCoordinator();
+  const oldRuntime = createLegacyMountedRuntime({ admissionCoordinator });
+  let finishJoin;
+  oldRuntime.joinActions.push({ wait: new Promise((resolve) => { finishJoin = resolve; }) });
+  oldRuntime.leaveActions.push({ outcome: "reject", message: "account_bound_rpc_unavailable" });
+  const oldHarness = await mountLegacyHook(oldRuntime, { enabled: true, naturalLifecycle: true });
+  await oldHarness.unmount();
+  const newRuntime = createLegacyMountedRuntime({ admissionCoordinator });
+  const replacement = await mountLegacyHook(newRuntime, { enabled: true, naturalLifecycle: true });
+  t.after(() => replacement.unmount());
+  assert.equal(newRuntime.joinCalls.length, 0);
+  await act(async () => { finishJoin(); await settle(256); });
+  assert.equal(oldRuntime.leaveCalls, 2);
+  assert.deepEqual(oldRuntime.leaveRequests[0], oldRuntime.leaveRequests[1], "retry cannot acquire a different membership authority");
+  assert.equal(newRuntime.joinCalls.length, 1);
+  assert.equal(oldRuntime.mediaCreateCalls.length, 0);
+});
+
+test("legacy retired admission: two ambiguous cleanup responses retain the barrier without an endless retry loop", async (t) => {
+  const admissionCoordinator = createAdmissionCoordinator();
+  const oldRuntime = createLegacyMountedRuntime({ admissionCoordinator });
+  let finishJoin;
+  oldRuntime.joinActions.push({ wait: new Promise((resolve) => { finishJoin = resolve; }) });
+  oldRuntime.leaveActions.push(
+    { outcome: "reject", message: "account_bound_rpc_unavailable" },
+    { outcome: "reject", message: "account_bound_rpc_unavailable" },
+  );
+  const oldHarness = await mountLegacyHook(oldRuntime, { enabled: true, naturalLifecycle: true });
+  await oldHarness.unmount();
+  const newRuntime = createLegacyMountedRuntime({ admissionCoordinator, fireOperationTimeouts: true });
+  const replacement = await mountLegacyHook(newRuntime, { enabled: true, naturalLifecycle: true });
+  t.after(() => replacement.unmount());
+  await act(async () => { finishJoin(); await settle(256); });
+  await replacement.run(() => new Promise((resolve) => hostSetTimeout(resolve, 5)));
+  assert.equal(oldRuntime.leaveCalls, 2);
+  assert.equal(newRuntime.joinCalls.length, 0);
+  assert.equal(replacement.getResult().channelState, "error");
+  newRuntime.roomId = "SEPARATE-FRESH-ROOM";
+  await replacement.rerender({ roomId: newRuntime.roomId });
+  assert.equal(newRuntime.joinCalls.length, 1);
+});
+
+test("legacy cleanup across mounts: actual pending End remains ahead of replacement admission", async (t) => {
+  const admissionCoordinator = createAdmissionCoordinator();
+  const oldRuntime = createLegacyMountedRuntime({ admissionCoordinator });
+  const oldHarness = await mountLegacyHook(oldRuntime, { enabled: true });
+  let finishLeave;
+  oldRuntime.leaveActions.push({ wait: new Promise((resolve) => { finishLeave = resolve; }) });
+  let ending;
+  await act(async () => { ending = oldHarness.getResult().leaveRoom(); await settle(64); });
+  assert.equal(oldRuntime.leaveCalls, 1);
+  await oldHarness.unmount();
+  const newRuntime = createLegacyMountedRuntime({ admissionCoordinator });
+  const replacement = await mountLegacyHook(newRuntime, { enabled: true, naturalLifecycle: true });
+  t.after(() => replacement.unmount());
+  assert.equal(newRuntime.joinCalls.length, 0);
+  await act(async () => { finishLeave(); await ending; await settle(256); });
+  assert.equal(newRuntime.joinCalls.length, 1);
+});
+
+test("legacy ambiguous cleanup: exact-generation End retry resolves the shared admission barrier", async (t) => {
+  const admissionCoordinator = createAdmissionCoordinator();
+  const oldRuntime = createLegacyMountedRuntime({ admissionCoordinator });
+  const oldHarness = await mountLegacyHook(oldRuntime, { enabled: true });
+  t.after(() => oldHarness.unmount());
+  oldRuntime.leaveActions.push({ outcome: "reject", message: "account_bound_rpc_unavailable" });
+  await assert.rejects(oldHarness.run(() => oldHarness.getResult().leaveRoom()), /unavailable/u);
+  const newRuntime = createLegacyMountedRuntime({ admissionCoordinator });
+  const replacement = await mountLegacyHook(newRuntime, { enabled: true, naturalLifecycle: true });
+  t.after(() => replacement.unmount());
+  assert.equal(newRuntime.joinCalls.length, 0);
+  await oldHarness.run(() => oldHarness.getResult().leaveRoom());
+  await replacement.run(() => settle(256));
+  assert.equal(oldRuntime.leaveCalls, 2);
+  assert.equal(newRuntime.joinCalls.length, 1);
+});
+
+test("legacy SDP answer ownership: a queued answer cannot settle an offer that replaced it", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  const peer = harness.refs.peerConnectionsRef.current[runtime.remoteUserId];
+  await peer.setLocalDescription({ type: "offer", sdp: "old-offer" });
+  const oldOffer = { generation: harness.refs.legacySessionGenerationRef.current, peerConnection: peer, sdp: "old-offer", negotiationId: "old-offer-id" };
+  harness.refs.peerLocalOffersRef.current[runtime.remoteUserId] = oldOffer;
+  let releaseNativeQueue;
+  const nativeQueue = harness.refs.runSerializedPeerSignaling(runtime.remoteUserId, () => new Promise((resolve) => { releaseNativeQueue = resolve; }));
+  await settle(24);
+  let answerEvent;
+  await act(async () => {
+    answerEvent = channel.emitBroadcast("webrtc:answer", {
+      roomId: runtime.roomId, targetUserId: runtime.userId, fromUserId: runtime.remoteUserId,
+      negotiationId: oldOffer.negotiationId, description: { type: "answer", sdp: "old-answer" },
+    });
+    await settle(24);
+  });
+  const before = peer.remoteDescriptionCalls.length;
+  harness.refs.peerLocalOffersRef.current[runtime.remoteUserId] = { ...oldOffer, sdp: "new-offer", negotiationId: "new-offer-id" };
+  await harness.run(async () => { releaseNativeQueue(); await nativeQueue; await answerEvent; });
+  assert.equal(peer.remoteDescriptionCalls.length, before);
+  assert.equal(peer.signalingState, "have-local-offer");
+  await harness.run(() => channel.emitBroadcast("webrtc:answer", {
+    roomId: runtime.roomId, targetUserId: runtime.userId, fromUserId: runtime.remoteUserId,
+    negotiationId: "new-offer-id", description: { type: "answer", sdp: "current-answer" },
+  }));
+  assert.equal(peer.signalingState, "stable");
+  assert.equal(peer.remoteDescription.sdp, "current-answer");
+});
+
+for (const incomingDescriptionType of ["offer", "answer"]) {
+  test(`legacy ICE ordering: candidates arriving before ${incomingDescriptionType} wait for exact peer SDP`, async (t) => {
+    const runtime = createLegacyMountedRuntime({ peerConnectionState: "connecting" });
+    const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+    t.after(() => harness.unmount());
+    const channel = harness.refs.channelRef.current;
+    const peer = harness.refs.peerConnectionsRef.current[runtime.remoteUserId];
+    assert.equal(peer.remoteDescription, undefined);
+    if (incomingDescriptionType === "answer") {
+      await peer.setLocalDescription({ type: "offer", sdp: "initial-offer" });
+      harness.refs.peerLocalOffersRef.current[runtime.remoteUserId] = {
+        generation: harness.refs.legacySessionGenerationRef.current, peerConnection: peer,
+        sdp: "initial-offer", negotiationId: "initial-offer-id",
+      };
+    }
+    const envelope = { roomId: runtime.roomId, targetUserId: runtime.userId, fromUserId: runtime.remoteUserId };
+    await harness.run(() => channel.emitBroadcast("webrtc:ice", { ...envelope, candidate: { candidate: "candidate:early", sdpMid: "0", sdpMLineIndex: 0 } }));
+    await harness.run(() => channel.emitBroadcast("webrtc:ice", { ...envelope, candidate: { candidate: "candidate:early", sdpMid: "0", sdpMLineIndex: 0 } }));
+    assert.equal(peer.iceCandidates.length, 0, "native ICE must wait for remote SDP");
+    await harness.run(() => channel.emitBroadcast(`webrtc:${incomingDescriptionType}`, {
+      ...envelope, negotiationId: "initial-offer-id", description: { type: incomingDescriptionType, sdp: "initial-sdp" },
+    }));
+    assert.equal(peer.iceCandidates.length, 1, "buffer drains once, including duplicate relay suppression");
+    assert.equal(peer.iceCandidates[0].candidate, "candidate:early");
+    assert.equal(runtime.errors.filter((entry) => entry.scope === "communication-webrtc-ice-candidate").length, 0);
+  });
+}
+
+test("legacy ICE ownership: queued candidates from a retired native peer cannot reach its replacement", async (t) => {
+  const runtime = createLegacyMountedRuntime({ peerConnectionState: "connecting" });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  const oldPeer = harness.refs.peerConnectionsRef.current[runtime.remoteUserId];
+  const envelope = { roomId: runtime.roomId, targetUserId: runtime.userId, fromUserId: runtime.remoteUserId };
+  await harness.run(() => channel.emitBroadcast("webrtc:ice", { ...envelope, candidate: { candidate: "candidate:retired", sdpMid: "0", sdpMLineIndex: 0 } }));
+  const replacement = runtime.createPeer();
+  harness.refs.peerConnectionsRef.current[runtime.remoteUserId] = replacement;
+  await harness.run(() => channel.emitBroadcast("webrtc:offer", { ...envelope, description: { type: "offer", sdp: "replacement-offer" } }));
+  assert.equal(oldPeer.iceCandidates.length, 0);
+  assert.equal(replacement.iceCandidates.length, 0);
+  await harness.run(() => channel.emitBroadcast("webrtc:ice", { ...envelope, candidate: { candidate: "candidate:current", sdpMid: "0", sdpMLineIndex: 0 } }));
+  assert.equal(replacement.iceCandidates[0]?.candidate, "candidate:current");
+});
+
+test("legacy ICE bounds: pending relay candidates are deduplicated and capped before SDP", async (t) => {
+  const runtime = createLegacyMountedRuntime({ peerConnectionState: "connecting" });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  const peer = harness.refs.peerConnectionsRef.current[runtime.remoteUserId];
+  const envelope = { roomId: runtime.roomId, targetUserId: runtime.userId, fromUserId: runtime.remoteUserId };
+  await harness.run(async () => {
+    for (let index = 0; index < 80; index += 1) {
+      await channel.emitBroadcast("webrtc:ice", { ...envelope, candidate: { candidate: `candidate:${index}`, sdpMid: "0", sdpMLineIndex: 0 } });
+    }
+    await channel.emitBroadcast("webrtc:offer", { ...envelope, description: { type: "offer", sdp: "current-offer" } });
+  });
+  assert.equal(peer.iceCandidates.length, 64);
+});
+
+test("legacy cleanup generation: missing or replaced admission cannot claim cleanup success", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  const { track } = seedLocalTrack(runtime, harness, { enabled: true }, { sender: true });
+  harness.refs.joinedMembershipRef.current = null;
+  await assert.rejects(harness.run(() => harness.getResult().leaveRoom()), /generation/u);
+  assert.equal(track.readyState, "ended", "native privacy shutdown remains independent of unavailable server authority");
+  assert.equal(runtime.leaveRequests[0].expectedMembershipGeneration, undefined);
+});
+
+test("legacy cleanup generation: a wrong-generation terminal response is not accepted", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime);
+  t.after(() => harness.unmount());
+  runtime.leaveActions.push({ membership: makeMembership(runtime, {
+    membershipGeneration: "12000000-0000-4000-8000-000000000002",
+    membershipState: "left", leftAt: "2026-09-28T16:00:00Z", cameraEnabled: false, micEnabled: false,
+  }) });
+  await assert.rejects(harness.run(() => harness.getResult().leaveRoom()), /cleanup/u);
+  await harness.run(() => harness.getResult().leaveRoom());
+  assert.equal(runtime.leaveCalls, 2, "a verified retry is still possible");
 });
 
 test("legacy remote End: retained capture remains verifiable after the authenticated room-end broadcast", async (t) => {

@@ -1531,7 +1531,7 @@ for (const platformOS of ["android", "ios"]) {
   });
 }
 
-test("cleanup support: a late same-row leave is repaired for the exact replacement session", async (t) => {
+test("cleanup support: a late same-row leave settles before the replacement session joins", async (t) => {
   const { harness, runtime } = await mountCase(t, {
     initialCamera: true,
     initialMic: true,
@@ -1552,14 +1552,16 @@ test("cleanup support: a late same-row leave is repaired for the exact replaceme
       id: "invite-2",
     },
   }));
+  assert.equal(runtime.rooms.length, 1, "replacement waits for pending old leave");
+  await harness.resolveDeferred(delayedMembershipLeave);
   await waitFor(harness, () => runtime.rooms.length === 2, "same-row replacement Room created");
   await waitFor(harness, () => harness.getResult().channelState === "live", "same-row replacement live");
 
-  await harness.resolveDeferred(delayedMembershipLeave);
+  await harness.flush(48);
   await waitFor(
     harness,
     () => runtime.durableCamera === true && runtime.durableMic === true,
-    "replacement durable media restored after late leave",
+    "replacement durable media is enabled after old leave settled",
   );
 
   assert.equal(runtime.membershipLeaves, 1);
@@ -1593,6 +1595,8 @@ test("cleanup support: a timed-out leave cannot overwrite newer replacement medi
       id: "invite-2",
     },
   }));
+  assert.equal(runtime.rooms.length, 1, "replacement waits for pending old leave");
+  await harness.resolveDeferred(delayedMembershipLeave);
   await waitFor(harness, () => runtime.rooms.length === 2, "same-row replacement Room created");
   await waitFor(harness, () => harness.getResult().channelState === "live", "same-row replacement live");
   assert.equal(await runOperation(harness, () => harness.getResult().setMicrophoneEnabled(false)), true);
@@ -1600,11 +1604,11 @@ test("cleanup support: a timed-out leave cannot overwrite newer replacement medi
   assert.equal(runtime.durableMic, false);
   const touchesBeforeLateLeave = runtime.membershipTouches.length;
 
-  await harness.resolveDeferred(delayedMembershipLeave);
+  await harness.flush(48);
   await waitFor(
     harness,
     () => runtime.durableCamera === true && runtime.durableMic === false,
-    "late leave reconciled to the replacement's latest media intent",
+    "completed old leave cannot overwrite the replacement's latest media intent",
   );
 
   const replacementRoom = runtime.rooms.at(-1);
@@ -1613,7 +1617,7 @@ test("cleanup support: a timed-out leave cannot overwrite newer replacement medi
   assert.equal(harness.getResult().cameraEnabled, true);
   assert.equal(harness.getResult().micEnabled, false);
   assert.equal(harness.getResult().channelState, "live");
-  assert.equal(runtime.membershipTouches.length > touchesBeforeLateLeave, true);
+  assert.equal(runtime.membershipTouches.length, touchesBeforeLateLeave, "no stale reconciliation writes after current user intent");
 });
 
 test("cleanup support: repeated End reuses an unresolved membership leave", async (t) => {
@@ -1739,14 +1743,15 @@ test("cleanup support: an old-account leave cannot restore media for a replaceme
   assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, true);
 });
 
-test("cleanup support: pre-initialization unmount is bounded and produces no rejected cleanup", async () => {
+test("cleanup support: pre-initialization unmount leaves its already-joined exact generation", async () => {
   const runtime = createLiveKitMountedRuntime();
   const pendingSnapshot = runtime.deferSnapshot();
   const harness = await mountLiveKitHook(runtime, defaultHookOptions(), { requireLive: false, turns: 4 });
   await harness.unmount();
   pendingSnapshot.resolve();
   await harness.flush(48);
-  assert.equal(runtime.membershipLeaves, 0);
+  assert.equal(runtime.membershipLeaves, 1);
+  assert.equal(runtime.membershipLeaveRequests[0].expectedMembershipGeneration, runtime.membershipGeneration);
   assert.equal(runtime.errors.length, 0);
 });
 
@@ -3165,7 +3170,313 @@ test("cleanup_complete follows proved capture, transport, audio, and durable mem
   assert.equal(room.localParticipant.micEnabled, false);
   assert.equal(runtime.audioStopCalls, 1);
   assert.equal(runtime.membershipLeaves, 1);
+  assert.equal(runtime.membershipLeaveRequests[0].expectedMembershipGeneration, runtime.membershipGeneration);
   assert.equal(runtime.stages.filter((stage) => stage === "cleanup_complete").length, 1);
+  assert.equal(harness.getResult().channelState, "idle");
+});
+
+test("generation cleanup: a join returning after unmount retires only its captured generation", async () => {
+  const runtime = createLiveKitMountedRuntime();
+  const pendingJoin = deferred();
+  runtime.queueMembershipJoin({ gate: pendingJoin });
+  const joinedGeneration = runtime.membershipGeneration;
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions(), { requireLive: false });
+  assert.equal(runtime.membershipJoinRequests.length, 1);
+  await harness.unmount();
+  await harness.resolveDeferred(pendingJoin);
+  await harness.flush(48);
+  assert.equal(runtime.membershipLeaves, 1);
+  assert.equal(runtime.membershipLeaveRequests[0].expectedMembershipGeneration, joinedGeneration);
+  assert.equal(runtime.providerTokenCalls, 0);
+  assert.equal(runtime.rooms.length, 0);
+  assert.equal(runtime.errors.length, 0);
+});
+
+test("generation cleanup: replacement admission waits for late old join cleanup before native ownership", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ initialMic: true });
+  const pendingJoin = deferred();
+  const pendingLeave = deferred();
+  const oldGeneration = runtime.membershipGeneration;
+  const nextGeneration = "20000000-0000-4000-8000-000000000002";
+  runtime.queueMembershipJoin({ gate: pendingJoin });
+  runtime.queueMembershipJoin({ generation: nextGeneration });
+  runtime.queueMembershipLeave({ gate: pendingLeave });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions(), { requireLive: false });
+  t.after(() => harness.unmount());
+  await harness.commitRender(defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, id: "invite-2" },
+  }));
+  assert.equal(runtime.membershipJoinRequests.length, 1, "new admission cannot reuse the old pending generation");
+  await harness.resolveDeferred(pendingJoin);
+  await waitFor(harness, () => runtime.membershipLeaves === 1, "retired join begins exact cleanup");
+  assert.equal(runtime.membershipJoinRequests.length, 1, "new join waits for the old leave to settle");
+  assert.equal(runtime.providerTokenCalls, 0);
+  await harness.resolveDeferred(pendingLeave);
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement safely admits after old cleanup");
+  assert.equal(runtime.membershipLeaveRequests[0].expectedMembershipGeneration, oldGeneration);
+  assert.equal(runtime.membershipJoinRequests.length, 2);
+  assert.equal(runtime.rooms.length, 1);
+  assert.equal(runtime.durableMic, true);
+  assert.equal(await runOperation(harness, () => harness.getResult().leaveRoom()), true);
+  assert.equal(runtime.membershipLeaveRequests.at(-1).expectedMembershipGeneration, nextGeneration);
+});
+
+test("generation cleanup: late old-account join never acquires replacement-account authority", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ initialMic: true, requireExactLeaveAccount: true });
+  const pendingJoin = deferred();
+  runtime.queueMembershipJoin({ gate: pendingJoin });
+  runtime.queueMembershipJoin({ generation: "20000000-0000-4000-8000-000000000002" });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions(), { requireLive: false });
+  t.after(() => harness.unmount());
+  runtime.userId = "replacement-user";
+  await harness.commitRender(defaultHookOptions({
+    authenticatedUserId: "replacement-user",
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, id: "invite-2", calleeUserId: "replacement-user" },
+  }));
+  await harness.resolveDeferred(pendingJoin);
+  await waitFor(harness, () => harness.getResult().channelState === "live", "new account independently admitted");
+  assert.equal(runtime.membershipLeaveRequests[0]?.userId, "local-user");
+  assert.equal(runtime.errors.filter(entry => entry.scope === "chat-call-livekit-retired-join-cleanup").length, 1);
+  assert.equal(runtime.rooms.length, 1);
+  assert.equal(runtime.durableMic, true);
+  assert.equal(harness.getResult().error, null);
+  assert.equal(await runOperation(harness, () => harness.getResult().leaveRoom()), true);
+  assert.equal(runtime.membershipLeaveRequests.at(-1).userId, "replacement-user");
+});
+
+test("generation cleanup: rejected old join releases replacement admission without changing its state", async (t) => {
+  const runtime = createLiveKitMountedRuntime();
+  const pendingJoin = deferred();
+  runtime.queueMembershipJoin({ gate: pendingJoin, outcome: "reject" });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions(), { requireLive: false });
+  t.after(() => harness.unmount());
+  await harness.commitRender(defaultHookOptions({ invite: { ...defaultHookOptions().invite, id: "invite-2" } }));
+  await harness.resolveDeferred(pendingJoin);
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement admits after retired rejection");
+  assert.equal(runtime.membershipLeaves, 0);
+  assert.equal(runtime.rooms.length, 1);
+  assert.equal(harness.getResult().error, null);
+});
+
+test("generation cleanup: unresolved predecessor fails boundedly without releasing its admission barrier", async (t) => {
+  const runtime = createLiveKitMountedRuntime();
+  const pendingJoin = deferred();
+  runtime.queueMembershipJoin({ gate: pendingJoin });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions(), { requireLive: false });
+  t.after(() => harness.unmount());
+  await harness.commitRender(defaultHookOptions({ invite: { ...defaultHookOptions().invite, id: "invite-2" } }));
+  await harness.fireLatestTimeout();
+  assert.equal(harness.getResult().channelState, "error");
+  assert.equal(runtime.membershipJoinRequests.length, 1);
+  assert.equal(runtime.rooms.length, 0);
+  assert.ok(runtime.errors.some(entry => entry.message === "accepted_chat_call_prior_membership_pending"));
+  await harness.commitRender(defaultHookOptions({ invite: { ...defaultHookOptions().invite, id: "invite-3" } }));
+  await harness.fireLatestTimeout();
+  assert.equal(runtime.membershipJoinRequests.length, 1, "retry cannot leapfrog the unresolved operation");
+  await harness.resolveDeferred(pendingJoin);
+  await harness.flush(48);
+  assert.equal(runtime.membershipLeaves, 1, "the original late join remains tracked and is compensated");
+  assert.equal(runtime.rooms.length, 0, "timed-out candidates do not start later without a new request");
+  await harness.commitRender(defaultHookOptions({ invite: { ...defaultHookOptions().invite, id: "invite-4" } }));
+  await waitFor(harness, () => harness.getResult().channelState === "live", "fresh call retries after real settlement");
+  assert.equal(runtime.membershipJoinRequests.length, 2);
+});
+
+test("generation cleanup: initial join timeout remains tracked and compensates its late success", async (t) => {
+  const runtime = createLiveKitMountedRuntime();
+  const pendingJoin = deferred();
+  runtime.queueMembershipJoin({ gate: pendingJoin });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions(), { requireLive: false });
+  t.after(() => harness.unmount());
+  await harness.fireLatestTimeout();
+  assert.equal(harness.getResult().channelState, "error");
+  assert.equal(harness.getResult().loading, false);
+  assert.ok(runtime.errors.some(entry => entry.message === "accepted_chat_call_membership_pending"));
+  await harness.resolveDeferred(pendingJoin);
+  await harness.flush(48);
+  assert.equal(runtime.membershipLeaves, 1);
+  assert.equal(runtime.rooms.length, 0);
+  assert.equal(runtime.providerTokenCalls, 0);
+  assert.equal(harness.getResult().channelState, "error", "late result cannot start a timed-out call");
+});
+
+test("generation cleanup: full unmount and remount share the unresolved admission barrier", async (t) => {
+  const oldRuntime = createLiveKitMountedRuntime();
+  const pendingJoin = deferred();
+  oldRuntime.queueMembershipJoin({ gate: pendingJoin });
+  const oldHarness = await mountLiveKitHook(oldRuntime, defaultHookOptions(), { requireLive: false });
+  await oldHarness.unmount();
+  const runtime = createLiveKitMountedRuntime({
+    membershipAdmissionCoordinator: oldRuntime.membershipAdmissionCoordinator,
+    membershipGeneration: "20000000-0000-4000-8000-000000000002",
+  });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, id: "invite-2" },
+  }), { requireLive: false });
+  t.after(() => harness.unmount());
+  assert.equal(runtime.membershipJoinRequests.length, 0);
+  await oldHarness.resolveDeferred(pendingJoin);
+  await waitFor(harness, () => harness.getResult().channelState === "live", "new instance joins only after retired join cleanup");
+  assert.equal(oldRuntime.membershipLeaves, 1);
+  assert.equal(oldRuntime.rooms.length, 0);
+  assert.equal(runtime.rooms.length, 1);
+});
+
+for (const replacement of ["room", "account"]) {
+  test(`generation cleanup: ambiguous join blocks reuse but permits independent ${replacement}`, async (t) => {
+    const runtime = createLiveKitMountedRuntime();
+    runtime.queueMembershipJoin({ outcome: "reject", message: "account_bound_rpc_unavailable" });
+    const harness = await mountLiveKitHook(runtime, defaultHookOptions(), { requireLive: false });
+    t.after(() => harness.unmount());
+    assert.equal(harness.getResult().channelState, "error");
+    await harness.commitRender(defaultHookOptions({ invite: { ...defaultHookOptions().invite, id: "invite-2" } }));
+    await harness.fireLatestTimeout();
+    assert.equal(runtime.membershipJoinRequests.length, 1, "unknown old mutation cannot be treated as absent");
+    const replacementOptions = replacement === "room"
+      ? { roomId: "ROOM-2", invite: { ...defaultHookOptions().invite, id: "invite-3", communicationRoomId: "ROOM-2" } }
+      : { authenticatedUserId: "new-user", invite: { ...defaultHookOptions().invite, id: "invite-3", calleeUserId: "new-user" } };
+    if (replacement === "room") runtime.roomId = "ROOM-2";
+    else runtime.userId = "new-user";
+    await harness.commitRender(defaultHookOptions(replacementOptions));
+    await waitFor(harness, () => harness.getResult().channelState === "live", "independent exact authority remains usable");
+    assert.equal(runtime.membershipJoinRequests.length, 2);
+    assert.equal(runtime.rooms.length, 1);
+  });
+}
+
+test("generation cleanup: ambiguous leave retries exact generation before permitting replacement", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  runtime.queueMembershipLeave({ outcome: "reject", message: "account_bound_rpc_unavailable" });
+  assert.equal(await runOperation(harness, () => harness.getResult().leaveRoom()), true);
+  assert.equal(runtime.membershipLeaveRequests.length, 2);
+  assert.equal(runtime.membershipLeaveRequests[0].expectedMembershipGeneration,
+    runtime.membershipLeaveRequests[1].expectedMembershipGeneration);
+  assert.equal(harness.getResult().channelState, "idle");
+});
+
+test("generation cleanup: repeated End reuses unresolved reservation and confirms the exact leave", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  runtime.queueMembershipLeave({ outcome: "reject", message: "account_bound_rpc_unavailable" });
+  runtime.queueMembershipLeave({ outcome: "reject", message: "account_bound_rpc_unavailable" });
+  const error = await runOperation(harness, () => harness.getResult().leaveRoom().then(() => null, failure => failure));
+  assert.match(error.message, /Unable to prove/u);
+  assert.equal(runtime.membershipLeaveRequests.length, 2);
+  assert.equal(runtime.stages.includes("cleanup_complete"), false);
+  assert.equal(await runOperation(harness, () => harness.getResult().leaveRoom()), true,
+    "retry must not wait behind its own unresolved reservation");
+  assert.equal(runtime.membershipLeaveRequests.length, 3);
+  assert.equal(new Set(runtime.membershipLeaveRequests.map(entry => entry.expectedMembershipGeneration)).size, 1);
+  assert.equal(harness.getResult().channelState, "idle");
+});
+
+test("generation cleanup: pending End remains reserved across full unmount and remount", async (t) => {
+  const { harness: oldHarness, runtime: oldRuntime } = await mountCase(t);
+  const pendingLeave = deferred();
+  oldRuntime.queueMembershipLeave({ gate: pendingLeave });
+  const cleanup = await oldHarness.startOperation(() => oldHarness.getResult().leaveRoom());
+  await waitFor(oldHarness, () => oldRuntime.membershipLeaves === 1, "old End starts durable leave");
+  await oldHarness.unmount();
+  const runtime = createLiveKitMountedRuntime({
+    membershipAdmissionCoordinator: oldRuntime.membershipAdmissionCoordinator,
+    membershipGeneration: "20000000-0000-4000-8000-000000000002",
+  });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, id: "invite-2" },
+  }), { requireLive: false });
+  t.after(() => harness.unmount());
+  assert.equal(runtime.membershipJoinRequests.length, 0);
+  await oldHarness.resolveDeferred(pendingLeave);
+  assert.equal(await settleOperation(cleanup, oldHarness), true);
+  await waitFor(harness, () => harness.getResult().channelState === "live", "new hook waits through old exact leave");
+  assert.equal(runtime.membershipJoinRequests.length, 1);
+  assert.equal(oldRuntime.membershipLeaves, 1);
+});
+
+test("generation cleanup: a join without cleanup identity never starts native media", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ membershipGeneration: null });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions(), { requireLive: false });
+  t.after(() => harness.unmount());
+  assert.equal(runtime.providerTokenCalls, 0);
+  assert.equal(runtime.rooms.length, 0);
+  assert.equal(runtime.membershipLeaves, 0);
+  assert.equal(harness.getResult().channelState, "error");
+  assert.match(harness.getResult().error, /Unable to connect/u);
+  assert.ok(runtime.errors.some(entry => entry.message === "accepted_chat_call_membership_generation_missing"));
+});
+
+test("generation cleanup: token initialization failure leaves the joined generation and retains its error", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ rejectProviderToken: true });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions(), { requireLive: false });
+  t.after(() => harness.unmount());
+  await harness.flush(48);
+  assert.equal(runtime.rooms.length, 0);
+  assert.equal(runtime.membershipLeaves, 1);
+  assert.equal(runtime.membershipLeaveRequests[0].expectedMembershipGeneration, runtime.membershipGeneration);
+  assert.equal(harness.getResult().channelState, "error");
+  assert.match(harness.getResult().error, /Unable to connect/u);
+});
+
+for (const returnedGeneration of ["", "20000000-0000-4000-8000-000000000002"]) {
+  test(`generation cleanup: ${returnedGeneration ? "wrong" : "missing"} response generation cannot certify End`, async (t) => {
+    const { harness, runtime } = await mountCase(t);
+    runtime.queueMembershipLeave({ returnedGeneration });
+    const error = await runOperation(harness, () => harness.getResult().leaveRoom().then(() => null, failure => failure));
+    assert.match(error.message, /Unable to prove/u);
+    assert.equal(runtime.stages.includes("cleanup_complete"), false);
+    assert.equal(runtime.membershipLeaveRequests[0].expectedMembershipGeneration, runtime.membershipGeneration);
+    assert.equal(await runOperation(harness, () => harness.getResult().leaveRoom()), true, "exact retry remains usable");
+  });
+}
+
+test("generation cleanup: refreshing a newer durable row cannot donate its generation to an old call", async (t) => {
+  const { harness, runtime } = await mountCase(t, { initialMic: true }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  }));
+  const joinedGeneration = runtime.membershipGeneration;
+  runtime.membershipGeneration = "20000000-0000-4000-8000-000000000002";
+  await harness.fireHeartbeat();
+  await harness.flush(48);
+  const error = await runOperation(harness, () => harness.getResult().leaveRoom().then(() => null, failure => failure));
+  assert.match(error.message, /Unable to prove/u);
+  assert.equal(runtime.membershipLeaveRequests[0].expectedMembershipGeneration, joinedGeneration);
+  assert.equal(runtime.durableMic, true, "old generation cannot retire the newer durable admission");
+  assert.equal(runtime.stages.includes("cleanup_complete"), false);
+});
+
+test("generation cleanup: an old pending leave cannot retire a same-room replacement generation", async (t) => {
+  const { harness, runtime } = await mountCase(t, { initialMic: true }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  }));
+  const oldGeneration = runtime.membershipGeneration;
+  const pendingLeave = deferred();
+  runtime.queueMembershipLeave({ gate: pendingLeave });
+  const cleanup = await harness.startOperation(() => harness.getResult().leaveRoom().then(() => null, failure => failure));
+  await waitFor(harness, () => runtime.membershipLeaves === 1, "old leave begins");
+  await harness.fireLatestTimeout();
+  assert.match((await settleOperation(cleanup, harness)).message, /Unable to prove/u);
+  runtime.membershipGeneration = "20000000-0000-4000-8000-000000000002";
+  await harness.commitRender(defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, id: "invite-2" },
+  }));
+  assert.equal(runtime.rooms.length, 1, "replacement waits for old leave settlement");
+  await harness.resolveDeferred(pendingLeave);
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement joins a new durable generation");
+  await harness.flush(48);
+  assert.equal(runtime.membershipLeaveRequests[0].expectedMembershipGeneration, oldGeneration);
+  assert.equal(harness.getResult().channelState, "live");
+  assert.equal(runtime.durableMic, true);
+  assert.equal(await runOperation(harness, () => harness.getResult().leaveRoom()), true);
+  assert.equal(runtime.membershipLeaveRequests.at(-1).expectedMembershipGeneration, runtime.membershipGeneration);
+});
+
+test("generation cleanup: an exact already-removed terminal membership satisfies cleanup", async (t) => {
+  const { harness, runtime } = await mountCase(t);
+  runtime.queueMembershipLeave({ membershipState: "removed" });
+  assert.equal(await runOperation(harness, () => harness.getResult().leaveRoom()), true);
+  assert.equal(runtime.membershipLeaveRequests[0].expectedMembershipGeneration, runtime.membershipGeneration);
   assert.equal(harness.getResult().channelState, "idle");
 });
 

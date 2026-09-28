@@ -41,6 +41,7 @@
       "tests/**"
     ],
     "sensitive": [
+      "app/_layout.tsx",
       "app/(auth)/**",
       "app/account*",
       "app/admin*",
@@ -81,6 +82,8 @@
     ],
     "database": [
       "supabase/**",
+      "app/_layout.tsx",
+      "app/chat/**",
       "hooks/use-chat-call-media-session.ts",
       "hooks/use-communication-room-session.ts",
       "hooks/use-livekit-chat-call-session.ts",
@@ -89,6 +92,8 @@
     "nativeRelease": [
       "android/**",
       "ios/**",
+      "app/_layout.tsx",
+      "app/chat/**",
       "hooks/use-chat-call-media-session.ts",
       "hooks/use-communication-room-session.ts",
       "hooks/use-livekit-chat-call-session.ts",

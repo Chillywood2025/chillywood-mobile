@@ -52,7 +52,7 @@ const COMMUNICATION_ROOM_BASE_SELECT =
 const COMMUNICATION_ROOM_SELECT =
   `${COMMUNICATION_ROOM_BASE_SELECT},content_access_rule,capture_policy,last_activity_at`;
 const COMMUNICATION_ROOM_MEMBERSHIP_SELECT =
-  "room_id,user_id,role,membership_state,camera_enabled,mic_enabled,display_name,avatar_url,joined_at,last_seen_at,left_at,updated_at";
+  "room_id,user_id,role,membership_state,membership_generation,camera_enabled,mic_enabled,display_name,avatar_url,joined_at,last_seen_at,left_at,updated_at";
 
 export type CommunicationRoomStatus = "active" | "ended";
 export type CommunicationLinkedRoomMode = "live" | "hybrid";
@@ -78,6 +78,7 @@ export type CommunicationRoomMembership = {
   userId: string;
   role: CommunicationMembershipRole;
   membershipState: RoomMembershipState;
+  membershipGeneration?: string;
   cameraEnabled: boolean;
   micEnabled: boolean;
   displayName?: string;
@@ -155,6 +156,7 @@ type CommunicationMembershipRow = Pick<
   | "user_id"
   | "role"
   | "membership_state"
+  | "membership_generation"
   | "camera_enabled"
   | "mic_enabled"
   | "display_name"
@@ -471,6 +473,7 @@ export const parseCommunicationMembershipPayload = (row: CommunicationMembership
     userId,
     role,
     membershipState: normalizeRoomMembershipState(row.membership_state),
+    membershipGeneration: String(row.membership_generation ?? "").trim() || undefined,
     cameraEnabled: !!row.camera_enabled,
     micEnabled: typeof row.mic_enabled === "boolean" ? row.mic_enabled : true,
     displayName: String(row.display_name ?? "").trim() || undefined,
@@ -815,14 +818,30 @@ export async function touchCommunicationRoomSession(options: {
 export async function leaveCommunicationRoomSession(options: {
   roomId: string;
   userId?: string;
+  expectedMembershipGeneration?: string;
 }): Promise<CommunicationRoomMembership | null> {
-  return touchCommunicationRoomSession({
-    roomId: options.roomId,
-    userId: options.userId,
-    membershipState: "left",
-    cameraEnabled: false,
-    micEnabled: false,
-  });
+  const roomId = formatCommunicationRoomCode(options.roomId);
+  const userId = normalizeAuthenticatedUserId(options.userId ?? await getWritablePartyUserId());
+  const generation = String(options.expectedMembershipGeneration ?? "").trim();
+  if (!roomId || !userId || !AUTHENTICATED_USER_ID_PATTERN.test(generation)) {
+    throw createCommunicationOperationError("membership leave", { message: "cleanup identity required" });
+  }
+  const { data, error } = await runExactSessionAccountBoundSupabaseMutationRpc<
+    CommunicationMembershipRow[] | CommunicationMembershipRow
+  >("leave_communication_room_session", {
+    p_room_id: roomId,
+    p_expected_membership_generation: generation,
+  }, userId);
+  if (error) throw createCommunicationOperationError("membership leave", error);
+  const row = Array.isArray(data) ? data.length === 1 ? data[0] : null : data;
+  const membership = row ? parseCommunicationMembershipPayload(row) : null;
+  if (!membership || membership.roomId !== roomId || membership.userId !== userId
+    || membership.membershipGeneration !== generation
+    || !["left", "removed"].includes(membership.membershipState)
+    || membership.cameraEnabled || membership.micEnabled || !membership.leftAt) {
+    throw createCommunicationOperationError("membership leave", { message: "cleanup postcondition not confirmed" });
+  }
+  return membership;
 }
 
 export async function heartbeatCommunicationRoomSession(options: {

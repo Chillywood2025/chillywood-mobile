@@ -1017,15 +1017,20 @@ export default function ChillyChatThreadScreen() {
     }, [authLoading, isSignedIn, loadThreadState, threadId]),
   );
 
+  // The server clears the thread projection when the invite becomes terminal.
+  // Keep the exact call's media kind while its local cleanup/retry panel remains.
+  const resolvedCallType = activeCallInvite?.communicationRoomId === activeCallRoomId
+    ? activeCallInvite.callType
+    : thread?.activeCallType;
   const initialCallMediaPreferences = useMemo(() => {
-    if (thread?.activeCallType === "voice") {
+    if (resolvedCallType === "voice") {
       return {
         cameraEnabled: false,
         micEnabled: true,
       };
     }
 
-    if (thread?.activeCallType === "video") {
+    if (resolvedCallType === "video") {
       return {
         cameraEnabled: true,
         micEnabled: true,
@@ -1033,7 +1038,7 @@ export default function ChillyChatThreadScreen() {
     }
 
     return undefined;
-  }, [thread?.activeCallType]);
+  }, [resolvedCallType]);
   const waitingForIosNativeAudioSession =
     Platform.OS === "ios"
     && requestedNativeCallAction === "answer"
@@ -1122,14 +1127,13 @@ export default function ChillyChatThreadScreen() {
         setCallPanelOpen(true);
         return;
       }
-      if (!await finishTerminalInviteCleanup(terminalInvite, false, ownsEndedCall, `room_${reason}`)) return;
+      if (!await finishTerminalInviteCleanup(terminalInvite, ownsEndedCall, `room_${reason}`)) return;
       void loadThreadState();
     },
   });
 
   const finishTerminalInviteCleanup = useCallback(async (
     invite: ChillyChatCallInvite,
-    endRoomIfHost: boolean,
     ownsContext: () => boolean,
     remoteReason?: string,
   ): Promise<boolean> => {
@@ -1143,7 +1147,10 @@ export default function ChillyChatThreadScreen() {
     try {
       // Capture the exact session's cleanup before disabling media for the
       // terminal invite. A failed leave must retain its resources for Retry End.
-      const cleanup = leaveRoom({ endRoomIfHost });
+      // The authoritative terminal invite transition already closes the room
+      // for both participants. Repeating a host mutation after that transition
+      // can lose its active-room authority before the exact self-leave receipt.
+      const cleanup = leaveRoom({ endRoomIfHost: false });
       activeCallInviteRef.current = invite;
       setActiveCallInvite(invite);
       setOutgoingCallInvite(null);
@@ -1376,10 +1383,10 @@ export default function ChillyChatThreadScreen() {
       || activeCallInvite?.status !== "accepted"
       || callChannelState !== "live"
     ) return;
-    const route = resolveIosChatCallAudioRoute(thread?.activeCallType);
+    const route = resolveIosChatCallAudioRoute(resolvedCallType);
     const shouldUseSpeaker = route === "speaker";
     void applyCallAudioRoute(shouldUseSpeaker, true);
-  }, [activeCallInvite?.status, activeCallRoomId, applyCallAudioRoute, callChannelState, nativeMediaActivationSerial, thread?.activeCallType]);
+  }, [activeCallInvite?.status, activeCallRoomId, applyCallAudioRoute, callChannelState, nativeMediaActivationSerial, resolvedCallType]);
 
   useEffect(() => {
     stopOutgoingRingback();
@@ -1413,41 +1420,58 @@ export default function ChillyChatThreadScreen() {
 
     const expiresAt = Date.parse(outgoingCallInvite.expiresAt);
     const timeoutMs = Number.isFinite(expiresAt) ? Math.max(0, expiresAt - Date.now()) : 0;
-    outgoingCallTimeoutRef.current = setTimeout(async () => {
-      const latestInvite = await readChillyChatCallInvite(outgoingCallInvite.id).catch(() => null);
+    const exactOutgoingInvite = (invite: ChillyChatCallInvite | null) => !!invite
+      && invite.id === outgoingCallInvite.id
+      && invite.threadId === outgoingCallInvite.threadId
+      && invite.communicationRoomId === outgoingCallInvite.communicationRoomId
+      && invite.callerUserId === currentUserId
+      && invite.calleeUserId === outgoingCallInvite.calleeUserId;
+    const scheduleReconciliation = (delayMs: number) => {
       if (!isCurrent()) return;
-      if (latestInvite?.status === "accepted") {
-        activeCallInviteRef.current = latestInvite;
-        setActiveCallInvite(latestInvite);
-        setOutgoingCallInvite(null);
-        stopOutgoingRingback();
-        setCallDeliveryStatus("Receiver joined the call.");
-        return;
-      }
-      if (!latestInvite || latestInvite.status !== "ringing") {
-        if (!latestInvite || TERMINAL_CHAT_CALL_INVITE_STATUSES.has(latestInvite.status)) {
-          if (!latestInvite) return;
-          const completed = await finishTerminalInviteCleanup(latestInvite, true, ownsContext);
+      outgoingCallTimeoutRef.current = setTimeout(async () => {
+        const latestInvite = await readChillyChatCallInvite(outgoingCallInvite.id).catch(() => null);
+        if (!isCurrent()) return;
+        if (!latestInvite || !exactOutgoingInvite(latestInvite)) {
+          scheduleReconciliation(ACTIVE_CHAT_CALL_TERMINAL_RECONCILIATION_MS);
+          return;
+        }
+        if (latestInvite.status === "accepted") {
+          activeCallInviteRef.current = latestInvite;
+          setActiveCallInvite(latestInvite);
+          setOutgoingCallInvite(null);
+          stopOutgoingRingback();
+          setCallDeliveryStatus("Receiver joined the call.");
+          return;
+        }
+        if (TERMINAL_CHAT_CALL_INVITE_STATUSES.has(latestInvite.status)) {
+          const completed = await finishTerminalInviteCleanup(latestInvite, ownsContext);
           if (!completed) return;
           setCallDeliveryStatus("The call is no longer ringing. Active call state was cleared.");
           await loadThreadState();
+          return;
         }
-        return;
-      }
-
-      const missedInvite = await updateChillyChatCallInviteStatus({
-        actorUserId: currentUserId,
-        invite: latestInvite,
-        status: "missed",
-      }).catch(() => null);
-      if (!isCurrent()) return;
-      if (!missedInvite || missedInvite.status !== "missed") return;
-
-      const completed = await finishTerminalInviteCleanup(missedInvite, true, ownsContext);
-      if (!completed) return;
-      setCallDeliveryStatus("No answer. The call expired and active call state was cleared.");
-      await loadThreadState();
-    }, timeoutMs);
+        const latestExpiresAt = Date.parse(latestInvite.expiresAt);
+        if (latestInvite.status !== "ringing" || (Number.isFinite(latestExpiresAt) && latestExpiresAt > Date.now())) {
+          scheduleReconciliation(latestInvite.status === "ringing" ? latestExpiresAt - Date.now() : ACTIVE_CHAT_CALL_TERMINAL_RECONCILIATION_MS);
+          return;
+        }
+        const missedInvite = await updateChillyChatCallInviteStatus({
+          actorUserId: currentUserId,
+          invite: latestInvite,
+          status: "missed",
+        }).catch(() => null);
+        if (!isCurrent()) return;
+        if (!missedInvite || missedInvite.status !== "missed" || !exactOutgoingInvite(missedInvite)) {
+          scheduleReconciliation(ACTIVE_CHAT_CALL_TERMINAL_RECONCILIATION_MS);
+          return;
+        }
+        const completed = await finishTerminalInviteCleanup(missedInvite, ownsContext);
+        if (!completed) return;
+        setCallDeliveryStatus("No answer. The call expired and active call state was cleared.");
+        await loadThreadState();
+      }, delayMs);
+    };
+    scheduleReconciliation(timeoutMs);
 
     return () => {
       soundActive = false;
@@ -1475,7 +1499,7 @@ export default function ChillyChatThreadScreen() {
         if (cleanupInFlight) return;
         cleanupInFlight = true;
         // Unsubscribing after terminal projection must not cancel owned cleanup.
-        const completed = await finishTerminalInviteCleanup(invite, true, ownsContext);
+        const completed = await finishTerminalInviteCleanup(invite, ownsContext);
         cleanupInFlight = false;
         if (!completed) return;
         setCallDeliveryStatus("The call ended. Active call state was cleared.");
@@ -1562,31 +1586,63 @@ export default function ChillyChatThreadScreen() {
 
     const expiresAt = Date.parse(incomingCallInvite.expiresAt);
     const timeoutMs = Number.isFinite(expiresAt) ? Math.max(0, expiresAt - Date.now()) : 0;
-    incomingCallTimeoutRef.current = setTimeout(async () => {
-      const latestInvite = await readChillyChatCallInvite(incomingCallInvite.id).catch(() => null);
+    const scheduleReconciliation = (delayMs: number) => {
       if (!isCurrent()) return;
-      if (latestInvite?.status === "accepted") {
-        applyAcceptedIncomingInviteState(latestInvite);
-        return;
-      }
-      if (!latestInvite || latestInvite.status !== "ringing") {
+      incomingCallTimeoutRef.current = setTimeout(async () => {
+        const latestInvite = await readChillyChatCallInvite(incomingCallInvite.id).catch(() => null);
+        if (!isCurrent()) return;
+        const exactInvite = latestInvite?.id === incomingCallInvite.id
+          && latestInvite.threadId === incomingCallInvite.threadId
+          && latestInvite.communicationRoomId === incomingCallInvite.communicationRoomId
+          && latestInvite.callerUserId === incomingCallInvite.callerUserId
+          && latestInvite.calleeUserId === currentUserId;
+        if (!exactInvite || !latestInvite) {
+          // A failed read is not terminal authority. Keep one scheduled retry
+          // at a time, bounded by this invite/account's mounted ownership.
+          scheduleReconciliation(ACTIVE_CHAT_CALL_TERMINAL_RECONCILIATION_MS);
+          return;
+        }
+        if (latestInvite.status === "accepted") {
+          applyAcceptedIncomingInviteState(latestInvite);
+          return;
+        }
+        if (TERMINAL_CHAT_CALL_INVITE_STATUSES.has(latestInvite.status)) {
+          await clearEndedChatThreadCall(threadId, incomingCallInvite.communicationRoomId, authority ?? undefined).catch(() => null);
+          if (!isCurrent()) return;
+          clearVisibleIncomingCallState(latestInvite);
+          await loadThreadState();
+          return;
+        }
+        if (latestInvite.status !== "ringing") {
+          scheduleReconciliation(ACTIVE_CHAT_CALL_TERMINAL_RECONCILIATION_MS);
+          return;
+        }
+        const latestExpiresAt = Date.parse(latestInvite.expiresAt);
+        if (Number.isFinite(latestExpiresAt) && latestExpiresAt > Date.now()) {
+          scheduleReconciliation(latestExpiresAt - Date.now());
+          return;
+        }
+        const missedInvite = await updateChillyChatCallInviteStatus({
+          actorUserId: currentUserId,
+          invite: latestInvite,
+          status: "missed",
+        }).catch(() => null);
+        if (!isCurrent()) return;
+        if (missedInvite?.status !== "missed" || missedInvite.id !== latestInvite.id
+          || missedInvite.threadId !== latestInvite.threadId
+          || missedInvite.communicationRoomId !== latestInvite.communicationRoomId
+          || missedInvite.callerUserId !== latestInvite.callerUserId
+          || missedInvite.calleeUserId !== latestInvite.calleeUserId) {
+          scheduleReconciliation(ACTIVE_CHAT_CALL_TERMINAL_RECONCILIATION_MS);
+          return;
+        }
         await clearEndedChatThreadCall(threadId, incomingCallInvite.communicationRoomId, authority ?? undefined).catch(() => null);
         if (!isCurrent()) return;
-        clearVisibleIncomingCallState(latestInvite ?? incomingCallInvite);
-        await loadThreadState();
-        return;
-      }
-      const missedInvite = await updateChillyChatCallInviteStatus({
-        actorUserId: currentUserId,
-        invite: latestInvite,
-        status: "missed",
-      }).catch(() => null);
-      if (!isCurrent() || missedInvite?.status !== "missed") return;
-      await clearEndedChatThreadCall(threadId, incomingCallInvite.communicationRoomId, authority ?? undefined).catch(() => null);
-      if (!isCurrent()) return;
-      clearVisibleIncomingCallState(missedInvite);
-      void loadThreadState();
-    }, timeoutMs);
+        clearVisibleIncomingCallState(missedInvite);
+        void loadThreadState();
+      }, delayMs);
+    };
+    scheduleReconciliation(timeoutMs);
 
     return () => {
       active = false;
@@ -1601,10 +1657,15 @@ export default function ChillyChatThreadScreen() {
     if (!incomingCallInvite?.id) return undefined;
     const visibleInvite = incomingCallInvite;
     let active = true;
+    const ownsContext = captureCallOperation();
 
     const reconcileInvitePresentation = async () => {
       const latestInvite = await readChillyChatCallInvite(visibleInvite.id).catch(() => null);
-      if (!active || !latestInvite || latestInvite.status === "ringing") return;
+      if (!active || !ownsContext() || !latestInvite || latestInvite.status === "ringing"
+        || latestInvite.id !== visibleInvite.id || latestInvite.threadId !== threadId
+        || latestInvite.communicationRoomId !== visibleInvite.communicationRoomId
+        || latestInvite.callerUserId !== visibleInvite.callerUserId
+        || latestInvite.calleeUserId !== currentUserId) return;
 
       rememberHandledIncomingInvite(latestInvite, {
         clearRoom: latestInvite.status !== "accepted",
@@ -1637,7 +1698,7 @@ export default function ChillyChatThreadScreen() {
       active = false;
       unsubscribe();
     };
-  }, [clearVisibleIncomingCallState, incomingCallInvite, rememberHandledIncomingInvite, threadId]);
+  }, [captureCallOperation, clearVisibleIncomingCallState, currentUserId, incomingCallInvite, rememberHandledIncomingInvite, threadId]);
 
   useEffect(() => {
     if (!activeCallInvite?.id || activeCallInvite.status !== "accepted" || !currentUserId) {
@@ -1653,8 +1714,7 @@ export default function ChillyChatThreadScreen() {
       if (!TERMINAL_CHAT_CALL_INVITE_STATUSES.has(latestInvite.status)) return;
       if (terminalCleanupInFlight || handledActiveTerminalInviteIdsRef.current.has(inviteId)) return;
       terminalCleanupInFlight = true;
-      const isHost = !!callRoom?.hostUserId && callRoom.hostUserId === currentUserId;
-      const completed = await finishTerminalInviteCleanup(latestInvite, isHost, ownsContext, `invite_${latestInvite.status}`);
+      const completed = await finishTerminalInviteCleanup(latestInvite, ownsContext, `invite_${latestInvite.status}`);
       terminalCleanupInFlight = false;
       if (!completed) return;
       setCallDeliveryStatus("The call ended. Active call state was cleared on both devices.");
@@ -1665,7 +1725,7 @@ export default function ChillyChatThreadScreen() {
     // Realtime may reconnect without replaying the terminal invite update.
     const terminalReconciliationInterval = setInterval(() => { void reconcileActiveInvite(); }, ACTIVE_CHAT_CALL_TERMINAL_RECONCILIATION_MS);
     return () => { subscribed = false; clearInterval(terminalReconciliationInterval); unsubscribe(); };
-  }, [activeCallInvite?.id, activeCallInvite?.status, callRoom?.hostUserId, captureCallOperation, currentUserId, finishTerminalInviteCleanup, loadThreadState]);
+  }, [activeCallInvite?.id, activeCallInvite?.status, captureCallOperation, currentUserId, finishTerminalInviteCleanup, loadThreadState]);
 
   const otherMember = thread?.otherMember;
   const officialAccount = getOfficialPlatformAccount(otherMember?.userId);
@@ -1688,14 +1748,14 @@ export default function ChillyChatThreadScreen() {
   const outgoingDeviceAlertConfirmed = outgoingCallRinging && outgoingCallDeviceAlertSent;
   const callTitle = outgoingCallRinging
     ? outgoingDeviceAlertConfirmed
-      ? (thread?.activeCallType === "video" ? "Video call ringing" : "Voice call ringing")
-      : (thread?.activeCallType === "video" ? "Video call — waiting for answer" : "Voice call — waiting for answer")
-    : (thread?.activeCallType === "video" ? "Video call active" : "Voice call active");
+      ? (resolvedCallType === "video" ? "Video call ringing" : "Voice call ringing")
+      : (resolvedCallType === "video" ? "Video call — waiting for answer" : "Voice call — waiting for answer")
+    : (resolvedCallType === "video" ? "Video call active" : "Voice call active");
   const callBody = outgoingCallRinging
     ? outgoingDeviceAlertConfirmed
       ? `A device alert was sent to ${otherMemberDisplayName}. Waiting for an answer.`
       : `The call invite is ready. Waiting for ${otherMemberDisplayName} to answer in Chi'lly Chat.`
-    : thread?.activeCallType === "video"
+    : resolvedCallType === "video"
       ? "Chi'lly Chat video stays inside this direct thread so both people can join without leaving the conversation."
       : "Chi'lly Chat voice stays inside this direct thread so both people can join without leaving the conversation.";
   const callActionLabel = callBusy
@@ -1707,10 +1767,10 @@ export default function ChillyChatThreadScreen() {
         : outgoingCallRinging
           ? outgoingDeviceAlertConfirmed ? "Open Ringing Call" : "Open Call"
           : activeCallInvite?.status === "accepted"
-            ? thread?.activeCallType === "video"
+            ? resolvedCallType === "video"
               ? "Open Video Call"
               : "Open Voice Call"
-            : thread?.activeCallType === "video"
+            : resolvedCallType === "video"
               ? "Join Video Call"
               : "Join Voice Call";
 
@@ -2401,8 +2461,7 @@ export default function ChillyChatThreadScreen() {
           }
           terminalInvite = endedInvite;
         }
-        const isHost = !!callRoom?.hostUserId && callRoom.hostUserId === currentUserId;
-        if (!await finishTerminalInviteCleanup(terminalInvite, isHost, isCurrent)) return;
+        if (!await finishTerminalInviteCleanup(terminalInvite, isCurrent)) return;
         await loadThreadState();
         return;
       }
@@ -2655,10 +2714,16 @@ export default function ChillyChatThreadScreen() {
           status: "canceled",
         }).catch(() => null);
         if (!isCurrent()) return;
-        if (!canceledInvite) {
+        if (!canceledInvite || canceledInvite.status !== "canceled"
+          || canceledInvite.id !== terminalInvite.id || canceledInvite.threadId !== terminalInvite.threadId
+          || canceledInvite.communicationRoomId !== terminalInvite.communicationRoomId
+          || canceledInvite.callerUserId !== terminalInvite.callerUserId
+          || canceledInvite.calleeUserId !== terminalInvite.calleeUserId) {
           throw new Error("Unable to cancel the ringing call for the receiver. The call was left connected so you can try again.");
         }
         handledActiveTerminalInviteIdsRef.current.add(terminalInvite.id);
+        activeCallInviteRef.current = canceledInvite;
+        setActiveCallInvite(canceledInvite);
       } else if (terminalInvite.status === "accepted" && currentUserId) {
         const endedInvite = await updateChillyChatCallInviteStatus({
           actorUserId: currentUserId,
@@ -2666,7 +2731,11 @@ export default function ChillyChatThreadScreen() {
           status: "ended",
         }).catch(() => null);
         if (!isCurrent()) return;
-        if (!endedInvite) {
+        if (!endedInvite || endedInvite.status !== "ended"
+          || endedInvite.id !== terminalInvite.id || endedInvite.threadId !== terminalInvite.threadId
+          || endedInvite.communicationRoomId !== terminalInvite.communicationRoomId
+          || endedInvite.callerUserId !== terminalInvite.callerUserId
+          || endedInvite.calleeUserId !== terminalInvite.calleeUserId) {
           throw new Error("Unable to end the call for both participants. The call was left connected so you can try again.");
         }
         handledActiveTerminalInviteIdsRef.current.add(terminalInvite.id);
@@ -2675,7 +2744,9 @@ export default function ChillyChatThreadScreen() {
       } else if (!TERMINAL_CHAT_CALL_INVITE_STATUSES.has(terminalInvite.status)) {
         throw new Error("The active call is changing state. Wait a moment and try End Call again.");
       }
-      await leaveRoom({ endRoomIfHost: shouldEndRoomAsHost });
+      // Terminal invite authority has already closed the shared room. Only
+      // local/native resources and the exact membership still need settlement.
+      await leaveRoom({ endRoomIfHost: false });
       if (!isCurrent()) return;
       if (requestedNativeCallUuid) {
         const nativeEnded = await endIosNativeCall(requestedNativeCallUuid, "in_app_leave").catch(() => false);
@@ -3468,7 +3539,7 @@ export default function ChillyChatThreadScreen() {
             statusMessage={outgoingCallRinging ? null : callError}
             statusLabelOverride={outgoingCallRinging ? outgoingDeviceAlertConfirmed ? "Ringing" : "Calling" : null}
             participants={participants}
-            callType={thread?.activeCallType ?? null}
+            callType={resolvedCallType ?? null}
             cameraEnabled={cameraEnabled}
             micEnabled={micEnabled}
             mediaControlsBusy={mediaControlsBusy}

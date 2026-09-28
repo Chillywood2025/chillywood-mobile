@@ -1255,7 +1255,11 @@ function IosNativeCallsBridge() {
   const routerRef = useRef(router);
   useEffect(() => { routerRef.current = router; }, [router]);
   const inviteSubscriptionsRef = useRef(new Map<string, () => void>());
-  const nativeCallDescriptorsRef = useRef(new Map<string, { callUuid: string }>());
+  const nativeCallDescriptorsRef = useRef(new Map<string, {
+    callUuid: string;
+    reconcile(): Promise<void>;
+    dispose(): void;
+  }>());
   const activeNativeAuthorityKeyRef = useRef("");
 
   useEffect(() => {
@@ -1268,11 +1272,13 @@ function IosNativeCallsBridge() {
     });
 
     const clearInviteSubscription = (inviteId: string) => {
+      nativeCallDescriptorsRef.current.get(inviteId)?.dispose();
       inviteSubscriptionsRef.current.get(inviteId)?.();
       inviteSubscriptionsRef.current.delete(inviteId);
       nativeCallDescriptorsRef.current.delete(inviteId);
     };
     const clearInviteSubscriptions = () => {
+      nativeCallDescriptorsRef.current.forEach((descriptor) => descriptor.dispose());
       inviteSubscriptionsRef.current.forEach((unsubscribe) => unsubscribe());
       inviteSubscriptionsRef.current.clear();
       nativeCallDescriptorsRef.current.clear();
@@ -1304,24 +1310,64 @@ function IosNativeCallsBridge() {
       if (nativeCallDescriptorsRef.current.get(inviteId)?.callUuid === callUuid
         && inviteSubscriptionsRef.current.has(inviteId)) return;
       clearInviteSubscription(inviteId);
-      const descriptor = { callUuid };
-      nativeCallDescriptorsRef.current.set(inviteId, descriptor);
-
-      const reconcileInvite = async () => {
-        const invite = await readChillyChatCallInvite(inviteId).catch(() => null);
-        if (!active || !invite || nativeCallDescriptorsRef.current.get(inviteId) !== descriptor) return;
-        if (invite.status === "ringing" || invite.status === "accepted") return;
-        clearInviteSubscription(inviteId);
-        await reportIosNativeCallRemoteEnd(callUuid, `invite_${invite.status}`).catch(() => false);
+      let reconciling = false;
+      let refreshRequested = false;
+      let retryCount = 0;
+      let retryTimer: ReturnType<typeof setTimeout> | null = null;
+      const ownsPresentation = () => ownsAuthority()
+        && nativeCallDescriptorsRef.current.get(inviteId) === descriptor;
+      const descriptor = {
+        callUuid,
+        dispose: () => {
+          if (retryTimer !== null) clearTimeout(retryTimer);
+          retryTimer = null;
+        },
+        reconcile: async () => {
+          if (!ownsPresentation()) return;
+          if (reconciling) {
+            refreshRequested = true;
+            return;
+          }
+          descriptor.dispose();
+          reconciling = true;
+          refreshRequested = false;
+          let retryNeeded = false;
+          try {
+            const invite = await readChillyChatCallInvite(inviteId).catch(() => null);
+            if (!ownsPresentation()) return;
+            if (!invite) {
+              retryNeeded = true;
+              return;
+            }
+            if (invite.status === "ringing" || invite.status === "accepted") return;
+            // A terminal server row does not prove that CallKit dismissed its
+            // presentation. Retain this exact owner until native completion;
+            // transient bridge errors must remain retryable on activation.
+            await reportIosNativeCallRemoteEnd(callUuid, `invite_${invite.status}`).catch(() => false);
+            if (!ownsPresentation()) return;
+            // The native promise acknowledges dispatch to the main queue; the
+            // exact remoteEnded event below acknowledges presentation removal.
+            // A resolved dispatch without that event is still incomplete.
+            retryNeeded = true;
+          } finally {
+            reconciling = false;
+            if (ownsPresentation() && (retryNeeded || refreshRequested) && retryCount < 3) {
+              retryCount += 1;
+              retryTimer = setTimeout(() => { void descriptor.reconcile(); }, 400 * retryCount);
+            }
+          }
+        },
       };
+      nativeCallDescriptorsRef.current.set(inviteId, descriptor);
 
       inviteSubscriptionsRef.current.set(
         inviteId,
         subscribeToChillyChatCallInvite(inviteId, () => {
-          void reconcileInvite();
+          retryCount = 0;
+          void descriptor.reconcile();
         }),
       );
-      void reconcileInvite();
+      void descriptor.reconcile();
     };
 
     const routeNativeAnswer = createIosCallKitAnswerRouteHandler({
@@ -1345,7 +1391,14 @@ function IosNativeCallsBridge() {
       const inviteId = String(event.callInviteId ?? "").trim();
       const threadId = String(event.threadId ?? "").trim();
       if (!ownsAuthority() || !inviteId || !threadId) return false;
-      const actionKey = `${inviteId}:${status}`;
+      const callUuid = String(event.callUuid ?? "").trim();
+      const currentDescriptor = nativeCallDescriptorsRef.current.get(inviteId);
+      if (!callUuid || (currentDescriptor && currentDescriptor.callUuid !== callUuid)) return false;
+      const ownsNativeAction = () => {
+        const descriptor = nativeCallDescriptorsRef.current.get(inviteId);
+        return ownsAuthority() && (!descriptor || descriptor.callUuid === callUuid);
+      };
+      const actionKey = `${inviteId}:${callUuid}:${status}`;
       pendingNativeTerminalActions.set(actionKey, { event, status });
       if (nativeTerminalActionsInFlight.has(actionKey)) return false;
       nativeTerminalActionsInFlight.add(actionKey);
@@ -1353,20 +1406,26 @@ function IosNativeCallsBridge() {
       let settled = false;
       let settledRoomId: string | null = null;
       try {
-        for (let attempt = 0; ownsAuthority() && attempt < 3; attempt += 1) {
+        for (let attempt = 0; ownsNativeAction() && attempt < 3; attempt += 1) {
           const invite = await readChillyChatCallInvite(inviteId).catch(() => null);
-          if (!ownsAuthority()) return false;
+          if (!ownsNativeAction()) return false;
           if (!invite || invite.threadId !== threadId) break;
           settledRoomId = invite.communicationRoomId;
 
           const actorIsParticipant =
             invite.callerUserId === currentUserId
             || invite.calleeUserId === currentUserId;
-          const transitionAllowed = status === "declined"
+          // Failed native Answer can arrive before the server acceptance. The
+          // native presentation is already gone, so the callee must decline
+          // that still-ringing invite rather than leave a phantom callable row.
+          const transitionStatus = status === "ended" && invite.status === "ringing"
+            && invite.calleeUserId === currentUserId && invite.callerUserId !== currentUserId
+            ? "declined" : status;
+          const transitionAllowed = transitionStatus === "declined"
             ? invite.status === "ringing"
               && invite.calleeUserId === currentUserId
               && invite.callerUserId !== currentUserId
-            : status === "missed"
+            : transitionStatus === "missed"
               ? invite.status === "ringing" && actorIsParticipant
               : invite.status === "accepted" && actorIsParticipant;
           if (!transitionAllowed) {
@@ -1377,13 +1436,13 @@ function IosNativeCallsBridge() {
           const updated = await updateChillyChatCallInviteStatus({
             actorUserId: currentUserId,
             invite,
-            status,
+            status: transitionStatus,
           }).catch(() => null);
           // The server operation may finish after sign-out or account/session
           // replacement. Its result cannot authorize this retired bridge to
           // clear the replacement's thread or notification state.
-          if (!ownsAuthority()) return false;
-          if (updated?.status === status) {
+          if (!ownsNativeAction()) return false;
+          if (updated?.status === transitionStatus) {
             settled = true;
             break;
           }
@@ -1392,28 +1451,32 @@ function IosNativeCallsBridge() {
           }
         }
 
-        if (!settled || !ownsAuthority()) return false;
-        pendingNativeTerminalActions.delete(actionKey);
-        clearInviteSubscription(inviteId);
+        if (!settled || !ownsNativeAction()) return false;
         await clearEndedChatThreadCall(threadId, settledRoomId, authority).catch(() => null);
-        if (!ownsAuthority()) return false;
+        if (!ownsNativeAction()) return false;
         await dismissPresentedChillyChatCallNotifications({
           callInviteId: inviteId,
           exactInviteOnly: true,
           threadId,
         }).catch(() => 0);
-        if (!ownsAuthority()) return false;
+        if (!ownsNativeAction()) return false;
         await dismissChillyChatCallNotificationRows({
           callInviteId: inviteId,
           exactInviteOnly: true,
           threadId,
           userId: currentUserId,
         }).catch(() => 0);
-        if (!ownsAuthority()) return false;
-        await completeIosNativeCallTerminalTransition(String(event.callUuid ?? "").trim()).catch(() => false);
-        return ownsAuthority();
+        if (!ownsNativeAction()) return false;
+        const completed = await completeIosNativeCallTerminalTransition(String(event.callUuid ?? "").trim()).catch(() => false);
+        if (!ownsNativeAction() || !completed) return false;
+        pendingNativeTerminalActions.delete(actionKey);
+        if (nativeCallDescriptorsRef.current.get(inviteId)?.callUuid === String(event.callUuid ?? "").trim()) {
+          clearInviteSubscription(inviteId);
+        }
+        return true;
       } finally {
         nativeTerminalActionsInFlight.delete(actionKey);
+        if (!ownsNativeAction()) pendingNativeTerminalActions.delete(actionKey);
       }
     };
 
@@ -1425,6 +1488,7 @@ function IosNativeCallsBridge() {
       }
       if (event.type === "answerRequested") {
         const navigationReady = await waitForIosNativeCallAnswerRouteReadiness(event);
+        if (!ownsAuthority()) return;
         if (!navigationReady) {
           await completeIosNativeCallAnswer(String(event.callUuid ?? "").trim(), false).catch(() => false);
           return;
@@ -1461,7 +1525,10 @@ function IosNativeCallsBridge() {
         return;
       }
       if (event.type === "remoteEnded" || event.type === "reportFailed") {
-        clearInviteSubscription(String(event.callInviteId ?? "").trim());
+        const inviteId = String(event.callInviteId ?? "").trim();
+        if (nativeCallDescriptorsRef.current.get(inviteId)?.callUuid === String(event.callUuid ?? "").trim()) {
+          clearInviteSubscription(inviteId);
+        }
       }
     };
 
@@ -1475,16 +1542,7 @@ function IosNativeCallsBridge() {
       pendingNativeTerminalActions.forEach(({ event, status }) => {
         void settleNativeTerminalAction(event, status);
       });
-      nativeCallDescriptorsRef.current.forEach((descriptor, inviteId) => {
-        void readChillyChatCallInvite(inviteId)
-          .then((invite) => {
-            if (!active || nativeCallDescriptorsRef.current.get(inviteId) !== descriptor
-              || !invite || invite.status === "ringing" || invite.status === "accepted") return;
-            clearInviteSubscription(inviteId);
-            return reportIosNativeCallRemoteEnd(descriptor.callUuid, `activation_${invite.status}`);
-          })
-          .catch(() => null);
-      });
+      nativeCallDescriptorsRef.current.forEach((descriptor) => { void descriptor.reconcile(); });
     });
 
     return () => {

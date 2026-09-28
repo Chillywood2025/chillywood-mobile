@@ -122,7 +122,9 @@ const invariants = (candidate, candidateContract = contract) => {
   assert.match(candidate, /const bindingStillCurrent = sameCommittedAuthority\(committedSessionRef\.current, binding\)/u);
   assert.match(cleanupSlice, /if \(replacementReusesDurableAuthority\) return null;/u);
   assert.match(cleanupSlice, /const endContext = currentDurableContext\(\);/u);
-  assert.match(cleanupSlice, /const leaveContext = currentDurableContext\(\);/u);
+  assert.match(cleanupSlice, /const durableLeaveContext = currentDurableContext\(\);/u);
+  assert.match(cleanupSlice, /sameCommittedAuthority\(committedSessionRef\.current, binding\)[\s\S]{0,150}binding\.membershipGeneration/u);
+  assert.match(cleanupSlice, /expectedMembershipGeneration: binding\.membershipGeneration/u);
   assert.ok(
     cleanupSlice.indexOf("await liveKitRoom.disconnect") < cleanupSlice.indexOf("const endContext = currentDurableContext();"),
     "cleanup revalidates durable authority after native shutdown",
@@ -316,8 +318,8 @@ const mutants = [
     "    activateCommittedSession,\n    allowBackgroundAudio,\n    authenticatedUserId,",
   )],
   ["STALE_CLEANUP_REUSES_DURABLE_SNAPSHOT", (value) => value.replace(
-    "const leaveContext = currentDurableContext();",
-    "const leaveContext = endContext;",
+    "const durableLeaveContext = currentDurableContext();",
+    "const durableLeaveContext = endContext;",
   )],
   ["INITIAL_CONVERGENCE_FAILURE_MARKS_LIVE", (value) => value.replace(
     "if (!initialMembership) {",
