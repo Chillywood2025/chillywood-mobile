@@ -25,7 +25,11 @@ const wait = async (page, predicate, description, timeout = 20_000) => {
   }
   throw new Error(`${description}\n${JSON.stringify(state, null, 2)}`);
 };
-const media = (endpoint, kind) => endpoint.stats.filter((report) => report.kind === kind).reduce((sum, report) => sum + (kind === "video" ? report.frames : Number.isFinite(report.energy) ? report.energy : Number.NaN), 0);
+const receivedAudio = (endpoint) => endpoint.audioReceivers.filter((receiver) => receiver.connection === "connected");
+const pcmValue = (endpoint, name) => receivedAudio(endpoint).reduce((sum, receiver) => sum + (!receiver.error && Number.isFinite(receiver[name]) ? receiver[name] : Number.NaN), 0);
+const audioSamples = (endpoint) => pcmValue(endpoint, "pcmSamples");
+const audioPackets = (endpoint) => endpoint.stats.filter((report) => report.kind === "audio").reduce((sum, report) => sum + report.packets, 0);
+const media = (endpoint, kind) => kind === "audio" ? pcmValue(endpoint, "pcmEnergy") : endpoint.stats.filter((report) => report.kind === kind).reduce((sum, report) => sum + report.frames, 0);
 const hasColor = (endpoint) => endpoint.pixels.some((frame) => frame.brightness > 20);
 try {
   browser = await chromium.launch({ headless: true, executablePath: process.env.CHILLY_CHAT_CHROMIUM_PATH || undefined, args: ["--no-sandbox", "--autoplay-policy=no-user-gesture-required", "--allow-loopback-in-peer-connection"] });
@@ -41,7 +45,7 @@ try {
   };
   const { context, page } = await run();
   try {
-    const first = await wait(page, (state) => state.endpoints.length === 2 && state.endpoints.every((endpoint) => endpoint.channelState === "live" && endpoint.peers.some((peer) => peer.connection === "connected") && media(endpoint, "video") > 5 && media(endpoint, "audio") > 0 && hasColor(endpoint)), "Both real peers must negotiate and receive decoded video and nonzero audio energy");
+    const first = await wait(page, (state) => state.endpoints.length === 2 && state.endpoints.every((endpoint) => endpoint.channelState === "live" && endpoint.peers.some((peer) => peer.connection === "connected") && media(endpoint, "video") > 5 && media(endpoint, "audio") > 0 && audioSamples(endpoint) > 2048 && audioPackets(endpoint) > 0 && hasColor(endpoint)), "Both real peers must negotiate and receive decoded video and nonzero received PCM audio energy");
     await wait(page, (state) => state.endpoints.every((endpoint, index) => endpoint.pixels.some((frame) => frame.fingerprint !== first.endpoints[index].pixels[0]?.fingerprint)), "Received pixels must change on both endpoints, not merely repeat a frozen frame");
     for (const userId of ["alice", "bob"]) {
       for (let cycle = 0; cycle < 3; cycle += 1) {
@@ -54,6 +58,8 @@ try {
         await new Promise((resolve) => setTimeout(resolve, 300));
         const silentEnd = await page.evaluate(() => window.__pairedCall.read());
         const remoteIndex = silentEnd.endpoints.findIndex((endpoint) => endpoint.userId !== userId);
+        assert.ok(audioSamples(silentEnd.endpoints[remoteIndex]) > audioSamples(silentStart.endpoints[remoteIndex]), `${userId} mute must keep receiving measured PCM samples; missing audio is not silence`);
+        assert.ok(audioPackets(silentEnd.endpoints[remoteIndex]) > audioPackets(silentStart.endpoints[remoteIndex]), `${userId} mute must keep receiving actual audio RTP packets`);
         assert.ok(media(silentEnd.endpoints[remoteIndex], "audio") - media(silentStart.endpoints[remoteIndex], "audio") < 0.0001, `${userId} mute must stop received synthetic audio energy`);
         assert.equal(await page.evaluate((id) => window.__pairedCall.control(id, "setMicrophoneEnabled", true), userId), true, `${userId} unmute`);
         assert.equal(await page.evaluate((id) => window.__pairedCall.control(id, "toggleCamera"), userId), true, `${userId} camera off`);
@@ -64,7 +70,7 @@ try {
         }, `${userId} camera-off must actually remove the picture at the receiving endpoint`);
         assert.equal(await page.evaluate((id) => window.__pairedCall.control(id, "toggleCamera"), userId), true, `${userId} camera on`);
         const baseline = await page.evaluate(() => window.__pairedCall.read());
-        await wait(page, (state) => state.endpoints.every((endpoint, index) => media(endpoint, "video") > media(baseline.endpoints[index], "video") + 3 && media(endpoint, "audio") > media(baseline.endpoints[index], "audio") && hasColor(endpoint) && endpoint.peers.filter((peer) => peer.connection === "connected").length === 1), `${userId} cycle ${cycle + 1} must preserve real received media and one peer`);
+        await wait(page, (state) => state.endpoints.every((endpoint, index) => media(endpoint, "video") > media(baseline.endpoints[index], "video") + 3 && media(endpoint, "audio") > media(baseline.endpoints[index], "audio") && audioSamples(endpoint) > audioSamples(baseline.endpoints[index]) && hasColor(endpoint) && endpoint.peers.filter((peer) => peer.connection === "connected").length === 1), `${userId} cycle ${cycle + 1} must preserve real received media and one peer`);
       }
     }
     const beforeRestart = await page.evaluate(() => window.__pairedCall.read());
@@ -93,13 +99,15 @@ try {
           && endpoint.peers.filter((peer) => peer.connection === "connected" && peer.signaling === "stable" && !oldPeerIds.includes(peer.id)).length === 1
           && endpoint.peers.filter((peer) => oldPeerIds.includes(peer.id)).every((peer) => peer.connection === "closed")
           && endpoint.stats.every((report) => !oldPeerIds.includes(report.peerId))
+          && receivedAudio(endpoint).every((receiver) => !oldPeerIds.includes(receiver.peerId))
           && endpoint.pixels.every((frame) => !oldPeerIds.includes(frame.peerId))
-          && media(endpoint, "video") > 5 && media(endpoint, "audio") > 0 && hasColor(endpoint));
+          && media(endpoint, "video") > 5 && media(endpoint, "audio") > 0 && audioSamples(endpoint) > 2048 && audioPackets(endpoint) > 0 && hasColor(endpoint));
     }, "Same-room Bob app restart must retire old resources and make unchanged Alice receive real media through a new peer");
     const advanced = await wait(page, (state) => state.endpoints.every((endpoint) => {
       const baseline = restarted.endpoints.find((candidate) => candidate.instanceId === endpoint.instanceId);
       return baseline && media(endpoint, "video") > media(baseline, "video") + 3
         && media(endpoint, "audio") > media(baseline, "audio")
+        && audioSamples(endpoint) > audioSamples(baseline)
         && endpoint.pixels.some((frame) => frame.fingerprint !== baseline.pixels[0]?.fingerprint);
     }), "Replacement peers must receive advancing audio, decoded frames, and changing pixels independently of retired statistics");
     const aliceBeforeOldPacket = advanced.endpoints.find((endpoint) => endpoint.userId === "alice");
@@ -109,17 +117,17 @@ try {
     assert.deepEqual(afterOldPacket.errors, []);
     const aliceAfterOldPacket = afterOldPacket.endpoints.find((endpoint) => endpoint.userId === "alice");
     assert.deepEqual(aliceAfterOldPacket.peers.map(({ id, remoteDescriptionApplications }) => ({ id, remoteDescriptionApplications })), aliceBeforeOldPacket.peers.map(({ id, remoteDescriptionApplications }) => ({ id, remoteDescriptionApplications })), "Old-generation SDP must neither create a peer nor reach setRemoteDescription after the replacement is authoritative");
-    assert.ok(media(aliceAfterOldPacket, "video") > media(aliceBeforeOldPacket, "video") && media(aliceAfterOldPacket, "audio") > media(aliceBeforeOldPacket, "audio"), "Alice must keep receiving actual replacement media after dropping the stale offer");
+    assert.ok(media(aliceAfterOldPacket, "video") > media(aliceBeforeOldPacket, "video") && media(aliceAfterOldPacket, "audio") > media(aliceBeforeOldPacket, "audio") && audioSamples(aliceAfterOldPacket) > audioSamples(aliceBeforeOldPacket), "Alice must keep receiving actual replacement media after dropping the stale offer");
     console.log("PASS: same-room one-endpoint app restart, new-peer received media, retired resources, and delayed old-generation SDP rejection");
     const beforeEnd = await page.evaluate(() => window.__pairedCall.read());
     assert.ok(beforeEnd.events.some((event) => event.kind === "presence-leave" && event.remaining > 0), "exercise real SDK metadata-replacement leave events");
     await page.evaluate(() => window.__pairedCall.end());
     await wait(page, (state) => state.endpoints.every((endpoint) => endpoint.peers.every((peer) => peer.connection === "closed") && endpoint.tracks.every((track) => track.state === "ended")), "End must close actual peers and end every acquired track");
-    console.log("PASS: real two-hook offer/answer, changing received video pixels/audio energy, six silence/black-frame/restoration cycles, projection, and cleanup");
+    console.log("PASS: real two-hook offer/answer, changing received video pixels/PCM audio energy, six measured silence/black-frame/restoration cycles, projection, and cleanup");
     await page.evaluate(() => window.__pairedCall.freshCall());
-    await wait(page, (state) => state.endpoints.length === 2 && state.endpoints.every((endpoint) => endpoint.peers.filter((peer) => peer.connection === "connected").length === 1 && media(endpoint, "video") > 5 && media(endpoint, "audio") > 0 && hasColor(endpoint)), "A fresh call must receive media after prior End in the same mounted hooks and browser context");
+    await wait(page, (state) => state.endpoints.length === 2 && state.endpoints.every((endpoint) => endpoint.peers.filter((peer) => peer.connection === "connected").length === 1 && media(endpoint, "video") > 5 && media(endpoint, "audio") > 0 && audioSamples(endpoint) > 2048 && audioPackets(endpoint) > 0 && hasColor(endpoint)), "A fresh call must receive media after prior End in the same mounted hooks and browser context");
     const freshBaseline = await page.evaluate(() => window.__pairedCall.read());
-    await wait(page, (state) => state.endpoints.every((endpoint, index) => media(endpoint, "video") > media(freshBaseline.endpoints[index], "video") + 3 && media(endpoint, "audio") > media(freshBaseline.endpoints[index], "audio")), "Fresh-call received counters must advance independently of retired peer statistics");
+    await wait(page, (state) => state.endpoints.every((endpoint, index) => media(endpoint, "video") > media(freshBaseline.endpoints[index], "video") + 3 && media(endpoint, "audio") > media(freshBaseline.endpoints[index], "audio") && audioSamples(endpoint) > audioSamples(freshBaseline.endpoints[index])), "Fresh-call received counters must advance independently of retired peer statistics");
     await page.evaluate(() => window.__pairedCall.end());
     await wait(page, (state) => state.endpoints.every((endpoint) => endpoint.peers.every((peer) => peer.connection === "closed") && endpoint.tracks.every((track) => track.state === "ended")), "Fresh-call cleanup must also retire all resources");
     console.log("PASS: fresh call in the same mounted hooks/context after completed cleanup");

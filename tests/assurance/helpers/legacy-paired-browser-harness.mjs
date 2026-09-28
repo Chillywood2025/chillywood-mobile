@@ -14,12 +14,45 @@ const ts = require("typescript");
 export function createLegacyBrowserAudioReceiver(track) {
   const context = new AudioContext();
   const source = context.createMediaStreamSource(new MediaStream([track]));
-  const output = context.createGain();
-  // Pull actual decoded remote audio without making the test tone audible.
-  // RTP packet arrival alone does not start Chromium's audio playout path.
-  output.gain.value = 0;
-  source.connect(output); output.connect(context.destination);
-  return { context, source, output, ready: context.resume() };
+  const receiver = { context, source, meter: null, samples: null, energy: null, error: null, ready: null };
+  const moduleUrl = URL.createObjectURL(new Blob([`
+    class ReceivedAudioMeter extends AudioWorkletProcessor {
+      constructor() { super(); this.samples = 0; this.energy = 0; this.lastReport = 0; }
+      process(inputs) {
+        const channels = inputs[0];
+        if (channels?.length && channels[0].length) {
+          let squaredSamples = 0;
+          for (const channel of channels) for (const sample of channel) squaredSamples += sample * sample;
+          this.samples += channels[0].length;
+          this.energy += squaredSamples / (sampleRate * channels.length);
+          if (this.samples - this.lastReport >= 2048) {
+            this.port.postMessage({ samples: this.samples, energy: this.energy });
+            this.lastReport = this.samples;
+          }
+        }
+        // Outputs remain zero. Only actual input PCM contributes observations;
+        // disconnected/missing input never advances the input sample count.
+        return true;
+      }
+    }
+    registerProcessor('chilly-received-audio-meter', ReceivedAudioMeter);
+  `], { type: "text/javascript" }));
+  receiver.ready = (async () => {
+    try { await context.audioWorklet.addModule(moduleUrl); }
+    finally { URL.revokeObjectURL(moduleUrl); }
+    const meter = new AudioWorkletNode(context, "chilly-received-audio-meter", { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+    receiver.meter = meter;
+    meter.port.onmessage = ({ data }) => {
+      if (!Number.isSafeInteger(data.samples) || data.samples < 0 || !Number.isFinite(data.energy) || data.energy < 0) {
+        receiver.error = "Invalid received PCM observation"; return;
+      }
+      receiver.samples = data.samples; receiver.energy = data.energy;
+    };
+    meter.onprocessorerror = () => { receiver.error = "Received PCM processor failed"; };
+    source.connect(meter); meter.connect(context.destination);
+    await context.resume();
+  })();
+  return receiver;
 }
 
 // The browser uses this same store as the offline adapter contract checks.
@@ -276,7 +309,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
             if (event.track.kind === "audio") {
               const receiver = audioReceiverFactory(event.track);
               endpoint.audioContexts.push(receiver.context);
-              endpoint.receivedAudio.push({ peer: this, track: event.track, ...receiver });
+              endpoint.receivedAudio.push({ peer: this, track: event.track, receiver });
               void receiver.ready.catch((error) => hub.errors.push(`Receiver audio playout: ${error}`));
               return;
             }
@@ -399,7 +432,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
   const resources = (endpoint) => ({
     peers: endpoint.peers.map((peer) => ({ id: peer.fixturePeerId, connection: peer.connectionState, signaling: peer.signalingState, gathering: peer.iceGatheringState, localType: peer.localDescription?.type, remoteType: peer.remoteDescription?.type, remoteDescriptionApplications: peer.remoteDescriptionApplications, senders: peer.getSenders().map((sender) => sender.track?.kind ?? "none") })),
     tracks: endpoint.streams.flatMap((stream) => stream.getTracks().map((item) => ({ kind: item.kind, state: item.readyState, enabled: item.enabled }))),
-    audioReceivers: endpoint.receivedAudio.map(({ peer, track, context }) => ({ peerId: peer.fixturePeerId, contextState: context.state, trackState: track.readyState, trackEnabled: track.enabled })),
+    audioReceivers: endpoint.receivedAudio.map(({ peer, track, receiver }) => ({ peerId: peer.fixturePeerId, connection: peer.connectionState, contextState: receiver.context.state, trackState: track.readyState, trackEnabled: track.enabled, pcmSamples: receiver.samples, pcmEnergy: receiver.energy, error: receiver.error })),
   });
   window.__pairedCall = {
     async start({ dropAnswers = false } = {}) { hub.dropAnswers = dropAnswers; createEndpoint("alice"); createEndpoint("bob"); await delay(0); },
