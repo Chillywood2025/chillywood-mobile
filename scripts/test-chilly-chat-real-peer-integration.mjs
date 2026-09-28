@@ -14,12 +14,12 @@ const server = http.createServer((request, response) => {
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 let browser;
-const wait = async (page, predicate, description, timeout = 20_000) => {
+const wait = async (page, predicate, description, timeout = 20_000, read = () => window.__pairedCall.read()) => {
   const deadline = Date.now() + timeout;
   let state;
   while (Date.now() < deadline) {
-    state = await page.evaluate(() => window.__pairedCall.read());
-    assert.deepEqual(state.errors, [], `production hook must not throw in browser\n${JSON.stringify(state, null, 2)}`);
+    state = await page.evaluate(read);
+    assert.deepEqual(state.errors, [], `browser fixture must not throw\n${JSON.stringify(state, null, 2)}`);
     if (predicate(state)) return state;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
@@ -34,14 +34,44 @@ const hasColor = (endpoint) => endpoint.pixels.some((frame) => frame.brightness 
 try {
   browser = await chromium.launch({ headless: true, executablePath: process.env.CHILLY_CHAT_CHROMIUM_PATH || undefined, args: ["--no-sandbox", "--autoplay-policy=no-user-gesture-required", "--allow-loopback-in-peer-connection"] });
   console.log(`Real peer integration: Chromium ${browser.version()}, production hooks, synthetic local capture, in-memory signaling adapter`);
-  const run = async (dropAnswers = false) => {
+  const createPage = async () => {
     const context = await browser.newContext();
     await context.route("**/*", (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
     const page = await context.newPage();
     page.on("pageerror", (error) => { console.error(error); });
     await page.goto(origin);
-    await page.evaluate((drop) => window.__pairedCall.start({ dropAnswers: drop }), dropAnswers);
     return { context, page };
+  };
+  const audioControl = await createPage();
+  try {
+    await audioControl.page.evaluate(() => window.__pairedCall.startAudioControl());
+    const read = () => window.__pairedAudioControl.read();
+    const controlPackets = (state) => state.receiverStats.filter((report) => report.type === "inbound-rtp").reduce((sum, report) => sum + (report.packetsReceived ?? 0), 0);
+    const first = await wait(audioControl.page, (state) => state.senderConnection === "connected" && state.receiverConnection === "connected"
+      && state.received?.pcmSamples > 2048 && state.received.pcmEnergy > 0 && !state.received.error
+      && !state.received.playbackPaused && state.received.playbackReadyState >= 2 && controlPackets(state) > 0,
+    "Independent native two-peer audio control must receive actual RTP and nonzero remote-track PCM before testing production hooks", 20_000, read);
+    console.log(`Audio control initial diagnostics: ${JSON.stringify(first)}`);
+    await audioControl.page.evaluate(() => window.__pairedAudioControl.setEnabled(false));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const silentStart = await audioControl.page.evaluate(read);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const silentEnd = await audioControl.page.evaluate(read);
+    assert.ok(silentEnd.received.pcmSamples > silentStart.received.pcmSamples && controlPackets(silentEnd) > controlPackets(silentStart), "Independent disabled-track control must keep receiving actual RTP and measured input samples");
+    assert.ok(silentEnd.received.pcmEnergy - silentStart.received.pcmEnergy < 0.0001, "Independent disabled-track control must receive silence");
+    await audioControl.page.evaluate(() => window.__pairedAudioControl.setEnabled(true));
+    await wait(audioControl.page, (state) => state.received?.pcmSamples > silentEnd.received.pcmSamples
+      && state.received.pcmEnergy > silentEnd.received.pcmEnergy && controlPackets(state) > controlPackets(silentEnd),
+    "Independent re-enabled track must restore received PCM energy", 20_000, read);
+    console.log("PASS: independent native two-peer audio, received-track PCM, disabled-track silence, and restored audio");
+  } finally {
+    await audioControl.page.evaluate(async () => { await window.__pairedAudioControl?.dispose(); });
+    await audioControl.context.close();
+  }
+  const run = async (dropAnswers = false) => {
+    const result = await createPage();
+    await result.page.evaluate((drop) => window.__pairedCall.start({ dropAnswers: drop }), dropAnswers);
+    return result;
   };
   const { context, page } = await run();
   try {

@@ -11,10 +11,23 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
 
+export async function createLegacyBrowserAudioSource(frequency) {
+  const context = new AudioContext(); await context.resume();
+  const oscillator = context.createOscillator(); oscillator.frequency.value = frequency;
+  const destination = context.createMediaStreamDestination();
+  oscillator.connect(destination); oscillator.start();
+  return { context, oscillator, stream: destination.stream, track: destination.stream.getAudioTracks()[0] };
+}
+
 export function createLegacyBrowserAudioReceiver(track) {
   const context = new AudioContext();
   const source = context.createMediaStreamSource(new MediaStream([track]));
-  const receiver = { context, source, meter: null, samples: null, energy: null, error: null, ready: null };
+  // An actual media element consumes the remote WebRTC playout stream. The
+  // separate worklet measures only this received track, before device muting.
+  const playback = document.createElement("audio");
+  playback.autoplay = true; playback.muted = false;
+  playback.srcObject = new MediaStream([track]); document.body.appendChild(playback);
+  const receiver = { context, source, playback, meter: null, samples: null, energy: null, error: null, ready: null };
   const moduleUrl = URL.createObjectURL(new Blob([`
     class ReceivedAudioMeter extends AudioWorkletProcessor {
       constructor() { super(); this.samples = 0; this.energy = 0; this.lastReport = 0; }
@@ -50,9 +63,63 @@ export function createLegacyBrowserAudioReceiver(track) {
     };
     meter.onprocessorerror = () => { receiver.error = "Received PCM processor failed"; };
     source.connect(meter); meter.connect(context.destination);
-    await context.resume();
+    await Promise.all([context.resume(), playback.play()]);
   })();
+  receiver.dispose = async () => {
+    playback.pause(); playback.srcObject = null; playback.remove();
+    source.disconnect(); receiver.meter?.disconnect();
+    if (context.state !== "closed") await context.close();
+  };
   return receiver;
+}
+
+export async function createLegacyBrowserAudioControl({ audioSourceFactory, audioReceiverFactory }) {
+  const sender = new RTCPeerConnection({ iceServers: [] });
+  const receiver = new RTCPeerConnection({ iceServers: [] });
+  const source = await audioSourceFactory(550);
+  const errors = [], toSender = [], toReceiver = [];
+  let received = null, receivedTrack = null;
+  const recordError = (error) => errors.push(String(error.stack ?? error));
+  const forward = (target, queued, candidate) => {
+    if (!candidate) return;
+    if (!target.remoteDescription) queued.push(candidate);
+    else void target.addIceCandidate(candidate).catch(recordError);
+  };
+  sender.addEventListener("icecandidate", ({ candidate }) => forward(receiver, toReceiver, candidate));
+  receiver.addEventListener("icecandidate", ({ candidate }) => forward(sender, toSender, candidate));
+  receiver.addEventListener("track", ({ track }) => {
+    if (track.kind !== "audio") return;
+    receivedTrack = track; received = audioReceiverFactory(track);
+    void received.ready.catch(recordError);
+  });
+  sender.addTrack(source.track, source.stream);
+  const reports = async (peer) => [...(await peer.getStats()).values()]
+    .filter((report) => ["media-source", "outbound-rtp", "inbound-rtp"].includes(report.type) && report.kind === "audio")
+    .map((report) => ({ type: report.type, packetsSent: report.packetsSent ?? null, bytesSent: report.bytesSent ?? null, packetsReceived: report.packetsReceived ?? null, bytesReceived: report.bytesReceived ?? null, energy: Number.isFinite(report.totalAudioEnergy) ? report.totalAudioEnergy : null, samples: Number.isFinite(report.totalSamplesReceived) ? report.totalSamplesReceived : null, samplesDuration: Number.isFinite(report.totalSamplesDuration) ? report.totalSamplesDuration : null }));
+  const control = {
+    setEnabled(enabled) { source.track.enabled = enabled; },
+    async read() {
+      return {
+        errors: [...errors], senderConnection: sender.connectionState, receiverConnection: receiver.connectionState,
+        senderTrack: { enabled: source.track.enabled, state: source.track.readyState, contextState: source.context.state },
+        received: received && { trackState: receivedTrack.readyState, trackEnabled: receivedTrack.enabled, contextState: received.context.state, playbackPaused: received.playback.paused, playbackReadyState: received.playback.readyState, pcmSamples: received.samples, pcmEnergy: received.energy, error: received.error },
+        senderStats: await reports(sender), receiverStats: await reports(receiver),
+      };
+    },
+    async dispose() {
+      sender.close(); receiver.close(); source.track.stop(); source.oscillator.stop();
+      await received?.dispose(); await source.context.close();
+    },
+  };
+  try {
+    await sender.setLocalDescription(await sender.createOffer());
+    await receiver.setRemoteDescription(sender.localDescription);
+    for (const candidate of toReceiver.splice(0)) await receiver.addIceCandidate(candidate);
+    await receiver.setLocalDescription(await receiver.createAnswer());
+    await sender.setRemoteDescription(receiver.localDescription);
+    for (const candidate of toSender.splice(0)) await sender.addIceCandidate(candidate);
+    return control;
+  } catch (error) { await control.dispose(); throw error; }
 }
 
 // The browser uses this same store as the offline adapter contract checks.
@@ -198,11 +265,11 @@ export function buildLegacyPairedBrowserBundle({ sourceRoot = process.cwd() } = 
     const membershipAdmission = require('membership-admission');
     const accountBoundRpc = require('./accountBoundSupabaseRpc.mjs');
     const hookSource = ${JSON.stringify(hook)};
-    (${installLegacyPairedBrowser.toString()})({React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, membershipStoreFactory: (${createLegacyBrowserMembershipStore.toString()}), audioReceiverFactory: (${createLegacyBrowserAudioReceiver.toString()})});
+    (${installLegacyPairedBrowser.toString()})({React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, membershipStoreFactory: (${createLegacyBrowserMembershipStore.toString()}), audioSourceFactory: (${createLegacyBrowserAudioSource.toString()}), audioReceiverFactory: (${createLegacyBrowserAudioReceiver.toString()}), audioControlFactory: (${createLegacyBrowserAudioControl.toString()})});
   })();`;
 }
 
-function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, membershipStoreFactory, audioReceiverFactory }) {
+function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, membershipStoreFactory, audioSourceFactory, audioReceiverFactory, audioControlFactory }) {
   const clone = (value) => structuredClone(value);
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const granted = { granted: true, canAskAgain: true, status: "granted" };
@@ -339,11 +406,8 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
         canvas.captureStream(25).getVideoTracks().forEach((track) => stream.addTrack(track));
       }
       if (audio) {
-        const audioContext = new AudioContext(); await audioContext.resume();
-        const oscillator = audioContext.createOscillator(); oscillator.frequency.value = userId === "alice" ? 440 : 660;
-        const destination = audioContext.createMediaStreamDestination(); oscillator.connect(destination); oscillator.start();
-        destination.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
-        endpoint.audioContexts.push(audioContext);
+        const source = await audioSourceFactory(userId === "alice" ? 440 : 660);
+        stream.addTrack(source.track); endpoint.audioContexts.push(source.context);
       }
       endpoint.streams.push(stream);
       return stream;
@@ -410,13 +474,14 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     return endpoint;
   }
   const stats = async (endpoint) => {
-    const reports = [];
+    const reports = [], outgoingAudio = [];
     for (const peer of endpoint.peers.filter((candidate) => candidate.connectionState === "connected")) {
       for (const report of (await peer.getStats()).values()) {
         if (report.type === "inbound-rtp" && !report.isRemote) reports.push({ peerId: peer.fixturePeerId, kind: report.kind, bytes: report.bytesReceived ?? 0, packets: report.packetsReceived ?? 0, frames: report.framesDecoded ?? 0, energy: Number.isFinite(report.totalAudioEnergy) ? report.totalAudioEnergy : null, samples: Number.isFinite(report.totalSamplesReceived) ? report.totalSamplesReceived : null, samplesDuration: Number.isFinite(report.totalSamplesDuration) ? report.totalSamplesDuration : null });
+        if (["media-source", "outbound-rtp"].includes(report.type) && report.kind === "audio") outgoingAudio.push({ peerId: peer.fixturePeerId, type: report.type, packets: report.packetsSent ?? null, bytes: report.bytesSent ?? null, energy: Number.isFinite(report.totalAudioEnergy) ? report.totalAudioEnergy : null, samplesDuration: Number.isFinite(report.totalSamplesDuration) ? report.totalSamplesDuration : null });
       }
     }
-    return reports;
+    return { stats: reports, outgoingAudio };
   };
   const receivedPixels = (endpoint) => endpoint.receivedVideos.filter(({ peer, video }) => peer.connectionState !== "closed" && video.readyState >= 2).map(({ peer, video, canvas }) => {
     const context = canvas.getContext("2d", { willReadFrequently: true });
@@ -432,9 +497,10 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
   const resources = (endpoint) => ({
     peers: endpoint.peers.map((peer) => ({ id: peer.fixturePeerId, connection: peer.connectionState, signaling: peer.signalingState, gathering: peer.iceGatheringState, localType: peer.localDescription?.type, remoteType: peer.remoteDescription?.type, remoteDescriptionApplications: peer.remoteDescriptionApplications, senders: peer.getSenders().map((sender) => sender.track?.kind ?? "none") })),
     tracks: endpoint.streams.flatMap((stream) => stream.getTracks().map((item) => ({ kind: item.kind, state: item.readyState, enabled: item.enabled }))),
-    audioReceivers: endpoint.receivedAudio.map(({ peer, track, receiver }) => ({ peerId: peer.fixturePeerId, connection: peer.connectionState, contextState: receiver.context.state, trackState: track.readyState, trackEnabled: track.enabled, pcmSamples: receiver.samples, pcmEnergy: receiver.energy, error: receiver.error })),
+    audioReceivers: endpoint.receivedAudio.map(({ peer, track, receiver }) => ({ peerId: peer.fixturePeerId, connection: peer.connectionState, contextState: receiver.context.state, trackState: track.readyState, trackEnabled: track.enabled, playbackPaused: receiver.playback.paused, playbackReadyState: receiver.playback.readyState, pcmSamples: receiver.samples, pcmEnergy: receiver.energy, error: receiver.error })),
   });
   window.__pairedCall = {
+    async startAudioControl() { window.__pairedAudioControl = await audioControlFactory({ audioSourceFactory, audioReceiverFactory }); },
     async start({ dropAnswers = false } = {}) { hub.dropAnswers = dropAnswers; createEndpoint("alice"); createEndpoint("bob"); await delay(0); },
     holdNextSignal(userId, event) {
       if (hub.holdNext) throw new Error("A signal hold is already armed");
@@ -483,11 +549,11 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     },
     async read() { return { roomId: hub.roomId, errors: [...hub.errors], events: clone(hub.events), heldSignals: hub.heldSignals.map(({ message, sender }) => ({ event: message.event, sender: sender.userId, generation: message.payload.membershipGeneration })), retiredEndpoints: hub.retiredEndpoints.map((endpoint) => ({ userId: endpoint.userId, instanceId: endpoint.instanceId, pendingControl: clone(endpoint.pendingControl), ...resources(endpoint) })), endpoints: await Promise.all(hub.endpoints.map(async (endpoint) => ({
       userId: endpoint.userId, instanceId: endpoint.instanceId, membership: membershipStore.read({ roomId: hub.roomId, userId: endpoint.userId }), channelState: endpoint.output?.channelState, error: endpoint.output?.error, micEnabled: endpoint.output?.micEnabled, cameraEnabled: endpoint.output?.cameraEnabled,
-      participants: endpoint.output?.participants?.map(({ streamURL: _url, ...rest }) => rest), stats: await stats(endpoint), pixels: receivedPixels(endpoint),
+      participants: endpoint.output?.participants?.map(({ streamURL: _url, ...rest }) => rest), ...await stats(endpoint), pixels: receivedPixels(endpoint),
       ...resources(endpoint),
     }))) }; },
     async control(userId, name, value) { const endpoint = hub.endpoints.find((item) => item.userId === userId); if (!endpoint?.output || typeof endpoint.output[name] !== "function") throw new Error(`Missing control ${name}`); return endpoint.output[name](value); },
     async end() { await Promise.all(hub.endpoints.map((endpoint) => endpoint.output.leaveRoom())); },
-    async dispose() { for (const endpoint of [...hub.endpoints, ...hub.retiredEndpoints]) { if (endpoint.mounted) endpoint.root.unmount(); endpoint.mounted = false; endpoint.drawTimers.forEach(clearInterval); endpoint.streams.forEach((stream) => stream.getTracks().forEach((item) => item.stop())); endpoint.peers.forEach((peer) => peer.close()); for (const context of endpoint.audioContexts) await context.close(); } },
+    async dispose() { for (const endpoint of [...hub.endpoints, ...hub.retiredEndpoints]) { if (endpoint.mounted) endpoint.root.unmount(); endpoint.mounted = false; endpoint.drawTimers.forEach(clearInterval); endpoint.streams.forEach((stream) => stream.getTracks().forEach((item) => item.stop())); endpoint.peers.forEach((peer) => peer.close()); for (const { receiver } of endpoint.receivedAudio) await receiver.dispose(); for (const context of endpoint.audioContexts) if (context.state !== "closed") await context.close(); } },
   };
 }
