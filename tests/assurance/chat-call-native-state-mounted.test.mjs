@@ -108,6 +108,15 @@ test("legacy End retires background Answer while foreground permission read is p
   assert.equal(runtime.captureRequests.some(request => request.audio), false);
 });
 
+test("legacy deferred background Answer respects a newer muted media preference", async t => {
+  const { runtime, h } = await start(t, { video: false, initialAppState: "background" });
+  await h.rerender({ initialMediaPreferences: { micEnabled: false, cameraEnabled: false } });
+  await h.run(() => runtime.emitAppState("active"));
+  assert.equal(h.getResult().micEnabled, false, "new muted preference retires old deferred intent");
+  assert.equal(live(runtime, "audio").length, 0);
+  assert.equal(runtime.durableMic, false);
+});
+
 for (const kind of ["microphone", "camera"]) {
   test(`legacy natural lifecycle: ${kind} denial, Settings grant, and explicit recovery preserve ownership`, async t => {
     const { runtime, h } = await start(t, { [kind === "microphone" ? "microphonePermission" : "cameraPermission"]: denied() });

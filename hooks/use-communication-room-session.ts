@@ -634,6 +634,8 @@ export function useCommunicationRoomSession({
       setCameraEnabled(initialMediaPreferences.cameraEnabled);
     }
     if (typeof initialMediaPreferences?.micEnabled === "boolean") {
+      // New muted preferences outrank an earlier background Answer request.
+      if (!initialMediaPreferences.micEnabled) resumeMicAfterForegroundRef.current = false;
       setMicEnabled(initialMediaPreferences.micEnabled);
     }
   }, [
