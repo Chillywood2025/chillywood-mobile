@@ -1,0 +1,49 @@
+{
+  "date": "2026-09-29",
+  "result": "PASS_NO_NEW_PUBLICATION_PRIVACY_CONCERN_FOUND",
+  "reviewedFile": "deployed-history.private.json",
+  "reviewedFileSha256": "ae1057ba8780026ec27e486dc28d076ab66170de14730cafd6f922c76fafb183",
+  "migrationRows": 408,
+  "orderedStatements": 9529,
+  "rawRows": 41,
+  "rawRowsComposition": {
+    "trailingWhitespaceOnly": 15,
+    "divergent": 26
+  },
+  "scope": "Read-only privacy scan of full supplied SQL history and deployed-only literals against corresponding canonical migration source. No raw private SQL, credential values or personal values are included in this report.",
+  "checks": {
+    "credentialAndSignedUrlPatterns": "No matches for private keys, JWTs, Stripe/GitHub/Supabase/AWS secret keys, credentialed connection URLs, Bearer credentials, signed URLs or assigned device/push tokens.",
+    "deployedOnlyUuidOrIp": "None found.",
+    "deployedOnlyPhoneOrHighEntropyLiteral": "None found.",
+    "deployedOnlyRawHexOrMixedHighEntropyToken": "None found.",
+    "deployedOnlySqlLiterals": "34 per-statement distinct candidates reviewed:22 brand-spelling text values;1 public sample-media URL;1 media MIME type;8 fixed authority-key occurrences;2 fixed account-purge prefix/pattern strings. No private payload/person/device values found."
+  },
+  "nonSensitiveNewUrl": {
+    "version": "202605260011",
+    "statementIndex": 13,
+    "category": "public_test_media_fixture_url",
+    "host": "test-streams.mux.dev",
+    "occurrences": 2,
+    "containsCredentialsQueryOrFragment": false
+  },
+  "preExistingPatternMatches": [
+    {
+      "version": "202605140008",
+      "statementIndex": 37,
+      "field": "statements[36]",
+      "category": "email_literal",
+      "occurrences": 2,
+      "alreadyVerbatimInCanonicalSource": true
+    },
+    {
+      "version": "202605140009",
+      "statementIndex": 3,
+      "field": "statements[2]",
+      "category": "email_literal",
+      "occurrences": 1,
+      "alreadyVerbatimInCanonicalSource": true
+    }
+  ],
+  "concerns": [],
+  "limits": "This bounded content review finds no new publication privacy blocker in the exact hashed input. It does not attest current schema equivalence, deployment readiness, execution safety, or authorize production actions."
+}

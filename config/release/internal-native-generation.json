@@ -1,22 +1,25 @@
 {
   "schemaVersion": 1,
-  "generation": "internal-native-v3",
+  "generation": "internal-native-v4",
   "channels": {
     "android": "android-internal-v2",
     "ios": "ios-internal-v2"
   },
   "runtimeVersions": {
-    "android": "1.0.0-android-production-v3",
-    "ios": "1.0.0-ios-production-v3"
+    "android": "1.0.0-android-production-v4",
+    "ios": "1.0.0-ios-production-v4"
   },
   "supersedes": {
-    "androidRuntimeVersion": "1.0.0-android-production-v2",
-    "iosRuntimeVersion": "1.0.0-ios-production-v2"
+    "generation": "internal-native-v3",
+    "androidRuntimeVersion": "1.0.0-android-production-v3",
+    "iosRuntimeVersion": "1.0.0-ios-production-v3",
+    "androidCompatibilityDigest": "dba8c0cf8cb6c70453f7edc82a0dc5f38da1bfd99cbcfbbcb2886dc36676e890",
+    "iosCompatibilityDigest": "3d1f37dc61e79c8fd087c8a9b37a569cadaca4789b0b1427f0b8d73c6ec77925"
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
-    "androidDigest": "dba8c0cf8cb6c70453f7edc82a0dc5f38da1bfd99cbcfbbcb2886dc36676e890",
-    "iosDigest": "3d1f37dc61e79c8fd087c8a9b37a569cadaca4789b0b1427f0b8d73c6ec77925"
+    "androidDigest": "14941d59849b2d5d9ef1d4c34a0619a959cee6078d93934cbe95e79687e59c43",
+    "iosDigest": "73779c9084ef8195e44288b062624d08abf4597fb9454cad71f8ffcd61e32c7c"
   },
   "policy": {
     "internalOnly": true,
@@ -34,6 +37,6 @@
         "group": "Chillywood Internal"
       }
     },
-    "reason": "PR #532 changes the Android incoming-call plugin and the iOS native-call coordinator/deadline implementation. These runtimes remain restricted to the existing Google Play and TestFlight internal tester audiences and cannot join either incompatible v2 native cohort."
+    "reason": "PR #536 adds native WebRTC sender acknowledgments on Android and iOS. These runtimes require new binaries, remain restricted to the existing Google Play and TestFlight internal tester audiences, and cannot join either incompatible v3 native cohort."
   }
 }

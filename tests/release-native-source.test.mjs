@@ -52,7 +52,23 @@ test("recorded internal v3 cohorts retain their historical Git-native inputs", (
   }
 });
 
-test("internal tester store profiles bind v3 runtimes only to their private audiences", () => {
+test("internal v4 supersedes the incompatible v3 runtimes without rewriting their historical digests", () => {
+  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+  const recorded = JSON.parse(git(repo, "show", `${recordedV3Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(generation.generation, "internal-native-v4");
+  assert.equal(generation.supersedes.generation, recorded.generation);
+  assert.equal(generation.nativeCompatibility.algorithm, recorded.nativeCompatibility.algorithm);
+  for (const platform of ["android", "ios"]) {
+    assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v4`);
+    assert.equal(generation.supersedes[`${platform}RuntimeVersion`], recorded.runtimeVersions[platform]);
+    assert.equal(generation.supersedes[`${platform}CompatibilityDigest`], recorded.nativeCompatibility[`${platform}Digest`]);
+    assert.match(generation.nativeCompatibility[`${platform}Digest`], /^[0-9a-f]{64}$/u);
+    assert.notEqual(generation.nativeCompatibility[`${platform}Digest`], recorded.nativeCompatibility[`${platform}Digest`]);
+    assert.equal(generation.channels[platform], recorded.channels[platform]);
+  }
+});
+
+test("internal tester store profiles bind current runtimes only to their private audiences", () => {
   const eas = JSON.parse(fs.readFileSync(path.join(repo, "eas.json"), "utf8"));
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
   assert.equal(generation.policy?.internalOnly, true);
