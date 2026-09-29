@@ -60,6 +60,7 @@ const live = (runtime, kind) => [...new Set(runtime.localStreams.flatMap(stream 
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { resolve, promise }; };
 async function start(t, { video = true, backgroundAudio = false, ...options } = {}) {
   const runtime = createRuntime(options);
+  if (options.initialAppState) runtime.appState = options.initialAppState;
   if (options.cameraPermission) runtime.cameraPermission = options.cameraPermission;
   const h = await mount(runtime, { enabled: true, naturalLifecycle: true,
     allowBackgroundAudio: backgroundAudio, analyticsContext: { surface: "chat-thread" },
@@ -67,6 +68,45 @@ async function start(t, { video = true, backgroundAudio = false, ...options } = 
   t.after(() => h.unmount());
   return { runtime, h };
 }
+
+test("legacy background Answer retains requested microphone until the first eligible foreground", async t => {
+  const { runtime, h } = await start(t, { video: false, initialAppState: "background" });
+  assert.equal(live(runtime, "audio").length, 0, "background startup must not bypass OS eligibility");
+  assert.equal(h.getResult().micEnabled, false, "requested intent is not capture proof");
+  await h.run(() => runtime.emitAppState("active"));
+  assert.equal(h.getResult().micEnabled, true, "foreground retries the original authorized Answer intent");
+  assert.equal(live(runtime, "audio").length, 1);
+  assert.equal(runtime.durableMic, true);
+});
+
+test("legacy explicit mute cancels deferred background Answer microphone intent", async t => {
+  const { runtime, h } = await start(t, { video: false, initialAppState: "background" });
+  await h.run(() => h.getResult().setMicrophoneEnabled(false));
+  await h.run(() => runtime.emitAppState("active"));
+  assert.equal(h.getResult().micEnabled, false);
+  assert.equal(live(runtime, "audio").length, 0);
+});
+
+test("legacy deferred background Answer cannot acquire a denied microphone", async t => {
+  const { runtime, h } = await start(t, { video: false, initialAppState: "background", microphonePermission: denied() });
+  await h.run(() => runtime.emitAppState("active"));
+  assert.equal(h.getResult().micEnabled, false);
+  assert.equal(live(runtime, "audio").length, 0);
+  assert.equal(runtime.durableMic, false);
+  assert.equal(runtime.captureRequests.some(request => request.audio), false);
+});
+
+test("legacy End retires background Answer while foreground permission read is pending", async t => {
+  const { runtime, h } = await start(t, { video: false, initialAppState: "background" });
+  const pending = deferred();
+  runtime.microphoneReadActions = [{ wait: pending.promise, permission: granted() }];
+  await h.run(() => runtime.emitAppState("active"));
+  await h.run(() => h.getResult().leaveRoom());
+  pending.resolve();
+  await h.run(async () => { for (let i = 0; i < 100; i += 1) await Promise.resolve(); });
+  assert.equal(live(runtime, "audio").length, 0, "late permission cannot restart an ended call");
+  assert.equal(runtime.captureRequests.some(request => request.audio), false);
+});
 
 for (const kind of ["microphone", "camera"]) {
   test(`legacy natural lifecycle: ${kind} denial, Settings grant, and explicit recovery preserve ownership`, async t => {

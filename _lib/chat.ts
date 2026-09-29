@@ -1085,6 +1085,10 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       mode,
       message: inviteError instanceof Error ? inviteError.message : "invite_failed",
     });
+    if (inviteError && typeof inviteError === "object" && "message" in inviteError
+      && String(inviteError.message).trim().toLowerCase() === "rate_limited") {
+      throw new UserFacingError("chat_action", "Too many attempts. Wait a few minutes, then try again.");
+    }
     throw new UserFacingError("chat_action", "Unable to start Chi'lly Chat call. The receiver invite could not be saved.");
   }
 

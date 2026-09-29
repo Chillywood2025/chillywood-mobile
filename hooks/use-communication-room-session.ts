@@ -1488,7 +1488,14 @@ export function useCommunicationRoomSession({
       allowBackgroundAudio: allowBackgroundAudioRef.current,
       micRequested: micEnabledRef.current,
     });
-    if (!appIsActive && !backgroundAudioAllowed) return null;
+    if (!appIsActive && !backgroundAudioAllowed) {
+      // Notification Answer may admit the call before Android resumes its
+      // Activity. Capture must wait for eligibility, but initial presence
+      // promotion must not erase the user's requested microphone intent.
+      // Explicit mute clears this deferred intent through the normal control.
+      if (micEnabledRef.current) resumeMicAfterForegroundRef.current = true;
+      return null;
+    }
 
     const requestedCamera = cameraEnabledRef.current;
     const requestedMic = micEnabledRef.current;

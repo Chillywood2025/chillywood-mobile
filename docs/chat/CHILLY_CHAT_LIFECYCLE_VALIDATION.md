@@ -1,13 +1,17 @@
 # Chi'lly Chat lifecycle validation
 
-Updated: 2026-09-28. This is the current testing and troubleshooting entry point.
-The latest reviewed PR #532/#534 candidate (Android 94, iOS 29) is **not
-physically qualified**. Source fixes,
+Updated: 2026-09-29. This is the current testing and troubleshooting entry point.
+The latest physical run of PR #537 source (Android 95, iOS 30) is **not
+physically qualified**: 26 PASS, 18 FAIL, 1 AUTOMATION BLOCKED and 60 DEPENDENCY
+BLOCKED across 105 rows. Start with the
+[physical repair findings and stronger retest requirements](PR537_PHYSICAL_REPAIR_2026-09-29.md)
+and [all 105 reconciled rows](PR537_RETEST_MATRIX.tsv).
+The PR #532/#534 records below are retained history. Source fixes,
 passing CI, a completed checklist, and an older physical pass do not qualify a
 different installed candidate. This document grants no delivery or provider
 configuration authority.
 
-Start with the [PR #532 evidence reconciliation](PR532_EVIDENCE_RECONCILIATION.md)
+Earlier evidence remains in the [PR #532 reconciliation](PR532_EVIDENCE_RECONCILIATION.md)
 and its [complete audited case mapping](PR532_AUDITED_CASES.tsv). The separate
 [104-row automated coverage map](PR532_AUTOMATED_COVERAGE.json) links every case
 to exact test assertions, controlled boundaries, unsupported capabilities and
