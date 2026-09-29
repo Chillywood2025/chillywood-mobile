@@ -117,6 +117,139 @@ test("legacy deferred background Answer respects a newer muted media preference"
   assert.equal(runtime.durableMic, false);
 });
 
+for (const [gate, cancellation] of ["capture", "durable membership", "media broadcast acknowledgement"]
+  .flatMap(gate => ["muted preference", "explicit Mute"].map(cancellation => [gate, cancellation]))) {
+  test(`legacy automatic foreground unmute retires during ${gate} after ${cancellation}`, async t => {
+    const { runtime, h } = await start(t, { video: false, initialAppState: "background" });
+    const pending = deferred();
+    let broadcastPending = false;
+    if (gate === "capture") runtime.queueMedia({ wait: pending.promise });
+    if (gate === "durable membership") runtime.queueMembership({ wait: pending.promise });
+    if (gate === "media broadcast acknowledgement") {
+      const channel = runtime.channels.at(-1);
+      const send = channel.send.bind(channel);
+      channel.send = async message => {
+        if (message.event === "media:update" && message.payload?.micOn === true && !broadcastPending) {
+          broadcastPending = true;
+          await pending.promise;
+        }
+        return send(message);
+      };
+    }
+    const capturesBefore = runtime.captureRequests.length;
+    await h.run(() => runtime.emitAppState("active"));
+    assert.ok(runtime.captureRequests.length > capturesBefore, "foreground restoration reached real hook capture");
+    if (gate === "durable membership") assert.equal(runtime.membershipActions.length, 0);
+    if (gate === "media broadcast acknowledgement") assert.equal(broadcastPending, true);
+    let mute;
+    if (cancellation === "muted preference") {
+      await h.rerender({ initialMediaPreferences: { micEnabled: false, cameraEnabled: false } });
+    } else {
+      await React.act(async () => { mute = h.getResult().setMicrophoneEnabled(false); });
+    }
+    assert.equal(live(runtime, "audio").length, 0, "new mute is private before old acknowledgement settles");
+    pending.resolve();
+    await h.run(async () => { await mute; for (let i = 0; i < 200; i += 1) await Promise.resolve(); });
+    assert.equal(h.getResult().micEnabled, false, "retired automatic unmute cannot publish success");
+    assert.equal(live(runtime, "audio").length, 0, "retired acquisition cannot transmit");
+    assert.equal(runtime.durableMic, false, "late durable success is compensated to the current muted preference");
+    assert.equal(runtime.broadcasts.filter(message => message.event === "media:update").at(-1)?.payload.micOn, false);
+    assert.equal(await h.run(() => h.getResult().setMicrophoneEnabled(true)), true,
+      "a later explicit unmute owns a fresh intent and remains recoverable");
+    assert.equal(live(runtime, "audio").length, 1);
+  });
+}
+
+for (const gate of ["sender replacement receipt", "negotiation receipt"]) {
+  test(`legacy superseded microphone preparation rolls back its ${gate}`, async t => {
+    const { runtime, h } = await start(t, { video: false });
+    const priorTrack = live(runtime, "audio")[0];
+    priorTrack.stop();
+    const pending = deferred();
+    let receiptPending = false;
+    const sender = runtime.peers[0].getSenders().find(sender => sender.track === priorTrack);
+    if (gate === "sender replacement receipt") {
+      const replaceTrack = sender.replaceTrack.bind(sender);
+      sender.replaceTrack = async track => {
+        await replaceTrack(track);
+        if (!receiptPending) { receiptPending = true; await pending.promise; }
+      };
+    } else {
+      const channel = runtime.channels.at(-1);
+      const send = channel.send.bind(channel);
+      channel.send = async message => {
+        const result = await send(message);
+        if (message.event === "webrtc:offer" && !receiptPending) {
+          receiptPending = true;
+          await pending.promise;
+        }
+        return result;
+      };
+    }
+    let unmute;
+    await React.act(async () => {
+      unmute = h.getResult().setMicrophoneEnabled(true);
+      for (let i = 0; i < 96; i += 1) await Promise.resolve();
+    });
+    assert.equal(receiptPending, true, "the selected native/signaling operation succeeded before its acknowledgement");
+    await h.rerender({ initialMediaPreferences: { micEnabled: false, cameraEnabled: false } });
+    pending.resolve();
+    assert.equal(await h.run(() => unmute), false, "superseded preparation returns a controlled cancellation");
+    assert.equal(sender.track, priorTrack, "rollback retains receipts for completed native mutations");
+    assert.equal(live(runtime, "audio").length, 0);
+    assert.equal(h.getResult().micEnabled, false);
+    assert.equal(runtime.durableMic, false);
+  });
+}
+
+test("legacy failed mute compensation cannot restore a newer muted preference", async t => {
+  const { runtime, h } = await start(t, { video: false });
+  const pending = deferred();
+  runtime.queueMembership({ outcome: "null" });
+  runtime.queueMembership({ wait: pending.promise });
+  let mute;
+  await React.act(async () => {
+    mute = h.getResult().setMicrophoneEnabled(false);
+    for (let i = 0; i < 96; i += 1) await Promise.resolve();
+  });
+  assert.equal(runtime.membershipActions.length, 0, "the compensation write reached its held acknowledgement");
+  assert.equal(runtime.membershipTouches.at(-1).micEnabled, true);
+  await h.rerender({ initialMediaPreferences: { micEnabled: false, cameraEnabled: false } });
+  assert.equal(live(runtime, "audio").length, 0);
+  pending.resolve();
+  assert.equal(await h.run(() => mute), false);
+  assert.equal(live(runtime, "audio").length, 0);
+  assert.equal(h.getResult().micEnabled, false);
+  assert.equal(runtime.durableMic, false);
+  assert.equal(runtime.broadcasts.filter(message => message.event === "media:update").at(-1)?.payload.micOn, false);
+});
+
+for (const video of [false, true]) {
+  test(`legacy initial ${video ? "video" : "voice"} capture cannot revive superseded microphone preferences`, async t => {
+    const runtime = createRuntime();
+    const pending = deferred();
+    runtime.queueMedia({ wait: pending.promise });
+    const h = await mount(runtime, { enabled: true, naturalLifecycle: true,
+      analyticsContext: { surface: "chat-thread" },
+      initialMediaPreferences: { micEnabled: true, cameraEnabled: video } });
+    t.after(() => h.unmount());
+    assert.equal(runtime.captureRequests.length, 1, "initial getUserMedia reached the held native boundary");
+    await h.rerender({ initialMediaPreferences: { micEnabled: false, cameraEnabled: video } });
+    const promotion = deferred();
+    runtime.queueMembership({ wait: promotion.promise });
+    pending.resolve();
+    await h.run(async () => { for (let i = 0; i < 200; i += 1) await Promise.resolve(); });
+    assert.equal(runtime.membershipActions.length, 0, "the initial membership promotion is pending");
+    assert.equal(live(runtime, "audio").length, 0, "cancelled capture stays private before initial promotion completes");
+    promotion.resolve();
+    await h.run(async () => { for (let i = 0; i < 200; i += 1) await Promise.resolve(); });
+    assert.equal(live(runtime, "audio").length, 0, "late initial capture cannot turn on a cancelled microphone");
+    assert.equal(h.getResult().micEnabled, false);
+    assert.equal(runtime.durableMic, false);
+    assert.equal(live(runtime, "video").length, Number(video), "independent authorized camera capture remains usable");
+  });
+}
+
 for (const producer of ["AppState", "active media stopper"]) {
   for (const gate of ["durable membership", "media broadcast acknowledgement"]) {
     test(`legacy pending ${producer} mute cannot restore intent after a newer muted preference at ${gate}`, async t => {

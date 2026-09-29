@@ -2044,9 +2044,14 @@ const cameraControlSource = communicationSessionSource.slice(
   communicationSessionSource.indexOf("const toggleCamera"),
 );
 const microphoneControlSource = communicationSessionSource.slice(
-  communicationSessionSource.indexOf("const setMicrophoneEnabled"),
+  communicationSessionSource.indexOf("const applyMicrophoneEnabled"),
   communicationSessionSource.indexOf("const toggleMic"),
 );
+assert.match(microphoneControlSource, /legacyMicControlRef\.current = applyMicrophoneEnabled/u,
+  "automatic lifecycle controls use the same serialized microphone transaction");
+assert.match(microphoneControlSource,
+  /const setMicrophoneEnabled[\s\S]*foregroundMicIntentRevisionRef\.current \+= 1;[\s\S]*return applyMicrophoneEnabled\(nextEnabled, requestedCameraOverride\)/u,
+  "explicit microphone controls supersede old intent and delegate to the verified transaction");
 assert.doesNotMatch(cameraControlSource, /stopLocalMediaKind/u, "camera controls must not stop a negotiated sender");
 assert.equal(
   (cameraControlSource.match(/updatePresence\(/gu) ?? []).length,

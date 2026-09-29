@@ -40,7 +40,7 @@ const sourceBindings = () => {
     legacy.includes("collectLegacyMicTopology")
       && legacy.includes("quarantineLegacyMicrophoneTopology")
       && legacy.includes("commitProvedLegacyMicMute(authority")
-      && legacy.includes("prepareLegacyMicrophoneTrack(authority)")
+      && legacy.includes("prepareLegacyMicrophoneTrack(authority, isIntentCurrent)")
       && legacy.includes("strictlyRenegotiateLegacyMicPeer")
       && legacy.includes("legacySessionGenerationRef.current === authority.generation")
       && legacy.includes("LEGACY_MIC_ROLLBACK_UNVERIFIED"),

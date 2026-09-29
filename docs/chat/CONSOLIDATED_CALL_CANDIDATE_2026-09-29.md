@@ -38,6 +38,19 @@ callbacks may restore only their current revision and session generation.
 The global media stopper also verifies generation before applying a late
 privacy fallback, protecting replacement capture.
 
+Independent review then reproduced cancellation during foreground acquisition
+and during a successful sender replacement whose acknowledgment was pending.
+The final fence covers permission/capture, initial stream adoption, sender
+preparation, enablement, durable writes, broadcasts and compensation. New muted
+preferences and explicit Mute during a pending transaction quarantine owned
+capture immediately; they do not wait for the old network acknowledgment.
+Completed sender/negotiation mutations are recorded before cancellation checks,
+so rollback can restore the actual topology. Initial voice/video capture cannot
+revive a cancelled microphone, while independently authorized video remains
+available. Eleven additional barrier cases cover these boundaries, including
+successful later Unmute. The independent reviewer reran acquisition, sender
+rollback/recovery and immediate-Mute probes on the final patch.
+
 The final #540 CI run `36612755275` failed its independent disabled-track
 browser silence assertion. All Node product tests had passed. The measurement
 assumed two 300 ms host sleeps drained receiver audio and provided fresh PCM;
@@ -127,6 +140,69 @@ Once connected, execute in this order:
 7. End all calls, verify capture/audio/session cleanup and fresh reuse, restore
    permissions/idle state, sanitize the archive and independently verify hashes,
    references and all 105 verdicts. Any unmet required assertion remains blocked.
+
+### Physical acceptance and correlated receipts
+
+These are required observations for the future device run, not completed tests.
+Keep an attempt record linked to each matrix case with candidate/build identity,
+provider, direction, precise entry state, UTC/monotonic times, each assertion's
+outcome, observed behavior and sanitized evidence references. Keep the original
+matrix columns immutable. A later successful retry must not erase an earlier
+failure. Identify the first failing boundary; dependent assertions stay blocked
+with their specific missing prerequisite. Native fixture proof cannot turn an
+unreachable physical scenario into a physical PASS.
+
+- **Independent media proof:** isolate the endpoints acoustically so an observer
+  cannot hear the speaker directly. Use a fresh spoken challenge in each
+  direction and confirm it through the intended remote earpiece, speaker or
+  headset. During Mute and after End, continue the challenge and confirm that it
+  no longer travels through the call. For video, observe the remote display,
+  use a changing physical marker and distinct front/back views, then confirm
+  Camera Off removes transmitted content. A local preview, repeated screenshot,
+  black frame or increasing packet counter cannot establish moving remote video.
+- **Android background eligibility:** record OS/target SDK, actual notification
+  action and Activity/service state, declared service type, permission state and
+  native start outcome. Do not require every background Answer to be ineligible:
+  notification interaction has documented exemptions. If the actual attempt is
+  ineligible, require truthful muted state and recovery of only the current
+  request after eligible foreground; new Mute, denial, End or replacement must
+  cancel it. A granted permission query alone does not establish eligibility.
+  [Android background service and while-in-use restrictions](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start).
+- **iPhone audio and route recovery:** correlate CallKit activation/deactivation,
+  interruption start/end, native audio errors and actual input/output route with
+  the same invite and media owner. Observe route-change reasons and the resulting
+  route before repeating the audible challenge. Add a separately identified
+  interruption/media-services-reset diagnostic variant when available; do not
+  treat it as an original 105-case result. After a media-services reset, verify
+  audio-object/session reinitialization and explicit user-initiated restart.
+  This is an additional failure-path test, not a diagnosis of the recorded mic
+  failure. [CallKit activation](https://developer.apple.com/documentation/callkit/cxproviderdelegate/provider(_:didactivate:)),
+  [audio route changes](https://developer.apple.com/documentation/avfaudio/responding-to-audio-route-changes),
+  [media-services reset](https://developer.apple.com/documentation/avfaudio/avaudiosession/mediaserviceswereresetnotification).
+- **Camera/native receipts:** retain capture-session start/stop and interruption
+  notifications, the underlying runtime error, requested/actual lens and first
+  actual frames. Inspect background interruption and later foreground recovery
+  separately from flipping while active. A fulfilled JS promise or live track
+  does not replace the native capture receipt or remote motion observation.
+  [Capture runtime errors](https://developer.apple.com/documentation/avfoundation/avcapturesession/runtimeerrornotification),
+  [background camera interruption](https://developer.apple.com/documentation/avfoundation/avcapturesession/interruptionreason/videodevicenotavailableinbackground).
+- **Push/Answer receipts:** record APNs submission result, device PushKit callback,
+  CallKit reporting completion/error and notification completion separately,
+  followed by the real Answer delegate, exact route, server acceptance, one join
+  and audio activation. Record relevant Focus/Do Not Disturb state and native
+  report errors; do not label every absent presentation a transport failure.
+  CallKit reporting must not wait for a successful server connection.
+  [Apple PushKit handling](https://developer.apple.com/documentation/pushkit/responding-to-voip-notifications-from-pushkit).
+- **Receiver measurements:** sample current track/peer/SSRC statistics over time
+  on both endpoints. Keep source, sent, received, decoded and rendered evidence
+  distinct; record audio energy/sample deltas, concealment/loss, video frame
+  deltas and freezes when supported. Missing fields are unavailable, not zero.
+  New track/SSRC counters need a fresh baseline. Received sample counts can
+  include synthesized concealment, and decoded frames do not establish visible
+  motion; the independent physical challenge remains required. Use the existing
+  product timing expectations with explicit start/end events; the browser
+  observer's settling allowance is not a physical mute-latency acceptance limit.
+  [W3C WebRTC statistics](https://www.w3.org/TR/webrtc-stats/).
 
 | Platform | Build/submit profile | Runtime before any new native changes | Channel/audience |
 | --- | --- | --- | --- |
