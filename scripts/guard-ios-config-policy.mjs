@@ -78,14 +78,14 @@ assert(productionOtaGeneration.policy?.nativeAutomaticActivationDisabled === tru
 assert(productionOtaGeneration.policy?.appOwnedUpdateGateRequired === true, "production generation must retain the app-owned update gate");
 assert(productionOtaGeneration.iosRuntimeVersion !== expo.runtimeVersion, "replacement iOS runtime must quarantine the legacy production runtime");
 assert(internalNativeGeneration.schemaVersion === 1, "internal native generation schema must remain v1");
-assert(internalNativeGeneration.generation === "internal-native-v4", "internal native builds must use the reviewed v4 generation");
+assert(internalNativeGeneration.generation === "internal-native-v5", "internal native builds must use the reviewed v5 generation");
 assert(internalNativeGeneration.channels?.android === "android-internal-v2", "Android internal generation must stay on its private channel");
 assert(internalNativeGeneration.channels?.ios === "ios-internal-v2", "iOS internal generation must stay on its private channel");
-assert(internalNativeGeneration.runtimeVersions?.android === "1.0.0-android-production-v4", "Android internal v4 runtime is incorrect");
-assert(internalNativeGeneration.runtimeVersions?.ios === "1.0.0-ios-production-v4", "iOS internal v4 runtime is incorrect");
-assert(internalNativeGeneration.supersedes?.generation === "internal-native-v3", "internal v4 must explicitly supersede v3");
-assert(internalNativeGeneration.supersedes?.androidRuntimeVersion === "1.0.0-android-production-v3", "Android internal v4 must quarantine the v3 runtime");
-assert(internalNativeGeneration.supersedes?.iosRuntimeVersion === "1.0.0-ios-production-v3", "iOS internal v4 must quarantine the v3 runtime");
+assert(internalNativeGeneration.runtimeVersions?.android === "1.0.0-android-production-v5", "Android internal v5 runtime is incorrect");
+assert(internalNativeGeneration.runtimeVersions?.ios === "1.0.0-ios-production-v5", "iOS internal v5 runtime is incorrect");
+assert(internalNativeGeneration.supersedes?.generation === "internal-native-v4", "internal v5 must explicitly supersede v4");
+assert(internalNativeGeneration.supersedes?.androidRuntimeVersion === "1.0.0-android-production-v4", "Android internal v5 must quarantine the v4 runtime");
+assert(internalNativeGeneration.supersedes?.iosRuntimeVersion === "1.0.0-ios-production-v4", "iOS internal v5 must quarantine the v4 runtime");
 assert(internalNativeGeneration.policy?.internalOnly === true, "internal native generation must remain internal only");
 assert(internalNativeGeneration.policy?.publicReleaseAuthorized === false, "internal native generation cannot authorize public release");
 assert(internalNativeGeneration.policy?.storeSubmissionOutsideInternalTestersAuthorized === false, "internal native generation cannot authorize store distribution beyond internal testers");
@@ -135,6 +135,22 @@ assert(iosInternalTesterProfile?.distribution === "store", "iOS internal tester 
 assert(iosInternalTesterProfile?.channel === internalNativeGeneration.channels?.ios, "iOS internal tester build must keep the existing private internal channel");
 assert(iosInternalTesterProfile?.env?.CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM === "ios", "iOS internal tester build must select iOS provenance");
 assertEqual(easJson.submit?.["ios-internal-v2"]?.ios?.groups, ["Chillywood Internal"], "iOS internal tester submit must remain in the named TestFlight internal group");
+assert(iosInternalTesterProfile?.env?.CHILLYWOOD_INTERNAL_CALL_DIAGNOSTICS === "true", "only the reviewed iOS internal tester profile must explicitly opt in to native diagnostics");
+const inheritedProfileEnvironment = (name, platform, parents = new Set()) => {
+  const profile = easJson.build?.[name];
+  if (!profile || parents.has(name)) {
+    failures.push(`Unable to resolve native diagnostics policy for EAS profile ${name}`);
+    return {};
+  }
+  const inherited = profile.extends
+    ? inheritedProfileEnvironment(profile.extends, platform, new Set([...parents, name])) : {};
+  return { ...inherited, ...profile.env, ...profile[platform]?.env };
+};
+for (const name of Object.keys(easJson.build ?? {})) for (const platform of ["ios", "android"]) {
+  const optIn = inheritedProfileEnvironment(name, platform).CHILLYWOOD_INTERNAL_CALL_DIAGNOSTICS;
+  assert(name === "ios-internal-v2" ? optIn === "true" : optIn === undefined || optIn === "false",
+    `${name}/${platform} must not broaden native diagnostics beyond the reviewed ios-internal-v2 profile`);
+}
 const androidInternalDeviceProfile = easJson.build?.["android-internal-device-v3"];
 assert(androidInternalDeviceProfile?.extends === "android-internal-v2", "Android internal device v3 must inherit the governed internal lane");
 assert(androidInternalDeviceProfile?.distribution === "internal", "Android internal device v3 must not use store distribution");
@@ -144,6 +160,7 @@ const iosInternalDeviceProfile = easJson.build?.["ios-internal-device-v3"];
 assert(iosInternalDeviceProfile?.extends === "ios-internal-v2", "iOS internal device v3 must inherit the governed internal lane");
 assert(iosInternalDeviceProfile?.distribution === "internal", "iOS internal device v3 must not use store distribution");
 assert(iosInternalDeviceProfile?.env?.CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM === "ios", "iOS internal device v3 must select only iOS provenance");
+assert(iosInternalDeviceProfile?.env?.CHILLYWOOD_INTERNAL_CALL_DIAGNOSTICS === "false", "the device profile must explicitly suppress inherited native diagnostics");
 assert(easJson.build?.["development-simulator"]?.extends === "development", "EAS iOS simulator profile must extend development");
 assert(easJson.build?.["development-simulator"]?.ios?.simulator === true, "EAS iOS simulator profile must set ios.simulator=true");
 const iosQaProfile = easJson.build?.["ios-qa"];

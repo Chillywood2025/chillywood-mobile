@@ -8,6 +8,7 @@ import ts from "typescript";
 import { getIosNativeCallAuthorityBindingKey, resolveIosNativeCallBridgeLifecycle } from "../../_lib/iosNativeCallBridgeLifecycle.mjs";
 import * as lifecycle from "../../_lib/iosNativeCallBridgeLifecycle.mjs";
 import * as provenance from "../../_lib/nativeCallTransitionProvenance.mjs";
+import * as nativeCallErrorDiagnostics from "../../_lib/nativeCallErrorDiagnostics.mjs";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const noop = () => {};
@@ -37,6 +38,7 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
   let router = { replace: noop };
   const subscriptions = new Map();
   const presentations = new Map();
+  const errorReports = [];
   const activations = new Set();
   const ends = [];
   const starts = [];
@@ -148,7 +150,17 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
         if (stageHandlers.has("os-remoteEnd")) return stageHandlers.get("os-remoteEnd")(uuid, reason);
         nativeModuleListener?.({ type: "remoteEnded", callUuid: uuid, callInviteId: ids.invite, threadId: ids.thread });
       },
-      completeAnswerAsync: async (uuid, connected) => { nativeSteps.push({ name: "answer", uuid, connected }); },
+      completeAnswerAsync: async (uuid, connected) => {
+        nativeSteps.push({ name: "answer", uuid, connected });
+        if (stageHandlers.has("os-completeAnswer")) return stageHandlers.get("os-completeAnswer")(uuid, connected);
+      },
+      requestAnswerAsync: async (uuid, inviteId) => {
+        nativeSteps.push({ name: "requestAnswer", uuid, inviteId });
+        // The OS edge must explicitly deliver its event; a request promise
+        // alone never fabricates an Answer route or server acceptance.
+        return stageHandlers.has("os-requestAnswer")
+          ? stageHandlers.get("os-requestAnswer")(uuid, inviteId) : false;
+      },
       completeTerminalTransitionAsync: async (uuid) => { nativeSteps.push({ name: "terminal", uuid }); },
     };
     const imports = {
@@ -160,6 +172,11 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
       "./iosNativeCallBridgeLifecycle.mjs": lifecycle,
       "./livekit/bootstrap": { synchronizeLiveKitCallKitAudioSession: noop },
       "./nativeCallTransitionProvenance.mjs": provenance,
+      "./nativeCallErrorDiagnostics.mjs": nativeCallErrorDiagnostics,
+      "./logger": { reportRuntimeError: (scope, error, metadata) => {
+        errorReports.push({ scope, error, metadata });
+        if (stageHandlers.has("diagnostic-report")) stageHandlers.get("diagnostic-report")();
+      } },
       "./notifications": { createPushOwnershipOperationKey: () => "test-operation", getNotificationInstallId: async () => "test-install", getNotificationRevocationCredential: async () => "test-credential" },
       "./supabase": { supabase: { functions: { invoke: async () => ({ data: null, error: null }) } } },
     };
@@ -187,7 +204,7 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
   t.after(unmount);
   await render();
   return {
-    subscriptions, ends, starts, terminalSteps, routes, nativeSteps, nativeLifecycleOrder, retryTimers,
+    subscriptions, ends, starts, terminalSteps, routes, nativeSteps, nativeLifecycleOrder, retryTimers, errorReports,
     get facade() { return facade; },
     get revokes() { return revokes; },
     setReader(next) { reader = next; },
@@ -676,3 +693,29 @@ test("same-authority cold launch preserves queued CallKit Answer through native 
   assert.match(swift, /if previousAuthority != nil && previousAuthority != authority \{\s*self.resetAccountContextOnMain\(\)/u, "native reset is conditional on a different binding, not every startup");
   assert.match(swift, /private func resetAccountContextOnMain\(\)[\s\S]*?pendingEvents.removeAll\(\)/u);
 });
+
+for (const operation of ["request", "complete"]) {
+  for (const reporterThrows of [false, true]) {
+    test(`actual native Answer ${operation} rejection stays false with bounded evidence: reporter throws ${reporterThrows}`, async t => {
+      const h = await mount(t, { realFacade: true });
+      await h.event(nativeEvent("incoming"));
+      const privateMarker = "PRIVATE-NATIVE-ANSWER-PAYLOAD-TOKEN";
+      const original = Object.assign(new Error(privateMarker), {
+        domain: "com.apple.CallKit.error.requesttransaction", code: 4,
+        callUuid: ids.uuid, inviteId: ids.invite, userInfo: { payload: privateMarker },
+      });
+      h.setStage(operation === "request" ? "os-requestAnswer" : "os-completeAnswer", async () => { throw original; });
+      if (reporterThrows) h.setStage("diagnostic-report", () => { throw new Error("reporter unavailable"); });
+      const result = operation === "request"
+        ? await h.facade.requestIosNativeCallAnswer(ids.invite)
+        : await h.facade.completeIosNativeCallAnswer(ids.uuid, true);
+      assert.equal(result, false, "native rejection retains its existing public result");
+      assert.equal(h.errorReports.length, 1);
+      assert.equal(h.errorReports[0].scope, `ios-native-answer-${operation}`);
+      assert.equal(h.errorReports[0].metadata.nativeErrorDomain, "com.apple.CallKit.error.requesttransaction");
+      assert.equal(h.errorReports[0].metadata.nativeErrorCode, 4);
+      const evidence = JSON.stringify(h.errorReports);
+      for (const prohibited of [privateMarker, ids.uuid, ids.invite]) assert.equal(evidence.includes(prohibited), false);
+    });
+  }
+}

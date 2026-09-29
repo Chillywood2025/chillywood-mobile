@@ -6,6 +6,8 @@ import { createRequire } from "node:module";
 import test from "node:test";
 import vm from "node:vm";
 import { invokeAccountBoundSupabaseRpc, isAccountBoundSupabaseRpcOutcomeAmbiguous } from "../../_lib/accountBoundSupabaseRpc.mjs";
+import * as actualCallMediaPolicy from "../../_lib/communicationCallMediaPolicy.mjs";
+import * as nativeCallErrorDiagnostics from "../../_lib/nativeCallErrorDiagnostics.mjs";
 
 import {
   evaluateLegacyReleaseReachability,
@@ -36,7 +38,7 @@ const legacyPeerSyncMarker = "  const syncPeerConnections = useCallback";
 assert.equal(legacyHookSource.split(legacyPeerSyncMarker).length - 1, 1, "unique legacy peer sync exposure marker");
 const instrumentedLegacyHookSource = legacyHookSource.replace(
   legacyRefMarker,
-  `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { appStateLifecycleHandlerRef, auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, joinedMembershipRef, legacyMicAnswerWaitersRef, legacyMicControlRef, legacyMicLocalPrivacyStopRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, nativePermissionRequestDepthRef, peerConnectionsRef, roomRef, setChannelState, setLoading, presenceRegistrationRef: typeof presenceRegistrationRef === "undefined" ? null : presenceRegistrationRef };`,
+  `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { acquireOwnedLegacyMedia, appStateLifecycleHandlerRef, auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, joinedMembershipRef, legacyMicAnswerWaitersRef, legacyMicControlRef, legacyMicLocalPrivacyStopRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, nativePermissionRequestDepthRef, peerConnectionsRef, roomRef, setChannelState, setLoading, presenceRegistrationRef: typeof presenceRegistrationRef === "undefined" ? null : presenceRegistrationRef };`,
 ).replace(
   legacyOfferQueueMarker,
   `  Object.assign((globalThis as any).__chillywoodLegacyMicAssuranceRefs, { runSerializedPeerOffer, runSerializedPeerSignaling, peerLocalOffersRef, pendingPeerIceRef });\n${legacyOfferQueueMarker}`,
@@ -159,7 +161,7 @@ const makeRoom = (runtime) => ({
 
 function createLegacyMountedRuntime(options = {}) {
   const runtime = {
-    appState: "active",
+    appState: options.appState ?? "active",
     appStateListeners: [],
     broadcasts: [],
     cameraPermission: grantedPermission(),
@@ -368,7 +370,7 @@ function createLegacyMountedRuntime(options = {}) {
     runtime.mediaCreateCalls.push({ audio, video });
     const action = runtime.mediaActions.shift() ?? {};
     if (action.wait) await action.wait;
-    if (action.outcome === "reject") throw new Error("media creation rejected");
+    if (action.outcome === "reject") throw action.error ?? new Error("media creation rejected");
     if (action.outcome === "missing") return null;
     const tracks = [];
     if (audio) tracks.push(new FakeTrack("audio", action.audio));
@@ -672,7 +674,8 @@ function createLegacyMountedRuntime(options = {}) {
       },
     },
     "../_lib/communicationCallMediaPolicy.mjs": {
-      canAttemptNativeCallBackgroundAudio: () => false,
+      canAttemptNativeCallBackgroundAudio: options.nativeBackgroundPolicy
+        ? actualCallMediaPolicy.canAttemptNativeCallBackgroundAudio : () => false,
       resolveLegacyChatSessionRecovery: ({ alreadyRequested, enabled, ending, generationIsCurrent }) => (
         enabled && generationIsCurrent && !ending && !alreadyRequested ? { delayMs: 1 } : null
       ),
@@ -685,9 +688,14 @@ function createLegacyMountedRuntime(options = {}) {
         }
         return updated;
       },
-      shouldPreserveNativeCallBackgroundAudio: () => false,
+      shouldPreserveNativeCallBackgroundAudio: options.nativeBackgroundPolicy
+        ? actualCallMediaPolicy.shouldPreserveNativeCallBackgroundAudio : () => false,
     },
-    "../_lib/logger": { reportRuntimeError: (scope, error) => runtime.errors.push({ message: String(error?.message ?? error), scope }) },
+    "../_lib/nativeCallErrorDiagnostics.mjs": nativeCallErrorDiagnostics,
+    "../_lib/logger": { reportRuntimeError: (scope, error, metadata) => {
+      runtime.errors.push({ message: String(error?.message ?? error), scope, metadata });
+      if (options.throwRuntimeErrors) throw new Error("controlled diagnostic reporter failure");
+    } },
     "../_lib/mediaPermissions": {
       getMediaPermissionRecoveryMessage: (kind, snapshot) => snapshot.state === "denied" ? `${kind} permission denied` : null,
       resolveMediaPermission: permissionSnapshot,
@@ -1469,6 +1477,55 @@ test("legacy media projection: a server-relayed media update refreshes durable r
   assert.equal(mutedRemote?.micOn, false, "stale Presence=true cannot override durable mic=false");
 });
 
+for (const cancelIntent of [false, true]) {
+  test(`legacy native background Answer retains foreground mic intent; explicit mute=${cancelIntent}`, async (t) => {
+    const runtime = createLegacyMountedRuntime({ appState: "background", nativeBackgroundPolicy: true });
+    const harness = await mountLegacyHook(runtime, {
+      enabled: true, naturalLifecycle: true, allowBackgroundAudio: true,
+      initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    });
+    t.after(() => harness.unmount());
+    assert.equal(harness.getResult().micEnabled, false, "background permission/capture unavailability is never live mic proof");
+    assert.equal(runtime.durableMic, false);
+    if (cancelIntent) await harness.run(() => harness.getResult().setMicrophoneEnabled(false));
+    await harness.run(() => runtime.emitAppState("inactive"));
+    await harness.run(() => runtime.emitAppState("active"));
+    assert.equal(harness.getResult().micEnabled, !cancelIntent,
+      "foreground restores only the retained Answer intent, without requiring another Unmute");
+    assert.equal(runtime.durableMic, !cancelIntent);
+    assert.equal(runtime.localStreams.flatMap(stream => stream.getAudioTracks())
+      .filter(track => track.enabled && track.readyState !== "ended").length, cancelIntent ? 0 : 1);
+  });
+}
+
+test("legacy native background Answer cannot restore a microphone denied in Settings", async (t) => {
+  const runtime = createLegacyMountedRuntime({ appState: "background", nativeBackgroundPolicy: true });
+  const harness = await mountLegacyHook(runtime, {
+    enabled: true, naturalLifecycle: true, allowBackgroundAudio: true,
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+  runtime.microphonePermission = { granted: false, canAskAgain: false, status: "denied" };
+  await harness.run(() => runtime.emitAppState("active"));
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(runtime.durableMic, false);
+  assert.equal(runtime.localStreams.length, 0);
+});
+
+test("legacy native background Answer intent is retired by End before foreground", async (t) => {
+  const runtime = createLegacyMountedRuntime({ appState: "background", nativeBackgroundPolicy: true });
+  const harness = await mountLegacyHook(runtime, {
+    enabled: true, naturalLifecycle: true, allowBackgroundAudio: true,
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+  await harness.run(() => harness.getResult().leaveRoom());
+  const acquisitions = runtime.mediaCreateCalls.length;
+  await harness.run(() => runtime.emitAppState("active"));
+  assert.equal(runtime.mediaCreateCalls.length, acquisitions);
+  assert.equal(runtime.durableMic, false);
+});
+
 test("legacy grouped media lifecycle: failed initial media promotion disables tracks and restores muted membership", async (t) => {
   const runtime = createLegacyMountedRuntime();
   runtime.queuePresenceTrack({ outcome: "error" });
@@ -1810,7 +1867,7 @@ test("legacy call-domain closure: unprovable quarantine never claims muted succe
 test("legacy call-domain closure: background lifecycle commits proved camera state and catches controller rejection", () => {
   const stopperBlock = legacyHookSource.match(/registerActiveMediaSessionStopper\(async \(reason\) => \{[\s\S]*?\n    \}\);/u)?.[0] ?? "";
   assert.match(stopperBlock, /try \{[\s\S]*?await legacyMicControlRef\.current\?\.\(\s*LEGACY_BACKGROUND_MEDIA_STATE\.micEnabled,\s*cameraStopped \? LEGACY_BACKGROUND_MEDIA_STATE\.cameraEnabled : hasUsableLocalTrack\("video"\),\s*\)[\s\S]*?\} catch \(error\) \{/u);
-  assert.match(stopperBlock, /catch \(error\) \{\s*legacyMicLocalPrivacyStopRef\.current\?\.\(\);/u);
+  assert.match(stopperBlock, /catch \(error\) \{\s*if \(!isActiveLegacyGeneration\(generation\)\) return;\s*legacyMicLocalPrivacyStopRef\.current\?\.\(\);/u);
   assert.match(stopperBlock, /reportRuntimeError\("communication-media-session-background"/u);
   assert.match(legacyHookSource, /const LEGACY_BACKGROUND_MEDIA_STATE = \{\s*cameraEnabled: false,\s*micEnabled: false,/u);
   assert.match(legacyHookSource, /legacyMicControlRef\.current\?\.\(true, !cameraStopped && hasUsableLocalTrack\("video"\)\)/u);
@@ -3462,3 +3519,26 @@ test("legacy ending generation: an explicit new room can establish fresh media a
   assert.ok(runtime.localStreams.some((stream) => stream.getTracks().some((track) => track.readyState === "live")));
   assert.equal(runtime.joinCalls.at(-1).roomId, runtime.roomId);
 });
+
+for (const throwRuntimeErrors of [false, true]) {
+  test(`legacy capture preserves the identical native rejection and one bounded report: reporter throws ${throwRuntimeErrors}`, async t => {
+    const runtime = createLegacyMountedRuntime({ throwRuntimeErrors });
+    const harness = await mountLegacyHook(runtime);
+    t.after(() => harness.unmount());
+    const original = Object.assign(new Error("PRIVATE-CAPTURE-DETAIL-AND-TOKEN"), {
+      name: "NotReadableError", domain: "AVFoundationErrorDomain", code: -11819,
+    });
+    runtime.queueMedia({ outcome: "reject", error: original });
+    await assert.rejects(() => harness.run(() => harness.refs.acquireOwnedLegacyMedia({
+      audio: true, video: false, facingMode: "environment",
+    })), error => error === original, "diagnostic reporting cannot replace the native exception");
+    const reports = runtime.errors.filter(report => report.scope === "communication-native-capture");
+    assert.equal(reports.length, 1, "the acquisition boundary reports the cause exactly once");
+    assert.equal(reports[0].metadata.nativeErrorName, "NotReadableError");
+    assert.equal(reports[0].metadata.nativeErrorCode, -11819);
+    assert.equal(reports[0].metadata.audio, true);
+    assert.equal(reports[0].metadata.video, false);
+    assert.equal(reports[0].metadata.appState, "active");
+    assert.equal(JSON.stringify(reports).includes(original.message), false);
+  });
+}

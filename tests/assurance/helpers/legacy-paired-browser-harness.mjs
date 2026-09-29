@@ -11,6 +11,40 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
 
+// Measure a sustained interval of received PCM, not an assumed wall-clock
+// drain. WebRTC playout and AudioWorklet messages can lag the test runner.
+// The caller still owns a bounded deadline: continuous audio or absent input
+// must never become a success simply because the receiver has not caught up.
+export function createLegacyBrowserSilenceObservation({ minimumDurationSeconds = 0.3, maximumEnergy = 0.0001 } = {}) {
+  if (!(minimumDurationSeconds > 0) || !(maximumEnergy > 0)) throw new Error("Invalid silence observation limits");
+  let baseline = null, previous = null, lastWindow = null;
+  let noisyWindows = 0, observations = 0;
+  const inspect = (observation) => {
+    const { samples, energy, packets, sampleRate } = observation;
+    if (!Number.isSafeInteger(samples) || samples < 0 || !Number.isFinite(energy) || energy < 0
+      || !Number.isSafeInteger(packets) || packets < 0 || !Number.isFinite(sampleRate) || sampleRate <= 0) {
+      throw new Error("Missing or invalid received PCM/RTP observation");
+    }
+    if (previous && (samples < previous.samples || energy < previous.energy || packets < previous.packets
+      || sampleRate !== previous.sampleRate)) throw new Error("Received PCM/RTP observation changed identity or moved backwards");
+    previous = { samples, energy, packets, sampleRate };
+    observations += 1;
+    if (!baseline) { baseline = previous; return false; }
+    lastWindow = {
+      samples: samples - baseline.samples, energy: energy - baseline.energy,
+      packets: packets - baseline.packets, durationSeconds: (samples - baseline.samples) / sampleRate,
+    };
+    if (lastWindow.energy >= maximumEnergy) {
+      noisyWindows += 1;
+      baseline = previous;
+      return false;
+    }
+    return lastWindow.samples > 0 && lastWindow.packets > 0
+      && lastWindow.durationSeconds >= minimumDurationSeconds;
+  };
+  return { inspect, read: () => ({ minimumDurationSeconds, maximumEnergy, observations, noisyWindows, lastWindow }) };
+}
+
 export async function createLegacyBrowserAudioSource(frequency) {
   const context = new AudioContext(); await context.resume();
   const oscillator = context.createOscillator(); oscillator.frequency.value = frequency;
@@ -102,7 +136,7 @@ export async function createLegacyBrowserAudioControl({ audioSourceFactory, audi
       return {
         errors: [...errors], senderConnection: sender.connectionState, receiverConnection: receiver.connectionState,
         senderTrack: { enabled: source.track.enabled, state: source.track.readyState, contextState: source.context.state },
-        received: received && { trackState: receivedTrack.readyState, trackEnabled: receivedTrack.enabled, contextState: received.context.state, playbackPaused: received.playback.paused, playbackReadyState: received.playback.readyState, pcmSamples: received.samples, pcmEnergy: received.energy, error: received.error },
+        received: received && { trackState: receivedTrack.readyState, trackEnabled: receivedTrack.enabled, contextState: received.context.state, playbackPaused: received.playback.paused, playbackReadyState: received.playback.readyState, pcmSampleRate: received.context.sampleRate, pcmSamples: received.samples, pcmEnergy: received.energy, error: received.error },
         senderStats: await reports(sender), receiverStats: await reports(receiver),
       };
     },
@@ -243,7 +277,7 @@ export function buildLegacyPairedBrowserBundle({ sourceRoot = process.cwd(), aut
     "presence-adapter": read("node_modules/@supabase/realtime-js/dist/main/phoenix/presenceAdapter.js"),
     "membership-admission": compile(read("_lib/communicationMembershipAdmission.ts"), "communicationMembershipAdmission.ts"),
   };
-  for (const name of ["communicationCallMediaPolicy", "nativeCallTransitionProvenance", "communicationRoomIdentifier", "accountBoundSupabaseRpc"]) {
+  for (const name of ["communicationCallMediaPolicy", "nativeCallTransitionProvenance", "communicationRoomIdentifier", "accountBoundSupabaseRpc", "nativeCallErrorDiagnostics"]) {
     modules[`./${name}.mjs`] = compile(read(`_lib/${name}.mjs`), `${name}.ts`);
   }
   const hook = compile(read("hooks/use-communication-room-session.ts"), "use-communication-room-session.ts");
@@ -266,10 +300,11 @@ export function buildLegacyPairedBrowserBundle({ sourceRoot = process.cwd(), aut
     const {Presence} = require('phoenix');
     const PresenceAdapter = require('presence-adapter').default;
     const mediaPolicy = require('./communicationCallMediaPolicy.mjs');
+    const nativeCallErrorDiagnostics = require('./nativeCallErrorDiagnostics.mjs');
     const membershipAdmission = require('membership-admission');
     const accountBoundRpc = require('./accountBoundSupabaseRpc.mjs');
     const hookSource = ${JSON.stringify(hook)};
-    (${installLegacyPairedBrowser.toString()})({React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, captureRetirementSource: ${JSON.stringify(captureRetirementSource)}, backendSources: ${JSON.stringify(backendSources)}, authenticatedRuntimeFactory: (${createAuthenticatedBrowserRuntime.toString()}), membershipStoreFactory: (${createLegacyBrowserMembershipStore.toString()}), audioSourceFactory: (${createLegacyBrowserAudioSource.toString()}), audioReceiverFactory: (${createLegacyBrowserAudioReceiver.toString()}), audioControlFactory: (${createLegacyBrowserAudioControl.toString()})});
+    (${installLegacyPairedBrowser.toString()})({React, createRoot, Presence, PresenceAdapter, mediaPolicy, nativeCallErrorDiagnostics, membershipAdmission, accountBoundRpc, hookSource, captureRetirementSource: ${JSON.stringify(captureRetirementSource)}, backendSources: ${JSON.stringify(backendSources)}, authenticatedRuntimeFactory: (${createAuthenticatedBrowserRuntime.toString()}), membershipStoreFactory: (${createLegacyBrowserMembershipStore.toString()}), audioSourceFactory: (${createLegacyBrowserAudioSource.toString()}), audioReceiverFactory: (${createLegacyBrowserAudioReceiver.toString()}), audioControlFactory: (${createLegacyBrowserAudioControl.toString()})});
   })();`;
 }
 
@@ -318,7 +353,7 @@ async function createAuthenticatedBrowserRuntime({ sources, connection, endpoint
   return { client, api, accessToken: signedIn.data.session.access_token, authority };
 }
 
-function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, captureRetirementSource, backendSources, authenticatedRuntimeFactory, membershipStoreFactory, audioSourceFactory, audioReceiverFactory, audioControlFactory }) {
+function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapter, mediaPolicy, nativeCallErrorDiagnostics, membershipAdmission, accountBoundRpc, hookSource, captureRetirementSource, backendSources, authenticatedRuntimeFactory, membershipStoreFactory, audioSourceFactory, audioReceiverFactory, audioControlFactory }) {
   const clone = (value) => structuredClone(value);
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const granted = { granted: true, canAskAgain: true, status: "granted" };
@@ -596,6 +631,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       "../_lib/accountBoundSupabaseRpc.mjs": accountBoundRpc,
       "../_lib/communicationCallMediaPolicy.mjs": mediaPolicy,
       "../_lib/logger": { reportRuntimeError: (scope, error) => hub.events.push({ kind: "reported-error", userId, scope, error: String(error?.message ?? error) }) },
+      "../_lib/nativeCallErrorDiagnostics.mjs": nativeCallErrorDiagnostics,
       "../_lib/mediaPermissions": { UNDETERMINED_MEDIA_PERMISSION: permissions, resolveMediaPermission: () => permissions, getMediaPermissionRecoveryMessage: () => null },
       "../_lib/mediaSessionLifecycle": { registerActiveMediaSessionStopper: () => () => {} },
       "../_lib/performancePolicy": { ROOM_HEARTBEAT_MS: 15_000 },
@@ -647,7 +683,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     peers: endpoint.peers.map((peer) => ({ id: peer.fixturePeerId, connection: peer.connectionState, ice: peer.iceConnectionState, signaling: peer.signalingState, gathering: peer.iceGatheringState, localType: peer.localDescription?.type, remoteType: peer.remoteDescription?.type, remoteDescriptionApplications: peer.remoteDescriptionApplications, senders: peer.getSenders().map((sender) => sender.track?.kind ?? "none") })),
     // Acquisition identities survive stream.removeTrack during hook rollback.
     tracks: endpoint.acquiredTracks.map((item) => ({ id: item.id, kind: item.kind, state: item.readyState, enabled: item.enabled })),
-    audioReceivers: endpoint.receivedAudio.map(({ peer, track, receiver }) => ({ peerId: peer.fixturePeerId, connection: peer.connectionState, contextState: receiver.context.state, trackState: track.readyState, trackEnabled: track.enabled, playbackPaused: receiver.playback.paused, playbackReadyState: receiver.playback.readyState, pcmSamples: receiver.samples, pcmEnergy: receiver.energy, error: receiver.error })),
+    audioReceivers: endpoint.receivedAudio.map(({ peer, track, receiver }) => ({ peerId: peer.fixturePeerId, connection: peer.connectionState, contextState: receiver.context.state, trackState: track.readyState, trackEnabled: track.enabled, playbackPaused: receiver.playback.paused, playbackReadyState: receiver.playback.readyState, pcmSampleRate: receiver.context.sampleRate, pcmSamples: receiver.samples, pcmEnergy: receiver.energy, error: receiver.error })),
   });
   window.__pairedCall = {
     async replaceLegacyPresenceMetadata(userId) {

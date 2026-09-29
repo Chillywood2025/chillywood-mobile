@@ -46,6 +46,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private let voipAuthorityDefaultsKey = "com.chillywood.native-calls.session-authority.v1"
   private let presentationAckHost = "bmkkhihfbmsnnmcqkoly.supabase.co"
   private var provider: CXProvider?
+  private let audioSessionDiagnostics = ChillywoodNativeCallDiagnostics.shared
   private var pushRegistry: PKPushRegistry?
   private var activeCalls: [UUID: ActiveNativeCall] = [:]
   private var requestedAnswerTransactions: Set<UUID> = []
@@ -448,7 +449,12 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     activeCalls[callUuid] = call
     persistActiveCallDescriptors()
 
+    ChillywoodNativeCallDiagnostics.shared.record(.incomingReportRequested, callUuid: callUuid)
     provider.reportNewIncomingCall(with: callUuid, update: update) { [weak self] error in
+      ChillywoodNativeCallDiagnostics.shared.record(
+        error == nil ? .incomingReportSucceeded : .incomingReportFailed,
+        callUuid: callUuid, error: error
+      )
       DispatchQueue.main.async {
         guard let self, self.activeCalls[callUuid]?.generation == call.generation else {
           completion?(error ?? ChillywoodNativeCallError.callUnavailable)
@@ -611,6 +617,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   public func requestAnswer(callUuid: String, inviteId: String) async throws {
+    ChillywoodNativeCallDiagnostics.shared.record(.answerRequestReceived, callUuid: UUID(uuidString: callUuid))
     guard let uuid = UUID(uuidString: callUuid) else { throw ChillywoodNativeCallError.invalidCallUuid }
     let normalizedInviteId = inviteId.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !normalizedInviteId.isEmpty else { throw ChillywoodNativeCallError.invalidPayload }
@@ -626,6 +633,8 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
           call.inviteId == normalizedInviteId,
           !self.isTerminalInvite(normalizedInviteId)
         else {
+          ChillywoodNativeCallDiagnostics.shared.record(.answerRequestRejected, callUuid: uuid,
+            error: ChillywoodNativeCallError.callUnavailable)
           continuation.resume(throwing: ChillywoodNativeCallError.callUnavailable)
           return
         }
@@ -636,6 +645,8 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
         if call.ringingDeadline?.wakeup(
           now: Date(), ownsCall: true, answered: false, answerPending: false
         ) == .expire {
+          ChillywoodNativeCallDiagnostics.shared.record(.answerRequestRejected, callUuid: uuid,
+            error: ChillywoodNativeCallError.callUnavailable)
           self.timeoutCall(uuid, generation: call.generation)
           continuation.resume(throwing: ChillywoodNativeCallError.callUnavailable)
           return
@@ -651,15 +662,19 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
         self.callController.request(transaction) { [weak self] error in
           DispatchQueue.main.async {
             if let error {
+              ChillywoodNativeCallDiagnostics.shared.record(.answerRequestRejected, callUuid: uuid, error: error)
               self?.requestedAnswerTransactions.remove(uuid)
               self?.settleRequestedAnswers(uuid, result: .failure(error))
               return
             }
+            ChillywoodNativeCallDiagnostics.shared.record(.answerRequestQueued, callUuid: uuid)
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
               guard
                 let self,
                 self.requestedAnswerTransactions.remove(uuid) != nil
               else { return }
+              ChillywoodNativeCallDiagnostics.shared.record(.answerRequestTimedOut, callUuid: uuid,
+                error: ChillywoodNativeCallError.answerNotPending)
               self.settleRequestedAnswers(
                 uuid,
                 result: .failure(ChillywoodNativeCallError.answerNotPending)
@@ -871,11 +886,13 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       activeCalls[uuid] = call
       persistActiveCallDescriptors()
       action.fulfill()
+      ChillywoodNativeCallDiagnostics.shared.record(.answerFulfilled, callUuid: uuid)
       emit(type: "answered", call: call, reason: reason)
       return
     }
 
     action.fail()
+    ChillywoodNativeCallDiagnostics.shared.record(.answerFailed, callUuid: uuid)
     markTerminalInvite(call.inviteId)
     provider?.reportCall(with: uuid, endedAt: Date(), reason: .failed)
     _ = removeCall(uuid)
@@ -1131,6 +1148,8 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       completion()
       return
     }
+    let diagnosticCallUuid = (payload.dictionaryPayload["callUuid"] as? String).flatMap(UUID.init(uuidString:))
+    ChillywoodNativeCallDiagnostics.shared.record(.pushReceived, callUuid: diagnosticCallUuid)
     guard isBuildEnabled, isRuntimeDefaultEnabled else {
       reportInvalidVoipPushOnMain(completion: completion)
       return
@@ -1141,6 +1160,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
         result[key] = entry.value
       }
       guard voipPayloadMatchesPersistedAuthority(normalizedPayload) else {
+        ChillywoodNativeCallDiagnostics.shared.record(.pushAuthorityRejected, callUuid: diagnosticCallUuid)
         reportInvalidVoipPushOnMain(completion: completion)
         return
       }
@@ -1157,6 +1177,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
         completion: completion
       )
     } catch {
+      ChillywoodNativeCallDiagnostics.shared.record(.pushPayloadRejected, callUuid: diagnosticCallUuid, error: error)
       reportInvalidVoipPushOnMain(completion: completion)
     }
   }
@@ -1187,8 +1208,11 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   public func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
+    ChillywoodNativeCallDiagnostics.shared.record(.answerDelegateReceived, callUuid: action.callUUID)
     requestedAnswerTransactions.remove(action.callUUID)
     guard let call = activeCalls[action.callUUID] else {
+      ChillywoodNativeCallDiagnostics.shared.record(.answerDelegateRejected, callUuid: action.callUUID,
+        error: ChillywoodNativeCallError.callUnavailable)
       settleRequestedAnswers(action.callUUID, result: .failure(ChillywoodNativeCallError.callUnavailable))
       action.fail()
       return
@@ -1197,6 +1221,8 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       now: Date(), ownsCall: true, answered: call.answered,
       answerPending: pendingAnswerActions[action.callUUID] != nil
     ) == .expire {
+      ChillywoodNativeCallDiagnostics.shared.record(.answerDelegateRejected, callUuid: action.callUUID,
+        error: ChillywoodNativeCallError.callUnavailable)
       timeoutCall(action.callUUID, generation: call.generation)
       action.fail()
       return
@@ -1215,6 +1241,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     pendingAnswerTimeouts[action.callUUID] = timeout
     let timeoutDelay = max(0.5, action.timeoutDate.timeIntervalSinceNow - 0.25)
     DispatchQueue.main.asyncAfter(deadline: .now() + timeoutDelay, execute: timeout)
+    ChillywoodNativeCallDiagnostics.shared.record(.answerPending, callUuid: action.callUUID)
     emit(type: "answerRequested", call: call)
     // A foreground React Answer request is authoritative only after CallKit
     // has installed this exact pending action and emitted the exact-bound
@@ -1252,11 +1279,14 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   public func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+    audioSessionDiagnostics.record(.audioActivationReceived)
     do {
       try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
       try audioSession.setActive(true)
+      audioSessionDiagnostics.record(.audioActivationSucceeded)
       emitRaw(["type": "audioSessionActivated"])
     } catch {
+      audioSessionDiagnostics.record(.audioActivationFailed, error: error)
       if activeCalls.isEmpty {
         emitRaw(["type": "audioSessionFailed"])
       } else {
@@ -1266,6 +1296,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   public func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
+    audioSessionDiagnostics.record(.audioDeactivationReceived)
     deactivateAudioSession()
     emitRaw(["type": "audioSessionDeactivated"])
   }

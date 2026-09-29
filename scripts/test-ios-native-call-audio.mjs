@@ -9,6 +9,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const nativePath = join(root, "modules/chillywood-native-calls/ios");
 const coordinator = readFileSync(join(nativePath, "ChillywoodNativeCallCoordinator.swift"), "utf8");
 const policy = readFileSync(join(nativePath, "ChillywoodIncomingCallDeadline.swift"), "utf8");
+const diagnostics = readFileSync(join(nativePath, "ChillywoodNativeCallDiagnostics.swift"), "utf8");
 const harness = readFileSync(join(root, "tests/native/ChillywoodNativeAudioTests.swift"), "utf8");
 const compiler = process.env.CHILLYWOOD_SWIFTC
   || (process.env.SWIFT_PATH ? join(process.env.SWIFT_PATH, "swiftc") : "swiftc");
@@ -47,7 +48,7 @@ function generated(source) {
     output = output.replace(`// INSERT_${key}`, declaration(source, marker));
   }
   assert.doesNotMatch(output, /\/\/ INSERT_/u);
-  return `${policy}\n${output}`;
+  return `${diagnostics}\n${policy}\n${output}`;
 }
 function runCase(label, source, shouldPass) {
   const main = join(temporary, "main.swift"), executable = join(temporary, label);
@@ -84,9 +85,20 @@ try {
   const corruptedEmit = emit.replace('"callUuid": call.uuid.uuidString.lowercased(),', '"callUuid": "retired-native-call",');
   assert.notEqual(corruptedEmit, emit);
   runCase("native-event-identity-corrupted", coordinator.replace(emit, corruptedEmit), false);
+  runCase("audio-diagnostic-arbitrary-call-binding", mutate(
+    "audioSessionDiagnostics.record(.audioActivationReceived)",
+    "audioSessionDiagnostics.record(.audioActivationReceived, callUuid: activeCalls.keys.first)"), false);
+  runCase("audio-diagnostic-success-disconnected", mutate(
+    "audioSessionDiagnostics.record(.audioActivationSucceeded)", "_ = audioSessionDiagnostics"), false);
+  runCase("audio-diagnostic-phase-swapped", mutate(
+    "audioSessionDiagnostics.record(.audioDeactivationReceived)",
+    "audioSessionDiagnostics.record(.audioActivationReceived)"), false);
   if (checkSource) {
-    console.log("Native audio declarations and six mutations generated; Swift compilation/execution NOT RUN.");
+    console.log("Native audio declarations and nine mutations generated; Swift compilation/execution NOT RUN.");
   } else {
+    execFileSync(process.execPath, ["scripts/test-ios-native-call-diagnostics.mjs"], {
+      cwd: root, timeout: 180_000, stdio: "inherit",
+    });
     execFileSync(process.execPath, ["--test", "tests/assurance/ios-native-audio-root-mounted.test.mjs"], {
       cwd: root, timeout: 60_000, stdio: "inherit",
     });

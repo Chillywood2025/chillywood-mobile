@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import http from "node:http";
 import { createRequire } from "node:module";
-import { buildLegacyPairedBrowserBundle } from "../tests/assurance/helpers/legacy-paired-browser-harness.mjs";
+import { buildLegacyPairedBrowserBundle, createLegacyBrowserSilenceObservation } from "../tests/assurance/helpers/legacy-paired-browser-harness.mjs";
 
 const require = createRequire(new URL("../tests/integration/real-peer-browser/package.json", import.meta.url));
 const { chromium } = require("./node_modules/playwright");
@@ -34,6 +34,30 @@ const audioSamples = (endpoint) => pcmValue(endpoint, "pcmSamples");
 const audioPackets = (endpoint) => endpoint.stats.filter((report) => report.kind === "audio").reduce((sum, report) => sum + report.packets, 0);
 const media = (endpoint, kind) => kind === "audio" ? pcmValue(endpoint, "pcmEnergy") : endpoint.stats.filter((report) => report.kind === kind).reduce((sum, report) => sum + report.frames, 0);
 const hasColor = (endpoint) => endpoint.pixels.some((frame) => frame.brightness > 20);
+const endpointAudioObservation = (endpoint) => {
+  const receivers = receivedAudio(endpoint);
+  assert.equal(receivers.length, 1, "A silence measurement requires one current connected audio receiver");
+  const receiver = receivers[0];
+  assert.equal(receiver.error, null, "Received PCM processor must remain healthy");
+  assert.equal(receiver.contextState, "running", "Suspended audio processing is not silence");
+  return { samples: audioSamples(endpoint), energy: media(endpoint, "audio"),
+    packets: audioPackets(endpoint), sampleRate: receiver.pcmSampleRate };
+};
+const waitForReceivedSilence = async (page, select, description, read = () => window.__pairedCall.read()) => {
+  // Retain the original energy ceiling and require at least 300 ms of actual
+  // input PCM. A bounded receiver-settling interval replaces two host sleeps;
+  // it does not treat delayed/missing input or persistent audio as silence.
+  const observation = createLegacyBrowserSilenceObservation();
+  const deadline = performance.now() + 3_000;
+  try {
+    return await wait(page, (state) => {
+      assert.ok(performance.now() <= deadline, `${description}: receiver-settling deadline expired`);
+      return observation.inspect(select(state));
+    }, description, 3_000, read);
+  } catch (error) {
+    throw new Error(`${error.message}\nReceived silence intervals: ${JSON.stringify(observation.read())}`, { cause: error });
+  }
+};
 try {
   browser = await chromium.launch({ headless: true, executablePath: process.env.CHILLY_CHAT_CHROMIUM_PATH || undefined, args: ["--no-sandbox", "--autoplay-policy=no-user-gesture-required", "--allow-loopback-in-peer-connection"] });
   console.log(`Real peer integration: Chromium ${browser.version()}, production hooks, synthetic local capture, in-memory signaling adapter`);
@@ -56,12 +80,13 @@ try {
     "Independent native two-peer audio control must receive actual RTP and nonzero remote-track PCM before testing production hooks", 20_000, read);
     console.log(`Audio control initial diagnostics: ${JSON.stringify(first)}`);
     await audioControl.page.evaluate(() => window.__pairedAudioControl.setEnabled(false));
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    const silentStart = await audioControl.page.evaluate(read);
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    const silentEnd = await audioControl.page.evaluate(read);
-    assert.ok(silentEnd.received.pcmSamples > silentStart.received.pcmSamples && controlPackets(silentEnd) > controlPackets(silentStart), "Independent disabled-track control must keep receiving actual RTP and measured input samples");
-    assert.ok(silentEnd.received.pcmEnergy - silentStart.received.pcmEnergy < 0.0001, "Independent disabled-track control must receive silence");
+    const silentEnd = await waitForReceivedSilence(audioControl.page, (state) => {
+      assert.equal(state.senderTrack.enabled, false, "Independent control must actually disable its source track");
+      assert.equal(state.received?.error, null, "Independent received PCM processor must remain healthy");
+      assert.equal(state.received?.contextState, "running", "Independent receiver must keep processing");
+      return { samples: state.received?.pcmSamples, energy: state.received?.pcmEnergy,
+        packets: controlPackets(state), sampleRate: state.received?.pcmSampleRate };
+    }, "Independent disabled-track control must receive sustained silence with advancing actual RTP and input PCM", read);
     await audioControl.page.evaluate(() => window.__pairedAudioControl.setEnabled(true));
     await wait(audioControl.page, (state) => state.received?.pcmSamples > silentEnd.received.pcmSamples
       && state.received.pcmEnergy > silentEnd.received.pcmEnergy && controlPackets(state) > controlPackets(silentEnd),
@@ -104,16 +129,9 @@ try {
       for (let cycle = 0; cycle < 3; cycle += 1) {
         assert.equal(await page.evaluate((id) => window.__pairedCall.control(id, "setMicrophoneEnabled", false), userId), true, `${userId} mute`);
         await wait(page, (state) => state.endpoints.every((endpoint) => endpoint.participants.some((participant) => participant.userId === userId && participant.micOn === false)), `${userId} mute must project on both hooks`);
-        // Drain previously queued media before observing the receiver. The
-        // outcome is decoded synthetic silence, not the sender's UI flag.
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        const silentStart = await page.evaluate(() => window.__pairedCall.read());
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        const silentEnd = await page.evaluate(() => window.__pairedCall.read());
-        const remoteIndex = silentEnd.endpoints.findIndex((endpoint) => endpoint.userId !== userId);
-        assert.ok(audioSamples(silentEnd.endpoints[remoteIndex]) > audioSamples(silentStart.endpoints[remoteIndex]), `${userId} mute must keep receiving measured PCM samples; missing audio is not silence`);
-        assert.ok(audioPackets(silentEnd.endpoints[remoteIndex]) > audioPackets(silentStart.endpoints[remoteIndex]), `${userId} mute must keep receiving actual audio RTP packets`);
-        assert.ok(media(silentEnd.endpoints[remoteIndex], "audio") - media(silentStart.endpoints[remoteIndex], "audio") < 0.0001, `${userId} mute must stop received synthetic audio energy`);
+        await waitForReceivedSilence(page, (state) => endpointAudioObservation(
+          state.endpoints.find((endpoint) => endpoint.userId !== userId)),
+        `${userId} mute must deliver sustained decoded silence with advancing actual input PCM and RTP`);
         assert.equal(await page.evaluate((id) => window.__pairedCall.control(id, "setMicrophoneEnabled", true), userId), true, `${userId} unmute`);
         if (isVideo) {
         assert.equal(await page.evaluate((id) => window.__pairedCall.control(id, "toggleCamera"), userId), true, `${userId} camera off`);
@@ -158,14 +176,9 @@ try {
           && local.tracks.every((track) => track.kind === "video" ? track.state === "ended" : track.state === "ended" || !track.enabled)
           && state.endpoints.every((endpoint) => endpoint.participants.some((participant) => participant.userId === userId && !participant.micOn && !participant.cameraOn));
       }, `${scenario}: injected AppState background must apply actual capture privacy and durable/peer projection`);
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      const silentStart = await page.evaluate(() => window.__pairedCall.read());
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      const silentEnd = await page.evaluate(() => window.__pairedCall.read());
-      const remoteStart = silentStart.endpoints.find((endpoint) => endpoint.userId !== userId);
-      const remoteEnd = silentEnd.endpoints.find((endpoint) => endpoint.userId !== userId);
-      assert.ok(audioSamples(remoteEnd) > audioSamples(remoteStart) && audioPackets(remoteEnd) > audioPackets(remoteStart), `${scenario}: injected background must preserve measured received samples/RTP for the privacy check`);
-      assert.ok(media(remoteEnd, "audio") - media(remoteStart, "audio") < 0.0001, `${scenario}: injected background must deliver actual silence`);
+      const silentEnd = await waitForReceivedSilence(page, (state) => endpointAudioObservation(
+        state.endpoints.find((endpoint) => endpoint.userId !== userId)),
+      `${scenario}: injected background must deliver sustained silence with actual received input PCM and RTP`);
       await page.evaluate((id) => window.__pairedCall.setAppState(id, "active"), userId);
       const resumed = await wait(page, (state) => {
         const local = state.endpoints.find((endpoint) => endpoint.userId === userId);
