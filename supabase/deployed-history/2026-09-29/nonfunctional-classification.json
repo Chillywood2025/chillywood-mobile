@@ -1,0 +1,484 @@
+{
+  "generatedDate": "2026-09-29",
+  "scope": "Read-only classification of baseline order, branding-only and header-only differences in supplied migration-history comparison. No SQL, production or repository mutation. Raw private SQL omitted.",
+  "inputSha256": "b064e51c736968468be6818353a9354cfe5575b3d0525038c782bdb3f7af521a",
+  "comparisonBasis": "Exact strings and order in supplied statements/sourceStatements arrays. No broad whitespace/comment normalization used for these classifications.",
+  "inputMismatchCount": 26,
+  "classifiedCount": 12,
+  "counts": {
+    "statementOrderOnly": 1,
+    "brandingOnlyValueChanges": 10,
+    "headerAndNewlineOnly": 1,
+    "remainingForFunctionalReviewer": 14,
+    "brandingReplacementOccurrences": 26,
+    "brandingChangedStatements": 11
+  },
+  "entries": [
+    {
+      "version": "202604190004",
+      "name": "baseline_current_schema_truth",
+      "sourceFile": "supabase/migrations/202604190004_baseline_current_schema_truth.sql",
+      "remoteStatementCount": 395,
+      "sourceStatementCount": 395,
+      "rawStatementSequenceEqual": false,
+      "classification": "statement_order_only",
+      "rawStatementMultisetEqual": true,
+      "uniqueStatementCount": 395,
+      "changedPositionCount": 31,
+      "movedStatementClass": "ALTER TABLE ADD CONSTRAINT",
+      "movedTables": {
+        "chat_messages": 3,
+        "chat_thread_members": 3,
+        "communication_room_memberships": 4,
+        "communication_rooms": 6,
+        "watch_party_room_memberships": 5,
+        "watch_party_room_messages": 1,
+        "watch_party_rooms": 9
+      },
+      "statementPositionMap": [
+        {
+          "remoteIndex": 58,
+          "sourceIndex": 43,
+          "statementSha256": "7edbeb17b7e377f4a7074976746b67cafa6bee07eeaff16671fedf7af92c709e"
+        },
+        {
+          "remoteIndex": 59,
+          "sourceIndex": 44,
+          "statementSha256": "13d334eb333dd4ae2a72b38d56deba943c0f27bcfef25cddf19f75eb90bd3aeb"
+        },
+        {
+          "remoteIndex": 60,
+          "sourceIndex": 45,
+          "statementSha256": "3a1c69e2f4971ea0fbddaf50285cec16760c3de90118b4c641e1a24426254e6f"
+        },
+        {
+          "remoteIndex": 61,
+          "sourceIndex": 46,
+          "statementSha256": "51d68c6e851f3183123ddc55b6fc9d3ce05e6f2445c734317058960f0181c97b"
+        },
+        {
+          "remoteIndex": 62,
+          "sourceIndex": 47,
+          "statementSha256": "9d925714a5187c0e3d575d476c6847ef2262f6091ea1bb76624a6f45e8694530"
+        },
+        {
+          "remoteIndex": 63,
+          "sourceIndex": 48,
+          "statementSha256": "3a2bf1e98b5b5b06e220e5ff8aa96bc9589474182a4a3b93cb966a4546691cac"
+        },
+        {
+          "remoteIndex": 43,
+          "sourceIndex": 54,
+          "statementSha256": "20c47ca8d1f33c928d97cc68e5f61954d8f24bf661d763619b75431926bc0823"
+        },
+        {
+          "remoteIndex": 44,
+          "sourceIndex": 55,
+          "statementSha256": "33a3f6e0d9e772cf07f5924e22fd9c99215b262954908f20c8bec5334efacb71"
+        },
+        {
+          "remoteIndex": 45,
+          "sourceIndex": 56,
+          "statementSha256": "3e875092b1f2fd4418084c9342ce0ffdf71b53763c6b39ec2fef40ab0f9c0b5a"
+        },
+        {
+          "remoteIndex": 46,
+          "sourceIndex": 57,
+          "statementSha256": "8f29441f92d32b731c44b523a8ddd87fc7d8083e55b8196b82b5b6b8e122803b"
+        },
+        {
+          "remoteIndex": 47,
+          "sourceIndex": 58,
+          "statementSha256": "290495be42e0733af7a5b63d20cab0688f3aa6ae4574d0dc5a1a2cea313d2503"
+        },
+        {
+          "remoteIndex": 48,
+          "sourceIndex": 59,
+          "statementSha256": "f877ae38b128534c93899f0fb1de5a67256acdbce20c687a63c75536290d9870"
+        },
+        {
+          "remoteIndex": 54,
+          "sourceIndex": 60,
+          "statementSha256": "6a3e5894aa3ecbc8e8db6c3d82c380b5c42214301d1f9ba843ecee6980a4e5c2"
+        },
+        {
+          "remoteIndex": 55,
+          "sourceIndex": 61,
+          "statementSha256": "ef4eea45b414270602c99148f3d0d105e400784a8d5b18d8a49142f4c4d482ad"
+        },
+        {
+          "remoteIndex": 56,
+          "sourceIndex": 62,
+          "statementSha256": "8245e01fb89f70917e677936bd2e515493aac6ccab93d08f6e1557ae6810d6d1"
+        },
+        {
+          "remoteIndex": 57,
+          "sourceIndex": 63,
+          "statementSha256": "ac2e289ec6d53b3b9cb75c6493009422cbbd7b63771fa2696a0a119ef9caf7fb"
+        },
+        {
+          "remoteIndex": 93,
+          "sourceIndex": 87,
+          "statementSha256": "4d8ec40384f463362cf687cdf85b76a0163d8df5e947959379dbfb2b11655514"
+        },
+        {
+          "remoteIndex": 94,
+          "sourceIndex": 88,
+          "statementSha256": "8fc68257f035a5b194a8f1d9983c2c99204e96b986290d6a1e9e4e206e4ac85b"
+        },
+        {
+          "remoteIndex": 95,
+          "sourceIndex": 89,
+          "statementSha256": "2198336f85f7cb3948bf6acb1f9400a240a9f5791ca686ec87d8b5f397fa29c3"
+        },
+        {
+          "remoteIndex": 96,
+          "sourceIndex": 90,
+          "statementSha256": "31e9c93610ed0b420b4b46eed9993a533f1e31a901bcf7bd38d16264b5b03e21"
+        },
+        {
+          "remoteIndex": 97,
+          "sourceIndex": 91,
+          "statementSha256": "d552ddfdbe616054d64eb7218d6409c9e5246636131d8abe75f9a2aae3153982"
+        },
+        {
+          "remoteIndex": 98,
+          "sourceIndex": 92,
+          "statementSha256": "86ec76bfbcec2360a7c06c3d1fd48db885ed0e4ce32e58ff60216253de17621e"
+        },
+        {
+          "remoteIndex": 99,
+          "sourceIndex": 93,
+          "statementSha256": "acfddb8038f3a31d6c31900494709dfe19ccda45a6b0c557d037e1caf3e76cf4"
+        },
+        {
+          "remoteIndex": 100,
+          "sourceIndex": 94,
+          "statementSha256": "43c589658a5d3dbda393911e1f68f71c468e14dfdea4afe9e6fadd67042ef423"
+        },
+        {
+          "remoteIndex": 101,
+          "sourceIndex": 95,
+          "statementSha256": "ce8adefeea9554d5ecf52c6e174915ef2a3739c56eb6694d0300809763962bb9"
+        },
+        {
+          "remoteIndex": 87,
+          "sourceIndex": 96,
+          "statementSha256": "2c879cf55329721155d83be526244155b73456dafac089193e7312a73478fec1"
+        },
+        {
+          "remoteIndex": 88,
+          "sourceIndex": 97,
+          "statementSha256": "732d6712c51dd7cbc9ba65659e45bc67565e6dd3cd5a77c26773484e71d1ef53"
+        },
+        {
+          "remoteIndex": 89,
+          "sourceIndex": 98,
+          "statementSha256": "16d3740563510749f362bd5d50f6d31af17187730ae07e8b587c6017fb927953"
+        },
+        {
+          "remoteIndex": 90,
+          "sourceIndex": 99,
+          "statementSha256": "77b9c98cf23fb7de7ff45b36e9b843321bc28742f1a692acff44d5ecfac085d7"
+        },
+        {
+          "remoteIndex": 91,
+          "sourceIndex": 100,
+          "statementSha256": "0c6187bec9c8652a9e90e634a6cadece8c9874563a1533c59cc19ac96d4863ad"
+        },
+        {
+          "remoteIndex": 92,
+          "sourceIndex": 101,
+          "statementSha256": "a5123675468c01cb4eb8f0424d80d074eb94a67e6dad3e058c12ccdb531be430"
+        }
+      ],
+      "sourceChangeCommit": "9361240c89f798b297bee3aa3784a12991b24d71",
+      "sourceChangeSubject": "Fix local Supabase migration startup",
+      "interpretation": "Exact equality of each statement with order changed. Source commit moves parent keys ahead of dependent foreign keys. No missing, added or modified statement body in the supplied comparison.",
+      "remainingLimit": "Ordered-history equality is false. Multiset equality does not prove equivalent execution, current schema, constraints, or successful replay on an empty database; no such replay/current-definition audit was performed here."
+    },
+    {
+      "version": "202605120004",
+      "name": "livekit_server_registry_router",
+      "sourceFile": "supabase/migrations/202605120004_livekit_server_registry_router.sql",
+      "remoteStatementCount": 49,
+      "sourceStatementCount": 49,
+      "rawStatementSequenceEqual": false,
+      "classification": "branding_only_value_changes",
+      "changedStatementCount": 2,
+      "replacementOccurrences": 2,
+      "remoteBrand": "Chi'llwood",
+      "sourceBrand": "Chi'llywood",
+      "exactEqualityAfterSingleSpecifiedReplacement": true,
+      "sourceChangeCommit": "df731e08b48ccb8db0b916a5b7ac23938bda2cc7",
+      "sourceChangeSubject": "Fix runtime brand spelling fixtures",
+      "interpretation": "Only the escaped SQL brand text changes. Includes display labels, profile/fixture text, returned display text and/or descriptive comments; no other statement text or order differs.",
+      "remainingLimit": "This is not byte-for-byte history parity. Brand strings are observable values; their current persisted/returned state is not established by migration-history comparison."
+    },
+    {
+      "version": "202605260004",
+      "name": "spectator_child_room_safe_fixtures",
+      "sourceFile": "supabase/migrations/202605260004_spectator_child_room_safe_fixtures.sql",
+      "remoteStatementCount": 2,
+      "sourceStatementCount": 2,
+      "rawStatementSequenceEqual": false,
+      "classification": "branding_only_value_changes",
+      "changedStatementCount": 1,
+      "replacementOccurrences": 9,
+      "remoteBrand": "Chi'llwood",
+      "sourceBrand": "Chi'llywood",
+      "exactEqualityAfterSingleSpecifiedReplacement": true,
+      "sourceChangeCommit": "df731e08b48ccb8db0b916a5b7ac23938bda2cc7",
+      "sourceChangeSubject": "Fix runtime brand spelling fixtures",
+      "interpretation": "Only the escaped SQL brand text changes. Includes display labels, profile/fixture text, returned display text and/or descriptive comments; no other statement text or order differs.",
+      "remainingLimit": "This is not byte-for-byte history parity. Brand strings are observable values; their current persisted/returned state is not established by migration-history comparison."
+    },
+    {
+      "version": "202605260006",
+      "name": "spectator_replay_archive_fixture",
+      "sourceFile": "supabase/migrations/202605260006_spectator_replay_archive_fixture.sql",
+      "remoteStatementCount": 1,
+      "sourceStatementCount": 1,
+      "rawStatementSequenceEqual": false,
+      "classification": "branding_only_value_changes",
+      "changedStatementCount": 1,
+      "replacementOccurrences": 2,
+      "remoteBrand": "Chi'llwood",
+      "sourceBrand": "Chi'llywood",
+      "exactEqualityAfterSingleSpecifiedReplacement": true,
+      "sourceChangeCommit": "df731e08b48ccb8db0b916a5b7ac23938bda2cc7",
+      "sourceChangeSubject": "Fix runtime brand spelling fixtures",
+      "interpretation": "Only the escaped SQL brand text changes. Includes display labels, profile/fixture text, returned display text and/or descriptive comments; no other statement text or order differs.",
+      "remainingLimit": "This is not byte-for-byte history parity. Brand strings are observable values; their current persisted/returned state is not established by migration-history comparison."
+    },
+    {
+      "version": "202605260009",
+      "name": "rachi_official_profile_image",
+      "sourceFile": "supabase/migrations/202605260009_rachi_official_profile_image.sql",
+      "remoteStatementCount": 3,
+      "sourceStatementCount": 3,
+      "rawStatementSequenceEqual": false,
+      "classification": "branding_only_value_changes",
+      "changedStatementCount": 1,
+      "replacementOccurrences": 2,
+      "remoteBrand": "Chi'llwood",
+      "sourceBrand": "Chi'llywood",
+      "exactEqualityAfterSingleSpecifiedReplacement": true,
+      "sourceChangeCommit": "df731e08b48ccb8db0b916a5b7ac23938bda2cc7",
+      "sourceChangeSubject": "Fix runtime brand spelling fixtures",
+      "interpretation": "Only the escaped SQL brand text changes. Includes display labels, profile/fixture text, returned display text and/or descriptive comments; no other statement text or order differs.",
+      "remainingLimit": "This is not byte-for-byte history parity. Brand strings are observable values; their current persisted/returned state is not established by migration-history comparison."
+    },
+    {
+      "version": "202605290001",
+      "name": "public_people_search",
+      "sourceFile": "supabase/migrations/202605290001_public_people_search.sql",
+      "remoteStatementCount": 7,
+      "sourceStatementCount": 7,
+      "rawStatementSequenceEqual": false,
+      "classification": "branding_only_value_changes",
+      "changedStatementCount": 1,
+      "replacementOccurrences": 1,
+      "remoteBrand": "Chi'llwood",
+      "sourceBrand": "Chi'llywood",
+      "exactEqualityAfterSingleSpecifiedReplacement": true,
+      "sourceChangeCommit": "df731e08b48ccb8db0b916a5b7ac23938bda2cc7",
+      "sourceChangeSubject": "Fix runtime brand spelling fixtures",
+      "interpretation": "Only the escaped SQL brand text changes. Includes display labels, profile/fixture text, returned display text and/or descriptive comments; no other statement text or order differs.",
+      "remainingLimit": "This is not byte-for-byte history parity. Brand strings are observable values; their current persisted/returned state is not established by migration-history comparison."
+    },
+    {
+      "version": "202605290003",
+      "name": "public_people_search_operator_proof_hardening",
+      "sourceFile": "supabase/migrations/202605290003_public_people_search_operator_proof_hardening.sql",
+      "remoteStatementCount": 12,
+      "sourceStatementCount": 12,
+      "rawStatementSequenceEqual": false,
+      "classification": "branding_only_value_changes",
+      "changedStatementCount": 1,
+      "replacementOccurrences": 3,
+      "remoteBrand": "Chi'llwood",
+      "sourceBrand": "Chi'llywood",
+      "exactEqualityAfterSingleSpecifiedReplacement": true,
+      "sourceChangeCommit": "df731e08b48ccb8db0b916a5b7ac23938bda2cc7",
+      "sourceChangeSubject": "Fix runtime brand spelling fixtures",
+      "interpretation": "Only the escaped SQL brand text changes. Includes display labels, profile/fixture text, returned display text and/or descriptive comments; no other statement text or order differs.",
+      "remainingLimit": "This is not byte-for-byte history parity. Brand strings are observable values; their current persisted/returned state is not established by migration-history comparison."
+    },
+    {
+      "version": "20260603014500",
+      "name": "self_service_account_deletion_30_day_restore",
+      "sourceFile": "supabase/migrations/20260603014500_self_service_account_deletion_30_day_restore.sql",
+      "remoteStatementCount": 35,
+      "sourceStatementCount": 35,
+      "rawStatementSequenceEqual": false,
+      "classification": "branding_only_value_changes",
+      "changedStatementCount": 1,
+      "replacementOccurrences": 3,
+      "remoteBrand": "Chi'llwood",
+      "sourceBrand": "Chi'llywood",
+      "exactEqualityAfterSingleSpecifiedReplacement": true,
+      "sourceChangeCommit": "df731e08b48ccb8db0b916a5b7ac23938bda2cc7",
+      "sourceChangeSubject": "Fix runtime brand spelling fixtures",
+      "interpretation": "Only the escaped SQL brand text changes. Includes display labels, profile/fixture text, returned display text and/or descriptive comments; no other statement text or order differs.",
+      "remainingLimit": "This is not byte-for-byte history parity. Brand strings are observable values; their current persisted/returned state is not established by migration-history comparison."
+    },
+    {
+      "version": "20260603165000",
+      "name": "money_access_grants_product_catalog",
+      "sourceFile": "supabase/migrations/20260603165000_money_access_grants_product_catalog.sql",
+      "remoteStatementCount": 80,
+      "sourceStatementCount": 80,
+      "rawStatementSequenceEqual": false,
+      "classification": "branding_only_value_changes",
+      "changedStatementCount": 1,
+      "replacementOccurrences": 1,
+      "remoteBrand": "Chi'llwood",
+      "sourceBrand": "Chi'llywood",
+      "exactEqualityAfterSingleSpecifiedReplacement": true,
+      "sourceChangeCommit": "df731e08b48ccb8db0b916a5b7ac23938bda2cc7",
+      "sourceChangeSubject": "Fix runtime brand spelling fixtures",
+      "interpretation": "Only the escaped SQL brand text changes. Includes display labels, profile/fixture text, returned display text and/or descriptive comments; no other statement text or order differs.",
+      "remainingLimit": "This is not byte-for-byte history parity. Brand strings are observable values; their current persisted/returned state is not established by migration-history comparison."
+    },
+    {
+      "version": "20260604043000",
+      "name": "stripe_merch_payout_sandbox_readiness",
+      "sourceFile": "supabase/migrations/20260604043000_stripe_merch_payout_sandbox_readiness.sql",
+      "remoteStatementCount": 39,
+      "sourceStatementCount": 39,
+      "rawStatementSequenceEqual": false,
+      "classification": "branding_only_value_changes",
+      "changedStatementCount": 1,
+      "replacementOccurrences": 2,
+      "remoteBrand": "Chi'llwood",
+      "sourceBrand": "Chi'llywood",
+      "exactEqualityAfterSingleSpecifiedReplacement": true,
+      "sourceChangeCommit": "df731e08b48ccb8db0b916a5b7ac23938bda2cc7",
+      "sourceChangeSubject": "Fix runtime brand spelling fixtures",
+      "interpretation": "Only the escaped SQL brand text changes. Includes display labels, profile/fixture text, returned display text and/or descriptive comments; no other statement text or order differs.",
+      "remainingLimit": "This is not byte-for-byte history parity. Brand strings are observable values; their current persisted/returned state is not established by migration-history comparison."
+    },
+    {
+      "version": "20260605000610",
+      "name": "creator_monetization_in_app_setup_flows",
+      "sourceFile": "supabase/migrations/20260605000610_creator_monetization_in_app_setup_flows.sql",
+      "remoteStatementCount": 28,
+      "sourceStatementCount": 28,
+      "rawStatementSequenceEqual": false,
+      "classification": "branding_only_value_changes",
+      "changedStatementCount": 1,
+      "replacementOccurrences": 1,
+      "remoteBrand": "Chi'llwood",
+      "sourceBrand": "Chi'llywood",
+      "exactEqualityAfterSingleSpecifiedReplacement": true,
+      "sourceChangeCommit": "df731e08b48ccb8db0b916a5b7ac23938bda2cc7",
+      "sourceChangeSubject": "Fix runtime brand spelling fixtures",
+      "interpretation": "Only the escaped SQL brand text changes. Includes display labels, profile/fixture text, returned display text and/or descriptive comments; no other statement text or order differs.",
+      "remainingLimit": "This is not byte-for-byte history parity. Brand strings are observable values; their current persisted/returned state is not established by migration-history comparison."
+    },
+    {
+      "version": "20260827011240",
+      "name": "decouple_ordinary_live_access_from_creator_money_eligibility",
+      "sourceFile": "supabase/migrations/20260827011240_decouple_ordinary_live_access_from_creator_money_eligibility.sql",
+      "remoteStatementCount": 1,
+      "sourceStatementCount": 1,
+      "rawStatementSequenceEqual": false,
+      "classification": "leading_comment_header_and_trailing_newline_only",
+      "leadingHeaderCharacters": 255,
+      "trailingNewlineCharacters": 1,
+      "executableBodyExact": true,
+      "sourceChangeCommit": "828a3bd990c893d2578424cb8f8ec56c7488ea66",
+      "sourceChangeSubject": "Close Live room entry lifecycle gaps end to end (#274)",
+      "interpretation": "The sole source statement equals the remote statement plus four leading SQL line comments, a blank line, and one trailing newline. Header is outside the DO body.",
+      "remainingLimit": "Statement text/history hashes differ. This comparison does not verify the current target function definition or prove that the historical migration effect persists after later migrations."
+    }
+  ],
+  "remainingMismatches": [
+    {
+      "version": "202605140001",
+      "name": "dmca_operational_tooling",
+      "scope": "functional reviewer",
+      "containsAlsoBrandingChange": false
+    },
+    {
+      "version": "202605140002",
+      "name": "dmca_notice_rpc_lint_fix",
+      "scope": "functional reviewer",
+      "containsAlsoBrandingChange": false
+    },
+    {
+      "version": "202605140003",
+      "name": "dmca_case_number_lint_fix",
+      "scope": "functional reviewer",
+      "containsAlsoBrandingChange": false
+    },
+    {
+      "version": "202605260011",
+      "name": "rachi_originals_public_video_fixture",
+      "scope": "functional reviewer",
+      "containsAlsoBrandingChange": true
+    },
+    {
+      "version": "202605290002",
+      "name": "public_people_search_rachi_official",
+      "scope": "functional reviewer",
+      "containsAlsoBrandingChange": true
+    },
+    {
+      "version": "20260530191115",
+      "name": "media_malware_scanning_pipeline",
+      "scope": "functional reviewer",
+      "containsAlsoBrandingChange": false
+    },
+    {
+      "version": "20260604015548",
+      "name": "money_failure_paths_event_pass",
+      "scope": "functional reviewer",
+      "containsAlsoBrandingChange": false
+    },
+    {
+      "version": "20260604015818",
+      "name": "allow_admin_sql_revoke_proof",
+      "scope": "functional reviewer",
+      "containsAlsoBrandingChange": false
+    },
+    {
+      "version": "20260611231512",
+      "name": "paid_watch_party_seats_v1_sandbox",
+      "scope": "functional reviewer",
+      "containsAlsoBrandingChange": false
+    },
+    {
+      "version": "20260624231731",
+      "name": "account_purge_deidentification_proof",
+      "scope": "functional reviewer",
+      "containsAlsoBrandingChange": false
+    },
+    {
+      "version": "20260628211710",
+      "name": "chilly_chat_direct_thread_repair_safety_guards",
+      "scope": "functional reviewer",
+      "containsAlsoBrandingChange": false
+    },
+    {
+      "version": "20260728004158",
+      "name": "cognitive_product_quality_proof_trigger_predicate_diagnostic",
+      "scope": "functional reviewer",
+      "containsAlsoBrandingChange": false
+    },
+    {
+      "version": "20260728004416",
+      "name": "cognitive_product_quality_confidence_hash_canonicalization",
+      "scope": "functional reviewer",
+      "containsAlsoBrandingChange": false
+    },
+    {
+      "version": "20260728005610",
+      "name": "cognitive_product_quality_proof_trigger_final",
+      "scope": "functional reviewer",
+      "containsAlsoBrandingChange": false
+    }
+  ],
+  "deploymentInterpretation": "These explained historical differences do not authorize rewriting deployed versions or prove full production/source parity. Preserve immutable history; evaluate current authoritative definitions and forward deployment prerequisites separately."
+}

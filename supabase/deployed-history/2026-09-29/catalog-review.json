@@ -1,0 +1,841 @@
+{
+  "projectId": "bmkkhihfbmsnnmcqkoly",
+  "observedDate": "2026-09-29",
+  "scope": "Read-only catalog metadata and comparisons; no user rows or invoked functions",
+  "preflight": {
+    "query": "select jsonb_build_object(\n 'observed_at',now(),\n 'history',(select jsonb_build_object('count',count(*),'latest',max(version),'pending_record_count',count(*) filter(where version in ('20260928164743','20260929004448'))) from supabase_migrations.schema_migrations),\n 'relations',(select jsonb_agg(jsonb_build_object('schema',n.nspname,'name',c.relname,'estimated_rows',c.reltuples,'table_bytes',pg_table_size(c.oid),'total_bytes',pg_total_relation_size(c.oid),'rls',c.relrowsecurity,'force_rls',c.relforcerowsecurity,'authenticated_table_update',has_table_privilege('authenticated',c.oid,'UPDATE'),'acl',c.relacl::text) order by c.relname) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('communication_rooms','communication_room_memberships')),\n 'ownership_columns',(select coalesce(jsonb_agg(jsonb_build_object('name',a.attname,'authenticated_update',has_column_privilege('authenticated',a.attrelid,a.attnum,'UPDATE'))),'[]'::jsonb) from pg_attribute a where a.attrelid='public.communication_room_memberships'::regclass and a.attname in ('membership_generation','membership_admission_attempt') and not a.attisdropped),\n 'triggers',(select jsonb_agg(jsonb_build_object('table',t.tgrelid::regclass::text,'name',t.tgname,'enabled',t.tgenabled,'definition',pg_get_triggerdef(t.oid)) order by t.tgrelid::regclass::text,t.tgname) from pg_trigger t where t.tgrelid in ('public.communication_rooms'::regclass,'public.communication_room_memberships'::regclass) and not t.tgisinternal),\n 'partial_new_functions',(select coalesce(jsonb_agg(jsonb_build_object('name',p.oid::regprocedure::text,'sha256',encode(sha256(convert_to(pg_get_functiondef(p.oid),'UTF8')),'hex'))),'[]'::jsonb) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','private') and p.proname in ('advance_communication_membership_generation','guard_owned_communication_membership_write','leave_communication_room_session','authorize_communication_room_admission_internal','read_communication_room_admission','join_communication_room_owned','broadcast_communication_state_invalidation')),\n 'policies',(select jsonb_agg(jsonb_build_object('table',tablename,'name',policyname,'command',cmd,'roles',roles,'using',qual,'with_check',with_check) order by tablename,policyname) from pg_policies where schemaname='public' and tablename in ('communication_rooms','communication_room_memberships')),\n 'publications',(select coalesce(jsonb_agg(jsonb_build_object('publication',pubname,'table',tablename)),'[]'::jsonb) from pg_publication_tables where schemaname='public' and tablename in ('communication_rooms','communication_room_memberships')),\n 'current_realtime_partitions',(select count(*) from pg_inherits i join pg_class p on p.oid=i.inhparent join pg_namespace pn on pn.oid=p.relnamespace where pn.nspname='realtime' and p.relname='messages'),\n 'target_lock_activity',(select jsonb_build_object('held',count(*) filter(where granted),'waiting',count(*) filter(where not granted)) from pg_locks where relation in ('public.communication_rooms'::regclass,'public.communication_room_memberships'::regclass)),\n 'long_transactions',(select jsonb_build_object('over_60s',count(*) filter(where now()-xact_start>interval '60 seconds'),'oldest_seconds',coalesce(max(extract(epoch from now()-xact_start)),0)) from pg_stat_activity where datname=current_database() and pid<>pg_backend_pid() and xact_start is not null)\n) as preflight;",
+    "result": {
+      "history": {
+        "count": 408,
+        "latest": "20260919223835",
+        "pending_record_count": 0
+      },
+      "policies": [
+        {
+          "name": "communication_room_memberships_host_update_policy",
+          "roles": [
+            "authenticated"
+          ],
+          "table": "communication_room_memberships",
+          "using": "(whole_app_exact_current_session_authority() AND (EXISTS ( SELECT 1\n   FROM communication_rooms room\n  WHERE ((room.room_id = communication_room_memberships.room_id) AND (room.host_user_id = (auth.uid())::text)))))",
+          "command": "UPDATE",
+          "with_check": "(whole_app_exact_current_session_authority() AND (EXISTS ( SELECT 1\n   FROM communication_rooms room\n  WHERE ((room.room_id = communication_room_memberships.room_id) AND (room.host_user_id = (auth.uid())::text)))))"
+        },
+        {
+          "name": "communication_room_memberships_select_policy",
+          "roles": [
+            "authenticated"
+          ],
+          "table": "communication_room_memberships",
+          "using": "can_read_communication_room_authority(room_id)",
+          "command": "SELECT",
+          "with_check": null
+        },
+        {
+          "name": "communication_room_memberships_self_update_policy",
+          "roles": [
+            "authenticated"
+          ],
+          "table": "communication_room_memberships",
+          "using": "((user_id = (auth.uid())::text) AND whole_app_exact_current_session_authority())",
+          "command": "UPDATE",
+          "with_check": "((user_id = (auth.uid())::text) AND whole_app_exact_current_session_authority())"
+        },
+        {
+          "name": "communication_rooms_host_update_policy",
+          "roles": [
+            "authenticated"
+          ],
+          "table": "communication_rooms",
+          "using": "((host_user_id = (auth.uid())::text) AND whole_app_exact_current_session_authority())",
+          "command": "UPDATE",
+          "with_check": "((host_user_id = (auth.uid())::text) AND whole_app_exact_current_session_authority())"
+        },
+        {
+          "name": "communication_rooms_insert_policy",
+          "roles": [
+            "authenticated"
+          ],
+          "table": "communication_rooms",
+          "using": null,
+          "command": "INSERT",
+          "with_check": "((host_user_id = (auth.uid())::text) AND whole_app_exact_current_session_authority() AND (NOT is_account_access_restricted((auth.uid())::text)) AND (room_id = upper(btrim(room_id))) AND (room_code = room_id) AND (status = 'active'::text) AND (((linked_party_id IS NULL) AND (linked_room_code IS NULL) AND (linked_room_mode IS NULL)) OR (EXISTS ( SELECT 1\n   FROM watch_party_rooms linked_party\n  WHERE ((linked_party.party_id = communication_rooms.linked_party_id) AND (linked_party.party_id = communication_rooms.linked_room_code) AND ((linked_party.host_user_id)::text = (auth.uid())::text) AND linked_party.is_active AND can_read_watch_party_room_authority(linked_party.party_id))))))"
+        },
+        {
+          "name": "communication_rooms_select_policy",
+          "roles": [
+            "authenticated"
+          ],
+          "table": "communication_rooms",
+          "using": "(can_read_communication_room_authority(room_id) OR communication_room_creation_readback_allowed(room_id, host_user_id, status, linked_party_id))",
+          "command": "SELECT",
+          "with_check": null
+        }
+      ],
+      "triggers": [
+        {
+          "name": "enforce_communication_membership_identity",
+          "table": "communication_room_memberships",
+          "enabled": "O",
+          "definition": "CREATE TRIGGER enforce_communication_membership_identity BEFORE UPDATE ON public.communication_room_memberships FOR EACH ROW EXECUTE FUNCTION enforce_communication_membership_identity()"
+        },
+        {
+          "name": "enforce_communication_room_memberships_account_access_guard",
+          "table": "communication_room_memberships",
+          "enabled": "O",
+          "definition": "CREATE TRIGGER enforce_communication_room_memberships_account_access_guard BEFORE INSERT OR UPDATE ON public.communication_room_memberships FOR EACH ROW EXECUTE FUNCTION enforce_communication_room_memberships_account_access_guard()"
+        },
+        {
+          "name": "prevent_ended_communication_room_membership_reactivation",
+          "table": "communication_room_memberships",
+          "enabled": "O",
+          "definition": "CREATE TRIGGER prevent_ended_communication_room_membership_reactivation BEFORE INSERT OR UPDATE OF membership_state, camera_enabled, mic_enabled ON public.communication_room_memberships FOR EACH ROW EXECUTE FUNCTION prevent_ended_communication_room_membership_reactivation()"
+        },
+        {
+          "name": "enforce_communication_room_identity",
+          "table": "communication_rooms",
+          "enabled": "O",
+          "definition": "CREATE TRIGGER enforce_communication_room_identity BEFORE INSERT OR UPDATE ON public.communication_rooms FOR EACH ROW EXECUTE FUNCTION enforce_communication_room_identity()"
+        },
+        {
+          "name": "enforce_communication_rooms_abuse_guard",
+          "table": "communication_rooms",
+          "enabled": "O",
+          "definition": "CREATE TRIGGER enforce_communication_rooms_abuse_guard BEFORE INSERT ON public.communication_rooms FOR EACH ROW EXECUTE FUNCTION enforce_communication_rooms_abuse_guard()"
+        },
+        {
+          "name": "enforce_livekit_room_namespace_unique_trigger",
+          "table": "communication_rooms",
+          "enabled": "O",
+          "definition": "CREATE TRIGGER enforce_livekit_room_namespace_unique_trigger BEFORE INSERT OR UPDATE OF room_id ON public.communication_rooms FOR EACH ROW EXECUTE FUNCTION reserve_livekit_room_namespace()"
+        },
+        {
+          "name": "release_livekit_room_namespace_trigger",
+          "table": "communication_rooms",
+          "enabled": "O",
+          "definition": "CREATE TRIGGER release_livekit_room_namespace_trigger AFTER DELETE ON public.communication_rooms FOR EACH ROW EXECUTE FUNCTION release_livekit_room_namespace()"
+        }
+      ],
+      "relations": [
+        {
+          "acl": "{postgres=arwdDxtm/postgres,authenticated=rd/postgres,service_role=arwdDxtm/postgres}",
+          "rls": true,
+          "name": "communication_room_memberships",
+          "schema": "public",
+          "force_rls": false,
+          "table_bytes": 327680,
+          "total_bytes": 532480,
+          "estimated_rows": 891,
+          "authenticated_table_update": false
+        },
+        {
+          "acl": "{postgres=arwdDxtm/postgres,authenticated=ard/postgres,service_role=arwdDxtm/postgres}",
+          "rls": true,
+          "name": "communication_rooms",
+          "schema": "public",
+          "force_rls": false,
+          "table_bytes": 237568,
+          "total_bytes": 466944,
+          "estimated_rows": 1209,
+          "authenticated_table_update": false
+        }
+      ],
+      "observed_at": "2026-09-29T04:49:52.090293+00:00",
+      "publications": [],
+      "long_transactions": {
+        "over_60s": 0,
+        "oldest_seconds": 0
+      },
+      "ownership_columns": [],
+      "target_lock_activity": {
+        "held": 1,
+        "waiting": 0
+      },
+      "partial_new_functions": [],
+      "current_realtime_partitions": 7
+    }
+  },
+  "chatPredecessors": {
+    "queries": [
+      {
+        "sql": "select p.oid::regprocedure::text as signature, p.proname, pg_get_function_identity_arguments(p.oid) as identity_args, md5(p.prosrc) as body_md5, p.prosecdef as security_definer, p.proconfig, has_function_privilege('anon',p.oid,'EXECUTE') as anon_execute, has_function_privilege('authenticated',p.oid,'EXECUTE') as authenticated_execute, has_function_privilege('service_role',p.oid,'EXECUTE') as service_role_execute from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('join_communication_room_session','broadcast_communication_room_signal','assert_account_private_feature_allowed','can_access_chat_thread','can_access_communication_realtime_topic','can_read_communication_room_authority','can_read_watch_party_room_authority','communication_sdp_is_receive_only_internal','has_channel_audience_block_between','is_account_access_restricted','user_has_active_entitlement','whole_app_exact_current_session_authority_internal','resolve_paid_watch_party_ticket_access','watch_party_room_self_access_allowed_internal') order by p.proname,signature;",
+        "rows": [
+          {
+            "signature": "assert_account_private_feature_allowed(text,text)",
+            "proname": "assert_account_private_feature_allowed",
+            "identity_args": "p_user_id text, p_feature text",
+            "body_md5": "c324fe4b6a66dca902df790cc0ab6eb5",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=public"
+            ],
+            "anon_execute": true,
+            "authenticated_execute": true,
+            "service_role_execute": true
+          },
+          {
+            "signature": "broadcast_communication_room_signal(text,text,jsonb)",
+            "proname": "broadcast_communication_room_signal",
+            "identity_args": "p_room_id text, p_event text, p_payload jsonb",
+            "body_md5": "659ffe7fd40b30a64185482ccd617092",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ],
+            "anon_execute": false,
+            "authenticated_execute": true,
+            "service_role_execute": false
+          },
+          {
+            "signature": "can_access_chat_thread(uuid)",
+            "proname": "can_access_chat_thread",
+            "identity_args": "target_thread_id uuid",
+            "body_md5": "0671cb72a9909e2fcbc2c464bdbc75fd",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ],
+            "anon_execute": false,
+            "authenticated_execute": true,
+            "service_role_execute": true
+          },
+          {
+            "signature": "can_access_communication_realtime_topic(text)",
+            "proname": "can_access_communication_realtime_topic",
+            "identity_args": "p_topic text",
+            "body_md5": "a2762ba223ad5ec27d1bc37a7b647597",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ],
+            "anon_execute": false,
+            "authenticated_execute": true,
+            "service_role_execute": true
+          },
+          {
+            "signature": "can_read_communication_room_authority(text)",
+            "proname": "can_read_communication_room_authority",
+            "identity_args": "p_room_id text",
+            "body_md5": "4b7cb8d3900b633bfe7317a445c80c2d",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ],
+            "anon_execute": false,
+            "authenticated_execute": true,
+            "service_role_execute": true
+          },
+          {
+            "signature": "can_read_watch_party_room_authority(text)",
+            "proname": "can_read_watch_party_room_authority",
+            "identity_args": "p_party_id text",
+            "body_md5": "6608964e946b82b97c66f5c84c04861e",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ],
+            "anon_execute": false,
+            "authenticated_execute": true,
+            "service_role_execute": true
+          },
+          {
+            "signature": "communication_sdp_is_receive_only_internal(text)",
+            "proname": "communication_sdp_is_receive_only_internal",
+            "identity_args": "p_sdp text",
+            "body_md5": "64d14b87dde66cbbebfb3eb3fd11be40",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ],
+            "anon_execute": false,
+            "authenticated_execute": false,
+            "service_role_execute": false
+          },
+          {
+            "signature": "has_channel_audience_block_between(text,text)",
+            "proname": "has_channel_audience_block_between",
+            "identity_args": "p_user_a text, p_user_b text",
+            "body_md5": "291833302a07610fa0de787aec61da3e",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=public"
+            ],
+            "anon_execute": true,
+            "authenticated_execute": true,
+            "service_role_execute": true
+          },
+          {
+            "signature": "is_account_access_restricted(text)",
+            "proname": "is_account_access_restricted",
+            "identity_args": "p_user_id text",
+            "body_md5": "2832033b8d2bd9e4c2a0ce2710520426",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ],
+            "anon_execute": true,
+            "authenticated_execute": true,
+            "service_role_execute": true
+          },
+          {
+            "signature": "join_communication_room_session(text,text,text,boolean,boolean)",
+            "proname": "join_communication_room_session",
+            "identity_args": "p_room_id text, p_display_name text, p_avatar_url text, p_camera_enabled boolean, p_mic_enabled boolean",
+            "body_md5": "c764619e8ee86f3e29656c88a7570108",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ],
+            "anon_execute": false,
+            "authenticated_execute": true,
+            "service_role_execute": false
+          },
+          {
+            "signature": "resolve_paid_watch_party_ticket_access(text)",
+            "proname": "resolve_paid_watch_party_ticket_access",
+            "identity_args": "p_party_id text",
+            "body_md5": "61b607234d41115cf25566b45082f78c",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ],
+            "anon_execute": false,
+            "authenticated_execute": true,
+            "service_role_execute": true
+          },
+          {
+            "signature": "user_has_active_entitlement(text,text[])",
+            "proname": "user_has_active_entitlement",
+            "identity_args": "target_user_id text, required_entitlement_keys text[]",
+            "body_md5": "eb16fb5f241067682bc39fd42523ce67",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ],
+            "anon_execute": false,
+            "authenticated_execute": true,
+            "service_role_execute": true
+          },
+          {
+            "signature": "watch_party_room_self_access_allowed_internal(text,text)",
+            "proname": "watch_party_room_self_access_allowed_internal",
+            "identity_args": "p_party_id text, p_user_id text",
+            "body_md5": "1f2f12e2e2920c9a249549cb4b804da3",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ],
+            "anon_execute": false,
+            "authenticated_execute": false,
+            "service_role_execute": false
+          },
+          {
+            "signature": "whole_app_exact_current_session_authority_internal()",
+            "proname": "whole_app_exact_current_session_authority_internal",
+            "identity_args": "",
+            "body_md5": "078aedd6b2f44f1df836b7ace9ce67fa",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ],
+            "anon_execute": false,
+            "authenticated_execute": false,
+            "service_role_execute": false
+          }
+        ]
+      },
+      {
+        "sql": "select p.oid::regprocedure::text as signature, pg_get_function_arguments(p.oid) as arguments_with_defaults, pg_get_function_result(p.oid) as result_type, pg_get_userbyid(p.proowner) as owner, p.provolatile, p.proparallel, p.proleakproof, p.proacl::text as acl from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('join_communication_room_session','broadcast_communication_room_signal') order by signature;",
+        "rows": [
+          {
+            "signature": "broadcast_communication_room_signal(text,text,jsonb)",
+            "arguments_with_defaults": "p_room_id text, p_event text, p_payload jsonb DEFAULT '{}'::jsonb",
+            "result_type": "jsonb",
+            "owner": "postgres",
+            "provolatile": "v",
+            "proparallel": "u",
+            "proleakproof": false,
+            "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+          },
+          {
+            "signature": "join_communication_room_session(text,text,text,boolean,boolean)",
+            "arguments_with_defaults": "p_room_id text, p_display_name text DEFAULT NULL::text, p_avatar_url text DEFAULT NULL::text, p_camera_enabled boolean DEFAULT false, p_mic_enabled boolean DEFAULT true",
+            "result_type": "SETOF communication_room_memberships",
+            "owner": "postgres",
+            "provolatile": "v",
+            "proparallel": "u",
+            "proleakproof": false,
+            "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+          }
+        ]
+      }
+    ]
+  },
+  "moneyReview": {
+    "queries": [
+      {
+        "sql": "select p.oid::regprocedure::text as signature, md5(p.prosrc) as body_md5, md5(pg_get_functiondef(p.oid)) as definition_md5, p.prosecdef as security_definer, p.proconfig, position('ticket_blocked_sold_out' in p.prosrc) > 0 as has_projector_capacity_path, position('grants_livekit_publish' in p.prosrc) > 0 as has_legacy_metadata_flag, position('payout_access' in p.prosrc) > 0 as has_safe_payout_flag from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('admin_revoke_money_access_grant_for_proof','sync_paid_watch_party_ticket_from_access_grant','prevent_paid_watch_party_ticket_oversell') order by signature;",
+        "rows": [
+          {
+            "signature": "admin_revoke_money_access_grant_for_proof(uuid,text)",
+            "body_md5": "0886f823ca8c522e031e07e161be78ea",
+            "definition_md5": "d9a2e5ea2e5c4953ec5c365420414c49",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ],
+            "has_projector_capacity_path": false,
+            "has_legacy_metadata_flag": false,
+            "has_safe_payout_flag": true
+          },
+          {
+            "signature": "prevent_paid_watch_party_ticket_oversell()",
+            "body_md5": "49bf1e22bb434d691bf74324ac87c764",
+            "definition_md5": "0a471f9757ad2ca8c36f7737219cef6b",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ],
+            "has_projector_capacity_path": true,
+            "has_legacy_metadata_flag": false,
+            "has_safe_payout_flag": false
+          },
+          {
+            "signature": "sync_paid_watch_party_ticket_from_access_grant()",
+            "body_md5": "94ed9d6618315c54a687ce7ef6f63908",
+            "definition_md5": "339c23e9b914a7ec7d30e01d1d6981ca",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ],
+            "has_projector_capacity_path": false,
+            "has_legacy_metadata_flag": false,
+            "has_safe_payout_flag": false
+          }
+        ]
+      },
+      {
+        "sql": "select t.tgname, t.tgenabled, t.tgtype, p.oid::regprocedure::text as function_signature, md5(pg_get_triggerdef(t.oid)) as trigger_definition_md5 from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace join pg_proc p on p.oid=t.tgfoid where not t.tgisinternal and n.nspname='public' and c.relname='paid_watch_party_tickets' order by t.tgname;",
+        "rows": [
+          {
+            "tgname": "prevent_paid_watch_party_ticket_oversell_insert",
+            "tgenabled": "O",
+            "tgtype": 7,
+            "function_signature": "prevent_paid_watch_party_ticket_oversell()",
+            "trigger_definition_md5": "d592184a82b6c875363b3e4693eb0ae4"
+          }
+        ]
+      },
+      {
+        "sql": "select p.oid::regprocedure::text as signature, md5(p.prosrc) as body_md5, p.prosecdef as security_definer, p.proconfig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('can_read_watch_party_room_authority','resolve_paid_watch_party_ticket_access','resolve_paid_watch_party_ticket_access_pre_integrity_closeout') order by signature;",
+        "rows": [
+          {
+            "signature": "can_read_watch_party_room_authority(text)",
+            "body_md5": "6608964e946b82b97c66f5c84c04861e",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ]
+          },
+          {
+            "signature": "resolve_paid_watch_party_ticket_access(text)",
+            "body_md5": "61b607234d41115cf25566b45082f78c",
+            "security_definer": true,
+            "proconfig": [
+              "search_path=\"\""
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "canonicalChatHashes": {
+    "can_access_chat_thread": {
+      "name": "can_access_chat_thread",
+      "source": "supabase/migrations/202608250001_chilly_chat_room_authority_closure.sql",
+      "line": 94,
+      "body_md5": "0671cb72a9909e2fcbc2c464bdbc75fd",
+      "remote_version": "202608250001",
+      "parity": "exact_cli_statement_bytes"
+    },
+    "user_has_active_entitlement": {
+      "name": "user_has_active_entitlement",
+      "source": "supabase/migrations/20260824034109_creator_money_authority_integrity_closeout.sql",
+      "line": 4892,
+      "body_md5": "eb16fb5f241067682bc39fd42523ce67",
+      "remote_version": "20260824034109",
+      "parity": "exact_cli_statement_bytes"
+    },
+    "resolve_paid_watch_party_ticket_access": {
+      "name": "resolve_paid_watch_party_ticket_access",
+      "source": "supabase/migrations/20260906184500_party_room_free_default_sandbox_checkout_closure.sql",
+      "line": 11,
+      "body_md5": "61b607234d41115cf25566b45082f78c",
+      "remote_version": "20260907041704",
+      "parity": "exact_file_bytes"
+    },
+    "has_channel_audience_block_between": {
+      "name": "has_channel_audience_block_between",
+      "source": "supabase/migrations/20260624125951_wave4_abuse_rate_limit_controls.sql",
+      "line": 87,
+      "body_md5": "291833302a07610fa0de787aec61da3e",
+      "remote_version": "20260624125951",
+      "parity": "exact_cli_statement_bytes"
+    },
+    "is_account_access_restricted": {
+      "name": "is_account_access_restricted",
+      "source": "supabase/migrations/20260824034109_creator_money_authority_integrity_closeout.sql",
+      "line": 856,
+      "body_md5": "2832033b8d2bd9e4c2a0ce2710520426",
+      "remote_version": "20260824034109",
+      "parity": "exact_cli_statement_bytes"
+    },
+    "assert_account_private_feature_allowed": {
+      "name": "assert_account_private_feature_allowed",
+      "source": "supabase/migrations/20260624171153_wave5_1_account_access_restrictions.sql",
+      "line": 50,
+      "body_md5": "c324fe4b6a66dca902df790cc0ab6eb5",
+      "remote_version": "20260624171153",
+      "parity": "exact_cli_statement_bytes"
+    },
+    "watch_party_room_self_access_allowed_internal": {
+      "name": "watch_party_room_self_access_allowed_internal",
+      "source": "supabase/migrations/20260827235000_live_room_access_independence_closure.sql",
+      "line": 130,
+      "body_md5": "1f2f12e2e2920c9a249549cb4b804da3",
+      "remote_version": "20260827235000",
+      "parity": "exact_cli_statement_bytes"
+    },
+    "whole_app_exact_current_session_authority_internal": {
+      "name": "whole_app_exact_current_session_authority_internal",
+      "source": "supabase/migrations/202608250001_chilly_chat_room_authority_closure.sql",
+      "line": 14,
+      "body_md5": "078aedd6b2f44f1df836b7ace9ce67fa",
+      "remote_version": "202608250001",
+      "parity": "exact_cli_statement_bytes"
+    },
+    "can_read_watch_party_room_authority": {
+      "name": "can_read_watch_party_room_authority",
+      "source": "supabase/migrations/202608250001_chilly_chat_room_authority_closure.sql",
+      "line": 1866,
+      "body_md5": "6608964e946b82b97c66f5c84c04861e",
+      "remote_version": "202608250001",
+      "parity": "exact_cli_statement_bytes"
+    },
+    "can_read_communication_room_authority": {
+      "name": "can_read_communication_room_authority",
+      "source": "supabase/migrations/202608250001_chilly_chat_room_authority_closure.sql",
+      "line": 1973,
+      "body_md5": "4b7cb8d3900b633bfe7317a445c80c2d",
+      "remote_version": "202608250001",
+      "parity": "exact_cli_statement_bytes"
+    },
+    "join_communication_room_session": {
+      "name": "join_communication_room_session",
+      "source": "supabase/migrations/202608250001_chilly_chat_room_authority_closure.sql",
+      "line": 2262,
+      "body_md5": "c764619e8ee86f3e29656c88a7570108",
+      "remote_version": "202608250001",
+      "parity": "exact_cli_statement_bytes"
+    },
+    "can_access_communication_realtime_topic": {
+      "name": "can_access_communication_realtime_topic",
+      "source": "supabase/migrations/202608250001_chilly_chat_room_authority_closure.sql",
+      "line": 2670,
+      "body_md5": "a2762ba223ad5ec27d1bc37a7b647597",
+      "remote_version": "202608250001",
+      "parity": "exact_cli_statement_bytes"
+    },
+    "communication_sdp_is_receive_only_internal": {
+      "name": "communication_sdp_is_receive_only_internal",
+      "source": "supabase/migrations/202608250001_chilly_chat_room_authority_closure.sql",
+      "line": 2722,
+      "body_md5": "64d14b87dde66cbbebfb3eb3fd11be40",
+      "remote_version": "202608250001",
+      "parity": "exact_cli_statement_bytes"
+    },
+    "broadcast_communication_room_signal": {
+      "name": "broadcast_communication_room_signal",
+      "source": "supabase/migrations/202608250001_chilly_chat_room_authority_closure.sql",
+      "line": 2785,
+      "body_md5": "659ffe7fd40b30a64185482ccd617092",
+      "remote_version": "202608250001",
+      "parity": "exact_cli_statement_bytes"
+    }
+  },
+  "dmcaVideoSearch": {
+    "project_id": "bmkkhihfbmsnnmcqkoly",
+    "queried_at_utc": "2026-09-29T04:47:34.661Z",
+    "scope": "Read-only pg_proc/pg_class/pg_policy metadata; no user rows, no function execution, no mutation",
+    "query": "select jsonb_build_object(\n'functions', (select jsonb_agg(jsonb_build_object(\n'name', p.proname, 'identity_arguments', pg_get_function_identity_arguments(p.oid),\n'language', l.lanname, 'security_definer', p.prosecdef, 'volatility', p.provolatile,\n'config', p.proconfig, 'acl', p.proacl::text,\n'body_sha256', encode(sha256(convert_to(p.prosrc, 'UTF8')), 'hex'),\n'body_bytes', octet_length(p.prosrc)\n) order by p.proname)\nfrom pg_proc p join pg_namespace n on n.oid=p.pronamespace join pg_language l on l.oid=p.prolang\nwhere n.nspname='public' and p.proname in ('dmca_next_case_number','submit_dmca_notice','enqueue_dmca_attachment_scan','search_public_people')),\n'official_video_rls', (select jsonb_build_object('rls', c.relrowsecurity, 'force_rls', c.relforcerowsecurity, 'acl', c.relacl::text,\n'policies', (select jsonb_agg(jsonb_build_object('name',pol.polname,'command',pol.polcmd,'permissive',pol.polpermissive,\n'roles',pol.polroles::text,'using',pg_get_expr(pol.polqual,pol.polrelid),'check',pg_get_expr(pol.polwithcheck,pol.polrelid)) order by pol.polname)\nfrom pg_policy pol where pol.polrelid=c.oid))\nfrom pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname='official_rachi_original_videos')\n) as reconciliation_catalog;",
+    "result": [
+      {
+        "reconciliation_catalog": {
+          "functions": [
+            {
+              "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "name": "dmca_next_case_number",
+              "config": [
+                "search_path=public"
+              ],
+              "language": "plpgsql",
+              "body_bytes": 536,
+              "volatility": "v",
+              "body_sha256": "b59032ee75aa12d16c56f1a187340bcf43d7414dea546e0573c93a1d777df8ea",
+              "security_definer": true,
+              "identity_arguments": ""
+            },
+            {
+              "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "name": "enqueue_dmca_attachment_scan",
+              "config": [
+                "search_path=public"
+              ],
+              "language": "plpgsql",
+              "body_bytes": 414,
+              "volatility": "v",
+              "body_sha256": "3858939ee009074b20c6e5b07a3cca8f5788718e90cce87deed2e638d9e51c15",
+              "security_definer": true,
+              "identity_arguments": ""
+            },
+            {
+              "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "name": "search_public_people",
+              "config": [
+                "search_path=public"
+              ],
+              "language": "sql",
+              "body_bytes": 6448,
+              "volatility": "s",
+              "body_sha256": "f06a479a0af690376c7d436bd681955e37e869dc8caa6a54322622fde71a01da",
+              "security_definer": true,
+              "identity_arguments": "p_query text, p_limit integer"
+            },
+            {
+              "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "name": "submit_dmca_notice",
+              "config": [
+                "search_path=public"
+              ],
+              "language": "plpgsql",
+              "body_bytes": 6324,
+              "volatility": "v",
+              "body_sha256": "3f8d9d02d353c7405c79a3ceadda4adf8f0afeaf10c903e1c6ea7ab3dc663749",
+              "security_definer": true,
+              "identity_arguments": "p_payload jsonb"
+            }
+          ],
+          "official_video_rls": {
+            "acl": "{postgres=arwdDxtm/postgres,anon=arwd/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres}",
+            "rls": true,
+            "policies": [
+              {
+                "name": "official_rachi_original_videos_operator_manage",
+                "check": "has_platform_role(ARRAY['owner'::text, 'operator'::text])",
+                "roles": "{16481}",
+                "using": "has_platform_role(ARRAY['owner'::text, 'operator'::text])",
+                "command": "*",
+                "permissive": true
+              },
+              {
+                "name": "official_rachi_original_videos_select_published",
+                "check": null,
+                "roles": "{0}",
+                "using": "((official_account_id = 'platform_rachi_official'::text) AND (status = 'published'::text) AND (EXISTS ( SELECT 1\n   FROM videos video\n  WHERE ((video.id = official_rachi_original_videos.video_id) AND (video.visibility = 'public'::text) AND (video.moderation_status = ANY (ARRAY['clean'::text, 'reported'::text]))))))",
+                "command": "r",
+                "permissive": true
+              }
+            ],
+            "force_rls": false
+          }
+        }
+      }
+    ]
+  },
+  "purgeChatSentinel": {
+    "reviewedAt": "2026-09-29T04:48:19.820Z",
+    "head": "b0540375",
+    "project": "bmkkhihfbmsnnmcqkoly",
+    "method": "Local migration comparison and two narrow read-only pg_catalog SELECTs; no RPC invocation, data-row read, database mutation, or source edit.",
+    "inputEvidence": [
+      "/workspace/scratch/39a1be7a2120/migration-upstream-comparison.json",
+      "/workspace/scratch/39a1be7a2120/migration-diff-inputs.private.json"
+    ],
+    "cases": [
+      {
+        "version": "20260728004158",
+        "object": "public.product_quality_require_evaluator_for_collected_run()",
+        "classification": "SQL tokens identical after excluding comments/whitespace, preserving all quoted literals",
+        "tokenCount": 582,
+        "tokenSha256": "59431d78663e003e3a42ca7ed229e837dc763e80a108a4d423166632dd9e8375",
+        "currentState": "Superseded by 20260728005610; current trigger function body matches deployed final migration."
+      },
+      {
+        "version": "20260728004416",
+        "object": "public.product_quality_detection_assessment_hash(uuid,text,text,text,text,text,text[],text,numeric,text,text,text,text,text)",
+        "classification": "SQL tokens identical after excluding comments/whitespace, preserving all quoted literals",
+        "tokenCount": 241,
+        "tokenSha256": "3a87559a8d2ae6dcbe64d421a839e0741dac46130819f33ef215b0f1735beb15",
+        "currentBodyMd5": "0f72d23a74870c8cef6a7bf98569b09f",
+        "currentState": "Matches deployed function body exactly; empty search_path, immutable SECURITY DEFINER, all client/service/PUBLIC execute denied."
+      },
+      {
+        "version": "20260728005610",
+        "object": "public.product_quality_require_evaluator_for_collected_run()",
+        "classification": "SQL tokens identical after excluding comments/whitespace, preserving all quoted literals",
+        "tokenCount": 539,
+        "tokenSha256": "c75077a5541b14bb4cd5237e70657cc242e2e866825ddaf7b30b91d14c86e41f",
+        "currentBodyMd5": "b5f0c87e18647b58fd3e6df46358b975",
+        "currentState": "Matches deployed final function body exactly; empty search_path, SECURITY DEFINER, internal-only execute; original BEFORE INSERT ROW trigger is enabled."
+      },
+      {
+        "version": "20260624231731",
+        "object": "public.admin_deidentify_deleted_account_for_proof(text,text,boolean,boolean)",
+        "classification": "Historical semantic difference limited to two proof/deidentification string expressions",
+        "supersedingExactStatementMigrations": [
+          "20260624232323",
+          "20260624232653"
+        ],
+        "canonicalSource": "supabase/migrations/20260624232653_account_purge_deidentification_uuid_repair.sql",
+        "currentBodyMd5": "d93c76691f6841d0e3c43e058260ae97",
+        "currentState": "Current body exactly matches later canonical uuid repair, whose deployed statements match source. Other statements in original migration matched. Effective anon execute is currently true; later canonical source revokes PUBLIC only and body retains role gating. No execution tested."
+      },
+      {
+        "version": "20260628211710",
+        "object": "public.get_or_create_direct_chat_thread(text,text,text,text)",
+        "classification": "Remote historical text omitted explicit anon and service_role revokes; function body unchanged",
+        "laterGrantRepair": "20260628211813 (trailing whitespace only)",
+        "supersedingExactStatementMigrations": [
+          "202608250001"
+        ],
+        "canonicalSource": "supabase/migrations/202608250001_chilly_chat_room_authority_closure.sql",
+        "currentBodyMd5": "85e5f23edf17ae22360052f528b79b21",
+        "currentState": "Current body exactly matches canonical authority closure. Authenticated execute true; anon/service_role/PUBLIC false; empty search_path."
+      }
+    ],
+    "catalog": [
+      {
+        "proname": "admin_deidentify_deleted_account_for_proof",
+        "arguments": "p_target_user_id text, p_reason text, p_dry_run boolean, p_proof_override boolean",
+        "prosecdef": true,
+        "provolatile": "v",
+        "proconfig": [
+          "search_path=public, auth"
+        ],
+        "owner": "postgres",
+        "body_md5": "d93c76691f6841d0e3c43e058260ae97",
+        "authenticated_execute": true,
+        "anon_execute": true,
+        "service_execute": true,
+        "public_execute": false
+      },
+      {
+        "proname": "get_or_create_direct_chat_thread",
+        "arguments": "p_target_user_id text, p_target_display_name text, p_target_avatar_url text, p_target_tagline text",
+        "prosecdef": true,
+        "provolatile": "v",
+        "proconfig": [
+          "search_path=\"\""
+        ],
+        "owner": "postgres",
+        "body_md5": "85e5f23edf17ae22360052f528b79b21",
+        "authenticated_execute": true,
+        "anon_execute": false,
+        "service_execute": false,
+        "public_execute": false
+      },
+      {
+        "proname": "product_quality_detection_assessment_hash",
+        "arguments": "p_sentinel_run_id uuid, p_finding_key text, p_route_or_surface text, p_build_runtime_hash text, p_severity text, p_user_impact_hash text, p_evidence_hashes text[], p_suspected_layer text, p_confidence numeric, p_reproduction_state text, p_affected_components_hash text, p_provider_backend_state_hash text, p_proposed_next_investigation_hash text, p_physical_proof_status text",
+        "prosecdef": true,
+        "provolatile": "i",
+        "proconfig": [
+          "search_path=\"\""
+        ],
+        "owner": "postgres",
+        "body_md5": "0f72d23a74870c8cef6a7bf98569b09f",
+        "authenticated_execute": false,
+        "anon_execute": false,
+        "service_execute": false,
+        "public_execute": false
+      },
+      {
+        "proname": "product_quality_require_evaluator_for_collected_run",
+        "arguments": "",
+        "prosecdef": true,
+        "provolatile": "v",
+        "proconfig": [
+          "search_path=\"\""
+        ],
+        "owner": "postgres",
+        "body_md5": "b5f0c87e18647b58fd3e6df46358b975",
+        "authenticated_execute": false,
+        "anon_execute": false,
+        "service_execute": false,
+        "public_execute": false
+      }
+    ],
+    "triggers": [
+      {
+        "table_schema": "public",
+        "table_name": "product_quality_findings",
+        "tgname": "product_quality_findings_collected_run_evaluator_required",
+        "tgenabled": "O",
+        "tgtype": 7,
+        "function_name": "product_quality_require_evaluator_for_collected_run"
+      }
+    ],
+    "pendingChatImpact": "No active functional dependency divergence found among these five scoped cases for 20260928164743 or 20260929004448. Preserve these historical differences in immutable history reconciliation; semantic equivalence or later supersession is not exact historical statement/hash parity and does not authorize rewriting deployed rows or replaying older migrations."
+  },
+  "completeNewObjectInventory": {
+    "query": "select jsonb_build_object(\n'observed_at',now(),\n'new_functions',(select coalesce(jsonb_agg(jsonb_build_object('schema',n.nspname,'name',p.proname,'signature',p.oid::regprocedure::text,'definition_sha256',encode(sha256(convert_to(pg_get_functiondef(p.oid),'UTF8')),'hex'))),'[]'::jsonb) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where (n.nspname='public' and p.proname in ('advance_communication_membership_generation','guard_owned_communication_membership_write','leave_communication_room_session','authorize_communication_room_admission_internal','read_communication_room_admission','join_owned_communication_room_session','touch_owned_communication_room_session','broadcast_communication_room_signal_internal','broadcast_owned_communication_room_signal')) or (n.nspname='private' and p.proname='broadcast_communication_state_invalidation')),\n'new_triggers',(select coalesce(jsonb_agg(jsonb_build_object('name',t.tgname,'table',t.tgrelid::regclass::text,'definition',pg_get_triggerdef(t.oid))),'[]'::jsonb) from pg_trigger t where not t.tgisinternal and t.tgname in ('zz_advance_communication_membership_generation','aa_guard_owned_communication_membership_write','broadcast_communication_room_state_invalidation','broadcast_communication_membership_state_invalidation')),\n'new_columns',(select coalesce(jsonb_agg(jsonb_build_object('name',a.attname,'type',format_type(a.atttypid,a.atttypmod))),'[]'::jsonb) from pg_attribute a where a.attrelid='public.communication_room_memberships'::regclass and a.attname in ('membership_generation','membership_admission_attempt') and not a.attisdropped),\n'pending_history',(select coalesce(jsonb_agg(jsonb_build_object('version',version,'name',name)),'[]'::jsonb) from supabase_migrations.schema_migrations where version in ('20260928164743','20260929004448'))\n) as inventory;",
+    "result": {
+      "new_columns": [],
+      "observed_at": "2026-09-29T05:01:03.814204+00:00",
+      "new_triggers": [],
+      "new_functions": [],
+      "pending_history": []
+    }
+  },
+  "realtimeCatalogPreflight": {
+    "query": "select jsonb_build_object('observed_at',now(),'send_function',(select jsonb_build_object('signature',p.oid::regprocedure::text,'owner',pg_get_userbyid(p.proowner),'definition_sha256',encode(sha256(convert_to(pg_get_functiondef(p.oid),'UTF8')),'hex')) from pg_proc p where p.oid=to_regprocedure('realtime.send(jsonb,text,text,boolean)')),'message_partition_bounds',(select jsonb_agg(jsonb_build_object('name',c.relname,'bound',pg_get_expr(c.relpartbound,c.oid)) order by c.relname) from pg_inherits i join pg_class p on p.oid=i.inhparent join pg_namespace pn on pn.oid=p.relnamespace join pg_class c on c.oid=i.inhrelid where pn.nspname='realtime' and p.relname='messages')) as realtime_preflight;",
+    "result": {
+      "observed_at": "2026-09-29T05:03:06.412866+00:00",
+      "send_function": {
+        "owner": "supabase_realtime_admin",
+        "signature": "realtime.send(jsonb,text,text,boolean)",
+        "definition_sha256": "a59ff7fd7608eb6b987fbeb20e49aacb0b29f7ee75dbf5046e10bc5f1d058f33"
+      },
+      "message_partition_bounds": [
+        {
+          "name": "messages_2026_09_26",
+          "bound": "FOR VALUES FROM ('2026-09-26 00:00:00') TO ('2026-09-27 00:00:00')"
+        },
+        {
+          "name": "messages_2026_09_27",
+          "bound": "FOR VALUES FROM ('2026-09-27 00:00:00') TO ('2026-09-28 00:00:00')"
+        },
+        {
+          "name": "messages_2026_09_28",
+          "bound": "FOR VALUES FROM ('2026-09-28 00:00:00') TO ('2026-09-29 00:00:00')"
+        },
+        {
+          "name": "messages_2026_09_29",
+          "bound": "FOR VALUES FROM ('2026-09-29 00:00:00') TO ('2026-09-30 00:00:00')"
+        },
+        {
+          "name": "messages_2026_09_30",
+          "bound": "FOR VALUES FROM ('2026-09-30 00:00:00') TO ('2026-10-01 00:00:00')"
+        },
+        {
+          "name": "messages_2026_10_01",
+          "bound": "FOR VALUES FROM ('2026-10-01 00:00:00') TO ('2026-10-02 00:00:00')"
+        },
+        {
+          "name": "messages_2026_10_02",
+          "bound": "FOR VALUES FROM ('2026-10-02 00:00:00') TO ('2026-10-03 00:00:00')"
+        }
+      ]
+    }
+  }
+}
