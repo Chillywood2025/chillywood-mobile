@@ -1,6 +1,6 @@
 # PR #532 physical evidence reconciliation and repair checklist
 
-Updated: 2026-09-28. The delivered candidate remains **NOT QUALIFIED**.
+Updated: 2026-09-29. The delivered candidate remains **NOT QUALIFIED**.
 This record corrects interpretation of the original evidence without editing
 its archive, report, matrix or manifest. Source repairs and their tests do not
 change any historical physical result. No new device test is claimed here.
@@ -320,6 +320,21 @@ retains received-media and durable-state assertions, and checks that controls
 do not produce additional Presence tracks. Final exact-head CI must prove this
 correction; historical device failures are not retrospectively attributed to it.
 
+The next authenticated run completed all six participant mic/camera cycles,
+including durable state and received silence, black frames, and restored media.
+Its sticky error check then exposed two unsupported Postgres Changes
+subscriptions: neither communication table belongs to the Realtime publication.
+The forward correction sends empty `state:update` invalidations on the existing
+authorized private room topic. Both transports obtain state from a fresh
+authoritative snapshot; the event carries no row or membership data and grants
+no client Broadcast write authority. A successful read that loses room access
+must retire only its captured session; a transport error must remain distinct.
+The [migration and delivery record](COMMUNICATION_PRIVATE_STATE_INVALIDATION.md)
+preserves database validation, rollout order, and the existing production-history
+parity blocker. Final complete CI remains required, including End and fresh-call
+proof after the controls, rather than treating earlier completed sections as a
+passing Database lane.
+
 The 104-row review also identified two test boundaries that could be joined
 without devices. Android root routing now runs with the production native-action
 buffer, shared provenance and actual destination screen. The existing macOS
@@ -359,9 +374,11 @@ Connected label cannot substitute for observed media or physical qualification.
    [dependency-audit disposition](../security/NPM_AUDIT_TRIAGE_WARNING_MAINTENANCE.md)
    and final exact-head results in the PR. Completed sections of an earlier
    failed run do not establish a successful lane.
-2. Under explicit production database authorization, apply and verify the
-   forward self-leave migration before any corrected client delivery. Preserve
-   the D1–D6/T1–T6 mapping and keep original evidence recovery E01 separate.
+2. Reconcile existing deployed migration version/content parity before planning
+   production deployment. Under explicit production database authorization,
+   apply and verify the forward self-leave and private state-invalidation
+   migrations before corrected client delivery. Preserve the D1–D6/T1–T6 mapping
+   and keep original evidence recovery E01 separate.
 3. Under separate appropriate delivery authority, build new Android/iOS binaries
    and a new runtime generation for the native sender patch; existing v3 binaries
    cannot receive that patch by OTA. Prove exact installed source

@@ -305,8 +305,10 @@ async function main() {
               ["Too many messages per second", "event_rate_limit"],
               ["Track message size exceeded", "presence_payload_size"],
               ["Token has expired", "token_expired"],
+              ["Unable to subscribe to changes", "postgres_subscription_parameters"],
             ];
-            record({ phase: "system-error", reason: knownReasons.find(([fragment]) => message.includes(fragment))?.[1] ?? "other" });
+            const extension = ["system", "postgres_changes", "broadcast", "presence"].includes(diff.extension) ? diff.extension : "unknown";
+            record({ phase: "system-error", extension, reason: knownReasons.find(([fragment]) => message.includes(fragment))?.[1] ?? "other" });
           }
           if (event === "phx_reply" && pendingPresenceRefs.has(ref)) {
             pendingPresenceRefs.delete(ref);
@@ -374,7 +376,7 @@ async function main() {
     }
     assert.deepEqual([...presenceTrackCounts], initialPresenceTracks,
       "repeated media changes use owned membership and broadcasts without more Presence updates");
-    assert.equal(realtimeSystemErrors, 0, "the real backend did not reject the signaling channel");
+    assert.equal(realtimeSystemErrors, 0, `the real backend did not reject a subscription: ${diagnostics(await read())}`);
     console.log("PASS: both endpoints commit actual PostgreSQL mic/camera controls and observe receiver silence, black frames, and restored media");
     const beforeEnd = await read();
     await endAndProve(initialCall);

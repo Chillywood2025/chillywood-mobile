@@ -102,6 +102,14 @@ const runOperation = async (harness, callback) => (
   settleOperation(await harness.startOperation(callback), harness)
 );
 
+const stateInvalidationHandler = (channel) => {
+  const handlers = channel.handlers.filter((entry) => (
+    entry.event === "broadcast" && entry.filter?.event === "state:update"
+  ));
+  assert.equal(handlers.length, 1, "the private room channel accepts one server state invalidation");
+  return handlers[0].callback;
+};
+
 const prepareLateCaptureCleanup = async (t, kind = "audio", runtimeOptions = {}) => {
   const cameraEnabled = kind === "video";
   const hookOptions = {
@@ -2331,6 +2339,258 @@ test("remote camera projection never opens from membership without a usable Live
   assert.equal(readRemote()?.cameraOn, false);
   assert.equal(readRemote()?.liveKitVideoTrackReference, undefined);
 });
+
+test("empty server state invalidation closes departed membership camera projection without waiting for heartbeat", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialRemoteParticipant: true,
+    remoteCamera: true,
+  }, defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }));
+  const readRemote = () => harness.getResult().participants.find((entry) => !entry.isSelf);
+  const channel = runtime.realtimeChannels.at(-1);
+  const invalidate = stateInvalidationHandler(channel);
+  const readsBeforeHint = runtime.snapshotReads;
+  const touchesBeforeHint = runtime.membershipTouches.length;
+  const tokenCallsBeforeHint = runtime.providerTokenCalls;
+  assert.equal(channel.topic, "comm-room-ROOM-1");
+  assert.equal(channel.config.config.private, true);
+  assert.equal(readRemote()?.cameraOn, true);
+
+  runtime.remoteIncludedInSnapshot = false;
+  await runOperation(harness, () => invalidate({ payload: {} }));
+
+  assert.equal(runtime.snapshotReads, readsBeforeHint + 1);
+  assert.equal(readRemote()?.cameraOn, false);
+  assert.equal(readRemote()?.liveKitVideoTrackReference, undefined);
+  assert.equal(runtime.rooms.at(-1).remoteParticipants.has(runtime.remoteUserId), true,
+    "durable departure closes rendering even before provider disconnection");
+  assert.equal(runtime.membershipTouches.length, touchesBeforeHint);
+  assert.equal(runtime.providerTokenCalls, tokenCallsBeforeHint);
+  assert.equal(runtime.roomDisconnects ?? 0, 0);
+  assert.equal(harness.getResult().channelState, "live");
+});
+
+test("server state invalidation ignores claimed room, terminal, and media values", async (t) => {
+  const ended = [];
+  const { harness, runtime } = await mountCase(t, {
+    initialRemoteParticipant: true,
+    remoteCamera: true,
+  }, defaultHookOptions({
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+    onRoomEnded: (reason) => ended.push(reason),
+  }));
+  const invalidate = stateInvalidationHandler(runtime.realtimeChannels.at(-1));
+  const readsBeforeHint = runtime.snapshotReads;
+  runtime.remoteDurableCamera = false;
+
+  await runOperation(harness, () => invalidate({ payload: {
+    roomId: "OTHER-ROOM",
+    status: "ended",
+    cameraOn: true,
+    micOn: true,
+  } }));
+
+  assert.equal(runtime.snapshotReads, readsBeforeHint + 1);
+  assert.equal(harness.getResult().room?.roomId, "ROOM-1");
+  assert.equal(harness.getResult().room?.status, "active");
+  assert.equal(harness.getResult().participants.find((entry) => !entry.isSelf)?.cameraOn, false);
+  assert.deepEqual(ended, []);
+  assert.equal(harness.getResult().channelState, "live");
+});
+
+for (const outcome of ["null", "terminal"]) {
+  test(`server state invalidation retires capture after authoritative ${outcome} readback without callback cleanup`, async (t) => {
+    const ended = [];
+    const { harness, runtime } = await mountCase(t, {
+      initialCamera: true,
+      initialMic: true,
+    }, defaultHookOptions({
+      initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+      invite: { ...defaultHookOptions().invite, callType: "video" },
+      onRoomEnded: (reason) => ended.push(reason),
+    }));
+    const invalidate = stateInvalidationHandler(runtime.realtimeChannels.at(-1));
+    const readsBeforeHint = runtime.snapshotReads;
+    const liveKitRoom = runtime.rooms.at(-1);
+    assert.equal(liveKitRoom.localParticipant.cameraEnabled, true);
+    assert.equal(liveKitRoom.localParticipant.micEnabled, true);
+    runtime.queueSnapshot({ outcome });
+
+    await runOperation(harness, () => invalidate({ payload: {} }));
+
+    assert.equal(runtime.snapshotReads, readsBeforeHint + 1);
+    assert.deepEqual(ended, ["ended"]);
+    assert.equal(liveKitRoom.localParticipant.cameraEnabled, false);
+    assert.equal(liveKitRoom.localParticipant.micEnabled, false);
+    assert.equal(liveKitRoom.state, "disconnected");
+    assert.equal(runtime.audioStopCalls, 1);
+    assert.equal(runtime.membershipLeaves, 0, "unavailable room grants no durable leave authority");
+    assert.equal(runtime.stages.filter((stage) => stage === "cleanup_complete").length, 1);
+    assert.equal(harness.getResult().channelState, "idle");
+    assert.equal(await runOperation(harness, () => harness.getResult().setMicrophoneEnabled(true)), false);
+    await runOperation(harness, () => invalidate({ payload: {} }));
+    assert.equal(runtime.snapshotReads, readsBeforeHint + 1, "terminal authority rejects further hints");
+    assert.deepEqual(ended, ["ended"]);
+  });
+
+  test(`server state invalidation preserves failed cleanup and End retry after ${outcome} readback`, async (t) => {
+    const { harness, runtime } = await mountCase(t, {}, defaultHookOptions({ onRoomEnded: () => undefined }));
+    const invalidate = stateInvalidationHandler(runtime.realtimeChannels.at(-1));
+    runtime.queueSnapshot({ outcome });
+    runtime.queueAudioStop({ outcome: "reject" });
+
+    await runOperation(harness, () => invalidate({ payload: {} }));
+
+    assert.equal(runtime.rooms.at(-1).state, "disconnected");
+    assert.equal(runtime.stages.includes("cleanup_complete"), false);
+    assert.equal(runtime.membershipLeaves, 0);
+    assert.equal(harness.getResult().channelState, "error");
+    assert.match(harness.getResult().error, /Unable to prove local call shutdown/u);
+    assert.equal(await runOperation(harness, () => harness.getResult().leaveRoom()), true);
+    assert.equal(runtime.audioStopCalls, 2);
+    assert.equal(runtime.stages.filter((stage) => stage === "cleanup_complete").length, 1);
+    assert.equal(harness.getResult().channelState, "idle");
+  });
+}
+
+test("server state invalidation read failure preserves the live call and cannot claim terminal state", async (t) => {
+  const ended = [];
+  const { harness, runtime } = await mountCase(t, {
+    initialCamera: true,
+    initialMic: true,
+  }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+    onRoomEnded: (reason) => ended.push(reason),
+  }));
+  const invalidate = stateInvalidationHandler(runtime.realtimeChannels.at(-1));
+  const readsBeforeHint = runtime.snapshotReads;
+  runtime.queueSnapshot({ outcome: "reject" });
+
+  await runOperation(harness, () => invalidate({ payload: {} }));
+
+  assert.equal(runtime.snapshotReads, readsBeforeHint + 1);
+  assert.deepEqual(ended, []);
+  assert.equal(runtime.rooms.at(-1).localParticipant.cameraEnabled, true);
+  assert.equal(runtime.rooms.at(-1).localParticipant.micEnabled, true);
+  assert.equal(runtime.rooms.at(-1).state, "connected");
+  assert.equal(runtime.audioStopCalls, 0);
+  assert.equal(runtime.membershipLeaves, 0);
+  assert.equal(runtime.errors.some((entry) => entry.scope === "chat-call-livekit-state-snapshot-refresh"), true);
+  assert.equal(harness.getResult().channelState, "live");
+  await harness.fireHeartbeat();
+  assert.equal(harness.getResult().channelState, "live");
+  assert.deepEqual(ended, []);
+});
+
+test("initial authoritative null snapshot retires its exact admission before native media acquisition", async (t) => {
+  const runtime = createLiveKitMountedRuntime({ initialCamera: true, initialMic: true });
+  runtime.queueSnapshot({ outcome: "null" });
+  const harness = await mountLiveKitHook(runtime, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    invite: { ...defaultHookOptions().invite, callType: "video" },
+  }), { requireLive: false });
+  t.after(() => harness.unmount());
+
+  assert.equal(runtime.rooms.length, 0);
+  assert.equal(runtime.providerTokenCalls, 0);
+  assert.equal(runtime.cameraCalls.length, 0);
+  assert.equal(runtime.micCalls.length, 0);
+  assert.equal(runtime.membershipLeaveRequests.length, 1);
+  assert.equal(runtime.membershipLeaveRequests[0].expectedMembershipGeneration, runtime.membershipGeneration);
+  assert.equal(harness.getResult().channelState, "error");
+  assert.equal(runtime.errors.some((entry) => entry.message === "accepted_chat_call_room_unavailable"), true);
+});
+
+test("server state invalidation retires an old durable generation without leaving its replacement", async (t) => {
+  const { harness, runtime } = await mountCase(t, { initialMic: true }, defaultHookOptions({
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  }));
+  const invalidate = stateInvalidationHandler(runtime.realtimeChannels.at(-1));
+  runtime.membershipGeneration = "20000000-0000-4000-8000-000000000002";
+
+  await runOperation(harness, () => invalidate({ payload: {} }));
+
+  assert.equal(runtime.membershipLeaveRequests.length, 0);
+  assert.equal(runtime.rooms.at(-1).state, "disconnected");
+  assert.equal(harness.getResult().channelState, "error");
+  assert.match(harness.getResult().error, /continued in another session/u);
+  assert.equal(runtime.durableMic, true, "new admission retains its durable media state");
+});
+
+test("server state invalidation bursts share the bounded reader with media hints", async (t) => {
+  const { harness, runtime } = await mountCase(t, {
+    initialRemoteParticipant: true,
+    remoteCamera: true,
+  });
+  const invalidate = stateInvalidationHandler(runtime.realtimeChannels.at(-1));
+  const leadingSnapshot = deferred();
+  runtime.queueSnapshot({ gate: leadingSnapshot, outcome: "active", remoteCamera: true });
+  runtime.queueSnapshot({ outcome: "active", remoteCamera: false });
+  const readsBeforeBurst = runtime.snapshotReads;
+
+  await runOperation(harness, () => {
+    for (let index = 0; index < 50; index += 1) {
+      invalidate({ payload: {} });
+      runtime.emitMembershipChange();
+    }
+  });
+
+  assert.equal(runtime.snapshotReads, readsBeforeBurst + 1);
+  await harness.resolveDeferred(leadingSnapshot);
+  assert.equal(runtime.snapshotReads, readsBeforeBurst + 1);
+  await harness.fireLatestTimeout();
+  assert.equal(runtime.snapshotReads, readsBeforeBurst + 2);
+  assert.equal(harness.getResult().participants.find((entry) => !entry.isSelf)?.cameraOn, false);
+});
+
+for (const [retirement, outcome] of ["End", "account switch", "same-room replacement"].flatMap(
+  (retirement) => ["null", "reject"].map((outcome) => [retirement, outcome]),
+)) {
+  test(`server state invalidation callback and pending ${outcome} read cannot cross ${retirement}`, async (t) => {
+    const ended = [];
+    const options = defaultHookOptions({ onRoomEnded: (reason) => ended.push(reason) });
+    const { harness, runtime } = await mountCase(t, {}, options);
+    const oldChannel = runtime.realtimeChannels.at(-1);
+    const invalidate = stateInvalidationHandler(oldChannel);
+    const pendingSnapshot = deferred();
+    runtime.queueSnapshot({ gate: pendingSnapshot, outcome });
+    const readsBeforeHint = runtime.snapshotReads;
+    await runOperation(harness, () => invalidate({ payload: {} }));
+    assert.equal(runtime.snapshotReads, readsBeforeHint + 1);
+
+    if (retirement === "End") {
+      assert.equal(await runOperation(harness, () => harness.getResult().leaveRoom()), true);
+    } else {
+      runtime.queueMembershipJoin({ generation: "20000000-0000-4000-8000-000000000002" });
+      if (retirement === "account switch") runtime.userId = "replacement-user";
+      await harness.commitRender(defaultHookOptions({
+        ...options,
+        authenticatedUserId: runtime.userId,
+        invite: { ...options.invite, id: "invite-2", calleeUserId: runtime.userId },
+      }));
+      await waitFor(harness, () => runtime.rooms.length === 2 && harness.getResult().channelState === "live",
+        "replacement session independently connected");
+      assert.equal(oldChannel.removed, true);
+    }
+
+    const readsAfterRetirement = runtime.snapshotReads;
+    const writesAfterRetirement = runtime.membershipTouches.length;
+    const leavesAfterRetirement = runtime.membershipLeaveRequests.length;
+    const errorsAfterRetirement = runtime.errors.length;
+    await harness.resolveDeferred(pendingSnapshot);
+    await runOperation(harness, () => invalidate({ payload: {} }));
+
+    assert.equal(runtime.snapshotReads, readsAfterRetirement);
+    assert.equal(runtime.membershipTouches.length, writesAfterRetirement);
+    assert.equal(runtime.membershipLeaveRequests.length, leavesAfterRetirement);
+    assert.equal(runtime.errors.length, errorsAfterRetirement);
+    assert.deepEqual(ended, []);
+    assert.equal(harness.getResult().channelState, retirement === "End" ? "idle" : "live");
+    if (retirement !== "End") assert.equal(harness.getResult().room?.roomId, "ROOM-1");
+  });
+}
 
 test("media invalidation rejects wrong-room and self-sender payloads before authoritative refresh", async (t) => {
   const { harness, runtime } = await mountCase(t, {

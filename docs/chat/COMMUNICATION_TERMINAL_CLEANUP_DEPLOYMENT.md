@@ -6,6 +6,13 @@ bundle containing the new membership, admission, media and signaling RPCs. A pro
 does not deploy that migration or qualify the phones. No production database
 mutation, build, or OTA is authorized by the source repair task.
 
+The candidate also requires
+`20260929004448_communication_private_state_invalidation.sql` before shipping
+the new snapshot listeners. Its [delivery record](COMMUNICATION_PRIVATE_STATE_INVALIDATION.md)
+describes empty private room hints and the existing deployed migration-history
+parity blocker. Reconcile that history before production deployment planning;
+neither migration has been applied by this source task.
+
 This candidate also corrects the pinned WebRTC native sender-replacement
 acknowledgment. The Expo plugin changes native inputs on both platforms.
 Android 94 and iOS 29 do not contain that native correction. **This candidate
@@ -71,7 +78,7 @@ an explicit server denial is different from an unknown mutation outcome.
    suite and the actual authenticated local HTTP integration. Verify the exact
    migration/version/source diff and obtain the separate database deployment
    authorization before any production application.
-2. Apply the forward migration through the canonical database tooling. Confirm
+2. Apply both forward migrations through the canonical database tooling. Confirm
    migration history/parity, the column/default, restricted function grants,
    trigger ordering, unchanged row policies, and PostgREST schema availability.
    Use designated test accounts for any authorized functional readback.

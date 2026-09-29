@@ -2561,34 +2561,40 @@ export function useLiveKitChatCallSession({
 
     const refreshMembershipSnapshot = async (
       scope: string,
-      options: { reconnectingOnMissing?: boolean } = {},
+      options: { reconnectingOnReadFailure?: boolean } = {},
     ) => {
       const binding = effectBinding;
       const requestSerial = membershipSnapshotRequestSerial + 1;
       membershipSnapshotRequestSerial = requestSerial;
       if (!active || !binding || !isCommittedSessionCurrent(binding)) return;
-      const latestSnapshot = await getCommunicationRoomSnapshot(binding.normalizedRoomId)
-        .catch((snapshotError) => {
-          reportRuntimeError(scope, snapshotError, { roomId: binding.normalizedRoomId });
-          return null;
-        });
+      const readResult = await getCommunicationRoomSnapshot(binding.normalizedRoomId).then(
+        (snapshot) => ({ succeeded: true as const, snapshot }),
+        (snapshotError: unknown) => ({ succeeded: false as const, snapshotError }),
+      );
       if (
         !active
         || requestSerial !== membershipSnapshotRequestSerial
         || !isCommittedSessionCurrent(binding)
       ) return;
-      if (!latestSnapshot) {
-        if (options.reconnectingOnMissing) {
+      if (!readResult.succeeded) {
+        reportRuntimeError(scope, readResult.snapshotError, { roomId: binding.normalizedRoomId });
+        if (options.reconnectingOnReadFailure) {
           setCommittedRoomState(binding, "reconnecting");
           setChannelState("reconnecting");
         }
         return;
       }
+      const latestSnapshot = readResult.snapshot;
       if (
-        normalizeRoomId(latestSnapshot.room.roomId) !== binding.normalizedRoomId
+        !latestSnapshot
+        || normalizeRoomId(latestSnapshot.room.roomId) !== binding.normalizedRoomId
         || latestSnapshot.room.status !== "active"
       ) {
-        if (setCommittedRoomState(binding, "terminal")) {
+        // A successful RLS read returns null when the active room is no longer
+        // available. Retire this local owner without borrowing durable write
+        // authority from an unreadable room or a replacement admission.
+        await cleanupSession({ leaveMembership: false }, binding, cleanupToken);
+        if (active && sameCommittedAuthority(committedSessionRef.current, binding)) {
           void onRoomEndedRef.current?.("ended");
         }
         return;
@@ -2721,6 +2727,16 @@ export function useLiveKitChatCallSession({
               || senderUserId === binding.userId
             ) return;
             queuePeerMediaSnapshotRefresh("chat-call-livekit-membership-snapshot-refresh");
+          },
+        )
+        .on(
+          "broadcast",
+          { event: "state:update" },
+          () => {
+            if (!active || !isCommittedSessionCurrent(binding)) return;
+            // The room-scoped server hint carries no state. Re-read through
+            // RLS, sharing the paced reader so repeated hints stay bounded.
+            queuePeerMediaSnapshotRefresh("chat-call-livekit-state-snapshot-refresh");
           },
         );
       if (!active || !isCommittedSessionCurrent(binding)) {
@@ -3376,7 +3392,7 @@ export function useLiveKitChatCallSession({
         });
         void refreshMembershipSnapshot(
           "chat-call-livekit-heartbeat-snapshot",
-          { reconnectingOnMissing: true },
+          { reconnectingOnReadFailure: true },
         );
       }, ROOM_HEARTBEAT_MS);
     };

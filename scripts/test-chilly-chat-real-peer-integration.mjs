@@ -267,8 +267,22 @@ try {
     }, "Alice must keep receiving actual replacement media after dropping the stale offer");
     console.log(`PASS: same-room one-endpoint app restart, new-peer received media, retired resources, and delayed old-generation SDP rejection (${scenario}; ${observeAbsence ? "after observed absence" : "immediate replacement"})`);
     }
-    const beforeEnd = await page.evaluate(() => window.__pairedCall.read());
-    assert.ok(beforeEnd.events.some((event) => event.kind === "presence-leave" && event.remaining > 0), "exercise real SDK metadata-replacement leave events");
+    const beforeLegacyMetadata = await page.evaluate(() => window.__pairedCall.read());
+    for (const userId of ["alice", "bob"]) {
+      assert.equal(await page.evaluate((sender) => window.__pairedCall.replaceLegacyPresenceMetadata(sender), userId), "ok");
+    }
+    await wait(page, (state) => {
+      assert.ok(state.events.slice(beforeLegacyMetadata.events.length).some((event) => event.kind === "presence-leave" && event.remaining > 0), "explicit older-sender updates exercise real SDK metadata-replacement leave events");
+      return state.endpoints.every((endpoint) => {
+        const baseline = beforeLegacyMetadata.endpoints.find((candidate) => candidate.instanceId === endpoint.instanceId);
+        assert.ok(baseline, "legacy metadata replacement preserves the mounted endpoint");
+        assert.deepEqual(endpoint.peers.filter((peer) => peer.connection === "connected").map((peer) => peer.id),
+          baseline.peers.filter((peer) => peer.connection === "connected").map((peer) => peer.id),
+          "a replacement Presence ref must preserve the same connected native peer");
+        return endpoint.channelState === "live" && hasRequiredMedia(endpoint) && mediaAdvances(endpoint, baseline);
+      });
+    }, "Older-sender Presence metadata replacement must preserve connected peers and advancing received audio/video");
+    console.log(`PASS: explicit older-sender Presence metadata replacement preserves actual peers and advancing received media (${scenario})`);
     await page.evaluate(() => window.__pairedCall.end());
     await wait(page, (state) => state.endpoints.every((endpoint) => endpoint.peers.every((peer) => peer.connection === "closed") && endpoint.tracks.every((track) => track.state === "ended")), "End must close actual peers and end every acquired track");
     console.log(isVideo

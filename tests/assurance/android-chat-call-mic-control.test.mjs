@@ -397,10 +397,11 @@ function createLegacyMountedRuntime(options = {}) {
   ];
 
   class FakeChannel {
-    constructor(topic) {
+    constructor(topic, config) {
       this.handlers = [];
       this.subscriptionCallback = null;
       this.topic = topic;
+      this.config = config;
       runtime.channels.push(this);
       // Use the installed Presence implementation for metadata reconciliation
       // cases. It emits join + leave when a presence ref is replaced by track(),
@@ -431,7 +432,7 @@ function createLegacyMountedRuntime(options = {}) {
         .map(([, , callback]) => callback);
       // The deployed private relay stamps every media packet. Tests can
       // explicitly supply an old/missing stamp to exercise queued wire data.
-      const stampedPayload = event !== "room:end" && !Object.hasOwn(payload, "membershipGeneration")
+      const stampedPayload = event !== "room:end" && event !== "state:update" && !Object.hasOwn(payload, "membershipGeneration")
         ? { ...payload, membershipGeneration: runtime.remoteMembershipGeneration } : payload;
       for (const callback of callbacks) await callback({ payload: stampedPayload });
     }
@@ -705,7 +706,7 @@ function createLegacyMountedRuntime(options = {}) {
     "../_lib/roomRules": { normalizeRoomMembershipState: (value) => value },
     "../_lib/supabase": {
       supabase: {
-        channel: (topic) => new FakeChannel(topic),
+        channel: (topic, config) => new FakeChannel(topic, config),
         getChannels: () => runtime.channels,
         realtime: { setAuth: async () => undefined },
         removeChannel: (channel) => { runtime.removedChannels.push(channel); },
@@ -1253,7 +1254,7 @@ test("legacy snapshot authority: an older overlapping response cannot overwrite 
   assert.equal(harness.getResult().room.updatedAt, newerRoom.updatedAt);
 });
 
-test("legacy snapshot authority: room-state Realtime terminal status is observable and enters bounded recovery", async (t) => {
+test("legacy snapshot authority: private room Realtime terminal status is observable and enters bounded recovery", async (t) => {
   const runtime = createLegacyMountedRuntime();
   const harness = await mountLegacyHook(runtime, {
     authenticatedAccessToken: "exact-access-token",
@@ -1263,13 +1264,150 @@ test("legacy snapshot authority: room-state Realtime terminal status is observab
     restartDisconnectedSession: true,
   });
   t.after(() => harness.unmount());
-  const stateChannel = runtime.channels.find((channel) => channel.topic === `comm-room-state-${runtime.roomId}`);
+  const stateChannel = runtime.channels.find((channel) => channel.topic === `comm-room-${runtime.roomId}`);
   assert.ok(stateChannel);
+  assert.equal(stateChannel.config.config.private, true);
+  assert.equal(runtime.channels.some((channel) => channel.topic.startsWith("comm-room-state-")), false);
+  assert.equal(runtime.channels.some((channel) => channel.handlers.some(([type]) => type === "postgres_changes")), false);
 
   await harness.run(() => stateChannel.emitSubscriptionStatus("CHANNEL_ERROR", new Error("state channel rejected")));
 
-  assert.equal(runtime.errors.some((entry) => entry.scope === "communication-snapshot-subscription"), true);
+  assert.equal(runtime.errors.some((entry) => entry.scope === "communication-realtime-subscription"), true);
   assert.ok(runtime.timeoutCallbacks.some(Boolean), "state-channel failure schedules the generation-deduplicated session recovery");
+});
+
+test("legacy server state hint: empty private invalidation reads durable media and departure without trusting a row payload", async (t) => {
+  const runtime = createLegacyMountedRuntime({ remoteDurableCamera: true, remoteDurableMic: true });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  const peer = harness.refs.peerConnectionsRef.current[runtime.remoteUserId];
+  assert.ok(channel.handlers.some(([type, filter]) => type === "broadcast" && filter.event === "state:update"));
+  const reads = runtime.snapshotReads;
+  runtime.remoteDurableCamera = false;
+  runtime.remoteDurableMic = false;
+  await harness.run(() => channel.emitBroadcast("state:update", {}));
+  assert.equal(runtime.snapshotReads, reads + 1);
+  const remote = harness.getResult().participants.find((participant) => participant.userId === runtime.remoteUserId);
+  assert.equal(remote.cameraOn, false);
+  assert.equal(remote.micOn, false);
+  await harness.run(() => channel.emitBroadcast("state:update", { roomId: "OTHER", status: "ended", cameraOn: true, micOn: true }));
+  assert.equal(harness.getResult().room.status, "active", "hint contents cannot replace the authoritative room");
+  assert.equal(harness.getResult().participants.find((participant) => participant.userId === runtime.remoteUserId).cameraOn, false);
+  runtime.queueSnapshot({ memberships: [makeMembership(runtime)] });
+  await harness.run(() => channel.emitBroadcast("state:update", {}));
+  assert.equal(peer.connectionState, "closed", "authoritative DELETE readback retires the departed peer");
+  assert.equal(harness.getResult().participants.some((participant) => participant.userId === runtime.remoteUserId), false);
+});
+
+for (const receipt of ["missing", "ended"]) {
+test(`legacy server state hint: authoritative ${receipt} room retires capture but an empty hint alone cannot end the call`, async (t) => {
+  const ended = [];
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true,
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true }, onRoomEnded: (reason) => ended.push(reason) });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  await harness.run(() => channel.emitBroadcast("state:update", {}));
+  assert.deepEqual(ended, []);
+  runtime.queueSnapshot(receipt === "missing" ? { outcome: "missing" } : { room: { ...makeRoom(runtime), status: "ended" } });
+  await harness.run(() => channel.emitBroadcast("state:update", {}));
+  assert.deepEqual(ended, ["ended"]);
+  assert.ok(runtime.localStreams.flatMap((stream) => stream.getTracks()).every((track) => track.readyState === "ended"));
+  assert.ok(runtime.peers.every((peer) => peer.connectionState === "closed"));
+  const reads = runtime.snapshotReads;
+  await harness.run(() => channel.emitBroadcast("state:update", {}));
+  assert.equal(runtime.snapshotReads, reads, "retired terminal subscription cannot read or reopen media");
+});
+}
+
+test("legacy server state hint: a failed read is not terminal proof and a later successful null retires capture", async (t) => {
+  const ended = [];
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true,
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true }, onRoomEnded: (reason) => ended.push(reason) });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  runtime.queueSnapshot({ outcome: "reject" });
+  await harness.run(() => channel.emitBroadcast("state:update", {}));
+  assert.deepEqual(ended, []);
+  assert.equal(harness.refs.channelRef.current, channel);
+  assert.ok(runtime.localStreams.flatMap((stream) => stream.getTracks()).some((track) => track.readyState === "live" && track.enabled));
+  assert.equal(runtime.errors.at(-1)?.scope, "communication-room-state-refresh");
+  runtime.queueSnapshot({ outcome: "missing" });
+  await harness.run(() => channel.emitBroadcast("state:update", {}));
+  assert.deepEqual(ended, ["ended"]);
+  assert.ok(runtime.localStreams.flatMap((stream) => stream.getTracks()).every((track) => track.readyState === "ended"));
+});
+
+test("legacy server state hint: unavailable room retains failed native shutdown for exact End retry", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true,
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true } });
+  t.after(() => harness.unmount());
+  const track = runtime.localStreams.flatMap((stream) => stream.getTracks())[0];
+  track.refuseStop = true;
+  const channel = harness.refs.channelRef.current;
+  runtime.queueSnapshot({ outcome: "missing" });
+  await harness.run(() => channel.emitBroadcast("state:update", {}));
+  assert.equal(track.readyState, "live", "controlled failed native stop remains observable");
+  assert.equal(track.enabled, false, "terminal retirement still disables the retained capture");
+  await assert.rejects(harness.run(() => harness.getResult().leaveRoom()));
+  track.refuseStop = false;
+  await harness.run(() => harness.getResult().leaveRoom());
+  assert.equal(track.readyState, "ended");
+  assert.equal(runtime.leaveRequests.at(-1).expectedMembershipGeneration, runtime.membershipGeneration);
+});
+
+test("legacy server state hint: an older null cannot retire a call after a newer active snapshot", async (t) => {
+  let release;
+  const ended = [];
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true, onRoomEnded: (reason) => ended.push(reason) });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  runtime.queueSnapshot({ outcome: "missing", wait: new Promise((resolve) => { release = resolve; }) });
+  await harness.run(() => channel.emitBroadcast("state:update", {}));
+  await harness.run(() => channel.emitBroadcast("state:update", {}));
+  await harness.run(async () => { release(); await settle(96); });
+  assert.deepEqual(ended, []);
+  assert.equal(harness.refs.channelRef.current, channel);
+  assert.equal(harness.getResult().room.status, "active");
+});
+
+test("legacy initial admission: unavailable snapshot prevents capture without claiming an established call ended", async (t) => {
+  const ended = [];
+  const runtime = createLegacyMountedRuntime();
+  runtime.queueSnapshot({ outcome: "missing" });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true,
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true }, onRoomEnded: (reason) => ended.push(reason) });
+  t.after(() => harness.unmount());
+  assert.deepEqual(ended, []);
+  assert.equal(runtime.mediaCreateCalls.length, 0);
+  assert.equal(runtime.channels.length, 0);
+  assert.equal(harness.getResult().channelState, "error");
+  assert.match(harness.getResult().error, /unavailable/u);
+});
+
+test("legacy server state hint: retired callback and late read cannot change a replacement account session", async (t) => {
+  let release;
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+  t.after(() => harness.unmount());
+  const oldChannel = harness.refs.channelRef.current;
+  runtime.queueSnapshot({ outcome: "missing", wait: new Promise((resolve) => { release = resolve; }) });
+  await harness.run(() => oldChannel.emitBroadcast("state:update", {}));
+  runtime.userId = "replacement-user";
+  runtime.membershipGeneration = "12000000-0000-4000-8000-000000000002";
+  await harness.rerender({ authenticatedAccessToken: "replacement-token", authenticatedUserId: runtime.userId });
+  const replacementChannel = harness.refs.channelRef.current;
+  const reads = runtime.snapshotReads;
+  await harness.run(async () => { release(); await settle(96); });
+  await harness.run(() => oldChannel.emitBroadcast("state:update", {}));
+  assert.equal(runtime.snapshotReads, reads);
+  assert.equal(harness.refs.channelRef.current, replacementChannel);
+  assert.equal(harness.getResult().room.status, "active");
+  assert.equal(harness.refs.identityRef.current.userId, runtime.userId);
 });
 
 test("legacy media projection: stale local Presence cannot override committed microphone and camera state", async (t) => {

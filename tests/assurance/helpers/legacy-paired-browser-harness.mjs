@@ -326,12 +326,20 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
   const NativePeer = RTCPeerConnection;
   const membershipStore = membershipStoreFactory({ onCommit: (membership, operation) => {
     hub.events.push({ kind: "commit", operation, userId: membership.userId, mic: membership.micEnabled, camera: membership.cameraEnabled, state: membership.membershipState, generation: membership.membershipGeneration, admissionAttempt: membership.membershipAdmissionAttempt });
-    for (const channel of hub.channels.filter((candidate) => candidate.active)) setTimeout(() => channel.emit("postgres_changes", "*", {}), 0);
+    hub.invalidate(membership.roomId);
   } });
   const hub = {
     channels: [], roomId: "BROWSER-CALL-1", serial: 0, callSerial: 1, endpointSerial: 0, peerSerial: 0,
     roomStatus: "active", callType: "video", hostUserId: "alice", dropAnswers: false, events: [], operationResults: [], errors: [], endpoints: [], retiredEndpoints: [], heldSignals: [], holdNext: null,
     backend: false, backendRuntimes: new Map(), captureRetirementModules: new Map(),
+    invalidate(roomId) {
+      // The database trigger invalidates only the authorized room topic; it
+      // exposes no membership row contents, including on DELETE.
+      for (const channel of this.channels.filter((candidate) => candidate.active
+        && candidate.topic === `comm-room-${roomId}`)) {
+        setTimeout(() => { if (channel.active) channel.emit("broadcast", "state:update", { payload: {} }); }, 0);
+      }
+    },
     dispatch(message, sender) {
       for (const channel of this.channels.filter((candidate) => candidate.active && candidate.endpoint.userId !== sender.userId && candidate.topic === `comm-room-${message.roomId}`)) {
         // Delivery is independent of send acknowledgement, like Realtime.
@@ -538,7 +546,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       touchCommunicationRoomSession: (input) => hub.membership(endpoint, "touch", input),
       heartbeatCommunicationRoomSession: (input) => hub.membership(endpoint, "heartbeat", input),
       leaveCommunicationRoomSession: (input) => hub.membership(endpoint, "leave", input),
-      endCommunicationRoom: async () => { hub.roomStatus = "ended"; return hub.snapshot().room; },
+      endCommunicationRoom: async () => { hub.roomStatus = "ended"; hub.invalidate(hub.roomId); return hub.snapshot().room; },
       stopCommunicationStream: (stream) => stream?.getTracks().forEach((item) => item.stop()),
       setCommunicationTrackEnabled: (stream, kind, enabled) => { const found = track(stream, kind); if (!found) return false; found.enabled = enabled; return true; },
     };
@@ -642,6 +650,19 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     audioReceivers: endpoint.receivedAudio.map(({ peer, track, receiver }) => ({ peerId: peer.fixturePeerId, connection: peer.connectionState, contextState: receiver.context.state, trackState: track.readyState, trackEnabled: track.enabled, playbackPaused: receiver.playback.paused, playbackReadyState: receiver.playback.readyState, pcmSamples: receiver.samples, pcmEnergy: receiver.energy, error: receiver.error })),
   });
   window.__pairedCall = {
+    async replaceLegacyPresenceMetadata(userId) {
+      if (hub.backend) throw new Error("Legacy metadata injection belongs only to the in-memory compatibility fixture");
+      const channels = hub.channels.filter((channel) => channel.active && channel.endpoint.userId === userId
+        && channel.topic === `comm-room-${hub.roomId}` && channel.meta);
+      if (channels.length !== 1) throw new Error(`Expected one online legacy sender for ${userId}`);
+      const member = membershipStore.snapshot(hub.roomId).find((membership) => membership.userId === userId);
+      if (!member) throw new Error(`Missing legacy sender membership for ${userId}`);
+      const { phx_ref: _oldRef, phx_ref_prev: _previousRef, ...identity } = channels[0].meta;
+      // Old clients still retrack media metadata. Exercise their wire diff
+      // through actual Phoenix reconciliation while the new hook keeps its
+      // own one-registration policy and existing connected RTCPeerConnection.
+      return channels[0].track({ ...identity, cameraOn: member.cameraEnabled, micOn: member.micEnabled });
+    },
     async checkAuthenticatedSource() {
       const { api } = await authenticatedRuntimeFactory({ sources: backendSources, boundRpc: accountBoundRpc, checkSourceOnly: true,
         connection: { apiUrl: "http://127.0.0.1:54321", anonKey: "source-check-not-a-key" },

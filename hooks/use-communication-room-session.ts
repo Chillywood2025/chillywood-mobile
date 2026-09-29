@@ -454,7 +454,6 @@ export function useCommunicationRoomSession({
   const localJoinedAtRef = useRef(new Date().toISOString());
   const channelRef = useRef<RealtimeChannel | null>(null);
   const presenceRegistrationRef = useRef<LegacyPresenceRegistration | null>(null);
-  const snapshotChannelRef = useRef<RealtimeChannel | null>(null);
   const roomRef = useRef<CommunicationRoomState | null>(null);
   const identityRef = useRef<CommunicationIdentity | null>(null);
   const membershipsRef = useRef<CommunicationRoomMembership[]>([]);
@@ -974,13 +973,6 @@ export function useCommunicationRoomSession({
     supabase.removeChannel(channel);
   }, []);
 
-  const cleanupSnapshotChannel = useCallback((expectedChannel?: RealtimeChannel | null) => {
-    const channel = expectedChannel ?? snapshotChannelRef.current;
-    if (!channel) return;
-    supabase.removeChannel(channel);
-    if (snapshotChannelRef.current === channel) snapshotChannelRef.current = null;
-  }, []);
-
   const runNativePermissionRequest = useCallback(async <T,>(request: () => Promise<T>) => {
     nativePermissionRequestDepthRef.current += 1;
     try {
@@ -1162,7 +1154,6 @@ export function useCommunicationRoomSession({
       && !channelRef.current && !roomRef.current && !identityRef.current;
     if (!operation || (operation.generation !== generation && !isDisabledRetainedOperation)) {
       const capturedChannel = channelRef.current;
-      const capturedSnapshotChannel = snapshotChannelRef.current;
       const capturedMedia = {
         answerWaiters: Object.entries(legacyMicAnswerWaitersRef.current),
         auxiliaryStreams: [...auxiliaryStreamsRef.current],
@@ -1222,7 +1213,6 @@ export function useCommunicationRoomSession({
       // Local privacy cannot wait on a database write or Realtime untrack.
       stopNativeCapture();
       cleanupSessionMedia(capturedMedia);
-      cleanupSnapshotChannel(capturedSnapshotChannel);
       operation = {
         authenticatedAccessToken,
         authenticatedUserId,
@@ -1245,7 +1235,7 @@ export function useCommunicationRoomSession({
       leaveOperationRef.current = operation;
     }
     return operation;
-  }, [authenticatedAccessToken, authenticatedUserId, cleanupChannel, cleanupSessionMedia, cleanupSnapshotChannel, roomId]);
+  }, [authenticatedAccessToken, authenticatedUserId, cleanupChannel, cleanupSessionMedia, roomId]);
 
   const refreshSnapshot = useCallback(async (targetRoomId?: string) => {
     const generation = legacySessionGenerationRef.current;
@@ -1257,10 +1247,24 @@ export function useCommunicationRoomSession({
 
     const snapshot = await getCommunicationRoomSnapshot(resolvedRoomId);
     if (!isActiveLegacyGeneration(generation)) return null;
+    // This fence also applies to a successful null read: a slower unavailable
+    // receipt cannot retire a call after a newer read proved it still active.
+    if (requestSerial !== snapshotRefreshSerialRef.current) return snapshot;
     if (!snapshot) {
       logChatRtc("snapshot_missing", {
         roomId: resolvedRoomId,
       });
+      const admitted = joinedMembershipRef.current;
+      if (formatRoomId(roomRef.current?.roomId ?? "") === resolvedRoomId
+        && admitted?.roomId === resolvedRoomId && admitted.membershipGeneration
+        && identityRef.current?.userId === admitted.userId) {
+        // The API returns null after a successful read when an active room is
+        // no longer visible (including terminal rooms and removed access).
+        // Exceptions still reject above and never become terminal evidence.
+        captureLeaveOperation();
+        setError("This communication room is no longer available.");
+        onRoomEndedRef.current?.("ended");
+      }
       return null;
     }
 
@@ -1268,8 +1272,18 @@ export function useCommunicationRoomSession({
     // reads. Only the newest response may project into the mounted session;
     // an older response is still valid for its direct caller, but it must not
     // overwrite newer room or membership truth.
-    if (requestSerial !== snapshotRefreshSerialRef.current) return snapshot;
     if (formatRoomId(snapshot.room.roomId) !== resolvedRoomId) return null;
+    if (snapshot.room.status === "ended") {
+      roomRef.current = snapshot.room;
+      setRoom(snapshot.room);
+      // An empty server hint (or a post-subscribe read) cannot itself end a
+      // call. This exact-generation authoritative room receipt can, using the
+      // same retained native cleanup path as the explicit terminal relay.
+      captureLeaveOperation();
+      setError("This communication room has ended.");
+      onRoomEndedRef.current?.("ended");
+      return snapshot;
+    }
 
     const admitted = joinedMembershipRef.current;
     const observedSelf = admitted && snapshot.memberships.find((membership) => membership.userId === admitted.userId);
@@ -2471,76 +2485,15 @@ export function useCommunicationRoomSession({
       await ensureInitialLocalStream();
       if (!isActiveGeneration()) return;
 
-      const stateChannelName = `comm-room-state-${snapshot.room.roomId}`;
       const presenceChannelName = buildCommunicationChannelName(snapshot.room.roomId);
 
       supabase.getChannels().forEach((existingChannel) => {
         if (
-          existingChannel.topic === stateChannelName
-          || existingChannel.topic === `realtime:${stateChannelName}`
-          || existingChannel.topic === presenceChannelName
+          existingChannel.topic === presenceChannelName
           || existingChannel.topic === `realtime:${presenceChannelName}`
         ) {
           supabase.removeChannel(existingChannel);
         }
-      });
-
-      const reportSnapshotRefreshFailure = (scope: string, refreshError: unknown) => {
-        reportRuntimeError(scope, refreshError, {
-          roomId: snapshot.room.roomId,
-        });
-      };
-      const stateChannel = supabase
-        .channel(stateChannelName)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "communication_room_memberships",
-            filter: `room_id=eq.${snapshot.room.roomId}`,
-          },
-          () => {
-            if (!isActiveGeneration()) return;
-            void refreshSnapshot(snapshot.room.roomId).catch((refreshError) => {
-              reportSnapshotRefreshFailure("communication-membership-snapshot-refresh", refreshError);
-            });
-          },
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "communication_rooms",
-            filter: `room_id=eq.${snapshot.room.roomId}`,
-          },
-          () => {
-            if (!isActiveGeneration()) return;
-            void refreshSnapshot(snapshot.room.roomId).catch((refreshError) => {
-              reportSnapshotRefreshFailure("communication-room-snapshot-refresh", refreshError);
-            });
-          },
-        );
-
-      snapshotChannelRef.current = stateChannel;
-      stateChannel.subscribe((status, subscriptionError) => {
-        if (!isActiveGeneration()) return;
-        logChatRtc("snapshot_subscription_status", {
-          roomId: snapshot.room.roomId,
-          status,
-        });
-        if (status !== "CHANNEL_ERROR" && status !== "TIMED_OUT" && status !== "CLOSED") return;
-        reportRuntimeError(
-          "communication-snapshot-subscription",
-          subscriptionError ?? new Error(`communication_snapshot_subscription_${status.toLowerCase()}`),
-          { roomId: snapshot.room.roomId, status },
-        );
-        requestLegacySessionRestart(status === "CHANNEL_ERROR"
-          ? "snapshot_realtime_error"
-          : status === "TIMED_OUT"
-            ? "snapshot_realtime_timeout"
-            : "snapshot_realtime_closed", sessionGeneration);
       });
 
       const channel = supabase.channel(presenceChannelName, {
@@ -2548,6 +2501,18 @@ export function useCommunicationRoomSession({
           private: true,
           presence: { key: resolvedIdentity.userId },
         },
+      });
+
+      channel.on("broadcast", { event: "state:update" }, () => {
+        if (!isActiveGeneration()) return;
+        // The server sends an empty invalidation on this authorized room
+        // channel. Only the account-bound snapshot may supply row contents or
+        // terminal truth; no table CDC publication or payload trust is needed.
+        void refreshSnapshot(snapshot.room.roomId).catch((refreshError) => {
+          reportRuntimeError("communication-room-state-refresh", refreshError, {
+            roomId: snapshot.room.roomId,
+          });
+        });
       });
 
       const isAuthorizedInboundParticipant = (candidateUserId: unknown) => {
@@ -3029,7 +2994,6 @@ export function useCommunicationRoomSession({
         captureLeaveOperation();
       }
       const capturedChannel = channelRef.current;
-      const capturedSnapshotChannel = snapshotChannelRef.current;
       const capturedRoom = roomRef.current;
       const capturedIdentity = identityRef.current;
       const capturedMemberships = membershipsRef.current;
@@ -3053,7 +3017,6 @@ export function useCommunicationRoomSession({
       // Retiring a React generation does not publish captured media intent.
       // Explicit End owns durable leave; a replacement owns its own join.
       void cleanupChannel(capturedChannel);
-      cleanupSnapshotChannel(capturedSnapshotChannel);
       cleanupSessionMedia(capturedMedia);
       // React runs this cleanup synchronously before mounting the replacement
       // generation. If this effect still owned the generation, clear every
@@ -3075,7 +3038,6 @@ export function useCommunicationRoomSession({
     cleanupChannel,
     cleanupSessionMedia,
     captureLeaveOperation,
-    cleanupSnapshotChannel,
     ensureInitialLocalStream,
     hasUsableLocalTrack,
     logInboundVideoDiagnostics,
