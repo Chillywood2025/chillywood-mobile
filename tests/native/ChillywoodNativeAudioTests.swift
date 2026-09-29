@@ -77,11 +77,18 @@ private final class UserDefaults {
   static let standard = UserDefaults()
   func removeObject(forKey key: String) {}
 }
+private var nativeAudioDiagnosticLines: [String] = []
 private final class CoordinatorProbe {
   var activeCalls: [UUID: ActiveNativeCall] = [:]
   var audioSessionObservers: [NSObjectProtocol] = []
   var prepared = false
   var provider: CXProvider?
+  private let audioSessionDiagnostics = ChillywoodNativeCallDiagnostics(infoDictionary: [
+    "ChillywoodNativeCallDiagnosticsEnabled": true,
+    "ChillywoodNativeCallDiagnosticsChannel": "ios-internal-v2",
+    "ChillywoodNativeCallsBuildEnabled": true,
+    "ChillywoodNativeCallsRuntimeDefaultEnabled": true,
+  ]) { nativeAudioDiagnosticLines.append($0) }
   var events: [[String: Any]] = []
   let activeCallsDefaultsKey = "controlled-audio-active-calls"
   func persistedVoipAuthority() -> String? { "controlled-current-authority" }
@@ -110,6 +117,23 @@ private func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
 private func expectsFailure(_ label: String, _ action: () throws -> Void) {
   do { try action(); expect(false, label) }
   catch { passed += 1 }
+}
+private func expectAudioDiagnostics(_ phases: [String], error: Error? = nil) {
+  expect(nativeAudioDiagnosticLines.count == phases.count,
+    "actual audio callbacks retain exactly their expected diagnostic receipts")
+  for (line, phase) in zip(nativeAudioDiagnosticLines, phases) {
+    expect(line.hasPrefix("CH_NATIVE_CALL phase=\(phase) uptime_ms="),
+      "actual audio callback reports the correct phase in order")
+    expect(line.contains(" call_hash=none"),
+      "session-wide audio receipts never bind an arbitrary active or pending call")
+  }
+  if let error {
+    expect(nativeAudioDiagnosticLines.last!.hasSuffix(" error_domain=other error_code=\((error as NSError).code)"),
+      "actual failed activation retains the controlled native error code")
+  } else {
+    expect(nativeAudioDiagnosticLines.allSatisfy { !$0.contains(" error_domain=") },
+      "nonfailure audio receipts do not fabricate native errors")
+  }
 }
 private func sameCall(_ event: [String: Any], _ call: ActiveNativeCall, _ type: String) -> Bool {
   event["type"] as? String == type
@@ -161,7 +185,7 @@ expect(session.operations == ["override:none", "category"] && session.category =
 
 // Execute real CallKit delegate methods with controlled AVAudioSession. Validate
 // ordering, category, exact active-call failures, and no false activation event.
-session.reset(); coordinator.clearEvents()
+session.reset(); coordinator.clearEvents(); nativeAudioDiagnosticLines.removeAll()
 coordinator.provider(provider, didActivate: session)
 expect(session.operations == ["category", "active:true"] && session.active,
   "activation configures category before activating")
@@ -169,14 +193,21 @@ expect(session.categoryOptions == systemOptions && session.mode == .voiceChat,
   "activation preserves supported Bluetooth profiles")
 expect(coordinator.events.count == 1 && coordinator.events[0]["type"] as? String == "audioSessionActivated",
   "activation success emits exactly one event")
+expectAudioDiagnostics(["audio_activation_received", "audio_activation_succeeded"])
 private let first = makeCall("first")
 private let second = makeCall("second")
+session.reset(); coordinator.clearEvents(); nativeAudioDiagnosticLines.removeAll()
+coordinator.activeCalls = [first.uuid: first, second.uuid: second]
+coordinator.provider(provider, didActivate: session)
+expectAudioDiagnostics(["audio_activation_received", "audio_activation_succeeded"])
 for failure in ["category", "active"] {
   for hasCalls in [false, true] {
-    session.reset(); coordinator.clearEvents()
+    session.reset(); coordinator.clearEvents(); nativeAudioDiagnosticLines.removeAll()
     coordinator.activeCalls = hasCalls ? [first.uuid: first, second.uuid: second] : [:]
     session.rejectCategory = failure == "category"; session.rejectActivation = failure == "active"
     coordinator.provider(provider, didActivate: session)
+    expectAudioDiagnostics(["audio_activation_received", "audio_activation_failed"],
+      error: failure == "category" ? AudioProbeError.categoryRejected : AudioProbeError.activationRejected)
     expect(!session.active, "failed activation is not recorded as active")
     expect(session.operations == (failure == "category" ? ["category"] : ["category", "active:true"]),
       "activation failure stops at the actual failing native operation")
@@ -193,17 +224,20 @@ for failure in ["category", "active"] {
     }
   }
 }
-session.reset(); coordinator.clearEvents()
+session.reset(); coordinator.clearEvents(); nativeAudioDiagnosticLines.removeAll()
 try session.setActive(true); session.operations.removeAll()
 coordinator.provider(provider, didDeactivate: session)
+expectAudioDiagnostics(["audio_deactivation_received"])
 expect(!session.active && session.operations == ["active:false"]
   && session.activeOptions == [.notifyOthersOnDeactivation], "deactivation attempts release and notifies other audio")
 expect(coordinator.events.count == 1 && coordinator.events[0]["type"] as? String == "audioSessionDeactivated",
   "deactivation forwards the CallKit receipt")
 // The production cleanup is best effort (try?). Its callback event is not an
 // assertion that setActive(false) succeeded; assert this explicit limitation.
-session.reset(); coordinator.clearEvents(); try session.setActive(true); session.rejectActivation = true
+session.reset(); coordinator.clearEvents(); nativeAudioDiagnosticLines.removeAll()
+try session.setActive(true); session.rejectActivation = true
 coordinator.provider(provider, didDeactivate: session)
+expectAudioDiagnostics(["audio_deactivation_received"])
 expect(session.active && coordinator.events.first?["type"] as? String == "audioSessionDeactivated",
   "controlled deactivation rejection remains a known best-effort boundary, not shutdown proof")
 

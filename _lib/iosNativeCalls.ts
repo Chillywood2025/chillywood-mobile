@@ -22,6 +22,8 @@ import {
   type PushRevocationReason,
 } from "./notifications";
 import { supabase } from "./supabase";
+import { reportRuntimeError } from "./logger";
+import { reportBoundedNativeCallError } from "./nativeCallErrorDiagnostics.mjs";
 
 export type IosNativeCallsDisabledReason =
   | "not_ios"
@@ -732,7 +734,10 @@ export async function reportIosNativeCallRemoteEnd(callUuid: string, reason = "r
 
 export async function completeIosNativeCallAnswer(callUuid: string, connected: boolean) {
   if (!NativeCallsModule || !isIosNativeCallsRuntimeEnabled()) return false;
-  return NativeCallsModule.completeAnswerAsync(callUuid, connected).then(() => true).catch(() => false);
+  return NativeCallsModule.completeAnswerAsync(callUuid, connected).then(() => true).catch((error) => {
+    reportBoundedNativeCallError(reportRuntimeError, "complete_answer", error, { connected });
+    return false;
+  });
 }
 
 export async function requestIosNativeCallAnswer(inviteId: string) {
@@ -747,7 +752,10 @@ export async function requestIosNativeCallAnswer(inviteId: string) {
   if (!normalizedInviteId || !callUuid) return false;
   return NativeCallsModule.requestAnswerAsync(callUuid, normalizedInviteId)
     .then((requested) => requested === true)
-    .catch(() => false);
+    .catch((error) => {
+      reportBoundedNativeCallError(reportRuntimeError, "request_answer", error);
+      return false;
+    });
 }
 
 export async function completeIosNativeCallTerminalTransition(callUuid: string) {

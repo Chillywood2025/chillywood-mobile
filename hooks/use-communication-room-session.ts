@@ -36,6 +36,7 @@ import {
   type CommunicationRoomState,
 } from "../_lib/communication";
 import { reportRuntimeError } from "../_lib/logger";
+import { reportBoundedNativeCallError } from "../_lib/nativeCallErrorDiagnostics.mjs";
 import { reserveCommunicationCapture, retireCommunicationCaptures, retryRetiredCommunicationCaptures } from "../_lib/communicationCaptureRetirement";
 import { reserveCommunicationMembershipAdmission } from "../_lib/communicationMembershipAdmission";
 import { isAccountBoundSupabaseRpcOutcomeAmbiguous as isAmbiguousMembershipOutcome } from "../_lib/accountBoundSupabaseRpc.mjs";
@@ -511,6 +512,10 @@ export function useCommunicationRoomSession({
       stream = await createCommunicationMediaStream(options);
     } catch (captureError) {
       reservation.rejected();
+      reportBoundedNativeCallError(reportRuntimeError, "capture", captureError, {
+        audio: options.audio, video: options.video, facingMode: options.facingMode,
+        appState: appStateRef.current,
+      });
       throw captureError;
     }
     if (!reservation.received(stream?.getTracks() ?? [])) return null;

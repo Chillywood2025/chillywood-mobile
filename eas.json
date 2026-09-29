@@ -60,6 +60,7 @@
       "environment": "production",
       "env": {
         "CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM": "ios",
+        "CHILLYWOOD_INTERNAL_CALL_DIAGNOSTICS": "true",
         "IOS_NATIVE_CALLS_ENABLED": "true",
         "EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED": "true",
         "EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED": "true",
@@ -71,6 +72,7 @@
       "distribution": "internal",
       "env": {
         "CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM": "ios",
+        "CHILLYWOOD_INTERNAL_CALL_DIAGNOSTICS": "false",
         "IOS_NATIVE_CALLS_ENABLED": "true",
         "EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED": "true",
         "EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED": "true",

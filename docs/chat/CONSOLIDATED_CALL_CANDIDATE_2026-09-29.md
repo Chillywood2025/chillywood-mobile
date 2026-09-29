@@ -2,7 +2,7 @@
 
 Updated 2026-09-29. PR #539 is the single candidate; PR #540 is incorporated
 as a merge parent and superseded. **Source consolidation is not physical
-qualification. No new installed-device result is claimed here.**
+qualification. No physical result for the new candidate is claimed here.**
 
 The owner requested comparison, consolidation, remaining repairs, validation,
 internal builds/installations and complete physical retesting. That request
@@ -93,21 +93,51 @@ traces. Do not invent them or claim the remaining causes are established.
 
 ## Device and delivery execution
 
-Current workspace inspection: Linux, no USB device bus, no attached-phone
-transport, no configured remote Mac endpoint, no Xcode/ADB/Appium/WDA runtime,
-and no authenticated EAS session. GitHub CI uses hosted Ubuntu/macOS machines;
-none is a connected physical runner. Available Supabase access supports server
-readback, not iPhone camera/audio logs.
+Remote Desktop Commander connected successfully and executed commands on the
+owner's Mac. Both intended paired phones were verified: Android build 95 from
+Google Play and iPhone build 30 from TestFlight. The existing Android Appium
+session worked. The stale iPhone WDA session was replaced without resetting the
+app, changing its signed-in account or registering a device. The replacement
+session answered source/control requests successfully. Existing native crash
+reports were copied with keep-original enabled, and Android logcat was preserved
+without clearing its buffer. EAS and existing Firebase/Google Cloud identities
+were authenticated. None of this establishes independent audible/video proof.
 
-Remote Desktop Commander was found as an available but unconnected integration
-for the existing Mac. It must be installed/connected to that Mac before this
-session can run its device tools. Connection alone does not prove device
-visibility, trust or an available observer. Reconstruct the existing authorized
-tunnel/WDA/Appium sessions using the real health checks; do not repeat trust
-authorization unless actual trust is lost. A Mac administrator prompt remains
-a local owner action if restarting its root-owned iOS tunnel requires it.
+The following diagnostics used the **original builds**, not the new candidate:
 
-Once connected, execute in this order:
+| Attempt | Observation | Interpretation |
+| --- | --- | --- |
+| D01 | Android invitation appeared on iPhone, but remote command/capture overhead delayed Answer beyond expiry. | Automation timing blocked; not a product Answer failure. |
+| D02 | A locally timed Answer completed at 22:05:31 UTC, approximately six seconds after the caller tap. Both phones subsequently displayed Connected. Later the iPhone displayed Connecting with microphone controls disabled. | This attempt reached the connected UI; it did not prove audible media or durable connection. The later state prevented a valid microphone recovery sequence. End was followed by verified idle screens on both devices. |
+| D03 | A locally timed Answer produced the retryable iPhone handoff error while the invitation remained available; the connected microphone prerequisite was not reached within 45 seconds. | Original-build handoff defect reproduced. The banner alone cannot distinguish missing presentation authority, native request rejection or a missing Answer delegate. Microphone recovery remains blocked behind this prerequisite. Cleanup was requested; final idle readback was interrupted by transport failure. |
+
+Private native logs, timestamps, screenshots and attempt records are preserved
+under the task's private Mac evidence directory. They have not been sanitized
+or published and must not be linked as verified public evidence. The original
+matrix and all 105 new-candidate NOT RUN dispositions remain unchanged.
+
+Crashlytics REST event retrieval returned SERVICE_DISABLED for both apps.
+The existing Cloud Logging query returned zero matching events in the bounded
+window; no new API, export, permission or provider configuration was enabled.
+Release capture and native Answer errors could previously lose their original
+cause before reporting. The candidate now preserves allowlisted error classes,
+domains/codes and bounded media context without logging descriptions, stacks,
+identifiers or payloads. Reporting cannot change the original rejection/false
+result. Native PushKit, presentation, Answer and audio receipts are explicitly
+gated to the reviewed iOS internal binary. Session-wide audio callbacks carry
+no invented call identity. These are diagnostic improvements, not a claimed
+causal repair of the unresolved physical defects.
+
+At 22:24 UTC the connector listed the Mac online but its last heartbeat was
+22:17:55 UTC. Subsequent process-output and a single UTC-only execution probe
+returned HTTP 504; the latter completed at 22:27:43 UTC without a process ID or
+output. Mac execution health is therefore unverified. Dependency installation
+was acknowledged before the outage; a later native-patch transfer/Swift test
+request has unknown execution status. Reconcile files/processes before retrying,
+and do not infer success from the connector's online label. No new binary has
+been built, submitted or installed by this diagnostic run.
+
+Continue execution in this order:
 
 1. Verify both intended phones and existing internal apps. Preserve existing
    Android/iOS/native crash logs before restarting anything; the old logcat
@@ -204,16 +234,31 @@ unreachable physical scenario into a physical PASS.
   observer's settling allowance is not a physical mute-latency acceptance limit.
   [W3C WebRTC statistics](https://www.w3.org/TR/webrtc-stats/).
 
-| Platform | Build/submit profile | Runtime before any new native changes | Channel/audience |
+| Platform | Build/submit profile | New diagnostic-candidate runtime | Channel/audience |
 | --- | --- | --- | --- |
-| Android | `android-internal-v2` | `1.0.0-android-production-v4` | `android-internal-v2`; Play internal |
-| iOS | `ios-internal-v2` | `1.0.0-ios-production-v4` | `ios-internal-v2`; TestFlight Chillywood Internal |
+| Android | `android-internal-v2` | `1.0.0-android-production-v5` | `android-internal-v2`; Play internal |
+| iOS | `ios-internal-v2` | `1.0.0-ios-production-v5` | `ios-internal-v2`; TestFlight Chillywood Internal |
 
 Use `config/release/internal-native-generation.json` and current receipts;
-runtime-v2 examples in older documents are not candidate identity. Any actual
-native input change requires a new compatibility review and appropriate runtime
-generation. Do not dispatch the generic production iOS workflow with the wrong
-profile for native-call qualification.
+runtime-v2/v4 examples in older documents are not this candidate's identity.
+The iOS native diagnostics patch and shared profile changes require fresh v5
+binaries. The supersedes record preserves both exact v4 compatibility digests.
+Only `ios-internal-v2` explicitly enables
+`CHILLYWOOD_INTERNAL_CALL_DIAGNOSTICS=true`; its device-profile child explicitly
+disables the inherited opt-in. Other profiles cannot enable diagnostics. The
+plugin also requires the matching build-profile name, iOS provenance, native
+calls and private internal channel. Do not dispatch the generic production iOS
+workflow, broaden audiences, or publish an OTA for this native transition.
+
+Before building, commit all final native inputs, then compute both platform
+digests with `nativeSourceSnapshot` in
+`scripts/ota-native-source-compatibility.mjs` against that exact Git SHA/tree.
+Populate the v5 `nativeCompatibility` digest fields, commit the receipt-only
+update, and recompute against the resulting candidate to prove equality. The
+digest fields remain unsealed until this step; never reuse the v4 digests or
+fill a digest from a partial working tree. Rerun release-native-source tests and
+both platform config guards on the sealed candidate. Existing v4 binaries must
+be rejected as compatible receipts for v5.
 
 No build, installation or physical retest has been performed by consolidation
 alone. Final CI receipts belong to the exact PR head; delivery and physical

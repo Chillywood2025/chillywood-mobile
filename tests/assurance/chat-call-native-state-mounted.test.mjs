@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import test from "node:test";
 import vm from "node:vm";
 import * as actualMediaPolicy from "../../_lib/communicationCallMediaPolicy.mjs";
+import * as nativeCallErrorDiagnostics from "../../_lib/nativeCallErrorDiagnostics.mjs";
 import { mountChatAnswer } from "./helpers/chat-thread-answer-mounted-harness.mjs";
 
 // Reuse the controlled native/API seam of the established exact-hook fixture,
@@ -450,6 +451,7 @@ function nativeRouteFacade(setAudioRouteAsync) {
     "./accountSessionAuthority": {}, "./iosNativeCallBridgeLifecycle.mjs": {},
     "./livekit/bootstrap": {}, "./nativeCallTransitionProvenance.mjs": {},
     "./notifications": {}, "./supabase": {},
+    "./logger": { reportRuntimeError() {} }, "./nativeCallErrorDiagnostics.mjs": nativeCallErrorDiagnostics,
   };
   const context = { exports: {}, process: { env: {} }, __DEV__: false,
     require: name => { assert.ok(imports[name], `unmodeled iOS facade import ${name}`); return imports[name]; } };

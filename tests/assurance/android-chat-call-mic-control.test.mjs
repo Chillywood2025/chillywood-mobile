@@ -7,6 +7,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { invokeAccountBoundSupabaseRpc, isAccountBoundSupabaseRpcOutcomeAmbiguous } from "../../_lib/accountBoundSupabaseRpc.mjs";
 import * as actualCallMediaPolicy from "../../_lib/communicationCallMediaPolicy.mjs";
+import * as nativeCallErrorDiagnostics from "../../_lib/nativeCallErrorDiagnostics.mjs";
 
 import {
   evaluateLegacyReleaseReachability,
@@ -37,7 +38,7 @@ const legacyPeerSyncMarker = "  const syncPeerConnections = useCallback";
 assert.equal(legacyHookSource.split(legacyPeerSyncMarker).length - 1, 1, "unique legacy peer sync exposure marker");
 const instrumentedLegacyHookSource = legacyHookSource.replace(
   legacyRefMarker,
-  `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { appStateLifecycleHandlerRef, auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, joinedMembershipRef, legacyMicAnswerWaitersRef, legacyMicControlRef, legacyMicLocalPrivacyStopRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, nativePermissionRequestDepthRef, peerConnectionsRef, roomRef, setChannelState, setLoading, presenceRegistrationRef: typeof presenceRegistrationRef === "undefined" ? null : presenceRegistrationRef };`,
+  `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { acquireOwnedLegacyMedia, appStateLifecycleHandlerRef, auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, joinedMembershipRef, legacyMicAnswerWaitersRef, legacyMicControlRef, legacyMicLocalPrivacyStopRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, nativePermissionRequestDepthRef, peerConnectionsRef, roomRef, setChannelState, setLoading, presenceRegistrationRef: typeof presenceRegistrationRef === "undefined" ? null : presenceRegistrationRef };`,
 ).replace(
   legacyOfferQueueMarker,
   `  Object.assign((globalThis as any).__chillywoodLegacyMicAssuranceRefs, { runSerializedPeerOffer, runSerializedPeerSignaling, peerLocalOffersRef, pendingPeerIceRef });\n${legacyOfferQueueMarker}`,
@@ -369,7 +370,7 @@ function createLegacyMountedRuntime(options = {}) {
     runtime.mediaCreateCalls.push({ audio, video });
     const action = runtime.mediaActions.shift() ?? {};
     if (action.wait) await action.wait;
-    if (action.outcome === "reject") throw new Error("media creation rejected");
+    if (action.outcome === "reject") throw action.error ?? new Error("media creation rejected");
     if (action.outcome === "missing") return null;
     const tracks = [];
     if (audio) tracks.push(new FakeTrack("audio", action.audio));
@@ -690,7 +691,11 @@ function createLegacyMountedRuntime(options = {}) {
       shouldPreserveNativeCallBackgroundAudio: options.nativeBackgroundPolicy
         ? actualCallMediaPolicy.shouldPreserveNativeCallBackgroundAudio : () => false,
     },
-    "../_lib/logger": { reportRuntimeError: (scope, error) => runtime.errors.push({ message: String(error?.message ?? error), scope }) },
+    "../_lib/nativeCallErrorDiagnostics.mjs": nativeCallErrorDiagnostics,
+    "../_lib/logger": { reportRuntimeError: (scope, error, metadata) => {
+      runtime.errors.push({ message: String(error?.message ?? error), scope, metadata });
+      if (options.throwRuntimeErrors) throw new Error("controlled diagnostic reporter failure");
+    } },
     "../_lib/mediaPermissions": {
       getMediaPermissionRecoveryMessage: (kind, snapshot) => snapshot.state === "denied" ? `${kind} permission denied` : null,
       resolveMediaPermission: permissionSnapshot,
@@ -3514,3 +3519,26 @@ test("legacy ending generation: an explicit new room can establish fresh media a
   assert.ok(runtime.localStreams.some((stream) => stream.getTracks().some((track) => track.readyState === "live")));
   assert.equal(runtime.joinCalls.at(-1).roomId, runtime.roomId);
 });
+
+for (const throwRuntimeErrors of [false, true]) {
+  test(`legacy capture preserves the identical native rejection and one bounded report: reporter throws ${throwRuntimeErrors}`, async t => {
+    const runtime = createLegacyMountedRuntime({ throwRuntimeErrors });
+    const harness = await mountLegacyHook(runtime);
+    t.after(() => harness.unmount());
+    const original = Object.assign(new Error("PRIVATE-CAPTURE-DETAIL-AND-TOKEN"), {
+      name: "NotReadableError", domain: "AVFoundationErrorDomain", code: -11819,
+    });
+    runtime.queueMedia({ outcome: "reject", error: original });
+    await assert.rejects(() => harness.run(() => harness.refs.acquireOwnedLegacyMedia({
+      audio: true, video: false, facingMode: "environment",
+    })), error => error === original, "diagnostic reporting cannot replace the native exception");
+    const reports = runtime.errors.filter(report => report.scope === "communication-native-capture");
+    assert.equal(reports.length, 1, "the acquisition boundary reports the cause exactly once");
+    assert.equal(reports[0].metadata.nativeErrorName, "NotReadableError");
+    assert.equal(reports[0].metadata.nativeErrorCode, -11819);
+    assert.equal(reports[0].metadata.audio, true);
+    assert.equal(reports[0].metadata.video, false);
+    assert.equal(reports[0].metadata.appState, "active");
+    assert.equal(JSON.stringify(reports).includes(original.message), false);
+  });
+}

@@ -277,7 +277,7 @@ export function buildLegacyPairedBrowserBundle({ sourceRoot = process.cwd(), aut
     "presence-adapter": read("node_modules/@supabase/realtime-js/dist/main/phoenix/presenceAdapter.js"),
     "membership-admission": compile(read("_lib/communicationMembershipAdmission.ts"), "communicationMembershipAdmission.ts"),
   };
-  for (const name of ["communicationCallMediaPolicy", "nativeCallTransitionProvenance", "communicationRoomIdentifier", "accountBoundSupabaseRpc"]) {
+  for (const name of ["communicationCallMediaPolicy", "nativeCallTransitionProvenance", "communicationRoomIdentifier", "accountBoundSupabaseRpc", "nativeCallErrorDiagnostics"]) {
     modules[`./${name}.mjs`] = compile(read(`_lib/${name}.mjs`), `${name}.ts`);
   }
   const hook = compile(read("hooks/use-communication-room-session.ts"), "use-communication-room-session.ts");
@@ -300,10 +300,11 @@ export function buildLegacyPairedBrowserBundle({ sourceRoot = process.cwd(), aut
     const {Presence} = require('phoenix');
     const PresenceAdapter = require('presence-adapter').default;
     const mediaPolicy = require('./communicationCallMediaPolicy.mjs');
+    const nativeCallErrorDiagnostics = require('./nativeCallErrorDiagnostics.mjs');
     const membershipAdmission = require('membership-admission');
     const accountBoundRpc = require('./accountBoundSupabaseRpc.mjs');
     const hookSource = ${JSON.stringify(hook)};
-    (${installLegacyPairedBrowser.toString()})({React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, captureRetirementSource: ${JSON.stringify(captureRetirementSource)}, backendSources: ${JSON.stringify(backendSources)}, authenticatedRuntimeFactory: (${createAuthenticatedBrowserRuntime.toString()}), membershipStoreFactory: (${createLegacyBrowserMembershipStore.toString()}), audioSourceFactory: (${createLegacyBrowserAudioSource.toString()}), audioReceiverFactory: (${createLegacyBrowserAudioReceiver.toString()}), audioControlFactory: (${createLegacyBrowserAudioControl.toString()})});
+    (${installLegacyPairedBrowser.toString()})({React, createRoot, Presence, PresenceAdapter, mediaPolicy, nativeCallErrorDiagnostics, membershipAdmission, accountBoundRpc, hookSource, captureRetirementSource: ${JSON.stringify(captureRetirementSource)}, backendSources: ${JSON.stringify(backendSources)}, authenticatedRuntimeFactory: (${createAuthenticatedBrowserRuntime.toString()}), membershipStoreFactory: (${createLegacyBrowserMembershipStore.toString()}), audioSourceFactory: (${createLegacyBrowserAudioSource.toString()}), audioReceiverFactory: (${createLegacyBrowserAudioReceiver.toString()}), audioControlFactory: (${createLegacyBrowserAudioControl.toString()})});
   })();`;
 }
 
@@ -352,7 +353,7 @@ async function createAuthenticatedBrowserRuntime({ sources, connection, endpoint
   return { client, api, accessToken: signedIn.data.session.access_token, authority };
 }
 
-function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapter, mediaPolicy, membershipAdmission, accountBoundRpc, hookSource, captureRetirementSource, backendSources, authenticatedRuntimeFactory, membershipStoreFactory, audioSourceFactory, audioReceiverFactory, audioControlFactory }) {
+function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapter, mediaPolicy, nativeCallErrorDiagnostics, membershipAdmission, accountBoundRpc, hookSource, captureRetirementSource, backendSources, authenticatedRuntimeFactory, membershipStoreFactory, audioSourceFactory, audioReceiverFactory, audioControlFactory }) {
   const clone = (value) => structuredClone(value);
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const granted = { granted: true, canAskAgain: true, status: "granted" };
@@ -630,6 +631,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       "../_lib/accountBoundSupabaseRpc.mjs": accountBoundRpc,
       "../_lib/communicationCallMediaPolicy.mjs": mediaPolicy,
       "../_lib/logger": { reportRuntimeError: (scope, error) => hub.events.push({ kind: "reported-error", userId, scope, error: String(error?.message ?? error) }) },
+      "../_lib/nativeCallErrorDiagnostics.mjs": nativeCallErrorDiagnostics,
       "../_lib/mediaPermissions": { UNDETERMINED_MEDIA_PERMISSION: permissions, resolveMediaPermission: () => permissions, getMediaPermissionRecoveryMessage: () => null },
       "../_lib/mediaSessionLifecycle": { registerActiveMediaSessionStopper: () => () => {} },
       "../_lib/performancePolicy": { ROOM_HEARTBEAT_MS: 15_000 },
