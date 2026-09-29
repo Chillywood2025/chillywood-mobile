@@ -11,6 +11,16 @@ Both call transports reread their authoritative snapshot when receiving a hint.
 Subscription/reconnection refresh and heartbeat recovery remain necessary
 because Broadcast is an invalidation signal, not a durable event log.
 
+The sent application payload is `{}`. The pinned Realtime server v2.112.6 adds
+its own generated message UUID as `payload.id` when the caller did not supply an
+ID, and repeats it as `meta.id` in the replication envelope. This behavior is
+defined in the provider's [send function](https://github.com/supabase/realtime/blob/v2.112.6/lib/realtime/tenants/repo/migrations/20260605120000_rename_broadcast_send_warning.ex)
+and [replication connection](https://github.com/supabase/realtime/blob/v2.112.6/lib/realtime/tenants/replication_connection.ex).
+The delivery check permits only this optional UUIDv4 field, checks it against
+`meta.id` when supplied, and requires the remaining application payload to be
+exactly empty. It never strips or permits room, user, generation, operation, or
+row fields. Hooks ignore the hint payload and read current RLS truth.
+
 The migration does not publish either table, change RLS, expand client Broadcast
 permissions, or place room/member keys or row values in the payload. Existing
 private-topic authorization remains in force. Payload minimization also matters
@@ -29,7 +39,7 @@ shares its existing paced snapshot reader.
   trigger timing, grants, fixed search path, publication exclusion, unchanged
   RLS/Realtime policies, ordinary writes, rollback, and terminal read closure.
 - `scripts/test-communication-room-realtime-delivery.mjs` uses only a local
-  Supabase instance. It checks real private delivery with exact empty payloads
+  Supabase instance. It checks real private delivery with exact empty application payloads
   for membership INSERT/UPDATE/DELETE and terminal room UPDATE, followed by
   authenticated receiver reads. It retains the separate media relay check.
 - Mounted hook regressions cover authoritative state refresh, stale generations,

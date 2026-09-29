@@ -11,6 +11,24 @@ const timeout = (milliseconds, label) => new Promise((_, reject) => {
   timer.unref?.();
 });
 
+const assertEmptyStateInvalidation = (payload, metadata) => {
+  assert.ok(payload && typeof payload === "object" && !Array.isArray(payload),
+    "state invalidation has an object payload");
+  // Realtime v2.112.6 realtime.send adds its generated message UUID when the
+  // application payload has no id. Its replication envelope repeats that UUID
+  // in meta.id. Only this provider field is permitted; row data stays forbidden.
+  if (Object.hasOwn(payload, "id")) {
+    assert.match(payload.id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu,
+      "provider message id is a generated UUIDv4");
+    if (metadata?.id !== undefined) {
+      assert.equal(payload.id, metadata.id, "provider payload id matches its message metadata");
+    }
+  }
+  const { id: providerMessageId, ...applicationPayload } = payload;
+  void providerMessageId;
+  assert.deepEqual(applicationPayload, {}, "state invalidation application payload is exactly empty");
+};
+
 const parseLocalEnvironment = () => {
   const output = execFileSync("supabase", ["status", "-o", "env"], {
     encoding: "utf8",
@@ -150,8 +168,9 @@ try {
     stateUpdateCount += 1;
     try {
       // This trigger hint carries no row, user, generation, or operation data.
+      // The provider may append its independently generated message UUID.
       // Every projection below comes from the signed-in receiver's RLS reads.
-      assert.deepEqual(message.payload, {}, "state invalidation payload is exactly empty");
+      assertEmptyStateInvalidation(message.payload, message.meta);
       assert.ok(pending, "every state hint belongs to a pending durable mutation");
       const [roomResult, membershipsResult] = await Promise.all([
         receiver.from("communication_rooms")
@@ -305,7 +324,7 @@ try {
   assert.equal(terminalSnapshot.room, null, "terminal hint still reaches the joined receiver after room visibility closes");
   assert.deepEqual(terminalSnapshot.memberships, [], "terminal refresh preserves membership RLS");
   assert.equal(stateUpdateFailure, null);
-  assert.equal(stateUpdateCount, 5, "one empty private hint arrives for each tested durable mutation");
+  assert.equal(stateUpdateCount, 5, "one private hint with empty application data arrives for each tested durable mutation");
   process.stdout.write("communication room Realtime delivery: PASS (private media relay; empty database hints for membership INSERT/UPDATE/DELETE and terminal room UPDATE; receiver RLS projections)\n");
 } finally {
   if (channel) await receiver.removeChannel(channel).catch(() => undefined);

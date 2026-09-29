@@ -1787,19 +1787,50 @@ const liveKitSnapshotRefreshBlock = liveKitChatCallSessionSource.slice(
 );
 assert.match(
   liveKitSnapshotRefreshBlock,
-  /if \(!latestSnapshot\) \{[\s\S]{0,160}options\.reconnectingOnMissing[\s\S]{0,160}setCommittedRoomState\(binding, "reconnecting"\)[\s\S]{0,160}return;/u,
-  "a transient LiveKit snapshot miss is reconnecting rather than terminal",
+  /getCommunicationRoomSnapshot\(binding\.normalizedRoomId\)\.then\([\s\S]{0,100}succeeded: true as const, snapshot[\s\S]{0,120}succeeded: false as const, snapshotError/u,
+  "a successful unavailable-room receipt remains distinct from a failed authoritative read",
+);
+const liveKitFailedSnapshotReadBlock = liveKitSnapshotRefreshBlock.slice(
+  liveKitSnapshotRefreshBlock.indexOf("if (!readResult.succeeded)"),
+  liveKitSnapshotRefreshBlock.indexOf("const latestSnapshot = readResult.snapshot"),
+);
+assert.match(
+  liveKitFailedSnapshotReadBlock,
+  /options\.reconnectingOnReadFailure[\s\S]{0,100}setCommittedRoomState\(binding, "reconnecting"\)[\s\S]{0,100}setChannelState\("reconnecting"\)[\s\S]{0,100}return;/u,
+  "a failed LiveKit read optionally enters reconnecting and returns without terminal authority",
 );
 assert.doesNotMatch(
+  liveKitFailedSnapshotReadBlock,
+  /cleanupSession|onRoomEndedRef|"terminal"/u,
+  "a transport/read failure cannot retire capture or end an accepted invite",
+);
+assert.match(
   liveKitSnapshotRefreshBlock,
-  /if \(!latestSnapshot\)[\s\S]{0,240}onRoomEndedRef/u,
-  "a transient LiveKit snapshot miss cannot end an accepted invite",
+  /!active[\s\S]{0,100}requestSerial !== membershipSnapshotRequestSerial[\s\S]{0,100}!isCommittedSessionCurrent\(binding\)[\s\S]{0,100}return;[\s\S]{0,100}if \(!readResult\.succeeded\)/u,
+  "both failed and successful snapshot receipts are fenced by current effect, ordered read, and exact session",
+);
+assert.match(
+  liveKitSnapshotRefreshBlock,
+  /const latestSnapshot = readResult\.snapshot;[\s\S]{0,250}!latestSnapshot[\s\S]{0,500}await cleanupSession\(\{ leaveMembership: false \}, binding, cleanupToken\);[\s\S]{0,180}active && sameCommittedAuthority\(committedSessionRef\.current, binding\)[\s\S]{0,100}onRoomEndedRef\.current\?\.\("ended"\)/u,
+  "successful unavailable-room readback retires only captured local media before guarded terminal notification, without a durable leave write",
 );
 assert.match(
   liveKitHeartbeatBlock,
-  /refreshMembershipSnapshot\([\s\S]{0,120}reconnectingOnMissing: true/u,
-  "the LiveKit heartbeat preserves reconnecting-on-miss behavior through the shared ordered snapshot reader",
+  /refreshMembershipSnapshot\([\s\S]{0,120}reconnectingOnReadFailure: true/u,
+  "the LiveKit heartbeat preserves reconnecting on read failure through the shared ordered snapshot reader",
 );
+const liveKitMountedSnapshotTests = await readFile(new URL("tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs", root), "utf8");
+for (const witness of [
+  'for (const outcome of ["null", "terminal"])',
+  "server state invalidation retires capture after authoritative ${outcome} readback without callback cleanup",
+  "server state invalidation preserves failed cleanup and End retry after ${outcome} readback",
+  "server state invalidation read failure preserves the live call and cannot claim terminal state",
+  "server state invalidation callback and pending ${outcome} read cannot cross ${retirement}",
+  'assert.equal(liveKitRoom.localParticipant.cameraEnabled, false)',
+  'assert.equal(liveKitRoom.localParticipant.micEnabled, false)',
+  'assert.equal(liveKitRoom.state, "disconnected")',
+  'assert.equal(runtime.audioStopCalls, 0)',
+]) assert.ok(liveKitMountedSnapshotTests.includes(witness), `mounted LiveKit snapshot authority witness remains required: ${witness}`);
 assert.match(
   liveKitChatCallSessionSource,
   /publishData\([\s\S]{0,180}reliable: true, topic: LIVEKIT_MEDIA_INVALIDATION_TOPIC/u,
@@ -2224,7 +2255,16 @@ assert.match(
   /legacySessionRestartSerial,\s*requestLegacySessionRestart,\s*runSerializedMediaControl,[\s\S]{0,240}\]\);/u,
   "legacy initialization observes both foreground recovery and ownership-bound media serialization",
 );
-assert.match(communicationSessionSource, /CHANNEL_ERROR[\s\S]{0,600}requestLegacySessionRestart\(status === "CHANNEL_ERROR"/u, "Realtime terminal and error states rebuild the transport instead of only changing UI state");
+const legacyRealtimeFailureStart = communicationSessionSource.indexOf('if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED")');
+const legacyRealtimeFailureBlock = communicationSessionSource.slice(
+  legacyRealtimeFailureStart,
+  communicationSessionSource.indexOf("if (!reconnectTrackedRef.current)", legacyRealtimeFailureStart),
+);
+assert.match(legacyRealtimeFailureBlock, /presenceRegistrationRef\.current\.subscribed = false/u,
+  "Realtime terminal/error states immediately revoke the current subscription receipt");
+assert.match(legacyRealtimeFailureBlock,
+  /requestLegacySessionRestart\(status === "CHANNEL_ERROR"\s*\? "realtime_error"\s*: status === "TIMED_OUT"\s*\? "realtime_timeout"\s*: "realtime_closed", sessionGeneration\)/u,
+  "every Realtime terminal/error status rebuilds the exact-generation transport instead of only changing UI state");
 assert.match(communicationSessionSource, /mappedState === "failed"\) requestLegacySessionRestart\("peer_failed", generation\)[\s\S]{0,140}mappedState === "disconnected"\) requestLegacySessionRestart\("peer_disconnected", generation\)/u, "peer failures enter the same generation-bound recovery supervisor");
 const activeInviteReconciliationSource = chatThreadSource.slice(
   chatThreadSource.indexOf("const reconcileActiveInvite"),
