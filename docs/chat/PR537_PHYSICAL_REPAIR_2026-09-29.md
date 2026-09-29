@@ -167,8 +167,8 @@ and this evidence, not claims that the vendors guarantee this app works.
 - Product tests: 367 passed after retrieving required historical Git objects.
   The initial shallow clone caused four historical-native-cohort lookup failures;
   full history resolved them without changing tests.
-- Final combined product and call-assurance run: **1,015 passed, zero failed,
-  zero skipped** (367 product + 648 call-assurance tests). Includes all four
+- Final combined product and call-assurance run: **1,017 passed, zero failed,
+  zero skipped** (369 product + 648 call-assurance tests). Includes all four
   new background-start cases and the final static-message implementation.
 - Local PostgreSQL terminal integration: 73 checks passed.
 - Lint and TypeScript passed; runtime and route checks passed. Expo Doctor:
@@ -181,6 +181,22 @@ and this evidence, not claims that the vendors guarantee this app works.
   no attached phone automation, Xcode/Swift or Android device bridge.
 - Protected Required Validation must still pass on the submitted exact head.
   CI and these source tests do not close physical qualification.
+
+The first [CI run](https://github.com/Chillywood2025/chillywood-mobile/actions/runs/36611298071)
+on `5221a7d675091c3ae8c1f9c385e5840c18a25825` subsequently passed real-peer
+Chromium media checks and Native SDK Contracts, including 45 Swift audio checks
+and six rejected mutations. These are CI results, separate from the local
+environment limitations above. Swift tests control OS receipts; browser tests
+use synthetic capture. Neither is hardware qualification.
+
+That run also exposed a call-dispatch assertion based on a 600-character source
+window. The additional error handling exceeded the window without changing
+dispatch behavior. The assertion now parses the actual TypeScript function,
+requires one awaited begin and one awaited dispatch under the authoritative
+`created` branch, and rejects missing, unawaited and unguarded dispatch mutations.
+Runtime tests also verify created/reused invite behavior and cleanup. No bound
+was merely increased and no protected check was removed. The full required run
+must repeat on the updated head.
 
 No production source delivery, OTA, provider configuration, entitlements, money
 or database mutation occurred in this repair work.

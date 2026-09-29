@@ -8,7 +8,7 @@ const userId = "10000000-0000-4000-8000-000000000001";
 const otherId = "10000000-0000-4000-8000-000000000002";
 const binding = { state: "ACTIVE", userId, accountId: userId, restoreOnly: false };
 
-function fixture({ stage = "invite", message = "rate_limited" } = {}) {
+function fixture({ stage = "invite", message = "rate_limited", created = true } = {}) {
   const calls = { begin: 0, dispatch: 0, cleanup: 0, create: 0 };
   const thread = { id: "thread", participant_pair_key: `${userId}::${otherId}`, created_by: userId,
     members: [userId, otherId].map(user_id => ({ thread_id: "thread", user_id, display_name: "Test" })) };
@@ -26,8 +26,12 @@ function fixture({ stage = "invite", message = "rate_limited" } = {}) {
       endCommunicationRoom: async () => { calls.cleanup++; },
     },
     "./chillyChatCalls": {
-      beginChillyChatCall: async () => { calls.begin++; throw { code: "P0001", message }; },
-      dispatchChillyChatCallPush: async () => { calls.dispatch++; },
+      beginChillyChatCall: async () => {
+        calls.begin++;
+        if (stage !== "success") throw { code: "P0001", message };
+        return { created, role: "caller", invite: { id: "invite", communicationRoomId: "ROOM", status: "ringing", callType: "voice" } };
+      },
+      dispatchChillyChatCallPush: async () => { calls.dispatch++; return { status: "sent", pushSent: true }; },
     },
     "./userFacingErrors": errors,
   });
@@ -56,3 +60,16 @@ test("unknown invite backend text remains private and cannot become rate-limit s
   assert.equal(calls.cleanup, 1);
   assert.equal(calls.dispatch, 0);
 });
+
+for (const created of [true, false]) {
+  test(`authoritative ${created ? "created" : "reused"} invite preserves canonical dispatch and cleanup behavior`, async () => {
+    const { api, calls } = fixture({ stage: "success", created });
+    const result = await api.startChatThreadCall("thread", "voice");
+    assert.equal(result.invite.id, "invite");
+    assert.equal(result.roomId, "ROOM");
+    assert.equal(calls.create, 1);
+    assert.equal(calls.begin, 1);
+    assert.equal(calls.dispatch, Number(created), "only a newly created server invite dispatches, exactly once");
+    assert.equal(calls.cleanup, Number(!created), "a reused invite retires only the unused room");
+  });
+}
