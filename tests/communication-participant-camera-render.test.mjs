@@ -1,0 +1,63 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import vm from "node:vm";
+import test from "node:test";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import ts from "typescript";
+
+// Execute the production JSX, including its real render conditions and labels.
+// Host views are DOM stand-ins; this proves presentation, not native frames/RTP.
+const host = (tag) => ({ children, testID, ...props }) => React.createElement(tag,
+  { "data-testid": testID, ...(props.streamURL ? { "data-stream": props.streamURL } : {}) }, children);
+const mocks = {
+  react: React,
+  "react-native": { StyleSheet: { create: (value) => value }, Text: host("span"), View: host("div") },
+  "../../_lib/communication": { getCommunicationRTCModule: () => ({ RTCView: host("video") }) },
+  "../../_lib/livekit/react-native-module": { LiveKitVideoTrack: host("video") },
+  "../../hooks/use-responsive-layout": { responsiveFontSize: (size) => size,
+    useResponsiveLayout: () => ({ fontScale: 1, isLandscape: false }) },
+  "../ui/ProfileMediaImage": { ProfileMediaImage: host("img") },
+  "../ui/chillywood-visual-system": { CHILLYWOOD_VISUAL: {} },
+};
+const filename = process.env.CHILLY_GRID_TEST_SOURCE ?? "components/communication/communication-participant-grid.tsx";
+const module = { exports: {} };
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(filename, "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
+  fileName: filename,
+}).outputText, { module, exports: module.exports, __DEV__: false,
+  require: (name) => { assert.ok(Object.hasOwn(mocks, name), name); return mocks[name]; } });
+const render = (participant, props = {}) => renderToStaticMarkup(React.createElement(
+  module.exports.CommunicationParticipantGrid, { callType: "video", participants: [{
+    userId: "remote", displayName: "Participant", isSelf: false,
+    cameraOn: false, micOn: true, connectionState: "connected", ...participant,
+  }], ...props }));
+
+for (const transport of ["legacy", "livekit"]) {
+  const retained = transport === "legacy" ? { streamURL: "retained-native-stream" }
+    : { liveKitVideoTrackReference: { publication: { trackSid: "retained-track" } } };
+  test(`${transport}: camera-off hides a retained remote renderer and removes Cam On`, () => {
+    const html = render(retained);
+    assert.doesNotMatch(html, /<video|Cam On|Video connected/);
+    assert.match(html, /communication-video-remote-placeholder/);
+    assert.match(html, /Cam Off/);
+  });
+  test(`${transport}: camera-on restores the existing remote renderer`, () => {
+    const html = render({ ...retained, cameraOn: true });
+    assert.match(html, /<video/);
+    assert.match(html, /Cam On/);
+    assert.doesNotMatch(html, /communication-video-remote-placeholder/);
+  });
+  test(`${transport}: voice calls never render a retained video track`, () => {
+    assert.doesNotMatch(render({ ...retained, cameraOn: true }, { callType: "voice" }), /<video|Cam On/);
+  });
+}
+test("local camera-off overrides a retained stream and stale participant intent", () => {
+  assert.doesNotMatch(render({ isSelf: true, cameraOn: true, streamURL: "local" },
+    { localCameraEnabled: false }), /<video|Cam On/);
+});
+test("camera requested without a track remains Starting, never Cam On", () => {
+  const html = render({ cameraOn: true });
+  assert.match(html, /Starting/);
+  assert.doesNotMatch(html, /<video|Cam On|Video connected/);
+});

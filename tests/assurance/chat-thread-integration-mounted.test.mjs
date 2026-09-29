@@ -568,6 +568,35 @@ test("actual root native Answer route is consumed by the actual screen once and 
   assert.equal(screen.runtime.media.localStreams.length, 1);
 });
 
+test("same-thread iOS Answer consumes a native route arriving before the request promise settles", async (t) => {
+  const root = await mountIosRoot(t, { realFacade: true });
+  await root.event(makeNativeEvent("incoming"));
+  const screen = await mountFullChatThread({ userId: rootNativeIds.user,
+    remoteUserId: "00000000-0000-4000-8000-000000000099", threadId: rootNativeIds.thread,
+    platform: "ios", sessionGeneration: rootNativeIds.session,
+    invite: { id: rootNativeIds.invite, callType: "voice" }, nativeFacade: root.facade });
+  t.after(() => screen.unmount());
+  const nativeRequest = deferredMessageWrite();
+  root.setStage("os-requestAnswer", () => nativeRequest.wait.then(() => true));
+  let answer;
+  await screen.run(() => { answer = screen.runtime.snapshot.handleAcceptIncomingCall(); });
+  assert.equal(screen.runtime.snapshot.callBusy, true);
+  assert.equal(root.nativeSteps.filter(step => step.name === "requestAnswer").length, 1);
+  assert.equal(screen.runtime.transitions.length, 0, "queueing the native request cannot accept the server invite");
+  await root.event(makeNativeEvent("answerRequested"));
+  assert.equal(root.routes.length, 1);
+  const destination = new URL(root.routes[0], "https://test.invalid");
+  await screen.rerender({ params: { threadId: rootNativeIds.thread, ...Object.fromEntries(destination.searchParams) } });
+  assert.equal(screen.runtime.transitions.length, 0, "the in-flight UI request retains its single operation slot");
+  await screen.run(async () => { nativeRequest.release(); await answer; });
+  assert.deepEqual(screen.runtime.transitions.map(({ status }) => status), ["accepted"]);
+  assert.equal(screen.runtime.snapshot.callBusy, false);
+  assert.equal(screen.runtime.media.localStreams.length, 0, "Answer waits for actual native audio activation");
+  await screen.run(() => root.event(makeNativeEvent("audioSessionActivated")));
+  assert.equal(screen.runtime.media.joinCalls.length, 1);
+  assert.equal(screen.runtime.media.localStreams.length, 1);
+});
+
 test("actual root-issued native Answer route cannot be consumed by a replacement-account screen", async (t) => {
   const root = await mountIosRoot(t, { realFacade: true });
   await root.event(makeNativeEvent("incoming"));

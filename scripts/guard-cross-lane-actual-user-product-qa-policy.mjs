@@ -34,7 +34,7 @@ const parseTsx = (source) => parse(source, {
   plugins: ["typescript", "jsx", "decorators-legacy", "classProperties", "classPrivateProperties", "classPrivateMethods", "importAttributes"],
 });
 
-const CRITICAL_PARTICIPANT_GRID_AST_SHA256 = "4cdd5f2fd80a17297611c8e7cfd80ec6186add291c144ba8ce11222f47d1ec22";
+const CRITICAL_PARTICIPANT_GRID_AST_SHA256 = "d641739a198109f3966a1accae176db8e1fe71a0a7f0049c674cdc6ee6634dae";
 const AST_METADATA_KEYS = new Set([
   "start",
   "end",
@@ -186,14 +186,9 @@ const isDoubleNegated = (nodePath, predicate) => {
     && predicate(unwrapExpression(innerPath.get("argument")));
 };
 
-const isRemoteCameraGate = (nodePath) => matchExactTerms(flattenLogical(nodePath, "||"), [
-  (term) => {
-    const expressionPath = unwrapExpression(term);
-    return expressionPath?.isUnaryExpression({ operator: "!" })
-      && isParticipantMember(expressionPath.get("argument"), "isSelf");
-  },
-  (term) => term?.isIdentifier({ name: "cameraRequested" }),
-]);
+// Retained remote tracks/URLs survive Camera Off. Both endpoints must obey
+// authoritative camera intent; remote identity is never a rendering exemption.
+const isRemoteCameraGate = (nodePath) => unwrapExpression(nodePath)?.isIdentifier({ name: "cameraRequested" });
 
 const isLocalCameraTypeCheck = (nodePath) => {
   const expressionPath = unwrapExpression(nodePath);
@@ -513,10 +508,10 @@ const validHybridRenderFixture = `
       : false;
     const hasLiveKitVideo = isVideoCall
       && !!participant.liveKitVideoTrackReference
-      && (!participant.isSelf || cameraRequested);
+      && cameraRequested;
     const hasVideoStream = isVideoCall
       && (!!participant.streamURL || hasLiveKitVideo)
-      && (!participant.isSelf || cameraRequested);
+      && cameraRequested;
     const showLegacyVideo = !!RTCView && !!participant.streamURL && hasVideoStream;
     return hasLiveKitVideo ? (
       <LiveKitVideoTrack trackRef={participant.liveKitVideoTrackReference as unknown} />
@@ -528,6 +523,12 @@ const validHybridRenderFixture = `
 `;
 if (!hasBoundHybridVideoRender(validHybridRenderFixture)) {
   fail("communication participant grid guard rejected an equivalent formatted hybrid render chain");
+}
+const remoteCameraBypass = validHybridRenderFixture.replaceAll(
+  "&& cameraRequested;", "&& (!participant.isSelf || cameraRequested);",
+);
+if (hasBoundHybridVideoRender(remoteCameraBypass)) {
+  fail("communication participant grid guard accepted retained remote video after Camera Off");
 }
 const disconnectedHybridRender = validHybridRenderFixture.replace("return hasLiveKitVideo ? (", "return false ? (");
 if (hasBoundHybridVideoRender(disconnectedHybridRender)) {

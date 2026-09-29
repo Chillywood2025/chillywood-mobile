@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import test from "node:test";
 import vm from "node:vm";
 import { invokeAccountBoundSupabaseRpc, isAccountBoundSupabaseRpcOutcomeAmbiguous } from "../../_lib/accountBoundSupabaseRpc.mjs";
+import * as actualCallMediaPolicy from "../../_lib/communicationCallMediaPolicy.mjs";
 
 import {
   evaluateLegacyReleaseReachability,
@@ -159,7 +160,7 @@ const makeRoom = (runtime) => ({
 
 function createLegacyMountedRuntime(options = {}) {
   const runtime = {
-    appState: "active",
+    appState: options.appState ?? "active",
     appStateListeners: [],
     broadcasts: [],
     cameraPermission: grantedPermission(),
@@ -672,7 +673,8 @@ function createLegacyMountedRuntime(options = {}) {
       },
     },
     "../_lib/communicationCallMediaPolicy.mjs": {
-      canAttemptNativeCallBackgroundAudio: () => false,
+      canAttemptNativeCallBackgroundAudio: options.nativeBackgroundPolicy
+        ? actualCallMediaPolicy.canAttemptNativeCallBackgroundAudio : () => false,
       resolveLegacyChatSessionRecovery: ({ alreadyRequested, enabled, ending, generationIsCurrent }) => (
         enabled && generationIsCurrent && !ending && !alreadyRequested ? { delayMs: 1 } : null
       ),
@@ -685,7 +687,8 @@ function createLegacyMountedRuntime(options = {}) {
         }
         return updated;
       },
-      shouldPreserveNativeCallBackgroundAudio: () => false,
+      shouldPreserveNativeCallBackgroundAudio: options.nativeBackgroundPolicy
+        ? actualCallMediaPolicy.shouldPreserveNativeCallBackgroundAudio : () => false,
     },
     "../_lib/logger": { reportRuntimeError: (scope, error) => runtime.errors.push({ message: String(error?.message ?? error), scope }) },
     "../_lib/mediaPermissions": {
@@ -1467,6 +1470,55 @@ test("legacy media projection: a server-relayed media update refreshes durable r
   const mutedRemote = harness.getResult().participants.find((participant) => participant.userId === runtime.remoteUserId);
   assert.equal(mutedRemote?.cameraOn, false, "stale Presence=true cannot override durable camera=false");
   assert.equal(mutedRemote?.micOn, false, "stale Presence=true cannot override durable mic=false");
+});
+
+for (const cancelIntent of [false, true]) {
+  test(`legacy native background Answer retains foreground mic intent; explicit mute=${cancelIntent}`, async (t) => {
+    const runtime = createLegacyMountedRuntime({ appState: "background", nativeBackgroundPolicy: true });
+    const harness = await mountLegacyHook(runtime, {
+      enabled: true, naturalLifecycle: true, allowBackgroundAudio: true,
+      initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    });
+    t.after(() => harness.unmount());
+    assert.equal(harness.getResult().micEnabled, false, "background permission/capture unavailability is never live mic proof");
+    assert.equal(runtime.durableMic, false);
+    if (cancelIntent) await harness.run(() => harness.getResult().setMicrophoneEnabled(false));
+    await harness.run(() => runtime.emitAppState("inactive"));
+    await harness.run(() => runtime.emitAppState("active"));
+    assert.equal(harness.getResult().micEnabled, !cancelIntent,
+      "foreground restores only the retained Answer intent, without requiring another Unmute");
+    assert.equal(runtime.durableMic, !cancelIntent);
+    assert.equal(runtime.localStreams.flatMap(stream => stream.getAudioTracks())
+      .filter(track => track.enabled && track.readyState !== "ended").length, cancelIntent ? 0 : 1);
+  });
+}
+
+test("legacy native background Answer cannot restore a microphone denied in Settings", async (t) => {
+  const runtime = createLegacyMountedRuntime({ appState: "background", nativeBackgroundPolicy: true });
+  const harness = await mountLegacyHook(runtime, {
+    enabled: true, naturalLifecycle: true, allowBackgroundAudio: true,
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+  runtime.microphonePermission = { granted: false, canAskAgain: false, status: "denied" };
+  await harness.run(() => runtime.emitAppState("active"));
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(runtime.durableMic, false);
+  assert.equal(runtime.localStreams.length, 0);
+});
+
+test("legacy native background Answer intent is retired by End before foreground", async (t) => {
+  const runtime = createLegacyMountedRuntime({ appState: "background", nativeBackgroundPolicy: true });
+  const harness = await mountLegacyHook(runtime, {
+    enabled: true, naturalLifecycle: true, allowBackgroundAudio: true,
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+  await harness.run(() => harness.getResult().leaveRoom());
+  const acquisitions = runtime.mediaCreateCalls.length;
+  await harness.run(() => runtime.emitAppState("active"));
+  assert.equal(runtime.mediaCreateCalls.length, acquisitions);
+  assert.equal(runtime.durableMic, false);
 });
 
 test("legacy grouped media lifecycle: failed initial media promotion disables tracks and restores muted membership", async (t) => {

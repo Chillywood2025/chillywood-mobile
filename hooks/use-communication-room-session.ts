@@ -630,10 +630,16 @@ export function useCommunicationRoomSession({
   }, [allowBackgroundAudio]);
 
   useEffect(() => {
+    // Deferred Answer intent belongs to this account and room only.
+    resumeMicAfterForegroundRef.current = false;
+  }, [authenticatedUserId, roomId]);
+
+  useEffect(() => {
     if (typeof initialMediaPreferences?.cameraEnabled === "boolean") {
       setCameraEnabled(initialMediaPreferences.cameraEnabled);
     }
     if (typeof initialMediaPreferences?.micEnabled === "boolean") {
+      if (!initialMediaPreferences.micEnabled) resumeMicAfterForegroundRef.current = false;
       setMicEnabled(initialMediaPreferences.micEnabled);
     }
   }, [
@@ -933,7 +939,7 @@ export function useCommunicationRoomSession({
           stopLocalMediaKind("video");
           return;
         }
-        const shouldResumeMic = micEnabledRef.current;
+        const shouldResumeMic = micEnabledRef.current || resumeMicAfterForegroundRef.current;
         const cameraStopped = stopLocalMediaKind("video");
         try {
           const controlled = await legacyMicControlRef.current?.(
@@ -1564,6 +1570,9 @@ export function useCommunicationRoomSession({
       setCameraEnabled(false);
     }
     if (requestedMic && !microphoneTrackReady) {
+      // Background Answer can precede OS capture eligibility. Keep authorized
+      // foreground intent separate from the truthful, currently muted state.
+      if (!appIsActive && allowBackgroundAudioRef.current) resumeMicAfterForegroundRef.current = true;
       micEnabledRef.current = false;
       setMicEnabled(false);
     }
@@ -2877,6 +2886,9 @@ export function useCommunicationRoomSession({
               setCameraEnabled(provedCameraEnabled);
             }
             if (micEnabledRef.current !== provedMicEnabled) {
+              if (micEnabledRef.current && appStateRef.current !== "active" && allowBackgroundAudioRef.current) {
+                resumeMicAfterForegroundRef.current = true;
+              }
               micEnabledRef.current = provedMicEnabled;
               setMicEnabled(provedMicEnabled);
             }
@@ -3507,7 +3519,7 @@ export function useCommunicationRoomSession({
         return;
       }
 
-      const shouldResumeMic = micEnabledRef.current;
+      const shouldResumeMic = micEnabledRef.current || resumeMicAfterForegroundRef.current;
       const cameraStopped = stopLocalMediaKind("video");
       channelStateRef.current = "reconnecting";
       setChannelState("reconnecting");

@@ -107,10 +107,10 @@ export function CommunicationParticipantGrid({
           : false;
         const hasLiveKitVideo = isVideoCall
           && !!participant.liveKitVideoTrackReference
-          && (!participant.isSelf || cameraRequested);
+          && cameraRequested;
         const hasVideoStream = isVideoCall
           && (!!participant.streamURL || hasLiveKitVideo)
-          && (!participant.isSelf || cameraRequested);
+          && cameraRequested;
         const showLegacyVideo = !!RTCView && !!participant.streamURL && hasVideoStream;
         const videoObjectFit = "cover";
         const cameraPillLabel = hasVideoStream ? "Cam On" : cameraRequested ? "Starting" : "Cam Off";

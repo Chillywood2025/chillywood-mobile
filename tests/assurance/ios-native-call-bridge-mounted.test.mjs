@@ -149,6 +149,13 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
         nativeModuleListener?.({ type: "remoteEnded", callUuid: uuid, callInviteId: ids.invite, threadId: ids.thread });
       },
       completeAnswerAsync: async (uuid, connected) => { nativeSteps.push({ name: "answer", uuid, connected }); },
+      requestAnswerAsync: async (uuid, inviteId) => {
+        nativeSteps.push({ name: "requestAnswer", uuid, inviteId });
+        // The OS edge must explicitly deliver its event; a request promise
+        // alone never fabricates an Answer route or server acceptance.
+        return stageHandlers.has("os-requestAnswer")
+          ? stageHandlers.get("os-requestAnswer")(uuid, inviteId) : false;
+      },
       completeTerminalTransitionAsync: async (uuid) => { nativeSteps.push({ name: "terminal", uuid }); },
     };
     const imports = {
