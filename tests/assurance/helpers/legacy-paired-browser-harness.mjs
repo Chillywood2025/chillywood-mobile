@@ -11,6 +11,40 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
 
+// Measure a sustained interval of received PCM, not an assumed wall-clock
+// drain. WebRTC playout and AudioWorklet messages can lag the test runner.
+// The caller still owns a bounded deadline: continuous audio or absent input
+// must never become a success simply because the receiver has not caught up.
+export function createLegacyBrowserSilenceObservation({ minimumDurationSeconds = 0.3, maximumEnergy = 0.0001 } = {}) {
+  if (!(minimumDurationSeconds > 0) || !(maximumEnergy > 0)) throw new Error("Invalid silence observation limits");
+  let baseline = null, previous = null, lastWindow = null;
+  let noisyWindows = 0, observations = 0;
+  const inspect = (observation) => {
+    const { samples, energy, packets, sampleRate } = observation;
+    if (!Number.isSafeInteger(samples) || samples < 0 || !Number.isFinite(energy) || energy < 0
+      || !Number.isSafeInteger(packets) || packets < 0 || !Number.isFinite(sampleRate) || sampleRate <= 0) {
+      throw new Error("Missing or invalid received PCM/RTP observation");
+    }
+    if (previous && (samples < previous.samples || energy < previous.energy || packets < previous.packets
+      || sampleRate !== previous.sampleRate)) throw new Error("Received PCM/RTP observation changed identity or moved backwards");
+    previous = { samples, energy, packets, sampleRate };
+    observations += 1;
+    if (!baseline) { baseline = previous; return false; }
+    lastWindow = {
+      samples: samples - baseline.samples, energy: energy - baseline.energy,
+      packets: packets - baseline.packets, durationSeconds: (samples - baseline.samples) / sampleRate,
+    };
+    if (lastWindow.energy >= maximumEnergy) {
+      noisyWindows += 1;
+      baseline = previous;
+      return false;
+    }
+    return lastWindow.samples > 0 && lastWindow.packets > 0
+      && lastWindow.durationSeconds >= minimumDurationSeconds;
+  };
+  return { inspect, read: () => ({ minimumDurationSeconds, maximumEnergy, observations, noisyWindows, lastWindow }) };
+}
+
 export async function createLegacyBrowserAudioSource(frequency) {
   const context = new AudioContext(); await context.resume();
   const oscillator = context.createOscillator(); oscillator.frequency.value = frequency;
@@ -102,7 +136,7 @@ export async function createLegacyBrowserAudioControl({ audioSourceFactory, audi
       return {
         errors: [...errors], senderConnection: sender.connectionState, receiverConnection: receiver.connectionState,
         senderTrack: { enabled: source.track.enabled, state: source.track.readyState, contextState: source.context.state },
-        received: received && { trackState: receivedTrack.readyState, trackEnabled: receivedTrack.enabled, contextState: received.context.state, playbackPaused: received.playback.paused, playbackReadyState: received.playback.readyState, pcmSamples: received.samples, pcmEnergy: received.energy, error: received.error },
+        received: received && { trackState: receivedTrack.readyState, trackEnabled: receivedTrack.enabled, contextState: received.context.state, playbackPaused: received.playback.paused, playbackReadyState: received.playback.readyState, pcmSampleRate: received.context.sampleRate, pcmSamples: received.samples, pcmEnergy: received.energy, error: received.error },
         senderStats: await reports(sender), receiverStats: await reports(receiver),
       };
     },
@@ -647,7 +681,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     peers: endpoint.peers.map((peer) => ({ id: peer.fixturePeerId, connection: peer.connectionState, ice: peer.iceConnectionState, signaling: peer.signalingState, gathering: peer.iceGatheringState, localType: peer.localDescription?.type, remoteType: peer.remoteDescription?.type, remoteDescriptionApplications: peer.remoteDescriptionApplications, senders: peer.getSenders().map((sender) => sender.track?.kind ?? "none") })),
     // Acquisition identities survive stream.removeTrack during hook rollback.
     tracks: endpoint.acquiredTracks.map((item) => ({ id: item.id, kind: item.kind, state: item.readyState, enabled: item.enabled })),
-    audioReceivers: endpoint.receivedAudio.map(({ peer, track, receiver }) => ({ peerId: peer.fixturePeerId, connection: peer.connectionState, contextState: receiver.context.state, trackState: track.readyState, trackEnabled: track.enabled, playbackPaused: receiver.playback.paused, playbackReadyState: receiver.playback.readyState, pcmSamples: receiver.samples, pcmEnergy: receiver.energy, error: receiver.error })),
+    audioReceivers: endpoint.receivedAudio.map(({ peer, track, receiver }) => ({ peerId: peer.fixturePeerId, connection: peer.connectionState, contextState: receiver.context.state, trackState: track.readyState, trackEnabled: track.enabled, playbackPaused: receiver.playback.paused, playbackReadyState: receiver.playback.readyState, pcmSampleRate: receiver.context.sampleRate, pcmSamples: receiver.samples, pcmEnergy: receiver.energy, error: receiver.error })),
   });
   window.__pairedCall = {
     async replaceLegacyPresenceMetadata(userId) {

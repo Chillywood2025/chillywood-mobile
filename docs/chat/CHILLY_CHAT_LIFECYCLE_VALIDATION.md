@@ -4,10 +4,10 @@ Updated: 2026-09-29. This is the current testing and troubleshooting entry point
 The latest reviewed PR #538 evidence covers Android 95 / iOS 30 at source
 `f44437c8acf9c9ad0f1621c985b3a70831e8459c`: 26 PASS, 18 FAIL, 1 AUTOMATION
 BLOCKED and 60 DEPENDENCY BLOCKED. The candidate is **not physically qualified**.
-Start with the [PR #538 investigation and source repairs](PR538_REPAIR_AND_QUALIFICATION.md)
-and [all 105 case follow-ups](PR538_CASE_FOLLOWUP.tsv). The original outcomes
-remain unchanged; source repairs require fresh installed-device proof.
-Source fixes,
+Start with the [consolidated candidate](CONSOLIDATED_CALL_CANDIDATE_2026-09-29.md)
+and [complete 105-row retest matrix](PR537_RETEST_MATRIX.tsv). The original
+outcomes remain unchanged; source repairs require fresh installed-device proof.
+The PR #539 and #540 investigation documents remain supporting history. Source fixes,
 passing CI, a completed checklist, and an older physical pass do not qualify a
 different installed candidate. This document grants no delivery or provider
 configuration authority.

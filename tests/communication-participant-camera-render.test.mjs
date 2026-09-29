@@ -51,6 +51,17 @@ for (const transport of ["legacy", "livekit"]) {
   test(`${transport}: voice calls never render a retained video track`, () => {
     assert.doesNotMatch(render({ ...retained, cameraOn: true }, { callType: "voice" }), /<video|Cam On/);
   });
+  for (const [connectionState, label] of [
+    ["failed", "Connection failed"], ["disconnected", "Disconnected"],
+    ["connecting", "Connecting"], ["waiting", "Waiting"],
+  ]) {
+    test(`${transport}: ${connectionState} cannot be masked by retained video`, () => {
+      const html = render({ ...retained, cameraOn: true, connectionState });
+      assert.doesNotMatch(html, /<video|Cam On|Video connected/);
+      assert.match(html, /communication-video-remote-placeholder/);
+      assert.ok(html.includes(label));
+    });
+  }
 }
 test("local camera-off overrides a retained stream and stale participant intent", () => {
   assert.doesNotMatch(render({ isSelf: true, cameraOn: true, streamURL: "local" },

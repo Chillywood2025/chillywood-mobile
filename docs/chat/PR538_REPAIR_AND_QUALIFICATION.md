@@ -2,6 +2,11 @@
 
 Date: 2026-09-29. **Incomplete repair; NOT physically qualified.**
 
+Historical PR #539 investigation. For the union with PR #540 and subsequent
+repairs, use the [consolidated candidate](CONSOLIDATED_CALL_CANDIDATE_2026-09-29.md)
+and its canonical retest matrix. In particular, the later #540 investigation
+identified DE03 rate limiting; the earlier open D4 entry below is retained history.
+
 The source reviewed here is `f44437c8acf9c9ad0f1621c985b3a70831e8459c`.
 PR #538 head is `9563900cbc1454122fe266ac1313260edc9e2f87`. Its ZIP at
 `docs/chat/evidence/chillywood-pr537-v4-physical-qualification-2026-09-29.zip`

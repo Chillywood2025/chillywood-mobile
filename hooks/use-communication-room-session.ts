@@ -487,6 +487,7 @@ export function useCommunicationRoomSession({
   const legacyMicControlRef = useRef<((nextEnabled: boolean, cameraEnabledOverride?: boolean) => Promise<boolean>) | null>(null);
   const legacyMicLocalPrivacyStopRef = useRef<(() => boolean) | null>(null);
   const resumeMicAfterForegroundRef = useRef(false);
+  const foregroundMicIntentRevisionRef = useRef(0);
   const legacySessionGenerationRef = useRef(0);
   const snapshotRefreshSerialRef = useRef(0);
   const legacySessionRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -631,6 +632,7 @@ export function useCommunicationRoomSession({
 
   useEffect(() => {
     // Deferred Answer intent belongs to this account and room only.
+    foregroundMicIntentRevisionRef.current += 1;
     resumeMicAfterForegroundRef.current = false;
   }, [authenticatedUserId, roomId]);
 
@@ -639,7 +641,11 @@ export function useCommunicationRoomSession({
       setCameraEnabled(initialMediaPreferences.cameraEnabled);
     }
     if (typeof initialMediaPreferences?.micEnabled === "boolean") {
-      if (!initialMediaPreferences.micEnabled) resumeMicAfterForegroundRef.current = false;
+      // New muted preferences outrank an earlier background Answer request.
+      if (!initialMediaPreferences.micEnabled) {
+        foregroundMicIntentRevisionRef.current += 1;
+        resumeMicAfterForegroundRef.current = false;
+      }
       setMicEnabled(initialMediaPreferences.micEnabled);
     }
   }, [
@@ -939,6 +945,8 @@ export function useCommunicationRoomSession({
           stopLocalMediaKind("video");
           return;
         }
+        const generation = legacySessionGenerationRef.current;
+        const intentRevision = foregroundMicIntentRevisionRef.current;
         const shouldResumeMic = micEnabledRef.current || resumeMicAfterForegroundRef.current;
         const cameraStopped = stopLocalMediaKind("video");
         try {
@@ -946,19 +954,23 @@ export function useCommunicationRoomSession({
             LEGACY_BACKGROUND_MEDIA_STATE.micEnabled,
             cameraStopped ? LEGACY_BACKGROUND_MEDIA_STATE.cameraEnabled : hasUsableLocalTrack("video"),
           ) ?? false;
+          if (!isActiveLegacyGeneration(generation)) return;
           if (!controlled) legacyMicLocalPrivacyStopRef.current?.();
         } catch (error) {
+          if (!isActiveLegacyGeneration(generation)) return;
           legacyMicLocalPrivacyStopRef.current?.();
           reportRuntimeError("communication-media-session-background", error, {
             roomId: roomRef.current?.roomId ?? roomId,
           });
         }
-        resumeMicAfterForegroundRef.current = shouldResumeMic;
+        if (intentRevision === foregroundMicIntentRevisionRef.current) {
+          resumeMicAfterForegroundRef.current = shouldResumeMic;
+        }
         return;
       }
       cleanupSessionMedia();
     });
-  }, [cleanupSessionMedia, enabled, hasUsableLocalTrack, roomId, stopLocalMediaKind]);
+  }, [cleanupSessionMedia, enabled, hasUsableLocalTrack, isActiveLegacyGeneration, roomId, stopLocalMediaKind]);
 
   const cleanupChannel = useCallback(async (expectedChannel?: RealtimeChannel | null) => {
     const channel = expectedChannel ?? channelRef.current;
@@ -1494,7 +1506,14 @@ export function useCommunicationRoomSession({
       allowBackgroundAudio: allowBackgroundAudioRef.current,
       micRequested: micEnabledRef.current,
     });
-    if (!appIsActive && !backgroundAudioAllowed) return null;
+    if (!appIsActive && !backgroundAudioAllowed) {
+      // Notification Answer may admit the call before Android resumes its
+      // Activity. Capture must wait for eligibility, but initial presence
+      // promotion must not erase the user's requested microphone intent.
+      // Explicit mute clears this deferred intent through the normal control.
+      if (micEnabledRef.current) resumeMicAfterForegroundRef.current = true;
+      return null;
+    }
 
     const requestedCamera = cameraEnabledRef.current;
     const requestedMic = micEnabledRef.current;
@@ -3374,12 +3393,15 @@ export function useCommunicationRoomSession({
       }
 
       const requestedMic = micEnabledRef.current || resumeMicAfterForegroundRef.current;
+      const intentRevision = foregroundMicIntentRevisionRef.current;
       const nextMicEnabled = requestedMic && microphonePermissionRef.current.state === "granted";
       const micResult = nextMicEnabled
         ? await legacyMicControlRef.current?.(true) ?? false
         : await legacyMicControlRef.current?.(false) ?? false;
       if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
-      resumeMicAfterForegroundRef.current = nextMicEnabled && !micResult;
+      if (intentRevision === foregroundMicIntentRevisionRef.current) {
+        resumeMicAfterForegroundRef.current = nextMicEnabled && !micResult;
+      }
       return micResult || !requestedMic;
     })().finally(() => {
       if (foregroundMediaRestorationRef.current?.promise === operation) foregroundMediaRestorationRef.current = null;
@@ -3520,6 +3542,7 @@ export function useCommunicationRoomSession({
       }
 
       const shouldResumeMic = micEnabledRef.current || resumeMicAfterForegroundRef.current;
+      const intentRevision = foregroundMicIntentRevisionRef.current;
       const cameraStopped = stopLocalMediaKind("video");
       channelStateRef.current = "reconnecting";
       setChannelState("reconnecting");
@@ -3539,12 +3562,16 @@ export function useCommunicationRoomSession({
         .then((controlled) => {
           if (!isActiveLegacyGeneration(generation)) return;
           if (!controlled) legacyMicLocalPrivacyStopRef.current?.();
-          resumeMicAfterForegroundRef.current = shouldResumeMic;
+          if (intentRevision === foregroundMicIntentRevisionRef.current) {
+            resumeMicAfterForegroundRef.current = shouldResumeMic;
+          }
         })
         .catch((error) => {
           if (!isActiveLegacyGeneration(generation)) return;
           legacyMicLocalPrivacyStopRef.current?.();
-          resumeMicAfterForegroundRef.current = shouldResumeMic;
+          if (intentRevision === foregroundMicIntentRevisionRef.current) {
+            resumeMicAfterForegroundRef.current = shouldResumeMic;
+          }
           reportRuntimeError("communication-appstate-background", error, {
             roomId: currentRoom.roomId,
           });
@@ -4374,7 +4401,7 @@ export function useCommunicationRoomSession({
     return setCameraCaptureEnabled(!currentlyEnabled);
   }, [hasUsableLocalTrack, setCameraCaptureEnabled]);
 
-  const setMicrophoneEnabled = useCallback((
+  const applyMicrophoneEnabled = useCallback((
     nextEnabled: boolean,
     requestedCameraOverride?: boolean,
   ) => runSerializedMediaControl(async () => {
@@ -4560,7 +4587,15 @@ export function useCommunicationRoomSession({
     updatePresence,
   ]);
 
-  legacyMicControlRef.current = setMicrophoneEnabled;
+  legacyMicControlRef.current = applyMicrophoneEnabled;
+
+  const setMicrophoneEnabled = useCallback((nextEnabled: boolean, requestedCameraOverride?: boolean) => {
+    // Explicit controls supersede a background callback even while its durable
+    // mute is pending. Automatic lifecycle controls retain that caller's intent.
+    foregroundMicIntentRevisionRef.current += 1;
+    if (!nextEnabled) resumeMicAfterForegroundRef.current = false;
+    return applyMicrophoneEnabled(nextEnabled, requestedCameraOverride);
+  }, [applyMicrophoneEnabled]);
 
   const toggleMic = useCallback(async () => {
     return setMicrophoneEnabled(!micEnabledRef.current);

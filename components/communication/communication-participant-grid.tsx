@@ -42,15 +42,17 @@ const getConnectionLabel = (
     if (options.cameraRequested) return participant.micOn ? "You · camera connecting" : "You · camera connecting · muted";
     return participant.micOn ? "You · live mic" : "You · muted";
   }
+  // A retained stream/publication is not evidence of current peer liveness.
+  if (participant.connectionState === "failed") return "Connection failed";
+  if (participant.connectionState === "disconnected") return "Disconnected";
+  if (participant.connectionState === "connecting") return "Connecting";
+  if (participant.connectionState !== "connected") return "Waiting";
   if (options.hasVideoStream) return participant.micOn ? "Video connected" : "Video connected · muted";
   if (options.cameraRequested) return participant.micOn ? "Video connecting" : "Video connecting · muted";
   if (options.callType === "video" && participant.connectionState === "connected") {
     return participant.micOn ? "Connected · camera off" : "Connected · muted";
   }
   if (participant.connectionState === "connected") return participant.micOn ? "Connected" : "Connected · muted";
-  if (participant.connectionState === "failed") return "Connection failed";
-  if (participant.connectionState === "disconnected") return "Disconnected";
-  if (participant.connectionState === "connecting") return "Connecting";
   return "Waiting";
 };
 
@@ -105,12 +107,15 @@ export function CommunicationParticipantGrid({
             ? localCameraEnabled
             : participant.cameraOn
           : false;
+        // Retained streams do not override Camera Off or a disconnected peer.
         const hasLiveKitVideo = isVideoCall
           && !!participant.liveKitVideoTrackReference
-          && cameraRequested;
+          && cameraRequested
+          && (participant.isSelf || participant.connectionState === "connected");
         const hasVideoStream = isVideoCall
           && (!!participant.streamURL || hasLiveKitVideo)
-          && cameraRequested;
+          && cameraRequested
+          && (participant.isSelf || participant.connectionState === "connected");
         const showLegacyVideo = !!RTCView && !!participant.streamURL && hasVideoStream;
         const videoObjectFit = "cover";
         const cameraPillLabel = hasVideoStream ? "Cam On" : cameraRequested ? "Starting" : "Cam Off";

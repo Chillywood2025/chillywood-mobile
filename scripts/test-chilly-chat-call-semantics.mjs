@@ -1290,11 +1290,51 @@ assert.match(
   /invite\.threadId !== input\.threadId[\s\S]{0,420}invite\.callerUserId !== input\.actorUserId[\s\S]{0,220}invite\.callType !== input\.callType/u,
   "post-commit call recovery remains bound to the exact thread, room, caller, and call type",
 );
-assert.match(
-  startThreadCallBlock,
-  /begunCall = await beginChillyChatCall[\s\S]{0,600}if \(begunCall\.created\)[\s\S]{0,220}dispatchChillyChatCallPush/u,
-  "a reconciled committed invite resumes the canonical receiver-dispatch path instead of becoming an undispatched missed call",
-);
+// Check executable syntax and ownership, not the number of characters in an
+// intervening error handler. Runtime success/failure cases also execute the
+// complete production function in chat-call-rate-limit-message.test.mjs.
+function assertCommittedInviteDispatch(source) {
+  const ast = ts.createSourceFile("chat.ts", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  assert.equal(ast.parseDiagnostics.length, 0);
+  const start = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "startChatThreadCall");
+  assert.ok(start?.body, "one actual call-start function");
+  const calls = [];
+  const visit = node => { if (ts.isCallExpression(node)) calls.push(node); ts.forEachChild(node, visit); };
+  visit(start.body);
+  const named = name => calls.filter(node => ts.isIdentifier(node.expression) && node.expression.text === name);
+  const begins = named("beginChillyChatCall"), dispatches = named("dispatchChillyChatCallPush");
+  assert.equal(begins.length, 1, "one authoritative begin operation");
+  assert.equal(dispatches.length, 1, "one canonical dispatch operation");
+  const assignment = (call, name) => {
+    assert.ok(ts.isAwaitExpression(call.parent), `${name} must await its operation`);
+    const expression = call.parent.parent;
+    assert.ok(ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      && ts.isIdentifier(expression.left) && expression.left.text === name, `operation must assign ${name}`);
+    return expression;
+  };
+  const begin = assignment(begins[0], "begunCall");
+  const dispatch = assignment(dispatches[0], "delivery");
+  const owner = node => { while (node.parent && node.parent !== start.body) node = node.parent; return node; };
+  const beginStatement = owner(begin), dispatchStatement = owner(dispatch);
+  assert.ok(ts.isTryStatement(beginStatement), "begin must retain its failure cleanup");
+  assert.ok(ts.isIfStatement(dispatchStatement)
+    && ts.isPropertyAccessExpression(dispatchStatement.expression)
+    && dispatchStatement.expression.expression.getText(ast) === "begunCall"
+    && dispatchStatement.expression.name.text === "created", "dispatch is guarded by the authoritative created result");
+  assert.ok(dispatch.pos >= dispatchStatement.thenStatement.pos && dispatch.end <= dispatchStatement.thenStatement.end,
+    "dispatch belongs to the created branch, never a reused/busy branch");
+  assert.ok(beginStatement.end <= dispatchStatement.pos, "dispatch follows completed begin and failure handling");
+}
+assertCommittedInviteDispatch(startThreadCallBlock);
+for (const [from, to] of [
+  ["if (begunCall.created)", "if (true)"],
+  ["delivery = await dispatchChillyChatCallPush", "delivery = dispatchChillyChatCallPush"],
+  ["dispatchChillyChatCallPush({", "discardDispatch({"],
+]) {
+  assert.ok(startThreadCallBlock.includes(from), "negative control targets actual source");
+  assert.throws(() => assertCommittedInviteDispatch(startThreadCallBlock.replace(from, to)),
+    "broken dispatch control must be rejected");
+}
 assert.match(chatLibSource, /getCurrentAccountSessionAuthoritySnapshot\(\)[\s\S]{0,420}getWritablePartyUserId/u, "direct chat operations prefer established exact mounted authority and retain a bounded fallback");
 const communicationJoinBlock = communicationLibSource.slice(
   communicationLibSource.indexOf("export async function joinCommunicationRoomSession"),
