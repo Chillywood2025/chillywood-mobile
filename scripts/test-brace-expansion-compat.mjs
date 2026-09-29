@@ -80,14 +80,37 @@ const expectedDependencyAdvisoryClosure = Object.freeze({
   "node_modules/@xmldom/xmldom": "0.8.15",
   "node_modules/js-yaml": "4.3.2",
 });
-// Exact reviewed lock graph after the bounded browserslist, fast-uri, js-yaml,
+const expectedSupabasePresenceBackport = Object.freeze({
+  realtimeOverride: "$@supabase/realtime-js",
+  packages: Object.freeze({
+    "@supabase/realtime-js": Object.freeze({
+      declaration: "file:vendor/supabase-presence-backport/realtime-js-2.100.0-chillywood.1.tgz",
+      version: "2.100.0-chillywood.1",
+      resolved: "file:vendor/supabase-presence-backport/realtime-js-2.100.0-chillywood.1.tgz",
+      integrity: "sha512-cXd0nUaKvBLED7qxNiU7TYO4hYRQCchMxkAYrE39/UnJkx5bH3tWWLbyAlm0fAgkBH3XbrpLYoA0lsrIxCYIcg==",
+      parents: Object.freeze(["", "node_modules/@supabase/supabase-js"]),
+    }),
+    "@supabase/supabase-js": Object.freeze({
+      declaration: "file:vendor/supabase-presence-backport/supabase-js-2.100.0-chillywood.1.tgz",
+      version: "2.100.0-chillywood.1",
+      resolved: "file:vendor/supabase-presence-backport/supabase-js-2.100.0-chillywood.1.tgz",
+      integrity: "sha512-YGp28vJEizK3D/EKKAFRhcWRnjHMD1K3IYt6A5Hezr7PgaiAUHGuK51YGvOBwmITf14RS6WPEr3eZ7UzbzP6jw==",
+      parents: Object.freeze([""]),
+    }),
+  }),
+});
+// Exact reviewed lock graph after the bounded browserslist, fast-uri, undici, js-yaml,
 // xmldom, @humanfs/node, PostCSS, xcode-scoped uuid, decoder advisory, and
 // LiveKit camera-convergence dependency closures. The decoder package paths are
 // excluded below and verified by their own exact identity witness; the LiveKit
 // identities remain in this digest and are also bound by their focused test.
+// The two Supabase Presence backport paths also have an exact identity witness;
+// every other Supabase identity remains in this unchanged-rest digest.
 // Any later package identity drift still fails closed at this digest.
-const expectedUnrelatedPackageGraphSha256 = "2b54605b2b296b71d8a11de00b24b63ea798303bf80d0c3fb3e1e085e8d0a521";
+const expectedUnrelatedPackageGraphSha256 = "49f9be46469fd6ecee22148dce71d0bc72085e2e1d4a2f8c6d4d759ed23854d8";
 const compatibilityClosurePaths = new Set([
+  "node_modules/@supabase/realtime-js",
+  "node_modules/@supabase/supabase-js",
   "node_modules/concat-map",
   "node_modules/decode-uri-component",
   "node_modules/expo/node_modules/balanced-match",
@@ -151,6 +174,8 @@ function validatePolicy(model) {
   gate(JSON.stringify(model.imageSize) === JSON.stringify(expectedImageSize), "IMAGE_SIZE_SAFE_IDENTITY_CHANGED", "The vendored image-size-safe identity changed");
   gate(JSON.stringify(model.decodeUriComponent) === JSON.stringify(expectedDecodeUriComponent),
     "DECODE_URI_COMPONENT_SAFE_IDENTITY_CHANGED", "Every query-string consumer must resolve the reviewed CommonJS-compatible fixed decoder package");
+  gate(JSON.stringify(model.supabasePresenceBackport) === JSON.stringify(expectedSupabasePresenceBackport),
+    "SUPABASE_PRESENCE_BACKPORT_IDENTITY_CHANGED", "The two reviewed Supabase Presence backports and their declaring parents must remain exact");
   gate(model.overrides.nanoid === expectedNanoid.version
     && model.nanoid.version === expectedNanoid.version
     && model.nanoid.resolved === expectedNanoid.resolved
@@ -221,6 +246,22 @@ function actualModel() {
         .map(([entryPath]) => entryPath)
         .sort(),
     },
+    supabasePresenceBackport: {
+      realtimeOverride: packageJson.overrides?.["@supabase/realtime-js"],
+      packages: Object.fromEntries(Object.keys(expectedSupabasePresenceBackport.packages).map((name) => {
+        const metadata = packages[`node_modules/${name}`] ?? {};
+        return [name, {
+          declaration: packageJson.dependencies?.[name],
+          version: metadata.version,
+          resolved: metadata.resolved,
+          integrity: metadata.integrity,
+          parents: Object.entries(packages)
+            .filter(([, entry]) => typeof entry?.dependencies?.[name] === "string")
+            .map(([entryPath]) => entryPath)
+            .sort(),
+        }];
+      })),
+    },
     nanoid: {
       version: nanoid.version,
       resolved: nanoid.resolved,
@@ -259,6 +300,19 @@ async function validateNanoidApis() {
     asyncZeroSize: "PASS",
     nativeZeroSizeGuard: "PASS",
   };
+}
+
+function validateInstalledSupabaseBackports() {
+  for (const [name, expected] of Object.entries(expectedSupabasePresenceBackport.packages)) {
+    for (const parentPath of expected.parents) {
+      const dependency = resolveInstalledPackage(parentPath, name);
+      assert.equal(dependency.packagePath, `node_modules/${name}`, `${parentPath}: ${name}`);
+      assert.equal(dependency.metadata.name, name);
+      assert.equal(dependency.metadata.version, expected.version);
+    }
+    const archive = fs.readFileSync(path.join(root, expected.resolved.slice("file:".length)));
+    assert.equal(`sha512-${crypto.createHash("sha512").update(archive).digest("base64")}`, expected.integrity);
+  }
 }
 
 function resolveInstalledPackage(requesterPackagePath, dependency) {
@@ -354,6 +408,11 @@ function killNegativeControls(base) {
     ["RESTORE_DECODE_URI_COMPONENT_0_2_2", "DECODE_URI_COMPONENT_SAFE_IDENTITY_CHANGED", (m) => { m.decodeUriComponent.version = "0.2.2"; }],
     ["REMOVE_DECODE_URI_COMPONENT_OVERRIDE", "DECODE_URI_COMPONENT_SAFE_IDENTITY_CHANGED", (m) => { delete m.decodeUriComponent.override; }],
     ["CHANGE_DECODE_URI_COMPONENT_PARENT_SET", "DECODE_URI_COMPONENT_SAFE_IDENTITY_CHANGED", (m) => { m.decodeUriComponent.parents = []; }],
+    ["RESTORE_UNPATCHED_REALTIME", "SUPABASE_PRESENCE_BACKPORT_IDENTITY_CHANGED", (m) => { m.supabasePresenceBackport.packages["@supabase/realtime-js"].version = "2.100.0"; }],
+    ["RESTORE_UNPATCHED_SUPABASE_ARCHIVE", "SUPABASE_PRESENCE_BACKPORT_IDENTITY_CHANGED", (m) => { m.supabasePresenceBackport.packages["@supabase/supabase-js"].resolved = "https://registry.npmjs.org/@supabase/supabase-js/-/supabase-js-2.100.0.tgz"; }],
+    ["REMOVE_REALTIME_BACKPORT_OVERRIDE", "SUPABASE_PRESENCE_BACKPORT_IDENTITY_CHANGED", (m) => { delete m.supabasePresenceBackport.realtimeOverride; }],
+    ["ALTER_SUPABASE_BACKPORT_INTEGRITY", "SUPABASE_PRESENCE_BACKPORT_IDENTITY_CHANGED", (m) => { m.supabasePresenceBackport.packages["@supabase/supabase-js"].integrity = "sha512-altered"; }],
+    ["CHANGE_REALTIME_BACKPORT_PARENT_SET", "SUPABASE_PRESENCE_BACKPORT_IDENTITY_CHANGED", (m) => { m.supabasePresenceBackport.packages["@supabase/realtime-js"].parents = [""]; }],
     ["RESTORE_NANOID_3_3_17", "NANOID_VERSION_VULNERABLE", (m) => { m.overrides.nanoid = "3.3.17"; m.nanoid.version = "3.3.17"; }],
     ["CHANGE_NANOID_PARENT_SET", "NANOID_PARENT_SET_CHANGED", (m) => { m.nanoid.parents = m.nanoid.parents.slice(1); }],
     ["RESTORE_XMLDOM_0_8_13", "DEPENDENCY_ADVISORY_CLOSURE_INVALID", (m) => { m.dependencyAdvisoryClosure["node_modules/@xmldom/xmldom"] = "0.8.13"; }],
@@ -373,6 +432,7 @@ function killNegativeControls(base) {
 
 const model = actualModel();
 validatePolicy(model);
+validateInstalledSupabaseBackports();
 const apiObservations = await validateInstalledApis();
 const nanoidObservation = await validateNanoidApis();
 const negativeControls = killNegativeControls(model);
@@ -389,6 +449,7 @@ const output = {
   apiObservations,
   nanoidObservation,
   dependencyAdvisoryClosure: model.dependencyAdvisoryClosure,
+  supabasePresenceBackport: model.supabasePresenceBackport,
   relevantSourceHashes: relevantSourceHashes(),
   npmLsProblems: model.npmProblems.length,
   negativeControls: { required: negativeControls.length, killed: negativeControls.length, results: negativeControls },

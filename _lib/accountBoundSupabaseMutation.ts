@@ -5,7 +5,7 @@ import {
   type AccountSessionAuthorityBinding,
 } from "./accountSessionAuthority";
 import { withAuthorityReadDeadline } from "./entitlementAuthority";
-import { invokeAccountBoundSupabaseRpc } from "./accountBoundSupabaseRpc.mjs";
+import { invokeAccountBoundSupabaseRpc, isAccountBoundSupabaseRpcOutcomeAmbiguous } from "./accountBoundSupabaseRpc.mjs";
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "./supabase";
 import { Platform } from "react-native";
 
@@ -24,6 +24,11 @@ const toText = (value: unknown) => String(value ?? "").trim();
 type ExactSessionAuthorityRpcName =
   | "heartbeat_watch_party_room_session"
   | "join_communication_room_session"
+  | "read_communication_room_admission"
+  | "broadcast_owned_communication_room_signal"
+  | "join_owned_communication_room_session"
+  | "touch_owned_communication_room_session"
+  | "leave_communication_room_session"
   | "join_watch_party_room_session"
   | "set_watch_party_participant_authority";
 
@@ -49,12 +54,7 @@ export class AccountBoundSupabaseMutationError extends Error {
 }
 
 export function isAccountBoundSupabaseMutationOutcomeAmbiguous(error: unknown) {
-  const record = error && typeof error === "object" && !Array.isArray(error)
-    ? error as { message?: unknown }
-    : null;
-  const message = toText(record?.message ?? error);
-  return message === "account_bound_rpc_timeout"
-    || message === "account_bound_rpc_unavailable";
+  return isAccountBoundSupabaseRpcOutcomeAmbiguous(error);
 }
 
 export function assertAccountBoundSupabaseMutationSubjectCurrent(
@@ -74,17 +74,28 @@ export async function invokeAccountBoundSupabaseMutationRpc<T>(
   args: Record<string, unknown> = {},
 ): Promise<AccountBoundSupabaseMutationResult<T>> {
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
-  const result = await withAuthorityReadDeadline<AccountBoundSupabaseMutationResult<T>>(
-    invokeAccountBoundSupabaseRpc({
+  const pending = invokeAccountBoundSupabaseRpc({
       supabaseUrl: SUPABASE_URL,
       anonKey: SUPABASE_ANON_KEY,
       accessToken: subject.accessToken,
       functionName,
       args,
       clientPlatform: Platform.OS,
-    }),
-    { data: null, error: { message: "account_bound_rpc_timeout" } },
-  );
+    }) as Promise<AccountBoundSupabaseMutationResult<T>>;
+  // Room admission, owned media writes, and leave mutate durable membership.
+  // Their callers bound the
+  // UI wait separately and retain this operation until transport settlement;
+  // a display deadline must not pretend that a server mutation was canceled.
+  // Other RPC callers retain their existing authority-read deadline.
+  const result = functionName === "join_communication_room_session"
+    || functionName === "join_owned_communication_room_session"
+    || functionName === "touch_owned_communication_room_session"
+    || functionName === "leave_communication_room_session"
+    ? await pending
+    : await withAuthorityReadDeadline<AccountBoundSupabaseMutationResult<T>>(
+      pending,
+      { data: null, error: { message: "account_bound_rpc_timeout" } },
+    );
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
   return result;
 }
@@ -134,7 +145,7 @@ export async function captureAccountBoundSupabaseMutationSubject(
   return subject;
 }
 
-// These four RPCs independently require
+// These room RPCs independently require
 // whole_app_exact_current_session_authority_internal() before mutation. They
 // still need a frozen initiating token so an A -> B switch cannot make the
 // request execute as B, but repeating the readback RPC on every room heartbeat

@@ -10,7 +10,10 @@ const nativePath = join(root, "modules/chillywood-native-calls/ios");
 const coordinator = readFileSync(join(nativePath, "ChillywoodNativeCallCoordinator.swift"), "utf8");
 const policy = readFileSync(join(nativePath, "ChillywoodIncomingCallDeadline.swift"), "utf8");
 const harness = readFileSync(join(root, "tests/native/ChillywoodIncomingCallDeadlineTests.swift"), "utf8");
-const compiler = process.env.CHILLYWOOD_SWIFTC || "swiftc";
+// GitHub's Ubuntu image publishes its installed toolchain directory. Prefer
+// that explicit compiler to a PATH shim; local callers can still select one.
+const compiler = process.env.CHILLYWOOD_SWIFTC
+  || (process.env.SWIFT_PATH ? join(process.env.SWIFT_PATH, "swiftc") : "swiftc");
 const temporary = mkdtempSync(join(tmpdir(), "chillywood-native-deadline-"));
 
 // Extract complete actual Swift declarations, not a JavaScript reimplementation
@@ -62,7 +65,23 @@ function runCase(label, sourcePolicy, sourceCallback, shouldPass) {
 }
 
 try {
-  execFileSync(compiler, ["--version"], {stdio: "inherit", timeout: 15_000});
+  // A cold hosted runner exceeded the former 15-second startup bound before
+  // printing a version. Startup is a toolchain check, not an app deadline.
+  // Retry only a killed timeout once; missing/failed compilers still fail
+  // immediately, and all production/mutation compiles below remain required.
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const version = execFileSync(compiler, ["--version"], {
+        encoding: "utf8", stdio: "pipe", timeout: 60_000, killSignal: "SIGKILL",
+      });
+      assert.match(version, /\bSwift version \d/u, "selected compiler must identify its Swift version");
+      console.log(`Native deadline compiler: ${compiler}\n${version.trim()}`);
+      break;
+    } catch (error) {
+      if (error.code !== "ETIMEDOUT" || attempt === 2) throw error;
+      console.warn("Swift compiler startup timed out after 60 seconds; retrying once before failing closed.");
+    }
+  }
   // Parse the complete production files too. This is syntax verification only,
   // not an Apple SDK compile or a claim about installed CallKit behavior.
   execFileSync(compiler, ["-frontend", "-parse", "-swift-version", "5",

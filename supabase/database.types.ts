@@ -2500,6 +2500,8 @@ export type Database = {
           joined_at: string
           last_seen_at: string
           left_at: string | null
+          membership_admission_attempt: string | null
+          membership_generation: string
           membership_state: string
           mic_enabled: boolean
           role: string
@@ -2514,6 +2516,8 @@ export type Database = {
           joined_at?: string
           last_seen_at?: string
           left_at?: string | null
+          membership_admission_attempt?: string | null
+          membership_generation?: string
           membership_state?: string
           mic_enabled?: boolean
           role?: string
@@ -2528,6 +2532,8 @@ export type Database = {
           joined_at?: string
           last_seen_at?: string
           left_at?: string | null
+          membership_admission_attempt?: string | null
+          membership_generation?: string
           membership_state?: string
           mic_enabled?: boolean
           role?: string

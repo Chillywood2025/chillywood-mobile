@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "fix": {
+    "repository": "https://github.com/supabase/supabase-js",
+    "pullRequest": "https://github.com/supabase/supabase-js/pull/2566",
+    "commit": "31dc1b0f4e9b21adb056cb799a2702bf1484919f",
+    "description": "Copy Presence metadata with Object.getOwnPropertyDescriptors/Object.defineProperties before renaming refs; preserve Phoenix-owned metadata and own __proto__ descriptors."
+  },
+  "license": {
+    "file": "LICENSE",
+    "source": "https://raw.githubusercontent.com/supabase/supabase-js/v2.100.0/LICENSE",
+    "sha256": "334dd6820e2eaeab2064e7c59001b810566728a28a41a7c1dbf69bbee17d0936"
+  },
+  "archiveFormat": {
+    "tar": "POSIX ustar; sorted regular files; mode 0644; uid/gid/mtime zero; empty owner names; two zero end blocks",
+    "gzip": "RFC 1952; stored RFC 1951 DEFLATE blocks (65535 bytes); mtime zero; OS 255; no optional fields"
+  },
+  "scope": "Four transform bodies only, two stale JS source maps and their comments removed, package version/provenance metadata, and upstream MIT LICENSE added. All other file bytes and dependency requirements are unchanged. UMD has no source map.",
+  "packages": [
+    {
+      "name": "@supabase/realtime-js",
+      "version": "2.100.0-chillywood.1",
+      "upstream": {
+        "version": "2.100.0",
+        "registryUrl": "https://registry.npmjs.org/@supabase/realtime-js/-/realtime-js-2.100.0.tgz",
+        "file": "upstream/realtime-js-2.100.0.tgz",
+        "integrity": "sha512-2AZs00zzEF0HuCKY8grz5eCYlwEfVi5HONLZFoNR6aDfxQivl8zdQYNjyFoqN2MZiVhQHD7u6XV/xHwM8mCEHw==",
+        "sha256": "155ab4d7435b20a267853b5e1a45ab5e16082ecc4715952eb611baf2937d3c88",
+        "treeSha256": "31b7757548f4780cea3aeae79c7399ebbd6f84f61bc494c205cc50ffdd0835a5",
+        "fileCount": 121
+      },
+      "output": {
+        "file": "realtime-js-2.100.0-chillywood.1.tgz",
+        "integrity": "sha512-cXd0nUaKvBLED7qxNiU7TYO4hYRQCchMxkAYrE39/UnJkx5bH3tWWLbyAlm0fAgkBH3XbrpLYoA0lsrIxCYIcg==",
+        "sha256": "b24e219afa9e7cd92a41bb54e1c1632371b7f9e0defc32ad68cfc563291f788a",
+        "treeSha256": "d2576d724218536a48f741b0dbf3975e9b70cd6cb1dfaca5b8c43e3497722329",
+        "fileCount": 120,
+        "bytes": 724046
+      },
+      "changes": [
+        {
+          "file": "LICENSE",
+          "action": "added",
+          "originalSha256": null,
+          "patchedSha256": "334dd6820e2eaeab2064e7c59001b810566728a28a41a7c1dbf69bbee17d0936"
+        },
+        {
+          "file": "dist/main/phoenix/presenceAdapter.js",
+          "action": "modified",
+          "originalSha256": "70452ba1a66181255f9fcd0d1efeafbfbfc6b05d1c3cacdadfe404f7ac05f6fb",
+          "patchedSha256": "27e9468e8bfe7de5baf8f61047ceef284839c32c1de4f49e91d25cf498a6176b"
+        },
+        {
+          "file": "dist/main/phoenix/presenceAdapter.js.map",
+          "action": "removed",
+          "originalSha256": "eef06a73c4925583e043a8d3f2bbd18ec275d91bc2c1432efa9fee8ad4e2ba8b",
+          "patchedSha256": null
+        },
+        {
+          "file": "dist/module/phoenix/presenceAdapter.js",
+          "action": "modified",
+          "originalSha256": "917d4307b21258afe4a8bb07c0872ff9cb7dc33e16dc249a92287df7647e3dfc",
+          "patchedSha256": "e40ec3e4561e0a0e1f1a2e40b52633eead172fd14a99db7f39da2eedc2f3ff12"
+        },
+        {
+          "file": "dist/module/phoenix/presenceAdapter.js.map",
+          "action": "removed",
+          "originalSha256": "5dc4e7000d2e7b26ca3927f669a985c244b4da730ca4db0d31ea6f87b161881e",
+          "patchedSha256": null
+        },
+        {
+          "file": "package.json",
+          "action": "modified",
+          "originalSha256": "189cedcf520a60d8b48ad9b99499ce629535587bc42cbdfe0b586c5b9cee6c4b",
+          "patchedSha256": "4ae043ba50b8354a2dbae980fe5f11ad905d19324272b55833d034003c92318d"
+        },
+        {
+          "file": "src/phoenix/presenceAdapter.ts",
+          "action": "modified",
+          "originalSha256": "a61f0a609a09d5f8440344d3c4666878b03a19fa14f08cbe7230d3a65a9ab5b7",
+          "patchedSha256": "964e486a25d5908395a3afa4c9843c542e7d517efcd3c040dfae301e0fdab9b6"
+        }
+      ]
+    },
+    {
+      "name": "@supabase/supabase-js",
+      "version": "2.100.0-chillywood.1",
+      "upstream": {
+        "version": "2.100.0",
+        "registryUrl": "https://registry.npmjs.org/@supabase/supabase-js/-/supabase-js-2.100.0.tgz",
+        "file": "upstream/supabase-js-2.100.0.tgz",
+        "integrity": "sha512-r0tlcukejJXJ1m/2eG/Ya5eYs4W8AC7oZfShpG3+SIo/eIU9uIt76ZeYI1SoUwUmcmzlAbgch+HDZDR/toVQPQ==",
+        "sha256": "c0413bfffabcbb4bfb6c89c38e38d153220f37aa0d8a159d4bd75aadab103270",
+        "treeSha256": "4525e98db81843646e90e3b1476d051d9e30a8d6df2393c047481aa4fb1be203",
+        "fileCount": 30
+      },
+      "output": {
+        "file": "supabase-js-2.100.0-chillywood.1.tgz",
+        "integrity": "sha512-YGp28vJEizK3D/EKKAFRhcWRnjHMD1K3IYt6A5Hezr7PgaiAUHGuK51YGvOBwmITf14RS6WPEr3eZ7UzbzP6jw==",
+        "sha256": "4c2e9d6d20fbb6500628ff87244f284701f3e3329912aca4498b3a106ad86fc0",
+        "treeSha256": "4715c1338830de3c597aa29fccc0a98fff2499c56a952b4c82f8c9121dbe3bff",
+        "fileCount": 31,
+        "bytes": 483898
+      },
+      "changes": [
+        {
+          "file": "LICENSE",
+          "action": "added",
+          "originalSha256": null,
+          "patchedSha256": "334dd6820e2eaeab2064e7c59001b810566728a28a41a7c1dbf69bbee17d0936"
+        },
+        {
+          "file": "dist/umd/supabase.js",
+          "action": "modified",
+          "originalSha256": "40a4377dbe54e160177ca220513f660c62634087ff58f626f8109725fec95706",
+          "patchedSha256": "3eab4a18083a2d3cf79a46da39ccde4ce01ba10d0b61194026aeda47c93a8209"
+        },
+        {
+          "file": "package.json",
+          "action": "modified",
+          "originalSha256": "b8095472adec0b94de0ec57f69cc9f292325d2caf07f53086f045c918116e83d",
+          "patchedSha256": "185dc21f03a0792b7eb78363bbf527ca25dd61dc49279fa438aafd2563221991"
+        }
+      ]
+    }
+  ]
+}

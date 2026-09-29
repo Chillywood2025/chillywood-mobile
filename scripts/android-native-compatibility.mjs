@@ -80,6 +80,7 @@ export function computeAndroidNativeCompatibility() {
     ...(Array.isArray(appJson.plugins) ? appJson.plugins : []),
     "expo-asset",
     "@livekit/react-native-expo-plugin",
+    "./plugins/withWebRtcSenderAcknowledgment",
     "./plugins/withLiveKitIosStaticFrameworkCompatibility",
     ["expo-notifications", {
       sounds: [

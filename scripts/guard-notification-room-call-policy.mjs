@@ -223,10 +223,11 @@ assertIncludes(chatThread, "outgoingDeviceAlertConfirmed", "caller ringing copy 
 assertIncludes(chatThread, "statusLabelOverride={outgoingCallRinging ? outgoingDeviceAlertConfirmed ? \"Ringing\" : \"Calling\" : null}", "call panel must distinguish confirmed device alert from invite-only waiting");
 assertIncludes(chatThread, "No answer. The call expired and active call state was cleared.", "caller timeout must clear stale active call state");
 assertIncludes(chatThread, "const latestInvite = await readChillyChatCallInvite(outgoingCallInvite.id)", "caller timeout must re-read authoritative invite state before transition");
-assertIncludes(chatThread, "if (latestInvite?.status === \"accepted\")", "caller timeout must preserve an invite accepted at the deadline");
-assertIncludes(chatThread, "if (!latestInvite || latestInvite.status !== \"ringing\") {", "caller timeout must distinguish authoritative terminal truth from a still-ringing invite");
+assertIncludes(chatThread, "if (latestInvite.status === \"accepted\")", "caller timeout must preserve an invite accepted at the deadline");
+assertIncludes(chatThread, "if (!latestInvite || !exactOutgoingInvite(latestInvite)) {", "caller timeout must reject absent or mismatched authoritative invite truth");
+assertIncludes(chatThread, "if (latestInvite.status !== \"ringing\" ||", "caller timeout must distinguish authoritative terminal truth from a still-ringing invite");
 assertIncludes(chatThread, "TERMINAL_CHAT_CALL_INVITE_STATUSES.has(latestInvite.status)", "caller timeout must clear stale ringing UI after authoritative terminal readback");
-assertIncludes(chatThread, "if (!missedInvite || missedInvite.status !== \"missed\") return;", "caller timeout cleanup requires a confirmed missed transition");
+assertIncludes(chatThread, "if (!missedInvite || missedInvite.status !== \"missed\" || !exactOutgoingInvite(missedInvite)) {", "caller timeout cleanup requires a confirmed exact-invite missed transition");
 assertIncludes(chatThread, "trustedNativeCallClaim", "native call transitions must originate from a consumed platform-scoped claim");
 assertIncludes(chatThread, "consumeMountedIosNativeCallRoute", "CallKit Answer must be consumed once after mounted-thread auth readiness and before a transition request");
 assertIncludes(chatThread, "requestedNativeCallOwnsTransition", "trusted native actions must own acceptance without racing navigation-only openCall");

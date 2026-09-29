@@ -1226,14 +1226,32 @@ assert.doesNotMatch(
   /getSafePartyUserId/u,
   "communication identity must not use guest identity fallback",
 );
+const legacySessionAst = ts.createSourceFile("use-communication-room-session.ts", communicationSessionSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+const legacyAdmissionLoops = [];
+const findLegacyAdmissionLoop = (node) => {
+  if (ts.isForStatement(node) && node.statement.getText(legacySessionAst).includes("joinCommunicationRoomSession(")) legacyAdmissionLoops.push(node);
+  ts.forEachChild(node, findLegacyAdmissionLoop);
+};
+findLegacyAdmissionLoop(legacySessionAst);
+assert.equal(legacyAdmissionLoops.length, 1, "legacy admission has one explicit bounded retry loop");
+const legacyAdmissionLoop = legacyAdmissionLoops[0];
+assert.equal(legacyAdmissionLoop.initializer?.getText(legacySessionAst), "let attempt = 0");
+assert.equal(legacyAdmissionLoop.condition?.getText(legacySessionAst), "attempt < 3 && !joinedMembership");
+assert.equal(legacyAdmissionLoop.incrementor?.getText(legacySessionAst), "attempt += 1");
+const legacyAdmissionBody = legacyAdmissionLoop.statement.getText(legacySessionAst);
 assert.match(
-  communicationSessionSource,
-  /for \(let attempt = 0; attempt < 3 && !joinedMembership; attempt \+= 1\)[\s\S]{0,1200}resolvedIdentity = await readCommunicationIdentity\(authenticatedUserId\)/u,
-  "legacy accepted media retries the authenticated identity-to-membership handoff within a strict bound",
+  legacyAdmissionBody,
+  /if \(!joinedMembership && attempt < 2\)[\s\S]*resolvedIdentity = await readCommunicationIdentity\(authenticatedUserId\)/u,
+  "legacy accepted media refreshes authenticated identity only within the bounded membership retry loop",
 );
 assert.match(
-  communicationSessionSource,
-  /joinCommunicationRoomSession\(\{[\s\S]{0,360}cameraEnabled: false,[\s\S]{0,80}micEnabled: false/u,
+  legacyAdmissionBody,
+  /isAmbiguousMembershipOutcome\(error\)[\s\S]*admissionUncertain = true;[\s\S]*throw error;/u,
+  "an unknown admission outcome is retained and cannot silently retry the same durable join",
+);
+assert.match(
+  legacyAdmissionBody,
+  /joinCommunicationRoomSession\(\{[\s\S]*cameraEnabled: false,[\s\S]*micEnabled: false/u,
   "legacy membership admission remains muted until native media tracks are proved",
 );
 assert.match(
@@ -1322,12 +1340,12 @@ for (const [sourceBlock, label] of [
 }
 assert.match(
   communicationJoinBlock,
-  /runExactSessionAccountBoundSupabaseMutationRpc<[\s\S]{0,180}"join_communication_room_session"[\s\S]{0,420}requestedUserId/u,
+  /runExactSessionAccountBoundSupabaseMutationRpc<[\s\S]{0,180}"join_owned_communication_room_session"[\s\S]{0,700}requestedUserId/u,
   "accepted room membership uses the exact-session account-bound RPC boundary",
 );
 assert.match(
   communicationJoinBlock,
-  /membership\?\.userId === requestedUserId \? membership : null/u,
+  /if \(!membership \|\| membership\.roomId !== roomId \|\| membership\.userId !== requestedUserId[\s\S]{0,800}account_bound_rpc_outcome_unknown/u,
   "accepted room membership binds the server result back to the initiating subject",
 );
 assert.match(
@@ -1352,8 +1370,8 @@ assert.doesNotMatch(
 );
 assert.match(
   communicationJoinBlock,
-  /membership\?\.userId === requestedUserId \? membership : null/u,
-  "the RPC result must bind back to the exact mounted subject",
+  /membership\.membershipAdmissionAttempt !== admission\.attemptId[\s\S]{0,650}return membership/u,
+  "the RPC result must bind back to the exact durable admission attempt",
 );
 assert.match(
   communicationLibSource,
@@ -1361,7 +1379,8 @@ assert.match(
   "mounted identity inputs remain strictly UUID-bound",
 );
 assert.doesNotMatch(communicationTouchBlock, /if \(!room && membershipState !== "left"\) return null/u, "membership updates are not blocked by a circular pre-join room read");
-assert.match(communicationTouchBlock, /\.update\(updates\)[\s\S]{0,600}getCommunicationRoom\(roomId\)/u, "server-authorized membership mutation precedes optional room heartbeat readback");
+assert.match(communicationTouchBlock, /runExactSessionAccountBoundSupabaseMutationRpc<[\s\S]{0,180}"touch_owned_communication_room_session"[\s\S]{0,180}p_expected_membership_generation: generation/u, "durable media writes are fenced to the captured membership generation");
+assert.doesNotMatch(communicationTouchBlock, /\.update\(/u, "owned media updates cannot use a room/user-only direct table write");
 assert.match(clearEndedCallBlock, /if \(error\) throw new Error/u, "stale projection cleanup cannot silently report success after an RPC failure");
 const legacyMissingSnapshotBranch = communicationSessionSource.slice(
   communicationSessionSource.indexOf("if (!snapshot)", communicationSessionSource.indexOf("let joinedMembership")),
@@ -1646,19 +1665,28 @@ assert.doesNotMatch(
 );
 assert.match(rootLayoutSource, /setAlert\(\(current\) => mergeIncomingCallAlert\(current, nextAlert\)\)/u, "database readback hydrates notification-first banners through the stable semantic invite merge");
 assert.match(chatThreadSource, /subscribeToChillyChatCallInvite\(visibleInvite\.id/u, "incoming presentation must follow authoritative invite state");
+const outgoingReconciliationStart = chatThreadSource.indexOf("const exactOutgoingInvite =");
+const outgoingReconciliationEnd = chatThreadSource.indexOf("scheduleReconciliation(timeoutMs)", outgoingReconciliationStart);
+assert.ok(outgoingReconciliationStart >= 0 && outgoingReconciliationEnd > outgoingReconciliationStart, "outgoing timeout owns an exact invite and a bounded deadline scheduler");
+const outgoingReconciliationBlock = chatThreadSource.slice(outgoingReconciliationStart, outgoingReconciliationEnd);
 assert.match(
-  chatThreadSource,
-  /const latestInvite = await readChillyChatCallInvite\(outgoingCallInvite\.id\)[\s\S]{0,320}latestInvite\?\.status === "accepted"[\s\S]{0,320}setActiveCallInvite\(latestInvite\)/u,
+  outgoingReconciliationBlock,
+  /invite\.id === outgoingCallInvite\.id[\s\S]*invite\.threadId === outgoingCallInvite\.threadId[\s\S]*invite\.communicationRoomId === outgoingCallInvite\.communicationRoomId[\s\S]*invite\.callerUserId === currentUserId[\s\S]*invite\.calleeUserId === outgoingCallInvite\.calleeUserId/u,
+  "outgoing deadline reconciliation binds the exact invite, thread, room, caller, and callee",
+);
+assert.match(
+  outgoingReconciliationBlock,
+  /const latestInvite = await readChillyChatCallInvite\(outgoingCallInvite\.id\)[\s\S]*if \(!isCurrent\(\)\) return;[\s\S]*!exactOutgoingInvite\(latestInvite\)[\s\S]*latestInvite\.status === "accepted"[\s\S]*setActiveCallInvite\(latestInvite\)/u,
   "the caller timeout race must re-read and preserve an invite accepted at the deadline",
 );
 assert.match(
-  chatThreadSource,
-  /if \(!latestInvite \|\| latestInvite\.status !== "ringing"\) \{[\s\S]{0,900}const missedInvite = await updateChillyChatCallInviteStatus[\s\S]{0,420}if \(!missedInvite \|\| missedInvite\.status !== "missed"\) return;/u,
+  outgoingReconciliationBlock,
+  /latestInvite\.status !== "ringing" \|\| \(Number\.isFinite\(latestExpiresAt\) && latestExpiresAt > Date\.now\(\)\)[\s\S]*return;[\s\S]*const missedInvite = await updateChillyChatCallInviteStatus[\s\S]*if \(!missedInvite \|\| missedInvite\.status !== "missed" \|\| !exactOutgoingInvite\(missedInvite\)\)[\s\S]*scheduleReconciliation\(ACTIVE_CHAT_CALL_TERMINAL_RECONCILIATION_MS\);[\s\S]*return;/u,
   "caller timeout cleanup must require both a fresh ringing read and a confirmed missed transition",
 );
 assert.match(
-  chatThreadSource,
-  /TERMINAL_CHAT_CALL_INVITE_STATUSES\.has\(latestInvite\.status\)[\s\S]{0,400}finishTerminalInviteCleanup\(latestInvite, true, ownsContext\)/u,
+  outgoingReconciliationBlock,
+  /TERMINAL_CHAT_CALL_INVITE_STATUSES\.has\(latestInvite\.status\)[\s\S]{0,400}finishTerminalInviteCleanup\(latestInvite, ownsContext\)/u,
   "a caller that misses the realtime terminal update clears the stale ringing surface from authoritative terminal truth",
 );
 assert.doesNotMatch(
@@ -1668,7 +1696,12 @@ assert.doesNotMatch(
 );
 assert.match(
   chatThreadSource,
-  /const route = resolveIosChatCallAudioRoute\(thread\?\.activeCallType\);[\s\S]{0,160}applyCallAudioRoute\(shouldUseSpeaker, true\)/u,
+  /const resolvedCallType = activeCallInvite\?\.communicationRoomId === activeCallRoomId\s*\? activeCallInvite\.callType\s*: thread\?\.activeCallType/u,
+  "terminal cleanup preserves media kind only for the exact active invite and room",
+);
+assert.match(
+  chatThreadSource,
+  /const route = resolveIosChatCallAudioRoute\(resolvedCallType\);[\s\S]{0,160}applyCallAudioRoute\(shouldUseSpeaker, true\)/u,
   "call initialization must select the call-type route through the shared owned route operation",
 );
 assert.match(
@@ -1754,19 +1787,50 @@ const liveKitSnapshotRefreshBlock = liveKitChatCallSessionSource.slice(
 );
 assert.match(
   liveKitSnapshotRefreshBlock,
-  /if \(!latestSnapshot\) \{[\s\S]{0,160}options\.reconnectingOnMissing[\s\S]{0,160}setCommittedRoomState\(binding, "reconnecting"\)[\s\S]{0,160}return;/u,
-  "a transient LiveKit snapshot miss is reconnecting rather than terminal",
+  /getCommunicationRoomSnapshot\(binding\.normalizedRoomId\)\.then\([\s\S]{0,100}succeeded: true as const, snapshot[\s\S]{0,120}succeeded: false as const, snapshotError/u,
+  "a successful unavailable-room receipt remains distinct from a failed authoritative read",
+);
+const liveKitFailedSnapshotReadBlock = liveKitSnapshotRefreshBlock.slice(
+  liveKitSnapshotRefreshBlock.indexOf("if (!readResult.succeeded)"),
+  liveKitSnapshotRefreshBlock.indexOf("const latestSnapshot = readResult.snapshot"),
+);
+assert.match(
+  liveKitFailedSnapshotReadBlock,
+  /options\.reconnectingOnReadFailure[\s\S]{0,100}setCommittedRoomState\(binding, "reconnecting"\)[\s\S]{0,100}setChannelState\("reconnecting"\)[\s\S]{0,100}return;/u,
+  "a failed LiveKit read optionally enters reconnecting and returns without terminal authority",
 );
 assert.doesNotMatch(
+  liveKitFailedSnapshotReadBlock,
+  /cleanupSession|onRoomEndedRef|"terminal"/u,
+  "a transport/read failure cannot retire capture or end an accepted invite",
+);
+assert.match(
   liveKitSnapshotRefreshBlock,
-  /if \(!latestSnapshot\)[\s\S]{0,240}onRoomEndedRef/u,
-  "a transient LiveKit snapshot miss cannot end an accepted invite",
+  /!active[\s\S]{0,100}requestSerial !== membershipSnapshotRequestSerial[\s\S]{0,100}!isCommittedSessionCurrent\(binding\)[\s\S]{0,100}return;[\s\S]{0,100}if \(!readResult\.succeeded\)/u,
+  "both failed and successful snapshot receipts are fenced by current effect, ordered read, and exact session",
+);
+assert.match(
+  liveKitSnapshotRefreshBlock,
+  /const latestSnapshot = readResult\.snapshot;[\s\S]{0,250}!latestSnapshot[\s\S]{0,500}await cleanupSession\(\{ leaveMembership: false \}, binding, cleanupToken\);[\s\S]{0,180}active && sameCommittedAuthority\(committedSessionRef\.current, binding\)[\s\S]{0,100}onRoomEndedRef\.current\?\.\("ended"\)/u,
+  "successful unavailable-room readback retires only captured local media before guarded terminal notification, without a durable leave write",
 );
 assert.match(
   liveKitHeartbeatBlock,
-  /refreshMembershipSnapshot\([\s\S]{0,120}reconnectingOnMissing: true/u,
-  "the LiveKit heartbeat preserves reconnecting-on-miss behavior through the shared ordered snapshot reader",
+  /refreshMembershipSnapshot\([\s\S]{0,120}reconnectingOnReadFailure: true/u,
+  "the LiveKit heartbeat preserves reconnecting on read failure through the shared ordered snapshot reader",
 );
+const liveKitMountedSnapshotTests = await readFile(new URL("tests/assurance/livekit-chat-call-mic-mounted-hook.test.mjs", root), "utf8");
+for (const witness of [
+  'for (const outcome of ["null", "terminal"])',
+  "server state invalidation retires capture after authoritative ${outcome} readback without callback cleanup",
+  "server state invalidation preserves failed cleanup and End retry after ${outcome} readback",
+  "server state invalidation read failure preserves the live call and cannot claim terminal state",
+  "server state invalidation callback and pending ${outcome} read cannot cross ${retirement}",
+  'assert.equal(liveKitRoom.localParticipant.cameraEnabled, false)',
+  'assert.equal(liveKitRoom.localParticipant.micEnabled, false)',
+  'assert.equal(liveKitRoom.state, "disconnected")',
+  'assert.equal(runtime.audioStopCalls, 0)',
+]) assert.ok(liveKitMountedSnapshotTests.includes(witness), `mounted LiveKit snapshot authority witness remains required: ${witness}`);
 assert.match(
   liveKitChatCallSessionSource,
   /publishData\([\s\S]{0,180}reliable: true, topic: LIVEKIT_MEDIA_INVALIDATION_TOPIC/u,
@@ -1885,13 +1949,23 @@ const iosTerminalActionSource = rootLayoutSource.match(
 )?.[0] ?? "";
 assert.match(
   iosTerminalActionSource,
-  /if \(!settled \|\| !ownsAuthority\(\)\) return false;[\s\S]*await completeIosNativeCallTerminalTransition\(String\(event\.callUuid/u,
+  /const ownsNativeAction = \(\) => \{[\s\S]*return ownsAuthority\(\) && \(!descriptor \|\| descriptor\.callUuid === callUuid\);/u,
+  "native terminal ownership retains both the authenticated bridge and exact presented CallKit UUID",
+);
+assert.match(
+  iosTerminalActionSource,
+  /if \(!settled \|\| !ownsNativeAction\(\)\) return false;[\s\S]*await completeIosNativeCallTerminalTransition\(String\(event\.callUuid/u,
   "the authenticated bridge releases the exact native lease only after authoritative settlement and current ownership; statement length is not authority",
 );
 assert.match(
   iosTerminalActionSource,
-  /await updateChillyChatCallInviteStatus\([\s\S]*?if \(!ownsAuthority\(\)\) return false;[\s\S]*?if \(updated\?\.status === status\)/u,
+  /await updateChillyChatCallInviteStatus\([\s\S]*?status: transitionStatus,[\s\S]*?if \(!ownsNativeAction\(\)\) return false;[\s\S]*?if \(updated\?\.status === transitionStatus\)/u,
   "a delayed terminal transition result is rechecked against the bridge owner before cleanup",
+);
+assert.match(
+  iosTerminalActionSource,
+  /const completed = await completeIosNativeCallTerminalTransition[\s\S]*if \(!ownsNativeAction\(\) \|\| !completed\) return false;[\s\S]*pendingNativeTerminalActions\.delete\(actionKey\)/u,
+  "a failed native terminal acknowledgement remains available for an owned retry",
 );
 assert.match(
   rootLayoutSource,
@@ -2110,7 +2184,9 @@ const foregroundMediaRestoreSource = communicationSessionSource.slice(
 );
 const preservesVideoForegroundRecovery = (source) => (
   /nextCameraEnabled[\s\S]{0,500}ensureTrackKind\("video", \{[\s\S]{0,140}attachToPeers: false,[\s\S]{0,140}expectedGeneration: generation,[\s\S]{0,260}if \(!restoredCameraTrack\)[\s\S]{0,180}setCameraEnabled\(false\)[\s\S]{0,120}return false;/u.test(source)
-  && /attachMissingLocalTracks\(peerConnection, false\)[\s\S]{0,260}renegotiateAllPeers\(true\)/u.test(source)
+  && source.includes("attachMissingLocalTracks(peerConnection, false, generation)")
+  && source.indexOf("renegotiateAllPeers(true)") > source.indexOf("attachMissingLocalTracks(peerConnection, false, generation)")
+  && source.includes("sender.track === restoredCameraTrack")
   && !/nextCameraEnabled[\s\S]{0,260}ensureInitialLocalStream\(false\)/u.test(source)
 );
 const trackKindRecoverySource = communicationSessionSource.slice(
@@ -2120,7 +2196,7 @@ const trackKindRecoverySource = communicationSessionSource.slice(
 const preservesGenerationBoundTrackRecovery = (source) => (
   /expectedGeneration = options\?\.expectedGeneration \?\? legacySessionGenerationRef\.current/u.test(source)
   && /expectedPeerConnections = Object\.values\(peerConnectionsRef\.current\)/u.test(source)
-  && /!isExpectedGenerationCurrent\(\) \|\| localStreamRef\.current !== expectedLocalStream[\s\S]{0,160}stopCommunicationStream\(extraStream\)/u.test(source)
+  && /!isExpectedGenerationCurrent\(\) \|\| localStreamRef\.current !== expectedLocalStream[\s\S]{0,160}acquisition\?\.reservation\.retire\(\)/u.test(source)
   && /for \(const peerConnection of expectedPeerConnections\)[\s\S]{0,120}if \(!isExpectedGenerationCurrent\(\)\)/u.test(source)
 );
 assert.equal(
@@ -2136,6 +2212,18 @@ assert.equal(
   "the regression guard kills the audio-only early-return mutant that drops video after background or CallKit Answer",
 );
 assert.equal(
+  preservesVideoForegroundRecovery(
+    foregroundMediaRestoreSource.replace("attachMissingLocalTracks(peerConnection, false, generation)", "attachMissingLocalTracks(peerConnection, false)"),
+  ),
+  false,
+  "the regression guard rejects foreground attachment without its captured call generation",
+);
+assert.equal(
+  preservesVideoForegroundRecovery(foregroundMediaRestoreSource.replace("sender.track === restoredCameraTrack", "true")),
+  false,
+  "the regression guard rejects successful foreground recovery without sender readback",
+);
+assert.equal(
   preservesGenerationBoundTrackRecovery(trackKindRecoverySource),
   true,
   "async media recovery binds capture and peer attachment to the exact accepted-call generation",
@@ -2146,6 +2234,11 @@ assert.equal(
   ),
   false,
   "the regression guard kills the stale-generation media-attachment mutant",
+);
+assert.equal(
+  preservesGenerationBoundTrackRecovery(trackKindRecoverySource.replaceAll("acquisition?.reservation.retire()", "void 0")),
+  false,
+  "retired acquisition disposal must remain owned for failure and explicit retry",
 );
 assert.match(
   legacyAppStateBlock,
@@ -2159,10 +2252,19 @@ assert.match(
 );
 assert.match(
   communicationSessionSource,
-  /legacySessionRestartSerial,\s*requestLegacySessionRestart,\s*runSerializedMediaControl,\s*\]\);/u,
+  /legacySessionRestartSerial,\s*requestLegacySessionRestart,\s*runSerializedMediaControl,[\s\S]{0,240}\]\);/u,
   "legacy initialization observes both foreground recovery and ownership-bound media serialization",
 );
-assert.match(communicationSessionSource, /CHANNEL_ERROR[\s\S]{0,600}requestLegacySessionRestart\(status === "CHANNEL_ERROR"/u, "Realtime terminal and error states rebuild the transport instead of only changing UI state");
+const legacyRealtimeFailureStart = communicationSessionSource.indexOf('if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED")');
+const legacyRealtimeFailureBlock = communicationSessionSource.slice(
+  legacyRealtimeFailureStart,
+  communicationSessionSource.indexOf("if (!reconnectTrackedRef.current)", legacyRealtimeFailureStart),
+);
+assert.match(legacyRealtimeFailureBlock, /presenceRegistrationRef\.current\.subscribed = false/u,
+  "Realtime terminal/error states immediately revoke the current subscription receipt");
+assert.match(legacyRealtimeFailureBlock,
+  /requestLegacySessionRestart\(status === "CHANNEL_ERROR"\s*\? "realtime_error"\s*: status === "TIMED_OUT"\s*\? "realtime_timeout"\s*: "realtime_closed", sessionGeneration\)/u,
+  "every Realtime terminal/error status rebuilds the exact-generation transport instead of only changing UI state");
 assert.match(communicationSessionSource, /mappedState === "failed"\) requestLegacySessionRestart\("peer_failed", generation\)[\s\S]{0,140}mappedState === "disconnected"\) requestLegacySessionRestart\("peer_disconnected", generation\)/u, "peer failures enter the same generation-bound recovery supervisor");
 const activeInviteReconciliationSource = chatThreadSource.slice(
   chatThreadSource.indexOf("const reconcileActiveInvite"),
@@ -2185,7 +2287,7 @@ assert.match(
 );
 assert.match(
   activeInviteReconciliationSource,
-  /finishTerminalInviteCleanup\(latestInvite, isHost, ownsContext, `invite_\$\{latestInvite\.status\}`\)/u,
+  /finishTerminalInviteCleanup\(latestInvite, ownsContext, `invite_\$\{latestInvite\.status\}`\)/u,
   "remote terminal invite state enters the exact owned native/media cleanup operation",
 );
 assert.match(

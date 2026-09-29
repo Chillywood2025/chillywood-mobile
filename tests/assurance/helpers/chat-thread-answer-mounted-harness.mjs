@@ -107,6 +107,7 @@ export async function mountChatAnswer(options = {}) {
       const { callChannelState, activeCallRoomId, callMediaProvider, nativeMediaActivationSerial } = runtime;
       const activeCallInvite = runtime.invite;
       const thread = { activeCallType: runtime.activeCallType, activeCommunicationRoomId: runtime.threadRoomId ?? null };
+      const resolvedCallType = thread.activeCallType;
       const authority = { userId: currentUserId, sessionGeneration };
       const incomingCallInvite = runtime.incomingInvite === null ? null : runtime.invite;
       const outgoingCallInvite = runtime.terminalMode === "outgoing" && runtime.outgoingPresent !== false ? runtime.invite : null;

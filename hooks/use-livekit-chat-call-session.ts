@@ -27,6 +27,7 @@ import {
   getCommunicationRoomSnapshot,
   joinCommunicationRoomSession,
   leaveCommunicationRoomSession,
+  prepareCommunicationRoomAdmission,
   readCommunicationIdentity,
   touchCommunicationRoomSession,
   type CommunicationIdentity,
@@ -50,6 +51,8 @@ import {
   validateChatCallLiveKitTokenClaims,
 } from "../_lib/livekit/token-contract";
 import { reportRuntimeError } from "../_lib/logger";
+import { reserveCommunicationMembershipAdmission } from "../_lib/communicationMembershipAdmission";
+import { isAccountBoundSupabaseRpcOutcomeAmbiguous } from "../_lib/accountBoundSupabaseRpc.mjs";
 import {
   resolveMediaPermission,
   type MediaPermissionKind,
@@ -79,6 +82,7 @@ type CommittedSession = Readonly<{
   generation: number;
   inviteId: string;
   liveKitRoom: Room | null;
+  membershipGeneration: string | null;
   mediaProvider: ChillyChatCallInvite["mediaProvider"] | null;
   normalizedRoomId: string;
   participantAuthority: string;
@@ -111,6 +115,21 @@ type DeferredNativeMediaReconciliation = {
   binding: CommittedSession;
   promise: Promise<NativeMediaReconciliationResult | null>;
   reconcileNative: boolean;
+};
+
+const membershipOutcomeIsAmbiguous = isAccountBoundSupabaseRpcOutcomeAmbiguous;
+
+const leaveExactMembershipWithRetry = async (
+  options: Parameters<typeof leaveCommunicationRoomSession>[0],
+) => {
+  try {
+    return await leaveCommunicationRoomSession(options);
+  } catch (failure) {
+    if (!membershipOutcomeIsAmbiguous(failure)) throw failure;
+    // The same generation is idempotent. Confirming it LEFT makes a later
+    // original request harmless before a replacement receives a new token.
+    return leaveCommunicationRoomSession(options);
+  }
 };
 
 const MEDIA_WRITE_PREDECESSOR_DRAIN_TIMEOUT_MS = 2_000;
@@ -217,6 +236,7 @@ const sameCommittedAuthority = (left: CommittedSession | null, right: CommittedS
   && left.normalizedRoomId === right.normalizedRoomId
   && left.participantAuthority === right.participantAuthority
   && left.userId === right.userId
+  && left.membershipGeneration === right.membershipGeneration
   && left.mediaProvider === right.mediaProvider
   && left.callType === right.callType
   && left.liveKitRoom === right.liveKitRoom
@@ -307,6 +327,10 @@ export function useLiveKitChatCallSession({
   const mediaControlOwnerRef = useRef<MediaControlOwner | null>(null);
   const mediaWriteTailsRef = useRef<Map<string, Promise<void>>>(new Map());
   const membershipCleanupOperationsRef = useRef<Map<object | symbol, Promise<boolean>>>(new Map());
+  const membershipCleanupReservationsRef = useRef<Map<
+    object | symbol,
+    ReturnType<typeof reserveCommunicationMembershipAdmission>
+  >>(new Map());
   const audioOutputTailRef = useRef<Promise<void>>(Promise.resolve());
   const audioOutputRequestSerialRef = useRef(0);
   const deferredMediaReconciliationRef = useRef<DeferredMediaReconciliation | null>(null);
@@ -364,6 +388,7 @@ export function useLiveKitChatCallSession({
       generation,
       inviteId,
       liveKitRoom: null,
+      membershipGeneration: null,
       mediaProvider: inviteProvider,
       normalizedRoomId,
       participantAuthority,
@@ -758,6 +783,8 @@ export function useLiveKitChatCallSession({
     const membership = snapshot.memberships.find((entry) => (
       entry.roomId === roomId
       && entry.userId === userId
+      && !!activeBinding.membershipGeneration
+      && entry.membershipGeneration === activeBinding.membershipGeneration
       && !entry.leftAt
       && (entry.membershipState === "active" || entry.membershipState === "reconnecting")
     )) ?? null;
@@ -781,13 +808,16 @@ export function useLiveKitChatCallSession({
   ) => {
     const activeBinding = binding ?? committedSessionRef.current;
     const currentIdentity = identityRef.current;
-    if (!activeBinding || !currentIdentity || !isCommittedSessionCurrent(activeBinding)) return null;
+    if (!activeBinding || !currentIdentity || !activeBinding.membershipGeneration
+      || !isCommittedSessionCurrent(activeBinding)) return null;
     const roomId = activeBinding.normalizedRoomId;
     const userId = activeBinding.userId;
     const isExact = (candidate: CommunicationRoomMembership | null | undefined) => {
       return !!candidate
         && candidate.roomId === roomId
         && candidate.userId === userId
+        && !!activeBinding.membershipGeneration
+        && candidate.membershipGeneration === activeBinding.membershipGeneration
         && candidate.cameraEnabled === cameraOn
         && candidate.micEnabled === micOn
         && !candidate.leftAt
@@ -796,6 +826,7 @@ export function useLiveKitChatCallSession({
     let membership = await touchCommunicationRoomSession({
       roomId,
       userId,
+      expectedMembershipGeneration: activeBinding.membershipGeneration,
       membershipState,
       cameraEnabled: cameraOn,
       micEnabled: micOn,
@@ -810,7 +841,10 @@ export function useLiveKitChatCallSession({
       const observed = await readCurrentMembershipMediaState(activeBinding);
       membership = isExact(observed) ? observed : null;
     }
-    if (!membership || !isCommittedSessionCurrent(activeBinding) || (strict && !isExact(membership))) return null;
+    if (!membership || !isCommittedSessionCurrent(activeBinding)
+      || !activeBinding.membershipGeneration
+      || membership.membershipGeneration !== activeBinding.membershipGeneration
+      || (strict && !isExact(membership))) return null;
     membershipsRef.current = [
       ...membershipsRef.current.filter((entry) => entry.userId !== membership.userId),
       membership,
@@ -822,7 +856,9 @@ export function useLiveKitChatCallSession({
     binding: CommittedSession,
     membership: CommunicationRoomMembership,
   ) => {
-    if (!isCommittedSessionCurrent(binding)) return;
+    if (!isCommittedSessionCurrent(binding) || !binding.membershipGeneration
+      || membership.userId !== binding.userId
+      || membership.membershipGeneration !== binding.membershipGeneration) return;
     const liveKitRoom = binding.liveKitRoom;
     if (liveKitRoom?.state === ConnectionState.Connected) {
       void liveKitRoom.localParticipant.publishData(
@@ -836,6 +872,8 @@ export function useLiveKitChatCallSession({
     }
     void broadcastCommunicationRoomSignal({
       roomId: binding.normalizedRoomId,
+      userId: binding.userId,
+      expectedMembershipGeneration: binding.membershipGeneration,
       event: "media:update",
       payload: {
         cameraOn: membership.cameraEnabled,
@@ -1993,6 +2031,24 @@ export function useLiveKitChatCallSession({
         : null;
       return productRoom && currentIdentity ? { currentIdentity, productRoom } : null;
     };
+    // Reserve durable ownership synchronously when retirement begins. Native
+    // disconnect/audio teardown can await before the leave RPC. Keep a new
+    // mounted hook behind this known teardown before it acquires native media;
+    // durable generation checks separately fence writes from another process.
+    const retirementNeedsLeave = options.leaveMembership !== false
+      && !!binding.userId
+      && !!binding.membershipGeneration
+      && (!!currentDurableContext() || bindingStillCurrent);
+    const retirementReservation = retirementNeedsLeave
+      ? membershipCleanupReservationsRef.current.get(cleanupOwner)
+        ?? reserveCommunicationMembershipAdmission({
+          roomId: binding.normalizedRoomId, userId: binding.userId,
+        })
+      : null;
+    if (retirementReservation) {
+      membershipCleanupReservationsRef.current.set(cleanupOwner, retirementReservation);
+    }
+    let reservationTransferredToLeave = false;
     setCommittedRoomState(binding, "terminal");
     const liveKitRoom = binding.liveKitRoom;
     if (bindingStillCurrent || roomRef.current === liveKitRoom) manualDisconnectRef.current = true;
@@ -2268,23 +2324,56 @@ export function useLiveKitChatCallSession({
         );
       }
       let membershipLeft = options.leaveMembership === false;
-      const leaveContext = currentDurableContext();
+      // A successful join can precede a snapshot/token failure. Its cleanup
+      // identity belongs to this binding, even before a native Room exists.
+      // Never obtain the generation from a later snapshot/replacement row.
+      const durableLeaveContext = currentDurableContext();
+      const leaveContext = durableLeaveContext ? {
+        roomId: durableLeaveContext.productRoom.roomId,
+        userId: durableLeaveContext.currentIdentity.userId,
+      } : sameCommittedAuthority(committedSessionRef.current, binding)
+        && binding.userId
+        && binding.membershipGeneration
+        ? { roomId: binding.normalizedRoomId, userId: binding.userId }
+        : null;
       if (leaveContext && options.leaveMembership !== false) {
+        reservationTransferredToLeave = true;
         let membershipCleanupOperation = membershipCleanupOperationsRef.current.get(cleanupOwner);
         if (!membershipCleanupOperation) {
+          const leaveReservation = membershipCleanupReservationsRef.current.get(cleanupOwner)
+            ?? reserveCommunicationMembershipAdmission(leaveContext);
+          membershipCleanupReservationsRef.current.set(cleanupOwner, leaveReservation);
           membershipCleanupOperation = (async () => {
-            const leftMembership = await leaveCommunicationRoomSession({
-              roomId: leaveContext.productRoom.roomId,
-              userId: leaveContext.currentIdentity.userId,
-            });
-            const exactLeave = !!leftMembership
-              && normalizeRoomId(leftMembership.roomId) === binding.normalizedRoomId
-              && leftMembership.userId === binding.userId
-              && leftMembership.membershipState === "left"
-              && leftMembership.cameraEnabled === false
-              && leftMembership.micEnabled === false;
-            if (!exactLeave) return false;
-            return protectCurrentReplacementMembership();
+            let leaveUnresolved = false;
+            try {
+              if (leaveReservation.predecessor) await leaveReservation.predecessor;
+              const leftMembership = await leaveExactMembershipWithRetry({
+                roomId: leaveContext.roomId,
+                userId: leaveContext.userId,
+                expectedMembershipGeneration: binding.membershipGeneration ?? undefined,
+              });
+              const exactLeave = !!leftMembership
+                && normalizeRoomId(leftMembership.roomId) === binding.normalizedRoomId
+                && leftMembership.userId === binding.userId
+                && !!binding.membershipGeneration
+                && leftMembership.membershipGeneration === binding.membershipGeneration
+                && (leftMembership.membershipState === "left" || leftMembership.membershipState === "removed")
+                && !!leftMembership.leftAt
+                && leftMembership.cameraEnabled === false
+                && leftMembership.micEnabled === false;
+              if (!exactLeave) return false;
+              return protectCurrentReplacementMembership();
+            } catch (leaveError) {
+              leaveUnresolved = membershipOutcomeIsAmbiguous(leaveError);
+              throw leaveError;
+            } finally {
+              if (!leaveUnresolved) {
+                leaveReservation.release();
+                if (membershipCleanupReservationsRef.current.get(cleanupOwner) === leaveReservation) {
+                  membershipCleanupReservationsRef.current.delete(cleanupOwner);
+                }
+              }
+            }
           })();
           membershipCleanupOperationsRef.current.set(cleanupOwner, membershipCleanupOperation);
           void membershipCleanupOperation.then(() => {
@@ -2359,6 +2448,15 @@ export function useLiveKitChatCallSession({
       }
       return cleanupProved;
     } finally {
+      // A same-component replacement may have retired this binding before its
+      // durable phase. If no leave was started, release only our reservation;
+      // pending/ambiguous leaves keep their existing owner and retry contract.
+      if (retirementReservation && !reservationTransferredToLeave) {
+        retirementReservation.release();
+        if (membershipCleanupReservationsRef.current.get(cleanupOwner) === retirementReservation) {
+          membershipCleanupReservationsRef.current.delete(cleanupOwner);
+        }
+      }
       endingCleanupOwnersRef.current.delete(cleanupOwner);
     }
   }, [
@@ -2463,35 +2561,54 @@ export function useLiveKitChatCallSession({
 
     const refreshMembershipSnapshot = async (
       scope: string,
-      options: { reconnectingOnMissing?: boolean } = {},
+      options: { reconnectingOnReadFailure?: boolean } = {},
     ) => {
       const binding = effectBinding;
       const requestSerial = membershipSnapshotRequestSerial + 1;
       membershipSnapshotRequestSerial = requestSerial;
       if (!active || !binding || !isCommittedSessionCurrent(binding)) return;
-      const latestSnapshot = await getCommunicationRoomSnapshot(binding.normalizedRoomId)
-        .catch((snapshotError) => {
-          reportRuntimeError(scope, snapshotError, { roomId: binding.normalizedRoomId });
-          return null;
-        });
+      const readResult = await getCommunicationRoomSnapshot(binding.normalizedRoomId).then(
+        (snapshot) => ({ succeeded: true as const, snapshot }),
+        (snapshotError: unknown) => ({ succeeded: false as const, snapshotError }),
+      );
       if (
         !active
         || requestSerial !== membershipSnapshotRequestSerial
         || !isCommittedSessionCurrent(binding)
       ) return;
-      if (!latestSnapshot) {
-        if (options.reconnectingOnMissing) {
+      if (!readResult.succeeded) {
+        reportRuntimeError(scope, readResult.snapshotError, { roomId: binding.normalizedRoomId });
+        if (options.reconnectingOnReadFailure) {
           setCommittedRoomState(binding, "reconnecting");
           setChannelState("reconnecting");
         }
         return;
       }
+      const latestSnapshot = readResult.snapshot;
       if (
-        normalizeRoomId(latestSnapshot.room.roomId) !== binding.normalizedRoomId
+        !latestSnapshot
+        || normalizeRoomId(latestSnapshot.room.roomId) !== binding.normalizedRoomId
         || latestSnapshot.room.status !== "active"
       ) {
-        if (setCommittedRoomState(binding, "terminal")) {
+        // A successful RLS read returns null when the active room is no longer
+        // available. Retire this local owner without borrowing durable write
+        // authority from an unreadable room or a replacement admission.
+        await cleanupSession({ leaveMembership: false }, binding, cleanupToken);
+        if (active && sameCommittedAuthority(committedSessionRef.current, binding)) {
           void onRoomEndedRef.current?.("ended");
+        }
+        return;
+      }
+      const observedSelf = latestSnapshot.memberships.find((entry) => (
+        normalizeRoomId(entry.roomId) === binding.normalizedRoomId && entry.userId === binding.userId
+      ));
+      if (observedSelf && observedSelf.membershipGeneration !== binding.membershipGeneration) {
+        // A newer owner now holds this durable membership. Retire only our
+        // local resources; ending the shared invite would end that new call.
+        await cleanupSession({ leaveMembership: false }, binding, cleanupToken);
+        if (active && sameCommittedAuthority(committedSessionRef.current, binding)) {
+          setChannelState("error");
+          setError("This call continued in another session. Reopen the call to reconnect.");
         }
         return;
       }
@@ -2611,6 +2728,16 @@ export function useLiveKitChatCallSession({
             ) return;
             queuePeerMediaSnapshotRefresh("chat-call-livekit-membership-snapshot-refresh");
           },
+        )
+        .on(
+          "broadcast",
+          { event: "state:update" },
+          () => {
+            if (!active || !isCommittedSessionCurrent(binding)) return;
+            // The room-scoped server hint carries no state. Re-read through
+            // RLS, sharing the paced reader so repeated hints stay bounded.
+            queuePeerMediaSnapshotRefresh("chat-call-livekit-state-snapshot-refresh");
+          },
         );
       if (!active || !isCommittedSessionCurrent(binding)) {
         supabase.removeChannel(channel);
@@ -2636,49 +2763,158 @@ export function useLiveKitChatCallSession({
       });
     };
 
-    const initialize = async () => {
-      let currentIdentity = await readCommunicationIdentity(authenticatedUserId);
-      if (
-        !currentIdentity.userId
-        || (currentIdentity.userId !== inviteCallerUserId && currentIdentity.userId !== inviteCalleeUserId)
-        || inviteThreadId !== threadId
-        || normalizeRoomId(inviteCommunicationRoomId) !== normalizedRoomId
-      ) {
-        throw new Error("accepted_chat_call_identity_mismatch");
-      }
+    // Join can commit before its response reaches an effect that has already
+    // retired. Finish known same-process compensation before a replacement
+    // acquires native media; the durable admission CAS also fences restarts.
+    const admissionReservation = reserveCommunicationMembershipAdmission({
+      roomId: normalizedRoomId,
+      userId: authenticatedUserId,
+    });
+    let admissionAbandoned = false;
 
-      let membership: CommunicationRoomMembership | null = null;
-      for (let attempt = 0; attempt < 3 && !membership; attempt += 1) {
-        if (!active) return;
-        membership = await joinCommunicationRoomSession({
-          roomId: normalizedRoomId,
-          userId: currentIdentity.userId,
-          displayName: currentIdentity.displayName,
-          avatarUrl: currentIdentity.avatarUrl,
-          cameraEnabled: initialCameraEnabled,
-          micEnabled: initialMicEnabled,
-        });
-        if (!membership && attempt < 2) {
-          await new Promise((resolve) => setTimeout(resolve, 250));
-          currentIdentity = await readCommunicationIdentity(authenticatedUserId);
+    const initialize = async () => {
+      let admissionUnresolved = false;
+      const pendingAdmission = (async () => {
+        try {
+          if (admissionReservation.predecessor) await admissionReservation.predecessor;
+          if (!active || admissionAbandoned) return null;
+          let currentIdentity = await readCommunicationIdentity(authenticatedUserId);
           if (
             !currentIdentity.userId
             || (currentIdentity.userId !== inviteCallerUserId && currentIdentity.userId !== inviteCalleeUserId)
+            || inviteThreadId !== threadId
+            || normalizeRoomId(inviteCommunicationRoomId) !== normalizedRoomId
           ) {
             throw new Error("accepted_chat_call_identity_mismatch");
           }
+
+          if (!active || admissionAbandoned) return null;
+          const admission = await prepareCommunicationRoomAdmission({
+            roomId: normalizedRoomId,
+            userId: currentIdentity.userId,
+          });
+          if (!active || admissionAbandoned) return null;
+          // Preserve this exact attempt and prior-generation precondition on
+          // retries. A fresh owner, including a new JS process, prepares a new
+          // attempt instead of inheriting an existing ACTIVE generation.
+          let membership: CommunicationRoomMembership | null = null;
+          for (let attempt = 0; attempt < 3 && !membership; attempt += 1) {
+            if (!active || admissionAbandoned) return null;
+            membership = await joinCommunicationRoomSession({
+              admission,
+              roomId: normalizedRoomId,
+              userId: currentIdentity.userId,
+              displayName: currentIdentity.displayName,
+              avatarUrl: currentIdentity.avatarUrl,
+              cameraEnabled: initialCameraEnabled,
+              micEnabled: initialMicEnabled,
+            });
+            if (!membership && attempt < 2) {
+              await new Promise((resolve) => setTimeout(resolve, 250));
+              currentIdentity = await readCommunicationIdentity(authenticatedUserId);
+              if (
+                !currentIdentity.userId
+                || (currentIdentity.userId !== inviteCallerUserId && currentIdentity.userId !== inviteCalleeUserId)
+              ) {
+                throw new Error("accepted_chat_call_identity_mismatch");
+              }
+            }
+          }
+          if (!membership) {
+            if (!active) return null;
+            throw new Error("accepted_chat_call_membership_denied");
+          }
+
+          if (
+            !effectBinding
+            || membership.userId !== currentIdentity.userId
+            || normalizeRoomId(membership.roomId) !== normalizedRoomId
+          ) throw new Error("accepted_chat_call_membership_identity_mismatch");
+          const bindingWasCurrent = sameCommittedAuthority(committedSessionRef.current, effectBinding);
+          effectBinding = Object.freeze({
+            ...effectBinding,
+            membershipGeneration: String(membership.membershipGeneration ?? "").trim() || null,
+            userId: currentIdentity.userId,
+          });
+          if (!active || admissionAbandoned || !bindingWasCurrent) {
+            // No Room or native capture was acquired. Retire only this exact
+            // successful join; never read cleanup identity from current refs.
+            try {
+              const leftMembership = await leaveExactMembershipWithRetry({
+                roomId: effectBinding.normalizedRoomId,
+                userId: effectBinding.userId,
+                expectedMembershipGeneration: effectBinding.membershipGeneration ?? undefined,
+              });
+              if (!leftMembership
+                || normalizeRoomId(leftMembership.roomId) !== effectBinding.normalizedRoomId
+                || leftMembership.userId !== effectBinding.userId
+                || !effectBinding.membershipGeneration
+                || leftMembership.membershipGeneration !== effectBinding.membershipGeneration
+                || !["left", "removed"].includes(leftMembership.membershipState)
+                || !leftMembership.leftAt
+                || leftMembership.cameraEnabled
+                || leftMembership.micEnabled) {
+                throw new Error("durable_membership_leave_unproved");
+              }
+            } catch (cleanupError) {
+              admissionUnresolved = membershipOutcomeIsAmbiguous(cleanupError);
+              // Account replacement may correctly reject the old subject.
+              // Report uncertainty; do not borrow the new account's authority.
+              reportRuntimeError("chat-call-livekit-retired-join-cleanup", cleanupError, {
+                roomId: effectBinding.normalizedRoomId,
+              });
+            }
+            return null;
+          }
+          committedSessionRef.current = effectBinding;
+          if (!effectBinding.membershipGeneration) {
+            throw new Error("accepted_chat_call_membership_generation_missing");
+          }
+          return { currentIdentity, membership };
+        } catch (admissionError) {
+          admissionUnresolved = membershipOutcomeIsAmbiguous(admissionError);
+          throw admissionError;
+        } finally {
+          // Transport loss does not prove that the server failed to commit.
+          // Keep this exact room/account reserved instead of letting a later
+          // ACTIVE join race an operation whose result remains unknown.
+          if (!admissionUnresolved) admissionReservation.release();
         }
+      })();
+      let admissionTimeout: ReturnType<typeof setTimeout> | null = null;
+      const admissionResult = await Promise.race([
+        pendingAdmission.then((value) => ({ completed: true as const, value })),
+        new Promise<{ completed: false; value: null }>((resolve) => {
+          admissionTimeout = setTimeout(() => {
+            admissionAbandoned = true;
+            resolve({ completed: false, value: null });
+          }, CLEANUP_OPERATION_TIMEOUT_MS);
+        }),
+      ]).finally(() => {
+        if (admissionTimeout) clearTimeout(admissionTimeout);
+      });
+      if (!admissionResult.completed) {
+        throw new Error(admissionReservation.predecessor
+          ? "accepted_chat_call_prior_membership_pending"
+          : "accepted_chat_call_membership_pending");
       }
-      if (!active) return;
-      if (!membership) {
-        throw new Error("accepted_chat_call_membership_denied");
-      }
+      const admitted = admissionResult.value;
+      if (!admitted || !active) return;
+      const { currentIdentity, membership } = admitted;
 
       const snapshot = await getCommunicationRoomSnapshot(normalizedRoomId);
       if (!active) return;
       if (!snapshot || snapshot.room.status !== "active") {
         throw new Error("accepted_chat_call_room_unavailable");
       }
+      const admittedSelf = snapshot.memberships.find((entry) => (
+        normalizeRoomId(entry.roomId) === normalizedRoomId
+        && entry.userId === membership.userId
+        && entry.membershipGeneration === membership.membershipGeneration
+        && !entry.leftAt
+        && (entry.membershipState === "active" || entry.membershipState === "reconnecting")
+      ));
+      if (!admittedSelf) throw new Error("accepted_chat_call_membership_generation_changed");
 
       const nextMemberships = [
         ...snapshot.memberships.filter((entry) => entry.userId !== membership.userId),
@@ -3156,7 +3392,7 @@ export function useLiveKitChatCallSession({
         });
         void refreshMembershipSnapshot(
           "chat-call-livekit-heartbeat-snapshot",
-          { reconnectingOnMissing: true },
+          { reconnectingOnReadFailure: true },
         );
       }, ROOM_HEARTBEAT_MS);
     };
@@ -3168,7 +3404,10 @@ export function useLiveKitChatCallSession({
       setError("Unable to connect this accepted Chi'lly Chat call through LiveKit.");
       reportRuntimeError("chat-call-livekit-initialize", initializationError);
       await cleanupSession({ leaveMembership: true }, effectBinding, cleanupToken);
-      if (active) setChannelState("error");
+      if (active) {
+        setChannelState("error");
+        setError("Unable to connect this accepted Chi'lly Chat call through LiveKit.");
+      }
     });
 
     return () => {

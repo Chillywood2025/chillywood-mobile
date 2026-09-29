@@ -13,6 +13,8 @@ import java.util.Locale
 import java.util.TimeZone
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -41,7 +43,54 @@ class ChillyChatIncomingCallNotificationTest {
   )
 
   @Before
-  fun clearNotifications() { manager.cancelAll() }
+  fun clearNotifications() {
+    manager.cancelAll()
+    context.getSharedPreferences("chilly_chat_native_call_action_v1", Context.MODE_PRIVATE).edit().clear().commit()
+  }
+
+  @Test
+  fun actualAnswerPendingIntentDispatchesReceiverAndCreatesOneConsumableStoreAction() {
+    val expiresAt = System.currentTimeMillis() + 90_000L
+    ChillyChatCallNotifications.showIncomingCallNotification(context, data(expiresAt))
+    val notification = manager.activeNotifications.single().notification
+    val action = notification.actions.single {
+      shadowOf(it.actionIntent).savedIntent.action == ChillyChatCallNotifications.ACTION_ANSWER
+    }.actionIntent
+    assertEquals("empty", ChillyChatNativeCallActionStore.readStatus(context))
+    // Send the generated immutable PendingIntent, allowing the actual Android
+    // dispatch path to invoke the generated private BroadcastReceiver. This
+    // stops at the store/JS boundary; it is not FCM, Activity, or RN installation proof.
+    action.send()
+    shadowOf(Looper.getMainLooper()).idle()
+    assertEquals("present", ChillyChatNativeCallActionStore.readStatus(context))
+    val captured = ChillyChatNativeCallActionStore.consume(context)
+    assertNotNull(captured)
+    assertEquals(inviteId, captured!!.callInviteId)
+    assertEquals("11111111-1111-4111-8111-111111111111", captured.threadId)
+    assertEquals("answer", captured.nativeCallAction)
+    assertEquals(2, captured.schemaVersion)
+    assertTrue(captured.captureGeneration > 0)
+    assertTrue(captured.requestKey.matches(Regex("^[0-9a-f]{64}$")))
+    assertNull(ChillyChatNativeCallActionStore.consume(context))
+    action.send()
+    shadowOf(Looper.getMainLooper()).idle()
+    assertNull(ChillyChatNativeCallActionStore.consume(context))
+    assertEquals("empty", ChillyChatNativeCallActionStore.readStatus(context))
+  }
+
+  @Test
+  fun receiverRejectsMalformedOrUnrecognizedActionsWithoutCreatingPendingAnswer() {
+    val receiver = ChillyChatCallNotificationActionReceiver()
+    for (action in listOf(ChillyChatCallNotifications.ACTION_ANSWER, "not-a-native-action")) {
+      receiver.onReceive(context, Intent(context, ChillyChatCallNotificationActionReceiver::class.java).apply {
+        this.action = action
+        putExtra("callInviteId", if (action == ChillyChatCallNotifications.ACTION_ANSWER) "malformed" else inviteId)
+        putExtra("threadId", "11111111-1111-4111-8111-111111111111")
+      })
+      assertEquals("empty", ChillyChatNativeCallActionStore.readStatus(context))
+      assertNull(ChillyChatNativeCallActionStore.consume(context))
+    }
+  }
 
   @Test
   fun generatedNotificationUsesServerRemainderAndRetainsDeadlineAcrossRedelivery() {

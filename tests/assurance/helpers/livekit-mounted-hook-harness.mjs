@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import vm from "node:vm";
+import { randomUUID } from "node:crypto";
+import { isAccountBoundSupabaseRpcOutcomeAmbiguous } from "../../../_lib/accountBoundSupabaseRpc.mjs";
 
 const require = createRequire(import.meta.url);
 const React = require("react");
@@ -17,6 +19,18 @@ const compiledHook = ts.transpileModule(hookSource, {
   },
   fileName: "hooks/use-livekit-chat-call-session.ts",
 }).outputText;
+
+const compiledMembershipAdmission = ts.transpileModule(
+  fs.readFileSync("_lib/communicationMembershipAdmission.ts", "utf8"),
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
+).outputText;
+const loadMembershipAdmission = () => {
+  const commonJsModule = { exports: {} };
+  vm.runInNewContext(compiledMembershipAdmission, {
+    exports: commonJsModule.exports, module: commonJsModule,
+  }, { filename: "_lib/communicationMembershipAdmission.ts" });
+  return commonJsModule.exports;
+};
 
 const audioRoutingSource = fs.readFileSync("_lib/livekit/audioRouting.ts", "utf8");
 const compiledAudioRouting = ts.transpileModule(audioRoutingSource, {
@@ -108,6 +122,7 @@ const membership = (runtime, overrides = {}) => ({
   lastSeenAt: "2026-08-11T00:00:00.000Z",
   leftAt: null,
   membershipState: "active",
+  membershipGeneration: runtime.membershipGeneration,
   micEnabled: runtime.durableMic,
   role: "participant",
   roomId: runtime.roomId,
@@ -174,8 +189,17 @@ export function createLiveKitMountedRuntime(options = {}) {
     identityReads: 0,
     intervalsCleared: 0,
     liveKitDataPublishes: [],
+    membershipAdmissionCoordinator: options.membershipAdmissionCoordinator ?? loadMembershipAdmission(),
+    membershipPrepareActions: [],
+    membershipPrepareRequests: [],
+    membershipJoinActions: [],
+    membershipJoinRequests: [],
     membershipLeaveActions: [],
+    membershipLeaveRequests: [],
     membershipLeaves: 0,
+    membershipGeneration: options.membershipGeneration === undefined
+      ? "10000000-0000-4000-8000-000000000001"
+      : options.membershipGeneration,
     membershipTouches: [],
     mediaBroadcasts: [],
     micCalls: [],
@@ -210,6 +234,22 @@ export function createLiveKitMountedRuntime(options = {}) {
     userId: options.userId ?? "local-user",
   };
 
+  // Sharing only this durable row models independent application processes:
+  // their hook refs/coordinators/native Rooms remain separate.
+  runtime.durableMembershipStore = options.durableMembershipStore ?? {
+    membershipGeneration: runtime.membershipGeneration,
+    durableCamera: runtime.durableCamera,
+    durableMic: runtime.durableMic,
+    admissionAttemptId: null,
+  };
+  for (const key of ["membershipGeneration", "durableCamera", "durableMic"]) {
+    Object.defineProperty(runtime, key, {
+      configurable: true, enumerable: true,
+      get: () => runtime.durableMembershipStore[key],
+      set: (value) => { runtime.durableMembershipStore[key] = value; },
+    });
+  }
+
   runtime.createAcceptedMediaDescriptor = (overrides = {}) => {
     const descriptor = Object.freeze({
       authenticatedUserId: runtime.userId,
@@ -237,6 +277,8 @@ export function createLiveKitMountedRuntime(options = {}) {
   runtime.queueNativeAudioSelection = (action) => runtime.nativeAudioSelectionActions.push(action);
   runtime.queueAudioReset = (action) => runtime.audioResetActions.push(action);
   runtime.queueAudioStop = (action) => runtime.audioStopActions.push(action);
+  runtime.queueMembershipPrepare = (action) => runtime.membershipPrepareActions.push(action);
+  runtime.queueMembershipJoin = (action) => runtime.membershipJoinActions.push(action);
   runtime.queueMembershipLeave = (action) => runtime.membershipLeaveActions.push(action);
   runtime.queueNativeApplicationActive = (action) => runtime.nativeApplicationActiveActions.push(action);
   runtime.queueNative = (action) => runtime.nativeActions.push(action);
@@ -686,6 +728,10 @@ export function createLiveKitMountedRuntime(options = {}) {
     if (action.gate) await action.gate.promise;
     if (action.outcome === "reject") throw new Error("membership rejected");
     if (action.outcome === "null") return null;
+    if (!touchOptions.expectedMembershipGeneration
+      || touchOptions.expectedMembershipGeneration !== runtime.membershipGeneration) {
+      throw new Error("communication_membership_cleanup_generation_changed");
+    }
     if (action.outcome === "lost") {
       runtime.durableCamera = !!touchOptions.cameraEnabled;
       runtime.durableMic = !!touchOptions.micEnabled;
@@ -699,13 +745,15 @@ export function createLiveKitMountedRuntime(options = {}) {
     }
     runtime.durableCamera = !!touchOptions.cameraEnabled;
     runtime.durableMic = !!touchOptions.micEnabled;
-    return membership(runtime, {
+    const committedMembership = membership(runtime, {
       cameraEnabled: runtime.durableCamera,
       membershipState: touchOptions.membershipState,
       micEnabled: runtime.durableMic,
       roomId: touchOptions.roomId,
       userId: touchOptions.userId,
     });
+    if (action.afterCommitGate) await action.afterCommitGate.promise;
+    return committedMembership;
   };
 
   const AppState = {
@@ -820,9 +868,16 @@ export function createLiveKitMountedRuntime(options = {}) {
         && input.descriptor.threadId === input.threadId
       ),
     },
+    "../_lib/communicationMembershipAdmission": runtime.membershipAdmissionCoordinator,
+    "../_lib/accountBoundSupabaseRpc.mjs": { isAccountBoundSupabaseRpcOutcomeAmbiguous },
     "../_lib/communication": {
       broadcastCommunicationRoomSignal: async (request) => {
         runtime.mediaBroadcasts.push(request);
+        if (request.event === "media:update" && (request.userId !== runtime.userId
+          || !request.expectedMembershipGeneration
+          || request.expectedMembershipGeneration !== runtime.membershipGeneration)) {
+          throw new Error("communication_signal_membership_generation_changed");
+        }
         if (options.rejectMediaBroadcast) throw new Error("fixture media broadcast rejected");
         if (options.broadcastCommunicationRoomSignal) {
           return options.broadcastCommunicationRoomSignal(request);
@@ -833,24 +888,64 @@ export function createLiveKitMountedRuntime(options = {}) {
       endCommunicationRoom: async () => undefined,
       getActiveCommunicationMemberships: (memberships) => memberships.filter((entry) => !entry.leftAt),
       getCommunicationRoomSnapshot: getSnapshot,
-      joinCommunicationRoomSession: async (joinOptions) => membership(runtime, {
-        cameraEnabled: !!joinOptions.cameraEnabled,
-        micEnabled: !!joinOptions.micEnabled,
-        roomId: joinOptions.roomId,
-        userId: joinOptions.userId,
-      }),
-      leaveCommunicationRoomSession: async ({ roomId, userId }) => {
+      prepareCommunicationRoomAdmission: async ({ roomId, userId }) => {
+        const prepared = Object.freeze({ roomId, userId, attemptId: randomUUID(), expectedPreviousGeneration: runtime.membershipGeneration });
+        runtime.membershipPrepareRequests.push(prepared);
+        const action = runtime.membershipPrepareActions.shift() ?? {};
+        if (action.gate) await action.gate.promise;
+        if (action.outcome === "reject") throw new Error("admission prepare rejected");
+        return prepared;
+      },
+      joinCommunicationRoomSession: async (joinOptions) => {
+        runtime.membershipJoinRequests.push(joinOptions);
+        const action = runtime.membershipJoinActions.shift() ?? {};
+        const admission = joinOptions.admission;
+        if (!admission || admission.roomId !== joinOptions.roomId || admission.userId !== joinOptions.userId) {
+          throw new Error("communication_membership_admission_identity_required");
+        }
+        if (action.beforeCommitGate) await action.beforeCommitGate.promise;
+        if (runtime.durableMembershipStore.admissionAttemptId !== admission.attemptId) {
+          if (admission.expectedPreviousGeneration !== runtime.membershipGeneration) {
+            throw new Error("communication_membership_admission_generation_changed");
+          }
+          if (runtime.membershipGeneration) runtime.membershipGeneration = action.generation ?? randomUUID();
+          runtime.durableMembershipStore.admissionAttemptId = admission.attemptId;
+        }
+        const joined = membership(runtime, {
+          cameraEnabled: !!joinOptions.cameraEnabled,
+          micEnabled: !!joinOptions.micEnabled,
+          roomId: joinOptions.roomId,
+          userId: joinOptions.userId,
+        });
+        // Capture the committed row before delaying its response. A newer
+        // admission must not donate its identity to an old pending response.
+        if (action.gate) await action.gate.promise;
+        if (action.outcome === "reject") throw Object.assign(new Error(action.message ?? "membership join rejected"), { code: action.code });
+        if (action.api) return action.api(joinOptions);
+        if (action.outcome === "null") return null;
+        return joined;
+      },
+      leaveCommunicationRoomSession: async ({ roomId, userId, expectedMembershipGeneration }) => {
         runtime.membershipLeaves += 1;
+        runtime.membershipLeaveRequests.push({ roomId, userId, expectedMembershipGeneration });
         const action = runtime.membershipLeaveActions.shift() ?? { outcome: "success" };
         if (action.gate) await action.gate.promise;
-        if (action.outcome === "reject") throw new Error("membership leave rejected");
+        if (action.outcome === "reject") throw Object.assign(new Error(action.message ?? "membership leave rejected"), { code: action.code });
         if (action.outcome === "null") return null;
+        if (options.requireExactLeaveAccount && userId !== runtime.userId) {
+          throw new Error("account-bound membership leave rejected");
+        }
+        if (!expectedMembershipGeneration) throw new Error("cleanup identity required");
+        if (expectedMembershipGeneration !== runtime.membershipGeneration) {
+          throw new Error("communication_membership_cleanup_generation_changed");
+        }
         runtime.durableCamera = false;
         runtime.durableMic = false;
         return membership(runtime, {
           cameraEnabled: false,
           leftAt: "2026-08-11T00:01:00.000Z",
-          membershipState: "left",
+          membershipState: action.membershipState ?? "left",
+          membershipGeneration: action.returnedGeneration ?? expectedMembershipGeneration,
           micEnabled: false,
           roomId,
           userId,
@@ -887,6 +982,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     "../_lib/livekit/token-contract": {
       requestLiveKitParticipantToken: async (request) => {
         runtime.providerTokenCalls += 1;
+        if (options.rejectProviderToken) throw new Error("fixture token request rejected");
         return {
           participantRole: "speaker",
           participantToken: "fixture-token",

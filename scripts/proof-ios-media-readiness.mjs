@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -132,8 +133,40 @@ const communicationHook = read("hooks/use-communication-room-session.ts");
   "registerActiveMediaSessionStopper",
   "getMediaPermissionRecoveryMessage",
   "Linking.openSettings",
-  "_switchCamera",
 ].forEach((expected) => includes(communicationHook, expected, "communication media lifecycle"));
+
+// Camera switching on the pinned native SDK requires video-only reacquisition.
+// These narrow source checks protect that boundary; mounted/installed-SDK
+// tests below prove behavior under controlled native receipts, not physical
+// lens movement or delivered frames on an installed iPhone.
+const assertSupportedCameraSwitch = (source) => {
+  const start = source.indexOf("  const switchCamera = useCallback(");
+  const end = source.indexOf("  const participants = useMemo", start);
+  assert.ok(start >= 0 && end > start, "supported camera switch callback must be present");
+  const cameraSwitch = source.slice(start, end);
+  [
+    "oldTrack.stop()",
+    "await acquireOwnedLegacyMedia({ audio: false, video: true, facingMode })",
+    "nextTrack.getSettings?.().facingMode !== facingMode",
+    "await senders[0].replaceTrack(nextTrack)",
+    "senders[0].track !== nextTrack",
+    "!ownsIntent() || !ownsPeers()",
+    "captureReservation?.adopt()",
+  ].forEach((expected) => includes(cameraSwitch, expected, "supported owned video-only camera switch"));
+  for (const unsupported of ["._switchCamera(", ".applyConstraints(", "stopCommunicationStream(", "setMicrophoneEnabled("]) {
+    excludes(cameraSwitch, unsupported, "camera switch preserves audio and uses supported capture replacement");
+  }
+};
+assertSupportedCameraSwitch(communicationHook);
+// A source guard that accepted these mutations would only bless its own text.
+// Both changes violate boundaries also exercised by the behavioral runners.
+assert.throws(() => assertSupportedCameraSwitch(communicationHook.replace(
+  "await acquireOwnedLegacyMedia({ audio: false, video: true, facingMode })",
+  "await acquireOwnedLegacyMedia({ audio: true, video: true, facingMode })",
+)), /supported owned video-only camera switch/u, "camera guard rejects opening the microphone during a lens change");
+assert.throws(() => assertSupportedCameraSwitch(communicationHook.replace(
+  "senders[0].track !== nextTrack", "false /* sender receipt check removed */",
+)), /supported owned video-only camera switch/u, "camera guard rejects an unverified native sender replacement");
 
 // A transport reconnect retains the recovery supervisor, but its heartbeat
 // cannot re-publish a captured camera/microphone intent or revive a left row.
@@ -143,16 +176,26 @@ const heartbeatSource = communicationSource.slice(
   communicationSource.indexOf("export async function getLinkedCommunicationRoom"),
 );
 [
-  ".update({ last_seen_at: now, updated_at: now })",
-  '.eq("room_id", roomId)',
-  '.eq("user_id", userId)',
-  '.in("membership_state", ["active", "reconnecting"])',
-  '.is("left_at", null)',
-  "if (!data) return null",
+  "expectedMembershipGeneration: string",
+  "return touchCommunicationRoomSession(options)",
 ].forEach((expected) => includes(heartbeatSource, expected, "ownership-preserving liveness heartbeat"));
-for (const mediaField of ["camera_enabled:", "mic_enabled:", "membership_state:", "left_at:"]) {
+for (const mediaField of ["cameraEnabled:", "micEnabled:", "membershipState:", "camera_enabled:", "mic_enabled:", "membership_state:", "left_at:"]) {
   excludes(heartbeatSource, mediaField, "heartbeat cannot overwrite media or admission state");
 }
+const touchSource = communicationSource.slice(
+  communicationSource.indexOf("export async function touchCommunicationRoomSession"),
+  communicationSource.indexOf("export async function leaveCommunicationRoomSession"),
+);
+[
+  "runExactSessionAccountBoundSupabaseMutationRpc",
+  '>("touch_owned_communication_room_session", {',
+  "p_expected_membership_generation: generation",
+  "p_membership_state: options.membershipState === undefined ? null",
+  "p_camera_enabled: options.cameraEnabled === undefined ? null",
+  "p_mic_enabled: options.micEnabled === undefined ? null",
+  "membership.membershipGeneration !== generation",
+  "row?.left_at !== null",
+].forEach((expected) => includes(touchSource, expected, "generation-bound owned heartbeat RPC"));
 const reconnectSource = communicationHook.slice(
   communicationHook.indexOf('if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED")'),
   communicationHook.indexOf("void init().catch"),
@@ -164,6 +207,48 @@ const reconnectSource = communicationHook.slice(
   "if (!isActiveGeneration()) return",
 ].forEach((expected) => includes(reconnectSource, expected, "generation-bound transport recovery"));
 excludes(reconnectSource, "touchCommunicationRoomSession({", "reconnect cannot replay captured media state");
+
+// Execute the current API, mounted-hook, and SQL regressions instead of treating
+// source markers as proof of asynchronous or database behavior. These runners
+// use controlled local transports and disposable PostgreSQL, never providers.
+const runLivenessProof = (args, label) => {
+  const result = spawnSync(process.execPath, args, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 120_000,
+    killSignal: "SIGKILL",
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, `${label} failed:\n${result.stdout}\n${result.stderr}`);
+  return result.stdout;
+};
+const cameraProof = runLivenessProof([
+  "--test", "--test-reporter=tap", "--test-name-pattern",
+  "legacy supported camera flip|legacy camera retry|legacy foreground camera restore|installed RTC SDK",
+  "tests/assurance/chat-call-native-state-mounted.test.mjs",
+  "tests/assurance/chat-call-sdk-contract.test.mjs",
+], "actual camera lifecycle and installed SDK boundary regressions");
+for (const title of [
+  "legacy supported camera flip reacquires video only and replaces senders while preserving microphone and call",
+  "legacy camera retry cannot acknowledge SDK-swallowed sender replacement failure",
+  "installed RTC SDK native sender rejection resolves but leaves old track: callers must verify the postcondition",
+]) {
+  assert.ok(cameraProof.split("\n").some((line) => /^ok \d+ - /u.test(line) && line.endsWith(` - ${title}`)),
+    `camera selection must execute the behavioral assertion: ${title}`);
+}
+const passedCameraCases = Number(cameraProof.match(/^# pass (\d+)$/mu)?.[1] ?? 0);
+console.log(`Camera replacement proof passed: ${passedCameraCases} actual-hook and installed-SDK cases with controlled native receipts.`);
+
+const heartbeatProof = runLivenessProof([
+  "--test", "--test-reporter=tap", "--test-name-pattern", "heartbeat",
+  "tests/assurance/communication-operation-error-truth.test.mjs",
+  "tests/assurance/android-chat-call-mic-control.test.mjs",
+], "actual API and mounted heartbeat regressions");
+const passedHeartbeatCases = Number(heartbeatProof.match(/^# pass (\d+)$/mu)?.[1] ?? 0);
+assert.ok(passedHeartbeatCases > 0, "heartbeat selection must execute behavioral assertions");
+runLivenessProof(["scripts/test-communication-terminal-postgres.mjs"], "actual SQL membership ownership regressions");
+console.log(`Owned heartbeat proof passed: ${passedHeartbeatCases} actual API/mounted cases and the actual-SQL ownership suite.`);
 
 const sessionProvider = read("_lib/session.tsx");
 includes(sessionProvider, 'stopActiveMediaSessions("sign_out")', "sign-out media teardown");
