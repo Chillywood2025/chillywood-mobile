@@ -18,8 +18,8 @@
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
-    "androidDigest": null,
-    "iosDigest": null
+    "androidDigest": "4ddc307e47272f81037c5d51d09dcabfa36fe34471c0cba1bcddad516ec3aba8",
+    "iosDigest": "d8289e104a09297582022286f99dcd01efea246c37b9174c186981ba2e7e005f"
   },
   "policy": {
     "internalOnly": true,

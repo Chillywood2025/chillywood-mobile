@@ -255,10 +255,22 @@ digests with `nativeSourceSnapshot` in
 `scripts/ota-native-source-compatibility.mjs` against that exact Git SHA/tree.
 Populate the v5 `nativeCompatibility` digest fields, commit the receipt-only
 update, and recompute against the resulting candidate to prove equality. The
-digest fields remain unsealed until this step; never reuse the v4 digests or
+digest fields must match this step; never reuse the v4 digests or
 fill a digest from a partial working tree. Rerun release-native-source tests and
 both platform config guards on the sealed candidate. Existing v4 binaries must
 be rejected as compatible receipts for v5.
+
+The v5 inputs were sealed from source
+`085b8bccf9e88eaa0e7da0f4153257ab68ce2af3`, tree
+`444387a583b382c15b023a857ccccd70c92b69cc`:
+
+| Platform | Git-native compatibility digest |
+| --- | --- |
+| Android | `4ddc307e47272f81037c5d51d09dcabfa36fe34471c0cba1bcddad516ec3aba8` |
+| iOS | `d8289e104a09297582022286f99dcd01efea246c37b9174c186981ba2e7e005f` |
+
+The subsequent receipt/documentation commit must retain both digests. They
+identify source compatibility only; they are not signed-binary or device proof.
 
 No build, installation or physical retest has been performed by consolidation
 alone. Final CI receipts belong to the exact PR head; delivery and physical
