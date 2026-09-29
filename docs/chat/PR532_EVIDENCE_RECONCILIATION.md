@@ -302,6 +302,24 @@ regressions and the installed backport must pass. Hosted received-media and
 authenticated backend checks remain required; this dependency correction alone
 does not establish call qualification.
 
+The next authenticated run exposed a separate application transport defect.
+On source `8b3fd88c`, Realtime acknowledged five Presence tracks, then closed the
+host channel on its sixth track during camera restoration. The owned database
+writes and server broadcasts still succeeded; a connected media peer did not
+prove that the signaling subscription remained usable. This matches the
+[documented per-client Presence limit](https://supabase.com/docs/guides/troubleshooting/realtime-client-presence-rate-limit-reached)
+and the observed server image's
+[v2.112.6 implementation](https://github.com/supabase/realtime/blob/v2.112.6/lib/realtime_web/channels/realtime_channel/presence_handler.ex):
+five track/untrack calls per 30-second window, including unchanged payloads.
+The source correction keeps acknowledged Presence registration per subscription
+and sends rapid media changes through the existing owned membership and fenced
+broadcast paths. Registration validity must expire on channel loss or ownership
+replacement. Durable mute/off compensation remains mandatory on failure.
+The HTTP gate repeats three complete mic/camera cycles for each participant,
+retains received-media and durable-state assertions, and checks that controls
+do not produce additional Presence tracks. Final exact-head CI must prove this
+correction; historical device failures are not retrospectively attributed to it.
+
 The 104-row review also identified two test boundaries that could be joined
 without devices. Android root routing now runs with the production native-action
 buffer, shared provenance and actual destination screen. The existing macOS

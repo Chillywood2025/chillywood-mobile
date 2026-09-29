@@ -46,7 +46,9 @@ performed.
   as high and the [Vitest mocker advisory](https://github.com/advisories/GHSA-82fw-gwwq-j7x9)
   as moderate at review time.
 - Isolated Cloudflare tooling: Wrangler 4.141.0, resolving sharp 0.35.4 and
-  undici 7.29.1 in that lockfile through a Miniflare-scoped override. Wrangler requires Node.js 22 or newer; only a
+  undici 7.29.1 through an override confined to this package tree. The flat override
+  preserves npm 10 clean-install compatibility; the nested Miniflare override
+  incorrectly requested the upstream 7.29.0 pin during `npm ci`. Wrangler requires Node.js 22 or newer; only a
   scoped Wrangler job should change runtime. Ordinary application CI remains on
   Node 20 and does not invoke Wrangler.
 

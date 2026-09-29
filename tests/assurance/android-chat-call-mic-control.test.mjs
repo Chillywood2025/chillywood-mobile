@@ -36,7 +36,7 @@ const legacyPeerSyncMarker = "  const syncPeerConnections = useCallback";
 assert.equal(legacyHookSource.split(legacyPeerSyncMarker).length - 1, 1, "unique legacy peer sync exposure marker");
 const instrumentedLegacyHookSource = legacyHookSource.replace(
   legacyRefMarker,
-  `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { appStateLifecycleHandlerRef, auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, joinedMembershipRef, legacyMicAnswerWaitersRef, legacyMicControlRef, legacyMicLocalPrivacyStopRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, nativePermissionRequestDepthRef, peerConnectionsRef, roomRef, setChannelState, setLoading };`,
+  `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { appStateLifecycleHandlerRef, auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, joinedMembershipRef, legacyMicAnswerWaitersRef, legacyMicControlRef, legacyMicLocalPrivacyStopRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, nativePermissionRequestDepthRef, peerConnectionsRef, roomRef, setChannelState, setLoading, presenceRegistrationRef: typeof presenceRegistrationRef === "undefined" ? null : presenceRegistrationRef };`,
 ).replace(
   legacyOfferQueueMarker,
   `  Object.assign((globalThis as any).__chillywoodLegacyMicAssuranceRefs, { runSerializedPeerOffer, runSerializedPeerSignaling, peerLocalOffersRef, pendingPeerIceRef });\n${legacyOfferQueueMarker}`,
@@ -500,8 +500,13 @@ function createLegacyMountedRuntime(options = {}) {
     }
     async track(payload) {
       runtime.presenceTracks.push(payload);
+      if (runtime.presenceTracks.length > (options.presenceTrackLimit ?? Infinity)) {
+        await this.emitSubscriptionStatus("CLOSED");
+        return "error";
+      }
       const action = runtime.presenceTrackActions.shift() ?? {};
       action.mutate?.({ payload, runtime });
+      if (action.wait) await action.wait;
       if (action.outcome === "reject") throw new Error("presence track rejected");
       if (action.outcome === "error") return "error";
       return "ok";
@@ -804,6 +809,15 @@ async function mountLegacyHook(runtime, optionOverrides = {}) {
     refs.identityRef.current ??= { avatarUrl: null, displayName: "Local", userId: runtime.userId };
     refs.joinedMembershipRef.current ??= makeMembership(runtime);
     refs.roomRef.current ??= makeRoom(runtime);
+    // These unit fixtures explicitly start with an acknowledged subscription;
+    // natural lifecycle tests exercise the production registration itself.
+    if (refs.presenceRegistrationRef && !refs.presenceRegistrationRef.current) {
+      refs.presenceRegistrationRef.current = {
+        channel: refs.channelRef.current, generation: refs.legacySessionGenerationRef.current,
+        roomId: runtime.roomId, userId: runtime.userId, membershipGeneration: runtime.membershipGeneration,
+        subscribed: true, confirmed: true, pending: Promise.resolve(true),
+      };
+    }
     refs.peerConnectionsRef.current[runtime.remoteUserId] ??= runtime.createPeer();
     await act(async () => {
       refs.setLoading(false);
@@ -1094,7 +1108,7 @@ const legacyFirstTrackCases = [
   },
   { id: "durable_rejection_rolls_back", setup: (runtime) => runtime.queueMembership({ outcome: "reject" }), expected: false },
   { id: "durable_null_rolls_back", setup: (runtime) => runtime.queueMembership({ outcome: "null" }), expected: false },
-  { id: "presence_track_error_compensates", setup: (runtime) => runtime.queuePresenceTrack({ outcome: "error" }), expected: false },
+  { id: "retired_presence_registration_compensates", setup: (_runtime, harness) => { harness.refs.presenceRegistrationRef.current.subscribed = false; }, expected: false },
   { id: "media_broadcast_error_compensates", setup: (runtime) => runtime.queueSend({ event: "media:update", outcome: "error" }), expected: false },
 ];
 
@@ -1303,6 +1317,18 @@ test("legacy media projection: a server-relayed media update refreshes durable r
   const remote = harness.getResult().participants.find((participant) => participant.userId === runtime.remoteUserId);
   assert.equal(remote?.cameraOn, true, "remote camera projection comes from refreshed durable membership");
   assert.equal(remote?.micOn, true, "remote microphone projection comes from refreshed durable membership");
+  const channel = harness.refs.channelRef.current;
+  await harness.run(() => channel.emitPresenceState({ [runtime.remoteUserId]: {
+    metas: [{ phx_ref: "old-online", userId: runtime.remoteUserId, cameraOn: true, micOn: true }],
+  } }));
+  runtime.remoteDurableCamera = false;
+  runtime.remoteDurableMic = false;
+  await harness.run(() => channel.emitBroadcast("media:update", {
+    cameraOn: false, fromUserId: runtime.remoteUserId, micOn: false, roomId: runtime.roomId,
+  }));
+  const mutedRemote = harness.getResult().participants.find((participant) => participant.userId === runtime.remoteUserId);
+  assert.equal(mutedRemote?.cameraOn, false, "stale Presence=true cannot override durable camera=false");
+  assert.equal(mutedRemote?.micOn, false, "stale Presence=true cannot override durable mic=false");
 });
 
 test("legacy grouped media lifecycle: failed initial media promotion disables tracks and restores muted membership", async (t) => {
@@ -1324,6 +1350,124 @@ test("legacy grouped media lifecycle: failed initial media promotion disables tr
   assert.ok(runtime.membershipTouches.some((touch) => touch.cameraEnabled === false && touch.micEnabled === false));
   assert.ok(runtime.localStreams.flatMap((stream) => stream.getTracks()).every((track) => track.enabled === false));
   assert.equal(runtime.errors.at(-1)?.scope, "communication-presence-initial-promotion");
+  assert.equal(runtime.presenceTracks.length, 1, "failed registration compensation never bursts another track call");
+  assert.equal(runtime.broadcasts.at(-1)?.payload?.cameraOn, false);
+  assert.equal(runtime.broadcasts.at(-1)?.payload?.micOn, false);
+});
+
+test("legacy Presence registration: repeated camera and microphone controls stay within the five-call subscription budget", async (t) => {
+  const runtime = createLegacyMountedRuntime({ presenceTrackLimit: 5 });
+  const harness = await mountLegacyHook(runtime, {
+    enabled: true, naturalLifecycle: true,
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+  for (let cycle = 0; cycle < 4; cycle += 1) {
+    assert.equal(await harness.run(() => harness.getResult().toggleCamera()), true, `camera off cycle ${cycle}`);
+    assert.equal(await harness.run(() => harness.getResult().setMicrophoneEnabled(false)), true, `mic off cycle ${cycle}`);
+    assert.equal(runtime.durableCamera, false);
+    assert.equal(runtime.durableMic, false);
+    assert.equal(await harness.run(() => harness.getResult().toggleCamera()), true, `camera on cycle ${cycle}`);
+    assert.equal(await harness.run(() => harness.getResult().setMicrophoneEnabled(true)), true, `mic on cycle ${cycle}`);
+    assert.equal(runtime.durableCamera, true);
+    assert.equal(runtime.durableMic, true);
+    assert.equal(harness.getResult().channelState, "live");
+    assert.equal(runtime.broadcasts.at(-1)?.payload?.cameraOn, true);
+    assert.equal(runtime.broadcasts.at(-1)?.payload?.micOn, true);
+  }
+  assert.equal(runtime.presenceTracks.length, 1, "all sixteen media controls reuse the acknowledged online registration");
+  assert.equal(Object.hasOwn(runtime.presenceTracks[0], "cameraOn"), false);
+  assert.equal(Object.hasOwn(runtime.presenceTracks[0], "micOn"), false);
+  assert.ok(runtime.localStreams.flatMap((stream) => stream.getTracks()).filter((track) => track.readyState !== "ended").every((track) => track.enabled));
+  assert.equal(runtime.errors.length, 0);
+});
+
+for (const status of ["CLOSED", "CHANNEL_ERROR", "TIMED_OUT"]) {
+  test(`legacy Presence registration: ${status} revokes success until a genuine rejoin is acknowledged`, async (t) => {
+    const runtime = createLegacyMountedRuntime();
+    const harness = await mountLegacyHook(runtime, {
+      enabled: true, naturalLifecycle: true,
+      initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    });
+    t.after(() => harness.unmount());
+    const channel = harness.refs.channelRef.current;
+    const initialReceipt = harness.refs.presenceRegistrationRef.current;
+    await harness.run(() => channel.emitSubscriptionStatus("SUBSCRIBED"));
+    assert.equal(harness.refs.presenceRegistrationRef.current, initialReceipt);
+    assert.equal(runtime.presenceTracks.length, 1, "duplicate callback does not re-register");
+    await harness.run(() => channel.emitSubscriptionStatus(status));
+    assert.equal(initialReceipt.subscribed, false);
+    assert.equal(await harness.run(() => harness.getResult().toggleCamera()), false, "HTTP success cannot prove a closed subscription");
+    assert.equal(harness.getResult().cameraEnabled, false);
+    assert.equal(runtime.durableCamera, false, "failed camera compensation follows local shutdown with durable privacy state");
+    assert.equal(runtime.broadcasts.at(-1)?.payload?.cameraOn, false);
+    assert.equal(await harness.run(() => harness.getResult().setMicrophoneEnabled(false)), false);
+    assert.equal(runtime.durableMic, false, "privacy-off remains writable after registration loss");
+    assert.equal(runtime.presenceTracks.length, 1, "closed-channel controls never retry Presence");
+    await harness.run(() => channel.emitSubscriptionStatus("SUBSCRIBED"));
+    assert.notEqual(harness.refs.presenceRegistrationRef.current, initialReceipt);
+    assert.equal(harness.refs.presenceRegistrationRef.current.confirmed, true);
+    assert.equal(runtime.presenceTracks.length, 2, "genuine rejoin gets exactly one new receipt");
+    assert.equal(await harness.run(() => harness.getResult().toggleCamera()), true);
+    assert.equal(await harness.run(() => harness.getResult().setMicrophoneEnabled(true)), true);
+  });
+}
+
+test("legacy Presence registration: a late old acknowledgement cannot confirm a new subscription", async (t) => {
+  let releaseOld;
+  let releaseNew;
+  const runtime = createLegacyMountedRuntime();
+  runtime.queuePresenceTrack({ wait: new Promise((resolve) => { releaseOld = resolve; }) });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  const oldReceipt = harness.refs.presenceRegistrationRef.current;
+  assert.equal(oldReceipt.confirmed, false);
+  await harness.run(() => channel.emitSubscriptionStatus("SUBSCRIBED"));
+  assert.equal(runtime.presenceTracks.length, 1, "duplicate callback shares the pending receipt");
+  await harness.run(() => channel.emitSubscriptionStatus("CLOSED"));
+  runtime.queuePresenceTrack({ wait: new Promise((resolve) => { releaseNew = resolve; }) });
+  await harness.run(() => channel.emitSubscriptionStatus("SUBSCRIBED"));
+  const newReceipt = harness.refs.presenceRegistrationRef.current;
+  assert.notEqual(newReceipt, oldReceipt);
+  await harness.run(async () => { releaseOld(); await settle(96); });
+  assert.equal(oldReceipt.confirmed, false);
+  assert.equal(newReceipt.confirmed, false, "the old ACK cannot grant authority while the new ACK is pending");
+  assert.equal(runtime.presenceTracks.length, 2);
+  await harness.run(async () => { releaseNew(); await settle(96); });
+  assert.equal(newReceipt.confirmed, true);
+  assert.equal(runtime.presenceTracks.length, 2);
+});
+
+test("legacy Presence registration: failed initial registration recovers only after a new subscription", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  runtime.queuePresenceTrack({ outcome: "error" });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  assert.equal(await harness.run(() => harness.getResult().setMicrophoneEnabled(true)), false);
+  assert.equal(runtime.presenceTracks.length, 1);
+  assert.equal(runtime.durableMic, false);
+  assert.match(harness.getResult().mediaControlError, /Leave and rejoin/u);
+  await harness.run(() => channel.emitSubscriptionStatus("CLOSED"));
+  await harness.run(() => channel.emitSubscriptionStatus("SUBSCRIBED"));
+  assert.equal(runtime.presenceTracks.length, 2);
+  assert.equal(await harness.run(() => harness.getResult().setMicrophoneEnabled(true)), true);
+  assert.equal(harness.getResult().mediaControlError, null);
+});
+
+test("legacy Presence registration: closure during broadcast cannot commit media success", async (t) => {
+  const runtime = createLegacyMountedRuntime();
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+  t.after(() => harness.unmount());
+  runtime.queueSend({ event: "media:update", mutate: () => {
+    void harness.refs.channelRef.current.emitSubscriptionStatus("CLOSED");
+  } });
+  assert.equal(await harness.run(() => harness.getResult().setMicrophoneEnabled(true)), false);
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(runtime.durableMic, false);
+  assert.equal(runtime.broadcasts.at(-1)?.payload?.micOn, false);
+  assert.equal(runtime.presenceTracks.length, 1);
 });
 
 test("legacy grouped media lifecycle: camera broadcast failure compensates native and durable state", async (t) => {

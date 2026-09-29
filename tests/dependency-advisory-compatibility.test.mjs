@@ -43,7 +43,7 @@ test("patched advisory leaves are resolved independently in all three package tr
   assert.equal(isolatedLock.packages["node_modules/wrangler"].version, "4.141.0");
   assert.equal(isolatedLock.packages["node_modules/sharp"].version, "0.35.4");
   assert.equal(isolatedLock.packages["node_modules/undici"].version, "7.29.1");
-  assert.equal(readJson("isolated-runtime/cloudflare/package.json").overrides.miniflare.undici, "7.29.1");
+  assert.equal(readJson("isolated-runtime/cloudflare/package.json").overrides.undici, "7.29.1");
 });
 
 test("patched fast-uri preserves URI references used by both Expo Ajv consumers", () => {

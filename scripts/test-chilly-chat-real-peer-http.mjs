@@ -49,6 +49,8 @@ const diagnostics = (state) => redact(JSON.stringify({
   reportedErrors: state?.events?.filter((event) => event.kind === "reported-error").slice(-20),
   presenceDiffs: state?.presenceDiffs,
   presenceReceipts: state?.presenceReceipts,
+  presenceTrackCounts: state?.presenceTrackCounts,
+  realtimeSystemErrors: state?.realtimeSystemErrors,
   operationResults: state?.operationResults,
   endpoints: state?.endpoints?.map((endpoint) => ({
     userId: endpoint.userId, instanceId: endpoint.instanceId, channelState: endpoint.channelState,
@@ -105,6 +107,8 @@ async function main() {
   let threadId, browser, context, page, server;
   let failed = false;
   const networkFailures = [], browserErrors = [], presenceDiffs = [], presenceReceipts = [];
+  const presenceTrackCounts = new Map();
+  let realtimeSystemErrors = 0;
   const browserRequests = new Map();
   let realtimeSockets = 0;
 
@@ -114,6 +118,8 @@ async function main() {
     const state = await page.evaluate(() => window.__pairedCall.read());
     state.presenceDiffs = presenceDiffs;
     state.presenceReceipts = presenceReceipts;
+    state.presenceTrackCounts = [...presenceTrackCounts];
+    state.realtimeSystemErrors = realtimeSystemErrors;
     assert.equal(state.authenticatedBackend, true, "this gate requires the actual authenticated backend adapter");
     assert.deepEqual(state.errors, [], `browser fixture errors: ${diagnostics(state)}`);
     return state;
@@ -278,6 +284,7 @@ async function main() {
           const data = Array.isArray(message) ? message[4] : message.payload;
           const ref = Array.isArray(message) ? message[1] : message.ref;
           if (event !== "presence" || !["track", "untrack"].includes(data?.event) || typeof ref !== "string") return;
+          if (data.event === "track") presenceTrackCounts.set(socketId, (presenceTrackCounts.get(socketId) ?? 0) + 1);
           pendingPresenceRefs.add(ref);
           if (pendingPresenceRefs.size > 64) pendingPresenceRefs.delete(pendingPresenceRefs.values().next().value);
           record({ phase: "sent", operation: data.event, ref });
@@ -289,6 +296,18 @@ async function main() {
           const event = Array.isArray(message) ? message[3] : message.event;
           const diff = Array.isArray(message) ? message[4] : message.payload;
           const ref = Array.isArray(message) ? message[1] : message.ref;
+          if (event === "system" && diff?.status === "error") {
+            realtimeSystemErrors += 1;
+            const message = typeof diff.message === "string" ? diff.message : "";
+            const knownReasons = [
+              ["Client presence rate limit exceeded", "client_presence_rate_limit"],
+              ["Too many presence messages per second", "tenant_presence_rate_limit"],
+              ["Too many messages per second", "event_rate_limit"],
+              ["Track message size exceeded", "presence_payload_size"],
+              ["Token has expired", "token_expired"],
+            ];
+            record({ phase: "system-error", reason: knownReasons.find(([fragment]) => message.includes(fragment))?.[1] ?? "other" });
+          }
           if (event === "phx_reply" && pendingPresenceRefs.has(ref)) {
             pendingPresenceRefs.delete(ref);
             record({ phase: "reply", ref, status: ["ok", "error"].includes(diff?.status) ? diff.status : "unknown" });
@@ -321,7 +340,12 @@ async function main() {
     assert.ok((browserRequests.get("/rest/v1/rpc/broadcast_owned_communication_room_signal") ?? 0) > 0, "actual browser-owned signals traversed the server RPC");
     console.log("PASS: authenticated production hooks -> owned PostgreSQL admission -> private SDK Realtime -> real received RTP/PCM/video");
 
-    for (const userId of users) {
+    const initialPresenceTracks = [...presenceTrackCounts];
+    assert.equal(initialPresenceTracks.length, 2, "both independent endpoint sockets register online Presence");
+    assert.ok(initialPresenceTracks.every(([, count]) => count === 1), "each authenticated endpoint registers online Presence once");
+    // Repeat ordinary controls without rate-limit workarounds. Every cycle
+    // still proves durable state and actual receiver media, not only UI flags.
+    for (const userId of users.flatMap((id) => Array.from({ length: 3 }, () => id))) {
       await control(userId, "setMicrophoneEnabled", false, "authenticated microphone mute");
       let projected = await wait((state) => state.endpoints.every((endpoint) => endpoint.participants.some((participant) => participant.userId === userId && participant.micOn === false)),
         "authenticated mute must project through both production hooks");
@@ -348,6 +372,9 @@ async function main() {
       "restored controls must preserve one peer and advancing actual received audio/video");
       await proveOwnedRows(initialCall.roomId, restored, () => ({ mic: true, camera: true }));
     }
+    assert.deepEqual([...presenceTrackCounts], initialPresenceTracks,
+      "repeated media changes use owned membership and broadcasts without more Presence updates");
+    assert.equal(realtimeSystemErrors, 0, "the real backend did not reject the signaling channel");
     console.log("PASS: both endpoints commit actual PostgreSQL mic/camera controls and observe receiver silence, black frames, and restored media");
     const beforeEnd = await read();
     await endAndProve(initialCall);

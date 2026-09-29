@@ -95,12 +95,24 @@ type PresenceStatePayload = {
   isHost?: boolean;
 };
 
+type LegacyPresenceRegistration = {
+  channel: RealtimeChannel;
+  generation: number;
+  roomId: string;
+  userId: string;
+  membershipGeneration: string;
+  subscribed: boolean;
+  confirmed: boolean;
+  pending: Promise<boolean> | null;
+};
+
 type LegacyMicSessionAuthority = {
   channel: RealtimeChannel;
   generation: number;
   roomId: string;
   userId: string;
   membershipGeneration: string;
+  registration: LegacyPresenceRegistration | null;
 };
 
 type LegacyMicAnswerWaiter = {
@@ -441,6 +453,7 @@ export function useCommunicationRoomSession({
 
   const localJoinedAtRef = useRef(new Date().toISOString());
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const presenceRegistrationRef = useRef<LegacyPresenceRegistration | null>(null);
   const snapshotChannelRef = useRef<RealtimeChannel | null>(null);
   const roomRef = useRef<CommunicationRoomState | null>(null);
   const identityRef = useRef<CommunicationIdentity | null>(null);
@@ -945,6 +958,9 @@ export function useCommunicationRoomSession({
   const cleanupChannel = useCallback(async (expectedChannel?: RealtimeChannel | null) => {
     const channel = expectedChannel ?? channelRef.current;
     if (!channel) return;
+    if (presenceRegistrationRef.current?.channel === channel) {
+      presenceRegistrationRef.current.subscribed = false;
+    }
 
     // Clear the shared ref before awaiting untrack. A stale cleanup from the
     // previous room generation must never null a newly subscribed channel.
@@ -1302,9 +1318,49 @@ export function useCommunicationRoomSession({
     return snapshot;
   }, [applyParticipantsFromSources, captureLeaveOperation, cleanupRemotePeer, isActiveLegacyGeneration, roomId]);
 
+  const isPresenceRegistrationCurrent = useCallback((registration: LegacyPresenceRegistration | null) => (
+    !!registration
+    && presenceRegistrationRef.current === registration
+    && registration.subscribed
+    && channelRef.current === registration.channel
+    && legacySessionGenerationRef.current === registration.generation
+    && formatRoomId(roomRef.current?.roomId ?? "") === registration.roomId
+    && String(identityRef.current?.userId ?? "").trim() === registration.userId
+    && joinedMembershipRef.current?.membershipGeneration === registration.membershipGeneration
+  ), []);
+
+  const ensurePresenceRegistration = useCallback(async (registration: LegacyPresenceRegistration | null) => {
+    if (!registration || !isPresenceRegistrationCurrent(registration)) return false;
+    if (!registration.pending) {
+      // Presence describes online identity once per subscription. Rapid media
+      // truth is committed by the generation-fenced membership + broadcast;
+      // repeating track() for controls exhausts the provider's Presence budget.
+      registration.pending = Promise.resolve().then(async () => {
+        if (!isPresenceRegistrationCurrent(registration)) return false;
+        const resolvedIdentity = identityRef.current;
+        const resolvedRoom = roomRef.current;
+        if (!resolvedIdentity || !resolvedRoom) return false;
+        const { cameraOn: _cameraOn, micOn: _micOn, ...onlineIdentity } = buildCommunicationPresencePayload({
+          identity: resolvedIdentity,
+          room: resolvedRoom,
+          media: { cameraEnabled: false, micEnabled: false },
+          joinedAt: localJoinedAtRef.current,
+        });
+        const result = await waitForRealtimeOperation(registration.channel.track(onlineIdentity)).catch((presenceError) => {
+          reportRuntimeError("communication-realtime-presence-registration", presenceError, { roomId: registration.roomId });
+          return null;
+        });
+        registration.confirmed = result === "ok" && isPresenceRegistrationCurrent(registration);
+        return registration.confirmed;
+      });
+    }
+    return await registration.pending && isPresenceRegistrationCurrent(registration) && registration.confirmed;
+  }, [isPresenceRegistrationCurrent]);
+
   const updatePresence = useCallback(async (nextCameraEnabled: boolean, nextMicEnabled: boolean) => {
     const generation = legacySessionGenerationRef.current;
     const channel = channelRef.current;
+    const registration = presenceRegistrationRef.current;
     const resolvedRoom = roomRef.current;
     const resolvedIdentity = identityRef.current;
     if (!channel || !resolvedRoom || !resolvedIdentity) return false;
@@ -1349,23 +1405,7 @@ export function useCommunicationRoomSession({
       || !isCurrentAuthority()
     ) return false;
 
-    const trackResult = await channel.track(
-      buildCommunicationPresencePayload({
-        identity: resolvedIdentity,
-        room: resolvedRoom,
-        media: {
-          cameraEnabled: nextCameraEnabled,
-          micEnabled: nextMicEnabled,
-        },
-        joinedAt: localJoinedAtRef.current,
-      }),
-    ).catch((presenceError) => {
-      reportRuntimeError("communication-realtime-presence-update", presenceError, {
-        roomId: resolvedRoom.roomId,
-      });
-      return null;
-    });
-    if (trackResult !== "ok") return false;
+    const registered = await ensurePresenceRegistration(registration);
 
     const broadcastResult = await broadcastCommunicationRoomSignal({
       roomId: resolvedRoom.roomId,
@@ -1383,8 +1423,10 @@ export function useCommunicationRoomSession({
       return false;
     });
     return broadcastResult === true
-      && isCurrentAuthority();
-  }, []);
+      && registered
+      && isCurrentAuthority()
+      && isPresenceRegistrationCurrent(registration);
+  }, [ensurePresenceRegistration, isPresenceRegistrationCurrent]);
 
   const runSerializedMediaControl = useCallback(<T,>(task: () => Promise<T>) => {
     const generation = legacySessionGenerationRef.current;
@@ -2839,6 +2881,17 @@ export function useCommunicationRoomSession({
             status,
           });
           channelRef.current = channel;
+          const registration = presenceRegistrationRef.current;
+          const membershipGeneration = joinedMembershipRef.current?.membershipGeneration;
+          if (membershipGeneration && (!registration || !registration.subscribed
+            || registration.channel !== channel || registration.generation !== sessionGeneration
+            || registration.membershipGeneration !== membershipGeneration)) {
+            presenceRegistrationRef.current = {
+              channel, generation: sessionGeneration, roomId: formatRoomId(snapshot.room.roomId),
+              userId: String(identityRef.current?.userId ?? "").trim(), membershipGeneration,
+              subscribed: true, confirmed: false, pending: null,
+            };
+          }
           setChannelState("live");
           setError(null);
           const reconnectReason = reconnectTrackedRef.current ? "recovered" : "initial_join";
@@ -2891,6 +2944,9 @@ export function useCommunicationRoomSession({
         }
 
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          if (presenceRegistrationRef.current?.channel === channel) {
+            presenceRegistrationRef.current.subscribed = false;
+          }
           if (subscriptionError) {
             reportRuntimeError("communication-realtime-subscription", subscriptionError, {
               roomId: snapshot.room.roomId,
@@ -3552,6 +3608,7 @@ export function useCommunicationRoomSession({
       roomId: resolvedRoomId,
       userId,
       membershipGeneration,
+      registration: presenceRegistrationRef.current,
     };
   }, [roomId]);
 
@@ -3715,27 +3772,12 @@ export function useCommunicationRoomSession({
       || !isLegacyMicSessionAuthorityCurrent(authority)
     ) return { durableWritten: !!membership, ok: false };
 
-    const trackResult = await waitForRealtimeOperation(authority.channel.track(
-      buildCommunicationPresencePayload({
-        identity: resolvedIdentity,
-        room: resolvedRoom,
-        media: {
-          cameraEnabled: nextCameraEnabled,
-          micEnabled: nextMicEnabled,
-        },
-        joinedAt: localJoinedAtRef.current,
-      }),
-    )).catch((presenceError) => {
-      reportRuntimeError("communication-legacy-realtime-presence-commit", presenceError, {
-        roomId: authority.roomId,
-      });
-      return null;
-    });
+    const registered = await ensurePresenceRegistration(authority.registration);
     return {
       durableWritten: true,
-      ok: trackResult === "ok" && isLegacyMicSessionAuthorityCurrent(authority),
+      ok: registered && isLegacyMicSessionAuthorityCurrent(authority),
     };
-  }, [isLegacyMicSessionAuthorityCurrent]);
+  }, [ensurePresenceRegistration, isLegacyMicSessionAuthorityCurrent]);
 
   const strictlyBroadcastLegacyMicState = useCallback(async (
     authority: LegacyMicSessionAuthority,
@@ -3759,10 +3801,11 @@ export function useCommunicationRoomSession({
       return false;
     });
     return {
-      ok: result === true && isLegacyMicSessionAuthorityCurrent(authority),
+      ok: result === true && isLegacyMicSessionAuthorityCurrent(authority)
+        && isPresenceRegistrationCurrent(authority.registration) && authority.registration?.confirmed === true,
       sent: result === true,
     };
-  }, [isLegacyMicSessionAuthorityCurrent]);
+  }, [isLegacyMicSessionAuthorityCurrent, isPresenceRegistrationCurrent]);
 
   const collectLegacyMicTopology = useCallback(() => {
     const streams = new Set<MediaStream>([
@@ -4333,6 +4376,11 @@ export function useCommunicationRoomSession({
       cameraEnabledRef.current = false;
       setCameraEnabled(false);
       setLocalVideoStreamURL("");
+      // Registration loss prevents a success claim, but must not prevent the
+      // exact-generation durable privacy state from following local shutdown.
+      await strictlyCommitLegacyMicPresence(authority, micEnabledRef.current, false);
+      await strictlyBroadcastLegacyMicState(authority, micEnabledRef.current, false);
+      if (!isLegacyMicSessionAuthorityCurrent(authority)) return false;
       setError("Camera recovery could not be verified. Leave the call before continuing.");
     }
     return false;
@@ -4358,6 +4406,11 @@ export function useCommunicationRoomSession({
   ) => runSerializedMediaControl(async () => {
     const authority = captureLegacyMicSessionAuthority();
     if (!authority) return false;
+    const synchronizationFailureMessage = (retryMessage: string) => (
+      isPresenceRegistrationCurrent(authority.registration) && authority.registration?.confirmed
+        ? retryMessage
+        : "Microphone is locally blocked. Leave and rejoin the call before retrying."
+    );
     const cameraEnabledOverride = requestedCameraOverride
       ?? (appStateRef.current === "active" && cameraEnabledRef.current);
     if (!nextEnabled) resumeMicAfterForegroundRef.current = false;
@@ -4382,7 +4435,7 @@ export function useCommunicationRoomSession({
           await commitProvedLegacyMicMute(authority, cameraEnabledOverride);
         }
         if (muted.privacyProved && muted.normalized && isLegacyMicSessionAuthorityCurrent(authority)) {
-          setMediaControlError("Microphone could not start after call signaling settled. The call remains muted. Try again.");
+          setMediaControlError(synchronizationFailureMessage("Microphone could not start after call signaling settled. The call remains muted. Try again."));
         }
         return false;
       }
@@ -4458,7 +4511,7 @@ export function useCommunicationRoomSession({
           && isLegacyMicSessionAuthorityCurrent(authority)
         ) {
           if (rolledBack && muted.privacyProved && muted.normalized) {
-            setMediaControlError("Microphone is locally blocked, but call state could not be synchronized. Try again.");
+            setMediaControlError(synchronizationFailureMessage("Microphone is locally blocked, but call state could not be synchronized. Try again."));
           } else {
             setError("Microphone recovery failed closed and requires leaving the call.");
           }
@@ -4505,8 +4558,11 @@ export function useCommunicationRoomSession({
     if (finalQuarantine?.privacyProved) {
       micEnabledRef.current = false;
       setMicEnabled(false);
+      await strictlyCommitLegacyMicPresence(authority, false, cameraEnabledOverride);
+      await strictlyBroadcastLegacyMicState(authority, false, cameraEnabledOverride);
+      if (!isLegacyMicSessionAuthorityCurrent(authority)) return false;
       if (finalQuarantine.normalized) {
-        setMediaControlError("Microphone is locally blocked, but call state could not be synchronized. Try again.");
+        setMediaControlError(synchronizationFailureMessage("Microphone is locally blocked, but call state could not be synchronized. Try again."));
       } else {
         setError("Microphone is locally blocked, but duplicate call media could not be removed.");
       }
@@ -4521,6 +4577,7 @@ export function useCommunicationRoomSession({
     commitProvedLegacyMicMute,
     isLegacyMicTrackPrivacySafe,
     isLegacyMicSessionAuthorityCurrent,
+    isPresenceRegistrationCurrent,
     prepareLegacyMicrophoneTrack,
     quarantineLegacyMicrophoneTopology,
     runSerializedMediaControl,
