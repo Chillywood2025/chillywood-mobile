@@ -423,23 +423,42 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       hub.captureRetirementModules.set(userId, captureRetirement);
     }
     const endpoint = { userId, instanceId: ++hub.endpointSerial, appState: "active", appStateListeners: new Set(), peers: [], streams: [], acquiredTracks: [], audioContexts: [], drawTimers: [], receivedVideos: [], receivedAudio: [], output: null, root: null, current: true, mounted: true, pendingControl: null };
+    let operationSerial = 0;
     const observeOperation = (operation, method) => function (...args) {
       const started = performance.now();
       const action = endpoint.controlLabel ?? "startup";
-      const record = (status) => {
+      const operationId = ++operationSerial;
+      const record = (phase, status, value) => {
         try {
-          hub.operationResults.push({ endpoint: userId === hub.hostUserId ? "host" : "participant", action, operation, status, elapsedMs: Math.round(performance.now() - started) });
+          const matchesRequested = {};
+          if (operation === "touchCommunicationRoomSession" && phase === "settled") {
+            for (const field of ["cameraEnabled", "micEnabled", "membershipState"]) {
+              if (args[0]?.[field] !== undefined) matchesRequested[field] = value?.[field] === args[0][field];
+            }
+          }
+          hub.operationResults.push({ endpoint: userId === hub.hostUserId ? "host" : "participant", action, operation, operationId,
+            phase, status, elapsedMs: Math.round(performance.now() - started),
+            ...(Object.keys(matchesRequested).length ? { matchesRequested } : {}) });
           if (hub.operationResults.length > 40) hub.operationResults.shift();
         } catch { /* Diagnostics never alter SDK settlement. */ }
       };
       const status = (value) => ["ok", "error", "timed out"].includes(value) ? value
         : value === true ? "confirmed" : value === false ? "unconfirmed" : value == null ? "empty" : "returned";
+      record("started", "pending");
+      if (operation === "sdk.subscribe" && typeof args[0] === "function") {
+        const callback = args[0];
+        args[0] = function (...callbackArgs) {
+          const nextStatus = ["SUBSCRIBED", "TIMED_OUT", "CHANNEL_ERROR", "CLOSED"].includes(callbackArgs[0]) ? callbackArgs[0] : "unknown";
+          record("subscription", nextStatus);
+          return Reflect.apply(callback, this, callbackArgs);
+        };
+      }
       try {
         const result = Reflect.apply(method, this, args);
-        if (result && typeof result.then === "function") void result.then((value) => record(status(value)), () => record("rejected"));
-        else record(status(result));
+        if (result && typeof result.then === "function") void result.then((value) => record("settled", status(value), value), () => record("settled", "rejected"));
+        else record("settled", status(result), result);
         return result;
-      } catch (error) { record("threw"); throw error; }
+      } catch (error) { record("settled", "threw"); throw error; }
     };
     if (backendRuntime) {
       const originalChannel = backendRuntime.client.channel;
@@ -448,7 +467,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
         const channel = Reflect.apply(originalChannel, this, args);
         if (!observed.has(channel)) {
           observed.add(channel);
-          for (const operation of ["track", "send"]) channel[operation] = observeOperation(`sdk.${operation}`, channel[operation]);
+          for (const operation of ["track", "send", "subscribe"]) channel[operation] = observeOperation(`sdk.${operation}`, channel[operation]);
         }
         return channel;
       };
@@ -748,7 +767,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
         ? await hub.backendRuntimes.values().next().value.api.listCommunicationRoomMemberships(hub.roomId)
         : membershipStore.snapshot(hub.roomId);
       return { authenticatedBackend: hub.backend, roomId: hub.roomId, callType: hub.callType, hostUserId: hub.hostUserId, memberships, errors: [...hub.errors], events: clone(hub.events), operationResults: clone(hub.operationResults), heldSignals: hub.heldSignals.map(({ message, sender }) => ({ event: message.event, sender: sender.userId, generation: message.payload.membershipGeneration })), retiredEndpoints: hub.retiredEndpoints.map((endpoint) => ({ userId: endpoint.userId, instanceId: endpoint.instanceId, pendingControl: clone(endpoint.pendingControl), ...resources(endpoint) })), endpoints: await Promise.all(hub.endpoints.map(async (endpoint) => ({
-      userId: endpoint.userId, instanceId: endpoint.instanceId, appState: endpoint.appState, membership: memberships.find((membership) => membership.userId === endpoint.userId), channelState: endpoint.output?.channelState, error: endpoint.output?.error, mediaControlError: endpoint.output?.mediaControlError, micEnabled: endpoint.output?.micEnabled, cameraEnabled: endpoint.output?.cameraEnabled,
+      userId: endpoint.userId, instanceId: endpoint.instanceId, appState: endpoint.appState, roomHostUserId: endpoint.output?.room?.hostUserId, membership: memberships.find((membership) => membership.userId === endpoint.userId), channelState: endpoint.output?.channelState, error: endpoint.output?.error, mediaControlError: endpoint.output?.mediaControlError, micEnabled: endpoint.output?.micEnabled, cameraEnabled: endpoint.output?.cameraEnabled,
       participants: endpoint.output?.participants?.map(({ streamURL: _url, ...rest }) => rest), ...await stats(endpoint), pixels: receivedPixels(endpoint),
       ...resources(endpoint),
     }))) }; },

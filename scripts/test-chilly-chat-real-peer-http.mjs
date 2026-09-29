@@ -48,6 +48,7 @@ const diagnostics = (state) => redact(JSON.stringify({
   errors: state?.errors,
   reportedErrors: state?.events?.filter((event) => event.kind === "reported-error").slice(-20),
   presenceDiffs: state?.presenceDiffs,
+  presenceReceipts: state?.presenceReceipts,
   operationResults: state?.operationResults,
   endpoints: state?.endpoints?.map((endpoint) => ({
     userId: endpoint.userId, instanceId: endpoint.instanceId, channelState: endpoint.channelState,
@@ -103,7 +104,7 @@ async function main() {
   secrets.add(password);
   let threadId, browser, context, page, server;
   let failed = false;
-  const networkFailures = [], browserErrors = [], presenceDiffs = [];
+  const networkFailures = [], browserErrors = [], presenceDiffs = [], presenceReceipts = [];
   const browserRequests = new Map();
   let realtimeSockets = 0;
 
@@ -112,6 +113,7 @@ async function main() {
     assert.deepEqual(browserErrors, [], "browser must not throw");
     const state = await page.evaluate(() => window.__pairedCall.read());
     state.presenceDiffs = presenceDiffs;
+    state.presenceReceipts = presenceReceipts;
     assert.equal(state.authenticatedBackend, true, "this gate requires the actual authenticated backend adapter");
     assert.deepEqual(state.errors, [], `browser fixture errors: ${diagnostics(state)}`);
     return state;
@@ -261,24 +263,50 @@ async function main() {
     });
     page = await context.newPage();
     page.on("pageerror", (error) => browserErrors.push(redact(error.message)));
-    page.on("websocket", (socket) => socket.on("framereceived", ({ payload }) => {
-      try {
-        const message = JSON.parse(String(payload));
-        const event = Array.isArray(message) ? message[3] : message.event;
-        const diff = Array.isArray(message) ? message[4] : message.payload;
-        if (event !== "presence_diff" || !diff || typeof diff !== "object") return;
-        // Retain wire ref identities/counts only. Never copy subscription
-        // credentials, arbitrary Presence metadata, SDP, or raw frames.
-        const refs = (entries) => Object.entries(entries ?? {}).map(([key, presence]) => ({
-          key, refs: (presence?.metas ?? []).map((meta) => ({
-            ref: typeof meta.phx_ref === "string" ? meta.phx_ref : null,
-            previousRef: typeof meta.phx_ref_prev === "string" ? meta.phx_ref_prev : null,
-          })),
-        }));
-        presenceDiffs.push({ joins: refs(diff.joins), leaves: refs(diff.leaves) });
-        if (presenceDiffs.length > 20) presenceDiffs.shift();
-      } catch { /* Non-JSON socket frames do not contain Presence diagnostics. */ }
-    }));
+    let diagnosticSocketSerial = 0;
+    page.on("websocket", (socket) => {
+      const socketId = ++diagnosticSocketSerial;
+      const pendingPresenceRefs = new Set();
+      const record = (entry) => {
+        presenceReceipts.push({ socketId, ...entry });
+        if (presenceReceipts.length > 30) presenceReceipts.shift();
+      };
+      socket.on("framesent", ({ payload }) => {
+        try {
+          const message = JSON.parse(String(payload));
+          const event = Array.isArray(message) ? message[3] : message.event;
+          const data = Array.isArray(message) ? message[4] : message.payload;
+          const ref = Array.isArray(message) ? message[1] : message.ref;
+          if (event !== "presence" || !["track", "untrack"].includes(data?.event) || typeof ref !== "string") return;
+          pendingPresenceRefs.add(ref);
+          if (pendingPresenceRefs.size > 64) pendingPresenceRefs.delete(pendingPresenceRefs.values().next().value);
+          record({ phase: "sent", operation: data.event, ref });
+        } catch { /* Never retain raw frames or subscription credentials. */ }
+      });
+      socket.on("framereceived", ({ payload }) => {
+        try {
+          const message = JSON.parse(String(payload));
+          const event = Array.isArray(message) ? message[3] : message.event;
+          const diff = Array.isArray(message) ? message[4] : message.payload;
+          const ref = Array.isArray(message) ? message[1] : message.ref;
+          if (event === "phx_reply" && pendingPresenceRefs.has(ref)) {
+            pendingPresenceRefs.delete(ref);
+            record({ phase: "reply", ref, status: ["ok", "error"].includes(diff?.status) ? diff.status : "unknown" });
+          }
+          if (event !== "presence_diff" || !diff || typeof diff !== "object") return;
+          // Retain wire ref identities/counts only. Never copy subscription
+          // credentials, arbitrary Presence metadata, SDP, or raw frames.
+          const refs = (entries) => Object.entries(entries ?? {}).map(([key, presence]) => ({
+            key, refs: (presence?.metas ?? []).map((meta) => ({
+              ref: typeof meta.phx_ref === "string" ? meta.phx_ref : null,
+              previousRef: typeof meta.phx_ref_prev === "string" ? meta.phx_ref_prev : null,
+            })),
+          }));
+          presenceDiffs.push({ joins: refs(diff.joins), leaves: refs(diff.leaves) });
+          if (presenceDiffs.length > 20) presenceDiffs.shift();
+        } catch { /* Non-JSON socket frames do not contain Presence diagnostics. */ }
+      });
+    });
     await page.goto(fixtureOrigin);
     await page.evaluate((backend) => window.__pairedCall.start({ callType: "video", backend }), {
       apiUrl: apiOrigin, anonKey: environment.ANON_KEY, roomId: initialCall.roomId, hostUserId: users[0], endpoints,

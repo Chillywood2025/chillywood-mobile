@@ -1,6 +1,6 @@
 # npm Audit Triage — Warning Maintenance
 
-Date: 2026-09-26
+Date: 2026-09-28
 
 This is a sanitized lockfile review. Raw registry responses are intentionally
 not committed because advisory databases change over time.
@@ -12,13 +12,25 @@ all-dependency and production-only modes:
 
 | Tree | Critical | High | Moderate | Reviewed result |
 | --- | ---: | ---: | ---: | --- |
-| Root mobile application | 0 | 0 | 0 | The final decoder leaf is replaced by the reviewed fixed implementation. |
-| `ops/alert-automation` | 0 | 0 | 0 | Compatible Vitest, nanoid, and PostCSS patches applied. |
+| Root mobile application | 0 | 0 | 0 | Reviewed decoder package retained; fast-uri and undici patched within their existing major versions. |
+| `ops/alert-automation` | 0 | 0 | 0 | Existing repairs retained; Nodemailer updated to the reviewed 10.0.12 release. |
 | `isolated-runtime/cloudflare` | 0 | 0 | 0 | Wrangler updated and the resolved sharp/undici leaves verified. |
+| `tests/integration/real-peer-browser` | 0 | 0 | 0 | Independently locked browser-test dependencies audited. |
 
 The existing failure policy remains unchanged: production critical/high
 findings fail the guard. Development findings are reported for review without
 turning an aggregate development count into a new admission rule.
+
+The alert automation follow-up also closes
+[Nodemailer GHSA-6vj9-mwq6-2f5v](https://github.com/advisories/GHSA-6vj9-mwq6-2f5v).
+Its first patched release is 10.0.2. The exact 10.0.12 pin includes the later
+CommonJS/type-layout compatibility fixes and SMTP settlement fixes documented
+in the [upstream changelog](https://github.com/nodemailer/nodemailer/blob/master/CHANGELOG.md).
+Node.js 20 or newer is required, matching the supported CI runtime. Runtime
+dependencies remain empty. Existing production imports and mail options pass
+typechecking unchanged; both ESM and CommonJS stream transports preserve the
+ordinary message envelope and content, and the existing alert workflow tests
+pass. No live email or provider request is sent by these checks.
 
 No automatic audit fix, forced major upgrade, deployment, or provider action was
 performed.
@@ -27,17 +39,40 @@ performed.
 
 - Root: `@humanfs/node` 0.16.8, PostCSS 8.5.23, an exact `xcode@3.0.1`
   resolution of uuid 11.1.1, and the locally packaged decoder repair described
-  below. The xcode override is intentionally nested rather than graph-wide.
-- Alert automation: Vitest 4.1.11, nanoid 3.3.18, and PostCSS 8.5.23.
+  below, plus fast-uri 3.1.7 and undici 6.28.1. The xcode override is
+  intentionally nested rather than graph-wide.
+- Alert automation: Vitest 4.1.11, nanoid 3.3.18, PostCSS 8.5.23, and Nodemailer 10.0.12.
   The registry classified the [nanoid advisory](https://github.com/advisories/GHSA-2v37-7h3g-55p8)
   as high and the [Vitest mocker advisory](https://github.com/advisories/GHSA-82fw-gwwq-j7x9)
   as moderate at review time.
 - Isolated Cloudflare tooling: Wrangler 4.141.0, resolving sharp 0.35.4 and
-  undici 7.29.0 in that lockfile. Wrangler requires Node.js 22 or newer; only a
+  undici 7.29.1 in that lockfile through a Miniflare-scoped override. Wrangler requires Node.js 22 or newer; only a
   scoped Wrangler job should change runtime. Ordinary application CI remains on
   Node 20 and does not invoke Wrangler.
 
 ## Focused compatibility investigation
+
+### September 28 URI and HTTP dependency follow-up
+
+Fresh CI exposed the two fast-uri advisories
+[GHSA-qw65-cvwx-89v3](https://github.com/advisories/GHSA-qw65-cvwx-89v3)
+and [GHSA-58mr-gqgx-xq4g](https://github.com/advisories/GHSA-58mr-gqgx-xq4g),
+both fixed in 3.1.7, plus the undici advisory
+[GHSA-3wwx-pv8p-q78v](https://github.com/advisories/GHSA-3wwx-pv8p-q78v),
+fixed in 6.28.1 and 7.29.1 for the two installed major versions. The advisory
+database added these records on September 28; earlier zero-count reports do
+not establish the current dependency status.
+
+Only fast-uri and undici changed in the root lockfile; only undici changed in
+the isolated tooling lockfile. All other package entries, including both
+Supabase Presence backports and native tooling metadata, are unchanged. The
+root exact-graph digest was advanced for those two reviewed identities.
+
+Ordinary compatibility checks exercise URI serialization and schema reference
+resolution through both Expo Ajv consumers, plus the Expo and Miniflare undici
+fetch/JSON contracts with network access disabled. The repair uses the official
+patched releases and authorized advisory reports without exploit reproduction.
+The dependency guard and its severity policy remain unchanged.
 
 ### `uuid`
 

@@ -311,6 +311,19 @@ Native OS delivery, actual navigation transport, selected hardware output and
 Bluetooth/physical audio remain explicit limits. These additions verify existing
 application behavior; they do not add unsupported Android speaker controls.
 
+BT01's Android legacy audio ownership has also been inspected. The configured
+Expo plugin 1.0.2 calls LiveKit React Native 2.10.0's default communication-audio
+setup; its Java audio-device module is consumed by WebRTC 144.0.0. That setup
+does not prove headset selection or interruption recovery. The legacy hook does
+not start the SDK's separate AudioSwitch routing lifecycle or select an output,
+and no app-owned legacy device/route-change callback was found in the application
+or Android native/plugin sources. The SDK routing manager's default device-change
+listener is empty. Platform/native WebRTC route behavior therefore remains a
+device qualification requirement, with no app callback policy to claim as tested.
+BT01 stays partial and hardware-blocked; AR01/AR03 remain unsupported app controls.
+This documents the boundary without adding routing behavior or declaring
+Bluetooth support from generic reconnect tests.
+
 Keep this regression standard for future physical findings: reproduce the
 mechanism at the lowest faithful automated boundary, demonstrate that the
 former source fails it, and run the correction through its applicable connected
@@ -322,6 +335,12 @@ Connected label cannot substitute for observed media or physical qualification.
 
 1. Finish exact-head protected validation, including the new authenticated
    HTTP and real-browser RTP lanes, and independently review their assumptions.
+   Complete every applicable job after the repaired assertions: all browser
+   voice/video and offer-role scenarios, both authenticated endpoints' controls,
+   End cleanup, fresh-call proof, and remaining Database checks. Retain the
+   [dependency-audit disposition](../security/NPM_AUDIT_TRIAGE_WARNING_MAINTENANCE.md)
+   and final exact-head results in the PR. Completed sections of an earlier
+   failed run do not establish a successful lane.
 2. Under explicit production database authorization, apply and verify the
    forward self-leave migration before any corrected client delivery. Preserve
    the D1–D6/T1–T6 mapping and keep original evidence recovery E01 separate.

@@ -88,7 +88,17 @@ try {
   const { context, page } = await run({ callType, hostUserId });
   try {
     const first = await wait(page, (state) => state.endpoints.length === 2 && state.endpoints.every((endpoint) => endpoint.channelState === "live" && endpoint.peers.some((peer) => peer.connection === "connected") && hasRequiredMedia(endpoint)), `${scenario}: both real peers must negotiate and receive actual RTP and nonzero received PCM, plus video for video calls`);
-    assert.equal(first.events.find((event) => event.kind === "broadcast" && event.event === "webrtc:offer")?.sender, hostUserId, `${scenario}: the configured host must initiate the actual first offer`);
+    assert.equal(first.hostUserId, hostUserId, `${scenario}: the fixture retains the configured host`);
+    assert.deepEqual(first.memberships.filter((member) => member.role === "host").map((member) => member.userId), [hostUserId], `${scenario}: the durable fixture assigns only the configured host role`);
+    for (const endpoint of first.endpoints) {
+      assert.equal(endpoint.roomHostUserId, hostUserId, `${scenario}: ${endpoint.userId}'s actual hook must resolve the configured host`);
+      assert.deepEqual(endpoint.participants.filter((participant) => participant.isHost).map((participant) => participant.userId), [hostUserId], `${scenario}: both actual hooks must project the configured host`);
+    }
+    // Host preference governs presence-driven startup and glare handling. The
+    // actual initial foreground-media reconciliation can also offer from the
+    // participant, so the first packet is not a host/caller-role invariant.
+    assert.ok(first.events.some((event) => event.kind === "broadcast" && event.event === "webrtc:offer"), `${scenario}: startup must send an actual SDP offer`);
+    assert.ok(first.events.some((event) => event.kind === "broadcast" && event.event === "webrtc:answer"), `${scenario}: startup must send an actual SDP answer`);
     if (isVideo) await wait(page, (state) => state.endpoints.every((endpoint, index) => endpoint.pixels.some((frame) => frame.fingerprint !== first.endpoints[index].pixels[0]?.fingerprint)), "Received pixels must change on both endpoints, not merely repeat a frozen frame");
     for (const userId of ["alice", "bob"]) {
       for (let cycle = 0; cycle < 3; cycle += 1) {
@@ -118,6 +128,26 @@ try {
         await wait(page, (state) => state.endpoints.every((endpoint, index) => mediaAdvances(endpoint, baseline.endpoints[index]) && endpoint.peers.filter((peer) => peer.connection === "connected").length === 1), `${scenario}: ${userId} cycle ${cycle + 1} must preserve real received media and one peer`);
       }
     }
+    for (const userId of ["alice", "bob"]) {
+      const beforeReacquisition = await page.evaluate(() => window.__pairedCall.read());
+      const owner = beforeReacquisition.endpoints.find((endpoint) => endpoint.userId === userId);
+      assert.deepEqual(await page.evaluate((id) => window.__pairedCall.stopLocalCapture(id, "audio"), userId),
+        { count: 1, kind: "audio", state: "ended" }, `${scenario}: ${userId} must end exactly one real audio capture before reacquisition`);
+      assert.equal(await page.evaluate((id) => window.__pairedCall.control(id, "setMicrophoneEnabled", true), userId), true,
+        `${scenario}: ${userId}'s actual hook must complete microphone reacquisition and SDP negotiation`);
+      const afterReacquisition = await page.evaluate(() => window.__pairedCall.read());
+      await wait(page, (state) => {
+        const current = state.endpoints.find((endpoint) => endpoint.userId === userId);
+        return current.membership.membershipGeneration === owner.membership.membershipGeneration
+          && current.membership.micEnabled === true && current.micEnabled === true
+          && current.tracks.filter((track) => track.kind === "audio" && track.state === "live" && track.enabled).length === 1
+          && state.events.slice(beforeReacquisition.events.length).some((event) => event.kind === "broadcast"
+            && event.event === "webrtc:offer" && event.sender === userId && event.generation === owner.membership.membershipGeneration)
+          && state.endpoints.every((endpoint, index) => mediaAdvances(endpoint, afterReacquisition.endpoints[index])
+            && endpoint.peers.filter((peer) => peer.connection === "connected" && peer.signaling === "stable").length === 1);
+      }, `${scenario}: ${userId}'s actual SDP offer must settle and restore received media with one current capture`);
+    }
+    console.log(`PASS: both actual offerers complete microphone reacquisition and received-media recovery (${scenario})`);
     for (const userId of ["alice", "bob"]) {
       const beforeBackground = await page.evaluate(() => window.__pairedCall.read());
       const owner = beforeBackground.endpoints.find((endpoint) => endpoint.userId === userId);

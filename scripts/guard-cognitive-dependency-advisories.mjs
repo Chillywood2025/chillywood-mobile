@@ -42,8 +42,22 @@ export function validateAuditResult(result, label, scope) {
   assert.equal(totals.total, severities.reduce((sum, severity) => sum + totals[severity], 0), `${context} has inconsistent totals`);
   assert.ok(result.status === 0 || totals.total > 0, `${context} failed without advisory findings`);
   if (scope === "production") {
-    assert.equal(totals.critical, 0, `${label} has a production critical advisory`);
-    assert.equal(totals.high, 0, `${label} has a production high advisory`);
+    for (const severity of ["critical", "high"]) {
+      // Print public identifiers only, so failed CI names the packages to
+      // repair without logging the full dependency graph or npm response.
+      const findings = Object.entries(report.vulnerabilities)
+        .filter(([name, entry]) => /^(@[a-z0-9._-]+\/)?[a-z0-9._-]+$/i.test(name) && entry?.severity === severity)
+        .map(([name, entry]) => {
+          const ids = (Array.isArray(entry.via) ? entry.via : [])
+            .map((advisory) => typeof advisory?.url === "string"
+              ? /^https:\/\/github\.com\/advisories\/(GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})$/.exec(advisory.url)?.[1]
+              : undefined)
+            .filter(Boolean);
+          return ids.length ? `${name} (${[...new Set(ids)].join(", ")})` : name;
+        });
+      assert.equal(totals[severity], 0,
+        `${label} has a production ${severity} advisory${findings.length ? `: ${findings.join("; ")}` : ""}`);
+    }
   }
   return totals;
 }

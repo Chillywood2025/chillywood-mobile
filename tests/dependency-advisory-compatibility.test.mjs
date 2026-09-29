@@ -14,6 +14,10 @@ test("patched advisory leaves are resolved independently in all three package tr
   const rootLock = readJson("package-lock.json");
   assert.equal(rootLock.packages["node_modules/@humanfs/node"].version, "0.16.8");
   assert.equal(rootLock.packages["node_modules/postcss"].version, "8.5.23");
+  assert.equal(rootManifest.overrides["fast-uri"], "3.1.7");
+  assert.equal(rootLock.packages["node_modules/fast-uri"].version, "3.1.7");
+  assert.equal(rootManifest.overrides.undici, "6.28.1");
+  assert.equal(rootLock.packages["node_modules/undici"].version, "6.28.1");
   assert.equal(
     rootManifest.dependencies["decode-uri-component"],
     "file:vendor/decode-uri-component-safe/chillywood-decode-uri-component-safe-0.5.0-chillywood.1.tgz",
@@ -33,11 +37,54 @@ test("patched advisory leaves are resolved independently in all three package tr
   assert.equal(alertLock.packages["node_modules/postcss"].version, "8.5.23");
   assert.equal(alertLock.packages["node_modules/vitest"].version, "4.1.11");
   assert.equal(alertLock.packages["node_modules/@vitest/mocker"].version, "4.1.11");
+  assert.equal(alertLock.packages["node_modules/nodemailer"].version, "10.0.12");
 
   const isolatedLock = readJson("isolated-runtime/cloudflare/package-lock.json");
   assert.equal(isolatedLock.packages["node_modules/wrangler"].version, "4.141.0");
   assert.equal(isolatedLock.packages["node_modules/sharp"].version, "0.35.4");
-  assert.equal(isolatedLock.packages["node_modules/undici"].version, "7.29.0");
+  assert.equal(isolatedLock.packages["node_modules/undici"].version, "7.29.1");
+  assert.equal(readJson("isolated-runtime/cloudflare/package.json").overrides.miniflare.undici, "7.29.1");
+});
+
+test("patched fast-uri preserves URI references used by both Expo Ajv consumers", () => {
+  for (const parent of ["expo-build-properties", "expo-dev-launcher"]) {
+    const parentRequire = createRequire(require.resolve(`${parent}/package.json`));
+    const ajvRequire = createRequire(parentRequire.resolve("ajv/package.json"));
+    assert.equal(ajvRequire("fast-uri/package.json").version, "3.1.7");
+    const uri = ajvRequire("fast-uri");
+    const ordinary = "https://example.invalid:8443/catalog?item=one#details";
+    const parsed = uri.parse(ordinary);
+    assert.equal(parsed.error, undefined);
+    assert.equal(uri.serialize(parsed), ordinary);
+    assert.equal(uri.resolve("https://example.invalid/catalog/", "item.json"), "https://example.invalid/catalog/item.json");
+    const Ajv = parentRequire("ajv");
+    const validator = new Ajv();
+    validator.addSchema({ $id: "https://schemas.example.invalid/item.json", type: "object", properties: { title: { type: "string" } }, required: ["title"] });
+    const validate = validator.compile({ type: "array", items: { $ref: "https://schemas.example.invalid/item.json" } });
+    assert.equal(validate([{ title: "Chi'llywood" }]), true);
+    assert.equal(validate([{ title: 123 }]), false);
+  }
+});
+
+test("patched undici preserves Expo's fetch and response contract without network access", async () => {
+  const expoRequire = createRequire(require.resolve("expo/package.json"));
+  const cliRequire = createRequire(expoRequire.resolve("@expo/cli/package.json"));
+  assert.equal(cliRequire("undici/package.json").version, "6.28.1");
+  const { fetch, MockAgent, Response, Agent, RetryAgent, EnvHttpProxyAgent } = cliRequire("undici");
+  for (const constructor of [Agent, RetryAgent, EnvHttpProxyAgent]) assert.equal(typeof constructor, "function");
+  const dispatcher = new MockAgent();
+  dispatcher.disableNetConnect();
+  try {
+    dispatcher.get("https://fixture.example.invalid").intercept({ path: "/metadata", method: "GET" })
+      .reply(200, { platform: "android" }, { headers: { "content-type": "application/json" } });
+    const response = await fetch("https://fixture.example.invalid/metadata", { dispatcher });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { platform: "android" });
+    assert.deepEqual(await new Response('{"cached":true}', { status: 200 }).json(), { cached: true });
+    dispatcher.assertNoPendingInterceptors();
+  } finally {
+    await dispatcher.close();
+  }
 });
 
 test("xcode uses the patched uuid line without changing native identifier generation", () => {

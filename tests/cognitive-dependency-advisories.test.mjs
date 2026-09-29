@@ -69,6 +69,23 @@ test("production moderate findings retain their existing reviewed threshold", ()
   assert.equal(validateAuditResult(result, "fixture", "production").moderate, 3);
 });
 
+test("blocked production audits name safe package and advisory identifiers", () => {
+  const report = reportWith({ high: 1 });
+  report.vulnerabilities["@fixture/client"] = {
+    severity: "high",
+    via: [
+      { url: "https://github.com/advisories/GHSA-abcd-1234-efgh", title: "private report content" },
+      { url: "https://example.invalid/private?token=secret" },
+      "transitive-dependency",
+    ],
+  };
+  assert.throws(() => validateAuditResult(auditResult(report, { status: 1 }), "fixture", "production"), (error) => {
+    assert.match(error.message, /@fixture\/client \(GHSA-abcd-1234-efgh\)/);
+    assert.doesNotMatch(error.message, /private|secret|transitive-dependency/);
+    return true;
+  });
+});
+
 test("an unrecognized scope cannot skip production enforcement", () => {
   assert.throws(() => validateAuditResult(auditResult(), "fixture", "other"), /invalid scope/);
 });

@@ -99,7 +99,7 @@ const expectedSupabasePresenceBackport = Object.freeze({
     }),
   }),
 });
-// Exact reviewed lock graph after the bounded browserslist, fast-uri, js-yaml,
+// Exact reviewed lock graph after the bounded browserslist, fast-uri, undici, js-yaml,
 // xmldom, @humanfs/node, PostCSS, xcode-scoped uuid, decoder advisory, and
 // LiveKit camera-convergence dependency closures. The decoder package paths are
 // excluded below and verified by their own exact identity witness; the LiveKit
@@ -107,7 +107,7 @@ const expectedSupabasePresenceBackport = Object.freeze({
 // The two Supabase Presence backport paths also have an exact identity witness;
 // every other Supabase identity remains in this unchanged-rest digest.
 // Any later package identity drift still fails closed at this digest.
-const expectedUnrelatedPackageGraphSha256 = "f6a9374255c5212928047ea7685da086fb39323156250ed8c78a486ac192deb0";
+const expectedUnrelatedPackageGraphSha256 = "49f9be46469fd6ecee22148dce71d0bc72085e2e1d4a2f8c6d4d759ed23854d8";
 const compatibilityClosurePaths = new Set([
   "node_modules/@supabase/realtime-js",
   "node_modules/@supabase/supabase-js",
