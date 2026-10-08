@@ -194,6 +194,205 @@ test("legacy background Answer retains requested microphone until the first elig
   assert.equal(runtime.durableMic, true);
 });
 
+test("legacy automatic foreground microphone waits for the native signaling receipt after a proved answer", async t => {
+  const { runtime, h } = await start(t, { video: false, initialAppState: "background" });
+  const peer = runtime.peers[0];
+  const original = peer.setRemoteDescription.bind(peer);
+  let delayedAnswer = null;
+  peer.setRemoteDescription = async description => {
+    if (description.type !== "answer") return original(description);
+    // The installed SDK updates signalingState through an independent native
+    // event, not in setRemoteDescription's fulfilled Promise.
+    peer.remoteDescription = description;
+    peer.remoteDescriptionCalls.push(description);
+    delayedAnswer = description;
+  };
+  await h.run(() => runtime.emitAppState("active"));
+  assert.ok(delayedAnswer, "the authenticated answer reached the native description boundary");
+  assert.equal(h.getResult().mediaControlError, null,
+    "a delayed signalingstatechange receipt is not an immediate failed microphone preparation");
+  assert.equal(runtime.durableMic, false, "no unmute success before the independent native receipt");
+  peer.signalingState = "stable";
+  await h.run(() => peer.emit("signalingstatechange"));
+  assert.equal(h.getResult().micEnabled, true);
+  assert.equal(runtime.durableMic, true);
+  assert.equal(live(runtime, "audio").length, 1);
+});
+
+function collideAutomaticMicOffers(runtime, { count = 1, answerBarrier, rejectAnswer = false, holdRetryAnswer = false } = {}) {
+  const channel = runtime.channels.at(-1);
+  const send = channel.send.bind(channel);
+  const state = { offers: [], answerPending: false, restore: () => { channel.send = send; } };
+  channel.send = async message => {
+    if (message.event === "webrtc:answer" && message.payload.negotiationId?.startsWith("controlled-glare:")) {
+      state.answerPending = true;
+      if (answerBarrier) await answerBarrier;
+      if (rejectAnswer) runtime.queueSend({ event: "webrtc:answer", outcome: "error" });
+    }
+    if (message.event !== "webrtc:offer" || !message.payload.negotiationId?.startsWith("legacy-mic:")
+      || !message.payload.negotiationId.endsWith(":forward")) return send(message);
+    state.offers.push(message);
+    if (state.offers.length > count) {
+      if (holdRetryAnswer) runtime.queueSend({ event: "webrtc:offer", answer: false });
+      return send(message);
+    }
+    runtime.queueSend({ event: "webrtc:offer", answer: false });
+    const result = await send(message);
+    await channel.emitBroadcast("webrtc:offer", {
+      roomId: runtime.roomId, targetUserId: runtime.userId, fromUserId: runtime.remoteUserId,
+      negotiationId: `controlled-glare:${state.offers.length}`,
+      description: { type: "offer", sdp: `concurrent-remote-offer:${state.offers.length}` },
+    });
+    return result;
+  };
+  return state;
+}
+
+test("legacy automatic foreground microphone recovers a polite glare with a new correlated offer", async t => {
+  const { runtime, h } = await start(t, { video: false, initialAppState: "background" });
+  const collision = collideAutomaticMicOffers(runtime);
+  await h.run(() => runtime.emitAppState("active"));
+  assert.equal(h.getResult().mediaControlError, null);
+  assert.equal(h.getResult().micEnabled, true);
+  assert.equal(runtime.durableMic, true);
+  assert.equal(live(runtime, "audio").length, 1);
+  assert.equal(collision.offers.length, 2, "the replacement offer must obtain its own answer proof");
+  assert.notEqual(collision.offers[0].payload.negotiationId, collision.offers[1].payload.negotiationId);
+});
+
+test("legacy glare retry rejects the interrupted offer's late answer and requires its own answer", async t => {
+  const { runtime, h } = await start(t, { video: false, initialAppState: "background" });
+  const collision = collideAutomaticMicOffers(runtime, { holdRetryAnswer: true });
+  await h.run(() => runtime.emitAppState("active"));
+  assert.equal(collision.offers.length, 2);
+  assert.equal(live(runtime, "audio").length, 0);
+  assert.equal(runtime.durableMic, false);
+  const answer = negotiationId => runtime.channels.at(-1).emitBroadcast("webrtc:answer", {
+    roomId: runtime.roomId, targetUserId: runtime.userId, fromUserId: runtime.remoteUserId,
+    negotiationId, description: { type: "answer", sdp: "authenticated-answer" },
+  });
+  await h.run(() => answer(collision.offers[0].payload.negotiationId));
+  assert.equal(live(runtime, "audio").length, 0, "old correlation cannot enable capture");
+  assert.equal(runtime.durableMic, false);
+  await h.run(() => answer(collision.offers[1].payload.negotiationId));
+  assert.equal(h.getResult().micEnabled, true);
+  assert.equal(live(runtime, "audio").length, 1);
+  assert.equal(runtime.durableMic, true);
+});
+
+for (const muted of [false, true]) {
+  test(`legacy glare waits for its native stable receipt before retry: newer mute ${muted}`, async t => {
+    const { runtime, h } = await start(t, { video: false, initialAppState: "background" });
+    const peer = runtime.peers[0];
+    const setLocal = peer.setLocalDescription.bind(peer);
+    peer.setLocalDescription = async description => {
+      if (description.type !== "answer") return setLocal(description);
+      peer.localDescription = description;
+    };
+    const collision = collideAutomaticMicOffers(runtime);
+    await h.run(() => runtime.emitAppState("active"));
+    assert.equal(collision.offers.length, 1, "native answer completion alone cannot trigger a second offer");
+    assert.equal(h.getResult().mediaControlError, null);
+    assert.equal(live(runtime, "audio").length, 0);
+    if (muted) await h.rerender({ initialMediaPreferences: { micEnabled: false, cameraEnabled: false } });
+    peer.signalingState = "stable";
+    await h.run(() => peer.emit("signalingstatechange"));
+    assert.equal(collision.offers.length, muted ? 1 : 2);
+    assert.equal(h.getResult().micEnabled, !muted);
+    assert.equal(runtime.durableMic, !muted);
+    assert.equal(live(runtime, "audio").length, muted ? 0 : 1);
+  });
+}
+
+for (const failure of ["repeated glare", "answer send failure", "retry answer timeout"]) {
+  test(`legacy microphone glare recovery fails closed on ${failure}`, async t => {
+    const { runtime, h } = await start(t, {
+      video: false, initialAppState: "background", fireOperationTimeouts: failure === "retry answer timeout",
+    });
+    const collision = collideAutomaticMicOffers(runtime, {
+      count: failure === "repeated glare" ? 5 : 1,
+      rejectAnswer: failure === "answer send failure",
+      holdRetryAnswer: failure === "retry answer timeout",
+    });
+    await h.run(() => runtime.emitAppState("active"));
+    if (failure === "retry answer timeout") await h.run(() => new Promise(resolve => setTimeout(resolve, 10)));
+    assert.equal(collision.offers.length, failure === "answer send failure" ? 1 : 2,
+      "only one authenticated, successfully answered glare can cause a retry");
+    assert.equal(h.getResult().micEnabled, false);
+    assert.equal(live(runtime, "audio").length, 0);
+    assert.equal(runtime.durableMic, false);
+    assert.match(h.getResult().mediaControlError, /Microphone could not start/);
+    collision.restore();
+    assert.equal(await h.run(() => h.getResult().setMicrophoneEnabled(true)), true,
+      "bounded automatic failure leaves a later explicit retry recoverable");
+    assert.equal(live(runtime, "audio").length, 1);
+  });
+}
+
+for (const boundary of ["native stable receipt", "glare answer acknowledgement"]) {
+  for (const cancellation of ["muted preference", "explicit Mute", "End", "room replacement", "account replacement"]) {
+    test(`legacy microphone ${boundary} cannot resurrect capture after ${cancellation}`, async t => {
+      const { runtime, h } = await start(t, { video: false, initialAppState: "background" });
+      const peer = runtime.peers[0];
+      const pending = deferred();
+      let collision;
+      let stablePending = false;
+      if (boundary === "glare answer acknowledgement") {
+        collision = collideAutomaticMicOffers(runtime, { answerBarrier: pending.promise });
+      } else {
+        const setRemote = peer.setRemoteDescription.bind(peer);
+        peer.setRemoteDescription = async description => {
+          if (description.type !== "answer" || stablePending) return setRemote(description);
+          peer.remoteDescription = description;
+          peer.remoteDescriptionCalls.push(description);
+          stablePending = true;
+        };
+      }
+      await h.run(() => runtime.emitAppState("active"));
+      assert.ok(stablePending || collision?.answerPending, "the selected native/relay receipt is pending");
+      let mute;
+      const preferences = { micEnabled: false, cameraEnabled: false };
+      if (cancellation === "muted preference") await h.rerender({ initialMediaPreferences: preferences });
+      if (cancellation === "explicit Mute") await React.act(async () => { mute = h.getResult().setMicrophoneEnabled(false); });
+      if (cancellation === "End") await h.run(() => h.getResult().leaveRoom());
+      if (cancellation === "room replacement") {
+        runtime.roomId = "REPLACEMENT-GLARE-ROOM";
+        await h.rerender({ roomId: runtime.roomId, initialMediaPreferences: preferences });
+      }
+      if (cancellation === "account replacement") {
+        runtime.userId = "replacement-glare-user";
+        await h.rerender({ authenticatedUserId: runtime.userId, initialMediaPreferences: preferences });
+      }
+      assert.equal(live(runtime, "audio").length, 0, "capture remains private before old acknowledgement");
+      pending.resolve();
+      if (stablePending) {
+        peer.signalingState = "stable";
+        peer.emit("signalingstatechange");
+      }
+      await h.run(async () => { await mute; for (let i = 0; i < 200; i += 1) await Promise.resolve(); });
+      assert.equal(h.getResult().micEnabled, false);
+      assert.equal(live(runtime, "audio").length, 0);
+      assert.equal(runtime.durableMic, false);
+      if (collision) assert.equal(collision.offers.length, 1, "retired intent cannot send a glare retry");
+    });
+  }
+}
+
+test("legacy missing native stable receipt has a bounded failure and cannot publish microphone success", async t => {
+  const { runtime, h } = await start(t, { video: false, initialAppState: "background", fireOperationTimeouts: true });
+  const peer = runtime.peers[0];
+  peer.setRemoteDescription = async description => {
+    peer.remoteDescription = description;
+    peer.remoteDescriptionCalls.push(description);
+  };
+  await h.run(() => runtime.emitAppState("active"));
+  await h.run(() => new Promise(resolve => setTimeout(resolve, 10)));
+  assert.equal(h.getResult().micEnabled, false);
+  assert.equal(live(runtime, "audio").length, 0);
+  assert.equal(runtime.durableMic, false);
+  assert.match(h.getResult().mediaControlError, /Microphone could not start/);
+});
+
 test("legacy explicit mute cancels deferred background Answer microphone intent", async t => {
   const { runtime, h } = await start(t, { video: false, initialAppState: "background" });
   await h.run(() => h.getResult().setMicrophoneEnabled(false));

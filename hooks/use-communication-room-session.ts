@@ -117,11 +117,13 @@ type LegacyMicSessionAuthority = {
   registration: LegacyPresenceRegistration | null;
 };
 
+type LegacyMicAnswerResult = boolean | "glare";
+
 type LegacyMicAnswerWaiter = {
   authority: LegacyMicSessionAuthority;
   peerConnection: any;
   remoteUserId: string;
-  resolve: (answered: boolean) => void;
+  resolve: (answered: LegacyMicAnswerResult) => void;
 };
 
 const LEGACY_BACKGROUND_MEDIA_STATE = {
@@ -2717,6 +2719,7 @@ export function useCommunicationRoomSession({
         const peerConnection = await ensurePeerConnection(fromUserId);
         if (!peerConnection || !isActiveGeneration()) return;
 
+        const interruptedMicWaiters: LegacyMicAnswerWaiter[] = [];
         const normalizedAnswer = await runSerializedPeerSignaling(fromUserId, async () => {
           if (!isCurrentInboundOwner(payload) || peerConnectionsRef.current[fromUserId] !== peerConnection) return null;
           const description = payload?.description as { type?: string; sdp?: string } | undefined;
@@ -2733,7 +2736,7 @@ export function useCommunicationRoomSession({
             if (shouldInitiatePeerOffer({ localUserId: currentIdentity.userId, remoteUserId: fromUserId, hostUserId: snapshot.room.hostUserId })) return null;
             await peerConnection.setLocalDescription({ type: "rollback" });
             for (const waiter of Object.values(legacyMicAnswerWaitersRef.current)) {
-              if (waiter.peerConnection === peerConnection) waiter.resolve(false);
+              if (waiter.peerConnection === peerConnection) interruptedMicWaiters.push(waiter);
             }
           }
           if (!isCurrentInboundOwner(payload) || peerConnectionsRef.current[fromUserId] !== peerConnection) return null;
@@ -2750,8 +2753,11 @@ export function useCommunicationRoomSession({
           reportRuntimeError("communication-inbound-offer", signalingError, { roomId: snapshot.room.roomId });
           return null;
         });
-        if (!normalizedAnswer || !isCurrentInboundOwner(payload) || peerConnectionsRef.current[fromUserId] !== peerConnection) return;
-        await sendBroadcast("webrtc:answer", {
+        if (!normalizedAnswer || !isCurrentInboundOwner(payload) || peerConnectionsRef.current[fromUserId] !== peerConnection) {
+          interruptedMicWaiters.forEach((waiter) => waiter.resolve(false));
+          return;
+        }
+        const answerSent = await sendBroadcast("webrtc:answer", {
           // Route the answer back to the original offer sender.
           targetUserId: fromUserId,
           fromUserId: currentIdentity.userId,
@@ -2761,6 +2767,13 @@ export function useCommunicationRoomSession({
             sdp: normalizedAnswer.sdp ?? null,
           },
         });
+        // Only a successfully answered, authenticated collision is retryable.
+        // It is not proof of the interrupted microphone offer: the mic
+        // transaction must obtain a fresh, independently correlated answer.
+        const canRetryMicOffer = answerSent === true
+          && isCurrentInboundOwner(payload)
+          && peerConnectionsRef.current[fromUserId] === peerConnection;
+        interruptedMicWaiters.forEach((waiter) => waiter.resolve(canRetryMicOffer ? "glare" : false));
       });
 
       channel.on("broadcast", { event: "webrtc:answer" }, async ({ payload }: { payload: Record<string, unknown> }) => {
@@ -3741,95 +3754,114 @@ export function useCommunicationRoomSession({
     peerConnection,
     remoteUserId,
     phase,
+    isIntentCurrent = () => true,
   }: {
     authority: LegacyMicSessionAuthority;
     peerConnection: any;
     remoteUserId: string;
     phase: "forward" | "compensate";
+    isIntentCurrent?: () => boolean;
   }) => runSerializedPeerOffer(remoteUserId, async () => {
-    if (
-      !isLegacyMicSessionAuthorityCurrent(authority)
-      || peerConnectionsRef.current[remoteUserId] !== peerConnection
-      || String(peerConnection?.connectionState ?? "") === "closed"
-    ) return false;
-    if (!await waitForLegacyPeerSignalingStable(peerConnection, () => (
-      isLegacyMicSessionAuthorityCurrent(authority)
-      && peerConnectionsRef.current[remoteUserId] === peerConnection
-    ))) return false;
-
-    const negotiationId = [
-      "legacy-mic",
-      authority.roomId,
-      authority.userId,
-      ++legacyMicNegotiationSerialRef.current,
-      phase,
-    ].join(":");
-    let resolveAnswer = (_answered: boolean) => {};
-    const answerPromise = new Promise<boolean>((resolve) => {
-      resolveAnswer = resolve;
-    });
-    legacyMicAnswerWaitersRef.current[negotiationId] = {
-      authority,
-      peerConnection,
-      remoteUserId,
-      resolve: resolveAnswer,
-    };
-
-    let completed = false;
-    try {
-      const normalizedOffer = await runSerializedPeerSignaling(remoteUserId, async () => {
-        if (!isLegacyMicSessionAuthorityCurrent(authority) || peerConnectionsRef.current[remoteUserId] !== peerConnection
-          || String(peerConnection.signalingState ?? "stable") !== "stable") return null;
-        const offer = await peerConnection.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
-        if (!isLegacyMicSessionAuthorityCurrent(authority)) throw new Error("LEGACY_MIC_SESSION_AUTHORITY_CHANGED");
-        const normalized = { ...offer, sdp: preferVideoCodecInSdp(offer.sdp, PREFERRED_VIDEO_CODEC) };
-        await peerConnection.setLocalDescription(normalized);
-        return normalized;
-      });
-      if (!normalizedOffer) throw new Error("LEGACY_MIC_SIGNALING_CHANGED");
-      if (!isLegacyMicSessionAuthorityCurrent(authority)
-        || peerConnectionsRef.current[remoteUserId] !== peerConnection) throw new Error("LEGACY_MIC_SESSION_AUTHORITY_CHANGED");
-      peerLocalOffersRef.current[remoteUserId] = { generation: authority.generation, peerConnection, sdp: normalizedOffer.sdp ?? "", negotiationId };
-      const sendResult = await waitForRealtimeOperation(
-        broadcastCommunicationRoomSignal({
-          roomId: authority.roomId,
-          userId: authority.userId,
-          expectedMembershipGeneration: authority.membershipGeneration,
-          event: "webrtc:offer",
-          payload: {
-            targetUserId: remoteUserId,
-            negotiationId,
-            description: {
-              type: normalizedOffer.type,
-              sdp: normalizedOffer.sdp ?? null,
-            },
-          },
-        }),
-        LEGACY_MIC_RENEGOTIATION_TIMEOUT_MILLIS,
-      ).catch(() => false);
-      if (sendResult !== true) throw new Error("LEGACY_MIC_OFFER_SEND_FAILED");
-      const answered = await waitForRealtimeOperation(
-        answerPromise,
-        LEGACY_MIC_RENEGOTIATION_TIMEOUT_MILLIS,
-      );
-      completed = answered === true
+    // One authenticated collision may interrupt a valid local offer. Retry
+    // once with a new correlation ID; arbitrary failures never enter retry.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (
+        !isIntentCurrent()
+        || !isLegacyMicSessionAuthorityCurrent(authority)
+        || peerConnectionsRef.current[remoteUserId] !== peerConnection
+        || String(peerConnection?.connectionState ?? "") === "closed"
+      ) return false;
+      if (!await waitForLegacyPeerSignalingStable(peerConnection, () => (
+        isIntentCurrent()
         && isLegacyMicSessionAuthorityCurrent(authority)
         && peerConnectionsRef.current[remoteUserId] === peerConnection
-        && String(peerConnection?.signalingState ?? "stable") === "stable";
-    } catch (renegotiationError) {
-      reportRuntimeError("communication-legacy-microphone-renegotiation", renegotiationError, {
+      ))) return false;
+      if (!isIntentCurrent()) return false;
+
+      const negotiationId = [
+        "legacy-mic",
+        authority.roomId,
+        authority.userId,
+        ++legacyMicNegotiationSerialRef.current,
         phase,
-        remoteUserId,
-        roomId: authority.roomId,
+      ].join(":");
+      let resolveAnswer = (_answered: LegacyMicAnswerResult) => {};
+      const answerPromise = new Promise<LegacyMicAnswerResult>((resolve) => {
+        resolveAnswer = resolve;
       });
-      completed = false;
+      legacyMicAnswerWaitersRef.current[negotiationId] = {
+        authority,
+        peerConnection,
+        remoteUserId,
+        resolve: resolveAnswer,
+      };
+
+      let completed = false;
+      let interruptedByGlare = false;
+      try {
+        const normalizedOffer = await runSerializedPeerSignaling(remoteUserId, async () => {
+          if (!isIntentCurrent() || !isLegacyMicSessionAuthorityCurrent(authority) || peerConnectionsRef.current[remoteUserId] !== peerConnection
+            || String(peerConnection.signalingState ?? "stable") !== "stable") return null;
+          const offer = await peerConnection.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+          if (!isLegacyMicSessionAuthorityCurrent(authority)) throw new Error("LEGACY_MIC_SESSION_AUTHORITY_CHANGED");
+          if (!isIntentCurrent()) throw new Error("LEGACY_MIC_INTENT_SUPERSEDED");
+          const normalized = { ...offer, sdp: preferVideoCodecInSdp(offer.sdp, PREFERRED_VIDEO_CODEC) };
+          await peerConnection.setLocalDescription(normalized);
+          return normalized;
+        });
+        if (!normalizedOffer) throw new Error("LEGACY_MIC_SIGNALING_CHANGED");
+        if (!isIntentCurrent()) throw new Error("LEGACY_MIC_INTENT_SUPERSEDED");
+        if (!isLegacyMicSessionAuthorityCurrent(authority)
+          || peerConnectionsRef.current[remoteUserId] !== peerConnection) throw new Error("LEGACY_MIC_SESSION_AUTHORITY_CHANGED");
+        peerLocalOffersRef.current[remoteUserId] = { generation: authority.generation, peerConnection, sdp: normalizedOffer.sdp ?? "", negotiationId };
+        const sendResult = await waitForRealtimeOperation(
+          broadcastCommunicationRoomSignal({
+            roomId: authority.roomId,
+            userId: authority.userId,
+            expectedMembershipGeneration: authority.membershipGeneration,
+            event: "webrtc:offer",
+            payload: {
+              targetUserId: remoteUserId,
+              negotiationId,
+              description: {
+                type: normalizedOffer.type,
+                sdp: normalizedOffer.sdp ?? null,
+              },
+            },
+          }),
+          LEGACY_MIC_RENEGOTIATION_TIMEOUT_MILLIS,
+        ).catch(() => false);
+        if (sendResult !== true) throw new Error("LEGACY_MIC_OFFER_SEND_FAILED");
+        const answered = await waitForRealtimeOperation(
+          answerPromise,
+          LEGACY_MIC_RENEGOTIATION_TIMEOUT_MILLIS,
+        );
+        // Native description completion and the signalingstatechange receipt
+        // cross separate bridge events. A correlated answer is necessary, but
+        // must be followed by the bounded stable-state proof before enabling.
+        const stabilized = (answered === true || answered === "glare")
+          && await waitForLegacyPeerSignalingStable(peerConnection, () => (
+            isLegacyMicSessionAuthorityCurrent(authority)
+            && peerConnectionsRef.current[remoteUserId] === peerConnection
+          ));
+        completed = answered === true && stabilized;
+        interruptedByGlare = answered === "glare" && stabilized;
+      } catch (renegotiationError) {
+        reportRuntimeError("communication-legacy-microphone-renegotiation", renegotiationError, {
+          phase,
+          remoteUserId,
+          roomId: authority.roomId,
+        });
+        completed = false;
+      }
+      delete legacyMicAnswerWaitersRef.current[negotiationId];
+      if (
+        String(peerConnection?.signalingState ?? "stable") !== "stable"
+        && !await rollbackLegacyMicLocalOffer(remoteUserId, peerConnection)
+      ) throw new Error("LEGACY_MIC_LOCAL_OFFER_ROLLBACK_UNVERIFIED");
+      if (completed || !interruptedByGlare) return completed;
     }
-    delete legacyMicAnswerWaitersRef.current[negotiationId];
-    if (
-      String(peerConnection?.signalingState ?? "stable") !== "stable"
-      && !await rollbackLegacyMicLocalOffer(remoteUserId, peerConnection)
-    ) throw new Error("LEGACY_MIC_LOCAL_OFFER_ROLLBACK_UNVERIFIED");
-    return completed;
+    return false;
   }, false), [isLegacyMicSessionAuthorityCurrent, rollbackLegacyMicLocalOffer, runSerializedPeerOffer, runSerializedPeerSignaling]);
 
   const strictlyCommitLegacyMicPresence = useCallback(async (
@@ -4346,6 +4378,7 @@ export function useCommunicationRoomSession({
           peerConnection,
           remoteUserId,
           phase: "forward",
+          isIntentCurrent,
         });
         if (!isLegacyMicSessionAuthorityCurrent(authority)) throw new Error("LEGACY_MIC_SESSION_AUTHORITY_CHANGED");
         if (!renegotiated) throw new Error("LEGACY_MIC_RENEGOTIATION_FAILED");
