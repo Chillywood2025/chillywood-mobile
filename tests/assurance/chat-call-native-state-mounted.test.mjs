@@ -19,6 +19,11 @@ const React = require("react");
 let fixture = fs.readFileSync(fixturePath, "utf8").split('test("current PR210 contract')[0];
 assert.ok(fixture.includes("async function mountLegacyHook("));
 fixture = fixture.replace("const require = createRequire(import.meta.url);", "");
+fixture = fixture.replace("const getCameraPermission = async () => runtime.cameraPermission;", `const getCameraPermission = async () => {
+  const action = runtime.cameraReadActions?.shift();
+  if (action?.wait) await action.wait;
+  return action?.permission ?? runtime.cameraPermission;
+};`);
 const seam = "  const commonJsModule = { exports: {} };";
 assert.equal(fixture.split(seam).length, 2);
 fixture = fixture.replace(seam, `
@@ -161,6 +166,90 @@ test("legacy deferred video foreground acquisition respects a newer off preferen
   assert.equal(live(runtime, "video").length, 0);
   assert.equal(h.getResult().cameraEnabled, false);
   assert.equal(runtime.durableCamera, false);
+  assert.equal(live(runtime, "audio").length, 1, "canceling camera recovery cannot cancel independently authorized microphone recovery");
+  assert.equal(runtime.durableMic, true);
+});
+
+for (const gate of ["camera permission", "microphone permission", "capture"]) {
+  for (const cancellation of ["Camera Off", "background"]) {
+    test(`legacy initial video ${cancellation} during ${gate} cancels camera while preserving eligible audio`, async t => {
+      const runtime = createRuntime();
+      const pending = deferred();
+      if (gate === "camera permission") {
+        runtime.cameraPermission = { granted: false, canAskAgain: true, status: "undetermined" };
+        runtime.cameraReadActions = [{ wait: pending.promise, permission: granted() }];
+      } else if (gate === "microphone permission") {
+        runtime.microphoneReadActions = [{ permission: granted() }, { wait: pending.promise, permission: granted() }];
+      } else runtime.queueMedia({ wait: pending.promise });
+      const h = await mount(runtime, { enabled: true, naturalLifecycle: true, allowBackgroundAudio: true,
+        analyticsContext: { surface: "chat-thread" }, initialMediaPreferences: { cameraEnabled: true, micEnabled: true } });
+      t.after(() => h.unmount());
+      assert.equal(runtime.captureRequests.length, Number(gate === "capture"), "initial startup is paused at the intended asynchronous boundary");
+      if (cancellation === "Camera Off") await h.rerender({ initialMediaPreferences: { cameraEnabled: false, micEnabled: true } });
+      else await h.run(() => runtime.emitAppState("background"));
+      if (gate === "camera permission") runtime.cameraPermission = granted();
+      pending.resolve();
+      await h.run(async () => { for (let i = 0; i < 200; i += 1) await Promise.resolve(); });
+      assert.equal(live(runtime, "video").length, 0);
+      assert.equal(h.getResult().cameraEnabled, false);
+      assert.equal(runtime.durableCamera, false);
+      assert.equal(live(runtime, "audio").length, Number(cancellation === "Camera Off"), "Camera Off preserves audio; background without an existing audio track obeys the automatic mute policy");
+      assert.equal(runtime.durableMic, cancellation === "Camera Off");
+      if (gate !== "capture") assert.equal(runtime.captureRequests.some(request => request.video), false, "canceled video never reaches the native capture boundary");
+      else assert.equal(runtime.localStreams[0].getVideoTracks()[0].readyState, "ended");
+      if (cancellation === "background") {
+        await h.run(() => runtime.emitAppState("active"));
+        assert.equal(live(runtime, "video").length, 1, "foreground may recover the retained camera intent");
+        assert.equal(runtime.durableCamera, true);
+        assert.equal(live(runtime, "audio").length, 1);
+        assert.equal(runtime.durableMic, true);
+      }
+    });
+  }
+}
+
+for (const refuseDisable of [false, true]) {
+  test(`legacy initial Camera Off retains an unproved late video shutdown: disable refusal ${refuseDisable}`, async t => {
+    const coordinator = module.exports.createCaptureRetirementCoordinator();
+    const runtime = createRuntime({ captureRetirementCoordinator: coordinator });
+    const pending = deferred();
+    runtime.queueMedia({ wait: pending.promise, video: { refuseStop: true, refuseDisable } });
+    const h = await mount(runtime, { enabled: true, naturalLifecycle: true,
+      analyticsContext: { surface: "chat-thread" }, initialMediaPreferences: { cameraEnabled: true, micEnabled: true } });
+    t.after(() => h.unmount());
+    await h.rerender({ initialMediaPreferences: { cameraEnabled: false, micEnabled: true } });
+    pending.resolve();
+    await h.run(async () => { for (let i = 0; i < 200; i += 1) await Promise.resolve(); });
+    const video = runtime.localStreams[0].getVideoTracks()[0];
+    assert.equal(coordinator.retryRetiredCommunicationCaptures(), false, "late camera remains owned until stop is proved");
+    assert.equal(runtime.channels.length, 0, "unverified initial shutdown cannot become a live call");
+    assert.match(h.getResult().error, /[Ss]hutdown.*[Rr]etry End/);
+    assert.equal(h.getResult().cameraEnabled, refuseDisable, "projection cannot hide a still-enabled live camera");
+    await assert.rejects(() => h.run(() => h.getResult().leaveRoom()), /shutdown/);
+    video.refuseStop = false;
+    video.refuseDisable = false;
+    await h.run(() => h.getResult().leaveRoom());
+    assert.equal(video.readyState, "ended");
+    assert.equal(coordinator.retryRetiredCommunicationCaptures(), true);
+  });
+}
+
+test("legacy initial video cancellation cannot erase a later renewed camera preference", async t => {
+  const runtime = createRuntime();
+  const pending = deferred();
+  runtime.queueMedia({ wait: pending.promise });
+  const h = await mount(runtime, { enabled: true, naturalLifecycle: true,
+    analyticsContext: { surface: "chat-thread" }, initialMediaPreferences: { cameraEnabled: true, micEnabled: true } });
+  t.after(() => h.unmount());
+  await h.rerender({ initialMediaPreferences: { cameraEnabled: false, micEnabled: true } });
+  await h.rerender({ initialMediaPreferences: { cameraEnabled: true, micEnabled: true } });
+  pending.resolve();
+  await h.run(async () => { for (let i = 0; i < 200; i += 1) await Promise.resolve(); });
+  assert.equal(runtime.captureRequests.filter(request => request.video).length, 2, "the canceled attempt cannot be recycled for the new request");
+  assert.equal(live(runtime, "video").length, 1, "the newest intent receives its own eligible capture");
+  assert.equal(live(runtime, "audio")[0], runtime.localStreams[0].getAudioTracks()[0]);
+  assert.equal(runtime.durableCamera, true);
+  assert.equal(runtime.durableMic, true);
 });
 
 test("legacy automatic camera recovery stops adopted video when a newer off preference arrives during sender replacement", async t => {
@@ -1480,3 +1569,53 @@ test("adopted failed-stop camera remains process-owned across full hook unmount 
   assert.equal(coordinator.retryRetiredCommunicationCaptures(), true);
   assert.equal(live(replacement, "video").length, 1, "retirement retry cannot stop an adopted replacement owner's track");
 });
+
+test("legacy background initial audio resolving in foreground preserves requested camera", async t => {
+  const runtime = createRuntime(); runtime.appState = "background";
+  const h = await mount(runtime, { enabled: false, naturalLifecycle: true, allowBackgroundAudio: true,
+    analyticsContext: { surface: "chat-thread" }, initialMediaPreferences: { cameraEnabled: true, micEnabled: true } });
+  t.after(() => h.unmount());
+  const initialCapture = deferred(); runtime.queueMedia({ wait: initialCapture.promise });
+  await h.rerender({ enabled: true });
+  assert.ok(runtime.captureRequests.some(r => r.audio && !r.video), "initial acquisition must be background audio only");
+  const permissionRead = deferred(); runtime.microphoneReadBarrier = permissionRead.promise;
+  await h.run(() => runtime.emitAppState("active"));
+  initialCapture.resolve();
+  await h.run(async () => { for (let i = 0; i < 100; i++) await Promise.resolve(); });
+  runtime.microphoneReadBarrier = null; permissionRead.resolve();
+  await h.run(async () => { for (let i = 0; i < 200; i++) await Promise.resolve(); });
+  assert.equal(h.getResult().cameraEnabled, true, "background audio-only receipt is not a denied camera receipt");
+  assert.equal(live(runtime, "video").length, 1);
+  assert.equal(runtime.durableCamera, true);
+});
+
+for (const refuseDisable of [false, true]) {
+  test(`legacy canceled foreground video retains unverified shutdown: disable refusal ${refuseDisable}`, async t => {
+    const coordinator = module.exports.createCaptureRetirementCoordinator();
+    const { runtime, h } = await start(t, { video: true, backgroundAudio: true,
+      captureRetirementCoordinator: coordinator });
+    t.after(async () => {
+      for (const stream of runtime.localStreams) for (const track of stream.getVideoTracks()) {
+        track.refuseStop = false; track.refuseDisable = false;
+      }
+      coordinator.retryRetiredCommunicationCaptures();
+    });
+    await h.run(() => runtime.emitAppState("background"));
+    const pending = deferred();
+    runtime.queueMedia({ wait: pending.promise, video: { refuseStop: true, refuseDisable } });
+    await h.run(() => runtime.emitAppState("active"));
+    await h.rerender({ initialMediaPreferences: { cameraEnabled: false, micEnabled: true } });
+    pending.resolve();
+    await h.run(async () => { for (let i = 0; i < 200; i++) await Promise.resolve(); });
+    assert.equal(live(runtime, "video").length, Number(refuseDisable), "injected native failure prevents shutdown proof");
+    assert.equal(coordinator.retryRetiredCommunicationCaptures(), false, "failed native stop remains process owned");
+    assert.equal(h.getResult().cameraEnabled, refuseDisable, "public camera projection cannot hide the still-enabled failed-stop track");
+    assert.match(h.getResult().error ?? "", /[Cc]amera.*shutdown.*verified/);
+    await assert.rejects(() => h.run(() => h.getResult().leaveRoom()), /shutdown/);
+    for (const stream of runtime.localStreams) for (const track of stream.getVideoTracks()) {
+      track.refuseStop = false; track.refuseDisable = false;
+    }
+    await h.run(() => h.getResult().leaveRoom());
+    assert.equal(coordinator.retryRetiredCommunicationCaptures(), true);
+  });
+}

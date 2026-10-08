@@ -1570,7 +1570,17 @@ export function useCommunicationRoomSession({
 
     const requestedCamera = cameraEnabledRef.current;
     const requestedMic = micEnabledRef.current;
+    const cameraIntentRevision = foregroundCameraIntentRevisionRef.current;
     const micIntentRevision = foregroundMicIntentRevisionRef.current;
+    const ownsCameraIntent = () => requestedCamera && cameraIntentRevision === foregroundCameraIntentRevisionRef.current
+      && cameraEnabledRef.current;
+    const retainUncapturedCameraIntent = () => {
+      if (cameraEnabledRef.current && (!ownsCameraIntent() || appStateRef.current !== "active")) {
+        // A newer On also needs its own acquisition after this stale attempt
+        // settles; initial presence may report Off without erasing that intent.
+        deferredInitialCameraGenerationRef.current = generation;
+      }
+    };
     const wantsCamera = appIsActive && requestedCamera;
     const wantsMic = requestedMic && (appIsActive || backgroundAudioAllowed);
     logChatRtc("local_stream_start", {
@@ -1578,7 +1588,7 @@ export function useCommunicationRoomSession({
       wantsCamera,
       wantsMic,
     });
-    const canUseCamera = wantsCamera
+    const cameraPermissionGranted = wantsCamera
       ? requestMissingPermissions && appIsActive
         ? await ensureCameraPermission()
         : cameraPermissionSnapshotRef.current.state === "granted"
@@ -1590,6 +1600,10 @@ export function useCommunicationRoomSession({
         : microphonePermissionRef.current.state === "granted"
       : false;
     if (!isActiveLegacyGeneration(generation)) return null;
+    retainUncapturedCameraIntent();
+    // Either permission read can outlive Camera Off or a foreground change.
+    const canUseCamera = cameraPermissionGranted && ownsCameraIntent()
+      && appStateRef.current === "active";
     const canUseMic = microphonePermissionGranted
       && micIntentRevision === foregroundMicIntentRevisionRef.current
       && micEnabledRef.current;
@@ -1599,7 +1613,7 @@ export function useCommunicationRoomSession({
       micPermission: microphonePermissionRef.current.state,
     });
 
-    if (appIsActive && requestedCamera && !canUseCamera) {
+    if (appIsActive && appStateRef.current === "active" && ownsCameraIntent() && !canUseCamera) {
       cameraEnabledRef.current = false;
       setCameraEnabled(false);
     }
@@ -1629,6 +1643,7 @@ export function useCommunicationRoomSession({
       return null;
     }
 
+    retainUncapturedCameraIntent();
     if (!stream) {
       setLocalStreamURL("");
       logChatRtc("local_stream_failed", {
@@ -1637,6 +1652,24 @@ export function useCommunicationRoomSession({
         canUseMic,
       });
       return null;
+    }
+
+    const cameraIntentCurrent = ownsCameraIntent() && appStateRef.current === "active";
+    if (!cameraIntentCurrent) {
+      // The pending native result was not visible to the immediate privacy
+      // stop. Shut down only its canceled camera and preserve authorized audio.
+      for (const track of stream.getVideoTracks()) {
+        try { track.enabled = false; } catch { /* Verify shutdown below. */ }
+        try { track.stop(); } catch { /* Verify shutdown below. */ }
+      }
+      if (stream.getVideoTracks().some((track) => String(track.readyState).toLowerCase() !== "ended")) {
+        acquisition?.reservation.retire();
+        // Retain projection and End ownership even if native disable also
+        // refused. Never attach this unverified stream to a peer.
+        auxiliaryStreamsRef.current.push(stream);
+        notifyLocalMediaProjection();
+        throw new Error("communication_initial_camera_shutdown_unverified");
+      }
     }
 
     const microphoneIntentCurrent = micIntentRevision === foregroundMicIntentRevisionRef.current
@@ -1655,6 +1688,7 @@ export function useCommunicationRoomSession({
     }
 
     const cameraTrackReady = canUseCamera
+      && cameraIntentCurrent
       && !!getCommunicationTrack(stream, "video")
       && setCommunicationTrackEnabled(stream, "video", true);
     const microphoneTrackReady = canUseMic
@@ -1662,7 +1696,7 @@ export function useCommunicationRoomSession({
       && !!getCommunicationTrack(stream, "audio")
       && setCommunicationTrackEnabled(stream, "audio", true);
 
-    if (appIsActive && requestedCamera && !cameraTrackReady) {
+    if (appIsActive && appStateRef.current === "active" && ownsCameraIntent() && !cameraTrackReady) {
       cameraEnabledRef.current = false;
       setCameraEnabled(false);
     }
@@ -3100,7 +3134,9 @@ export function useCommunicationRoomSession({
       reportRuntimeError("communication-init", error, {
         roomId,
       });
-      setError("Unable to connect this communication room right now.");
+      setError(error instanceof Error && error.message === "communication_initial_camera_shutdown_unverified"
+        ? "Camera shutdown could not be verified. Retry End."
+        : "Unable to connect this communication room right now.");
       setChannelState("error");
       setLoading(false);
     });
@@ -3327,6 +3363,12 @@ export function useCommunicationRoomSession({
     if (!extraStream) return null;
     if (!isExpectedGenerationCurrent() || localStreamRef.current !== expectedLocalStream) {
       acquisition?.reservation.retire();
+      if (kind === "video" && isActiveLegacyGeneration(expectedGeneration)
+        && extraStream.getVideoTracks().some((track) => String(track.readyState).toLowerCase() !== "ended")) {
+        auxiliaryStreamsRef.current.push(extraStream);
+        notifyLocalMediaProjection();
+        setError("Camera shutdown could not be verified. Retry End.");
+      }
       return null;
     }
 
@@ -3467,14 +3509,16 @@ export function useCommunicationRoomSession({
         cameraEnabledRef.current = nextCameraEnabled;
         setCameraEnabled(nextCameraEnabled);
       }
-      if (nextCameraEnabled) {
+      // Camera cancellation is independent of the retained microphone intent.
+      // Settle its own result without skipping the microphone recovery below.
+      const cameraRestored = !nextCameraEnabled || await (async () => {
         const restoredCameraTrack = await ensureTrackKind("video", {
           attachToPeers: false,
           expectedGeneration: generation,
           isCurrent: ownsCameraIntent,
         });
         if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
-        if (!ownsCameraIntent()) return false;
+        if (!ownsCameraIntent()) return cameraEnabledRef.current || stopLocalMediaKind("video");
         if (!restoredCameraTrack) {
           cameraEnabledRef.current = false;
           setCameraEnabled(false);
@@ -3485,7 +3529,8 @@ export function useCommunicationRoomSession({
             attachMissingLocalTracks(peerConnection, false, generation)
           )),
         );
-        if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active" || !ownsCameraIntent()) return false;
+        if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
+        if (!ownsCameraIntent()) return cameraEnabledRef.current || stopLocalMediaKind("video");
         if (!Object.values(peerConnectionsRef.current).every((peerConnection) => (
           peerConnection.getSenders().some((sender: any) => sender.track === restoredCameraTrack)
         ))) {
@@ -3497,8 +3542,11 @@ export function useCommunicationRoomSession({
           return false;
         }
         if (!await renegotiateAllPeers(true)) return false;
-        if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active" || !ownsCameraIntent()) return false;
-      }
+        if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
+        if (!ownsCameraIntent()) return cameraEnabledRef.current || stopLocalMediaKind("video");
+        return true;
+      })();
+      if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
       deferredInitialCameraGenerationRef.current = null;
 
       const requestedMic = micEnabledRef.current || resumeMicAfterForegroundRef.current;
@@ -3511,7 +3559,7 @@ export function useCommunicationRoomSession({
       if (intentRevision === foregroundMicIntentRevisionRef.current) {
         resumeMicAfterForegroundRef.current = nextMicEnabled && !micResult;
       }
-      return micResult || !requestedMic;
+      return cameraRestored && (micResult || !requestedMic);
     })().finally(() => {
       if (foregroundMediaRestorationRef.current?.promise === operation) foregroundMediaRestorationRef.current = null;
     });
@@ -3531,8 +3579,8 @@ export function useCommunicationRoomSession({
       const currentAppState = AppState.currentState;
       appStateRef.current = currentAppState;
       if (currentAppState === "active") {
-        await restoreLocalMediaAfterForeground();
-        if (isCurrent() && channelRef.current) {
+        const restored = await restoreLocalMediaAfterForeground();
+        if (restored && isCurrent() && channelRef.current) {
           channelStateRef.current = "live";
           setChannelState("live");
           setError(null);
