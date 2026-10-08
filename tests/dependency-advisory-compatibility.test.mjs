@@ -14,6 +14,8 @@ test("patched advisory leaves are resolved independently in all three package tr
   const rootLock = readJson("package-lock.json");
   assert.equal(rootLock.packages["node_modules/@humanfs/node"].version, "0.16.8");
   assert.equal(rootLock.packages["node_modules/postcss"].version, "8.5.23");
+  assert.equal(rootManifest.overrides["shell-quote"], "1.11.0");
+  assert.equal(rootLock.packages["node_modules/shell-quote"].version, "1.11.0");
   assert.equal(rootManifest.overrides["fast-uri"], "3.1.7");
   assert.equal(rootLock.packages["node_modules/fast-uri"].version, "3.1.7");
   assert.equal(rootManifest.overrides.undici, "6.28.1");
@@ -85,6 +87,36 @@ test("patched undici preserves Expo's fetch and response contract without networ
   } finally {
     await dispatcher.close();
   }
+});
+
+test("React Native devtools resolves shell-quote that rejects post-comment line terminators", () => {
+  const reactNativeRequire = createRequire(require.resolve("react-native/package.json"));
+  const devtoolsRequire = createRequire(reactNativeRequire.resolve("react-devtools-core/package.json"));
+  assert.equal(devtoolsRequire("shell-quote/package.json").version, "1.11.0");
+  const { parse, quote } = devtoolsRequire("shell-quote");
+
+  // GHSA-pqg4-j6r4-53mv: a comment can hide an opening quote, leaving a
+  // subsequent line terminator to expose the rest of an argument as shell input.
+  // Inspect the quoting contract only; never execute the resulting shell text.
+  for (const lineTerminator of ["\n", "\r", "\u2028", "\u2029"]) {
+    assert.throws(() => quote([
+      "echo", "safe", { comment: "comment" }, `argument${lineTerminator}printf injected;#`,
+    ]), TypeError);
+    assert.throws(() => quote([
+      "echo", { comment: "comment" }, "intervening safe token", `argument${lineTerminator}printf injected;#`,
+    ]), TypeError);
+    const parsedWithComment = parse("echo https://example.invalid/#fragment");
+    assert.ok(parsedWithComment.some((token) => typeof token === "object" && "comment" in token));
+    assert.throws(() => quote([
+      ...parsedWithComment, `argument${lineTerminator}printf injected;#`,
+    ]), TypeError);
+  }
+
+  const ordinaryArgs = ["open", "a path with spaces", "Chi'llywood", "quote\"here", "$literal", "line\nbreak"];
+  assert.deepEqual(parse(quote(ordinaryArgs)), ordinaryArgs);
+  assert.deepEqual(parse(quote(["echo", "safe", { comment: "ordinary comment" }])), [
+    "echo", "safe", { comment: "ordinary comment" },
+  ]);
 });
 
 test("xcode uses the patched uuid line without changing native identifier generation", () => {

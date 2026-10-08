@@ -369,3 +369,30 @@ The v5 delivery and diagnostic attempts above are completed observations. V6
 build/install and physical qualification remain pending. Final CI receipts
 belong to the exact PR head; delivery and physical results must be added from
 actual execution rather than inferred from CI.
+
+### CI follow-up before the first v6 build
+
+Source Validation run `37842417416` on `a6986aae3141f55c78f3f30f7a5b3001210288c3`
+passed Product, Database, Native SDK Contracts, Policy and Core. Sensitive and
+Native/Release stopped at old source-shape assertions for foreground Answer;
+Autonomous stopped at newly reported dependency advisories. That head did not
+pass Required Validation and was not built. Read-only EAS inventories confirmed
+no Android or iOS v6-runtime build existed before this follow-up.
+
+The call-policy guard now follows TypeScript function/branch structure, exact
+native receipts, per-operation admission consumption and dispatch order. Ten
+negative controls must fail their intended assertion. The dependency repairs
+and maintained local backports are documented in
+[`../dependencies/2026-10-08-advisory-repairs.md`](../dependencies/2026-10-08-advisory-repairs.md).
+The original production audit threshold remains unchanged; all four production
+trees passed with zero high/critical findings. This audit result does not replace
+the backports' behavioral and provenance tests or establish physical qualification.
+The dependency/vendor inputs require a new pre-build v6 digest seal below.
+The completed follow-up passed 1,268 local product/call tests with zero failures
+or skips, plus lint and TypeScript. Exact-head hosted validation remains required.
+
+[`PR539_V6_EXECUTION_PLAN_2026-10-08.md`](PR539_V6_EXECUTION_PLAN_2026-10-08.md)
+maps all 105 matrix IDs exactly once to execution batches. It records actual
+speech/motion, native/logging positive controls, live heartbeat readbacks,
+rate-limit scheduling and the precise hardware/person/state prerequisites.
+No matrix verdict is advanced by this plan.

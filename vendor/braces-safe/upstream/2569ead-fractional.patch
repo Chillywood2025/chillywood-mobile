@@ -1,0 +1,50 @@
+From 2569eada352a032decd189db906c3c7d87be0ad0 Mon Sep 17 00:00:00 2001
+From: Progrmaietor <paularcelillo@gmail.com>
+Date: Fri, 2 Oct 2026 20:16:24 -0600
+Subject: [PATCH] fix: enforce fractional maxDepth while parsing
+
+---
+ lib/parse.js         | 4 ++--
+ test/braces.parse.js | 7 +++++++
+ 2 files changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/lib/parse.js b/lib/parse.js
+index b8183b6..99cfb63 100644
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -146,7 +146,7 @@ const parse = (input, options = {}) => {
+      */
+ 
+     if (value === CHAR_LEFT_PARENTHESES) {
+-      if (nesting >= maxDepth) {
++      if (nesting + 1 > maxDepth) {
+         throw new SyntaxError(`Input depth (${nesting + 1}), exceeds max depth (${maxDepth})`);
+       }
+       nesting++;
+@@ -211,7 +211,7 @@ const parse = (input, options = {}) => {
+      */
+ 
+     if (value === CHAR_LEFT_CURLY_BRACE) {
+-      if (nesting >= maxDepth) {
++      if (nesting + 1 > maxDepth) {
+         throw new SyntaxError(`Input depth (${nesting + 1}), exceeds max depth (${maxDepth})`);
+       }
+       nesting++;
+diff --git a/test/braces.parse.js b/test/braces.parse.js
+index 01a45cc..024784f 100644
+--- a/test/braces.parse.js
++++ b/test/braces.parse.js
+@@ -23,6 +23,13 @@ describe('braces.parse()', () => {
+       assert.throws(() => parse('{{a,b},c}', { maxDepth: 1 }), /exceeds max depth/);
+       assert.doesNotThrow(() => parse('{{a,b},c}', { maxDepth: 2 }));
+     });
++
++    it('should enforce fractional maximum depth values', () => {
++      assert.doesNotThrow(() => parse('{a,b}', { maxDepth: 1.5 }));
++      assert.throws(() => parse('{{a,b},c}', { maxDepth: 1.5 }), /exceeds max depth/);
++      assert.doesNotThrow(() => parse('(a)', { maxDepth: 1.5 }));
++      assert.throws(() => parse('((a))', { maxDepth: 1.5 }), /exceeds max depth/);
++    });
+   });
+ 
+   describe('valid', () => {

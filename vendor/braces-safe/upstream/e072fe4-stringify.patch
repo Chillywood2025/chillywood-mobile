@@ -1,0 +1,54 @@
+From e072fe408812dbcb428cf85fde4cfb12ec4021f0 Mon Sep 17 00:00:00 2001
+From: AathilFelix <59413143+AathilFelix@users.noreply.github.com>
+Date: Sat, 3 Oct 2026 14:29:44 +0530
+Subject: [PATCH] fix: do not escape valid nested braces in stringify
+
+The depth limit changed the recursive stringify call. The call now
+sends each node as the parent. Before, the call sent no parent.
+
+When escapeInvalid is true, isInvalidBrace(parent) now examines a real
+parent. Valid nested braces then get escape characters. For example,
+"{{a}}" becomes "\{\{a\}\}".
+
+This change sends no parent again. The depth value does not change.
+---
+ lib/stringify.js         | 2 +-
+ test/braces.stringify.js | 7 +++++++
+ 2 files changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/lib/stringify.js b/lib/stringify.js
+index 4d8b196..651849c 100644
+--- a/lib/stringify.js
++++ b/lib/stringify.js
+@@ -27,7 +27,7 @@ module.exports = (ast, options = {}) => {
+ 
+     if (node.nodes) {
+       for (const child of node.nodes) {
+-        output += stringify(child, node, child.nodes ? depth + 1 : depth);
++        output += stringify(child, undefined, child.nodes ? depth + 1 : depth);
+       }
+     }
+     return output;
+diff --git a/test/braces.stringify.js b/test/braces.stringify.js
+index 4b46227..36b1bf7 100644
+--- a/test/braces.stringify.js
++++ b/test/braces.stringify.js
+@@ -3,6 +3,7 @@
+ require('mocha');
+ const assert = require('assert').strict;
+ const stringify = require('../lib/stringify');
++const parse = require('../lib/parse');
+ 
+ describe('braces.stringify()', () => {
+   it('should reject deeply nested ASTs', () => {
+@@ -11,4 +12,10 @@ describe('braces.stringify()', () => {
+     ast = { type: 'root', nodes: [ast] };
+     assert.throws(() => stringify(ast), /exceeds max depth/);
+   });
++
++  it('should not escape valid nested braces when escapeInvalid is set', () => {
++    for (const pattern of ['{{a}}', '{a,{b}}', '{{x}y}', '{a,{b,{c}}', '{}{a}']) {
++      assert.equal(stringify(parse(pattern), { escapeInvalid: true }), pattern);
++    }
++  });
+ });

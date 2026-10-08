@@ -1539,13 +1539,192 @@ assert.match(
   "the app-wide foreground surface remains customer-visible after bounded native grace",
 );
 assert.match(iosNativeCallsSource, /const nativePresentedCallUuidsByInviteId = new Map<string, string>\(\)/u, "native presentation ownership binds each invite to its exact CallKit UUID");
-assert.match(iosNativeCallsSource, /shouldReuseIosNativeCallReadiness[\s\S]{0,1200}eventListener = listener \?\? null;[\s\S]{0,240}drainPendingEventsForExactLifecycle/u, "same account/session revalidation preserves an already-presented exact CallKit invite while rebinding its current event listener");
-assert.match(iosNativeCallsSource, /event\.type === "incoming" \|\| event\.type === "recovered"/u, "only confirmed native incoming/recovered events acquire presentation ownership");
-assert.match(iosNativeCallsSource, /nativePresentedCallUuidsByInviteId\.set\(inviteId, callUuid\)/u, "confirmed CallKit presentation records the exact invite/UUID pair");
-assert.match(iosNativeCallsSource, /requestIosNativeCallAnswer\(inviteId: string\)[\s\S]{0,520}requestAnswerAsync\(callUuid, normalizedInviteId\)/u, "foreground Answer delegates the exact native invite/UUID pair to CallKit");
-assert.match(iosNativeCallsSource, /waitForIosNativeCallPresentation[\s\S]{0,1800}nativePresentedCallUuidsByInviteId\.has\(normalizedInviteId\)[\s\S]{0,1200}finish\("timeout"\)/u, "foreground Answer waits a bounded interval for exact late CallKit ownership");
-assert.match(rootLayoutSource, /waitForIosNativeCallPresentation\(invite\.id\)[\s\S]{0,240}resolveIosForegroundIncomingAnswerAuthority[\s\S]{0,760}answerAuthority === "blocked"/u, "app-wide Answer arbitrates late CallKit ownership and fails closed while ownership is unknown");
-assert.match(chatThreadSource, /waitForIosNativeCallPresentation\(invite\.id\)[\s\S]{0,240}resolveIosForegroundIncomingAnswerAuthority[\s\S]{0,680}answerAuthority === "blocked"/u, "same-thread Answer uses the same late CallKit ownership arbitration");
+// These checks follow the executable function/branch structure. Comments,
+// diagnostics and recovery code cannot invalidate a character-distance proxy.
+// Runtime admission and cancellation are independently exercised by the actual
+// facade and mounted-root/thread suites, including withheld native receipts.
+function assertIosForegroundAnswerStructure(facadeSource, layoutSource, threadSource) {
+  const parse = (name, source) => {
+    const ast = ts.createSourceFile(name, source, ts.ScriptTarget.Latest, true,
+      name.endsWith("tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+    assert.equal(ast.parseDiagnostics.length, 0, `${name} must parse`);
+    return ast;
+  };
+  const find = (owner, predicate) => {
+    const matches = [];
+    const visit = node => { if (predicate(node)) matches.push(node); ts.forEachChild(node, visit); };
+    visit(owner);
+    return matches;
+  };
+  const one = (matches, description) => {
+    assert.equal(matches.length, 1, description);
+    return matches[0];
+  };
+  const namedFunction = (ast, name) => one(ast.statements.filter(node => ts.isFunctionDeclaration(node)
+    && node.name?.text === name && node.body), `one production ${name}`);
+  const calls = (owner, name) => find(owner, node => ts.isCallExpression(node)
+    && node.expression.getText() === name);
+  const variable = (owner, name) => one(find(owner, node => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name) && node.name.text === name), `one ${name} declaration`);
+  const inside = (owner, node) => node.pos >= owner.pos && node.end <= owner.end;
+  const returns = owner => find(owner, ts.isReturnStatement);
+  const rejects = owner => returns(owner).some(node => node.expression?.kind === ts.SyntaxKind.FalseKeyword);
+  const authorityBranch = (owner, value) => one(find(owner, node => ts.isIfStatement(node)
+    && ts.isBinaryExpression(node.expression)
+    && node.expression.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+    && node.expression.left.getText() === "answerAuthority"
+    && ts.isStringLiteral(node.expression.right) && node.expression.right.text === value), `one ${value} branch`);
+  const property = (object, name) => one(object.properties.filter(node => ts.isPropertyAssignment(node)
+    && node.name.getText() === name), `one ${name} property`);
+
+  const facadeAst = parse("iosNativeCalls.ts", facadeSource);
+  const readiness = namedFunction(facadeAst, "startIosNativeCallsReadiness");
+  const reuse = one(find(readiness, node => ts.isIfStatement(node)
+    && calls(node.expression, "shouldReuseIosNativeCallReadiness").length === 1), "one same-authority reuse branch").thenStatement;
+  const listener = one(find(reuse, node => ts.isBinaryExpression(node)
+    && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && node.left.getText() === "eventListener"), "reuse installs one current listener");
+  assert.equal(listener.right.getText(), "listener ?? null");
+  const rebound = one(calls(reuse, "NativeCallsModule.startVoipRegistrationAsync"), "reuse requests genuine native token/presentation replay");
+  const drain = one(calls(reuse, "drainPendingEventsForExactLifecycle"), "reuse drains exact native receipts");
+  assert.ok(ts.isAwaitExpression(variable(reuse, "rebound").initializer)
+    && ts.isAwaitExpression(drain.parent), "native replay and receipt drain are awaited");
+  assert.ok(listener.end < rebound.pos && rebound.end < drain.pos, "listener precedes native rebind and exact receipt drain");
+  assert.equal(calls(reuse, "clearNativePresentedInvites").length, 0, "healthy reuse cannot erase native ownership");
+  assert.equal(calls(reuse, "nativeSubscription?.remove").length, 0, "healthy reuse retains its observer");
+
+  const ownership = variable(facadeAst, "updateNativePresentationOwnership");
+  const record = one(calls(facadeAst, "nativePresentedCallUuidsByInviteId.set"), "only the native receipt owner can record invite/UUID ownership");
+  const confirmedEvent = (node, type) => ts.isBinaryExpression(node)
+    && node.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+    && node.left.getText() === "event.type" && ts.isStringLiteral(node.right) && node.right.text === type;
+  const confirmedBranch = one(find(ownership, node => ts.isIfStatement(node)
+    && ts.isBinaryExpression(node.expression) && node.expression.operatorToken.kind === ts.SyntaxKind.BarBarToken
+    && confirmedEvent(node.expression.left, "incoming") && confirmedEvent(node.expression.right, "recovered")), "incoming/recovered receipts own presentation");
+  assert.ok(inside(confirmedBranch.thenStatement, record));
+  assert.deepEqual(record.arguments.map(node => node.getText()), ["inviteId", "callUuid"]);
+
+  const presentationWait = namedFunction(facadeAst, "waitForIosNativeCallPresentation");
+  const presentedResults = [
+    ...returns(presentationWait).filter(node => node.expression && ts.isStringLiteral(node.expression) && node.expression.text === "presented"),
+    ...calls(presentationWait, "finish").filter(node => ts.isStringLiteral(node.arguments[0]) && node.arguments[0].text === "presented"),
+  ];
+  assert.equal(presentedResults.length, 3, "initial, notification and deadline checks can confirm native presentation");
+  for (const result of presentedResults) {
+    const confirmed = find(presentationWait, node => ts.isIfStatement(node)
+      && ts.isCallExpression(node.expression)
+      && node.expression.expression.getText() === "nativePresentedCallUuidsByInviteId.has"
+      && node.expression.arguments.length === 1
+      && node.expression.arguments[0].getText() === "normalizedInviteId"
+      && inside(node.thenStatement, result));
+    assert.equal(confirmed.length, 1, "every presented outcome requires the exact native receipt");
+  }
+  const timeout = one(calls(presentationWait, "setTimeout"), "exact native receipt wait has one deadline");
+  assert.ok(ts.isArrowFunction(timeout.arguments[0]));
+  assert.equal(timeout.arguments[1].getText(), "boundedTimeoutMs");
+  assert.equal(calls(timeout.arguments[0], "finish").filter(call => ts.isStringLiteral(call.arguments[0])
+    && call.arguments[0].text === "timeout").length, 1, "missing native receipt resolves timeout");
+  const boundedWait = variable(presentationWait, "boundedTimeoutMs");
+  const upperBound = one(calls(boundedWait, "Math.min"), "receipt deadline has a fixed maximum");
+  assert.ok(ts.isNumericLiteral(upperBound.arguments[0]) && Number(upperBound.arguments[0].text) === 20_000);
+  assert.equal(upperBound.arguments[1].getText(), "timeoutMs");
+
+  const ensure = namedFunction(facadeAst, "ensureIosForegroundIncomingCallPresentation");
+  const report = one(calls(ensure, "native.reportForegroundIncomingCallAsync"), "foreground fallback requests native presentation");
+  const wait = one(calls(ensure, "waitForIosNativeCallPresentation"), "foreground fallback awaits an actual presentation receipt");
+  const admitted = one(calls(ensure, "foregroundAnswerValidations.set"), "foreground admission is operation-bound");
+  assert.equal(admitted.arguments[0].getText(), "input.isCurrent");
+  assert.ok(report.end < wait.pos && wait.end < admitted.pos, "report and confirmed receipt precede foreground admission");
+  assert.equal(calls(ensure, "nativePresentedCallUuidsByInviteId.set").length, 0, "a returned report UUID cannot manufacture native ownership");
+
+  const request = namedFunction(facadeAst, "requestIosNativeCallAnswer");
+  assert.equal(request.parameters.length, 2, "native Answer requires invite and current UI operation");
+  assert.equal(request.parameters[1].name.getText(), "isCurrent");
+  assert.ok(ts.isFunctionTypeNode(request.parameters[1].type) && !request.parameters[1].initializer
+    && !request.parameters[1].questionToken, "UI operation cannot default to an always-current callback");
+  const admission = one(calls(request, "foregroundAnswerValidations.get"), "native Answer reads its own admission");
+  const consume = one(calls(request, "foregroundAnswerValidations.delete"), "native Answer consumes admission once");
+  assert.equal(admission.arguments[0].getText(), "isCurrent", "admission lookup belongs to the current UI operation");
+  assert.equal(consume.arguments[0].getText(), "isCurrent", "admission consumption belongs to the current UI operation");
+  const exactAdmission = one(find(request, node => ts.isIfStatement(node)
+    && find(node.expression, child => ts.isPrefixUnaryExpression(child)
+      && child.operator === ts.SyntaxKind.ExclamationToken && child.operand.getText() === "foregroundValidation").length > 0), "missing foreground admission is rejected");
+  assert.ok(rejects(exactAdmission.thenStatement));
+  for (const [field, expected] of [["inviteId", "normalizedInviteId"], ["generation", "generation"], ["context", "context"]]) {
+    assert.equal(find(exactAdmission.expression, node => ts.isBinaryExpression(node)
+      && node.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken
+      && node.left.getText() === `foregroundValidation.${field}` && node.right.getText() === expected).length,
+    1, `foreground admission binds exact ${field}`);
+  }
+  const freshValidation = one(calls(request, "foregroundValidation.validate"), "native Answer revalidates current raw server state");
+  const validationGuard = one(find(request, node => ts.isIfStatement(node) && inside(node.expression, freshValidation)), "fresh validation guards native dispatch");
+  assert.ok(rejects(validationGuard.thenStatement));
+  const nativeAnswer = one(calls(request, "NativeCallsModule.requestAnswerAsync"), "one exact native Answer dispatch");
+  assert.deepEqual(nativeAnswer.arguments.map(node => node.getText()), ["callUuid", "normalizedInviteId"]);
+  assert.ok(admission.end < consume.pos && consume.end < exactAdmission.pos
+    && exactAdmission.end < freshValidation.pos && validationGuard.end < nativeAnswer.pos,
+  "admission is consumed and freshly validated before exact native Answer dispatch");
+
+  for (const [name, source, component, handler, outcome] of [
+    ["_layout.tsx", layoutSource, "IncomingCallNotificationBridge", "openCall", "nativePresentationWaitOutcome"],
+    ["thread.tsx", threadSource, "ChillyChatThreadScreen", "acceptIncomingInvite", "presentationWaitOutcome"],
+  ]) {
+    const ast = parse(name, source);
+    const owner = variable(namedFunction(ast, component), handler).initializer;
+    const presentation = one(calls(owner, "ensureIosForegroundIncomingCallPresentation"), `${name} uses authenticated foreground presentation`);
+    const options = presentation.arguments[0];
+    assert.ok(ts.isObjectLiteralExpression(options));
+    assert.equal(property(options, "isCurrent").initializer.getText(), "ownsForegroundAnswer");
+    const current = variable(owner, "ownsForegroundAnswer");
+    assert.ok(ts.isArrowFunction(current.initializer), "the handler captures its mounted operation");
+    const currentCheck = one(calls(current, handler === "openCall" ? "incomingActionOwner.isCurrent" : "isAnswerOperationCurrent"), "UI callback checks the mounted operation owner");
+    assert.equal(currentCheck.arguments[0].getText(), "operation");
+    const arbitration = one(calls(owner, "resolveIosForegroundIncomingAnswerAuthority"), `${name} arbitrates native ownership`);
+    assert.equal(arbitration.arguments[0].getText(), outcome);
+    assert.ok(inside(variable(owner, outcome).initializer, presentation), "arbitration uses the actual presentation outcome");
+    const nativeBranch = authorityBranch(owner, "native_answer");
+    const blockedBranch = authorityBranch(owner, "blocked");
+    const dispatch = one(calls(owner, "requestIosNativeCallAnswer"), `${name} dispatches one native Answer`);
+    assert.ok(ts.isAwaitExpression(presentation.parent) && ts.isAwaitExpression(dispatch.parent), "UI waits for native presentation and native Answer acknowledgments");
+    assert.deepEqual(dispatch.arguments.map(node => node.getText()), ["invite.id", "ownsForegroundAnswer"],
+      "native dispatch retains the same UI operation that obtained presentation");
+    assert.ok(inside(nativeBranch.thenStatement, dispatch), "native dispatch belongs exclusively to native-owned arbitration");
+    assert.ok(ts.isBlock(nativeBranch.thenStatement) && ts.isReturnStatement(nativeBranch.thenStatement.statements.at(-1)),
+      "native-owned Answer returns without falling through to server acceptance");
+    assert.ok(ts.isBlock(blockedBranch.thenStatement) && ts.isReturnStatement(blockedBranch.thenStatement.statements.at(-1)),
+      "unknown or timed-out presentation stops the foreground Answer");
+    const blockedReturn = blockedBranch.thenStatement.statements.at(-1).expression;
+    assert.ok(!blockedReturn || blockedReturn.kind === ts.SyntaxKind.FalseKeyword, "blocked presentation cannot report successful Answer");
+    assert.ok(presentation.end <= arbitration.pos && arbitration.end <= nativeBranch.pos && nativeBranch.end <= blockedBranch.pos,
+      "presentation receipt is arbitrated before native Answer or blocked return");
+    const accepts = calls(owner, "updateChillyChatCallInviteStatus");
+    assert.equal(accepts.length, 1, "one fallback server acceptance remains");
+    assert.ok(blockedBranch.end < accepts[0].pos, "server acceptance cannot precede native-owned or blocked arbitration");
+    if (handler === "openCall") {
+      const clear = one(calls(nativeBranch.thenStatement, "clearAlert"), "native app-wide Answer clears its alert once");
+      assert.ok(dispatch.end < clear.pos, "app-wide alert clears only after awaiting native Answer");
+    }
+  }
+}
+assertIosForegroundAnswerStructure(iosNativeCallsSource, rootLayoutSource, chatThreadSource);
+for (const [target, from, to, expectedFailure] of [
+  [0, "eventListener = listener ?? null;", "retiredListener = listener ?? null;", "reuse installs one current listener"],
+  [0, "const rebound = await NativeCallsModule.startVoipRegistrationAsync(", "const rebound = await discardNativeReplay(", "reuse requests genuine native token/presentation replay"],
+  [0, "foregroundAnswerValidations.get(isCurrent)", "foregroundAnswerValidations.get(() => true)", "admission lookup belongs to the current UI operation"],
+  [0, "foregroundAnswerValidations.delete(isCurrent)", "discardAdmission(isCurrent)", "native Answer consumes admission once"],
+  [0, "foregroundValidation.validate()", "skipFreshValidation()", "native Answer revalidates current raw server state"],
+  [0, 'finish("timeout")', 'finish("stale")', "missing native receipt resolves timeout"],
+  [0, 'if (nativePresentedCallUuidsByInviteId.has(normalizedInviteId)) return "presented";', 'if (true) return "presented";', "every presented outcome requires the exact native receipt"],
+  [1, "requestIosNativeCallAnswer(invite.id, ownsForegroundAnswer)", "requestIosNativeCallAnswer(invite.id, () => true)", "native dispatch retains the same UI operation that obtained presentation"],
+  [2, 'if (answerAuthority === "blocked")', 'if (answerAuthority === "allowed")', "one blocked branch"],
+  [2, "ensureIosForegroundIncomingCallPresentation({", "waitForIosNativeCallPresentation({", "thread.tsx uses authenticated foreground presentation"],
+]) {
+  const sources = [iosNativeCallsSource, rootLayoutSource, chatThreadSource];
+  assert.ok(sources[target].includes(from), "foreground negative control targets actual source");
+  sources[target] = sources[target].replace(from, to);
+  assert.throws(() => assertIosForegroundAnswerStructure(...sources),
+    error => error?.code === "ERR_ASSERTION" && error.message.startsWith(expectedFailure),
+    `broken foreground admission must fail its intended guard: ${expectedFailure}`);
+}
 assert.match(iosNativeCallsSource, /typeof NativeCallsModule\.requestAnswerAsync !== "function"/u, "older same-runtime native binaries fail closed instead of invoking an unavailable Answer API");
 assert.match(iosNativeCallsSource, /"reportFailed"/u, "failed CallKit reporting releases fallback presentation ownership");
 assert.match(
@@ -1565,21 +1744,6 @@ assert.doesNotMatch(
 assert.doesNotMatch(rootLayoutSource, /nativeCallAction:\s*"answer"/u, "CallKit and foreground routes never carry authoritative action text");
 assert.match(rootLayoutSource, /createIosCallKitAnswerRouteHandler/u, "CallKit Answer uses the canonical bridge-auth-router provenance handler");
 assert.match(rootLayoutSource, /await waitForIosNativeCallAnswerRouteReadiness\(event\)[\s\S]*?await routeNativeAnswer\(event\)/u, "CallKit Answer waits for exact stable application readiness before native-authority navigation");
-assert.match(chatThreadSource, /answerAuthority === "native_answer"[\s\S]*?requestIosNativeCallAnswer\(invite\.id\)/u, "same-thread iOS Answer enters the exact CallKit handoff instead of bypassing native presentation state");
-const appWideOpenCallBlock = rootLayoutSource.slice(
-  rootLayoutSource.indexOf("const openCall = async () =>"),
-  rootLayoutSource.indexOf("const decline = async () =>"),
-);
-assert.match(
-  appWideOpenCallBlock,
-  /if \(answerAuthority === "native_answer"\)[\s\S]{0,180}requestIosNativeCallAnswer\(invite\.id\)[\s\S]{0,520}clearAlert\(\);[\s\S]{0,80}return;/u,
-  "an app-wide iOS Answer owned by CallKit must request the exact native answer instead of racing it",
-);
-assert.ok(
-  appWideOpenCallBlock.indexOf("requestIosNativeCallAnswer(invite.id)")
-    < appWideOpenCallBlock.indexOf("const acceptedInvite ="),
-  "native-owned foreground Answer must delegate to CallKit before any fallback server acceptance",
-);
 const nativeForegroundAnswerBlock = nativeCoordinatorSource.slice(
   nativeCoordinatorSource.indexOf("public func requestAnswer(callUuid: String, inviteId: String)"),
   nativeCoordinatorSource.indexOf("public func completeTerminalTransition(callUuid: String)"),

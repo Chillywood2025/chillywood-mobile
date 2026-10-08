@@ -34,17 +34,17 @@ const expectedMinimatch = Object.freeze({
   "node_modules/minimatch": "3.1.5",
 });
 const expectedBraceExpansion = Object.freeze({
-  "node_modules/brace-expansion": "5.0.9",
-  "node_modules/expo/node_modules/brace-expansion": "2.1.4",
-  "node_modules/minimatch/node_modules/brace-expansion": "1.1.18",
+  "node_modules/brace-expansion": "5.0.12",
+  "node_modules/expo/node_modules/brace-expansion": "2.1.7",
+  "node_modules/minimatch/node_modules/brace-expansion": "1.1.21",
 });
 const expectedOverrides = Object.freeze({
-  minimatch3: ["minimatch@3.1.5", "brace-expansion", "1.1.18"],
-  minimatch9: ["minimatch@9.0.9", "brace-expansion", "2.1.4"],
+  minimatch3: ["minimatch@3.1.5", "brace-expansion", "1.1.21"],
+  minimatch9: ["minimatch@9.0.9", "brace-expansion", "2.1.7"],
   minimatch10: [
-    ["@expo/fingerprint@0.15.5", "minimatch@10.2.5", "brace-expansion", "5.0.9"],
-    ["@typescript-eslint/typescript-estree@8.57.2", "minimatch@10.2.4", "brace-expansion", "5.0.9"],
-    ["glob@13.0.6", "minimatch@10.2.4", "brace-expansion", "5.0.9"],
+    ["@expo/fingerprint@0.15.5", "minimatch@10.2.5", "brace-expansion", "5.0.12"],
+    ["@typescript-eslint/typescript-estree@8.57.2", "minimatch@10.2.4", "brace-expansion", "5.0.12"],
+    ["glob@13.0.6", "minimatch@10.2.4", "brace-expansion", "5.0.12"],
   ],
 });
 const expectedImageSize = Object.freeze({
@@ -101,13 +101,15 @@ const expectedSupabasePresenceBackport = Object.freeze({
 });
 // Exact reviewed lock graph after the bounded browserslist, fast-uri, undici, js-yaml,
 // xmldom, @humanfs/node, PostCSS, xcode-scoped uuid, decoder advisory, and
-// LiveKit camera-convergence dependency closures. The decoder package paths are
+// LiveKit camera-convergence dependency closures, and the 2026-10-08 shell-quote,
+// compression, source-map-js, gRPC, braces and node-forge advisory repairs.
+// The decoder package paths are
 // excluded below and verified by their own exact identity witness; the LiveKit
 // identities remain in this digest and are also bound by their focused test.
 // The two Supabase Presence backport paths also have an exact identity witness;
 // every other Supabase identity remains in this unchanged-rest digest.
 // Any later package identity drift still fails closed at this digest.
-const expectedUnrelatedPackageGraphSha256 = "49f9be46469fd6ecee22148dce71d0bc72085e2e1d4a2f8c6d4d759ed23854d8";
+const expectedUnrelatedPackageGraphSha256 = "5608bdfbc11c252d9ae8335558d4e0362ba86c3ee0a1d8e909c9dd9ec9d531b3";
 const compatibilityClosurePaths = new Set([
   "node_modules/@supabase/realtime-js",
   "node_modules/@supabase/supabase-js",
@@ -163,9 +165,9 @@ function validatePolicy(model) {
   gate(min3.startsWith("1."), "MINIMATCH_3_BRACE_LINE_INVALID", "Minimatch 3 requires the brace-expansion 1.x callable API");
   gate(min9.startsWith("2."), "MINIMATCH_9_BRACE_LINE_INVALID", "Minimatch 9 requires the brace-expansion 2.x callable API");
   gate(min10.every((value) => value.startsWith("5.")), "MINIMATCH_10_BRACE_LINE_INVALID", "Minimatch 10 requires brace-expansion 5.x named exports");
-  gate(min3 === "1.1.18", "BRACE_EXPANSION_1_VULNERABLE", "The reviewed secure 1.x brace-expansion release is required");
-  gate(min9 === "2.1.4", "BRACE_EXPANSION_2_VULNERABLE", "The reviewed secure 2.x brace-expansion release is required");
-  gate(min10.every((value) => value === "5.0.9"), "BRACE_EXPANSION_5_VULNERABLE", "The reviewed secure 5.x brace-expansion release is required");
+  gate(min3 === "1.1.21", "BRACE_EXPANSION_1_VULNERABLE", "The reviewed secure 1.x brace-expansion release is required");
+  gate(min9 === "2.1.7", "BRACE_EXPANSION_2_VULNERABLE", "The reviewed secure 2.x brace-expansion release is required");
+  gate(min10.every((value) => value === "5.0.12"), "BRACE_EXPANSION_5_VULNERABLE", "The reviewed secure 5.x brace-expansion release is required");
   gate(model.postinstall === undefined && !model.patchScriptExists, "POSTINSTALL_MUTATION_FORBIDDEN", "Install-time dependency source mutation is forbidden");
   gate(model.sourceShapeClear, "INSTALLED_MINIMATCH_SOURCE_MUTATED", "Installed minimatch source differs from its upstream API shape");
   gate(model.npmProblems.length === 0, "NPM_LS_PROBLEMS_PRESENT", "npm ls reported dependency graph problems");
@@ -333,7 +335,7 @@ async function validateInstalledApis() {
     assert.equal(metadata.version, expectedVersion, entryPath);
     const major = Number(expectedVersion.split(".")[0]);
     const dependency = resolveInstalledPackage(entryPath, "brace-expansion");
-    const expectedBraceVersion = major === 3 ? "1.1.18" : major === 9 ? "2.1.4" : "5.0.9";
+    const expectedBraceVersion = major === 3 ? "1.1.21" : major === 9 ? "2.1.7" : "5.0.12";
     assert.equal(dependency.metadata.version, expectedBraceVersion, entryPath);
     const braceCommonJs = dependency.requester("brace-expansion");
     if (major < 10) assert.equal(typeof braceCommonJs, "function", entryPath);
@@ -358,6 +360,19 @@ async function validateInstalledApis() {
     ].join(";"), commonJsEntry], { encoding: "utf8", timeout: 2_000 });
     assert.notEqual(child.error?.code, "ETIMEDOUT", entryPath);
     assert.equal(child.signal, null, entryPath);
+    // These three recently disclosed paths overflowed the stack or repeatedly
+    // rescanned an expanding string before the old output cap took effect.
+    const nestedChild = spawnSync(process.execPath, ["-e", [
+      "const assert=require('node:assert/strict')",
+      "const {createRequire}=require('node:module')",
+      "const dependency=createRequire(process.argv[1])('brace-expansion')",
+      "const expand=dependency.expand||dependency",
+      "const patterns=['{a,'.repeat(4000)+'z'+'}'.repeat(4000),'{'.repeat(3200)+'a,b'+'}'.repeat(3200),'{a}'+'}'.repeat(32000)+',z}']",
+      "for(const pattern of patterns)assert.ok(Array.isArray(expand(pattern)))",
+    ].join(";"), path.join(packageRoot, "package.json")], { encoding: "utf8", timeout: 2_000 });
+    assert.equal(nestedChild.error?.code, undefined, entryPath);
+    assert.equal(nestedChild.signal, null, entryPath);
+    assert.equal(nestedChild.status, 0, `${entryPath}: ${nestedChild.stderr}`);
     observations.push({
       packagePath: entryPath,
       minimatchVersion: expectedVersion,
@@ -366,6 +381,7 @@ async function validateInstalledApis() {
       commonJs: "PASS",
       esm: esmResult,
       boundedMaliciousFixture: "PASS",
+      nestedAndRewriteFixtures: "PASS",
     });
   }
   return observations;
@@ -397,6 +413,9 @@ function killNegativeControls(base) {
     ["RESTORE_BRACE_1_1_17", "BRACE_EXPANSION_1_VULNERABLE", (m) => { m.overrides["minimatch@3.1.5"]["brace-expansion"] = "1.1.17"; }],
     ["RESTORE_BRACE_2_1_3", "BRACE_EXPANSION_2_VULNERABLE", (m) => { m.overrides["minimatch@9.0.9"]["brace-expansion"] = "2.1.3"; }],
     ["RESTORE_BRACE_5_0_8", "BRACE_EXPANSION_5_VULNERABLE", (m) => { m.overrides["@expo/fingerprint@0.15.5"]["minimatch@10.2.5"]["brace-expansion"] = "5.0.8"; }],
+    ["RESTORE_BRACE_1_1_18", "BRACE_EXPANSION_1_VULNERABLE", (m) => { m.overrides["minimatch@3.1.5"]["brace-expansion"] = "1.1.18"; }],
+    ["RESTORE_BRACE_2_1_4", "BRACE_EXPANSION_2_VULNERABLE", (m) => { m.overrides["minimatch@9.0.9"]["brace-expansion"] = "2.1.4"; }],
+    ["RESTORE_BRACE_5_0_9", "BRACE_EXPANSION_5_VULNERABLE", (m) => { m.overrides["@expo/fingerprint@0.15.5"]["minimatch@10.2.5"]["brace-expansion"] = "5.0.9"; }],
     ["REMOVE_MINIMATCH_3_MAPPING", "MINIMATCH_3_OVERRIDE_MISSING", (m) => { delete m.overrides["minimatch@3.1.5"]; }],
     ["REMOVE_MINIMATCH_9_MAPPING", "MINIMATCH_9_OVERRIDE_MISSING", (m) => { delete m.overrides["minimatch@9.0.9"]; }],
     ["REMOVE_MINIMATCH_10_MAPPING", "MINIMATCH_10_OVERRIDE_MISSING", (m) => { delete m.overrides["glob@13.0.6"]; }],
