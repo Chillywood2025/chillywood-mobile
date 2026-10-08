@@ -351,6 +351,20 @@ The v5 inputs were sealed from source
 The subsequent receipt/documentation commit must retain both digests. They
 identify source compatibility only; they are not signed-binary or device proof.
 
+The v6 inputs were sealed from source
+`d53277afc5fd52840dc0971774e20dabcc2ea54c`, tree
+`43ddc5b696ce3477153a63e3d04c163d87a854a2`:
+
+| Platform | V6 Git-native compatibility digest |
+| --- | --- |
+| Android | `1a990dab01a0607881d649a5f16772e5a6ac812400c0647b26b50d7e35b85584` |
+| iOS | `ce166db7fb92f6fda290607ead72e719c2bb57608147909e3cae33438b5efe53` |
+
+Independent review closed the three draft-repair findings and reran its own
+concurrent Answer, token-failure and native receipt recovery counterexamples.
+The source review found no remaining blocker in those paths; signed-device
+qualification remains a separate gate.
+
 The v5 delivery and diagnostic attempts above are completed observations. V6
 build/install and physical qualification remain pending. Final CI receipts
 belong to the exact PR head; delivery and physical results must be added from
