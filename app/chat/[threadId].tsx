@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -435,6 +436,11 @@ export default function ChillyChatThreadScreen() {
   const [messageReportTarget, setMessageReportTarget] = useState<ChatMessage | null>(null);
   const [messageReportBusy, setMessageReportBusy] = useState(false);
   const [callPanelOpen, setCallPanelOpen] = useState(false);
+  useEffect(() => {
+    // Every call entry path shares this panel, including native Answer and reopening.
+    // Release composer focus so the keyboard cannot cover the call controls.
+    if (callPanelOpen) Keyboard.dismiss();
+  }, [callPanelOpen]);
   const [nativeSpeakerEnabled, setNativeSpeakerEnabled] = useState(false);
   const [iosNativeAnswerRecoveryBlocked, setIosNativeAnswerRecoveryBlocked] = useState(false);
   const [nativeMediaActivationSerial, setNativeMediaActivationSerial] = useState(0);

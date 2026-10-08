@@ -145,6 +145,7 @@ export async function mountFullChatThread(options = {}) {
     leaves: [], hostEnds: 0, clears: [], nativeEnds: [], notifications: [], timers: [], intervals: [],
     subscriptions: new Set(), threadSubscriptions: new Set(), ...options,
   };
+  runtime.keyboard = { visible: options.keyboardVisible ?? false, dismissals: 0 };
   runtime.invite = { id: "invite", threadId: runtime.threadId, communicationRoomId: runtime.roomId,
     callerUserId: runtime.remoteUserId, calleeUserId: runtime.userId, status: "ringing",
     callType: "video", mediaProvider: "legacy_webrtc", expiresAt: new Date(Date.now() + 90_000).toISOString(),
@@ -289,7 +290,8 @@ export async function mountFullChatThread(options = {}) {
     react: React, "expo-router": { useFocusEffect: (callback) => React.useEffect(callback, [callback]),
       useLocalSearchParams: () => ({ ...runtime.params, threadId: runtime.threadId }), useRouter: () => router },
     "@expo/vector-icons/MaterialIcons": noop,
-    "react-native": { Platform: { OS: runtime.platform }, StyleSheet: { create: (v) => v }, Vibration: { cancel: noop, vibrate: noop } },
+    "react-native": { Platform: { OS: runtime.platform }, StyleSheet: { create: (v) => v }, Vibration: { cancel: noop, vibrate: noop },
+      Keyboard: { dismiss: () => { runtime.keyboard.visible = false; runtime.keyboard.dismissals += 1; } } },
     "react-native-safe-area-context": { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
     "../../_lib/analytics": { trackEvent: noop }, "../../_lib/appConfig": { DEFAULT_APP_CONFIG: defaults, readAppConfig: async () => defaults },
     "../../_lib/chillyChatCalls": inviteApi, "../../_lib/chat": chat,
