@@ -18,8 +18,8 @@
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
-    "androidDigest": "855a7362816374af36ba5b9df1527c3308c1246b5191c6239017af2d8b96bc23",
-    "iosDigest": "169b5db038fb2d739271bd03f4d7888cab3e4ebc1b68d9b35067fe83e89114c9"
+    "androidDigest": "df19ee0cde119782d28d7e514d56d8890cc13f0ba70d20cf750a9980cc7455bc",
+    "iosDigest": "7c6e1332541f2e0a0cc9a963ad8c3c0e3bfac6d414be32ab780728994d121fed"
   },
   "policy": {
     "internalOnly": true,

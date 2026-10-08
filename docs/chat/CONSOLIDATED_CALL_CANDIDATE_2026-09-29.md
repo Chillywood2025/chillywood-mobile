@@ -481,3 +481,21 @@ controlled native contracts do not establish physical media or crash closure.
 No v7 binary existed at the final provider inventory readback, so the initial
 unbuilt v7 digests above must be superseded by a final prebuild seal after all
 these native inputs are committed. Installed v6 and earlier cohorts stay fixed.
+
+The final prebuild v7 inputs were committed at
+`ab4307580dca35d650c2ba6e3f42e41fbcf9342e`, tree
+`e5b7e8fe3a0daca8d0ca2e01cba62ffd471ed090`. The documented
+`nativeSourceSnapshot` computation produced these replacement digests:
+
+| Platform | Final prebuild v7 Git-native compatibility digest |
+| --- | --- |
+| Android | `df19ee0cde119782d28d7e514d56d8890cc13f0ba70d20cf750a9980cc7455bc` |
+| iOS | `7c6e1332541f2e0a0cc9a963ad8c3c0e3bfac6d414be32ab780728994d121fed` |
+
+Both measured native-input sets equal the Mac-validated source
+`e654e6acbdacae408215fd6a58e8c518d31194ac`; later repairs changed JS ownership,
+tests and documentation. The provider inventory at 23:38 UTC still showed only
+v6 Android 97/iOS 32 and no v7 build. Thus these supersede only the never-built
+v7 seal, not delivered history. Recompute against the receipt commit to verify
+equality, require all final exact-head gates, and bind the next signed artifacts
+and physical retest to that final source.
