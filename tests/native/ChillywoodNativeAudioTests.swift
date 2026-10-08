@@ -10,6 +10,9 @@ private let AVAudioSessionInterruptionTypeKey = "AVAudioSessionInterruptionTypeK
 private enum AudioProbeError: Error { case overrideRejected, categoryRejected, activationRejected }
 public final class AVAudioSession: NSObject {
   enum PortOverride: Equatable { case none, speaker }
+  enum Port: Equatable { case builtInSpeaker, builtInReceiver, bluetoothHFP, headphones, unknown }
+  struct PortDescription { let portType: Port }
+  struct RouteDescription { let outputs: [PortDescription] }
   enum Category: Equatable { case playAndRecord }
   enum Mode: Equatable { case voiceChat }
   struct CategoryOptions: OptionSet, Equatable {
@@ -36,19 +39,29 @@ public final class AVAudioSession: NSObject {
   var rejectOverride = false
   var rejectCategory = false
   var rejectActivation = false
+  var overrideFailure: Error = AudioProbeError.overrideRejected
+  var categoryFailure: Error = AudioProbeError.categoryRejected
+  var observedOutputs: [Port] = [.builtInReceiver]
+  var currentRouteReads = 0
+  var currentRoute: RouteDescription {
+    currentRouteReads += 1
+    return RouteDescription(outputs: observedOutputs.map { PortDescription(portType: $0) })
+  }
   func reset() {
     operations = []; output = .none; category = nil; mode = nil
     categoryOptions = []; active = false; activeOptions = []
     rejectOverride = false; rejectCategory = false; rejectActivation = false
+    overrideFailure = AudioProbeError.overrideRejected; categoryFailure = AudioProbeError.categoryRejected
+    observedOutputs = [.builtInReceiver]; currentRouteReads = 0
   }
   func overrideOutputAudioPort(_ port: PortOverride) throws {
     operations.append(port == .speaker ? "override:speaker" : "override:none")
-    if rejectOverride { throw AudioProbeError.overrideRejected }
+    if rejectOverride { throw overrideFailure }
     output = port
   }
   func setCategory(_ category: Category, mode: Mode, options: CategoryOptions) throws {
     operations.append("category")
-    if rejectCategory { throw AudioProbeError.categoryRejected }
+    if rejectCategory { throw categoryFailure }
     self.category = category; self.mode = mode; categoryOptions = options
   }
   func setActive(_ active: Bool, options: SetActiveOptions = []) throws {
@@ -78,17 +91,29 @@ private final class UserDefaults {
   func removeObject(forKey key: String) {}
 }
 private var nativeAudioDiagnosticLines: [String] = []
+private var nativeAudioDiagnosticOperations: [[String]] = []
+private let nativeAudioDiagnosticFlags: [String: Any] = [
+  "ChillywoodNativeCallDiagnosticsEnabled": true,
+  "ChillywoodNativeCallDiagnosticsChannel": "ios-internal-v2",
+  "ChillywoodNativeCallsBuildEnabled": true,
+  "ChillywoodNativeCallsRuntimeDefaultEnabled": true,
+]
+private func clearAudioDiagnostics() {
+  nativeAudioDiagnosticLines.removeAll()
+  nativeAudioDiagnosticOperations.removeAll()
+}
 private final class CoordinatorProbe {
   var activeCalls: [UUID: ActiveNativeCall] = [:]
   var audioSessionObservers: [NSObjectProtocol] = []
   var prepared = false
   var provider: CXProvider?
-  private let audioSessionDiagnostics = ChillywoodNativeCallDiagnostics(infoDictionary: [
-    "ChillywoodNativeCallDiagnosticsEnabled": true,
-    "ChillywoodNativeCallDiagnosticsChannel": "ios-internal-v2",
-    "ChillywoodNativeCallsBuildEnabled": true,
-    "ChillywoodNativeCallsRuntimeDefaultEnabled": true,
-  ]) { nativeAudioDiagnosticLines.append($0) }
+  private let audioSessionDiagnostics: ChillywoodNativeCallDiagnostics
+  init(infoDictionary: [String: Any] = nativeAudioDiagnosticFlags) {
+    audioSessionDiagnostics = ChillywoodNativeCallDiagnostics(infoDictionary: infoDictionary) {
+      nativeAudioDiagnosticLines.append($0)
+      nativeAudioDiagnosticOperations.append(AVAudioSession.sharedInstance().operations)
+    }
+  }
   var events: [[String: Any]] = []
   let activeCallsDefaultsKey = "controlled-audio-active-calls"
   func persistedVoipAuthority() -> String? { "controlled-current-authority" }
@@ -118,7 +143,7 @@ private func expectsFailure(_ label: String, _ action: () throws -> Void) {
   do { try action(); expect(false, label) }
   catch { passed += 1 }
 }
-private func expectAudioDiagnostics(_ phases: [String], error: Error? = nil) {
+private func expectAudioDiagnostics(_ phases: [String], error: Error? = nil, errorDomain: String = "other") {
   expect(nativeAudioDiagnosticLines.count == phases.count,
     "actual audio callbacks retain exactly their expected diagnostic receipts")
   for (line, phase) in zip(nativeAudioDiagnosticLines, phases) {
@@ -128,8 +153,10 @@ private func expectAudioDiagnostics(_ phases: [String], error: Error? = nil) {
       "session-wide audio receipts never bind an arbitrary active or pending call")
   }
   if let error {
-    expect(nativeAudioDiagnosticLines.last!.hasSuffix(" error_domain=other error_code=\((error as NSError).code)"),
-      "actual failed activation retains the controlled native error code")
+    expect(nativeAudioDiagnosticLines.last!.hasSuffix(" error_domain=\(errorDomain) error_code=\((error as NSError).code)"),
+      "actual failed operation retains the bounded native error domain and code")
+    expect(nativeAudioDiagnosticLines.dropLast().allSatisfy { !$0.contains(" error_domain=") },
+      "a native error belongs only to the failure receipt")
   } else {
     expect(nativeAudioDiagnosticLines.allSatisfy { !$0.contains(" error_domain=") },
       "nonfailure audio receipts do not fabricate native errors")
@@ -154,34 +181,104 @@ private let provider = CXProvider(configuration: CXProviderConfiguration())
 // Actual coordinator routing and failure propagation; receipt success does not
 // prove the real currentRoute selected a speaker, receiver, or Bluetooth device.
 for (route, expected) in [("speaker", AVAudioSession.PortOverride.speaker), ("receiver", .none)] {
-  session.reset()
+  session.reset(); clearAudioDiagnostics()
   try coordinator.setAudioRoute(route)
   expect(session.output == expected, "\(route) requests the correct native override")
   expect(session.operations.count == 1 && session.category == nil && !session.active,
     "\(route) must not implicitly reactivate or recategorize the session")
+  expectAudioDiagnostics(["audio_route_\(route)_requested", "audio_route_succeeded", "audio_route_immediate_receiver"])
+  expect(nativeAudioDiagnosticOperations == [[], session.operations, session.operations],
+    "request precedes native work; success and observation follow accepted native work")
 }
-session.reset()
+session.reset(); clearAudioDiagnostics()
 try coordinator.setAudioRoute("system")
 expect(session.operations == ["override:none", "category"], "system releases override before selecting category")
 expect(session.category == .playAndRecord && session.mode == .voiceChat && session.categoryOptions == systemOptions,
   "system allows both Bluetooth profiles using the voice-chat category")
 expect(!session.active, "route choice does not fabricate session activation")
-session.reset()
+expectAudioDiagnostics(["audio_route_system_requested", "audio_route_succeeded", "audio_route_immediate_receiver"])
+expect(nativeAudioDiagnosticOperations == [[], session.operations, session.operations],
+  "system success is not recorded before the category operation returns")
+session.reset(); clearAudioDiagnostics()
 do {
-  try coordinator.setAudioRoute("unsupported")
+  try coordinator.setAudioRoute("PRIVATE-UNKNOWN-ROUTE-SHOULD-NOT-APPEAR")
   expect(false, "unsupported route must throw")
 } catch ChillywoodNativeCallError.unsupportedAudioRoute {
   expect(session.operations.isEmpty, "unsupported route never commands AVAudioSession")
 } catch { expect(false, "unsupported route reports the documented error") }
+expectAudioDiagnostics(["audio_route_failed"], error: ChillywoodNativeCallError.unsupportedAudioRoute)
+expect(session.currentRouteReads == 0 && !nativeAudioDiagnosticLines.joined().contains("PRIVATE-UNKNOWN"),
+  "unsupported route cannot be sampled or leak the raw requested value")
 for route in ["speaker", "receiver", "system"] {
-  session.reset(); session.rejectOverride = true
+  session.reset(); clearAudioDiagnostics(); session.rejectOverride = true
   expectsFailure("\(route) native override rejection cannot become success") { try coordinator.setAudioRoute(route) }
   expect(session.operations.count == 1, "failed override prevents later native work")
+  expectAudioDiagnostics(["audio_route_\(route)_requested", "audio_route_failed"], error: AudioProbeError.overrideRejected)
+  expect(nativeAudioDiagnosticOperations == [[], session.operations] && session.currentRouteReads == 0,
+    "override failure is recorded after the rejection without a selected-route claim")
 }
-session.reset(); session.rejectCategory = true
+session.reset(); clearAudioDiagnostics(); session.rejectCategory = true
 expectsFailure("system category rejection cannot become success") { try coordinator.setAudioRoute("system") }
 expect(session.operations == ["override:none", "category"] && session.category == nil,
   "system rejection retains truthful partial native receipt")
+expectAudioDiagnostics(["audio_route_system_requested", "audio_route_failed"], error: AudioProbeError.categoryRejected)
+expect(nativeAudioDiagnosticOperations == [[], session.operations] && session.currentRouteReads == 0,
+  "category failure cannot emit an accepted or observed route")
+
+// The observed output is independent of the requested override. Exactly one
+// built-in port qualifies; absent, external, unknown or mixed outputs do not.
+// This fixture controls the sample and cannot establish settled hardware audio.
+for (outputs, phase) in [
+  ([AVAudioSession.Port.builtInSpeaker], "speaker"),
+  ([.builtInReceiver], "receiver"), ([], "no_outputs"),
+  ([.bluetoothHFP], "other"), ([.headphones], "other"), ([.unknown], "other"),
+  ([.builtInSpeaker, .headphones], "other"), ([.builtInReceiver, .builtInSpeaker], "other"),
+  ([.builtInSpeaker, .builtInSpeaker], "other"),
+] {
+  for route in ["speaker", "receiver", "system"] {
+    session.reset(); clearAudioDiagnostics(); session.observedOutputs = outputs
+    coordinator.activeCalls = [UUID(): makeCall("unrelated-route-call")]
+    try coordinator.setAudioRoute(route)
+    expectAudioDiagnostics(["audio_route_\(route)_requested", "audio_route_succeeded", "audio_route_immediate_\(phase)"])
+    expect(session.currentRouteReads == 1, "accepted route samples currentRoute exactly once")
+    expect(nativeAudioDiagnosticOperations == [[], session.operations, session.operations],
+      "all immediate observations follow accepted native operations")
+  }
+}
+coordinator.activeCalls = [:]
+
+// Catch/rethrow must preserve the exact native error object, including private
+// contents for its original caller, while the diagnostic retains only allowed fields.
+let routePrivateMarker = "PRIVATE-ROUTE-ERROR-PAYLOAD"
+for (domain, allowedDomain) in [("NSOSStatusErrorDomain", "NSOSStatusErrorDomain"),
+  ("com.apple.coreaudio.avfaudio", "com.apple.coreaudio.avfaudio"), (routePrivateMarker, "other")] {
+  for route in ["speaker", "receiver", "system"] {
+    for rejection in route == "system" ? ["override", "category"] : ["override"] {
+      session.reset(); clearAudioDiagnostics()
+      let originalError = NSError(domain: domain, code: -50,
+        userInfo: [NSLocalizedDescriptionKey: routePrivateMarker, "private": routePrivateMarker])
+      session.rejectOverride = rejection == "override"; session.rejectCategory = rejection == "category"
+      session.overrideFailure = originalError; session.categoryFailure = originalError
+      do { try coordinator.setAudioRoute(route); expect(false, "native error must propagate") }
+      catch { expect((error as NSError) === originalError, "diagnostics rethrows the original error unchanged") }
+      expectAudioDiagnostics(["audio_route_\(route)_requested", "audio_route_failed"], error: originalError, errorDomain: allowedDomain)
+      expect(!nativeAudioDiagnosticLines.joined().contains(routePrivateMarker),
+        "route errors never log descriptions, userInfo or arbitrary error domains")
+    }
+  }
+}
+for info in [[:], nativeAudioDiagnosticFlags.merging(["ChillywoodNativeCallDiagnosticsEnabled": false]) { _, new in new }] {
+  let disabled = CoordinatorProbe(infoDictionary: info)
+  for route in ["speaker", "receiver", "system"] {
+    session.reset(); clearAudioDiagnostics()
+    try disabled.setAudioRoute(route)
+    expect(nativeAudioDiagnosticLines.isEmpty && !session.operations.isEmpty,
+      "disabled internal diagnostics preserve route behavior without emitting receipts")
+    session.rejectOverride = true
+    expectsFailure("disabled diagnostics retain native failure") { try disabled.setAudioRoute(route) }
+    expect(nativeAudioDiagnosticLines.isEmpty, "disabled diagnostics cannot emit failed-route receipts")
+  }
+}
 
 // Execute real CallKit delegate methods with controlled AVAudioSession. Validate
 // ordering, category, exact active-call failures, and no false activation event.

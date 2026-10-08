@@ -31,6 +31,15 @@ enum ChillywoodNativeCallDiagnosticPhase: String, CaseIterable {
   case audioActivationSucceeded = "audio_activation_succeeded"
   case audioActivationFailed = "audio_activation_failed"
   case audioDeactivationReceived = "audio_deactivation_received"
+  case audioRouteSpeakerRequested = "audio_route_speaker_requested"
+  case audioRouteReceiverRequested = "audio_route_receiver_requested"
+  case audioRouteSystemRequested = "audio_route_system_requested"
+  case audioRouteSucceeded = "audio_route_succeeded"
+  case audioRouteFailed = "audio_route_failed"
+  case audioRouteImmediateSpeaker = "audio_route_immediate_speaker"
+  case audioRouteImmediateReceiver = "audio_route_immediate_receiver"
+  case audioRouteImmediateNoOutputs = "audio_route_immediate_no_outputs"
+  case audioRouteImmediateOther = "audio_route_immediate_other"
 }
 
 final class ChillywoodNativeCallDiagnostics {

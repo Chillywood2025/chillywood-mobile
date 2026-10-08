@@ -69,6 +69,11 @@ function mutate(from, to) {
   assert.equal(coordinator.split(from).length, 2, `mutation must target one exact production branch: ${from}`);
   return coordinator.replace(from, to);
 }
+function mutateRoute(from, to) {
+  const route = declaration(coordinator, markers.SET_AUDIO_ROUTE);
+  assert.equal(route.split(from).length, 2, `route mutation targets one production operation: ${from}`);
+  return coordinator.replace(route, route.replace(from, to));
+}
 try {
   if (!checkSource) {
     const version = execFileSync(compiler, ["--version"], { encoding: "utf8", timeout: 60_000, stdio: "pipe" });
@@ -93,8 +98,37 @@ try {
   runCase("audio-diagnostic-phase-swapped", mutate(
     "audioSessionDiagnostics.record(.audioDeactivationReceived)",
     "audioSessionDiagnostics.record(.audioActivationReceived)"), false);
+  runCase("route-request-disconnected", mutateRoute(
+    "audioSessionDiagnostics.record(.audioRouteSpeakerRequested)", "_ = audioSessionDiagnostics"), false);
+  runCase("route-request-mislabeled", mutateRoute(
+    "audioSessionDiagnostics.record(.audioRouteSpeakerRequested)",
+    "audioSessionDiagnostics.record(.audioRouteReceiverRequested)"), false);
+  runCase("route-request-after-native-work", mutateRoute(
+    "audioSessionDiagnostics.record(.audioRouteSpeakerRequested)\n        try session.overrideOutputAudioPort(.speaker)",
+    "try session.overrideOutputAudioPort(.speaker)\n        audioSessionDiagnostics.record(.audioRouteSpeakerRequested)"), false);
+  runCase("route-success-disconnected", mutateRoute(
+    "audioSessionDiagnostics.record(.audioRouteSucceeded)", "_ = audioSessionDiagnostics"), false);
+  runCase("route-failure-reported-as-success", mutateRoute(
+    "audioSessionDiagnostics.record(.audioRouteFailed, error: error)",
+    "audioSessionDiagnostics.record(.audioRouteSucceeded)"), false);
+  runCase("route-failure-code-lost", mutateRoute(
+    "audioSessionDiagnostics.record(.audioRouteFailed, error: error)",
+    "audioSessionDiagnostics.record(.audioRouteFailed)"), false);
+  runCase("route-error-object-replaced", mutateRoute(
+    "throw error", "throw ChillywoodNativeCallError.unsupportedAudioRoute"), false);
+  runCase("route-diagnostic-arbitrary-call-binding", mutateRoute(
+    "audioSessionDiagnostics.record(.audioRouteSucceeded)",
+    "audioSessionDiagnostics.record(.audioRouteSucceeded, callUuid: activeCalls.keys.first)"), false);
+  runCase("requested-route-replaces-observation", mutateRoute(
+    "outputs[0].portType == .builtInSpeaker", 'route == "speaker"'), false);
+  runCase("mixed-output-claimed-as-speaker", mutateRoute(
+    "outputs.count == 1 && outputs[0].portType == .builtInSpeaker",
+    "outputs.contains { $0.portType == .builtInSpeaker }"), false);
+  runCase("receiver-observation-mislabeled", mutateRoute(
+    "audioSessionDiagnostics.record(.audioRouteImmediateReceiver)",
+    "audioSessionDiagnostics.record(.audioRouteImmediateSpeaker)"), false);
   if (checkSource) {
-    console.log("Native audio declarations and nine mutations generated; Swift compilation/execution NOT RUN.");
+    console.log("Native audio declarations and twenty mutations generated; Swift compilation/execution NOT RUN.");
   } else {
     execFileSync(process.execPath, ["scripts/test-ios-native-call-diagnostics.mjs"], {
       cwd: root, timeout: 180_000, stdio: "inherit",

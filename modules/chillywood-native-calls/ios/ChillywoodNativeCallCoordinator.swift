@@ -902,16 +902,37 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
 
   public func setAudioRoute(_ route: String) throws {
     let session = AVAudioSession.sharedInstance()
-    switch route {
-    case "speaker":
-      try session.overrideOutputAudioPort(.speaker)
-    case "receiver":
-      try session.overrideOutputAudioPort(.none)
-    case "system":
-      try session.overrideOutputAudioPort(.none)
-      try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
-    default:
-      throw ChillywoodNativeCallError.unsupportedAudioRoute
+    do {
+      switch route {
+      case "speaker":
+        audioSessionDiagnostics.record(.audioRouteSpeakerRequested)
+        try session.overrideOutputAudioPort(.speaker)
+      case "receiver":
+        audioSessionDiagnostics.record(.audioRouteReceiverRequested)
+        try session.overrideOutputAudioPort(.none)
+      case "system":
+        audioSessionDiagnostics.record(.audioRouteSystemRequested)
+        try session.overrideOutputAudioPort(.none)
+        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
+      default:
+        throw ChillywoodNativeCallError.unsupportedAudioRoute
+      }
+      audioSessionDiagnostics.record(.audioRouteSucceeded)
+      // This is one immediate session-wide sample, not a settled route or
+      // audible-media receipt. No port name, raw type, UID or call identity is logged.
+      let outputs = session.currentRoute.outputs
+      if outputs.isEmpty {
+        audioSessionDiagnostics.record(.audioRouteImmediateNoOutputs)
+      } else if outputs.count == 1 && outputs[0].portType == .builtInSpeaker {
+        audioSessionDiagnostics.record(.audioRouteImmediateSpeaker)
+      } else if outputs.count == 1 && outputs[0].portType == .builtInReceiver {
+        audioSessionDiagnostics.record(.audioRouteImmediateReceiver)
+      } else {
+        audioSessionDiagnostics.record(.audioRouteImmediateOther)
+      }
+    } catch {
+      audioSessionDiagnostics.record(.audioRouteFailed, error: error)
+      throw error
     }
   }
 
