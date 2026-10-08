@@ -487,7 +487,10 @@ export function useCommunicationRoomSession({
   const legacyMicNegotiationSerialRef = useRef(0);
   const legacyMicControlRef = useRef<((nextEnabled: boolean, cameraEnabledOverride?: boolean) => Promise<boolean>) | null>(null);
   const legacyMicLocalPrivacyStopRef = useRef<(() => boolean) | null>(null);
+  const legacyCameraLocalPrivacyStopRef = useRef<(() => boolean) | null>(null);
   const resumeMicAfterForegroundRef = useRef(false);
+  const deferredInitialCameraGenerationRef = useRef<number | null>(null);
+  const foregroundCameraIntentRevisionRef = useRef(0);
   const foregroundMicIntentRevisionRef = useRef(0);
   const legacySessionGenerationRef = useRef(0);
   const snapshotRefreshSerialRef = useRef(0);
@@ -637,12 +640,20 @@ export function useCommunicationRoomSession({
 
   useEffect(() => {
     // Deferred Answer intent belongs to this account and room only.
+    foregroundCameraIntentRevisionRef.current += 1;
+    deferredInitialCameraGenerationRef.current = null;
     foregroundMicIntentRevisionRef.current += 1;
     resumeMicAfterForegroundRef.current = false;
   }, [authenticatedUserId, roomId]);
 
   useEffect(() => {
     if (typeof initialMediaPreferences?.cameraEnabled === "boolean") {
+      if (!initialMediaPreferences.cameraEnabled) {
+        foregroundCameraIntentRevisionRef.current += 1;
+        deferredInitialCameraGenerationRef.current = null;
+        cameraEnabledRef.current = false;
+        legacyCameraLocalPrivacyStopRef.current?.();
+      }
       setCameraEnabled(initialMediaPreferences.cameraEnabled);
     }
     if (typeof initialMediaPreferences?.micEnabled === "boolean") {
@@ -878,6 +889,7 @@ export function useCommunicationRoomSession({
     if (!stopped) setError(`${kind === "video" ? "Camera" : "Microphone"} shutdown could not be verified. Retry End.`);
     return stopped;
   }, []);
+  legacyCameraLocalPrivacyStopRef.current = () => stopLocalMediaKind("video");
 
   const setLocalMediaKindEnabled = useCallback((kind: "audio" | "video", enabled: boolean) => {
     const streams = new Set<MediaStream>([
@@ -1510,6 +1522,11 @@ export function useCommunicationRoomSession({
     if (!isActiveLegacyGeneration(generation)) return null;
     if (localStreamRef.current) return localStreamRef.current;
     const appIsActive = appStateRef.current === "active";
+    if (!appIsActive && cameraEnabledRef.current) {
+      // A video call can be admitted before its Activity is foregrounded.
+      // Keep this generation's request distinct from current capture proof.
+      deferredInitialCameraGenerationRef.current = generation;
+    }
     const backgroundAudioAllowed = canAttemptNativeCallBackgroundAudio({
       appState: appStateRef.current,
       allowBackgroundAudio: allowBackgroundAudioRef.current,
@@ -1613,7 +1630,7 @@ export function useCommunicationRoomSession({
       && !!getCommunicationTrack(stream, "audio")
       && setCommunicationTrackEnabled(stream, "audio", true);
 
-    if (requestedCamera && !cameraTrackReady) {
+    if (appIsActive && requestedCamera && !cameraTrackReady) {
       cameraEnabledRef.current = false;
       setCameraEnabled(false);
     }
@@ -2929,7 +2946,8 @@ export function useCommunicationRoomSession({
             if (!isActiveGeneration()) return false;
             const provedCameraEnabled = cameraEnabledRef.current && hasUsableLocalTrack("video");
             const provedMicEnabled = micEnabledRef.current && hasUsableLocalTrack("audio");
-            if (cameraEnabledRef.current !== provedCameraEnabled) {
+            if (cameraEnabledRef.current !== provedCameraEnabled
+              && deferredInitialCameraGenerationRef.current !== sessionGeneration) {
               cameraEnabledRef.current = provedCameraEnabled;
               setCameraEnabled(provedCameraEnabled);
             }
@@ -3232,6 +3250,7 @@ export function useCommunicationRoomSession({
     options?: {
       attachToPeers?: boolean;
       expectedGeneration?: number;
+      isCurrent?: () => boolean;
     },
   ) => {
     const expectedGeneration = options?.expectedGeneration ?? legacySessionGenerationRef.current;
@@ -3240,6 +3259,7 @@ export function useCommunicationRoomSession({
     const isExpectedGenerationCurrent = () => (
       isActiveLegacyGeneration(expectedGeneration)
       && (kind !== "video" || appStateRef.current === "active")
+      && options?.isCurrent?.() !== false
     );
     if (!isExpectedGenerationCurrent()) return null;
     const existingTracks = kind === "audio"
@@ -3392,6 +3412,9 @@ export function useCommunicationRoomSession({
 
       const nextCameraEnabled = cameraEnabledRef.current
         && cameraPermissionSnapshotRef.current.state === "granted";
+      const cameraIntentRevision = foregroundCameraIntentRevisionRef.current;
+      const ownsCameraIntent = () => cameraEnabledRef.current
+        && cameraIntentRevision === foregroundCameraIntentRevisionRef.current;
 
       if (cameraEnabledRef.current !== nextCameraEnabled) {
         cameraEnabledRef.current = nextCameraEnabled;
@@ -3401,8 +3424,10 @@ export function useCommunicationRoomSession({
         const restoredCameraTrack = await ensureTrackKind("video", {
           attachToPeers: false,
           expectedGeneration: generation,
+          isCurrent: ownsCameraIntent,
         });
         if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
+        if (!ownsCameraIntent()) return false;
         if (!restoredCameraTrack) {
           cameraEnabledRef.current = false;
           setCameraEnabled(false);
@@ -3413,7 +3438,7 @@ export function useCommunicationRoomSession({
             attachMissingLocalTracks(peerConnection, false, generation)
           )),
         );
-        if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
+        if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active" || !ownsCameraIntent()) return false;
         if (!Object.values(peerConnectionsRef.current).every((peerConnection) => (
           peerConnection.getSenders().some((sender: any) => sender.track === restoredCameraTrack)
         ))) {
@@ -3425,8 +3450,9 @@ export function useCommunicationRoomSession({
           return false;
         }
         if (!await renegotiateAllPeers(true)) return false;
-        if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
+        if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active" || !ownsCameraIntent()) return false;
       }
+      deferredInitialCameraGenerationRef.current = null;
 
       const requestedMic = micEnabledRef.current || resumeMicAfterForegroundRef.current;
       const intentRevision = foregroundMicIntentRevisionRef.current;
@@ -4438,6 +4464,7 @@ export function useCommunicationRoomSession({
   ]);
 
   const toggleCamera = useCallback(async () => {
+    foregroundCameraIntentRevisionRef.current += 1;
     const currentlyEnabled = hasUsableLocalTrack("video");
     return setCameraCaptureEnabled(!currentlyEnabled);
   }, [hasUsableLocalTrack, setCameraCaptureEnabled]);

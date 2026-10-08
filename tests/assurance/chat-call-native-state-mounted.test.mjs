@@ -60,6 +60,18 @@ const denied = () => ({ granted: false, canAskAgain: false, status: "denied" });
 const live = (runtime, kind) => [...new Set(runtime.localStreams.flatMap(stream => stream.getTracks()))]
   .filter(track => track.kind === kind && track.readyState === "live" && track.enabled);
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { resolve, promise }; };
+for (const previous of [undefined, { cameraEnabled: false, micEnabled: true }, { cameraEnabled: true, micEnabled: true }]) {
+  test(`legacy fresh foreground video admission retains requested capture after ${JSON.stringify(previous)}`, async t => {
+    const runtime = createRuntime();
+    const h = await mount(runtime, { enabled: false, roomId: "", naturalLifecycle: true,
+      analyticsContext: { surface: "chat-thread" }, initialMediaPreferences: previous });
+    t.after(() => h.unmount());
+    await h.rerender({ roomId: runtime.roomId, initialMediaPreferences: { cameraEnabled: true, micEnabled: true } });
+    await h.rerender({ enabled: true });
+    assert.ok(runtime.captureRequests.some(x => x.video && x.audio), JSON.stringify(runtime.captureRequests));
+    assert.equal(h.getResult().cameraEnabled, true);
+  });
+}
 async function start(t, { video = true, backgroundAudio = false, ...options } = {}) {
   const runtime = createRuntime(options);
   if (options.initialAppState) runtime.appState = options.initialAppState;
@@ -70,6 +82,95 @@ async function start(t, { video = true, backgroundAudio = false, ...options } = 
   t.after(() => h.unmount());
   return { runtime, h };
 }
+
+for (const backgroundAudio of [false, true]) {
+  test(`legacy deferred video admission preserves camera intent without claiming background capture: background audio ${backgroundAudio}`, async t => {
+    const { runtime, h } = await start(t, { video: true, initialAppState: "background", backgroundAudio });
+    assert.equal(live(runtime, "video").length, 0);
+    assert.equal(runtime.captureRequests.some(request => request.video), false);
+    assert.equal(h.getResult().cameraEnabled, false);
+    assert.equal(runtime.durableCamera, false);
+    await h.run(() => runtime.emitAppState("active"));
+    assert.equal(h.getResult().cameraEnabled, true, JSON.stringify(runtime.captureRequests));
+    assert.equal(live(runtime, "video").length, 1);
+    assert.equal(runtime.durableCamera, true);
+    assert.equal(runtime.joinCalls.length, 1, "foreground uses the original admitted call");
+  });
+
+  test(`legacy deferred video camera intent obeys a newer off preference: background audio ${backgroundAudio}`, async t => {
+    const { runtime, h } = await start(t, { video: true, initialAppState: "background", backgroundAudio });
+    await h.rerender({ initialMediaPreferences: { cameraEnabled: false, micEnabled: true } });
+    await h.run(() => runtime.emitAppState("active"));
+    assert.equal(h.getResult().cameraEnabled, false);
+    assert.equal(runtime.captureRequests.some(request => request.video), false);
+    assert.equal(runtime.durableCamera, false);
+    assert.equal(h.getResult().micEnabled, true);
+  });
+}
+
+test("legacy deferred video admission cannot acquire a denied camera", async t => {
+  const { runtime, h } = await start(t, { video: true, initialAppState: "background", cameraPermission: denied() });
+  await h.run(() => runtime.emitAppState("active"));
+  assert.equal(h.getResult().cameraEnabled, false);
+  assert.equal(runtime.captureRequests.some(request => request.video), false);
+  assert.equal(runtime.durableCamera, false);
+  assert.equal(h.getResult().micEnabled, true);
+});
+
+test("legacy End retires deferred video intent before foreground", async t => {
+  const { runtime, h } = await start(t, { video: true, initialAppState: "background" });
+  await h.run(() => h.getResult().leaveRoom());
+  await h.run(() => runtime.emitAppState("active"));
+  assert.equal(live(runtime, "video").length, 0);
+  assert.equal(runtime.captureRequests.some(request => request.video), false);
+  assert.equal(runtime.durableCamera, false);
+});
+
+test("legacy replacement voice room does not borrow the retired deferred video intent", async t => {
+  const { runtime, h } = await start(t, { video: true, initialAppState: "background" });
+  await h.run(() => h.getResult().leaveRoom());
+  runtime.roomId = "REPLACEMENT-VOICE";
+  await h.rerender({ roomId: runtime.roomId, initialMediaPreferences: { cameraEnabled: false, micEnabled: true } });
+  await h.run(() => runtime.emitAppState("active"));
+  assert.equal(h.getResult().cameraEnabled, false);
+  assert.equal(runtime.captureRequests.some(request => request.video), false);
+  assert.equal(runtime.durableCamera, false);
+});
+
+test("legacy deferred video foreground acquisition respects a newer off preference while capture is pending", async t => {
+  const { runtime, h } = await start(t, { video: true, initialAppState: "background" });
+  const pending = deferred();
+  runtime.queueMedia({ wait: pending.promise });
+  await h.run(() => runtime.emitAppState("active"));
+  assert.ok(runtime.captureRequests.some(request => request.video), "camera acquisition reached the native seam");
+  await h.rerender({ initialMediaPreferences: { cameraEnabled: false, micEnabled: true } });
+  pending.resolve();
+  await h.run(async () => { for (let i = 0; i < 100; i += 1) await Promise.resolve(); });
+  assert.equal(live(runtime, "video").length, 0);
+  assert.equal(h.getResult().cameraEnabled, false);
+  assert.equal(runtime.durableCamera, false);
+});
+
+test("legacy automatic camera recovery stops adopted video when a newer off preference arrives during sender replacement", async t => {
+  const { runtime, h } = await start(t, { video: true });
+  await h.run(() => runtime.emitAppState("background"));
+  const sender = runtime.peers[0].getSenders().find(item => item.track?.kind === "video");
+  assert.ok(sender);
+  const pending = deferred();
+  const replaceTrack = sender.replaceTrack.bind(sender);
+  let replacing = false;
+  sender.replaceTrack = async track => { replacing = true; await pending.promise; return replaceTrack(track); };
+  await h.run(() => runtime.emitAppState("active"));
+  assert.equal(replacing, true);
+  assert.equal(live(runtime, "video").length, 1, "capture was adopted before the pending sender receipt");
+  await h.rerender({ initialMediaPreferences: { cameraEnabled: false, micEnabled: true } });
+  assert.equal(live(runtime, "video").length, 0, "privacy stop must not wait for native sender completion");
+  pending.resolve();
+  await h.run(async () => { for (let i = 0; i < 100; i += 1) await Promise.resolve(); });
+  assert.equal(live(runtime, "video").length, 0);
+  assert.equal(h.getResult().cameraEnabled, false);
+  assert.equal(runtime.durableCamera, false);
+});
 
 test("legacy background Answer retains requested microphone until the first eligible foreground", async t => {
   const { runtime, h } = await start(t, { video: false, initialAppState: "background" });
