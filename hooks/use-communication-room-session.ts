@@ -37,6 +37,7 @@ import {
 } from "../_lib/communication";
 import { reportRuntimeError } from "../_lib/logger";
 import { reportBoundedNativeCallError } from "../_lib/nativeCallErrorDiagnostics.mjs";
+import { reportInternalCallMediaDiagnostic } from "../_lib/internalCallMediaDiagnostics";
 import { reserveCommunicationCapture, retireCommunicationCaptures, retryRetiredCommunicationCaptures } from "../_lib/communicationCaptureRetirement";
 import { reserveCommunicationMembershipAdmission } from "../_lib/communicationMembershipAdmission";
 import { isAccountBoundSupabaseRpcOutcomeAmbiguous as isAmbiguousMembershipOutcome } from "../_lib/accountBoundSupabaseRpc.mjs";
@@ -511,9 +512,15 @@ export function useCommunicationRoomSession({
     const owner = captureRetirementOwnerRef.current;
     const reservation = reserveCommunicationCapture(owner);
     let stream: MediaStream | null;
+    reportInternalCallMediaDiagnostic("capture_requested", {
+      wantsMic: options.audio, wantsCamera: options.video, appState: appStateRef.current,
+    });
     try {
       stream = await createCommunicationMediaStream(options);
     } catch (captureError) {
+      reportInternalCallMediaDiagnostic("capture_failed", {
+        wantsMic: options.audio, wantsCamera: options.video, appState: appStateRef.current, error: captureError,
+      });
       reservation.rejected();
       reportBoundedNativeCallError(reportRuntimeError, "capture", captureError, {
         audio: options.audio, video: options.video, facingMode: options.facingMode,
@@ -521,6 +528,9 @@ export function useCommunicationRoomSession({
       });
       throw captureError;
     }
+    reportInternalCallMediaDiagnostic("capture_received", {
+      wantsMic: options.audio, wantsCamera: options.video, appState: appStateRef.current, stream,
+    });
     if (!reservation.received(stream?.getTracks() ?? [])) return null;
     if (!stream || owner !== captureRetirementOwnerRef.current || !isActiveLegacyGeneration(generation)) {
       reservation.retire();
@@ -645,6 +655,15 @@ export function useCommunicationRoomSession({
     foregroundMicIntentRevisionRef.current += 1;
     resumeMicAfterForegroundRef.current = false;
   }, [authenticatedUserId, roomId]);
+
+  useEffect(() => {
+    reportInternalCallMediaDiagnostic("initial_preferences", {
+      enabled,
+      requestedCamera: initialMediaPreferences?.cameraEnabled,
+      requestedMic: initialMediaPreferences?.micEnabled,
+      appState: appStateRef.current,
+    });
+  }, [enabled, initialMediaPreferences?.cameraEnabled, initialMediaPreferences?.micEnabled, roomId]);
 
   useEffect(() => {
     if (typeof initialMediaPreferences?.cameraEnabled === "boolean") {
@@ -1532,6 +1551,12 @@ export function useCommunicationRoomSession({
       allowBackgroundAudio: allowBackgroundAudioRef.current,
       micRequested: micEnabledRef.current,
     });
+    reportInternalCallMediaDiagnostic("initial_intent", {
+      requestedCamera: cameraEnabledRef.current, requestedMic: micEnabledRef.current,
+      appState: appStateRef.current, backgroundAudioAllowed,
+      cameraPermission: cameraPermissionSnapshotRef.current.state,
+      micPermission: microphonePermissionRef.current.state,
+    });
     if (!appIsActive && !backgroundAudioAllowed) {
       // Notification Answer may admit the call before Android resumes its
       // Activity. Capture must wait for eligibility, but initial presence
@@ -1566,6 +1591,11 @@ export function useCommunicationRoomSession({
     const canUseMic = microphonePermissionGranted
       && micIntentRevision === foregroundMicIntentRevisionRef.current
       && micEnabledRef.current;
+    reportInternalCallMediaDiagnostic("initial_permissions", {
+      requestedCamera, requestedMic, wantsCamera, wantsMic, canUseCamera, canUseMic,
+      appState: appStateRef.current, cameraPermission: cameraPermissionSnapshotRef.current.state,
+      micPermission: microphonePermissionRef.current.state,
+    });
 
     if (appIsActive && requestedCamera && !canUseCamera) {
       cameraEnabledRef.current = false;
@@ -2946,6 +2976,10 @@ export function useCommunicationRoomSession({
             if (!isActiveGeneration()) return false;
             const provedCameraEnabled = cameraEnabledRef.current && hasUsableLocalTrack("video");
             const provedMicEnabled = micEnabledRef.current && hasUsableLocalTrack("audio");
+            reportInternalCallMediaDiagnostic("initial_projection", {
+              requestedCamera: cameraEnabledRef.current, requestedMic: micEnabledRef.current,
+              provedCamera: provedCameraEnabled, provedMic: provedMicEnabled, appState: appStateRef.current,
+            });
             if (cameraEnabledRef.current !== provedCameraEnabled
               && deferredInitialCameraGenerationRef.current !== sessionGeneration) {
               cameraEnabledRef.current = provedCameraEnabled;

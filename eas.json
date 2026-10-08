@@ -37,7 +37,8 @@
       "distribution": "store",
       "environment": "production",
       "env": {
-        "CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM": "android"
+        "CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM": "android",
+        "CHILLYWOOD_INTERNAL_CALL_MEDIA_DIAGNOSTICS": "true"
       },
       "android": {
         "buildType": "app-bundle"
@@ -47,7 +48,8 @@
       "extends": "android-internal-v2",
       "distribution": "internal",
       "env": {
-        "CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM": "android"
+        "CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM": "android",
+        "CHILLYWOOD_INTERNAL_CALL_MEDIA_DIAGNOSTICS": "false"
       },
       "android": {
         "buildType": "apk"
@@ -61,6 +63,7 @@
       "env": {
         "CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM": "ios",
         "CHILLYWOOD_INTERNAL_CALL_DIAGNOSTICS": "true",
+        "CHILLYWOOD_INTERNAL_CALL_MEDIA_DIAGNOSTICS": "true",
         "IOS_NATIVE_CALLS_ENABLED": "true",
         "EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED": "true",
         "EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED": "true",
@@ -73,6 +76,7 @@
       "env": {
         "CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM": "ios",
         "CHILLYWOOD_INTERNAL_CALL_DIAGNOSTICS": "false",
+        "CHILLYWOOD_INTERNAL_CALL_MEDIA_DIAGNOSTICS": "false",
         "IOS_NATIVE_CALLS_ENABLED": "true",
         "EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED": "true",
         "EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED": "true",

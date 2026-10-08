@@ -83,6 +83,18 @@ async function start(t, { video = true, backgroundAudio = false, ...options } = 
   return { runtime, h };
 }
 
+test("legacy startup diagnostic boundaries distinguish requested capture, permissions, returned tracks and projection", async t => {
+  const { runtime } = await start(t);
+  const receipt = phase => runtime.mediaDiagnostics.find(item => item.phase === phase);
+  assert.equal(receipt("initial_preferences").requestedCamera, true);
+  assert.equal(receipt("initial_intent").requestedCamera, true);
+  assert.equal(receipt("initial_intent").appState, "active");
+  assert.equal(receipt("initial_permissions").canUseCamera, true);
+  assert.equal(receipt("capture_requested").wantsCamera, true);
+  assert.equal(receipt("capture_received").stream.getVideoTracks().length, 1);
+  assert.equal(receipt("initial_projection").provedCamera, true);
+});
+
 for (const backgroundAudio of [false, true]) {
   test(`legacy deferred video admission preserves camera intent without claiming background capture: background audio ${backgroundAudio}`, async t => {
     const { runtime, h } = await start(t, { video: true, initialAppState: "background", backgroundAudio });

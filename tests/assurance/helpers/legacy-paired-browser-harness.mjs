@@ -632,6 +632,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       "../_lib/communicationCallMediaPolicy.mjs": mediaPolicy,
       "../_lib/logger": { reportRuntimeError: (scope, error) => hub.events.push({ kind: "reported-error", userId, scope, error: String(error?.message ?? error) }) },
       "../_lib/nativeCallErrorDiagnostics.mjs": nativeCallErrorDiagnostics,
+      "../_lib/internalCallMediaDiagnostics": { reportInternalCallMediaDiagnostic() {} },
       "../_lib/mediaPermissions": { UNDETERMINED_MEDIA_PERMISSION: permissions, resolveMediaPermission: () => permissions, getMediaPermissionRecoveryMessage: () => null },
       "../_lib/mediaSessionLifecycle": { registerActiveMediaSessionStopper: () => () => {} },
       "../_lib/performancePolicy": { ROOM_HEARTBEAT_MS: 15_000 },

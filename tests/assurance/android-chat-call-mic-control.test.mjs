@@ -693,6 +693,9 @@ function createLegacyMountedRuntime(options = {}) {
         ? actualCallMediaPolicy.shouldPreserveNativeCallBackgroundAudio : () => false,
     },
     "../_lib/nativeCallErrorDiagnostics.mjs": nativeCallErrorDiagnostics,
+    "../_lib/internalCallMediaDiagnostics": { reportInternalCallMediaDiagnostic: (phase, input) => {
+      (runtime.mediaDiagnostics ??= []).push({ phase, ...input });
+    } },
     "../_lib/logger": { reportRuntimeError: (scope, error, metadata) => {
       runtime.errors.push({ message: String(error?.message ?? error), scope, metadata });
       if (options.throwRuntimeErrors) throw new Error("controlled diagnostic reporter failure");
