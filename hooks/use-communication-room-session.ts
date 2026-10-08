@@ -3122,37 +3122,44 @@ export function useCommunicationRoomSession({
     flushPendingPeerIce,
   ]);
 
+  // Snapshot reads replace room/identity objects. Their projection must not
+  // restart liveness: a peer's media updates (or heartbeat invalidations) can
+  // otherwise postpone this participant's heartbeat beyond its admission TTL.
+  const heartbeatRoomId = room?.roomId ?? "";
+  const heartbeatUserId = identity?.userId ?? "";
+  const heartbeatMembershipGeneration = joinedMembershipRef.current?.roomId === heartbeatRoomId
+    && joinedMembershipRef.current?.userId === heartbeatUserId
+    ? joinedMembershipRef.current?.membershipGeneration : undefined;
+  const heartbeatSessionGeneration = legacySessionGenerationRef.current;
   useEffect(() => {
-    if (!enabled) return;
-    if (!room || !identity || loading) return;
+    if (!enabled || !heartbeatRoomId || !heartbeatUserId || loading) return;
 
-    const generation = legacySessionGenerationRef.current;
+    const generation = heartbeatSessionGeneration;
     if (!isActiveLegacyGeneration(generation)) return;
-    const admission = joinedMembershipRef.current;
-    const membershipGeneration = admission?.roomId === room.roomId && admission.userId === identity.userId
-      ? admission.membershipGeneration : undefined;
+    const membershipGeneration = heartbeatMembershipGeneration;
     if (!membershipGeneration) return;
+    let active = true;
     const ownsHeartbeat = () => (
-      isActiveLegacyGeneration(generation)
-      && roomRef.current?.roomId === room.roomId
-      && identityRef.current?.userId === identity.userId
+      active && isActiveLegacyGeneration(generation)
+      && roomRef.current?.roomId === heartbeatRoomId
+      && identityRef.current?.userId === heartbeatUserId
       && joinedMembershipRef.current?.membershipGeneration === membershipGeneration
     );
     const interval = setInterval(() => {
       if (!ownsHeartbeat()) return;
       void heartbeatCommunicationRoomSession({
-        roomId: room.roomId,
-        userId: identity.userId,
+        roomId: heartbeatRoomId,
+        userId: heartbeatUserId,
         expectedMembershipGeneration: membershipGeneration,
-      }).then(() => ownsHeartbeat() ? refreshSnapshot(room.roomId) : null).catch((heartbeatError) => {
+      }).then(() => ownsHeartbeat() ? refreshSnapshot(heartbeatRoomId) : null).catch((heartbeatError) => {
         reportRuntimeError("communication-membership-heartbeat", heartbeatError, {
-          roomId: room.roomId,
+          roomId: heartbeatRoomId,
         });
       });
     }, HEARTBEAT_INTERVAL_MILLIS);
 
-    return () => clearInterval(interval);
-  }, [enabled, identity, isActiveLegacyGeneration, loading, refreshSnapshot, room]);
+    return () => { active = false; clearInterval(interval); };
+  }, [enabled, heartbeatMembershipGeneration, heartbeatRoomId, heartbeatSessionGeneration, heartbeatUserId, isActiveLegacyGeneration, loading, refreshSnapshot]);
 
   useEffect(() => {
     if (!enabled) return;

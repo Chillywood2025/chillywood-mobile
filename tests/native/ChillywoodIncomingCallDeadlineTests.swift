@@ -19,7 +19,7 @@ private final class UserDefaults {
 }
 
 private final class CXCallObserver {
-  struct Call { let uuid: UUID }
+  struct Call { let uuid: UUID; var hasEnded = false }
   static var observedCalls: [Call] = []
   var calls: [Call] { Self.observedCalls }
 }
@@ -32,6 +32,7 @@ private final class CoordinatorProbe {
   var events: [String] = []
   var retainedAnswerUuids: Set<UUID> = []
   let activeCallsDefaultsKey = "test-active-calls"
+  func persistedVoipAuthority() -> NativeVoipAuthority? { nil }
 
   func failPendingAnswer(_ uuid: UUID) { pendingAnswerActions.removeValue(forKey: uuid) }
   func markTerminalInvite(_ inviteId: String) { terminalInvites.append(inviteId) }
@@ -132,7 +133,7 @@ private func makeCall(uuid: UUID = UUID(), expiry: Date, answered: Bool = false)
   ActiveNativeCall(
     uuid: uuid, inviteId: UUID().uuidString, threadId: UUID().uuidString, callType: "voice",
     ringingDeadline: ChillywoodIncomingCallDeadline(serverExpiresAt: expiry, now: Date()),
-    answered: answered, timeoutWorkItem: nil
+    answered: answered, timeoutWorkItem: nil, presentationConfirmed: true
   )
 }
 private let future = makeCall(expiry: Date().addingTimeInterval(90))
@@ -239,5 +240,19 @@ private let absentRestore = CoordinatorProbe()
 absentRestore.restore()
 expect(absentRestore.activeCalls.isEmpty && absentRestore.events.isEmpty,
   "persisted descriptor cannot invent a CallKit call absent from system inventory")
+
+CXCallObserver.observedCalls = [.init(uuid: persistedCall.uuid, hasEnded: true)]
+storageCoordinator.save()
+private let endedRestore = CoordinatorProbe()
+endedRestore.restore()
+expect(endedRestore.activeCalls.isEmpty && endedRestore.events.isEmpty,
+  "an ended system call cannot be recovered as a live presentation")
+private var pendingCall = makeCall(expiry: Date().addingTimeInterval(70))
+pendingCall.presentationConfirmed = false
+private let pendingStorage = CoordinatorProbe()
+pendingStorage.activeCalls[pendingCall.uuid] = pendingCall
+pendingStorage.save()
+expect((UserDefaults.standard.storage["test-active-calls"] as? [[String: Any]])?.isEmpty == true,
+  "a pending unconfirmed report never persists a recoverable descriptor")
 
 print("Native incoming deadline: \(passed) policy and actual-callback assertions passed.")

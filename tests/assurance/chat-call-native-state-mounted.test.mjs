@@ -449,6 +449,7 @@ function nativeRouteFacade(setAudioRouteAsync) {
     "expo-application": {}, "react-native": { Platform: { OS: "ios" } },
     "../modules/chillywood-native-calls": { default: { setAudioRouteAsync } },
     "./accountSessionAuthority": {}, "./iosNativeCallBridgeLifecycle.mjs": {},
+    "./communicationRoomIdentifier.mjs": {},
     "./livekit/bootstrap": {}, "./nativeCallTransitionProvenance.mjs": {},
     "./notifications": {}, "./supabase": {},
     "./logger": { reportRuntimeError() {} }, "./nativeCallErrorDiagnostics.mjs": nativeCallErrorDiagnostics,

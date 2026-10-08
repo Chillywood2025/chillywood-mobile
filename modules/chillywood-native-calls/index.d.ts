@@ -22,6 +22,12 @@ export type NativeCallsModule = {
   stopVoipRegistrationAsync(): Promise<boolean>;
   getPendingEventsAsync(): Promise<NativeCallEvent[]>;
   reportIncomingCallAsync(payload: Record<string, unknown>): Promise<string>;
+  reportForegroundIncomingCallAsync?(payload: Record<string, unknown>, authority: {
+    userId: string;
+    accountId: string;
+    sessionGeneration: string;
+    installId: string;
+  }): Promise<string>;
   endCallAsync(callUuid: string, reason?: string): Promise<void>;
   reportRemoteEndAsync(callUuid: string, reason?: string): Promise<void>;
   completeAnswerAsync(callUuid: string, connected: boolean): Promise<void>;

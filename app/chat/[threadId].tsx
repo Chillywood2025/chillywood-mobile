@@ -86,6 +86,7 @@ import { reportRuntimeError } from "../../_lib/logger";
 import {
   completeIosNativeCallAnswer,
   endIosNativeCall,
+  ensureIosForegroundIncomingCallPresentation,
   hasIosNativeCallPresentation,
   isIosNativeCallsRuntimeEnabled,
   readIosNativeApplicationActiveSerial,
@@ -95,7 +96,6 @@ import {
   setIosNativeCallMuted,
   subscribeToIosNativeCallEvents,
   subscribeToIosNativeCallPresentation,
-  waitForIosNativeCallPresentation,
 } from "../../_lib/iosNativeCalls";
 import {
   consumeMountedAndroidNativeCallRoute,
@@ -2210,11 +2210,18 @@ export default function ChillyChatThreadScreen() {
     if (!operation) return false;
     try {
       if (Platform.OS === "ios" && !requestedNativeCallUuid) {
-        const presentationWaitOutcome = await waitForIosNativeCallPresentation(invite.id);
+        const ownsForegroundAnswer = () => isAnswerOperationCurrent(operation);
+        const presentationWaitOutcome = await ensureIosForegroundIncomingCallPresentation({
+          inviteId: invite.id,
+          threadId,
+          roomId: normalizeCommunicationRoomIdentifier(invite.communicationRoomId),
+          authority,
+          isCurrent: ownsForegroundAnswer,
+        });
         if (!isAnswerOperationCurrent(operation)) return false;
         const answerAuthority = resolveIosForegroundIncomingAnswerAuthority(presentationWaitOutcome);
         if (answerAuthority === "native_answer") {
-          const requested = await requestIosNativeCallAnswer(invite.id);
+          const requested = await requestIosNativeCallAnswer(invite.id, ownsForegroundAnswer);
           if (!isAnswerOperationCurrent(operation)) return false;
           if (!requested) {
             setError("Unable to hand this call to iPhone right now. The call remains available while it is still ringing.");
@@ -2285,6 +2292,7 @@ export default function ChillyChatThreadScreen() {
     }
   }, [
     applyAcceptedIncomingInviteState,
+    authority,
     beginAnswerOperation,
     callBusy,
     completeTrustedIosNativeAnswer,

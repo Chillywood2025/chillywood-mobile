@@ -55,6 +55,10 @@ public final class ChillywoodNativeCallsModule: Module {
       try await ChillywoodNativeCallCoordinator.shared.reportIncomingCall(payload: payload)
     }
 
+    AsyncFunction("reportForegroundIncomingCallAsync") { (payload: [String: Any], authority: [String: Any]) async throws -> String in
+      try await ChillywoodNativeCallCoordinator.shared.reportForegroundIncomingCall(payload: payload, authority: authority)
+    }
+
     AsyncFunction("endCallAsync") { (callUuid: String, reason: String?) in
       try ChillywoodNativeCallCoordinator.shared.endCall(callUuid: callUuid, reason: reason ?? "local_end")
     }

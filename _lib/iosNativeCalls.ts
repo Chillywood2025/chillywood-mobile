@@ -7,6 +7,8 @@ import NativeCallsModule, {
 } from "../modules/chillywood-native-calls";
 import {
   isCurrentAccountSessionAuthority,
+  readCurrentAccountSessionAuthority,
+  sameAccountSessionAuthority,
   type AccountSessionAuthorityBinding,
 } from "./accountSessionAuthority";
 import { shouldReuseIosNativeCallReadiness } from "./iosNativeCallBridgeLifecycle.mjs";
@@ -24,6 +26,7 @@ import {
 import { supabase } from "./supabase";
 import { reportRuntimeError } from "./logger";
 import { reportBoundedNativeCallError } from "./nativeCallErrorDiagnostics.mjs";
+import { normalizeCommunicationRoomIdentifier } from "./communicationRoomIdentifier.mjs";
 
 export type IosNativeCallsDisabledReason =
   | "not_ios"
@@ -71,6 +74,26 @@ let voipRegistrationActive = false;
 let voipAuthorityContext: IosVoipAuthorityContext | null = null;
 let voipTokenLifecycleQueue: Promise<void> = Promise.resolve();
 let voipTransitionQueue: Promise<void> = Promise.resolve();
+// Process memory only; used to suppress confirmed same-lifecycle replay writes.
+// Never persisted, included in diagnostics, or exposed to event consumers.
+let confirmedVoipToken: { token: string; generation: number; context: IosVoipAuthorityContext } | null = null;
+const voipTokenRetryWaiters = new Set<() => void>();
+const cancelVoipTokenRetries = () => { voipTokenRetryWaiters.forEach((finish) => finish()); };
+const waitForVoipTokenRetry = (delay: number) => new Promise<void>((resolve) => {
+  const finish = () => {
+    clearTimeout(timer);
+    voipTokenRetryWaiters.delete(finish);
+    resolve();
+  };
+  const timer = setTimeout(finish, delay);
+  voipTokenRetryWaiters.add(finish);
+});
+let foregroundAnswerValidations = new WeakMap<() => boolean, {
+  inviteId: string;
+  generation: number;
+  context: IosVoipAuthorityContext;
+  validate(): Promise<boolean>;
+}>();
 
 const toText = (value: unknown) => String(value ?? "").trim();
 const isExplicitlyEnabled = (value: unknown) => ENABLED_VALUES.has(toText(value).toLowerCase());
@@ -178,6 +201,20 @@ const runVoipTransition = <T>(task: () => Promise<T>) => {
   return result;
 };
 
+// A failed network read is not a logout. Quarantine JavaScript actions while
+// retaining the persisted native binding and its queued receipts for recovery.
+// Explicit account/session revocation still clears PushKit and backend ownership.
+const suspendVoipReadiness = () => {
+  ++voipLifecycleGeneration;
+  cancelVoipTokenRetries();
+  voipRegistrationActive = false;
+  nativeSubscription?.remove();
+  nativeSubscription = null;
+  eventListener = null;
+  clearNativeCallTransitionClaims("ios");
+  clearNativePresentedInvites();
+};
+
 const isExactVoipAuthorityCurrent = async (context: IosVoipAuthorityContext) => (
   context.authority.state === "ACTIVE"
   && !context.authority.restoreOnly
@@ -256,8 +293,9 @@ const registerVoipToken = async (
       userId: context.authority.userId,
     },
   });
-  const currentAfterRegistration = await isExactVoipAuthorityCurrent(context);
-  if (!currentAfterRegistration) {
+  const authorityAfterRegistration = await readCurrentAccountSessionAuthority();
+  const currentAfterRegistration = sameAccountSessionAuthority(context.authority, authorityAfterRegistration);
+  if (authorityAfterRegistration && !currentAfterRegistration) {
     await revokeBackendVoipRegistration(context, "account_switch").catch(() => null);
   }
   const exactResponse = !error
@@ -281,14 +319,28 @@ const enqueueVoipTokenRegistration = (
   if (!normalizedToken) return;
 
   void enqueueVoipTokenLifecycle(async () => {
-    if (!voipRegistrationActive || generation !== voipLifecycleGeneration || voipAuthorityContext !== context) return;
-    await registerVoipToken(normalizedToken, context);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (!voipRegistrationActive || generation !== voipLifecycleGeneration || voipAuthorityContext !== context) return;
+      if (confirmedVoipToken?.generation === generation && confirmedVoipToken.context === context
+        && confirmedVoipToken.token === normalizedToken) return;
+      const result = await registerVoipToken(normalizedToken, context).catch(() => null);
+      if (result?.status === "registered") {
+        if (voipRegistrationActive && generation === voipLifecycleGeneration && voipAuthorityContext === context) {
+          confirmedVoipToken = { token: normalizedToken, generation, context };
+        }
+        return;
+      }
+      if (attempt === 2) return;
+      if (!voipRegistrationActive || generation !== voipLifecycleGeneration || voipAuthorityContext !== context) return;
+      await waitForVoipTokenRetry([1_000, 3_000][attempt]);
+    }
   });
 };
 
 const enqueueVoipTokenInvalidation = (generation: number, context: IosVoipAuthorityContext) => {
   void enqueueVoipTokenLifecycle(async () => {
     if (!voipRegistrationActive || generation !== voipLifecycleGeneration || voipAuthorityContext !== context) return;
+    confirmedVoipToken = null;
     await revokeBackendVoipRegistration(context, "provider_invalid");
   });
 };
@@ -304,6 +356,8 @@ const notifyNativePresentationSubscribers = () => {
 };
 
 const clearNativePresentedInvites = () => {
+  foregroundAnswerValidations = new WeakMap();
+  confirmedVoipToken = null;
   if (nativePresentedCallUuidsByInviteId.size === 0) return;
   nativePresentedCallUuidsByInviteId.clear();
   notifyNativePresentationSubscribers();
@@ -548,6 +602,128 @@ export async function waitForIosNativeCallPresentation(
   });
 }
 
+const FOREGROUND_CALL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+const FOREGROUND_CALL_EXPIRY = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/u;
+const isFutureForegroundCallExpiry = (value: unknown): value is string => {
+  if (typeof value !== "string" || !FOREGROUND_CALL_EXPIRY.test(value)) return false;
+  const year = Number(value.slice(0, 4));
+  const month = Number(value.slice(5, 7));
+  const day = Number(value.slice(8, 10));
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return month >= 1 && month <= 12 && day >= 1 && day <= days[month - 1]
+    && Number(value.slice(11, 13)) < 24 && Number(value.slice(14, 16)) < 60
+    && Number(value.slice(17, 19)) < 60
+    && Number.isFinite(Date.parse(value)) && Date.parse(value) > Date.now();
+};
+
+// A deliberate foreground Answer may reach the authenticated invite before
+// PushKit. Ask CallKit to present that freshly verified invite, then wait for
+// its real receipt. A returned UUID alone never manufactures native ownership.
+export async function ensureIosForegroundIncomingCallPresentation(input: {
+  inviteId: string;
+  threadId: string;
+  roomId: string;
+  authority: AccountSessionAuthorityBinding | null;
+  isCurrent(): boolean;
+  timeoutMs?: number;
+}): Promise<IosNativePresentationWaitOutcome> {
+  if (Platform.OS !== "ios" || !isIosNativeCallsRuntimeEnabled()) return "not_expected";
+  const native = NativeCallsModule;
+  const context = voipAuthorityContext;
+  const generation = voipLifecycleGeneration;
+  const inviteId = toText(input.inviteId).toLowerCase();
+  const threadId = toText(input.threadId).toLowerCase();
+  const roomId = normalizeCommunicationRoomIdentifier(input.roomId);
+  if (!native || !context || !voipRegistrationActive || !roomId
+    || !FOREGROUND_CALL_UUID.test(inviteId) || !FOREGROUND_CALL_UUID.test(threadId)
+    || !sameAccountSessionAuthority(input.authority, context.authority)) return "stale";
+  const ownsOperation = () => input.isCurrent() && voipRegistrationActive
+    && generation === voipLifecycleGeneration && voipAuthorityContext === context;
+  const currentNativeAuthority = async () => {
+    if (!ownsOperation() || !await isExactVoipAuthorityCurrent(context) || !ownsOperation()) return false;
+    if (await getNotificationInstallId() !== context.installId || !ownsOperation()) return false;
+    return await readIosNativeApplicationActive() && ownsOperation();
+  };
+  const readExactRingingInvite = async () => {
+    if (!await currentNativeAuthority()) return null;
+    // Read the raw call_type/status. The ordinary display parser supplies
+    // defaults for unknown values; those defaults cannot grant call authority.
+    const [inviteResult, threadResult] = await Promise.all([
+      supabase.from("chat_call_invites")
+        .select("id,thread_id,communication_room_id,caller_user_id,callee_user_id,call_type,status,expires_at")
+        .eq("id", inviteId).maybeSingle(),
+      supabase.from("chat_threads")
+        .select("id,active_communication_room_id,members:chat_thread_members(user_id,thread_id)")
+        .eq("id", threadId).maybeSingle(),
+    ]);
+    if (!ownsOperation() || inviteResult.error || threadResult.error) return null;
+    const invite = inviteResult.data;
+    const thread = threadResult.data;
+    if (!invite || !thread || invite.id !== inviteId || invite.thread_id !== threadId
+      || invite.communication_room_id !== roomId || thread.id !== threadId
+      || thread.active_communication_room_id !== roomId
+      || invite.callee_user_id !== context.authority.userId
+      || invite.caller_user_id === context.authority.userId
+      || !FOREGROUND_CALL_UUID.test(invite.caller_user_id)
+      || invite.status !== "ringing"
+      || (invite.call_type !== "voice" && invite.call_type !== "video")
+      || !isFutureForegroundCallExpiry(invite.expires_at)
+      || !Array.isArray(thread.members)
+      || ![context.authority.userId, invite.caller_user_id].every((userId) => thread.members.some(
+        (member) => member.user_id === userId && member.thread_id === threadId,
+      ))) return null;
+    if (!await currentNativeAuthority() || Date.parse(invite.expires_at) <= Date.now()) return null;
+    return invite;
+  };
+  try {
+    const invite = await readExactRingingInvite();
+    if (!invite || !ownsOperation()) return "stale";
+    const observedUuid = nativePresentedCallUuidsByInviteId.get(inviteId);
+    if (observedUuid && observedUuid !== inviteId) return "stale";
+    if (!observedUuid) {
+      if (typeof native.reportForegroundIncomingCallAsync !== "function") return "stale";
+      let reportTimeout: ReturnType<typeof setTimeout> | undefined;
+      const nativeReport = native.reportForegroundIncomingCallAsync({
+        callInviteId: inviteId,
+        callUuid: inviteId,
+        threadId,
+        callType: invite.call_type,
+        expiresAt: invite.expires_at,
+      }, {
+        userId: context.authority.userId,
+        accountId: context.authority.accountId,
+        sessionGeneration: context.authority.sessionGeneration,
+        installId: context.installId,
+      });
+      const reportedUuid = await Promise.race([
+        nativeReport,
+        new Promise<null>((resolve) => { reportTimeout = setTimeout(() => resolve(null), 5_000); }),
+      ]).finally(() => clearTimeout(reportTimeout));
+      // A late CallKit callback retains its own native lifecycle. It cannot
+      // continue this timed-out tap or trigger an indiscriminate native End.
+      if (reportedUuid === null) return "timeout";
+      if (!ownsOperation() || reportedUuid !== inviteId) return "stale";
+    }
+    const outcome = await waitForIosNativeCallPresentation(inviteId,
+      Math.max(0, Math.min(3_000, input.timeoutMs ?? 2_000)));
+    if (!ownsOperation()) return "stale";
+    if (outcome !== "presented") return outcome;
+    const validate = async () => {
+      if (nativePresentedCallUuidsByInviteId.get(inviteId) !== inviteId) return false;
+      const latest = await readExactRingingInvite();
+      return !!latest && latest.call_type === invite.call_type
+        && latest.caller_user_id === invite.caller_user_id && latest.expires_at === invite.expires_at
+        && ownsOperation() && nativePresentedCallUuidsByInviteId.get(inviteId) === inviteId;
+    };
+    if (!await validate()) return "stale";
+    foregroundAnswerValidations.set(input.isCurrent, { inviteId, generation, context, validate });
+    return "presented";
+  } catch {
+    return "stale";
+  }
+}
+
 export async function startIosNativeCallsReadiness(
   authority: AccountSessionAuthorityBinding,
   listener?: IosNativeCallEventListener,
@@ -556,6 +732,14 @@ export async function startIosNativeCallsReadiness(
     const apnsEnvironment = readApnsEnvironment();
     const readiness = await readIosNativeCallsReadiness();
     const currentContext = voipAuthorityContext;
+    const currentAuthority = readiness.available
+      ? await readCurrentAccountSessionAuthority() : null;
+    if (readiness.available && !currentAuthority) {
+      suspendVoipReadiness();
+      return { apnsEnvironment, status: "error", tokenFingerprint: null };
+    }
+    const exactAuthority = sameAccountSessionAuthority(authority, currentAuthority)
+      && authority.restoreOnly === false && authority.accountId === authority.userId;
     if (
       readiness.available
       && NativeCallsModule
@@ -566,7 +750,7 @@ export async function startIosNativeCallsReadiness(
         nextAuthority: authority,
         registrationActive: voipRegistrationActive,
       })
-      && await isExactVoipAuthorityCurrent(currentContext)
+      && exactAuthority
     ) {
       // React can re-enter this bridge while the same account/session is being
       // harmlessly revalidated. CallKit may already be presenting an exact
@@ -574,10 +758,22 @@ export async function startIosNativeCallsReadiness(
       // its invite/UUID ownership and make a visible foreground Answer fail
       // closed even though the native call remains live.
       eventListener = listener ?? null;
+      // Rebind the same native owner without clearing its calls/listener. Native
+      // replays the current registry token and confirmed live presentations,
+      // recovering a prior failed token write without inventing either receipt.
+      const rebound = await NativeCallsModule.startVoipRegistrationAsync(
+        currentContext.authority.userId, currentContext.authority.accountId,
+        currentContext.authority.sessionGeneration, currentContext.installId,
+      ).catch(() => false);
+      if (!rebound) {
+        suspendVoipReadiness();
+        return { apnsEnvironment, status: "error", tokenFingerprint: null };
+      }
       await drainPendingEventsForExactLifecycle(voipLifecycleGeneration, currentContext);
       return { apnsEnvironment, status: "started", tokenFingerprint: null };
     }
     const generation = ++voipLifecycleGeneration;
+    cancelVoipTokenRetries();
     iosNativeApplicationActiveSerial = 0;
     iosNativeAnswerApplicationActiveBaselines.clear();
     clearNativeCallTransitionClaims("ios");
@@ -594,11 +790,12 @@ export async function startIosNativeCallsReadiness(
 
     if (!readiness.available || !NativeCallsModule) {
       await NativeCallsModule?.stopVoipRegistrationAsync().catch(() => false);
+      if (currentContext) await revokeBackendVoipRegistration(currentContext, "auth_loss").catch(() => null);
       return { apnsEnvironment, status: "disabled", tokenFingerprint: null };
     }
-    if (authority.restoreOnly || authority.accountId !== authority.userId
-      || !await isCurrentAccountSessionAuthority(authority)) {
+    if (!exactAuthority) {
       await NativeCallsModule.stopVoipRegistrationAsync().catch(() => false);
+      if (currentContext) await revokeBackendVoipRegistration(currentContext, "account_switch").catch(() => null);
       return { apnsEnvironment, status: "error", tokenFingerprint: null };
     }
 
@@ -619,13 +816,22 @@ export async function startIosNativeCallsReadiness(
       context.authority.sessionGeneration,
       context.installId,
     ).catch(() => false);
-    const authorityStillCurrent = started && await isExactVoipAuthorityCurrent(context);
+    const authorityAfterStart = started ? await readCurrentAccountSessionAuthority() : null;
+    const authorityStillCurrent = started && sameAccountSessionAuthority(context.authority, authorityAfterStart);
+    if (started && !authorityAfterStart && generation === voipLifecycleGeneration) {
+      // Native startup may have succeeded while the following authority RPC
+      // timed out. Keep its exact binding and pending token/event queue, grant
+      // no JS action authority, and let bounded root recovery revalidate it.
+      voipAuthorityContext = context;
+      return { apnsEnvironment, status: "error", tokenFingerprint: null };
+    }
     if ((!started || !authorityStillCurrent) && generation === voipLifecycleGeneration) {
       voipRegistrationActive = false;
       voipAuthorityContext = null;
       nativeSubscription = null;
       eventListener = null;
       await NativeCallsModule.stopVoipRegistrationAsync().catch(() => false);
+      await revokeBackendVoipRegistration(currentContext ?? context, started ? "account_switch" : "auth_loss").catch(() => null);
     }
     if (started && authorityStillCurrent && generation === voipLifecycleGeneration) {
       voipRegistrationActive = true;
@@ -687,6 +893,7 @@ export async function revokeIosVoipRegistration(): Promise<IosVoipRegistrationSt
     if (Platform.OS !== "ios") return { apnsEnvironment, status: "disabled", tokenFingerprint: null };
 
     ++voipLifecycleGeneration;
+    cancelVoipTokenRetries();
     iosNativeApplicationActiveSerial = 0;
     iosNativeAnswerApplicationActiveBaselines.clear();
     const context = voipAuthorityContext;
@@ -740,7 +947,7 @@ export async function completeIosNativeCallAnswer(callUuid: string, connected: b
   });
 }
 
-export async function requestIosNativeCallAnswer(inviteId: string) {
+export async function requestIosNativeCallAnswer(inviteId: string, isCurrent: () => boolean) {
   if (
     !NativeCallsModule
     || typeof NativeCallsModule.requestAnswerAsync !== "function"
@@ -749,7 +956,22 @@ export async function requestIosNativeCallAnswer(inviteId: string) {
   ) return false;
   const normalizedInviteId = toText(inviteId);
   const callUuid = nativePresentedCallUuidsByInviteId.get(normalizedInviteId);
-  if (!normalizedInviteId || !callUuid) return false;
+  const context = voipAuthorityContext;
+  const generation = voipLifecycleGeneration;
+  const foregroundValidation = foregroundAnswerValidations.get(isCurrent);
+  // Admission belongs to this deliberate mounted UI operation. Consuming it
+  // cannot let a second tap skip its own final authoritative row read.
+  foregroundAnswerValidations.delete(isCurrent);
+  if (!foregroundValidation || foregroundValidation.inviteId !== normalizedInviteId
+    || foregroundValidation.generation !== generation || foregroundValidation.context !== context) return false;
+  const ownsRequest = () => isCurrent() && voipRegistrationActive
+    && generation === voipLifecycleGeneration && voipAuthorityContext === context
+    && nativePresentedCallUuidsByInviteId.get(normalizedInviteId) === callUuid;
+  if (!normalizedInviteId || !callUuid || !context || !ownsRequest()
+    || !await isExactVoipAuthorityCurrent(context) || !ownsRequest()
+    || await getNotificationInstallId() !== context.installId || !ownsRequest()
+    || !await readIosNativeApplicationActive() || !ownsRequest()) return false;
+  if (!await foregroundValidation.validate().catch(() => false) || !ownsRequest()) return false;
   return NativeCallsModule.requestAnswerAsync(callUuid, normalizedInviteId)
     .then((requested) => requested === true)
     .catch((error) => {

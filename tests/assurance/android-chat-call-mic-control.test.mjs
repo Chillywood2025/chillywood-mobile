@@ -166,6 +166,7 @@ function createLegacyMountedRuntime(options = {}) {
     broadcasts: [],
     cameraPermission: grantedPermission(),
     channels: [],
+    clockMs: 0,
     cleanupCalls: 0,
     durableCamera: false,
     durableMic: false,
@@ -768,7 +769,7 @@ function createLegacyMountedRuntime(options = {}) {
       throw new Error(`UNEXPECTED_LEGACY_HOOK_IMPORT:${specifier}`);
     },
     setInterval: (callback, delay) => {
-      runtime.intervals.push({ callback, delay });
+      runtime.intervals.push({ callback, delay, nextAt: runtime.clockMs + delay });
       return runtime.intervals.length;
     },
     setTimeout: (callback, delay) => {
@@ -2240,6 +2241,73 @@ test("legacy chat readiness: ICE loss demotes a previously connected peer before
     peer.emit("iceconnectionstatechange");
   });
   assert.equal(harness.getResult().channelState, "live");
+});
+
+async function advanceLegacyIntervalClock(harness, runtime, elapsedMs) {
+  const target = runtime.clockMs + elapsedMs;
+  let fired = 0;
+  while (true) {
+    const next = runtime.intervals.filter((entry) => entry && entry.nextAt <= target)
+      .sort((left, right) => left.nextAt - right.nextAt)[0];
+    if (!next) break;
+    assert.ok(fired++ < 1_000, "controlled interval clock must make progress");
+    runtime.clockMs = next.nextAt;
+    next.nextAt += next.delay;
+    await harness.run(() => next.callback());
+  }
+  runtime.clockMs = target;
+}
+
+test("legacy heartbeat: frequent authoritative snapshots cannot starve participant liveness", async (t) => {
+  const runtime = createLegacyMountedRuntime({ ownedAdmission: true });
+  const ended = [];
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true,
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    onRoomEnded: (reason) => ended.push(reason) });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  const timer = runtime.intervals.find((entry) => entry?.delay === 15_000);
+  assert.ok(timer, "natural admission starts the actual production heartbeat");
+  const admission = runtime.membershipGeneration;
+  for (let refresh = 0; refresh < 12; refresh += 1) {
+    await advanceLegacyIntervalClock(harness, runtime, 8_000);
+    await harness.run(() => channel.emitBroadcast("state:update", {}));
+  }
+  assert.equal(runtime.clockMs, 96_000);
+  assert.equal(runtime.heartbeatCalls.length, 6, "liveness continues at 15 seconds despite 8-second invalidations");
+  assert.ok(runtime.heartbeatCalls.every((call) => call.expectedMembershipGeneration === admission
+    && call.userId === runtime.userId && call.roomId === runtime.roomId));
+  assert.equal(runtime.joinCalls.length, 1, "snapshot projection does not reacquire admission");
+  assert.equal(runtime.durableMic, true, "heartbeats preserve current media intent");
+  assert.deepEqual(ended, []);
+});
+
+test("legacy heartbeat: exact session replacement retires its timer and End prevents future mutations", async (t) => {
+  const runtime = createLegacyMountedRuntime({ ownedAdmission: true });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+  t.after(() => harness.unmount());
+  const oldTimer = runtime.intervals.find((entry) => entry?.delay === 15_000);
+  const oldAdmission = runtime.membershipGeneration;
+  assert.ok(oldTimer);
+  await advanceLegacyIntervalClock(harness, runtime, 8_000);
+  await harness.rerender({ authenticatedAccessToken: "replacement-test-token" });
+  const replacementTimer = runtime.intervals.find((entry) => entry?.delay === 15_000);
+  assert.ok(replacementTimer);
+  assert.notEqual(replacementTimer, oldTimer);
+  assert.notEqual(runtime.membershipGeneration, oldAdmission);
+  assert.equal(runtime.intervals.includes(oldTimer), false, "old timer is cleared on session replacement");
+  await harness.run(() => oldTimer.callback());
+  assert.equal(runtime.heartbeatCalls.length, 0, "a queued retired callback cannot touch either admission");
+  await advanceLegacyIntervalClock(harness, runtime, 15_000);
+  assert.equal(runtime.heartbeatCalls.length, 1);
+  assert.equal(runtime.heartbeatCalls[0].expectedMembershipGeneration, runtime.membershipGeneration);
+  await harness.run(() => harness.getResult().leaveRoom());
+  const callsAtEnd = runtime.heartbeatCalls.length;
+  const readsAtEnd = runtime.snapshotReads;
+  await advanceLegacyIntervalClock(harness, runtime, 90_000);
+  await harness.run(() => { oldTimer.callback(); replacementTimer.callback(); });
+  assert.equal(runtime.heartbeatCalls.length, callsAtEnd, "End retires periodic and queued heartbeat work");
+  assert.equal(runtime.snapshotReads, readsAtEnd, "End cannot be followed by heartbeat snapshot resurrection");
 });
 
 test("legacy heartbeat: a late liveness response cannot overwrite a newer mute", async (t) => {

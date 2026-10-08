@@ -48,7 +48,7 @@ function generated(source) {
     output = output.replace(`// INSERT_${key}`, declaration(source, marker));
   }
   assert.doesNotMatch(output, /\/\/ INSERT_/u);
-  return `${diagnostics}\n${policy}\n${output}`;
+  return `${diagnostics}\n${policy}\n${declaration(source, "private struct NativeVoipAuthority:")}\n${output}`;
 }
 function runCase(label, source, shouldPass) {
   const main = join(temporary, "main.swift"), executable = join(temporary, label);
@@ -98,6 +98,9 @@ try {
   } else {
     execFileSync(process.execPath, ["scripts/test-ios-native-call-diagnostics.mjs"], {
       cwd: root, timeout: 180_000, stdio: "inherit",
+    });
+    execFileSync(process.execPath, ["scripts/test-ios-native-call-report.mjs"], {
+      cwd: root, timeout: 240_000, stdio: "inherit",
     });
     execFileSync(process.execPath, ["--test", "tests/assurance/ios-native-audio-root-mounted.test.mjs"], {
       cwd: root, timeout: 60_000, stdio: "inherit",

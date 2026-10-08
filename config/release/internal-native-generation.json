@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
-  "generation": "internal-native-v5",
+  "generation": "internal-native-v6",
   "channels": {
     "android": "android-internal-v2",
     "ios": "ios-internal-v2"
   },
   "runtimeVersions": {
-    "android": "1.0.0-android-production-v5",
-    "ios": "1.0.0-ios-production-v5"
+    "android": "1.0.0-android-production-v6",
+    "ios": "1.0.0-ios-production-v6"
   },
   "supersedes": {
-    "generation": "internal-native-v4",
-    "androidRuntimeVersion": "1.0.0-android-production-v4",
-    "iosRuntimeVersion": "1.0.0-ios-production-v4",
-    "androidCompatibilityDigest": "14941d59849b2d5d9ef1d4c34a0619a959cee6078d93934cbe95e79687e59c43",
-    "iosCompatibilityDigest": "73779c9084ef8195e44288b062624d08abf4597fb9454cad71f8ffcd61e32c7c"
+    "generation": "internal-native-v5",
+    "androidRuntimeVersion": "1.0.0-android-production-v5",
+    "iosRuntimeVersion": "1.0.0-ios-production-v5",
+    "androidCompatibilityDigest": "4ddc307e47272f81037c5d51d09dcabfa36fe34471c0cba1bcddad516ec3aba8",
+    "iosCompatibilityDigest": "d8289e104a09297582022286f99dcd01efea246c37b9174c186981ba2e7e005f"
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
@@ -37,6 +37,6 @@
         "group": "Chillywood Internal"
       }
     },
-    "reason": "The consolidated PR #539 candidate adds explicitly gated iOS native call diagnostics and changes shared native build inputs. Fresh v5 binaries are required for both platforms, restricted to the existing Google Play and TestFlight internal tester audiences. The historical v4 cohorts remain immutable. Diagnostics are enabled only by the reviewed ios-internal-v2 build profile; this generation does not authorize OTA publication or public release."
+    "reason": "Physical testing of Android 96 and iOS 31 reproduced remaining call failures. The next PR #539 candidate changes the native incoming-call presentation contract and registration diagnostics. Fresh v6 binaries are required for both platforms, restricted to the existing Google Play and TestFlight internal tester audiences. Historical v5 and earlier cohorts remain immutable. Diagnostics are enabled only by the reviewed ios-internal-v2 build profile; this generation does not authorize OTA publication or public release."
   }
 }

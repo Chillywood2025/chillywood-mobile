@@ -13,6 +13,7 @@ enum ChillywoodNativeCallError: Error {
   case callUnavailable
   case providerUnavailable
   case runtimeDisabled
+  case applicationNotActive
   case unsupportedAudioRoute
 }
 
@@ -25,6 +26,8 @@ private struct ActiveNativeCall {
   let ringingDeadline: ChillywoodIncomingCallDeadline?
   var answered: Bool
   var timeoutWorkItem: DispatchWorkItem?
+  var presentationConfirmed = false
+  var presentationAuthority: NativeVoipAuthority? = nil
 }
 
 private struct NativeVoipAuthority: Codable, Equatable, Sendable {
@@ -32,6 +35,11 @@ private struct NativeVoipAuthority: Codable, Equatable, Sendable {
   let accountId: String
   let sessionGeneration: String
   let installId: String
+}
+
+private struct PendingIncomingReport {
+  let generation: UUID
+  var completions: [(Error?) -> Void]
 }
 
 public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistryDelegate, @unchecked Sendable {
@@ -49,6 +57,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private let audioSessionDiagnostics = ChillywoodNativeCallDiagnostics.shared
   private var pushRegistry: PKPushRegistry?
   private var activeCalls: [UUID: ActiveNativeCall] = [:]
+  private var pendingIncomingReports: [UUID: PendingIncomingReport] = [:]
   private var requestedAnswerTransactions: Set<UUID> = []
   private var requestedAnswerCompletions: [UUID: [(Result<Void, Error>) -> Void]] = [:]
   private var pendingAnswerActions: [UUID: CXAnswerCallAction] = [:]
@@ -98,6 +107,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   public func prepareIfEnabled() {
+    ChillywoodNativeCallDiagnostics.shared.record(.lifecyclePrepared)
     guard isBuildEnabled else { return }
     prepare()
     guard isRuntimeDefaultEnabled, persistedVoipAuthority() != nil else { return }
@@ -154,6 +164,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     sessionGeneration: String,
     installId: String
   ) throws {
+    ChillywoodNativeCallDiagnostics.shared.record(.registrationStartReceived)
     guard isBuildEnabled else { throw ChillywoodNativeCallError.buildDisabled }
     guard isRuntimeDefaultEnabled else { throw ChillywoodNativeCallError.runtimeDisabled }
     let authority = NativeVoipAuthority(
@@ -175,6 +186,12 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       self.persistVoipAuthority(authority)
       self.prepare()
       self.startVoipRegistrationOnMain()
+      self.emitCurrentVoipTokenOnMain()
+      // JS may suspend readiness while preserving this same native registry.
+      // Rebinding must restore actual confirmed ownership into its new
+      // listener without minting an Answer or reporting another system call.
+      self.recoverConfirmedIncomingCallsOnMain()
+      ChillywoodNativeCallDiagnostics.shared.record(.registrationStarted)
     }
     if Thread.isMainThread { configure() }
     else { DispatchQueue.main.sync(execute: configure) }
@@ -189,7 +206,31 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     pushRegistry = registry
   }
 
+  private func recoverConfirmedIncomingCallsOnMain() {
+    dispatchPrecondition(condition: .onQueue(.main))
+    guard let authority = persistedVoipAuthority() else { return }
+    let liveCallUuids = Set(CXCallObserver().calls.filter { !$0.hasEnded }.map(\.uuid))
+    for call in Array(activeCalls.values) {
+      guard call.presentationConfirmed, call.presentationAuthority == authority,
+        activeCalls[call.uuid]?.generation == call.generation,
+        liveCallUuids.contains(call.uuid), !isTerminalInvite(call.inviteId),
+        call.ringingDeadline?.wakeup(now: Date(), ownsCall: true, answered: call.answered,
+          answerPending: pendingAnswerActions[call.uuid] != nil) != .expire
+      else { continue }
+      emit(type: "recovered", call: call)
+    }
+  }
+
+  private func emitCurrentVoipTokenOnMain() {
+    dispatchPrecondition(condition: .onQueue(.main))
+    guard persistedVoipAuthority() != nil, let token = pushRegistry?.pushToken(for: .voIP), !token.isEmpty else { return }
+    // PushKit need not issue a new callback when the same registry is reused.
+    // Replay its actual current token to the new JS lifecycle, memory-only.
+    emitRaw(["type": "voipTokenUpdated", "token": token.map { String(format: "%02x", $0) }.joined()])
+  }
+
   public func stopVoipRegistration() {
+    ChillywoodNativeCallDiagnostics.shared.record(.registrationStopReceived)
     let stop = { [weak self] in
       guard let self else { return }
       UserDefaults.standard.removeObject(forKey: self.voipAuthorityDefaultsKey)
@@ -197,6 +238,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       self.pushRegistry?.desiredPushTypes = []
       self.pushRegistry?.delegate = nil
       self.pushRegistry = nil
+      ChillywoodNativeCallDiagnostics.shared.record(.registrationStopped)
     }
     if Thread.isMainThread { stop() }
     else { DispatchQueue.main.sync(execute: stop) }
@@ -236,6 +278,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       provider?.reportCall(with: call.uuid, endedAt: Date(), reason: .remoteEnded)
     }
     activeCalls.removeAll()
+    drainIncomingReports()
     requestedAnswerTransactions.removeAll()
     requestedAnswerCompletions.values.flatMap { $0 }.forEach {
       $0(.failure(ChillywoodNativeCallError.callUnavailable))
@@ -343,13 +386,95 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
         }
         self.prepare()
         do {
-          let callUuid = try self.reportIncomingCallOnMain(payload: payload)
-          continuation.resume(returning: callUuid.uuidString.lowercased())
+          _ = try self.reportIncomingCallOnMain(payload: payload) { error in
+            if let error { continuation.resume(throwing: error) }
+            else if let call = self.findActiveCall(input: payload), call.presentationConfirmed {
+              continuation.resume(returning: call.uuid.uuidString.lowercased())
+            } else { continuation.resume(throwing: ChillywoodNativeCallError.callUnavailable) }
+          }
         } catch {
           continuation.resume(throwing: error)
         }
       }
     }
+  }
+
+  public func reportForegroundIncomingCall(
+    payload: [String: Any],
+    authority: [String: Any]
+  ) async throws -> String {
+    let diagnosticUuid = (payload["callUuid"] as? String).flatMap(UUID.init(uuidString:))
+    ChillywoodNativeCallDiagnostics.shared.record(.foregroundReportReceived, callUuid: diagnosticUuid)
+    return try await withCheckedThrowingContinuation { continuation in
+      DispatchQueue.main.async { [weak self] in
+        guard let self else {
+          continuation.resume(throwing: ChillywoodNativeCallError.callUnavailable)
+          return
+        }
+        do {
+          let safePayload = try self.foregroundIncomingPayload(payload, authority: authority)
+          self.prepare()
+          _ = try self.reportIncomingCallOnMain(payload: safePayload) { error in
+            if let error {
+              ChillywoodNativeCallDiagnostics.shared.record(.foregroundReportRejected, callUuid: diagnosticUuid, error: error)
+              continuation.resume(throwing: error)
+              return
+            }
+            do {
+              // Neither a main-queue delay nor CallKit's completion may grant
+              // an old account or a now-background screen Answer authority.
+              _ = try self.foregroundIncomingPayload(payload, authority: authority)
+              guard let call = self.findActiveCall(input: safePayload), call.presentationConfirmed else {
+                throw ChillywoodNativeCallError.callUnavailable
+              }
+              continuation.resume(returning: call.uuid.uuidString.lowercased())
+            } catch {
+              ChillywoodNativeCallDiagnostics.shared.record(.foregroundReportRejected, callUuid: diagnosticUuid, error: error)
+              continuation.resume(throwing: error)
+            }
+          }
+        } catch {
+          ChillywoodNativeCallDiagnostics.shared.record(.foregroundReportRejected, callUuid: diagnosticUuid, error: error)
+          continuation.resume(throwing: error)
+        }
+      }
+    }
+  }
+
+  private func foregroundIncomingPayload(
+    _ payload: [String: Any],
+    authority inputAuthority: [String: Any]
+  ) throws -> [String: Any] {
+    dispatchPrecondition(condition: .onQueue(.main))
+    guard isBuildEnabled else { throw ChillywoodNativeCallError.buildDisabled }
+    guard isRuntimeDefaultEnabled else { throw ChillywoodNativeCallError.runtimeDisabled }
+    guard UIApplication.shared.applicationState == .active else {
+      throw ChillywoodNativeCallError.applicationNotActive
+    }
+    let authority = NativeVoipAuthority(
+      userId: toText(inputAuthority["userId"]), accountId: toText(inputAuthority["accountId"]),
+      sessionGeneration: toText(inputAuthority["sessionGeneration"]), installId: toText(inputAuthority["installId"])
+    )
+    guard isValidVoipAuthority(authority), persistedVoipAuthority() == authority else {
+      throw ChillywoodNativeCallError.invalidPayload
+    }
+    let inviteId = toText(payload["callInviteId"]).lowercased()
+    let callUuid = toText(payload["callUuid"]).lowercased()
+    let threadId = toText(payload["threadId"]).lowercased()
+    let callType = toText(payload["callType"])
+    let expiry = (payload["expiresAt"] as? String) ?? ""
+    guard UUID(uuidString: inviteId) != nil, callUuid == inviteId,
+      UUID(uuidString: threadId) != nil, ["voice", "video"].contains(callType),
+      let deadline = ChillywoodIncomingCallDeadline(serverExpiresAt: parseForegroundServerDate(expiry), now: Date()),
+      deadline.wakeup(now: Date(), ownsCall: true, answered: false, answerPending: false) != .expire,
+      !isTerminalInvite(inviteId)
+    else { throw ChillywoodNativeCallError.invalidPayload }
+    // Foreground UI never receives or fabricates a server presentation-ack
+    // capability. Only the actual PushKit callback owns that payload.
+    let callerName = String(toText(payload["callerName"]).prefix(80))
+    return ["callInviteId": inviteId, "callUuid": callUuid, "threadId": threadId,
+      "callType": callType, "expiresAt": expiry,
+      "callerName": callerName.isEmpty ? "Chi'llywood caller" : callerName]
   }
 
   #if DEBUG
@@ -389,6 +514,33 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     return ISO8601DateFormatter().date(from: text)
   }
 
+  private func parseForegroundServerDate(_ text: String) -> Date? {
+    // ISO8601DateFormatter can normalize invalid calendar components. A new
+    // foreground presentation must reject those inputs rather than silently
+    // granting a different deadline (legacy restore parsing stays separate).
+    let pattern = "^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\\.[0-9]{1,6})?(Z|[+-]([0-9]{2}):([0-9]{2}))$"
+    guard let expression = try? NSRegularExpression(pattern: pattern),
+      let match = expression.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+      match.range.length == text.utf16.count
+    else { return nil }
+    let value = text as NSString
+    func integer(_ index: Int) -> Int? {
+      let range = match.range(at: index)
+      return range.location == NSNotFound ? nil : Int(value.substring(with: range))
+    }
+    guard let year = integer(1), year > 0, let month = integer(2), (1...12).contains(month),
+      let day = integer(3), let hour = integer(4), hour < 24,
+      let minute = integer(5), minute < 60, let second = integer(6), second < 60
+    else { return nil }
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+    let days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    guard day >= 1, day <= days[month - 1] else { return nil }
+    if let offsetHour = integer(8) {
+      guard offsetHour < 24, let offsetMinute = integer(9), offsetMinute < 60 else { return nil }
+    }
+    return parseServerDate(text)
+  }
+
   private func toText(_ value: Any?) -> String {
     guard let text = value as? String else { return "" }
     return text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -413,21 +565,37 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
 
     let suppliedUuid = (payload["callUuid"] as? String).flatMap(UUID.init(uuidString:))
     let callUuid = suppliedUuid ?? UUID()
-    if activeCalls[callUuid] != nil {
-      completion?(nil)
-      return callUuid
-    }
-    if let existing = activeCalls.values.first(where: { $0.inviteId == inviteId }) {
-      completion?(nil)
+    let callType = payload["callType"] as? String == "video" ? "video" : "voice"
+    let authority = persistedVoipAuthority()
+    if let existing = activeCalls[callUuid] ?? activeCalls.values.first(where: { $0.inviteId == inviteId }) {
+      guard existing.uuid == callUuid || suppliedUuid == nil,
+        existing.inviteId == inviteId, existing.threadId == threadId,
+        existing.callType == callType, existing.presentationAuthority == authority
+      else { throw ChillywoodNativeCallError.invalidPayload }
+      if existing.presentationConfirmed {
+        guard CXCallObserver().calls.contains(where: { $0.uuid == existing.uuid && !$0.hasEnded }),
+          existing.ringingDeadline?.wakeup(now: Date(), ownsCall: true, answered: existing.answered,
+            answerPending: pendingAnswerActions[existing.uuid] != nil) != .expire
+        else { throw ChillywoodNativeCallError.callUnavailable }
+        // A confirmed native descriptor may outlive a JS listener. Recovery is
+        // an actual native ownership receipt, never a map fabricated by JS.
+        emit(type: "recovered", call: existing)
+        completion?(nil)
+      } else {
+        guard var pending = pendingIncomingReports[existing.uuid], pending.generation == existing.generation else {
+          throw ChillywoodNativeCallError.callUnavailable
+        }
+        if let completion { pending.completions.append(completion) }
+        pendingIncomingReports[existing.uuid] = pending
+      }
       return existing.uuid
     }
     guard let provider else { throw ChillywoodNativeCallError.providerUnavailable }
-
-    let callType = payload["callType"] as? String == "video" ? "video" : "voice"
     guard let ringingDeadline = ChillywoodIncomingCallDeadline(
       serverExpiresAt: parseServerDate(payload["expiresAt"]),
       now: Date()
-    ) else { throw ChillywoodNativeCallError.invalidPayload }
+    ), ringingDeadline.wakeup(now: Date(), ownsCall: true, answered: false, answerPending: false) != .expire
+    else { throw ChillywoodNativeCallError.invalidPayload }
     let update = CXCallUpdate()
     update.remoteHandle = CXHandle(type: .generic, value: (payload["callerName"] as? String) ?? "Chi'llywood caller")
     update.localizedCallerName = (payload["callerName"] as? String) ?? "Chi'llywood caller"
@@ -444,10 +612,16 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       callType: callType,
       ringingDeadline: ringingDeadline,
       answered: false,
-      timeoutWorkItem: nil
+      timeoutWorkItem: nil,
+      presentationAuthority: authority
     )
     activeCalls[callUuid] = call
-    persistActiveCallDescriptors()
+    pendingIncomingReports[callUuid] = PendingIncomingReport(
+      generation: call.generation, completions: completion.map { [$0] } ?? []
+    )
+    // An OS callback that never arrives must not leave a pending presentation
+    // or checked continuation alive beyond the authoritative invite deadline.
+    timeoutCall(callUuid, generation: call.generation)
 
     ChillywoodNativeCallDiagnostics.shared.record(.incomingReportRequested, callUuid: callUuid)
     provider.reportNewIncomingCall(with: callUuid, update: update) { [weak self] error in
@@ -456,27 +630,52 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
         callUuid: callUuid, error: error
       )
       DispatchQueue.main.async {
-        guard let self, self.activeCalls[callUuid]?.generation == call.generation else {
-          completion?(error ?? ChillywoodNativeCallError.callUnavailable)
+        guard let self else { return }
+        guard var current = self.activeCalls[callUuid], current.generation == call.generation else {
+          // A delayed successful OS report can follow cancellation/reset. End
+          // only its orphaned UUID; never touch a replacement generation.
+          if error == nil && self.activeCalls[callUuid] == nil {
+            self.provider?.reportCall(with: callUuid, endedAt: Date(), reason: .remoteEnded)
+          }
           return
         }
         if let error {
-          self.removeCall(callUuid)
+          self.failPendingAnswer(callUuid)
+          self.removeCall(callUuid, incomingReportError: error)
           self.emit(type: "reportFailed", call: call, reason: String(describing: type(of: error)))
-          completion?(error)
           return
         }
-        self.acknowledgeIncomingCallPresentation(
-          payload: payload,
-          callUuid: callUuid,
-          inviteId: inviteId
-        )
-        self.emit(type: "incoming", call: call)
+        guard current.presentationAuthority == self.persistedVoipAuthority(),
+          !self.isTerminalInvite(inviteId),
+          current.ringingDeadline?.wakeup(now: Date(), ownsCall: true, answered: current.answered,
+            answerPending: self.pendingAnswerActions[callUuid] != nil) != .expire
+        else {
+          self.provider?.reportCall(with: callUuid, endedAt: Date(), reason: .remoteEnded)
+          self.removeCall(callUuid)
+          return
+        }
+        current.presentationConfirmed = true
+        self.activeCalls[callUuid] = current
+        self.persistActiveCallDescriptors()
+        self.emit(type: "incoming", call: current)
         self.timeoutCall(callUuid, generation: call.generation)
-        completion?(nil)
+        self.settleIncomingReport(callUuid, generation: call.generation, error: nil)
       }
     }
     return callUuid
+  }
+
+  private func settleIncomingReport(_ uuid: UUID, generation: UUID?, error: Error?) {
+    guard let pending = pendingIncomingReports[uuid], generation == nil || pending.generation == generation else { return }
+    // Remove before invoking consumers: a completion may itself end/reset the
+    // call or submit another request for the same UUID.
+    pendingIncomingReports.removeValue(forKey: uuid)
+    pending.completions.forEach { $0(error) }
+  }
+
+  private func drainIncomingReports() {
+    let pending = Array(pendingIncomingReports.keys)
+    pending.forEach { settleIncomingReport($0, generation: nil, error: ChillywoodNativeCallError.callUnavailable) }
   }
 
   private func normalizedCallAction(_ payload: [String: Any]) -> String {
@@ -573,8 +772,8 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       ? action == "declined" ? "declined" : action
       : "ended"
     provider?.reportCall(with: callUuid, endedAt: Date(), reason: .remoteEnded)
-    _ = removeCall(callUuid)
     markTerminalInvite(call.inviteId)
+    _ = removeCall(callUuid)
     emit(type: eventType, call: call, reason: action)
     completion()
   }
@@ -587,11 +786,12 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     callController.request(transaction) { [weak self] error in
       if error != nil {
         DispatchQueue.main.async {
-          if let call = self?.removeCall(uuid) {
-            self?.requestedEndReasons.removeValue(forKey: uuid)
-            self?.markTerminalInvite(call.inviteId)
-            self?.provider?.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
-            self?.emit(type: reason.hasPrefix("invite_") ? "remoteEnded" : "ended", call: call, reason: reason)
+          if let self, let call = self.activeCalls[uuid] {
+            self.markTerminalInvite(call.inviteId)
+            _ = self.removeCall(uuid)
+            self.requestedEndReasons.removeValue(forKey: uuid)
+            self.provider?.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
+            self.emit(type: reason.hasPrefix("invite_") ? "remoteEnded" : "ended", call: call, reason: reason)
           }
         }
       }
@@ -601,8 +801,9 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   public func reportRemoteEnd(callUuid: String, reason: String) throws {
     guard let uuid = UUID(uuidString: callUuid) else { throw ChillywoodNativeCallError.invalidCallUuid }
     DispatchQueue.main.async { [weak self] in
-      guard let self, let call = self.removeCall(uuid) else { return }
+      guard let self, let call = self.activeCalls[uuid] else { return }
       self.markTerminalInvite(call.inviteId)
+      _ = self.removeCall(uuid)
       self.failPendingAnswer(uuid)
       self.provider?.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
       self.emit(type: "remoteEnded", call: call, reason: reason)
@@ -629,7 +830,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
           return
         }
         guard
-          let call = self.activeCalls[uuid],
+          let call = self.activeCalls[uuid], call.presentationConfirmed,
           call.inviteId == normalizedInviteId,
           !self.isTerminalInvite(normalizedInviteId)
         else {
@@ -913,7 +1114,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   private func persistActiveCallDescriptors() {
-    let descriptors = activeCalls.values.map { call in
+    let descriptors = activeCalls.values.filter { $0.presentationConfirmed }.map { call in
       var descriptor: [String: Any] = [
         "callUuid": call.uuid.uuidString.lowercased(),
         "callInviteId": call.inviteId,
@@ -935,7 +1136,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
 
   private func restoreActiveCallDescriptors() {
     dispatchPrecondition(condition: .onQueue(.main))
-    let systemCallUuids = Set(CXCallObserver().calls.map(\.uuid))
+    let systemCallUuids = Set(CXCallObserver().calls.filter { !$0.hasEnded }.map(\.uuid))
     let descriptors = UserDefaults.standard.array(forKey: activeCallsDefaultsKey) as? [[String: Any]] ?? []
     for descriptor in descriptors {
       guard
@@ -968,7 +1169,9 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
         callType: descriptor["callType"] as? String == "video" ? "video" : "voice",
         ringingDeadline: ringingDeadline,
         answered: answered,
-        timeoutWorkItem: nil
+        timeoutWorkItem: nil,
+        presentationConfirmed: true,
+        presentationAuthority: persistedVoipAuthority()
       )
       activeCalls[uuid] = restoredCall
       timeoutCall(uuid, generation: restoredCall.generation)
@@ -1009,9 +1212,11 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   @discardableResult
-  private func removeCall(_ uuid: UUID) -> ActiveNativeCall? {
+  private func removeCall(_ uuid: UUID, incomingReportError: Error = ChillywoodNativeCallError.callUnavailable) -> ActiveNativeCall? {
     clearPendingAnswerEvent(uuid)
-    guard let call = activeCalls.removeValue(forKey: uuid) else { return nil }
+    let removed = activeCalls.removeValue(forKey: uuid)
+    settleIncomingReport(uuid, generation: nil, error: incomingReportError)
+    guard let call = removed else { return nil }
     requestedAnswerTransactions.remove(uuid)
     settleRequestedAnswers(uuid, result: .failure(ChillywoodNativeCallError.callUnavailable))
     call.timeoutWorkItem?.cancel()
@@ -1032,8 +1237,29 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   private func emitRaw(_ event: [String: Any]) {
+    let isPresentation = ["incoming", "recovered"].contains(event["type"] as? String ?? "")
+    let presentationUuid = (event["callUuid"] as? String).flatMap(UUID.init(uuidString:))
+    let presentationGeneration = isPresentation ? presentationUuid.flatMap { activeCalls[$0]?.generation } : nil
+    let presentationAuthority = isPresentation ? persistedVoipAuthority() : nil
+    let isTokenEvent = ["voipTokenUpdated", "voipTokenInvalidated"].contains(event["type"] as? String ?? "")
+    let tokenAuthority = isTokenEvent ? persistedVoipAuthority() : nil
+    let tokenRegistry = isTokenEvent ? pushRegistry : nil
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
+      if isTokenEvent {
+        guard let tokenAuthority, let tokenRegistry,
+          self.persistedVoipAuthority() == tokenAuthority, self.pushRegistry === tokenRegistry
+        else { return }
+      }
+      if isPresentation {
+        guard let presentationUuid, let presentationGeneration,
+          let call = self.activeCalls[presentationUuid], call.presentationConfirmed,
+          call.generation == presentationGeneration,
+          call.presentationAuthority == presentationAuthority,
+          self.persistedVoipAuthority() == presentationAuthority,
+          !self.isTerminalInvite(call.inviteId)
+        else { return }
+      }
       if event["type"] as? String == "answerRequested" {
         // Persist before touching the Expo event sink. A suspended app may
         // retain an in-memory sink even though JavaScript cannot consume the
@@ -1128,13 +1354,13 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     didUpdate pushCredentials: PKPushCredentials,
     for type: PKPushType
   ) {
-    guard type == .voIP, persistedVoipAuthority() != nil else { return }
+    guard type == .voIP, registry === pushRegistry, persistedVoipAuthority() != nil else { return }
     let token = pushCredentials.token.map { String(format: "%02x", $0) }.joined()
     emitRaw(["type": "voipTokenUpdated", "token": token])
   }
 
   public func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
-    guard type == .voIP else { return }
+    guard type == .voIP, registry === pushRegistry else { return }
     emitRaw(["type": "voipTokenInvalidated"])
   }
 
@@ -1166,7 +1392,17 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       }
       let action = callActionLabel(normalizedPayload)
       if action == "incoming" {
-        _ = try reportIncomingCallOnMain(payload: normalizedPayload) { _ in
+        _ = try reportIncomingCallOnMain(payload: normalizedPayload) { [weak self] error in
+          if error == nil, let self,
+            self.voipPayloadMatchesPersistedAuthority(normalizedPayload),
+            let call = self.findActiveCall(input: normalizedPayload), call.presentationConfirmed,
+            call.inviteId == self.toText(normalizedPayload["callInviteId"]),
+            call.threadId == self.toText(normalizedPayload["threadId"]),
+            call.presentationAuthority == self.persistedVoipAuthority(),
+            !self.isTerminalInvite(call.inviteId)
+          {
+            self.acknowledgeIncomingCallPresentation(payload: normalizedPayload, callUuid: call.uuid, inviteId: call.inviteId)
+          }
           completion()
         }
         return
@@ -1187,6 +1423,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   public func providerDidReset(_ provider: CXProvider) {
     let calls = activeCalls.values
     activeCalls.removeAll()
+    drainIncomingReports()
     requestedAnswerTransactions.removeAll()
     requestedAnswerCompletions.values.flatMap { $0 }.forEach {
       $0(.failure(ChillywoodNativeCallError.callUnavailable))
@@ -1250,6 +1487,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
+    if let call = activeCalls[action.callUUID] { markTerminalInvite(call.inviteId) }
     guard let call = removeCall(action.callUUID) else {
       action.fulfill()
       return

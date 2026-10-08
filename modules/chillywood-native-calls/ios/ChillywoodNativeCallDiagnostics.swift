@@ -5,6 +5,13 @@ import os
 // This records bounded native receipts only. It does not assert media success
 // or change CallKit behavior, and cannot be enabled by JavaScript or an OTA.
 enum ChillywoodNativeCallDiagnosticPhase: String, CaseIterable {
+  case lifecyclePrepared = "lifecycle_prepared"
+  case registrationStartReceived = "registration_start_received"
+  case registrationStarted = "registration_started"
+  case registrationStopReceived = "registration_stop_received"
+  case registrationStopped = "registration_stopped"
+  case foregroundReportReceived = "foreground_report_received"
+  case foregroundReportRejected = "foreground_report_rejected"
   case pushReceived = "push_received"
   case pushAuthorityRejected = "push_authority_rejected"
   case pushPayloadRejected = "push_payload_rejected"

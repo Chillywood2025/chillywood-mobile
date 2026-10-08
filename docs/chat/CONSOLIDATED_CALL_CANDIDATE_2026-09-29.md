@@ -1,13 +1,13 @@
 # Consolidated Chi'lly Chat repair candidate
 
-Updated 2026-09-29. PR #539 is the single candidate; PR #540 is incorporated
-as a merge parent and superseded. **Source consolidation is not physical
-qualification. No physical result for the new candidate is claimed here.**
+Updated 2026-10-08. PR #539 is the single candidate; PR #540 is incorporated
+as a merge parent and superseded. **The installed v5 candidate is not physically
+qualified. Its failures and the next v6 repairs are recorded below.**
 
 The owner requested comparison, consolidation, remaining repairs, validation,
 internal builds/installations and complete physical retesting. That request
-authorizes those steps; lack of device/build transport is the present delivery
-blocker, not a request for the owner to repeat authorization. It does not
+authorizes those steps. Device access was restored and internal delivery and
+installation completed; the remaining work is repair and qualification. It does not
 authorize a public release, provider rollout or production database changes.
 
 ## Source comparison and decisions
@@ -128,14 +128,93 @@ gated to the reviewed iOS internal binary. Session-wide audio callbacks carry
 no invented call identity. These are diagnostic improvements, not a claimed
 causal repair of the unresolved physical defects.
 
-At 22:24 UTC the connector listed the Mac online but its last heartbeat was
+During the September 29 diagnostic run, at 22:24 UTC the connector listed the Mac online but its last heartbeat was
 22:17:55 UTC. Subsequent process-output and a single UTC-only execution probe
 returned HTTP 504; the latter completed at 22:27:43 UTC without a process ID or
-output. Mac execution health is therefore unverified. Dependency installation
+output. Mac execution health was then unverified. Dependency installation
 was acknowledged before the outage; a later native-patch transfer/Swift test
 request has unknown execution status. Reconcile files/processes before retrying,
-and do not infer success from the connector's online label. No new binary has
-been built, submitted or installed by this diagnostic run.
+and do not infer success from the connector's online label. The outage was
+subsequently resolved; the following October 8 receipts supersede that blocker.
+
+### October 8 internal delivery and physical diagnostics
+
+Both signed binaries use source `2f6560724ba821c0fcc07a38b57b311b177a8e15`,
+tree `c929e6c9013ef3d1966ab6e5675997ec240654d7`, their platform v5 runtimes,
+and existing private internal channels. Exact-head Required Validation passed.
+
+| Platform | Build and submission | Artifact SHA-256 | Installation readback |
+| --- | --- | --- | --- |
+| Android 96 | EAS build `a191109c-0ac8-4726-96dc-c893f36dcfb2`; submission `f810e57f-ccdf-45c6-90cc-75744e9e154f`, FINISHED | `812056cb749b7c403f5bab340db21d45b127c21386ac3841a010d7ec8e066fd7` | Google Play internal release active; installed versionCode 96, installer `com.android.vending`. |
+| iOS 31 | EAS build `12b11450-d13f-413d-a9b1-adfd767d0a00`; submission `d7b2040d-f1a2-4505-be0d-dfb5677bfd55`, FINISHED | `5150e7726288b06dded3adb11dcca0df83b668289d76ea876336ff888818849f` | App Store Connect VALID; TestFlight shows 1.0.0 (31) and Open; independent device inventory confirms installed build 31. |
+
+Android bundle validation and upload-signature verification passed. iOS strict
+code-signature verification, production APNs entitlement, runtime/channel and
+all four compiled internal diagnostic gates passed. The configured TestFlight
+submission group remains Chillywood Internal. App Store Connect's group-read
+endpoint returned 403, so an independent complete group-assignment API receipt
+is unavailable; no permissions were broadened. The owner's on-device XCTest
+authentication restored iPhone automation without changing the app account.
+
+| Diagnostic attempt | Observed result on Android 96 / iOS 31 |
+| --- | --- |
+| V5D01, Android to iPhone voice | Timely Answer reproduced the retryable handoff banner. APNs returned 200 to an enabled, account-bound build-31 token; presentation acknowledgment and server acceptance remained null. No microphone recovery sequence could begin. Both devices returned idle. |
+| V5D02, iPhone to Android voice | Connected UI and two complete iPhone mute/unmute cycles were observed. The call disappeared during the third Mute; this is not proof of a microphone-recovery defect. The Android peer closed at 20:21:01.512 UTC; the callee ended the server invite and room at 20:21:03.052682 UTC, before the 20:21:31.830549 invite expiry. No End control was operated before disappearance. |
+| V5D03, untouched reverse voice control | Connected UI remained present throughout a 100-second observation. Live read-only snapshots showed both participants' heartbeats advancing approximately every 15.5 seconds. Explicit iPhone End completed at 20:37:39.209075 UTC; server termination followed at 20:37:40.0787 UTC. Both devices returned idle. Actual audio was not verified. |
+| V5D04, repeated reverse voice mute cycles | Android's last-seen timestamp stayed at 20:39:02.463249 UTC while iPhone media changes continued updating the host membership. Android heartbeat age reached 32.475089 seconds and then 44.600790 seconds. The Android callee ended the invite/room at 20:39:50.370589 UTC, 47.907340 seconds after its last heartbeat. No End was operated before disappearance. This controlled contrast strongly supports the heartbeat-starvation diagnosis. |
+| V5D05, reverse video controls | iPhone flip, Off, On and flip operated; Android displayed the remote Camera Off placeholder. Native front/back capture start/stop and first-frame receipts were present, without a captured start error. Rear-camera images were black on both devices; the final front-camera flip displayed a scene on both. Rear-camera scene/occlusion was uncontrolled, so black pixels alone are not adjudicated as a capture defect. Moving-video confirmation remains pending. Explicit End and idle cleanup completed. |
+
+Correlated native streams and a paired-device log archive are retained privately.
+The archive contains 54,375 Chillywood, 1,380 apsd and 109 callservicesd events
+between 20:13 and 20:21 UTC, but zero custom native-call diagnostic events.
+Without a successful custom-log positive control this does not establish that
+PushKit delivery never occurred. Fresh lifecycle/registration/foreground-entry
+receipts are added in v6 to make that distinction observable. No actual audible
+speech or moving remote video has yet been independently confirmed in these
+diagnostic attempts. These results cannot qualify v6 or replace its 105-row run.
+
+### Repairs prompted by the installed v5 run
+
+1. A reproduced readiness counterexample showed that a transient authority-read
+   failure could stop native VoIP registration while leaving its backend token
+   enabled; foreground activation only drained events and never restarted it.
+   Recovery now quarantines JS actions on unavailable authority, retains the
+   exact native binding, and performs bounded revalidation plus foreground
+   recovery. Explicit account/session replacement still revokes old ownership.
+2. Foreground Answer previously depended solely on prior PushKit presentation.
+   An explicit tap now freshly validates the raw invite, thread, members, room,
+   deadline and exact authority before requesting native foreground presentation.
+   PushKit and foreground share pending/confirmed report ownership, and the
+   actual CallKit completion and native event are required. A bridge promise
+   cannot fabricate presentation. Cancellation, reset, expiry and late callbacks
+   are fenced. Only genuine PushKit payloads can acknowledge APNs presentation.
+   This repairs a distinct availability gap; it is not a proven push root cause.
+3. Repeated room snapshots replaced objects used as heartbeat-effect dependencies,
+   repeatedly postponing the 15-second timer. The actual mounted-hook regression
+   with updates every eight seconds produced zero heartbeats in 96 seconds on
+   v5, versus six after binding the timer to stable admission/session identity.
+   Replacement and post-End callbacks cannot mutate retired membership. The
+   V5D02 terminal mutation overwrote historical last-seen values. V5D03/V5D04
+   then directly observed stable untouched heartbeats versus a frozen Android
+   heartbeat during repeated peer media updates and subsequent termination.
+   The repaired binary must repeat both sequences before physical closure.
+
+Independent review reproduced and closed three additional draft-repair gaps:
+concurrent foreground taps now use mandatory operation-bound admission;
+same-authority native rebind replays only confirmed live call receipts; and
+transient token-registration read failures no longer imply account replacement.
+Bounded token retries and replay use the real current registry token in memory,
+without logging or persisting it in diagnostics. Actual replacement still
+revokes prior authority.
+
+Before source sealing, the combined foreground/root/thread JS regressions
+passed 301/301, including 115 new facade/mounted tests. The actual mounted media
+hook passed 174 tests, including the heartbeat counterexample. Apple Swift
+6.3.2 compiled and executed 128 production incoming-report/registration checks
+and ten mutations, each rejected by its intended assertion. Native deadline
+checks passed 42 assertions and four mutation controls; native audio and
+diagnostic checks passed 89 and 52 assertions respectively. These use controlled
+OS/network receipts and do not establish physical presentation or media.
 
 Continue execution in this order:
 
@@ -236,13 +315,13 @@ unreachable physical scenario into a physical PASS.
 
 | Platform | Build/submit profile | New diagnostic-candidate runtime | Channel/audience |
 | --- | --- | --- | --- |
-| Android | `android-internal-v2` | `1.0.0-android-production-v5` | `android-internal-v2`; Play internal |
-| iOS | `ios-internal-v2` | `1.0.0-ios-production-v5` | `ios-internal-v2`; TestFlight Chillywood Internal |
+| Android | `android-internal-v2` | `1.0.0-android-production-v6` | `android-internal-v2`; Play internal |
+| iOS | `ios-internal-v2` | `1.0.0-ios-production-v6` | `ios-internal-v2`; TestFlight Chillywood Internal |
 
 Use `config/release/internal-native-generation.json` and current receipts;
 runtime-v2/v4 examples in older documents are not this candidate's identity.
-The iOS native diagnostics patch and shared profile changes require fresh v5
-binaries. The supersedes record preserves both exact v4 compatibility digests.
+The native presentation contract changes require fresh v6 binaries. The
+supersedes record preserves both exact v5 compatibility digests.
 Only `ios-internal-v2` explicitly enables
 `CHILLYWOOD_INTERNAL_CALL_DIAGNOSTICS=true`; its device-profile child explicitly
 disables the inherited opt-in. Other profiles cannot enable diagnostics. The
@@ -253,12 +332,12 @@ workflow, broaden audiences, or publish an OTA for this native transition.
 Before building, commit all final native inputs, then compute both platform
 digests with `nativeSourceSnapshot` in
 `scripts/ota-native-source-compatibility.mjs` against that exact Git SHA/tree.
-Populate the v5 `nativeCompatibility` digest fields, commit the receipt-only
+Populate the v6 `nativeCompatibility` digest fields, commit the receipt-only
 update, and recompute against the resulting candidate to prove equality. The
-digest fields must match this step; never reuse the v4 digests or
+digest fields must match this step; never reuse the v5 digests or
 fill a digest from a partial working tree. Rerun release-native-source tests and
-both platform config guards on the sealed candidate. Existing v4 binaries must
-be rejected as compatible receipts for v5.
+both platform config guards on the sealed candidate. Existing v5 binaries must
+be rejected as compatible receipts for v6.
 
 The v5 inputs were sealed from source
 `085b8bccf9e88eaa0e7da0f4153257ab68ce2af3`, tree
@@ -272,6 +351,7 @@ The v5 inputs were sealed from source
 The subsequent receipt/documentation commit must retain both digests. They
 identify source compatibility only; they are not signed-binary or device proof.
 
-No build, installation or physical retest has been performed by consolidation
-alone. Final CI receipts belong to the exact PR head; delivery and physical
-results must be added from actual execution rather than inferred from CI.
+The v5 delivery and diagnostic attempts above are completed observations. V6
+build/install and physical qualification remain pending. Final CI receipts
+belong to the exact PR head; delivery and physical results must be added from
+actual execution rather than inferred from CI.

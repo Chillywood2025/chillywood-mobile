@@ -32,7 +32,7 @@ function declaration(source, marker) {
   throw new Error(`unterminated Swift declaration: ${marker}`);
 }
 
-const actualCall = declaration(coordinator, "private struct ActiveNativeCall {");
+const actualCall = `${declaration(coordinator, "private struct NativeVoipAuthority:")}\n${declaration(coordinator, "private struct ActiveNativeCall {")}`;
 const actualTimeout = declaration(coordinator, "private func timeoutCall(_ uuid: UUID, generation: UUID) {");
 const incoming = declaration(coordinator, "private func reportIncomingCallOnMain(");
 const restore = declaration(coordinator, "private func restoreActiveCallDescriptors() {");

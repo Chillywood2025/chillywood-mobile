@@ -37,6 +37,11 @@ const recordedV4Source = {
   sha: "f44437c8acf9c9ad0f1621c985b3a70831e8459c",
   tree: "1ed514c1c377cad857eea5a33dabb89de6a78390",
 };
+// Signed internal binaries Android 96 / iOS 31, installed and physically tested.
+const recordedV5Source = {
+  sha: "2f6560724ba821c0fcc07a38b57b311b177a8e15",
+  tree: "c929e6c9013ef3d1966ab6e5675997ec240654d7",
+};
 
 test("recorded internal v3 cohorts retain their historical Git-native inputs", () => {
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
@@ -68,14 +73,24 @@ test("recorded internal v4 cohorts retain their historical Git-native inputs", (
   }
 });
 
-test("internal v5 supersedes the incompatible v4 runtimes without rewriting their historical digests", () => {
+test("recorded internal v5 cohorts retain their historical Git-native inputs", () => {
+  const recorded = JSON.parse(git(repo, "show", `${recordedV5Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(recorded.generation, "internal-native-v5");
+  for (const platform of ["android", "ios"]) {
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
+      repositoryRoot: repo, platform, sourceSha: recordedV5Source.sha, sourceTree: recordedV5Source.tree,
+    }).digest);
+  }
+});
+
+test("internal v6 supersedes the incompatible v5 runtimes without rewriting their historical digests", () => {
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
-  const recorded = JSON.parse(git(repo, "show", `${recordedV4Source.sha}:config/release/internal-native-generation.json`));
-  assert.equal(generation.generation, "internal-native-v5");
+  const recorded = JSON.parse(git(repo, "show", `${recordedV5Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(generation.generation, "internal-native-v6");
   assert.equal(generation.supersedes.generation, recorded.generation);
   assert.equal(generation.nativeCompatibility.algorithm, recorded.nativeCompatibility.algorithm);
   for (const platform of ["android", "ios"]) {
-    assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v5`);
+    assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v6`);
     assert.equal(generation.supersedes[`${platform}RuntimeVersion`], recorded.runtimeVersions[platform]);
     assert.equal(generation.supersedes[`${platform}CompatibilityDigest`], recorded.nativeCompatibility[`${platform}Digest`]);
     assert.match(generation.nativeCompatibility[`${platform}Digest`], /^[0-9a-f]{64}$/u);
@@ -204,6 +219,22 @@ if (args[0] === 'expo' && args[1] === 'config') {
 }
 
 for (const platform of ["android", "ios"]) {
+  test(`${platform}: foreground presentation contract rejects the delivered v5 binary and runtime cohort`, (t) => {
+    const { root, publish } = fixture(t, recordedV5Source.sha);
+    const changedPaths = ["modules/chillywood-native-calls/index.d.ts",
+      ...(platform === "ios" ? ["modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift"] : [])];
+    for (const name of changedPaths) write(root, name, fs.readFileSync(path.join(repo, name)));
+    const changedSource = commit(root);
+    const oldBinary = publish(platform);
+    assert.notEqual(oldBinary.status, 0);
+    assert.match(oldBinary.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(oldBinary.calls, [], "v5 signed artifacts must stop before Expo or provider calls");
+    const rebuiltInOldRuntime = publish(platform, changedSource);
+    assert.notEqual(rebuiltInOldRuntime.status, 0);
+    assert.match(rebuiltInOldRuntime.stderr, /OTA_RUNTIME_NATIVE_COHORT_INCOMPATIBLE/u);
+    assert.deepEqual(rebuiltInOldRuntime.calls, [], "new native presentation cannot repurpose the delivered v5 cohort");
+  });
+
   test(`${platform}: diagnostic candidate native inputs reject the recorded v4 binary and runtime cohort`, (t) => {
     const { root, publish } = fixture(t, recordedV4Source.sha);
     const changedPaths = platform === "ios" ? [

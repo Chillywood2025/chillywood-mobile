@@ -108,7 +108,7 @@ export async function mountChatAnswer(options = {}) {
       const activeCallInvite = runtime.invite;
       const thread = { activeCallType: runtime.activeCallType, activeCommunicationRoomId: runtime.threadRoomId ?? null };
       const resolvedCallType = thread.activeCallType;
-      const authority = { userId: currentUserId, sessionGeneration };
+      const authority = { userId: currentUserId, accountId: currentUserId, sessionGeneration, state: "ACTIVE", restoreOnly: false };
       const incomingCallInvite = runtime.incomingInvite === null ? null : runtime.invite;
       const outgoingCallInvite = runtime.terminalMode === "outgoing" && runtime.outgoingPresent !== false ? runtime.invite : null;
       const outgoingCallRinging = outgoingCallInvite?.status === "ringing";
@@ -178,9 +178,9 @@ export async function mountChatAnswer(options = {}) {
     setIncomingCallInvite: noop, setActiveCallInvite: (value) => { runtime.activeWrites ??= []; runtime.activeWrites.push(value); }, setOutgoingCallInvite: value => { runtime.outgoingPresent = !!value; },
     setCallPanelOpen: (value) => { runtime.panelOpen = typeof value === "function" ? value(runtime.panelOpen) : value; },
     updateChillyChatCallInviteStatus: (input) => { runtime.updates.push(input); return runtime.update(input); },
-    waitForIosNativeCallPresentation: (id) => runtime.presentation(id),
+    ensureIosForegroundIncomingCallPresentation: (input) => runtime.presentation(input.inviteId, input),
     resolveIosForegroundIncomingAnswerAuthority: (outcome) => outcome === "presented" ? "native_answer" : outcome === "not_expected" ? "foreground_answer" : "blocked",
-    requestIosNativeCallAnswer: (id) => { runtime.nativeRequests.push(id); return runtime.requestNative(id); },
+    requestIosNativeCallAnswer: (id, isCurrent) => { runtime.nativeRequests.push(id); return runtime.requestNative(id, isCurrent); },
     setMicrophoneEnabled: async (enabled) => { runtime.mediaMutations.push(enabled); runtime.micEnabled = enabled; return true; },
     setIosNativeCallMuted: async (callUuid, muted) => {
       runtime.nativeMuteRequests.push({ callUuid, muted });

@@ -271,7 +271,7 @@ export async function mountFullChatThread(options = {}) {
     subscribeToIosNativeCallPresentation: () => noop,
     subscribeToIosNativeCallEvents: (fn) => { nativeListeners.add(fn); return () => nativeListeners.delete(fn); },
     readIosNativeApplicationActiveSerial: () => 0,
-    waitForIosNativeCallPresentation: async () => "unavailable", requestIosNativeCallAnswer: async () => false,
+    ensureIosForegroundIncomingCallPresentation: async () => "stale", requestIosNativeCallAnswer: async () => false,
     endIosNativeCall: async (...args) => { runtime.nativeEnds.push(args); return true; },
     reportIosNativeCallRemoteEnd: async (...args) => { runtime.nativeEnds.push(args); return true; },
     completeIosNativeCallAnswer: async (uuid, connected) => {
@@ -316,7 +316,7 @@ export async function mountFullChatThread(options = {}) {
     },
     "../../_lib/officialAccounts": { getOfficialPlatformAccount: () => null },
     "../../_lib/performancePolicy": { READ_RECEIPT_THROTTLE_MS: 500 },
-    "../../_lib/session": { useSession: () => React.useMemo(() => ({ authority: { userId: runtime.userId, sessionGeneration: runtime.sessionGeneration }, session: { access_token: "test-token" }, user: { id: runtime.userId }, isSignedIn: true, isLoading: false }), [runtime.userId, runtime.sessionGeneration]) },
+    "../../_lib/session": { useSession: () => React.useMemo(() => ({ authority: { userId: runtime.userId, accountId: runtime.userId, sessionGeneration: runtime.sessionGeneration, state: "ACTIVE", restoreOnly: false }, session: { access_token: "test-token" }, user: { id: runtime.userId }, isSignedIn: true, isLoading: false }), [runtime.userId, runtime.sessionGeneration]) },
     "../../_lib/userFacingErrors": { getUserFacingErrorMessage: (error, fallback) => error?.message ?? fallback },
     "../../_lib/usernameHandles": { formatUsernameHandle: () => "" },
     "../../_lib/socialAttachmentPicker": {},
