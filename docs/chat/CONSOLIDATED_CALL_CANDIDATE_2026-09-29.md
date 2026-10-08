@@ -438,12 +438,12 @@ call identity is added. The sample is session-wide and does not prove a settled
 route or audible output. Actual audio, controlled moving video and the remaining
 physical matrix are still required.
 
-The v7 native inputs were committed at
+The initial, never-built v7 native inputs were committed at
 `65fdb4b4aa2e5b759540219b3379815b846f1b57`, tree
 `370ec026e27cb5eb5acaa037cfb3942871df9bb7`, then measured with the documented
 `nativeSourceSnapshot` workflow:
 
-| Platform | V7 Git-native compatibility digest |
+| Platform | Initial unbuilt v7 Git-native compatibility digest |
 | --- | --- |
 | Android | `855a7362816374af36ba5b9df1527c3308c1246b5191c6239017af2d8b96bc23` |
 | iOS | `169b5db038fb2d739271bd03f4d7888cab3e4ebc1b68d9b35067fe83e89114c9` |
@@ -452,3 +452,32 @@ The receipt-only follow-up must recompute these digests on its resulting Git
 head before build. Neither these source digests nor local test results replace
 exact-head CI, native compilation, signed-artifact identity or installed-device
 proof. The Product CI lane explicitly includes the new keyboard regressions.
+
+### Completed v6 diagnostics and further v7 repairs
+
+The operator-reconciled
+[`PR539_V6_DIAGNOSTIC_REPORT_2026-10-08.md`](PR539_V6_DIAGNOSTIC_REPORT_2026-10-08.md)
+records installed v6 delivery, successful technical assertions, reproduced
+defects and unresolved observations. Actual speech and controlled moving video
+remain unverified; all 105 new-candidate retest verdicts remain NOT RUN. The
+separate [`PR539_V7_EXECUTION_PLAN_2026-10-08.md`](PR539_V7_EXECUTION_PLAN_2026-10-08.md)
+preserves the 21-batch/105-row mapping and requires the new regression gates
+before final paired qualification. The v6 plan remains historical.
+
+Further source repairs preserve microphone feedback ownership before CallKit
+callbacks, wait for native signaling stability, and permit only one fresh
+correlated retry after an authenticated simultaneous offer has been answered.
+Camera acquisition and recovery now respect newer Off/background ownership,
+retain deferred or renewed On intent, preserve independent microphone recovery,
+and keep failed-stop resources owned for retryable cleanup. The Android native
+patch detaches shared stream references before disposing their track owner; the
+actual bridge and pinned upstream Java disposal wrappers reproduce the old
+failure and pass the repaired contract. Bounded startup receipts distinguish
+intent, permission/projection and capture outcomes in the exact internal builds.
+
+Independent review supplied additional failing camera-cancellation examples;
+the follow-up regressions retain those failures as counterexamples. Source and
+controlled native contracts do not establish physical media or crash closure.
+No v7 binary existed at the final provider inventory readback, so the initial
+unbuilt v7 digests above must be superseded by a final prebuild seal after all
+these native inputs are committed. Installed v6 and earlier cohorts stay fixed.
