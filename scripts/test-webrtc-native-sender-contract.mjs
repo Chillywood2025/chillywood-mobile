@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
+import { runAndroidReleaseContract } from "./webrtc-native-release-contract.mjs";
 
 const require = createRequire(import.meta.url);
 const { definitions, digest, transformSource, applyAcknowledgmentPatch, SDK_VERSION } =
@@ -81,6 +82,9 @@ try {
         assert.match(result.stdout, /0 failures/u);
       }
       process.stdout.write(`${platform} ${label}: ${result.stdout.trim()}\n`);
+    }
+    if (platform === "android") {
+      runAndroidReleaseContract({ root, out, execute, checkSource: options.has("--check-source"), original, patched });
     }
     console.log(`${platform} generated-source SHA-256: ${definition.patchedSha256}`);
   }

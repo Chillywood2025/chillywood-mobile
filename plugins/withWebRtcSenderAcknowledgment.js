@@ -15,10 +15,13 @@ const definitions = {
   android: {
     relativePath: "android/src/main/java/com/oney/WebRTCModule/WebRTCModule.java",
     originalSha256: "ed4aa8eacfa1311f681de34cae94d1bac5c4a2984ae7c9ad6835217e408dda20",
-    patchedSha256: "ac0822aade8e8bfa0c4949c6956d3db4ab2914f10e6caadf0b0044e2247e0328",
+    patchedSha256: "bd5fe459edd9089ca418e214bf4f39120b55a898f9b0035408315a8a2e818df1",
     changes: [[
       "                MediaStreamTrack track = getLocalTrack(trackId);\n                sender.setTrack(track, false);\n                promise.resolve(true);",
       "                MediaStreamTrack track = trackId == null ? null : getLocalTrack(trackId);\n                if (trackId != null && track == null) {\n                    promise.reject(new Exception(\"Replacement track is not available\"));\n                    return;\n                }\n                if (!sender.setTrack(track, false)) {\n                    promise.reject(new Exception(\"Native sender rejected replacement track\"));\n                    return;\n                }\n                promise.resolve(true);",
+    ], [
+      "            track.setEnabled(false);\n            getUserMediaImpl.disposeTrack(id);",
+      "            track.setEnabled(false);\n            // A recovered or cloned track can belong to several local streams.\n            // Detach every borrowed stream reference before disposing its native\n            // owner; otherwise later MediaStream.dispose() dereferences a freed\n            // track and aborts the WebRTC executor. All work stays on its queue.\n            for (MediaStream stream : localStreams.values()) {\n                if (track instanceof AudioTrack && stream.audioTracks.contains(track)) {\n                    stream.removeTrack((AudioTrack) track);\n                } else if (track instanceof VideoTrack && stream.videoTracks.contains(track)) {\n                    stream.removeTrack((VideoTrack) track);\n                }\n            }\n            getUserMediaImpl.disposeTrack(id);",
     ]],
   },
   ios: {
