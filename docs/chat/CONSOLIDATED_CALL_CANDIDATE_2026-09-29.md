@@ -351,7 +351,7 @@ The v5 inputs were sealed from source
 The subsequent receipt/documentation commit must retain both digests. They
 identify source compatibility only; they are not signed-binary or device proof.
 
-The v6 inputs were sealed from source
+The initial, never-built v6 inputs were sealed from source
 `d53277afc5fd52840dc0971774e20dabcc2ea54c`, tree
 `43ddc5b696ce3477153a63e3d04c163d87a854a2`:
 
@@ -387,7 +387,17 @@ and maintained local backports are documented in
 The original production audit threshold remains unchanged; all four production
 trees passed with zero high/critical findings. This audit result does not replace
 the backports' behavioral and provenance tests or establish physical qualification.
-The dependency/vendor inputs require a new pre-build v6 digest seal below.
+The dependency/vendor inputs were resealed before the first v6 build from
+source `671304e6ee790161eed9d7dcf1361c176f5fbad4`, tree
+`db4980808ff6612e8ce835d231954c9f1540484f`:
+
+| Platform | Current v6 Git-native compatibility digest |
+| --- | --- |
+| Android | `1142577cd8f72d88b9b118031bc19755c2e8bdf0b61ce4d4677fb5931f831367` |
+| iOS | `f70476a9d9a7cce3fee0353d126fef1bf86619ffb2f189764234b60b23a7f5ba` |
+
+These supersede the initial unbuilt v6 digests above. No delivered cohort is
+rewritten; both installed v5 compatibility digests remain immutable.
 The completed follow-up passed 1,268 local product/call tests with zero failures
 or skips, plus lint and TypeScript. Exact-head hosted validation remains required.
 
