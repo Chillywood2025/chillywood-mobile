@@ -6,6 +6,7 @@ import vm from "node:vm";
 import * as actualMediaPolicy from "../../_lib/communicationCallMediaPolicy.mjs";
 import * as nativeCallErrorDiagnostics from "../../_lib/nativeCallErrorDiagnostics.mjs";
 import { mountChatAnswer } from "./helpers/chat-thread-answer-mounted-harness.mjs";
+import { mountFullChatThread } from "./helpers/chat-thread-full-mounted-harness.mjs";
 
 // Reuse the controlled native/API seam of the established exact-hook fixture,
 // but start the real hook naturally: no injected live state, identity, peers,
@@ -461,6 +462,84 @@ function nativeRouteFacade(setAudioRouteAsync) {
   }).outputText, context, { filename: "_lib/iosNativeCalls.ts" });
   return context.exports;
 }
+
+async function startFullIosVoiceCaller(t, setAudioRouteAsync) {
+  const facade = nativeRouteFacade(setAudioRouteAsync);
+  const h = await mountFullChatThread({ platform: "ios",
+    invite: { callType: "voice", callerUserId: "local-user", calleeUserId: "remote-user", status: "accepted" },
+    nativeFacade: { setIosNativeCallAudioRoute: facade.setIosNativeCallAudioRoute } });
+  t.after(() => h.unmount());
+  await h.run(() => h.runtime.snapshot.handleJoinOrCloseCall());
+  assert.equal(h.runtime.media.joinCalls.length, 1);
+  await h.run(() => {
+    // Deliver the native SDK connection event; do not force screen/hook refs.
+    // This fixture proves application routing/error behavior, not physical audio.
+    const peer = h.runtime.media.peers[0];
+    peer.connectionState = "connected";
+    peer.emit("connectionstatechange");
+  });
+  assert.equal(h.runtime.snapshot.callChannelState, "live");
+  return h;
+}
+
+test("full legacy iOS screen retains native route rejection after mic cycles and permits explicit retry", async t => {
+  const commands = [];
+  let speakerFailures = 1;
+  const h = await startFullIosVoiceCaller(t, async route => {
+    commands.push(route);
+    if (route === "speaker" && speakerFailures-- > 0) throw Error("controlled OS route rejection");
+  });
+  for (let cycle = 0; cycle < 3; cycle += 1) {
+    await h.run(() => h.runtime.snapshot.handleToggleCallMic());
+    assert.equal(h.runtime.snapshot.micEnabled, false);
+    await h.run(() => h.runtime.snapshot.handleToggleCallMic());
+    assert.equal(h.runtime.snapshot.micEnabled, true);
+  }
+  await h.run(() => h.runtime.snapshot.handleToggleNativeAudioRoute());
+  assert.equal(h.runtime.snapshot.nativeSpeakerEnabled, false);
+  assert.match(h.runtime.snapshot.callControlError ?? "", /audio output could not be changed/,
+    "a successful automatic receiver fallback must not erase a rejected manual speaker request");
+  assert.match(h.runtime.snapshot.error ?? "", /audio output could not be changed/);
+  await h.run(() => h.runtime.snapshot.handleToggleNativeAudioRoute());
+  assert.equal(h.runtime.snapshot.nativeSpeakerEnabled, true);
+  assert.equal(h.runtime.snapshot.callControlError, null);
+  assert.deepEqual(commands, ["receiver", "speaker", "speaker"],
+    "unrelated screen renders must not issue process-wide native route mutations");
+});
+
+test("full legacy iOS screen preserves manual speaker intent across unrelated state and media renders", async t => {
+  const commands = [];
+  const h = await startFullIosVoiceCaller(t, async route => { commands.push(route); });
+  await h.run(() => h.runtime.snapshot.handleToggleNativeAudioRoute());
+  assert.equal(h.runtime.snapshot.nativeSpeakerEnabled, true);
+  await h.run(() => h.runtime.snapshot.setDraft("an unrelated local draft"));
+  await h.run(() => h.runtime.snapshot.handleToggleCallMic());
+  await h.run(() => h.runtime.snapshot.handleToggleCallMic());
+  await h.run(() => h.runtime.snapshot.loadThreadState());
+  assert.equal(h.runtime.snapshot.nativeSpeakerEnabled, true);
+  assert.deepEqual(commands, ["receiver", "speaker"]);
+  await h.run(() => h.runtime.snapshot.handleToggleNativeAudioRoute());
+  assert.equal(h.runtime.snapshot.nativeSpeakerEnabled, false);
+  assert.deepEqual(commands, ["receiver", "speaker", "receiver"]);
+});
+
+test("full legacy iOS screen does not supersede an issued manual route on unrelated renders", async t => {
+  const commands = [];
+  const issued = deferred();
+  const h = await startFullIosVoiceCaller(t, async route => {
+    commands.push(route);
+    if (route === "speaker") await issued.promise;
+  });
+  let operation;
+  await h.run(() => { operation = h.runtime.snapshot.handleToggleNativeAudioRoute(); });
+  assert.deepEqual(commands, ["receiver", "speaker"]);
+  await h.run(() => h.runtime.snapshot.setDraft("still unrelated while native routing is pending"));
+  await h.run(() => h.runtime.snapshot.loadThreadState());
+  assert.equal(h.runtime.snapshot.nativeSpeakerEnabled, false, "requested intent is not a native completion");
+  await h.run(async () => { issued.resolve(); await operation; });
+  assert.equal(h.runtime.snapshot.nativeSpeakerEnabled, true);
+  assert.deepEqual(commands, ["receiver", "speaker"]);
+});
 
 test("legacy iOS screen routes through actual JS native facade and permits retry after native rejection", async t => {
   const commands = [];

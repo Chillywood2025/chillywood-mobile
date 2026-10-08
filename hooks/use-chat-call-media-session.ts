@@ -45,6 +45,12 @@ const EMPTY_FIRST_MEDIA_STATE: ChatCallFirstMediaState = {
   remoteVideoSubscribed: false,
 };
 
+// Keep the unsupported legacy capability stable across renders. The iOS
+// screen's native-route effect depends on this callback even though legacy
+// routing itself is handled by the native bridge. A fresh callback reissues
+// automatic routes and can erase a failed manual request's error.
+const setLegacySpeaker = async (_enabled: boolean) => false;
+
 export function useChatCallMediaSession(options: UseChatCallMediaSessionOptions) {
   const fixedProviderRef = useRef<{
     inviteId: string;
@@ -114,7 +120,7 @@ export function useChatCallMediaSession(options: UseChatCallMediaSessionOptions)
     mediaProvider,
     legacyTransportActive: shouldEnableLegacy,
     liveKitTransportActive: false,
-    setSpeaker: async (_enabled: boolean) => false,
+    setSpeaker: setLegacySpeaker,
     speakerEnabled: false,
     canSetSpeaker: false,
     firstMediaState: EMPTY_FIRST_MEDIA_STATE,

@@ -333,6 +333,7 @@ export async function mountFullChatThread(options = {}) {
     useLayoutEffect(() => { runtime.snapshot = { loading, error, callControlError,
       callBusy, callPanelOpen, activeCallInvite, activeCallRoomId, incomingCallInvite,
       callChannelState, cameraEnabled, micEnabled, participantCount, participants,
+      nativeSpeakerEnabled,
       callTitle, callBody, initialCallMediaPreferences, messages, renderedMessages, draft, sending, setDraft,
       handleAcceptIncomingCall, handleJoinOrCloseCall, handleStartCall, handleToggleCallMic,
       handleToggleCallCamera, handleSwitchCallCamera, handleToggleNativeAudioRoute,
