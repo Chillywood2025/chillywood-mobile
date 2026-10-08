@@ -321,7 +321,7 @@ function useChatThreadOperationOwnership({
 }
 
 function useIosNativeMicrophoneAcknowledgements(contextKey: string, callUuid: string) {
-  type Acknowledgement = { muted: boolean; expiresAt: number };
+  type Acknowledgement = { muted: boolean; expiresAt: number | null };
   const currentContext = useRef<object | null>(null);
   const pending = useRef<Acknowledgement[]>([]);
   const context = useMemo(() => ({ contextKey, callUuid }), [contextKey, callUuid]);
@@ -336,19 +336,31 @@ function useIosNativeMicrophoneAcknowledgements(contextKey: string, callUuid: st
   const forgetNativeMicAck = useCallback((ack: Acknowledgement | null) => {
     pending.current = pending.current.filter((candidate) => candidate !== ack);
   }, []);
-  const rememberNativeMicAck = useCallback((muted: boolean) => {
+  const rememberNativeMicAck = useCallback((muted: boolean, awaitingMedia = false) => {
     if (!callUuid || currentContext.current !== context) return null;
     const now = Date.now();
-    const ack = { muted, expiresAt: now + 10_000 };
-    pending.current = [...pending.current.filter((candidate) => candidate.expiresAt > now).slice(-7), ack];
+    const ack = { muted, expiresAt: awaitingMedia ? null : now + 10_000 };
+    pending.current = [...pending.current.filter((candidate) => (
+      (candidate.expiresAt === null || candidate.expiresAt > now)
+      // An old local Mute receipt cannot swallow a new privacy-preserving
+      // system Mute once the user starts another Unmute attempt.
+      && !(awaitingMedia && !muted && candidate.muted)
+    )).slice(-7), ack];
     return ack;
   }, [callUuid, context]);
   const consumeNativeMicAck = useCallback((muted: boolean) => {
     if (currentContext.current !== context) return false;
-    pending.current = pending.current.filter((candidate) => candidate.expiresAt > Date.now());
+    pending.current = pending.current.filter((candidate) => candidate.expiresAt === null || candidate.expiresAt > Date.now());
     const ack = pending.current.find((candidate) => candidate.muted === muted);
-    if (!ack) return false;
-    forgetNativeMicAck(ack);
+    if (!ack) {
+      // A new opposite system intent retires the in-flight media reservation;
+      // it must not suppress a later system reversal back to the original state.
+      pending.current = pending.current.filter((candidate) => candidate.expiresAt !== null);
+      return false;
+    }
+    // Equivalent OS feedback during a pending media command acknowledges that
+    // command. Its owner removes the reservation when the media promise settles.
+    if (ack.expiresAt !== null) forgetNativeMicAck(ack);
     return true;
   }, [context, forgetNativeMicAck]);
   const isNativeMicContextCurrent = useCallback(() => currentContext.current === context, [context]);
@@ -1254,11 +1266,21 @@ export default function ChillyChatThreadScreen() {
     setCallControlError(null);
   }, [activeCallInvite?.id, activeCallRoomId]);
 
+  const microphoneControlOperationRef = useRef<(() => boolean) | null>(null);
   const handleToggleCallMic = useCallback(async () => {
     if (!isNativeMicContextCurrent()) return;
+    if (microphoneControlOperationRef.current?.()) return;
+    const ownsOperation = isNativeMicContextCurrent;
+    microphoneControlOperationRef.current = ownsOperation;
     const nextEnabled = !micEnabled;
+    // Changing the WebRTC track can itself trigger CallKit's bottom-up mute
+    // event before the durable media commit returns. Reserve that feedback now
+    // so it cannot supersede and roll back this same microphone intent.
+    const mediaAcknowledgement = requestedNativeCallUuid
+      ? rememberNativeMicAck(!nextEnabled, true) : null;
     try {
       const updated = await setMicrophoneEnabled(nextEnabled);
+      forgetNativeMicAck(mediaAcknowledgement);
       if (!isNativeMicContextCurrent()) return;
       if (!updated) {
         const message = canOpenMediaSettings
@@ -1295,6 +1317,9 @@ export default function ChillyChatThreadScreen() {
       setError(message);
       setCallControlError(message);
       reportRuntimeError("chat-call-toggle-microphone", mediaError, { threadId });
+    } finally {
+      forgetNativeMicAck(mediaAcknowledgement);
+      if (microphoneControlOperationRef.current === ownsOperation) microphoneControlOperationRef.current = null;
     }
   }, [canOpenMediaSettings, forgetNativeMicAck, isNativeMicContextCurrent, micEnabled, rememberNativeMicAck, requestedNativeCallUuid, setMicrophoneEnabled, threadId]);
 

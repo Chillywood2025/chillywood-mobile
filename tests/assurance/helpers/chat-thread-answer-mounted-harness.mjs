@@ -92,7 +92,7 @@ export async function mountChatAnswer(options = {}) {
   ) || (ts.isExpressionStatement(node) && node.getText(tree).includes("const route = resolveIosChatCallAudioRoute")))
     : options.declineMode ? screen.body.statements.filter((node) => ts.isVariableStatement(node) && node.declarationList.declarations.some((declaration) => declineNames.has(declaration.name.getText(tree))))
     : options.endedMode ? [] : options.micMode ? screen.body.statements.filter((node) => (
-    ts.isVariableStatement(node) && node.declarationList.declarations.some((declaration) => declaration.name.getText(tree) === "handleToggleCallMic")
+    ts.isVariableStatement(node) && node.declarationList.declarations.some((declaration) => ["microphoneControlOperationRef", "handleToggleCallMic"].includes(declaration.name.getText(tree)))
   ) || (ts.isExpressionStatement(node) && node.getText(tree).includes("return subscribeToIosNativeCallEvents")))
     : options.readMode ? screen.body.statements.filter((node) => ts.isVariableStatement(node)
       && node.declarationList.declarations.some((declaration) => readNames.has(declaration.name.getText(tree)))) : declarations;

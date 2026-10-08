@@ -344,7 +344,8 @@ export async function mountFullChatThread(options = {}) {
     if (match[1].startsWith("../../components/")) modules[match[1]] = {};
   }
   const screen = compile(source, "app/chat/[threadId].tsx", modules, {
-    runtime, setTimeout: (fn, delay) => { const timer = { fn, delay }; runtime.timers.push(timer); return timer; },
+    runtime, Date: options.screenDate ?? Date,
+    setTimeout: (fn, delay) => { const timer = { fn, delay }; runtime.timers.push(timer); return timer; },
     clearTimeout: (timer) => { if (timer) timer.canceled = true; },
     setInterval: (fn, delay) => { const timer = { fn, delay }; runtime.intervals.push(timer); return timer; },
     clearInterval: (timer) => { if (timer) timer.canceled = true; },
