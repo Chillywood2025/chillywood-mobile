@@ -406,3 +406,49 @@ maps all 105 matrix IDs exactly once to execution batches. It records actual
 speech/motion, native/logging positive controls, live heartbeat readbacks,
 rate-limit scheduling and the precise hardware/person/state prerequisites.
 No matrix verdict is advanced by this plan.
+
+### V7 follow-up to installed v6 diagnostics
+
+The installed v6 source is `936107eca963440599c4f3a2c9c247dcaca5faef`,
+tree `efca05683c171e4d7e55f77e342df9daf455c057`, delivered as Android 97 and
+iOS 32. Its native compatibility digests above are immutable. The current
+candidate advances both internal runtimes to `1.0.0-android-production-v7` and
+`1.0.0-ios-production-v7`, retaining the existing channels and tester audiences.
+The v6 execution plan remains a scenario schedule; its installed-source evidence
+must not be relabeled as v7 validation.
+
+Paired v6 diagnostics reproduced a composer keyboard that obscured iPhone call
+controls. The screen now dismisses the keyboard when the shared call panel
+opens, including outgoing, incoming, native handoff and reopened controls.
+Mounted tests retain the draft and verify each opening path; physical geometry
+and accessibility still require the new installed candidate.
+
+The unchanged iPhone speaker label led to a separate reproduced source defect:
+the legacy adapter recreated its unsupported route callback on every render,
+which retriggered automatic routing and erased a failed manual switch's error.
+The callback is now stable. Mounted regressions exercise rejected manual
+switches, retries, unrelated renders and pending requests. This correction
+does not establish that the native device accepted a speaker request.
+
+The native follow-up records allowlisted route requests, native success or
+error, and one immediate output category (speaker, receiver, none, or other).
+It preserves routing operations and rethrows the original native error. The
+existing internal-only diagnostic gate applies; no raw port type, name, UID or
+call identity is added. The sample is session-wide and does not prove a settled
+route or audible output. Actual audio, controlled moving video and the remaining
+physical matrix are still required.
+
+The v7 native inputs were committed at
+`65fdb4b4aa2e5b759540219b3379815b846f1b57`, tree
+`370ec026e27cb5eb5acaa037cfb3942871df9bb7`, then measured with the documented
+`nativeSourceSnapshot` workflow:
+
+| Platform | V7 Git-native compatibility digest |
+| --- | --- |
+| Android | `855a7362816374af36ba5b9df1527c3308c1246b5191c6239017af2d8b96bc23` |
+| iOS | `169b5db038fb2d739271bd03f4d7888cab3e4ebc1b68d9b35067fe83e89114c9` |
+
+The receipt-only follow-up must recompute these digests on its resulting Git
+head before build. Neither these source digests nor local test results replace
+exact-head CI, native compilation, signed-artifact identity or installed-device
+proof. The Product CI lane explicitly includes the new keyboard regressions.
