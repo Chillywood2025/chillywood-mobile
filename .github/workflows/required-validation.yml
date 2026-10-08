@@ -90,6 +90,7 @@ jobs:
           node --test tests/assurance/chat-thread-answer-mounted.test.mjs tests/assurance/ios-native-call-bridge-mounted.test.mjs
           node --test tests/assurance/ios-foreground-call-presentation.test.mjs
           node --test tests/assurance/chat-thread-integration-mounted.test.mjs
+          node --test tests/assurance/chat-thread-call-keyboard-mounted.test.mjs
           node --test tests/assurance/chat-call-native-state-mounted.test.mjs
           node --test tests/assurance/chat-call-dispatch-integration.test.mjs
           node --test tests/assurance/chat-call-sdk-contract.test.mjs
