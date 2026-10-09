@@ -9,7 +9,21 @@ const SDK_VERSION = "2.10.0";
 const digest = (source) => crypto.createHash("sha256").update(source).digest("hex");
 const packagePrefix = "android/src/main/java/com/livekit/reactnative/";
 const coordinatorPath = `${packagePrefix}audio/ChillywoodOwnedAudioSession.java`;
-const COORDINATOR_SHA256 = "cf709ff2e3abaccb5934365a27a461e2dbcfc1dc4cdc472bba1f36033a4b4cee";
+const COORDINATOR_SHA256 = "3fa3b8f63222ec9bab052a92a40b980fa6e64a34aa65ce9f7e140dfa2190d519";
+const WEBRTC_VERSION = "144.0.0";
+const trackProbePath = "android/src/main/java/org/webrtc/audio/ChillywoodAudioTrackRoute.java";
+const accessorPath = "android/src/main/java/com/oney/WebRTCModule/ChillywoodAudioModuleAccessor.java";
+const TRACK_PROBE_SHA256 = "9c163cdb41a57dcb3d6e7a2cf88747800d2801499a5df10599e3ae05df90f1bd";
+const ACCESSOR_SHA256 = "08b55cec912d6350e119ffb6b3dd631b51702858a3b9a4d5dace558fa1add5f9";
+const webRtcInputs = {
+  "android/build.gradle": ["345a133d213dae45fc462a54e7ff9e73f2778aa9d028f837679fa0e645097c97"],
+  "android/consumer-rules.pro": ["8d9cde2d745a6e3992746e1673be9d6b86d6034864c9deb3633be2c2fa04c7d1"],
+  "android/src/main/java/com/oney/WebRTCModule/WebRTCModuleOptions.java": ["359631674cfa1f525008c73b521e6da5388a894e75578cff48ca511852e51300"],
+  "android/src/main/java/com/oney/WebRTCModule/WebRTCModule.java": [
+    "ed4aa8eacfa1311f681de34cae94d1bac5c4a2984ae7c9ad6835217e408dda20",
+    "bd5fe459edd9089ca418e214bf4f39120b55a898f9b0035408315a8a2e818df1",
+  ],
+};
 
 const definitions = {
   manager: {
@@ -20,7 +34,12 @@ const definitions = {
   module: {
     relativePath: `${packagePrefix}LivekitReactNativeModule.kt`,
     originalSha256: "9bcf637cb346a97f37e637e0b2c55a5fdac454d115d0ad2f00ee3c7c40da25b8",
-    patchedSha256: "0121187cdbb880c140f3893a81ca633e5bcfd3b0af6920b7767b386315787238",
+    patchedSha256: "b2304261e0869eb41537a9c074c2aa0a6df257ecd8aa068816609ec99090f26a",
+  },
+  setup: {
+    relativePath: `${packagePrefix}LiveKitReactNative.kt`,
+    originalSha256: "de90d742453af30a72e4a643550e6a4aabcb542586584f6ba221084fb1fd2fe4",
+    patchedSha256: "60aca0f48ece119ace67dddfbef90536db95a9105d617b68177c2b4ca32fa8e3",
   },
 };
 
@@ -131,6 +150,7 @@ function transformKnownSource(kind, source) {
   if (kind === "module") {
     source = replaceExactly(source, "    val audioManager = AudioSwitchManager(reactContext.applicationContext)", `    val audioManager = AudioSwitchManager(reactContext.applicationContext)
     init {
+        audioManager.ownedSession.setLegacyRouteProbe(org.webrtc.audio.ChillywoodAudioTrackRoute(reactContext))
         audioManager.ownedSession.setRouteListener { receipt ->
             reactApplicationContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
                 .emit("ChillywoodAndroidAudioRouteChanged", receipt)
@@ -165,6 +185,14 @@ function transformKnownSource(kind, source) {
     fun startAudioSession() {`);
     return replaceExactly(source, "    override fun invalidate() {", "    override fun invalidate() {\n        audioManager.ownedSession.invalidate()");
   }
+  if (kind === "setup") {
+    source = replaceExactly(source, "        adm = JavaAudioDeviceModule.builder(context)",
+      "        val routeObserver = org.webrtc.audio.ChillywoodAudioTrackRoute.Observer()\n        adm = JavaAudioDeviceModule.builder(context)");
+    source = replaceExactly(source, "            .setSamplesReadyCallback(audioRecordSamplesDispatcher)",
+      "            .setSamplesReadyCallback(audioRecordSamplesDispatcher)\n            .setAudioTrackStateCallback(routeObserver)");
+    return replaceExactly(source, "            .createAudioDeviceModule()",
+      "            .createAudioDeviceModule()\n        routeObserver.bind(adm!!)");
+  }
   throw new Error(`${PLUGIN_NAME}: unsupported source.`);
 }
 
@@ -178,33 +206,55 @@ function transformSource(kind, source) {
   return next;
 }
 
-function applyOwnedAudioPatch(projectRoot) {
+function packageRootFor(projectRoot, name, version) {
   // SDK 2.10.0 hides package.json in exports and its default export omits a
   // Node-resolvable extension. Resolve package search roots without loading it.
-  const search = createRequire(path.join(projectRoot, "package.json")).resolve.paths("@livekit/react-native") || [];
-  const packagePath = search.map((root) => path.join(root, "@livekit/react-native/package.json"))
+  const search = createRequire(path.join(projectRoot, "package.json")).resolve.paths(name) || [];
+  const packagePath = search.map((root) => path.join(root, name, "package.json"))
     .find((candidate) => fs.existsSync(candidate));
   if (!packagePath) throw new Error(`${PLUGIN_NAME}: pinned SDK package is missing.`);
   const sdk = JSON.parse(fs.readFileSync(packagePath, "utf8"));
-  if (sdk.name !== "@livekit/react-native" || sdk.version !== SDK_VERSION) {
+  if (sdk.name !== name || sdk.version !== version) {
     throw new Error(`${PLUGIN_NAME}: review required for SDK version ${sdk.version}.`);
   }
-  const packageRoot = path.dirname(packagePath);
+  return path.dirname(packagePath);
+}
+
+function applyOwnedAudioPatch(projectRoot) {
+  const packageRoot = packageRootFor(projectRoot, "@livekit/react-native", SDK_VERSION);
+  const webRtcRoot = packageRootFor(projectRoot, "@livekit/react-native-webrtc", WEBRTC_VERSION);
+  for (const [relative, known] of Object.entries(webRtcInputs)) {
+    if (!known.includes(digest(fs.readFileSync(path.join(webRtcRoot, relative))))) {
+      throw new Error(`${PLUGIN_NAME}: unreviewed WebRTC native input ${relative}.`);
+    }
+  }
   const coordinator = fs.readFileSync(require.resolve("./native/ChillywoodOwnedAudioSession.java"), "utf8");
   if (digest(coordinator) !== COORDINATOR_SHA256) throw new Error(`${PLUGIN_NAME}: coordinator digest mismatch.`);
   const changes = Object.entries(definitions).map(([kind, definition]) => {
     const filename = path.join(packageRoot, definition.relativePath);
     return [filename, transformSource(kind, fs.readFileSync(filename, "utf8"))];
   });
-  const generated = path.join(packageRoot, coordinatorPath);
-  if (fs.existsSync(generated) && digest(fs.readFileSync(generated)) !== COORDINATOR_SHA256) {
-    throw new Error(`${PLUGIN_NAME}: unreviewed existing coordinator.`);
+  const generatedSources = [
+    [path.join(packageRoot, coordinatorPath), coordinator, COORDINATOR_SHA256],
+    [path.join(packageRoot, trackProbePath), fs.readFileSync(require.resolve("./native/ChillywoodAudioTrackRoute.java"), "utf8"), TRACK_PROBE_SHA256],
+    [path.join(webRtcRoot, accessorPath), fs.readFileSync(require.resolve("./native/ChillywoodAudioModuleAccessor.java"), "utf8"), ACCESSOR_SHA256],
+  ];
+  for (const [filename, source, expected] of generatedSources) {
+    if (digest(source) !== expected) throw new Error(`${PLUGIN_NAME}: generated helper digest mismatch.`);
+    if (fs.existsSync(filename) && digest(fs.readFileSync(filename)) !== expected) {
+      throw new Error(`${PLUGIN_NAME}: unreviewed existing coordinator or helper.`);
+    }
   }
   // Verify every input before writing any generated source.
   for (const [filename, source] of changes) fs.writeFileSync(filename, source);
-  fs.writeFileSync(generated, coordinator);
-  return { sdkVersion: SDK_VERSION, managerSha256: definitions.manager.patchedSha256,
-    moduleSha256: definitions.module.patchedSha256, coordinatorSha256: COORDINATOR_SHA256 };
+  for (const [filename, source] of generatedSources) {
+    fs.mkdirSync(path.dirname(filename), { recursive: true });
+    fs.writeFileSync(filename, source);
+  }
+  return { sdkVersion: SDK_VERSION, webRtcVersion: WEBRTC_VERSION, nativeWebRtcVersion: "144.7559.01",
+    managerSha256: definitions.manager.patchedSha256, moduleSha256: definitions.module.patchedSha256,
+    setupSha256: definitions.setup.patchedSha256, coordinatorSha256: COORDINATOR_SHA256,
+    trackProbeSha256: TRACK_PROBE_SHA256, accessorSha256: ACCESSOR_SHA256 };
 }
 
 module.exports = createRunOncePlugin((config) => withDangerousMod(config, ["android", (next) => {
@@ -212,4 +262,5 @@ module.exports = createRunOncePlugin((config) => withDangerousMod(config, ["andr
   return next;
 }]), PLUGIN_NAME, "1.0.0");
 module.exports.__test = { SDK_VERSION, definitions, coordinatorPath, COORDINATOR_SHA256, digest,
+  WEBRTC_VERSION, webRtcInputs, trackProbePath, accessorPath, TRACK_PROBE_SHA256, ACCESSOR_SHA256,
   transformKnownSource, transformSource, applyOwnedAudioPatch };

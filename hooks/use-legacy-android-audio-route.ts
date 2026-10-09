@@ -106,6 +106,7 @@ export function useLegacyAndroidAudioRoute({ active, identity, video }: {
     // This is a two-way toggle, so never label a default/headset fallback as
     // a receiver on hardware where no earpiece is actually available.
     canSetSpeaker: !!confirmed?.supported
+      && confirmed.selected !== "none"
       && confirmed.available.includes("speaker") && confirmed.available.includes("earpiece"),
     speakerEnabled: confirmed?.selected === "speaker",
     error: manualError ?? error,

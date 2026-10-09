@@ -3,13 +3,21 @@ package com.livekit.reactnative.audio;
 import android.content.Context;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
+import android.media.AudioTrack;
 import android.os.Build;
 import android.os.Handler;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.livekit.reactnative.LiveKitReactNative;
+import com.oney.WebRTCModule.WebRTCModule;
+import com.oney.WebRTCModule.WebRTCModuleOptions;
 import com.twilio.audioswitch.AudioDevice;
 import com.twilio.audioswitch.AudioSwitch;
 import java.util.List;
+import java.util.function.Supplier;
+import org.webrtc.audio.ChillywoodAudioTrackRoute;
+import org.webrtc.audio.JavaAudioDeviceModule;
 
 /** Executes the production coordinator and generated SDK manager unchanged. */
 public final class OwnedAudioContract {
@@ -32,7 +40,7 @@ public final class OwnedAudioContract {
         void error(String code) { check(settlements == 1 && code.equals(error), "expected " + code + ", got " + error); }
         WritableMap receipt() { success(); return (WritableMap) value; }
     }
-    private static final class Fixture {
+    private static class Fixture {
         final AudioDeviceInfo speaker = new AudioDeviceInfo(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER);
         final AudioDeviceInfo earpiece = new AudioDeviceInfo(AudioDeviceInfo.TYPE_BUILTIN_EARPIECE);
         final AudioManager system = new AudioManager();
@@ -55,6 +63,45 @@ public final class OwnedAudioContract {
         Reply select(String owner, String output) { Reply reply = new Reply(); owned.select(owner, output, reply); return reply; }
         Reply read(String owner) { Reply reply = new Reply(); owned.read(owner, reply); return reply; }
     }
+    private static final class LegacyFixture extends Fixture {
+        final ReactApplicationContext context = new ReactApplicationContext(system);
+        final JavaAudioDeviceModule adm = new JavaAudioDeviceModule();
+        final WebRTCModule factory = new WebRTCModule(adm);
+        final ChillywoodAudioTrackRoute.Observer observer = new ChillywoodAudioTrackRoute.Observer();
+        final ChillywoodAudioTrackRoute probe;
+        AudioTrack track;
+        LegacyFixture() {
+            Build.VERSION.SDK_INT = 30;
+            LiveKitReactNative.INSTANCE.setFixtureAdm(adm);
+            WebRTCModuleOptions.getInstance().audioDeviceModule = adm;
+            context.setNativeModule(WebRTCModule.class, factory);
+            observer.bind(adm);
+            probe = new ChillywoodAudioTrackRoute(context);
+            owned.setLegacyRouteProbe(probe);
+        }
+        void startTrack(AudioDeviceInfo output) {
+            track = new AudioTrack(output); adm.setFixtureTrack(track);
+            observer.onWebRtcAudioTrackStart(); Handler.drain();
+        }
+        void route(AudioDeviceInfo output) { track.routedDevice = output; track.emitRouteChanged(); Handler.advance(50); }
+        void noNewMediaOperations() {
+            equal(adm.releases, 0, "routing cannot release the shared ADM");
+            if (track != null) equal(track.playCalls + track.stopCalls + track.releaseCalls, 0,
+                "route observation must not create/start/stop/release playback");
+        }
+        void noApi31() {
+            equal(system.readCalls + system.availableCalls + system.setCalls + system.clearCalls
+                + system.addedListeners + system.removedListeners, 0, "API30 cannot call API31 framework methods");
+            noNewMediaOperations();
+        }
+    }
+    private static <T> T onMain(Supplier<T> action) {
+        Object[] result = {null};
+        new Handler(android.os.Looper.getMainLooper()).post(() -> result[0] = action.get());
+        Handler.drain();
+        @SuppressWarnings("unchecked") T value = (T) result[0];
+        return value;
+    }
     private static void check(boolean condition, String message) { if (!condition) throw new AssertionError(message); }
     private static void equal(Object actual, Object expected, String message) {
         check(java.util.Objects.equals(actual, expected), message + ": " + actual + " != " + expected);
@@ -66,6 +113,16 @@ public final class OwnedAudioContract {
     }
     public static void main(String[] args) {
         filter = args.length == 0 ? null : args[0];
+        if ("api30_reflection_shape_fails_closed".equals(filter)) test("api30_reflection_shape_fails_closed", () -> {
+            LegacyFixture f = new LegacyFixture(); f.startTrack(f.earpiece);
+            check(!f.probe.isAvailable(), "unreviewed private track field shape cannot enable the probe");
+            equal(onMain(() -> f.probe.currentTrack()), null, "unreviewed shape cannot expose a track");
+            Reply acquire = f.acquire("A"); Handler.drain();
+            equal(acquire.receipt().getString("selected"), "none", "unavailable observer must not block startup or infer receiver");
+            Reply select = f.select("A", "speaker"); Handler.advance(3000);
+            check(select.error != null, "unavailable observer cannot confirm selection");
+            equal(f.system.speakerCalls, 0, "unavailable observer cannot actuate a manual route"); f.noApi31();
+        });
         test("prequeue_owner_replacement", () -> {
             Fixture f = new Fixture();
             Reply a = f.acquire("A"), release = f.release("A"), b = f.acquire("B");
@@ -400,6 +457,197 @@ public final class OwnedAudioContract {
             equal(receipt.getBoolean("supported"), false, "old API capability"); equal(receipt.getString("selected"), "none", "old API cannot prove route");
             f.select("A", "speaker").error("E_AUDIO_UNSUPPORTED"); Reply read = f.read("A"); Handler.drain(); read.success();
             f.release("A"); Handler.drain(); equal(f.system.readCalls + f.system.availableCalls + f.system.setCalls + f.system.clearCalls + f.system.addedListeners + f.system.removedListeners, 0, "API31 framework calls below 31");
+        });
+        test("api30_acquire_before_playout_is_nonblocking_and_unconfirmed", () -> {
+            LegacyFixture f = new LegacyFixture(); Reply acquire = f.acquire("A"); Handler.drain();
+            equal(acquire.receipt().getString("selected"), "none", "no playing track cannot imply receiver");
+            equal(AudioSwitch.starts, 1, "routing session starts before call playout");
+            Reply select = f.select("A", "speaker"); Handler.advance(3000);
+            check(select.error != null, "selection without playout must fail, not claim speaker");
+            equal(f.system.speakerCalls, 0, "unknown playback cannot issue a manual route change");
+            f.startTrack(f.earpiece);
+            Reply read = f.read("A"); Handler.drain();
+            equal(read.receipt().getString("selected"), "earpiece", "later actual playout makes routing observable");
+            f.noApi31();
+        });
+        test("api30_requested_flag_and_scanner_are_not_playback_route_proof", () -> {
+            LegacyFixture f = new LegacyFixture(); f.startTrack(f.earpiece); f.acquireReady("A");
+            Reply select = f.select("A", "speaker"); Handler.drain(); select.pending();
+            check(f.system.requestedSpeaker, "API30 actuator must issue speaker request");
+            check(AudioSwitch.instances.get(0).cached instanceof AudioDevice.Speakerphone, "SDK preference updated");
+            equal(f.track.routedDevice, f.earpiece, "actual playback deliberately remains on receiver");
+            Handler.advance(2450); select.pending();
+            f.route(f.speaker);
+            equal(select.receipt().getString("selected"), "speaker", "only actual route completes selection");
+            f.noApi31();
+        });
+        test("api30_unapplied_request_times_out_without_false_label", () -> {
+            LegacyFixture f = new LegacyFixture(); f.startTrack(f.earpiece); f.acquireReady("A");
+            Reply select = f.select("A", "speaker"); Handler.advance(3000);
+            select.error("E_AUDIO_TIMEOUT");
+            Reply read = f.read("A"); Handler.drain();
+            equal(read.receipt().getString("selected"), "earpiece", "read reports actual old route after failed request");
+            equal(AudioSwitch.stops, 0, "route timeout does not stop the call session"); f.noApi31();
+        });
+        test("api30_video_acquire_reports_actual_route_not_default_preference", () -> {
+            LegacyFixture f = new LegacyFixture(); f.startTrack(f.earpiece);
+            Reply acquire = f.acquire("A", "speaker"); Handler.drain();
+            equal(acquire.receipt().getString("selected"), "earpiece", "default speaker request is not selected proof");
+            f.noApi31();
+        });
+        test("api30_shared_actual_factory_adm_is_required", () -> {
+            for (String mismatch : List.of("factory", "options", "livekit")) {
+                LegacyFixture f = new LegacyFixture(); f.startTrack(f.earpiece); f.acquireReady("A");
+                JavaAudioDeviceModule foreign = new JavaAudioDeviceModule(); foreign.setFixtureTrack(new AudioTrack(f.speaker));
+                if ("factory".equals(mismatch)) f.factory.replaceFixtureAdm(foreign);
+                if ("options".equals(mismatch)) WebRTCModuleOptions.getInstance().audioDeviceModule = foreign;
+                if ("livekit".equals(mismatch)) LiveKitReactNative.INSTANCE.setFixtureAdm(foreign);
+                equal(onMain(() -> f.probe.currentTrack()), null, "mismatched actual ADM cannot be observed: " + mismatch);
+                Reply select = f.select("A", "speaker"); Handler.advance(3000);
+                check(select.error != null, "foreign ADM must not confirm a route: " + mismatch);
+                equal(f.system.speakerCalls, 0, "foreign ADM cannot receive route actuator: " + mismatch); f.noApi31();
+            }
+        });
+        test("api30_replaced_track_cannot_complete_old_selection", () -> {
+            LegacyFixture f = new LegacyFixture(); f.startTrack(f.earpiece); f.acquireReady("A");
+            AudioTrack old = f.track; Object token = onMain(() -> f.probe.currentTrack());
+            Reply select = f.select("A", "speaker"); Handler.drain(); select.pending();
+            old.playState = AudioTrack.PLAYSTATE_STOPPED; f.observer.onWebRtcAudioTrackStop();
+            f.startTrack(f.speaker); Handler.advance(3000);
+            check(select.error != null, "a new track matching the request cannot settle an old-track command");
+            equal(onMain(() -> f.probe.selectedDevice(token)), null, "old track token stays invalid");
+            Reply retry = f.select("A", "speaker"); Handler.drain();
+            equal(retry.receipt().getString("selected"), "speaker", "explicit retry can bind the new current track");
+            equal(old.playCalls + old.stopCalls + old.releaseCalls, 0, "observer cannot mutate old playback"); f.noApi31();
+        });
+        test("api30_inner_track_replacement_during_read_fails_closed", () -> {
+            LegacyFixture f = new LegacyFixture(); f.startTrack(f.earpiece); f.acquireReady("A");
+            Object token = onMain(() -> f.probe.currentTrack());
+            f.track.duringRead = () -> f.adm.setFixtureTrack(new AudioTrack(f.speaker));
+            equal(onMain(() -> f.probe.selectedDevice(token)), null, "before/after inner track mismatch cannot return old route");
+            equal(onMain(() -> f.probe.currentTrack()), null, "replacement without its START cannot inherit the old observation");
+            f.noApi31();
+        });
+        test("api30_factory_replacement_during_read_fails_closed", () -> {
+            LegacyFixture f = new LegacyFixture(); f.startTrack(f.earpiece); f.acquireReady("A");
+            Object token = onMain(() -> f.probe.currentTrack());
+            f.track.duringRead = () -> f.factory.replaceFixtureAdm(new JavaAudioDeviceModule());
+            equal(onMain(() -> f.probe.selectedDevice(token)), null,
+                "actual factory change during the framework read cannot confirm the old ADM route");
+            f.noApi31();
+        });
+        test("api30_queued_old_stop_and_route_callbacks_preserve_new_track", () -> {
+            LegacyFixture f = new LegacyFixture(); f.startTrack(f.earpiece); f.acquireReady("A");
+            AudioTrack old = f.track; Object oldToken = onMain(() -> f.probe.currentTrack());
+            java.util.ArrayList<String> events = new java.util.ArrayList<>();
+            f.owned.setRouteListener(receipt -> events.add(receipt.getString("selected")));
+            old.routedDevice = f.speaker; old.emitRouteChanged();
+            old.playState = AudioTrack.PLAYSTATE_STOPPED;
+            f.observer.onWebRtcAudioTrackStop(); // Captures old track before main runs.
+            f.track = new AudioTrack(f.earpiece); f.adm.setFixtureTrack(f.track);
+            f.observer.onWebRtcAudioTrackStart(); // Publishes the replacement before queued old callbacks.
+            Handler.drain();
+            check(onMain(() -> f.probe.currentTrack()) != oldToken, "new track receives a distinct observation token");
+            equal(onMain(() -> f.probe.selectedDevice(oldToken)), null, "old observation remains retired");
+            check(!events.isEmpty() && events.stream().allMatch("earpiece"::equals),
+                "queued old callback cannot publish old route or erase new playing state");
+            equal(old.listenerCount(), 0, "old listener detached after playback replacement");
+            equal(f.track.listenerCount(), 1, "only current track remains observed");
+            f.release("A"); Handler.drain(); equal(f.track.listenerCount(), 0, "End removes replacement listener");
+            f.noApi31();
+        });
+        test("api30_retired_request_cannot_select_or_stop_successor_owner", () -> {
+            LegacyFixture f = new LegacyFixture(); f.startTrack(f.earpiece); f.acquireReady("A");
+            Reply pending = f.select("A", "speaker"); Handler.drain(); pending.pending();
+            Reply end = f.release("A"), next = f.acquire("B"); Handler.drain();
+            pending.error("E_AUDIO_STALE"); end.success(); next.success();
+            int requests = f.system.speakerCalls, stops = AudioSwitch.stops;
+            f.track.routedDevice = f.speaker; f.track.emitRouteChanged(); Handler.advance(3000);
+            equal(f.system.speakerCalls, requests, "late old request cannot actuate the successor");
+            equal(AudioSwitch.stops, stops, "late old request cannot stop the successor");
+            Reply read = f.read("B"); Handler.drain();
+            equal(read.receipt().getString("selected"), "speaker", "current owner observes actual current playback");
+            f.release("B"); Handler.drain(); f.noApi31();
+        });
+        test("api30_stopped_or_unrouted_track_never_means_earpiece", () -> {
+            for (String unavailable : List.of("stopped", "paused", "released", "unrouted")) {
+                LegacyFixture f = new LegacyFixture(); f.startTrack(f.earpiece); f.acquireReady("A");
+                if ("stopped".equals(unavailable)) f.track.playState = AudioTrack.PLAYSTATE_STOPPED;
+                if ("paused".equals(unavailable)) f.track.playState = AudioTrack.PLAYSTATE_PAUSED;
+                if ("released".equals(unavailable)) f.track.state = AudioTrack.STATE_UNINITIALIZED;
+                if ("unrouted".equals(unavailable)) f.track.routedDevice = null;
+                Reply read = f.read("A"); Handler.advance(3000);
+                check(read.error != null || "none".equals(read.receipt().getString("selected")),
+                    "unavailable playback cannot be receiver: " + unavailable);
+                if (!"unrouted".equals(unavailable)) {
+                    Reply select = f.select("A", "speaker"); Handler.advance(3000);
+                    check(select.error != null, "nonplaying track cannot complete a route command: " + unavailable);
+                    equal(f.system.speakerCalls, 0, "nonplaying track cannot authorize the speaker actuator: " + unavailable);
+                }
+                f.noApi31();
+            }
+        });
+        test("api30_actual_track_read_error_never_becomes_route_success", () -> {
+            LegacyFixture f = new LegacyFixture(); f.startTrack(f.earpiece); f.acquireReady("A");
+            f.track.throwOnRead = true; Reply read = f.read("A"); Handler.advance(3000);
+            check(read.error != null || "none".equals(read.receipt().getString("selected")), "route read failure cannot fabricate a device");
+            equal(AudioSwitch.stops, 0, "readback failure does not end the call"); f.noApi31();
+        });
+        test("api30_end_retires_track_listener_and_pending_selection", () -> {
+            LegacyFixture f = new LegacyFixture(); f.startTrack(f.earpiece); f.acquireReady("A");
+            check(f.track.listenerCount() > 0, "actual track listener must be registered");
+            Reply select = f.select("A", "speaker"); Handler.drain(); select.pending();
+            f.track.emitRouteChanged(); Reply end = f.release("A"); Handler.drain();
+            end.success(); select.error("E_AUDIO_STALE");
+            equal(f.track.listenerCount(), 0, "End removes only its own track listener");
+            int requests = f.system.speakerCalls; Handler.advance(3000);
+            equal(f.system.speakerCalls, requests, "late pending request cannot mutate after End"); f.noApi31();
+        });
+        test("api30_failed_track_listener_removal_is_retryable", () -> {
+            LegacyFixture f = new LegacyFixture(); f.startTrack(f.earpiece); f.acquireReady("A");
+            f.track.throwOnRemove = true; Reply first = f.release("A"); Handler.drain();
+            check(first.error != null, "failed listener cleanup must remain unproved");
+            check(f.track.listenerCount() > 0, "injected failure keeps actual listener attached");
+            f.track.throwOnRemove = false; Reply retry = f.release("A"); Handler.drain(); retry.success();
+            equal(f.track.listenerCount(), 0, "exact-owner retry removes retained track listener"); f.noApi31();
+        });
+        test("api30_failed_old_listener_detach_blocks_replacement_receipt", () -> {
+            LegacyFixture f = new LegacyFixture(); f.startTrack(f.earpiece); f.acquireReady("A");
+            AudioTrack old = f.track; old.throwOnRemove = true;
+            old.playState = AudioTrack.PLAYSTATE_STOPPED; f.observer.onWebRtcAudioTrackStop();
+            f.startTrack(f.speaker);
+            check(!f.probe.isAvailable(), "failed old-track detach must revoke observation readiness");
+            Reply read = f.read("A"); Handler.advance(3000);
+            check(read.error != null || (!read.receipt().getBoolean("supported")
+                    && "none".equals(read.receipt().getString("selected"))),
+                "unobserved successor cannot inherit the old listener's capability");
+            check(old.listenerCount() > 0, "failed old binding must remain available for exact cleanup");
+            Reply firstEnd = f.release("A"); Handler.drain();
+            check(firstEnd.error != null, "End cannot discard failed old listener removal");
+            old.throwOnRemove = false; Reply retry = f.release("A"); Handler.drain(); retry.success();
+            equal(old.listenerCount(), 0, "End retry removes the retained old binding");
+            equal(f.track.listenerCount(), 0, "unobserved successor has no leaked listener");
+            f.noApi31();
+        });
+        test("api30_failed_track_listener_registration_revokes_observer_capability", () -> {
+            for (boolean partial : List.of(false, true)) {
+                LegacyFixture f = new LegacyFixture(); f.startTrack(f.earpiece);
+                f.track.throwOnAdd = !partial; f.track.throwAfterAdd = partial;
+                Reply acquire = f.acquire("A"); Handler.drain(); acquire.success();
+                check(!acquire.receipt().getBoolean("supported"),
+                    "acquire must not briefly advertise readiness before failed listener registration");
+                check(!f.probe.isAvailable(), "failed observer registration must not advertise readiness");
+                Reply read = f.read("A"); Handler.advance(3000);
+                check(read.error != null || !read.receipt().getBoolean("supported"),
+                    "missing observation cannot leave a route control active");
+                Reply end = f.release("A"); Handler.drain(); end.success();
+                equal(f.track.listenerCount(), 0, "End removes any partial registration");
+                f.track.throwOnAdd = false; f.track.throwAfterAdd = false;
+                Reply next = f.acquire("B"); Handler.drain(); next.success();
+                Reply restored = f.read("B"); Handler.drain();
+                equal(restored.receipt().getString("selected"), "earpiece", "a later owned subscription can restore observation");
+                f.noApi31();
+            }
         });
         test("default_order_before_activation", () -> {
             for (String output : List.of("earpiece", "speaker", "system")) {

@@ -11,6 +11,7 @@ public final class AudioManager {
     public static final int AUDIOFOCUS_GAIN = 1;
     public static final int MODE_IN_COMMUNICATION = 3;
     public static final int STREAM_VOICE_CALL = 0;
+    public static final int GET_DEVICES_OUTPUTS = 2;
     public interface OnAudioFocusChangeListener { void onAudioFocusChange(int change); }
     public interface OnCommunicationDeviceChangedListener { void onCommunicationDeviceChanged(AudioDeviceInfo device); }
     private record Registration(Executor executor, OnCommunicationDeviceChangedListener listener) {}
@@ -23,6 +24,8 @@ public final class AudioManager {
     public boolean throwOnClear, throwOnRemoveListener;
     public int readCalls, availableCalls, setCalls, clearCalls, speakerCalls, microphoneCalls;
     public int addedListeners, removedListeners;
+    public int legacyInventoryCalls;
+    public boolean requestedSpeaker;
     public final List<Integer> requests = new ArrayList<>();
     private void api31() {
         Handler.requireMain();
@@ -63,6 +66,15 @@ public final class AudioManager {
         }
     }
     public int registeredListenerCount() { return listeners.size(); }
-    public void setSpeakerphoneOn(boolean enabled) { Handler.requireMain(); ++speakerCalls; }
+    public AudioDeviceInfo[] getDevices(int flags) {
+        Handler.requireMain();
+        if (Build.VERSION.SDK_INT < 23) throw new AssertionError("getDevices invoked below API23");
+        ++legacyInventoryCalls;
+        if (throwOnRead) throw new IllegalStateException("controlled framework inventory read failure");
+        if (flags != GET_DEVICES_OUTPUTS) throw new AssertionError("unexpected device inventory scope");
+        return available.toArray(new AudioDeviceInfo[0]);
+    }
+    public void setSpeakerphoneOn(boolean enabled) { Handler.requireMain(); ++speakerCalls; requestedSpeaker = enabled; }
+    public boolean isSpeakerphoneOn() { return requestedSpeaker; }
     public void setMicrophoneMute(boolean muted) { ++microphoneCalls; }
 }

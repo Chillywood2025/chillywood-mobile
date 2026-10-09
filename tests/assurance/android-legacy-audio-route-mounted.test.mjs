@@ -120,6 +120,41 @@ for (const callType of ["voice", "video"]) {
   });
 }
 
+test("pending API30 playout receipt cannot block call startup and enables routing only after actual-route observation", async t => {
+  const native = nativeAudio({ supported: false, selected: "none", available: [] });
+  const { h } = await connected(t, { native });
+  assert.equal(h.runtime.snapshot.callChannelState, "live");
+  assert.equal(h.runtime.snapshot.canSetCallMediaSpeaker, false);
+  assert.equal(control(h), undefined);
+  const footprint = mediaFootprint(h);
+  assert.equal(native.calls.filter(call => call.kind === "select").length, 0);
+  await h.run(() => {
+    native.supported = true; native.selected = "earpiece"; native.available = ["speaker", "earpiece"];
+    native.emit();
+  });
+  assertRoute(h, native, false);
+  await h.run(() => control(h).onPress());
+  assertRoute(h, native, true);
+  assert.deepEqual(mediaFootprint(h), footprint);
+  assert.equal(native.calls.filter(call => call.kind === "acquire").length, 1);
+});
+
+for (const supported of [false, true]) {
+  test(`lost playout route revokes the actual control without inferring receiver: supported=${supported}`, async t => {
+    const { h, native } = await connected(t);
+    await h.run(() => control(h).onPress());
+    assertRoute(h, native, true);
+    const selects = native.calls.filter(call => call.kind === "select").length;
+    await h.run(() => { native.supported = supported; native.selected = "none"; native.emit(); });
+    assert.equal(h.runtime.snapshot.canSetCallMediaSpeaker, false);
+    assert.equal(control(h), undefined);
+    assert.equal(h.runtime.snapshot.callChannelState, "live");
+    assert.equal(native.calls.filter(call => call.kind === "select").length, selects);
+    await h.run(() => { native.supported = true; native.selected = "speaker"; native.emit(); });
+    assertRoute(h, native, true);
+  });
+}
+
 test("native selection rejection keeps the confirmed label and manual error through unrelated renders, then permits explicit retry", async t => {
   const { h, native } = await connected(t);
   const footprint = mediaFootprint(h);

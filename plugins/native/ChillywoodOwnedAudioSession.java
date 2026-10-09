@@ -12,6 +12,7 @@ import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /** One owner of the existing AudioSwitch. No room, provider, or second audio manager. */
@@ -32,6 +33,23 @@ public final class ChillywoodOwnedAudioSession {
     private RouteListener routeListener;
     private Runnable removeRouteListener;
     private String automaticOutput;
+    private LegacyRouteProbe legacyProbe;
+    private boolean legacyProbeFailed;
+
+    public interface LegacyRouteProbe {
+        boolean isAvailable();
+        Object currentTrack();
+        AudioDeviceInfo selectedDevice(Object expectedTrack);
+        Runnable subscribe(Runnable changed);
+    }
+
+    public void setLegacyRouteProbe(LegacyRouteProbe probe) {
+        synchronized (lock) {
+            if (desiredOwner != null || activeOwner != null) throw new IllegalStateException("Audio session is active.");
+            legacyProbe = probe;
+            legacyProbeFailed = false;
+        }
+    }
 
     public interface RouteListener { void onRouteChanged(WritableMap receipt); }
 
@@ -71,6 +89,7 @@ public final class ChillywoodOwnedAudioSession {
         final long deadline;
         boolean settled;
         boolean selectionIssued;
+        Object trackBinding;
         Pending(String owner, long lifecycle, long request, Promise promise, String output, boolean acquiring) {
             this.owner = owner;
             this.lifecycle = lifecycle;
@@ -105,6 +124,7 @@ public final class ChillywoodOwnedAudioSession {
             }
             desiredOwner = owner;
             ready = false;
+            legacyProbeFailed = false;
             final long epoch = ++lifecycle;
             final long revision = ++request;
             main.post(() -> {
@@ -133,8 +153,11 @@ public final class ChillywoodOwnedAudioSession {
                         manager.prepareOwnedDefaultOnMainThread(defaultOutput);
                         activeOwner = owner;
                         manager.startOnMainThread();
-                        if (!supported()) {
+                        if (!api31()) {
+                            // The real track starts only after the call connects.
+                            // Never deadlock Room.connect on playout-route proof.
                             ready = true;
+                            installRouteListenerOnMainThread(owner, epoch);
                             promise.resolve(snapshot(owner));
                             return;
                         }
@@ -202,7 +225,7 @@ public final class ChillywoodOwnedAudioSession {
                 return;
             }
             if (!supported()) {
-                reject(promise, "E_AUDIO_UNSUPPORTED", "Confirmed routing requires Android 12 or newer.");
+                reject(promise, "E_AUDIO_UNSUPPORTED", "Confirmed audio routing is unavailable.");
                 return;
             }
             final long epoch = lifecycle;
@@ -215,11 +238,17 @@ public final class ChillywoodOwnedAudioSession {
                         return;
                     }
                     try {
+                        Object trackBinding = api31() ? null : legacyProbe.currentTrack();
+                        if (!api31() && trackBinding == null) {
+                            reject(promise, "E_AUDIO_ROUTE_PENDING", "Call audio playback is not ready.");
+                            return;
+                        }
                         if (!systemAvailable().contains(output)) {
                             reject(promise, "E_AUDIO_UNAVAILABLE", "Requested audio output is unavailable.");
                             return;
                         }
                         pending = new Pending(owner, epoch, revision, promise, output, false);
+                        pending.trackBinding = trackBinding;
                         observe(pending);
                     } catch (RuntimeException error) {
                         reject(promise, "E_AUDIO_SELECT", "Audio output selection failed.");
@@ -269,6 +298,10 @@ public final class ChillywoodOwnedAudioSession {
             return;
         }
         try {
+            if (!operation.acquiring && !api31() && !trackCurrent(operation)) {
+                settleError(operation, "E_AUDIO_STALE", "Call audio playback was replaced.");
+                return;
+            }
             if (operation.acquiring && automaticOutput != null) {
                 String scannerOutput = manager.ownedSelectedOutputOnMainThread();
                 if (!"none".equals(scannerOutput) && !automaticOutput.equals(scannerOutput)) {
@@ -305,14 +338,16 @@ public final class ChillywoodOwnedAudioSession {
                 // preference (or a successful setter) for selected-route proof.
                 if (manager.selectAudioOutputOnMainThread(AudioDeviceKind.fromTypeName(operation.output))) {
                     automaticOutput = null;
-                    if (!systemAudio.setCommunicationDevice(target)) {
+                    if (api31() && !systemAudio.setCommunicationDevice(target)) {
                         settleError(operation, "E_AUDIO_SELECT", "Android rejected the requested audio output.");
                         return;
                     }
+                    if (!api31()) systemAudio.setSpeakerphoneOn("speaker".equals(operation.output));
                     operation.selectionIssued = true;
                 }
             }
-            String selected = selected();
+            String selected = !operation.acquiring && !api31()
+                    ? kind(legacyProbe.selectedDevice(operation.trackBinding)) : selected();
             boolean confirmed = operation.acquiring ? defaultReady && !"none".equals(selected) && !available().isEmpty()
                     && manager.ownedDefaultObservedOnMainThread(selected)
                 : operation.selectionIssued && operation.output.equals(selected);
@@ -321,6 +356,10 @@ public final class ChillywoodOwnedAudioSession {
                 // snapshot performs a fresh read. A route may change between two
                 // framework calls; never return a contradictory success receipt.
                 String receiptOutput = receipt.getString("selected");
+                if (!operation.acquiring && !api31() && !trackCurrent(operation)) {
+                    settleError(operation, "E_AUDIO_STALE", "Call audio playback was replaced.");
+                    return;
+                }
                 if (receiptContainsOutput(receipt, receiptOutput) && (operation.acquiring ? acquisitionDefaultReady(operation) && !"none".equals(receiptOutput)
                         && manager.ownedDefaultObservedOnMainThread(receiptOutput)
                         : operation.output.equals(receiptOutput))) {
@@ -357,10 +396,14 @@ public final class ChillywoodOwnedAudioSession {
     }
 
     private AudioDeviceInfo communicationDevice(String output) {
-        for (AudioDeviceInfo device : systemAudio.getAvailableCommunicationDevices()) {
+        for (AudioDeviceInfo device : communicationDevices()) {
             if (output.equals(kind(device))) return device;
         }
         return null;
+    }
+
+    private boolean trackCurrent(Pending operation) {
+        return supported() && operation.trackBinding != null && legacyProbe.currentTrack() == operation.trackBinding;
     }
 
     private void observeRead(String owner, long epoch, Promise promise, long deadline) {
@@ -392,10 +435,17 @@ public final class ChillywoodOwnedAudioSession {
         return !invalidated && ready && owner != null && owner.equals(desiredOwner) && owner.equals(activeOwner) && epoch == lifecycle;
     }
 
-    private boolean supported() { return Build.VERSION.SDK_INT >= 31 && systemAudio != null; }
+    private boolean api31() { return Build.VERSION.SDK_INT >= 31 && systemAudio != null; }
+
+    private boolean supported() {
+        if (api31()) return true;
+        try { return systemAudio != null && !legacyProbeFailed && legacyProbe != null && legacyProbe.isAvailable(); }
+        catch (RuntimeException unavailable) { return false; }
+    }
 
     private String selected() {
-        return supported() ? kind(systemAudio.getCommunicationDevice()) : "none";
+        if (api31()) return kind(systemAudio.getCommunicationDevice());
+        return supported() ? kind(legacyProbe.selectedDevice(null)) : "none";
     }
 
     private List<String> available() {
@@ -411,12 +461,18 @@ public final class ChillywoodOwnedAudioSession {
     private List<String> systemAvailable() {
         List<String> result = new ArrayList<>();
         if (supported()) {
-            for (AudioDeviceInfo device : systemAudio.getAvailableCommunicationDevices()) {
+            for (AudioDeviceInfo device : communicationDevices()) {
                 String value = kind(device);
                 if (!"none".equals(value) && !result.contains(value)) result.add(value);
             }
         }
         return result;
+    }
+
+    private List<AudioDeviceInfo> communicationDevices() {
+        if (api31()) return systemAudio.getAvailableCommunicationDevices();
+        if (supported()) return Arrays.asList(systemAudio.getDevices(AudioManager.GET_DEVICES_OUTPUTS));
+        return new ArrayList<>();
     }
 
     private static String kind(AudioDeviceInfo device) {
@@ -460,7 +516,7 @@ public final class ChillywoodOwnedAudioSession {
         finally {
             try { manager.stopOnMainThread(); }
             finally {
-                if (supported()) systemAudio.clearCommunicationDevice();
+                if (api31()) systemAudio.clearCommunicationDevice();
                 automaticOutput = null;
             }
         }
@@ -468,8 +524,12 @@ public final class ChillywoodOwnedAudioSession {
 
     private void installRouteListenerOnMainThread(String owner, long epoch) {
         removeRouteListenerOnMainThread();
-        if (!supported()) return;
-        removeRouteListener = Api31Routes.install(systemAudio, main, () -> emitCurrentRoute(owner, epoch));
+        if (api31()) {
+            removeRouteListener = Api31Routes.install(systemAudio, main, () -> emitCurrentRoute(owner, epoch));
+        } else if (legacyProbe != null) {
+            try { removeRouteListener = legacyProbe.subscribe(() -> emitCurrentRoute(owner, epoch)); }
+            catch (RuntimeException unavailable) { legacyProbeFailed = true; }
+        }
     }
 
     private void emitCurrentRoute(String owner, long epoch) {
