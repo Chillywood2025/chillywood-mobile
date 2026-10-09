@@ -328,7 +328,7 @@ export async function mountFullChatThread(options = {}) {
     },
     "../../_lib/officialAccounts": { getOfficialPlatformAccount: () => null },
     "../../_lib/performancePolicy": { READ_RECEIPT_THROTTLE_MS: 500 },
-    "../../_lib/session": { useSession: () => React.useMemo(() => ({ authority: { userId: runtime.userId, accountId: runtime.userId, sessionGeneration: runtime.sessionGeneration, state: "ACTIVE", restoreOnly: false }, session: { access_token: "test-token" }, user: { id: runtime.userId }, isSignedIn: true, isLoading: false }), [runtime.userId, runtime.sessionGeneration]) },
+    "../../_lib/session": { useSession: () => React.useMemo(() => ({ authority: { userId: runtime.userId, accountId: runtime.userId, sessionGeneration: runtime.sessionGeneration, state: "ACTIVE", restoreOnly: false }, session: { access_token: runtime.accessToken ?? "test-token" }, user: { id: runtime.userId }, isSignedIn: true, isLoading: false }), [runtime.userId, runtime.sessionGeneration, runtime.accessToken]) },
     "../../_lib/userFacingErrors": { getUserFacingErrorMessage: (error, fallback) => error?.message ?? fallback },
     "../../_lib/usernameHandles": { formatUsernameHandle: () => "" },
     "../../_lib/socialAttachmentPicker": {},
@@ -341,7 +341,7 @@ export async function mountFullChatThread(options = {}) {
   const parsedScreen = ts.createSourceFile("thread.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const panelBindings = new Map();
   const presentationBindings = new Map();
-  const requiredPanelBindings = ["mediaControlsBusy", "onToggleCamera", "onToggleMic", "onSwitchCamera", "onLeave"];
+  const requiredPanelBindings = ["showControls", "showMediaControls", "mediaControlsBusy", "onToggleCamera", "onToggleMic", "onSwitchCamera", "onLeave"];
   const visit = node => {
     if (ts.isJsxElement(node)) {
       const attrs = node.openingElement.attributes.properties;
@@ -423,6 +423,7 @@ export async function mountFullChatThread(options = {}) {
       await media.emitAppState(state);
       await settle();
     }); },
+    emitNativeEvent(event) { for (const listener of nativeListeners) listener(event); },
     async rerender(patch) {
       Object.assign(runtime, patch);
       if (durableThread) Object.assign(media, { userId: runtime.userId, remoteUserId: runtime.remoteUserId });

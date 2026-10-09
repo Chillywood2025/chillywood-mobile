@@ -491,6 +491,7 @@ export default function ChillyChatThreadScreen() {
   const [nativeMediaActivationSerial, setNativeMediaActivationSerial] = useState(0);
   const [nativeApplicationActiveSerial, setNativeApplicationActiveSerial] = useState(0);
   const [nativeAudioSessionCallUuid, setNativeAudioSessionCallUuid] = useState("");
+  const nativeAudioSessionCallUuidRef = useRef("");
   const [callEvents, setCallEvents] = useState<ChillyChatCallEvent[]>([]);
   const [incomingCallInvite, setIncomingCallInvite] = useState<ChillyChatCallInvite | null>(null);
   const [outgoingCallInvite, setOutgoingCallInvite] = useState<ChillyChatCallInvite | null>(null);
@@ -523,6 +524,10 @@ export default function ChillyChatThreadScreen() {
   const activeCallInviteRef = useRef<ChillyChatCallInvite | null>(null);
   const acceptedIosNativeMediaDescriptorRef = useRef<ReturnType<typeof createIosAcceptedCallKitMediaDescriptor>>(null);
   const acceptedIosNativeMediaSettlementInFlightRef = useRef<(() => boolean) | null>(null);
+  const nativeAudioReadinessDeadlineRef = useRef<{
+    descriptor: NonNullable<ReturnType<typeof createIosAcceptedCallKitMediaDescriptor>>;
+    deadlineMs: number;
+  } | null>(null);
   const handledActiveTerminalInviteIdsRef = useRef<Set<string>>(new Set());
   const lastReadReceiptWriteAtRef = useRef(0);
   const incomingCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -542,6 +547,7 @@ export default function ChillyChatThreadScreen() {
     setTrustedNativeCallClaim(null);
     setTrustedNativeCallClaimAccountId("");
     setIosNativeAnswerRecoveryBlocked(false);
+    nativeAudioSessionCallUuidRef.current = "";
     setNativeAudioSessionCallUuid("");
     setNativeApplicationActiveSerial(0);
     setNativeMediaActivationSerial(0);
@@ -1275,6 +1281,68 @@ export default function ChillyChatThreadScreen() {
       return false;
     }
   }, [activeCallRoomId, authority, currentUserId, leaveRoom, releaseTrustedNativeCallSession, requestedNativeCallUuid, stopOutgoingRingback, threadId]);
+
+  useEffect(() => {
+    const descriptor = acceptedIosNativeMediaDescriptorRef.current;
+    if (!descriptor || !acceptedNativeAudioCallUuid || !waitingForIosNativeAudioSession) {
+      nativeAudioReadinessDeadlineRef.current = null;
+      return;
+    }
+    if (iosNativeAnswerRecoveryBlocked) return;
+    // Bound the accepted native handoff, not server acceptance or the route
+    // claim. Suspended JavaScript may deliver this timer later; it never grants
+    // audio authority, and incidental renders must not restart its deadline.
+    const nowMs = globalThis.performance?.now?.() ?? Date.now();
+    if (nativeAudioReadinessDeadlineRef.current?.descriptor !== descriptor) {
+      nativeAudioReadinessDeadlineRef.current = { descriptor, deadlineMs: nowMs + 15_000 };
+    }
+    const deadline = nativeAudioReadinessDeadlineRef.current;
+    const ownsOperation = captureCallOperation();
+    const isCurrent = () => ownsOperation()
+      && acceptedIosNativeMediaDescriptorRef.current === descriptor
+      && exactIosAcceptedMediaInvite(activeCallInviteRef.current, descriptor);
+    let canceled = false;
+    const timer = setTimeout(() => {
+      if (canceled || !isCurrent() || nativeAudioSessionCallUuidRef.current === descriptor.callUuid) return;
+      setIosNativeAnswerRecoveryBlocked(true);
+      setCallPanelOpen(true);
+      const message = "Call audio did not become ready. Ending this call safely. You can use End Call to retry cleanup.";
+      setError(message);
+      setCallControlError(message);
+      setCallDeliveryStatus(message);
+      void (async () => {
+        const invite = activeCallInviteRef.current;
+        if (!invite || !isCurrent()) return;
+        // Recheck ownership at every asynchronous boundary: a queued timeout
+        // must never end a replacement call or act for a replaced account.
+        const settled = await terminateIosAcceptedNativeAnswer({
+          authenticatedUserId: currentUserId, callUuid: descriptor.callUuid,
+          descriptor, invite, reason: "native_audio_activation_timeout",
+          threadId, trustedNativeClaim: trustedNativeCallClaim,
+        }, {
+          delay: (ms: number) => isCurrent() ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve(),
+          endNative: (uuid: string, reason: string) => isCurrent() ? endIosNativeCall(uuid, reason) : false,
+          readInvite: (inviteId: string) => isCurrent() ? readChillyChatCallInvite(inviteId) : null,
+          updateInvite: (latest: ChillyChatCallInvite) => isCurrent()
+            ? updateChillyChatCallInviteStatus({ actorUserId: currentUserId!, invite: latest, status: "ended" }) : null,
+        });
+        if (!isCurrent()) return;
+        const terminal = settled ? await readChillyChatCallInvite(descriptor.inviteId).catch(() => null) : null;
+        if (!isCurrent()) return;
+        if (!settled || !exactIosAcceptedMediaInvite(terminal, descriptor)
+          || !TERMINAL_CHAT_CALL_INVITE_STATUSES.has(terminal?.status ?? "")) {
+          const message = "Call audio did not become ready, and cleanup could not finish. Use End Call to retry safely.";
+          setError(message);
+          setCallControlError(message);
+          setCallDeliveryStatus(message);
+          return;
+        }
+        if (await finishTerminalInviteCleanup(terminal!, isCurrent)) void loadThreadState();
+      })();
+    }, Math.max(0, deadline.deadlineMs - nowMs));
+    return () => { canceled = true; clearTimeout(timer); };
+  }, [acceptedNativeAudioCallUuid, captureCallOperation, currentUserId, finishTerminalInviteCleanup,
+    iosNativeAnswerRecoveryBlocked, loadThreadState, threadId, trustedNativeCallClaim, waitingForIosNativeAudioSession]);
 
   useEffect(() => {
     const candidate = acceptedIosNativeMediaDescriptorRef.current;
@@ -2699,6 +2767,8 @@ export default function ChillyChatThreadScreen() {
         );
       }
       if (event.type === "audioSessionActivated") {
+        // Receipt wins over a queued deadline even before React commits state.
+        nativeAudioSessionCallUuidRef.current = activeIosNativeAudioCallUuid;
         setNativeAudioSessionCallUuid(activeIosNativeAudioCallUuid);
       }
     });
