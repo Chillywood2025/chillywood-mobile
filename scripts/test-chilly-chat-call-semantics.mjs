@@ -2113,15 +2113,40 @@ assert.match(
   /const loadThreadState = useCallback\(async \(\) => \{[\s\S]{0,200}const read = beginThreadRead\(\)[\s\S]{0,140}isThreadReadCurrent\(read\)[\s\S]{0,1250}if \(!isCurrent\(\)\) return;[\s\S]{0,180}reconcileEndedCallState\(loadedThread, isCurrent\)/u,
   "thread-state loading rejects obsolete session/read generations before call reconciliation",
 );
+const nativeAudioGateStart = chatThreadSource.indexOf("const acceptedNativeAudioDescriptor =");
+const nativeAudioGateEnd = chatThreadSource.indexOf("  const {\n    room: callRoom", nativeAudioGateStart);
+assert.ok(nativeAudioGateStart >= 0 && nativeAudioGateEnd > nativeAudioGateStart,
+  "the current accepted CallKit audio gate is present");
+const nativeAudioGateSource = chatThreadSource.slice(nativeAudioGateStart, nativeAudioGateEnd);
 assert.match(
-  chatThreadSource,
-  /nativeAudioSessionCallUuid !== requestedNativeCallUuid[\s\S]{0,900}enabled:[\s\S]{0,260}!waitingForIosNativeAudioSession/u,
-  "iOS CallKit media initialization waits for the matching native audio-session activation",
+  nativeAudioGateSource,
+  /const acceptedNativeAudioCallUuid = Platform\.OS === "ios" && isSignedIn\s*&& doesIosAcceptedCallKitMediaDescriptorOwnSession\(\{\s*authenticatedUserId: currentUserId,\s*descriptor: acceptedNativeAudioDescriptor,\s*inviteId: activeCallInvite\?\.id,\s*inviteStatus: activeCallInvite\?\.status,\s*mediaProvider: activeCallInvite\?\.mediaProvider,\s*roomId: activeCallRoomId,\s*threadId,\s*\}\) \? acceptedNativeAudioDescriptor\?\.callUuid \?\? "" : ""/u,
+  "accepted CallKit readiness remains bound to the exact signed-in account, invite, provider, room, and thread after the routing claim expires",
+);
+assert.match(
+  nativeAudioGateSource,
+  /const activeIosNativeAudioCallUuid = acceptedNativeAudioCallUuid \|\| \(\s*Platform\.OS === "ios" && requestedNativeCallAction === "answer"\s*&& requestedNativeCallOwnsTransition \? requestedNativeCallUuid : ""\s*\);/u,
+  "the routing fallback requires the still-owned iOS Answer transition; ordinary foreground calls do not acquire a CallKit gate",
+);
+assert.match(
+  nativeAudioGateSource,
+  /const waitingForIosNativeAudioSession = !!activeIosNativeAudioCallUuid\s*&& nativeAudioSessionCallUuid !== activeIosNativeAudioCallUuid;/u,
+  "iOS CallKit media waits for activation matching the current accepted or attested Answer UUID",
 );
 assert.match(
   chatThreadSource,
-  /event\.type === "audioSessionActivated"[\s\S]{0,180}setNativeAudioSessionCallUuid\(requestedNativeCallUuid\)/u,
-  "only CallKit audio-session activation releases the matching accepted call's media gate",
+  /enabled: shouldActivateAcceptedChatCallMedia\(\{[\s\S]{0,220}\}\) && !waitingForIosNativeAudioSession && !iosNativeAnswerRecoveryBlocked/u,
+  "accepted media requires native readiness and cannot bypass blocked native recovery",
+);
+assert.match(
+  chatThreadSource,
+  /const appliesToActiveCall = !eventCallUuid \|\| eventCallUuid === activeIosNativeAudioCallUuid;\s*if \(!appliesToActiveCall\) return;/u,
+  "a different explicit native call UUID cannot release the current call's media gate",
+);
+assert.match(
+  chatThreadSource,
+  /if \(event\.type === "audioSessionActivated"\) \{[\s\S]{0,320}setNativeAudioSessionCallUuid\(activeIosNativeAudioCallUuid\)/u,
+  "only native audio activation releases the current accepted CallKit media gate",
 );
 assert.doesNotMatch(
   rootLayoutSource,
