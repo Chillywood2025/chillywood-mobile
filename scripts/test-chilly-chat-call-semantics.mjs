@@ -2638,7 +2638,39 @@ assert.match(legacyRealtimeFailureBlock, /presenceRegistrationRef\.current\.subs
 assert.match(legacyRealtimeFailureBlock,
   /requestLegacySessionRestart\(status === "CHANNEL_ERROR"\s*\? "realtime_error"\s*: status === "TIMED_OUT"\s*\? "realtime_timeout"\s*: "realtime_closed", sessionGeneration\)/u,
   "every Realtime terminal/error status rebuilds the exact-generation transport instead of only changing UI state");
-assert.match(communicationSessionSource, /mappedState === "failed"\) requestLegacySessionRestart\("peer_failed", generation\)[\s\S]{0,140}mappedState === "disconnected"\) requestLegacySessionRestart\("peer_disconnected", generation\)/u, "peer failures enter the same generation-bound recovery supervisor");
+const preservesPeerRecoverySupervisor = (source) => (
+  /if \(!isCurrentPeer\(\)\) return;\s*const mappedState = readPeerConnectionState\(peerConnection\);/u.test(source)
+  && /if \(mappedState === "failed"\) requestLegacySessionRestart\("peer_failed", generation\);\s*else if \(mappedState === "disconnected"\) requestLegacySessionRestart\("peer_disconnected", generation, \{\s*peer: peerConnection, isStillNeeded: \(\) => isCurrentPeer\(\) && readPeerConnectionState\(peerConnection\) !== "connected",\s*\}\);/u.test(source)
+);
+for (const event of ["connectionstatechange", "iceconnectionstatechange"]) {
+  const marker = `(peerConnection as any).addEventListener("${event}", () => {`;
+  const start = communicationSessionSource.indexOf(marker);
+  assert.notEqual(start, -1, `${event} recovery handler exists`);
+  assert.equal(communicationSessionSource.indexOf(marker, start + marker.length), -1,
+    `${event} recovery handler is unambiguous`);
+  const end = communicationSessionSource.indexOf("\n    });", start);
+  assert.ok(end > start, `${event} recovery handler has its expected boundary`);
+  const handler = communicationSessionSource.slice(start, end);
+  assert.equal(preservesPeerRecoverySupervisor(handler), true,
+    `${event} failures use exact-generation recovery with a current disconnected-peer owner`);
+  for (const [before, after, description] of [
+    ["if (!isCurrentPeer()) return;", "", "missing event ownership"],
+    ["const mappedState = readPeerConnectionState(peerConnection);", "const mappedState = readPeerConnectionState(otherPeer);", "wrong observed peer"],
+    ['requestLegacySessionRestart("peer_failed", generation);', 'void 0;', "missing failed recovery"],
+    ['requestLegacySessionRestart("peer_failed", generation);', 'requestLegacySessionRestart("peer_failed", otherGeneration);', "wrong failed generation"],
+    ['requestLegacySessionRestart("peer_disconnected", generation, {', 'unrelatedRestart("peer_disconnected", generation, {', "missing disconnected supervisor"],
+    ['requestLegacySessionRestart("peer_disconnected", generation, {', 'requestLegacySessionRestart("peer_disconnected", otherGeneration, {', "wrong disconnected generation"],
+    ["peer: peerConnection", "peer: otherPeer", "wrong disconnected owner"],
+    ["isStillNeeded: () => isCurrentPeer() && ", "isStillNeeded: () => ", "missing delayed ownership check"],
+    ['readPeerConnectionState(peerConnection) !== "connected"', "true", "missing recovered-state check"],
+    ['requestLegacySessionRestart("peer_disconnected", generation, {\n        peer: peerConnection, isStillNeeded: () => isCurrentPeer() && readPeerConnectionState(peerConnection) !== "connected",\n      });', 'requestLegacySessionRestart("peer_disconnected", generation);', "obsolete unowned two-argument call"],
+  ]) {
+    const mutant = handler.replace(before, after);
+    assert.notEqual(mutant, handler, `${event}: ${description} changes the actual handler`);
+    assert.equal(preservesPeerRecoverySupervisor(mutant), false,
+      `${event}: recovery guard rejects ${description}`);
+  }
+}
 const activeInviteReconciliationSource = chatThreadSource.slice(
   chatThreadSource.indexOf("const reconcileActiveInvite"),
   chatThreadSource.indexOf("const otherMember ="),
