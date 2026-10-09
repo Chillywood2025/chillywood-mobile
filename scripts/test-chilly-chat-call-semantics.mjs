@@ -2549,7 +2549,7 @@ const foregroundMediaRestoreSource = communicationSessionSource.slice(
 const preservesVideoForegroundRecovery = (source) => (
   /nextCameraEnabled[\s\S]{0,500}ensureTrackKind\("video", \{[\s\S]{0,140}attachToPeers: false,[\s\S]{0,140}expectedGeneration: generation,[\s\S]{0,260}if \(!restoredCameraTrack\)[\s\S]{0,180}setCameraEnabled\(false\)[\s\S]{0,120}return false;/u.test(source)
   && source.includes("attachMissingLocalTracks(peerConnection, false, generation)")
-  && source.indexOf("renegotiateAllPeers(true)") > source.indexOf("attachMissingLocalTracks(peerConnection, false, generation)")
+  && source.indexOf("renegotiateAllPeers(true, canReuseNegotiatedCamera)") > source.indexOf("attachMissingLocalTracks(peerConnection, false, generation)")
   && source.includes("sender.track === restoredCameraTrack")
   && !/nextCameraEnabled[\s\S]{0,260}ensureInitialLocalStream\(false\)/u.test(source)
 );
@@ -2587,6 +2587,15 @@ assert.equal(
   false,
   "the regression guard rejects successful foreground recovery without sender readback",
 );
+for (const replacement of ["true", "renegotiateAllPeers(false, canReuseNegotiatedCamera)", "renegotiateAllPeers(true)"]) {
+  assert.equal(
+    preservesVideoForegroundRecovery(
+      foregroundMediaRestoreSource.replace("renegotiateAllPeers(true, canReuseNegotiatedCamera)", replacement),
+    ),
+    false,
+    "foreground camera recovery retains forced negotiation with the exact initial-camera reuse predicate",
+  );
+}
 assert.equal(
   preservesGenerationBoundTrackRecovery(trackKindRecoverySource),
   true,
