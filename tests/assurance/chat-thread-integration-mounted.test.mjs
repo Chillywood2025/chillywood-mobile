@@ -537,7 +537,7 @@ for (const interruption of ["system-mute", "system-mute-with-old-ack", "system-m
   });
 }
 
-for (const scenario of ["no feedback", "matching feedback", "queued retirement", "opposite system control", "settled system mute", "End", "account replacement"]) {
+for (const scenario of ["no feedback", "system Mute during retirement", "queued retirement", "opposite system control", "settled system mute", "End", "account replacement"]) {
 test(`full iPhone background retirement preserves microphone ownership through ${scenario}`, async () => {
   let elapsed = 0;
   const h = await mountFullChatThread({ ...nativeIds, platform: "ios",
@@ -558,10 +558,9 @@ test(`full iPhone background retirement preserves microphone ownership through $
     assert.equal(h.runtime.snapshot.callChannelState, "live");
     assert.equal(live("audio").length, 1);
     assert.equal(live("video").length, 1);
-    // Expire the actual consumed native transition claim through its clock
-    // boundary. The accepted session remains current, but no longer has the
-    // short-lived background-audio transition authority. Do not replace refs
-    // or bypass the screen's production restartDisconnectedSession setting.
+    // A healthy accepted session retains background audio after its one-use
+    // navigation claim expires. Retirement here requires a real missing media
+    // prerequisite; an ended native audio track supplies that receipt below.
     elapsed = 31_000;
     await h.rerender({});
     const wait = new Promise(resolve => { release = resolve; });
@@ -571,10 +570,12 @@ test(`full iPhone background retirement preserves microphone ownership through $
       await h.run(() => { cameraOperation = h.runtime.snapshot.handleToggleCallCamera(); });
       assert.equal(media.membershipTouches.length, writesBefore + 1, "Camera Off owns the held durable write");
     }
-    await h.run(() => media.emitAppState("background"));
+    await h.run(() => {
+      media.localStreams.flatMap(stream => stream.getAudioTracks()).forEach(track => track.stop());
+      return media.emitAppState("background");
+    });
     assert.equal(h.runtime.snapshot.callChannelState, "reconnecting");
-    assert.equal(live("audio").length, scenario === "queued retirement" ? 1 : 0,
-      "queued retirement has not touched audio; executing retirement already blocks it");
+    assert.equal(live("audio").length, 0, "ended audio cannot be preserved or reacquired in the background");
     assert.equal(live("video").length, 0);
     if (scenario === "queued retirement") {
       assert.equal(media.membershipTouches.length, writesBefore + 1, "automatic Mute still waits behind Camera Off's durable write");
@@ -622,11 +623,14 @@ test(`full iPhone background retirement preserves microphone ownership through $
       assert.equal(live("audio").length, 0);
       assert.equal(live("video").length, 0);
     } else {
-      const recoverMic = !["queued retirement", "opposite system control", "settled system mute"].includes(scenario);
+      // The track was already ended before automatic retirement. No new
+      // track transition can reserve a matching native Mute acknowledgment;
+      // any actual system Mute must cancel the retained microphone intent.
+      const recoverMic = scenario === "no feedback";
       assert.equal(media.joinCalls.length, 2, "foreground recovery obtains a fresh authorized admission");
       assert.equal(live("video").length, scenario === "queued retirement" ? 0 : 1);
       assert.equal(live("audio").length, recoverMic ? 1 : 0,
-        "retirement feedback preserves user-on intent; a subsequent system Mute cancels it");
+        "missing capture preserves user-on intent only without a new system Mute");
       assert.equal(h.runtime.snapshot.micEnabled, recoverMic);
       assert.equal(media.durableMic, recoverMic);
     }
@@ -1427,6 +1431,45 @@ for (const activationTiming of ["before unmount", "between screens"]) {
     await replacement.run(() => replacement.runtime.snapshot.handleJoinOrCloseCall());
     assert.equal(replacement.runtime.invite.status, "ended");
     assert.deepEqual(Array.from(root.nativeSteps).filter(step => step.name === "end").map(({uuid}) => uuid), [rootNativeIds.uuid]);
+  });
+}
+
+for (const remounted of [false, true]) {
+  test(`accepted native iOS ${remounted ? "remounted" : "original"} screen preserves activated audio on Home while stopping video`, async (t) => {
+    const root = await mountIosRoot(t, { realFacade: true });
+    await root.event(makeNativeEvent("incoming"));
+    await root.event(makeNativeEvent("answerRequested"));
+    const destination = new URL(root.routes[0], "https://test.invalid");
+    const options = { userId: rootNativeIds.user,
+      remoteUserId: "00000000-0000-4000-8000-000000000099", threadId: rootNativeIds.thread,
+      platform: "ios", sessionGeneration: rootNativeIds.session, nativeFacade: root.facade };
+    let screen = await mountFullChatThread({ ...options, invite: { id: rootNativeIds.invite },
+      routeParams: Object.fromEntries(destination.searchParams) });
+    await screen.run(() => root.event(makeNativeEvent("audioSessionActivated")));
+    if (remounted) {
+      const invite = { ...screen.runtime.invite };
+      await screen.unmount();
+      screen = await mountFullChatThread({ ...options, invite });
+    }
+    t.after(() => screen.unmount());
+    const stream = screen.runtime.media.localStreams[0];
+    const audio = stream.getAudioTracks()[0];
+    assert.equal(audio.enabled, true);
+    await screen.appState("background");
+    assert.equal(audio.readyState, "live");
+    assert.equal(audio.enabled, true, "Home preserves the accepted native session's already activated microphone");
+    assert.equal(screen.runtime.snapshot.micEnabled, true);
+    assert.equal(screen.runtime.media.durableMic, true);
+    assert.ok(stream.getVideoTracks().every(track => track.readyState === "ended"), "background never retains camera capture");
+    await screen.run(() => root.event(makeNativeEvent("muted")));
+    assert.equal(audio.enabled, false, "a genuine system Mute remains authoritative in the background");
+    await screen.appState("active");
+    assert.equal(screen.runtime.snapshot.micEnabled, false, "foreground does not undo the newer system Mute");
+    const captureCount = screen.runtime.media.localStreams.length;
+    await screen.run(() => root.event(makeNativeEvent("audioSessionDeactivated")));
+    assert.equal(audio.readyState, "ended", "background eligibility cannot outlive native audio ownership");
+    await screen.appState("background");
+    assert.equal(screen.runtime.media.localStreams.length, captureCount, "Home cannot reacquire revoked audio ownership");
   });
 }
 

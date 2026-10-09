@@ -1244,9 +1244,9 @@ export default function ChillyChatThreadScreen() {
       inviteStatus: activeCallInvite?.status,
     }) && !waitingForIosNativeAudioSession && !iosNativeAnswerRecoveryBlocked && !unclaimedIosNativeMediaBlocked,
     allowBackgroundAudio: Platform.OS === "ios"
-      && requestedNativeCallAction === "answer"
-      && requestedNativeCallOwnsTransition
-      && !!requestedNativeCallUuid,
+      && !!acceptedNativeAudioCallUuid
+      && retainedIosNativeMediaSession?.nativeAuthorityCurrent === true
+      && !waitingForIosNativeAudioSession,
     mediaActivationSerial: nativeMediaActivationSerial,
     iosAcceptedCallKitMediaDescriptor: acceptedIosNativeMediaDescriptorRef.current,
     nativeForegroundActivationInviteId:
