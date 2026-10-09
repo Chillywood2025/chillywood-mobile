@@ -18,18 +18,42 @@ private final class CXCallObserver {
 private final class AVAudioSession {
   enum Category { case playAndRecord }
   enum Mode { case voiceChat, videoChat }
-  enum Option { case allowBluetoothHFP, allowBluetoothA2DP }
+  enum Option: Hashable { case allowBluetoothHFP, allowBluetoothA2DP, defaultToSpeaker }
+  enum PortOverride { case none, speaker }
+  enum Port { case builtInReceiver, builtInSpeaker, bluetoothHFP, headphones }
+  struct PortDescription { let portType: Port }
+  struct RouteDescription { let outputs: [PortDescription] }
   static let shared = AVAudioSession()
   static func sharedInstance() -> AVAudioSession { shared }
   var categories: [(Category, Mode, [Option])] = []
   var activations: [Bool] = []
   var failCategory = false
+  var failOverride = false
+  var effectiveOptions: Set<Option> = []
+  var outputOverride = PortOverride.none
+  var accessory: Port?
+  var currentRoute: RouteDescription {
+    let port = outputOverride == .speaker ? Port.builtInSpeaker
+      : accessory ?? (effectiveOptions.contains(.defaultToSpeaker) ? .builtInSpeaker : .builtInReceiver)
+    return RouteDescription(outputs: [PortDescription(portType: port)])
+  }
   func setCategory(_ category: Category, mode: Mode, options: [Option]) throws {
     if failCategory { throw NSError(domain: "native-category", code: -50) }
     categories.append((category, mode, options))
+    // Apple AVAudioSessionTypes.h / Mode.videoChat: videoChat implicitly applies
+    // defaultToSpeaker. PortOverride.none only removes a transient override;
+    // it cannot remove that category/mode default. This is a controlled API
+    // contract model, not observed hardware or acoustic evidence.
+    effectiveOptions = Set(options).union([.allowBluetoothHFP])
+    if mode == .videoChat { effectiveOptions.insert(.defaultToSpeaker) }
+  }
+  func overrideOutputAudioPort(_ port: PortOverride) throws {
+    if failOverride { throw NSError(domain: "NSOSStatusErrorDomain", code: -50) }
+    outputOverride = port
   }
   func setActive(_ active: Bool) throws { activations.append(active) }
 }
+private var routeDiagnostics: [String] = []
 private final class Probe {
   var isBuildEnabled = true
   var isRuntimeDefaultEnabled = true
@@ -41,6 +65,12 @@ private final class Probe {
   var requestedAnswerTransactions: Set<UUID> = []
   var terminal: Set<String> = []
   var events: [[String: Any]] = []
+  private let audioSessionDiagnostics = ChillywoodNativeCallDiagnostics(infoDictionary: [
+    "ChillywoodNativeCallDiagnosticsEnabled": true,
+    "ChillywoodNativeCallDiagnosticsChannel": "ios-internal-v2",
+    "ChillywoodNativeCallsBuildEnabled": true,
+    "ChillywoodNativeCallsRuntimeDefaultEnabled": true,
+  ]) { routeDiagnostics.append($0) }
   func persistedVoipAuthority() -> NativeVoipAuthority? { authority }
   func isTerminalInvite(_ inviteId: String) -> Bool { terminal.contains(inviteId) }
   func emitRaw(_ event: [String: Any]) { events.append(event) }
@@ -70,12 +100,64 @@ private func probe() -> Probe {
   UIApplication.shared.applicationState = .active
   CXCallObserver.inventory = []
   AVAudioSession.shared.categories = []; AVAudioSession.shared.activations = []; AVAudioSession.shared.failCategory = false
+  AVAudioSession.shared.failOverride = false; AVAudioSession.shared.effectiveOptions = []
+  AVAudioSession.shared.outputOverride = .none; AVAudioSession.shared.accessory = nil
+  routeDiagnostics = []
   let value = Probe()
   value.authority = NativeVoipAuthority(userId: expectedAuthority.userId, accountId: expectedAuthority.userId,
     sessionGeneration: expectedAuthority.sessionGeneration, installId: expectedAuthority.installId)
   return value
 }
 private func owner(_ value: [String: Any]) -> String { value["ownerId"] as! String }
+
+// The platform model must retain the implicit video-chat speaker default even
+// when the transient override is released. Otherwise the V10 regression would
+// pass by assuming receiver whenever the app requests .none.
+do {
+  _ = probe()
+  let session = AVAudioSession.shared
+  try session.setCategory(.playAndRecord, mode: .videoChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
+  try session.overrideOutputAudioPort(.speaker)
+  try session.overrideOutputAudioPort(.none)
+  expect(session.currentRoute.outputs.first?.portType == .builtInSpeaker,
+    "videoChat platform contract retains implicit speaker after removing override")
+}
+for video in [true, false] {
+  let p = probe(), b = binding(video: video), session = AVAudioSession.shared
+  try p.beginOutgoingAudioHandoff(b); try p.prepareOutgoingAudioHandoff(owner(b))
+  expect(session.activations.isEmpty, "category prepare never activates or deactivates audio")
+  // Execute actual production prepare and route declarations together. Video's
+  // normal initial speaker request belongs to the app's existing route policy.
+  try p.setAudioRoute("speaker")
+  expect(session.currentRoute.outputs.first?.portType == .builtInSpeaker,
+    "explicit speaker request selects speaker after outgoing preparation")
+  try p.setAudioRoute("receiver")
+  expect(session.currentRoute.outputs.first?.portType == .builtInReceiver,
+    "video and voice receiver selection can release speaker after outgoing preparation")
+  expect(routeDiagnostics.last?.contains("phase=audio_route_immediate_receiver ") == true,
+    "actual coordinator diagnostics sample modeled receiver after release")
+  expect(session.categories.count == 1 && session.activations.isEmpty,
+    "speaker and receiver taps do not recategorize or activate the owned session")
+  try p.prepareOutgoingAudioHandoff(owner(b))
+  expect(session.currentRoute.outputs.first?.portType == .builtInReceiver && session.categories.count == 1,
+    "same-owner preparation does not restore an implicit speaker preference")
+  for accessory in [AVAudioSession.Port.bluetoothHFP, .headphones] {
+    session.accessory = accessory
+    try p.setAudioRoute("speaker")
+    try p.setAudioRoute("receiver")
+    expect(session.currentRoute.outputs.first?.portType == accessory,
+      "releasing speaker preserves the eligible system accessory route")
+    try p.setAudioRoute("system")
+    expect(session.currentRoute.outputs.first?.portType == accessory,
+      "existing system selection retains eligible accessory routing")
+  }
+  expect(session.activations.isEmpty, "route changes never activate or deactivate shared audio")
+  session.failOverride = true
+  rejects("native route failure stays a failure after successful preparation") { try p.setAudioRoute("receiver") }
+  expect(routeDiagnostics.last?.contains("phase=audio_route_failed ") == true
+    && routeDiagnostics.last?.contains("error_domain=NSOSStatusErrorDomain error_code=-50") == true,
+    "native route error remains bounded and truthful")
+}
 
 for video in [false, true] {
   let p = probe(), b = binding(video: video)
@@ -84,7 +166,7 @@ for video in [false, true] {
   try p.prepareOutgoingAudioHandoff(owner(b))
   expect(p.prepared && AVAudioSession.shared.categories.count == 1, "real six-character room admits category preparation")
   expect(AVAudioSession.shared.categories[0].0 == .playAndRecord
-    && AVAudioSession.shared.categories[0].1 == (video ? .videoChat : .voiceChat)
+    && AVAudioSession.shared.categories[0].1 == .voiceChat
     && AVAudioSession.shared.categories[0].2 == [.allowBluetoothHFP, .allowBluetoothA2DP], "voice/video category has exact options")
   expect(AVAudioSession.shared.activations.isEmpty, "category prepare never activates or deactivates audio")
   try p.beginOutgoingAudioHandoff(b); try p.prepareOutgoingAudioHandoff(owner(b))

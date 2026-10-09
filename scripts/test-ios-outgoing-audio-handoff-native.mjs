@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const nativePath = join(root, "modules/chillywood-native-calls/ios");
 const source = readFileSync(join(nativePath, "ChillywoodNativeCallCoordinator.swift"), "utf8");
+const diagnostics = readFileSync(join(nativePath, "ChillywoodNativeCallDiagnostics.swift"), "utf8");
 const harness = readFileSync(join(root, "tests/native/ChillywoodOutgoingAudioHandoffTests.swift"), "utf8");
 const compiler = process.env.CHILLYWOOD_SWIFTC
   || (process.env.SWIFT_PATH ? join(process.env.SWIFT_PATH, "swiftc") : "swiftc");
@@ -38,9 +39,10 @@ const members = [
   "private func outgoingAudioHandoffIsAvailable(",
   "public func beginOutgoingAudioHandoff(", "public func prepareOutgoingAudioHandoff(",
   "public func retireOutgoingAudioHandoff(",
+  "public func setAudioRoute(_ route: String) throws {",
 ];
 function generated(text) {
-  return harness.replace("// INSERT_DECLARATIONS", declarations.map(marker => declaration(text, marker)).join("\n"))
+  return diagnostics + "\n" + harness.replace("// INSERT_DECLARATIONS", declarations.map(marker => declaration(text, marker)).join("\n"))
     .replace("// INSERT_MEMBERS", members.map(marker => declaration(text, marker)).join("\n"));
 }
 function run(label, text, expectedFailure) {
@@ -77,6 +79,11 @@ try {
   run("callkit-pending-ignored", mutation("&& activeCalls.isEmpty && pendingIncomingReports.isEmpty", "&& activeCalls.isEmpty"), "pending native report blocks begin");
   run("takeover-not-retired", mutation("didSet { if !pendingIncomingReports.isEmpty { invalidateOutgoingAudioHandoff() } }", "didSet {}"), "pending report retires old owner even after report removal");
   run("prepare-activates-session", mutation("outgoingAudioHandoff?.prepared = true", "try AVAudioSession.sharedInstance().setActive(true)\n    outgoingAudioHandoff?.prepared = true"), "category prepare never activates or deactivates audio");
-  console.log(checkSource ? "Outgoing handoff declarations and seven mutations generated; Swift execution NOT RUN."
-    : "Production outgoing handoff guards and seven mutation controls passed; platform API receipts are controlled.");
+  const prepare = declaration(source, "public func prepareOutgoingAudioHandoff(");
+  assert.equal(prepare.split("mode: .voiceChat").length, 2, "one owned outgoing mode selection");
+  run("videochat-implicit-speaker-restored", source.replace(prepare,
+    prepare.replace("mode: .voiceChat", "mode: handoff.video ? .videoChat : .voiceChat")),
+  "video and voice receiver selection can release speaker after outgoing preparation");
+  console.log(checkSource ? "Outgoing handoff declarations and eight mutations generated; Swift execution NOT RUN."
+    : "Production outgoing handoff guards and eight mutation controls passed; platform API receipts are controlled.");
 } finally { rmSync(temporary, { recursive: true, force: true }); }

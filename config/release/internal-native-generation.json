@@ -1,25 +1,25 @@
 {
   "schemaVersion": 1,
-  "generation": "internal-native-v10",
+  "generation": "internal-native-v11",
   "channels": {
     "android": "android-internal-v2",
     "ios": "ios-internal-v2"
   },
   "runtimeVersions": {
-    "android": "1.0.0-android-production-v10",
-    "ios": "1.0.0-ios-production-v10"
+    "android": "1.0.0-android-production-v11",
+    "ios": "1.0.0-ios-production-v11"
   },
   "supersedes": {
-    "generation": "internal-native-v9",
-    "androidRuntimeVersion": "1.0.0-android-production-v9",
-    "iosRuntimeVersion": "1.0.0-ios-production-v9",
-    "androidCompatibilityDigest": "b1014a5a8ebbb141681d7fdb84ca0936a8ea7540ebbc9db6e06ac968955b7423",
-    "iosCompatibilityDigest": "689853a943957695b4974b389284ae38b773898b22dfc19870cad8598d5b2ce5"
+    "generation": "internal-native-v10",
+    "androidRuntimeVersion": "1.0.0-android-production-v10",
+    "iosRuntimeVersion": "1.0.0-ios-production-v10",
+    "androidCompatibilityDigest": "2455a67cb9bff63f5dc1f4d526ad7c0164b15cad98bcdd9cfa45f863963e15e5",
+    "iosCompatibilityDigest": "9f52e04acd6e7c00b058096c3a53cc3a9c42b7eacf2c9d846f8e0ab7b2879b5a"
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
-    "androidDigest": "2455a67cb9bff63f5dc1f4d526ad7c0164b15cad98bcdd9cfa45f863963e15e5",
-    "iosDigest": "9f52e04acd6e7c00b058096c3a53cc3a9c42b7eacf2c9d846f8e0ab7b2879b5a"
+    "androidDigest": "321a7ef31e17ec16eeefe3fcdd1886ad0075fbeb02bd3452430e78205c592ba8",
+    "iosDigest": "97aa914a321e38ad70900a735dbe79df01ca9b9c3503d4be7a6c6f528529939c"
   },
   "policy": {
     "internalOnly": true,
@@ -37,6 +37,6 @@
         "group": "Chillywood Internal"
       }
     },
-    "reason": "Paired testing of installed Android 100 and iOS 35 reproduced outgoing iPhone speaker override failures while audio remained configured for playback after ringback. V10 isolates the owned sound-to-call audio handoff repair for renewed source validation, native compilation and paired testing. It does not claim physical audio/video confirmation or completion of the qualification matrix. Fresh binaries remain restricted to the existing Google Play internal and TestFlight Chillywood Internal audiences. Installed v9 and earlier cohorts and their evidence remain immutable. Media diagnostics remain limited to the reviewed internal store profiles and matching signed channels. This generation does not authorize OTA publication or public release."
+    "reason": "Paired testing of installed Android 101 and iOS 36 observed successful outgoing iPhone voice route changes, but a video receiver request retained an immediate speaker output. VideoChat mode implicitly defaults to speaker, so clearing its output override cannot establish receiver selection. V11 keeps outgoing call audio in VoiceChat mode while the existing explicit video speaker request selects the initial route. Fresh source validation, native compilation and paired retesting are required; no physical audio/video confirmation or completed qualification matrix is claimed. Fresh binaries remain restricted to the existing Google Play internal and TestFlight Chillywood Internal audiences. Installed v10 and earlier cohorts and their evidence remain immutable. Media diagnostics remain limited to the reviewed internal store profiles and matching signed channels. This generation does not authorize OTA publication or public release."
   }
 }

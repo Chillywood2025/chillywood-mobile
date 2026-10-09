@@ -1117,8 +1117,10 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     // The exact outgoing sound owner has drained before this commit. Incoming
     // CallKit preparation owns its separate path. Category preparation does not
     // activate the session, request permission, or begin microphone capture.
+    // Keep video speaker selection in the app's explicit route policy. videoChat
+    // implicitly adds defaultToSpeaker, which receiver's .none cannot remove.
     try AVAudioSession.sharedInstance().setCategory(.playAndRecord,
-      mode: handoff.video ? .videoChat : .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
+      mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
     outgoingAudioHandoff?.prepared = true
   }
 
