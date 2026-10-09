@@ -474,6 +474,112 @@ test("full iPhone screen consumes real native provenance and waits for exact aud
   } finally { await h.unmount(); }
 });
 
+for (const callType of ["voice", "video"]) {
+  test(`full iPhone ${callType} native audio wait survives route claim expiry until current activation`, async () => {
+    let elapsed = 0;
+    const h = await mountFullChatThread({ ...nativeIds, platform: "ios",
+      screenPerformance: { now: () => performance.now() + elapsed },
+      invite: { id: nativeIds.inviteId, callType }, nativeAnswer: { callUuid: nativeIds.callUuid } });
+    try {
+      assert.equal(h.runtime.snapshot.activeCallInvite.status, "accepted");
+      assert.deepEqual(h.runtime.nativeCompletions, [{ uuid: nativeIds.callUuid, connected: true }]);
+      assert.equal(h.runtime.media.joinCalls.length, 0);
+      assert.equal(h.runtime.media.localStreams.length, 0);
+      // Expire the real consumed navigation claim through its clock boundary.
+      // Server acceptance and elapsed time do not manufacture didActivate.
+      elapsed = 31_000;
+      await h.rerender({});
+      assert.equal(h.runtime.media.joinCalls.length, 0, "expired routing authority cannot unlock native audio");
+      assert.equal(h.runtime.media.localStreams.length, 0, "no capture without actual audio readiness");
+      await h.nativeEvent({ type: "audioSessionActivated", callUuid: "10000000-0000-4000-8000-000000000006" });
+      assert.equal(h.runtime.media.localStreams.length, 0, "another native call cannot release the wait");
+      await h.nativeEvent({ type: "audioSessionActivated", callUuid: nativeIds.callUuid });
+      assert.equal(h.runtime.media.joinCalls.length, 1);
+      assert.equal(h.runtime.media.localStreams.length, 1);
+      assert.equal(h.runtime.media.localStreams[0].getAudioTracks().length, 1);
+      assert.equal(h.runtime.media.localStreams[0].getVideoTracks().length, callType === "video" ? 1 : 0);
+      await h.nativeEvent({ type: "audioSessionActivated", callUuid: nativeIds.callUuid });
+      assert.equal(h.runtime.media.localStreams.length, 1, "duplicate readiness cannot repeat capture");
+    } finally { await h.unmount(); }
+  });
+}
+
+for (const retirement of ["End", "account replacement", "call replacement"]) {
+  test(`full iPhone native audio wait ignores retired activation after ${retirement}`, async () => {
+    let elapsed = 0;
+    const h = await mountFullChatThread({ ...nativeIds, platform: "ios",
+      screenPerformance: { now: () => performance.now() + elapsed },
+      invite: { id: nativeIds.inviteId }, nativeAnswer: { callUuid: nativeIds.callUuid } });
+    try {
+      elapsed = retirement === "call replacement" ? 0 : 31_000;
+      await h.rerender({});
+      assert.equal(h.runtime.media.localStreams.length, 0, "claim expiry must leave the accepted call waiting");
+      if (retirement === "account replacement") {
+        // The replacement account's server snapshot has no call. Do not give
+        // the generic media fixture fictitious admission to the retired room.
+        h.runtime.invite = null;
+        h.runtime.thread.activeCommunicationRoomId = null;
+        h.runtime.thread.activeCallType = null;
+        h.runtime.media.userId = "10000000-0000-4000-8000-000000000007";
+        h.runtime.media.admissionPrepareActions.push({ outcome: "reject", message: "communication_chat_call_authority_required" });
+        await h.rerender({ userId: h.runtime.media.userId, sessionGeneration: "session-2" });
+      } else {
+        await h.run(() => h.runtime.snapshot.handleJoinOrCloseCall());
+        assert.equal(h.runtime.snapshot.callPanelOpen, false);
+      }
+      if (retirement === "call replacement") {
+        // Deliver another real root-issued Answer route on the same screen.
+        // The expired claim for the previous call must not own this new wait.
+        const nextUuid = "10000000-0000-4000-8000-000000000008";
+        const nextInvite = "10000000-0000-4000-8000-000000000009";
+        h.runtime.invite = { ...h.runtime.invite, id: nextInvite, status: "ringing",
+          communicationRoomId: "ROOM-REPLACEMENT", expiresAt: new Date(Date.now() + 90_000).toISOString() };
+        h.runtime.thread.activeCommunicationRoomId = "ROOM-REPLACEMENT";
+        h.runtime.thread.activeCallType = "video";
+        h.runtime.roomId = h.runtime.media.roomId = "ROOM-REPLACEMENT";
+        let params;
+        const route = nativeProvenance.createIosCallKitAnswerRouteHandler({
+          getAuthenticatedUserId: () => nativeIds.userId, isActive: () => true,
+          completeAnswerFailure: async () => { throw Error("replacement route was not attested"); },
+          replace: destination => { params = { threadId: nativeIds.threadId,
+            ...Object.fromEntries(new URL(destination, "https://fixture.invalid").searchParams) }; },
+        });
+        assert.equal(await route({ type: "answerrequested", platform: "ios", callType: "video",
+          callInviteId: nextInvite, threadId: nativeIds.threadId, callUuid: nextUuid, nativeEventGeneration: 1 }), "routed");
+        await h.rerender({ params });
+        assert.equal(h.runtime.snapshot.activeCallInvite.id, nextInvite);
+        assert.equal(h.runtime.snapshot.activeCallInvite.status, "accepted");
+        elapsed = 31_000;
+        await h.rerender({});
+        assert.equal(h.runtime.media.localStreams.length, 0, "replacement retains its own readiness wait after claim expiry");
+        await h.nativeEvent({ type: "audioSessionActivated", callUuid: nativeIds.callUuid });
+        assert.equal(h.runtime.media.localStreams.length, 0, "old UUID cannot release replacement audio wait");
+        await h.nativeEvent({ type: "audioSessionActivated", callUuid: nextUuid });
+        assert.equal(h.runtime.media.joinCalls.length, 1);
+        assert.equal(h.runtime.media.joinCalls[0].roomId, "ROOM-REPLACEMENT");
+        assert.equal(h.runtime.media.localStreams.length, 1);
+      } else {
+        await h.nativeEvent({ type: "audioSessionActivated", callUuid: nativeIds.callUuid });
+        assert.equal(h.runtime.media.joinCalls.length, 0);
+        assert.equal(h.runtime.media.localStreams.length, 0, "late activation cannot revive retired capture");
+      }
+    } finally { await h.unmount(); }
+  });
+}
+
+test("full iPhone foreground fallback without CallKit still captures after accepted Answer", async () => {
+  const h = await mountFullChatThread({ ...nativeIds, platform: "ios",
+    invite: { id: nativeIds.inviteId },
+    nativeFacade: { ensureIosForegroundIncomingCallPresentation: async () => "not_expected" } });
+  try {
+    await h.run(() => h.runtime.snapshot.handleAcceptIncomingCall());
+    assert.equal(h.runtime.snapshot.activeCallInvite.status, "accepted");
+    assert.equal(h.runtime.nativeCompletions.length, 0);
+    assert.equal(h.runtime.media.joinCalls.length, 1);
+    assert.equal(h.runtime.media.localStreams.length, 1);
+  } finally { await h.unmount(); }
+});
+
 test("full iPhone screen rejects unissued route claims without accepting or capturing", async () => {
   const h = await mountFullChatThread({ ...nativeIds, platform: "ios",
     invite: { id: nativeIds.inviteId }, routeParams: { callInviteId: nativeIds.inviteId,

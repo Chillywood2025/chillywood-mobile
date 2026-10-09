@@ -61,6 +61,7 @@ import {
   completeIosAcceptedNativeAnswer,
   createIosAcceptedCallKitMediaDescriptor,
   doesForegroundAuthenticatedUiCallIntentOwnAction,
+  doesIosAcceptedCallKitMediaDescriptorOwnSession,
   doesNativeCallActionOwnTransition,
   resolveAcceptedChatCallRoomId,
   resolveIncomingCallRoomJoinAction,
@@ -1074,12 +1075,26 @@ export default function ChillyChatThreadScreen() {
 
     return undefined;
   }, [resolvedCallType]);
-  const waitingForIosNativeAudioSession =
-    Platform.OS === "ios"
-    && requestedNativeCallAction === "answer"
-    && requestedNativeCallOwnsTransition
-    && !!requestedNativeCallUuid
-    && nativeAudioSessionCallUuid !== requestedNativeCallUuid;
+  // The consumed navigation claim expires after handoff. Once CallKit Answer
+  // has an exact accepted descriptor, its audio prerequisite belongs to that
+  // session and must not disappear when the navigation claim ages out.
+  const acceptedNativeAudioDescriptor = acceptedIosNativeMediaDescriptorRef.current;
+  const acceptedNativeAudioCallUuid = Platform.OS === "ios" && isSignedIn
+    && doesIosAcceptedCallKitMediaDescriptorOwnSession({
+      authenticatedUserId: currentUserId,
+      descriptor: acceptedNativeAudioDescriptor,
+      inviteId: activeCallInvite?.id,
+      inviteStatus: activeCallInvite?.status,
+      mediaProvider: activeCallInvite?.mediaProvider,
+      roomId: activeCallRoomId,
+      threadId,
+    }) ? acceptedNativeAudioDescriptor?.callUuid ?? "" : "";
+  const activeIosNativeAudioCallUuid = acceptedNativeAudioCallUuid || (
+    Platform.OS === "ios" && requestedNativeCallAction === "answer"
+    && requestedNativeCallOwnsTransition ? requestedNativeCallUuid : ""
+  );
+  const waitingForIosNativeAudioSession = !!activeIosNativeAudioCallUuid
+    && nativeAudioSessionCallUuid !== activeIosNativeAudioCallUuid;
 
   const {
     room: callRoom,
@@ -2617,10 +2632,10 @@ export default function ChillyChatThreadScreen() {
   ]);
 
   useEffect(() => {
-    if (Platform.OS !== "ios" || !requestedNativeCallUuid) return undefined;
+    if (Platform.OS !== "ios" || !activeIosNativeAudioCallUuid) return undefined;
     return subscribeToIosNativeCallEvents((event) => {
       const eventCallUuid = String(event.callUuid ?? "").trim();
-      const appliesToActiveCall = !eventCallUuid || eventCallUuid === requestedNativeCallUuid;
+      const appliesToActiveCall = !eventCallUuid || eventCallUuid === activeIosNativeAudioCallUuid;
       if (!appliesToActiveCall) return;
       if (event.type === "muted" || event.type === "unmuted") {
         if (eventCallUuid && consumeNativeMicAck(event.type === "muted")) return;
@@ -2640,10 +2655,10 @@ export default function ChillyChatThreadScreen() {
         );
       }
       if (event.type === "audioSessionActivated") {
-        setNativeAudioSessionCallUuid(requestedNativeCallUuid);
+        setNativeAudioSessionCallUuid(activeIosNativeAudioCallUuid);
       }
     });
-  }, [consumeAutomaticMicrophoneFeedback, consumeNativeMicAck, requestedCallInviteId, requestedNativeCallUuid, setMicrophoneEnabled]);
+  }, [activeIosNativeAudioCallUuid, consumeAutomaticMicrophoneFeedback, consumeNativeMicAck, requestedCallInviteId, setMicrophoneEnabled]);
 
   const handleJoinOrCloseCall = useCallback(async (
     expectedInviteId = "",
