@@ -367,6 +367,7 @@ export async function mountFullChatThread(options = {}) {
   }
   const screen = compile(source, "app/chat/[threadId].tsx", modules, {
     runtime, Date: options.screenDate ?? Date,
+    performance: options.screenPerformance ?? performance,
     setTimeout: (fn, delay) => { const timer = { fn, delay }; runtime.timers.push(timer); return timer; },
     clearTimeout: (timer) => { if (timer) timer.canceled = true; },
     setInterval: (fn, delay) => { const timer = { fn, delay }; runtime.intervals.push(timer); return timer; },

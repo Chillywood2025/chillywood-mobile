@@ -50,6 +50,7 @@ const EMPTY_FIRST_MEDIA_STATE: ChatCallFirstMediaState = {
 // routing itself is handled by the native bridge. A fresh callback reissues
 // automatic routes and can erase a failed manual request's error.
 const setLegacySpeaker = async (_enabled: boolean) => false;
+const noAutomaticMicrophoneFeedback = (_muted: boolean) => false;
 
 export function useChatCallMediaSession(options: UseChatCallMediaSessionOptions) {
   const fixedProviderRef = useRef<{
@@ -112,6 +113,7 @@ export function useChatCallMediaSession(options: UseChatCallMediaSessionOptions)
       mediaProvider,
       legacyTransportActive: false,
       liveKitTransportActive: shouldEnableLiveKit,
+      consumeAutomaticMicrophoneFeedback: noAutomaticMicrophoneFeedback,
     };
   }
 

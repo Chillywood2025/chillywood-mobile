@@ -1093,6 +1093,7 @@ export default function ChillyChatThreadScreen() {
     participantCount,
     toggleCamera,
     setMicrophoneEnabled,
+    consumeAutomaticMicrophoneFeedback,
     switchCamera,
     mediaPermissionMessage,
     mediaControlError,
@@ -2623,6 +2624,7 @@ export default function ChillyChatThreadScreen() {
       if (!appliesToActiveCall) return;
       if (event.type === "muted" || event.type === "unmuted") {
         if (eventCallUuid && consumeNativeMicAck(event.type === "muted")) return;
+        if (eventCallUuid && consumeAutomaticMicrophoneFeedback(event.type === "muted")) return;
         void setMicrophoneEnabled(event.type === "unmuted");
         return;
       }
@@ -2641,7 +2643,7 @@ export default function ChillyChatThreadScreen() {
         setNativeAudioSessionCallUuid(requestedNativeCallUuid);
       }
     });
-  }, [consumeNativeMicAck, requestedCallInviteId, requestedNativeCallUuid, setMicrophoneEnabled]);
+  }, [consumeAutomaticMicrophoneFeedback, consumeNativeMicAck, requestedCallInviteId, requestedNativeCallUuid, setMicrophoneEnabled]);
 
   const handleJoinOrCloseCall = useCallback(async (
     expectedInviteId = "",

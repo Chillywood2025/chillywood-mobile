@@ -182,6 +182,7 @@ export async function mountChatAnswer(options = {}) {
     resolveIosForegroundIncomingAnswerAuthority: (outcome) => outcome === "presented" ? "native_answer" : outcome === "not_expected" ? "foreground_answer" : "blocked",
     requestIosNativeCallAnswer: (id, isCurrent) => { runtime.nativeRequests.push(id); return runtime.requestNative(id, isCurrent); },
     setMicrophoneEnabled: async (enabled) => { runtime.mediaMutations.push(enabled); runtime.micEnabled = enabled; return true; },
+    consumeAutomaticMicrophoneFeedback: () => false,
     setIosNativeCallMuted: async (callUuid, muted) => {
       runtime.nativeMuteRequests.push({ callUuid, muted });
       if (runtime.nativeMuteFailure) return false;

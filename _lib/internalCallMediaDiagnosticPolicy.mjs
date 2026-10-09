@@ -1,6 +1,7 @@
 const PHASES = new Set([
   "initial_preferences", "initial_intent", "initial_permissions", "initial_projection",
   "capture_requested", "capture_received", "capture_failed",
+  "automatic_mic_feedback_reserved", "automatic_mic_feedback_settled", "native_mic_feedback",
 ]);
 const APP_STATES = new Set(["active", "background", "inactive", "unknown", "extension"]);
 const PERMISSIONS = new Set(["granted", "denied", "restricted", "undetermined"]);

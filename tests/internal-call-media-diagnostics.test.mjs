@@ -79,6 +79,19 @@ test("receipt rejects unknown phases and fields, caps counts, and never serializ
   assert.equal(parsed(lines[3]).videoTracks, 0);
 });
 
+test("microphone feedback receipts expose only bounded intent and acknowledgement state", () => {
+  const { lines, report } = recorder({ enabled: true, platform: "ios", channel: "ios-internal-v2" });
+  for (const phase of ["automatic_mic_feedback_reserved", "native_mic_feedback", "automatic_mic_feedback_settled"]) {
+    report(phase, { requestedMic: false, enabled: phase === "native_mic_feedback", appState: "background",
+      callUuid: "private-call", authority: "private-account", reason: "private-details" });
+  }
+  assert.equal(lines.length, 3);
+  assert.ok(lines.every(line => !line.includes("private")));
+  assert.deepEqual(lines.map(line => parsed(line).seq), [1, 2, 3]);
+  assert.deepEqual(parsed(lines[1]), { version: 1, phase: "native_mic_feedback", seq: 2,
+    call_hash: "none", platform: "ios", uptime_ms: 123, enabled: true, requestedMic: false, appState: "background" });
+});
+
 test("sequence is session-wide and monotonic clock receipts cannot regress", () => {
   const times = [20.5, 10.2, NaN, Infinity, -1, Number.MAX_SAFE_INTEGER + 1];
   const lines = [];

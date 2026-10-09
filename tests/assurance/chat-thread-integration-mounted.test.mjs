@@ -356,6 +356,103 @@ for (const interruption of ["system-mute", "system-mute-with-old-ack", "system-m
   });
 }
 
+for (const scenario of ["no feedback", "matching feedback", "queued retirement", "opposite system control", "settled system mute", "End", "account replacement"]) {
+test(`full iPhone background retirement preserves microphone ownership through ${scenario}`, async () => {
+  let elapsed = 0;
+  const h = await mountFullChatThread({ ...nativeIds, platform: "ios",
+    screenPerformance: { now: () => performance.now() + elapsed },
+    invite: { id: nativeIds.inviteId, callType: "video" }, nativeAnswer: { callUuid: nativeIds.callUuid } });
+  let release;
+  let cameraOperation;
+  try {
+    const media = h.runtime.media;
+    const live = kind => media.localStreams.flatMap(stream => stream.getTracks())
+      .filter(track => track.kind === kind && track.readyState === "live" && track.enabled);
+    await h.nativeEvent({ type: "audioSessionActivated", callUuid: nativeIds.callUuid });
+    await h.run(() => {
+      const peer = media.peers[0];
+      peer.connectionState = "connected";
+      peer.emit("connectionstatechange");
+    });
+    assert.equal(h.runtime.snapshot.callChannelState, "live");
+    assert.equal(live("audio").length, 1);
+    assert.equal(live("video").length, 1);
+    // Expire the actual consumed native transition claim through its clock
+    // boundary. The accepted session remains current, but no longer has the
+    // short-lived background-audio transition authority. Do not replace refs
+    // or bypass the screen's production restartDisconnectedSession setting.
+    elapsed = 31_000;
+    await h.rerender({});
+    const wait = new Promise(resolve => { release = resolve; });
+    const writesBefore = media.membershipTouches.length;
+    media.queueMembership({ wait });
+    if (scenario === "queued retirement") {
+      await h.run(() => { cameraOperation = h.runtime.snapshot.handleToggleCallCamera(); });
+      assert.equal(media.membershipTouches.length, writesBefore + 1, "Camera Off owns the held durable write");
+    }
+    await h.run(() => media.emitAppState("background"));
+    assert.equal(h.runtime.snapshot.callChannelState, "reconnecting");
+    assert.equal(live("audio").length, scenario === "queued retirement" ? 1 : 0,
+      "queued retirement has not touched audio; executing retirement already blocks it");
+    assert.equal(live("video").length, 0);
+    if (scenario === "queued retirement") {
+      assert.equal(media.membershipTouches.length, writesBefore + 1, "automatic Mute still waits behind Camera Off's durable write");
+    } else {
+      assert.ok(media.membershipTouches.length > writesBefore, "background retirement reached the held durable write");
+    }
+    if (scenario !== "no feedback") {
+      await h.nativeEvent({ type: "muted", callUuid: nativeIds.callUuid });
+    }
+    if (scenario === "queued retirement") {
+      assert.equal(live("audio").length, 0, "genuine system Mute cannot acknowledge an automatic command that has not started");
+    }
+    if (scenario === "opposite system control") {
+      // The opposite system action is a new user intent. Its subsequent Mute
+      // must remain authoritative, rather than looking like retirement feedback.
+      await h.nativeEvent({ type: "unmuted", callUuid: nativeIds.callUuid });
+      await h.nativeEvent({ type: "muted", callUuid: nativeIds.callUuid });
+    }
+    await h.run(async () => { release(); await cameraOperation; });
+    assert.equal(live("audio").length, 0, "retained intent cannot capture while backgrounded");
+    if (scenario === "settled system mute") {
+      await h.nativeEvent({ type: "muted", callUuid: nativeIds.callUuid });
+    }
+    if (scenario === "End") await h.run(() => h.runtime.snapshot.handleJoinOrCloseCall());
+    if (scenario === "account replacement") {
+      const userId = "10000000-0000-4000-8000-000000000009";
+      media.userId = userId; // Authenticated API fixture, not a media-hook ref.
+      // The replacement identity is not a participant in this accepted call.
+      media.admissionPrepareActions.push({ outcome: "reject", message: "communication_chat_call_authority_required" });
+      await h.rerender({ userId, sessionGeneration: "session-2" });
+    }
+    const capturesBeforeForeground = media.mediaCreateCalls.length;
+    const timerStart = media.timeoutCallbacks.length;
+    await h.run(() => media.emitAppState("active"));
+    for (let index = timerStart; index < media.timeoutCallbacks.length; index += 1) {
+      if (media.timeoutDelays[index] === 0 && media.timeoutCallbacks[index]) {
+        const callback = media.timeoutCallbacks[index];
+        media.timeoutCallbacks[index] = null;
+        await h.run(callback);
+      }
+    }
+    await h.flush();
+    if (scenario === "End" || scenario === "account replacement") {
+      assert.equal(media.mediaCreateCalls.length, capturesBeforeForeground, "retired ownership cannot resume capture");
+      assert.equal(live("audio").length, 0);
+      assert.equal(live("video").length, 0);
+    } else {
+      const recoverMic = !["queued retirement", "opposite system control", "settled system mute"].includes(scenario);
+      assert.equal(media.joinCalls.length, 2, "foreground recovery obtains a fresh authorized admission");
+      assert.equal(live("video").length, scenario === "queued retirement" ? 0 : 1);
+      assert.equal(live("audio").length, recoverMic ? 1 : 0,
+        "retirement feedback preserves user-on intent; a subsequent system Mute cancels it");
+      assert.equal(h.runtime.snapshot.micEnabled, recoverMic);
+      assert.equal(media.durableMic, recoverMic);
+    }
+  } finally { release?.(); await h.unmount(); }
+});
+}
+
 test("full iPhone screen consumes real native provenance and waits for exact audio activation before capture", async () => {
   const h = await mountFullChatThread({ ...nativeIds, platform: "ios",
     invite: { id: nativeIds.inviteId }, nativeAnswer: { callUuid: nativeIds.callUuid } });
