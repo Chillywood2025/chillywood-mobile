@@ -4348,7 +4348,6 @@ export function useCommunicationRoomSession({
         return null;
       }
     }
-    const previousTrackEnabled = track?.enabled !== false;
     const removedEndedTracks: { stream: MediaStream; track: any }[] = [];
     let addedCreatedTrackToPreviousLocalStream = false;
 
@@ -4382,7 +4381,10 @@ export function useCommunicationRoomSession({
         }
         captureDisposed = disposeCreatedCapture();
       } else if (track) {
-        track.enabled = previousTrackEnabled && isIntentCurrent();
+        // Failed On transactions settle through mute or retired cleanup.
+        // Restore topology without briefly restoring the old enabled bit
+        // while that privacy-preserving failure path is still pending.
+        track.enabled = false;
       }
       if (isLegacyMicSessionAuthorityCurrent(authority)) {
         removedEndedTracks.forEach(({ stream, track: endedTrack }) => {
@@ -4431,9 +4433,14 @@ export function useCommunicationRoomSession({
       }
       if (!acquisition?.reservation.adopt()) { cancelRetiredPreparation(); return null; }
       setLocalStreamURL(getCommunicationStreamURL(localStreamRef.current));
-    } else {
+    } else if (!micEnabledRef.current) {
       track.enabled = false;
     }
+
+    // Preserve an already committed On microphone during reconciliation:
+    // briefly muting its live track can generate a native Mute action that
+    // supersedes this same operation. An uncommitted or newly acquired track
+    // is still staged disabled, and a muted track stays muted until commit.
 
     const targetTrack = track;
     const targetMediaStream = localStreamRef.current

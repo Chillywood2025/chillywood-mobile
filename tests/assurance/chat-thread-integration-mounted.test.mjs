@@ -234,6 +234,187 @@ const nativeIds = {
   callUuid: "10000000-0000-4000-8000-000000000005",
 };
 
+test("full iPhone foreground reconciliation preserves an already live microphone without a native mute feedback loop", async () => {
+  const h = await mountFullChatThread({ ...nativeIds, platform: "ios",
+    invite: { id: nativeIds.inviteId, callType: "video" }, nativeAnswer: { callUuid: nativeIds.callUuid } });
+  let observe = true;
+  try {
+    await h.nativeEvent({ type: "audioSessionActivated", callUuid: nativeIds.callUuid });
+    await h.run(() => {
+      const peer = h.runtime.media.peers[0];
+      peer.connectionState = "connected";
+      peer.emit("connectionstatechange");
+    });
+    const stream = h.runtime.media.localStreams[0];
+    const audio = stream.getAudioTracks()[0];
+    const video = stream.getVideoTracks()[0];
+    const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(audio), "enabled");
+    const transitions = [];
+    Object.defineProperty(audio, "enabled", {
+      configurable: true,
+      get() { return descriptor.get.call(this); },
+      set(value) {
+        const before = descriptor.get.call(this);
+        descriptor.set.call(this, value);
+        if (!observe || before === descriptor.get.call(this)) return;
+        transitions.push(value);
+        // Controlled OS scheduling counterexample: deliver the observed
+        // native Mute/Unmute shapes after actual media transitions. This is
+        // not a claim that track.enabled always makes CallKit emit feedback.
+        // Bound the modeled loop so its counterexample remains finite.
+        if (transitions.length <= 12) queueMicrotask(() => {
+          if (observe) h.emitNativeEvent({ type: value ? "unmuted" : "muted", callUuid: nativeIds.callUuid });
+        });
+      },
+    });
+    await h.nativeEvent({ type: "applicationActive", callUuid: nativeIds.callUuid });
+    await h.flush();
+    assert.deepEqual([...transitions], [], "reconciling a live microphone must not insert an Off/On pulse");
+    assert.equal(h.runtime.snapshot.micEnabled, true);
+    assert.equal(h.runtime.media.durableMic, true);
+    assert.equal(audio.enabled, true);
+    assert.equal(video.enabled, true);
+    assert.equal(h.runtime.media.localStreams.length, 1, "same-session reconciliation must retain its capture");
+    await h.nativeEvent({ type: "muted", callUuid: nativeIds.callUuid });
+    assert.equal(audio.enabled, false, "a real system Mute remains authoritative after reconciliation");
+    assert.equal(h.runtime.snapshot.micEnabled, false);
+    assert.equal(h.runtime.media.durableMic, false);
+  } finally { observe = false; await h.unmount(); }
+});
+
+for (const interruption of ["system Mute", "End", "account replacement"]) {
+  test(`full iPhone pending On reconciliation cannot override ${interruption}`, async () => {
+    const h = await mountFullChatThread({ ...nativeIds, platform: "ios",
+      invite: { id: nativeIds.inviteId, callType: "video" }, nativeAnswer: { callUuid: nativeIds.callUuid } });
+    let release;
+    try {
+      await h.nativeEvent({ type: "audioSessionActivated", callUuid: nativeIds.callUuid });
+      await h.run(() => {
+        const peer = h.runtime.media.peers[0];
+        peer.connectionState = "connected";
+        peer.emit("connectionstatechange");
+      });
+      const audio = h.runtime.media.localStreams[0].getAudioTracks()[0];
+      const writesBefore = h.runtime.media.membershipTouches.length;
+      h.runtime.media.queueMembership({ wait: new Promise(resolve => { release = resolve; }) });
+      await h.nativeEvent({ type: "applicationActive", callUuid: nativeIds.callUuid });
+      assert.equal(h.runtime.media.membershipTouches.length, writesBefore + 1,
+        "the current reconciliation is awaiting its own durable receipt");
+      assert.equal(audio.enabled, true, "pending On reconciliation retains the committed microphone");
+      if (interruption === "system Mute") {
+        await h.nativeEvent({ type: "muted", callUuid: nativeIds.callUuid });
+      } else if (interruption === "End") {
+        await h.run(() => h.runtime.snapshot.handleJoinOrCloseCall());
+      } else {
+        const userId = "10000000-0000-4000-8000-000000000009";
+        h.runtime.media.userId = userId;
+        h.runtime.media.admissionPrepareActions.push({ outcome: "reject", message: "communication_chat_call_authority_required" });
+        await h.rerender({ userId, sessionGeneration: "session-2" });
+      }
+      assert.equal(audio.enabled, false, "privacy stop precedes settlement of the older On write");
+      await h.run(() => release());
+      assert.equal(audio.enabled, false, "the old durable continuation cannot re-enable capture");
+      if (interruption === "system Mute") {
+        assert.equal(h.runtime.snapshot.micEnabled, false);
+        assert.equal(h.runtime.media.durableMic, false);
+      } else {
+        assert.equal(audio.readyState, "ended");
+        assert.equal(h.runtime.media.localStreams.some(stream => stream.getAudioTracks().some(track => track.enabled && track.readyState === "live")), false);
+      }
+    } finally { release?.(); await h.unmount(); }
+  });
+}
+
+for (const failure of ["durable", "broadcast"]) {
+  test(`full iPhone failed ${failure} On reconciliation stops once without a rollback Unmute pulse`, async () => {
+    const h = await mountFullChatThread({ ...nativeIds, platform: "ios",
+      invite: { id: nativeIds.inviteId, callType: "video" }, nativeAnswer: { callUuid: nativeIds.callUuid } });
+    try {
+      await h.nativeEvent({ type: "audioSessionActivated", callUuid: nativeIds.callUuid });
+      await h.run(() => {
+        const peer = h.runtime.media.peers[0];
+        peer.connectionState = "connected";
+        peer.emit("connectionstatechange");
+      });
+      const audio = h.runtime.media.localStreams[0].getAudioTracks()[0];
+      const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(audio), "enabled");
+      const transitions = [];
+      Object.defineProperty(audio, "enabled", {
+        configurable: true,
+        get() { return descriptor.get.call(this); },
+        set(value) {
+          const before = descriptor.get.call(this);
+          descriptor.set.call(this, value);
+          if (before !== descriptor.get.call(this)) transitions.push(value);
+        },
+      });
+      if (failure === "durable") h.runtime.media.queueMembership({ outcome: "reject" });
+      else h.runtime.media.queueSend({ event: "media:update", outcome: "error" });
+      await h.nativeEvent({ type: "applicationActive", callUuid: nativeIds.callUuid });
+      assert.deepEqual([...transitions], [false],
+        "a fail-closed transaction must not generate an intermediate native Unmute during rollback");
+      assert.equal(audio.enabled, false);
+      assert.equal(h.runtime.snapshot.micEnabled, false);
+      assert.equal(h.runtime.media.durableMic, false);
+      await h.nativeEvent({ type: "muted", callUuid: nativeIds.callUuid });
+      assert.equal(audio.enabled, false, "the delayed actual Mute receipt cannot create another state change");
+      await h.nativeEvent({ type: "unmuted", callUuid: nativeIds.callUuid });
+      assert.equal(audio.enabled, true, "a later genuine Unmute remains available after failure settled");
+    } finally { await h.unmount(); }
+  });
+}
+
+test("actual iOS facade acknowledges native Mute requests and foreground reconciliation preserves their committed On state", async (t) => {
+  const root = await mountIosRoot(t, { realFacade: true });
+  await root.event(makeNativeEvent("incoming"));
+  await root.event(makeNativeEvent("answerRequested"));
+  const destination = new URL(root.routes[0], "https://test.invalid");
+  const h = await mountFullChatThread({ userId: rootNativeIds.user,
+    remoteUserId: "00000000-0000-4000-8000-000000000099", threadId: rootNativeIds.thread,
+    platform: "ios", sessionGeneration: rootNativeIds.session,
+    invite: { id: rootNativeIds.invite, callType: "video" },
+    routeParams: Object.fromEntries(destination.searchParams), nativeFacade: root.facade });
+  t.after(() => h.unmount());
+  await h.run(() => root.event(makeNativeEvent("audioSessionActivated")));
+  await h.run(() => {
+    const peer = h.runtime.media.peers[0];
+    peer.connectionState = "connected";
+    peer.emit("connectionstatechange");
+  });
+  root.setStage("os-setMuted", (uuid, muted) => {
+    // The OS boundary is controlled. Receipt delivery then passes through
+    // the production facade, root bridge and mounted screen subscriber.
+    root.emitWithoutWaiting(makeNativeEvent(muted ? "muted" : "unmuted", { callUuid: uuid }));
+  });
+  const audio = h.runtime.media.localStreams[0].getAudioTracks()[0];
+  await h.run(() => h.runtime.snapshot.handleToggleCallMic());
+  assert.equal(audio.enabled, false);
+  await h.run(() => h.runtime.snapshot.handleToggleCallMic());
+  assert.equal(audio.enabled, true);
+  assert.deepEqual(Array.from(root.nativeSteps).filter(step => step.name === "setMuted").map(step => [step.uuid, step.muted]),
+    [[rootNativeIds.uuid, true], [rootNativeIds.uuid, false]], "UI controls use the real native synchronization facade exactly once each");
+  assert.equal(h.runtime.snapshot.callControlError, null);
+  const transitions = [];
+  const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(audio), "enabled");
+  Object.defineProperty(audio, "enabled", {
+    configurable: true,
+    get() { return descriptor.get.call(this); },
+    set(value) {
+      const before = descriptor.get.call(this);
+      descriptor.set.call(this, value);
+      if (before !== descriptor.get.call(this)) transitions.push(value);
+    },
+  });
+  await h.run(() => root.event(makeNativeEvent("applicationActive")));
+  assert.deepEqual([...transitions], [], "recovery through the real facade cannot insert another microphone Off/On pulse");
+  assert.equal(h.runtime.snapshot.micEnabled, true);
+  assert.equal(h.runtime.media.durableMic, true);
+  assert.equal(root.nativeSteps.filter(step => step.name === "setMuted").length, 2);
+  await h.run(() => root.event(makeNativeEvent("muted")));
+  assert.equal(audio.enabled, false, "an independent native Mute still reaches actual media control");
+  assert.equal(h.runtime.media.durableMic, false);
+});
+
 for (const [callType, elapsed, duplicateTap] of [
   ...["voice", "video"].flatMap(kind => [0, 11_000].map(delay => [kind, delay, false])),
   ["video", 0, true],

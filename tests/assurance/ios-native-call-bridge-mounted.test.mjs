@@ -184,6 +184,12 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
         return stageHandlers.has("os-requestAnswer")
           ? stageHandlers.get("os-requestAnswer")(uuid, inviteId) : false;
       },
+      setMutedAsync: async (uuid, muted) => {
+        nativeSteps.push({ name: "setMuted", uuid, muted });
+        // A queued CXSetMutedCallAction is not its delegate receipt. Tests
+        // control delivery separately through the native-module listener.
+        if (stageHandlers.has("os-setMuted")) return stageHandlers.get("os-setMuted")(uuid, muted);
+      },
       completeTerminalTransitionAsync: async (uuid) => { nativeSteps.push({ name: "terminal", uuid }); },
     };
     const imports = {
