@@ -557,6 +557,7 @@ export function useCommunicationRoomSession({
     authenticatedUserId: string | undefined;
     requestedRoomId: string;
     generation: number;
+    recoverable: boolean;
     room: CommunicationRoomState | null;
     identity: CommunicationIdentity | null;
     membershipGeneration: string | undefined;
@@ -1195,14 +1196,13 @@ export function useCommunicationRoomSession({
     return nextParticipants;
   }, [hasUsableLocalTrack, isActiveLegacyGeneration, roomId]);
 
-  const captureLeaveOperation = useCallback(() => {
+  const captureLeaveOperation = useCallback((options?: { recoverable?: boolean }) => {
     const currentContext = leaveContextRef.current;
     if (currentContext.authenticatedAccessToken !== authenticatedAccessToken
       || currentContext.authenticatedUserId !== authenticatedUserId
       || currentContext.roomId !== roomId) {
       throw new Error("The call changed before cleanup could start.");
     }
-    const generation = legacySessionGenerationRef.current;
     const resolvedRoom = roomRef.current;
     const resolvedIdentity = identityRef.current;
     let operation = leaveOperationRef.current;
@@ -1212,7 +1212,21 @@ export function useCommunicationRoomSession({
       && operation.authenticatedUserId === authenticatedUserId
       && operation.requestedRoomId === roomId
       && !channelRef.current && !roomRef.current && !identityRef.current;
-    if (!operation || (operation.generation !== generation && !isDisabledRetainedOperation)) {
+    const isUnadmittedRecovery = operation?.recoverable
+      && operation.authenticatedAccessToken === authenticatedAccessToken
+      && operation.authenticatedUserId === authenticatedUserId
+      && operation.requestedRoomId === roomId
+      && !channelRef.current && !roomRef.current && !identityRef.current
+      && !joinedMembershipRef.current;
+    if (operation && isUnadmittedRecovery && !options?.recoverable) {
+      // Recovery may fail before a replacement admission exists. Explicit End
+      // still owns the old fenced membership and retained native resources;
+      // cancel the pending generation without replacing them with empty proof.
+      legacySessionGenerationRef.current += 1;
+      operation.generation = legacySessionGenerationRef.current;
+    }
+    if (!operation || (operation.generation !== legacySessionGenerationRef.current
+      && !isDisabledRetainedOperation && !isUnadmittedRecovery)) {
       const capturedChannel = channelRef.current;
       const capturedMedia = {
         answerWaiters: Object.entries(legacyMicAnswerWaitersRef.current),
@@ -1267,9 +1281,9 @@ export function useCommunicationRoomSession({
         }
       };
       legacySessionGenerationRef.current += 1;
-      endingGenerationRef.current = legacySessionGenerationRef.current;
-      channelStateRef.current = "idle";
-      setChannelState("idle");
+      if (!options?.recoverable) endingGenerationRef.current = legacySessionGenerationRef.current;
+      channelStateRef.current = options?.recoverable ? "reconnecting" : "idle";
+      setChannelState(options?.recoverable ? "reconnecting" : "idle");
       // Local privacy cannot wait on a database write or Realtime untrack.
       stopNativeCapture();
       cleanupSessionMedia(capturedMedia);
@@ -1278,6 +1292,7 @@ export function useCommunicationRoomSession({
         authenticatedUserId,
         requestedRoomId: roomId,
         generation: legacySessionGenerationRef.current,
+        recoverable: !!options?.recoverable,
         room: resolvedRoom,
         identity: resolvedIdentity,
         membershipGeneration: joinedMembershipRef.current?.roomId === resolvedRoom?.roomId
@@ -1293,6 +1308,14 @@ export function useCommunicationRoomSession({
         durableReservation: null,
       };
       leaveOperationRef.current = operation;
+    }
+    // Explicit End can follow a recoverable suspension before its restart
+    // timer fires. It must revoke that generation's recovery authority too.
+    if (!options?.recoverable) {
+      endingGenerationRef.current = legacySessionGenerationRef.current;
+      operation.recoverable = false;
+      channelStateRef.current = "idle";
+      setChannelState("idle");
     }
     return operation;
   }, [authenticatedAccessToken, authenticatedUserId, cleanupChannel, cleanupSessionMedia, roomId]);
@@ -1318,9 +1341,23 @@ export function useCommunicationRoomSession({
       if (formatRoomId(roomRef.current?.roomId ?? "") === resolvedRoomId
         && admitted?.roomId === resolvedRoomId && admitted.membershipGeneration
         && identityRef.current?.userId === admitted.userId) {
-        // The API returns null after a successful read when an active room is
-        // no longer visible (including terminal rooms and removed access).
-        // Exceptions still reject above and never become terminal evidence.
+        // A non-host loses room SELECT visibility after its membership lease
+        // expires. A queued background read can therefore return null before
+        // foreground re-admission even though this accepted call is active.
+        // Retire this media owner without ending the peer's call; the existing
+        // admission RPC must authorize recovery before any capture restarts.
+        if (restartDisconnectedSession && roomRef.current?.hostUserId !== admitted.userId
+          && (appStateRef.current !== "active"
+          || channelStateRef.current === "reconnecting")) {
+          const suspended = captureLeaveOperation({ recoverable: true });
+          setError(suspended.stopNativeCapture()
+            ? "Reconnecting this call after returning to the app…"
+            : "Media shutdown could not be verified. Retry End.");
+          requestLegacySessionRestart("app_foreground");
+          return null;
+        }
+        // Outside a recoverable chat lifecycle, unavailable room authority
+        // retains the existing terminal cleanup behavior.
         captureLeaveOperation();
         setError("This communication room is no longer available.");
         onRoomEndedRef.current?.("ended");
@@ -1390,7 +1427,7 @@ export function useCommunicationRoomSession({
       membershipCount: snapshot.memberships.length,
     });
     return snapshot;
-  }, [applyParticipantsFromSources, captureLeaveOperation, cleanupRemotePeer, isActiveLegacyGeneration, roomId]);
+  }, [applyParticipantsFromSources, captureLeaveOperation, cleanupRemotePeer, isActiveLegacyGeneration, requestLegacySessionRestart, restartDisconnectedSession, roomId]);
 
   const isPresenceRegistrationCurrent = useCallback((registration: LegacyPresenceRegistration | null) => (
     !!registration
@@ -2295,8 +2332,9 @@ export function useCommunicationRoomSession({
         && currentContext.roomId === leaving.requestedRoomId
         && !channelRef.current
         && ((legacySessionGenerationRef.current === leaving.generation
-          && roomRef.current?.roomId === leaving.room?.roomId
-          && identityRef.current?.userId === leaving.identity?.userId)
+          && ((roomRef.current?.roomId === leaving.room?.roomId
+            && identityRef.current?.userId === leaving.identity?.userId)
+            || (!roomRef.current && !identityRef.current && !joinedMembershipRef.current)))
           || (!currentContext.enabled && !roomRef.current && !identityRef.current));
     };
     if (leaving.completed && leaving.stopNativeCapture()) return;
@@ -2322,23 +2360,27 @@ export function useCommunicationRoomSession({
                 await endCommunicationRoom(leaving.room.roomId, leaving.identity.userId);
                 if (!ownsLeave()) throw new Error("The call changed before cleanup could finish.");
               }
-              const membership = await leaveCommunicationRoomSession({
-                roomId: leaving.room.roomId,
-                userId: leaving.identity.userId,
-                expectedMembershipGeneration: leaving.membershipGeneration,
-              });
-              if (
-                !membership
-                || formatRoomId(membership.roomId) !== formatRoomId(leaving.room.roomId)
-                || membership.userId !== leaving.identity.userId
-                || !leaving.membershipGeneration
-                || membership.membershipGeneration !== leaving.membershipGeneration
-                || !["left", "removed"].includes(normalizeRoomMembershipState(membership.membershipState))
-                || !membership.leftAt
-                || membership.cameraEnabled
-                || membership.micEnabled
-              ) throw new Error("Durable call cleanup could not be verified.");
-              leaving.durableLeft = true;
+              // A retired recovery admission can finish its exact cleanup
+              // while this End waits for that admission's reservation.
+              if (!leaving.durableLeft) {
+                const membership = await leaveCommunicationRoomSession({
+                  roomId: leaving.room.roomId,
+                  userId: leaving.identity.userId,
+                  expectedMembershipGeneration: leaving.membershipGeneration,
+                });
+                if (
+                  !membership
+                  || formatRoomId(membership.roomId) !== formatRoomId(leaving.room.roomId)
+                  || membership.userId !== leaving.identity.userId
+                  || !leaving.membershipGeneration
+                  || membership.membershipGeneration !== leaving.membershipGeneration
+                  || !["left", "removed"].includes(normalizeRoomMembershipState(membership.membershipState))
+                  || !membership.leftAt
+                  || membership.cameraEnabled
+                  || membership.micEnabled
+                ) throw new Error("Durable call cleanup could not be verified.");
+                leaving.durableLeft = true;
+              }
             } catch (durableError) {
               durableUncertain = isAmbiguousMembershipOutcome(durableError);
               throw durableError;
@@ -2488,14 +2530,36 @@ export function useCommunicationRoomSession({
               userId: joinedMembership.userId,
               expectedMembershipGeneration: joinedMembership.membershipGeneration,
             };
+            const retireAdmission = async () => {
+              const retired = await leaveCommunicationRoomSession(exactCleanup);
+              if (!retired || retired.roomId !== exactCleanup.roomId
+                || retired.userId !== exactCleanup.userId
+                || retired.membershipGeneration !== exactCleanup.expectedMembershipGeneration
+                || !["left", "removed"].includes(retired.membershipState)
+                || !retired.leftAt || retired.cameraEnabled || retired.micEnabled) {
+                throw new Error("Retired call admission cleanup could not be verified.");
+              }
+            };
             try {
-              await leaveCommunicationRoomSession(exactCleanup);
+              await retireAdmission();
             } catch (cleanupError) {
               if (!isAmbiguousMembershipOutcome(cleanupError)) throw cleanupError;
               // The old screen may already be gone, so there is no End button
               // to retry. One idempotent exact-token read/write can prove LEFT
               // after a lost response without changing a replacement admission.
-              await leaveCommunicationRoomSession(exactCleanup);
+              await retireAdmission();
+            }
+            if (previousLeave && leaveOperationRef.current === previousLeave
+              && !previousLeave.recoverable && !!previousLeave.pending
+              && previousLeave.room?.roomId === exactCleanup.roomId
+              && previousLeave.identity?.userId === exactCleanup.userId
+              && previousLeave.membershipGeneration === preparedAdmission.expectedPreviousGeneration
+              && previousLeave.generation === legacySessionGenerationRef.current
+              && endingGenerationRef.current === previousLeave.generation) {
+              // This exact prepared CAS replaced the suspended admission and
+              // its late receipt has now proved LEFT. End need not replay the
+              // superseded token; no unrelated replacement is adopted.
+              previousLeave.durableLeft = true;
             }
             return null;
           }

@@ -227,6 +227,7 @@ export async function mountFullChatThread(options = {}) {
   const readSnapshot = media.api.getCommunicationRoomSnapshot;
   media.api.getCommunicationRoomSnapshot = async (...args) => {
     const snapshot = await readSnapshot(...args);
+    if (!snapshot) return null;
     if (!durableThread) return { ...snapshot, room: { ...snapshot.room, hostUserId: runtime.invite?.callerUserId } };
     const room = durableThread.rooms.get(args[0]);
     if (!room) return null;
@@ -325,12 +326,33 @@ export async function mountFullChatThread(options = {}) {
     "../../hooks/use-chat-call-media-session": adapter,
   };
   let source = fs.readFileSync(process.env.CHILLY_CHAT_FULL_THREAD_TEST_SOURCE ?? "app/chat/[threadId].tsx", "utf8");
+  // Preserve the actual screen-to-panel expressions even though native JSX
+  // rendering is outside this fixture. Copied handler names would hide a
+  // no-op button binding or a permanently busy panel in the production JSX.
+  const parsedScreen = ts.createSourceFile("thread.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const panelBindings = new Map();
+  const requiredPanelBindings = ["mediaControlsBusy", "onToggleCamera", "onToggleMic", "onSwitchCamera", "onLeave"];
+  const visit = node => {
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(parsedScreen) === "InRoomCommunicationPanel") {
+      for (const attribute of node.attributes.properties) {
+        if (!ts.isJsxAttribute(attribute) || !requiredPanelBindings.includes(attribute.name.text)) continue;
+        assert.ok(attribute.initializer && ts.isJsxExpression(attribute.initializer) && attribute.initializer.expression);
+        assert.equal(panelBindings.has(attribute.name.text), false, "panel binding must be unique");
+        panelBindings.set(attribute.name.text, attribute.initializer.expression.getText(parsedScreen));
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(parsedScreen);
+  assert.equal(panelBindings.size, requiredPanelBindings.length, "actual panel bindings must remain observable");
+  const panelBindingSource = [...panelBindings].map(([name, expression]) => `${name}: (${expression})`).join(",");
   // Retain every screen hook/effect/callback. Only the render tree is replaced;
   // no call handlers, response checks, states, or lifecycle effects are replaced.
   const marker = "  if (authLoading || loading) {";
   assert.equal(source.split(marker).length, 2);
   source = source.slice(0, source.indexOf(marker)) + `
     useLayoutEffect(() => { runtime.snapshot = { loading, error, callControlError,
+      panelBindings: { ${panelBindingSource} },
       callBusy, callPanelOpen, activeCallInvite, activeCallRoomId, incomingCallInvite,
       callChannelState, cameraEnabled, micEnabled, participantCount, participants,
       nativeSpeakerEnabled,

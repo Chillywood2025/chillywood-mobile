@@ -7,6 +7,105 @@ import * as actualMediaPolicy from "../../_lib/communicationCallMediaPolicy.mjs"
 import * as nativeCallErrorDiagnostics from "../../_lib/nativeCallErrorDiagnostics.mjs";
 import { mountChatAnswer } from "./helpers/chat-thread-answer-mounted-harness.mjs";
 import { mountFullChatThread } from "./helpers/chat-thread-full-mounted-harness.mjs";
+const backgroundDeferred = () => { let resolve; const wait = new Promise(done => { resolve = done; }); return { wait, resolve }; };
+const backgroundLive = (media, kind) => [...new Set(media.localStreams.flatMap(stream => stream.getTracks()))]
+  .filter(track => track.kind === kind && track.readyState === 'live' && track.enabled);
+async function fireBackgroundRecovery(h, start) {
+  const media = h.runtime.media;
+  let fired = 0;
+  for (let index = start; index < media.timeoutCallbacks.length; index += 1) {
+    if (media.timeoutDelays[index] !== 0 || !media.timeoutCallbacks[index]) continue;
+    const callback = media.timeoutCallbacks[index]; media.timeoutCallbacks[index] = null;
+    await h.run(callback); fired += 1;
+  }
+  await h.flush();
+  return fired;
+}
+
+test('full-screen modeled successful null is preserved at its API seam', async t => {
+  const h = await mountFullChatThread({ invite: { status: 'accepted' } });
+  t.after(() => h.unmount());
+  h.runtime.media.queueSnapshot({ outcome: 'missing' });
+  assert.equal(await h.runtime.media.api.getCommunicationRoomSnapshot(h.runtime.roomId), null);
+});
+
+for (const ordering of ['before restart', 'after restart', 'explicit End', 'explicit terminal room', 'host invisible room']) {
+  test(`full production wrapper background stale-read ${ordering}`, async t => {
+    const h = await mountFullChatThread({ invite: { status: 'accepted',
+      ...(ordering === 'host invisible room' ? { callerUserId: 'local-user', calleeUserId: 'remote-user' } : {}) },
+      configureMedia: media => {
+        media.ownedAdmission = true;
+        const capture = media.api.createCommunicationMediaStream;
+        media.api.createCommunicationMediaStream = async options => {
+          const stream = await capture(options);
+          for (const track of stream?.getVideoTracks() ?? []) {
+            track.getSettings = () => ({ facingMode: options.facingMode ?? 'user' });
+          }
+          return stream;
+        };
+      } });
+    t.after(() => h.unmount());
+    if (ordering === 'host invisible room') await h.run(() => h.runtime.snapshot.handleJoinOrCloseCall());
+    const media = h.runtime.media;
+    const initialAdmission = media.membershipGeneration;
+    const channel = media.readAssuranceRefs().channelRef.current;
+    assert.equal(media.joinCalls.length, 1);
+    assert.equal(h.runtime.snapshot.activeCallInvite?.status, 'accepted');
+    assert.equal(backgroundLive(media, 'audio').length, 1);
+    await h.run(() => media.emitAppState('background'));
+    assert.equal(backgroundLive(media, 'audio').length, 0);
+    assert.equal(backgroundLive(media, 'video').length, 0);
+    const pending = backgroundDeferred();
+    const existing = media.readAssuranceRefs().roomRef.current;
+    media.queueSnapshot({ wait: pending.wait,
+      ...(ordering === 'explicit terminal room' ? { room: { ...existing, status: 'ended' } } : { outcome: 'missing' }) });
+    await h.run(() => channel.emitBroadcast('state:update', {}));
+    const start = media.timeoutCallbacks.length;
+    await h.run(() => media.emitAppState('active'));
+    assert.ok(media.timeoutDelays.slice(start).includes(0), 'production adapter must schedule its actual foreground restart');
+    if (ordering === 'after restart') await fireBackgroundRecovery(h, start);
+    await h.run(() => pending.resolve());
+    if (ordering !== 'explicit terminal room' && ordering !== 'host invisible room') {
+      assert.equal(h.runtime.snapshot.activeCallInvite?.status, 'accepted', 'a lease-expired read cannot invoke screen global End');
+      assert.equal(h.runtime.transitions.some(transition => transition.status === 'ended'), false);
+    }
+    if (ordering === 'explicit End') await h.run(() => h.runtime.snapshot.panelBindings.onLeave());
+    if (ordering !== 'after restart') await fireBackgroundRecovery(h, start);
+    if (ordering === 'explicit End' || ordering === 'explicit terminal room' || ordering === 'host invisible room') {
+      assert.equal(h.runtime.invite.status, 'ended');
+      assert.equal(media.joinCalls.length, 1);
+      assert.equal(backgroundLive(media, 'audio').length, 0);
+      assert.equal(backgroundLive(media, 'video').length, 0);
+      assert.ok(h.runtime.leaves.some(leave => leave.expectedMembershipGeneration === initialAdmission));
+      return;
+    }
+    assert.equal(media.joinCalls.length, 2);
+    assert.notEqual(media.membershipGeneration, initialAdmission);
+    assert.equal(backgroundLive(media, 'audio').length, 1);
+    assert.equal(backgroundLive(media, 'video').length, 1);
+    assert.equal(h.runtime.snapshot.activeCallInvite?.status, 'accepted');
+    assert.equal(h.runtime.transitions.some(transition => transition.status === 'ended'), false);
+    assert.equal(h.runtime.snapshot.panelBindings.mediaControlsBusy, false);
+    const offReceipt = backgroundDeferred();
+    media.queueMembership({ wait: offReceipt.wait });
+    await h.run(() => h.runtime.snapshot.panelBindings.onToggleCamera());
+    assert.equal(h.runtime.snapshot.panelBindings.mediaControlsBusy, true, 'actual panel shows the pending media operation');
+    assert.equal(typeof h.runtime.snapshot.panelBindings.onLeave, 'function', 'End remains bound while media work is pending');
+    await h.run(() => offReceipt.resolve());
+    assert.equal(h.runtime.snapshot.panelBindings.mediaControlsBusy, false);
+    assert.equal(backgroundLive(media, 'video').length, 0, 'actual screen camera handler reaches recovered hook');
+    assert.equal(media.durableCamera, false);
+    await h.run(() => h.runtime.snapshot.panelBindings.onToggleCamera());
+    assert.equal(backgroundLive(media, 'video').length, 1);
+    assert.equal(media.durableCamera, true);
+    const oldVideo = backgroundLive(media, 'video')[0];
+    await h.run(() => h.runtime.snapshot.panelBindings.onSwitchCamera());
+    assert.equal(backgroundLive(media, 'video').length, 1);
+    assert.notEqual(backgroundLive(media, 'video')[0], oldVideo, 'actual Flip binding replaces the captured video track');
+    assert.equal(h.runtime.snapshot.panelBindings.mediaControlsBusy, false);
+  });
+}
+
 
 // Reuse the controlled native/API seam of the established exact-hook fixture,
 // but start the real hook naturally: no injected live state, identity, peers,
