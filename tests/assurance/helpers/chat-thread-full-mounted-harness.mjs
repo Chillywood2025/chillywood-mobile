@@ -146,6 +146,8 @@ export async function mountFullChatThread(options = {}) {
     subscriptions: new Set(), threadSubscriptions: new Set(), ...options,
   };
   runtime.keyboard = { visible: options.keyboardVisible ?? false, dismissals: 0 };
+  runtime.appState = options.appState ?? "active";
+  const appStateListeners = new Set();
   runtime.invite = { id: "invite", threadId: runtime.threadId, communicationRoomId: runtime.roomId,
     callerUserId: runtime.remoteUserId, calleeUserId: runtime.userId, status: "ringing",
     callType: "video", mediaProvider: "legacy_webrtc", expiresAt: new Date(Date.now() + 90_000).toISOString(),
@@ -244,7 +246,8 @@ export async function mountFullChatThread(options = {}) {
     "./use-livekit-chat-call-session": { useLiveKitChatCallSession: idleLiveKit },
   });
   const chat = {
-    getChatThread: async (id) => durableThread && id !== durableThread.threadId ? null : ({ ...runtime.thread }),
+    getChatThread: async (id) => runtime.readThread ? runtime.readThread(id)
+      : durableThread && id !== durableThread.threadId ? null : ({ ...runtime.thread }),
     listChatMessages: async (id) => durableThread ? durableThread.list(runtime.userId, id) : [],
     sendChatMessage: async (id, body, attachment) => {
       if (!durableThread) throw Error("message writes require the durable thread fixture");
@@ -254,7 +257,10 @@ export async function mountFullChatThread(options = {}) {
       runtime.threadSubscriptions.add(fn); durableThread?.listeners.add(fn);
       return () => { runtime.threadSubscriptions.delete(fn); durableThread?.listeners.delete(fn); };
     },
-    clearEndedChatThreadCall: async (...args) => { runtime.clears.push(args); return { cleared: true, reason: "ended" }; },
+    clearEndedChatThreadCall: async (...args) => {
+      runtime.clears.push(args);
+      return runtime.clearThread ? runtime.clearThread(...args) : { cleared: true, reason: "ended" };
+    },
     startChatThreadCall: async (id, callType) => {
       if (durableThread) {
         const invite = durableThread.start(runtime.userId, id, callType);
@@ -292,6 +298,9 @@ export async function mountFullChatThread(options = {}) {
       useLocalSearchParams: () => ({ ...runtime.params, threadId: runtime.threadId }), useRouter: () => router },
     "@expo/vector-icons/MaterialIcons": noop,
     "react-native": { Platform: { OS: runtime.platform }, StyleSheet: { create: (v) => v }, Vibration: { cancel: noop, vibrate: noop },
+      AppState: { get currentState() { return runtime.appState; }, addEventListener: (_event, listener) => {
+        appStateListeners.add(listener); return { remove: () => appStateListeners.delete(listener) };
+      } },
       Keyboard: { dismiss: () => { runtime.keyboard.visible = false; runtime.keyboard.dismissals += 1; } } },
     "react-native-safe-area-context": { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
     "../../_lib/analytics": { trackEvent: noop }, "../../_lib/appConfig": { DEFAULT_APP_CONFIG: defaults, readAppConfig: async () => defaults },
@@ -331,8 +340,26 @@ export async function mountFullChatThread(options = {}) {
   // no-op button binding or a permanently busy panel in the production JSX.
   const parsedScreen = ts.createSourceFile("thread.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const panelBindings = new Map();
+  const presentationBindings = new Map();
   const requiredPanelBindings = ["mediaControlsBusy", "onToggleCamera", "onToggleMic", "onSwitchCamera", "onLeave"];
   const visit = node => {
+    if (ts.isJsxElement(node)) {
+      const attrs = node.openingElement.attributes.properties;
+      const testId = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === "testID")?.initializer?.text;
+      if (testId === "chat-thread-incoming-call-banner") {
+        let branch = node;
+        while (ts.isParenthesizedExpression(branch.parent)) branch = branch.parent;
+        assert.ok(ts.isConditionalExpression(branch.parent), "banner visibility must come from its actual JSX condition");
+        presentationBindings.set("incomingBannerVisible", `Boolean(${branch.parent.condition.getText(parsedScreen)})`);
+      }
+      if (["chat-thread-voice-call-button", "chat-thread-video-call-button"].includes(testId)) {
+        const disabled = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === "disabled");
+        presentationBindings.set(testId.includes("voice") ? "voiceCallDisabled" : "videoCallDisabled", disabled.initializer.expression.getText(parsedScreen));
+      }
+    }
+    if (ts.isCallExpression(node) && node.expression.getText(parsedScreen) === "getThreadStatusLabel") {
+      presentationBindings.set("threadStatusLabel", node.getText(parsedScreen));
+    }
     if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(parsedScreen) === "InRoomCommunicationPanel") {
       for (const attribute of node.attributes.properties) {
         if (!ts.isJsxAttribute(attribute) || !requiredPanelBindings.includes(attribute.name.text)) continue;
@@ -345,14 +372,22 @@ export async function mountFullChatThread(options = {}) {
   };
   visit(parsedScreen);
   assert.equal(panelBindings.size, requiredPanelBindings.length, "actual panel bindings must remain observable");
+  assert.equal(presentationBindings.size, 4, "actual ringing presentation bindings must remain observable");
   const panelBindingSource = [...panelBindings].map(([name, expression]) => `${name}: (${expression})`).join(",");
+  const presentationBindingSource = [...presentationBindings].map(([name, expression]) => `${name}: (${expression})`).join(",");
+  const screenFunction = parsedScreen.statements.find(node => ts.isFunctionDeclaration(node) && node.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.DefaultKeyword));
+  const presentationDeclarations = screenFunction.body.statements.filter(node => ts.isVariableStatement(node)
+    && node.declarationList.declarations.some(declaration => ["incomingCallInviteId", "iosNativeCallPresentationOwned", "waitingForIosNativePresentation"].includes(declaration.name.getText(parsedScreen))))
+    .map(node => node.getText(parsedScreen)).join("\n");
   // Retain every screen hook/effect/callback. Only the render tree is replaced;
   // no call handlers, response checks, states, or lifecycle effects are replaced.
   const marker = "  if (authLoading || loading) {";
   assert.equal(source.split(marker).length, 2);
   source = source.slice(0, source.indexOf(marker)) + `
+    ${presentationDeclarations}
     useLayoutEffect(() => { runtime.snapshot = { loading, error, callControlError,
       panelBindings: { ${panelBindingSource} },
+      presentation: { ${presentationBindingSource} },
       callBusy, callPanelOpen, activeCallInvite, activeCallRoomId, incomingCallInvite,
       callChannelState, cameraEnabled, micEnabled, participantCount, participants,
       nativeSpeakerEnabled,
@@ -382,6 +417,12 @@ export async function mountFullChatThread(options = {}) {
     async flush() { await React.act(settle); },
     async fireTimer(timer) { timer.canceled = true; await React.act(async () => { await timer.fn(); await settle(); }); },
     async nativeEvent(event) { await React.act(async () => { for (const listener of nativeListeners) listener(event); await settle(); }); },
+    async appState(state) { await React.act(async () => {
+      runtime.appState = state;
+      for (const listener of appStateListeners) listener(state);
+      await media.emitAppState(state);
+      await settle();
+    }); },
     async rerender(patch) {
       Object.assign(runtime, patch);
       if (durableThread) Object.assign(media, { userId: runtime.userId, remoteUserId: runtime.remoteUserId });

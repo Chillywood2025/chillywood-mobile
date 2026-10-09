@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -201,6 +202,37 @@ const getThreadStatusLabel = (thread: ChatThreadSummary | null) => {
   }
   return "Direct thread";
 };
+
+function useExpiredIncomingCallPresentation(invite: ChillyChatCallInvite | null, threadId: string, currentUserId: string, sessionGeneration: string) {
+  const [, refreshPresentation] = useState(0);
+  const retained = useRef<{ invite: ChillyChatCallInvite; sessionGeneration: string } | null>(null);
+  const candidate = invite ?? (retained.current?.sessionGeneration === sessionGeneration ? retained.current.invite : null);
+  const presentationInvite = candidate?.status === "ringing"
+    && candidate.threadId === threadId
+    && candidate.calleeUserId === currentUserId
+    && candidate.callerUserId !== currentUserId ? candidate : null;
+  // A terminal refresh may omit ringing while its stale thread projection
+  // remains. Remember only this account/session's exact presentation identity.
+  useLayoutEffect(() => {
+    retained.current = presentationInvite ? { invite: presentationInvite, sessionGeneration } : null;
+  }, [presentationInvite, sessionGeneration]);
+  const expiresAt = Date.parse(presentationInvite?.expiresAt ?? "");
+  useEffect(() => {
+    if (!presentationInvite || !Number.isFinite(expiresAt)) return;
+    // A suspended JS deadline cannot refresh the foreground surface. Keep this
+    // local presentation clock independent of the authoritative expiry RPCs.
+    const refresh = () => refreshPresentation(revision => revision + 1);
+    const remainingMs = expiresAt - Date.now();
+    const timeout = remainingMs > 0 ? setTimeout(refresh, remainingMs) : null;
+    const subscription = AppState.addEventListener("change", state => {
+      if (state === "active") refresh();
+    });
+    return () => { if (timeout) clearTimeout(timeout); subscription.remove(); };
+  }, [expiresAt, presentationInvite]);
+  // Re-evaluate on every render too: a read started before expiry can settle
+  // after it. This is presentation suppression, never a terminal transition.
+  return Number.isFinite(expiresAt) && expiresAt <= Date.now() ? presentationInvite : null;
+}
 
 const buildSmartReplySuggestions = ({
   activeCallType,
@@ -464,6 +496,8 @@ export default function ChillyChatThreadScreen() {
   const [outgoingCallInvite, setOutgoingCallInvite] = useState<ChillyChatCallInvite | null>(null);
   const [outgoingCallDeviceAlertSent, setOutgoingCallDeviceAlertSent] = useState(false);
   const [activeCallInvite, setActiveCallInvite] = useState<ChillyChatCallInvite | null>(null);
+  const expiredIncomingCallPresentation = useExpiredIncomingCallPresentation(incomingCallInvite, threadId, currentUserId, authority?.sessionGeneration ?? "");
+  const incomingCallPresentationExpired = !!incomingCallInvite && expiredIncomingCallPresentation?.id === incomingCallInvite.id;
   const { rememberNativeMicAck, consumeNativeMicAck, forgetNativeMicAck, isNativeMicContextCurrent } = useIosNativeMicrophoneAcknowledgements(
     JSON.stringify([currentUserId, threadId, authority?.sessionGeneration ?? "", isSignedIn, activeCallInvite?.id ?? "", activeCallInvite?.communicationRoomId ?? ""]), requestedNativeCallUuid,
   );
@@ -701,6 +735,13 @@ export default function ChillyChatThreadScreen() {
     return () => clearTimeout(timeout);
   }, [incomingCallInvite?.id]);
 
+  // Retain the raw invite/thread for exact backend reconciliation, while the
+  // expired ringing room cannot keep the header live or disable new-call UI.
+  const presentedThread = thread && expiredIncomingCallPresentation
+    && expiredIncomingCallPresentation.communicationRoomId === thread.activeCommunicationRoomId
+    && !activeCallInvite && !outgoingCallInvite
+      ? { ...thread, activeCommunicationRoomId: undefined, activeCallType: undefined }
+      : thread;
   // Keep only the owned terminal call's identity until cleanup succeeds. It
   // cannot activate media, but End must still target it after server projection clears.
   const activeCallRoomId = activeCallInvite && TERMINAL_CHAT_CALL_INVITE_STATUSES.has(activeCallInvite.status)
@@ -708,7 +749,7 @@ export default function ChillyChatThreadScreen() {
     : resolveAcceptedChatCallRoomId({
     inviteRoomId: activeCallInvite?.communicationRoomId,
     inviteStatus: activeCallInvite?.status,
-    threadRoomId: thread?.activeCommunicationRoomId,
+    threadRoomId: presentedThread?.activeCommunicationRoomId,
   });
   const rememberHandledIncomingInvite = useCallback((
     invite: ChillyChatCallInvite | null | undefined,
@@ -1595,6 +1636,7 @@ export default function ChillyChatThreadScreen() {
 
     if (
       !incomingCallInvite
+      || incomingCallPresentationExpired
       || callPanelOpen
       || iosNativeCallPresentationOwned
       || waitingForIosNativePresentation
@@ -1634,6 +1676,7 @@ export default function ChillyChatThreadScreen() {
     callPreferences?.chillyChatCallVibrateEnabled,
     callPreferences?.chillyChatCallsEnabled,
     incomingCallInvite,
+    incomingCallPresentationExpired,
     iosNativePresentationGraceReadyInviteId,
     iosNativePresentationRevision,
   ]);
@@ -1806,6 +1849,7 @@ export default function ChillyChatThreadScreen() {
     })
     && participantCount < 2;
   const incomingCallRinging = !!incomingCallInvite
+    && !incomingCallPresentationExpired
     && incomingCallInvite.status === "ringing"
     && incomingCallInvite.calleeUserId === currentUserId
     && incomingCallInvite.callerUserId !== currentUserId;
@@ -3206,7 +3250,7 @@ export default function ChillyChatThreadScreen() {
           <View style={styles.headerMetaRow}>
             <View style={styles.headerPill}>
               <View style={[styles.headerPillDot, activeCallRoomId && styles.headerPillDotAlert]} />
-              <Text style={styles.headerPillText}>{getThreadStatusLabel(thread)}</Text>
+              <Text style={styles.headerPillText}>{getThreadStatusLabel(presentedThread)}</Text>
             </View>
             {thread?.currentMember?.lastReadAt ? (
               <Text style={styles.headerMetaText}>Read up to date.</Text>
@@ -3673,6 +3717,7 @@ export default function ChillyChatThreadScreen() {
       ) : null}
 
       {incomingCallInvite
+        && !incomingCallPresentationExpired
         && !callPanelOpen
         && !waitingForIosNativePresentation ? (
         <View

@@ -17,6 +17,7 @@ const declarations = screen.body.statements.filter((node) => ts.isVariableStatem
 if (declarations.length !== names.size) throw new Error("Chat Answer source selection changed; review harness.");
 const ownershipHook = tree.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "useChatThreadOperationOwnership");
 const microphoneHook = tree.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "useIosNativeMicrophoneAcknowledgements");
+const presentationHook = tree.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "useExpiredIncomingCallPresentation");
 
 export const deferred = () => {
   let resolve;
@@ -99,6 +100,7 @@ export async function mountChatAnswer(options = {}) {
   const compiled = ts.transpileModule(`
     ${ownershipHook?.getText(tree) ?? ""}
     ${microphoneHook?.getText(tree) ?? ""}
+    ${presentationHook?.getText(tree) ?? ""}
     exports.Component = function Component() {
       const { currentUserId, threadId, isSignedIn, sessionGeneration, requestedNativeCallUuid } = runtime;
       const activeIosNativeAudioCallUuid = runtime.requestedNativeCallUuid;
@@ -112,6 +114,7 @@ export async function mountChatAnswer(options = {}) {
       const authority = { userId: currentUserId, accountId: currentUserId, sessionGeneration, state: "ACTIVE", restoreOnly: false };
       const incomingCallInvite = runtime.incomingInvite === null ? null : runtime.invite;
       const outgoingCallInvite = runtime.terminalMode === "outgoing" && runtime.outgoingPresent !== false ? runtime.invite : null;
+      ${screen.body.statements.filter(node => ts.isVariableStatement(node) && node.declarationList.declarations.some(declaration => ["expiredIncomingCallPresentation", "incomingCallPresentationExpired", "presentedThread"].includes(declaration.name.getText(tree)))).map(node => node.getText(tree)).join("\n")}
       const outgoingCallRinging = outgoingCallInvite?.status === "ringing";
       const callError = null; const callLoading = false;
       const callPanelOpen = runtime.callPanelOpen ?? true;
@@ -160,6 +163,7 @@ export async function mountChatAnswer(options = {}) {
     Date, Promise, setTimeout: options.timerMode ? (callback, delay) => { const timer = { callback, delay }; runtime.timeouts.push(timer); return timer; } : setTimeout, clearTimeout: options.timerMode ? noop : clearTimeout,
     resolveAcceptedChatCallRoomId,
     Platform: { OS: runtime.platform }, Vibration: { cancel: noop },
+    AppState: { addEventListener: () => ({ remove: noop }) },
     readChillyChatCallInvite: (id) => runtime.readInvite(id),
     getChatThread: (id) => runtime.readThread(id),
     listChatMessages: (id) => runtime.readMessages(id),
