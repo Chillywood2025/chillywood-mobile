@@ -499,3 +499,46 @@ v6 Android 97/iOS 32 and no v7 build. Thus these supersede only the never-built
 v7 seal, not delivered history. Recompute against the receipt commit to verify
 equality, require all final exact-head gates, and bind the next signed artifacts
 and physical retest to that final source.
+
+## V8 follow-up after paired v7 diagnostics — 2026-10-09
+
+V7 was delivered as Android 98 and iOS 33 from source
+`0d942593fe7db6187212ebdf234eca03f83c342d`. Its signed artifact identities,
+successful software gates, actual paired attempts and unresolved failures are
+preserved in `PR539_V7_DIAGNOSTIC_REPORT_2026-10-09.md`. That delivered cohort
+and every earlier cohort remain immutable.
+
+The next candidate combines these separately reviewed repairs:
+
+- Recover expired non-host membership visibility by retiring the old media
+  owner and requiring authorized re-admission, without ending the peer call.
+- Preserve requested microphone state through matching automatic CallKit
+  feedback, while genuine explicit controls and newer ownership remain binding.
+- Keep native audio readiness bound to the accepted call after its navigation
+  claim expires; do not let token age enable capture.
+- Configure the audio category before native Answer fulfillment, without
+  activating the session. Configuration failure retires the exact call through
+  the existing authoritative cleanup path.
+- Stop showing an expired incoming invitation or its stale live-room header
+  while read/cleanup work is delayed; retain backend ownership and retry rules.
+- Bound an accepted native audio wait to 15 seconds of the local scheduler,
+  report a visible failure, and attempt exact-call cleanup. Late activation,
+  account replacement and replacement calls cannot revive retired capture;
+  End remains available when cleanup must be retried.
+
+The Mac compiled the production native methods at intermediate source
+`c638d1286f9d686eaefa714d3c12c9c8f16ccf69`: 554 audio checks, 64 Answer checks,
+64 diagnostic checks, 128 incoming-report checks and four root/facade tests
+passed. All five new Answer mutations failed their intended assertions; the
+old native source failed configuration-before-fulfillment. Controlled native
+receipts do not establish OS activation or audible sound.
+
+The v8 cohort uses fresh platform runtimes on the existing internal channels.
+Its final committed native inputs must be measured and sealed below before
+exact-head validation and internal delivery. The full 105-row execution map and
+additional regression gates are in `PR539_V8_EXECUTION_PLAN_2026-10-09.md`.
+Independent helper review covered 44 offline groups, including stale candidate,
+changed owner, disjoint log capture, unrelated call correlation and bounded
+20/60-second background restoration. These are observer checks, not device
+results. Actual speech/moving video and the late/missing iPhone presentation
+cases remain open until the new installed candidate is evaluated.

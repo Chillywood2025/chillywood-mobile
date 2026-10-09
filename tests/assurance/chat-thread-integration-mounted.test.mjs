@@ -647,7 +647,9 @@ test("full iPhone native audio deadline keeps its remaining interval across an a
     assert.equal(original.canceled, true);
     const remaining = h.runtime.timers.filter(timer => !timer.canceled && timer.delay > 9_000 && timer.delay <= 10_001);
     assert.equal(remaining.length, 1, "the rerender schedules only the original deadline's remaining interval");
-    assert.equal(h.runtime.timers.some(timer => !timer.canceled && timer.delay > 14_000), false,
+    // The independent incoming-presentation expiry timer can legitimately
+    // remain scheduled later. Reject a renewed audio wait in its own window.
+    assert.equal(h.runtime.timers.some(timer => !timer.canceled && timer.delay > 14_000 && timer.delay <= 15_001), false,
       "an incidental render must not grant a new 15 seconds");
     await runNativeAudioDeadline(h, remaining[0]);
     assert.equal(h.runtime.invite.status, "ended");

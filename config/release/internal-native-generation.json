@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
-  "generation": "internal-native-v7",
+  "generation": "internal-native-v8",
   "channels": {
     "android": "android-internal-v2",
     "ios": "ios-internal-v2"
   },
   "runtimeVersions": {
-    "android": "1.0.0-android-production-v7",
-    "ios": "1.0.0-ios-production-v7"
+    "android": "1.0.0-android-production-v8",
+    "ios": "1.0.0-ios-production-v8"
   },
   "supersedes": {
-    "generation": "internal-native-v6",
-    "androidRuntimeVersion": "1.0.0-android-production-v6",
-    "iosRuntimeVersion": "1.0.0-ios-production-v6",
-    "androidCompatibilityDigest": "1142577cd8f72d88b9b118031bc19755c2e8bdf0b61ce4d4677fb5931f831367",
-    "iosCompatibilityDigest": "f70476a9d9a7cce3fee0353d126fef1bf86619ffb2f189764234b60b23a7f5ba"
+    "generation": "internal-native-v7",
+    "androidRuntimeVersion": "1.0.0-android-production-v7",
+    "iosRuntimeVersion": "1.0.0-ios-production-v7",
+    "androidCompatibilityDigest": "df19ee0cde119782d28d7e514d56d8890cc13f0ba70d20cf750a9980cc7455bc",
+    "iosCompatibilityDigest": "7c6e1332541f2e0a0cc9a963ad8c3c0e3bfac6d414be32ab780728994d121fed"
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
@@ -37,6 +37,6 @@
         "group": "Chillywood Internal"
       }
     },
-    "reason": "Physical testing of installed Android 97 and iOS 32 reproduced keyboard obstruction, microphone recovery failures, degraded initial video state, unresolved iPhone route switching and Android shared-track disposal crashes. The next PR #539 candidate repairs call-control keyboard handling, microphone feedback and signaling ownership, deferred camera cancellation and native Android track disposal, and adds bounded startup and route diagnostics. Fresh v7 binaries are required for both platforms, restricted to the existing Google Play and TestFlight internal tester audiences. Installed v6 and earlier cohorts remain immutable. Media diagnostics are enabled only by the two reviewed internal store profiles and matching signed channels; native iOS diagnostics remain restricted to ios-internal-v2. This generation does not authorize OTA publication or public release."
+    "reason": "Paired testing of installed Android 98 and iOS 33 reproduced unintended termination after prolonged Android backgrounding and lost iPhone microphone intent after automatic background mute feedback. Production-path regression tests also exposed native audio-readiness and expired-invitation recovery gaps. V8 isolates the next reviewed repair candidate for renewed source validation and paired physical testing; it does not claim those failures are physically closed. Late and missing iPhone presentation remain explicit diagnostic work. Fresh binaries are restricted to the existing Google Play internal and TestFlight Chillywood Internal audiences. Installed v7 and earlier cohorts remain immutable. Media diagnostics remain limited to the reviewed internal store profiles and matching signed channels. This generation does not authorize OTA publication or public release."
   }
 }
