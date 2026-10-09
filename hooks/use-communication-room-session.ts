@@ -507,6 +507,12 @@ export function useCommunicationRoomSession({
   const snapshotRefreshSerialRef = useRef(0);
   const legacySessionRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const legacySessionRestartRequestedGenerationRef = useRef<number | null>(null);
+  const legacySessionRestartRequestRef = useRef<{
+    generation: number;
+    trigger: string;
+    triggers: Set<string>;
+    peerChecks: Map<object, () => boolean>;
+  } | null>(null);
   const mediaControlTailRef = useRef<Promise<void>>(Promise.resolve());
   const pendingMediaControlCountRef = useRef(0);
   const mediaControlGenerationRef = useRef(0);
@@ -632,9 +638,10 @@ export function useCommunicationRoomSession({
     return await legacyMicControlRef.current?.(nextEnabled, cameraOverride, undefined, true) ?? false;
   }, []);
 
-  const requestLegacySessionRestart = useCallback((trigger: string, expectedGeneration = legacySessionGenerationRef.current) => {
+  const requestLegacySessionRestart = useCallback((trigger: string, expectedGeneration = legacySessionGenerationRef.current,
+    disconnectedPeer?: { peer: object; isStillNeeded: () => boolean }) => {
     const recovery = resolveLegacyChatSessionRecovery({
-      alreadyRequested: legacySessionRestartRequestedGenerationRef.current === expectedGeneration,
+      alreadyRequested: false,
       appState: appStateRef.current,
       enabled: restartDisconnectedSession,
       ending: endingGenerationRef.current === expectedGeneration,
@@ -642,6 +649,19 @@ export function useCommunicationRoomSession({
       trigger,
     });
     if (!recovery) return false;
+    const rememberReason = (request: NonNullable<typeof legacySessionRestartRequestRef.current>) => {
+      if (trigger === "peer_disconnected" && disconnectedPeer) {
+        request.peerChecks.set(disconnectedPeer.peer, disconnectedPeer.isStillNeeded);
+      } else request.triggers.add(trigger);
+    };
+    if (legacySessionRestartRequestedGenerationRef.current === expectedGeneration) {
+      const pending = legacySessionRestartRequestRef.current;
+      if (pending?.generation === expectedGeneration) rememberReason(pending);
+      return false;
+    }
+    const request = { generation: expectedGeneration, trigger, triggers: new Set<string>(), peerChecks: new Map<object, () => boolean>() };
+    rememberReason(request);
+    legacySessionRestartRequestRef.current = request;
     reportInternalCallMediaDiagnostic("session_restart_requested", {
       sessionGeneration: expectedGeneration, recoveryTrigger: trigger,
       appState: appStateRef.current, channelState: channelStateRef.current,
@@ -649,7 +669,9 @@ export function useCommunicationRoomSession({
     legacySessionRestartRequestedGenerationRef.current = expectedGeneration;
     if (legacySessionRestartTimerRef.current) clearTimeout(legacySessionRestartTimerRef.current);
     legacySessionRestartTimerRef.current = setTimeout(() => {
+      if (legacySessionRestartRequestRef.current !== request) return;
       legacySessionRestartTimerRef.current = null;
+      legacySessionRestartRequestRef.current = null;
       if (!resolveLegacyChatSessionRecovery({
         alreadyRequested: false,
         appState: appStateRef.current,
@@ -657,9 +679,21 @@ export function useCommunicationRoomSession({
         ending: endingGenerationRef.current === expectedGeneration,
         generationIsCurrent: expectedGeneration === legacySessionGenerationRef.current,
         trigger,
-      })) return;
+      })) {
+        if (legacySessionRestartRequestedGenerationRef.current === expectedGeneration) {
+          legacySessionRestartRequestedGenerationRef.current = null;
+        }
+        return;
+      }
+      // A disconnected peer may recover during the grace period. Only its
+      // original, still-current owner can justify this restart; independent
+      // signaling failures and other disconnected peers remain pending.
+      if (request.triggers.size === 0 && ![...request.peerChecks.values()].some(isStillNeeded => isStillNeeded())) {
+        legacySessionRestartRequestedGenerationRef.current = null;
+        return;
+      }
       reportInternalCallMediaDiagnostic("session_restart_started", {
-        sessionGeneration: expectedGeneration, recoveryTrigger: trigger,
+        sessionGeneration: expectedGeneration, recoveryTrigger: request.triggers.values().next().value ?? trigger,
         appState: appStateRef.current, channelState: channelStateRef.current,
       });
       channelStateRef.current = "connecting";
@@ -2123,7 +2157,9 @@ export function useCommunicationRoomSession({
         clearOfferRetry(remoteUserId);
       }
       if (mappedState === "failed") requestLegacySessionRestart("peer_failed", generation);
-      else if (mappedState === "disconnected") requestLegacySessionRestart("peer_disconnected", generation);
+      else if (mappedState === "disconnected") requestLegacySessionRestart("peer_disconnected", generation, {
+        peer: peerConnection, isStillNeeded: () => isCurrentPeer() && readPeerConnectionState(peerConnection) !== "connected",
+      });
       if (mappedState === "connected" || mappedState === "connecting") {
         void logInboundVideoDiagnostics(remoteUserId, peerConnection, `pc_${mappedState}`);
       }
@@ -2135,7 +2171,9 @@ export function useCommunicationRoomSession({
       if (mappedState === "connected") connectedRemoteSeenRef.current = true;
       setConnectionStateByUserId((prev) => ({ ...prev, [remoteUserId]: mappedState }));
       if (mappedState === "failed") requestLegacySessionRestart("peer_failed", generation);
-      else if (mappedState === "disconnected") requestLegacySessionRestart("peer_disconnected", generation);
+      else if (mappedState === "disconnected") requestLegacySessionRestart("peer_disconnected", generation, {
+        peer: peerConnection, isStillNeeded: () => isCurrentPeer() && readPeerConnectionState(peerConnection) !== "connected",
+      });
       logChatRtc("diag_ice_connection_state", {
         roomId,
         remoteUserId,
@@ -2563,6 +2601,7 @@ export function useCommunicationRoomSession({
     connectedRemoteSeenRef.current = false;
     setMediaControlError(null);
     legacySessionRestartRequestedGenerationRef.current = null;
+    legacySessionRestartRequestRef.current = null;
     const isActiveGeneration = () => (
       active && legacySessionGenerationRef.current === sessionGeneration
     );
@@ -3195,11 +3234,30 @@ export function useCommunicationRoomSession({
         });
 
         if (status === "SUBSCRIBED") {
-          if (legacySessionRestartTimerRef.current) {
-            clearTimeout(legacySessionRestartTimerRef.current);
-            legacySessionRestartTimerRef.current = null;
+          const pendingRestart = legacySessionRestartRequestRef.current;
+          if (pendingRestart?.generation === sessionGeneration) {
+            pendingRestart.triggers.delete("realtime_closed");
+            pendingRestart.triggers.delete("realtime_error");
+            pendingRestart.triggers.delete("realtime_timeout");
           }
-          legacySessionRestartRequestedGenerationRef.current = null;
+          // Signaling resubscription does not establish peer recovery.
+          if (!pendingRestart || (pendingRestart.triggers.size === 0
+            && ![...pendingRestart.peerChecks.values()].some(isStillNeeded => isStillNeeded()))) {
+            if (legacySessionRestartTimerRef.current) clearTimeout(legacySessionRestartTimerRef.current);
+            legacySessionRestartTimerRef.current = null;
+            legacySessionRestartRequestRef.current = null;
+            legacySessionRestartRequestedGenerationRef.current = null;
+          } else if (pendingRestart.trigger.startsWith("realtime_") && pendingRestart.triggers.size === 0) {
+            // A peer failure that joined a shorter signaling timer needs its
+            // own grace period after signaling recovers, not that old deadline.
+            if (legacySessionRestartTimerRef.current) clearTimeout(legacySessionRestartTimerRef.current);
+            legacySessionRestartTimerRef.current = null;
+            legacySessionRestartRequestRef.current = null;
+            legacySessionRestartRequestedGenerationRef.current = null;
+            for (const [peer, isStillNeeded] of pendingRestart.peerChecks) {
+              if (isStillNeeded()) requestLegacySessionRestart("peer_disconnected", sessionGeneration, { peer, isStillNeeded });
+            }
+          }
           logChatRtc("presence_subscription_status", {
             roomId: snapshot.room.roomId,
             status,

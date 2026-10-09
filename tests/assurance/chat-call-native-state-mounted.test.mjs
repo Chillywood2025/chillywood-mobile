@@ -311,6 +311,226 @@ async function start(t, { video = true, backgroundAudio = false, ...options } = 
   return { runtime, h };
 }
 
+function takePeerRecoveryTimer(runtime, start, delayMs = 2500) {
+  const index = runtime.timeoutDelays.findIndex((delay, index) => index >= start
+    && delay === delayMs && runtime.timeoutCallbacks[index]);
+  assert.ok(index >= start, "the real disconnected-peer callback schedules its recovery deadline");
+  const callback = runtime.timeoutCallbacks[index];
+  runtime.timeoutCallbacks[index] = null;
+  return callback;
+}
+async function firePeerRecoveryTimer(runtime, h, start) {
+  await h.run(takePeerRecoveryTimer(runtime, start));
+}
+async function startPeerRecovery(t) {
+  const runtime = createRuntime({ ownedAdmission: true });
+  const h = await mount(runtime, { enabled: true, naturalLifecycle: true,
+    restartDisconnectedSession: true, analyticsContext: { surface: "chat-thread" },
+    initialMediaPreferences: { micEnabled: true, cameraEnabled: true } });
+  t.after(() => h.unmount());
+  const peer = runtime.peers[0];
+  await h.run(() => peer.emit("connectionstatechange"));
+  return { runtime, h, peer, channel: h.refs.channelRef.current };
+}
+async function disconnectPeer(h, peer) {
+  await h.run(() => { peer.connectionState = "disconnected"; peer.emit("connectionstatechange"); });
+}
+async function recoverPeer(h, peer) {
+  await h.run(() => {
+    peer.connectionState = "connected"; peer.iceConnectionState = "connected";
+    peer.emit("connectionstatechange");
+  });
+}
+
+for (const event of ["connectionstatechange", "iceconnectionstatechange"]) {
+  test(`legacy peer recovery deadline preserves a recovered current peer via ${event}`, async t => {
+    const runtime = createRuntime();
+    const h = await mount(runtime, { enabled: true, naturalLifecycle: true,
+      restartDisconnectedSession: true, analyticsContext: { surface: "chat-thread" },
+      initialMediaPreferences: { micEnabled: true, cameraEnabled: true } });
+    t.after(() => h.unmount());
+    const peer = runtime.peers[0];
+    const generation = h.refs.legacySessionGenerationRef.current;
+    const channel = h.refs.channelRef.current;
+    const audio = live(runtime, "audio")[0];
+    const video = live(runtime, "video")[0];
+    const admissions = runtime.joinCalls.length;
+    await h.run(() => peer.emit("connectionstatechange"));
+    assert.equal(h.getResult().channelState, "live");
+    const timerStart = runtime.timeoutCallbacks.length;
+    await h.run(() => {
+      peer[event === "connectionstatechange" ? "connectionState" : "iceConnectionState"] = "disconnected";
+      peer.emit(event);
+    });
+    assert.equal(h.getResult().channelState, "reconnecting");
+    await h.run(() => {
+      peer.connectionState = "connected";
+      peer.iceConnectionState = "connected";
+      peer.emit(event);
+    });
+    assert.equal(h.getResult().channelState, "live", "the same peer recovers before the 2.5 second deadline");
+    await firePeerRecoveryTimer(runtime, h, timerStart);
+    assert.equal(runtime.joinCalls.length, admissions, "a recovered session must not re-admit because its obsolete timer fired");
+    assert.equal(h.refs.legacySessionGenerationRef.current, generation);
+    assert.equal(h.refs.channelRef.current, channel);
+    assert.equal(h.refs.peerConnectionsRef.current[runtime.remoteUserId], peer);
+    assert.equal(peer.connectionState, "connected");
+    assert.deepEqual(live(runtime, "audio"), [audio]);
+    assert.deepEqual(live(runtime, "video"), [video]);
+    assert.equal(runtime.mediaDiagnostics.some(entry => entry.phase === "session_restart_started"), false);
+  });
+}
+
+for (const condition of ["prolonged disconnect", "ICE still disconnected", "signaling resubscribed"]) {
+  test(`legacy peer recovery deadline retains ${condition}`, async t => {
+    const { runtime, h, peer, channel } = await startPeerRecovery(t);
+    const start = runtime.timeoutCallbacks.length;
+    await disconnectPeer(h, peer);
+    if (condition === "ICE still disconnected") await h.run(() => {
+      peer.connectionState = "connected"; peer.iceConnectionState = "disconnected";
+      peer.emit("iceconnectionstatechange");
+    });
+    if (condition === "signaling resubscribed") await h.run(() => channel.emitSubscriptionStatus("SUBSCRIBED"));
+    await firePeerRecoveryTimer(runtime, h, start);
+    assert.equal(runtime.joinCalls.length, 2);
+    assert.equal(peer.connectionState, "closed");
+    assert.equal(runtime.mediaDiagnostics.filter(entry => entry.phase === "session_restart_started").length, 1);
+  });
+}
+
+test("legacy peer recovery deadline permits a later genuine disconnect after cancellation", async t => {
+  const { runtime, h, peer } = await startPeerRecovery(t);
+  const start = runtime.timeoutCallbacks.length;
+  await disconnectPeer(h, peer);
+  await recoverPeer(h, peer);
+  await firePeerRecoveryTimer(runtime, h, start);
+  assert.equal(runtime.joinCalls.length, 1);
+  const later = runtime.timeoutCallbacks.length;
+  await disconnectPeer(h, peer);
+  await firePeerRecoveryTimer(runtime, h, later);
+  assert.equal(runtime.joinCalls.length, 2);
+});
+
+for (const reason of ["CHANNEL_ERROR", "TIMED_OUT", "CLOSED", "peer_failed"]) {
+  test(`legacy peer recovery deadline preserves an independent ${reason}`, async t => {
+    const { runtime, h, peer, channel } = await startPeerRecovery(t);
+    const start = runtime.timeoutCallbacks.length;
+    await disconnectPeer(h, peer);
+    if (reason === "peer_failed") await h.run(() => { peer.connectionState = "failed"; peer.emit("connectionstatechange"); });
+    else await h.run(() => channel.emitSubscriptionStatus(reason));
+    await recoverPeer(h, peer);
+    await firePeerRecoveryTimer(runtime, h, start);
+    assert.equal(runtime.joinCalls.length, 2, "peer recovery cannot cancel a different pending failure");
+  });
+}
+
+test("legacy peer recovery deadline preserves a second disconnected peer when the first recovers", async t => {
+  const { runtime, h, peer, channel } = await startPeerRecovery(t);
+  const local = h.refs.joinedMembershipRef.current;
+  runtime.queueSnapshot({ memberships: [local,
+    { ...local, userId: runtime.remoteUserId, membershipGeneration: runtime.remoteMembershipGeneration },
+    { ...local, userId: "second-remote", membershipGeneration: "16000000-0000-4000-8000-000000000003" }] });
+  await h.run(() => channel.emitBroadcast("state:update", {}));
+  const second = h.refs.peerConnectionsRef.current["second-remote"];
+  assert.ok(second && second !== peer);
+  const start = runtime.timeoutCallbacks.length;
+  await disconnectPeer(h, peer);
+  await disconnectPeer(h, second);
+  await recoverPeer(h, peer);
+  await firePeerRecoveryTimer(runtime, h, start);
+  assert.equal(runtime.joinCalls.length, 2);
+});
+
+for (const retirement of ["remote admission", "room", "account", "End"]) {
+  test(`legacy peer recovery deadline cannot act after ${retirement} replacement`, async t => {
+    const { runtime, h, peer, channel } = await startPeerRecovery(t);
+    const start = runtime.timeoutCallbacks.length;
+    await disconnectPeer(h, peer);
+    const oldDeadline = takePeerRecoveryTimer(runtime, start);
+    if (retirement === "remote admission") {
+      runtime.remoteMembershipGeneration = "16000000-0000-4000-8000-000000000002";
+      await h.run(() => channel.emitBroadcast("state:update", {}));
+    } else if (retirement === "room") {
+      runtime.roomId = "REPLACEMENT-ROOM";
+      await h.rerender({ roomId: runtime.roomId });
+    } else if (retirement === "account") {
+      runtime.userId = "replacement-account";
+      await h.rerender({ authenticatedUserId: runtime.userId, authenticatedAccessToken: "replacement-token" });
+    } else await h.run(() => h.getResult().leaveRoom());
+    const joins = runtime.joinCalls.length;
+    const generation = h.refs.legacySessionGenerationRef.current;
+    const currentPeer = h.refs.peerConnectionsRef.current[runtime.remoteUserId];
+    await h.run(oldDeadline);
+    assert.equal(runtime.joinCalls.length, joins);
+    assert.equal(h.refs.legacySessionGenerationRef.current, generation);
+    assert.equal(h.refs.peerConnectionsRef.current[runtime.remoteUserId], currentPeer);
+    if (retirement === "End") assert.equal(live(runtime, "audio").length, 0);
+  });
+}
+
+test("legacy peer recovery deadline cannot cancel a newer request after subscription recovery", async t => {
+  const { runtime, h, peer, channel } = await startPeerRecovery(t);
+  const start = runtime.timeoutCallbacks.length;
+  await disconnectPeer(h, peer);
+  const oldDeadline = takePeerRecoveryTimer(runtime, start);
+  await recoverPeer(h, peer);
+  await h.run(() => channel.emitSubscriptionStatus("SUBSCRIBED"));
+  const newer = runtime.timeoutCallbacks.length;
+  await disconnectPeer(h, peer);
+  await h.run(oldDeadline);
+  assert.equal(runtime.joinCalls.length, 1);
+  await firePeerRecoveryTimer(runtime, h, newer);
+  assert.equal(runtime.joinCalls.length, 2);
+});
+
+test("legacy peer recovery deadline aborted in background permits foreground recovery", async t => {
+  const { runtime, h, peer } = await startPeerRecovery(t);
+  const start = runtime.timeoutCallbacks.length;
+  await disconnectPeer(h, peer);
+  const oldDeadline = takePeerRecoveryTimer(runtime, start);
+  await h.run(() => runtime.emitAppState("background"));
+  await h.run(oldDeadline);
+  assert.equal(runtime.joinCalls.length, 1);
+  const foreground = runtime.timeoutCallbacks.length;
+  await h.run(() => runtime.emitAppState("active"));
+  await h.run(takePeerRecoveryTimer(runtime, foreground, 0));
+  assert.equal(runtime.joinCalls.length, 2);
+});
+
+for (const [status, delayMs] of [["CHANNEL_ERROR", 1500], ["TIMED_OUT", 1500], ["CLOSED", 0]]) {
+  for (const peerRemainsDisconnected of [false, true]) {
+    test(`legacy peer recovery deadline after ${status} resubscription retains only unresolved peer=${peerRemainsDisconnected}`, async t => {
+      const { runtime, h, peer, channel } = await startPeerRecovery(t);
+      const start = runtime.timeoutCallbacks.length;
+      await h.run(() => channel.emitSubscriptionStatus(status));
+      const oldSignalingDeadline = takePeerRecoveryTimer(runtime, start, delayMs);
+      if (peerRemainsDisconnected) await disconnectPeer(h, peer);
+      const renewed = runtime.timeoutCallbacks.length;
+      await h.run(() => channel.emitSubscriptionStatus("SUBSCRIBED"));
+      await h.run(oldSignalingDeadline);
+      assert.equal(runtime.joinCalls.length, 1, "the obsolete signaling deadline cannot restart a recovered channel");
+      if (peerRemainsDisconnected) {
+        await firePeerRecoveryTimer(runtime, h, renewed);
+        assert.equal(runtime.joinCalls.length, 2, "the unresolved peer retains a full 2.5 second recovery grace");
+      } else {
+        assert.equal(runtime.mediaDiagnostics.some(entry => entry.phase === "session_restart_started"), false);
+        assert.equal(peer.connectionState, "connected");
+      }
+    });
+  }
+}
+
+test("legacy peer recovery deadline retains peer failure even after signaling and peer reconnect", async t => {
+  const { runtime, h, peer, channel } = await startPeerRecovery(t);
+  const start = runtime.timeoutCallbacks.length;
+  await disconnectPeer(h, peer);
+  await h.run(() => { peer.connectionState = "failed"; peer.emit("connectionstatechange"); });
+  await recoverPeer(h, peer);
+  await h.run(() => channel.emitSubscriptionStatus("SUBSCRIBED"));
+  await firePeerRecoveryTimer(runtime, h, start);
+  assert.equal(runtime.joinCalls.length, 2, "resubscription cannot erase an independent failed-peer recovery");
+});
+
 // Opt-in native boundary for the real mounted hook. This models only sender
 // association and completed offer/answer direction, not SDP/RTP or a device.
 // A track attached after an offer cannot borrow that offer's answer proof.
