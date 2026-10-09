@@ -240,6 +240,13 @@ fixture = fixture.replace("const getCameraPermission = async () => runtime.camer
   if (action?.wait) await action.wait;
   return action?.permission ?? runtime.cameraPermission;
 };`);
+const cameraRequestSeam = "  const requestCameraPermission = async () => runtime.cameraPermission;";
+assert.equal(fixture.split(cameraRequestSeam).length, 2);
+fixture = fixture.replace(cameraRequestSeam, `  const requestCameraPermission = async () => {
+  runtime.cameraRequestCount = (runtime.cameraRequestCount ?? 0) + 1;
+  if (runtime.cameraRequestBarrier) await runtime.cameraRequestBarrier;
+  return runtime.cameraPermission;
+};`);
 const seam = "  const commonJsModule = { exports: {} };";
 assert.equal(fixture.split(seam).length, 2);
 fixture = fixture.replace(seam, `
@@ -495,6 +502,48 @@ test("legacy initial camera reuse cannot bless recovered track after a failed of
   await h.rerender({ mediaActivationSerial: 1 });
   assert.ok(peer.offerCalls > attemptsBefore, "a later reconciliation still negotiates the previously failed recovery");
 });
+
+for (const replacement of ["room", "remote admission"]) {
+  test(`legacy queued local offer cannot mutate a replacement ${replacement}`, async t => {
+    const { runtime, h } = await start(t, { video: false });
+    const oldPeer = runtime.peers.at(-1);
+    const pending = deferred();
+    const createOffer = oldPeer.createOffer.bind(oldPeer);
+    let held = false;
+    oldPeer.createOffer = async (...args) => {
+      const value = await createOffer(...args);
+      if (!held) { held = true; await pending.promise; }
+      return value;
+    };
+    let first;
+    let queued;
+    try {
+      await h.run(() => { first = h.refs.createAndSendOffer(runtime.remoteUserId, true); });
+      assert.equal(held, true, "the original native offer owns the peer queue");
+      await h.run(() => { queued = h.refs.createAndSendOffer(runtime.remoteUserId, true); });
+      if (replacement === "room") {
+        runtime.roomId = "ROOM-QUEUED-OFFER-REPLACEMENT";
+        await h.rerender({ roomId: runtime.roomId });
+      } else {
+        runtime.remoteMembershipGeneration = "16000000-0000-4000-8000-000000000009";
+        await h.run(() => h.refs.refreshSnapshot(runtime.roomId));
+      }
+      const nextPeer = h.refs.peerConnectionsRef.current[runtime.remoteUserId];
+      assert.ok(nextPeer && nextPeer !== oldPeer);
+      assert.equal(oldPeer.connectionState, "closed");
+      const offersBefore = nextPeer.offerCalls;
+      pending.resolve();
+      await h.run(async () => { await first; await queued; });
+      assert.equal(nextPeer.offerCalls, offersBefore, "retired queued work cannot negotiate through the replacement peer");
+      assert.equal(await h.run(() => h.refs.createAndSendOffer(runtime.remoteUserId, true)), true,
+        "a newly requested offer belongs to the replacement owner and remains usable");
+      assert.equal(nextPeer.offerCalls, offersBefore + 1);
+    } finally {
+      pending.resolve();
+      await h.run(async () => { await first; await queued; });
+    }
+  });
+}
 
 test("legacy startup diagnostic boundaries distinguish requested capture, permissions, returned tracks and projection", async t => {
   const { runtime } = await start(t);
@@ -755,7 +804,30 @@ test("legacy automatic foreground microphone recovers a polite glare with a new 
   assert.equal(live(runtime, "audio").length, 1);
   assert.equal(collision.offers.length, 2, "the replacement offer must obtain its own answer proof");
   assert.notEqual(collision.offers[0].payload.negotiationId, collision.offers[1].payload.negotiationId);
+  assert.deepEqual(Array.from(runtime.mediaDiagnostics.filter(entry => entry.phase === "microphone_operation"
+    && entry.microphoneOperation === "enable" && entry.microphoneStage === "negotiation"),
+  entry => entry.microphoneOutcome), ["glare_retry", "succeeded"]);
+  assert.ok(runtime.mediaDiagnostics.some(entry => entry.phase === "microphone_operation"
+    && entry.microphoneOperation === "enable" && entry.microphoneStage === "control" && entry.microphoneOutcome === "succeeded"));
 });
+
+for (const failure of ["capture", "sender"]) {
+  test(`legacy microphone operation diagnostic distinguishes actual ${failure} failure`, async t => {
+    const { runtime, h } = await start(t, { video: false, initialAppState: "background" });
+    if (failure === "capture") runtime.queueMedia({ outcome: "reject" });
+    else runtime.peers[0].addTrack = () => { throw Error("private native sender failure"); };
+    await h.run(() => runtime.emitAppState("active"));
+    assert.equal(live(runtime, "audio").length, 0);
+    assert.equal(h.getResult().micEnabled, false);
+    assert.equal(runtime.durableMic, false);
+    const operations = runtime.mediaDiagnostics.filter(entry => entry.phase === "microphone_operation"
+      && entry.microphoneOperation === "enable");
+    assert.ok(operations.some(entry => entry.microphoneStage === failure && entry.microphoneOutcome === "unproved"));
+    assert.equal(operations.some(entry => entry.microphoneStage === "negotiation"), false,
+      "a preparation failure before signaling must not be attributed to a negotiation");
+    assert.equal(operations.some(entry => entry.microphoneStage === "control" && entry.microphoneOutcome === "succeeded"), false);
+  });
+}
 
 test("legacy glare retry rejects the interrupted offer's late answer and requires its own answer", async t => {
   const { runtime, h } = await start(t, { video: false, initialAppState: "background" });
@@ -819,6 +891,13 @@ for (const failure of ["repeated glare", "answer send failure", "retry answer ti
     assert.equal(live(runtime, "audio").length, 0);
     assert.equal(runtime.durableMic, false);
     assert.match(h.getResult().mediaControlError, /Microphone could not start/);
+    const operations = runtime.mediaDiagnostics.filter(entry => entry.phase === "microphone_operation"
+      && entry.microphoneOperation === "enable");
+    assert.deepEqual(Array.from(operations.filter(entry => entry.microphoneStage === "negotiation"
+      && entry.microphoneOutcome.startsWith("glare_")), entry => entry.microphoneOutcome),
+    failure === "repeated glare" ? ["glare_retry", "glare_exhausted"] : failure === "retry answer timeout" ? ["glare_retry"] : []);
+    assert.ok(operations.some(entry => entry.microphoneStage === "preparation" && entry.microphoneOutcome === "unproved"));
+    assert.equal(operations.some(entry => entry.microphoneStage === "control" && entry.microphoneOutcome === "succeeded"), false);
     collision.restore();
     assert.equal(await h.run(() => h.getResult().setMicrophoneEnabled(true)), true,
       "bounded automatic failure leaves a later explicit retry recoverable");
@@ -1034,6 +1113,227 @@ test("legacy failed mute compensation cannot restore a newer muted preference", 
   assert.equal(runtime.durableMic, false);
   assert.equal(runtime.broadcasts.filter(message => message.event === "media:update").at(-1)?.payload.micOn, false);
 });
+
+test("legacy automatic background failed durable mute never restores capture while recovery is pending", async t => {
+  const { runtime, h } = await start(t, { video: false, backgroundAudio: false });
+  const pending = deferred();
+  const capturesBefore = runtime.captureRequests.length;
+  runtime.queueMembership({ outcome: "null" });
+  runtime.queueMembership({ wait: pending.promise });
+  try {
+    await h.run(() => runtime.emitAppState("background"));
+    await h.run(async () => { for (let i = 0; i < 160; i += 1) await Promise.resolve(); });
+    assert.equal(runtime.membershipActions.length, 0, "recovery reached its held durable acknowledgement");
+    assert.equal(runtime.appState, "background");
+    assert.equal(live(runtime, "audio").length, 0, "a failed privacy write cannot restore background capture");
+    assert.equal(runtime.membershipTouches.at(-1).micEnabled, false, "recovery must keep publishing muted state");
+    assert.equal(runtime.captureRequests.length, capturesBefore);
+    assert.ok(runtime.mediaDiagnostics.some(entry => entry.phase === "microphone_operation"
+      && entry.microphoneOperation === "disable" && entry.microphoneStage === "durable" && entry.microphoneOutcome === "unproved"));
+  } finally {
+    pending.resolve();
+    await h.run(async () => { for (let i = 0; i < 160; i += 1) await Promise.resolve(); });
+  }
+  assert.equal(live(runtime, "audio").length, 0);
+  assert.equal(h.getResult().micEnabled, false);
+  assert.equal(runtime.durableMic, false);
+  await h.run(() => runtime.emitAppState("active"));
+  assert.equal(live(runtime, "audio").length, 1, "eligible foreground still restores the retained microphone intent");
+  assert.equal(runtime.durableMic, true);
+});
+
+for (const outcome of ["grant", "deny", "End"]) {
+  test(`legacy actual background during camera permission enforces privacy before ${outcome}`, async t => {
+    const { runtime, h } = await start(t, { video: false,
+      cameraPermission: { granted: false, canAskAgain: true, status: "undetermined" } });
+    const pending = deferred();
+    runtime.cameraRequestBarrier = pending.promise;
+    let camera;
+    assert.equal(live(runtime, "audio").length, 1);
+    try {
+      await h.run(() => { camera = h.getResult().toggleCamera(); });
+      assert.equal(runtime.cameraRequestCount, 1, "actual native permission request is pending");
+      await h.run(() => runtime.emitAppState("inactive"));
+      assert.equal(live(runtime, "audio").length, 1, "permission dialog's inactive transition does not interrupt existing audio");
+      await h.run(() => runtime.emitAppState("background"));
+      assert.equal(live(runtime, "audio").length, 0, "real background must not wait for permission resolution");
+      assert.equal(h.getResult().micEnabled, false);
+      if (outcome === "End") await h.run(() => h.getResult().leaveRoom());
+    } finally {
+      runtime.cameraPermission = outcome === "deny" ? denied() : granted();
+      pending.resolve();
+      await h.run(async () => { await camera; for (let i = 0; i < 160; i += 1) await Promise.resolve(); });
+    }
+    assert.equal(live(runtime, "audio").length, 0);
+    assert.equal(live(runtime, "video").length, 0, "late camera grant is not permission to capture in background");
+    if (outcome === "End") {
+      assert.equal(runtime.leaveCalls, 1);
+      assert.ok(runtime.peers.every(peer => peer.connectionState === "closed"));
+    } else assert.equal(runtime.durableMic, false);
+    await h.run(() => runtime.emitAppState("active"));
+    assert.equal(live(runtime, "audio").length, outcome === "End" ? 0 : 1,
+      "foreground restores only the still-owned prior microphone intent");
+    if (outcome === "End") assert.equal(live(runtime, "video").length, 0);
+  });
+}
+
+test("legacy permission inactive-to-active cycle preserves current microphone and allows granted camera", async t => {
+  const { runtime, h } = await start(t, { video: false,
+    cameraPermission: { granted: false, canAskAgain: true, status: "undetermined" } });
+  const pending = deferred();
+  runtime.cameraRequestBarrier = pending.promise;
+  const microphone = live(runtime, "audio")[0];
+  let camera;
+  try {
+    await h.run(() => { camera = h.getResult().toggleCamera(); });
+    assert.equal(runtime.cameraRequestCount, 1);
+    await h.run(() => runtime.emitAppState("inactive"));
+    await h.run(() => runtime.emitAppState("active"));
+    assert.equal(live(runtime, "audio")[0], microphone);
+  } finally {
+    runtime.cameraPermission = granted();
+    pending.resolve();
+    assert.equal(await h.run(() => camera), true);
+  }
+  assert.equal(live(runtime, "audio")[0], microphone);
+  assert.equal(live(runtime, "video").length, 1);
+  assert.equal(runtime.joinCalls.length, 1);
+});
+
+for (const backgroundAudio of [false, true]) {
+  test(`legacy foreground return during camera permission preserves current authority: background audio ${backgroundAudio}`, async t => {
+    const { runtime, h } = await start(t, { video: false, backgroundAudio,
+      cameraPermission: { granted: false, canAskAgain: true, status: "undetermined" } });
+    const pending = deferred();
+    runtime.cameraRequestBarrier = pending.promise;
+    let camera;
+    try {
+      await h.run(() => { camera = h.getResult().toggleCamera(); });
+      assert.equal(runtime.cameraRequestCount, 1);
+      await h.run(() => runtime.emitAppState("background"));
+      assert.equal(live(runtime, "audio").length, Number(backgroundAudio));
+      assert.equal(live(runtime, "video").length, 0);
+      await h.run(() => runtime.emitAppState("active"));
+    } finally {
+      runtime.cameraPermission = granted();
+      pending.resolve();
+      await h.run(async () => { await camera; for (let i = 0; i < 160; i += 1) await Promise.resolve(); });
+    }
+    assert.equal(live(runtime, "audio").length, 1);
+    assert.equal(runtime.durableMic, true);
+    assert.equal(live(runtime, "video").length, 1);
+    assert.equal(runtime.joinCalls.length, 1);
+    assert.equal(runtime.cameraRequestCount, 1);
+  });
+}
+
+for (const gate of ["capture", "durable On", "broadcast On", "durable compensation"]) {
+  test(`legacy camera ${gate} cannot overwrite a newer Off preference or revive on foreground`, async t => {
+    const { runtime, h } = await start(t);
+    if (gate !== "durable compensation") assert.equal(await h.run(() => h.getResult().toggleCamera()), true);
+    const pending = deferred();
+    let operation;
+    let broadcastHeld = false;
+    if (gate === "capture") {
+      for (const stream of runtime.localStreams) for (const track of stream.getVideoTracks()) track.stop();
+      runtime.queueMedia({ wait: pending.promise });
+    } else if (gate === "broadcast On") {
+      const channel = runtime.channels.at(-1);
+      const send = channel.send.bind(channel);
+      channel.send = async message => {
+        if (!broadcastHeld && message.event === "media:update" && message.payload.cameraOn === true) {
+          broadcastHeld = true;
+          await pending.promise;
+        }
+        return send(message);
+      };
+    }
+    else {
+      if (gate === "durable compensation") runtime.queueMembership({ outcome: "null" });
+      runtime.queueMembership({ wait: pending.promise });
+    }
+    try {
+      await h.run(() => { operation = h.getResult().toggleCamera(); });
+      await h.run(async () => { for (let i = 0; i < 120; i += 1) await Promise.resolve(); });
+      if (gate === "capture") assert.equal(runtime.captureRequests.at(-1).video, true);
+      else if (gate === "broadcast On") assert.equal(broadcastHeld, true);
+      else assert.equal(runtime.membershipActions.length, 0);
+      await h.rerender({ initialMediaPreferences: { cameraEnabled: false, micEnabled: true } });
+      assert.equal(live(runtime, "video").length, 0);
+    } finally {
+      pending.resolve();
+    }
+    assert.equal(await h.run(() => operation), false, "superseded camera transaction cannot report success");
+    assert.equal(live(runtime, "video").length, 0);
+    assert.equal(h.refs.cameraEnabledRef.current, false);
+    assert.equal(runtime.durableCamera, false);
+    assert.equal(runtime.broadcasts.filter(message => message.event === "media:update").at(-1).payload.cameraOn, false);
+    await h.run(() => runtime.emitAppState("background"));
+    await h.run(() => runtime.emitAppState("active"));
+    assert.equal(live(runtime, "video").length, 0, "foreground cannot revive the retired camera intent");
+    assert.equal(h.getResult().cameraEnabled, false);
+    assert.equal(await h.run(() => h.getResult().toggleCamera()), true, "a new explicit camera request remains usable");
+    assert.equal(live(runtime, "video").length, 1);
+  });
+}
+
+for (const producer of ["AppState", "active media stopper"]) {
+  test(`legacy ${producer} privacy stop cannot queue behind an earlier microphone commit`, async t => {
+    const { runtime, h } = await start(t, { video: false, backgroundAudio: false });
+    const pending = deferred();
+    runtime.queueMembership({ wait: pending.promise });
+    let enabling;
+    let stopping;
+    await React.act(async () => {
+      enabling = h.getResult().setMicrophoneEnabled(true);
+      for (let i = 0; i < 96; i += 1) await Promise.resolve();
+    });
+    assert.equal(runtime.membershipActions.length, 0, "earlier microphone commit reached its held response");
+    try {
+      await h.run(() => {
+        if (producer === "AppState") return runtime.emitAppState("background");
+        stopping = runtime.mediaSessionStopper("app_background");
+      });
+      assert.equal(live(runtime, "audio").length, 0, "the privacy boundary must disable capture before queueing signaling");
+    } finally {
+      pending.resolve();
+      await h.run(async () => { await enabling; await stopping; for (let i = 0; i < 160; i += 1) await Promise.resolve(); });
+    }
+    assert.equal(live(runtime, "audio").length, 0, "the earlier enable receipt cannot revive the stopped microphone");
+    assert.equal(h.getResult().micEnabled, false);
+    assert.equal(runtime.durableMic, false);
+    if (producer === "active media stopper") await h.run(() => runtime.emitAppState("background"));
+    await h.run(() => runtime.emitAppState("active"));
+    assert.equal(live(runtime, "audio").length, 1, "the original foreground intent remains available");
+  });
+}
+
+for (const backgroundAudio of [false, true]) {
+  test(`legacy manual mute compensation respects changed background audio authority: ${backgroundAudio}`, async t => {
+    const { runtime, h } = await start(t, { video: false, backgroundAudio });
+    const pending = deferred();
+    runtime.queueMembership({ outcome: "null" });
+    runtime.queueMembership({ wait: pending.promise });
+    let muting;
+    await React.act(async () => {
+      muting = h.getResult().setMicrophoneEnabled(false);
+      for (let i = 0; i < 96; i += 1) await Promise.resolve();
+    });
+    assert.equal(runtime.membershipActions.length, 0);
+    assert.equal(runtime.membershipTouches.at(-1).micEnabled, true, "foreground compensation retains prior On behavior");
+    assert.equal(live(runtime, "audio").length, 1);
+    try {
+      await h.run(() => runtime.emitAppState("background"));
+      assert.equal(live(runtime, "audio").length, Number(backgroundAudio), "only retained native background authority permits capture");
+    } finally {
+      pending.resolve();
+      await h.run(async () => { await muting; for (let i = 0; i < 160; i += 1) await Promise.resolve(); });
+    }
+    assert.equal(live(runtime, "audio").length, Number(backgroundAudio));
+    assert.equal(h.getResult().micEnabled, backgroundAudio);
+    assert.equal(runtime.durableMic, backgroundAudio);
+  });
+}
 
 for (const video of [false, true]) {
   test(`legacy initial ${video ? "video" : "voice"} capture cannot revive superseded microphone preferences`, async t => {

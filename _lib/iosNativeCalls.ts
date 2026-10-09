@@ -1170,6 +1170,7 @@ export function createIosOutgoingAudioHandoff(input: {
   isCurrent(): boolean; onRevoked(): void;
 }) {
   let retired = false;
+  let nativeReservationRequested = false;
   const context = voipAuthorityContext;
   const generation = voipLifecycleGeneration;
   const current = () => !retired && input.isCurrent() && !!context
@@ -1183,7 +1184,9 @@ export function createIosOutgoingAudioHandoff(input: {
   const retire = () => {
     retired = true;
     unsubscribe();
-    void NativeCallsModule?.retireOutgoingAudioHandoffAsync?.(input.ownerId).catch(() => undefined);
+    if (nativeReservationRequested) {
+      void NativeCallsModule?.retireOutgoingAudioHandoffAsync?.(input.ownerId).catch(() => undefined);
+    }
   };
   return {
     retire,
@@ -1196,13 +1199,21 @@ export function createIosOutgoingAudioHandoff(input: {
             || !isIosNativeCallsRuntimeEnabled() || !await isExactVoipAuthorityCurrent(context) || !current()) {
           throw new Error("outgoing_call_audio_authority_unavailable");
         }
+        const result = await drained;
+        if (!result.ok) throw result.error;
+        // A still-current sound owner rejects competing screen ownership.
+        // Do not replace its native lease before that admission has succeeded.
+        if (!current() || !await isExactVoipAuthorityCurrent(context) || !current()) {
+          throw new Error("outgoing_call_audio_handoff_retired");
+        }
+        // Once begin is issued, even an uncertain failure needs exact-owner
+        // retirement. Before this point there is no native lease to retire.
+        nativeReservationRequested = true;
         await NativeCallsModule.beginOutgoingAudioHandoffAsync({
           ownerId: input.ownerId, userId: input.authority.userId, accountId: input.authority.accountId,
           sessionGeneration: input.authority.sessionGeneration, installId: context.installId,
           inviteId: input.inviteId, threadId: input.threadId, roomId: input.roomId, callType: input.callType,
         });
-        const result = await drained;
-        if (!result.ok) throw result.error;
         if (!current() || !await isExactVoipAuthorityCurrent(context) || !current()) {
           throw new Error("outgoing_call_audio_handoff_retired");
         }

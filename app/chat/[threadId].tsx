@@ -2852,7 +2852,16 @@ export default function ChillyChatThreadScreen() {
       if (event.type === "muted" || event.type === "unmuted") {
         if (eventCallUuid && consumeNativeMicAck(event.type === "muted")) return;
         if (eventCallUuid && consumeAutomaticMicrophoneFeedback(event.type === "muted")) return;
-        void setMicrophoneEnabled(event.type === "unmuted");
+        // A system control can receive the same bottom-up media feedback as
+        // an in-app control. Acknowledge only this pending command; an
+        // opposite system intent still clears its reservation and takes over.
+        const acknowledgement = eventCallUuid
+          ? rememberNativeMicAck(event.type === "muted", true) : null;
+        void setMicrophoneEnabled(event.type === "unmuted")
+          .finally(() => { forgetNativeMicAck(acknowledgement); })
+          .catch((mediaError) => {
+            reportRuntimeError("chat-call-native-microphone", mediaError, { threadId });
+          });
         return;
       }
       if (
@@ -2877,7 +2886,7 @@ export default function ChillyChatThreadScreen() {
         setNativeAudioSessionCallUuid("");
       }
     });
-  }, [activeIosNativeAudioCallUuid, consumeAutomaticMicrophoneFeedback, consumeNativeMicAck, requestedCallInviteId, setMicrophoneEnabled]);
+  }, [activeIosNativeAudioCallUuid, consumeAutomaticMicrophoneFeedback, consumeNativeMicAck, forgetNativeMicAck, rememberNativeMicAck, requestedCallInviteId, setMicrophoneEnabled, threadId]);
 
   const handleJoinOrCloseCall = useCallback(async (
     expectedInviteId = "",

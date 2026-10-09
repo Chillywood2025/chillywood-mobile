@@ -134,3 +134,66 @@ for (const acceptedWhileCancelPending of [true, false]) {
     } finally { terminal.resolve(); await h.unmount(); }
   });
 }
+
+for (const permissionSettlesFirst of [true, false]) {
+  for (const granted of [true, false]) {
+    test(`outgoing permission prompt ${granted ? "grant" : "denial"} ${permissionSettlesFirst ? "before" : "after"} active cannot revive the retired startup`, async () => {
+      const permission = deferred();
+      const result = { canAskAgain: granted, granted, status: granted ? "granted" : "denied" };
+      const h = await outgoing({ configureMedia(media) {
+        media.microphonePermission = { canAskAgain: true, granted: false, status: "undetermined" };
+        // Expo resolves each native permission request from its OS callback.
+        // If foreground readmission requests again, it must await that same
+        // modeled user decision; an immediate undetermined result is not proof.
+        media.queuePermission({ wait: permission.promise, permission: result });
+        media.queuePermission({ wait: permission.promise, permission: result });
+      } });
+      const enabledAudio = () => h.runtime.media.localStreams.flatMap(stream => stream.getAudioTracks())
+        .filter(track => track.enabled && track.readyState === "live");
+      try {
+        await h.run(() => h.runtime.snapshot.handleJoinOrCloseCall());
+        assert.equal(h.runtime.media.permissionRequestCalls, 1);
+        assert.equal(h.runtime.media.mediaCreateCalls.length, 0);
+        await h.appState("inactive");
+        assert.equal(h.runtime.outgoingAudioHandoffs[0].retired, true);
+        if (permissionSettlesFirst) {
+          await h.run(() => { permission.resolve(); });
+          assert.equal(enabledAudio().length, 0, "permission alone cannot admit inactive capture");
+        }
+        await h.appState("active");
+        if (!permissionSettlesFirst) {
+          assert.equal(enabledAudio().length, 0, "foreground cannot bypass the pending permission decision");
+          await h.run(() => { permission.resolve(); });
+        }
+        await h.flush();
+        assert.equal(enabledAudio().length, Number(granted));
+        assert.equal(h.runtime.media.mediaCreateCalls.length, Number(granted), "only the current startup may create microphone capture");
+        assert.equal(h.runtime.snapshot.micEnabled, granted);
+        assert.equal(h.runtime.outgoingAudioHandoffs[0].retired, true);
+        assert.equal(h.runtime.media.microphonePermission.granted, granted);
+        await h.run(() => h.runtime.snapshot.panelBindings.onLeave());
+        assert.equal(enabledAudio().length, 0);
+      } finally { permission.resolve(); await h.unmount(); }
+    });
+  }
+}
+
+test("explicit End during an outgoing permission prompt prevents capture after grant and foreground", async () => {
+  const permission = deferred();
+  const h = await outgoing({ configureMedia(media) {
+    media.microphonePermission = { canAskAgain: true, granted: false, status: "undetermined" };
+    media.queuePermission({ wait: permission.promise, permission: { canAskAgain: true, granted: true, status: "granted" } });
+  } });
+  try {
+    await h.run(() => h.runtime.snapshot.handleJoinOrCloseCall());
+    assert.equal(h.runtime.media.permissionRequestCalls, 1);
+    await h.appState("inactive");
+    await h.run(() => h.runtime.snapshot.panelBindings.onLeave());
+    await h.run(() => { permission.resolve(); });
+    await h.appState("active");
+    assert.equal(h.runtime.media.mediaCreateCalls.length, 0);
+    assert.equal(h.runtime.outgoingAudioHandoffs.length, 1);
+    assert.equal(h.runtime.snapshot.callPanelOpen, false);
+    assert.deepEqual(h.runtime.transitions.map(value => value.status), ["ended"]);
+  } finally { permission.resolve(); await h.unmount(); }
+});

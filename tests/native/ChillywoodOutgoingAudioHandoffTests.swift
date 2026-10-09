@@ -3,8 +3,18 @@ import Foundation
 // Actual production declarations/methods are inserted by the runner. The
 // platform APIs record category/activation receipts; no device claim is made.
 // INSERT_DECLARATIONS
-private struct ActiveNativeCall {}
+private struct ActiveNativeCall {
+  let uuid = UUID()
+  let inviteId = "controlled-incoming-invite"
+  var timeoutWorkItem: DispatchWorkItem?
+}
 private struct PendingIncomingReport {}
+private final class CXProvider {}
+private let AVAudioSessionInterruptionTypeKey = "controlled-interruption-type"
+private final class UserDefaults {
+  static let standard = UserDefaults()
+  func removeObject(forKey: String) {} // Private persistence is outside this audio probe.
+}
 private final class UIApplication {
   enum State { case active, inactive, background }
   static let shared = UIApplication()
@@ -20,6 +30,8 @@ private final class AVAudioSession {
   enum Mode { case voiceChat, videoChat }
   enum Option: Hashable { case allowBluetoothHFP, allowBluetoothA2DP, defaultToSpeaker }
   enum PortOverride { case none, speaker }
+  enum SetActiveOption { case notifyOthersOnDeactivation }
+  enum InterruptionType: UInt { case ended = 0, began = 1 }
   enum Port { case builtInReceiver, builtInSpeaker, bluetoothHFP, headphones }
   struct PortDescription { let portType: Port }
   struct RouteDescription { let outputs: [PortDescription] }
@@ -51,7 +63,7 @@ private final class AVAudioSession {
     if failOverride { throw NSError(domain: "NSOSStatusErrorDomain", code: -50) }
     outputOverride = port
   }
-  func setActive(_ active: Bool) throws { activations.append(active) }
+  func setActive(_ active: Bool, options: [SetActiveOption] = []) throws { activations.append(active) }
 }
 private var routeDiagnostics: [String] = []
 private final class Probe {
@@ -63,6 +75,9 @@ private final class Probe {
   var callKitAudioActivationOwners: [UUID: Bool] = [:]
   var pendingAnswerActions: [UUID: Bool] = [:]
   var requestedAnswerTransactions: Set<UUID> = []
+  var requestedAnswerCompletions: [UUID: [(Result<Void, Error>) -> Void]] = [:]
+  let stateQueue = DispatchQueue(label: "controlled-reset-persistence")
+  let pendingAnswerEventsDefaultsKey = "controlled-pending-answers"
   var terminal: Set<String> = []
   var events: [[String: Any]] = []
   private let audioSessionDiagnostics = ChillywoodNativeCallDiagnostics(infoDictionary: [
@@ -74,6 +89,17 @@ private final class Probe {
   func persistedVoipAuthority() -> NativeVoipAuthority? { authority }
   func isTerminalInvite(_ inviteId: String) -> Bool { terminal.contains(inviteId) }
   func emitRaw(_ event: [String: Any]) { events.append(event) }
+  func emit(type: String, call: ActiveNativeCall) { events.append(["type": type]) }
+  func drainIncomingReports() { pendingIncomingReports.removeAll() }
+  func failPendingAnswer(_ uuid: UUID) {}
+  func markTerminalInvite(_ inviteId: String) { terminal.insert(inviteId) }
+  func persistActiveCallDescriptors() {}
+  func endAllAnswerTransitionBackgroundTasks() {}
+  func endAllTerminalTransitionBackgroundTasks() {}
+  func interrupt(_ type: AVAudioSession.InterruptionType) {
+    handleAudioSessionInterruption(Notification(name: .init("controlled-interruption"),
+      userInfo: [AVAudioSessionInterruptionTypeKey: type.rawValue]))
+  }
   func active(_ present: Bool) { activeCalls = present ? [UUID(): ActiveNativeCall()] : [:] }
   func pending(_ present: Bool) { pendingIncomingReports = present ? [UUID(): PendingIncomingReport()] : [:] }
   func callKitActive() { callKitAudioSessionActive = true }
@@ -250,5 +276,38 @@ for disabled in ["build", "runtime", "terminal", "authority"] {
   if disabled == "terminal" { p.terminal.insert(b["inviteId"] as! String) }
   if disabled == "authority" { p.authority = nil }
   rejects("current eligibility is required at native commit") { try p.prepareOutgoingAudioHandoff(owner(b)) }
+}
+do {
+  let p = probe(), b = binding(), session = AVAudioSession.shared
+  try p.beginOutgoingAudioHandoff(b); try p.prepareOutgoingAudioHandoff(owner(b))
+  p.interrupt(.began); p.interrupt(.ended)
+  expect(p.events.compactMap { $0["type"] as? String } == ["audioInterruptionBegan", "audioInterruptionEnded"],
+    "ordinary interruption emits bounded lifecycle receipts without invented activation")
+  expect(p.prepared && session.categories.count == 1 && session.activations.isEmpty,
+    "interruption receipts alone do not activate, reprepare or prove outgoing media recovery")
+  CXCallObserver.inventory = [.init(hasEnded: false)]
+  rejects("a competing system call still blocks an already-prepared owner") { try p.prepareOutgoingAudioHandoff(owner(b)) }
+  CXCallObserver.inventory = [.init(hasEnded: true)]
+  try p.prepareOutgoingAudioHandoff(owner(b))
+  expect(session.categories.count == 1 && session.activations.isEmpty,
+    "system-call disappearance is not an outgoing media activation receipt")
+  p.retireOutgoingAudioHandoff(owner(b))
+  expect(!p.prepared && session.activations.isEmpty, "explicit outgoing End retires ownership without mutating shared activation")
+}
+do {
+  let p = probe(), b = binding(), session = AVAudioSession.shared
+  try p.beginOutgoingAudioHandoff(b); try p.prepareOutgoingAudioHandoff(owner(b))
+  // Execute the actual provider reset method with no incoming calls. Its real
+  // activeCalls property observer must also revoke an outgoing-only owner.
+  p.providerDidReset(CXProvider())
+  expect(p.events.count == 1 && p.events[0]["type"] as? String == "outgoingAudioHandoffRevoked"
+    && p.events[0]["outgoingAudioOwnerId"] as? String == owner(b).lowercased(),
+    "provider reset revokes the exact outgoing-only owner")
+  expect(!p.prepared && session.activations == [false], "provider reset deactivates and cannot retain outgoing readiness")
+  rejects("reset owner cannot reacquire after reset completes") { try p.prepareOutgoingAudioHandoff(owner(b)) }
+  let replacement = binding()
+  try p.beginOutgoingAudioHandoff(replacement); try p.prepareOutgoingAudioHandoff(owner(replacement))
+  expect(p.prepared && session.categories.count == 2 && session.activations == [false],
+    "fresh exact owner can prepare after reset without inventing activation")
 }
 print("Outgoing handoff: \(passed) checks PASS")

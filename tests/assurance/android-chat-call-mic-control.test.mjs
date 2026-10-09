@@ -731,8 +731,10 @@ function createLegacyMountedRuntime(options = {}) {
         requestPermissionsAsync: async () => {
           runtime.permissionRequestCalls += 1;
           if (options.permissionAppStateCycle) {
-            runtime.appState = "background";
-            runtime.readAssuranceRefs().appStateLifecycleHandlerRef.current?.("background");
+            // Model the transient permission dialog. A real background event
+            // has its own immediate privacy tests and must never be ignored.
+            runtime.appState = "inactive";
+            runtime.readAssuranceRefs().appStateLifecycleHandlerRef.current?.("inactive");
             runtime.appState = "active";
             runtime.readAssuranceRefs().appStateLifecycleHandlerRef.current?.("active");
           }

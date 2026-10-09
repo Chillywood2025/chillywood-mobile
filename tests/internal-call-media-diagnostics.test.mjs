@@ -92,6 +92,58 @@ test("microphone feedback receipts expose only bounded intent and acknowledgemen
     call_hash: "none", platform: "ios", uptime_ms: 123, enabled: true, requestedMic: false, appState: "background" });
 });
 
+test("microphone operation receipts expose fixed observed stages without arbitrary error or authority data", () => {
+  const { lines, report } = recorder();
+  const privateValue = "private-room-account-sdp-error-message";
+  report("microphone_operation", { microphoneOperation: "enable", microphoneStage: "negotiation",
+    microphoneOutcome: "glare_exhausted", sessionGeneration: 4, appState: "active",
+    roomId: privateValue, authority: privateValue, reason: privateValue, sdp: privateValue,
+    error: { name: privateValue, message: privateValue }, payload: { secret: privateValue } });
+  assert.deepEqual(parsed(lines[0]), { version: 1, phase: "microphone_operation", seq: 1,
+    call_hash: "none", platform: "android", uptime_ms: 123, appState: "active", sessionGeneration: 4,
+    microphoneOperation: "enable", microphoneStage: "negotiation", microphoneOutcome: "glare_exhausted" });
+  for (const [field, values] of Object.entries({
+    microphoneOperation: ["enable", "disable", "compensate"],
+    microphoneStage: ["authority", "permission", "capture", "topology", "preparation", "sender", "negotiation", "durable", "broadcast", "rollback", "control"],
+    microphoneOutcome: ["succeeded", "unproved", "superseded", "glare_retry", "glare_exhausted"],
+  })) {
+    for (const value of values) {
+      report("microphone_operation", { [field]: value });
+      assert.equal(parsed(lines.at(-1))[field], value);
+    }
+    for (const value of [privateValue, {}, [], true, 1, null]) {
+      report("microphone_operation", { [field]: value });
+      assert.equal(Object.hasOwn(parsed(lines.at(-1)), field), false);
+    }
+  }
+  report("capture_received", { microphoneOperation: "enable", microphoneStage: "control", microphoneOutcome: "succeeded" });
+  for (const field of ["microphoneOperation", "microphoneStage", "microphoneOutcome"]) {
+    assert.equal(Object.hasOwn(parsed(lines.at(-1)), field), false, "operation fields cannot relabel another phase");
+  }
+  assert.ok(lines.every(line => !line.includes(privateValue)));
+});
+
+test("microphone operation diagnostics remain non-authoritative at disabled and hostile boundaries", () => {
+  const hostile = new Proxy({}, { get() { throw Error("private diagnostic failure"); } });
+  for (const context of [{ ...internal, enabled: false }, { ...internal, channel: "production-v2" }]) {
+    const { lines, report } = recorder(context);
+    assert.doesNotThrow(() => report("microphone_operation", hostile));
+    assert.deepEqual(lines, []);
+  }
+  const { lines, report } = recorder();
+  assert.doesNotThrow(() => report("microphone_operation", hostile));
+  assert.equal(Object.hasOwn(parsed(lines[0]), "microphoneOutcome"), false);
+  let reads = 0;
+  report("microphone_operation", { get microphoneOutcome() { return ++reads === 1 ? "unproved" : "private-data"; } });
+  assert.equal(reads, 1);
+  assert.equal(parsed(lines[1]).microphoneOutcome, "unproved");
+  for (const throwing of ["readContext", "emit", "now"]) {
+    const options = { readContext: () => internal, emit() {}, now: () => 1 };
+    options[throwing] = () => { throw Error("private diagnostic failure"); };
+    assert.doesNotThrow(() => createInternalCallMediaDiagnosticReporter(options)("microphone_operation", hostile));
+  }
+});
+
 test("audio readiness receipts retain only allowlisted booleans without authority or SDK payloads", () => {
   const { lines, report } = recorder({ enabled: true, platform: "ios", channel: "ios-internal-v2" });
   for (const phase of ["native_audio_activation_received", "native_audio_deactivation_received", "native_audio_session_retained", "native_audio_gate", "native_audio_recovered"]) {

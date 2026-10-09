@@ -38,6 +38,7 @@ import {
 import { reportRuntimeError } from "../_lib/logger";
 import { reportBoundedNativeCallError } from "../_lib/nativeCallErrorDiagnostics.mjs";
 import { reportInternalCallMediaDiagnostic } from "../_lib/internalCallMediaDiagnostics";
+import type { InternalMicrophoneOperation, InternalMicrophoneOutcome, InternalMicrophoneStage } from "../_lib/internalCallMediaDiagnosticPolicy";
 import { reserveCommunicationCapture, retireCommunicationCaptures, retryRetiredCommunicationCaptures } from "../_lib/communicationCaptureRetirement";
 import { reserveCommunicationMembershipAdmission } from "../_lib/communicationMembershipAdmission";
 import { isAccountBoundSupabaseRpcOutcomeAmbiguous as isAmbiguousMembershipOutcome } from "../_lib/accountBoundSupabaseRpc.mjs";
@@ -586,6 +587,15 @@ export function useCommunicationRoomSession({
   const suppressedPermissionAppStateRef = useRef<AppStateStatus | null>(null);
   const appStateLifecycleHandlerRef = useRef<((nextState: AppStateStatus) => void) | null>(null);
 
+  const reportMicrophoneOperation = useCallback((authority: LegacyMicSessionAuthority,
+    microphoneOperation: InternalMicrophoneOperation, microphoneStage: InternalMicrophoneStage,
+    microphoneOutcome: InternalMicrophoneOutcome) => {
+    reportInternalCallMediaDiagnostic("microphone_operation", {
+      microphoneOperation, microphoneStage, microphoneOutcome,
+      sessionGeneration: authority.generation, appState: appStateRef.current,
+    });
+  }, []);
+
   const beginAutomaticMicrophoneFeedback = useCallback((nextEnabled: boolean) => {
     const feedback = {
       generation: legacySessionGenerationRef.current,
@@ -742,6 +752,7 @@ export function useCommunicationRoomSession({
       setMicEnabled(initialMediaPreferences.micEnabled);
     }
   }, [
+    authenticatedUserId,
     initialMediaPreferences?.cameraEnabled,
     initialMediaPreferences?.micEnabled,
     roomId,
@@ -832,10 +843,26 @@ export function useCommunicationRoomSession({
     operation: () => Promise<boolean>,
     deduplicateExisting: boolean,
   ) => {
+    const generation = legacySessionGenerationRef.current;
+    const channel = channelRef.current;
+    const userId = identityRef.current?.userId;
+    const activeRoomId = roomRef.current?.roomId;
+    const remoteGeneration = membershipsRef.current.find((membership) => membership.userId === remoteUserId)?.membershipGeneration;
+    const peerConnection = peerConnectionsRef.current[remoteUserId];
     const existing = peerOfferInFlightRef.current[remoteUserId];
     if (deduplicateExisting && existing) return existing;
     const predecessor = peerOfferTailRef.current[remoteUserId] ?? Promise.resolve();
-    const queued = predecessor.catch(() => undefined).then(operation);
+    // Queue ownership belongs to the caller at enqueue time. A retired
+    // continuation must not discover and negotiate through a replacement.
+    const queued = predecessor.catch(() => undefined).then(() => {
+      if (!isActiveLegacyGeneration(generation)
+        || channel !== channelRef.current
+        || userId !== identityRef.current?.userId
+        || activeRoomId !== roomRef.current?.roomId
+        || remoteGeneration !== membershipsRef.current.find((membership) => membership.userId === remoteUserId)?.membershipGeneration
+        || (peerConnection && peerConnectionsRef.current[remoteUserId] !== peerConnection)) return false;
+      return operation();
+    });
     const tail = queued.then(() => undefined, () => undefined);
     peerOfferTailRef.current[remoteUserId] = tail;
     peerOfferInFlightRef.current[remoteUserId] = queued;
@@ -848,7 +875,7 @@ export function useCommunicationRoomSession({
       }
     }).catch(() => undefined);
     return queued;
-  }, []);
+  }, [isActiveLegacyGeneration]);
 
   const cleanupRemotePeer = useCallback((userId: string, expectedPeerConnection?: any) => {
     logChatRtc("remote_peer_cleanup", {
@@ -1048,7 +1075,9 @@ export function useCommunicationRoomSession({
         const generation = legacySessionGenerationRef.current;
         const intentRevision = foregroundMicIntentRevisionRef.current;
         const shouldResumeMic = micEnabledRef.current || resumeMicAfterForegroundRef.current;
+        resumeMicAfterForegroundRef.current = shouldResumeMic;
         const cameraStopped = stopLocalMediaKind("video");
+        legacyMicLocalPrivacyStopRef.current?.();
         try {
           const controlled = await applyAutomaticMicrophoneEnabled(
             LEGACY_BACKGROUND_MEDIA_STATE.micEnabled,
@@ -3822,7 +3851,10 @@ export function useCommunicationRoomSession({
   ]);
 
   const handleAppStateLifecycleChange = useCallback((nextState: AppStateStatus) => {
-      if (nativePermissionRequestDepthRef.current > 0) {
+      // A permission dialog may transiently resign active status. A real
+      // background transition still revokes foreground-only capture, even
+      // while its permission promise remains unresolved.
+      if (nativePermissionRequestDepthRef.current > 0 && nextState === "inactive") {
         suppressedPermissionAppStateRef.current = nextState;
         return;
       }
@@ -3902,7 +3934,11 @@ export function useCommunicationRoomSession({
 
       const shouldResumeMic = micEnabledRef.current || resumeMicAfterForegroundRef.current;
       const intentRevision = foregroundMicIntentRevisionRef.current;
+      resumeMicAfterForegroundRef.current = shouldResumeMic;
       const cameraStopped = stopLocalMediaKind("video");
+      // Privacy cannot wait behind an earlier media command's server write.
+      // Keep recovery intent separate from this immediate local shutdown.
+      legacyMicLocalPrivacyStopRef.current?.();
       channelStateRef.current = "reconnecting";
       setChannelState("reconnecting");
       if (!reconnectTrackedRef.current) {
@@ -4020,12 +4056,18 @@ export function useCommunicationRoomSession({
         || !isLegacyMicSessionAuthorityCurrent(authority)
         || peerConnectionsRef.current[remoteUserId] !== peerConnection
         || String(peerConnection?.connectionState ?? "") === "closed"
-      ) return false;
+      ) {
+        reportMicrophoneOperation(authority, phase === "compensate" ? "compensate" : "enable", "authority", "superseded");
+        return false;
+      }
       if (!await waitForLegacyPeerSignalingStable(peerConnection, () => (
         isIntentCurrent()
         && isLegacyMicSessionAuthorityCurrent(authority)
         && peerConnectionsRef.current[remoteUserId] === peerConnection
-      ))) return false;
+      ))) {
+        reportMicrophoneOperation(authority, phase === "compensate" ? "compensate" : "enable", "negotiation", "unproved");
+        return false;
+      }
       if (!isIntentCurrent()) return false;
 
       const negotiationId = [
@@ -4108,11 +4150,16 @@ export function useCommunicationRoomSession({
       if (
         String(peerConnection?.signalingState ?? "stable") !== "stable"
         && !await rollbackLegacyMicLocalOffer(remoteUserId, peerConnection)
-      ) throw new Error("LEGACY_MIC_LOCAL_OFFER_ROLLBACK_UNVERIFIED");
+      ) {
+        reportMicrophoneOperation(authority, phase === "compensate" ? "compensate" : "enable", "rollback", "unproved");
+        throw new Error("LEGACY_MIC_LOCAL_OFFER_ROLLBACK_UNVERIFIED");
+      }
+      reportMicrophoneOperation(authority, phase === "compensate" ? "compensate" : "enable", "negotiation",
+        completed ? "succeeded" : interruptedByGlare ? (attempt === 0 ? "glare_retry" : "glare_exhausted") : "unproved");
       if (completed || !interruptedByGlare) return completed;
     }
     return false;
-  }, false), [isLegacyMicSessionAuthorityCurrent, rollbackLegacyMicLocalOffer, runSerializedPeerOffer, runSerializedPeerSignaling]);
+  }, false), [isLegacyMicSessionAuthorityCurrent, reportMicrophoneOperation, rollbackLegacyMicLocalOffer, runSerializedPeerOffer, runSerializedPeerSignaling]);
 
   const strictlyCommitLegacyMicPresence = useCallback(async (
     authority: LegacyMicSessionAuthority,
@@ -4370,6 +4417,8 @@ export function useCommunicationRoomSession({
     }
     const presenceCommit = await strictlyCommitLegacyMicPresence(authority, false, nextCameraEnabled);
     const broadcastCommit = await strictlyBroadcastLegacyMicState(authority, false, nextCameraEnabled);
+    if (!presenceCommit.ok) reportMicrophoneOperation(authority, "disable", "durable", "unproved");
+    if (!broadcastCommit.ok) reportMicrophoneOperation(authority, "disable", "broadcast", "unproved");
     const committed = quarantine.normalized
       && presenceCommit.ok
       && broadcastCommit.ok
@@ -4394,6 +4443,7 @@ export function useCommunicationRoomSession({
     isLegacyMicSessionAuthorityCurrent,
     isLegacyMicTrackPrivacySafe,
     quarantineLegacyMicrophoneTopology,
+    reportMicrophoneOperation,
     strictlyBroadcastLegacyMicState,
     strictlyCommitLegacyMicPresence,
   ]);
@@ -4409,11 +4459,17 @@ export function useCommunicationRoomSession({
     authority: LegacyMicSessionAuthority,
     isIntentCurrent: () => boolean,
   ) => {
-    if (!isLegacyMicSessionAuthorityCurrent(authority) || !canAcquireLegacyMicrophone() || !isIntentCurrent()) return null;
+    if (!isLegacyMicSessionAuthorityCurrent(authority) || !canAcquireLegacyMicrophone() || !isIntentCurrent()) {
+      reportMicrophoneOperation(authority, "enable", "authority", "superseded");
+      return null;
+    }
     const topology = collectLegacyMicTopology();
     const streams = topology.streams;
     const usableTracks = topology.tracks;
-    if (usableTracks.length > 1) return null;
+    if (usableTracks.length > 1) {
+      reportMicrophoneOperation(authority, "enable", "topology", "unproved");
+      return null;
+    }
 
     const previousLocalStream = localStreamRef.current;
     const previousAuxiliaryStreams = [...auxiliaryStreamsRef.current];
@@ -4486,7 +4542,10 @@ export function useCommunicationRoomSession({
     };
 
     if (!track) {
-      if (!await ensureMicrophonePermission()) return null;
+      if (!await ensureMicrophonePermission()) {
+        reportMicrophoneOperation(authority, "enable", "permission", "unproved");
+        return null;
+      }
       if (!isLegacyMicSessionAuthorityCurrent(authority) || !canAcquireLegacyMicrophone() || !isIntentCurrent()) return null;
       acquisition = await acquireOwnedLegacyMedia({ audio: true, video: false }).catch(() => null);
       createdStream = acquisition?.stream ?? null;
@@ -4497,6 +4556,7 @@ export function useCommunicationRoomSession({
         return null;
       }
       if (!createdStream || !track || String(track.readyState ?? "").trim().toLowerCase() === "ended") {
+        reportMicrophoneOperation(authority, "enable", "capture", "unproved");
         if (!disposeCreatedCapture()) throw new Error("LEGACY_MIC_CAPTURE_DISPOSAL_UNVERIFIED");
         return null;
       }
@@ -4610,6 +4670,7 @@ export function useCommunicationRoomSession({
       return sendersRestored && compensated && localMediaRestored;
     };
 
+    let preparationStage: "sender" | "negotiation" = "sender";
     try {
       for (const [remoteUserId, peerConnection] of peerEntries) {
         if (!isLegacyMicSessionAuthorityCurrent(authority) || !isIntentCurrent()) throw new Error("LEGACY_MIC_SESSION_AUTHORITY_CHANGED");
@@ -4630,6 +4691,7 @@ export function useCommunicationRoomSession({
       }
       for (const [remoteUserId, peerConnection] of peerEntries) {
         if (!senderChanges.some((change) => change.peerConnection === peerConnection)) continue;
+        preparationStage = "negotiation";
         const renegotiated = await strictlyRenegotiateLegacyMicPeer({
           authority,
           peerConnection,
@@ -4643,6 +4705,9 @@ export function useCommunicationRoomSession({
         if (!isIntentCurrent()) throw new Error("LEGACY_MIC_INTENT_SUPERSEDED");
       }
     } catch (preparationError) {
+      const preparationIsCurrent = isLegacyMicSessionAuthorityCurrent(authority) && isIntentCurrent();
+      reportMicrophoneOperation(authority, "enable", preparationIsCurrent ? preparationStage : "authority",
+        preparationIsCurrent ? "unproved" : "superseded");
       reportRuntimeError("communication-legacy-media-track-preparation", preparationError, {
         roomId: authority.roomId,
       });
@@ -4658,7 +4723,10 @@ export function useCommunicationRoomSession({
       if (
         !rolledBack
         || (preparationError instanceof Error && preparationError.message === "LEGACY_MIC_LOCAL_OFFER_ROLLBACK_UNVERIFIED")
-      ) throw new Error("LEGACY_MIC_ROLLBACK_UNVERIFIED");
+      ) {
+        reportMicrophoneOperation(authority, "enable", "rollback", "unproved");
+        throw new Error("LEGACY_MIC_ROLLBACK_UNVERIFIED");
+      }
       return null;
     }
 
@@ -4672,11 +4740,26 @@ export function useCommunicationRoomSession({
         return audioSenders.length === 1 && audioSenders[0]?.track === targetTrack;
       }),
     };
-  }, [acquireOwnedLegacyMedia, canAcquireLegacyMicrophone, collectLegacyMicTopology, ensureMicrophonePermission, isLegacyMicSessionAuthorityCurrent, strictlyRenegotiateLegacyMicPeer]);
+  }, [acquireOwnedLegacyMedia, canAcquireLegacyMicrophone, collectLegacyMicTopology, ensureMicrophonePermission, isLegacyMicSessionAuthorityCurrent, reportMicrophoneOperation, strictlyRenegotiateLegacyMicPeer]);
 
-  const setCameraCaptureEnabled = useCallback((nextEnabled: boolean) => runSerializedMediaControl(async () => {
+  const setCameraCaptureEnabled = useCallback((nextEnabled: boolean,
+    intentRevision = foregroundCameraIntentRevisionRef.current,
+  ) => runSerializedMediaControl(async () => {
     const authority = captureLegacyMicSessionAuthority();
     if (!authority) return false;
+    const isIntentCurrent = () => intentRevision === foregroundCameraIntentRevisionRef.current;
+    if (!isIntentCurrent()) return false;
+    // A newer Camera Off already stopped local capture. A late receipt may
+    // reconcile the observed projection, but cannot restore the old request.
+    const reconcileSupersededCamera = async () => {
+      if (!isLegacyMicSessionAuthorityCurrent(authority)) return false;
+      await strictlyCommitLegacyMicPresence(authority, micEnabledRef.current,
+        appStateRef.current === "active" && hasUsableLocalTrack("video"));
+      if (!isLegacyMicSessionAuthorityCurrent(authority)) return false;
+      await strictlyBroadcastLegacyMicState(authority, micEnabledRef.current,
+        appStateRef.current === "active" && hasUsableLocalTrack("video"));
+      return false;
+    };
     const previousCameraEnabled = cameraEnabledRef.current;
     const previousTrackStates = new Map<any, boolean>();
     const streams = new Set<MediaStream>([
@@ -4689,7 +4772,8 @@ export function useCommunicationRoomSession({
     let targetVideoTrack: any = null;
 
     if (nextEnabled) {
-      const track = await ensureTrackKind("video");
+      const track = await ensureTrackKind("video", { isCurrent: isIntentCurrent });
+      if (!isIntentCurrent()) return reconcileSupersededCamera();
       if (!track) {
         if (!isLegacyMicSessionAuthorityCurrent(authority)) return false;
         setCameraEnabled(false);
@@ -4724,11 +4808,13 @@ export function useCommunicationRoomSession({
       micEnabledRef.current,
       nextEnabled,
     );
+    if (!isIntentCurrent()) return reconcileSupersededCamera();
     const broadcastCommit = await strictlyBroadcastLegacyMicState(
       authority,
       micEnabledRef.current,
       nextEnabled,
     );
+    if (!isIntentCurrent()) return reconcileSupersededCamera();
     if (presenceCommit.ok && broadcastCommit.ok && isLegacyMicSessionAuthorityCurrent(authority)) {
       cameraEnabledRef.current = nextEnabled;
       setCameraEnabled(nextEnabled);
@@ -4752,7 +4838,9 @@ export function useCommunicationRoomSession({
     });
     if (nextEnabled && !previousCameraEnabled) setLocalMediaKindEnabled("video", false);
     const restoredPresence = await strictlyCommitLegacyMicPresence(authority, micEnabledRef.current, previousCameraEnabled);
+    if (!isIntentCurrent()) return reconcileSupersededCamera();
     const restoredBroadcast = await strictlyBroadcastLegacyMicState(authority, micEnabledRef.current, previousCameraEnabled);
+    if (!isIntentCurrent()) return reconcileSupersededCamera();
     if (!isLegacyMicSessionAuthorityCurrent(authority)) return false;
     cameraEnabledRef.current = previousCameraEnabled;
     setCameraEnabled(previousCameraEnabled);
@@ -4779,6 +4867,7 @@ export function useCommunicationRoomSession({
   }), [
     captureLegacyMicSessionAuthority,
     ensureTrackKind,
+    hasUsableLocalTrack,
     isLegacyMicSessionAuthorityCurrent,
     runSerializedMediaControl,
     setLocalMediaKindEnabled,
@@ -4809,7 +4898,7 @@ export function useCommunicationRoomSession({
     );
     const cameraEnabledOverride = requestedCameraOverride
       ?? (appStateRef.current === "active" && cameraEnabledRef.current);
-    if (!nextEnabled) resumeMicAfterForegroundRef.current = false;
+    if (!nextEnabled && !automaticFeedback) resumeMicAfterForegroundRef.current = false;
     if (nextEnabled) {
       if (!canAcquireLegacyMicrophone() || !isIntentCurrent()) return false;
       const prepared = await prepareLegacyMicrophoneTrack(authority, isIntentCurrent);
@@ -4818,6 +4907,7 @@ export function useCommunicationRoomSession({
         return false;
       }
       if (!prepared) {
+        reportMicrophoneOperation(authority, "enable", "preparation", "unproved");
         if (isIntentCurrent() && microphonePermissionRef.current.state === "granted") {
           reportRuntimeError(
             "communication-legacy-microphone-preparation",
@@ -4853,9 +4943,11 @@ export function useCommunicationRoomSession({
         ) throw new Error("LEGACY_MIC_ENABLED_TOPOLOGY_UNVERIFIED");
         const presenceCommit = await strictlyCommitLegacyMicPresence(authority, true, cameraEnabledOverride);
         durableCommitted = presenceCommit.durableWritten;
+        if (!presenceCommit.ok) reportMicrophoneOperation(authority, "enable", "durable", "unproved");
         if (!presenceCommit.ok || !isIntentCurrent()) throw new Error("LEGACY_MIC_DURABLE_COMMIT_FAILED");
         const broadcastCommit = await strictlyBroadcastLegacyMicState(authority, true, cameraEnabledOverride);
         broadcastCommitted = broadcastCommit.sent;
+        if (!broadcastCommit.ok) reportMicrophoneOperation(authority, "enable", "broadcast", "unproved");
         if (
           !broadcastCommit.ok
           || !isLegacyMicSessionAuthorityCurrent(authority)
@@ -4868,6 +4960,7 @@ export function useCommunicationRoomSession({
         setMicEnabled(true);
         resumeMicAfterForegroundRef.current = false;
         setMediaControlError(null);
+        reportMicrophoneOperation(authority, "enable", "control", "succeeded");
         return true;
       } catch (microphoneCommitError) {
         if (!isLegacyMicSessionAuthorityCurrent(authority)) {
@@ -4896,6 +4989,7 @@ export function useCommunicationRoomSession({
           compensated = presenceCompensation.ok && compensated;
         }
         const rolledBack = await prepared.rollback();
+        if (!rolledBack) reportMicrophoneOperation(authority, "enable", "rollback", "unproved");
         if (!isLegacyMicSessionAuthorityCurrent(authority)) {
           prepared.cancel();
           return false;
@@ -4915,6 +5009,7 @@ export function useCommunicationRoomSession({
             setError("Microphone recovery failed closed and requires leaving the call.");
           }
         }
+        reportMicrophoneOperation(authority, "enable", "control", "unproved");
         return false;
       }
     }
@@ -4923,9 +5018,17 @@ export function useCommunicationRoomSession({
     const previousTopology = collectLegacyMicTopology();
     const previousTrackStates = new Map<any, boolean>(previousTopology.tracks.map((track) => [track, track.enabled !== false]));
     const muted = await commitProvedLegacyMicMute(authority, cameraEnabledOverride);
-    if (muted.committed) return true;
+    if (muted.committed) {
+      reportMicrophoneOperation(authority, "disable", "control", "succeeded");
+      return true;
+    }
 
-    const canCompensate = muted.privacyProved
+    // Lifecycle/permission mutes are privacy boundaries, so a failed durable
+    // write must continue converging to Off instead of restoring capture.
+    // Explicit foreground controls retain their existing reversible behavior.
+    const canCompensate = !automaticFeedback
+      && (!previousMicEnabled || canAcquireLegacyMicrophone())
+      && muted.privacyProved
       && isIntentCurrent()
       && previousTopology.topologyReadable
       && previousTopology.tracks.length <= 1
@@ -4938,18 +5041,21 @@ export function useCommunicationRoomSession({
           // Verified below.
         }
       });
-      const restoredTopology = collectLegacyMicTopology();
-      const trackStateRestored = previousMicEnabled
-        ? restoredTopology.tracks.length === 1 && restoredTopology.tracks[0]?.enabled !== false
-        : restoredTopology.tracks.every(isLegacyMicTrackPrivacySafe);
+      const previousTrackStateIsCurrent = () => {
+        const restoredTopology = collectLegacyMicTopology();
+        return restoredTopology.topologyReadable && (previousMicEnabled
+          ? canAcquireLegacyMicrophone() && restoredTopology.tracks.length === 1 && restoredTopology.tracks[0]?.enabled !== false
+          : restoredTopology.tracks.every(isLegacyMicTrackPrivacySafe));
+      };
       const presenceCompensation = await strictlyCommitLegacyMicPresence(authority, previousMicEnabled, cameraEnabledOverride);
-      const broadcastCompensation = isIntentCurrent()
+      const broadcastCompensation = isIntentCurrent() && previousTrackStateIsCurrent()
         ? await strictlyBroadcastLegacyMicState(authority, previousMicEnabled, cameraEnabledOverride)
         : { ok: false };
-      if (trackStateRestored && presenceCompensation.ok && broadcastCompensation.ok && isIntentCurrent()) {
+      if (previousTrackStateIsCurrent() && presenceCompensation.ok && broadcastCompensation.ok && isIntentCurrent()) {
         micEnabledRef.current = previousMicEnabled;
         setMicEnabled(previousMicEnabled);
         setMediaControlError("Microphone state was not changed because call state could not be synchronized. Try again.");
+        reportMicrophoneOperation(authority, "disable", "control", "unproved");
         return false;
       }
     }
@@ -4971,6 +5077,7 @@ export function useCommunicationRoomSession({
     } else if (isLegacyMicSessionAuthorityCurrent(authority)) {
       setError("Microphone privacy could not be verified. Leave the call before continuing.");
     }
+    reportMicrophoneOperation(authority, "disable", "control", "unproved");
     return false;
   }, automaticFeedback ? { nextEnabled, intentRevision } : undefined), [
     canAcquireLegacyMicrophone,
@@ -4982,6 +5089,7 @@ export function useCommunicationRoomSession({
     isPresenceRegistrationCurrent,
     prepareLegacyMicrophoneTrack,
     quarantineLegacyMicrophoneTopology,
+    reportMicrophoneOperation,
     runSerializedMediaControl,
     strictlyBroadcastLegacyMicState,
     strictlyCommitLegacyMicPresence,

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import { createChillyChatCallSoundLifecycle } from "../_lib/chillyChatCallSoundLifecycle.mjs";
 
 const source = readFileSync(new URL("../_lib/iosNativeCalls.ts", import.meta.url), "utf8");
 const ast = ts.createSourceFile("iosNativeCalls.ts", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
@@ -21,7 +22,7 @@ const deferred = () => {
 const settle = async () => { for (let index = 0; index < 16; index += 1) await Promise.resolve(); };
 const binding = () => ({ userId: "synthetic-user", accountId: "synthetic-account", sessionGeneration: "synthetic-session" });
 
-function fixture({ authorityRead, begin, prepare, missing, runtimeEnabled = true } = {}) {
+function fixture({ authorityRead, begin, prepare, missing, runtimeEnabled = true, ownerId = "synthetic-owner" } = {}) {
   const calls = [];
   const listeners = new Set();
   const authority = binding();
@@ -59,7 +60,7 @@ function fixture({ authorityRead, begin, prepare, missing, runtimeEnabled = true
   };
   vm.runInNewContext(compiled, context);
   const input = {
-    ownerId: "synthetic-owner", authority,
+    ownerId, authority,
     inviteId: "synthetic-invite", threadId: "synthetic-thread", roomId: "ROOM42", callType: "voice",
     isCurrent: () => owns,
     onRevoked: () => { revocations += 1; },
@@ -75,21 +76,51 @@ function fixture({ authorityRead, begin, prepare, missing, runtimeEnabled = true
   };
 }
 
-test("actual handoff reserves exact authority, waits for sound drain, then prepares without activation", async () => {
+test("a rejected competing sound owner cannot touch the current owner's native handoff", async () => {
+  const sounds = createChillyChatCallSoundLifecycle();
+  const ownerA = {}, ownerB = {};
+  const a = fixture({ ownerId: "synthetic-owner-a" }), b = fixture({ ownerId: "synthetic-owner-b" });
+  await a.handoff.prepare(sounds.claim(ownerA, () => true));
+  const originalCalls = [...a.calls];
+  await assert.rejects(b.handoff.prepare(sounds.claim(ownerB, () => true)), /Another call owns the audio handoff/);
+  assert.deepEqual(b.calls, [], "a rejected sound claim must not begin, prepare, or retire a native lease");
+  assert.deepEqual(a.calls, originalCalls);
+  await sounds.claim(ownerA, () => true);
+  a.handoff.retire();
+  sounds.release(ownerA);
+});
+
+for (const change of ["End", "account"]) {
+  test(`${change} while sound drain is pending cannot begin or retire an unrequested native lease`, async () => {
+    const drain = deferred();
+    const f = fixture();
+    const preparing = f.handoff.prepare(drain.promise);
+    const rejected = assert.rejects(preparing, /handoff_retired/);
+    await settle();
+    if (change === "End") f.handoff.retire();
+    else f.context.voipAuthorityContext = { authority: { ...binding(), accountId: "replacement-account" }, installId: "replacement-install" };
+    drain.resolve();
+    await rejected;
+    assert.deepEqual(f.calls, []);
+    assert.equal(f.listeners.size, 0);
+  });
+}
+
+test("actual handoff drains sound before reserving exact native authority and preparing without activation", async () => {
   const drain = deferred();
   const f = fixture();
   const preparing = f.handoff.prepare(drain.promise);
   await settle();
-  assert.deepEqual(f.calls.map(([kind]) => kind), ["begin"]);
+  assert.deepEqual(f.calls, []);
+  drain.resolve();
+  await preparing;
   assert.deepEqual(JSON.parse(JSON.stringify(f.calls[0][1])), {
     ownerId: f.input.ownerId, ...f.input.authority, installId: "synthetic-install",
     inviteId: f.input.inviteId, threadId: f.input.threadId, roomId: f.input.roomId, callType: "voice",
   });
-  drain.resolve();
-  await preparing;
   assert.deepEqual(f.calls.map(([kind]) => kind), ["begin", "prepare"]);
   assert.equal(f.calls[1][1], f.input.ownerId);
-  assert.equal(f.reads, 2, "revalidate exact account after sound retirement");
+  assert.equal(f.reads, 3, "revalidate exact account after sound retirement and native reservation");
   assert.equal(f.activationAttempts, 0);
   f.handoff.retire();
   assert.deepEqual(f.calls.at(-1), ["retire", f.input.ownerId]);
@@ -100,7 +131,7 @@ test("already stale input cannot reserve native audio", async () => {
   const f = fixture();
   f.revokeCurrent();
   await assert.rejects(f.handoff.prepare(Promise.resolve()), /authority_unavailable/);
-  assert.deepEqual(f.calls.map(([kind]) => kind), ["retire"]);
+  assert.deepEqual(f.calls, []);
 });
 
 for (const change of ["account", "lifecycle", "context", "input"]) {
@@ -123,7 +154,7 @@ for (const change of ["account", "lifecycle", "context", "input"]) {
 test("account validation returning false does not begin native audio", async () => {
   const f = fixture({ authorityRead: async () => false });
   await assert.rejects(f.handoff.prepare(Promise.resolve()), /authority_unavailable/);
-  assert.deepEqual(f.calls.map(([kind]) => kind), ["retire"]);
+  assert.deepEqual(f.calls, []);
 });
 
 test("account replacement during pending native begin cannot proceed to prepare", async () => {
@@ -239,8 +270,8 @@ test("drain rejection is observed immediately while account validation is still 
   assert.equal(f.calls.length, 0);
   authority.resolve(true);
   await rejected;
-  assert.equal(f.calls.some(([kind]) => kind === "prepare"), false);
-  assert.deepEqual(f.calls.at(-1), ["retire", f.input.ownerId]);
+  assert.deepEqual(f.calls, []);
+  assert.equal(f.listeners.size, 0);
 });
 
 for (const operation of ["begin", "prepare"]) {

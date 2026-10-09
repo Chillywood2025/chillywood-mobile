@@ -40,6 +40,9 @@ const members = [
   "public func beginOutgoingAudioHandoff(", "public func prepareOutgoingAudioHandoff(",
   "public func retireOutgoingAudioHandoff(",
   "public func setAudioRoute(_ route: String) throws {",
+  "public func providerDidReset(_ provider: CXProvider)",
+  "private func deactivateAudioSession()",
+  "private func handleAudioSessionInterruption(_ notification: Notification)",
 ];
 function generated(text) {
   return diagnostics + "\n" + harness.replace("// INSERT_DECLARATIONS", declarations.map(marker => declaration(text, marker)).join("\n"))

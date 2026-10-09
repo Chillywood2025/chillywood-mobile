@@ -2,6 +2,7 @@ const PHASES = new Set([
   "initial_preferences", "initial_intent", "initial_permissions", "initial_projection",
   "capture_requested", "capture_received", "capture_failed",
   "automatic_mic_feedback_reserved", "automatic_mic_feedback_settled", "native_mic_feedback",
+  "microphone_operation",
   "session_restart_requested", "session_restart_started", "session_admission_result", "session_initialization_failed",
   "room_snapshot_missing", "room_snapshot_ended", "signaling_subscription", "room_terminal_received",
   "native_audio_activation_received", "native_audio_deactivation_received", "native_audio_session_retained", "native_audio_gate", "native_audio_recovered",
@@ -13,6 +14,11 @@ const SESSION_ENUMS = {
   recoveryTrigger: new Set(["app_foreground", "peer_disconnected", "peer_failed", "realtime_closed", "realtime_error", "realtime_timeout"]),
 };
 const PERMISSIONS = new Set(["granted", "denied", "restricted", "undetermined"]);
+const MICROPHONE_ENUMS = {
+  microphoneOperation: new Set(["enable", "disable", "compensate"]),
+  microphoneStage: new Set(["authority", "permission", "capture", "topology", "preparation", "sender", "negotiation", "durable", "broadcast", "rollback", "control"]),
+  microphoneOutcome: new Set(["succeeded", "unproved", "superseded", "glare_retry", "glare_exhausted"]),
+};
 const ERRORS = new Set([
   "Error", "TypeError", "DOMException", "NotAllowedError", "NotFoundError", "NotReadableError",
   "AbortError", "OverconstrainedError", "SecurityError", "InvalidStateError", "NotSupportedError",
@@ -65,6 +71,12 @@ export function createInternalCallMediaDiagnosticReporter({ readContext, emit, n
       for (const [field, values] of Object.entries(SESSION_ENUMS)) {
         const value = read(input, field);
         if (values.has(value)) receipt[field] = value;
+      }
+      if (phase === "microphone_operation") {
+        for (const [field, values] of Object.entries(MICROPHONE_ENUMS)) {
+          const value = read(input, field);
+          if (values.has(value)) receipt[field] = value;
+        }
       }
       // A bounded in-process lifecycle counter, never a durable membership,
       // auth generation, account identifier, wall-clock timestamp or token.
