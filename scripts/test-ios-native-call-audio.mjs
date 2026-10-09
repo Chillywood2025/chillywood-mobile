@@ -177,7 +177,10 @@ try {
       cwd: root, timeout: 180_000, stdio: "inherit",
     });
     execFileSync(process.execPath, ["scripts/test-ios-native-call-report.mjs"], {
-      cwd: root, timeout: 240_000, stdio: "inherit",
+      // The report suite compiles production Swift plus nineteen independent
+      // mutation controls; retain its per-case limits and allow slow CI hosts
+      // to finish the complete suite instead of terminating passing controls.
+      cwd: root, timeout: 600_000, stdio: "inherit",
     });
     execFileSync(process.execPath, ["--test", "tests/assurance/ios-native-audio-root-mounted.test.mjs"], {
       cwd: root, timeout: 60_000, stdio: "inherit",

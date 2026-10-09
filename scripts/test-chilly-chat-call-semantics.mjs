@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
+import { runInNewContext } from "node:vm";
 import ts from "typescript";
 
 import {
@@ -1727,11 +1728,97 @@ for (const [target, from, to, expectedFailure] of [
 }
 assert.match(iosNativeCallsSource, /typeof NativeCallsModule\.requestAnswerAsync !== "function"/u, "older same-runtime native binaries fail closed instead of invoking an unavailable Answer API");
 assert.match(iosNativeCallsSource, /"reportFailed"/u, "failed CallKit reporting releases fallback presentation ownership");
-assert.match(
-  iosNativeCallsSource,
-  /event\.type === "audioSessionActivated"[\s\S]{0,180}synchronizeLiveKitCallKitAudioSession\("activated"\)[\s\S]{0,180}event\.type === "audioSessionDeactivated"[\s\S]{0,180}synchronizeLiveKitCallKitAudioSession\("deactivated"\)/u,
-  "trusted CallKit activation and deactivation events close the installed WebRTC audio-session lifecycle",
-);
+// Execute the production event handler: receipt validation and grouped loss
+// events may grow without making source proximity an audio-lifecycle contract.
+const nativeAudioLifecycleAst = ts.createSourceFile("iosNativeCalls.ts", iosNativeCallsSource,
+  ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+const nativeAudioLifecycleDeclarations = new Map();
+for (const statement of nativeAudioLifecycleAst.statements) {
+  if (!ts.isVariableStatement(statement)) continue;
+  for (const declaration of statement.declarationList.declarations) {
+    if (["handleNativeEvent", "invalidateNativeAudioReadiness"].includes(declaration.name.getText())) {
+      nativeAudioLifecycleDeclarations.set(declaration.name.getText(), declaration.getText());
+    }
+  }
+}
+assert.equal(nativeAudioLifecycleDeclarations.size, 2, "audio fixtures execute both production lifecycle functions");
+const nativeAudioLifecycleCode = ts.transpileModule(
+  [...nativeAudioLifecycleDeclarations.values()].map(declaration => `const ${declaration};`).join("\n")
+    + "\nhandleNativeEvent;",
+  { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
+).outputText;
+const createNativeAudioLifecycleFixture = (sdkResult) => {
+  const context = { authority: { sessionGeneration: "current-session" } };
+  const phases = [];
+  const delivered = [];
+  const readyUuids = new Set(["current-call"]);
+  const scope = {
+    voipRegistrationActive: true,
+    voipLifecycleGeneration: 7,
+    voipAuthorityContext: context,
+    nativePresentedCallGenerations: new Map([["current-call", "current-generation"]]),
+    nativePresentedCallUuidsByInviteId: new Map([["current-invite", "current-call"], ["other-invite", "other-call"]]),
+    nativeAudioActivatedCallUuids: readyUuids,
+    acceptedNativeMediaSessions: new Map(),
+    nativeEventSubscribers: new Set(),
+    iosNativeAnswerApplicationActiveBaselines: new Map(),
+    toText: value => typeof value === "string" ? value.trim() : "",
+    synchronizeLiveKitCallKitAudioSession: phase => { phases.push(phase); return sdkResult; },
+    reportInternalCallMediaDiagnostic: () => {},
+    sanitizeNativeEvent: event => ({ ...event }),
+    updateNativePresentationOwnership: () => {},
+    notifyNativePresentationSubscribers: () => {},
+    eventListener: event => delivered.push(event),
+  };
+  const handle = runInNewContext(nativeAudioLifecycleCode, scope);
+  return { context, delivered, handle, phases, readyUuids, scope };
+};
+const nativeAudioEvent = {
+  type: "audioSessionActivated",
+  callInviteId: "current-invite",
+  callUuid: "current-call",
+  nativeCallGeneration: "current-generation",
+  nativeSessionGeneration: "current-session",
+};
+for (const sdkResult of [true, false, undefined]) {
+  const fixture = createNativeAudioLifecycleFixture(sdkResult);
+  fixture.handle(nativeAudioEvent, 7, fixture.context);
+  assert.deepEqual(fixture.phases, ["activated"], "an exact current activation synchronizes the installed WebRTC SDK once");
+  assert.equal(fixture.readyUuids.has("current-call"), sdkResult === true,
+    "native audio readiness requires explicit SDK synchronization success, including after a prior activation");
+  assert.equal(fixture.readyUuids.has("other-call"), false, "one activation cannot grant readiness to another call");
+  assert.equal(fixture.delivered.at(-1)?.audioSdkSynchronized, sdkResult === true,
+    "downstream consumers receive the actual SDK synchronization outcome");
+}
+for (const type of ["audioSessionDeactivated", "audioSessionFailed", "audioInterruptionBegan"]) {
+  const fixture = createNativeAudioLifecycleFixture(true);
+  fixture.handle({ ...nativeAudioEvent, type }, 7, fixture.context);
+  assert.deepEqual(fixture.phases, ["deactivated"], `${type} closes the installed WebRTC audio-session lifecycle`);
+  assert.equal(fixture.readyUuids.size, 0, `${type} revokes the prior native audio readiness`);
+}
+for (const eventOverrides of [
+  { callUuid: "other-call" },
+  { callUuid: "" },
+  { nativeCallGeneration: "retired-generation" },
+  { nativeCallGeneration: undefined },
+  { nativeSessionGeneration: "retired-session" },
+  { nativeSessionGeneration: undefined },
+]) {
+  const fixture = createNativeAudioLifecycleFixture(true);
+  fixture.readyUuids.clear();
+  fixture.handle({ ...nativeAudioEvent, ...eventOverrides }, 7, fixture.context);
+  assert.deepEqual(fixture.phases, [], "missing or mismatched native receipts cannot synchronize SDK audio");
+  assert.equal(fixture.readyUuids.size, 0, "rejected activation cannot manufacture native audio readiness");
+  assert.equal(fixture.delivered.length, 0, "rejected activation cannot reach downstream media consumers");
+}
+for (const retiredLifecycle of ["registration", "generation", "context"]) {
+  const fixture = createNativeAudioLifecycleFixture(true);
+  if (retiredLifecycle === "registration") fixture.scope.voipRegistrationActive = false;
+  fixture.handle(nativeAudioEvent, retiredLifecycle === "generation" ? 6 : 7,
+    retiredLifecycle === "context" ? { ...fixture.context } : fixture.context);
+  assert.deepEqual(fixture.phases, [], `retired ${retiredLifecycle} cannot synchronize SDK audio`);
+  assert.equal(fixture.delivered.length, 0, `retired ${retiredLifecycle} cannot reach downstream media consumers`);
+}
 assert.doesNotMatch(rootLayoutSource, /<Modal/u, "background/full-screen presentation remains native rather than a React modal");
 assert.match(rootLayoutSource, /presentation === "native_background"/u, "background state defers to native CallStyle or CallKit");
 assert.match(rootLayoutSource, /presentation === "native_ios"/u, "an exact CallKit record continues to own background and terminated presentation");
@@ -1788,11 +1875,30 @@ assert.match(
   /DispatchQueue\.main\.asyncAfter\(deadline: \.now\(\) \+ 3\)[\s\S]{0,360}answerNotPending/u,
   "a CallKit transaction that never reaches the provider releases every waiting foreground Answer within a bounded deadline",
 );
-assert.match(
-  chatThreadSource,
-  /const releaseTrustedNativeCallSession = useCallback[\s\S]{0,620}setTrustedNativeCallClaim\(null\)[\s\S]{0,360}setNativeMediaActivationSerial\(0\)/u,
-  "terminal cleanup revokes the consumed native Answer claim before a later ordinary call can inherit its media gates",
+const readSourceVariableInitializer = (source, fileName, name) => {
+  const ast = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const matches = [];
+  const visit = node => {
+    if (ts.isVariableDeclaration(node) && node.name.getText() === name) matches.push(node.initializer);
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  assert.equal(matches.length, 1, `${fileName} has one ${name} initializer`);
+  assert.ok(matches[0], `${name} has a production implementation`);
+  return matches[0].getText();
+};
+const releaseTrustedNativeCallSessionSource = readSourceVariableInitializer(
+  chatThreadSource, "thread.tsx", "releaseTrustedNativeCallSession",
 );
+assert.match(releaseTrustedNativeCallSessionSource,
+  /trustedNativeCallClaim\?\.inviteId !== expectedInviteId\s*&& acceptedIosNativeMediaDescriptorRef\.current\?\.inviteId !== expectedInviteId\s*\) return false;/u,
+  "terminal cleanup rejects an invite owned by neither the routing claim nor the accepted native session");
+assert.match(releaseTrustedNativeCallSessionSource,
+  /releaseIosAcceptedNativeMediaSession\(expectedInviteId, ownedUuid, \{\s*authenticatedUserId: currentUserId, sessionGeneration: authority\?\.sessionGeneration \?\? "",\s*\}\);/u,
+  "terminal cleanup releases the retained accepted native session with exact account and session ownership");
+assert.match(releaseTrustedNativeCallSessionSource,
+  /acceptedIosNativeMediaDescriptorRef\.current = null;[\s\S]*setTrustedNativeCallClaim\(null\)[\s\S]*setNativeAudioSessionCallUuid\(""\)[\s\S]*setNativeMediaActivationSerial\(0\)/u,
+  "terminal cleanup revokes accepted native ownership, the Answer claim, and audio gates before another call can inherit them");
 assert.match(
   liveKitChatCallSessionSource,
   /NATIVE_MEDIA_ACTIVATION_RETRY_DELAYS_MS = \[0, 250, 750, 1_500, 3_000\]/u,
@@ -2128,15 +2234,34 @@ assert.match(
   /const activeIosNativeAudioCallUuid = acceptedNativeAudioCallUuid \|\| \(\s*Platform\.OS === "ios" && requestedNativeCallAction === "answer"\s*&& requestedNativeCallOwnsTransition \? requestedNativeCallUuid : ""\s*\);/u,
   "the routing fallback requires the still-owned iOS Answer transition; ordinary foreground calls do not acquire a CallKit gate",
 );
-assert.match(
-  nativeAudioGateSource,
-  /const waitingForIosNativeAudioSession = !!activeIosNativeAudioCallUuid\s*&& nativeAudioSessionCallUuid !== activeIosNativeAudioCallUuid;/u,
-  "iOS CallKit media waits for activation matching the current accepted or attested Answer UUID",
+const nativeAudioWaitExpression = readSourceVariableInitializer(
+  chatThreadSource, "thread.tsx", "waitingForIosNativeAudioSession",
 );
+for (const [acceptedUuid, retainedReady, observedUuid, expectedWait] of [
+  ["current-call", true, "", false],
+  ["current-call", false, "current-call", true],
+  ["current-call", undefined, "current-call", true],
+  ["", undefined, "current-call", false],
+  ["", true, "other-call", true],
+  ["", undefined, "", true],
+]) {
+  assert.equal(runInNewContext(nativeAudioWaitExpression, {
+    activeIosNativeAudioCallUuid: "current-call",
+    acceptedNativeAudioCallUuid: acceptedUuid,
+    retainedIosNativeMediaSession: retainedReady === undefined ? null : { audioSessionActive: retainedReady },
+    nativeAudioSessionCallUuid: observedUuid,
+  }), expectedWait, "accepted CallKit media requires retained readiness; an attested Answer requires its exact activation UUID");
+}
+assert.equal(runInNewContext(nativeAudioWaitExpression, {
+  activeIosNativeAudioCallUuid: "",
+  acceptedNativeAudioCallUuid: "",
+  retainedIosNativeMediaSession: null,
+  nativeAudioSessionCallUuid: "",
+}), false, "ordinary foreground calls do not acquire a native audio prerequisite");
 assert.match(
   chatThreadSource,
-  /enabled: shouldActivateAcceptedChatCallMedia\(\{[\s\S]{0,220}\}\) && !waitingForIosNativeAudioSession && !iosNativeAnswerRecoveryBlocked/u,
-  "accepted media requires native readiness and cannot bypass blocked native recovery",
+  /enabled: shouldActivateAcceptedChatCallMedia\(\{[\s\S]{0,220}\}\) && !waitingForIosNativeAudioSession && !iosNativeAnswerRecoveryBlocked && !unclaimedIosNativeMediaBlocked/u,
+  "accepted media requires native readiness and cannot bypass blocked recovery or missing accepted-call authority",
 );
 assert.match(
   chatThreadSource,
@@ -2145,8 +2270,8 @@ assert.match(
 );
 assert.match(
   chatThreadSource,
-  /if \(event\.type === "audioSessionActivated"\) \{[\s\S]{0,320}setNativeAudioSessionCallUuid\(activeIosNativeAudioCallUuid\)/u,
-  "only native audio activation releases the current accepted CallKit media gate",
+  /if \(event\.type === "audioSessionActivated" && event\.audioSdkSynchronized !== false\) \{[\s\S]{0,320}setNativeAudioSessionCallUuid\(activeIosNativeAudioCallUuid\)/u,
+  "native audio activation releases the attested Answer gate only when SDK synchronization did not fail",
 );
 assert.doesNotMatch(
   rootLayoutSource,
