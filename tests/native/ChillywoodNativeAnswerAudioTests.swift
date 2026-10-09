@@ -84,6 +84,7 @@ private final class ChillywoodNativeCallDiagnostics {
 
 private final class CoordinatorProbe {
   var activeCalls: [UUID: ActiveNativeCall] = [:]
+  var callKitAudioActivationOwners: [UUID: (generation: UUID, authority: NativeVoipAuthority)] = [:]
   var pendingAnswerActions: [UUID: CXAnswerCallAction] = [:]
   var pendingAnswerTimeouts: [UUID: DispatchWorkItem] = [:]
   var requestedAnswerTransactions: Set<UUID> = []
