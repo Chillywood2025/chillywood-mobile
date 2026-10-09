@@ -231,6 +231,10 @@ const React = require("react");
 let fixture = fs.readFileSync(fixturePath, "utf8").split('test("current PR210 contract')[0];
 assert.ok(fixture.includes("async function mountLegacyHook("));
 fixture = fixture.replace("const require = createRequire(import.meta.url);", "");
+const peerConstructionSeam = "      runtime.peers.push(this);";
+assert.equal(fixture.split(peerConstructionSeam).length, 2);
+fixture = fixture.replace(peerConstructionSeam, `${peerConstructionSeam}
+      runtime.configureNegotiationPeer?.(this);`);
 fixture = fixture.replace("const getCameraPermission = async () => runtime.cameraPermission;", `const getCameraPermission = async () => {
   const action = runtime.cameraReadActions?.shift();
   if (action?.wait) await action.wait;
@@ -299,6 +303,198 @@ async function start(t, { video = true, backgroundAudio = false, ...options } = 
   t.after(() => h.unmount());
   return { runtime, h };
 }
+
+// Opt-in native boundary for the real mounted hook. This models only sender
+// association and completed offer/answer direction, not SDP/RTP or a device.
+// A track attached after an offer cannot borrow that offer's answer proof.
+function modelInitialCameraNegotiation(runtime) {
+  runtime.configureNegotiationPeer = peer => {
+    const transceivers = [];
+    const addTrack = peer.addTrack.bind(peer);
+    peer.addTrack = (...args) => {
+      const sender = addTrack(...args);
+      transceivers.push({ sender, mid: null, currentDirection: null, stopped: false });
+      return sender;
+    };
+    peer.getTransceivers = () => [...transceivers];
+    let offered = [];
+    const captureSenders = () => transceivers.map(transceiver => ({ transceiver, track: transceiver.sender.track }));
+    const accept = snapshots => {
+      for (const { transceiver, track } of snapshots) {
+        if (!track || transceiver.sender.track !== track || transceiver.stopped) continue;
+        transceiver.mid = String(transceivers.indexOf(transceiver));
+        transceiver.currentDirection = "sendrecv";
+      }
+      peer.connectionState = "connected";
+    };
+    const setLocal = peer.setLocalDescription.bind(peer);
+    peer.setLocalDescription = async description => {
+      if (description.type === "offer") offered = captureSenders();
+      const answering = description.type === "answer" ? captureSenders() : null;
+      await setLocal(description);
+      if (answering) {
+        if (peer.answerCompletionBarrier) await peer.answerCompletionBarrier;
+        accept(answering);
+      }
+    };
+    const setRemote = peer.setRemoteDescription.bind(peer);
+    peer.setRemoteDescription = async description => {
+      await setRemote(description);
+      if (description.type === "answer") accept(offered);
+    };
+  };
+}
+
+async function initialCameraHeldAtForeground(t) {
+  const runtime = createRuntime();
+  modelInitialCameraNegotiation(runtime);
+  const permission = deferred();
+  runtime.cameraReadActions = [{ wait: permission.promise }];
+  const h = await mount(runtime, { enabled: true, naturalLifecycle: true,
+    analyticsContext: { surface: "chat-thread" },
+    initialMediaPreferences: { cameraEnabled: true, micEnabled: true } });
+  t.after(() => h.unmount());
+  const peer = runtime.peers[0];
+  assert.ok(peer, "natural admission creates the peer without injected hook refs");
+  assert.equal(runtime.cameraReadActions.length, 0, "actual foreground permission continuation is held");
+  const video = live(runtime, "video")[0];
+  const sender = peer.getSenders().find(candidate => candidate.track === video);
+  assert.ok(sender);
+  assert.equal(peer.getTransceivers().find(item => item.sender === sender).currentDirection, null,
+    "track attachment alone does not establish negotiated sending");
+  const answerRemoteVideo = () => runtime.channels.at(-1).emitBroadcast("webrtc:offer", {
+    roomId: runtime.roomId, targetUserId: runtime.userId, fromUserId: runtime.remoteUserId,
+    negotiationId: "controlled-initial-video", description: { type: "offer", sdp: "controlled-video-offer" },
+  });
+  return { runtime, h, peer, video, sender, permission, answerRemoteVideo };
+}
+
+test("legacy unchanged initial camera reuses its completed negotiation after delayed foreground permission", async t => {
+  const { runtime, h, peer, video, sender, permission, answerRemoteVideo } = await initialCameraHeldAtForeground(t);
+  await h.run(answerRemoteVideo);
+  const transceiver = peer.getTransceivers().find(item => item.sender === sender);
+  assert.equal(peer.signalingState, "stable");
+  assert.equal(transceiver.currentDirection, "sendrecv");
+  assert.notEqual(transceiver.mid, null);
+  assert.equal(peer.offerCalls, 0, "the actual incoming-offer path answered without a local offer");
+  const captures = runtime.captureRequests.length;
+  const committedBefore = runtime.membershipTouches.length;
+  const broadcastsBefore = runtime.broadcasts.length;
+  await h.run(() => permission.resolve());
+  assert.ok(runtime.membershipTouches.slice(committedBefore).some(item => item.cameraEnabled && item.micEnabled),
+    "the foreground microphone reconciliation reaches its actual durable commit");
+  assert.ok(runtime.broadcasts.slice(broadcastsBefore).some(item => item.event === "media:update"
+    && item.payload.cameraOn && item.payload.micOn), "the current media projection was broadcast");
+  assert.equal(h.getResult().mediaControlsBusy, false);
+  assert.equal(live(runtime, "video")[0], video);
+  assert.equal(sender.track, video);
+  assert.equal(runtime.captureRequests.length, captures);
+  assert.equal(peer.offerCalls, 0, "already negotiated initial camera must not create a redundant offer");
+});
+
+for (const unavailable of ["null MID", "empty MID", "missing currentDirection", "missing stopped", "stopped", "recvonly"]) {
+  test(`legacy initial camera reuse requires negotiated evidence: ${unavailable}`, async t => {
+    const { h, peer, sender, permission, answerRemoteVideo } = await initialCameraHeldAtForeground(t);
+    await h.run(answerRemoteVideo);
+    const transceiver = peer.getTransceivers().find(item => item.sender === sender);
+    // Explicit negative native readings: none is evidence of usable sending.
+    if (unavailable === "null MID") transceiver.mid = null;
+    if (unavailable === "empty MID") transceiver.mid = "";
+    if (unavailable === "missing currentDirection") delete transceiver.currentDirection;
+    if (unavailable === "missing stopped") delete transceiver.stopped;
+    if (unavailable === "stopped") transceiver.stopped = true;
+    if (unavailable === "recvonly") transceiver.currentDirection = "recvonly";
+    await h.run(() => permission.resolve());
+    assert.equal(peer.offerCalls, 1, "uncertain or non-sending native state retains the forced offer path");
+  });
+}
+
+for (const changed of ["foreground recovery", "camera flip"]) {
+  test(`legacy initial camera reuse cannot cover ${changed}`, async t => {
+    const { runtime, h, peer, video, sender, permission, answerRemoteVideo } = await initialCameraHeldAtForeground(t);
+    await h.run(answerRemoteVideo);
+    if (changed === "foreground recovery") {
+      await h.run(() => runtime.emitAppState("background"));
+      assert.equal(video.readyState, "ended");
+      await h.run(() => runtime.emitAppState("active"));
+    } else {
+      assert.equal(await h.run(() => h.getResult().switchCamera()), true);
+      assert.notEqual(sender.track, video, "actual supported Flip replaces the original camera");
+    }
+    const offersBefore = peer.offerCalls;
+    await h.run(() => permission.resolve());
+    assert.notEqual(live(runtime, "video")[0], video);
+    assert.ok(peer.offerCalls > offersBefore, "a recovered or replaced camera cannot borrow initial-track proof");
+  });
+}
+
+test("legacy initial camera reuse waits behind native answer completion despite early stable state", async t => {
+  const { runtime, h, peer, permission, answerRemoteVideo } = await initialCameraHeldAtForeground(t);
+  await h.run(answerRemoteVideo);
+  const nativeAnswer = deferred();
+  peer.answerCompletionBarrier = nativeAnswer.promise;
+  let remoteAnswer;
+  await h.run(() => {
+    remoteAnswer = runtime.channels.at(-1).emitBroadcast("webrtc:offer", {
+      roomId: runtime.roomId, targetUserId: runtime.userId, fromUserId: runtime.remoteUserId,
+      negotiationId: "controlled-pending-answer", description: { type: "offer", sdp: "controlled-next-video-offer" },
+    });
+  });
+  assert.equal(peer.signalingState, "stable", "model the native event arriving before the description promise");
+  const commitsBefore = runtime.membershipTouches.length;
+  await h.run(() => permission.resolve());
+  assert.equal(runtime.membershipTouches.length, commitsBefore,
+    "camera reuse cannot advance to microphone commit while native SDP is still pending");
+  assert.equal(peer.offerCalls, 0);
+  await h.run(() => { nativeAnswer.resolve(); return remoteAnswer; });
+  assert.ok(runtime.membershipTouches.length > commitsBefore, "foreground work continues after native acknowledgement");
+  assert.equal(peer.offerCalls, 0, "settled unchanged camera reuses the acknowledged negotiation");
+});
+
+test("legacy initial camera reuse cannot escape a retired room generation", async t => {
+  const { runtime, h, peer, permission, answerRemoteVideo } = await initialCameraHeldAtForeground(t);
+  await h.run(answerRemoteVideo);
+  const oldGeneration = h.refs.legacySessionGenerationRef.current;
+  runtime.roomId = "REPLACEMENT-CAMERA-ROOM";
+  await h.rerender({ roomId: runtime.roomId, initialMediaPreferences: { cameraEnabled: false, micEnabled: false } });
+  assert.notEqual(h.refs.legacySessionGenerationRef.current, oldGeneration);
+  assert.equal(peer.connectionState, "closed");
+  const offersBefore = peer.offerCalls;
+  await h.run(() => permission.resolve());
+  assert.equal(peer.offerCalls, offersBefore, "retired continuation cannot issue an offer through its old peer");
+  assert.equal(live(runtime, "video").length, 0, "replacement room's off preference stays authoritative");
+});
+
+test("legacy initial camera reuse cannot borrow a replaced peer's negotiated direction", async t => {
+  const { runtime, h, peer, permission, answerRemoteVideo } = await initialCameraHeldAtForeground(t);
+  await h.run(answerRemoteVideo);
+  runtime.remoteMembershipGeneration = "16000000-0000-4000-8000-000000000002";
+  await h.run(() => runtime.channels.at(-1).emitBroadcast("state:update", {}));
+  assert.equal(peer.connectionState, "closed", "actual membership replacement retires the prior peer");
+  const replacement = h.refs.peerConnectionsRef.current[runtime.remoteUserId];
+  assert.ok(replacement && replacement !== peer);
+  assert.ok(replacement.getTransceivers().every(item => item.currentDirection === null));
+  await h.run(() => permission.resolve());
+  assert.equal(peer.offerCalls, 0);
+  assert.equal(replacement.offerCalls, 1, "new peer must obtain its own camera negotiation");
+});
+
+test("legacy initial camera reuse cannot bless recovered track after a failed offer", async t => {
+  const { runtime, h, peer, video, permission, answerRemoteVideo } = await initialCameraHeldAtForeground(t);
+  await h.run(answerRemoteVideo);
+  await h.run(() => runtime.emitAppState("background"));
+  await h.run(() => runtime.emitAppState("active"));
+  peer.failCreateOffer = true;
+  await h.run(() => permission.resolve());
+  const recovered = live(runtime, "video")[0];
+  assert.ok(recovered && recovered !== video, "failed recovery leaves its distinct attached track, not initial proof");
+  assert.ok(peer.getSenders().some(sender => sender.track === recovered));
+  const attemptsBefore = peer.offerCalls;
+  assert.ok(attemptsBefore > 0, "the recovery offer failed at the controlled native seam");
+  peer.failCreateOffer = false;
+  await h.rerender({ mediaActivationSerial: 1 });
+  assert.ok(peer.offerCalls > attemptsBefore, "a later reconciliation still negotiates the previously failed recovery");
+});
 
 test("legacy startup diagnostic boundaries distinguish requested capture, permissions, returned tracks and projection", async t => {
   const { runtime } = await start(t);

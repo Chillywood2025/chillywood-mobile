@@ -1,25 +1,25 @@
 {
   "schemaVersion": 1,
-  "generation": "internal-native-v11",
+  "generation": "internal-native-v12",
   "channels": {
     "android": "android-internal-v2",
     "ios": "ios-internal-v2"
   },
   "runtimeVersions": {
-    "android": "1.0.0-android-production-v11",
-    "ios": "1.0.0-ios-production-v11"
+    "android": "1.0.0-android-production-v12",
+    "ios": "1.0.0-ios-production-v12"
   },
   "supersedes": {
-    "generation": "internal-native-v10",
-    "androidRuntimeVersion": "1.0.0-android-production-v10",
-    "iosRuntimeVersion": "1.0.0-ios-production-v10",
-    "androidCompatibilityDigest": "2455a67cb9bff63f5dc1f4d526ad7c0164b15cad98bcdd9cfa45f863963e15e5",
-    "iosCompatibilityDigest": "9f52e04acd6e7c00b058096c3a53cc3a9c42b7eacf2c9d846f8e0ab7b2879b5a"
+    "generation": "internal-native-v11",
+    "androidRuntimeVersion": "1.0.0-android-production-v11",
+    "iosRuntimeVersion": "1.0.0-ios-production-v11",
+    "androidCompatibilityDigest": "321a7ef31e17ec16eeefe3fcdd1886ad0075fbeb02bd3452430e78205c592ba8",
+    "iosCompatibilityDigest": "97aa914a321e38ad70900a735dbe79df01ca9b9c3503d4be7a6c6f528529939c"
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
-    "androidDigest": "321a7ef31e17ec16eeefe3fcdd1886ad0075fbeb02bd3452430e78205c592ba8",
-    "iosDigest": "97aa914a321e38ad70900a735dbe79df01ca9b9c3503d4be7a6c6f528529939c"
+    "androidDigest": "61599fe404992adb0df8a5f9182b71c3bd332303448a6ee61b0140cfc8f6dd9b",
+    "iosDigest": "9aa4f5cea1371154d9c1932dfe9315724bb08c193858cf1e1e716d85ddb7c633"
   },
   "policy": {
     "internalOnly": true,
@@ -37,6 +37,6 @@
         "group": "Chillywood Internal"
       }
     },
-    "reason": "Paired testing of installed Android 101 and iOS 36 observed successful outgoing iPhone voice route changes, but a video receiver request retained an immediate speaker output. VideoChat mode implicitly defaults to speaker, so clearing its output override cannot establish receiver selection. V11 keeps outgoing call audio in VoiceChat mode while the existing explicit video speaker request selects the initial route. Fresh source validation, native compilation and paired retesting are required; no physical audio/video confirmation or completed qualification matrix is claimed. Fresh binaries remain restricted to the existing Google Play internal and TestFlight Chillywood Internal audiences. Installed v10 and earlier cohorts and their evidence remain immutable. Media diagnostics remain limited to the reviewed internal store profiles and matching signed channels. This generation does not authorize OTA publication or public release."
+    "reason": "V11 paired testing observed matching immediate iPhone receiver and speaker outputs during video, but also an intermittent Android microphone startup rollback around competing offers. Actual-hook mounted and real-browser paired regressions independently reproduced an unnecessary foreground camera offer after that same initial camera was already negotiated. V12 reuses only the original peer, generation, sender and live track with a stable negotiated sending transceiver; recovered or unproved camera senders still negotiate, and microphone collision recovery remains bounded. This removes the proved redundant offer without claiming it proves the phone failure's complete cause. Fresh source validation and paired retesting are required; physical sound, moving video and the full qualification matrix remain unverified. Fresh binaries remain restricted to the existing Google Play internal and TestFlight Chillywood Internal audiences. Installed v11 and earlier cohorts and their evidence remain immutable. Media diagnostics remain limited to the reviewed internal store profiles and matching signed channels. This generation does not authorize OTA publication or public release."
   }
 }

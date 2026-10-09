@@ -473,6 +473,9 @@ export function useCommunicationRoomSession({
   const localStreamRef = useRef<MediaStream | null>(null);
   const auxiliaryStreamsRef = useRef<MediaStream[]>([]);
   const peerConnectionsRef = useRef<Record<string, any>>({});
+  const peerInitialCameraSendersRef = useRef(new WeakMap<object, {
+    generation: number; sender: any; track: any;
+  }>());
   const peerConnectionTasksRef = useRef<Record<string, { generation: number; remoteGeneration: string | undefined; task: Promise<any> }>>({});
   const peerSignalingTailsRef = useRef<Record<string, Promise<void>>>({});
   const peerLocalOffersRef = useRef<Record<string, { generation: number; peerConnection: any; sdp: string; negotiationId: string }>>({});
@@ -874,6 +877,7 @@ export function useCommunicationRoomSession({
     });
     const existing = expectedPeerConnection ?? peerConnectionsRef.current[userId];
     if (existing) {
+      peerInitialCameraSendersRef.current.delete(existing);
       try {
         existing.close();
       } catch {
@@ -1951,6 +1955,16 @@ export function useCommunicationRoomSession({
       peerConnection.close();
       return null;
     }
+    // Record only the camera attached before this peer's first SDP operation.
+    // A later added/recovered track must still negotiate, even if an earlier
+    // failed attempt left that track attached to a sender.
+    const initialCameraSenders = peerConnection.getSenders().filter((sender: any) => (
+      sender.track?.kind === "video" && sender.track.readyState === "live"
+    ));
+    if (initialCameraSenders.length === 1) {
+      const sender = initialCameraSenders[0];
+      peerInitialCameraSendersRef.current.set(peerConnection, { generation, sender, track: sender.track });
+    }
     const isCurrentPeer = () => (
       isActiveLegacyGeneration(generation)
       && ownsRemoteGeneration()
@@ -2189,7 +2203,11 @@ export function useCommunicationRoomSession({
     offerRetryTimersRef.current[remoteUserId] = timer;
   }, [broadcastOfferDescription, clearOfferRetry, roomId]);
 
-  const createAndSendOffer = useCallback((remoteUserId: string, forceRenegotiation = false) => (
+  const createAndSendOffer = useCallback((
+    remoteUserId: string,
+    forceRenegotiation = false,
+    canReuseNegotiatedCamera?: (peerConnection: any) => boolean,
+  ) => (
     runSerializedPeerOffer(remoteUserId, async () => {
       const generation = legacySessionGenerationRef.current;
       const resolvedIdentity = identityRef.current;
@@ -2254,6 +2272,11 @@ export function useCommunicationRoomSession({
       const normalizedOffer = await runSerializedPeerSignaling(remoteUserId, async () => {
         if (generation !== legacySessionGenerationRef.current || peerConnectionsRef.current[remoteUserId] !== peerConnection
           || String(peerConnection.signalingState ?? "stable") !== "stable") return null;
+        // Incoming description promises update native transceiver state on
+        // this queue. Check only after they settle, not at the earlier render
+        // or signalingstatechange event. Initial negotiation may already have
+        // carried this exact camera while foreground reconciliation waited.
+        if (canReuseNegotiatedCamera?.(peerConnection)) return "camera-already-negotiated" as const;
         const offer = await peerConnection.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
         if (generation !== legacySessionGenerationRef.current || peerConnectionsRef.current[remoteUserId] !== peerConnection) return null;
         const normalized = { ...offer, sdp: preferVideoCodecInSdp(offer.sdp, PREFERRED_VIDEO_CODEC) };
@@ -2261,6 +2284,10 @@ export function useCommunicationRoomSession({
         return normalized;
       });
       if (!normalizedOffer) return false;
+      if (normalizedOffer === "camera-already-negotiated") {
+        clearOfferRetry(remoteUserId);
+        return true;
+      }
       logChatRtc("offer_created", {
         roomId,
         remoteUserId,
@@ -3471,14 +3498,17 @@ export function useCommunicationRoomSession({
     return clearWarmup;
   }, [enabled, identity?.userId, isActiveLegacyGeneration, loading, refreshSnapshot, room?.roomId]);
 
-  const renegotiateAllPeers = useCallback(async (forceRenegotiation = false) => {
+  const renegotiateAllPeers = useCallback(async (
+    forceRenegotiation = false,
+    canReuseNegotiatedCamera?: (peerConnection: any) => boolean,
+  ) => {
     const generation = legacySessionGenerationRef.current;
     if (!isActiveLegacyGeneration(generation)) return false;
     const remoteUserIds = Object.keys(peerConnectionsRef.current);
     let completed = true;
     for (const remoteUserId of remoteUserIds) {
       if (!isActiveLegacyGeneration(generation)) return false;
-      completed = await createAndSendOffer(remoteUserId, forceRenegotiation) && completed;
+      completed = await createAndSendOffer(remoteUserId, forceRenegotiation, canReuseNegotiatedCamera) && completed;
     }
     return completed && isActiveLegacyGeneration(generation);
   }, [createAndSendOffer, isActiveLegacyGeneration]);
@@ -3696,7 +3726,21 @@ export function useCommunicationRoomSession({
           if (isActiveLegacyGeneration(generation)) setMediaControlError("Camera recovery failed. Turn the camera on to try again.");
           return false;
         }
-        if (!await renegotiateAllPeers(true)) return false;
+        const canReuseNegotiatedCamera = (peerConnection: any) => {
+          const initial = peerInitialCameraSendersRef.current.get(peerConnection);
+          if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active" || !ownsCameraIntent()
+            || initial?.generation !== generation || initial.track !== restoredCameraTrack
+            || initial.sender.track !== restoredCameraTrack || restoredCameraTrack.readyState !== "live"
+            || restoredCameraTrack.enabled !== true || peerConnection.signalingState !== "stable"
+            || !peerConnection.getSenders().includes(initial.sender)
+            || typeof peerConnection.getTransceivers !== "function") return false;
+          return peerConnection.getTransceivers().some((transceiver: any) => (
+            transceiver.sender === initial.sender && transceiver.stopped === false
+            && typeof transceiver.mid === "string" && transceiver.mid.length > 0
+            && (transceiver.currentDirection === "sendrecv" || transceiver.currentDirection === "sendonly")
+          ));
+        };
+        if (!await renegotiateAllPeers(true, canReuseNegotiatedCamera)) return false;
         if (!isActiveLegacyGeneration(generation) || appStateRef.current !== "active") return false;
         if (!ownsCameraIntent()) return cameraEnabledRef.current || stopLocalMediaKind("video");
         return true;

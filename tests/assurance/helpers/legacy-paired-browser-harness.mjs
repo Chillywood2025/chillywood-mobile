@@ -367,6 +367,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     channels: [], roomId: "BROWSER-CALL-1", serial: 0, callSerial: 1, endpointSerial: 0, peerSerial: 0,
     roomStatus: "active", callType: "video", hostUserId: "alice", dropAnswers: false, events: [], operationResults: [], errors: [], endpoints: [], retiredEndpoints: [], heldSignals: [], holdNext: null,
     backend: false, backendRuntimes: new Map(), captureRetirementModules: new Map(),
+    nextCameraPermissionHolds: new Set(), heldCameraPermissionReads: new Map(),
     invalidate(roomId) {
       // The database trigger invalidates only the authorized room topic; it
       // exposes no membership row contents, including on DELETE.
@@ -455,7 +456,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     }
     async send(message) { await hub.deliver({ ...message, roomId: this.topic.replace(/^comm-room-/u, "") }, this.endpoint); return "ok"; }
   }
-  function createEndpoint(userId, { seed = true, backendRuntime = null } = {}) {
+  function createEndpoint(userId, { seed = true, backendRuntime = null, initialAppState = "active" } = {}) {
     let captureRetirement = hub.captureRetirementModules.get(userId);
     if (!captureRetirement) {
       const module = { exports: {} };
@@ -465,7 +466,7 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       // retains the actual process coordinator, without sharing it with peers.
       hub.captureRetirementModules.set(userId, captureRetirement);
     }
-    const endpoint = { userId, instanceId: ++hub.endpointSerial, appState: "active", appStateListeners: new Set(), peers: [], streams: [], acquiredTracks: [], audioContexts: [], drawTimers: [], receivedVideos: [], receivedAudio: [], output: null, root: null, current: true, mounted: true, pendingControl: null };
+    const endpoint = { userId, instanceId: ++hub.endpointSerial, appState: initialAppState, appStateListeners: new Set(), peers: [], streams: [], acquiredTracks: [], audioContexts: [], drawTimers: [], receivedVideos: [], receivedAudio: [], output: null, root: null, current: true, mounted: true, pendingControl: null };
     let operationSerial = 0;
     const observeOperation = (operation, method) => function (...args) {
       const started = performance.now();
@@ -519,6 +520,14 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     if (seed) membershipStore.seed({ roomId: hub.roomId, userId, displayName: userId, role: userId === hub.hostUserId ? "host" : "participant", membershipGeneration: crypto.randomUUID(), membershipAdmissionAttempt: null, membershipState: "active", cameraEnabled: hub.callType === "video", micEnabled: true, joinedAt: "2026-09-28T00:00:00Z", leftAt: null, lastSeenAt: "2026-09-28T00:00:00Z" });
     const rtc = {
       RTCPeerConnection: class extends NativePeer {
+        observePeerOperation(operation, description) {
+          // Observe real browser SDP calls without replacing their settlement
+          // or exposing SDP. Track IDs belong only to synthetic test capture.
+          hub.events.push({ kind: "peer-operation", userId, peerId: this.fixturePeerId, operation,
+            ...(description ? { descriptionType: description.type } : {}), signaling: this.signalingState,
+            senders: this.getSenders().map(({ track }) => track ? { trackId: track.id, kind: track.kind, state: track.readyState, enabled: track.enabled } : null),
+            at: performance.now() });
+        }
         constructor(config) {
           super(config); endpoint.peers.push(this);
           this.fixturePeerId = ++hub.peerSerial; this.remoteDescriptionApplications = 0;
@@ -541,8 +550,22 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
           });
         }
         async setRemoteDescription(description) {
+          this.observePeerOperation("setRemoteDescription", description);
           this.remoteDescriptionApplications += 1;
           return super.setRemoteDescription(description);
+        }
+        async setLocalDescription(description) {
+          this.observePeerOperation("setLocalDescription", description);
+          return super.setLocalDescription(description);
+        }
+        async createOffer(options) {
+          this.observePeerOperation("createOffer");
+          return super.createOffer(options);
+        }
+        addTrack(track, ...streams) {
+          const sender = super.addTrack(track, ...streams);
+          this.observePeerOperation("addTrack");
+          return sender;
         }
       },
       RTCSessionDescription, RTCIceCandidate, MediaStream,
@@ -607,7 +630,15 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
         return result;
       };
     }
-    const getPermission = async () => granted;
+    const getPermission = async () => {
+      // The initial granted camera snapshot remains unchanged. A held read
+      // pauses the actual foreground reconciliation at its permission await.
+      if (hub.nextCameraPermissionHolds.delete(userId)) {
+        hub.events.push({ kind: "held-camera-permission", userId });
+        await new Promise((resolve) => hub.heldCameraPermissionReads.set(userId, resolve));
+      }
+      return granted;
+    };
     const mocks = {
       react: React,
       "react-native": { AppState: {
@@ -681,7 +712,10 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
     return { peerId: peer.fixturePeerId, brightness: brightness / (pixels.length / 4 * 3), fingerprint, mediaTime: video.currentTime };
   });
   const resources = (endpoint) => ({
-    peers: endpoint.peers.map((peer) => ({ id: peer.fixturePeerId, connection: peer.connectionState, ice: peer.iceConnectionState, signaling: peer.signalingState, gathering: peer.iceGatheringState, localType: peer.localDescription?.type, remoteType: peer.remoteDescription?.type, remoteDescriptionApplications: peer.remoteDescriptionApplications, senders: peer.getSenders().map((sender) => sender.track?.kind ?? "none") })),
+    peers: endpoint.peers.map((peer) => ({ id: peer.fixturePeerId, connection: peer.connectionState, ice: peer.iceConnectionState, signaling: peer.signalingState, gathering: peer.iceGatheringState, localType: peer.localDescription?.type, remoteType: peer.remoteDescription?.type, remoteDescriptionApplications: peer.remoteDescriptionApplications, senders: peer.getSenders().map((sender) => sender.track?.kind ?? "none"),
+      senderTracks: peer.getSenders().map(({ track }) => track ? { trackId: track.id, kind: track.kind, state: track.readyState, enabled: track.enabled } : null),
+      transceivers: peer.getTransceivers().map((transceiver) => ({ mid: transceiver.mid, currentDirection: transceiver.currentDirection, senderTrackId: transceiver.sender.track?.id ?? null })),
+    })),
     // Acquisition identities survive stream.removeTrack during hook rollback.
     tracks: endpoint.acquiredTracks.map((item) => ({ id: item.id, kind: item.kind, state: item.readyState, enabled: item.enabled })),
     audioReceivers: endpoint.receivedAudio.map(({ peer, track, receiver }) => ({ peerId: peer.fixturePeerId, connection: peer.connectionState, contextState: receiver.context.state, trackState: track.readyState, trackEnabled: track.enabled, playbackPaused: receiver.playback.paused, playbackReadyState: receiver.playback.readyState, pcmSampleRate: receiver.context.sampleRate, pcmSamples: receiver.samples, pcmEnergy: receiver.energy, error: receiver.error })),
@@ -707,9 +741,10 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       return ["prepareCommunicationRoomAdmission", "joinCommunicationRoomSession", "touchCommunicationRoomSession", "getCommunicationRoomSnapshot", "broadcastCommunicationRoomSignal", "leaveCommunicationRoomSession"].every((name) => typeof api[name] === "function");
     },
     async startAudioControl() { window.__pairedAudioControl = await audioControlFactory({ audioSourceFactory, audioReceiverFactory }); },
-    async start({ dropAnswers = false, callType = "video", hostUserId = "alice", backend } = {}) {
+    async start({ dropAnswers = false, callType = "video", hostUserId = "alice", initialAppStates = {}, backend } = {}) {
       if (backend) {
-        if (hub.endpoints.length || dropAnswers || callType !== "video" || backend.endpoints?.length !== 2) throw new Error("Invalid authenticated browser baseline configuration");
+        if (hub.endpoints.length || dropAnswers || callType !== "video" || backend.endpoints?.length !== 2
+          || Object.keys(initialAppStates).length || hub.nextCameraPermissionHolds.size) throw new Error("Invalid authenticated browser baseline configuration");
         hub.backend = true; hub.roomId = backend.roomId; hub.hostUserId = backend.hostUserId; hub.callType = callType;
         for (const configuration of backend.endpoints) {
           const runtime = await authenticatedRuntimeFactory({ sources: backendSources, connection: backend, endpoint: configuration, boundRpc: accountBoundRpc });
@@ -720,8 +755,23 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
         return;
       }
       if (!["audio", "video"].includes(callType) || !["alice", "bob"].includes(hostUserId)) throw new Error("Invalid paired-call scenario");
+      if (!initialAppStates || typeof initialAppStates !== "object" || Array.isArray(initialAppStates)
+        || Object.entries(initialAppStates).some(([userId, state]) => !["alice", "bob"].includes(userId) || !["active", "background"].includes(state))) throw new Error("Invalid initial browser AppState configuration");
       hub.dropAnswers = dropAnswers; hub.callType = callType; hub.hostUserId = hostUserId;
-      createEndpoint("alice"); createEndpoint("bob"); await delay(0);
+      createEndpoint("alice", { initialAppState: initialAppStates.alice ?? "active" });
+      createEndpoint("bob", { initialAppState: initialAppStates.bob ?? "active" }); await delay(0);
+    },
+    holdNextCameraPermissionRead(userId) {
+      if (hub.backend || !["alice", "bob"].includes(userId) || hub.nextCameraPermissionHolds.has(userId)
+        || hub.heldCameraPermissionReads.has(userId)) throw new Error("Invalid camera permission hold");
+      hub.nextCameraPermissionHolds.add(userId);
+    },
+    async releaseHeldCameraPermissionReads(userId) {
+      const resolve = hub.heldCameraPermissionReads.get(userId);
+      if (hub.backend || !resolve) throw new Error("No held camera permission read");
+      hub.heldCameraPermissionReads.delete(userId);
+      hub.events.push({ kind: "released-camera-permission", userId });
+      resolve(); await delay(0);
     },
     async setAppState(userId, nextState) {
       if (!["active", "background"].includes(nextState)) throw new Error("Invalid browser AppState transition");
@@ -824,8 +874,8 @@ function installLegacyPairedBrowser({ React, createRoot, Presence, PresenceAdapt
       const memberships = hub.backend
         ? await hub.backendRuntimes.values().next().value.api.listCommunicationRoomMemberships(hub.roomId)
         : membershipStore.snapshot(hub.roomId);
-      return { authenticatedBackend: hub.backend, roomId: hub.roomId, callType: hub.callType, hostUserId: hub.hostUserId, memberships, errors: [...hub.errors], events: clone(hub.events), operationResults: clone(hub.operationResults), heldSignals: hub.heldSignals.map(({ message, sender }) => ({ event: message.event, sender: sender.userId, generation: message.payload.membershipGeneration })), retiredEndpoints: hub.retiredEndpoints.map((endpoint) => ({ userId: endpoint.userId, instanceId: endpoint.instanceId, pendingControl: clone(endpoint.pendingControl), ...resources(endpoint) })), endpoints: await Promise.all(hub.endpoints.map(async (endpoint) => ({
-      userId: endpoint.userId, instanceId: endpoint.instanceId, appState: endpoint.appState, roomHostUserId: endpoint.output?.room?.hostUserId, membership: memberships.find((membership) => membership.userId === endpoint.userId), channelState: endpoint.output?.channelState, error: endpoint.output?.error, mediaControlError: endpoint.output?.mediaControlError, micEnabled: endpoint.output?.micEnabled, cameraEnabled: endpoint.output?.cameraEnabled,
+      return { authenticatedBackend: hub.backend, roomId: hub.roomId, callType: hub.callType, hostUserId: hub.hostUserId, memberships, errors: [...hub.errors], events: clone(hub.events), operationResults: clone(hub.operationResults), heldCameraPermissionReads: [...hub.heldCameraPermissionReads.keys()], heldSignals: hub.heldSignals.map(({ message, sender }) => ({ event: message.event, sender: sender.userId, generation: message.payload.membershipGeneration })), retiredEndpoints: hub.retiredEndpoints.map((endpoint) => ({ userId: endpoint.userId, instanceId: endpoint.instanceId, pendingControl: clone(endpoint.pendingControl), ...resources(endpoint) })), endpoints: await Promise.all(hub.endpoints.map(async (endpoint) => ({
+      userId: endpoint.userId, instanceId: endpoint.instanceId, appState: endpoint.appState, roomHostUserId: endpoint.output?.room?.hostUserId, membership: memberships.find((membership) => membership.userId === endpoint.userId), channelState: endpoint.output?.channelState, error: endpoint.output?.error, mediaControlError: endpoint.output?.mediaControlError, mediaControlsBusy: endpoint.output?.mediaControlsBusy, micEnabled: endpoint.output?.micEnabled, cameraEnabled: endpoint.output?.cameraEnabled,
       participants: endpoint.output?.participants?.map(({ streamURL: _url, ...rest }) => rest), ...await stats(endpoint), pixels: receivedPixels(endpoint),
       ...resources(endpoint),
     }))) }; },

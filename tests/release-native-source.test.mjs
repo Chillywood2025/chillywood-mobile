@@ -67,6 +67,11 @@ const recordedV10Source = {
   sha: "e0bcc6c9b350ed2df51ca57b49ad49ccbb253e09",
   tree: "d173d5256f95b1b3631d5a8b0b66f389f76c34e1",
 };
+// Signed internal binaries Android 102 / iOS 37, installed for paired diagnostics.
+const recordedV11Source = {
+  sha: "06e5482e3585fd7d30e3d06bf8576c3cd1cc077f",
+  tree: "8897a6a6f4aceb2d308470e2e228170848933524",
+};
 
 test("recorded internal v3 cohorts retain their historical Git-native inputs", () => {
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
@@ -158,14 +163,24 @@ test("recorded internal v10 cohorts retain their historical Git-native inputs", 
   }
 });
 
-test("internal v11 supersedes the incompatible v10 runtimes without rewriting their historical digests", () => {
+test("recorded internal v11 cohorts retain their historical Git-native inputs", () => {
+  const recorded = JSON.parse(git(repo, "show", `${recordedV11Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(recorded.generation, "internal-native-v11");
+  for (const platform of ["android", "ios"]) {
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
+      repositoryRoot: repo, platform, sourceSha: recordedV11Source.sha, sourceTree: recordedV11Source.tree,
+    }).digest);
+  }
+});
+
+test("internal v12 supersedes the v11 runtimes without rewriting their historical digests", () => {
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
-  const recorded = JSON.parse(git(repo, "show", `${recordedV10Source.sha}:config/release/internal-native-generation.json`));
-  assert.equal(generation.generation, "internal-native-v11");
+  const recorded = JSON.parse(git(repo, "show", `${recordedV11Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(generation.generation, "internal-native-v12");
   assert.equal(generation.supersedes.generation, recorded.generation);
   assert.equal(generation.nativeCompatibility.algorithm, recorded.nativeCompatibility.algorithm);
   for (const platform of ["android", "ios"]) {
-    assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v11`);
+    assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v12`);
     assert.equal(generation.supersedes[`${platform}RuntimeVersion`], recorded.runtimeVersions[platform]);
     assert.equal(generation.supersedes[`${platform}CompatibilityDigest`], recorded.nativeCompatibility[`${platform}Digest`]);
     assert.match(generation.nativeCompatibility[`${platform}Digest`], /^[0-9a-f]{64}$/u);
