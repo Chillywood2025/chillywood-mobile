@@ -8,8 +8,11 @@ import ts from "typescript";
 
 // Execute the production JSX, including its real render conditions and labels.
 // Host views are DOM stand-ins; this proves presentation, not native frames/RTP.
-const host = (tag) => ({ children, testID, ...props }) => React.createElement(tag,
-  { "data-testid": testID, ...(props.streamURL ? { "data-stream": props.streamURL } : {}) }, children);
+const host = (tag) => function TestHost({ children, testID, ...props }) {
+  return React.createElement(tag,
+    { "data-testid": testID, ...(props.streamURL ? { "data-stream": props.streamURL } : {}),
+      ...(tag === "video" ? { "data-mirror": String(props.mirror) } : {}) }, children);
+};
 const mocks = {
   react: React,
   "react-native": { StyleSheet: { create: (value) => value }, Text: host("span"), View: host("div") },
@@ -72,3 +75,32 @@ test("camera requested without a track remains Starting, never Cam On", () => {
   assert.match(html, /Starting/);
   assert.doesNotMatch(html, /<video|Cam On|Video connected/);
 });
+
+for (const [facing, mirror] of [["user", true], ["environment", false], [undefined, false]]) {
+  test(`legacy local renderer mirrors only observed front camera: ${facing ?? "unknown"}`, () => {
+    const html = render({ isSelf: true, cameraOn: true, streamURL: "local",
+      cameraFacingMode: facing });
+    assert.match(html, new RegExp(`data-mirror="${mirror}"`));
+  });
+  test(`legacy remote renderer ignores facing metadata: ${facing ?? "unknown"}`, () => {
+    assert.match(render({ cameraOn: true, streamURL: "remote", cameraFacingMode: facing }),
+      /data-mirror="false"/);
+  });
+}
+
+const previewModule = { exports: {} };
+vm.runInNewContext(ts.transpileModule(fs.readFileSync("components/communication/communication-preview-card.tsx", "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
+  fileName: "components/communication/communication-preview-card.tsx",
+}).outputText, { module: previewModule, exports: previewModule.exports, __DEV__: false,
+  require: (name) => { assert.ok(Object.hasOwn(mocks, name), name); return mocks[name]; } });
+
+for (const [facing, mirror] of [["user", true], ["environment", false], [undefined, false]]) {
+  test(`standalone preview mirrors only observed front camera: ${facing ?? "unknown"}`, () => {
+    const html = renderToStaticMarkup(React.createElement(previewModule.exports.CommunicationPreviewCard, {
+      displayName: "You", streamURL: "local", cameraEnabled: true, micEnabled: true,
+      cameraPermissionState: "granted", microphonePermissionState: "granted", cameraFacingMode: facing,
+    }));
+    assert.match(html, new RegExp(`data-mirror="${mirror}"`));
+  });
+}

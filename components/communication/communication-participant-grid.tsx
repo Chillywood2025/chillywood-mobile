@@ -173,7 +173,7 @@ export function CommunicationParticipantGrid({
                     isFullscreen && styles.videoFullscreen,
                   ]}
                   objectFit={videoObjectFit}
-                  mirror={participant.isSelf}
+                  mirror={participant.isSelf && participant.cameraFacingMode === "user"}
                 />
               ) : (
                 <View

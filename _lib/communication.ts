@@ -116,6 +116,8 @@ export type CommunicationParticipantPresence = {
 export type CommunicationParticipantView = CommunicationParticipantPresence & {
   isSelf: boolean;
   streamURL?: string;
+  /** Observed facing of the owned local render track; never remote presence. */
+  cameraFacingMode?: "user" | "environment";
   liveKitVideoTrackReference?: unknown;
   mediaProvider?: "legacy_webrtc" | "livekit";
   connectionState: "waiting" | "connecting" | "connected" | "disconnected" | "failed";

@@ -5258,6 +5258,9 @@ export function useCommunicationRoomSession({
         cameraFacingRef.current = nextFacing;
         setLocalStreamURL(getCommunicationStreamURL(localStreamRef.current));
         setLocalVideoStreamURL(getRenderableVideoStreamURL(targetStream));
+        // The new track can keep the same stream URL. React may batch the
+        // temporary empty URL, so explicitly refresh its observed facing.
+        notifyLocalMediaProjection();
         setMediaControlError(null);
         return true;
       } catch (switchError) {
@@ -5302,6 +5305,23 @@ export function useCommunicationRoomSession({
   // The retained foreground preference is not proof of live capture. Equally,
   // background/disabled intent cannot hide a track whose stop is unproved.
   const currentCameraEnabled = hasUsableLocalTrack("video");
+  // Mirror only the camera actually rendered locally. Retained facing intent
+  // can differ after recovery, and another owned stream must not lend its facing.
+  let localCameraFacingMode: CommunicationParticipantView["cameraFacingMode"];
+  const localRenderStream = localVideoStreamURL
+    ? [localStreamRef.current, ...auxiliaryStreamsRef.current].find((stream) => (
+      stream && getCommunicationStreamURL(stream) === localVideoStreamURL
+    ))
+    : undefined;
+  const localRenderTracks = localRenderStream?.getVideoTracks().filter(isRenderableVideoTrack) ?? [];
+  if (localRenderTracks.length === 1) {
+    try {
+      const facing = localRenderTracks[0].getSettings?.().facingMode;
+      if (facing === "user" || facing === "environment") localCameraFacingMode = facing;
+    } catch {
+      // Missing native settings leave an unmirrored preview, not guessed facing.
+    }
+  }
 
   const participants = useMemo<CommunicationParticipantView[]>(() => {
     const localUserId = identity?.userId ?? "";
@@ -5319,6 +5339,7 @@ export function useCommunicationRoomSession({
           ...participant,
           isSelf,
           cameraOn: isSelf ? currentCameraEnabled : participant.cameraOn,
+          cameraFacingMode: isSelf ? localCameraFacingMode : undefined,
           micOn: isSelf ? micEnabled : participant.micOn,
           streamURL: isSelf
             ? localVideoStreamURL || undefined
@@ -5353,12 +5374,13 @@ export function useCommunicationRoomSession({
         joinedAt: localJoinedAtRef.current,
         isHost: room?.hostUserId === identity.userId,
         isSelf: true,
+        cameraFacingMode: localCameraFacingMode,
         streamURL: localVideoStreamURL || undefined,
         connectionState: "connected",
       },
       ...merged,
     ];
-  }, [currentCameraEnabled, connectionStateByUserId, identity, localVideoStreamURL, memberships, micEnabled, presenceParticipants, remoteStreamsByUserId, room?.hostUserId]);
+  }, [currentCameraEnabled, connectionStateByUserId, identity, localCameraFacingMode, localVideoStreamURL, memberships, micEnabled, presenceParticipants, remoteStreamsByUserId, room?.hostUserId]);
 
   useEffect(() => {
     if (!__DEV__) return;
@@ -5435,6 +5457,7 @@ export function useCommunicationRoomSession({
     participants,
     participantCount: analyticsSurface === "chat-thread" ? connectedParticipants.length : participants.length,
     localStreamURL,
+    localCameraFacingMode,
     toggleCamera,
     toggleMic,
     setMicrophoneEnabled,

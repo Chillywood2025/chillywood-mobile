@@ -1918,6 +1918,7 @@ async function beginFlip(h) {
 
 test("legacy supported camera flip reacquires video only and replaces senders while preserving microphone and call", async t => {
   const { runtime, h } = await start(t);
+  assert.equal(h.getResult().participants.find(participant => participant.isSelf).cameraFacingMode, "user");
   const microphone = live(runtime, "audio")[0];
   const initialVideo = live(runtime, "video")[0];
   const initialPeers = [...runtime.peers];
@@ -1927,6 +1928,8 @@ test("legacy supported camera flip reacquires video only and replaces senders wh
     assert.equal(await h.run(() => h.getResult().switchCamera()), true);
     const track = live(runtime, "video")[0];
     assert.equal(track.getSettings().facingMode, facingMode);
+    assert.equal(h.getResult().participants.find(participant => participant.isSelf).cameraFacingMode, facingMode);
+    assert.equal(h.getResult().localCameraFacingMode, facingMode);
     assert.equal(live(runtime, "video").length, 1);
     for (const peer of initialPeers) assert.equal(peer.getSenders().find(sender => sender.track?.kind === "video").track, track);
     assert.equal(live(runtime, "audio")[0], microphone);
@@ -1943,6 +1946,59 @@ test("legacy supported camera flip reacquires video only and replaces senders wh
   assert.equal(runtime.membershipTouches.length, initialCommits);
   assert.equal(runtime.joinCalls.length, 1);
 });
+
+test("legacy local preview facing follows the recovered track rather than retained camera intent", async t => {
+  const { runtime, h } = await start(t, { backgroundAudio: true });
+  assert.equal(await h.run(() => h.getResult().switchCamera()), true);
+  assert.equal(h.getResult().localCameraFacingMode, "environment");
+  await h.run(() => runtime.emitAppState("background"));
+  assert.equal(h.getResult().localCameraFacingMode, undefined);
+  // A fresh native capture can report a different actual camera from the
+  // retained request. Rendering must follow its settings, never the old ref.
+  runtime.cameraFacingReceipt = "user";
+  await h.run(() => runtime.emitAppState("active"));
+  assert.equal(live(runtime, "video")[0].getSettings().facingMode, "user");
+  assert.equal(h.getResult().participants.find(participant => participant.isSelf).cameraFacingMode, "user");
+});
+
+for (const settings of ["missing", "unknown", "throws"]) {
+  test(`legacy local preview does not guess facing when current track settings ${settings}`, async t => {
+    const { runtime, h } = await start(t);
+    const track = live(runtime, "video")[0];
+    if (settings === "missing") track.getSettings = undefined;
+    if (settings === "unknown") track.getSettings = () => ({ facingMode: "left" });
+    if (settings === "throws") track.getSettings = () => { throw Error("native settings unavailable"); };
+    await h.rerender({});
+    assert.equal(h.getResult().localCameraFacingMode, undefined);
+    assert.equal(h.getResult().participants.find(participant => participant.isSelf).cameraFacingMode, undefined);
+    assert.equal(live(runtime, "audio").length, 1);
+    assert.equal(live(runtime, "video").length, 1);
+  });
+}
+
+for (const change of ["different stream", "multiple render tracks", "disabled", "ended"]) {
+  test(`legacy local preview requires the unique live track in its render stream: ${change}`, async t => {
+    const { runtime, h } = await start(t);
+    const track = live(runtime, "video")[0];
+    if (change === "different stream" || change === "multiple render tracks") {
+      const other = runtime.createTrack("video");
+      other.getSettings = () => ({ facingMode: "environment" });
+      if (change === "different stream") {
+        track.getSettings = () => ({});
+        const stream = runtime.createStream([other]);
+        runtime.localStreams.push(stream);
+        h.refs.auxiliaryStreamsRef.current.push(stream);
+      } else {
+        h.refs.localStreamRef.current.addTrack(other);
+      }
+    }
+    if (change === "disabled") track.enabled = false;
+    if (change === "ended") track.stop();
+    await h.rerender({});
+    assert.equal(h.getResult().localCameraFacingMode, undefined);
+    assert.equal(h.getResult().participants.find(participant => participant.isSelf).cameraFacingMode, undefined);
+  });
+}
 
 test("legacy supported camera flip waits for capture and serializes two requested lens transitions", async t => {
   const { runtime, h } = await start(t);
@@ -2014,6 +2070,7 @@ for (const retirement of ["End", "room replacement", "account replacement", "bac
     const tracksBefore = new Set(live(runtime, "video"));
     pending.resolve();
     assert.equal(await h.run(() => operation), false);
+    assert.notEqual(h.getResult().localCameraFacingMode, "environment", "retired rear capture cannot lend its facing to the current preview");
     if (retirement === "End") await h.run(() => h.getResult().leaveRoom());
     for (const track of live(runtime, "video")) assert.ok(tracksBefore.has(track), "late capture cannot survive into a newer owner or background");
     assert.equal(runtime.roomEndCalls, 0);
