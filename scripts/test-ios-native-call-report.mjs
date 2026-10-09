@@ -129,6 +129,9 @@ try {
   runCase("terminal-push-skips-failed-report", mutateDeclaration(markers.PUSH,
     "self.reportInvalidVoipPushOnMain(completion: completion)", "completion()"),
   "legacy terminal push retains failed-report obligation regardless of prior call inventory");
+  runCase("terminal-uuid-borrows-another-invite", mutateDeclaration(markers.TERMINAL,
+    "call.inviteId == inviteId", "true"),
+  "terminal UUID lookup cannot override exact invite, thread, media type, or native authority");
   runCase("pending-duplicate-premature-success", mutateDeclaration(markers.REPORT,
     "if let completion { pending.completions.append(completion) }",
     "if let completion { completion(nil) }"),
@@ -177,6 +180,6 @@ try {
     'current["audioSessionActive"] = false', '_ = current["audioSessionActive"]'),
   "queued recovered presentation recomputes readiness after deactivation before delivery");
   console.log(checkSource
-    ? "Native incoming-report declarations and fourteen mutations generated; Swift compilation/execution NOT RUN."
-    : "Actual Swift incoming presentation/authority/terminal callbacks and fourteen mutation controls passed; controlled CallKit receipts do not prove physical presentation or media.");
+    ? "Native incoming-report declarations and fifteen mutations generated; Swift compilation/execution NOT RUN."
+    : "Actual Swift incoming presentation/authority/terminal callbacks and fifteen mutation controls passed; controlled CallKit receipts do not prove physical presentation or media.");
 } finally { rmSync(temporary, { recursive: true, force: true }); }

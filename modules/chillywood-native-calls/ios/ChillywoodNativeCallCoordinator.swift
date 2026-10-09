@@ -854,6 +854,15 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       completion()
       return
     }
+    guard call.inviteId == inviteId, call.threadId == threadId,
+      call.callType == (input["callType"] as? String == "video" ? "video" : "voice"),
+      call.presentationAuthority == persistedVoipAuthority()
+    else {
+      // A UUID lookup alone is not terminal authority. A conflicting payload
+      // must neither end another descriptor nor tombstone its valid invite.
+      completion()
+      return
+    }
     failPendingAnswer(callUuid)
     let eventType = action == "declined" || action == "timeout" || action == "missed"
       ? action == "declined" ? "declined" : action

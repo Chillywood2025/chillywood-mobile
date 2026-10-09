@@ -512,6 +512,27 @@ for terminalState in ["live", "already-terminal", "unknown"] {
   probe.remove(unrelatedUuid)
 }
 
+for conflictingField in ["callInviteId", "threadId", "callType", "authority"] {
+  let probe = fresh(), original = payload()
+  let uuid = try probe.report(original)
+  probe.provider!.complete(); pump()
+  let generation = probe.activeCalls[uuid]!.generation
+  let answer = CXAnswerCallAction(call: uuid)
+  probe.pendingAnswerActions[uuid] = answer
+  var conflicting = original
+  if conflictingField == "authority" {
+    probe.installAuthority(replacementAuthority)
+  } else {
+    conflicting[conflictingField] = conflictingField == "callType" ? "video" : UUID().uuidString.lowercased()
+  }
+  probe.terminal(conflicting)
+  expect(probe.activeCalls[uuid]?.generation == generation && probe.provider!.ended.isEmpty
+    && answer.failed == 0 && !probe.isTerminalInvite(original["callInviteId"] as! String)
+    && !probe.isTerminalInvite(conflicting["callInviteId"] as! String),
+    "terminal UUID lookup cannot override exact invite, thread, media type, or native authority")
+  probe.remove(uuid)
+}
+
 // Retiring native ownership while a duplicate callback is pending must not
 // borrow a same-UUID replacement, an altered authority, or an ended system call.
 for invalidation in ["remove", "account", "provider", "authority", "replacement", "system-ended"] {
