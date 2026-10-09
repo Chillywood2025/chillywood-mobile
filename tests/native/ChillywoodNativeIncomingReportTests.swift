@@ -435,10 +435,13 @@ for duplicateFirst in [false, true] {
       probe.push(input) { completions += 1 }
       expect(probe.provider!.requests.count == 2 && completions == 0,
         "pending foreground plus PushKit issues a distinct mandatory report")
-      let duplicateError: Error? = duplicateOutcome == "exists" ? duplicateIncomingError
-        : duplicateOutcome == "success" ? nil
-        : duplicateOutcome == "wrong-domain" ? NSError(domain: "unrelated", code: 2)
-        : ReportProbeError.rejected
+      let duplicateError: Error?
+      switch duplicateOutcome {
+      case "exists": duplicateError = duplicateIncomingError
+      case "success": duplicateError = nil
+      case "wrong-domain": duplicateError = NSError(domain: "unrelated", code: 2)
+      default: duplicateError = ReportProbeError.rejected
+      }
       func primaryCallback() { probe.provider!.complete(0, error: primaryFails ? ReportProbeError.rejected : nil); pump() }
       func duplicateCallback() { probe.provider!.complete(1, error: duplicateError); pump() }
       if duplicateFirst { duplicateCallback() } else { primaryCallback() }
