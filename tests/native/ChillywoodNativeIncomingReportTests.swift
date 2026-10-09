@@ -490,6 +490,11 @@ for terminalState in ["live", "already-terminal", "unknown"] {
   } else if terminalState == "already-terminal" {
     probe.markTerminalInvite(input["callInviteId"] as! String)
   }
+  let unrelatedInput = payload(), unrelatedUuid = try probe.report(unrelatedInput)
+  probe.provider!.complete(probe.provider!.requests.count - 1); pump()
+  let unrelatedGeneration = probe.activeCalls[unrelatedUuid]!.generation
+  let unrelatedAnswer = CXAnswerCallAction(call: unrelatedUuid)
+  probe.pendingAnswerActions[unrelatedUuid] = unrelatedAnswer
   input["callAction"] = "cancel"
   var completions = 0
   probe.push(input) { completions += 1 }
@@ -497,6 +502,11 @@ for terminalState in ["live", "already-terminal", "unknown"] {
     "legacy terminal push retains failed-report obligation regardless of prior call inventory")
   expect(probe.activeCalls[uuid] == nil,
     "legacy terminal report obligation does not resurrect the original call")
+  expect(probe.activeCalls[unrelatedUuid]?.generation == unrelatedGeneration
+    && probe.activeCalls[unrelatedUuid]?.presentationConfirmed == true && unrelatedAnswer.failed == 0
+    && !probe.provider!.ended.contains(unrelatedUuid),
+    "terminal reconciliation preserves unrelated native generation and pending Answer")
+  probe.remove(unrelatedUuid)
 }
 
 // Retiring native ownership while a duplicate callback is pending must not
