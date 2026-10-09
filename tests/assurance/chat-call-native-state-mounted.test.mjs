@@ -6,7 +6,7 @@ import vm from "node:vm";
 import * as actualMediaPolicy from "../../_lib/communicationCallMediaPolicy.mjs";
 import * as nativeCallErrorDiagnostics from "../../_lib/nativeCallErrorDiagnostics.mjs";
 import { mountChatAnswer } from "./helpers/chat-thread-answer-mounted-harness.mjs";
-import { mountFullChatThread } from "./helpers/chat-thread-full-mounted-harness.mjs";
+import { loadOwnedAndroidAudioRoute, mountFullChatThread } from "./helpers/chat-thread-full-mounted-harness.mjs";
 const backgroundDeferred = () => { let resolve; const wait = new Promise(done => { resolve = done; }); return { wait, resolve }; };
 const backgroundLive = (media, kind) => [...new Set(media.localStreams.flatMap(stream => stream.getTracks()))]
   .filter(track => track.kind === kind && track.readyState === 'live' && track.enabled);
@@ -1364,7 +1364,7 @@ test("legacy old issued sender command cannot block a fresh call media queue or 
   assert.equal(h.getResult().mediaControlsBusy, false);
 });
 
-test("actual legacy adapter and screen capability expression do not promise Android app speaker selection", async () => {
+test("actual legacy adapter and screen capability expression hide Android selection without the owned native bridge", async () => {
   const compile = (file, imports = {}) => {
     const context = { exports: {}, require: name => {
       assert.ok(imports[name], `unmodeled adapter import ${name}`); return imports[name];
@@ -1380,6 +1380,7 @@ test("actual legacy adapter and screen capability expression do not promise Andr
     "../_lib/chatCallMediaProviderPolicy": compile("_lib/chatCallMediaProviderPolicy.ts"),
     "./use-communication-room-session": { useCommunicationRoomSession: runtime.useHook },
     "./use-livekit-chat-call-session": { useLiveKitChatCallSession: () => ({}) },
+    "./use-legacy-android-audio-route": loadOwnedAndroidAudioRoute().hook,
   });
   const root = require("react-dom/client").createRoot(module.exports.container());
   let current;

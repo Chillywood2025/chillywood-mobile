@@ -108,6 +108,8 @@ export async function mountChatAnswer(options = {}) {
       const [nativeSpeakerEnabled, setNativeSpeakerState] = useState(false);
       const setNativeSpeakerEnabled = useCallback((value) => { runtime.speakerWrites.push(value); setNativeSpeakerState(value); }, []);
       const { callChannelState, activeCallRoomId, callMediaProvider, nativeMediaActivationSerial } = runtime;
+      const canSetCallMediaSpeaker = runtime.canSetSpeaker ?? callMediaProvider === "livekit";
+      const callMediaSpeakerEnabled = runtime.speakerEnabled ?? false;
       const activeCallInvite = runtime.invite;
       const thread = { activeCallType: runtime.activeCallType, activeCommunicationRoomId: runtime.threadRoomId ?? null };
       const resolvedCallType = thread.activeCallType;

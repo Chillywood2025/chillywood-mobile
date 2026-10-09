@@ -38,6 +38,7 @@ import {
 } from "../../../_lib/accessEntitlements";
 import { trackEvent } from "../../../_lib/analytics";
 import { createActionSingleFlightLatch } from "../../../_lib/actionSingleFlight.mjs";
+import { createOwnedAudioSession } from "../../../_lib/livekit/ownedAudioSession";
 import { formatOneTimePrice } from "../../../_lib/customerExperiencePresentation";
 import {
     DEFAULT_APP_CONFIG,
@@ -72,7 +73,6 @@ import {
 } from "../../../_lib/livekit/token-contract";
 import { emitLiveKitRenderTelemetryEvent } from "../../../_lib/livekit/livekitRenderTelemetry";
 import {
-  LiveKitAudioSession as HybridLiveKitAudioSession,
   LiveKitRoom as HybridLiveKitRoom,
   LiveKitVideoTrack as HybridLiveKitVideoTrack,
   isLiveKitTrackReference as isHybridLiveKitTrackReference,
@@ -772,7 +772,8 @@ function LiveKitHybridCommunityRoomHost({
       active = false;
     };
 
-    HybridLiveKitAudioSession.startAudioSession().catch((error) => {
+    const audioSession = createOwnedAudioSession();
+    audioSession.start().catch((error) => {
       if (!active) return;
       reportRuntimeError("livekit-hybrid-community-audio-session", error, {
         roomName: joinContract.roomName,
@@ -782,7 +783,9 @@ function LiveKitHybridCommunityRoomHost({
 
     return () => {
       active = false;
-      HybridLiveKitAudioSession.stopAudioSession().catch(() => {});
+      void audioSession.stop().catch((error) => {
+        reportRuntimeError("livekit-hybrid-community-audio-session-cleanup", error);
+      });
     };
   }, [joinContract.participantRole, joinContract.roomName, shouldConnectRoom]);
 

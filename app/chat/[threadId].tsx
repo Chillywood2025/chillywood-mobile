@@ -1164,6 +1164,7 @@ export default function ChillyChatThreadScreen() {
     leaveRoom,
     mediaProvider: callMediaProvider,
     setSpeaker: setCallMediaSpeaker,
+    speakerEnabled: callMediaSpeakerEnabled,
     canSetSpeaker: canSetCallMediaSpeaker,
     markInstalledUiConnected,
     markParticipantVideoRendered,
@@ -1494,16 +1495,21 @@ export default function ChillyChatThreadScreen() {
 
   const nativeAudioRouteQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const nativeAudioRouteIntentRef = useRef<{
-    isCurrent: () => boolean; speaker: boolean; manual: boolean;
+    isCurrent: () => boolean; speaker: boolean; manual: boolean; pending: boolean;
   } | null>(null);
   const applyCallAudioRoute = useCallback((speaker: boolean, automatic = false) => {
     if (!isNativeMicContextCurrent()) return Promise.resolve();
+    // Android legacy acquires its voice/video preference before activating
+    // native audio. Preserve an actual headset/default route until a person
+    // explicitly selects a built-in output.
+    if (automatic && Platform.OS === "android" && callMediaProvider === "legacy_webrtc") return Promise.resolve();
     const previous = nativeAudioRouteIntentRef.current;
     const retainedManual = automatic && previous?.isCurrent() && previous.manual;
     const intent = {
       isCurrent: isNativeMicContextCurrent,
       speaker: retainedManual ? (previous?.speaker ?? speaker) : speaker,
       manual: !automatic || !!retainedManual,
+      pending: true,
     };
     nativeAudioRouteIntentRef.current = intent;
     const ownsRoute = () => intent.isCurrent() && nativeAudioRouteIntentRef.current === intent;
@@ -1512,7 +1518,7 @@ export default function ChillyChatThreadScreen() {
     const operation = nativeAudioRouteQueueRef.current.catch(() => undefined).then(async () => {
       if (!ownsRoute()) return;
       try {
-        const liveKitUpdated = callMediaProvider === "livekit"
+        const liveKitUpdated = canSetCallMediaSpeaker
           ? await setCallMediaSpeaker(intent.speaker)
           : false;
         if (!ownsRoute()) return;
@@ -1538,15 +1544,23 @@ export default function ChillyChatThreadScreen() {
         setError(message);
         setCallControlError(message);
         reportRuntimeError("chat-call-audio-route", routeError, { threadId });
+      } finally {
+        intent.pending = false;
       }
     });
     nativeAudioRouteQueueRef.current = operation;
     return operation;
-  }, [callMediaProvider, isNativeMicContextCurrent, setCallMediaSpeaker, threadId]);
+  }, [callMediaProvider, canSetCallMediaSpeaker, isNativeMicContextCurrent, setCallMediaSpeaker, threadId]);
+
+  useEffect(() => {
+    if (Platform.OS === "android" && callMediaProvider === "legacy_webrtc" && canSetCallMediaSpeaker) {
+      setNativeSpeakerEnabled(callMediaSpeakerEnabled);
+    }
+  }, [callMediaProvider, callMediaSpeakerEnabled, canSetCallMediaSpeaker]);
 
   const handleToggleNativeAudioRoute = useCallback(() => {
     const previous = nativeAudioRouteIntentRef.current;
-    const currentSpeaker = previous?.isCurrent() ? previous.speaker : nativeSpeakerEnabled;
+    const currentSpeaker = previous?.isCurrent() && previous.pending ? previous.speaker : nativeSpeakerEnabled;
     return applyCallAudioRoute(!currentSpeaker);
   }, [applyCallAudioRoute, nativeSpeakerEnabled]);
 

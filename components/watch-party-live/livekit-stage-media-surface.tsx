@@ -18,12 +18,12 @@ import {
 
 import { debugLog, reportRuntimeError } from "../../_lib/logger";
 import { registerActiveMediaSessionStopper } from "../../_lib/mediaSessionLifecycle";
+import { createOwnedAudioSession } from "../../_lib/livekit/ownedAudioSession";
 import {
   LIVE_VIDEO_CAPTURE_OPTIONS,
   createLiveKitV1RoomOptions,
 } from "../../_lib/performancePolicy";
 import {
-  LiveKitAudioSession as AudioSession,
   LiveKitRoom,
   LiveKitVideoTrack as VideoTrack,
   isLiveKitTrackReference as isTrackReference,
@@ -930,7 +930,8 @@ export function LiveKitStageMediaSurface({
       active = false;
     };
 
-    AudioSession.startAudioSession().catch((error) => {
+    const audioSession = createOwnedAudioSession();
+    audioSession.start().catch((error) => {
       if (!active) return;
       reportRuntimeError("livekit-stage-audio-session", error, {
         roomName: joinContract.roomName,
@@ -940,7 +941,9 @@ export function LiveKitStageMediaSurface({
 
     return () => {
       active = false;
-      AudioSession.stopAudioSession().catch(() => {});
+      void audioSession.stop().catch((error) => {
+        reportRuntimeError("livekit-stage-audio-session-cleanup", error);
+      });
     };
   }, [joinContract.participantRole, joinContract.roomName, shouldConnectRoom]);
 

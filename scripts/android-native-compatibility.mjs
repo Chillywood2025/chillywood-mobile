@@ -81,6 +81,7 @@ export function computeAndroidNativeCompatibility() {
     "expo-asset",
     "@livekit/react-native-expo-plugin",
     "./plugins/withWebRtcSenderAcknowledgment",
+    "./plugins/withOwnedAndroidAudioSession",
     "./plugins/withLiveKitIosStaticFrameworkCompatibility",
     ["expo-notifications", {
       sounds: [

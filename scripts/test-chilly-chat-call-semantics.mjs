@@ -2380,7 +2380,7 @@ assert.match(
 );
 assert.match(
   liveKitChatCallSessionSource,
-  /const setMicrophoneEnabled[\s\S]{0,420}if \(nextEnabled\)[\s\S]{0,180}LiveKitAudioSession\.startAudioSession/u,
+  /const setMicrophoneEnabled[\s\S]{0,420}if \(nextEnabled\)[\s\S]{0,180}startCallAudioSession\(binding\)/u,
   "turning the microphone back on restores the native audio session before capture",
 );
 assert.match(
@@ -2405,8 +2405,13 @@ assert.match(
 );
 assert.match(
   liveKitChatCallSessionSource,
-  /if \(nextState === "active"\)[\s\S]{0,260}LiveKitAudioSession\.startAudioSession\(\)[\s\S]{0,420}setSpeaker\(speakerRequestedRef\.current\)/u,
+  /if \(nextState === "active"\)[\s\S]{0,260}startCallAudioSession\(binding\)[\s\S]{0,420}setSpeaker\(speakerRequestedRef\.current\)/u,
   "foreground recovery restores capture and the last selected audio output",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /const startCallAudioSession[\s\S]{0,280}if \(!committedSessionOwnsCurrentRoom\(binding\) \|\| !binding\?\.liveKitRoom\)[\s\S]{0,700}await owner\.start\(\);[\s\S]{0,160}if \(!committedSessionOwnsCurrentRoom\(binding\)\)/u,
+  "Android audio startup must retain the exact admitted room owner before and after native activation",
 );
 const legacyAppStateBlock = communicationSessionSource.slice(
   communicationSessionSource.indexOf("const handleAppStateLifecycleChange"),

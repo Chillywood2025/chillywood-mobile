@@ -45,6 +45,7 @@ import {
   LiveKitAudioSession,
   resetLiveKitIosAudioSession,
 } from "../_lib/livekit/react-native-module";
+import { createOwnedAudioSession, type OwnedAudioSession } from "../_lib/livekit/ownedAudioSession";
 
 import {
   requestLiveKitParticipantToken,
@@ -332,6 +333,7 @@ export function useLiveKitChatCallSession({
     ReturnType<typeof reserveCommunicationMembershipAdmission>
   >>(new Map());
   const audioOutputTailRef = useRef<Promise<void>>(Promise.resolve());
+  const androidAudioOwnersRef = useRef(new WeakMap<Room, OwnedAudioSession>());
   const audioOutputRequestSerialRef = useRef(0);
   const deferredMediaReconciliationRef = useRef<DeferredMediaReconciliation | null>(null);
   const deferredNativeMediaReconciliationRef = useRef<DeferredNativeMediaReconciliation | null>(null);
@@ -484,6 +486,26 @@ export function useLiveKitChatCallSession({
     return binding.liveKitRoom.state === ConnectionState.Connected
       || binding.liveKitRoom.state === ConnectionState.Reconnecting;
   }, [committedSessionOwnsCurrentRoom]);
+
+  const startCallAudioSession = useCallback(async (binding: CommittedSession | null) => {
+    if (Platform.OS !== "android") return LiveKitAudioSession.startAudioSession();
+    if (!committedSessionOwnsCurrentRoom(binding) || !binding?.liveKitRoom) {
+      throw new Error("The audio session no longer belongs to this call.");
+    }
+    let owner = androidAudioOwnersRef.current.get(binding.liveKitRoom);
+    if (!owner) {
+      owner = createOwnedAudioSession(binding.callType === "video" ? "speaker" : "earpiece");
+      androidAudioOwnersRef.current.set(binding.liveKitRoom, owner);
+    }
+    await owner.start();
+    if (!committedSessionOwnsCurrentRoom(binding)) throw new Error("The audio session changed during startup.");
+  }, [committedSessionOwnsCurrentRoom]);
+
+  const stopCallAudioSession = useCallback(async (binding: CommittedSession) => {
+    if (Platform.OS !== "android") return LiveKitAudioSession.stopAudioSession();
+    const owner = binding.liveKitRoom && androidAudioOwnersRef.current.get(binding.liveKitRoom);
+    if (owner) await owner.stop();
+  }, []);
 
   const activateCommittedSession = useCallback((options: {
     identity: CommunicationIdentity;
@@ -902,10 +924,11 @@ export function useLiveKitChatCallSession({
     const operation = predecessor.then(async () => {
       for (const output of getAudioOutputCandidates(nextSpeakerEnabled)) {
         if (!outputBelongsToCurrentSession()) return false;
-        const selected = await selectLiveKitAudioOutput(
-          output,
-          outputBelongsToCurrentSession,
-        ).catch(() => false);
+        const owner = binding?.liveKitRoom && androidAudioOwnersRef.current.get(binding.liveKitRoom);
+        const selected = Platform.OS === "android"
+          ? !!owner && (output === "speaker" || output === "earpiece")
+            && await owner.select(output).then(() => true).catch(() => false)
+          : await selectLiveKitAudioOutput(output, outputBelongsToCurrentSession).catch(() => false);
         if (!outputBelongsToCurrentSession()) return false;
         if (selected) {
           speakerRequestedRef.current = nextSpeakerEnabled;
@@ -1306,11 +1329,11 @@ export function useLiveKitChatCallSession({
       }
       try {
         if (nextState === "active") {
-          await LiveKitAudioSession.startAudioSession();
+          await startCallAudioSession(binding);
           if (!operationIsCurrent()) return null;
           await setSpeaker(speakerRequestedRef.current);
         } else if (microphoneTarget) {
-          await LiveKitAudioSession.startAudioSession();
+          await startCallAudioSession(binding);
         }
         if (!operationIsCurrent()) return null;
         if (microphoneTarget && !await restartEndedLocalPublication(binding, Track.Source.Microphone, operationIsCurrent)) {
@@ -1418,6 +1441,7 @@ export function useLiveKitChatCallSession({
     restartEndedLocalPublication,
     setConfirmedPermissionDenied,
     setReconciliationWarning,
+    startCallAudioSession,
     terminateRoomForCameraSafety,
   ]);
 
@@ -1535,12 +1559,12 @@ export function useLiveKitChatCallSession({
       ? committedSessionRef.current
       : bindingOverride;
     if (!binding || !isCommittedSessionCurrent(binding)) return false;
-    const audioSessionReady = await LiveKitAudioSession.startAudioSession()
+    const audioSessionReady = await startCallAudioSession(binding)
       .then(() => true)
       .catch(() => false);
     if (!audioSessionReady || !isCommittedSessionCurrent(binding)) return false;
     return applySpeakerOutput(nextSpeakerEnabled, binding);
-  }, [applySpeakerOutput, isCommittedSessionCurrent]);
+  }, [applySpeakerOutput, isCommittedSessionCurrent, startCallAudioSession]);
 
   const setMicrophoneEnabled = useCallback(async (nextEnabled: boolean) => {
     const binding = committedSessionRef.current;
@@ -1548,7 +1572,7 @@ export function useLiveKitChatCallSession({
     const result = await runMediaControl((leaseBinding) => enqueueSessionMediaWrite(binding, async (operationCurrent) => {
       try {
         if (nextEnabled) {
-          const audioSessionReady = await LiveKitAudioSession.startAudioSession()
+          const audioSessionReady = await startCallAudioSession(binding)
             .then(() => true)
             .catch(() => false);
           if (!audioSessionReady) return false;
@@ -1787,6 +1811,7 @@ export function useLiveKitChatCallSession({
     runMediaControl,
     setConfirmedPermissionDenied,
     setReconciliationWarning,
+    startCallAudioSession,
     updateFirstMediaState,
   ]);
 
@@ -2014,6 +2039,15 @@ export function useLiveKitChatCallSession({
     if (cleanupCompletedOwnersRef.current.has(cleanupOwner)) return true;
     if (endingCleanupOwnersRef.current.has(cleanupOwner)) return false;
     endingCleanupOwnersRef.current.add(cleanupOwner);
+    // Android owns routing by an exact native lease. Retire it before slow
+    // track/transport cleanup, so a successor can acquire without a late old
+    // stop mutating its session. Keep failures for the common End postcondition.
+    const androidAudioStop = Platform.OS === "android"
+      ? stopCallAudioSession(binding).then(() => true, (audioError) => {
+          reportRuntimeError("chat-call-livekit-cleanup-audio", audioError);
+          return false;
+        })
+      : null;
     const bindingStillCurrent = sameCommittedAuthority(committedSessionRef.current, binding);
     const currentDurableContext = () => {
       const currentBinding = committedSessionRef.current;
@@ -2097,7 +2131,7 @@ export function useLiveKitChatCallSession({
           ownsIosAudioConfigurationRef.current = true;
           iosAudioConfigurationOwnerRef.current = replacementBinding;
         }
-        await LiveKitAudioSession.startAudioSession();
+        await startCallAudioSession(replacementBinding);
         if (!isCommittedSessionCurrent(replacementBinding)) return false;
         return applySpeakerOutput(speakerRequestedRef.current, replacementBinding);
       };
@@ -2275,11 +2309,11 @@ export function useLiveKitChatCallSession({
       let nativeAudioStopped = true;
       const ownsCurrentAudioSession = roomRef.current === liveKitRoom
         && sameCommittedAuthority(committedSessionRef.current, binding);
-      if (ownsCurrentAudioSession) {
-        const audioStopOperation = LiveKitAudioSession.stopAudioSession().then(async () => {
+      if (ownsCurrentAudioSession || Platform.OS === "android") {
+        const audioStopOperation = androidAudioStop ?? stopCallAudioSession(binding).then(async () => {
           const replacementRestored = await restoreCurrentReplacementAudio();
-          return replacementRestored
-            && sameCommittedAuthority(committedSessionRef.current, binding);
+          return replacementRestored && (Platform.OS === "android"
+            || sameCommittedAuthority(committedSessionRef.current, binding));
         });
         nativeAudioStopped = await runBoundedCleanupOperation(
           "chat-call-livekit-cleanup-audio",
@@ -2465,6 +2499,8 @@ export function useLiveKitChatCallSession({
     isCommittedSessionCurrent,
     scheduleLatestMediaReconciliation,
     setCommittedRoomState,
+    startCallAudioSession,
+    stopCallAudioSession,
   ]);
 
   const leaveRoom = useCallback(async (options?: { endRoomIfHost?: boolean }) => {
@@ -3149,7 +3185,7 @@ export function useLiveKitChatCallSession({
           refresh();
         });
 
-      await LiveKitAudioSession.startAudioSession();
+      await startCallAudioSession(effectBinding);
       await liveKitRoom.connect(tokenResult.serverUrl, tokenResult.participantToken, {
         autoSubscribe: true,
       });
@@ -3456,6 +3492,7 @@ export function useLiveKitChatCallSession({
     setConfirmedPermissionDenied,
     setReconciliationWarning,
     setSpeaker,
+    startCallAudioSession,
     threadId,
     updateFirstMediaState,
   ]);

@@ -31,6 +31,101 @@ function compile(source, filename, modules, globals = {}) {
   return module.exports;
 }
 
+// Only the native bridge is modeled. The facade's receipt validation and the
+// hook's ownership/lifecycle checks execute from production source.
+export function loadOwnedAndroidAudioRoute({ nativeModule, platform = "android", appState, deviceEventEmitter } = {}) {
+  const reactNative = { Platform: { OS: platform },
+    DeviceEventEmitter: deviceEventEmitter,
+    NativeModules: nativeModule ? { LivekitReactNativeModule: nativeModule } : {},
+    AppState: appState ?? { currentState: "active", addEventListener: () => ({ remove: noop }) } };
+  const facade = compile(fs.readFileSync("_lib/livekit/ownedAudioSession.ts", "utf8"), "_lib/livekit/ownedAudioSession.ts", {
+    "react-native": reactNative,
+    "./react-native-module": { LiveKitAudioSession: {
+      startAudioSession: async () => { throw Error("unexpected non-Android audio acquisition"); },
+      stopAudioSession: async () => { throw Error("unexpected non-Android audio release"); },
+    } },
+  });
+  const hook = compile(fs.readFileSync("hooks/use-legacy-android-audio-route.ts", "utf8"), "hooks/use-legacy-android-audio-route.ts", {
+    react: React, "react-native": reactNative, "../_lib/livekit/ownedAudioSession": facade,
+  });
+  return { facade, hook };
+}
+
+export async function mountOwnedAndroidAudioRoute(boundary, initialProps = {}) {
+  const root = createRoot(container());
+  let props = { active: true, identity: "route-owner", video: false, ...initialProps };
+  let current;
+  function Probe() {
+    const result = boundary.hook.useLegacyAndroidAudioRoute(props);
+    React.useLayoutEffect(() => { current = result; });
+    return null;
+  }
+  const render = async () => React.act(async () => { root.render(React.createElement(Probe)); await settle(); });
+  await render();
+  return {
+    getResult: () => current,
+    async run(fn) { let result; await React.act(async () => { result = await fn(); await settle(); }); return result; },
+    async rerender(patch) { props = { ...props, ...patch }; await render(); },
+    async unmount() { await React.act(async () => { root.unmount(); await settle(); }); },
+  };
+}
+
+// Isolate each production watch-party lease effect without replacing its
+// startup/cleanup closure. Other watch-party behavior is outside this probe.
+export function loadWatchPartyAudioEffect(file, facade, errors) {
+  const source = fs.readFileSync(file, "utf8");
+  const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const callbacks = [];
+  const visit = node => {
+    if (ts.isCallExpression(node) && node.expression.getText(ast) === "useEffect"
+      && node.arguments[0]?.getText(ast).includes("createOwnedAudioSession()")) callbacks.push(node.arguments[0]);
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  assert.equal(callbacks.length, 1, "one owned audio lease effect must be observable");
+  return compile(`export function enter(joinContract, shouldConnectRoom) { return (${callbacks[0].getText(ast)})(); }`, file, {}, {
+    createOwnedAudioSession: facade.createOwnedAudioSession,
+    reportRuntimeError: (scope, error) => errors.push({ scope, message: error.message }),
+  }).enter;
+}
+
+// Execute the real control bar's JSX and read its native element props. Its
+// development-only effect does not participate in this presentation probe.
+// The parent panel's actual route forwarding is checked instead of copied.
+export function readAudioRouteControl(panelBindings) {
+  const panelFile = "components/communication/in-room-communication-panel.tsx";
+  const panel = ts.createSourceFile(panelFile, fs.readFileSync(panelFile, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const forwarded = new Map();
+  const visit = node => {
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(panel) === "CommunicationControlBar") {
+      for (const attribute of node.attributes.properties) {
+        if (ts.isJsxAttribute(attribute) && ["speakerEnabled", "onToggleAudioRoute"].includes(attribute.name.text)) {
+          forwarded.set(attribute.name.text, attribute.initializer.expression.getText(panel));
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(panel);
+  assert.equal(forwarded.get("speakerEnabled"), "speakerEnabled");
+  assert.equal(forwarded.get("onToggleAudioRoute"), "onToggleAudioRoute");
+  const file = "components/communication/communication-control-bar.tsx";
+  const { CommunicationControlBar } = compile(fs.readFileSync(file, "utf8"), file, {
+    react: { ...React, useEffect: noop }, "@expo/vector-icons/MaterialIcons": "Icon",
+    "react-native": { StyleSheet: { create: value => value }, Text: "Text", TouchableOpacity: "TouchableOpacity", View: "View" },
+  });
+  const tree = CommunicationControlBar({ ...panelBindings, disabled: panelBindings.mediaControlsBusy });
+  let control;
+  const walk = element => {
+    if (Array.isArray(element)) { element.forEach(walk); return; }
+    if (!element?.props) return;
+    if (element.props.testID === "communication-audio-route-toggle") control = element.props;
+    walk(element.props.children);
+  };
+  walk(tree);
+  return control;
+}
+
 // Reuse the existing native transport fixture, not its mount helper: that helper
 // force-promotes refs to live. Here the full screen and real adapter/hook must
 // perform startup themselves. This remains a controlled SDK/API boundary test;
@@ -240,10 +335,16 @@ export async function mountFullChatThread(options = {}) {
   // adapter, admission coordinator, and legacy hook still execute unchanged.
   options.configureMedia?.(media);
   const idleLiveKit = () => ({});
-  const adapter = compile(fs.readFileSync("hooks/use-chat-call-media-session.ts", "utf8"), "hooks/use-chat-call-media-session.ts", {
+  const ownedAudio = loadOwnedAndroidAudioRoute({ nativeModule: options.ownedAudioNativeModule, platform: runtime.platform,
+    deviceEventEmitter: options.ownedAudioDeviceEventEmitter,
+    appState: { get currentState() { return runtime.appState; }, addEventListener: (_event, listener) => {
+      appStateListeners.add(listener); return { remove: () => appStateListeners.delete(listener) };
+    } } });
+  const adapter = compile(options.adapterSource ?? fs.readFileSync("hooks/use-chat-call-media-session.ts", "utf8"), "hooks/use-chat-call-media-session.ts", {
     react: React, "../_lib/chatCallMediaProviderPolicy": compile(fs.readFileSync("_lib/chatCallMediaProviderPolicy.ts", "utf8"), "_lib/chatCallMediaProviderPolicy.ts", {}),
     "./use-communication-room-session": { useCommunicationRoomSession: media.useHook },
     "./use-livekit-chat-call-session": { useLiveKitChatCallSession: idleLiveKit },
+    "./use-legacy-android-audio-route": ownedAudio.hook,
   });
   const chat = {
     getChatThread: async (id) => runtime.readThread ? runtime.readThread(id)
@@ -341,7 +442,7 @@ export async function mountFullChatThread(options = {}) {
   const parsedScreen = ts.createSourceFile("thread.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const panelBindings = new Map();
   const presentationBindings = new Map();
-  const requiredPanelBindings = ["showControls", "showMediaControls", "mediaControlsBusy", "onToggleCamera", "onToggleMic", "onSwitchCamera", "onLeave"];
+  const requiredPanelBindings = ["showControls", "showMediaControls", "mediaControlsBusy", "onToggleCamera", "onToggleMic", "onSwitchCamera", "onLeave", "onToggleAudioRoute", "speakerEnabled", "mediaControlMessage"];
   const visit = node => {
     if (ts.isJsxElement(node)) {
       const attrs = node.openingElement.attributes.properties;
@@ -390,7 +491,7 @@ export async function mountFullChatThread(options = {}) {
       presentation: { ${presentationBindingSource} },
       callBusy, callPanelOpen, activeCallInvite, activeCallRoomId, incomingCallInvite,
       callChannelState, cameraEnabled, micEnabled, participantCount, participants,
-      nativeSpeakerEnabled,
+      nativeSpeakerEnabled, canSetCallMediaSpeaker,
       callTitle, callBody, initialCallMediaPreferences, messages, renderedMessages, draft, sending, setDraft,
       handleAcceptIncomingCall, handleJoinOrCloseCall, handleStartCall, handleToggleCallMic,
       handleToggleCallCamera, handleSwitchCallCamera, handleToggleNativeAudioRoute,
