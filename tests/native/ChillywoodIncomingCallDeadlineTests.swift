@@ -1,9 +1,23 @@
 import Foundation
 
 // The runner inserts the actual production declarations and timeout callback;
-// only CallKit reporting and persistence are substituted. No timer logic is
-// copied into this harness.
+// only CallKit reporting, persistence and the platform diagnostic sink are
+// substituted. No timer logic is copied into this harness. The production
+// diagnostic phase enum is inserted by the runner; its complete logger is
+// compiled and tested separately by the macOS Native SDK Contracts lane.
 // INSERT_ACTIVE_CALL_DECLARATION
+
+private final class ChillywoodNativeCallDiagnostics {
+  struct Receipt: Equatable {
+    let phase: ChillywoodNativeCallDiagnosticPhase
+    let callUuid: UUID?
+  }
+  static let shared = ChillywoodNativeCallDiagnostics()
+  var receipts: [Receipt] = []
+  func record(_ phase: ChillywoodNativeCallDiagnosticPhase, callUuid: UUID? = nil) {
+    receipts.append(Receipt(phase: phase, callUuid: callUuid))
+  }
+}
 
 private enum EndReason { case unanswered, failed }
 private final class ProviderProbe {
@@ -142,8 +156,12 @@ coordinator.activeCalls[future.uuid] = future
 coordinator.fire(future)
 expect(coordinator.events.isEmpty && coordinator.activeCalls[future.uuid]?.timeoutWorkItem != nil,
   "actual callback schedules future invite without reporting timeout")
+expect(ChillywoodNativeCallDiagnostics.shared.receipts.isEmpty,
+  "an early callback cannot report a ringing timeout diagnostic")
 coordinator.fire(future)
 expect(coordinator.events.isEmpty, "repeated early callback still cannot expire call")
+expect(ChillywoodNativeCallDiagnostics.shared.receipts.isEmpty,
+  "repeated early callbacks cannot report a ringing timeout diagnostic")
 coordinator.activeCalls[future.uuid]?.timeoutWorkItem?.cancel()
 
 private let expired = makeCall(expiry: Date().addingTimeInterval(-1))
@@ -152,10 +170,14 @@ coordinator.activeCalls[expired.uuid] = sameUuidReplacement
 coordinator.fire(expired)
 expect(coordinator.activeCalls[expired.uuid]?.generation == sameUuidReplacement.generation
   && coordinator.events.isEmpty, "actual retired callback cannot end same-UUID replacement")
+expect(ChillywoodNativeCallDiagnostics.shared.receipts.isEmpty,
+  "a retired timer cannot attribute a timeout diagnostic to its replacement")
 coordinator.pendingAnswerActions[expired.uuid] = true
 coordinator.fire(sameUuidReplacement)
 expect(coordinator.events.isEmpty && coordinator.pendingAnswerActions[expired.uuid] != nil,
   "actual callback cannot cancel pending Answer")
+expect(ChillywoodNativeCallDiagnostics.shared.receipts.isEmpty,
+  "a pending Answer cannot be reported as a ringing timeout")
 coordinator.pendingAnswerActions.removeValue(forKey: expired.uuid)
 private var answered = sameUuidReplacement
 answered.answered = true
@@ -163,14 +185,21 @@ coordinator.activeCalls[answered.uuid] = answered
 coordinator.fire(answered)
 expect(coordinator.events.isEmpty && coordinator.activeCalls[answered.uuid] != nil,
   "actual callback cannot end answered call")
+expect(ChillywoodNativeCallDiagnostics.shared.receipts.isEmpty,
+  "an answered call cannot be reported as a ringing timeout")
 coordinator.activeCalls[sameUuidReplacement.uuid] = sameUuidReplacement
 coordinator.fire(sameUuidReplacement)
 expect(coordinator.events == ["timeout"] && coordinator.activeCalls[expired.uuid] == nil
   && coordinator.terminalInvites == [sameUuidReplacement.inviteId]
   && coordinator.provider?.ended == [sameUuidReplacement.uuid],
   "actual expired-owner callback ends and emits exactly once")
+expect(ChillywoodNativeCallDiagnostics.shared.receipts == [
+  .init(phase: .ringingTimedOut, callUuid: sameUuidReplacement.uuid),
+], "actual expired-owner callback records one exact ringing timeout diagnostic")
 coordinator.fire(sameUuidReplacement)
 expect(coordinator.events == ["timeout"], "duplicate expired callback is idempotent")
+expect(ChillywoodNativeCallDiagnostics.shared.receipts.count == 1,
+  "duplicate expired callbacks cannot duplicate timeout diagnostics")
 
 // Exercise the actual persistence and restore methods, with only UserDefaults
 // and the system call inventory substituted. Each restart retains the same
@@ -202,10 +231,14 @@ elapsedDescriptor["ringingDeadlineUptime"] = ProcessInfo.processInfo.systemUptim
 elapsedDescriptor["ringingObservedUptime"] = ProcessInfo.processInfo.systemUptime - 2
 UserDefaults.standard.storage["test-active-calls"] = [elapsedDescriptor]
 private let elapsedRestore = CoordinatorProbe()
+ChillywoodNativeCallDiagnostics.shared.receipts.removeAll()
 elapsedRestore.restore()
 expect(elapsedRestore.activeCalls.isEmpty && elapsedRestore.events == ["timeout"]
   && elapsedRestore.provider?.ended == [persistedCall.uuid],
   "actual restore consumes elapsed monotonic deadline despite future wall expiry")
+expect(ChillywoodNativeCallDiagnostics.shared.receipts == [
+  .init(phase: .ringingTimedOut, callUuid: persistedCall.uuid),
+], "an elapsed restored deadline records its exact call's timeout")
 
 private let answeredCoordinator = CoordinatorProbe()
 private let persistedAnswered = makeCall(expiry: Date().addingTimeInterval(-60), answered: true)
@@ -213,11 +246,14 @@ answeredCoordinator.activeCalls[persistedAnswered.uuid] = persistedAnswered
 answeredCoordinator.save()
 CXCallObserver.observedCalls = [.init(uuid: persistedAnswered.uuid)]
 private let answeredRestore = CoordinatorProbe()
+ChillywoodNativeCallDiagnostics.shared.receipts.removeAll()
 answeredRestore.restore()
 expect(answeredRestore.activeCalls[persistedAnswered.uuid]?.answered == true
   && answeredRestore.activeCalls[persistedAnswered.uuid]?.timeoutWorkItem == nil
   && answeredRestore.provider?.ended.isEmpty == true,
   "actual restore cannot expire an answered call using ringing deadline")
+expect(ChillywoodNativeCallDiagnostics.shared.receipts.isEmpty,
+  "restoring an answered call cannot report a ringing timeout")
 
 private let corruptUuid = UUID()
 private let corruptInvite = UUID().uuidString

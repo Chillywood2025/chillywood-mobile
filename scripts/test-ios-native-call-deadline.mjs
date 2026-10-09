@@ -9,6 +9,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const nativePath = join(root, "modules/chillywood-native-calls/ios");
 const coordinator = readFileSync(join(nativePath, "ChillywoodNativeCallCoordinator.swift"), "utf8");
 const policy = readFileSync(join(nativePath, "ChillywoodIncomingCallDeadline.swift"), "utf8");
+const diagnostics = readFileSync(join(nativePath, "ChillywoodNativeCallDiagnostics.swift"), "utf8");
 const harness = readFileSync(join(root, "tests/native/ChillywoodIncomingCallDeadlineTests.swift"), "utf8");
 // GitHub's Ubuntu image publishes its installed toolchain directory. Prefer
 // that explicit compiler to a PATH shim; local callers can still select one.
@@ -34,6 +35,7 @@ function declaration(source, marker) {
 
 const actualCall = `${declaration(coordinator, "private struct NativeVoipAuthority:")}\n${declaration(coordinator, "private struct ActiveNativeCall {")}`;
 const actualTimeout = declaration(coordinator, "private func timeoutCall(_ uuid: UUID, generation: UUID) {");
+const actualDiagnosticPhase = declaration(diagnostics, "enum ChillywoodNativeCallDiagnosticPhase: String, CaseIterable {");
 const incoming = declaration(coordinator, "private func reportIncomingCallOnMain(");
 const restore = declaration(coordinator, "private func restoreActiveCallDescriptors() {");
 const parseDate = declaration(coordinator, "private func parseServerDate(_ value: Any?) -> Date? {");
@@ -44,10 +46,10 @@ assert.ok(restore.includes("ChillywoodIncomingCallDeadline("));
 assert.ok(restore.includes("timeoutCall(uuid, generation: restoredCall.generation)"));
 assert.ok(!incoming.includes("min(45") && !restore.includes("min(45"), "native paths must not shorten authoritative deadlines");
 
-function runCase(label, sourcePolicy, sourceCallback, shouldPass) {
+function runCase(label, sourcePolicy, sourceCallback, shouldPass, expectedFailure = null) {
   const main = join(temporary, "main.swift");
   const executable = join(temporary, label);
-  writeFileSync(main, `${sourcePolicy}\n${harness
+  writeFileSync(main, `${sourcePolicy}\n${actualDiagnosticPhase}\n${harness
     .replace("// INSERT_ACTIVE_CALL_DECLARATION", actualCall)
     .replace("// INSERT_DATE_PARSER", parseDate)
     .replace("// INSERT_PERSIST_CALLBACK", persist)
@@ -60,6 +62,10 @@ function runCase(label, sourcePolicy, sourceCallback, shouldPass) {
     process.stdout.write(output);
   } catch (error) {
     if (shouldPass || error.status !== 1 || !String(error.stderr).includes("FAIL:")) throw error;
+    if (expectedFailure !== null) {
+      assert.equal(String(error.stderr).trim(), `FAIL: ${expectedFailure}`,
+        `${label} must fail its diagnostic assertion, not an unrelated control`);
+    }
     console.log(`Rejected ${label}: ${String(error.stderr).trim()}`);
   }
 }
@@ -84,7 +90,7 @@ try {
   }
   // Parse the complete production files too. This is syntax verification only,
   // not an Apple SDK compile or a claim about installed CallKit behavior.
-  execFileSync(compiler, ["-frontend", "-parse", "-swift-version", "5",
+  execFileSync(compiler, ["-parse", "-swift-version", "5",
     join(nativePath, "ChillywoodIncomingCallDeadline.swift"),
     join(nativePath, "ChillywoodNativeCallCoordinator.swift")], {timeout: 60_000, stdio: "pipe"});
   runCase("production", policy, actualTimeout, true);
@@ -100,7 +106,19 @@ try {
   const pendingAnswer = actualTimeout.replace("answerPending: pendingAnswerActions[uuid] != nil", "answerPending: false");
   assert.notEqual(pendingAnswer, actualTimeout);
   runCase("pending-answer-expiry", policy, pendingAnswer, false);
-  console.log("Swift deadline/callback behavior and four mutation controls passed; Apple SDK/physical qualification remains separate.");
+  const diagnosticCall = "ChillywoodNativeCallDiagnostics.shared.record(.ringingTimedOut, callUuid: uuid)";
+  assert.equal(actualTimeout.split(diagnosticCall).length, 2, "one actual ringing-timeout diagnostic operation");
+  runCase("timeout-diagnostic-disconnected", policy, actualTimeout.replace(diagnosticCall, "_ = uuid"), false,
+    "actual expired-owner callback records one exact ringing timeout diagnostic");
+  runCase("timeout-diagnostic-wrong-owner", policy, actualTimeout.replace(diagnosticCall,
+    "ChillywoodNativeCallDiagnostics.shared.record(.ringingTimedOut, callUuid: UUID())"), false,
+    "actual expired-owner callback records one exact ringing timeout diagnostic");
+  const earlyDiagnostic = actualTimeout.replace(diagnosticCall, "_ = uuid")
+    .replace("switch deadline.wakeup(", `${diagnosticCall}\n    switch deadline.wakeup(`);
+  assert.notEqual(earlyDiagnostic, actualTimeout);
+  runCase("timeout-diagnostic-before-expiry", policy, earlyDiagnostic, false,
+    "an early callback cannot report a ringing timeout diagnostic");
+  console.log("Swift deadline/callback behavior and seven mutation controls passed; Apple SDK/physical qualification remains separate.");
 } finally {
   rmSync(temporary, {recursive: true, force: true});
 }
