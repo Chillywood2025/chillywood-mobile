@@ -139,7 +139,7 @@ try {
   runCase("incoming-report-error-swallowed", mutateDeclaration(markers.REPORT,
     "if let error {\n          self.failPendingAnswer(callUuid)",
     "if let error, false {\n          self.failPendingAnswer(callUuid)"),
-  "CallKit rejection propagates to every exact pending waiter");
+  "duplicate report never reverses original presentation failure");
   runCase("retired-report-generation-accepted", mutateDeclaration(markers.REPORT,
     "current.generation == call.generation", "true"),
   "retired generation callback cannot settle, confirm, or end its replacement");
