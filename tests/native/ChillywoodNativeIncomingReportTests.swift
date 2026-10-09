@@ -28,6 +28,10 @@ public final class AVAudioSession {
   func setCategory(_ category: Category, mode: Mode, options: CategoryOptions) throws {}
   func setActive(_ active: Bool, options: SetActiveOptions = []) throws {}
 }
+private let CXErrorDomainIncomingCall = "com.apple.CallKit.error.incomingcall"
+private enum CXErrorCodeIncomingCallError: Int { case callUUIDAlreadyExists = 2 }
+private let duplicateIncomingError = NSError(domain: CXErrorDomainIncomingCall,
+  code: CXErrorCodeIncomingCallError.callUUIDAlreadyExists.rawValue)
 enum HandleType { case generic }
 final class CXHandle {
   let value: String
@@ -190,6 +194,7 @@ private final class CoordinatorProbe {
   // INSERT_RECOVER_CONFIRMED
   // INSERT_REPLAY_TOKEN
   // INSERT_REPORT
+  // INSERT_DUPLICATE_PUSH_REPORT
   // INSERT_SETTLE_REPORT
   // INSERT_DRAIN_REPORTS
   // INSERT_REMOVE_CALL
@@ -367,9 +372,32 @@ expect(replacedRegistration.activeCalls[replacedRegistrationUuid] == nil
   && previousRegistry.desiredPushTypes.isEmpty && !hasEvent(replacedRegistration, "recovered"),
   "account replacement drains old presentation and retires its registry before registering the new owner")
 
-// Execute the actual PushKit callback wrapper as well as the common report
-// path. Only a received push owns the acknowledgment seam, including when it
-// joins a report that foreground Answer already started.
+// A foreground presentation can finish before its APNs push arrives. Sharing
+// native ownership must not erase the old PushKit delegate's per-push report.
+private let foregroundBeforePush = fresh(), foregroundBeforePushInput = payload()
+private let foregroundBeforePushUuid = try foregroundBeforePush.report(foregroundBeforePushInput)
+foregroundBeforePush.provider!.complete(); pump()
+private let foregroundBeforePushGeneration = foregroundBeforePush.activeCalls[foregroundBeforePushUuid]!.generation
+private let preservedAnswer = CXAnswerCallAction(call: foregroundBeforePushUuid)
+foregroundBeforePush.pendingAnswerActions[foregroundBeforePushUuid] = preservedAnswer
+private var foregroundBeforePushCompletions = 0
+foregroundBeforePush.push(foregroundBeforePushInput) { foregroundBeforePushCompletions += 1 }
+expect(foregroundBeforePush.provider!.requests.count == 2 && foregroundBeforePushCompletions == 0,
+  "confirmed foreground then PushKit must issue a second report before completing the push")
+expect(foregroundBeforePush.provider!.requests[1].uuid == foregroundBeforePushUuid,
+  "duplicate PushKit report retains the exact established UUID")
+foregroundBeforePush.provider!.complete(1, error: duplicateIncomingError); pump()
+expect(foregroundBeforePushCompletions == 1 && foregroundBeforePush.acknowledgments == 1
+  && foregroundBeforePush.activeCalls[foregroundBeforePushUuid]?.generation == foregroundBeforePushGeneration
+  && foregroundBeforePush.provider!.ended.isEmpty && preservedAnswer.failed == 0,
+  "expected duplicate rejection preserves established ownership and pending Answer")
+foregroundBeforePush.provider!.complete(1, error: duplicateIncomingError); pump()
+expect(foregroundBeforePushCompletions == 1 && foregroundBeforePush.acknowledgments == 1,
+  "duplicate OS callback cannot complete or acknowledge one push twice")
+foregroundBeforePush.remove(foregroundBeforePushUuid)
+
+// Execute the actual PushKit wrapper in both arrival orders. Foreground-only
+// waiters share ownership; every separate PushKit ingress issues its report.
 for pushFirst in [false, true] {
   let probe = fresh(), input = payload(), foreground = CompletionProbe()
   var pushCompletions = 0
@@ -377,16 +405,133 @@ for pushFirst in [false, true] {
   if pushFirst { probe.push(input) { pushCompletions += 1 } }
   _ = try probe.report(safe, completion: foreground.complete)
   if !pushFirst { probe.push(input) { pushCompletions += 1 } }
-  expect(probe.provider!.requests.count == 1 && foreground.results.isEmpty && pushCompletions == 0
-    && probe.acknowledgments == 0, "both push/foreground arrival orders wait for the single native report callback")
+  expect(probe.provider!.requests.count == (pushFirst ? 1 : 2) && foreground.results.isEmpty && pushCompletions == 0
+    && probe.acknowledgments == 0, "both arrival orders retain the per-push report obligation")
   probe.provider!.complete(); pump()
+  if !pushFirst {
+    expect(pushCompletions == 0 && probe.acknowledgments == 0,
+      "original report success cannot complete a later push before its own report callback")
+    probe.provider!.complete(1, error: duplicateIncomingError); pump()
+  }
   expect(foreground.results.count == 1 && foreground.results[0] == nil && pushCompletions == 1
     && probe.acknowledgments == 1, "genuine joined push acknowledges only confirmed presentation")
   var wrongPush = input; wrongPush["recipientInstallId"] = "stale-install"
   probe.push(wrongPush) { pushCompletions += 1 }
-  expect(probe.invalidPushes == 1 && probe.acknowledgments == 1 && probe.provider!.requests.count == 1,
+  expect(probe.invalidPushes == 1 && probe.acknowledgments == 1 && probe.provider!.requests.count == (pushFirst ? 1 : 2),
     "stale push authority cannot borrow confirmed foreground ownership or acknowledge it")
   probe.remove(UUID(uuidString: input["callUuid"] as! String)!)
+}
+
+// Both independent CallKit callbacks can arrive in either order. A duplicate
+// error cannot substitute for the original presentation, and a successful
+// duplicate must not leave an orphan when the original report is rejected.
+for duplicateFirst in [false, true] {
+  for primaryFails in [false, true] {
+    for duplicateOutcome in ["exists", "success", "rejected", "wrong-domain"] {
+      let probe = fresh(), input = payload(), primary = CompletionProbe()
+      let uuid = try probe.report(input, completion: primary.complete)
+      let generation = probe.activeCalls[uuid]!.generation
+      var completions = 0
+      probe.push(input) { completions += 1 }
+      expect(probe.provider!.requests.count == 2 && completions == 0,
+        "pending foreground plus PushKit issues a distinct mandatory report")
+      let duplicateError: Error? = duplicateOutcome == "exists" ? duplicateIncomingError
+        : duplicateOutcome == "success" ? nil
+        : duplicateOutcome == "wrong-domain" ? NSError(domain: "unrelated", code: 2)
+        : ReportProbeError.rejected
+      func primaryCallback() { probe.provider!.complete(0, error: primaryFails ? ReportProbeError.rejected : nil); pump() }
+      func duplicateCallback() { probe.provider!.complete(1, error: duplicateError); pump() }
+      if duplicateFirst { duplicateCallback() } else { primaryCallback() }
+      expect(completions == 0 && probe.acknowledgments == 0,
+        "one callback cannot settle a push joined to an unconfirmed original report")
+      if duplicateFirst { primaryCallback() } else { duplicateCallback() }
+      let shouldAcknowledge = !primaryFails && ["exists", "success"].contains(duplicateOutcome)
+      expect(completions == 1 && probe.acknowledgments == (shouldAcknowledge ? 1 : 0),
+        "only exact duplicate success plus confirmed original ownership may acknowledge")
+      if primaryFails {
+        expect(probe.activeCalls[uuid] == nil && primary.results.count == 1 && primary.results[0] != nil,
+          "duplicate report never reverses original presentation failure")
+        expect(probe.provider!.ended.count == (duplicateOutcome == "success" ? 1 : 0),
+          "successful duplicate after failed original closes only its orphan")
+      } else {
+        expect(probe.activeCalls[uuid]?.generation == generation && probe.provider!.ended.isEmpty
+          && primary.results.count == 1 && primary.results[0] == nil,
+          "duplicate failure never removes or ends a healthy original presentation")
+      }
+      probe.remove(uuid)
+    }
+  }
+}
+
+// Every duplicate notification has its own obligation; one completed duplicate
+// cannot prematurely complete a second notification for the same live UUID.
+private let repeatedPush = fresh(), repeatedInput = payload()
+private var repeatedCompletions = 0
+repeatedPush.push(repeatedInput) { repeatedCompletions += 1 }
+repeatedPush.provider!.complete(); pump()
+for _ in 0..<2 { repeatedPush.push(repeatedInput) { repeatedCompletions += 1 } }
+expect(repeatedPush.provider!.requests.count == 3 && repeatedCompletions == 1,
+  "each repeated VoIP notification receives a distinct CallKit report")
+repeatedPush.provider!.complete(2, error: duplicateIncomingError); pump()
+expect(repeatedCompletions == 2, "out-of-order duplicate callback completes only its own notification")
+repeatedPush.provider!.complete(1, error: duplicateIncomingError); pump()
+expect(repeatedCompletions == 3 && repeatedPush.acknowledgments == 3 && repeatedPush.provider!.ended.isEmpty,
+  "repeated legitimate notifications neither lose completion nor end the live call")
+repeatedPush.remove(UUID(uuidString: repeatedInput["callUuid"] as! String)!)
+
+// Current dispatch forbids terminal VoIP payloads, but a legacy delivery must
+// still satisfy the old delegate contract after bounded terminal cleanup.
+for terminalState in ["live", "already-terminal", "unknown"] {
+  let probe = fresh()
+  var input = payload()
+  let uuid = UUID(uuidString: input["callUuid"] as! String)!
+  if terminalState == "live" {
+    _ = try probe.report(input); probe.provider!.complete(); pump()
+  } else if terminalState == "already-terminal" {
+    probe.markTerminalInvite(input["callInviteId"] as! String)
+  }
+  input["callAction"] = "cancel"
+  var completions = 0
+  probe.push(input) { completions += 1 }
+  expect(probe.invalidPushes == 1 && completions == 1 && probe.acknowledgments == 0,
+    "legacy terminal push retains failed-report obligation regardless of prior call inventory")
+  expect(probe.activeCalls[uuid] == nil,
+    "legacy terminal report obligation does not resurrect the original call")
+}
+
+// Retiring native ownership while a duplicate callback is pending must not
+// borrow a same-UUID replacement, an altered authority, or an ended system call.
+for invalidation in ["remove", "account", "provider", "authority", "replacement", "system-ended"] {
+  for duplicateSucceeds in [false, true] {
+    let probe = fresh(), input = payload()
+    let uuid = try probe.report(input)
+    probe.provider!.complete(); pump()
+    var completions = 0
+    probe.push(input) { completions += 1 }
+    switch invalidation {
+    case "account": probe.resetAccount(); probe.installAuthority(replacementAuthority)
+    case "provider": probe.providerDidReset(probe.provider!)
+    case "authority": probe.installAuthority(replacementAuthority)
+    case "replacement":
+      probe.remove(uuid); _ = try probe.report(input)
+      probe.provider!.complete(2); pump()
+    case "system-ended": CXCallObserver.observedCalls.removeAll { $0.uuid == uuid }
+    default: probe.remove(uuid)
+    }
+    let replacementGeneration = probe.activeCalls[uuid]?.generation
+    let endedBefore = probe.provider!.ended.count
+    probe.provider!.complete(1, error: duplicateSucceeds ? nil : duplicateIncomingError)
+    if invalidation == "system-ended" { CXCallObserver.observedCalls.removeAll { $0.uuid == uuid } }
+    pump()
+    expect(completions == 1 && probe.acknowledgments == 0,
+      "retired or unobserved ownership cannot authorize late duplicate acknowledgement")
+    if invalidation == "replacement" {
+      expect(probe.activeCalls[uuid]?.generation == replacementGeneration
+        && probe.activeCalls[uuid]?.presentationConfirmed == true && probe.provider!.ended.count == endedBefore,
+        "late duplicate receipt cannot confirm or end a replacement native generation")
+    }
+    probe.remove(uuid)
+  }
 }
 
 // Rejection keeps the actual error and clears provisional ownership. A fresh

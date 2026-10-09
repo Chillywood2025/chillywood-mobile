@@ -156,9 +156,9 @@ for (const framework of ["CallKit", "PushKit", "AVFAudio", "UIKit"]) {
 for (const event of ["answerRequested", "answered", "declined", "timeout", "providerReset", "audioSessionActivated", "audioSessionDeactivated", "audioInterruptionBegan"]) {
   requireText(coordinator, `\"${event}\"`, `The native bridge must expose ${event} lifecycle state.`);
 }
-requireText(coordinator, "activeCalls[callUuid] ?? activeCalls.values.first(where:", "Duplicate incoming UUIDs and invites must share the same CallKit report.");
+requireText(coordinator, "activeCalls[callUuid] ?? activeCalls.values.first(where:", "Duplicate incoming UUIDs and invites must share native ownership.");
 requireText(coordinator, "pending.generation == existing.generation", "Pending duplicate presentations must retain the exact report generation.");
-requireText(coordinator, "pending.completions.append(completion)", "Pending duplicates must await the actual shared report completion.");
+requireText(coordinator, "pending.completions.append(completion)", "Foreground duplicates must await the actual shared presentation completion.");
 requireText(coordinator, "existing.presentationConfirmed", "Only a confirmed report may recover native presentation ownership.");
 requireText(coordinator, "reportNewIncomingCall", "PushKit delivery must immediately report an incoming CallKit call.");
 requireText(coordinator, "startVoipRegistrationOnMain()", "PushKit registration must be prepared from application launch for terminated delivery.");
@@ -204,6 +204,12 @@ requireText(incomingReportCompletion, "self.removeCall(callUuid, incomingReportE
 requireText(incomingReportCompletion, "current.presentationConfirmed = true", "Only the actual CallKit success callback may confirm presentation.");
 rejectText(incomingReportCompletion, "acknowledgeIncomingCallPresentation(", "Shared foreground reporting cannot manufacture an APNs presentation acknowledgement.");
 const incomingPush = coordinator.slice(coordinator.indexOf("didReceiveIncomingPushWith payload:"), coordinator.indexOf("// MARK: - CallKit"));
+requireText(incomingPush, "requiresPushReport: true", "Every legacy PushKit ingress must retain its own CallKit report obligation.");
+const duplicatePushReport = coordinator.slice(coordinator.indexOf("private func reportDuplicateVoipPushOnMain("), coordinator.indexOf("private func settleIncomingReport("));
+requireText(duplicatePushReport, "provider.reportNewIncomingCall(with: call.uuid, update: update)", "Duplicate PushKit notifications must issue an actual report for the exact existing UUID.");
+requireText(duplicatePushReport, "current?.generation == call.generation", "Duplicate report completion must retain immutable native generation ownership.");
+requireText(duplicatePushReport, "nativeError.domain == CXErrorDomainIncomingCall", "Expected duplicate errors must be scoped to the CallKit incoming-call domain.");
+rejectText(duplicatePushReport, "removeCall(", "A duplicate report error must never remove an established native call.");
 requireText(incomingPush, "if error == nil, let self,", "PushKit acknowledgement must await a successful shared report.");
 requireText(incomingPush, "call.presentationConfirmed", "PushKit acknowledgement must require confirmed native presentation.");
 requireText(incomingPush, "self.voipPayloadMatchesPersistedAuthority(normalizedPayload)", "Delayed PushKit acknowledgement must recheck exact authority.");

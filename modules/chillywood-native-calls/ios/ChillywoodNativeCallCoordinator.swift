@@ -561,6 +561,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
 
   private func reportIncomingCallOnMain(
     payload: [String: Any],
+    requiresPushReport: Bool = false,
     completion: ((Error?) -> Void)? = nil
   ) throws -> UUID {
     dispatchPrecondition(condition: .onQueue(.main))
@@ -585,6 +586,10 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
         existing.inviteId == inviteId, existing.threadId == threadId,
         existing.callType == callType, existing.presentationAuthority == authority
       else { throw ChillywoodNativeCallError.invalidPayload }
+      if requiresPushReport {
+        try reportDuplicateVoipPushOnMain(payload: payload, call: existing, completion: completion)
+        return existing.uuid
+      }
       if existing.presentationConfirmed {
         guard CXCallObserver().calls.contains(where: { $0.uuid == existing.uuid && !$0.hasEnded }),
           existing.ringingDeadline?.wakeup(now: Date(), ownsCall: true, answered: existing.answered,
@@ -676,6 +681,75 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       }
     }
     return callUuid
+  }
+
+  private func reportDuplicateVoipPushOnMain(
+    payload: [String: Any],
+    call: ActiveNativeCall,
+    completion: ((Error?) -> Void)?
+  ) throws {
+    dispatchPrecondition(condition: .onQueue(.main))
+    guard let provider else { throw ChillywoodNativeCallError.providerUnavailable }
+    // Foreground callers may share a presentation, but the legacy PushKit
+    // delegate must issue a CallKit report for EACH received VoIP push. An
+    // existing UUID is expected to be rejected as already present; that error
+    // must never remove the established call or fail its pending Answer.
+    var presentationResult: Result<Void, Error>?
+    var pushReportResult: Result<Void, Error>?
+    var completed = false
+    func settle() {
+      guard !completed, let presentationResult, let pushReportResult else { return }
+      completed = true
+      let current = activeCalls[call.uuid]
+      let ownsCall = current?.generation == call.generation
+        && current?.presentationAuthority == call.presentationAuthority
+        && persistedVoipAuthority() == call.presentationAuthority
+      // A successful duplicate report can finish after the original report
+      // failed or its owner retired. Close only an orphan, never a replacement
+      // generation (nor a healthy call on the expected duplicate error).
+      if case .success = pushReportResult, current == nil {
+        provider.reportCall(with: call.uuid, endedAt: Date(), reason: .remoteEnded)
+      }
+      guard ownsCall, current?.presentationConfirmed == true,
+        !isTerminalInvite(call.inviteId),
+        CXCallObserver().calls.contains(where: { $0.uuid == call.uuid && !$0.hasEnded })
+      else { completion?(ChillywoodNativeCallError.callUnavailable); return }
+      if case .failure(let error) = presentationResult { completion?(error); return }
+      if case .failure(let error) = pushReportResult {
+        let nativeError = error as NSError
+        guard nativeError.domain == CXErrorDomainIncomingCall,
+          nativeError.code == CXErrorCodeIncomingCallError.callUUIDAlreadyExists.rawValue
+        else { completion?(error); return }
+      }
+      completion?(nil)
+    }
+    // Attach to the immutable original generation before issuing the duplicate
+    // report. Either callback order is valid; neither alone grants ownership.
+    _ = try reportIncomingCallOnMain(payload: payload) { error in
+      guard presentationResult == nil else { return }
+      presentationResult = error.map { .failure($0) } ?? .success(())
+      settle()
+    }
+    let update = CXCallUpdate()
+    update.remoteHandle = CXHandle(type: .generic, value: (payload["callerName"] as? String) ?? "Chi'llywood caller")
+    update.localizedCallerName = (payload["callerName"] as? String) ?? "Chi'llywood caller"
+    update.hasVideo = call.callType == "video"
+    update.supportsHolding = false
+    update.supportsGrouping = false
+    update.supportsUngrouping = false
+    update.supportsDTMF = false
+    ChillywoodNativeCallDiagnostics.shared.record(.incomingReportRequested, callUuid: call.uuid)
+    provider.reportNewIncomingCall(with: call.uuid, update: update) { error in
+      ChillywoodNativeCallDiagnostics.shared.record(
+        error == nil ? .incomingReportSucceeded : .incomingReportFailed,
+        callUuid: call.uuid, error: error
+      )
+      DispatchQueue.main.async {
+        guard pushReportResult == nil else { return }
+        pushReportResult = error.map { .failure($0) } ?? .success(())
+        settle()
+      }
+    }
   }
 
   private func settleIncomingReport(_ uuid: UUID, generation: UUID?, error: Error?) {
@@ -1496,7 +1570,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       }
       let action = callActionLabel(normalizedPayload)
       if action == "incoming" {
-        _ = try reportIncomingCallOnMain(payload: normalizedPayload) { [weak self] error in
+        _ = try reportIncomingCallOnMain(payload: normalizedPayload, requiresPushReport: true) { [weak self] error in
           if error == nil, let self,
             self.voipPayloadMatchesPersistedAuthority(normalizedPayload),
             let call = self.findActiveCall(input: normalizedPayload), call.presentationConfirmed,
@@ -1514,7 +1588,13 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       handleTerminalVoipAction(
         input: normalizedPayload,
         action: action,
-        completion: completion
+        completion: { [weak self] in
+          // The current server only sends incoming VoIP pushes. A legacy
+          // terminal payload still carries the old delegate's mandatory
+          // report obligation, even when its original call is already gone.
+          guard let self else { completion(); return }
+          self.reportInvalidVoipPushOnMain(completion: completion)
+        }
       )
     } catch {
       ChillywoodNativeCallDiagnostics.shared.record(.pushPayloadRejected, callUuid: diagnosticCallUuid, error: error)

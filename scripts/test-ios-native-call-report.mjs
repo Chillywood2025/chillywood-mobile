@@ -52,6 +52,7 @@ const markers = {
   DRAIN_EVENTS: "public func drainPendingEvents() -> [[String: Any]] {",
   REPLAY_TOKEN: "private func emitCurrentVoipTokenOnMain() {",
   REPORT: "private func reportIncomingCallOnMain(",
+  DUPLICATE_PUSH_REPORT: "private func reportDuplicateVoipPushOnMain(",
   SETTLE_REPORT: "private func settleIncomingReport(",
   DRAIN_REPORTS: "private func drainIncomingReports() {",
   REMOVE_CALL: "private func removeCall(_ uuid: UUID,",
@@ -116,6 +117,18 @@ try {
     console.log(version.trim());
   }
   runCase("production-incoming-report", coordinator);
+  runCase("push-duplicates-skip-required-report", mutateDeclaration(markers.PUSH,
+    "requiresPushReport: true", "requiresPushReport: false"),
+  "confirmed foreground then PushKit must issue a second report before completing the push");
+  runCase("push-duplicate-error-domain-ignored", mutateDeclaration(markers.DUPLICATE_PUSH_REPORT,
+    "nativeError.domain == CXErrorDomainIncomingCall", "true"),
+  "only exact duplicate success plus confirmed original ownership may acknowledge");
+  runCase("push-duplicate-borrows-replacement-generation", mutateDeclaration(markers.DUPLICATE_PUSH_REPORT,
+    "current?.generation == call.generation", "true"),
+  "retired or unobserved ownership cannot authorize late duplicate acknowledgement");
+  runCase("terminal-push-skips-failed-report", mutateDeclaration(markers.PUSH,
+    "self.reportInvalidVoipPushOnMain(completion: completion)", "completion()"),
+  "legacy terminal push retains failed-report obligation regardless of prior call inventory");
   runCase("pending-duplicate-premature-success", mutateDeclaration(markers.REPORT,
     "if let completion { pending.completions.append(completion) }",
     "if let completion { completion(nil) }"),
