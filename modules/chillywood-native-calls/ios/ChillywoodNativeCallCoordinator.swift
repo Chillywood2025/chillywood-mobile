@@ -1103,7 +1103,24 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       return
     }
 
+    var answerReady = connected
+    var failureReason = reason
     if connected {
+      // CallKit activates the session after Answer is fulfilled. Configure the
+      // exact pending call first, without activating or beginning capture here.
+      audioSessionDiagnostics.record(.answerAudioConfigurationRequested, callUuid: uuid)
+      do {
+        try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat,
+          options: [.allowBluetoothHFP, .allowBluetoothA2DP])
+        audioSessionDiagnostics.record(.answerAudioConfigurationSucceeded, callUuid: uuid)
+      } catch {
+        audioSessionDiagnostics.record(.answerAudioConfigurationFailed, callUuid: uuid, error: error)
+        answerReady = false
+        failureReason = "audio_session_configuration_failed"
+      }
+    }
+
+    if answerReady {
       call.answered = true
       activeCalls[uuid] = call
       persistActiveCallDescriptors()
@@ -1118,7 +1135,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     markTerminalInvite(call.inviteId)
     provider?.reportCall(with: uuid, endedAt: Date(), reason: .failed)
     _ = removeCall(uuid)
-    emit(type: "answerFailed", call: call, reason: reason)
+    emit(type: "answerFailed", call: call, reason: failureReason)
   }
 
   private func failPendingAnswer(_ uuid: UUID) {

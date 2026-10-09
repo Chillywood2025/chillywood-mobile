@@ -127,6 +127,9 @@ try {
   runCase("receiver-observation-mislabeled", mutateRoute(
     "audioSessionDiagnostics.record(.audioRouteImmediateReceiver)",
     "audioSessionDiagnostics.record(.audioRouteImmediateSpeaker)"), false);
+  execFileSync(process.execPath, ["scripts/test-ios-native-call-answer-audio.mjs", ...(checkSource ? ["--check-source"] : [])], {
+    cwd: root, timeout: 240_000, stdio: "inherit",
+  });
   if (checkSource) {
     console.log("Native audio declarations and twenty mutations generated; Swift compilation/execution NOT RUN.");
   } else {

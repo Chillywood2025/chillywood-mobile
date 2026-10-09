@@ -54,7 +54,7 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
   const pendingRebindReceipts = new WeakSet();
   const observeNativeReceipt = (event) => {
     if (event.type === "incoming" || event.type === "recovered") nativePresentedCalls.set(event.callUuid, event);
-    if (["remoteEnded", "ended", "declined", "timeout"].includes(event.type)) nativePresentedCalls.delete(event.callUuid);
+    if (["remoteEnded", "ended", "declined", "timeout", "answerFailed"].includes(event.type)) nativePresentedCalls.delete(event.callUuid);
   };
   const drainNativeEvents = () => pendingEvents.splice(0).filter(event => !pendingRebindReceipts.has(event)
     || nativePresentedCalls.has(event.callUuid));
@@ -553,6 +553,100 @@ test("native Answer failure before server acceptance settles the ringing callee 
   assert.equal(h.terminalSteps[0]?.name, "transition");
   assert.equal(h.terminalSteps[0]?.args[0].status, "declined");
   assert.equal(h.terminalSteps.at(-1)?.name, "native");
+});
+
+const acceptedConfigurationFailureInvite = {
+  id: ids.invite, status: "accepted", threadId: ids.thread, communicationRoomId: "ROOM-LEGACY",
+  callerUserId: "00000000-0000-4000-8000-000000000099", calleeUserId: ids.user,
+};
+const configurationFailureEvent = () => nativeEvent("answerFailed", { reason: "audio_session_configuration_failed" });
+
+test("actual root and facade settle an accepted call after native Answer audio configuration failure", async (t) => {
+  const h = await mount(t, { realFacade: true });
+  let record = { ...acceptedConfigurationFailureInvite };
+  h.setReader(async () => ({ ...record }));
+  h.setStage("transition", ({ actorUserId, invite, status }) => {
+    assert.equal(actorUserId, ids.user);
+    assert.equal(invite.id, ids.invite);
+    assert.equal(status, "ended", "configuration failure follows server acceptance, so decline is no longer legal");
+    record = { ...record, status };
+    return { ...record };
+  });
+  await h.event(nativeEvent("incoming"));
+  assert.equal(await h.facade.completeIosNativeCallAnswer(ids.uuid, true), true);
+  assert.equal(h.terminalSteps.length, 0, "native dispatch acknowledgment alone does not settle the server invite");
+  await h.event(configurationFailureEvent());
+  assert.equal(record.status, "ended");
+  assert.equal(h.facade.hasIosNativeCallPresentation(ids.invite), false);
+  assert.deepEqual(h.terminalSteps.map(({ name }) => name), ["transition", "thread", "presented", "rows"]);
+  const threadArgs = h.terminalSteps.find(({ name }) => name === "thread").args;
+  assert.equal(threadArgs[0], ids.thread);
+  assert.equal(threadArgs[1], "ROOM-LEGACY");
+  assert.equal(threadArgs[2].userId, ids.user);
+  assert.equal(threadArgs[2].sessionGeneration, ids.session);
+  for (const name of ["presented", "rows"]) {
+    const input = h.terminalSteps.find(step => step.name === name).args[0];
+    assert.equal(input.callInviteId, ids.invite);
+    assert.equal(input.threadId, ids.thread);
+    assert.equal(input.exactInviteOnly, true);
+  }
+  assert.equal(h.terminalSteps.find(({ name }) => name === "rows").args[0].userId, ids.user);
+  assert.deepEqual(h.nativeSteps.filter(({ name }) => name === "terminal"), [{ name: "terminal", uuid: ids.uuid }]);
+  assert.equal(h.subscriptions.has(ids.invite), false);
+  assert.equal(h.routes.length, 0, "terminal recovery must not route another Answer");
+});
+
+test("actual root and facade retry rejected accepted-call configuration failure cleanup on foreground", async (t) => {
+  const h = await mount(t, { realFacade: true });
+  let record = { ...acceptedConfigurationFailureInvite };
+  h.setReader(async () => ({ ...record }));
+  h.setStage("transition", async () => { throw Error("temporary terminal transition rejection"); });
+  await h.event(nativeEvent("incoming"));
+  await h.event(configurationFailureEvent());
+  assert.equal(record.status, "accepted", "local CallKit failure is not proof of server termination");
+  assert.equal(h.terminalSteps.length, 3, "one failure receipt has bounded transition retries");
+  assert.ok(h.terminalSteps.every(({ name, args }) => name === "transition" && args[0].status === "ended"));
+  assert.equal(h.nativeSteps.some(({ name }) => name === "terminal"), false);
+  assert.equal(h.facade.hasIosNativeCallPresentation(ids.invite), false, "native failure retires presentation even when server cleanup fails");
+  h.setStage("transition", ({ status }) => { record = { ...record, status }; return { ...record }; });
+  await h.activate();
+  await h.flush();
+  assert.equal(record.status, "ended");
+  assert.equal(h.terminalSteps.filter(({ name }) => name === "transition").length, 4);
+  assert.equal(h.terminalSteps.filter(({ name }) => name === "thread").length, 1);
+  assert.deepEqual(h.nativeSteps.filter(({ name }) => name === "terminal"), [{ name: "terminal", uuid: ids.uuid }]);
+  assert.equal(h.subscriptions.has(ids.invite), false);
+});
+
+test("actual root and facade cannot apply late configuration-failure cleanup to replacement authority", async (t) => {
+  const h = await mount(t, { realFacade: true });
+  const pending = deferred();
+  h.setReader(async () => ({ ...acceptedConfigurationFailureInvite }));
+  h.setStage("transition", () => pending.promise);
+  await h.event(nativeEvent("incoming"));
+  const failure = h.event(configurationFailureEvent());
+  await settle();
+  assert.deepEqual(h.terminalSteps.map(({ name }) => name), ["transition"]);
+  const nextUser = "00000000-0000-4000-8000-000000000007";
+  const nextInvite = "00000000-0000-4000-8000-000000000008";
+  const nextSession = "00000000-0000-4000-8000-000000000009";
+  const replacement = { ...acceptedConfigurationFailureInvite, id: nextInvite,
+    communicationRoomId: "ROOM-REPLACEMENT", calleeUserId: nextUser };
+  h.setReader(async id => id === nextInvite ? { ...replacement } : { ...acceptedConfigurationFailureInvite });
+  await h.rerender({ user: { id: nextUser }, authority: {
+    ...binding(nextSession), userId: nextUser, accountId: nextUser,
+  } });
+  h.emitWithoutWaiting(nativeEvent("incoming", { callUuid: ids.replacementUuid, callInviteId: nextInvite }));
+  await settle();
+  await h.resolve(pending, { ...acceptedConfigurationFailureInvite, status: "ended" });
+  await failure;
+  await h.activate();
+  await h.flush();
+  assert.deepEqual(h.terminalSteps.map(({ name }) => name), ["transition"], "retired mutation cannot clear thread or notifications under the new account");
+  assert.equal(h.nativeSteps.some(({ name }) => name === "terminal" || name === "remoteEnd"), false);
+  assert.equal(h.facade.hasIosNativeCallPresentation(nextInvite), true);
+  assert.equal(h.subscriptions.has(nextInvite), true);
+  assert.equal(h.routes.length, 0);
 });
 
 test("late failed route readiness from a retired account cannot fail a replacement native Answer", async (t) => {
