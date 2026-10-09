@@ -37,6 +37,16 @@ private struct NativeVoipAuthority: Codable, Equatable, Sendable {
   let installId: String
 }
 
+private struct OutgoingAudioHandoff {
+  let owner: UUID
+  let authority: NativeVoipAuthority
+  let inviteId: String
+  let threadId: String
+  let roomId: String
+  let video: Bool
+  var prepared = false
+}
+
 private struct PendingIncomingReport {
   let generation: UUID
   var completions: [(Error?) -> Void]
@@ -56,11 +66,19 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private var provider: CXProvider?
   private let audioSessionDiagnostics = ChillywoodNativeCallDiagnostics.shared
   // Process-memory CallKit ownership only. Never restored from preferences.
-  private var callKitAudioSessionActive = false
+  private var callKitAudioSessionActive = false {
+    didSet { if callKitAudioSessionActive { invalidateOutgoingAudioHandoff() } }
+  }
   private var callKitAudioActivationOwners: [UUID: (generation: UUID, authority: NativeVoipAuthority)] = [:]
   private var pushRegistry: PKPushRegistry?
-  private var activeCalls: [UUID: ActiveNativeCall] = [:]
-  private var pendingIncomingReports: [UUID: PendingIncomingReport] = [:]
+  private var activeCalls: [UUID: ActiveNativeCall] = [:] {
+    didSet { invalidateOutgoingAudioHandoff() }
+  }
+  private var pendingIncomingReports: [UUID: PendingIncomingReport] = [:] {
+    didSet { if !pendingIncomingReports.isEmpty { invalidateOutgoingAudioHandoff() } }
+  }
+  private var outgoingAudioHandoff: OutgoingAudioHandoff?
+  private var retiredOutgoingAudioOwners: Set<UUID> = []
   private var requestedAnswerTransactions: Set<UUID> = []
   private var requestedAnswerCompletions: [UUID: [(Result<Void, Error>) -> Void]] = [:]
   private var pendingAnswerActions: [UUID: CXAnswerCallAction] = [:]
@@ -1036,6 +1054,81 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       audioSessionDiagnostics.record(.audioRouteFailed, error: error)
       throw error
     }
+  }
+
+  private func invalidateOutgoingAudioHandoff() {
+    guard let handoff = outgoingAudioHandoff else { return }
+    retiredOutgoingAudioOwners.insert(handoff.owner)
+    outgoingAudioHandoff = nil
+    emitRaw(["type": "outgoingAudioHandoffRevoked", "outgoingAudioOwnerId": handoff.owner.uuidString.lowercased()])
+  }
+
+  private func outgoingAudioHandoffIsAvailable(_ handoff: OutgoingAudioHandoff) -> Bool {
+    isBuildEnabled && isRuntimeDefaultEnabled
+      && persistedVoipAuthority() == handoff.authority
+      && UIApplication.shared.applicationState == .active
+      && !retiredOutgoingAudioOwners.contains(handoff.owner)
+      && !isTerminalInvite(handoff.inviteId)
+      && activeCalls.isEmpty && pendingIncomingReports.isEmpty
+      && pendingAnswerActions.isEmpty && requestedAnswerTransactions.isEmpty
+      && !callKitAudioSessionActive && callKitAudioActivationOwners.isEmpty
+      && !CXCallObserver().calls.contains(where: { !$0.hasEnded })
+  }
+
+  public func beginOutgoingAudioHandoff(_ binding: [String: Any]) throws {
+    dispatchPrecondition(condition: .onQueue(.main))
+    guard Set(binding.keys) == Set(["ownerId", "userId", "accountId", "sessionGeneration", "installId", "inviteId", "threadId", "roomId", "callType"]),
+      let owner = UUID(uuidString: toText(binding["ownerId"])),
+      UUID(uuidString: toText(binding["inviteId"])) != nil,
+      UUID(uuidString: toText(binding["threadId"])) != nil,
+      // Communication rooms use 6-64 character codes, not call UUIDs. Keep
+      // parity with communicationRoomIdentifier.mjs without normalizing owner identity.
+      let roomId = binding["roomId"] as? String,
+      roomId.range(of: "^[A-Za-z0-9_-]{6,64}$", options: .regularExpression) != nil,
+      roomId == roomId.trimmingCharacters(in: .whitespacesAndNewlines),
+      ["voice", "video"].contains(toText(binding["callType"]))
+    else { throw ChillywoodNativeCallError.invalidPayload }
+    let authority = NativeVoipAuthority(userId: toText(binding["userId"]),
+      accountId: toText(binding["accountId"]), sessionGeneration: toText(binding["sessionGeneration"]),
+      installId: toText(binding["installId"]))
+    let handoff = OutgoingAudioHandoff(owner: owner, authority: authority,
+      inviteId: toText(binding["inviteId"]), threadId: toText(binding["threadId"]),
+      roomId: toText(binding["roomId"]), video: toText(binding["callType"]) == "video")
+    guard isValidVoipAuthority(authority), outgoingAudioHandoffIsAvailable(handoff)
+    else { throw ChillywoodNativeCallError.callUnavailable }
+    if let current = outgoingAudioHandoff {
+      if current.owner == owner {
+        guard current.authority == handoff.authority, current.inviteId == handoff.inviteId,
+          current.threadId == handoff.threadId, current.roomId == handoff.roomId, current.video == handoff.video
+        else { throw ChillywoodNativeCallError.invalidPayload }
+        return
+      }
+      invalidateOutgoingAudioHandoff()
+    }
+    outgoingAudioHandoff = handoff
+  }
+
+  public func prepareOutgoingAudioHandoff(_ ownerId: String) throws {
+    dispatchPrecondition(condition: .onQueue(.main))
+    guard let owner = UUID(uuidString: ownerId), let handoff = outgoingAudioHandoff,
+      handoff.owner == owner, outgoingAudioHandoffIsAvailable(handoff)
+    else { throw ChillywoodNativeCallError.callUnavailable }
+    if handoff.prepared { return }
+    // The exact outgoing sound owner has drained before this commit. Incoming
+    // CallKit preparation owns its separate path. Category preparation does not
+    // activate the session, request permission, or begin microphone capture.
+    try AVAudioSession.sharedInstance().setCategory(.playAndRecord,
+      mode: handoff.video ? .videoChat : .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
+    outgoingAudioHandoff?.prepared = true
+  }
+
+  public func retireOutgoingAudioHandoff(_ ownerId: String) {
+    dispatchPrecondition(condition: .onQueue(.main))
+    guard let owner = UUID(uuidString: ownerId) else { return }
+    // Remember cancellation even when it wins the race with a queued begin.
+    retiredOutgoingAudioOwners.insert(owner)
+    if outgoingAudioHandoff?.owner == owner { outgoingAudioHandoff = nil }
+    // Never reset/deactivate shared audio: a newer CallKit owner may hold it.
   }
 
   public func applicationDidBecomeActive() {

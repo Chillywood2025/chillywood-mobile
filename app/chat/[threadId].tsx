@@ -141,6 +141,7 @@ import { LinkedText } from "../../components/social/linked-text";
 import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import { useChatCallMediaSession } from "../../hooks/use-chat-call-media-session";
+import { useOutgoingIosCallAudioHandoff } from "../../hooks/use-outgoing-ios-call-audio-handoff";
 
 const logChatThread = (event: string, details?: Record<string, unknown>) => {
   void event;
@@ -1208,6 +1209,10 @@ export default function ChillyChatThreadScreen() {
     });
   }, [activeIosNativeAudioCallUuid, hasRetainedIosNativeMediaSession, waitingForIosNativeAudioSession, iosNativeAnswerRecoveryBlocked, unclaimedIosNativeMediaBlocked]);
 
+  const { ready: outgoingIosAudioReady, error: outgoingIosAudioError, retire: retireOutgoingIosAudioHandoff } = useOutgoingIosCallAudioHandoff({
+    authority: authority ?? null, authenticatedUserId: currentUserId, invite: activeCallInvite,
+    roomId: activeCallRoomId, threadId,
+  });
   const {
     room: callRoom,
     loading: callLoading,
@@ -1242,7 +1247,8 @@ export default function ChillyChatThreadScreen() {
     enabled: shouldActivateAcceptedChatCallMedia({
       roomId: activeCallRoomId,
       inviteStatus: activeCallInvite?.status,
-    }) && !waitingForIosNativeAudioSession && !iosNativeAnswerRecoveryBlocked && !unclaimedIosNativeMediaBlocked,
+    }) && !waitingForIosNativeAudioSession && !iosNativeAnswerRecoveryBlocked && !unclaimedIosNativeMediaBlocked
+      && outgoingIosAudioReady,
     allowBackgroundAudio: Platform.OS === "ios"
       && !!acceptedNativeAudioCallUuid
       && retainedIosNativeMediaSession?.nativeAuthorityCurrent === true
@@ -2988,6 +2994,7 @@ export default function ChillyChatThreadScreen() {
       return;
     }
 
+    retireOutgoingIosAudioHandoff();
     let shouldEndRoomAsHost = !!callRoom?.hostUserId && callRoom.hostUserId === currentUserId;
     try {
       const terminalInvite = activeCallInviteRef.current
@@ -3000,7 +3007,7 @@ export default function ChillyChatThreadScreen() {
         && (!normalizedExpectedInviteId || terminalInvite.id === normalizedExpectedInviteId)
         && (terminalInvite.callerUserId === currentUserId || terminalInvite.calleeUserId === currentUserId);
       if (!inviteBelongsToParticipant || !terminalInvite) {
-        throw new Error("Unable to find the active call record. The call was left connected so it can be ended safely.");
+        throw new Error("Unable to find the active call record. Try End Call again.");
       }
       const currentUserIsCaller = terminalInvite.callerUserId === currentUserId;
       shouldEndRoomAsHost = shouldEndRoomAsHost || currentUserIsCaller;
@@ -3021,7 +3028,7 @@ export default function ChillyChatThreadScreen() {
           || canceledInvite.communicationRoomId !== terminalInvite.communicationRoomId
           || canceledInvite.callerUserId !== terminalInvite.callerUserId
           || canceledInvite.calleeUserId !== terminalInvite.calleeUserId) {
-          throw new Error("Unable to cancel the ringing call for the receiver. The call was left connected so you can try again.");
+          throw new Error("Unable to cancel the ringing call for the receiver. The call is still open. Try End Call again.");
         }
         handledActiveTerminalInviteIdsRef.current.add(terminalInvite.id);
         activeCallInviteRef.current = canceledInvite;
@@ -3038,7 +3045,7 @@ export default function ChillyChatThreadScreen() {
           || endedInvite.communicationRoomId !== terminalInvite.communicationRoomId
           || endedInvite.callerUserId !== terminalInvite.callerUserId
           || endedInvite.calleeUserId !== terminalInvite.calleeUserId) {
-          throw new Error("Unable to end the call for both participants. The call was left connected so you can try again.");
+          throw new Error("Unable to end the call for both participants. The call is still open. Try End Call again.");
         }
         handledActiveTerminalInviteIdsRef.current.add(terminalInvite.id);
         activeCallInviteRef.current = endedInvite;
@@ -3087,7 +3094,7 @@ export default function ChillyChatThreadScreen() {
         role: shouldEndRoomAsHost ? "host" : "viewer",
       });
     }
-  }, [acceptIncomingInvite, activeCallInvite, activeCallRoomId, authority, callPanelOpen, callRoom?.hostUserId, captureCallOperation, currentUserId, handleStartCall, incomingCallInvite, isNativeMicContextCurrent, isIosNativeMediaAuthorityCurrent, leaveRoom, loadThreadState, officialAccount, outgoingCallInvite, releaseTrustedNativeCallSession, requestedNativeCallUuid, stopOutgoingRingback, thread?.activeCallType, threadId]);
+  }, [acceptIncomingInvite, activeCallInvite, activeCallRoomId, authority, callPanelOpen, callRoom?.hostUserId, captureCallOperation, currentUserId, handleStartCall, incomingCallInvite, isNativeMicContextCurrent, isIosNativeMediaAuthorityCurrent, leaveRoom, loadThreadState, officialAccount, outgoingCallInvite, releaseTrustedNativeCallSession, requestedNativeCallUuid, retireOutgoingIosAudioHandoff, stopOutgoingRingback, thread?.activeCallType, threadId]);
 
   useEffect(() => {
     if (!trustedForegroundUiIntent || loading || callBusy || !currentUserId) return;
@@ -3850,7 +3857,7 @@ export default function ChillyChatThreadScreen() {
             speakerEnabled={nativeSpeakerEnabled}
             leaveLabel={outgoingCallRinging ? "Cancel Call" : "End Call"}
             mediaPermissionMessage={mediaPermissionMessage}
-            mediaControlMessage={callControlError ?? mediaControlError}
+            mediaControlMessage={outgoingIosAudioError ?? callControlError ?? mediaControlError}
             canOpenMediaSettings={canOpenMediaSettings}
             showControls={outgoingCallRinging || activeCallInvite?.status === "accepted" || TERMINAL_CHAT_CALL_INVITE_STATUSES.has(activeCallInvite?.status ?? "")}
             showMediaControls={activeCallInvite?.status === "accepted" && !outgoingCallRinging && !callError && !callLoading}

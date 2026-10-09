@@ -242,6 +242,9 @@ export async function mountFullChatThread(options = {}) {
   };
   runtime.keyboard = { visible: options.keyboardVisible ?? false, dismissals: 0 };
   runtime.appState = options.appState ?? "active";
+  runtime.outgoingAudioHandoffs = [];
+  runtime.soundClaims = [];
+  runtime.soundReleases = [];
   const appStateListeners = new Set();
   runtime.invite = { id: "invite", threadId: runtime.threadId, communicationRoomId: runtime.roomId,
     callerUserId: runtime.remoteUserId, calleeUserId: runtime.userId, status: "ringing",
@@ -413,6 +416,18 @@ export async function mountFullChatThread(options = {}) {
       return runtime.completeNative ? runtime.completeNative(uuid, connected) : true;
     },
     setIosNativeCallAudioRoute: async () => true, setIosNativeCallMuted: async () => true,
+    createIosOutgoingAudioHandoff: input => {
+      const handoff = { input, retired: false, prepareCalls: 0,
+        retire() { handoff.retired = true; },
+        async prepare(drained) {
+          handoff.prepareCalls += 1;
+          await drained;
+          await options.outgoingAudioPrepare?.(handoff);
+        },
+      };
+      runtime.outgoingAudioHandoffs.push(handoff);
+      return handoff;
+    },
   };
   // Root-to-thread composition may share the actual production JS native facade.
   // Existing isolated cases keep their explicit native-module boundary fixture.
@@ -461,6 +476,36 @@ export async function mountFullChatThread(options = {}) {
     "../../_lib/socialAttachmentPicker": {},
     "../../hooks/use-chat-call-media-session": adapter,
   };
+  // Execute the actual outgoing hook; only sound/native/authority boundaries
+  // are modeled. In particular iOS outgoing readiness is never bypassed.
+  modules["../../hooks/use-outgoing-ios-call-audio-handoff"] = compile(
+    fs.readFileSync("hooks/use-outgoing-ios-call-audio-handoff.ts", "utf8"),
+    "hooks/use-outgoing-ios-call-audio-handoff.ts", {
+      react: React, "react-native": modules["react-native"],
+      "../_lib/iosNativeCalls": native,
+      "../_lib/accountSessionAuthority": {
+        getCurrentAccountSessionAuthoritySnapshot: () => ({ userId: runtime.userId, accountId: runtime.userId,
+          sessionGeneration: runtime.sessionGeneration, state: "ACTIVE", restoreOnly: false }),
+        sameAccountSessionAuthority: (a, b) => !!a && !!b && a.userId === b.userId
+          && a.accountId === b.accountId && a.sessionGeneration === b.sessionGeneration
+          && a.state === b.state && a.restoreOnly === b.restoreOnly,
+      },
+      "../_lib/chillyChatCallSoundAssets": {
+        claimChillyChatCallAudioHandoff: (owner, isCurrent) => {
+          runtime.soundClaims.push({ owner, isCurrent });
+          runtime.soundOwner = owner;
+          return Promise.resolve(options.outgoingSoundDrain?.());
+        },
+        releaseChillyChatCallAudioHandoff: owner => {
+          runtime.soundReleases.push(owner);
+          if (runtime.soundOwner === owner) runtime.soundOwner = null;
+        },
+      },
+    }, {
+      crypto: { getRandomValues: bytes => bytes.fill(runtime.outgoingAudioHandoffs.length + 1) },
+      setTimeout: (fn, delay) => { const timer = { fn, delay }; runtime.timers.push(timer); return timer; },
+      clearTimeout: timer => { if (timer) timer.canceled = true; },
+    });
   let source = fs.readFileSync(process.env.CHILLY_CHAT_FULL_THREAD_TEST_SOURCE ?? "app/chat/[threadId].tsx", "utf8");
   // Preserve the actual screen-to-panel expressions even though native JSX
   // rendering is outside this fixture. Copied handler names would hide a

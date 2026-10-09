@@ -180,6 +180,9 @@ export async function mountChatAnswer(options = {}) {
     shouldKeepAcceptedChatCallPanelOpen: ({ wasOpen }) => wasOpen,
     markThreadReadWithThrottle: async () => { runtime.markRead = (runtime.markRead ?? 0) + 1; },
     stopOutgoingRingback: noop,
+    // These extracted incoming-handler probes own no outgoing audio lease;
+    // the full-screen harness executes the actual outgoing hook separately.
+    retireOutgoingIosAudioHandoff: noop,
     reportRuntimeError: noop,
     setThread: (thread) => { runtime.thread = thread; },
     setMessages: (messages) => { runtime.messages = messages; },

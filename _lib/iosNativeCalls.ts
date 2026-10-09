@@ -1164,6 +1164,58 @@ export async function setIosNativeCallAudioRoute(route: "receiver" | "speaker" |
   return NativeCallsModule.setAudioRouteAsync(route).then(() => true).catch(() => false);
 }
 
+export function createIosOutgoingAudioHandoff(input: {
+  ownerId: string; authority: AccountSessionAuthorityBinding;
+  inviteId: string; threadId: string; roomId: string; callType: "voice" | "video";
+  isCurrent(): boolean; onRevoked(): void;
+}) {
+  let retired = false;
+  const context = voipAuthorityContext;
+  const generation = voipLifecycleGeneration;
+  const current = () => !retired && input.isCurrent() && !!context
+    && context === voipAuthorityContext && generation === voipLifecycleGeneration
+    && sameAccountSessionAuthority(input.authority, context.authority);
+  const unsubscribe = subscribeToIosNativeCallEvents((event) => {
+    if (event.type !== "outgoingAudioHandoffRevoked" || event.outgoingAudioOwnerId !== input.ownerId) return;
+    retired = true;
+    input.onRevoked();
+  });
+  const retire = () => {
+    retired = true;
+    unsubscribe();
+    void NativeCallsModule?.retireOutgoingAudioHandoffAsync?.(input.ownerId).catch(() => undefined);
+  };
+  return {
+    retire,
+    async prepare(soundRetired: Promise<void>) {
+      // Observe drain rejection immediately while account validation is pending.
+      const drained = soundRetired.then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
+      try {
+        if (!current() || !context || !NativeCallsModule?.beginOutgoingAudioHandoffAsync
+            || !NativeCallsModule.prepareOutgoingAudioHandoffAsync || !NativeCallsModule.retireOutgoingAudioHandoffAsync
+            || !isIosNativeCallsRuntimeEnabled() || !await isExactVoipAuthorityCurrent(context) || !current()) {
+          throw new Error("outgoing_call_audio_authority_unavailable");
+        }
+        await NativeCallsModule.beginOutgoingAudioHandoffAsync({
+          ownerId: input.ownerId, userId: input.authority.userId, accountId: input.authority.accountId,
+          sessionGeneration: input.authority.sessionGeneration, installId: context.installId,
+          inviteId: input.inviteId, threadId: input.threadId, roomId: input.roomId, callType: input.callType,
+        });
+        const result = await drained;
+        if (!result.ok) throw result.error;
+        if (!current() || !await isExactVoipAuthorityCurrent(context) || !current()) {
+          throw new Error("outgoing_call_audio_handoff_retired");
+        }
+        await NativeCallsModule.prepareOutgoingAudioHandoffAsync(input.ownerId);
+        if (!current()) throw new Error("outgoing_call_audio_handoff_retired");
+      } catch (error) {
+        retire();
+        throw error;
+      }
+    },
+  };
+}
+
 export async function presentDebugIosNativeIncomingCall(payload?: Record<string, unknown>) {
   if (!__DEV__ || !NativeCallsModule || !isIosNativeCallsRuntimeEnabled()) return null;
   return NativeCallsModule.presentDebugIncomingCallAsync(payload).catch(() => null);

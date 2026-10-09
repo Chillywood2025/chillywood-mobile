@@ -9,6 +9,7 @@ export type NativeCallEvent = {
   nativeSessionGeneration?: string;
   token?: string;
   reason?: string;
+  outgoingAudioOwnerId?: string;
 };
 
 export type NativeCallsModule = {
@@ -38,6 +39,9 @@ export type NativeCallsModule = {
   completeTerminalTransitionAsync(callUuid: string): Promise<void>;
   setMutedAsync(callUuid: string, muted: boolean): Promise<void>;
   setAudioRouteAsync(route: "speaker" | "receiver" | "system"): Promise<void>;
+  beginOutgoingAudioHandoffAsync?(binding: Record<string, string>): Promise<void>;
+  prepareOutgoingAudioHandoffAsync?(ownerId: string): Promise<void>;
+  retireOutgoingAudioHandoffAsync?(ownerId: string): Promise<void>;
   presentDebugIncomingCallAsync(payload?: Record<string, unknown>): Promise<string>;
 };
 

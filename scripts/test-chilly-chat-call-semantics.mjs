@@ -2463,7 +2463,7 @@ for (const permanentSurfaceId of [
 }
 assert.match(
   chatThreadSource,
-  /mediaControlMessage=\{callControlError \?\? mediaControlError\}/u,
+  /mediaControlMessage=\{outgoingIosAudioError \?\? callControlError \?\? mediaControlError\}/u,
   "call-control failures remain visible inside the fullscreen call surface",
 );
 assert.match(

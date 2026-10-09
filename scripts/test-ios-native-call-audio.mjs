@@ -170,6 +170,9 @@ try {
   execFileSync(process.execPath, ["scripts/test-ios-native-call-answer-audio.mjs", ...(checkSource ? ["--check-source"] : [])], {
     cwd: root, timeout: 240_000, stdio: "inherit",
   });
+  execFileSync(process.execPath, ["scripts/test-ios-outgoing-audio-handoff-native.mjs", ...(checkSource ? ["--check-source"] : [])], {
+    cwd: root, timeout: 240_000, stdio: "inherit",
+  });
   if (checkSource) {
     console.log("Native audio declarations and twenty-eight mutations generated; Swift compilation/execution NOT RUN.");
   } else {
@@ -183,6 +186,14 @@ try {
       cwd: root, timeout: 600_000, stdio: "inherit",
     });
     execFileSync(process.execPath, ["--test", "tests/assurance/ios-native-audio-root-mounted.test.mjs"], {
+      cwd: root, timeout: 60_000, stdio: "inherit",
+    });
+    execFileSync(process.execPath, ["scripts/test-ios-outgoing-audio-handoff.mjs"], {
+      cwd: root, timeout: 60_000, stdio: "inherit",
+    });
+    execFileSync(process.execPath, ["--test", "tests/chilly-chat-call-sound-handoff.test.mjs",
+      "tests/assurance/outgoing-ios-call-audio-handoff-mounted.test.mjs",
+      "tests/assurance/outgoing-ios-call-audio-thread-mounted.test.mjs"], {
       cwd: root, timeout: 60_000, stdio: "inherit",
     });
     console.log("Actual Swift audio methods, actual observer closures, and JS root/facade contracts passed. OS receipts are controlled; no hardware route, Bluetooth device, or physical interruption proof is claimed.");
