@@ -1393,6 +1393,40 @@ test(`legacy background resubscription preserves camera intent unless explicitly
 });
 }
 
+for (const cancellation of ["Camera Off", "account replacement"]) {
+test(`legacy delayed background camera projection cannot override ${cancellation}`, async (t) => {
+  const runtime = createLegacyMountedRuntime({ ownedAdmission: true, actualRecoveryPolicy: true, nativeBackgroundPolicy: true });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true,
+    restartDisconnectedSession: true, initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    analyticsContext: { surface: "chat-thread" } });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  let releaseWrite;
+  runtime.queueMembership({ wait: new Promise(resolve => { releaseWrite = resolve; }) });
+  await harness.run(() => runtime.emitAppState("background"));
+  await harness.run(() => channel.emitSubscriptionStatus("SUBSCRIBED"));
+  let releaseCamera;
+  runtime.queueMedia({ wait: new Promise(resolve => { releaseCamera = resolve; }) });
+  await harness.run(() => runtime.emitAppState("active"));
+  assert.equal(runtime.mediaCreateCalls.at(-1).audio, false);
+  assert.equal(runtime.mediaCreateCalls.at(-1).video, true);
+  if (cancellation === "Camera Off") {
+    await harness.rerender({ initialMediaPreferences: { cameraEnabled: false, micEnabled: true } });
+  } else {
+    runtime.userId = "replacement-user";
+    await harness.rerender({ authenticatedUserId: runtime.userId, authenticatedAccessToken: "replacement-token", enabled: false });
+  }
+  await harness.run(() => releaseWrite());
+  await harness.run(() => releaseCamera());
+  const enabledVideo = [...new Set(runtime.localStreams.flatMap(stream => stream.getVideoTracks()))]
+    .filter(track => track.readyState === "live" && track.enabled);
+  assert.equal(enabledVideo.length, 0, "late capture remains retired after the owner cancels its intent");
+  assert.equal(runtime.durableCamera, false);
+  if (cancellation === "Camera Off") assert.equal(harness.getResult().cameraEnabled, false);
+  assert.equal(runtime.joinCalls.length, 1, "an obsolete projection cannot create a replacement admission");
+});
+}
+
 for (const outcome of ["recover", "explicit End", "new mute", "admission denied", "native stop failure", "account replacement"]) {
 test(`legacy background lease recovery: pending invisible-room read before foreground restart respects ${outcome}`, async (t) => {
   const runtime = createLegacyMountedRuntime({ ownedAdmission: true, actualRecoveryPolicy: true, nativeBackgroundPolicy: true });

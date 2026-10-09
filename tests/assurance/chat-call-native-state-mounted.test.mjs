@@ -22,6 +22,50 @@ async function fireBackgroundRecovery(h, start) {
   return fired;
 }
 
+for (const outcome of ['restore', 'explicit End', 'background again']) {
+test(`full production wrapper: delayed background projection during foreground camera acquisition respects ${outcome}`, async t => {
+  const h = await mountFullChatThread({ invite: { status: 'accepted' }, configureMedia: media => {
+    media.ownedAdmission = true;
+    const capture = media.api.createCommunicationMediaStream;
+    media.api.createCommunicationMediaStream = async options => {
+      const stream = await capture(options);
+      for (const track of stream?.getVideoTracks() ?? []) {
+        track.getSettings = () => ({ facingMode: options.facingMode ?? 'user' });
+      }
+      return stream;
+    };
+  } });
+  t.after(() => h.unmount());
+  const media = h.runtime.media;
+  const channel = media.readAssuranceRefs().channelRef.current;
+  const backgroundWrite = backgroundDeferred();
+  media.queueMembership({ wait: backgroundWrite.wait });
+  await h.run(() => media.emitAppState('background'));
+  assert.equal(backgroundLive(media, 'video').length, 0);
+  await h.run(() => channel.emitSubscriptionStatus('SUBSCRIBED'));
+  const camera = backgroundDeferred();
+  media.queueMedia({ wait: camera.wait });
+  await h.run(() => media.emitAppState('active'));
+  assert.equal(media.mediaCreateCalls.at(-1).audio, false);
+  assert.equal(media.mediaCreateCalls.at(-1).video, true);
+  await h.run(() => backgroundWrite.resolve());
+  const projection = media.mediaDiagnostics.filter(entry => entry.phase === 'initial_projection').at(-1);
+  assert.equal(projection.appState, 'active', 'the queued background projection runs after foregrounding');
+  assert.equal(projection.provedCamera, false, 'the pending capture cannot be advertised as live video');
+  assert.equal(media.durableCamera, false);
+  assert.equal(media.readAssuranceRefs().cameraEnabledRef.current, true,
+    'a delayed projection cannot erase the retained camera request');
+  if (outcome === 'explicit End') await h.run(() => h.runtime.snapshot.panelBindings.onLeave());
+  if (outcome === 'background again') await h.run(() => media.emitAppState('background'));
+  await h.run(() => camera.resolve());
+  await h.flush();
+  assert.equal(backgroundLive(media, 'video').length, Number(outcome === 'restore'));
+  assert.equal(media.durableCamera, outcome === 'restore');
+  assert.equal(h.runtime.invite.status, outcome === 'explicit End' ? 'ended' : 'accepted');
+  if (outcome !== 'restore') assert.equal(backgroundLive(media, 'audio').length, 0);
+});
+}
+
 for (const outcome of ['recover', 'admission denied', 'explicit End', 'terminal room']) {
 test(`full production wrapper: signaling resubscription with expired callee lease respects ${outcome}`, async t => {
   const h = await mountFullChatThread({ invite: { status: 'accepted' }, configureMedia: media => {

@@ -1032,6 +1032,11 @@ export function useCommunicationRoomSession({
     if (!enabled) return undefined;
     return registerActiveMediaSessionStopper(async (reason) => {
       if (reason === "app_background") {
+        // Retain intent at the privacy boundary, before queued signaling work
+        // can observe an already-foregrounded app with capture still pending.
+        if (cameraEnabledRef.current && isActiveLegacyGeneration(legacySessionGenerationRef.current)) {
+          deferredInitialCameraGenerationRef.current = legacySessionGenerationRef.current;
+        }
         if (allowBackgroundAudioRef.current) {
           stopLocalMediaKind("video");
           return;
@@ -3174,12 +3179,6 @@ export function useCommunicationRoomSession({
               requestedCamera: cameraEnabledRef.current, requestedMic: micEnabledRef.current,
               provedCamera: provedCameraEnabled, provedMic: provedMicEnabled, appState: appStateRef.current,
             });
-            if (cameraEnabledRef.current && !provedCameraEnabled && appStateRef.current !== "active") {
-              // Resubscription can run after background privacy stopped the
-              // camera. Project Off to the peer without erasing the retained
-              // foreground request; explicit Camera Off still clears it.
-              deferredInitialCameraGenerationRef.current = sessionGeneration;
-            }
             if (cameraEnabledRef.current !== provedCameraEnabled
               && deferredInitialCameraGenerationRef.current !== sessionGeneration) {
               cameraEnabledRef.current = provedCameraEnabled;
@@ -3834,6 +3833,10 @@ export function useCommunicationRoomSession({
         return;
       }
 
+      // This generation's privacy stop must retain its requested camera even
+      // if the serialized subscription projection runs after foregrounding.
+      // Explicit Camera Off clears this intent; capture proof remains separate.
+      if (cameraEnabledRef.current) deferredInitialCameraGenerationRef.current = generation;
       const preserveNativeCallAudio = shouldPreserveNativeCallBackgroundAudio({
         appState: nextState,
         allowBackgroundAudio: allowBackgroundAudioRef.current,
