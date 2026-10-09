@@ -1,6 +1,6 @@
-# V8 physical diagnostic report — 2026-10-09, through R05
+# V8 physical diagnostic report — 2026-10-09, through R06
 
-The installed v8 candidate remains **not physically qualified**. Internal delivery and installation completed, but the diagnostic run reports an iPhone microphone-feedback failure and a prolonged Android-background termination. Actual two-way audio and genuinely moving video remain unverified. These observations do not dispose of the original 105 rows.
+The installed v8 candidate remains **not physically qualified**. Internal delivery and installation completed, but the diagnostic run reports an iPhone microphone-feedback failure, a prolonged Android-background termination, and missing background iPhone voice/video presentation. Actual two-way audio and genuinely moving video remain unverified. These observations do not dispose of the original 105 rows.
 
 This report combines root-observed physical/server observations with read-only inspection of immutable source `5c545e324a010bb1bcad47bdaf15e86108c0785e`, tree `259b1d5c3851c2caad2fa87c0de6bde13ba11d5e`. The preparer did not access the Mac/phones or reopen raw captures. Full safe call hashes and endpoint roles/media below were supplied by root. Exact UTC dates, clock domains, complete action windows and original receipt references still require binding before final export.
 
@@ -31,6 +31,44 @@ Delivery provenance must retain the initial iOS build failure, two failed Androi
 R01 was created03:49:59.619957 and accepted03:50:08.637156; callee joined03:50:09.925389, caller03:50:10.387410. R02 was created04:05:09.976805 and accepted04:05:14.888229; Android joined04:05:15.939971 and iOS04:05:16.184531. These are distinct server/host observations to bind to their original clocks, not fabricated physical-media proof or independent join-invocation counts.
 
 All server/action times above are on 2026-10-09 UTC. Native wall-clock log strings use a separate clock representation; correlate their monotonic receipts and preserve uncertainty. The first server archive ends at R03. R05 readbacks are separately retained in `v8-server-observations-R05-20261009.json`, SHA-256 `fb784f2743fcf82e6a341997cea1be8d7fbce683cc8ccff2a89fed6482e64630`. All five case captures are closed, both apps are idle, and no Calendar notification permission choice was made.
+
+## R06 continuation and session reconciliation
+
+R06 (`24e7168feb16b9493e82`) tested Android-to-iPhone background voice on the
+same installed v8 pair. Its server creation was 04:37:22.789921 UTC and expiry
+04:38:52.789921 UTC. One production APNs attempt was created 04:37:26.947843
+and updated 04:37:27.158987, with HTTP 200. Initial samples and eight additional
+screenshots, the last acquired 04:38:54.897421, showed no incoming presentation.
+No Answer was attempted and no membership joined. The saved expiry reconciliation
+record observed server `missed` and room `ended` at 04:40:30.495424. This timestamp
+is the observation time, not an independently established terminal-transition time.
+
+The execution session resumed after R06 had already been finalized. Root read
+the existing manifest and reconciliation record rather than repeating cleanup or
+rewriting the attempt. The final manifest records closure 04:42:02.467654,
+85 events and outcome
+`FAIL_BACKGROUND_VOICE_PRESENTATION_NOT_OBSERVED_BEFORE_EXPIRY`. Its SHA-256 is
+`6c3e6d308877254741160c2a18a7e2bc30e24e4387cf8cea33c706a49ed60bb1`.
+The sequence-number suffix 98 is not the event-array count. The exact saved file is
+`V8R06-android-ios-voice-native-background-00098-final-manifest.json`.
+
+A fresh read-only server reconciliation at 05:05:46.723796 confirmed `missed`,
+`accepted_at=null`, `ended_at=null`, one sent APNs 200 attempt and
+`presented_at=null`. A missed invitation's null `ended_at` must not be rewritten
+as a known invitation-end timestamp. The reconciled server archive
+`v8-server-observations-R06-reconciled-20261009.json` has SHA-256
+`65c428d0075066a99e2012e38094a60327587ff1b679a35a9382c24aa09a3558`.
+Root also read both current thread UIs after resumption: both showed No Active
+Call, the active capture case was absent and its owned reader-process list empty.
+The earlier R01–R05 evidence and observer-setting restoration receipts remain
+unchanged.
+
+R06 informs the background-voice presentation assertion in BL03 only; it does
+not execute terminated voice BL04, successful Answer/media, or every expiry
+assertion in EX01. No observed callback and a null presentation acknowledgment
+do not establish that APNs never reached the device. The missing presentation
+remains a product diagnostic failure, with its logging-coverage limitation.
+Actual audio and moving video remain explicitly UNVERIFIED.
 
 ## Source-backed interpretation, without inferred root cause
 
