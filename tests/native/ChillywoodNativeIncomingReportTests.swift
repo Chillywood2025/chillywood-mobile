@@ -512,7 +512,7 @@ for terminalState in ["live", "already-terminal", "unknown"] {
   probe.remove(unrelatedUuid)
 }
 
-for conflictingField in ["callInviteId", "threadId", "callType", "authority"] {
+for conflictingField in ["callInviteId", "threadId", "callType", "authority", "missing-thread", "missing-invite"] {
   let probe = fresh(), original = payload()
   let uuid = try probe.report(original)
   probe.provider!.complete(); pump()
@@ -522,6 +522,8 @@ for conflictingField in ["callInviteId", "threadId", "callType", "authority"] {
   var conflicting = original
   if conflictingField == "authority" {
     probe.installAuthority(replacementAuthority)
+  } else if conflictingField == "missing-thread" || conflictingField == "missing-invite" {
+    conflicting[conflictingField == "missing-thread" ? "threadId" : "callInviteId"] = ""
   } else {
     conflicting[conflictingField] = conflictingField == "callType" ? "video" : UUID().uuidString.lowercased()
   }

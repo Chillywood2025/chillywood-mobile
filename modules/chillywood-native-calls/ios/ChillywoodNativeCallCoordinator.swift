@@ -838,7 +838,6 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     let inviteId = toText(input["callInviteId"])
     let threadId = toText(input["threadId"])
     if inviteId.isEmpty || threadId.isEmpty {
-      markTerminalInvite(inviteId)
       completion()
       return
     }
