@@ -542,3 +542,19 @@ changed owner, disjoint log capture, unrelated call correlation and bounded
 20/60-second background restoration. These are observer checks, not device
 results. Actual speech/moving video and the late/missing iPhone presentation
 cases remain open until the new installed candidate is evaluated.
+
+The final prebuild v8 inputs were committed at
+`d5b0c4d464ba0053152975f1f9c219629f32c802`, tree
+`15bf517a3a38dac02f579d9f69100540828d0938`. Their committed-input measurement is:
+
+| Platform | V8 Git-native compatibility digest |
+| --- | --- |
+| Android | `965a7e5198c6168229a8fc0bfdc6116c2852fa0f87e1e976108e3b4d21a2d8b6` |
+| iOS | `532a02fc3e71dcd708a867a2f0bf0d67127be21e576ae0c8ba955bd5e3ae6592` |
+
+Recompute these values on the seal commit and bind all hosted checks, signed
+builds and installed readbacks to that final source/tree. No v8 build or
+physical result is asserted by this prebuild receipt. The combined screen
+integration and expired-presentation suites passed 93 tests with no skips;
+the independent 90-second expiry timer remains allowed by the separate
+15-second audio-deadline regression.
