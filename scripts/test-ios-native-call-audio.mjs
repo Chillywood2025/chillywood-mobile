@@ -39,6 +39,9 @@ const markers = {
   PROVIDER_DEACTIVATE: "public func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {",
   DEACTIVATE_SESSION: "private func deactivateAudioSession() {",
   INTERRUPTION: "private func handleAudioSessionInterruption(_ notification: Notification) {",
+  RECORD_ACTIVATION: "private func recordCallKitAudioActivation() {",
+  CURRENT_ACTIVATION: "private func hasCurrentCallKitAudioActivation(_ call: ActiveNativeCall) -> Bool {",
+  RECOVER_AUDIO_READINESS: "private func recoveredAudioReadiness(_ event: [String: Any]) -> [String: Any] {",
   EMIT: "private func emit(type: String, call: ActiveNativeCall, reason: String? = nil) {",
 };
 function generated(source) {
@@ -50,7 +53,7 @@ function generated(source) {
   assert.doesNotMatch(output, /\/\/ INSERT_/u);
   return `${diagnostics}\n${policy}\n${declaration(source, "private struct NativeVoipAuthority:")}\n${output}`;
 }
-function runCase(label, source, shouldPass) {
+function runCase(label, source, shouldPass, expectedFailure = null) {
   const main = join(temporary, "main.swift"), executable = join(temporary, label);
   writeFileSync(main, generated(source));
   if (checkSource) return;
@@ -62,6 +65,10 @@ function runCase(label, source, shouldPass) {
     process.stdout.write(output);
   } catch (error) {
     if (shouldPass || error.status !== 1 || !String(error.stderr).includes("FAIL:")) throw error;
+    if (expectedFailure !== null) {
+      assert.equal(String(error.stderr).trim(), `FAIL: ${expectedFailure}`,
+        `${label} failed for an unrelated reason; its mutation control is not proved`);
+    }
     console.log(`Rejected ${label}: ${String(error.stderr).trim()}`);
   }
 }
@@ -73,6 +80,11 @@ function mutateRoute(from, to) {
   const route = declaration(coordinator, markers.SET_AUDIO_ROUTE);
   assert.equal(route.split(from).length, 2, `route mutation targets one production operation: ${from}`);
   return coordinator.replace(route, route.replace(from, to));
+}
+function mutateDeclaration(marker, from, to) {
+  const original = declaration(coordinator, marker);
+  assert.equal(original.split(from).length, 2, `mutation targets one production operation: ${from}`);
+  return coordinator.replace(original, original.replace(from, to));
 }
 try {
   if (!checkSource) {
@@ -127,11 +139,35 @@ try {
   runCase("receiver-observation-mislabeled", mutateRoute(
     "audioSessionDiagnostics.record(.audioRouteImmediateReceiver)",
     "audioSessionDiagnostics.record(.audioRouteImmediateSpeaker)"), false);
+  runCase("activation-owner-recording-disconnected", mutateDeclaration(markers.PROVIDER_ACTIVATE,
+    "recordCallKitAudioActivation()", "callKitAudioSessionActive = true"), false,
+  "successful activation carries each exact presented call identity");
+  runCase("failed-activation-retains-old-owner", mutateDeclaration(markers.PROVIDER_ACTIVATE,
+    "callKitAudioSessionActive = false\n    callKitAudioActivationOwners.removeAll()",
+    "_ = callKitAudioSessionActive"), false,
+  "failed activation cannot preserve earlier positive ownership");
+  runCase("activation-generation-not-checked", mutateDeclaration(markers.CURRENT_ACTIVATION,
+    "owner.generation == call.generation", "true"), false,
+  "same UUID with a different native generation cannot inherit activation");
+  runCase("activation-owner-authority-not-checked", mutateDeclaration(markers.CURRENT_ACTIVATION,
+    "owner.authority == authority", "true"), false,
+  "replacement persisted authority cannot inherit a previous owner's activation");
+  runCase("activation-terminal-owner-accepted", mutateDeclaration(markers.CURRENT_ACTIVATION,
+    "!isTerminalInvite(call.inviteId)", "true"), false,
+  "terminal invite cannot retain native audio readiness");
+  runCase("interruption-retains-activation", mutateDeclaration(markers.INTERRUPTION,
+    "callKitAudioSessionActive = false\n      callKitAudioActivationOwners.removeAll()",
+    "_ = callKitAudioSessionActive"), false,
+  "interruption removes current activation ownership");
+  runCase("deactivation-retains-activation", mutateDeclaration(markers.DEACTIVATE_SESSION,
+    "callKitAudioSessionActive = false\n    callKitAudioActivationOwners.removeAll()",
+    "_ = callKitAudioSessionActive"), false,
+  "deactivation removes current activation ownership");
   execFileSync(process.execPath, ["scripts/test-ios-native-call-answer-audio.mjs", ...(checkSource ? ["--check-source"] : [])], {
     cwd: root, timeout: 240_000, stdio: "inherit",
   });
   if (checkSource) {
-    console.log("Native audio declarations and twenty mutations generated; Swift compilation/execution NOT RUN.");
+    console.log("Native audio declarations and twenty-seven mutations generated; Swift compilation/execution NOT RUN.");
   } else {
     execFileSync(process.execPath, ["scripts/test-ios-native-call-diagnostics.mjs"], {
       cwd: root, timeout: 180_000, stdio: "inherit",

@@ -42,6 +42,14 @@ const markers = {
   START_REGISTRATION: "public func startVoipRegistration(",
   START_REGISTRY: "private func startVoipRegistrationOnMain() {",
   RECOVER_CONFIRMED: "private func recoverConfirmedIncomingCallsOnMain() {",
+  RECOVER_AUDIO_READINESS: "private func recoveredAudioReadiness(_ event: [String: Any]) -> [String: Any] {",
+  RECORD_ACTIVATION: "private func recordCallKitAudioActivation() {",
+  CURRENT_ACTIVATION: "private func hasCurrentCallKitAudioActivation(_ call: ActiveNativeCall) -> Bool {",
+  PROVIDER_ACTIVATE: "public func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {",
+  PROVIDER_DEACTIVATE: "public func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {",
+  DEACTIVATE_SESSION: "private func deactivateAudioSession() {",
+  INTERRUPTION: "private func handleAudioSessionInterruption(_ notification: Notification) {",
+  DRAIN_EVENTS: "public func drainPendingEvents() -> [[String: Any]] {",
   REPLAY_TOKEN: "private func emitCurrentVoipTokenOnMain() {",
   REPORT: "private func reportIncomingCallOnMain(",
   SETTLE_REPORT: "private func settleIncomingReport(",
@@ -142,7 +150,20 @@ try {
   runCase("registration-current-token-replay-disconnected", mutateDeclaration(markers.START_REGISTRATION,
     "self.emitCurrentVoipTokenOnMain()", "_ = self"),
   "same-authority rebind replays the actual current registry token");
+  runCase("queued-activation-recheck-disconnected", mutateDeclaration(markers.EMIT_RAW,
+    "if isAudioActivation && !self.hasCurrentCallKitAudioActivation(call) { return }",
+    "_ = isAudioActivation"),
+  "queued positive activation cannot survive deactivation before delivery");
+  runCase("positive-activation-persisted", mutateDeclaration(markers.EMIT_RAW,
+    "if isAudioActivation { return }", "_ = isAudioActivation"),
+  "listener absence cannot persist or queue a historical positive activation");
+  runCase("positive-activation-replayed-from-storage", mutateDeclaration(markers.DRAIN_EVENTS,
+    'events.filter { $0["type"] as? String != "audioSessionActivated" }', "events"),
+  "draining rejects historical positive activation from both durable and memory queues");
+  runCase("recovered-readiness-clearing-disconnected", mutateDeclaration(markers.RECOVER_AUDIO_READINESS,
+    'current["audioSessionActive"] = false', '_ = current["audioSessionActive"]'),
+  "queued recovered presentation recomputes readiness after deactivation before delivery");
   console.log(checkSource
-    ? "Native incoming-report declarations and ten mutations generated; Swift compilation/execution NOT RUN."
-    : "Actual Swift incoming presentation/authority/terminal callbacks and ten mutation controls passed; controlled CallKit receipts do not prove physical presentation or media.");
+    ? "Native incoming-report declarations and fourteen mutations generated; Swift compilation/execution NOT RUN."
+    : "Actual Swift incoming presentation/authority/terminal callbacks and fourteen mutation controls passed; controlled CallKit receipts do not prove physical presentation or media.");
 } finally { rmSync(temporary, { recursive: true, force: true }); }

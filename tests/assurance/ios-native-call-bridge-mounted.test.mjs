@@ -10,6 +10,7 @@ import * as lifecycle from "../../_lib/iosNativeCallBridgeLifecycle.mjs";
 import * as provenance from "../../_lib/nativeCallTransitionProvenance.mjs";
 import * as nativeCallErrorDiagnostics from "../../_lib/nativeCallErrorDiagnostics.mjs";
 import * as roomIdentifiers from "../../_lib/communicationRoomIdentifier.mjs";
+import * as callMediaPolicy from "../../_lib/communicationCallMediaPolicy.mjs";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const noop = () => {};
@@ -30,7 +31,8 @@ const ids = {
   replacementUuid: "00000000-0000-4000-8000-000000000005",
   session: "00000000-0000-4000-8000-000000000006",
 };
-const nativeEvent = (type, extra = {}) => ({ type, callInviteId: ids.invite, callUuid: ids.uuid, threadId: ids.thread, callType: "video", ...extra });
+const nativeEvent = (type, extra = {}) => ({ type, callInviteId: ids.invite, callUuid: ids.uuid, threadId: ids.thread, callType: "video",
+  nativeCallGeneration: "00000000-0000-4000-8000-000000000007", nativeSessionGeneration: ids.session, ...extra });
 
 async function mount(t, { realFacade = false, initialNativeEvents = [], persistedSameAuthority = true, controlledRetryTimers = false } = {}) {
   let session = { user: { id: "user-a" }, authority: binding(), authorityStatus: "active" };
@@ -40,6 +42,7 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
   const subscriptions = new Map();
   const presentations = new Map();
   const errorReports = [];
+  const mediaDiagnostics = [];
   const activations = new Set();
   const ends = [];
   const starts = [];
@@ -51,10 +54,26 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
   const nativeSteps = [];
   const pendingEvents = [...initialNativeEvents];
   const nativePresentedCalls = new Map();
+  const nativeAnsweredCallUuids = new Set();
+  const nativeAudioOwnerGenerations = new Map();
   const pendingRebindReceipts = new WeakSet();
   const observeNativeReceipt = (event) => {
-    if (event.type === "incoming" || event.type === "recovered") nativePresentedCalls.set(event.callUuid, event);
-    if (["remoteEnded", "ended", "declined", "timeout", "answerFailed"].includes(event.type)) nativePresentedCalls.delete(event.callUuid);
+    if (event.type === "audioSessionActivated" && nativePresentedCalls.get(event.callUuid)?.nativeCallGeneration === event.nativeCallGeneration) {
+      nativeAudioOwnerGenerations.set(event.callUuid, event.nativeCallGeneration);
+    }
+    if (["audioSessionDeactivated", "providerReset", "audioSessionFailed", "audioInterruptionBegan"].includes(event.type)) nativeAudioOwnerGenerations.clear();
+    if (event.type === "incoming" || event.type === "recovered") {
+      if (nativePresentedCalls.get(event.callUuid)?.nativeCallGeneration !== event.nativeCallGeneration) {
+        nativeAnsweredCallUuids.delete(event.callUuid);
+        nativeAudioOwnerGenerations.delete(event.callUuid);
+      }
+      nativePresentedCalls.set(event.callUuid, event);
+    }
+    if (["remoteEnded", "ended", "declined", "timeout", "answerFailed"].includes(event.type)) {
+      nativePresentedCalls.delete(event.callUuid);
+      nativeAnsweredCallUuids.delete(event.callUuid);
+      nativeAudioOwnerGenerations.delete(event.callUuid);
+    }
   };
   const drainNativeEvents = () => pendingEvents.splice(0).filter(event => !pendingRebindReceipts.has(event)
     || nativePresentedCalls.has(event.callUuid));
@@ -154,11 +173,14 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
         if (nativeBindingKey && nativeBindingKey !== nextBindingKey) {
           pendingEvents.length = 0;
           nativePresentedCalls.clear();
+          nativeAnsweredCallUuids.clear();
+          nativeAudioOwnerGenerations.clear();
         } else if (nativeBindingKey === nextBindingKey) {
           // Native rebind emits genuine recovered receipts for its confirmed,
           // still-live CallKit calls. The facade must consume those events.
           for (const event of nativePresentedCalls.values()) {
-            const recovered = { ...event, type: "recovered" };
+            const recovered = { ...event, type: "recovered", audioSessionActive:
+              nativeAudioOwnerGenerations.get(event.callUuid) === event.nativeCallGeneration && nativeAnsweredCallUuids.has(event.callUuid) };
             pendingRebindReceipts.add(recovered);
             pendingEvents.push(recovered);
           }
@@ -176,6 +198,12 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
       completeAnswerAsync: async (uuid, connected) => {
         nativeSteps.push({ name: "answer", uuid, connected });
         if (stageHandlers.has("os-completeAnswer")) return stageHandlers.get("os-completeAnswer")(uuid, connected);
+        if (connected) nativeAnsweredCallUuids.add(uuid);
+      },
+      endCallAsync: async (uuid, reason) => {
+        nativeSteps.push({ name: "end", uuid, reason });
+        if (stageHandlers.has("os-endCall")) return stageHandlers.get("os-endCall")(uuid, reason);
+        // Transaction acceptance does not manufacture its CXEndCallAction delegate event.
       },
       requestAnswerAsync: async (uuid, inviteId) => {
         nativeSteps.push({ name: "requestAnswer", uuid, inviteId });
@@ -206,7 +234,9 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
       },
       "./communicationRoomIdentifier.mjs": roomIdentifiers,
       "./iosNativeCallBridgeLifecycle.mjs": lifecycle,
-      "./livekit/bootstrap": { synchronizeLiveKitCallKitAudioSession: noop },
+      "./livekit/bootstrap": { synchronizeLiveKitCallKitAudioSession: lifecycle => stageHandlers.has("sdk-audio-sync") ? stageHandlers.get("sdk-audio-sync")(lifecycle) : true },
+      "./communicationCallMediaPolicy.mjs": callMediaPolicy,
+      "./internalCallMediaDiagnostics": { reportInternalCallMediaDiagnostic: (phase, input) => mediaDiagnostics.push({ phase, ...input }) },
       "./nativeCallTransitionProvenance.mjs": provenance,
       "./nativeCallErrorDiagnostics.mjs": nativeCallErrorDiagnostics,
       "./logger": { reportRuntimeError: (scope, error, metadata) => {
@@ -226,7 +256,8 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
       } },
     };
     const facadeContext = {
-      exports: {}, console, process: { env: {} }, __DEV__: false, setTimeout, clearTimeout,
+      exports: {}, console, performance: { now: () => stageHandlers.has("monotonic-now")
+        ? stageHandlers.get("monotonic-now")() : globalThis.performance.now() }, process: { env: {} }, __DEV__: false, setTimeout, clearTimeout,
       require: (name) => { assert.ok(imports[name], `unexpected facade import: ${name}`); return imports[name]; },
     };
     const facadeSource = ts.transpileModule(fs.readFileSync("_lib/iosNativeCalls.ts", "utf8"), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: false } }).outputText;
@@ -249,7 +280,7 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
   t.after(unmount);
   await render();
   return {
-    subscriptions, ends, starts, terminalSteps, routes, nativeSteps, nativeLifecycleOrder, retryTimers, errorReports,
+    subscriptions, ends, starts, terminalSteps, routes, nativeSteps, nativeLifecycleOrder, retryTimers, errorReports, mediaDiagnostics,
     get facade() { return facade; },
     get revokes() { return revokes; },
     setReader(next) { reader = next; },
@@ -642,7 +673,7 @@ test("actual root and facade cannot apply late configuration-failure cleanup to 
   await h.rerender({ user: { id: nextUser }, authority: {
     ...binding(nextSession), userId: nextUser, accountId: nextUser,
   } });
-  h.emitWithoutWaiting(nativeEvent("incoming", { callUuid: ids.replacementUuid, callInviteId: nextInvite }));
+  h.emitWithoutWaiting(nativeEvent("incoming", { callUuid: ids.replacementUuid, callInviteId: nextInvite, nativeSessionGeneration: nextSession }));
   await settle();
   await h.resolve(pending, { ...acceptedConfigurationFailureInvite, status: "ended" });
   await failure;
@@ -904,7 +935,7 @@ test("same-authority cold launch preserves queued CallKit Answer through native 
   assert.equal(h.routes.length, 1);
   assert.equal(h.subscriptions.has(ids.invite), true);
   const swift = fs.readFileSync("modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "utf8");
-  assert.match(swift, /if previousAuthority != nil && previousAuthority != authority \{\s*self.resetAccountContextOnMain\(\)/u, "native reset is conditional on a different binding, not every startup");
+  assert.match(swift, /if previousAuthority != nil && previousAuthority != authority \{\s*ChillywoodNativeCallDiagnostics.shared.record\(\.registrationAuthorityReplaced\)\s*self.resetAccountContextOnMain\(\)/u, "native reset is conditional on a different binding, not every startup");
   assert.match(swift, /private func resetAccountContextOnMain\(\)[\s\S]*?pendingEvents.removeAll\(\)/u);
 });
 

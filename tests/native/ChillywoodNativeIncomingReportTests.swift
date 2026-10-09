@@ -9,6 +9,25 @@ import Foundation
 // INSERT_PENDING_REPORT
 
 private enum ReportProbeError: Error { case rejected }
+private let AVAudioSessionInterruptionTypeKey = "AVAudioSessionInterruptionTypeKey"
+public final class AVAudioSession {
+  enum Category { case playAndRecord }
+  enum Mode { case voiceChat }
+  struct CategoryOptions: OptionSet {
+    let rawValue: Int
+    static let allowBluetoothHFP = Self(rawValue: 1)
+    static let allowBluetoothA2DP = Self(rawValue: 2)
+  }
+  struct SetActiveOptions: OptionSet {
+    let rawValue: Int
+    static let notifyOthersOnDeactivation = Self(rawValue: 1)
+  }
+  enum InterruptionType: UInt { case began = 1, ended = 0 }
+  static let singleton = AVAudioSession()
+  static func sharedInstance() -> AVAudioSession { singleton }
+  func setCategory(_ category: Category, mode: Mode, options: CategoryOptions) throws {}
+  func setActive(_ active: Bool, options: SetActiveOptions = []) throws {}
+}
 enum HandleType { case generic }
 final class CXHandle {
   let value: String
@@ -89,6 +108,9 @@ private final class CoordinatorProbe {
   var isBuildEnabled = true
   var isRuntimeDefaultEnabled = true
   var activeCalls: [UUID: ActiveNativeCall] = [:]
+  var callKitAudioSessionActive = false
+  var callKitAudioActivationOwners: [UUID: (generation: UUID, authority: NativeVoipAuthority)] = [:]
+  private let audioSessionDiagnostics = ChillywoodNativeCallDiagnostics.shared
   var pendingIncomingReports: [UUID: PendingIncomingReport] = [:]
   var requestedAnswerTransactions: Set<UUID> = []
   var requestedAnswerCompletions: [UUID: [(Result<Void, Error>) -> Void]] = [:]
@@ -122,7 +144,6 @@ private final class CoordinatorProbe {
   func clearPendingAnswerEvent(_ uuid: UUID) {}
   func endAllAnswerTransitionBackgroundTasks() {}
   func endAllTerminalTransitionBackgroundTasks() {}
-  func deactivateAudioSession() {}
   func persistPendingAnswerEvent(_ event: [String: Any]) {}
   func retainPendingAnswerEvents(for uuids: Set<UUID>) { retainedAnswerUuids = uuids }
   func acknowledgeIncomingCallPresentation(payload: [String: Any], callUuid: UUID, inviteId: String) {
@@ -135,6 +156,15 @@ private final class CoordinatorProbe {
       sessionGeneration: value.sessionGeneration, installId: value.installId)
   }
   func replayToken() { emitCurrentVoipTokenOnMain() }
+  func activateAudio() { provider(provider!, didActivate: AVAudioSession.sharedInstance()) }
+  func deactivateAudio() { provider(provider!, didDeactivate: AVAudioSession.sharedInstance()) }
+  func interruptAudio(_ rawType: UInt) {
+    handleAudioSessionInterruption(Notification(name: Notification.Name("controlled-interruption"),
+      userInfo: [AVAudioSessionInterruptionTypeKey: rawType]))
+  }
+  func audioReady(_ uuid: UUID) -> Bool {
+    activeCalls[uuid].map { hasCurrentCallKitAudioActivation($0) } ?? false
+  }
   func parsedForegroundDate(_ text: String) -> Date? { parseForegroundServerDate(text) }
   func resetAccount() { resetAccountContextOnMain() }
   func restore() { restoreActiveCallDescriptors() }
@@ -182,6 +212,14 @@ private final class CoordinatorProbe {
   // INSERT_PARSE_FOREGROUND_DATE
   // INSERT_TO_TEXT
   // INSERT_EMIT
+  // INSERT_RECOVER_AUDIO_READINESS
+  // INSERT_RECORD_ACTIVATION
+  // INSERT_CURRENT_ACTIVATION
+  // INSERT_PROVIDER_ACTIVATE
+  // INSERT_PROVIDER_DEACTIVATE
+  // INSERT_DEACTIVATE_SESSION
+  // INSERT_INTERRUPTION
+  // INSERT_DRAIN_EVENTS
   // INSERT_EMIT_RAW
 }
 
@@ -633,5 +671,139 @@ for invalidation in ["background", "authority", "terminal"] {
   }
   probe.remove(UUID(uuidString: input["callUuid"] as! String)!)
 }
+
+// Execute the actual activation delegate and asynchronous native event emitter.
+// Controlled CallKit inventory and AVAudioSession receipts establish source
+// causality, not audible media or delivery of a physical system callback.
+private func confirmedAnsweredCall() throws -> (CoordinatorProbe, [String: Any], UUID) {
+  let probe = fresh(), input = payload()
+  let uuid = try probe.report(input)
+  probe.provider!.complete(); pump()
+  probe.activeCalls[uuid]!.answered = true
+  probe.save()
+  probe.events.removeAll()
+  return (probe, input, uuid)
+}
+private func nativeEvent(_ probe: CoordinatorProbe, _ uuid: UUID, type: String) -> [String: Any] {
+  let call = probe.activeCalls[uuid]!
+  return ["type": type, "callUuid": uuid.uuidString.lowercased(), "callInviteId": call.inviteId,
+    "threadId": call.threadId, "callType": call.callType,
+    "nativeCallGeneration": call.generation.uuidString.lowercased(),
+    "nativeSessionGeneration": authority.sessionGeneration]
+}
+private func replaceGeneration(_ probe: CoordinatorProbe, _ uuid: UUID) {
+  let old = probe.activeCalls[uuid]!
+  probe.activeCalls[uuid] = ActiveNativeCall(uuid: old.uuid, inviteId: old.inviteId, threadId: old.threadId,
+    callType: old.callType, ringingDeadline: old.ringingDeadline, answered: old.answered,
+    timeoutWorkItem: nil, presentationConfirmed: true, presentationAuthority: old.presentationAuthority)
+}
+
+private let (liveAudio, _, liveAudioUuid) = try confirmedAnsweredCall()
+liveAudio.activateAudio(); pump()
+private let liveActivation = liveAudio.events.filter { $0["type"] as? String == "audioSessionActivated" }
+expect(liveActivation.count == 1 && liveActivation[0]["callUuid"] as? String == liveAudioUuid.uuidString.lowercased()
+  && liveActivation[0]["callInviteId"] as? String == liveAudio.activeCalls[liveAudioUuid]?.inviteId,
+  "live activation emits the exact answered presentation only")
+expect(liveActivation[0]["nativeCallGeneration"] as? String == liveAudio.activeCalls[liveAudioUuid]?.generation.uuidString.lowercased()
+  && liveActivation[0]["nativeSessionGeneration"] as? String == authority.sessionGeneration,
+  "live activation carries opaque current call and session generations")
+expect(liveAudio.audioReady(liveAudioUuid), "actual delegate creates native readiness for its exact owner")
+liveAudio.events.removeAll(); try liveAudio.register(); pump()
+private let readyRecovery = liveAudio.events.filter { $0["type"] as? String == "recovered" }
+expect(readyRecovery.count == 1 && readyRecovery[0]["audioSessionActive"] as? Bool == true,
+  "same-owner registration recovery reports current active readiness")
+expect(readyRecovery[0]["nativeCallGeneration"] as? String == liveAudio.activeCalls[liveAudioUuid]?.generation.uuidString.lowercased()
+  && readyRecovery[0]["nativeSessionGeneration"] as? String == authority.sessionGeneration,
+  "recovered readiness carries its exact current native generations")
+liveAudio.events.removeAll(); try liveAudio.register(); liveAudio.deactivateAudio(); pump()
+private let deactivatedRecovery = liveAudio.events.filter { $0["type"] as? String == "recovered" }
+expect(deactivatedRecovery.count == 1 && deactivatedRecovery[0]["audioSessionActive"] as? Bool == false,
+  "queued recovered presentation recomputes readiness after deactivation before delivery")
+liveAudio.activateAudio(); pump()
+liveAudio.remove(liveAudioUuid)
+expect(liveAudio.callKitAudioActivationOwners.isEmpty,
+  "exact call removal discards its activation owner")
+
+// emitRaw enqueues onto main; invalidate before pumping that queue. A positive
+// receipt queued by didActivate must not authorize an owner that disappeared.
+for invalidation in ["deactivation", "interruption", "authority", "generation", "terminal", "account", "provider", "ended"] {
+  let (probe, input, uuid) = try confirmedAnsweredCall()
+  probe.activateAudio()
+  expect(probe.events.isEmpty, "activation delivery is held until the native main queue executes")
+  switch invalidation {
+  case "deactivation": probe.deactivateAudio()
+  case "interruption": probe.interruptAudio(UInt(1))
+  case "authority": probe.installAuthority(replacementAuthority)
+  case "generation": replaceGeneration(probe, uuid)
+  case "terminal": probe.terminal(input)
+  case "account": probe.resetAccount(); probe.installAuthority(replacementAuthority)
+  case "provider": probe.providerDidReset(probe.provider!)
+  default: CXCallObserver.observedCalls = [.init(uuid: uuid, hasEnded: true)]
+  }
+  pump()
+  expect(!hasEvent(probe, "audioSessionActivated"),
+    "queued positive activation cannot survive \(invalidation) before delivery")
+  expect(!probe.audioReady(uuid), "\(invalidation) cannot retain positive native ownership")
+  if ["terminal", "account", "provider"].contains(invalidation) {
+    expect(probe.callKitAudioActivationOwners.isEmpty,
+      "\(invalidation) clears the retired activation owner")
+  }
+  probe.remove(uuid)
+}
+
+// No listener: neither queue is allowed to store a positive activation. A new
+// listener obtains readiness from a new exact recovered presentation instead.
+private let (detachedAudio, _, detachedAudioUuid) = try confirmedAnsweredCall()
+detachedAudio.eventSink = nil
+detachedAudio.activateAudio(); pump()
+private let detachedDurable = UserDefaults.standard.array(forKey: detachedAudio.pendingEventsDefaultsKey) as? [[String: Any]] ?? []
+expect(!detachedDurable.contains { $0["type"] as? String == "audioSessionActivated" }
+  && !detachedAudio.pendingEvents.contains { $0["type"] as? String == "audioSessionActivated" },
+  "listener absence cannot persist or queue a historical positive activation")
+expect(detachedAudio.drainPendingEvents().isEmpty,
+  "reattaching cannot drain a positive activation that happened without a listener")
+detachedAudio.eventSink = { event in detachedAudio.events.append(event) }
+try detachedAudio.register(); pump()
+expect(detachedAudio.events.contains { $0["type"] as? String == "recovered" && $0["audioSessionActive"] as? Bool == true },
+  "reattached listener receives current readiness through recovered ownership")
+
+// Defensively reject historical positives from both queue locations, including
+// data written by older application versions. Recovered snapshots are sampled
+// at delivery/drain time, never copied from a stored readiness bit.
+private var historicalActivation = nativeEvent(detachedAudio, detachedAudioUuid, type: "audioSessionActivated")
+historicalActivation["audioSessionActive"] = true
+UserDefaults.standard.set([historicalActivation], forKey: detachedAudio.pendingEventsDefaultsKey)
+detachedAudio.pendingEvents = [historicalActivation]
+expect(detachedAudio.drainPendingEvents().isEmpty,
+  "draining rejects historical positive activation from both durable and memory queues")
+private var historicalRecovery = nativeEvent(detachedAudio, detachedAudioUuid, type: "recovered")
+historicalRecovery["audioSessionActive"] = true
+UserDefaults.standard.set([historicalRecovery], forKey: detachedAudio.pendingEventsDefaultsKey)
+private let activeDrained = detachedAudio.drainPendingEvents()
+expect(activeDrained.count == 1 && activeDrained[0]["audioSessionActive"] as? Bool == true,
+  "drained same-owner recovery computes a currently active session")
+detachedAudio.deactivateAudio(); pump()
+UserDefaults.standard.set([historicalRecovery], forKey: detachedAudio.pendingEventsDefaultsKey)
+private let inactiveDrained = detachedAudio.drainPendingEvents()
+expect(inactiveDrained.count == 1 && inactiveDrained[0]["audioSessionActive"] as? Bool == false,
+  "drained recovery cannot retain a stored positive readiness field")
+
+// Persist only confirmed call descriptors, then instantiate a new coordinator
+// while the OS still reports the UUID. Process-memory activation must be gone.
+detachedAudio.activateAudio(); pump(); detachedAudio.save()
+private let coldAudio = CoordinatorProbe()
+coldAudio.restore(); pump()
+expect(coldAudio.activeCalls[detachedAudioUuid]?.answered == true && !coldAudio.audioReady(detachedAudioUuid),
+  "cold restore preserves answered presentation without restoring activation")
+private let coldRecovered = coldAudio.events.filter { $0["type"] as? String == "recovered" }
+expect(coldRecovered.count == 1 && coldRecovered[0]["audioSessionActive"] as? Bool == false,
+  "cold restored presentation reports current inactive readiness")
+expect(coldAudio.callKitAudioActivationOwners.isEmpty && !coldAudio.callKitAudioSessionActive,
+  "activation ownership remains process-memory state")
+UserDefaults.standard.set([historicalRecovery], forKey: coldAudio.pendingEventsDefaultsKey)
+private let coldDrained = coldAudio.drainPendingEvents()
+expect(coldDrained.count == 1 && coldDrained[0]["audioSessionActive"] as? Bool == false,
+  "cold drained recovery cannot inherit another native generation's activation")
+coldAudio.remove(detachedAudioUuid); detachedAudio.remove(detachedAudioUuid)
 
 print("\(passed) native incoming-report checks PASS")

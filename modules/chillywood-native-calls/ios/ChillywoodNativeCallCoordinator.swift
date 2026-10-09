@@ -55,6 +55,9 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private let presentationAckHost = "bmkkhihfbmsnnmcqkoly.supabase.co"
   private var provider: CXProvider?
   private let audioSessionDiagnostics = ChillywoodNativeCallDiagnostics.shared
+  // Process-memory CallKit ownership only. Never restored from preferences.
+  private var callKitAudioSessionActive = false
+  private var callKitAudioActivationOwners: [UUID: (generation: UUID, authority: NativeVoipAuthority)] = [:]
   private var pushRegistry: PKPushRegistry?
   private var activeCalls: [UUID: ActiveNativeCall] = [:]
   private var pendingIncomingReports: [UUID: PendingIncomingReport] = [:]
@@ -110,7 +113,11 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     ChillywoodNativeCallDiagnostics.shared.record(.lifecyclePrepared)
     guard isBuildEnabled else { return }
     prepare()
-    guard isRuntimeDefaultEnabled, persistedVoipAuthority() != nil else { return }
+    guard isRuntimeDefaultEnabled, persistedVoipAuthority() != nil else {
+      ChillywoodNativeCallDiagnostics.shared.record(.coldStartAuthorityRejected)
+      return
+    }
+    ChillywoodNativeCallDiagnostics.shared.record(.coldStartAuthorityAccepted)
     startVoipRegistrationOnMain()
   }
 
@@ -178,6 +185,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       guard let self else { return }
       let previousAuthority = self.persistedVoipAuthority()
       if previousAuthority != nil && previousAuthority != authority {
+        ChillywoodNativeCallDiagnostics.shared.record(.registrationAuthorityReplaced)
         self.resetAccountContextOnMain()
         self.pushRegistry?.desiredPushTypes = []
         self.pushRegistry?.delegate = nil
@@ -199,11 +207,16 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
 
   private func startVoipRegistrationOnMain() {
     dispatchPrecondition(condition: .onQueue(.main))
-    guard isBuildEnabled, isRuntimeDefaultEnabled, pushRegistry == nil else { return }
+    guard isBuildEnabled, isRuntimeDefaultEnabled else { return }
+    guard pushRegistry == nil else {
+      ChillywoodNativeCallDiagnostics.shared.record(.registryReused)
+      return
+    }
     let registry = PKPushRegistry(queue: .main)
     registry.delegate = self
     registry.desiredPushTypes = [.voIP]
     pushRegistry = registry
+    ChillywoodNativeCallDiagnostics.shared.record(.registryCreated)
   }
 
   private func recoverConfirmedIncomingCallsOnMain() {
@@ -1019,7 +1032,8 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   public func drainPendingEvents() -> [[String: Any]] {
-    stateQueue.sync {
+    let drain = { [self] in
+      let events = stateQueue.sync {
       let persistedEvents = UserDefaults.standard.array(forKey: pendingEventsDefaultsKey) as? [[String: Any]] ?? []
       let durableAnswerEvents = UserDefaults.standard.array(forKey: pendingAnswerEventsDefaultsKey) as? [[String: Any]] ?? []
       // Answer is the only lifecycle event whose native CallKit action remains
@@ -1032,7 +1046,50 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       pendingEvents.removeAll()
       UserDefaults.standard.removeObject(forKey: pendingEventsDefaultsKey)
       return events
+      }
+      // Positive activation is process-memory authority, never a durable event.
+      return events.filter { $0["type"] as? String != "audioSessionActivated" }
+        .map { recoveredAudioReadiness($0) }
     }
+    if Thread.isMainThread { return drain() }
+    return DispatchQueue.main.sync(execute: drain)
+  }
+
+  private func recoveredAudioReadiness(_ event: [String: Any]) -> [String: Any] {
+    dispatchPrecondition(condition: .onQueue(.main))
+    guard event["type"] as? String == "recovered" else { return event }
+    var current = event
+    // Overwrite any persisted field with current native ownership. In
+    // particular, a process restart cannot replay historical activation.
+    current["audioSessionActive"] = false
+    guard let uuidText = event["callUuid"] as? String, let uuid = UUID(uuidString: uuidText),
+      let call = activeCalls[uuid], hasCurrentCallKitAudioActivation(call),
+      call.generation.uuidString.lowercased() == event["nativeCallGeneration"] as? String,
+      call.presentationAuthority?.sessionGeneration == event["nativeSessionGeneration"] as? String,
+      call.inviteId == event["callInviteId"] as? String,
+      call.threadId == event["threadId"] as? String
+    else { return current }
+    current["audioSessionActive"] = true
+    return current
+  }
+
+  private func recordCallKitAudioActivation() {
+    dispatchPrecondition(condition: .onQueue(.main))
+    callKitAudioSessionActive = true
+    callKitAudioActivationOwners.removeAll()
+    guard let authority = persistedVoipAuthority() else { return }
+    for call in activeCalls.values where call.presentationConfirmed && call.presentationAuthority == authority {
+      callKitAudioActivationOwners[call.uuid] = (call.generation, authority)
+    }
+  }
+
+  private func hasCurrentCallKitAudioActivation(_ call: ActiveNativeCall) -> Bool {
+    guard callKitAudioSessionActive, call.answered, call.presentationConfirmed,
+      let owner = callKitAudioActivationOwners[call.uuid], owner.generation == call.generation,
+      let authority = persistedVoipAuthority(), owner.authority == authority,
+      call.presentationAuthority == authority, !isTerminalInvite(call.inviteId)
+    else { return false }
+    return CXCallObserver().calls.contains { $0.uuid == call.uuid && !$0.hasEnded }
   }
 
   private func persistPendingAnswerEvent(_ event: [String: Any]) {
@@ -1242,6 +1299,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     case .expire:
       break
     }
+    ChillywoodNativeCallDiagnostics.shared.record(.ringingTimedOut, callUuid: uuid)
     failPendingAnswer(uuid)
     markTerminalInvite(call.inviteId)
     provider?.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
@@ -1253,6 +1311,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private func removeCall(_ uuid: UUID, incomingReportError: Error = ChillywoodNativeCallError.callUnavailable) -> ActiveNativeCall? {
     clearPendingAnswerEvent(uuid)
     let removed = activeCalls.removeValue(forKey: uuid)
+    callKitAudioActivationOwners.removeValue(forKey: uuid)
     settleIncomingReport(uuid, generation: nil, error: incomingReportError)
     guard let call = removed else { return nil }
     requestedAnswerTransactions.remove(uuid)
@@ -1269,13 +1328,16 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       "callInviteId": call.inviteId,
       "threadId": call.threadId,
       "callType": call.callType,
+      "nativeCallGeneration": call.generation.uuidString.lowercased(),
+      "nativeSessionGeneration": call.presentationAuthority?.sessionGeneration ?? "",
     ]
     if let reason { event["reason"] = reason }
     emitRaw(event)
   }
 
   private func emitRaw(_ event: [String: Any]) {
-    let isPresentation = ["incoming", "recovered"].contains(event["type"] as? String ?? "")
+    let isAudioActivation = event["type"] as? String == "audioSessionActivated"
+    let isPresentation = ["incoming", "recovered", "audioSessionActivated"].contains(event["type"] as? String ?? "")
     let presentationUuid = (event["callUuid"] as? String).flatMap(UUID.init(uuidString:))
     let presentationGeneration = isPresentation ? presentationUuid.flatMap { activeCalls[$0]?.generation } : nil
     let presentationAuthority = isPresentation ? persistedVoipAuthority() : nil
@@ -1297,6 +1359,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
           self.persistedVoipAuthority() == presentationAuthority,
           !self.isTerminalInvite(call.inviteId)
         else { return }
+        if isAudioActivation && !self.hasCurrentCallKitAudioActivation(call) { return }
       }
       if event["type"] as? String == "answerRequested" {
         // Persist before touching the Expo event sink. A suspended app may
@@ -1306,8 +1369,11 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
         self.persistPendingAnswerEvent(event)
       }
       if let eventSink = self.eventSink {
-        eventSink(event)
+        eventSink(self.recoveredAudioReadiness(event))
       } else {
+        // A reattached listener receives current readiness through an exact
+        // recovered presentation, never a queued historical activation.
+        if isAudioActivation { return }
         self.stateQueue.sync {
           // PushKit tokens remain memory-only. Bounded non-token lifecycle
           // events are persisted so a VoIP-launched process can hand CallKit
@@ -1510,6 +1576,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     beginAnswerTransitionBackgroundTask(action.callUUID)
     pendingAnswerActions[action.callUUID] = action
     let timeout = DispatchWorkItem { [weak self] in
+      ChillywoodNativeCallDiagnostics.shared.record(.answerActionTimedOut, callUuid: action.callUUID)
       self?.completeAnswerOnMain(action.callUUID, connected: false, reason: "media_connection_timeout")
     }
     pendingAnswerTimeouts[action.callUUID]?.cancel()
@@ -1525,6 +1592,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
+    ChillywoodNativeCallDiagnostics.shared.record(.endDelegateReceived, callUuid: action.callUUID)
     if let call = activeCalls[action.callUUID] { markTerminalInvite(call.inviteId) }
     guard let call = removeCall(action.callUUID) else {
       action.fulfill()
@@ -1555,12 +1623,17 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   public func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+    callKitAudioSessionActive = false
+    callKitAudioActivationOwners.removeAll()
     audioSessionDiagnostics.record(.audioActivationReceived)
     do {
       try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
       try audioSession.setActive(true)
+      recordCallKitAudioActivation()
       audioSessionDiagnostics.record(.audioActivationSucceeded)
-      emitRaw(["type": "audioSessionActivated"])
+      for uuid in callKitAudioActivationOwners.keys {
+        if let call = activeCalls[uuid] { emit(type: "audioSessionActivated", call: call) }
+      }
     } catch {
       audioSessionDiagnostics.record(.audioActivationFailed, error: error)
       if activeCalls.isEmpty {
@@ -1578,6 +1651,8 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   }
 
   private func deactivateAudioSession() {
+    callKitAudioSessionActive = false
+    callKitAudioActivationOwners.removeAll()
     try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
   }
 
@@ -1589,6 +1664,10 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       return
     }
 
+    if interruptionType == .began {
+      callKitAudioSessionActive = false
+      callKitAudioActivationOwners.removeAll()
+    }
     let eventType = interruptionType == .began
       ? "audioInterruptionBegan"
       : "audioInterruptionEnded"

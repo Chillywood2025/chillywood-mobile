@@ -27,6 +27,8 @@ import { supabase } from "./supabase";
 import { reportRuntimeError } from "./logger";
 import { reportBoundedNativeCallError } from "./nativeCallErrorDiagnostics.mjs";
 import { normalizeCommunicationRoomIdentifier } from "./communicationRoomIdentifier.mjs";
+import { createIosAcceptedCallKitMediaDescriptor, doesIosAcceptedCallKitMediaDescriptorOwnSession } from "./communicationCallMediaPolicy.mjs";
+import { reportInternalCallMediaDiagnostic } from "./internalCallMediaDiagnostics";
 
 export type IosNativeCallsDisabledReason =
   | "not_ios"
@@ -44,6 +46,7 @@ export type IosNativeCallsReadiness = {
 export type SanitizedNativeCallEvent = Omit<NativeCallEvent, "token"> & {
   nativeEventGeneration: number;
   platform: "ios";
+  audioSdkSynchronized?: boolean;
 };
 export type IosNativeCallEventListener = (event: SanitizedNativeCallEvent) => void;
 export type IosNativePresentationWaitOutcome = "not_expected" | "presented" | "stale" | "timeout";
@@ -61,12 +64,22 @@ type IosVoipAuthorityContext = {
   installId: string;
   revocationCredential: string;
 };
+type IosAcceptedCallKitMediaDescriptor = NonNullable<ReturnType<typeof createIosAcceptedCallKitMediaDescriptor>>;
 
 let nativeSubscription: { remove(): void } | null = null;
 let eventListener: IosNativeCallEventListener | null = null;
 const nativeEventSubscribers = new Set<IosNativeCallEventListener>();
 const nativePresentationSubscribers = new Set<() => void>();
 const nativePresentedCallUuidsByInviteId = new Map<string, string>();
+const nativePresentedCallGenerations = new Map<string, string>();
+const nativeAudioActivatedCallUuids = new Set<string>();
+const acceptedNativeMediaSessions = new Map<string, {
+  descriptor: IosAcceptedCallKitMediaDescriptor;
+  context: IosVoipAuthorityContext;
+  generation: number;
+  nativeCallGeneration: string;
+  readinessDeadlineMs: number;
+}>();
 let voipLifecycleGeneration = 0;
 let iosNativeApplicationActiveSerial = 0;
 const iosNativeAnswerApplicationActiveBaselines = new Map<string, number>();
@@ -212,7 +225,7 @@ const suspendVoipReadiness = () => {
   nativeSubscription = null;
   eventListener = null;
   clearNativeCallTransitionClaims("ios");
-  clearNativePresentedInvites();
+  clearNativePresentedInvites(true);
 };
 
 const isExactVoipAuthorityCurrent = async (context: IosVoipAuthorityContext) => (
@@ -355,9 +368,25 @@ const notifyNativePresentationSubscribers = () => {
   });
 };
 
-const clearNativePresentedInvites = () => {
+const invalidateNativeAudioReadiness = (callUuid?: string) => {
+  for (const retained of acceptedNativeMediaSessions.values()) {
+    const uuid = retained.descriptor.callUuid;
+    if ((!callUuid || callUuid === uuid) && nativeAudioActivatedCallUuids.has(uuid)) {
+      // An already healthy call gets one bounded recovery window on loss of
+      // readiness. Repeated quarantine notifications cannot restart it.
+      retained.readinessDeadlineMs = performance.now() + 15_000;
+    }
+  }
+  if (callUuid) nativeAudioActivatedCallUuids.delete(callUuid);
+  else nativeAudioActivatedCallUuids.clear();
+};
+
+const clearNativePresentedInvites = (preserveAcceptedSessions = false) => {
   foregroundAnswerValidations = new WeakMap();
   confirmedVoipToken = null;
+  invalidateNativeAudioReadiness();
+  if (!preserveAcceptedSessions) acceptedNativeMediaSessions.clear();
+  nativePresentedCallGenerations.clear();
   if (nativePresentedCallUuidsByInviteId.size === 0) return;
   nativePresentedCallUuidsByInviteId.clear();
   notifyNativePresentationSubscribers();
@@ -372,7 +401,24 @@ const updateNativePresentationOwnership = (event: SanitizedNativeCallEvent) => {
 
   if (event.type === "incoming" || event.type === "recovered") {
     const callUuid = toText(event.callUuid).toLowerCase();
-    if (!callUuid || nativePresentedCallUuidsByInviteId.get(inviteId) === callUuid) return;
+    const callGeneration = toText(event.nativeCallGeneration).toLowerCase();
+    const context = voipAuthorityContext;
+    if (!callUuid || (event.nativeSessionGeneration && event.nativeSessionGeneration !== context?.authority.sessionGeneration)) return;
+    const samePresentation = nativePresentedCallUuidsByInviteId.get(inviteId) === callUuid
+      && nativePresentedCallGenerations.get(callUuid) === callGeneration;
+    if (samePresentation) return;
+    invalidateNativeAudioReadiness(callUuid);
+    if (callGeneration) nativePresentedCallGenerations.set(callUuid, callGeneration);
+    else nativePresentedCallGenerations.delete(callUuid);
+    const retained = acceptedNativeMediaSessions.get(inviteId);
+    if (retained && context && retained.descriptor.callUuid === callUuid
+      && retained.nativeCallGeneration === callGeneration
+      && sameAccountSessionAuthority(retained.context.authority, context.authority)
+      && retained.context.installId === context.installId
+      && retained.context.revocationCredential === context.revocationCredential) {
+      retained.context = context;
+      retained.generation = voipLifecycleGeneration;
+    }
     nativePresentedCallUuidsByInviteId.set(inviteId, callUuid);
     notifyNativePresentationSubscribers();
     return;
@@ -391,6 +437,8 @@ const updateNativePresentationOwnership = (event: SanitizedNativeCallEvent) => {
   ].includes(event.type)
     && nativePresentedCallUuidsByInviteId.get(inviteId) === toText(event.callUuid).toLowerCase()
     && nativePresentedCallUuidsByInviteId.delete(inviteId)) {
+    nativeAudioActivatedCallUuids.delete(toText(event.callUuid).toLowerCase());
+    nativePresentedCallGenerations.delete(toText(event.callUuid).toLowerCase());
     notifyNativePresentationSubscribers();
   }
 };
@@ -401,16 +449,41 @@ const handleNativeEvent = (
   context: IosVoipAuthorityContext,
 ) => {
   if (!voipRegistrationActive || generation !== voipLifecycleGeneration || voipAuthorityContext !== context) return;
+  if (event.nativeSessionGeneration && event.nativeSessionGeneration !== context.authority.sessionGeneration) return;
+  const observedUuid = toText(event.callUuid).toLowerCase();
+  const observedCallGeneration = nativePresentedCallGenerations.get(observedUuid);
+  if (event.nativeCallGeneration && observedCallGeneration
+    && event.nativeCallGeneration !== observedCallGeneration && event.type !== "incoming") return;
 
   if (event.type === "applicationActive") {
     iosNativeApplicationActiveSerial = iosNativeApplicationActiveSerial >= Number.MAX_SAFE_INTEGER
       ? 1
       : iosNativeApplicationActiveSerial + 1;
   }
+  let audioSdkSynchronized: boolean | undefined;
   if (event.type === "audioSessionActivated") {
-    synchronizeLiveKitCallKitAudioSession("activated");
-  } else if (event.type === "audioSessionDeactivated") {
-    synchronizeLiveKitCallKitAudioSession("deactivated");
+    const eventUuid = toText(event.callUuid).toLowerCase();
+    // Native queue delivery and the React Native queue are separate boundaries.
+    // Match the native call generation and authenticated session again here.
+    const receiptMatches = !!eventUuid && !!event.nativeCallGeneration
+      && nativePresentedCallGenerations.get(eventUuid) === event.nativeCallGeneration
+      && event.nativeSessionGeneration === context.authority.sessionGeneration;
+    if (!receiptMatches) return;
+    invalidateNativeAudioReadiness(eventUuid || undefined);
+    const synchronized = synchronizeLiveKitCallKitAudioSession("activated");
+    audioSdkSynchronized = synchronized === true;
+    reportInternalCallMediaDiagnostic("native_audio_activation_received", { enabled: synchronized === true });
+    // Retain only an observed activation for currently presented native UUIDs.
+    // A remounted thread may reuse this receipt; a replacement call may not.
+    if (synchronized === true) {
+      for (const uuid of nativePresentedCallUuidsByInviteId.values()) {
+        if (!eventUuid || uuid === eventUuid) nativeAudioActivatedCallUuids.add(uuid);
+      }
+    }
+  } else if (["audioSessionDeactivated", "audioSessionFailed", "audioInterruptionBegan"].includes(event.type)) {
+    const synchronized = synchronizeLiveKitCallKitAudioSession("deactivated");
+    invalidateNativeAudioReadiness();
+    reportInternalCallMediaDiagnostic("native_audio_deactivation_received", { enabled: synchronized === true });
   }
   const eventInviteId = toText(event.callInviteId);
   if (event.type === "answerRequested" && eventInviteId) {
@@ -440,7 +513,27 @@ const handleNativeEvent = (
   }
 
   const sanitizedEvent = sanitizeNativeEvent(event, generation);
+  if (audioSdkSynchronized !== undefined) sanitizedEvent.audioSdkSynchronized = audioSdkSynchronized;
   updateNativePresentationOwnership(sanitizedEvent);
+  if (event.type === "recovered") {
+    const retained = acceptedNativeMediaSessions.get(toText(event.callInviteId));
+    const uuid = toText(event.callUuid).toLowerCase();
+    invalidateNativeAudioReadiness(uuid);
+    if (retained?.descriptor.callUuid === uuid && retained.context === context && retained.generation === generation
+      && retained.nativeCallGeneration === event.nativeCallGeneration
+      && event.nativeSessionGeneration === context.authority.sessionGeneration) {
+      // Native recomputes this boolean when delivering a recovered receipt,
+      // after checking its current CallKit activation, exact call and authority.
+      // A persisted event or JS presentation alone cannot supply readiness.
+      const synchronized = event.audioSessionActive === true
+        && synchronizeLiveKitCallKitAudioSession("activated") === true;
+      if (synchronized) nativeAudioActivatedCallUuids.add(uuid);
+      reportInternalCallMediaDiagnostic("native_audio_recovered", { enabled: synchronized });
+    }
+  }
+  if (["audioSessionActivated", "audioSessionDeactivated", "audioSessionFailed", "audioInterruptionBegan", "recovered"].includes(event.type)) {
+    notifyNativePresentationSubscribers();
+  }
   eventListener?.(sanitizedEvent);
   nativeEventSubscribers.forEach((subscriber) => {
     try {
@@ -542,6 +635,81 @@ export function readIosNativeCallPresentations() {
     callInviteId,
     callUuid,
   }));
+}
+
+// The one-use route claim ends at the screen boundary; accepted media ownership
+// lasts until exact call cleanup. Retain its existing attestation in this same
+// authenticated native lifecycle, never in storage or route parameters.
+export function retainIosAcceptedNativeMediaSession(descriptor: IosAcceptedCallKitMediaDescriptor) {
+  const context = voipAuthorityContext;
+  if (!context || !voipRegistrationActive
+    || context.authority.userId !== descriptor?.authenticatedUserId
+    || nativePresentedCallUuidsByInviteId.get(descriptor?.inviteId) !== descriptor?.callUuid
+    || !nativePresentedCallGenerations.has(descriptor?.callUuid)
+    || !doesIosAcceptedCallKitMediaDescriptorOwnSession({ ...descriptor, descriptor, inviteStatus: "accepted" })) return false;
+  const previous = acceptedNativeMediaSessions.get(descriptor.inviteId);
+  if (previous) return previous.descriptor === descriptor && previous.context === context
+    && previous.generation === voipLifecycleGeneration;
+  // Native configuration permits one call; bound even unexpected retained
+  // terminal cleanup without evicting an unresolved owner to admit another.
+  if (acceptedNativeMediaSessions.size >= 8) return false;
+  acceptedNativeMediaSessions.set(descriptor.inviteId, {
+    descriptor, context, generation: voipLifecycleGeneration,
+    nativeCallGeneration: nativePresentedCallGenerations.get(descriptor.callUuid)!,
+    readinessDeadlineMs: performance.now() + 15_000,
+  });
+  reportInternalCallMediaDiagnostic("native_audio_session_retained", { enabled: true });
+  return true;
+}
+
+export function readIosAcceptedNativeMediaSession(input: {
+  authenticatedUserId: string; sessionGeneration: string; inviteId?: string; inviteStatus?: string;
+  mediaProvider?: string; roomId?: string | null; threadId: string;
+}) {
+  const retained = acceptedNativeMediaSessions.get(toText(input.inviteId));
+  if (!retained || retained.context.authority.userId !== input.authenticatedUserId
+    || retained.context.authority.sessionGeneration !== input.sessionGeneration
+    || !doesIosAcceptedCallKitMediaDescriptorOwnSession({ ...input, descriptor: retained.descriptor })) return null;
+  return {
+    descriptor: retained.descriptor,
+    readinessDeadlineMs: retained.readinessDeadlineMs,
+    nativeAuthorityCurrent: voipRegistrationActive && retained.context === voipAuthorityContext
+      && retained.generation === voipLifecycleGeneration
+      && (!nativePresentedCallGenerations.has(retained.descriptor.callUuid)
+        || nativePresentedCallGenerations.get(retained.descriptor.callUuid) === retained.nativeCallGeneration),
+    // During transient readiness quarantine the exact descriptor remains a
+    // capture gate, never an activation grant. A recovered native receipt must
+    // rebind it to the authenticated lifecycle before new readiness is usable.
+    audioSessionActive: voipRegistrationActive && retained.context === voipAuthorityContext
+      && retained.generation === voipLifecycleGeneration
+      && nativePresentedCallGenerations.get(retained.descriptor.callUuid) === retained.nativeCallGeneration
+      && nativeAudioActivatedCallUuids.has(retained.descriptor.callUuid),
+  };
+}
+
+export function isIosNativeCallAuthorityCurrent(input: { authenticatedUserId: string; sessionGeneration: string }) {
+  return voipRegistrationActive && voipAuthorityContext?.authority.userId === input.authenticatedUserId
+    && voipAuthorityContext.authority.sessionGeneration === input.sessionGeneration;
+}
+
+export function isIosAcceptedNativeMediaAuthorityCurrent(descriptor: IosAcceptedCallKitMediaDescriptor,
+  input: { authenticatedUserId: string; sessionGeneration: string }) {
+  const retained = acceptedNativeMediaSessions.get(descriptor.inviteId);
+  return retained?.descriptor === descriptor && isIosNativeCallAuthorityCurrent(input)
+    && retained.context === voipAuthorityContext && retained.generation === voipLifecycleGeneration
+    && (!nativePresentedCallGenerations.has(descriptor.callUuid)
+      || nativePresentedCallGenerations.get(descriptor.callUuid) === retained.nativeCallGeneration);
+}
+
+export function releaseIosAcceptedNativeMediaSession(inviteId: string, callUuid: string,
+  screenAuthority: { authenticatedUserId: string; sessionGeneration: string }) {
+  const retained = acceptedNativeMediaSessions.get(inviteId);
+  if (!retained || retained.context.authority.userId !== screenAuthority.authenticatedUserId
+    || retained.context.authority.sessionGeneration !== screenAuthority.sessionGeneration
+    || retained.descriptor.callUuid !== callUuid) return false;
+  acceptedNativeMediaSessions.delete(inviteId);
+  nativeAudioActivatedCallUuids.delete(callUuid);
+  return true;
 }
 
 export function subscribeToIosNativeCallPresentation(listener: () => void) {
@@ -782,7 +950,8 @@ export async function startIosNativeCallsReadiness(
     nativeSubscription?.remove();
     nativeSubscription = null;
     eventListener = null;
-    clearNativePresentedInvites();
+    clearNativePresentedInvites(readiness.available && exactAuthority && !!currentContext
+      && sameAccountSessionAuthority(currentContext.authority, authority));
 
     // Let any request from the previous lifecycle finish before a new native
     // listener can enqueue work under the next authenticated account state.

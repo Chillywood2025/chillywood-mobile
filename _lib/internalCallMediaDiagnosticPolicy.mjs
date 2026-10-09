@@ -4,6 +4,7 @@ const PHASES = new Set([
   "automatic_mic_feedback_reserved", "automatic_mic_feedback_settled", "native_mic_feedback",
   "session_restart_requested", "session_restart_started", "session_admission_result", "session_initialization_failed",
   "room_snapshot_missing", "room_snapshot_ended", "signaling_subscription", "room_terminal_received",
+  "native_audio_activation_received", "native_audio_deactivation_received", "native_audio_session_retained", "native_audio_gate", "native_audio_recovered",
 ]);
 const APP_STATES = new Set(["active", "background", "inactive", "unknown", "extension"]);
 const SESSION_ENUMS = {
@@ -19,7 +20,8 @@ const ERRORS = new Set([
 ]);
 const BOOLEANS = ["enabled", "requestedCamera", "requestedMic", "wantsCamera", "wantsMic",
   "canUseCamera", "canUseMic", "backgroundAudioAllowed", "provedCamera", "provedMic",
-  "recoverable", "hasAdmission", "isHost", "admitted"];
+  "recoverable", "hasAdmission", "isHost", "admitted",
+  "nativeOwner", "retainedOwner", "activationObserved"];
 const read = (value, key) => {
   try { return value && (typeof value === "object" || typeof value === "function") ? value[key] : undefined; }
   catch { return undefined; }

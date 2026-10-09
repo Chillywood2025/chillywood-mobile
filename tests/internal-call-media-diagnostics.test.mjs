@@ -92,6 +92,19 @@ test("microphone feedback receipts expose only bounded intent and acknowledgemen
     call_hash: "none", platform: "ios", uptime_ms: 123, enabled: true, requestedMic: false, appState: "background" });
 });
 
+test("audio readiness receipts retain only allowlisted booleans without authority or SDK payloads", () => {
+  const { lines, report } = recorder({ enabled: true, platform: "ios", channel: "ios-internal-v2" });
+  for (const phase of ["native_audio_activation_received", "native_audio_deactivation_received", "native_audio_session_retained", "native_audio_gate", "native_audio_recovered"]) {
+    report(phase, { enabled: false, nativeOwner: true, retainedOwner: true, activationObserved: false,
+      callUuid: "private-call", authority: "private-account", sdkResult: "private-payload" });
+  }
+  assert.equal(lines.length, 5);
+  assert.ok(lines.every(line => !line.includes("private")));
+  assert.deepEqual(parsed(lines[3]), { version: 1, phase: "native_audio_gate", seq: 4,
+    call_hash: "none", platform: "ios", uptime_ms: 123,
+    enabled: false, nativeOwner: true, retainedOwner: true, activationObserved: false });
+});
+
 test("sequence is session-wide and monotonic clock receipts cannot regress", () => {
   const times = [20.5, 10.2, NaN, Infinity, -1, Number.MAX_SAFE_INTEGER + 1];
   const lines = [];

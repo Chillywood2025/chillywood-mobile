@@ -4,6 +4,9 @@ export type NativeCallEvent = {
   callInviteId?: string;
   threadId?: string;
   callType?: "voice" | "video";
+  audioSessionActive?: boolean;
+  nativeCallGeneration?: string;
+  nativeSessionGeneration?: string;
   token?: string;
   reason?: string;
 };

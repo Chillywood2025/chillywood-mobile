@@ -104,6 +104,8 @@ export async function mountChatAnswer(options = {}) {
     exports.Component = function Component() {
       const { currentUserId, threadId, isSignedIn, sessionGeneration, requestedNativeCallUuid } = runtime;
       const activeIosNativeAudioCallUuid = runtime.requestedNativeCallUuid;
+      const nativeControlCallUuid = runtime.requestedNativeCallUuid;
+      const isIosNativeMediaAuthorityCurrent = () => true;
       const [callBusy, setCallBusy] = useState(false);
       const [nativeSpeakerEnabled, setNativeSpeakerState] = useState(false);
       const setNativeSpeakerEnabled = useCallback((value) => { runtime.speakerWrites.push(value); setNativeSpeakerState(value); }, []);

@@ -6,6 +6,11 @@ import os
 // or change CallKit behavior, and cannot be enabled by JavaScript or an OTA.
 enum ChillywoodNativeCallDiagnosticPhase: String, CaseIterable {
   case lifecyclePrepared = "lifecycle_prepared"
+  case coldStartAuthorityAccepted = "cold_start_authority_accepted"
+  case coldStartAuthorityRejected = "cold_start_authority_rejected"
+  case registryCreated = "registry_created"
+  case registryReused = "registry_reused"
+  case registrationAuthorityReplaced = "registration_authority_replaced"
   case registrationStartReceived = "registration_start_received"
   case registrationStarted = "registration_started"
   case registrationStopReceived = "registration_stop_received"
@@ -25,6 +30,9 @@ enum ChillywoodNativeCallDiagnosticPhase: String, CaseIterable {
   case answerDelegateReceived = "answer_delegate_received"
   case answerDelegateRejected = "answer_delegate_rejected"
   case answerPending = "answer_pending"
+  case answerActionTimedOut = "answer_action_timed_out"
+  case endDelegateReceived = "end_delegate_received"
+  case ringingTimedOut = "ringing_timed_out"
   case answerAudioConfigurationRequested = "answer_audio_configuration_requested"
   case answerAudioConfigurationSucceeded = "answer_audio_configuration_succeeded"
   case answerAudioConfigurationFailed = "answer_audio_configuration_failed"

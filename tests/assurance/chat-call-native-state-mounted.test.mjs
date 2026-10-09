@@ -1064,6 +1064,7 @@ function nativeRouteFacade(setAudioRouteAsync) {
     "../modules/chillywood-native-calls": { default: { setAudioRouteAsync } },
     "./accountSessionAuthority": {}, "./iosNativeCallBridgeLifecycle.mjs": {},
     "./communicationRoomIdentifier.mjs": {},
+    "./communicationCallMediaPolicy.mjs": {}, "./internalCallMediaDiagnostics": {},
     "./livekit/bootstrap": {}, "./nativeCallTransitionProvenance.mjs": {},
     "./notifications": {}, "./supabase": {},
     "./logger": { reportRuntimeError() {} }, "./nativeCallErrorDiagnostics.mjs": nativeCallErrorDiagnostics,

@@ -375,11 +375,36 @@ export async function mountFullChatThread(options = {}) {
     },
   };
   const nativeListeners = new Set();
+  const retainedNativeMedia = new Map();
+  const nativeAudioReady = new Set();
+  const observeNativeAudio = event => {
+    if (event.type === "audioSessionActivated" && event.audioSdkSynchronized !== false) {
+      for (const {descriptor} of retainedNativeMedia.values()) {
+        if (!event.callUuid || event.callUuid === descriptor.callUuid) nativeAudioReady.add(descriptor.callUuid);
+      }
+    }
+    if (["audioSessionDeactivated", "audioSessionFailed", "audioInterruptionBegan"].includes(event.type)) nativeAudioReady.clear();
+  };
   const native = {
     isIosNativeCallsRuntimeEnabled: () => false, hasIosNativeCallPresentation: () => false,
     subscribeToIosNativeCallPresentation: () => noop,
     subscribeToIosNativeCallEvents: (fn) => { nativeListeners.add(fn); return () => nativeListeners.delete(fn); },
     readIosNativeApplicationActiveSerial: () => 0,
+    isIosNativeCallAuthorityCurrent: () => true,
+    isIosAcceptedNativeMediaAuthorityCurrent: (descriptor, input) => retainedNativeMedia.get(descriptor.inviteId)?.descriptor === descriptor
+      && retainedNativeMedia.get(descriptor.inviteId)?.sessionGeneration === input.sessionGeneration,
+    readIosAcceptedNativeMediaSession: input => {
+      const retained = retainedNativeMedia.get(input.inviteId);
+      return retained && retained.sessionGeneration === input.sessionGeneration
+        && mediaPolicy.doesIosAcceptedCallKitMediaDescriptorOwnSession({ ...input, descriptor: retained.descriptor })
+        ? { ...retained, nativeAuthorityCurrent: true, audioSessionActive: nativeAudioReady.has(retained.descriptor.callUuid) } : null;
+    },
+    retainIosAcceptedNativeMediaSession: descriptor => {
+      retainedNativeMedia.set(descriptor.inviteId, {descriptor, sessionGeneration: runtime.sessionGeneration,
+        readinessDeadlineMs: (options.screenPerformance ?? performance).now() + 15_000});
+      return true;
+    },
+    releaseIosAcceptedNativeMediaSession: inviteId => retainedNativeMedia.delete(inviteId),
     ensureIosForegroundIncomingCallPresentation: async () => "stale", requestIosNativeCallAnswer: async () => false,
     endIosNativeCall: async (...args) => { runtime.nativeEnds.push(args); return true; },
     reportIosNativeCallRemoteEnd: async (...args) => { runtime.nativeEnds.push(args); return true; },
@@ -395,6 +420,7 @@ export async function mountFullChatThread(options = {}) {
   const defaults = { runtimeControls: { chat_enabled: true, chat_attachments_enabled: true } };
   const router = { setParams: patch => Object.assign(runtime.params, patch), push: noop, replace: noop, back: noop };
   const modules = {
+    "../../_lib/internalCallMediaDiagnostics": { reportInternalCallMediaDiagnostic() {} },
     react: React, "expo-router": { useFocusEffect: (callback) => React.useEffect(callback, [callback]),
       useLocalSearchParams: () => ({ ...runtime.params, threadId: runtime.threadId }), useRouter: () => router },
     "@expo/vector-icons/MaterialIcons": noop,
@@ -517,14 +543,14 @@ export async function mountFullChatThread(options = {}) {
     async run(fn) { let result; await React.act(async () => { result = await fn(); await settle(); }); return result; },
     async flush() { await React.act(settle); },
     async fireTimer(timer) { timer.canceled = true; await React.act(async () => { await timer.fn(); await settle(); }); },
-    async nativeEvent(event) { await React.act(async () => { for (const listener of nativeListeners) listener(event); await settle(); }); },
+    async nativeEvent(event) { await React.act(async () => { observeNativeAudio(event); for (const listener of nativeListeners) listener(event); await settle(); }); },
     async appState(state) { await React.act(async () => {
       runtime.appState = state;
       for (const listener of appStateListeners) listener(state);
       await media.emitAppState(state);
       await settle();
     }); },
-    emitNativeEvent(event) { for (const listener of nativeListeners) listener(event); },
+    emitNativeEvent(event) { observeNativeAudio(event); for (const listener of nativeListeners) listener(event); },
     async rerender(patch) {
       Object.assign(runtime, patch);
       if (durableThread) Object.assign(media, { userId: runtime.userId, remoteUserId: runtime.remoteUserId });

@@ -86,6 +86,15 @@ public final class CXProvider {
   init(configuration: CXProviderConfiguration) { self.configuration = configuration }
   func setDelegate(_ delegate: AnyObject, queue: DispatchQueue?) {}
 }
+private final class CXCallObserver {
+  struct Call { let uuid: UUID; let hasEnded: Bool }
+  static var observedCalls: [Call] = []
+  var calls: [Call] { Self.observedCalls }
+}
+private let audioAuthority = NativeVoipAuthority(userId: "audio-user", accountId: "audio-account",
+  sessionGeneration: "audio-session", installId: "audio-install")
+private let replacementAudioAuthority = NativeVoipAuthority(userId: "other-user", accountId: "other-account",
+  sessionGeneration: "other-session", installId: "other-install")
 private final class UserDefaults {
   static let standard = UserDefaults()
   func removeObject(forKey key: String) {}
@@ -108,6 +117,10 @@ private final class CoordinatorProbe {
   var prepared = false
   var provider: CXProvider?
   private let audioSessionDiagnostics: ChillywoodNativeCallDiagnostics
+  var callKitAudioSessionActive = false
+  var callKitAudioActivationOwners: [UUID: (generation: UUID, authority: NativeVoipAuthority)] = [:]
+  var authority: NativeVoipAuthority? = audioAuthority
+  var terminalInvites: Set<String> = []
   init(infoDictionary: [String: Any] = nativeAudioDiagnosticFlags) {
     audioSessionDiagnostics = ChillywoodNativeCallDiagnostics(infoDictionary: infoDictionary) {
       nativeAudioDiagnosticLines.append($0)
@@ -116,7 +129,16 @@ private final class CoordinatorProbe {
   }
   var events: [[String: Any]] = []
   let activeCallsDefaultsKey = "controlled-audio-active-calls"
-  func persistedVoipAuthority() -> String? { "controlled-current-authority" }
+  func persistedVoipAuthority() -> NativeVoipAuthority? { authority }
+  func isTerminalInvite(_ inviteId: String) -> Bool { terminalInvites.contains(inviteId) }
+  func isAudioReady(_ call: ActiveNativeCall) -> Bool { hasCurrentCallKitAudioActivation(call) }
+  func recovered(_ call: ActiveNativeCall, claimedActive: Bool = true) -> [String: Any] {
+    recoveredAudioReadiness(["type": "recovered", "callUuid": call.uuid.uuidString.lowercased(),
+      "callInviteId": call.inviteId, "threadId": call.threadId, "audioSessionActive": claimedActive,
+      "nativeCallGeneration": call.generation.uuidString.lowercased(),
+      "nativeSessionGeneration": call.presentationAuthority?.sessionGeneration ?? ""])
+  }
+  func recoveredEvent(_ event: [String: Any]) -> [String: Any] { recoveredAudioReadiness(event) }
   func restoreActiveCallDescriptors() {}
   func emitRaw(_ event: [String: Any]) { events.append(event) }
   func prepareObservers() { prepare() }
@@ -128,6 +150,9 @@ private final class CoordinatorProbe {
   // INSERT_PROVIDER_DEACTIVATE
   // INSERT_DEACTIVATE_SESSION
   // INSERT_INTERRUPTION
+  // INSERT_RECORD_ACTIVATION
+  // INSERT_CURRENT_ACTIVATION
+  // INSERT_RECOVER_AUDIO_READINESS
   // INSERT_EMIT
 }
 
@@ -169,9 +194,11 @@ private func sameCall(_ event: [String: Any], _ call: ActiveNativeCall, _ type: 
     && event["threadId"] as? String == call.threadId
     && event["callType"] as? String == call.callType
 }
-private func makeCall(_ suffix: String) -> ActiveNativeCall {
-  ActiveNativeCall(uuid: UUID(), inviteId: "invite-\(suffix)", threadId: "thread-\(suffix)",
-    callType: "video", ringingDeadline: nil, answered: true, timeoutWorkItem: nil)
+private func makeCall(_ suffix: String, uuid: UUID = UUID(), authority: NativeVoipAuthority = audioAuthority,
+  answered: Bool = true, confirmed: Bool = true) -> ActiveNativeCall {
+  ActiveNativeCall(uuid: uuid, inviteId: "invite-\(suffix)", threadId: "thread-\(suffix)",
+    callType: "video", ringingDeadline: nil, answered: answered, timeoutWorkItem: nil,
+    presentationConfirmed: confirmed, presentationAuthority: authority)
 }
 private let coordinator = CoordinatorProbe()
 private let session = AVAudioSession.sharedInstance()
@@ -288,17 +315,100 @@ expect(session.operations == ["category", "active:true"] && session.active,
   "activation configures category before activating")
 expect(session.categoryOptions == systemOptions && session.mode == .voiceChat,
   "activation preserves supported Bluetooth profiles")
-expect(coordinator.events.count == 1 && coordinator.events[0]["type"] as? String == "audioSessionActivated",
-  "activation success emits exactly one event")
+expect(coordinator.events.isEmpty && coordinator.callKitAudioActivationOwners.isEmpty,
+  "activation without a presented owner cannot emit a positive call receipt")
 expectAudioDiagnostics(["audio_activation_received", "audio_activation_succeeded"])
 private let first = makeCall("first")
 private let second = makeCall("second")
 session.reset(); coordinator.clearEvents(); nativeAudioDiagnosticLines.removeAll()
 coordinator.activeCalls = [first.uuid: first, second.uuid: second]
+CXCallObserver.observedCalls = [.init(uuid: first.uuid, hasEnded: false), .init(uuid: second.uuid, hasEnded: false)]
 coordinator.provider(provider, didActivate: session)
 expectAudioDiagnostics(["audio_activation_received", "audio_activation_succeeded"])
+expect(coordinator.events.count == 2 && [first, second].allSatisfy { call in
+  coordinator.events.contains { sameCall($0, call, "audioSessionActivated") }
+}, "successful activation carries each exact presented call identity")
+expect([first, second].allSatisfy { coordinator.isAudioReady($0) },
+  "actual activation delegate records exact current native owners")
+expect(coordinator.recovered(first, claimedActive: false)["audioSessionActive"] as? Bool == true,
+  "same-owner recovered presentation recomputes current native activation")
+for key in ["callInviteId", "threadId", "nativeCallGeneration", "nativeSessionGeneration"] {
+  var stale = coordinator.recovered(first)
+  stale[key] = "retired-value"
+  expect(coordinator.recoveredEvent(stale)["audioSessionActive"] as? Bool == false,
+    "recovered \(key) must match the exact current native owner")
+  stale.removeValue(forKey: key)
+  expect(coordinator.recoveredEvent(stale)["audioSessionActive"] as? Bool == false,
+    "recovered readiness cannot omit \(key) ownership")
+}
+
+// Ownership cannot transfer just because the UUID, process, or AVAudioSession
+// survived. These calls execute the real ownership predicate without creating
+// readiness through a fixture flag or a fabricated media-track transition.
+private let sameUuidReplacement = makeCall("first", uuid: first.uuid)
+expect(!coordinator.isAudioReady(sameUuidReplacement),
+  "same UUID with a different native generation cannot inherit activation")
+coordinator.authority = replacementAudioAuthority
+private var authorityReplacement = first
+authorityReplacement.presentationAuthority = replacementAudioAuthority
+expect(!coordinator.isAudioReady(authorityReplacement),
+  "replacement persisted authority cannot inherit a previous owner's activation")
+coordinator.authority = audioAuthority
+private var wrongPresentationAuthority = first
+wrongPresentationAuthority.presentationAuthority = replacementAudioAuthority
+expect(!coordinator.isAudioReady(wrongPresentationAuthority),
+  "presented descriptor must retain the activated authority")
+coordinator.terminalInvites.insert(first.inviteId)
+expect(!coordinator.isAudioReady(first), "terminal invite cannot retain native audio readiness")
+coordinator.terminalInvites.removeAll()
+CXCallObserver.observedCalls = [.init(uuid: first.uuid, hasEnded: true)]
+expect(!coordinator.isAudioReady(first), "ended CallKit inventory cannot retain native audio readiness")
+CXCallObserver.observedCalls = []
+expect(!coordinator.isAudioReady(first), "absent CallKit inventory cannot retain native audio readiness")
+CXCallObserver.observedCalls = [.init(uuid: first.uuid, hasEnded: false)]
+private var unanswered = first
+unanswered.answered = false
+expect(!coordinator.isAudioReady(unanswered), "unanswered owner cannot authorize native capture")
+private var unconfirmed = first
+unconfirmed.presentationConfirmed = false
+expect(!coordinator.isAudioReady(unconfirmed), "unconfirmed owner cannot authorize native capture")
+coordinator.activeCalls[first.uuid] = sameUuidReplacement
+expect(coordinator.recovered(sameUuidReplacement)["audioSessionActive"] as? Bool == false,
+  "persisted positive field is overwritten when native generation was replaced")
+coordinator.activeCalls[first.uuid] = first
+
+for invalidation in ["deactivation", "interruption"] {
+  session.reset(); coordinator.clearEvents()
+  coordinator.activeCalls = [first.uuid: first]
+  coordinator.provider(provider, didActivate: session)
+  expect(coordinator.isAudioReady(first), "invalidation setup receives actual native activation")
+  if invalidation == "deactivation" {
+    coordinator.provider(provider, didDeactivate: session)
+  } else {
+    coordinator.receiveInterruption(Notification(name: AVAudioSession.interruptionNotification, object: session,
+      userInfo: [AVAudioSessionInterruptionTypeKey: UInt(1)]))
+  }
+  expect(!coordinator.isAudioReady(first) && coordinator.callKitAudioActivationOwners.isEmpty,
+    "\(invalidation) removes current activation ownership")
+  expect(coordinator.recovered(first)["audioSessionActive"] as? Bool == false,
+    "\(invalidation) overwrites recovered historical positive readiness")
+  coordinator.receiveInterruption(Notification(name: AVAudioSession.interruptionNotification, object: session,
+    userInfo: [AVAudioSessionInterruptionTypeKey: UInt(0)]))
+  expect(!coordinator.isAudioReady(first), "interruption ended cannot create a fresh activation receipt")
+}
+
+private let pendingAudio = makeCall("pending", confirmed: false)
+private let wrongAuthorityAudio = makeCall("wrong-authority", authority: replacementAudioAuthority)
+coordinator.activeCalls = [pendingAudio.uuid: pendingAudio, wrongAuthorityAudio.uuid: wrongAuthorityAudio]
+session.reset(); coordinator.clearEvents()
+coordinator.provider(provider, didActivate: session)
+expect(coordinator.callKitAudioActivationOwners.isEmpty && coordinator.events.isEmpty,
+  "activation never records unconfirmed or foreign-authority calls")
 for failure in ["category", "active"] {
   for hasCalls in [false, true] {
+    session.reset(); coordinator.activeCalls = [first.uuid: first]
+    coordinator.provider(provider, didActivate: session)
+    expect(coordinator.isAudioReady(first), "failure setup has prior genuine native activation")
     session.reset(); coordinator.clearEvents(); nativeAudioDiagnosticLines.removeAll()
     coordinator.activeCalls = hasCalls ? [first.uuid: first, second.uuid: second] : [:]
     session.rejectCategory = failure == "category"; session.rejectActivation = failure == "active"
@@ -306,6 +416,8 @@ for failure in ["category", "active"] {
     expectAudioDiagnostics(["audio_activation_received", "audio_activation_failed"],
       error: failure == "category" ? AudioProbeError.categoryRejected : AudioProbeError.activationRejected)
     expect(!session.active, "failed activation is not recorded as active")
+    expect(!coordinator.callKitAudioSessionActive && coordinator.callKitAudioActivationOwners.isEmpty,
+      "failed activation cannot preserve earlier positive ownership")
     expect(session.operations == (failure == "category" ? ["category"] : ["category", "active:true"]),
       "activation failure stops at the actual failing native operation")
     expect(!coordinator.events.contains { $0["type"] as? String == "audioSessionActivated" },

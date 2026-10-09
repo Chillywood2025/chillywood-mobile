@@ -6,6 +6,7 @@ import ts from "typescript";
 import * as lifecycle from "../../_lib/iosNativeCallBridgeLifecycle.mjs";
 import * as diagnostics from "../../_lib/nativeCallErrorDiagnostics.mjs";
 import * as roomIdentifiers from "../../_lib/communicationRoomIdentifier.mjs";
+import * as callMediaPolicy from "../../_lib/communicationCallMediaPolicy.mjs";
 import { deferred, mountChatAnswer } from "./helpers/chat-thread-answer-mounted-harness.mjs";
 
 // Execute the production facade and authority parser. Only authenticated RPC /
@@ -131,6 +132,8 @@ async function harness({ platform = "ios", buildEnabled = true, runtimeEnabled =
     "./accountSessionAuthority": authorityContext.exports,
     "./iosNativeCallBridgeLifecycle.mjs": lifecycle,
     "./communicationRoomIdentifier.mjs": roomIdentifiers,
+    "./communicationCallMediaPolicy.mjs": callMediaPolicy,
+    "./internalCallMediaDiagnostics": { reportInternalCallMediaDiagnostic() {} },
     "./livekit/bootstrap": { synchronizeLiveKitCallKitAudioSession: () => {} },
     "./nativeCallTransitionProvenance.mjs": { clearNativeCallTransitionClaims: () => {} },
     "./nativeCallErrorDiagnostics.mjs": diagnostics,
