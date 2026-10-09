@@ -1,5 +1,8 @@
 export type InternalCallMediaDiagnosticPhase = "initial_preferences" | "initial_intent" | "initial_permissions"
-  | "initial_projection" | "capture_requested" | "capture_received" | "capture_failed";
+  | "initial_projection" | "capture_requested" | "capture_received" | "capture_failed"
+  | "automatic_mic_feedback_reserved" | "automatic_mic_feedback_settled" | "native_mic_feedback"
+  | "session_restart_requested" | "session_restart_started" | "session_admission_result" | "session_initialization_failed"
+  | "room_snapshot_missing" | "room_snapshot_ended" | "signaling_subscription" | "room_terminal_received";
 export type InternalCallMediaDiagnosticInput = {
   enabled?: boolean;
   requestedCamera?: boolean;
@@ -11,6 +14,14 @@ export type InternalCallMediaDiagnosticInput = {
   backgroundAudioAllowed?: boolean;
   provedCamera?: boolean;
   provedMic?: boolean;
+  recoverable?: boolean;
+  hasAdmission?: boolean;
+  isHost?: boolean;
+  admitted?: boolean;
+  channelState?: string;
+  subscriptionStatus?: string;
+  recoveryTrigger?: string;
+  sessionGeneration?: number;
   appState?: string | null;
   cameraPermission?: string;
   micPermission?: string;

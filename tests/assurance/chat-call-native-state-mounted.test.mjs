@@ -22,6 +22,75 @@ async function fireBackgroundRecovery(h, start) {
   return fired;
 }
 
+for (const outcome of ['recover', 'admission denied', 'explicit End', 'terminal room']) {
+test(`full production wrapper: signaling resubscription with expired callee lease respects ${outcome}`, async t => {
+  const h = await mountFullChatThread({ invite: { status: 'accepted' }, configureMedia: media => {
+    media.ownedAdmission = true;
+    const capture = media.api.createCommunicationMediaStream;
+    media.api.createCommunicationMediaStream = async options => {
+      const stream = await capture(options);
+      for (const track of stream?.getVideoTracks() ?? []) {
+        track.getSettings = () => ({ facingMode: options.facingMode ?? 'user' });
+      }
+      return stream;
+    };
+  } });
+  t.after(() => h.unmount());
+  const media = h.runtime.media;
+  const admission = media.membershipGeneration;
+  const channel = media.readAssuranceRefs().channelRef.current;
+  assert.equal(backgroundLive(media, 'audio').length, 1);
+  assert.equal(backgroundLive(media, 'video').length, 1);
+  await h.run(() => media.emitAppState('background'));
+  assert.equal(backgroundLive(media, 'audio').length, 0);
+  // Socket resubscription is not a fresh membership admission. Its callback
+  // can arrive before AppState's foreground callback after a suspended lease.
+  await h.run(() => channel.emitSubscriptionStatus('SUBSCRIBED'));
+  assert.equal(media.readAssuranceRefs().channelStateRef.current, 'live');
+  assert.equal(media.membershipGeneration, admission);
+  const foregroundWrite = backgroundDeferred();
+  media.queueMembership({ wait: foregroundWrite.wait });
+  const start = media.timeoutCallbacks.length;
+  await h.run(() => media.emitAppState('active'));
+  media.queueSnapshot(outcome === 'terminal room'
+    ? { room: { ...media.readAssuranceRefs().roomRef.current, status: 'ended' } }
+    : { outcome: 'missing' });
+  await h.run(() => channel.emitBroadcast('state:update', {}));
+  assert.equal(h.runtime.invite.status, outcome === 'terminal room' ? 'ended' : 'accepted',
+    'only an authoritative ended receipt permits automatic global End');
+  assert.equal(h.runtime.transitions.some(transition => transition.status === 'ended'), outcome === 'terminal room');
+  const receipt = media.mediaDiagnostics.findLast(entry => entry.phase ===
+    (outcome === 'terminal room' ? 'room_snapshot_ended' : 'room_snapshot_missing'));
+  assert.equal(receipt.appState, 'active');
+  assert.equal(receipt.channelState, 'live');
+  if (outcome !== 'terminal room') {
+    assert.equal(receipt.hasAdmission, true);
+    assert.equal(receipt.isHost, false);
+    assert.equal(receipt.recoverable, true);
+  }
+  assert.equal(backgroundLive(media, 'audio').length, 0, 'unavailable authority retires capture before recovery');
+  assert.equal(backgroundLive(media, 'video').length, 0);
+  await h.run(() => foregroundWrite.resolve());
+  if (outcome === 'admission denied') media.admissionPrepareActions.push({ outcome: 'reject' });
+  if (outcome === 'explicit End') await h.run(() => h.runtime.snapshot.panelBindings.onLeave());
+  await fireBackgroundRecovery(h, start);
+  if (outcome === 'recover') {
+    assert.equal(media.joinCalls.length, 2, 'the admission RPC must authorize a replacement owner');
+    assert.notEqual(media.membershipGeneration, admission);
+    assert.equal(h.runtime.invite.status, 'accepted');
+    assert.equal(backgroundLive(media, 'audio').length, 1);
+    assert.equal(backgroundLive(media, 'video').length, 1);
+    assert.ok(media.mediaDiagnostics.some(entry => entry.phase === 'session_restart_started'));
+    assert.ok(media.mediaDiagnostics.findLast(entry => entry.phase === 'session_admission_result').sessionGeneration > receipt.sessionGeneration);
+  } else {
+    assert.equal(media.joinCalls.length, 1);
+    assert.equal(backgroundLive(media, 'audio').length, 0);
+    assert.equal(backgroundLive(media, 'video').length, 0);
+    assert.equal(h.runtime.invite.status, outcome === 'admission denied' ? 'accepted' : 'ended');
+  }
+});
+}
+
 test('full-screen modeled successful null is preserved at its API seam', async t => {
   const h = await mountFullChatThread({ invite: { status: 'accepted' } });
   t.after(() => h.unmount());

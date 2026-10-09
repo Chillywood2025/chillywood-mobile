@@ -1373,6 +1373,26 @@ test("legacy server state hint: unavailable room retains failed native shutdown 
   assert.equal(runtime.leaveRequests.at(-1).expectedMembershipGeneration, runtime.membershipGeneration);
 });
 
+for (const cancelCamera of [false, true]) {
+test(`legacy background resubscription preserves camera intent unless explicitly cancelled: ${cancelCamera}`, async (t) => {
+  const runtime = createLegacyMountedRuntime({ ownedAdmission: true, actualRecoveryPolicy: true, nativeBackgroundPolicy: true });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true,
+    restartDisconnectedSession: true, initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    analyticsContext: { surface: "chat-thread" } });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  await harness.run(() => runtime.emitAppState("background"));
+  await harness.run(() => channel.emitSubscriptionStatus("SUBSCRIBED"));
+  assert.equal(runtime.durableCamera, false, "stopped background capture must be projected Off");
+  if (cancelCamera) await harness.rerender({ initialMediaPreferences: { cameraEnabled: false, micEnabled: true } });
+  await harness.run(() => runtime.emitAppState("active"));
+  const liveVideo = [...new Set(runtime.localStreams.flatMap(stream => stream.getVideoTracks()))]
+    .filter(track => track.readyState === "live" && track.enabled);
+  assert.equal(liveVideo.length, Number(!cancelCamera), "resubscription cannot erase or override deliberate camera intent");
+  assert.equal(runtime.durableCamera, !cancelCamera);
+});
+}
+
 for (const outcome of ["recover", "explicit End", "new mute", "admission denied", "native stop failure", "account replacement"]) {
 test(`legacy background lease recovery: pending invisible-room read before foreground restart respects ${outcome}`, async (t) => {
   const runtime = createLegacyMountedRuntime({ ownedAdmission: true, actualRecoveryPolicy: true, nativeBackgroundPolicy: true });

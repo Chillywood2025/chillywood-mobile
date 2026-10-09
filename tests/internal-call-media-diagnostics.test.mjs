@@ -102,6 +102,41 @@ test("sequence is session-wide and monotonic clock receipts cannot regress", () 
   assert.ok(lines.slice(2).every(line => !Object.hasOwn(parsed(line), "uptime_ms")));
 });
 
+test("session recovery receipts allow only fixed states, booleans and a bounded process generation", () => {
+  const phases = ["session_restart_requested", "session_restart_started", "session_admission_result", "session_initialization_failed",
+    "room_snapshot_missing", "room_snapshot_ended", "signaling_subscription", "room_terminal_received"];
+  const { lines, report } = recorder();
+  const privateValue = "private-auth-membership-room-device-token";
+  for (const phase of phases) report(phase, {
+    sessionGeneration: 12, channelState: "live", subscriptionStatus: "SUBSCRIBED", recoveryTrigger: "app_foreground",
+    appState: "active", hasAdmission: true, isHost: false, recoverable: true, admitted: false,
+    membershipGeneration: privateValue, authority: privateValue, roomId: privateValue,
+    userId: privateValue, error: { name: privateValue, message: privateValue }, status: privateValue,
+  });
+  assert.deepEqual(lines.map(line => parsed(line).phase), phases);
+  for (const [index, line] of lines.entries()) {
+    assert.equal(line.includes(privateValue), false);
+    assert.deepEqual(parsed(line), {
+      version: 1, phase: phases[index], seq: index + 1, call_hash: "none", platform: "android", uptime_ms: 123,
+      recoverable: true, hasAdmission: true, isHost: false, admitted: false, appState: "active",
+      channelState: "live", subscriptionStatus: "SUBSCRIBED", recoveryTrigger: "app_foreground", sessionGeneration: 12,
+    });
+  }
+  for (const sessionGeneration of [-1, 1.5, 1_000_001, Infinity, NaN, privateValue]) {
+    report("room_snapshot_missing", { sessionGeneration, channelState: privateValue,
+      subscriptionStatus: privateValue, recoveryTrigger: privateValue, hasAdmission: privateValue });
+    const receipt = parsed(lines.at(-1));
+    for (const field of ["sessionGeneration", "channelState", "subscriptionStatus", "recoveryTrigger", "hasAdmission"]) {
+      assert.equal(Object.hasOwn(receipt, field), false);
+    }
+  }
+  for (const context of [{ ...internal, enabled: false }, { ...internal, channel: "production-v2" }]) {
+    const disabled = recorder(context);
+    for (const phase of phases) disabled.report(phase, { sessionGeneration: 1, recoverable: true });
+    assert.deepEqual(disabled.lines, []);
+  }
+});
+
 test("hostile getters and failing clocks, context readers or log sinks cannot escape", () => {
   const hostile = new Proxy({}, { get() { throw Error("private getter failure"); } });
   const { lines, report } = recorder();

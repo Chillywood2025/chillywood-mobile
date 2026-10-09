@@ -629,6 +629,10 @@ export function useCommunicationRoomSession({
       trigger,
     });
     if (!recovery) return false;
+    reportInternalCallMediaDiagnostic("session_restart_requested", {
+      sessionGeneration: expectedGeneration, recoveryTrigger: trigger,
+      appState: appStateRef.current, channelState: channelStateRef.current,
+    });
     legacySessionRestartRequestedGenerationRef.current = expectedGeneration;
     if (legacySessionRestartTimerRef.current) clearTimeout(legacySessionRestartTimerRef.current);
     legacySessionRestartTimerRef.current = setTimeout(() => {
@@ -641,6 +645,10 @@ export function useCommunicationRoomSession({
         generationIsCurrent: expectedGeneration === legacySessionGenerationRef.current,
         trigger,
       })) return;
+      reportInternalCallMediaDiagnostic("session_restart_started", {
+        sessionGeneration: expectedGeneration, recoveryTrigger: trigger,
+        appState: appStateRef.current, channelState: channelStateRef.current,
+      });
       channelStateRef.current = "connecting";
       setChannelState("connecting");
       setLoading(true);
@@ -1378,17 +1386,24 @@ export function useCommunicationRoomSession({
         roomId: resolvedRoomId,
       });
       const admitted = joinedMembershipRef.current;
-      if (formatRoomId(roomRef.current?.roomId ?? "") === resolvedRoomId
+      const hasAdmission = formatRoomId(roomRef.current?.roomId ?? "") === resolvedRoomId
         && admitted?.roomId === resolvedRoomId && admitted.membershipGeneration
-        && identityRef.current?.userId === admitted.userId) {
+        && identityRef.current?.userId === admitted.userId;
+      const recoverable = !!hasAdmission && restartDisconnectedSession
+        && roomRef.current?.hostUserId !== admitted?.userId;
+      reportInternalCallMediaDiagnostic("room_snapshot_missing", {
+        sessionGeneration: generation, hasAdmission: !!hasAdmission, recoverable,
+        isHost: !!admitted && roomRef.current?.hostUserId === admitted.userId,
+        appState: appStateRef.current, channelState: channelStateRef.current,
+      });
+      if (hasAdmission) {
         // A non-host loses room SELECT visibility after its membership lease
-        // expires. A queued background read can therefore return null before
-        // foreground re-admission even though this accepted call is active.
+        // expires. Socket resubscription can already mark the channel live
+        // when a queued read returns after foregrounding; neither observation
+        // renews that lease or proves that the accepted call has ended.
         // Retire this media owner without ending the peer's call; the existing
         // admission RPC must authorize recovery before any capture restarts.
-        if (restartDisconnectedSession && roomRef.current?.hostUserId !== admitted.userId
-          && (appStateRef.current !== "active"
-          || channelStateRef.current === "reconnecting")) {
+        if (recoverable) {
           const suspended = captureLeaveOperation({ recoverable: true });
           setError(suspended.stopNativeCapture()
             ? "Reconnecting this call after returning to the app…"
@@ -1411,6 +1426,9 @@ export function useCommunicationRoomSession({
     // overwrite newer room or membership truth.
     if (formatRoomId(snapshot.room.roomId) !== resolvedRoomId) return null;
     if (snapshot.room.status === "ended") {
+      reportInternalCallMediaDiagnostic("room_snapshot_ended", {
+        sessionGeneration: generation, appState: appStateRef.current, channelState: channelStateRef.current,
+      });
       roomRef.current = snapshot.room;
       setRoom(snapshot.room);
       // An empty server hint (or a post-subscribe read) cannot itself end a
@@ -2642,6 +2660,9 @@ export function useCommunicationRoomSession({
       }
       const joinedMembership = admissionResult.membership;
       if (!isActiveGeneration()) return;
+      reportInternalCallMediaDiagnostic("session_admission_result", {
+        sessionGeneration, admitted: !!joinedMembership, appState: appStateRef.current,
+      });
 
       joinedMembershipRef.current = joinedMembership;
       identityRef.current = resolvedIdentity;
@@ -3095,6 +3116,9 @@ export function useCommunicationRoomSession({
           roomId: snapshot.room.roomId,
           reason,
         });
+        reportInternalCallMediaDiagnostic("room_terminal_received", {
+          sessionGeneration, appState: appStateRef.current, channelState: channelStateRef.current,
+        });
         setError(reason === "host-left" ? "The host ended this communication room." : "This communication room has ended.");
         // The screen must still verify this exact capture/transport shutdown;
         // clearing the refs first would turn a failed stop into empty proof.
@@ -3104,6 +3128,10 @@ export function useCommunicationRoomSession({
 
       channel.subscribe(async (status, subscriptionError) => {
         if (!isActiveGeneration()) return;
+        reportInternalCallMediaDiagnostic("signaling_subscription", {
+          sessionGeneration, subscriptionStatus: status,
+          appState: appStateRef.current, channelState: channelStateRef.current,
+        });
 
         if (status === "SUBSCRIBED") {
           if (legacySessionRestartTimerRef.current) {
@@ -3146,6 +3174,12 @@ export function useCommunicationRoomSession({
               requestedCamera: cameraEnabledRef.current, requestedMic: micEnabledRef.current,
               provedCamera: provedCameraEnabled, provedMic: provedMicEnabled, appState: appStateRef.current,
             });
+            if (cameraEnabledRef.current && !provedCameraEnabled && appStateRef.current !== "active") {
+              // Resubscription can run after background privacy stopped the
+              // camera. Project Off to the peer without erasing the retained
+              // foreground request; explicit Camera Off still clears it.
+              deferredInitialCameraGenerationRef.current = sessionGeneration;
+            }
             if (cameraEnabledRef.current !== provedCameraEnabled
               && deferredInitialCameraGenerationRef.current !== sessionGeneration) {
               cameraEnabledRef.current = provedCameraEnabled;
@@ -3246,6 +3280,9 @@ export function useCommunicationRoomSession({
 
     void init().catch((error) => {
       if (!isActiveGeneration()) return;
+      reportInternalCallMediaDiagnostic("session_initialization_failed", {
+        sessionGeneration, appState: appStateRef.current, channelState: channelStateRef.current,
+      });
       logChatRtc("init_failed", {
         roomId,
         message: error instanceof Error ? error.message : "unknown_error",

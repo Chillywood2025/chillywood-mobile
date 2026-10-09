@@ -2,8 +2,15 @@ const PHASES = new Set([
   "initial_preferences", "initial_intent", "initial_permissions", "initial_projection",
   "capture_requested", "capture_received", "capture_failed",
   "automatic_mic_feedback_reserved", "automatic_mic_feedback_settled", "native_mic_feedback",
+  "session_restart_requested", "session_restart_started", "session_admission_result", "session_initialization_failed",
+  "room_snapshot_missing", "room_snapshot_ended", "signaling_subscription", "room_terminal_received",
 ]);
 const APP_STATES = new Set(["active", "background", "inactive", "unknown", "extension"]);
+const SESSION_ENUMS = {
+  channelState: new Set(["idle", "connecting", "live", "reconnecting", "error"]),
+  subscriptionStatus: new Set(["SUBSCRIBED", "CHANNEL_ERROR", "TIMED_OUT", "CLOSED"]),
+  recoveryTrigger: new Set(["app_foreground", "peer_disconnected", "peer_failed", "realtime_closed", "realtime_error", "realtime_timeout"]),
+};
 const PERMISSIONS = new Set(["granted", "denied", "restricted", "undetermined"]);
 const ERRORS = new Set([
   "Error", "TypeError", "DOMException", "NotAllowedError", "NotFoundError", "NotReadableError",
@@ -11,7 +18,8 @@ const ERRORS = new Set([
   "OperationError", "ConstraintNotSatisfiedError", "PermissionDeniedError", "DevicesNotFoundError", "TrackStartError",
 ]);
 const BOOLEANS = ["enabled", "requestedCamera", "requestedMic", "wantsCamera", "wantsMic",
-  "canUseCamera", "canUseMic", "backgroundAudioAllowed", "provedCamera", "provedMic"];
+  "canUseCamera", "canUseMic", "backgroundAudioAllowed", "provedCamera", "provedMic",
+  "recoverable", "hasAdmission", "isHost", "admitted"];
 const read = (value, key) => {
   try { return value && (typeof value === "object" || typeof value === "function") ? value[key] : undefined; }
   catch { return undefined; }
@@ -52,6 +60,16 @@ export function createInternalCallMediaDiagnosticReporter({ readContext, emit, n
       }
       const appState = read(input, "appState");
       if (APP_STATES.has(appState)) receipt.appState = appState;
+      for (const [field, values] of Object.entries(SESSION_ENUMS)) {
+        const value = read(input, field);
+        if (values.has(value)) receipt[field] = value;
+      }
+      // A bounded in-process lifecycle counter, never a durable membership,
+      // auth generation, account identifier, wall-clock timestamp or token.
+      const generation = read(input, "sessionGeneration");
+      if (Number.isSafeInteger(generation) && generation >= 0 && generation <= 1_000_000) {
+        receipt.sessionGeneration = generation;
+      }
       for (const field of ["cameraPermission", "micPermission"]) {
         const value = read(input, field);
         if (PERMISSIONS.has(value)) receipt[field] = value;
