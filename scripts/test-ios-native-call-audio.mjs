@@ -42,6 +42,7 @@ const markers = {
   RECORD_ACTIVATION: "private func recordCallKitAudioActivation() {",
   CURRENT_ACTIVATION: "private func hasCurrentCallKitAudioActivation(_ call: ActiveNativeCall) -> Bool {",
   RECOVER_AUDIO_READINESS: "private func recoveredAudioReadiness(_ event: [String: Any]) -> [String: Any] {",
+  COMPLETE_ANSWER: "private func completeAnswerOnMain(_ uuid: UUID, connected: Bool, reason: String) {",
   EMIT: "private func emit(type: String, call: ActiveNativeCall, reason: String? = nil) {",
 };
 function generated(source) {
@@ -152,6 +153,9 @@ try {
   runCase("activation-owner-authority-not-checked", mutateDeclaration(markers.CURRENT_ACTIVATION,
     "owner.authority == authority", "true"), false,
   "replacement persisted authority cannot inherit a previous owner's activation");
+  runCase("ringing-call-retains-activation-for-later-answer", mutateDeclaration(markers.RECORD_ACTIVATION,
+    "call.answered && call.presentationConfirmed", "call.presentationConfirmed"), false,
+  "activation cannot record a ringing call for a later Answer");
   runCase("activation-terminal-owner-accepted", mutateDeclaration(markers.CURRENT_ACTIVATION,
     "!isTerminalInvite(call.inviteId)", "true"), false,
   "terminal invite cannot retain native audio readiness");
@@ -167,7 +171,7 @@ try {
     cwd: root, timeout: 240_000, stdio: "inherit",
   });
   if (checkSource) {
-    console.log("Native audio declarations and twenty-seven mutations generated; Swift compilation/execution NOT RUN.");
+    console.log("Native audio declarations and twenty-eight mutations generated; Swift compilation/execution NOT RUN.");
   } else {
     execFileSync(process.execPath, ["scripts/test-ios-native-call-diagnostics.mjs"], {
       cwd: root, timeout: 180_000, stdio: "inherit",

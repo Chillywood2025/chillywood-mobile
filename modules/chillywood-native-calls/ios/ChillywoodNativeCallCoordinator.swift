@@ -1167,7 +1167,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     callKitAudioSessionActive = true
     callKitAudioActivationOwners.removeAll()
     guard let authority = persistedVoipAuthority() else { return }
-    for call in activeCalls.values where call.presentationConfirmed && call.presentationAuthority == authority {
+    for call in activeCalls.values where call.answered && call.presentationConfirmed && call.presentationAuthority == authority {
       callKitAudioActivationOwners[call.uuid] = (call.generation, authority)
     }
   }

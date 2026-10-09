@@ -85,6 +85,17 @@ public final class CXProvider {
   let configuration: CXProviderConfiguration
   init(configuration: CXProviderConfiguration) { self.configuration = configuration }
   func setDelegate(_ delegate: AnyObject, queue: DispatchQueue?) {}
+  func reportCall(with uuid: UUID, endedAt: Date, reason: CXCallEndedReason) {}
+}
+enum CXCallEndedReason { case failed }
+private final class CXAnswerCallAction {
+  let callUUID: UUID
+  var fulfilled = 0
+  var failed = 0
+  var onFulfill: (() -> Void)?
+  init(_ uuid: UUID) { callUUID = uuid }
+  func fulfill() { fulfilled += 1; onFulfill?() }
+  func fail() { failed += 1 }
 }
 private final class CXCallObserver {
   struct Call { let uuid: UUID; let hasEnded: Bool }
@@ -121,6 +132,8 @@ private final class CoordinatorProbe {
   var callKitAudioActivationOwners: [UUID: (generation: UUID, authority: NativeVoipAuthority)] = [:]
   var authority: NativeVoipAuthority? = audioAuthority
   var terminalInvites: Set<String> = []
+  var pendingAnswerActions: [UUID: CXAnswerCallAction] = [:]
+  var pendingAnswerTimeouts: [UUID: DispatchWorkItem] = [:]
   init(infoDictionary: [String: Any] = nativeAudioDiagnosticFlags) {
     audioSessionDiagnostics = ChillywoodNativeCallDiagnostics(infoDictionary: infoDictionary) {
       nativeAudioDiagnosticLines.append($0)
@@ -131,6 +144,15 @@ private final class CoordinatorProbe {
   let activeCallsDefaultsKey = "controlled-audio-active-calls"
   func persistedVoipAuthority() -> NativeVoipAuthority? { authority }
   func isTerminalInvite(_ inviteId: String) -> Bool { terminalInvites.contains(inviteId) }
+  func clearPendingAnswerEvent(_ uuid: UUID) {}
+  func endAnswerTransitionBackgroundTask(_ uuid: UUID) {}
+  func persistActiveCallDescriptors() {}
+  func markTerminalInvite(_ inviteId: String) { terminalInvites.insert(inviteId) }
+  func removeCall(_ uuid: UUID) -> ActiveNativeCall? {
+    callKitAudioActivationOwners.removeValue(forKey: uuid)
+    return activeCalls.removeValue(forKey: uuid)
+  }
+  func complete(_ uuid: UUID) { completeAnswerOnMain(uuid, connected: true, reason: "controlled_answer") }
   func isAudioReady(_ call: ActiveNativeCall) -> Bool { hasCurrentCallKitAudioActivation(call) }
   func recovered(_ call: ActiveNativeCall, claimedActive: Bool = true) -> [String: Any] {
     recoveredAudioReadiness(["type": "recovered", "callUuid": call.uuid.uuidString.lowercased(),
@@ -153,6 +175,7 @@ private final class CoordinatorProbe {
   // INSERT_RECORD_ACTIVATION
   // INSERT_CURRENT_ACTIVATION
   // INSERT_RECOVER_AUDIO_READINESS
+  // INSERT_COMPLETE_ANSWER
   // INSERT_EMIT
 }
 
@@ -376,6 +399,34 @@ coordinator.activeCalls[first.uuid] = sameUuidReplacement
 expect(coordinator.recovered(sameUuidReplacement)["audioSessionActive"] as? Bool == false,
   "persisted positive field is overwritten when native generation was replaced")
 coordinator.activeCalls[first.uuid] = first
+
+// Activation received while a call is only ringing is not that call's Answer
+// receipt. Execute the real Answer completion to prove a later state transition
+// cannot promote a retained ringing receipt into current media authority.
+do {
+  let ringing = makeCall("ringing-before-activation", answered: false)
+  coordinator.activeCalls = [ringing.uuid: ringing]
+  CXCallObserver.observedCalls = [.init(uuid: ringing.uuid, hasEnded: false)]
+  session.reset(); coordinator.clearEvents()
+  coordinator.provider(provider, didActivate: session)
+  expect(coordinator.callKitAudioActivationOwners.isEmpty,
+    "activation cannot record a ringing call for a later Answer")
+  let answer = CXAnswerCallAction(ringing.uuid)
+  answer.onFulfill = {
+    expect(coordinator.activeCalls[ringing.uuid]?.answered == true,
+      "production Answer stores answered ownership before fulfillment can activate audio")
+  }
+  coordinator.pendingAnswerActions[ringing.uuid] = answer
+  coordinator.complete(ringing.uuid)
+  expect(answer.fulfilled == 1 && answer.failed == 0,
+    "ringing transition executes successful production Answer completion")
+  expect(coordinator.recovered(ringing)["audioSessionActive"] as? Bool == false,
+    "later Answer cannot inherit activation received while ringing")
+  coordinator.provider(provider, didActivate: session)
+  expect(coordinator.recovered(ringing)["audioSessionActive"] as? Bool == true,
+    "fresh activation after fulfilled Answer grants current exact-call readiness")
+}
+CXCallObserver.observedCalls = [.init(uuid: first.uuid, hasEnded: false)]
 
 for invalidation in ["deactivation", "interruption"] {
   session.reset(); coordinator.clearEvents()
