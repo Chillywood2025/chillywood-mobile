@@ -849,11 +849,18 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       let callUuid = resolveCallUuid(input: input, fallbackInviteId: inviteId),
       let call = activeCalls[callUuid]
     else {
-      markTerminalInvite(inviteId)
+      // A conflicting UUID cannot tombstone an invite that another native
+      // descriptor still owns. Truly unknown invites retain cancel-before-ring
+      // ordering, without acquiring authority over an existing call.
+      if !activeCalls.values.contains(where: { $0.inviteId == inviteId }) {
+        markTerminalInvite(inviteId)
+      }
       completion()
       return
     }
-    guard call.inviteId == inviteId, call.threadId == threadId,
+    let suppliedCallUuid = toText(input["callUuid"])
+    guard suppliedCallUuid.isEmpty || UUID(uuidString: suppliedCallUuid) == callUuid,
+      call.inviteId == inviteId, call.threadId == threadId,
       call.callType == (input["callType"] as? String == "video" ? "video" : "voice"),
       call.presentationAuthority == persistedVoipAuthority()
     else {
