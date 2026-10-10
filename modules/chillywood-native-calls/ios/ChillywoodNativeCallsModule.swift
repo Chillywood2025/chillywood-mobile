@@ -67,6 +67,12 @@ public final class ChillywoodNativeCallsModule: Module {
       try ChillywoodNativeCallCoordinator.shared.reportRemoteEnd(callUuid: callUuid, reason: reason ?? "remote_end")
     }
 
+    AsyncFunction("hasPendingVoiceAnswerAsync") { (binding: [String: String]) async -> Bool in
+      await MainActor.run {
+        ChillywoodNativeCallCoordinator.shared.hasPendingVoiceAnswer(binding)
+      }
+    }
+
     AsyncFunction("completeAnswerAsync") { (callUuid: String, connected: Bool) in
       try ChillywoodNativeCallCoordinator.shared.completeAnswer(callUuid: callUuid, connected: connected)
     }

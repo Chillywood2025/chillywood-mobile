@@ -43,6 +43,7 @@ private final class AVAudioSession {
 
 private final class CXAnswerCallAction {
   let callUUID: UUID
+  var timeoutDate = Date().addingTimeInterval(20)
   var fulfilled = 0
   var failed = 0
   var operationsAtFulfill: [String] = []
@@ -83,6 +84,9 @@ private final class ChillywoodNativeCallDiagnostics {
 }
 
 private final class CoordinatorProbe {
+  var isBuildEnabled = true
+  var isRuntimeDefaultEnabled = true
+  var currentAuthority: NativeVoipAuthority?
   var activeCalls: [UUID: ActiveNativeCall] = [:]
   var callKitAudioActivationOwners: [UUID: (generation: UUID, authority: NativeVoipAuthority)] = [:]
   var pendingAnswerActions: [UUID: CXAnswerCallAction] = [:]
@@ -98,6 +102,8 @@ private final class CoordinatorProbe {
   func clearPendingAnswerEvent(_ uuid: UUID) { pendingAnswerEvents.remove(uuid) }
   func endAnswerTransitionBackgroundTask(_ uuid: UUID) { backgroundTasks.remove(uuid) }
   func markTerminalInvite(_ inviteId: String) { terminalInvites.insert(inviteId) }
+  func isTerminalInvite(_ inviteId: String) -> Bool { terminalInvites.contains(inviteId) }
+  func persistedVoipAuthority() -> NativeVoipAuthority? { currentAuthority }
   func settleIncomingReport(_ uuid: UUID, generation: UUID?, error: Error?) {}
   func settleRequestedAnswers(_ uuid: UUID, result: Result<Void, Error>) {}
   func emitRaw(_ event: [String: Any]) { events.append(event) }
@@ -109,6 +115,9 @@ private final class CoordinatorProbe {
   // INSERT_REMOVE_CALL
   // INSERT_PERSIST_CALLS
   // INSERT_EMIT
+  // INSERT_PENDING_VOICE_ANSWER
+  // INSERT_VALID_AUTHORITY
+  // INSERT_TO_TEXT
 }
 
 private var passed = 0
@@ -249,4 +258,77 @@ do {
   expectRetiredPending(coordinator, call, timeout)
 }
 
-print("Swift Answer audio: \(passed) checks PASS; actual completion/removal/persistence/event methods with controlled audio and CallKit receipts; OS activation and physical microphone/audio NOT TESTED")
+private func pendingVoiceFixture() -> (CoordinatorProbe, ActiveNativeCall, CXAnswerCallAction, [String: String]) {
+  let (coordinator, initialCall, action, _) = fresh()
+  let authority = NativeVoipAuthority(userId: UUID().uuidString.lowercased(), accountId: "", sessionGeneration: UUID().uuidString.lowercased(), installId: "controlled-install")
+  let current = NativeVoipAuthority(userId: authority.userId, accountId: authority.userId,
+    sessionGeneration: authority.sessionGeneration, installId: authority.installId)
+  var call = initialCall
+  call.presentationAuthority = current
+  coordinator.activeCalls[call.uuid] = call
+  coordinator.currentAuthority = current
+  let binding = ["callUuid": call.uuid.uuidString.lowercased(), "callInviteId": call.inviteId,
+    "threadId": call.threadId, "nativeCallGeneration": call.generation.uuidString.lowercased(),
+    "userId": current.userId, "accountId": current.accountId,
+    "sessionGeneration": current.sessionGeneration, "installId": current.installId]
+  return (coordinator, call, action, binding)
+}
+do {
+  let (coordinator, call, action, binding) = pendingVoiceFixture()
+  let before = operations
+  expect(coordinator.hasPendingVoiceAnswer(binding), "exact pending voice Answer is eligible without a foreground assertion")
+  expect(coordinator.hasPendingVoiceAnswer(binding), "duplicate read-only proof does not consume pending Answer")
+  expect(operations == before && action.fulfilled == 0 && action.failed == 0 && coordinator.pendingAnswerActions[call.uuid] === action,
+    "pending voice proof does not fulfill, capture, configure or mutate Answer ownership")
+  coordinator.complete(call.uuid, connected: true)
+  expect(!coordinator.hasPendingVoiceAnswer(binding), "fulfilled Answer cannot reuse pending voice authority")
+}
+for field in ["callUuid", "callInviteId", "threadId", "nativeCallGeneration", "userId", "accountId", "sessionGeneration", "installId"] {
+  let (coordinator, _, _, binding) = pendingVoiceFixture()
+  var wrong = binding
+  wrong[field] = UUID().uuidString.lowercased()
+  expect(!coordinator.hasPendingVoiceAnswer(wrong), "pending voice proof rejects mismatched \(field)")
+  wrong.removeValue(forKey: field)
+  expect(!coordinator.hasPendingVoiceAnswer(wrong), "pending voice proof rejects absent \(field)")
+}
+do {
+  let (coordinator, call, _, binding) = pendingVoiceFixture()
+  let previous = call.presentationAuthority!
+  let replacement = NativeVoipAuthority(userId: previous.userId, accountId: previous.accountId,
+    sessionGeneration: UUID().uuidString.lowercased(), installId: previous.installId)
+  coordinator.currentAuthority = replacement
+  var replacementBinding = binding
+  replacementBinding["sessionGeneration"] = replacement.sessionGeneration
+  expect(!coordinator.hasPendingVoiceAnswer(replacementBinding), "replacement session cannot borrow the previous presentation")
+}
+for state in ["build-disabled", "runtime-disabled", "no-authority", "replaced-authority", "unconfirmed", "answered", "video", "terminal", "no-call", "no-action", "wrong-action", "expired-action", "replacement-generation"] {
+  let (coordinator, call, action, binding) = pendingVoiceFixture()
+  switch state {
+  case "build-disabled": coordinator.isBuildEnabled = false
+  case "runtime-disabled": coordinator.isRuntimeDefaultEnabled = false
+  case "no-authority": coordinator.currentAuthority = nil
+  case "replaced-authority": coordinator.currentAuthority = NativeVoipAuthority(userId: call.presentationAuthority!.userId, accountId: call.presentationAuthority!.accountId, sessionGeneration: UUID().uuidString, installId: call.presentationAuthority!.installId)
+  case "unconfirmed": coordinator.activeCalls[call.uuid]?.presentationConfirmed = false
+  case "answered": coordinator.activeCalls[call.uuid]?.answered = true
+  case "video":
+    var other = ActiveNativeCall(uuid: call.uuid, inviteId: call.inviteId, threadId: call.threadId, callType: "video", ringingDeadline: nil, answered: false, timeoutWorkItem: nil, presentationConfirmed: true)
+    other.presentationAuthority = call.presentationAuthority
+    coordinator.activeCalls[call.uuid] = other
+    var videoBinding = binding
+    videoBinding["nativeCallGeneration"] = other.generation.uuidString.lowercased()
+    expect(!coordinator.hasPendingVoiceAnswer(videoBinding), "video cannot use pending voice authority")
+  case "terminal": coordinator.terminalInvites.insert(call.inviteId)
+  case "no-call": coordinator.activeCalls.removeValue(forKey: call.uuid)
+  case "no-action": coordinator.pendingAnswerActions.removeValue(forKey: call.uuid)
+  case "wrong-action": coordinator.pendingAnswerActions[call.uuid] = CXAnswerCallAction(UUID())
+  case "expired-action": action.timeoutDate = Date().addingTimeInterval(-1)
+  case "replacement-generation":
+    var replacement = ActiveNativeCall(uuid: call.uuid, inviteId: call.inviteId, threadId: call.threadId, callType: call.callType, ringingDeadline: nil, answered: false, timeoutWorkItem: nil, presentationConfirmed: true)
+    replacement.presentationAuthority = call.presentationAuthority
+    coordinator.activeCalls[call.uuid] = replacement
+  default: fatalError("unknown fixture")
+  }
+  expect(!coordinator.hasPendingVoiceAnswer(binding), "pending voice proof rejects \(state)")
+}
+
+print("Swift Answer audio: \(passed) checks PASS; actual completion/removal/persistence/event/pending-voice methods with controlled audio and CallKit receipts; OS activation and physical microphone/audio NOT TESTED")

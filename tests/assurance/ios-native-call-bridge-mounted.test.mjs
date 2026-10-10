@@ -34,7 +34,7 @@ const ids = {
 const nativeEvent = (type, extra = {}) => ({ type, callInviteId: ids.invite, callUuid: ids.uuid, threadId: ids.thread, callType: "video",
   nativeCallGeneration: "00000000-0000-4000-8000-000000000007", nativeSessionGeneration: ids.session, ...extra });
 
-async function mount(t, { realFacade = false, initialNativeEvents = [], persistedSameAuthority = true, controlledRetryTimers = false } = {}) {
+async function mount(t, { realFacade = false, initialNativeEvents = [], persistedSameAuthority = true, controlledRetryTimers = false, pendingVoiceAnswerAvailable = true } = {}) {
   let session = { user: { id: "user-a" }, authority: binding(), authorityStatus: "active" };
   let nativeListener;
   let reader = async () => ({ status: "ringing", threadId: "thread-a" });
@@ -156,6 +156,13 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
     const nativeModule = {
       isBuildEnabledAsync: async () => true,
       isApplicationActiveAsync: async () => applicationActive,
+      // Model only the native read boundary. Actual pending CXAnswerCallAction
+      // identity/expiry is exercised by the compiled native contract tests.
+      hasPendingVoiceAnswerAsync: async (value) => {
+        nativeSteps.push({ name: "pendingVoiceAnswer", binding: { ...value } });
+        return stageHandlers.has("os-pendingVoiceAnswer")
+          ? stageHandlers.get("os-pendingVoiceAnswer")(value) : false;
+      },
       addListener: (_name, listener) => {
         nativeLifecycleOrder.push("listen");
         nativeModuleListener = listener;
@@ -220,6 +227,7 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
       },
       completeTerminalTransitionAsync: async (uuid) => { nativeSteps.push({ name: "terminal", uuid }); },
     };
+    if (!pendingVoiceAnswerAvailable) delete nativeModule.hasPendingVoiceAnswerAsync;
     const imports = {
       "expo-constants": { default: { expoConfig: { extra: { runtime: { iosNativeCallsEnabled: true } } } } },
       "expo-application": { nativeApplicationVersion: "test", nativeBuildVersion: "test" },
@@ -788,6 +796,133 @@ for (const suspendedStage of ["thread", "presented", "rows"]) {
     assert.deepEqual(h.terminalSteps.map((step) => step.name), expectedSteps, "no further cleanup begins after ownership changes");
   });
 }
+
+test("locked pending native voice Answer routes through actual facade without fabricating foreground or media success", async (t) => {
+  const h = await mount(t, { realFacade: true });
+  h.setApplicationActive(false);
+  h.setStage("os-pendingVoiceAnswer", async (value) => {
+    assert.deepEqual({ ...value }, {
+      callUuid: ids.uuid, callInviteId: ids.invite, threadId: ids.thread,
+      nativeCallGeneration: nativeEvent("incoming").nativeCallGeneration,
+      userId: ids.user, accountId: ids.user, sessionGeneration: ids.session,
+      installId: "test-install",
+    });
+    return true;
+  });
+  await h.event(nativeEvent("incoming", { callType: "voice" }));
+  await h.event(nativeEvent("answerRequested", { callType: "voice" }));
+  assert.equal(h.routes.length, 1, "a still-pending exact native voice Answer can route while the application remains inactive");
+  assert.ok(h.nativeSteps.some(step => step.name === "pendingVoiceAnswer"));
+  assert.equal(h.nativeSteps.some(step => step.name === "answer"), false, "route readiness cannot complete or fail the native Answer itself");
+  assert.equal(h.facade.readIosNativeApplicationActiveSerial(ids.invite), 0, "no foreground receipt was fabricated");
+  const destination = new URL(h.routes[0], "https://test.invalid");
+  const expected = {
+    action: "answer", authenticatedUserId: ids.user, claimId: destination.searchParams.get("nativeCallClaim"),
+    inviteId: ids.invite, nativeIdentity: ids.uuid, platform: "ios", source: "ios_callkit_native_event", threadId: ids.thread,
+  };
+  assert.equal(provenance.consumeNativeCallTransitionClaim(expected)?.consumed, true);
+  assert.equal(provenance.consumeNativeCallTransitionClaim(expected), null, "routing preserves one-use native claim ownership");
+});
+
+for (const nativeProof of ["denied", "unavailable", "rejected"]) {
+  test(`locked voice Answer cannot bypass foreground when native proof is ${nativeProof}`, async (t) => {
+    const h = await mount(t, { realFacade: true, pendingVoiceAnswerAvailable: nativeProof !== "unavailable" });
+    h.setApplicationActive(false);
+    h.setStage("os-pendingVoiceAnswer", async () => {
+      if (nativeProof === "rejected") throw new Error("native proof unavailable");
+      return false;
+    });
+    await h.event(nativeEvent("incoming", { callType: "voice" }));
+    await h.event(nativeEvent("answerRequested", { callType: "voice" }));
+    assert.equal(h.routes.length, 0);
+    assert.deepEqual(h.nativeSteps.filter(step => step.name === "answer").map(step => step.connected), [false]);
+    assert.equal(h.facade.readIosNativeApplicationActiveSerial(ids.invite), 0);
+  });
+}
+
+test("locked video Answer keeps foreground requirement even if a native voice proof would return true", async (t) => {
+  const h = await mount(t, { realFacade: true });
+  h.setApplicationActive(false);
+  h.setStage("os-pendingVoiceAnswer", async () => true);
+  await h.event(nativeEvent("incoming"));
+  await h.event(nativeEvent("answerRequested"));
+  assert.equal(h.routes.length, 0);
+  assert.equal(h.nativeSteps.some(step => step.name === "pendingVoiceAnswer"), false, "video never requests a voice exception");
+  assert.deepEqual(h.nativeSteps.filter(step => step.name === "answer").map(step => step.connected), [false]);
+});
+
+test("foreground voice Answer still routes on an older native binary without the optional proof API", async (t) => {
+  const h = await mount(t, { realFacade: true, pendingVoiceAnswerAvailable: false });
+  await h.event(nativeEvent("incoming", { callType: "voice" }));
+  await h.event(nativeEvent("answerRequested", { callType: "voice" }));
+  assert.equal(h.routes.length, 1);
+  assert.equal(h.nativeSteps.some(step => step.name === "answer"), false);
+});
+
+for (const replacement of ["account", "terminal", "uuid", "native-generation"]) {
+  test(`locked pending voice proof cannot route after ${replacement} changes during its await`, async (t) => {
+    const h = await mount(t, { realFacade: true });
+    h.setApplicationActive(false);
+    const pending = deferred();
+    let reads = 0;
+    h.setStage("os-pendingVoiceAnswer", async () => { reads += 1; return pending.promise; });
+    await h.event(nativeEvent("incoming", { callType: "voice" }));
+    h.emitWithoutWaiting(nativeEvent("answerRequested", { callType: "voice" }));
+    await settle();
+    assert.equal(reads, 1, "hold the actual native-proof await before replacing its owner");
+    if (replacement === "account") {
+      await h.rerender({ authority: { ...binding("session-b"), userId: ids.user, accountId: ids.user } });
+    } else if (replacement === "terminal") {
+      h.emitWithoutWaiting(nativeEvent("remoteEnded", { callType: "voice" }));
+    } else {
+      // A different generation is authoritative only on a fresh incoming
+      // event. A recovered mismatched-generation receipt is rejected as stale.
+      h.emitWithoutWaiting(nativeEvent(replacement === "native-generation" ? "incoming" : "recovered", {
+        callType: "voice",
+        ...(replacement === "uuid" ? { callUuid: ids.replacementUuid }
+          : { nativeCallGeneration: "00000000-0000-4000-8000-000000000008" }),
+      }));
+    }
+    await settle();
+    await h.resolve(pending, true);
+    await h.flush();
+    assert.equal(h.routes.length, 0, "late positive native proof cannot authorize a retired call owner");
+    assert.equal(h.nativeSteps.some(step => step.name === "answer"), false, "retired work cannot complete or fail the replacement's Answer");
+  });
+}
+
+test("locked pending voice Answer cannot reuse a replacement generation after the app becomes foreground", async (t) => {
+  const h = await mount(t, { realFacade: true });
+  h.setApplicationActive(false);
+  const pending = deferred();
+  let reads = 0;
+  h.setStage("os-pendingVoiceAnswer", async () => { reads += 1; return pending.promise; });
+  await h.event(nativeEvent("incoming", { callType: "voice" }));
+  h.emitWithoutWaiting(nativeEvent("answerRequested", { callType: "voice" }));
+  await settle();
+  assert.equal(reads, 1);
+  h.emitWithoutWaiting(nativeEvent("incoming", {
+    callType: "voice", nativeCallGeneration: "00000000-0000-4000-8000-000000000008",
+  }));
+  await settle();
+  h.setApplicationActive(true);
+  await h.resolve(pending, true);
+  await h.flush();
+  assert.equal(h.routes.length, 0, "foreground fallback cannot grant the retired generation a new route");
+  assert.equal(h.nativeSteps.some(step => step.name === "answer"), false, "retired work cannot fail the replacement's Answer");
+});
+
+test("duplicate locked native voice Answer delivery creates only one route and no fabricated activation", async (t) => {
+  const h = await mount(t, { realFacade: true });
+  h.setApplicationActive(false);
+  h.setStage("os-pendingVoiceAnswer", async () => true);
+  await h.event(nativeEvent("incoming", { callType: "voice" }));
+  await h.event(nativeEvent("answerRequested", { callType: "voice" }));
+  await h.event(nativeEvent("answerRequested", { callType: "voice" }));
+  assert.equal(h.routes.length, 1);
+  assert.equal(h.facade.readIosNativeApplicationActiveSerial(ids.invite), 0);
+  assert.equal(h.nativeSteps.some(step => step.name === "answer"), false);
+});
 
 test("actual native facade, mounted bridge, and provenance deliver one consumable Answer route", async (t) => {
   const h = await mount(t, { realFacade: true });

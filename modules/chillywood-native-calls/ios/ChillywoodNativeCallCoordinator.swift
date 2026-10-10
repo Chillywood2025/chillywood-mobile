@@ -930,6 +930,30 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     }
   }
 
+  public func hasPendingVoiceAnswer(_ binding: [String: String]) -> Bool {
+    dispatchPrecondition(condition: .onQueue(.main))
+    // A real CallKit voice Answer can arrive while the phone remains locked.
+    // This grants only the exact pending handoff, not media or foreground UI
+    // authority. Answer completion and CallKit audio activation remain separate.
+    guard isBuildEnabled, isRuntimeDefaultEnabled,
+      let uuid = UUID(uuidString: toText(binding["callUuid"])),
+      let generation = UUID(uuidString: toText(binding["nativeCallGeneration"])),
+      let authority = persistedVoipAuthority(), isValidVoipAuthority(authority),
+      authority.userId == toText(binding["userId"]),
+      authority.accountId == toText(binding["accountId"]),
+      authority.sessionGeneration == toText(binding["sessionGeneration"]),
+      authority.installId == toText(binding["installId"]),
+      let call = activeCalls[uuid], call.presentationConfirmed, !call.answered,
+      call.generation == generation, call.presentationAuthority == authority,
+      call.inviteId == toText(binding["callInviteId"]),
+      call.threadId == toText(binding["threadId"]), call.callType == "voice",
+      !isTerminalInvite(call.inviteId),
+      let action = pendingAnswerActions[uuid], action.callUUID == uuid,
+      action.timeoutDate > Date()
+    else { return false }
+    return true
+  }
+
   public func completeAnswer(callUuid: String, connected: Bool) throws {
     guard let uuid = UUID(uuidString: callUuid) else { throw ChillywoodNativeCallError.invalidCallUuid }
     DispatchQueue.main.async { [weak self] in

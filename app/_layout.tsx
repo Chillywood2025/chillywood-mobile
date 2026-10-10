@@ -1495,7 +1495,7 @@ function IosNativeCallsBridge() {
       }
       if (event.type === "answerRequested") {
         const navigationReady = await waitForIosNativeCallAnswerRouteReadiness(event);
-        if (!ownsAuthority()) return;
+        if (!ownsAuthority() || navigationReady === "stale") return;
         if (!navigationReady) {
           await completeIosNativeCallAnswer(String(event.callUuid ?? "").trim(), false).catch(() => false);
           return;
