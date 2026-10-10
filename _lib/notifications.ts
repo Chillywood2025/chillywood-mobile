@@ -2276,12 +2276,40 @@ async function registerCurrentPushProvidersWithDeadline(
   const registration = (async () => {
     const authority = await readCurrentPushSessionBinding();
     if (!authority) throw new Error("Push registration requires an active session binding.");
-    const token = await Notifications.getExpoPushTokenAsync({ projectId });
-    const rawToken = normalizeText(token.data);
-    if (!rawToken) throw new Error("Expo returned an empty push token.");
-    const expoResult = await registerPushTokenWithBackend({ authority, permissionStatus: permissionState, provider: "expo", token: rawToken });
-    const nativeResult = await registerAndroidNativeFcmToken(permissionState, authority);
-    return mergeAndroidPushRegistrationResults(expoResult, nativeResult);
+    if (Platform.OS === "android") {
+      // Both providers must reuse one installation identity even on first run.
+      await getNotificationInstallId();
+      await getNotificationRevocationCredential();
+    }
+    const expoRegistration = (async () => {
+      const token = await Notifications.getExpoPushTokenAsync({ projectId });
+      const rawToken = normalizeText(token.data);
+      if (!rawToken) throw new Error("Expo returned an empty push token.");
+      return registerPushTokenWithBackend({ authority, permissionStatus: permissionState, provider: "expo", token: rawToken });
+    })();
+    if (Platform.OS !== "android") return expoRegistration;
+
+    // Expo availability must not prevent native Android call registration, or
+    // hold a verified provider's result behind the other provider's network.
+    // Late completions retain registerPushTokenWithBackend's ownership checks.
+    return new Promise<PushRegistrationState>((resolve) => {
+      let expoResult = fallback;
+      let nativeResult: PushRegistrationState | null = null;
+      let remaining = 2;
+      const settle = () => {
+        remaining -= 1;
+        const result = mergeAndroidPushRegistrationResults(expoResult, nativeResult);
+        if (result.status === "registered" || remaining === 0) resolve(result);
+      };
+      void expoRegistration.catch(() => fallback).then((result) => {
+        expoResult = result;
+        settle();
+      });
+      void registerAndroidNativeFcmToken(permissionState, authority).catch(() => null).then((result) => {
+        nativeResult = result;
+        settle();
+      });
+    });
   })();
 
   // Permission prompts remain user-controlled. Once permission is settled, the

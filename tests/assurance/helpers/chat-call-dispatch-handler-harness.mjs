@@ -169,8 +169,14 @@ export function createCallDispatchHarness(options = {}) {
       }
       return response(status === 200 ? {} : { reason: options.apnsReason ?? "InternalServerError" }, status, { "apns-id": "test-provider-message" });
     }
-    if (address === "https://oauth2.googleapis.com/token") return response({ access_token: "test-oauth-result", expires_in: 3600 });
+    if (address === "https://oauth2.googleapis.com/token") {
+      if (options.fcmOAuthTransportError) throw new TypeError("controlled OAuth fetch failure");
+      return options.fcmOAuthFailure
+        ? response({ error: "temporarily_unavailable" }, 503)
+        : response({ access_token: "test-oauth-result", expires_in: 3600 });
+    }
     if (address === "https://fcm.googleapis.com/v1/projects/test-project/messages:send") {
+      if (options.fcmTransportError) throw new TypeError("controlled FCM fetch failure with private-provider-detail");
       return options.fcmFailure
         ? response({ error: { status: "UNAVAILABLE" } }, 503)
         : response({ name: "projects/test-project/messages/test-message" });

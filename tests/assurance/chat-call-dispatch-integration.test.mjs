@@ -68,6 +68,66 @@ test("dispatch chain: failed FCM uses Android ordinary fallback while retaining 
   assert.equal(h.tables.notification_delivery_attempts.some((attempt) => attempt.provider === "fcm" && attempt.status === "failed"), true);
 });
 
+for (const failure of ["fcmTransportError", "fcmOAuthTransportError", "fcmOAuthFailure"]) {
+  test(`dispatch chain: ${failure} preserves Android fallback and repeat dedupe`, async () => {
+    const options = { [failure]: true, voipToken: false, pushTokens: [androidFcm, androidExpo] };
+    const h = createCallDispatchHarness(options);
+    const first = await h.dispatch();
+    assert.equal(first.status, 200);
+    assert.equal(first.body.channels.androidNative.failedCount, 1);
+    assert.equal(first.body.channels.androidNative.pushSent, false);
+    assert.equal(first.body.channels.androidNative.reason, "fcm_transport_unavailable");
+    assert.equal(first.body.channels.ordinaryPush.pushSent, true);
+    assert.equal(first.body.result.pushSent, true);
+    assert.equal(sends(h, "/push/send").length, 1);
+    const attempts = h.tables.notification_delivery_attempts;
+    assert.equal(attempts.filter((a) => a.provider === "fcm" && a.status === "failed").length, 1);
+    assert.equal(attempts.filter((a) => a.provider === "expo" && a.status === "sent").length, 1);
+    assert.equal(h.tables.user_push_tokens.every((token) => token.enabled), true,
+      "transport/auth service errors do not prove a permanently invalid token");
+    assert.equal(JSON.stringify({ attempts, response: first }).includes("private-provider-detail"), false);
+
+    options[failure] = false;
+    const fcmBeforeRetry = sends(h, "fcm.googleapis.com").length;
+    const expoBeforeRetry = sends(h, "/push/send").length;
+    const retry = await h.dispatch();
+    assert.equal(retry.status, 200);
+    assert.equal(retry.body.channels.androidNative.reason, "duplicate_prevented");
+    assert.equal(retry.body.channels.ordinaryPush.reason, "duplicate_prevented");
+    assert.equal(retry.body.result.pushSent, false);
+    assert.equal(sends(h, "fcm.googleapis.com").length, fcmBeforeRetry);
+    assert.equal(sends(h, "/push/send").length, expoBeforeRetry,
+      "recovering the provider does not duplicate the fallback already sent for this invite");
+    assert.equal(h.tables.notifications.length, 1);
+    assert.equal(h.tables.notification_event_dedupes.length, 1);
+    assert.equal(attempts.length, 2);
+  });
+}
+
+test("dispatch chain: unconfirmed FCM transport and failed fallback never claim delivery or replay", async () => {
+  const options = { fcmTransportError: true, expoFailure: true, inAppEnabled: false,
+    voipToken: false, pushTokens: [androidFcm, androidExpo] };
+  const h = createCallDispatchHarness(options);
+  const first = await h.dispatch();
+  assert.equal(first.status, 200);
+  assert.equal(first.body.result.status, "failed");
+  assert.equal(first.body.result.pushSent, false);
+  assert.equal(first.body.channels.androidNative.failedCount, 1);
+  assert.equal(first.body.channels.ordinaryPush.failedCount, 1);
+  assert.equal(h.tables.notifications.length, 0);
+  assert.equal(h.tables.notification_delivery_attempts.length, 2);
+  options.fcmTransportError = false;
+  options.expoFailure = false;
+  const fcmBeforeRetry = sends(h, "fcm.googleapis.com").length;
+  const expoBeforeRetry = sends(h, "/push/send").length;
+  const retry = await h.dispatch();
+  assert.equal(retry.body.result.pushSent, false);
+  assert.equal(retry.body.channels.androidNative.reason, "duplicate_prevented");
+  assert.equal(sends(h, "fcm.googleapis.com").length, fcmBeforeRetry);
+  assert.equal(sends(h, "/push/send").length, expoBeforeRetry,
+    "a lost FCM response can hide acceptance; do not erase dedupe and replay automatically");
+});
+
 for (const options of [
   { apnsTransportError: true, reason: "provider_failed" },
   { iosUnavailable: true, reason: "ios_voip_dispatch_unavailable" },

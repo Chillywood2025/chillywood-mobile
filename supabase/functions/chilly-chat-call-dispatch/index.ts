@@ -801,7 +801,17 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
         ttlSeconds: input.action === "incoming"
           ? resolveChillyChatIncomingPushTtlSeconds(input.invite.expires_at)
           : 300,
-      });
+      }).catch(() => ({
+        // OAuth or fetch failures must not abort the other delivery channels.
+        // An unavailable response is not permanent token invalidation; retain
+        // the invite dedupe because FCM may have accepted the request before
+        // its response was lost.
+        body: { error: "FCM request outcome unavailable." },
+        errorCode: "fcm_transport_unavailable",
+        ok: false,
+        providerMessageId: null,
+        status: 0,
+      }));
       const sent = pushResult.ok;
       if (sent) androidSent += 1;
       else androidFailed += 1;
