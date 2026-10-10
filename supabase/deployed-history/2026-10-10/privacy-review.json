@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "scope": "Only version/name/exact SQL strings, source mapping, hashes and observation metadata are archived.",
+  "allArchivedStatementsEqualAlreadyCommittedSourceBytes": true,
+  "excluded": [
+    "Provider/DB credentials",
+    "User rows",
+    "Actor metadata",
+    "Raw production query responses",
+    "Private filesystem paths",
+    "Provider payloads"
+  ],
+  "newSecretOrPersonalDataAdded": false,
+  "wholeDatabaseDataAuditClaim": false
+}
