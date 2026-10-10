@@ -42,6 +42,7 @@ import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { SPECTATOR_LIFECYCLE_REFRESH_MS } from "../../_lib/performancePolicy";
 import { useSession } from "../../_lib/session";
+import { sameAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
 import { useNotificationViewTracking } from "../../_lib/useNotificationViewTracking";
 import { notificationPlaybackRecordId } from "../../_lib/notificationViewProgress.mjs";
 import { SUPABASE_URL } from "../../_lib/supabase";
@@ -66,7 +67,7 @@ const getPrimaryActorId = (item: DiscoveryFeedItem) =>
 const uniqueLiveItems = (initial: DiscoveryFeedItem, ranked: DiscoveryFeedItem[]) => {
   const seen = new Set<string>();
   return [initial, ...ranked]
-    .filter((item) => item.live_state === "live")
+    .filter((item) => item.live_state === "live" && item.source_type !== "live_stage_room")
     .filter((item) => {
       const id = String(item.id ?? "").trim();
       if (!id || seen.has(id)) return false;
@@ -172,13 +173,15 @@ export default function ImmersiveLiveSpectatorScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const { isSignedIn } = useSession();
+  const { isSignedIn, authority, authorityStatus } = useSession();
   const params = useLocalSearchParams<{
     itemId?: string | string[];
     lane?: string | string[];
   }>();
   const initialItemId = normalizeParam(params.itemId);
   const lane: AccessLane = normalizeParam(params.lane) === "circle" ? "circle" : "public";
+  const currentOwnerRef = useRef({ initialItemId, lane, authority, authorityStatus });
+  currentOwnerRef.current = { initialItemId, lane, authority, authorityStatus };
 
   const [items, setItems] = useState<DiscoveryFeedItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -197,12 +200,16 @@ export default function ImmersiveLiveSpectatorScreen() {
 
   const loadLiveItems = useCallback(async (showLoading = false) => {
     const generation = ++liveLoadGenerationRef.current;
+    const current = () => generation === liveLoadGenerationRef.current
+      && currentOwnerRef.current.initialItemId === initialItemId && currentOwnerRef.current.lane === lane
+      && currentOwnerRef.current.authorityStatus === authorityStatus
+      && (authority ? sameAccountSessionAuthority(authority, currentOwnerRef.current.authority) : !currentOwnerRef.current.authority);
     if (showLoading) setLoading(true);
     setUnavailable(false);
 
     try {
       if (!initialItemId) {
-        if (generation !== liveLoadGenerationRef.current) return;
+        if (!current()) return;
         setItems([]);
         setActiveIndex(0);
         setSheetItem(null);
@@ -214,9 +221,9 @@ export default function ImmersiveLiveSpectatorScreen() {
       const initial = lane === "circle"
         ? await readCircleSpectatorFeedItem(initialItemId).catch(() => null)
         : await readPublicDiscoveryFeedItem(initialItemId).catch(() => null);
-      if (generation !== liveLoadGenerationRef.current) return;
+      if (!current()) return;
 
-      if (!initial || initial.live_state !== "live" || (lane === "circle") !== isCircleItem(initial)) {
+      if (!initial || initial.id !== initialItemId || initial.live_state !== "live" || (lane === "circle") !== isCircleItem(initial)) {
         setItems([]);
         setActiveIndex(0);
         setSheetItem(null);
@@ -225,10 +232,18 @@ export default function ImmersiveLiveSpectatorScreen() {
         return;
       }
 
+      if (initial.source_type === "live_stage_room") {
+        // Old direct links must take the same fresh session/projection checks
+        // as discovery cards; this HLS screen never grants a stage role.
+        setItems([]);
+        router.replace({ pathname: "/spectate/[itemId]", params: { itemId: initialItemId } });
+        return;
+      }
+
       const ranked = lane === "circle"
         ? await readRankedCircleSpectatorFeedItems({ limit: 50 }).catch(() => ({ items: [] }))
         : await readRankedPublicDiscoveryFeedItems({ limit: 50, surface: "home" }).catch(() => ({ items: [] }));
-      if (generation !== liveLoadGenerationRef.current) return;
+      if (!current()) return;
 
       const nextItems = uniqueLiveItems(initial, ranked.items);
       setItems(nextItems);
@@ -236,9 +251,9 @@ export default function ImmersiveLiveSpectatorScreen() {
       setSheetItem((current) => current ? nextItems.find((item) => item.id === current.id) ?? null : null);
       setUnavailable(nextItems.length === 0);
     } finally {
-      if (generation === liveLoadGenerationRef.current) setLoading(false);
+      if (current()) setLoading(false);
     }
-  }, [initialItemId, lane]);
+  }, [initialItemId, lane, authority, authorityStatus, router]);
 
   useFocusEffect(
     useCallback(() => {

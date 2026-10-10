@@ -45,7 +45,7 @@ import {
     type CreatorVideo,
 } from "../../_lib/creatorVideos";
 import { readCreatorRelationshipFeedVideos } from "../../_lib/creatorFeed";
-import { readRankedCircleSpectatorFeedItems } from "../../_lib/circleSpectatorFeed";
+import { useLiveDiscoveryFeed } from "../../_lib/useLiveDiscoveryFeed";
 import { RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
 import { readProfilePosts, type ProfilePost } from "../../_lib/profilePosts";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
@@ -55,12 +55,9 @@ import {
     getDiscoveryItemDestination,
     getDiscoveryLiveLabel,
     getDiscoveryRankingReasonLabel,
-    rankDiscoveryFeedItems,
-    readRankedPublicDiscoveryFeedItems,
     scoreCircleSpectatorFeedItem,
     scoreDiscoveryFeedItem,
     type DiscoveryFeedItem,
-    type DiscoveryFeedRankingSignals,
 } from "../../_lib/discoveryFeed";
 import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
@@ -218,6 +215,8 @@ const formatCreatorEventMode = (event: CreatorEventSummary) => {
 };
 
 export default function HomeScreen() {
+  const discovery = useLiveDiscoveryFeed({ surface: "home", includeCircle: true, limit: 24 });
+  const liveDiscovery = useLiveDiscoveryFeed({ surface: "home", includeCircle: true, liveOnly: true, limit: 8 });
   const safeAreaInsets = useSafeAreaInsets();
   const bottomTabBarHeight = useBottomTabBarHeight();
   const homeDiscoveryLoadGenerationRef = useRef(0);
@@ -231,21 +230,22 @@ export default function HomeScreen() {
   const [currentChannel, setCurrentChannel] = useState<UserChannelProfile | null>(null);
   const [watchProgress, setWatchProgress] = useState<WatchProgressMap>({});
   const [, setHomeActiveTitleRoomCount] = useState(0);
-  const [homeLiveEvents, setHomeLiveEvents] = useState<CreatorEventSummary[]>([]);
   const [homeUpcomingEvents, setHomeUpcomingEvents] = useState<CreatorEventSummary[]>([]);
   const [followedFeedVideos, setFollowedFeedVideos] = useState<CreatorVideo[]>([]);
   const [circleFeedVideos, setCircleFeedVideos] = useState<CreatorVideo[]>([]);
   const [followedFeedPosts, setFollowedFeedPosts] = useState<ProfilePost[]>([]);
   const [circleFeedPosts, setCircleFeedPosts] = useState<ProfilePost[]>([]);
-  const [circleSpectatorItems, setCircleSpectatorItems] = useState<DiscoveryFeedItem[]>([]);
+  const circleSpectatorItems = discovery.circleItems;
   const [rachiOfficialPosts, setRachiOfficialPosts] = useState<ProfilePost[]>([]);
   const [rachiOriginals, setRachiOriginals] = useState<CreatorVideo[]>([]);
   const [rachiOfficialAvatarUrl, setRachiOfficialAvatarUrl] = useState("");
-  const [homeDiscoveryItems, setHomeDiscoveryItems] = useState<DiscoveryFeedItem[]>([]);
-  const [homeDiscoverySignals, setHomeDiscoverySignals] = useState<DiscoveryFeedRankingSignals>({});
-  const [circleSpectatorSignals, setCircleSpectatorSignals] = useState<DiscoveryFeedRankingSignals>({});
-  const [homeDiscoveryLoading, setHomeDiscoveryLoading] = useState(true);
-  const [homeDiscoveryError, setHomeDiscoveryError] = useState<string | null>(null);
+  const homeDiscoveryItems = discovery.publicItems;
+  const homeDiscoverySignals = discovery.signals;
+  const circleSpectatorSignals = discovery.signals;
+  const [otherDiscoveryLoading, setHomeDiscoveryLoading] = useState(true);
+  const [otherDiscoveryError, setHomeDiscoveryError] = useState<string | null>(null);
+  const homeDiscoveryLoading = otherDiscoveryLoading || discovery.loading || liveDiscovery.loading;
+  const homeDiscoveryError = otherDiscoveryError ?? discovery.error ?? liveDiscovery.error;
   const homeConfig = resolveHomeConfig(appConfig);
   const featureConfig = resolveFeatureConfig(appConfig);
   const canShowContinueWatching = featureConfig.continueWatchingEnabled && homeConfig.enabledRails.continue_watching;
@@ -360,20 +360,8 @@ export default function HomeScreen() {
     setHomeDiscoveryError(null);
 
     try {
-      const [publicEvents, rankedDiscovery, rankedCircleSpectator, officialPosts, officialOriginals, officialProfile] = await Promise.all([
+      const [publicEvents, officialPosts, officialOriginals, officialProfile] = await Promise.all([
         readLatestPublicEventSummaries({ limit: 24 }).catch(() => [] as CreatorEventSummary[]),
-        readRankedPublicDiscoveryFeedItems({ surface: "home", limit: 24 }).catch(() => ({
-          items: [] as DiscoveryFeedItem[],
-          signals: {} as DiscoveryFeedRankingSignals,
-          generatedAt: new Date().toISOString(),
-          viewerSpecific: false,
-        })),
-        readRankedCircleSpectatorFeedItems({ limit: 16 }).catch(() => ({
-          items: [] as DiscoveryFeedItem[],
-          signals: {} as DiscoveryFeedRankingSignals,
-          generatedAt: new Date().toISOString(),
-          viewerSpecific: true as const,
-        })),
         readProfilePosts(RACHI_OFFICIAL_ACCOUNT.userId, { includeDrafts: false, limit: 3 }).catch(() => [] as ProfilePost[]),
         readCreatorVideos(RACHI_OFFICIAL_ACCOUNT.userId, { includeDrafts: false, limit: 12 }).catch(() => [] as CreatorVideo[]),
         readUserProfileByUserId(RACHI_OFFICIAL_ACCOUNT.userId).catch(() => null),
@@ -385,7 +373,6 @@ export default function HomeScreen() {
 
       if (generation !== homeDiscoveryLoadGenerationRef.current) return;
 
-      setHomeLiveEvents(publicEvents.filter((event) => event.isLiveNow).slice(0, 8));
       setHomeUpcomingEvents(publicEvents.filter((event) => event.isUpcoming).slice(0, 8));
       setRachiOfficialPosts(officialPosts);
       setRachiOriginals(officialOriginals);
@@ -394,13 +381,8 @@ export default function HomeScreen() {
       setCircleFeedVideos(circleFeed?.videos ?? []);
       setFollowedFeedPosts(followedFeed?.profilePosts ?? []);
       setCircleFeedPosts(circleFeed?.profilePosts ?? []);
-      setCircleSpectatorItems(rankedCircleSpectator.items);
-      setHomeDiscoverySignals(rankedDiscovery.signals);
-      setCircleSpectatorSignals(rankedCircleSpectator.signals);
-      setHomeDiscoveryItems(rankDiscoveryFeedItems(rankedDiscovery.items, rankedDiscovery.signals));
     } catch {
       if (generation !== homeDiscoveryLoadGenerationRef.current) return;
-      setHomeLiveEvents([]);
       setHomeUpcomingEvents([]);
       setRachiOfficialPosts([]);
       setRachiOriginals([]);
@@ -409,10 +391,6 @@ export default function HomeScreen() {
       setCircleFeedVideos([]);
       setFollowedFeedPosts([]);
       setCircleFeedPosts([]);
-      setCircleSpectatorItems([]);
-      setHomeDiscoveryItems([]);
-      setHomeDiscoverySignals({});
-      setCircleSpectatorSignals({});
       setHomeDiscoveryError("Discovery feed is unavailable right now.");
     } finally {
       if (generation === homeDiscoveryLoadGenerationRef.current) setHomeDiscoveryLoading(false);
@@ -458,6 +436,8 @@ export default function HomeScreen() {
       fetchWatchProgress(),
       fetchHomeActiveTitleRoomCount(),
       fetchDiscoveryFeedV1(),
+      discovery.reload(),
+      liveDiscovery.reload(),
     ]);
     if (result.timedOut) setError((existing) => existing ?? HOME_LOAD_TIMEOUT_MESSAGE);
     setRefreshing(false);
@@ -576,19 +556,19 @@ export default function HomeScreen() {
 
   const homeAvatarInitial = String(currentChannel?.displayName ?? "You").slice(0, 1).toUpperCase() || "Y";
   const liveDiscoveryItems = useMemo(
-    () => homeDiscoveryItems.filter((item) => item.live_state === "live").slice(0, 8),
-    [homeDiscoveryItems],
+    () => liveDiscovery.publicItems,
+    [liveDiscovery.publicItems],
   );
   const upcomingDiscoveryItems = useMemo(
     () => homeDiscoveryItems.filter((item) => item.live_state === "scheduled").slice(0, 8),
     [homeDiscoveryItems],
   );
   const circleLiveSpectatorItems = useMemo(
-    () => circleSpectatorItems.filter((item) => (
+    () => liveDiscovery.circleItems.filter((item) => (
       item.live_state === "live"
       && (item.item_type === "live_room" || item.item_type === "creator_event")
     )).slice(0, 8),
-    [circleSpectatorItems],
+    [liveDiscovery.circleItems],
   );
   const circleWatchPartySpectatorItems = useMemo(
     () => circleSpectatorItems.filter((item) => item.item_type === "watch_party").slice(0, 8),
@@ -1017,7 +997,7 @@ export default function HomeScreen() {
             title: "Live Now",
             subtitle: "Public rooms and events that are live now.",
             feedItems: liveDiscoveryItems,
-            events: homeLiveEvents,
+            events: [],
             emptyTitle: "No public live rooms right now",
             emptyText: "Live rooms appear here when public rooms or events are live.",
           })}

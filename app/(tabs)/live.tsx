@@ -28,9 +28,9 @@ import {
   getDiscoveryAccessLabel,
   getDiscoveryItemActionLabel,
   getDiscoveryItemDestination,
-  readRankedPublicDiscoveryFeedItems,
   type DiscoveryFeedItem,
 } from "../../_lib/discoveryFeed";
+import { useLiveDiscoveryFeed } from "../../_lib/useLiveDiscoveryFeed";
 import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import {
   getRuntimeControlBlockedCopy,
@@ -76,10 +76,11 @@ export default function LiveTabScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [discoveryItems, setDiscoveryItems] = useState<DiscoveryFeedItem[]>([]);
+  const discovery = useLiveDiscoveryFeed({ surface: "home", liveOnly: true, limit: 40 });
+  const discoveryItems = discovery.items;
   const [events, setEvents] = useState<CreatorEventSummary[]>([]);
 
-  const { liveItems, liveEvents, upcomingEvents } = useMemo(
+  const { liveItems, upcomingEvents } = useMemo(
     () => buildLiveTabDiscoveryBuckets(discoveryItems, events),
     [discoveryItems, events],
   );
@@ -91,21 +92,11 @@ export default function LiveTabScreen() {
     setErrorMsg(null);
 
     try {
-      const [rankedDiscovery, publicEvents] = await Promise.all([
-        readRankedPublicDiscoveryFeedItems({ surface: "home", limit: 40 }).catch(() => ({
-          items: [] as DiscoveryFeedItem[],
-          signals: {},
-          generatedAt: new Date().toISOString(),
-          viewerSpecific: false,
-        })),
-        readLatestPublicEventSummaries({ limit: 32 }).catch(() => [] as CreatorEventSummary[]),
-      ]);
+      const publicEvents = await readLatestPublicEventSummaries({ limit: 32 });
       if (generation !== liveLoadGenerationRef.current) return;
-      setDiscoveryItems(rankedDiscovery.items);
       setEvents(publicEvents);
     } catch {
       if (generation !== liveLoadGenerationRef.current) return;
-      setDiscoveryItems([]);
       setEvents([]);
       setErrorMsg("Live discovery could not refresh right now. Pull down to try again.");
     } finally {
@@ -198,7 +189,7 @@ export default function LiveTabScreen() {
     router.push(getDiscoveryItemDestination(item) as any);
   };
 
-  const totalLiveNow = liveItems.length + liveEvents.length;
+  const totalLiveNow = liveItems.length;
 
   return (
     <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.screenBackground} resizeMode="cover">
@@ -210,7 +201,7 @@ export default function LiveTabScreen() {
           showsVerticalScrollIndicator={false}
           alwaysBounceVertical
           nestedScrollEnabled
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadLive(true)} tintColor="#E50914" />}
+          refreshControl={<RefreshControl refreshing={refreshing || discovery.loading} onRefresh={() => { void loadLive(true); void discovery.reload(); }} tintColor="#E50914" />}
         >
           <MainTabTopBar surface="live" label="LIVE" style={styles.mainTabTopBar} />
           <View
@@ -222,18 +213,18 @@ export default function LiveTabScreen() {
               <Text style={styles.kicker}>LIVE HUB</Text>
               <View style={styles.statusPill}>
                 <View style={styles.statusDot} />
-                <Text style={styles.statusPillText}>{loading ? "Checking" : `${totalLiveNow} live`}</Text>
+                <Text style={styles.statusPillText}>{discovery.error ? "Unavailable" : loading || discovery.loading ? "Checking" : `${totalLiveNow} live`}</Text>
               </View>
             </View>
             <Text style={styles.title}>Live</Text>
             <Text style={styles.heroSubtitle}>Watch what is live now, see upcoming events, start a people-first room, or enter a Watch-Party code.</Text>
           </View>
 
-          {errorMsg ? (
+          {errorMsg || discovery.error ? (
             <View style={styles.errorCard}>
               <Text style={styles.errorTitle}>Live discovery unavailable</Text>
-              <Text style={styles.errorBody}>{errorMsg}</Text>
-              <Pressable style={styles.secondaryButton} onPress={() => void loadLive(true)} accessibilityRole="button">
+              <Text style={styles.errorBody}>{errorMsg ?? discovery.error}</Text>
+              <Pressable style={styles.secondaryButton} onPress={() => { void loadLive(true); void discovery.reload(); }} accessibilityRole="button">
                 <Text style={styles.buttonText}>Retry</Text>
               </Pressable>
             </View>
@@ -271,11 +262,11 @@ export default function LiveTabScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Live Now</Text>
-              <Text style={styles.sectionMeta}>{totalLiveNow} available</Text>
+              <Text style={styles.sectionMeta}>{discovery.error ? "Unavailable" : discovery.loading ? "Checking" : `${totalLiveNow} available`}</Text>
             </View>
-            {loading ? (
+            {discovery.loading ? (
               <View style={styles.loadingRow}><ActivityIndicator color="#E50914" /><Text style={styles.muted}>Loading live discovery...</Text></View>
-            ) : liveItems.length || liveEvents.length ? (
+            ) : liveItems.length ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
                 {liveItems.map((item) => {
                   const title = String(item.title ?? "").trim() || "Live Now";
@@ -288,19 +279,11 @@ export default function LiveTabScreen() {
                     </TouchableOpacity>
                   );
                 })}
-                {liveEvents.map((event) => (
-                  <TouchableOpacity key={`event-${event.id}`} style={[styles.discoveryCard, { width: discoveryCardWidth }]} activeOpacity={0.88} onPress={() => openEvent(event.id)} accessibilityRole="button" accessibilityLabel={`${event.eventTitle}. Live public Event. ${formatEventMode(event)}. Open Event`}>
-                    <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>LIVE EVENT</Text></View>
-                    <Text style={styles.cardTitle} numberOfLines={2}>{event.eventTitle}</Text>
-                    <Text style={styles.cardBody}>{formatEventMode(event)}</Text>
-                    <Text style={styles.cardMeta}>Open Event</Text>
-                  </TouchableOpacity>
-                ))}
               </ScrollView>
             ) : (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyStateTitle}>Nothing public is live right now</Text>
-                <Text style={styles.emptyStateBody}>Pull down to refresh, start your own Live room, or Explore other content.</Text>
+                <Text style={styles.emptyStateTitle}>{discovery.error ? "Live discovery unavailable" : "Nothing public is live right now"}</Text>
+                <Text style={styles.emptyStateBody}>{discovery.error ?? "Pull down to refresh, start your own Live room, or Explore other content."}</Text>
               </View>
             )}
           </View>

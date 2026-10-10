@@ -80,6 +80,7 @@ import { CreatorContentActionSheet, type CreatorContentActionSheetVisibilityActi
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
 import { AppActionButton, AppEmptyState, AppSection, AppStatusPill } from "../../components/ui/app-surface";
 import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
+import { PlatformLiveNow } from "../../components/live/platform-live-now";
 import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
 
 type ChannelLoadState = "loading" | "ready" | "not_found" | "blocked" | "locked";
@@ -1120,15 +1121,7 @@ export default function PublicChannelScreen() {
   );
 
   const renderLiveNow = () => (
-    <AppSection title="Live Now">
-      {liveNowEvents.length ? (
-        <View style={styles.listStack}>
-          {liveNowEvents.map((event) => renderEventCard(event))}
-        </View>
-      ) : (
-        <AppEmptyState title="No public live room" body="Public live rooms appear here only while they are active." />
-      )}
-    </AppSection>
+    <PlatformLiveNow creatorUserId={routeUserId} enabled={loadState === "ready"} />
   );
 
   const renderUpcomingEvents = () => (

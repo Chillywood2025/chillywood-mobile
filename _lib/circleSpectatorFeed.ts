@@ -1,6 +1,7 @@
 import type { DiscoveryFeedItem, DiscoveryFeedRankingSignals } from "./discoveryFeed";
 import {
   loadDiscoveryFeedRankingSignals,
+  normalizeDiscoveryCreatorIds,
   rankCircleSpectatorFeedItems,
 } from "./discoveryFeed";
 import { supabase } from "./supabase";
@@ -10,6 +11,10 @@ export const CIRCLE_SPECTATOR_FEED_ITEMS_TABLE = "circle_spectator_feed_items";
 export type CircleSpectatorFeedReadOptions = {
   itemId?: string;
   limit?: number;
+  creatorUserId?: string;
+  creatorUserIds?: string[];
+  liveOnly?: boolean;
+  signal?: AbortSignal;
 };
 
 export type RankedCircleSpectatorFeedReadResult = {
@@ -128,15 +133,23 @@ export async function readCircleSpectatorFeedItems(
     .eq("moderation_status", "clean")
     .order("ranking_score", { ascending: false })
     .order("starts_at", { ascending: false, nullsFirst: false })
-    .order("published_at", { ascending: false, nullsFirst: false })
-    .limit(limit);
+    .order("published_at", { ascending: false, nullsFirst: false });
+
+  if (options.liveOnly) {
+    query = query.eq("live_state", "live").or(`ended_at.is.null,ended_at.gt.${new Date().toISOString()}`);
+  }
+  const creatorIds = normalizeDiscoveryCreatorIds(options);
+  if (creatorIds.length) query = query.in("creator_user_id", creatorIds);
 
   if (itemId) {
     query = query.eq("id", itemId);
   }
 
+  query = query.limit(limit);
+  if (options.signal) query = query.abortSignal(options.signal);
   const { data, error } = await query.returns<CircleSpectatorFeedItemRow[]>();
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error("Circle discovery response unavailable.");
   return data.map(adaptCircleSpectatorFeedItem);
 }
 

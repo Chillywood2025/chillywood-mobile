@@ -34,10 +34,8 @@ import {
   unfollowChannel,
   type ChannelViewerFollowState,
 } from "../../_lib/channelAudience";
-import {
-  readPublicDiscoveryFeedItems,
-  type DiscoveryFeedItem,
-} from "../../_lib/discoveryFeed";
+import { useLiveDiscoveryFeed } from "../../_lib/useLiveDiscoveryFeed";
+import type { DiscoveryFeedItem } from "../../_lib/discoveryFeed";
 import {
   type CreatorEventSummary,
   type CreatorEventType,
@@ -182,7 +180,6 @@ type ProfileSocialFeedExtraState = {
   followedPosts: ProfileSocialFeedPostActivity[];
   circleVideos: CreatorVideo[];
   followedVideos: CreatorVideo[];
-  discoveryItems: DiscoveryFeedItem[];
   notifications: NotificationRecord[];
   circleBackingUnavailable: boolean;
 };
@@ -195,21 +192,11 @@ const createEmptyProfileSocialFeedExtras = (): ProfileSocialFeedExtraState => ({
   followedPosts: [],
   circleVideos: [],
   followedVideos: [],
-  discoveryItems: [],
   notifications: [],
   circleBackingUnavailable: false,
 });
 
 const normalizeFeedUserId = (value: unknown) => String(value ?? "").trim();
-
-const dedupeProfileSocialDiscoveryItems = (items: DiscoveryFeedItem[]) => {
-  const byId = new Map<string, DiscoveryFeedItem>();
-  for (const item of items) {
-    const id = normalizeFeedUserId(item.id);
-    if (id && !byId.has(id)) byId.set(id, item);
-  }
-  return [...byId.values()];
-};
 
 const buildProfileSocialActor = (
   userId: string,
@@ -257,15 +244,6 @@ async function readProfileSocialPostsForActors(
     return posts.map((post) => ({ post, actor, sourceContext }));
   }));
   return postGroups.flat();
-}
-
-async function readProfileSocialDiscoveryItemsForActors(actorIds: string[]): Promise<DiscoveryFeedItem[]> {
-  const normalizedActorIds = Array.from(new Set(actorIds.map(normalizeFeedUserId).filter(Boolean))).slice(0, 12);
-  const itemGroups = await Promise.all(normalizedActorIds.flatMap((actorId) => [
-    readPublicDiscoveryFeedItems({ surface: "profile", ownerUserId: actorId, limit: 6 }).catch(() => []),
-    readPublicDiscoveryFeedItems({ surface: "profile", channelUserId: actorId, limit: 6 }).catch(() => []),
-  ]));
-  return dedupeProfileSocialDiscoveryItems(itemGroups.flat());
 }
 
 type OwnerQuickAction = {
@@ -734,6 +712,15 @@ export default function ProfileScreen() {
   const isSelfProfile = !profile.isProtectedFromClaim
     && hasVerifiedSelfIdentity
     && (!requestedSelfProfile || hasVerifiedSelfIdentity);
+  const profileDiscovery = useLiveDiscoveryFeed({
+    surface: "profile",
+    creatorUserIds: Array.from(new Set([userId, ...(isSelfProfile ? [
+      ...profileSocialFeedExtras.circleUserIds,
+      ...profileSocialFeedExtras.followedChannelUserIds,
+    ] : [])])).slice(0, 12),
+    limit: 50,
+    enabled: !!userId && profilePrivacyReady && canViewFullProfile && !isOfficialProfile,
+  });
   const shouldShowLockedShell = profilePrivacyReady
     && !!profilePrivacyAccess?.isLocked
     && !isOfficialProfile
@@ -874,18 +861,11 @@ export default function ProfileScreen() {
           ...normalizedFollowedChannelUserIds,
         ]));
         const actorsByUserId = await readProfileSocialActorMap(actorIds);
-        const discoveryActorIds = Array.from(new Set([
-          userId,
-          ...normalizedCircleUserIds,
-          ...normalizedFollowedChannelUserIds,
-        ]));
-
         const [
           circlePosts,
           followedPosts,
           circleVideos,
           followedVideos,
-          discoveryItems,
           notifications,
         ] = await Promise.all([
           readProfileSocialPostsForActors(normalizedCircleUserIds, actorsByUserId, "chilly_circle"),
@@ -896,7 +876,6 @@ export default function ProfileScreen() {
           normalizedFollowedChannelUserIds.length
             ? readCreatorVideosForOwners(normalizedFollowedChannelUserIds, { limit: 12 }).catch(() => [])
             : Promise.resolve([]),
-          readProfileSocialDiscoveryItemsForActors(discoveryActorIds),
           readNotificationList(currentUserId, 12).catch(() => []),
         ]);
 
@@ -909,7 +888,6 @@ export default function ProfileScreen() {
           followedPosts,
           circleVideos,
           followedVideos,
-          discoveryItems,
           notifications,
           circleBackingUnavailable,
         });
@@ -918,13 +896,11 @@ export default function ProfileScreen() {
       }
 
       const actorsByUserId = await readProfileSocialActorMap([userId]);
-      const discoveryItems = await readProfileSocialDiscoveryItemsForActors([userId]);
 
       if (!active) return;
       setProfileSocialFeedExtras({
         ...createEmptyProfileSocialFeedExtras(),
         actorsByUserId,
-        discoveryItems,
       });
       setProfileSocialFeedExtrasReady(true);
     };
@@ -2994,7 +2970,7 @@ export default function ProfileScreen() {
         followedPosts: profileSocialFeedExtras.followedPosts,
         circleVideos: profileSocialFeedExtras.circleVideos,
         followedVideos: profileSocialFeedExtras.followedVideos,
-        discoveryItems: profileSocialFeedExtras.discoveryItems,
+        discoveryItems: profileDiscovery.items,
         notifications: profileSocialFeedExtras.notifications,
         actorsByUserId: {
           ...profileSocialFeedExtras.actorsByUserId,
@@ -3010,7 +2986,7 @@ export default function ProfileScreen() {
       profileActor: profileSocialFeedActor,
       profilePosts,
       profileVideos: creatorVideos,
-      discoveryItems: profileSocialFeedExtras.discoveryItems,
+      discoveryItems: profileDiscovery.items,
       actorsByUserId: {
         ...profileSocialFeedExtras.actorsByUserId,
         ...(profileSocialFeedActor ? { [userId]: profileSocialFeedActor } : {}),
@@ -3025,7 +3001,7 @@ export default function ProfileScreen() {
     profileSocialFeedExtras.circlePosts,
     profileSocialFeedExtras.circleUserIds,
     profileSocialFeedExtras.circleVideos,
-    profileSocialFeedExtras.discoveryItems,
+    profileDiscovery.items,
     profileSocialFeedExtras.followedChannelUserIds,
     profileSocialFeedExtras.followedPosts,
     profileSocialFeedExtras.followedVideos,
@@ -3033,7 +3009,7 @@ export default function ProfileScreen() {
     profileSocialFeedMode,
     userId,
   ]);
-  const profileSocialFeedReady = profilePostsReady && creatorVideosReady && profileSocialFeedExtrasReady;
+  const profileSocialFeedReady = profilePostsReady && creatorVideosReady && profileSocialFeedExtrasReady && !profileDiscovery.loading;
   const publicEventSummaryCards: readonly OwnerStatCard[] = [
     {
       label: "Live Now",
@@ -3810,9 +3786,14 @@ export default function ProfileScreen() {
         </AppText>
       </View>
       {renderProfilePostComposer()}
-      {profilePostsNotice || profileSocialFeedNotice ? (
+      {profilePostsNotice || profileSocialFeedNotice || profileDiscovery.error ? (
         <View style={styles.profileComposerNotice}>
-          <AppText scale="footnote" style={styles.profileComposerNoticeText}>{profilePostsNotice ?? profileSocialFeedNotice}</AppText>
+          <AppText scale="footnote" style={styles.profileComposerNoticeText}>{profilePostsNotice ?? profileSocialFeedNotice ?? profileDiscovery.error}</AppText>
+          {profileDiscovery.error ? (
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry profile discovery" onPress={() => { void profileDiscovery.reload(); }}>
+              <AppText scale="footnote" style={styles.profileComposerNoticeText}>Retry live discovery</AppText>
+            </TouchableOpacity>
+          ) : null}
         </View>
       ) : null}
       {profileSocialFeedExtras.circleBackingUnavailable ? (

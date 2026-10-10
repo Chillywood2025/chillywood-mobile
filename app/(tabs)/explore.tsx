@@ -35,11 +35,10 @@ import {
   getDiscoveryItemDestination,
   getDiscoveryLiveLabel,
   rankDiscoveryFeedItems,
-  readRankedPublicDiscoveryFeedItems,
   scoreDiscoveryFeedItem,
   type DiscoveryFeedItem,
-  type DiscoveryFeedRankingSignals,
 } from "../../_lib/discoveryFeed";
+import { useLiveDiscoveryFeed } from "../../_lib/useLiveDiscoveryFeed";
 import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
 import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
@@ -94,8 +93,6 @@ type TitleLiveMetadata = {
 };
 
 type ExploreBackedSections = {
-  discoveryItems: DiscoveryFeedItem[];
-  discoverySignals: DiscoveryFeedRankingSignals;
   creatorVideos: CreatorVideo[];
   rachiOriginals: CreatorVideo[];
   publicEvents: CreatorEventSummary[];
@@ -141,8 +138,6 @@ const MAX_PROGRAM_SORT_ORDER = Number.MAX_SAFE_INTEGER;
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../../assets/images/chillywood-branded-background.png");
 
 const emptyBackedSections: ExploreBackedSections = {
-  discoveryItems: [],
-  discoverySignals: {},
   creatorVideos: [],
   rachiOriginals: [],
   publicEvents: [],
@@ -277,6 +272,8 @@ const fetchBackedTitles = async () => {
 };
 
 export default function ExploreScreen() {
+  const discovery = useLiveDiscoveryFeed({ surface: "home", limit: 36 });
+  const liveDiscovery = useLiveDiscoveryFeed({ surface: "home", liveOnly: true, limit: 40 });
   const bottomTabBarHeight = useBottomTabBarHeight();
   const { height: viewportHeight } = useWindowDimensions();
   const brandRevealHeight = resolveMainTabBrandRevealHeight(viewportHeight);
@@ -322,15 +319,14 @@ export default function ExploreScreen() {
   const liveTitleCount = Object.values(titleLiveMetadataById).filter((item) => item.liveRoomCount > 0).length;
 
   const rankedDiscoveryItems = useMemo(
-    () => rankDiscoveryFeedItems(sections.discoveryItems, sections.discoverySignals),
-    [sections.discoveryItems, sections.discoverySignals],
+    () => rankDiscoveryFeedItems(discovery.items, discovery.signals),
+    [discovery.items, discovery.signals],
   );
   const liveDiscoveryItems = useMemo(
-    () => rankedDiscoveryItems
-      .filter((item) => item.live_state === "live")
+    () => liveDiscovery.items
       .filter((item) => matchesTextSearch(debouncedSearchQuery, [item.title, item.subtitle, item.category_key]))
       .slice(0, 8),
-    [debouncedSearchQuery, rankedDiscoveryItems],
+    [debouncedSearchQuery, liveDiscovery.items],
   );
   const platformDiscoveryItems = useMemo(
     () => rankedDiscoveryItems
@@ -352,13 +348,6 @@ export default function ExploreScreen() {
       .filter((video) => matchesTextSearch(debouncedSearchQuery, [video.title, video.description, video.publicClipMetadata?.titleText]))
       .slice(0, 8),
     [debouncedSearchQuery, sections.creatorVideos],
-  );
-  const liveEvents = useMemo(
-    () => sections.publicEvents
-      .filter((event) => event.isLiveNow)
-      .filter((event) => matchesTextSearch(debouncedSearchQuery, [event.eventTitle, event.eventType, event.status]))
-      .slice(0, 6),
-    [debouncedSearchQuery, sections.publicEvents],
   );
   const scheduledEvents = useMemo(
     () => sections.publicEvents
@@ -495,20 +484,7 @@ export default function ExploreScreen() {
         badge: "Live",
         onPress: () => openDiscoveryFeedItem(item),
       }));
-      const liveEventSuggestions = sortByTypeaheadRank(
-        debouncedSearchQuery,
-        liveEvents,
-        (event) => [event.eventTitle, event.eventType, event.status],
-      ).slice(0, 3).map<ExploreTypeaheadSuggestion>((event) => ({
-        id: `live-event-${event.id}`,
-        group: "live",
-        label: "Live Event",
-        title: event.eventTitle,
-        subtitle: formatEventMode(event),
-        badge: "Live",
-        onPress: () => openEvent(event.id),
-      }));
-      const suggestions = [...liveFeedSuggestions, ...liveEventSuggestions].slice(0, 6);
+      const suggestions = liveFeedSuggestions;
       if (suggestions.length) {
         groups.push({ key: "live", label: EXPLORE_TYPEAHEAD_GROUP_LABELS.live, suggestions });
       }
@@ -538,7 +514,6 @@ export default function ExploreScreen() {
   }, [
     debouncedSearchQuery,
     liveDiscoveryItems,
-    liveEvents,
     peopleResults,
     platformDiscoveryItems,
     programmedTitles,
@@ -611,18 +586,11 @@ export default function ExploreScreen() {
 
     const [
       titleResult,
-      rankedDiscovery,
       latestCreatorVideos,
       rachiOriginals,
       publicEvents,
     ] = await Promise.all([
       fetchBackedTitles(),
-      readRankedPublicDiscoveryFeedItems({ surface: "home", limit: 36 }).catch(() => ({
-        items: [] as DiscoveryFeedItem[],
-        signals: {} as DiscoveryFeedRankingSignals,
-        generatedAt: new Date().toISOString(),
-        viewerSpecific: false,
-      })),
       readLatestPublicCreatorVideos({ limit: 12 }).catch(() => [] as CreatorVideo[]),
       readCreatorVideos(RACHI_OFFICIAL_ACCOUNT.userId, { includeDrafts: false, limit: 12 }).catch(() => [] as CreatorVideo[]),
       readLatestPublicEventSummaries({ limit: 24 }).catch(() => [] as CreatorEventSummary[]),
@@ -633,8 +601,6 @@ export default function ExploreScreen() {
     setTitles(titleResult.titles);
     setErrorMsg(titleResult.error);
     setSections({
-      discoveryItems: rankedDiscovery.items,
-      discoverySignals: rankedDiscovery.signals,
       creatorVideos: latestCreatorVideos,
       rachiOriginals,
       publicEvents,
@@ -784,7 +750,7 @@ export default function ExploreScreen() {
     const thumbnail = remoteImageSource(item.thumbnail_url);
     const label = labelOverride ?? getDiscoveryLiveLabel(item);
     const accessLabel = getDiscoveryAccessLabel(item);
-    const rankingReason = scoreDiscoveryFeedItem(item, sections.discoverySignals).reason;
+    const rankingReason = scoreDiscoveryFeedItem(item, discovery.signals).reason;
     const title = String(item.title ?? "").trim() || "Untitled";
 
     return (
@@ -1094,7 +1060,7 @@ export default function ExploreScreen() {
             style={styles.list}
             contentContainerStyle={[styles.listContent, { paddingBottom: bottomTabBarHeight + 24 }]}
             renderItem={renderTitleItem}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadExplore({ refresh: true })} tintColor="#E50914" />}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void loadExplore({ refresh: true }); void discovery.reload(); void liveDiscovery.reload(); }} tintColor="#E50914" />}
             ListHeaderComponent={
               <View style={styles.headerBlock}>
                 <MainTabTopBar surface="explore" label="EXPLORE" style={styles.mainTabTopBar} />
@@ -1107,11 +1073,11 @@ export default function ExploreScreen() {
                 <Text style={styles.headerBody}>
                   Search titles, public people, Platforms, creator videos, Originals, events, and replays.
                 </Text>
-                {errorMsg ? (
+                {errorMsg || discovery.error || liveDiscovery.error ? (
                   <View style={styles.inlineError}>
-                    <Text style={styles.inlineErrorTitle}>Titles could not refresh</Text>
-                    <Text style={styles.inlineErrorText}>{errorMsg}</Text>
-                    <Pressable onPress={() => void loadExplore({ refresh: true })} style={styles.retryBtn}>
+                    <Text style={styles.inlineErrorTitle}>Explore could not refresh</Text>
+                    <Text style={styles.inlineErrorText}>{errorMsg ?? discovery.error ?? liveDiscovery.error}</Text>
+                    <Pressable onPress={() => { void loadExplore({ refresh: true }); void discovery.reload(); void liveDiscovery.reload(); }} style={styles.retryBtn}>
                       <ChillywoodPrimaryActionFill radius={12} />
                       <Text style={styles.retryText}>Retry</Text>
                     </Pressable>
@@ -1195,22 +1161,21 @@ export default function ExploreScreen() {
 
                 {showLiveScope ? renderBackedSection(
                   "Live Now",
-                  `${liveDiscoveryItems.length + liveEvents.length} live`,
-                  liveDiscoveryItems.length + liveEvents.length > 0,
-                  "No public live rooms right now",
-                  "Live rooms appear here when current public sources say they are live.",
+                  liveDiscovery.error ? "Unavailable" : liveDiscovery.loading ? "Checking" : `${liveDiscoveryItems.length} live`,
+                  liveDiscoveryItems.length > 0,
+                  liveDiscovery.error ? "Live discovery unavailable" : liveDiscovery.loading ? "Checking live discovery" : "No public live rooms right now",
+                  liveDiscovery.error ?? "Live rooms appear here when current public sources say they are live.",
                   <>
                     {liveDiscoveryItems.map((item) => renderDiscoveryCard(item, "Live"))}
-                    {liveEvents.map((event) => renderEventCard(event))}
                   </>,
                 ) : null}
 
                 {showPlatformScope ? renderBackedSection(
                   "Platforms",
-                  `${platformDiscoveryItems.length} ${platformDiscoveryItems.length === 1 ? "Platform" : "Platforms"}`,
+                  discovery.error ? "Unavailable" : `${platformDiscoveryItems.length} ${platformDiscoveryItems.length === 1 ? "Platform" : "Platforms"}`,
                   platformDiscoveryItems.length > 0,
-                  "No public Platforms yet",
-                  "Platform cards appear after public discovery identifies a public Platform update.",
+                  discovery.error ? "Discovery unavailable" : "No public Platforms yet",
+                  discovery.error ?? "Platform cards appear after public discovery identifies a public Platform update.",
                   platformDiscoveryItems.map((item) => renderDiscoveryCard(item, "Platform")),
                 ) : null}
 

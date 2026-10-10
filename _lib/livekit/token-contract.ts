@@ -6,6 +6,7 @@ import {
 } from "./livekitRenderTelemetry";
 import { getRuntimeLiveKitConfig, isLiveKitRuntimeConfigured } from "../runtimeConfig";
 import { supabase } from "../supabase";
+import { readCurrentAccountSessionAuthority, sameAccountSessionAuthority, type AccountSessionAuthorityBinding } from "../accountSessionAuthority";
 
 export type LiveKitJoinSurface = "live-stage" | "watch-party-live" | "chat-call";
 export type LiveKitParticipantRole = "host" | "speaker" | "viewer";
@@ -407,21 +408,65 @@ const requestLiveKitTokenResponse = async (
   }
 };
 
+export type LiveDiscoveryPublicationResult =
+  | { status: "published" }
+  | { status: "cancelled" }
+  | { status: "failed"; reason: "not_configured" | "session_changed" | "not_eligible" | "request_failed" | "invalid_response"; retryable: boolean };
+
+export const LIVE_DISCOVERY_PUBLICATION_ATTEMPT_TIMEOUT_MILLIS = 5_000;
+
+// Auth SDK reads cannot be interrupted themselves. Retire their result at the
+// same deadline as the abortable HTTP request; a late read cannot start a send.
+const awaitDiscoveryOperation = <T>(operation: () => PromiseLike<T>, signal: AbortSignal): Promise<T> => new Promise((resolve, reject) => {
+  const aborted = () => { signal.removeEventListener("abort", aborted); reject(new Error("publication_aborted")); };
+  if (signal.aborted) { aborted(); return; }
+  signal.addEventListener("abort", aborted, { once: true });
+  Promise.resolve().then(() => {
+    if (signal.aborted) throw new Error("publication_aborted");
+    return operation();
+  }).then(value => {
+    signal.removeEventListener("abort", aborted);
+    if (signal.aborted) reject(new Error("publication_aborted")); else resolve(value);
+  }, error => { signal.removeEventListener("abort", aborted); reject(error); });
+});
+
+const waitForDiscoveryRetry = (delay: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
+  const aborted = () => { clearTimeout(timer); signal.removeEventListener("abort", aborted); reject(new Error("publication_aborted")); };
+  const timer = setTimeout(() => { signal.removeEventListener("abort", aborted); resolve(); }, delay);
+  if (signal.aborted) { aborted(); return; }
+  signal.addEventListener("abort", aborted, { once: true });
+});
+
 export async function markLiveStageRoomConnectedForDiscovery(
   roomNameValue: string,
-): Promise<boolean> {
+  options: { authority: AccountSessionAuthorityBinding; signal: AbortSignal },
+): Promise<LiveDiscoveryPublicationResult> {
   const config = getRuntimeLiveKitConfig();
   const roomName = String(roomNameValue ?? "").trim().toUpperCase();
-  if (!roomName || !isLiveKitRuntimeConfigured()) return false;
-
-  const authSession = await supabase.auth.getSession().catch(() => null);
-  const accessToken = String(authSession?.data.session?.access_token ?? "").trim();
-  if (!accessToken) return false;
+  if (!roomName || !isLiveKitRuntimeConfigured()) return { status: "failed", reason: "not_configured", retryable: false };
+  const expected = options.authority;
+  if (!expected || expected.restoreOnly) return { status: "failed", reason: "session_changed", retryable: false };
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (options.signal.aborted) return { status: "cancelled" };
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    options.signal.addEventListener("abort", abort, { once: true });
+    const timeout = setTimeout(abort, LIVE_DISCOVERY_PUBLICATION_ATTEMPT_TIMEOUT_MILLIS);
     try {
-      const response = await requestLiveKitTokenResponse(config.tokenEndpoint, {
+      const current = () => awaitDiscoveryOperation(readCurrentAccountSessionAuthority, controller.signal);
+      if (!sameAccountSessionAuthority(expected, await current())) return { status: "failed", reason: "session_changed", retryable: false };
+      const authSession = await awaitDiscoveryOperation(() => supabase.auth.getSession(), controller.signal);
+      const session = authSession?.data.session;
+      const accessToken = String(session?.access_token ?? "").trim();
+      if (authSession.error || !accessToken || session?.user.id !== expected.userId
+        || (session.expires_at != null && session.expires_at * 1000 <= Date.now())
+        || !sameAccountSessionAuthority(expected, await current())) {
+        return { status: "failed", reason: "session_changed", retryable: false };
+      }
+      const response = await awaitDiscoveryOperation(() => fetch(config.tokenEndpoint, {
         method: "POST",
+        signal: controller.signal,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
@@ -431,18 +476,37 @@ export async function markLiveStageRoomConnectedForDiscovery(
           surface: "live-stage",
           roomName,
         }),
-      });
+      }), controller.signal);
+      const payload = await awaitDiscoveryOperation(() => response.json(), controller.signal).catch(error => {
+        if (controller.signal.aborted) throw error;
+        return null;
+      }) as { published?: unknown; roomName?: unknown; error?: unknown } | null;
+      if (!sameAccountSessionAuthority(expected, await current())) return { status: "failed", reason: "session_changed", retryable: false };
       if (response.ok) {
-        const payload = await response.json().catch(() => null) as { published?: unknown } | null;
-        return payload?.published === true;
+        return payload?.published === true && payload.roomName === roomName
+          ? { status: "published" }
+          : { status: "failed", reason: "invalid_response", retryable: true };
       }
-      if (response.status !== 409 || attempt === 2) return false;
+      if (response.status === 401) return { status: "failed", reason: "session_changed", retryable: false };
+      const providerNotReady = response.status === 409 && [
+        "live_discovery_provider_room_unconfirmed", "live_discovery_provider_host_unconfirmed",
+      ].includes(String(payload?.error ?? ""));
+      if (!providerNotReady && ![502, 503, 504].includes(response.status)) {
+        return { status: "failed", reason: "not_eligible", retryable: false };
+      }
     } catch {
-      if (attempt === 2) return false;
+      if (options.signal.aborted) return { status: "cancelled" };
+    } finally {
+      clearTimeout(timeout);
+      options.signal.removeEventListener("abort", abort);
+      controller.abort();
     }
-    await new Promise<void>((resolve) => setTimeout(resolve, 750 * (attempt + 1)));
+    if (attempt < 2) {
+      try { await waitForDiscoveryRetry(750 * (attempt + 1), options.signal); }
+      catch { return { status: "cancelled" }; }
+    }
   }
-  return false;
+  return { status: "failed", reason: "request_failed", retryable: true };
 }
 
 // The mobile app never mints LiveKit credentials. It only requests them from a backend endpoint.
