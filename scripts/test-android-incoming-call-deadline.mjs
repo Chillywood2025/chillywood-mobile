@@ -5,6 +5,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 
 // Executes generated Kotlin, not a JavaScript reimplementation or a source-text
 // assertion. JVM mode uses a local Kotlin compiler and JUnit4/stdlib classpath
@@ -12,9 +13,12 @@ import { fileURLToPath } from "node:url";
 // dependencies. Neither mode builds, installs or publishes a mobile app.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
-const { nativeFiles } = require("../plugins/withChillyChatNativeCallNotifications.js").__test;
+const { nativeFiles, ensureManifestServices } = require("../plugins/withChillyChatNativeCallNotifications.js").__test;
+const { XML } = require("@expo/config-plugins");
 const android = process.argv.includes("--android");
-assert(process.argv.slice(2).every((arg) => arg === "--android"), "Only --android is supported.");
+const mutationControls = process.argv.includes("--mutation-controls");
+assert(process.argv.slice(2).every((arg) => ["--android", "--mutation-controls"].includes(arg)), "Unsupported argument.");
+assert(!mutationControls || android, "Mutation controls require --android.");
 const compileClasspath = process.env.CHILLY_KOTLIN_COMPILER_CLASSPATH;
 const testClasspath = process.env.CHILLY_ANDROID_JVM_TEST_CLASSPATH;
 if (!android) assert(testClasspath, "Set CHILLY_ANDROID_JVM_TEST_CLASSPATH to local Kotlin stdlib, JUnit4 and Hamcrest jars, or use --android.");
@@ -80,15 +84,26 @@ tasks.withType<Test>().configureEach {
   testLogging { events("passed", "failed", "skipped") }
 }
 `);
-  write("src/main/AndroidManifest.xml", `<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-<application><receiver android:name=".ChillyChatCallNotificationActionReceiver" android:exported="false" />
-<activity android:name="android.app.Activity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity>
-</application>
-</manifest>\n`);
+  const manifest = { manifest: { $: { "xmlns:android": "http://schemas.android.com/apk/res/android" }, application: [{
+    activity: [{ $: { "android:name": "android.app.Activity", "android:exported": "true" }, "intent-filter": [{
+      action: [{ $: { "android:name": "android.intent.action.MAIN" } }],
+      category: [{ $: { "android:name": "android.intent.category.LAUNCHER" } }],
+    }] }],
+  }] } };
+  ensureManifestServices(manifest);
+  const activities = manifest.manifest.application[0].activity;
+  const incoming = activities.find((activity) => activity.$["android:name"] === ".ChillyChatIncomingCallActivity").$;
+  assert.equal(incoming["android:exported"], "false");
+  assert.equal(incoming["android:excludeFromRecents"], "true");
+  for (const activity of activities.filter((activity) => activity.$["android:name"] !== incoming["android:name"])) {
+    assert.equal(activity.$["android:showWhenLocked"], undefined);
+    assert.equal(activity.$["android:turnScreenOn"], undefined);
+  }
+  write("src/main/AndroidManifest.xml", XML.format(manifest));
   // A local test resource supplies R.mipmap without copying product icon pixels.
   // AndroidX resources are merged by AGP, so CallStyle uses its real layouts.
   write("src/main/res/mipmap/ic_launcher.xml", '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#ffffff" android:pathData="M0,0h24v24h-24z" /></vector>\n');
-  for (const name of ["ChillyChatIncomingCallDeadline.kt", "ChillyChatCallNotifications.kt", "ChillyChatCallNotificationActionReceiver.kt", "ChillyChatNativeCallActionStore.kt", "ChillyChatFirebaseMessagingService.kt"]) {
+  for (const name of ["ChillyChatIncomingCallDeadline.kt", "ChillyChatCallNotifications.kt", "ChillyChatCallNotificationActionReceiver.kt", "ChillyChatNativeCallActionStore.kt", "ChillyChatFirebaseMessagingService.kt", "ChillyChatIncomingCallActivity.kt"]) {
     write(`src/main/java/com/chillywood/mobile/${name}`, nativeFiles[name]);
   }
   // The generated service is executed verbatim. These external transport
@@ -109,18 +124,64 @@ open class ExpoFirebaseMessagingService : Service() {
   open fun onNewToken(token: String) {}
 }
 `);
-  for (const name of ["ChillyChatIncomingCallDeadlineTest.kt", "ChillyChatIncomingCallNotificationTest.kt"]) {
+  for (const name of ["ChillyChatIncomingCallDeadlineTest.kt", "ChillyChatIncomingCallNotificationTest.kt", "ChillyChatIncomingCallActivityTest.kt"]) {
     write(`src/test/java/com/chillywood/mobile/${name}`, fs.readFileSync(path.join(root, "tools/android-native-call-harness", name)));
   }
+  console.log(JSON.stringify({ generatedSha256: Object.fromEntries([
+    "src/main/AndroidManifest.xml", "src/main/java/com/chillywood/mobile/ChillyChatIncomingCallActivity.kt",
+    "src/main/java/com/chillywood/mobile/ChillyChatCallNotifications.kt",
+  ].map((name) => [name, createHash("sha256").update(fs.readFileSync(path.join(output, name))).digest("hex")])) }));
   console.log("Compiling generated Android notification/receiver/deadline source and running focused Robolectric/JUnit regressions.");
   process.stdout.write(run("bash", [path.join(output, "gradlew"), "testDebugUnitTest", "--no-daemon", "--console=plain"], { cwd: output, timeout: 20 * 60_000 }));
-  for (const name of ["ChillyChatIncomingCallDeadlineTest", "ChillyChatIncomingCallNotificationTest"]) {
+  for (const name of ["ChillyChatIncomingCallDeadlineTest", "ChillyChatIncomingCallNotificationTest", "ChillyChatIncomingCallActivityTest"]) {
     const report = fs.readFileSync(path.join(output, `build/test-results/testDebugUnitTest/TEST-com.chillywood.mobile.${name}.xml`), "utf8");
     assert.match(report, /failures="0"/u);
     assert.match(report, /errors="0"/u);
     assert.match(report, /skipped="0"/u);
   }
   console.log("Generated Android notification compile and lifecycle integration tests passed. No APK, installation, or physical qualification was performed.");
+  if (mutationControls) {
+    const activityFile = "ChillyChatIncomingCallActivity.kt";
+    const notificationsFile = "ChillyChatCallNotifications.kt";
+    const controls = [
+      ["lock-screen-display-disabled", activityFile, "setShowWhenLocked(true)", "setShowWhenLocked(false)"],
+      ["wrong-nonce-accepted", notificationsFile, "|| extras.getString(EXTRA_PRESENTATION_NONCE) != nonce || nonce.isBlank()", "|| nonce.isBlank()"],
+      ["old-unlock-attempt-accepted", activityFile, "generation != actionGeneration || ", ""],
+      ["matching-terminal-listener-ignored", activityFile, "current.nonce == nonce) finish()", "current.nonce == nonce) Unit"],
+      ["expiry-watch-disabled", activityFile, "if (ownsPresentation()) handler.postDelayed(this, 500L) else finish()", "handler.postDelayed(this, 500L)"],
+      ["locked-unlock-callback-accepted", activityFile, "if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) { releaseAction(expected, generation); return }", "// Fault: trust callback without confirming unlocked state."],
+      ["stale-intent-dismisses-replacement", activityFile, "if (!ownsPresentation()) finish()\n      return", "finish()\n      return"],
+      ["recreated-legacy-credential-reused", activityFile, "legacyCredentialRequestsAllowed = savedInstanceState == null", "legacyCredentialRequestsAllowed = true"],
+      ["back-manufactures-decline", activityFile, "  override fun onResume() {", `  override fun onBackPressed() {
+    presentation?.let { ChillyChatCallNotifications.performIncomingPresentationAction(this, presentationIntent!!, it, "decline") }
+    finish()
+  }
+  override fun onResume() {`],
+    ];
+    for (const [id, file, from, to] of controls) {
+      const original = nativeFiles[file];
+      assert(original.includes(from), `Mutation control anchor missing: ${id}`);
+      const target = `src/main/java/com/chillywood/mobile/${file}`;
+      write(target, original.replaceAll(from, to));
+      const results = path.join(output, "build/test-results/testDebugUnitTest");
+      fs.rmSync(results, { recursive: true, force: true });
+      try {
+        const result = spawnSync("bash", [path.join(output, "gradlew"), "testDebugUnitTest", "--tests", "com.chillywood.mobile.ChillyChatIncomingCallActivityTest", "--no-daemon", "--console=plain"], {
+          cwd: output, encoding: "utf8", timeout: 20 * 60_000, maxBuffer: 32 * 1024 * 1024,
+        });
+        const reportPath = path.join(results, "TEST-com.chillywood.mobile.ChillyChatIncomingCallActivityTest.xml");
+        assert.equal(result.error, undefined, `${id}: ${result.error?.message}`);
+        assert(fs.existsSync(reportPath), `${id} must compile and reach test assertions: ${result.stdout}\n${result.stderr}`);
+        const report = fs.readFileSync(reportPath, "utf8");
+        assert(result.status !== 0 && /failures="[1-9][0-9]*"/u.test(report), `${id} was not caught by executable tests`);
+        assert.match(report, /errors="0"/u, `${id} must fail assertions, not test initialization`);
+        console.log(`Mutation control caught: ${id}`);
+      } finally {
+        write(target, original);
+      }
+    }
+    console.log(`All ${controls.length} generated-native mutation controls were rejected by executable Activity tests.`);
+  }
 };
 try {
   if (android) {

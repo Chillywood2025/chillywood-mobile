@@ -215,7 +215,8 @@ const validateD2BSource = (source) => {
   const failures = [];
   const requireSource = (condition, code) => { if (!condition) failures.push(code); };
   const trustedLaunch = source.plugin.match(/fun launchAfterTrustedAction[\s\S]*?context\.startActivity\(intent\)/u)?.[0] ?? "";
-  const activityIntentHandler = source.plugin.match(/override fun onNewIntent\(intent: Intent\) \{[\s\S]*?\n  \}/u)?.[0] ?? "";
+  const moduleSource = source.plugin.split('"ChillyChatCallNotificationModule.kt": String.raw`')[1]?.split('`,')[0] ?? "";
+  const activityIntentHandler = moduleSource.match(/override fun onNewIntent\(intent: Intent\) \{[\s\S]*?\n  \}/u)?.[0] ?? "";
   const provenanceConsume = source.provenance.match(/consume\(expected\) \{[\s\S]*?\n    \},\n    inspectCounts/u)?.[0] ?? "";
   requireSource(source.plugin.includes("function composeLegacyBackupRules") && source.plugin.includes('android:fullBackupContent'), "ANDROID_NATIVE_ACTION_LEGACY_BACKUP_EXCLUSION_MISSING");
   requireSource(source.plugin.includes('ensureModernBackupSection(root, "cloud-backup")'), "ANDROID_NATIVE_ACTION_CLOUD_BACKUP_EXCLUSION_MISSING");
