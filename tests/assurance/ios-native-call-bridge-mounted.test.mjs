@@ -155,7 +155,8 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
     router = { replace: (destination) => routes.push(destination) };
     const nativeModule = {
       isBuildEnabledAsync: async () => true,
-      isApplicationActiveAsync: async () => applicationActive,
+      isApplicationActiveAsync: async () => stageHandlers.has("os-application-active")
+        ? stageHandlers.get("os-application-active")() : applicationActive,
       // Model only the native read boundary. Actual pending CXAnswerCallAction
       // identity/expiry is exercised by the compiled native contract tests.
       hasPendingVoiceAnswerAsync: async (value) => {
@@ -911,6 +912,42 @@ test("locked pending voice Answer cannot reuse a replacement generation after th
   assert.equal(h.routes.length, 0, "foreground fallback cannot grant the retired generation a new route");
   assert.equal(h.nativeSteps.some(step => step.name === "answer"), false, "retired work cannot fail the replacement's Answer");
 });
+
+for (const replacement of ["terminal", "replacement call"]) {
+  test(`foreground fallback cannot route retired voice Answer after ${replacement} during its final native foreground read`, { timeout: 5_000 }, async (t) => {
+    const h = await mount(t, { realFacade: true, pendingVoiceAnswerAvailable: false });
+    const pending = deferred();
+    const entered = deferred();
+    let reads = 0;
+    h.setStage("os-application-active", async () => {
+      if (++reads === 2) { entered.resolve(); return pending.promise; }
+      return true;
+    });
+    await h.event(nativeEvent("incoming", { callType: "voice" }));
+    h.emitWithoutWaiting(nativeEvent("answerRequested", { callType: "voice" }));
+    await entered.promise;
+    // A genuine native terminal callback retires the old call while the
+    // foreground-only fallback awaits its final OS result. A later call has
+    // its own invite, UUID and generation; no same-invite reuse is assumed.
+    h.emitWithoutWaiting(nativeEvent("remoteEnded", { callType: "voice" }));
+    if (replacement === "replacement call") {
+      h.emitWithoutWaiting(nativeEvent("incoming", {
+        callType: "voice", callInviteId: ids.replacementUuid, callUuid: ids.replacementUuid,
+        nativeCallGeneration: "00000000-0000-4000-8000-000000000008",
+      }));
+    }
+    await settle();
+    assert.equal(h.facade.hasIosNativeCallPresentation(ids.invite), false);
+    await h.resolve(pending, true);
+    await h.flush();
+    assert.equal(reads, 2, "the original foreground check completed without an automatic retry");
+    assert.equal(h.routes.length, 0, "a late foreground boolean cannot authorize a retired Answer");
+    assert.equal(h.nativeSteps.some(step => step.name === "answer"), false, "stale work cannot complete or fail a native Answer");
+    if (replacement === "replacement call") {
+      assert.equal(h.facade.hasIosNativeCallPresentation(ids.replacementUuid), true, "the replacement presentation remains owned");
+    }
+  });
+}
 
 test("duplicate locked native voice Answer delivery creates only one route and no fabricated activation", async (t) => {
   const h = await mount(t, { realFacade: true });

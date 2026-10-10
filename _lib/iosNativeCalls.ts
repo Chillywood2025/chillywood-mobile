@@ -624,8 +624,10 @@ export async function waitForIosNativeCallAnswerRouteReadiness(
     isApplicationActive: readIosNativeApplicationActive,
     isExactContextCurrent,
   });
-  // A replaced call must neither route nor fail its replacement's Answer.
-  return readiness === "stale" ? "stale" : readiness === "ready";
+  // The final foreground read is itself asynchronous. A terminal/replacement
+  // receipt during that await must neither route nor fail the retired Answer.
+  if (readiness === "stale" || !await isExactContextCurrent(event)) return "stale";
+  return readiness === "ready";
 }
 
 export function subscribeToIosNativeCallEvents(listener: IosNativeCallEventListener) {
