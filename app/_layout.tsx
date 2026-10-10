@@ -1401,12 +1401,13 @@ function IosNativeCallsBridge() {
       };
       nativeCallDescriptorsRef.current.set(inviteId, descriptor);
 
+      const reconcileInvite = () => {
+        retryCount = 0;
+        void descriptor.reconcile();
+      };
       inviteSubscriptionsRef.current.set(
         inviteId,
-        subscribeToChillyChatCallInvite(inviteId, () => {
-          retryCount = 0;
-          void descriptor.reconcile();
-        }),
+        subscribeToChillyChatCallInvite(inviteId, reconcileInvite, reconcileInvite),
       );
       void descriptor.reconcile();
     };
