@@ -83,7 +83,10 @@ private final class ChillywoodNativeCallDiagnostics {
   }
 }
 
+// Owned transport endpoint only; actual observer behavior runs in state/report suites.
+private final class IncomingStateTransportProbe { func stop() {} }
 private final class CoordinatorProbe {
+  var incomingStateObservers: [UUID: IncomingStateTransportProbe] = [:]
   var isBuildEnabled = true
   var isRuntimeDefaultEnabled = true
   var currentAuthority: NativeVoipAuthority?

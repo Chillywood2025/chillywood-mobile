@@ -42,6 +42,9 @@ import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { SPECTATOR_LIFECYCLE_REFRESH_MS } from "../../_lib/performancePolicy";
 import { useSession } from "../../_lib/session";
+import { useNotificationViewTracking } from "../../_lib/useNotificationViewTracking";
+import { notificationPlaybackRecordId } from "../../_lib/notificationViewProgress.mjs";
+import { SUPABASE_URL } from "../../_lib/supabase";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 
@@ -114,6 +117,7 @@ function ImmersiveLivePage({
   const title = String(item.title ?? "").trim() || "Live now";
   const subtitle = String(item.subtitle ?? "").trim();
   const playbackUrl = pagePlayback.playback?.playbackUrl ?? null;
+  const reportViewProgress = useNotificationViewTracking("spectator", notificationPlaybackRecordId(playbackUrl, SUPABASE_URL), active);
 
   return (
     <Pressable
@@ -129,6 +133,7 @@ function ImmersiveLivePage({
           style={StyleSheet.absoluteFill}
           resizeMode={ResizeMode.CONTAIN}
           shouldPlay={active}
+          onPlaybackStatusUpdate={reportViewProgress}
           useNativeControls={false}
         />
       ) : item.thumbnail_url ? (

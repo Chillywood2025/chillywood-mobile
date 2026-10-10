@@ -10,6 +10,8 @@ const nativePath = join(root, "modules/chillywood-native-calls/ios");
 const coordinator = readFileSync(join(nativePath, "ChillywoodNativeCallCoordinator.swift"), "utf8");
 const policy = readFileSync(join(nativePath, "ChillywoodIncomingCallDeadline.swift"), "utf8");
 const diagnostics = readFileSync(join(nativePath, "ChillywoodNativeCallDiagnostics.swift"), "utf8");
+const observerPolicy = readFileSync(join(nativePath, "ChillywoodIncomingCallStatePolicy.swift"), "utf8");
+const observerTransport = readFileSync(join(nativePath, "ChillywoodIncomingCallStateObserver.swift"), "utf8");
 const harness = readFileSync(join(root, "tests/native/ChillywoodNativeIncomingReportTests.swift"), "utf8");
 const checkSource = process.argv.includes("--check-source");
 assert.ok(process.argv.slice(2).every(arg => arg === "--check-source"), "unknown incoming-report probe option");
@@ -71,6 +73,11 @@ const markers = {
   READ_AUTHORITY: "private func persistedVoipAuthority() -> NativeVoipAuthority? {",
   WRITE_AUTHORITY: "private func persistVoipAuthority(_ authority: NativeVoipAuthority) {",
   MATCH_AUTHORITY: "private func voipPayloadMatchesPersistedAuthority(_ payload: [String: Any]) -> Bool {",
+  OBSERVER_OWNER: "private func incomingStateOwner(",
+  OBSERVER_CURRENT: "private func currentIncomingStateOwner(",
+  OBSERVER_START: "private func startIncomingStateObserver(",
+  OBSERVER_TERMINAL: "private func applyIncomingObservedState(",
+  OBSERVER_STOP_ALL: "private func stopAllIncomingStateObservers()",
   PARSE_DATE: "private func parseServerDate(_ value: Any?) -> Date? {",
   PARSE_FOREGROUND_DATE: "private func parseForegroundServerDate(_ text: String) -> Date? {",
   TO_TEXT: "private func toText(_ value: Any?) -> String {",
@@ -84,7 +91,7 @@ function generated(source) {
     output = output.replace(`// INSERT_${key}\n`, `${declaration(source, marker)}\n`);
   }
   assert.doesNotMatch(output, /\/\/ INSERT_/u);
-  return `${diagnostics}\n${policy}\n${output}`;
+  return `${diagnostics}\n${policy}\n${observerPolicy}\n${observerTransport}\n${output}`;
 }
 function runCase(label, source, expectedFailure = null) {
   const main = join(temporary, "main.swift"), executable = join(temporary, label);

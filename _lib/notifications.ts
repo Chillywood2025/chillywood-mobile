@@ -71,7 +71,10 @@ export type NotificationCategory =
   | "chilly_chat_call"
   | "chilly_chat_missed_call"
   | "creator_money_purchase"
-  | "creator_money_sale";
+  | "creator_money_sale"
+  | "social_activity"
+  | "circle_activity"
+  | "view_summary";
 
 export type CreatorMoneyBuyerNotificationType =
   | "paid_video_unlocked"
@@ -191,7 +194,7 @@ export const DISCOVERY_ACTIVITY_TRIGGER_FOUNDATION: readonly DiscoveryActivityTr
   {
     key: "replay_available_later",
     notificationCategory: "content_dropped",
-    targetRoute: "/channel/[userId]",
+    targetRoute: "/player/replay/[replayId]",
     sendingConnected: false,
     requiredFilters: ["replay_rights", "public_visibility", "blocked_relationships", "notification_permission"],
   },
@@ -201,6 +204,7 @@ export const readDiscoveryActivityTriggerFoundation = () => DISCOVERY_ACTIVITY_T
 
 export type NotificationTargetRoute =
   | "/profile/[userId]"
+  | "/chilly-circle"
   | "/channel/[userId]"
   | "/channel-settings"
   | "/channel-studio"
@@ -217,6 +221,7 @@ export type NotificationTargetRoute =
   | "/spectate/[itemId]"
   | "/title/[id]"
   | "/player/[id]"
+  | "/player/replay/[replayId]"
   | "/admin";
 
 export type NormalizedNotificationTarget = {
@@ -417,6 +422,9 @@ const normalizeNotificationCategory = (value: unknown): NotificationCategory => 
     || normalized === "chilly_chat_missed_call"
     || normalized === "creator_money_purchase"
     || normalized === "creator_money_sale"
+    || normalized === "social_activity"
+    || normalized === "circle_activity"
+    || normalized === "view_summary"
   ) {
     return normalized;
   }
@@ -427,6 +435,7 @@ const normalizeTargetRoute = (value: unknown): NotificationTargetRoute | "unknow
   const normalized = normalizeText(value);
   if (
     normalized === "/profile/[userId]"
+    || normalized === "/chilly-circle"
     || normalized === "/channel/[userId]"
     || normalized === "/channel-settings"
     || normalized === "/channel-studio"
@@ -443,6 +452,7 @@ const normalizeTargetRoute = (value: unknown): NotificationTargetRoute | "unknow
     || normalized === "/spectate/[itemId]"
     || normalized === "/title/[id]"
     || normalized === "/player/[id]"
+    || normalized === "/player/replay/[replayId]"
     || normalized === "/admin"
   ) {
     return normalized;
@@ -547,6 +557,25 @@ export function classifyNotificationAction(input: {
   } else if (input.category === "access_granted" || input.category === "payment_access_confirmation") {
     actionGroup = "access_ready";
     actionLabel = "Open";
+  } else if (input.category === "circle_activity") {
+    actionGroup = notificationType === "circle_request" ? "action_required" : "general_activity";
+    actionLabel = notificationType === "circle_request" ? "Review request"
+      : notificationType === "circle_post" ? "Open profile" : "Open Chi'lly Circle";
+  } else if (notificationType === "social_follow_request") {
+    actionGroup = "action_required";
+    actionLabel = "Open profile";
+  } else if (notificationType === "video_comment" || notificationType === "video_reply") {
+    actionLabel = "Open video";
+  } else if (notificationType === "content_shared") {
+    actionLabel = "Open title";
+  } else if (notificationType === "profile_comment" || notificationType === "profile_reply"
+    || notificationType === "profile_post_liked" || notificationType === "social_follow"
+    || notificationType === "social_follow_accepted") {
+    actionLabel = "Open profile";
+  } else if (input.category === "new_message") {
+    actionLabel = "Open Chat";
+  } else if (input.category === "view_summary") {
+    actionLabel = "View activity";
   }
 
   const baseImportant = IMPORTANT_NOTIFICATION_CATEGORIES.includes(input.category)
@@ -1512,6 +1541,14 @@ export async function readPublicEventReminderSummaries(
 }
 
 export type NotificationPreferenceSettings = {
+  socialActivityEnabled: boolean;
+  circleActivityEnabled: boolean;
+  messagesEnabled: boolean;
+  viewSummaryEnabled: boolean;
+  viewSummaryPushEnabled: boolean;
+  eventUpdatesEnabled: boolean;
+  seatActivityEnabled: boolean;
+  accountActivityEnabled: boolean;
   followedCreatorLiveEnabled: boolean;
   circleFriendLiveEnabled: boolean;
   eventStartsSoonEnabled: boolean;
@@ -1615,6 +1652,14 @@ const IOS_ORDINARY_PUSH_ENABLED = String(
 const handledNotificationResponseKeys = new Set<string>();
 
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferenceSettings = {
+  socialActivityEnabled: true,
+  circleActivityEnabled: true,
+  messagesEnabled: true,
+  viewSummaryEnabled: true,
+  viewSummaryPushEnabled: false,
+  eventUpdatesEnabled: true,
+  seatActivityEnabled: true,
+  accountActivityEnabled: true,
   circleFriendLiveEnabled: true,
   eventStartsSoonEnabled: true,
   followedCreatorLiveEnabled: true,
@@ -1753,6 +1798,14 @@ const samePushSessionBinding = (
 const parsePreferenceRow = (row: NotificationPreferenceRow | null): NotificationPreferenceSettings => {
   if (!row) return DEFAULT_NOTIFICATION_PREFERENCES;
   return {
+    socialActivityEnabled: row.social_activity_enabled !== false,
+    circleActivityEnabled: row.circle_activity_enabled !== false,
+    messagesEnabled: row.messages_enabled !== false,
+    viewSummaryEnabled: row.view_summary_enabled !== false,
+    viewSummaryPushEnabled: row.view_summary_push_enabled === true,
+    eventUpdatesEnabled: row.event_updates_enabled !== false,
+    seatActivityEnabled: row.seat_activity_enabled !== false,
+    accountActivityEnabled: row.account_activity_enabled !== false,
     circleFriendLiveEnabled: row.circle_friend_live_enabled !== false,
     chillyChatCallCustomInAppSoundUri: normalizeText(row.chilly_chat_call_custom_in_app_sound_uri) || null,
     chillyChatCallSoundKey: normalizeChillyChatRingtoneKey(row.chilly_chat_call_sound_key),
@@ -1772,6 +1825,14 @@ const parsePreferenceRow = (row: NotificationPreferenceRow | null): Notification
 
 const buildPreferenceUpdate = (patch: NotificationPreferencePatch): NotificationPreferenceUpdate => {
   const update: NotificationPreferenceUpdate = {};
+  if (typeof patch.socialActivityEnabled === "boolean") update.social_activity_enabled = patch.socialActivityEnabled;
+  if (typeof patch.circleActivityEnabled === "boolean") update.circle_activity_enabled = patch.circleActivityEnabled;
+  if (typeof patch.messagesEnabled === "boolean") update.messages_enabled = patch.messagesEnabled;
+  if (typeof patch.viewSummaryEnabled === "boolean") update.view_summary_enabled = patch.viewSummaryEnabled;
+  if (typeof patch.viewSummaryPushEnabled === "boolean") update.view_summary_push_enabled = patch.viewSummaryPushEnabled;
+  if (typeof patch.eventUpdatesEnabled === "boolean") update.event_updates_enabled = patch.eventUpdatesEnabled;
+  if (typeof patch.seatActivityEnabled === "boolean") update.seat_activity_enabled = patch.seatActivityEnabled;
+  if (typeof patch.accountActivityEnabled === "boolean") update.account_activity_enabled = patch.accountActivityEnabled;
   if (typeof patch.followedCreatorLiveEnabled === "boolean") {
     update.followed_creator_live_enabled = patch.followedCreatorLiveEnabled;
   }
@@ -1825,17 +1886,19 @@ export async function readNotificationPreferences(userId?: string): Promise<Noti
     .returns<NotificationPreferenceRow>()
     .maybeSingle();
 
-  if (!error && data) return parsePreferenceRow(data);
+  if (error) throw new Error("Unable to read notification preferences.");
+  if (data) return parsePreferenceRow(data);
 
   const insert: NotificationPreferenceInsert = { user_id: viewerUserId };
-  const { data: created } = await supabase
+  const { data: created, error: createError } = await supabase
     .from("notification_preferences")
     .insert(insert)
     .select("*")
     .returns<NotificationPreferenceRow>()
     .maybeSingle();
 
-  return parsePreferenceRow(created ?? null);
+  if (createError || !created) throw new Error("Unable to create notification preferences.");
+  return parsePreferenceRow(created);
 }
 
 export async function updateNotificationPreferences(

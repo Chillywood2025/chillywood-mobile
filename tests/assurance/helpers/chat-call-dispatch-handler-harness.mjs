@@ -150,6 +150,14 @@ export function createCallDispatchHarness(options = {}) {
     if (name === "whole_app_read_deliverable_ios_voip_tokens") return {
       data: clone(tables.user_voip_push_tokens.filter((row) => row.enabled)), error: null,
     };
+    if (name === "whole_app_issue_ios_call_state_observer") {
+      if (options.observerIssue === "throw") throw new Error("controlled private issuance failure");
+      if (options.observerIssue === "held") return new Promise(() => {});
+      if (options.observerIssue === "error") return {data:null,error:{message:"controlled"}};
+      if (options.observerIssue === "denied") return {data:null,error:null};
+      return {data:{observerId:parameters.p_issuance_id,
+        expiresAt:options.observerIssue === "mismatch" ? "2000-01-01T00:00:00Z" : tables.chat_call_invites[0].expires_at},error:null};
+    }
     if (name === "whole_app_acknowledge_ios_callkit_presentation") return {
       data: options.ackReceipt === true, error: options.ackError ? { message: "controlled RPC failure" } : null,
     };

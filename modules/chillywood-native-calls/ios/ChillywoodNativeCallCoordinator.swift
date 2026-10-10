@@ -74,6 +74,10 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   private var activeCalls: [UUID: ActiveNativeCall] = [:] {
     didSet { invalidateOutgoingAudioHandoff() }
   }
+  private var incomingStateObservers: [UUID: ChillywoodIncomingCallStateObserver] = [:]
+  private let incomingStateSocketFactory: (URLRequest) -> ChillywoodIncomingCallStateSocket = {
+    ChillywoodIncomingCallStateWebSocket(request: $0)
+  }
   private var pendingIncomingReports: [UUID: PendingIncomingReport] = [:] {
     didSet { if !pendingIncomingReports.isEmpty { invalidateOutgoingAudioHandoff() } }
   }
@@ -302,6 +306,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
 
   private func resetAccountContextOnMain() {
     dispatchPrecondition(condition: .onQueue(.main))
+    stopAllIncomingStateObservers()
     let calls = Array(activeCalls.values)
     calls.forEach { call in
       call.timeoutWorkItem?.cancel()
@@ -338,6 +343,65 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       && toText(payload["recipientAccountId"]) == authority.accountId
       && toText(payload["recipientSessionGeneration"]) == authority.sessionGeneration
       && toText(payload["recipientInstallId"]) == authority.installId
+  }
+
+  private func incomingStateOwner(_ call: ActiveNativeCall, authority: NativeVoipAuthority) -> ChillywoodIncomingCallStateOwner {
+    ChillywoodIncomingCallStateOwner(callUUID: call.uuid, inviteID: call.inviteId, threadID: call.threadId,
+      nativeGeneration: call.generation, userID: authority.userId, accountID: authority.accountId,
+      sessionGeneration: authority.sessionGeneration, installID: authority.installId)
+  }
+
+  private func currentIncomingStateOwner(_ uuid: UUID, generation: UUID) -> (ChillywoodIncomingCallStateOwner?, Bool, Bool, Bool) {
+    guard isBuildEnabled, isRuntimeDefaultEnabled, let authority = persistedVoipAuthority(),
+      let call = activeCalls[uuid], call.generation == generation, call.presentationConfirmed,
+      call.presentationAuthority == authority, !isTerminalInvite(call.inviteId) else { return (nil, false, false, false) }
+    return (incomingStateOwner(call, authority: authority), call.answered,
+      pendingAnswerActions[uuid] != nil, requestedAnswerTransactions.contains(uuid))
+  }
+
+  private func startIncomingStateObserver(payload: [String: Any], call: ActiveNativeCall) {
+    dispatchPrecondition(condition: .onQueue(.main))
+    guard incomingStateObservers[call.uuid] == nil else { return }
+    guard let deadline = call.ringingDeadline,
+      let capability = ChillywoodIncomingCallStateCapability(payload: payload, deadline: deadline),
+      let authority = persistedVoipAuthority(), voipPayloadMatchesPersistedAuthority(payload),
+      let owner = currentIncomingStateOwner(call.uuid, generation: call.generation).0,
+      owner == incomingStateOwner(call, authority: authority),
+      !call.answered, pendingAnswerActions[call.uuid] == nil, !requestedAnswerTransactions.contains(call.uuid)
+    else {
+      ChillywoodNativeCallDiagnostics.shared.record(.stateObserverUnavailable, callUuid: call.uuid)
+      return
+    }
+    let observer = ChillywoodIncomingCallStateObserver(capability: capability, owner: owner,
+      callType: call.callType, deadline: deadline,
+      current: { [weak self] in self?.currentIncomingStateOwner(call.uuid, generation: call.generation) ?? (nil, false, false, false) },
+      terminal: { [weak self] status in self?.applyIncomingObservedState(status, uuid: call.uuid, generation: call.generation) },
+      finished: { unavailable in
+        ChillywoodNativeCallDiagnostics.shared.record(unavailable ? .stateObserverUnavailable : .stateObserverRetired, callUuid: call.uuid)
+      }, socketFactory: incomingStateSocketFactory)
+    incomingStateObservers[call.uuid] = observer
+    ChillywoodNativeCallDiagnostics.shared.record(.stateObserverStarted, callUuid: call.uuid)
+    observer.start()
+  }
+
+  private func applyIncomingObservedState(_ status: String, uuid: UUID, generation: UUID) {
+    dispatchPrecondition(condition: .onQueue(.main))
+    let state = currentIncomingStateOwner(uuid, generation: generation)
+    guard state.0 != nil, !state.1, !state.2, !state.3,
+      let call = activeCalls[uuid], let deadline = call.ringingDeadline,
+      case .wait = deadline.wakeup(now: Date(), ownsCall: true, answered: false, answerPending: false),
+      ["accepted", "canceled", "declined", "missed", "ended"].contains(status) else { return }
+    markTerminalInvite(call.inviteId)
+    _ = removeCall(uuid)
+    let reason: CXCallEndedReason = status == "accepted" ? .answeredElsewhere : status == "missed" ? .unanswered : .remoteEnded
+    provider?.reportCall(with: uuid, endedAt: Date(), reason: reason)
+    ChillywoodNativeCallDiagnostics.shared.record(.stateObserverTerminalApplied, callUuid: uuid)
+    emit(type: "remoteEnded", call: call, reason: "invite_\(status)")
+  }
+
+  private func stopAllIncomingStateObservers() {
+    incomingStateObservers.values.forEach { $0.stop() }
+    incomingStateObservers.removeAll()
   }
 
   private func acknowledgeIncomingCallPresentation(
@@ -1003,6 +1067,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
         if self.requestedAnswerTransactions.contains(uuid) { return }
 
         self.requestedAnswerTransactions.insert(uuid)
+        self.incomingStateObservers[uuid]?.stop()
         let transaction = CXTransaction(action: CXAnswerCallAction(call: uuid))
         self.callController.request(transaction) { [weak self] error in
           DispatchQueue.main.async {
@@ -1517,6 +1582,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
 
   @discardableResult
   private func removeCall(_ uuid: UUID, incomingReportError: Error = ChillywoodNativeCallError.callUnavailable) -> ActiveNativeCall? {
+    incomingStateObservers.removeValue(forKey: uuid)?.stop()
     clearPendingAnswerEvent(uuid)
     let removed = activeCalls.removeValue(forKey: uuid)
     callKitAudioActivationOwners.removeValue(forKey: uuid)
@@ -1714,6 +1780,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
             !self.isTerminalInvite(call.inviteId)
           {
             self.acknowledgeIncomingCallPresentation(payload: normalizedPayload, callUuid: call.uuid, inviteId: call.inviteId)
+            self.startIncomingStateObserver(payload: normalizedPayload, call: call)
           }
           completion()
         }
@@ -1739,6 +1806,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
   // MARK: - CallKit
 
   public func providerDidReset(_ provider: CXProvider) {
+    stopAllIncomingStateObservers()
     let calls = activeCalls.values
     activeCalls.removeAll()
     drainIncomingReports()
@@ -1787,6 +1855,7 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     // exact CallKit Answer process alive only long enough for React/session
     // hydration, server acceptance, and LiveKit connection to acknowledge the
     // pending action. Every terminal or failed path below releases this lease.
+    incomingStateObservers[action.callUUID]?.stop()
     beginAnswerTransitionBackgroundTask(action.callUUID)
     pendingAnswerActions[action.callUUID] = action
     let timeout = DispatchWorkItem { [weak self] in

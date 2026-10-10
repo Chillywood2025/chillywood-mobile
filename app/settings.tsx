@@ -182,14 +182,14 @@ const NOTIFICATION_GROUPS: {
       {
         key: "pushEnabled",
         label: "Push alerts",
-        description: "Allow this device to receive push notifications.",
+        description: "Allow phone alerts for this account on its registered devices.",
       },
     ],
   },
   {
     id: "notification-activity",
-    title: "Activity alerts",
-    summary: "In-app activity and account updates",
+    title: "Activity, purchases, and account",
+    summary: "Bell activity, creator receipts, and account notices",
     items: [
       {
         key: "inAppEnabled",
@@ -205,6 +205,33 @@ const NOTIFICATION_GROUPS: {
         key: "creatorMoneySalesEnabled",
         label: "Creator sale alerts",
         description: "Show creator-side sale and support alerts that route to Money Center transactions.",
+      },
+      {
+        key: "accountActivityEnabled",
+        label: "Content moderation alerts",
+        description: "Updates when reviewed content is hidden, removed, or restored.",
+      },
+    ],
+  },
+  {
+    id: "notification-people",
+    title: "People and conversations",
+    summary: "Messages, connections, and activity on your content",
+    items: [
+      {
+        key: "messagesEnabled",
+        label: "Messages",
+        description: "New messages in your Chi'lly Chat conversations.",
+      },
+      {
+        key: "socialActivityEnabled",
+        label: "Follows and content activity",
+        description: "Follows, shares, likes, comments, and replies involving you or your content.",
+      },
+      {
+        key: "circleActivityEnabled",
+        label: "Chi'lly Circle activity",
+        description: "Connection requests, accepted connections, and Circle posts.",
       },
     ],
   },
@@ -233,8 +260,8 @@ const NOTIFICATION_GROUPS: {
   },
   {
     id: "notification-live",
-    title: "Live alerts",
-    summary: "Followed creators and Chi'lly Circle live sessions",
+    title: "Live sessions and view updates",
+    summary: "Live alerts and grouped daily views of videos and live sessions",
     items: [
       {
         key: "followedCreatorLiveEnabled",
@@ -245,6 +272,16 @@ const NOTIFICATION_GROUPS: {
         key: "circleFriendLiveEnabled",
         label: "Chi'lly Circle live",
         description: "A mutual Chi'lly Circle connection starts an eligible public live session.",
+      },
+      {
+        key: "viewSummaryEnabled",
+        label: "View summaries",
+        description: "Grouped updates about unique viewers of your videos and live sessions in the bell. Profile views are not included.",
+      },
+      {
+        key: "viewSummaryPushEnabled",
+        label: "Phone alerts for view summaries",
+        description: "Also send grouped view updates to your phone when view summaries and push alerts are enabled.",
       },
     ],
   },
@@ -257,6 +294,16 @@ const NOTIFICATION_GROUPS: {
         key: "eventStartsSoonEnabled",
         label: "Events starting soon",
         description: "A saved public event is about 15 minutes away.",
+      },
+      {
+        key: "eventUpdatesEnabled",
+        label: "Event changes",
+        description: "Schedule changes and cancellations for events you follow or have saved.",
+      },
+      {
+        key: "seatActivityEnabled",
+        label: "Live Stage seat requests",
+        description: "Seat requests and host decisions. Open Live Stage to review the current status.",
       },
       {
         key: "publicUploadEnabled",
@@ -504,6 +551,7 @@ export default function SettingsScreen() {
   } | null>(null);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferenceSettings | null>(null);
   const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationPreferenceError, setNotificationPreferenceError] = useState<string | null>(null);
   const [notificationSavingKey, setNotificationSavingKey] = useState<string | null>(null);
   const [pushRegistration, setPushRegistration] = useState<PushRegistrationState | null>(null);
   const [nativeCallAlertStatus, setNativeCallAlertStatus] = useState<NativeCallAlertStatus | null>(null);
@@ -759,8 +807,12 @@ export default function SettingsScreen() {
         readNativeCallAlertStatus(),
       ]);
       setNotificationPreferences(preferences);
+      setNotificationPreferenceError(null);
       setPushRegistration(registration);
       setNativeCallAlertStatus(callAlertStatus);
+    } catch (error) {
+      setNotificationPreferences(null);
+      setNotificationPreferenceError(getUserFacingErrorMessage(error, "Notification settings could not be loaded. Try Refresh."));
     } finally {
       setNotificationLoading(false);
     }
@@ -822,13 +874,18 @@ export default function SettingsScreen() {
 
     setNotificationSavingKey("push-refresh");
     try {
-      const [nextRegistration, callAlertStatus] = await Promise.all([
+      const [nextRegistration, callAlertStatus, preferences] = await Promise.all([
         readCurrentPushRegistration(),
         readNativeCallAlertStatus(),
+        readNotificationPreferences(),
       ]);
       setPushRegistration(nextRegistration);
       setNativeCallAlertStatus(callAlertStatus);
+      setNotificationPreferences(preferences);
+      setNotificationPreferenceError(null);
     } catch (error) {
+      setNotificationPreferences(null);
+      setNotificationPreferenceError("Notification settings could not be verified. Try Refresh.");
       const message = getUserFacingErrorMessage(error, "Unable to verify this device push registration.");
       setPushRegistration({
         message: `${message} In-app Activity is tied to your account and still works in the app.`,
@@ -2160,13 +2217,16 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
         </SettingsRow>
+        {notificationPreferenceError ? (
+          <SettingsRow title="Notification settings unavailable" subtitle={notificationPreferenceError} value="Try Refresh" />
+        ) : null}
         <SettingsRow
           title="Bell Activity"
           subtitle="Use the bell icon for account activity, important alerts, timestamps, read state, dismiss, and routing."
           value="Bell tray"
         >
           <Text style={styles.metaText}>
-            Settings manages alert preferences and device push registration only. The bell tray is the notification Activity inbox for creator-money receipts, creator sale alerts, event reminders, calls, and system alerts.
+            Settings manages alert preferences and device push registration. The bell holds messages, connections, content activity, grouped video and live views, creator receipts, events, calls, and account notices.
           </Text>
         </SettingsRow>
         {NOTIFICATION_GROUPS.map((group) => (

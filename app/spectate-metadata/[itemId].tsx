@@ -39,6 +39,9 @@ import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { SPECTATOR_LIFECYCLE_REFRESH_MS } from "../../_lib/performancePolicy";
 import { useSession } from "../../_lib/session";
+import { useNotificationViewTracking } from "../../_lib/useNotificationViewTracking";
+import { notificationPlaybackRecordId } from "../../_lib/notificationViewProgress.mjs";
+import { SUPABASE_URL } from "../../_lib/supabase";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 
@@ -105,6 +108,7 @@ export default function SpectatorMetadataScreen() {
   const [item, setItem] = useState<DiscoveryFeedItem | null>(null);
   const [decision, setDecision] = useState<SpectatorAccessDecision | null>(null);
   const [playback, setPlayback] = useState<SpectatorPlaybackReadout | null>(null);
+  const reportViewProgress = useNotificationViewTracking("spectator", notificationPlaybackRecordId(playback?.playbackUrl, SUPABASE_URL));
   const [accessLane, setAccessLane] = useState<SpectatorAccessLane>("public");
   const [startingAction, setStartingAction] = useState<SpectatorLaunchAction | null>(null);
   const startRoomLatchRef = useRef(createActionSingleFlightLatch());
@@ -417,6 +421,7 @@ export default function SpectatorMetadataScreen() {
                 style={styles.playbackVideo}
                 resizeMode={ResizeMode.CONTAIN}
                 shouldPlay
+                onPlaybackStatusUpdate={reportViewProgress}
                 useNativeControls
               />
             </View>

@@ -359,6 +359,7 @@ const resolveSupportedContentPath = (pathname: string) => {
     "/",
     "/channel-studio",
     "/chat",
+    "/chilly-circle",
     "/settings",
     "/subscribe",
     "/watch-party",

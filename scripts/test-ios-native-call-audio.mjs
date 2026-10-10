@@ -176,6 +176,9 @@ try {
   if (checkSource) {
     console.log("Native audio declarations and twenty-eight mutations generated; Swift compilation/execution NOT RUN.");
   } else {
+    execFileSync(process.execPath, ["scripts/test-ios-native-call-state.mjs"], {
+      cwd: root, timeout: 300_000, stdio: "inherit",
+    });
     execFileSync(process.execPath, ["scripts/test-ios-native-call-diagnostics.mjs"], {
       cwd: root, timeout: 180_000, stdio: "inherit",
     });

@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2.110.6";
+import { issueOptionalIosCallStateObserver } from "../_shared/ios-native-call-state-issuance.mjs";
 import {
   buildIosVoipApnsPayload,
   buildIosVoipTopic,
@@ -557,6 +558,12 @@ Deno.serve(async (req): Promise<Response> => {
         recipientUserId: tokenRow.user_id,
         threadId: invite.thread_id,
       }) as JsonObject;
+
+      Object.assign(payload, await issueOptionalIosCallStateObserver({
+        enabled: Deno.env.get("IOS_NATIVE_CALL_STATE_OBSERVER_ENABLED"),
+        admin: adminClient, attempt, expiresAt: invite.expires_at,
+        createCapability: createPresentationCapability, randomUUID: () => crypto.randomUUID(), sha256: sha256Hex,
+      }));
 
       const result = await sendVoipPush({
         apnsEnvironment: tokenRow.apns_environment,

@@ -66,7 +66,14 @@ private final class AVAudioSession {
   func setActive(_ active: Bool, options: [SetActiveOption] = []) throws { activations.append(active) }
 }
 private var routeDiagnostics: [String] = []
+// This outgoing-audio fixture controls only the observer transport endpoint.
+// The state/report suites execute the complete incoming observer implementation.
+private final class IncomingStateTransportProbe {
+  var stops = 0
+  func stop() { stops += 1 }
+}
 private final class Probe {
+  var incomingStateObservers: [UUID: IncomingStateTransportProbe] = [:]
   var isBuildEnabled = true
   var isRuntimeDefaultEnabled = true
   var authority: NativeVoipAuthority? = expectedAuthority
@@ -299,7 +306,11 @@ do {
   try p.beginOutgoingAudioHandoff(b); try p.prepareOutgoingAudioHandoff(owner(b))
   // Execute the actual provider reset method with no incoming calls. Its real
   // activeCalls property observer must also revoke an outgoing-only owner.
+  let incomingObserver = IncomingStateTransportProbe()
+  p.incomingStateObservers[UUID()] = incomingObserver
   p.providerDidReset(CXProvider())
+  expect(incomingObserver.stops == 1 && p.incomingStateObservers.isEmpty,
+    "provider reset also releases each owned incoming observer transport")
   expect(p.events.count == 1 && p.events[0]["type"] as? String == "outgoingAudioHandoffRevoked"
     && p.events[0]["outgoingAudioOwnerId"] as? String == owner(b).lowercased(),
     "provider reset revokes the exact outgoing-only owner")
