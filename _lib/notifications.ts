@@ -1116,13 +1116,16 @@ export async function markNotificationRead(
   }
 
   const payload: NotificationUpdate = { read_at: new Date().toISOString(), status: "read" };
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from(NOTIFICATIONS_TABLE)
     .update(payload)
     .eq("id", normalizedNotificationId)
-    .eq("user_id", viewerUserId);
+    .eq("user_id", viewerUserId)
+    .select("id,user_id,read_at")
+    .maybeSingle();
 
-  if (error) {
+  if (error || data?.id !== normalizedNotificationId || data?.user_id !== viewerUserId
+    || !normalizeIsoTimestamp(data?.read_at)) {
     return buildNotificationActionResult({
       action: "mark_read",
       status: "error",
@@ -1194,13 +1197,16 @@ export async function dismissNotification(
   }
 
   const payload: NotificationUpdate = { dismissed_at: new Date().toISOString(), status: "dismissed" };
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from(NOTIFICATIONS_TABLE)
     .update(payload)
     .eq("id", normalizedNotificationId)
-    .eq("user_id", viewerUserId);
+    .eq("user_id", viewerUserId)
+    .select("id,user_id,dismissed_at")
+    .maybeSingle();
 
-  if (error) {
+  if (error || data?.id !== normalizedNotificationId || data?.user_id !== viewerUserId
+    || !normalizeIsoTimestamp(data?.dismissed_at)) {
     return buildNotificationActionResult({
       action: "dismiss",
       status: "error",
@@ -2711,10 +2717,16 @@ export function subscribeToForegroundNotificationAlerts(onAlert: (alert: Foregro
   });
 }
 
-export function subscribeToForegroundActivityNotifications(onAlert: (alert: ForegroundActivityNotification) => void) {
+export function subscribeToForegroundActivityNotifications(
+  onAlert: (alert: ForegroundActivityNotification) => void,
+  onReceived?: (data: Record<string, unknown>) => boolean | void,
+) {
   return Notifications.addNotificationReceivedListener((notification) => {
     const content = notification.request.content;
     const data = content.data as Record<string, unknown>;
+    // Toast eligibility must not suppress a durable Activity refresh (for
+    // example, a missed-call row). The current root owner scopes the reread.
+    if (onReceived?.(data) === false) return;
     const path = normalizeNotificationPath(data.path || data.url || data.deepLink);
     if (!path) return;
 

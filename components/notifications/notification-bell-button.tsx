@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -29,6 +29,8 @@ import {
   CHILLYWOOD_VISUAL,
   ChillywoodPrimaryActionFill,
 } from "../ui/chillywood-visual-system";
+import { useSession } from "../../_lib/session";
+import { getCurrentNotificationActivityOwnerKey, getNotificationActivityOwnerKey, invalidateNotificationActivity, subscribeToNotificationActivity } from "../../_lib/notificationActivity";
 
 type NotificationBellButtonProps = {
   surface: string;
@@ -59,14 +61,51 @@ const formatNotificationTimestamp = (value: string) => {
 };
 
 export function NotificationBellButton({ surface, roomSafe = false, style }: NotificationBellButtonProps) {
+  const { authority, authorityStatus, user } = useSession();
+  const ownerKey = authorityStatus === "active" && authority?.userId === user?.id
+    ? getNotificationActivityOwnerKey(authority) : "";
+  const ownerRef = useRef(ownerKey);
+  ownerRef.current = ownerKey;
+  const mountedRef = useRef(true);
+  const refreshSequence = useRef(0);
+  const fullRefreshPending = useRef(false);
+  const actionSequence = useRef(0);
+  const actionPending = useRef(false);
+  const refreshAfterAction = useRef(false);
+  const [stateOwner, setStateOwner] = useState(ownerKey);
   const [summary, setSummary] = useState<NotificationSummary>(EMPTY_SUMMARY);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [trayVisible, setTrayVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<NotificationListCursor | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const ownsActivity = useCallback(() => mountedRef.current && !!ownerKey && ownerRef.current === ownerKey
+    && getCurrentNotificationActivityOwnerKey() === ownerKey, [ownerKey]);
+
+  useLayoutEffect(() => {
+    refreshSequence.current += 1;
+    fullRefreshPending.current = false;
+    actionSequence.current += 1;
+    actionPending.current = false;
+    refreshAfterAction.current = false;
+    setStateOwner(ownerKey);
+    setSummary(EMPTY_SUMMARY);
+    setNotifications([]);
+    setNextCursor(null);
+    setLoadError(null);
+    setActionError(null);
+    setBusyId(null);
+    setLoading(false);
+    setLoadingMore(false);
+    setTrayVisible(false);
+  }, [ownerKey]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; refreshSequence.current += 1; actionSequence.current += 1; };
+  }, []);
 
   const mergeNotifications = useCallback((...groups: NotificationRecord[][]) => {
     const seen = new Set<string>();
@@ -78,13 +117,21 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
   }, []);
 
   const refreshNotifications = useCallback(async () => {
+    if (!ownsActivity()) return;
+    if (actionPending.current) { refreshAfterAction.current = true; return; }
+    refreshAfterAction.current = false;
+    const sequence = ++refreshSequence.current;
+    fullRefreshPending.current = true;
+    const isCurrent = () => ownsActivity() && sequence === refreshSequence.current;
     setLoading(true);
+    setLoadingMore(false);
     try {
       const [nextSummary, importantRows, recentPage] = await Promise.all([
-        readNotificationSummary(),
-        readImportantNotificationList(undefined, 30),
-        readNotificationListPage(undefined, 30),
+        readNotificationSummary(user!.id),
+        readImportantNotificationList(user!.id, 30),
+        readNotificationListPage(user!.id, 30),
       ]);
+      if (!isCurrent()) return;
       if (recentPage.status !== "resolved") throw new Error("notification_page_unavailable");
       setSummary(nextSummary);
       setNotifications(mergeNotifications(importantRows, recentPage.items)
@@ -92,28 +139,36 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
       setNextCursor(recentPage.nextCursor);
       setLoadError(null);
     } catch {
+      if (!isCurrent()) return;
       setLoadError("Notifications could not be refreshed. Your existing activity is unchanged.");
     } finally {
-      setLoading(false);
+      if (isCurrent()) { fullRefreshPending.current = false; setLoading(false); }
     }
-  }, [mergeNotifications]);
+  }, [mergeNotifications, ownsActivity, user]);
+
+  useEffect(() => subscribeToNotificationActivity(ownerKey, () => { void refreshNotifications(); }), [ownerKey, refreshNotifications]);
 
   const loadMoreNotifications = useCallback(async () => {
-    if (!nextCursor || loadingMore) return;
+    if (!nextCursor || loadingMore || fullRefreshPending.current || actionPending.current || !ownsActivity()) return;
+    const sequence = ++refreshSequence.current;
+    const isCurrent = () => ownsActivity() && sequence === refreshSequence.current;
     setLoadingMore(true);
+    setLoading(false);
     try {
-      const page = await readNotificationListPage(undefined, 30, nextCursor);
+      const page = await readNotificationListPage(user!.id, 30, nextCursor);
+      if (!isCurrent()) return;
       if (page.status !== "resolved") throw new Error("notification_page_unavailable");
       setNotifications((current) => mergeNotifications(current, page.items)
         .filter((notification) => !notification.isDismissed));
       setNextCursor(page.nextCursor);
       setLoadError(null);
     } catch {
+      if (!isCurrent()) return;
       setLoadError("More activity could not be loaded. Try again when your connection is available.");
     } finally {
-      setLoadingMore(false);
+      if (isCurrent()) setLoadingMore(false);
     }
-  }, [loadingMore, mergeNotifications, nextCursor]);
+  }, [loadingMore, mergeNotifications, nextCursor, ownsActivity, user]);
 
   useFocusEffect(
     useCallback(() => {
@@ -121,7 +176,10 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
     }, [refreshNotifications]),
   );
 
-  const unreadCount = Math.max(0, summary.unreadCount);
+  const visibleOwner = stateOwner === ownerKey && ownsActivity();
+  const visibleNotifications = visibleOwner ? notifications : [];
+  const visibleError = visibleOwner ? actionError ?? loadError : null;
+  const unreadCount = Math.max(0, visibleOwner ? summary.unreadCount : 0);
   const accessibilityLabel = unreadCount > 0
     ? `${unreadCount} unread notifications`
     : "Notifications";
@@ -140,44 +198,71 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
   };
 
   const openNotification = async (notification: NotificationRecord) => {
-    if (busyId) return;
+    if (busyId || actionPending.current || !ownsActivity()) return;
+    const action = ++actionSequence.current;
+    actionPending.current = true;
+    refreshSequence.current += 1;
+    fullRefreshPending.current = false;
+    const isCurrent = () => ownsActivity() && action === actionSequence.current;
     setBusyId(notification.id);
+    setLoading(false);
+    setLoadingMore(false);
     try {
       const path = resolveNotificationPath(notification.deepLink);
-      await markNotificationRead(notification.id);
+      const result = await markNotificationRead(notification.id).catch(() => null);
+      if (!isCurrent()) return;
+      refreshSequence.current += 1;
+      if (!result || (result.status !== "completed" && result.status !== "noop")) {
+        setActionError("This notification could not be marked as read. Please try again.");
+        return;
+      }
+      setActionError(null);
       setNotifications((current) => current.map((item) => (
         item.id === notification.id
           ? { ...item, isRead: true, readAt: item.readAt ?? new Date().toISOString() }
           : item
       )));
-      setSummary((current) => ({
-        ...current,
-        unreadCount: Math.max(0, current.unreadCount - (notification.isRead ? 0 : 1)),
-      }));
+      invalidateNotificationActivity(ownerKey);
       if (path) {
         setTrayVisible(false);
         router.push(path as Parameters<typeof router.push>[0]);
       }
     } finally {
-      setBusyId(null);
+      if (isCurrent()) {
+        actionPending.current = false;
+        setBusyId(null);
+        if (refreshAfterAction.current) void refreshNotifications();
+      }
     }
   };
 
   const dismiss = async (notification: NotificationRecord) => {
-    if (busyId) return;
+    if (busyId || actionPending.current || !ownsActivity()) return;
+    const action = ++actionSequence.current;
+    actionPending.current = true;
+    refreshSequence.current += 1;
+    fullRefreshPending.current = false;
+    const isCurrent = () => ownsActivity() && action === actionSequence.current;
     setBusyId(notification.id);
+    setLoading(false);
+    setLoadingMore(false);
     try {
-      const result = await dismissNotification(notification.id);
-      if (result.status === "completed" || result.status === "noop") {
+      const result = await dismissNotification(notification.id).catch(() => null);
+      if (!isCurrent()) return;
+      refreshSequence.current += 1;
+      if (result?.status === "completed" || result?.status === "noop") {
+        setActionError(null);
         setNotifications((current) => current.filter((item) => item.id !== notification.id));
-        setSummary((current) => ({
-          ...current,
-          undismissedCount: Math.max(0, current.undismissedCount - 1),
-          unreadCount: notification.isRead ? current.unreadCount : Math.max(0, current.unreadCount - 1),
-        }));
+        invalidateNotificationActivity(ownerKey);
+      } else {
+        setActionError("This notification could not be dismissed. Please try again.");
       }
     } finally {
-      setBusyId(null);
+      if (isCurrent()) {
+        actionPending.current = false;
+        setBusyId(null);
+        if (refreshAfterAction.current) void refreshNotifications();
+      }
     }
   };
 
@@ -235,8 +320,8 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
     );
   };
 
-  const importantNotifications = notifications.filter((notification) => notification.isImportant);
-  const recentNotifications = notifications.filter((notification) => !notification.isImportant);
+  const importantNotifications = visibleNotifications.filter((notification) => notification.isImportant);
+  const recentNotifications = visibleNotifications.filter((notification) => !notification.isImportant);
 
   return (
     <>
@@ -292,12 +377,12 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.trayList} contentContainerStyle={styles.trayListContent}>
-              {loading && notifications.length === 0 ? (
+              {loading && visibleNotifications.length === 0 ? (
                 <View style={styles.emptyState}>
                   <ActivityIndicator color="#DC143C" size="small" />
                   <Text style={styles.emptyStateText}>Loading notifications...</Text>
                 </View>
-              ) : notifications.length ? (
+              ) : visibleNotifications.length ? (
                 <>
                   {importantNotifications.length ? (
                     <View style={styles.traySection} testID={`${surface}-notification-tray-important-section`}>
@@ -312,12 +397,12 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
                       {recentNotifications.map(renderRow)}
                     </View>
                   ) : null}
-                  {loadError ? <Text style={styles.loadErrorText}>{loadError}</Text> : null}
+                  {visibleError ? <Text style={styles.loadErrorText}>{visibleError}</Text> : null}
                   {nextCursor ? (
                     <TouchableOpacity
                       style={styles.loadMoreButton}
                       activeOpacity={0.84}
-                      disabled={loadingMore}
+                      disabled={loading || loadingMore}
                       onPress={() => { void loadMoreNotifications(); }}
                       accessibilityRole="button"
                       accessibilityLabel="Load more notifications"
@@ -331,8 +416,8 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
               ) : (
                 <View style={styles.emptyState}>
                   <MaterialIcons name="notifications-none" size={22} color="#8D98AE" />
-                  <Text style={styles.emptyStateTitle}>{loadError ? "Notifications unavailable" : "No notifications yet"}</Text>
-                  <Text style={styles.emptyStateText}>{loadError ?? "Your recent activity will appear here."}</Text>
+                  <Text style={styles.emptyStateTitle}>{visibleError ? "Notifications unavailable" : "No notifications yet"}</Text>
+                  <Text style={styles.emptyStateText}>{visibleError ?? "Your recent activity will appear here."}</Text>
                 </View>
               )}
             </ScrollView>
