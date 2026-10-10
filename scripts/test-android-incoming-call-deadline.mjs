@@ -81,14 +81,34 @@ tasks.withType<Test>().configureEach {
 }
 `);
   write("src/main/AndroidManifest.xml", `<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-<application><receiver android:name=".ChillyChatCallNotificationActionReceiver" android:exported="false" /></application>
+<application><receiver android:name=".ChillyChatCallNotificationActionReceiver" android:exported="false" />
+<activity android:name="android.app.Activity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity>
+</application>
 </manifest>\n`);
   // A local test resource supplies R.mipmap without copying product icon pixels.
   // AndroidX resources are merged by AGP, so CallStyle uses its real layouts.
   write("src/main/res/mipmap/ic_launcher.xml", '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#ffffff" android:pathData="M0,0h24v24h-24z" /></vector>\n');
-  for (const name of ["ChillyChatIncomingCallDeadline.kt", "ChillyChatCallNotifications.kt", "ChillyChatCallNotificationActionReceiver.kt", "ChillyChatNativeCallActionStore.kt"]) {
+  for (const name of ["ChillyChatIncomingCallDeadline.kt", "ChillyChatCallNotifications.kt", "ChillyChatCallNotificationActionReceiver.kt", "ChillyChatNativeCallActionStore.kt", "ChillyChatFirebaseMessagingService.kt"]) {
     write(`src/main/java/com/chillywood/mobile/${name}`, nativeFiles[name]);
   }
+  // The generated service is executed verbatim. These external transport
+  // boundaries expose only the delivered data and a forwarding counter; they
+  // do not claim Firebase delivery or Expo presentation integration.
+  write("src/main/java/com/google/firebase/messaging/RemoteMessage.kt", `package com.google.firebase.messaging
+class RemoteMessage(val data: Map<String, String>)
+`);
+  write("src/main/java/expo/modules/notifications/service/ExpoFirebaseMessagingService.kt", `package expo.modules.notifications.service
+import android.app.Service
+import android.content.Intent
+import android.os.IBinder
+import com.google.firebase.messaging.RemoteMessage
+open class ExpoFirebaseMessagingService : Service() {
+  var forwardedMessages = 0
+  override fun onBind(intent: Intent?): IBinder? = null
+  open fun onMessageReceived(message: RemoteMessage) { forwardedMessages += 1 }
+  open fun onNewToken(token: String) {}
+}
+`);
   for (const name of ["ChillyChatIncomingCallDeadlineTest.kt", "ChillyChatIncomingCallNotificationTest.kt"]) {
     write(`src/test/java/com/chillywood/mobile/${name}`, fs.readFileSync(path.join(root, "tools/android-native-call-harness", name)));
   }

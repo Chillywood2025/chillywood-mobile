@@ -355,6 +355,25 @@ object ChillyChatCallNotifications {
   fun isAppForegrounded(): Boolean =
     ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
 
+  @Synchronized
+  fun handleNativeTerminalCall(context: Context, data: Map<String, String>): Boolean {
+    if (data["nativeCallStyle"] != "terminal" || data["dismissCall"] != "true"
+      || data["action"] !in setOf("cancel", "declined", "end", "timeout")) return false
+    val inviteId = data["callInviteId"].orEmpty()
+    val threadId = data["threadId"].orEmpty()
+    if (inviteId.isBlank() || threadId.isBlank()) return true
+    val posted = context.getSystemService(NotificationManager::class.java).activeNotifications
+      .firstOrNull { it.tag == notificationTagForInvite(inviteId) && it.id == notificationIdForInvite(inviteId) }
+      ?: return true
+    // A terminal push only retires its existing presentation. It cannot clear
+    // another invite/thread, create a user action, consume pending authority,
+    // or bring the app to the foreground.
+    if (posted.notification.extras.getString(EXTRA_THREAD_SCOPE) == threadId) {
+      clearIncomingCallNotification(context, inviteId)
+    }
+    return true
+  }
+
   fun ensureCallChannel(context: Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
 
@@ -460,7 +479,8 @@ object ChillyChatCallNotifications {
         putString(EXTRA_THREAD_SCOPE, threadId)
       })
       .setContentIntent(contentIntent)
-      .setDeleteIntent(buildActionPendingIntent(context, data, ACTION_DECLINE, 4))
+      // Android sends deleteIntent on automatic timeout too. Only the explicit
+      // CallStyle Decline button may create a Decline action and launch the app.
       .setFullScreenIntent(fullScreenIntent, canUseFullScreenIntent(context))
       .setStyle(callStyle)
       .build()
@@ -628,6 +648,7 @@ import expo.modules.notifications.service.ExpoFirebaseMessagingService
 class ChillyChatFirebaseMessagingService : ExpoFirebaseMessagingService() {
   override fun onMessageReceived(remoteMessage: RemoteMessage) {
     val data = remoteMessage.data
+    if (ChillyChatCallNotifications.handleNativeTerminalCall(this, data)) return
     if (ChillyChatCallNotifications.shouldHandleNativeIncomingCall(data)) {
       if (!ChillyChatCallNotifications.isAppForegrounded()) {
         ChillyChatCallNotifications.showIncomingCallNotification(this, data)

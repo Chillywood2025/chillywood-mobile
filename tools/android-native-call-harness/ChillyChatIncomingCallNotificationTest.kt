@@ -1,6 +1,7 @@
 package com.chillywood.mobile
 
 import android.app.AlarmManager
+import android.app.Application
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -20,6 +21,8 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Robolectric
+import com.google.firebase.messaging.RemoteMessage
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
@@ -76,6 +79,109 @@ class ChillyChatIncomingCallNotificationTest {
     shadowOf(Looper.getMainLooper()).idle()
     assertNull(ChillyChatNativeCallActionStore.consume(context))
     assertEquals("empty", ChillyChatNativeCallActionStore.readStatus(context))
+  }
+
+  @Test
+  @Config(sdk = [30])
+  fun terminalFcmClearsOnlyItsExactPresentedInviteWithoutActionOrLaunch() {
+    val service = Robolectric.buildService(ChillyChatFirebaseMessagingService::class.java).create().get()
+    for (terminalAction in listOf("cancel", "declined", "end", "timeout")) {
+      val original = data(System.currentTimeMillis() + 90_000L)
+      ChillyChatCallNotifications.showIncomingCallNotification(context, original)
+      val terminal = original + mapOf("action" to terminalAction, "nativeCallStyle" to "terminal", "dismissCall" to "true", "openCall" to "false")
+      service.onMessageReceived(RemoteMessage(terminal))
+      assertEquals("terminal $terminalAction must remove the native presentation", 0, manager.activeNotifications.size)
+      assertEquals("empty", ChillyChatNativeCallActionStore.readStatus(context))
+      assertNull(shadowOf(context as Application).nextStartedActivity)
+      assertEquals(0, service.forwardedMessages)
+      service.onMessageReceived(RemoteMessage(terminal))
+      assertEquals(0, manager.activeNotifications.size)
+    }
+  }
+
+  @Test
+  @Config(sdk = [30])
+  fun terminalFcmCannotClearOtherInviteThreadOrUnrecognizedTerminalPayload() {
+    val service = Robolectric.buildService(ChillyChatFirebaseMessagingService::class.java).create().get()
+    val firstId = "e95279f8-6588-4a82-b3e5-c5e0a7cbbf43"
+    val secondId = "55ac6903-5dc8-4206-a04e-599644694f47"
+    assertEquals(firstId.hashCode() and 0x0fffffff, secondId.hashCode() and 0x0fffffff)
+    val first = data(System.currentTimeMillis() + 90_000L, firstId)
+    val second = data(System.currentTimeMillis() + 90_000L, secondId)
+    ChillyChatCallNotifications.showIncomingCallNotification(context, first)
+    ChillyChatCallNotifications.showIncomingCallNotification(context, second)
+    val terminal = first + mapOf("action" to "cancel", "nativeCallStyle" to "terminal", "dismissCall" to "true", "openCall" to "false")
+    val invalid = listOf(
+      terminal - "callInviteId", terminal - "threadId",
+      terminal + ("callInviteId" to inviteId),
+      terminal + ("threadId" to "33333333-3333-4333-8333-333333333333"),
+      terminal + ("action" to "incoming"),
+      terminal + ("nativeCallStyle" to "unknown"), terminal + ("dismissCall" to "false"),
+    )
+    for (payload in invalid) {
+      service.onMessageReceived(RemoteMessage(payload))
+      assertEquals(2, manager.activeNotifications.size)
+      assertEquals("empty", ChillyChatNativeCallActionStore.readStatus(context))
+      assertNull(shadowOf(context as Application).nextStartedActivity)
+    }
+    // Clearing the exact former invite must not retire a newer/different call,
+    // even when legacy numeric notification IDs collide. No account authority
+    // is inferred: terminal cleanup never consumes or creates a native action.
+    ChillyChatNativeCallActionStore.captureTrustedNotificationAction(context, second.getValue("threadId"), secondId, "answer")
+    service.onMessageReceived(RemoteMessage(terminal))
+    assertEquals("chilly_chat_call:$secondId", manager.activeNotifications.single().tag)
+    assertEquals(secondId, ChillyChatNativeCallActionStore.consume(context)?.callInviteId)
+    assertNull(shadowOf(context as Application).nextStartedActivity)
+  }
+
+  @Test
+  fun ordinaryPushStillForwardsToExpo() {
+    val service = Robolectric.buildService(ChillyChatFirebaseMessagingService::class.java).create().get()
+    service.onMessageReceived(RemoteMessage(mapOf("title" to "Ordinary notification")))
+    assertEquals(1, service.forwardedMessages)
+    assertEquals(0, manager.activeNotifications.size)
+    assertEquals("empty", ChillyChatNativeCallActionStore.readStatus(context))
+    assertNull(shadowOf(context as Application).nextStartedActivity)
+  }
+
+  @Test
+  @Config(sdk = [30])
+  fun androidElevenTimeoutDeleteDispatchDoesNotBecomeDeclineOrLaunch() {
+    ChillyChatCallNotifications.showIncomingCallNotification(context, data(System.currentTimeMillis() + 90_000L))
+    val posted = manager.activeNotifications.single()
+    val notification = posted.notification
+    ShadowSystemClock.advanceBy(Duration.ofMillis(notification.timeoutAfter))
+    // Android 11 NotificationManagerService cancels REASON_TIMEOUT with
+    // sendDelete=true, removes the presentation, then sends its deleteIntent.
+    // Model that OS boundary explicitly: Robolectric does not implement NMS
+    // timeout dispatch. The app's actual generated PendingIntent/receiver runs.
+    manager.cancel(posted.tag, posted.id)
+    notification.deleteIntent?.send()
+    shadowOf(Looper.getMainLooper()).idle()
+    assertEquals(0, manager.activeNotifications.size)
+    assertEquals("automatic expiration is not a user Decline", "empty", ChillyChatNativeCallActionStore.readStatus(context))
+    assertNull("automatic expiration must not launch the app", shadowOf(context as Application).nextStartedActivity)
+  }
+
+  @Test
+  @Config(sdk = [30])
+  fun explicitDeclineStillCreatesOnlyItsOwnedActionAndLaunchesOnce() {
+    ChillyChatCallNotifications.showIncomingCallNotification(context, data(System.currentTimeMillis() + 90_000L))
+    val notification = manager.activeNotifications.single().notification
+    val decline = notification.actions.single {
+      shadowOf(it.actionIntent).savedIntent.action == ChillyChatCallNotifications.ACTION_DECLINE
+    }.actionIntent
+    decline.send()
+    shadowOf(Looper.getMainLooper()).idle()
+    val captured = ChillyChatNativeCallActionStore.consume(context)
+    assertEquals(inviteId, captured?.callInviteId)
+    assertEquals("decline", captured?.nativeCallAction)
+    assertNotNull(shadowOf(context as Application).nextStartedActivity)
+    assertEquals(0, manager.activeNotifications.size)
+    decline.send()
+    shadowOf(Looper.getMainLooper()).idle()
+    assertNull(ChillyChatNativeCallActionStore.consume(context))
+    assertNull(shadowOf(context as Application).nextStartedActivity)
   }
 
   @Test
