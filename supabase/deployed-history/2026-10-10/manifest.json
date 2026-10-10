@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 1,
+  "projectId": "bmkkhihfbmsnnmcqkoly",
+  "observedDate": "2026-10-10",
+  "canonicalSourceCommit": "5ebd202bef43c3a0c9d107093a47b8ec9a741be1",
+  "canonicalSourceTree": "8d187906afb482d40515266ce3ce97280ee43fe8",
+  "reviewedSourceCommit": "3e8557cc86d3d69a57e87a6b9f09cdcd032bc2ad",
+  "archivePath": "statements.json",
+  "archiveSha256": "a60be103bc6b7b0d38d28062c9cad80bd2374be72c098d6cdc400dedf814fd5b",
+  "archiveFormat": "UTF-8 JSON ordered records, preserving exact stored statements array strings",
+  "hashRules": {
+    "statementSha256": "SHA-256 of each exact UTF-8 statement string",
+    "joinedSha256": "SHA-256 of exact statement strings joined with a single newline",
+    "compactStatementsJsonSha256": "SHA-256 of UTF-8 JSON.stringify-compatible array with no whitespace between values; no ASCII escaping"
+  },
+  "scope": "Eight actual records only; previous immutable 2026-09-29 archive remains unchanged. Not an active migration chain.",
+  "deployed": [
+    {
+      "step": 1,
+      "version": "20261010224643",
+      "name": "notifications_realtime_publication",
+      "sourceVersion": "20261010105413",
+      "sourcePath": "supabase/migrations/20261010105413_notifications_realtime_publication.sql",
+      "sourceSha256": "ac29fc344494757b86d9294ac414846b4a89af8b141e706aefd9dfbf693fa263",
+      "statementCount": 1,
+      "statementBytes": 720,
+      "statementSha256": [
+        "ac29fc344494757b86d9294ac414846b4a89af8b141e706aefd9dfbf693fa263"
+      ],
+      "joinedSha256": "ac29fc344494757b86d9294ac414846b4a89af8b141e706aefd9dfbf693fa263",
+      "compactStatementsJsonSha256": "38afd52793199abe96f90e7979836bf511f20382b4fa3bea6b6f9e290a420f8e",
+      "exactSourceBytes": true,
+      "postReadObservedAt": "2026-10-10T22:46:49.614647+00:00",
+      "privateReceiptName": "approved-migration-step-01.json",
+      "privateReceiptSha256": "98990eebff4b5abe5c0789d40cc7351fab34ceb8535eb014862e66c01d3828f6"
+    },
+    {
+      "step": 2,
+      "version": "20261010224709",
+      "name": "ios_native_call_state_observer",
+      "sourceVersion": "20261010180514",
+      "sourcePath": "supabase/migrations/20261010180514_ios_native_call_state_observer.sql",
+      "sourceSha256": "6321627c05faf8f77532e7eaf158483ef0925e231f06a61e35a58ef791d7c6ff",
+      "statementCount": 1,
+      "statementBytes": 9997,
+      "statementSha256": [
+        "6321627c05faf8f77532e7eaf158483ef0925e231f06a61e35a58ef791d7c6ff"
+      ],
+      "joinedSha256": "6321627c05faf8f77532e7eaf158483ef0925e231f06a61e35a58ef791d7c6ff",
+      "compactStatementsJsonSha256": "8a691e2816d4e8e24464e447f5770a4e1fc9e530eb0939fc77635192222b5f01",
+      "exactSourceBytes": true,
+      "postReadObservedAt": "2026-10-10T22:47:21.773944+00:00",
+      "privateReceiptName": "approved-migration-step-02.json",
+      "privateReceiptSha256": "24bd49930ce7500cab2b1a6804fadfbe8d475ac14980a75a8d3fc3ad0c52a810"
+    },
+    {
+      "step": 3,
+      "version": "20261010224739",
+      "name": "notification_activity_outbox",
+      "sourceVersion": "20261010180545",
+      "sourcePath": "supabase/migrations/20261010180545_notification_activity_outbox.sql",
+      "sourceSha256": "6f8170a282a7e4f9cd61a7c9473770e7cd656e4e67d138175958c954b3175024",
+      "statementCount": 1,
+      "statementBytes": 28211,
+      "statementSha256": [
+        "6f8170a282a7e4f9cd61a7c9473770e7cd656e4e67d138175958c954b3175024"
+      ],
+      "joinedSha256": "6f8170a282a7e4f9cd61a7c9473770e7cd656e4e67d138175958c954b3175024",
+      "compactStatementsJsonSha256": "990990e94d1fadec97b0797d09ea27779056645eb679216fab3450acaeea155e",
+      "exactSourceBytes": true,
+      "postReadObservedAt": "2026-10-10T22:47:48.241225+00:00",
+      "privateReceiptName": "approved-migration-step-03.json",
+      "privateReceiptSha256": "ba36f54236d40c6fa5735d7dc6ebc4dd5cd375714f4a1abb19894b8307bf1c1f"
+    },
+    {
+      "step": 4,
+      "version": "20261010224815",
+      "name": "social_notification_activity_producers",
+      "sourceVersion": "20261010180642",
+      "sourcePath": "supabase/migrations/20261010180642_social_notification_activity_producers.sql",
+      "sourceSha256": "9277b822e6a809aeca2a086dfaee4bbe75404479f9973764ec46437db0024f5b",
+      "statementCount": 1,
+      "statementBytes": 28253,
+      "statementSha256": [
+        "9277b822e6a809aeca2a086dfaee4bbe75404479f9973764ec46437db0024f5b"
+      ],
+      "joinedSha256": "9277b822e6a809aeca2a086dfaee4bbe75404479f9973764ec46437db0024f5b",
+      "compactStatementsJsonSha256": "1c0e2f0fa8c45529908f0bfbf62d92c132ee850c0df305c9b31f4a18d0aa2425",
+      "exactSourceBytes": true,
+      "postReadObservedAt": "2026-10-10T22:48:18.212213+00:00",
+      "privateReceiptName": "approved-migration-step-04.json",
+      "privateReceiptSha256": "c2c3373d9ef86b10a2bfba39e01fb9d09e36a84adbf1da06a3197a853f87700d"
+    },
+    {
+      "step": 5,
+      "version": "20261010224832",
+      "name": "discovery_notification_activity_producers",
+      "sourceVersion": "20261010181246",
+      "sourcePath": "supabase/migrations/20261010181246_discovery_notification_activity_producers.sql",
+      "sourceSha256": "ae99c77076ca529b80f0d516a13387c447307b9ecf11833476dc6fa14b3a4bb6",
+      "statementCount": 1,
+      "statementBytes": 21620,
+      "statementSha256": [
+        "ae99c77076ca529b80f0d516a13387c447307b9ecf11833476dc6fa14b3a4bb6"
+      ],
+      "joinedSha256": "ae99c77076ca529b80f0d516a13387c447307b9ecf11833476dc6fa14b3a4bb6",
+      "compactStatementsJsonSha256": "1ef77d05bf97d981c904bfc9672b6db3850f8ca1ec80e4d1eeee47218da214c4",
+      "exactSourceBytes": true,
+      "postReadObservedAt": "2026-10-10T22:48:34.223667+00:00",
+      "privateReceiptName": "approved-migration-step-05.json",
+      "privateReceiptSha256": "3572666db1f24e0ca5b3d576afd086f7fb026b3d7db7be5b8d42ed4ec2a10ed2"
+    },
+    {
+      "step": 6,
+      "version": "20261010224845",
+      "name": "qualified_content_view_notifications",
+      "sourceVersion": "20261010181429",
+      "sourcePath": "supabase/migrations/20261010181429_qualified_content_view_notifications.sql",
+      "sourceSha256": "40b6568a9751aff82709478a4e7b9c52dd1a7a09e9ddadf80a27d5435dcc0efb",
+      "statementCount": 1,
+      "statementBytes": 17863,
+      "statementSha256": [
+        "40b6568a9751aff82709478a4e7b9c52dd1a7a09e9ddadf80a27d5435dcc0efb"
+      ],
+      "joinedSha256": "40b6568a9751aff82709478a4e7b9c52dd1a7a09e9ddadf80a27d5435dcc0efb",
+      "compactStatementsJsonSha256": "1513c9e7e1df3617f4cd5578483de572172c4873ab80fb7e5129008db67e44dd",
+      "exactSourceBytes": true,
+      "postReadObservedAt": "2026-10-10T22:48:46.774081+00:00",
+      "privateReceiptName": "approved-migration-step-06.json",
+      "privateReceiptSha256": "02a75e1ff79d52c49cadd81f6d79c55ece10f924c405834135b9d45fb21d7e97"
+    },
+    {
+      "step": 7,
+      "version": "20261010224903",
+      "name": "seat_notification_activity_producers",
+      "sourceVersion": "20261010182808",
+      "sourcePath": "supabase/migrations/20261010182808_seat_notification_activity_producers.sql",
+      "sourceSha256": "8683128f6a0acf134e6f87dc1469c675f9cc65f29fbd60b4abdd0734b0644502",
+      "statementCount": 1,
+      "statementBytes": 8136,
+      "statementSha256": [
+        "8683128f6a0acf134e6f87dc1469c675f9cc65f29fbd60b4abdd0734b0644502"
+      ],
+      "joinedSha256": "8683128f6a0acf134e6f87dc1469c675f9cc65f29fbd60b4abdd0734b0644502",
+      "compactStatementsJsonSha256": "205071a60239181354f597d0f471979e6280ff8943025448aedbbae1d7e324e0",
+      "exactSourceBytes": true,
+      "postReadObservedAt": "2026-10-10T22:49:04.309009+00:00",
+      "privateReceiptName": "approved-migration-step-07.json",
+      "privateReceiptSha256": "289643d350041b0699f3f49e877acba37a01855acf1aa6174a8242988fd97508"
+    },
+    {
+      "step": 8,
+      "version": "20261010224915",
+      "name": "moderation_notification_activity",
+      "sourceVersion": "20261010183056",
+      "sourcePath": "supabase/migrations/20261010183056_moderation_notification_activity.sql",
+      "sourceSha256": "d0fcfdd40b3b4b15b915b509270461929d9de52c66b0695f22999af490f2ec45",
+      "statementCount": 1,
+      "statementBytes": 7007,
+      "statementSha256": [
+        "d0fcfdd40b3b4b15b915b509270461929d9de52c66b0695f22999af490f2ec45"
+      ],
+      "joinedSha256": "d0fcfdd40b3b4b15b915b509270461929d9de52c66b0695f22999af490f2ec45",
+      "compactStatementsJsonSha256": "901f6e6746abbcf7caf91b0ad04e345158efe988bab4b51a8e87c28b69c4bf42",
+      "exactSourceBytes": true,
+      "postReadObservedAt": "2026-10-10T22:49:19.166012+00:00",
+      "privateReceiptName": "approved-migration-step-08.json",
+      "privateReceiptSha256": "ad62e87e6d4cd0511e0c0297f8f26427e0740eacb47ba66fe7e7d753ed63f6ae"
+    }
+  ],
+  "pending": []
+}

@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "scope": "Security advisor findings on objects created/replaced by these eight migrations; not a full historical advisor remediation.",
+  "advisorObservedAt": "2026-10-10T22:49:51.177Z",
+  "catalogObservedAt": "2026-10-10T22:50:14.558556+00:00",
+  "freshHistoryCount": 418,
+  "chronologicalAdvisorDiffAvailable": false,
+  "newScopeFindings": {
+    "rlsEnabledNoPolicy": 7,
+    "authenticatedSecurityDefinerExecutable": 3
+  },
+  "interpretation": [
+    "The seven new service-only tables intentionally have no client policies. Fresh catalog confirms RLS and FORCE RLS enabled, with no PUBLIC, anon or authenticated table privileges.",
+    "The three new view-tracking RPCs intentionally allow authenticated callers, not anon/PUBLIC. Fresh catalog confirms fixed empty search_path and exact source body hashes. Source enforces auth.uid(), current session authority, ownership and current content access before writes.",
+    "No scoped mutable-search-path or anonymous SECURITY DEFINER advisor finding was returned. No newly actionable issue was established by these scoped findings.",
+    "Global pre-existing warnings are preserved privately and were not modified. No before-advisor snapshot exists, so this is source-object attribution rather than a claimed complete chronological diff."
+  ],
+  "catalog": {
+    "tables": [
+      {
+        "rls": true,
+        "name": "ios_native_call_state_connections",
+        "force_rls": true,
+        "public_grants": [],
+        "anon_any_table_privilege": false,
+        "authenticated_any_table_privilege": false
+      },
+      {
+        "rls": true,
+        "name": "ios_native_call_state_issuances",
+        "force_rls": true,
+        "public_grants": [],
+        "anon_any_table_privilege": false,
+        "authenticated_any_table_privilege": false
+      },
+      {
+        "rls": true,
+        "name": "notification_activity_events",
+        "force_rls": true,
+        "public_grants": [],
+        "anon_any_table_privilege": false,
+        "authenticated_any_table_privilege": false
+      },
+      {
+        "rls": true,
+        "name": "notification_activity_pushes",
+        "force_rls": true,
+        "public_grants": [],
+        "anon_any_table_privilege": false,
+        "authenticated_any_table_privilege": false
+      },
+      {
+        "rls": true,
+        "name": "notification_activity_worker_config",
+        "force_rls": true,
+        "public_grants": [],
+        "anon_any_table_privilege": false,
+        "authenticated_any_table_privilege": false
+      },
+      {
+        "rls": true,
+        "name": "notification_qualified_views",
+        "force_rls": true,
+        "public_grants": [],
+        "anon_any_table_privilege": false,
+        "authenticated_any_table_privilege": false
+      },
+      {
+        "rls": true,
+        "name": "notification_video_view_sessions",
+        "force_rls": true,
+        "public_grants": [],
+        "anon_any_table_privilege": false,
+        "authenticated_any_table_privilege": false
+      }
+    ],
+    "functions": [
+      {
+        "name": "begin_spectator_notification_view",
+        "config": [
+          "search_path=\"\""
+        ],
+        "body_md5": "96aa01b1d07c5852bfb0471f186762ed",
+        "identity": "p_record_id uuid",
+        "anon_execute": false,
+        "public_execute": false,
+        "security_definer": true,
+        "authenticated_execute": true
+      },
+      {
+        "name": "begin_video_notification_view",
+        "config": [
+          "search_path=\"\""
+        ],
+        "body_md5": "21a9b8a157540124f7035e160bce5853",
+        "identity": "p_video_id uuid",
+        "anon_execute": false,
+        "public_execute": false,
+        "security_definer": true,
+        "authenticated_execute": true
+      },
+      {
+        "name": "complete_content_notification_view",
+        "config": [
+          "search_path=\"\""
+        ],
+        "body_md5": "eec0edaa46177d643899a83705caa14a",
+        "identity": "p_view_id uuid",
+        "anon_execute": false,
+        "public_execute": false,
+        "security_definer": true,
+        "authenticated_execute": true
+      }
+    ],
+    "observed_at": "2026-10-10T22:50:14.558556+00:00",
+    "history_count": 418
+  },
+  "remediationReferences": [
+    "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+    "https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable"
+  ],
+  "privateEvidence": [
+    {
+      "name": "security-advisor-post-migrations-01-private.json",
+      "sha256": "38fe01faa564937a35d5c56a0865f409d51cb18f11531846634fd5e89bccc205"
+    },
+    {
+      "name": "security-advisor-migration-scope-01.json",
+      "sha256": "f0300d7b953fbe275137ebb3799b78ab41f76b9b0bf8fd29fa18101824014726"
+    },
+    {
+      "name": "security-advisor-scoped-catalog-01.json",
+      "sha256": "24902044d0b212a71bf93bd090862c024841ed56ea4e34d214ad42c89195023e"
+    }
+  ]
+}
