@@ -54,6 +54,10 @@ export function createRevenueCatNotificationHarness(options = {}) {
   let serial = 100;
   const nextId = () => `00000000-0000-4000-8000-${String(serial++).padStart(12, "0")}`;
   const events = [];
+  const boundaryListeners = new Set();
+  let activeRuns = 0;
+  const notifyBoundaries = () => { for (const listener of [...boundaryListeners]) listener(); };
+  const recordEvent = (event) => { events.push(event); notifyBoundaries(); };
   const holds = [];
   const timers = new Map();
   let timerSerial = 0;
@@ -99,7 +103,7 @@ export function createRevenueCatNotificationHarness(options = {}) {
       delete() { operation = "delete"; return q; },
       then(resolve, reject) {
         result ??= Promise.resolve().then(() => {
-          events.push({ kind: "db", table, operation, values: copy(values) });
+          recordEvent({ kind: "db", table, operation, values: copy(values) });
           if (table === "money_purchase_intents" && operation === "select" && intentReadFailure) {
             return { data: null, error: { code: "XX000", message: "modeled intent lookup failure" } };
           }
@@ -139,7 +143,7 @@ export function createRevenueCatNotificationHarness(options = {}) {
     async rpc(name, args) {
       assert.equal(name, options.writer === "live" ? "process_revenuecat_live_watch_party_event_atomic"
         : platform === "ios" ? "process_revenuecat_app_store_event_atomic" : "process_revenuecat_google_play_event_atomic");
-      events.push({ kind: "atomic_rpc", name, args: copy(args) });
+      recordEvent({ kind: "atomic_rpc", name, args: copy(args) });
       // Deliberately modeled durable purchase result, stable IDs on replay.
       return { error: null, data: {
         status: options.atomicStatus ?? "processed", productType, productKey: "synthetic-product",
@@ -153,12 +157,12 @@ export function createRevenueCatNotificationHarness(options = {}) {
     assert.equal(init.method, "POST");
     const body = JSON.parse(init.body);
     if (url === "https://exp.host/--/api/v2/push/getReceipts") {
-      events.push({ kind: "receipt_lookup", body });
+      recordEvent({ kind: "receipt_lookup", body });
       if (receiptMode === "hold") return new Promise((resolve) => holds.push(() => resolve(response({ data: {} }))));
       return response({ data: {} });
     }
     assert.equal(url, "https://exp.host/--/api/v2/push/send", "no external endpoint allowed");
-    events.push({ kind: "push_send", body, hasAbortSignal: !!init.signal });
+    recordEvent({ kind: "push_send", body, hasAbortSignal: !!init.signal });
     const success = () => response({ data: { status: "ok", id: `synthetic-ticket-${nextId()}` } });
     if (pushMode === "throw_buyer" && body.to.endsWith(ids.buyer)) throw new TypeError("modeled Expo transport rejection");
     if (pushMode === "hold_buyer" && body.to.endsWith(ids.buyer)) {
@@ -177,8 +181,12 @@ export function createRevenueCatNotificationHarness(options = {}) {
     return success();
   };
   class ClockDate extends Date { constructor(...args) { super(...(args.length ? args : [now])); } static now() { return now; } }
+  const testCrypto = options.beforeDigest ? { subtle: { async digest(...args) {
+    await options.beforeDigest();
+    return webcrypto.subtle.digest(...args);
+  } } } : webcrypto;
   const context = {
-    exports: {}, Date: ClockDate, TextEncoder, Uint8Array, crypto: webcrypto, Response,
+    exports: {}, Date: ClockDate, TextEncoder, Uint8Array, crypto: testCrypto, Response,
     fetch: simulatedFetch, ...payloadPolicy, ...receiptPolicy, ...storePolicy,
     Deno: { env: { get: (key) => { assert.equal(key, "IOS_ORDINARY_PUSH_ROLLOUT_ENABLED"); return options.iosRollout === false ? "false" : "true"; } } },
     setTimeout(fn, ms) { const id = ++timerSerial; timers.set(id, { fn, at: now + ms }); return id; },
@@ -199,9 +207,13 @@ export function createRevenueCatNotificationHarness(options = {}) {
   const flush = async () => { for (let i = 0; i < 80; i++) await Promise.resolve(); };
   return {
     tables, events,
-    run: () => (options.writer === "live" ? context.production.writeLiveWatchPartyMoneyFromRevenueCatEvent
-      : platform === "ios" ? context.production.writeIosConsumableFromRevenueCatEvent
-      : context.production.writeGooglePlayCreatorMoneyFromRevenueCatEvent)(client, event, JSON.stringify(event)),
+    run: () => {
+      activeRuns++;
+      const writer = options.writer === "live" ? context.production.writeLiveWatchPartyMoneyFromRevenueCatEvent
+        : platform === "ios" ? context.production.writeIosConsumableFromRevenueCatEvent
+        : context.production.writeGooglePlayCreatorMoneyFromRevenueCatEvent;
+      return writer(client, event, JSON.stringify(event)).finally(() => { activeRuns--; notifyBoundaries(); });
+    },
     setPushMode(value) { pushMode = value; },
     setPreferenceFailure(value) { preferenceFailure = value; },
     setReceiptMode(value) { receiptMode = value; },
@@ -211,12 +223,23 @@ export function createRevenueCatNotificationHarness(options = {}) {
     setIntentReadFailure(value) { intentReadFailure = value; },
     sends: () => events.filter((e) => e.kind === "push_send"),
     rpcs: () => events.filter((e) => e.kind === "atomic_rpc"),
-    async waitForBoundary(kind = "push_send") {
-      for (let i = 0; i < 100; i++) {
-        if (events.some((e) => e.kind === kind)) return;
-        await new Promise((resolve) => setImmediate(resolve));
-      }
-      assert.fail("production orchestration never reached provider boundary");
+    async waitForBoundary(kind = "push_send", predicate = () => true) {
+      // Real crypto completion is independent of event-loop turn counts. This
+      // host timer detects test hangs only; advance() controls production time.
+      await new Promise((resolve, reject) => {
+        const finish = (error) => {
+          clearTimeout(hangGuard);
+          boundaryListeners.delete(check);
+          if (error) reject(error); else resolve();
+        };
+        const check = () => {
+          if (events.some((event) => event.kind === kind && predicate(event))) finish();
+          else if (activeRuns === 0) finish(new Error(`production run settled without provider boundary: ${kind}`));
+        };
+        const hangGuard = setTimeout(() => finish(new Error(`provider boundary wait exceeded real hang guard: ${kind}`)), 5_000);
+        boundaryListeners.add(check);
+        check();
+      });
     },
     async advance(ms) {
       now += ms;

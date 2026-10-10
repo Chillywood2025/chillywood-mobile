@@ -69,7 +69,7 @@ test("held buyer transport has a bounded outcome and does not strand the creator
   let settled = false;
   const run = h.run().then(() => { settled = true; }, () => { settled = true; });
   try {
-    await h.waitForBoundary();
+    await h.waitForBoundary("push_send", (event) => event.body.to.endsWith(ids.buyer));
     await h.advance(60_000);
     console.log("held buyer observation", JSON.stringify({ virtualElapsedMs: 60_000, settled,
       rows: h.tables.notifications.length, creatorRows: h.tables.notifications.filter((n) => n.user_id === ids.creator).length,
@@ -127,10 +127,74 @@ test("held old-ticket reconciliation settles before reservation and same-event r
   assert.equal(h.sends().filter((s) => s.body.to.endsWith(ids.creator)).length, 1);
 });
 
+test("provider-boundary synchronization survives delayed real hashing without consuming the virtual deadline", { timeout: 15_000 }, async () => {
+  let releaseDigest;
+  let enteredDigest;
+  const digestGate = new Promise((resolve) => { releaseDigest = resolve; });
+  const digestEntered = new Promise((resolve) => { enteredDigest = resolve; });
+  const h = createRevenueCatNotificationHarness({ receiptMode: "hold", beforeDigest: async () => {
+    enteredDigest(); await digestGate;
+  } });
+  h.tables.notification_delivery_attempts.push({ id: "prior-attempt", recipient_user_id: ids.buyer,
+    provider: "expo", status: "sent", provider_message_id: "prior-ticket", push_token_id: "prior-token" });
+  let settled = false;
+  const run = h.run().then(() => { settled = true; return null; }, (error) => { settled = true; return error; });
+  try {
+    await digestEntered;
+    let boundarySettled = false;
+    const boundary = h.waitForBoundary("receipt_lookup").then(() => {
+      boundarySettled = true; return null;
+    }, (error) => { boundarySettled = true; return error; });
+    // Thread-pool completion has no relationship to a count of event-loop turns.
+    for (let turn = 0; turn < 200; turn++) await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(boundarySettled, false, "a pending hash is not a missing provider boundary");
+    releaseDigest();
+    assert.equal(await boundary, null);
+    await h.advance(4_999);
+    assert.equal(settled, false, "the real scheduling wait cannot consume the virtual provider deadline");
+    await h.advance(1);
+    assert.match((await run).message, /push_timeout/);
+    assert.equal(h.tables.notification_event_dedupes.filter((r) => r.recipient_user_id === ids.buyer).length, 0);
+    assert.equal(h.sends().filter((s) => s.body.to.endsWith(ids.buyer)).length, 0);
+    await h.release();
+    assert.equal(h.sends().filter((s) => s.body.to.endsWith(ids.buyer)).length, 0, "late old receipt cannot resume a send");
+    await h.run();
+    assert.equal(h.sends().filter((s) => s.body.to.endsWith(ids.buyer)).length, 1);
+  } finally {
+    releaseDigest(); await h.release(); await run;
+  }
+});
+
+test("boundary wait has a separate real hang guard and recognizes recorded or unreachable events", { timeout: 15_000 }, async () => {
+  let releaseDigest;
+  let enteredDigest;
+  const digestGate = new Promise((resolve) => { releaseDigest = resolve; });
+  const digestEntered = new Promise((resolve) => { enteredDigest = resolve; });
+  const h = createRevenueCatNotificationHarness({ beforeDigest: async () => {
+    enteredDigest(); await digestGate;
+  } });
+  const run = h.run();
+  try {
+    await digestEntered;
+    let boundarySettled = false;
+    const boundary = h.waitForBoundary("push_send", (event) => event.body.to.endsWith(ids.buyer))
+      .then(() => { boundarySettled = true; return null; }, (error) => { boundarySettled = true; return error; });
+    await h.advance(60_000);
+    assert.equal(boundarySettled, false, "the production clock cannot fire the host hang guard");
+    assert.match((await boundary).message, /provider boundary wait exceeded real hang guard/);
+    releaseDigest();
+    await run;
+    await h.waitForBoundary("push_send", (event) => event.body.to.endsWith(ids.buyer));
+    await assert.rejects(h.waitForBoundary("never_recorded"), /production run settled without provider boundary/);
+  } finally {
+    releaseDigest(); await h.release(); await run;
+  }
+});
+
 test("held provider body times out with no late success receipt and no replay resend", async () => {
   const h = createRevenueCatNotificationHarness({ pushMode: "hold_body_buyer" });
   const run = h.run();
-  await h.waitForBoundary();
+  await h.waitForBoundary("push_send", (event) => event.body.to.endsWith(ids.buyer));
   await h.advance(60_000);
   await run;
   const attempt = h.tables.notification_delivery_attempts.find((a) => a.recipient_user_id === ids.buyer);
