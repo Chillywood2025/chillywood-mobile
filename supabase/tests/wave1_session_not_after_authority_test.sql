@@ -140,8 +140,8 @@ select is(
       and procedure.proname <> 'wave1_session_authority_readback'
       and pg_get_functiondef(procedure.oid) like '%wave1_session_authority_readback%'
   ),
-  26,
-  'all twenty-six direct SQL consumers inherit the one shared root correction'
+  29,
+  'all twenty-nine direct SQL consumers inherit the one shared root correction'
 );
 
 select is(
@@ -155,6 +155,9 @@ select is(
       and pg_get_functiondef(procedure.oid) like '%wave1_session_authority_readback%'
   ),
   array[
+    'begin_spectator_notification_view',
+    'begin_video_notification_view',
+    'complete_content_notification_view',
     'create_channel_subscription_intent_pre_source_lock',
     'create_creator_payout_request_safe',
     'create_event_pass_intent_pre_source_lock',
@@ -182,7 +185,7 @@ select is(
     'whole_app_ios_voip_push_readback',
     'whole_app_register_ios_voip_push_token'
   ]::text[],
-  'the inventoried legal, entitlement, creator, push, room, VoIP, and staff consumers all converge on the corrected root'
+  'the inventoried legal, entitlement, creator, push, room, VoIP, staff, and notification-view consumers all converge on the corrected root'
 );
 
 -- L: a nullable cutoff is the provider-defined ordinary non-time-boxed state.
