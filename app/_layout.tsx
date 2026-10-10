@@ -83,6 +83,7 @@ import {
 import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid } from "../_lib/runtimeConfig";
 import { RuntimeUpdateGate } from "../_lib/runtimeUpdates";
 import { SessionProvider, useSession } from "../_lib/session";
+import { getCurrentNotificationActivityOwnerKey, getNotificationActivityOwnerKey, invalidateNotificationActivity, subscribeToNotificationActivityChanges } from "../_lib/notificationActivity";
 import { supabase } from "../_lib/supabase";
 import {
   completeIosNativeCallAnswer,
@@ -1093,28 +1094,61 @@ function IncomingCallNotificationBridge() {
 
 function RoomSafeActivityNotificationBridge() {
   const pathname = usePathname();
+  const { authority, authorityStatus, user } = useSession();
+  const ownerKey = authorityStatus === "active" && authority?.userId === user?.id
+    ? getNotificationActivityOwnerKey(authority) : "";
+  const ownerRef = useRef(ownerKey);
+  ownerRef.current = ownerKey;
   const [alert, setAlert] = useState<ForegroundActivityNotification | null>(null);
+  const alertOwnerRef = useRef("");
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const roomSafeSurface = isRoomSafeIncomingCallPath(pathname);
 
   useEffect(() => {
+    let active = true;
+    const ownsActivity = () => active && !!ownerKey && ownerRef.current === ownerKey
+      && getCurrentNotificationActivityOwnerKey() === ownerKey;
+    setAlert(null);
+    if (!ownerKey) return;
     const subscription = subscribeToForegroundActivityNotifications((nextAlert) => {
-      if (!isRoomSafeIncomingCallPath(pathname)) return;
+      if (!ownsActivity() || !isRoomSafeIncomingCallPath(pathname)) return;
+      alertOwnerRef.current = ownerKey;
       setAlert(nextAlert);
       if (dismissTimeoutRef.current) clearTimeout(dismissTimeoutRef.current);
       dismissTimeoutRef.current = setTimeout(() => {
-        setAlert(null);
-        dismissTimeoutRef.current = null;
+        if (ownsActivity()) {
+          setAlert(null);
+          dismissTimeoutRef.current = null;
+        }
       }, 6500);
+    }, (data) => {
+      if (!ownsActivity()) return false;
+      const recipient = String(data?.recipientUserId ?? data?.recipient_user_id ?? "").trim();
+      if (recipient && recipient !== authority?.userId) return false;
+      invalidateNotificationActivity(ownerKey);
+      // Legacy receipts may trigger an authoritative reread, but their text
+      // cannot be attributed to the current account without an exact owner.
+      return recipient === authority?.userId;
+    });
+    const activation = AppState.addEventListener("change", (state) => {
+      if (state === "active" && ownsActivity()) invalidateNotificationActivity(ownerKey);
     });
 
     return () => {
+      active = false;
       subscription.remove();
+      activation.remove();
       if (dismissTimeoutRef.current) clearTimeout(dismissTimeoutRef.current);
     };
-  }, [pathname]);
+  }, [authority?.userId, ownerKey, pathname]);
 
-  if (!roomSafeSurface || !alert) return null;
+  useEffect(() => {
+    if (!ownerKey) return;
+    return subscribeToNotificationActivityChanges(authority);
+  }, [authority, ownerKey]);
+
+  if (!roomSafeSurface || !alert || alertOwnerRef.current !== ownerKey
+    || getCurrentNotificationActivityOwnerKey() !== ownerKey) return null;
 
   return (
     <View
@@ -1367,12 +1401,13 @@ function IosNativeCallsBridge() {
       };
       nativeCallDescriptorsRef.current.set(inviteId, descriptor);
 
+      const reconcileInvite = () => {
+        retryCount = 0;
+        void descriptor.reconcile();
+      };
       inviteSubscriptionsRef.current.set(
         inviteId,
-        subscribeToChillyChatCallInvite(inviteId, () => {
-          retryCount = 0;
-          void descriptor.reconcile();
-        }),
+        subscribeToChillyChatCallInvite(inviteId, reconcileInvite, reconcileInvite),
       );
       void descriptor.reconcile();
     };
@@ -1495,7 +1530,7 @@ function IosNativeCallsBridge() {
       }
       if (event.type === "answerRequested") {
         const navigationReady = await waitForIosNativeCallAnswerRouteReadiness(event);
-        if (!ownsAuthority()) return;
+        if (!ownsAuthority() || navigationReady === "stale") return;
         if (!navigationReady) {
           await completeIosNativeCallAnswer(String(event.callUuid ?? "").trim(), false).catch(() => false);
           return;

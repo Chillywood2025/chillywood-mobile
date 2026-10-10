@@ -34,12 +34,14 @@ const ids = {
 const nativeEvent = (type, extra = {}) => ({ type, callInviteId: ids.invite, callUuid: ids.uuid, threadId: ids.thread, callType: "video",
   nativeCallGeneration: "00000000-0000-4000-8000-000000000007", nativeSessionGeneration: ids.session, ...extra });
 
-async function mount(t, { realFacade = false, initialNativeEvents = [], persistedSameAuthority = true, controlledRetryTimers = false } = {}) {
+async function mount(t, { realFacade = false, realInviteSubscription = false, initialNativeEvents = [], persistedSameAuthority = true, controlledRetryTimers = false, pendingVoiceAnswerAvailable = true } = {}) {
   let session = { user: { id: "user-a" }, authority: binding(), authorityStatus: "active" };
   let nativeListener;
   let reader = async () => ({ status: "ringing", threadId: "thread-a" });
   let router = { replace: noop };
   const subscriptions = new Map();
+  const inviteChannels = [];
+  const inviteReads = [];
   const presentations = new Map();
   const errorReports = [];
   const mediaDiagnostics = [];
@@ -118,7 +120,7 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
       return { status: "started" };
     },
     readIosNativeCallPresentations: () => [...presentations.values()],
-    readChillyChatCallInvite: (...args) => reader(...args),
+    readChillyChatCallInvite: (...args) => { inviteReads.push(args[0]); return reader(...args); },
     subscribeToChillyChatCallInvite: (id, listener) => { subscriptions.set(id, listener); return () => subscriptions.delete(id); },
     reportIosNativeCallRemoteEnd: async (uuid, reason) => {
       ends.push({ uuid, reason });
@@ -144,6 +146,29 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
     completeIosNativeCallTerminalTransition: (...args) => terminalStep("native", args, true),
     reportRuntimeError: (scope, error) => { throw new Error(`${scope}: ${error}`); },
   };
+  if (realInviteSubscription) {
+    const source = fs.readFileSync("_lib/chillyChatCalls.ts", "utf8");
+    const ast = ts.createSourceFile("chillyChatCalls.ts", source, ts.ScriptTarget.Latest, true);
+    const declaration = ast.statements.find(node => ts.isFunctionDeclaration(node)
+      && node.name?.text === "subscribeToChillyChatCallInvite");
+    assert.ok(declaration, "execute the actual exact-invite subscription, not a replacement readiness callback");
+    const subscriptionContext = { exports: {}, CHAT_CALL_INVITES_TABLE: "chat_call_invites",
+      toText: value => String(value ?? "").trim(),
+      supabase: {
+        channel(name) {
+          const channel = { name, removed: false,
+            on(kind, filter, listener) { channel.kind = kind; channel.filter = filter; channel.row = listener; return channel; },
+            subscribe(listener) { channel.status = listener; return channel; } };
+          inviteChannels.push(channel); return channel;
+        },
+        removeChannel(channel) { channel.removed = true; },
+      },
+    };
+    vm.runInNewContext(ts.transpileModule(declaration.getText(ast), {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+    }).outputText, subscriptionContext);
+    context.subscribeToChillyChatCallInvite = subscriptionContext.exports.subscribeToChillyChatCallInvite;
+  }
   if (realFacade) {
     // Execute the complete production JS facade and route provenance together
     // with the mounted root bridge. Only the OS/native module and authenticated
@@ -155,7 +180,15 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
     router = { replace: (destination) => routes.push(destination) };
     const nativeModule = {
       isBuildEnabledAsync: async () => true,
-      isApplicationActiveAsync: async () => applicationActive,
+      isApplicationActiveAsync: async () => stageHandlers.has("os-application-active")
+        ? stageHandlers.get("os-application-active")() : applicationActive,
+      // Model only the native read boundary. Actual pending CXAnswerCallAction
+      // identity/expiry is exercised by the compiled native contract tests.
+      hasPendingVoiceAnswerAsync: async (value) => {
+        nativeSteps.push({ name: "pendingVoiceAnswer", binding: { ...value } });
+        return stageHandlers.has("os-pendingVoiceAnswer")
+          ? stageHandlers.get("os-pendingVoiceAnswer")(value) : false;
+      },
       addListener: (_name, listener) => {
         nativeLifecycleOrder.push("listen");
         nativeModuleListener = listener;
@@ -220,6 +253,7 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
       },
       completeTerminalTransitionAsync: async (uuid) => { nativeSteps.push({ name: "terminal", uuid }); },
     };
+    if (!pendingVoiceAnswerAvailable) delete nativeModule.hasPendingVoiceAnswerAsync;
     const imports = {
       "expo-constants": { default: { expoConfig: { extra: { runtime: { iosNativeCallsEnabled: true } } } } },
       "expo-application": { nativeApplicationVersion: "test", nativeBuildVersion: "test" },
@@ -280,7 +314,8 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
   t.after(unmount);
   await render();
   return {
-    subscriptions, ends, starts, terminalSteps, routes, nativeSteps, nativeLifecycleOrder, retryTimers, errorReports, mediaDiagnostics,
+    subscriptions, inviteChannels, inviteReads, ends, starts, terminalSteps, routes, nativeSteps, nativeLifecycleOrder, retryTimers, errorReports, mediaDiagnostics,
+    subscribeInvite: context.subscribeToChillyChatCallInvite,
     get facade() { return facade; },
     get revokes() { return revokes; },
     setReader(next) { reader = next; },
@@ -304,6 +339,12 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
       await React.act(async () => { await nativeListener(event); await settle(); });
     },
     async update(inviteId = "invite-a") { await React.act(async () => { subscriptions.get(inviteId)?.(); await settle(); }); },
+    async subscriptionStatus(status, index = inviteChannels.length - 1) {
+      await React.act(async () => { assert.ok(inviteChannels[index]); inviteChannels[index].status?.(status); await settle(); });
+    },
+    async subscriptionRow(index = inviteChannels.length - 1) {
+      await React.act(async () => { assert.ok(inviteChannels[index]); inviteChannels[index].row(); await settle(); });
+    },
     async activate() { await React.act(async () => { for (const listener of activations) listener("active"); await settle(); }); },
     async runRetry() {
       const [id, timer] = retryTimers.entries().next().value ?? [];
@@ -332,6 +373,120 @@ test("transient readiness quarantine recovers a live CallKit receipt before a la
   await h.flush();
   assert.equal(h.routes.length, 1, "an actual native Answer remains eligible after transient recovery");
   assert.equal(h.nativeSteps.some(step => step.name === "requestAnswer"), false, "no foreground report or fabricated Answer was needed");
+});
+
+for (const phase of ["initial readiness", "reconnect"]) {
+  test(`actual invite subscription ${phase} reconciles a missed terminal change through root and native facade`, async t => {
+    const h = await mount(t, { realFacade: true, realInviteSubscription: true, controlledRetryTimers: true });
+    await h.event(nativeEvent("incoming"));
+    assert.equal(h.inviteChannels.length, 1);
+    const channel = h.inviteChannels[0];
+    assert.equal(channel.kind, "postgres_changes");
+    assert.equal(channel.filter.table, "chat_call_invites");
+    assert.equal(channel.filter.filter, `id=eq.${ids.invite}`);
+    if (phase === "reconnect") {
+      await h.subscriptionStatus("SUBSCRIBED"); await h.subscriptionStatus("CHANNEL_ERROR");
+    }
+    h.setReader(async () => ({ status: "canceled", threadId: ids.thread }));
+    // The row changed before ready/reconnected, so no row event is delivered.
+    await h.subscriptionStatus("SUBSCRIBED"); await h.flush();
+    assert.equal(h.nativeSteps.filter(step => step.name === "remoteEnd").length, 1);
+    assert.equal(h.nativeSteps.find(step => step.name === "remoteEnd").uuid, ids.uuid);
+    assert.equal(h.facade.hasIosNativeCallPresentation(ids.invite), false);
+    assert.equal(channel.removed, true);
+    assert.ok(h.inviteReads.every(id => id === ids.invite));
+    await h.subscriptionStatus("SUBSCRIBED", 0); await h.subscriptionRow(0);
+    assert.equal(h.nativeSteps.filter(step => step.name === "remoteEnd").length, 1, "retired callbacks cannot repeat native cleanup");
+  });
+}
+
+test("subscription readiness during a held ringing read queues one exact-owner terminal reread", async t => {
+  const h = await mount(t, { realFacade: true, realInviteSubscription: true, controlledRetryTimers: true });
+  const held = deferred(); h.setReader(() => held.promise);
+  await h.event(nativeEvent("incoming")); assert.equal(h.inviteReads.length, 1);
+  h.setReader(async () => ({ status: "canceled", threadId: ids.thread }));
+  await h.subscriptionStatus("SUBSCRIBED"); await h.subscriptionStatus("SUBSCRIBED");
+  assert.equal(h.inviteReads.length, 1, "no concurrent read is started while its predecessor is held");
+  await h.resolve(held, { status: "ringing", threadId: ids.thread });
+  assert.equal(h.retryTimers.size, 1, "successful stale ringing read must not swallow the queued readiness hint");
+  assert.equal(await h.runRetry(), 400); await h.flush();
+  assert.equal(h.inviteReads.length, 2);
+  assert.equal(h.nativeSteps.filter(step => step.name === "remoteEnd").length, 1);
+  assert.equal(h.retryTimers.size, 0);
+});
+
+for (const replacement of [
+  { name: "account", value: { user: { id: "user-b" }, authority: { ...binding("session-b"), userId: "user-b", accountId: "user-b" } } },
+  { name: "session generation", value: { authority: binding("session-b") } },
+]) {
+  test(`actual subscription readiness read and late callbacks cannot cross ${replacement.name} replacement`, async t => {
+    const h = await mount(t, { realInviteSubscription: true, controlledRetryTimers: true });
+    await h.incoming();
+    const held = deferred(); h.setReader(() => held.promise); await h.subscriptionStatus("SUBSCRIBED");
+    await h.rerender(replacement.value); assert.equal(h.inviteChannels[0].removed, true);
+    h.setReader(async () => ({ status: "ringing" })); await h.incoming("native-b", "invite-b");
+    const reads = h.inviteReads.length;
+    await h.subscriptionStatus("SUBSCRIBED", 0); await h.subscriptionRow(0);
+    await h.resolve(held, { status: "canceled" });
+    assert.equal(h.inviteReads.length, reads); assert.equal(h.ends.length, 0);
+    h.setReader(async () => ({ status: "ended" })); await h.subscriptionStatus("SUBSCRIBED", 1);
+    assert.equal(h.ends.length, 1); assert.equal(h.ends[0].uuid, "native-b");
+  });
+}
+
+test("actual invite subscription preserves row delivery and retires ready callbacks on native End and unmount", async t => {
+  const h = await mount(t, { realInviteSubscription: true, controlledRetryTimers: true });
+  await h.incoming(); h.setReader(async () => ({ status: "ended" }));
+  await h.subscriptionRow(); assert.equal(h.ends.length, 1); assert.equal(h.inviteChannels[0].removed, true);
+  h.setReader(async () => ({ status: "ringing" })); await h.incoming("native-b", "invite-b");
+  const reads = h.inviteReads.length; await h.subscriptionStatus("SUBSCRIBED", 0); await h.subscriptionRow(0);
+  assert.equal(h.inviteReads.length, reads); assert.equal(h.ends.length, 1);
+  await h.unmount(); assert.equal(h.inviteChannels[1].removed, true);
+  await h.subscriptionStatus("SUBSCRIBED", 1); await h.subscriptionRow(1);
+  assert.equal(h.inviteReads.length, reads);
+});
+
+test("actual subscription readiness keeps ringing and accepted calls open and ignores failure statuses", async t => {
+  const h = await mount(t, { realFacade: true, realInviteSubscription: true, controlledRetryTimers: true });
+  await h.event(nativeEvent("incoming")); const reads = h.inviteReads.length;
+  await h.subscriptionStatus("CHANNEL_ERROR"); await h.subscriptionStatus("TIMED_OUT"); await h.subscriptionStatus("CLOSED");
+  assert.equal(h.inviteReads.length, reads);
+  await h.subscriptionStatus("SUBSCRIBED");
+  assert.equal(h.inviteReads.length, reads + 1);
+  h.setReader(async () => ({ status: "accepted" })); await h.subscriptionStatus("SUBSCRIBED");
+  assert.equal(h.inviteReads.length, reads + 2);
+  assert.equal(h.nativeSteps.filter(step => step.name === "remoteEnd").length, 0);
+  assert.equal(h.facade.hasIosNativeCallPresentation(ids.invite), true);
+  assert.equal(h.retryTimers.size, 0);
+});
+
+test("actual invite subscription keeps existing two-argument consumers row-only and suppresses retired callbacks", async t => {
+  const h = await mount(t, { realInviteSubscription: true });
+  let changes = 0;
+  const unsubscribe = h.subscribeInvite("invite-row-only", () => { changes += 1; });
+  await h.subscriptionStatus("SUBSCRIBED"); await h.subscriptionStatus("CHANNEL_ERROR");
+  await h.subscriptionStatus("SUBSCRIBED");
+  assert.equal(changes, 0, "readiness is opt-in and does not add concurrent reads to other consumers");
+  await h.subscriptionRow(); assert.equal(changes, 1);
+  unsubscribe(); assert.equal(h.inviteChannels[0].removed, true);
+  await h.subscriptionStatus("SUBSCRIBED"); await h.subscriptionRow();
+  assert.equal(changes, 1, "late row and ready callbacks cannot revive a retired subscription");
+});
+
+test("actual subscription readiness completion after native End cannot repeat cleanup or navigate", async t => {
+  const h = await mount(t, { realFacade: true, realInviteSubscription: true, controlledRetryTimers: true });
+  await h.event(nativeEvent("incoming"));
+  const held = deferred(); h.setReader(() => held.promise);
+  await h.subscriptionStatus("SUBSCRIBED");
+  await h.event(nativeEvent("remoteEnded"));
+  assert.equal(h.inviteChannels[0].removed, true);
+  await h.resolve(held, { status: "canceled", threadId: ids.thread });
+  const reads = h.inviteReads.length;
+  await h.subscriptionStatus("SUBSCRIBED", 0); await h.subscriptionRow(0);
+  assert.equal(h.inviteReads.length, reads);
+  assert.equal(h.nativeSteps.filter(step => step.name === "remoteEnd").length, 0);
+  assert.equal(h.routes.length, 0);
+  assert.equal(h.retryTimers.size, 0);
 });
 
 test("root readiness retries two transient failures and foreground can recover after exhaustion", async (t) => {
@@ -788,6 +943,169 @@ for (const suspendedStage of ["thread", "presented", "rows"]) {
     assert.deepEqual(h.terminalSteps.map((step) => step.name), expectedSteps, "no further cleanup begins after ownership changes");
   });
 }
+
+test("locked pending native voice Answer routes through actual facade without fabricating foreground or media success", async (t) => {
+  const h = await mount(t, { realFacade: true });
+  h.setApplicationActive(false);
+  h.setStage("os-pendingVoiceAnswer", async (value) => {
+    assert.deepEqual({ ...value }, {
+      callUuid: ids.uuid, callInviteId: ids.invite, threadId: ids.thread,
+      nativeCallGeneration: nativeEvent("incoming").nativeCallGeneration,
+      userId: ids.user, accountId: ids.user, sessionGeneration: ids.session,
+      installId: "test-install",
+    });
+    return true;
+  });
+  await h.event(nativeEvent("incoming", { callType: "voice" }));
+  await h.event(nativeEvent("answerRequested", { callType: "voice" }));
+  assert.equal(h.routes.length, 1, "a still-pending exact native voice Answer can route while the application remains inactive");
+  assert.ok(h.nativeSteps.some(step => step.name === "pendingVoiceAnswer"));
+  assert.equal(h.nativeSteps.some(step => step.name === "answer"), false, "route readiness cannot complete or fail the native Answer itself");
+  assert.equal(h.facade.readIosNativeApplicationActiveSerial(ids.invite), 0, "no foreground receipt was fabricated");
+  const destination = new URL(h.routes[0], "https://test.invalid");
+  const expected = {
+    action: "answer", authenticatedUserId: ids.user, claimId: destination.searchParams.get("nativeCallClaim"),
+    inviteId: ids.invite, nativeIdentity: ids.uuid, platform: "ios", source: "ios_callkit_native_event", threadId: ids.thread,
+  };
+  assert.equal(provenance.consumeNativeCallTransitionClaim(expected)?.consumed, true);
+  assert.equal(provenance.consumeNativeCallTransitionClaim(expected), null, "routing preserves one-use native claim ownership");
+});
+
+for (const nativeProof of ["denied", "unavailable", "rejected"]) {
+  test(`locked voice Answer cannot bypass foreground when native proof is ${nativeProof}`, async (t) => {
+    const h = await mount(t, { realFacade: true, pendingVoiceAnswerAvailable: nativeProof !== "unavailable" });
+    h.setApplicationActive(false);
+    h.setStage("os-pendingVoiceAnswer", async () => {
+      if (nativeProof === "rejected") throw new Error("native proof unavailable");
+      return false;
+    });
+    await h.event(nativeEvent("incoming", { callType: "voice" }));
+    await h.event(nativeEvent("answerRequested", { callType: "voice" }));
+    assert.equal(h.routes.length, 0);
+    assert.deepEqual(h.nativeSteps.filter(step => step.name === "answer").map(step => step.connected), [false]);
+    assert.equal(h.facade.readIosNativeApplicationActiveSerial(ids.invite), 0);
+  });
+}
+
+test("locked video Answer keeps foreground requirement even if a native voice proof would return true", async (t) => {
+  const h = await mount(t, { realFacade: true });
+  h.setApplicationActive(false);
+  h.setStage("os-pendingVoiceAnswer", async () => true);
+  await h.event(nativeEvent("incoming"));
+  await h.event(nativeEvent("answerRequested"));
+  assert.equal(h.routes.length, 0);
+  assert.equal(h.nativeSteps.some(step => step.name === "pendingVoiceAnswer"), false, "video never requests a voice exception");
+  assert.deepEqual(h.nativeSteps.filter(step => step.name === "answer").map(step => step.connected), [false]);
+});
+
+test("foreground voice Answer still routes on an older native binary without the optional proof API", async (t) => {
+  const h = await mount(t, { realFacade: true, pendingVoiceAnswerAvailable: false });
+  await h.event(nativeEvent("incoming", { callType: "voice" }));
+  await h.event(nativeEvent("answerRequested", { callType: "voice" }));
+  assert.equal(h.routes.length, 1);
+  assert.equal(h.nativeSteps.some(step => step.name === "answer"), false);
+});
+
+for (const replacement of ["account", "terminal", "uuid", "native-generation"]) {
+  test(`locked pending voice proof cannot route after ${replacement} changes during its await`, async (t) => {
+    const h = await mount(t, { realFacade: true });
+    h.setApplicationActive(false);
+    const pending = deferred();
+    let reads = 0;
+    h.setStage("os-pendingVoiceAnswer", async () => { reads += 1; return pending.promise; });
+    await h.event(nativeEvent("incoming", { callType: "voice" }));
+    h.emitWithoutWaiting(nativeEvent("answerRequested", { callType: "voice" }));
+    await settle();
+    assert.equal(reads, 1, "hold the actual native-proof await before replacing its owner");
+    if (replacement === "account") {
+      await h.rerender({ authority: { ...binding("session-b"), userId: ids.user, accountId: ids.user } });
+    } else if (replacement === "terminal") {
+      h.emitWithoutWaiting(nativeEvent("remoteEnded", { callType: "voice" }));
+    } else {
+      // A different generation is authoritative only on a fresh incoming
+      // event. A recovered mismatched-generation receipt is rejected as stale.
+      h.emitWithoutWaiting(nativeEvent(replacement === "native-generation" ? "incoming" : "recovered", {
+        callType: "voice",
+        ...(replacement === "uuid" ? { callUuid: ids.replacementUuid }
+          : { nativeCallGeneration: "00000000-0000-4000-8000-000000000008" }),
+      }));
+    }
+    await settle();
+    await h.resolve(pending, true);
+    await h.flush();
+    assert.equal(h.routes.length, 0, "late positive native proof cannot authorize a retired call owner");
+    assert.equal(h.nativeSteps.some(step => step.name === "answer"), false, "retired work cannot complete or fail the replacement's Answer");
+  });
+}
+
+test("locked pending voice Answer cannot reuse a replacement generation after the app becomes foreground", async (t) => {
+  const h = await mount(t, { realFacade: true });
+  h.setApplicationActive(false);
+  const pending = deferred();
+  let reads = 0;
+  h.setStage("os-pendingVoiceAnswer", async () => { reads += 1; return pending.promise; });
+  await h.event(nativeEvent("incoming", { callType: "voice" }));
+  h.emitWithoutWaiting(nativeEvent("answerRequested", { callType: "voice" }));
+  await settle();
+  assert.equal(reads, 1);
+  h.emitWithoutWaiting(nativeEvent("incoming", {
+    callType: "voice", nativeCallGeneration: "00000000-0000-4000-8000-000000000008",
+  }));
+  await settle();
+  h.setApplicationActive(true);
+  await h.resolve(pending, true);
+  await h.flush();
+  assert.equal(h.routes.length, 0, "foreground fallback cannot grant the retired generation a new route");
+  assert.equal(h.nativeSteps.some(step => step.name === "answer"), false, "retired work cannot fail the replacement's Answer");
+});
+
+for (const replacement of ["terminal", "replacement call"]) {
+  test(`foreground fallback cannot route retired voice Answer after ${replacement} during its final native foreground read`, { timeout: 5_000 }, async (t) => {
+    const h = await mount(t, { realFacade: true, pendingVoiceAnswerAvailable: false });
+    const pending = deferred();
+    const entered = deferred();
+    let reads = 0;
+    h.setStage("os-application-active", async () => {
+      if (++reads === 2) { entered.resolve(); return pending.promise; }
+      return true;
+    });
+    await h.event(nativeEvent("incoming", { callType: "voice" }));
+    h.emitWithoutWaiting(nativeEvent("answerRequested", { callType: "voice" }));
+    await entered.promise;
+    // A genuine native terminal callback retires the old call while the
+    // foreground-only fallback awaits its final OS result. A later call has
+    // its own invite, UUID and generation; no same-invite reuse is assumed.
+    h.emitWithoutWaiting(nativeEvent("remoteEnded", { callType: "voice" }));
+    if (replacement === "replacement call") {
+      h.emitWithoutWaiting(nativeEvent("incoming", {
+        callType: "voice", callInviteId: ids.replacementUuid, callUuid: ids.replacementUuid,
+        nativeCallGeneration: "00000000-0000-4000-8000-000000000008",
+      }));
+    }
+    await settle();
+    assert.equal(h.facade.hasIosNativeCallPresentation(ids.invite), false);
+    await h.resolve(pending, true);
+    await h.flush();
+    assert.equal(reads, 2, "the original foreground check completed without an automatic retry");
+    assert.equal(h.routes.length, 0, "a late foreground boolean cannot authorize a retired Answer");
+    assert.equal(h.nativeSteps.some(step => step.name === "answer"), false, "stale work cannot complete or fail a native Answer");
+    if (replacement === "replacement call") {
+      assert.equal(h.facade.hasIosNativeCallPresentation(ids.replacementUuid), true, "the replacement presentation remains owned");
+    }
+  });
+}
+
+test("duplicate locked native voice Answer delivery creates only one route and no fabricated activation", async (t) => {
+  const h = await mount(t, { realFacade: true });
+  h.setApplicationActive(false);
+  h.setStage("os-pendingVoiceAnswer", async () => true);
+  await h.event(nativeEvent("incoming", { callType: "voice" }));
+  await h.event(nativeEvent("answerRequested", { callType: "voice" }));
+  await h.event(nativeEvent("answerRequested", { callType: "voice" }));
+  assert.equal(h.routes.length, 1);
+  assert.equal(h.facade.readIosNativeApplicationActiveSerial(ids.invite), 0);
+  assert.equal(h.nativeSteps.some(step => step.name === "answer"), false);
+});
 
 test("actual native facade, mounted bridge, and provenance deliver one consumable Answer route", async (t) => {
   const h = await mount(t, { realFacade: true });

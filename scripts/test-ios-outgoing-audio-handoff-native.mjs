@@ -41,6 +41,7 @@ const members = [
   "public func retireOutgoingAudioHandoff(",
   "public func setAudioRoute(_ route: String) throws {",
   "public func providerDidReset(_ provider: CXProvider)",
+  "private func stopAllIncomingStateObservers()",
   "private func deactivateAudioSession()",
   "private func handleAudioSessionInterruption(_ notification: Notification)",
 ];

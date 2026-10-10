@@ -1,25 +1,25 @@
 {
   "schemaVersion": 1,
-  "generation": "internal-native-v12",
+  "generation": "internal-native-v13",
   "channels": {
     "android": "android-internal-v2",
     "ios": "ios-internal-v2"
   },
   "runtimeVersions": {
-    "android": "1.0.0-android-production-v12",
-    "ios": "1.0.0-ios-production-v12"
+    "android": "1.0.0-android-production-v13",
+    "ios": "1.0.0-ios-production-v13"
   },
   "supersedes": {
-    "generation": "internal-native-v11",
-    "androidRuntimeVersion": "1.0.0-android-production-v11",
-    "iosRuntimeVersion": "1.0.0-ios-production-v11",
-    "androidCompatibilityDigest": "321a7ef31e17ec16eeefe3fcdd1886ad0075fbeb02bd3452430e78205c592ba8",
-    "iosCompatibilityDigest": "97aa914a321e38ad70900a735dbe79df01ca9b9c3503d4be7a6c6f528529939c"
+    "generation": "internal-native-v12",
+    "androidRuntimeVersion": "1.0.0-android-production-v12",
+    "iosRuntimeVersion": "1.0.0-ios-production-v12",
+    "androidCompatibilityDigest": "61599fe404992adb0df8a5f9182b71c3bd332303448a6ee61b0140cfc8f6dd9b",
+    "iosCompatibilityDigest": "9aa4f5cea1371154d9c1932dfe9315724bb08c193858cf1e1e716d85ddb7c633"
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
-    "androidDigest": "61599fe404992adb0df8a5f9182b71c3bd332303448a6ee61b0140cfc8f6dd9b",
-    "iosDigest": "9aa4f5cea1371154d9c1932dfe9315724bb08c193858cf1e1e716d85ddb7c633"
+    "androidDigest": "88264f9d61b35d435705797c247759e298ccc90e385691c797df6e04b9b4a769",
+    "iosDigest": "c1fb06a12caf03e5d3e14716ca2ac63eb5017aeef1103fe6845a04b6638c5fc8"
   },
   "policy": {
     "internalOnly": true,
@@ -37,6 +37,6 @@
         "group": "Chillywood Internal"
       }
     },
-    "reason": "V11 paired testing observed matching immediate iPhone receiver and speaker outputs during video, but also an intermittent Android microphone startup rollback around competing offers. Actual-hook mounted and real-browser paired regressions independently reproduced an unnecessary foreground camera offer after that same initial camera was already negotiated. V12 reuses only the original peer, generation, sender and live track with a stable negotiated sending transceiver; recovered or unproved camera senders still negotiate, and microphone collision recovery remains bounded. This removes the proved redundant offer without claiming it proves the phone failure's complete cause. Fresh source validation and paired retesting are required; physical sound, moving video and the full qualification matrix remain unverified. Fresh binaries remain restricted to the existing Google Play internal and TestFlight Chillywood Internal audiences. Installed v11 and earlier cohorts and their evidence remain immutable. Media diagnostics remain limited to the reviewed internal store profiles and matching signed channels. This generation does not authorize OTA publication or public release."
+    "reason": "V13 isolates the consolidated notification repair from installed V12 binaries. Android adds a private incoming-call activity for the locked-screen surface; iOS adds guarded native Answer readiness and an optional exact-call status observer. These native changes require fresh signed binaries and cannot be delivered by a V12 OTA. Existing Android 104 and iOS 38 artifacts, V12 digests and historical physical evidence remain immutable. Local source and synthetic/native checks do not establish installed notification, sound, moving-video or background-call behavior; the expanded paired physical matrix remains required. Future delivery stays limited to the existing Google Play internal track and TestFlight Chillywood Internal group. Native automatic activation remains disabled; the app owns update activation. This source generation grants no build, submission, server activation, OTA or public-release authority."
   }
 }

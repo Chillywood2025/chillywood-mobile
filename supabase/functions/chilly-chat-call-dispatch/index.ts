@@ -12,6 +12,7 @@ import {
   buildBlockedChillyChatCallDispatch,
   buildChillyChatCallPresentationCopy,
   buildChillyChatNativeActionData,
+  combineChillyChatTimeoutAndMissedDispatch,
   createChillyChatCallChannelResult,
   resolveChillyChatCallPreferencePolicy,
   resolveChillyChatIncomingPushTtlSeconds,
@@ -263,23 +264,25 @@ async function readThreadMembers(adminClient: SupabaseClientLike, threadId: stri
   return (data ?? []) as ChatMember[];
 }
 
-async function hasAudienceBlock(adminClient: SupabaseClientLike, callerUserId: string, calleeUserId: string) {
-  const { data: callerBlockedCallee } = await adminClient
+async function hasAudienceBlock(adminClient: SupabaseClientLike, callerUserId: string, calleeUserId: string, requireKnown = false) {
+  const { data: callerBlockedCallee, error: callerBlockError } = await adminClient
     .from("channel_audience_blocks")
     .select("channel_user_id")
     .eq("channel_user_id", callerUserId)
     .eq("blocked_user_id", calleeUserId)
     .limit(1);
 
+  if (requireKnown && callerBlockError) throw new Error("missed_audience_block_read_failed");
   if (callerBlockedCallee?.length) return true;
 
-  const { data: calleeBlockedCaller } = await adminClient
+  const { data: calleeBlockedCaller, error: calleeBlockError } = await adminClient
     .from("channel_audience_blocks")
     .select("channel_user_id")
     .eq("channel_user_id", calleeUserId)
     .eq("blocked_user_id", callerUserId)
     .limit(1);
 
+  if (requireKnown && calleeBlockError) throw new Error("missed_audience_block_read_failed");
   return !!calleeBlockedCaller?.length;
 }
 
@@ -291,19 +294,22 @@ async function isAccountAccessRestricted(adminClient: SupabaseClientLike, userId
   return data === true;
 }
 
-async function readPreferences(adminClient: SupabaseClientLike, userId: string) {
-  const { data } = await adminClient
+async function readPreferences(adminClient: SupabaseClientLike, userId: string, action: DispatchAction) {
+  const { data, error } = await adminClient
     .from("notification_preferences")
     .select("user_id,push_enabled,in_app_enabled,chilly_chat_calls_enabled")
     .eq("user_id", userId)
     .maybeSingle();
 
+  // A missing row can use defaults; an unreadable row cannot authorize a new
+  // missed-call presentation. Terminal cleanup retains its independent policy.
+  if (error && action === "missed") throw new Error("missed_notification_preferences_unavailable");
   return data as NotificationPreference | null;
 }
 
-async function readPushTokens(adminClient: SupabaseClientLike, userId: string) {
+async function readPushTokens(adminClient: SupabaseClientLike, userId: string, action: DispatchAction) {
   const readPlatformTokens = async (platform: PushToken["platform"]) => {
-    const { data } = await adminClient
+    const { data, error } = await adminClient
       .from("user_push_tokens")
       .select("id,platform,provider,token,token_fingerprint")
       .eq("user_id", userId)
@@ -312,6 +318,7 @@ async function readPushTokens(adminClient: SupabaseClientLike, userId: string) {
       .is("revoked_at", null)
       .order("last_seen_at", { ascending: false })
       .limit(5);
+    if (error && action === "missed") throw new Error("missed_notification_tokens_unavailable");
     return (data ?? []) as PushToken[];
   };
 
@@ -355,17 +362,38 @@ async function insertDeliveryAttempt(adminClient: SupabaseClientLike, input: {
   });
 }
 
+const withOrdinaryPushDeadline = async <T>(operation: (signal: AbortSignal) => Promise<T>) => {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation(controller.signal),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error("ordinary_push_timeout"));
+          controller.abort();
+        }, 5_000);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+};
+
 async function sendExpoPush(message: JsonObject) {
-  const response = await fetch(EXPO_PUSH_URL, {
-    body: JSON.stringify(message),
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    method: "POST",
+  return await withOrdinaryPushDeadline(async (signal) => {
+    const response = await fetch(EXPO_PUSH_URL, {
+      body: JSON.stringify(message),
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      signal,
+    });
+    const body = await response.json();
+    return { body, ok: response.ok, status: response.status };
   });
-  const body = await response.json().catch(() => ({}));
-  return { body, ok: response.ok, status: response.status };
 }
 
 type FcmServiceAccount = {
@@ -634,7 +662,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
   deliveryId?: string;
   retryToken?: string;
 }) {
-  const preference = await readPreferences(adminClient, input.recipientUserId);
+  const preference = await readPreferences(adminClient, input.recipientUserId, input.action);
   const preferencePolicy = resolveChillyChatCallPreferencePolicy({
     action: input.action,
     chillyChatCallsEnabled: preference?.chilly_chat_calls_enabled,
@@ -658,6 +686,19 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
       inAppNotification: { ...blocked },
     }, "chilly_chat_calls_disabled");
   }
+
+  if (input.action === "missed" && pushAllowed) {
+    // This shared helper can finish updating older receipts after our deadline;
+    // it cannot resume this invocation or create a new notification send.
+    // No missed presentation is reserved until this known-unsent wait succeeds.
+    await withOrdinaryPushDeadline(() => reconcileRecentExpoPushReceipts(adminClient, input.recipientUserId));
+  }
+
+  // Resolve known-unsent lookup failures before claiming missed presentation.
+  // A later retry may then read the actual tokens without replaying any send.
+  const missedTokens = input.action === "missed" && pushAllowed
+    ? await readPushTokens(adminClient, input.recipientUserId, input.action)
+    : null;
 
   // PushKit is deliberately started before notification or ordinary-token
   // work for the initial invitation only. Terminal transitions use the
@@ -700,6 +741,9 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
       timing_key: timingKey,
       trigger_type: notificationType,
     });
+    if (input.action === "missed" && dedupeError && dedupeError.code !== "23505") {
+      throw new Error("missed_notification_reservation_failed");
+    }
     presentationDuplicate = !!dedupeError;
 
     if (presentationDuplicate) {
@@ -728,7 +772,11 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
             callUuid: input.invite.id,
             callInviteId: input.invite.id,
             callType: input.callType,
-            expiresAt: input.invite.expires_at,
+            // The ringing deadline is history for a missed call, not the
+            // expiry of its unread notification or Open Chat action.
+            ...(input.action === "missed"
+              ? { callExpiresAt: input.invite.expires_at }
+              : { expiresAt: input.invite.expires_at }),
             notificationChannelId: channelId,
             openCall: input.action === "incoming",
             threadId: input.invite.thread_id,
@@ -741,7 +789,10 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
         .select("id")
         .maybeSingle();
       if (error || !data?.id) {
-        await adminClient.from("notification_event_dedupes").delete().eq("dedupe_key", dedupeKey);
+        const { error: releaseError } = await adminClient.from("notification_event_dedupes").delete().eq("dedupe_key", dedupeKey);
+        if (input.action === "missed" && releaseError) {
+          throw new Error("missed_unsent_release_failed");
+        }
         inAppNotification = channelResult({
           eligible: true,
           attempted: true,
@@ -749,6 +800,16 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
           reason: "notification_insert_failed",
           status: "failed",
         });
+        if (input.action === "missed") {
+          // No provider attempt occurred. Releasing this reservation above is
+          // safe, and a later retry can create the required row before sending.
+          return summarizeDispatch(true, {
+            androidNative: channelResult(),
+            iosVoip: await iosVoipPromise,
+            ordinaryPush: channelResult({ reason: "notification_insert_failed" }),
+            inAppNotification,
+          });
+        }
       } else {
         notificationId = data.id;
         await adminClient.from("notification_event_dedupes").update({ notification_id: notificationId }).eq("dedupe_key", dedupeKey);
@@ -763,10 +824,12 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
     }
   }
 
-  if (pushAllowed) {
-    await reconcileRecentExpoPushReceipts(adminClient, input.recipientUserId).catch(() => null);
+  if (pushAllowed && input.action !== "missed") {
+    await withOrdinaryPushDeadline(() => reconcileRecentExpoPushReceipts(adminClient, input.recipientUserId)).catch(() => null);
   }
-  const tokens = pushAllowed ? await readPushTokens(adminClient, input.recipientUserId) : [];
+  const tokens = pushAllowed
+    ? missedTokens ?? await readPushTokens(adminClient, input.recipientUserId, input.action)
+    : [];
   const androidTokens = tokens.filter((token) => token.platform === "android");
   const fcmTokens = androidTokens.filter((token) => token.provider === "fcm");
   const androidExpoTokens = androidTokens.filter((token) => token.provider === "expo");
@@ -801,7 +864,17 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
         ttlSeconds: input.action === "incoming"
           ? resolveChillyChatIncomingPushTtlSeconds(input.invite.expires_at)
           : 300,
-      });
+      }).catch(() => ({
+        // OAuth or fetch failures must not abort the other delivery channels.
+        // An unavailable response is not permanent token invalidation; retain
+        // the invite dedupe because FCM may have accepted the request before
+        // its response was lost.
+        body: { error: "FCM request outcome unavailable." },
+        errorCode: "fcm_transport_unavailable",
+        ok: false,
+        providerMessageId: null,
+        status: 0,
+      }));
       const sent = pushResult.ok;
       if (sent) androidSent += 1;
       else androidFailed += 1;
@@ -895,16 +968,25 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
         ttl: input.action === "incoming" ? 45 : 3600,
       });
     }
-    const pushResult = await sendExpoPush(pushMessage);
-    const firstTicket = Array.isArray((pushResult.body as { data?: unknown }).data)
-      ? ((pushResult.body as { data: JsonObject[] }).data[0] ?? {})
-      : ((pushResult.body as { data?: JsonObject }).data ?? {});
+    const pushResult = await sendExpoPush(pushMessage).catch((error) => ({
+      body: { data: { status: "error", message: "Expo request outcome unavailable.", details: {
+        error: error instanceof Error && error.message === "ordinary_push_timeout"
+          ? "expo_timeout_unknown" : "expo_transport_unavailable",
+      } } },
+      ok: false,
+      status: 0,
+    }));
+    const pushBody = pushResult.body && typeof pushResult.body === "object" && !Array.isArray(pushResult.body)
+      ? pushResult.body as JsonObject : {};
+    const ticketRaw = Array.isArray(pushBody.data) ? pushBody.data[0] : pushBody.data;
+    const firstTicket = ticketRaw && typeof ticketRaw === "object" && !Array.isArray(ticketRaw)
+      ? ticketRaw as JsonObject : {};
     const ticketStatus = toText(firstTicket.status || (pushResult.ok ? "sent" : "failed"));
     const providerMessageId = toText(firstTicket.id) || null;
+    const sent = pushResult.ok && ticketStatus === "ok" && providerMessageId !== null;
     const errorCode = toText(firstTicket.details && typeof firstTicket.details === "object"
       ? (firstTicket.details as JsonObject).error
-      : firstTicket.message) || null;
-    const sent = pushResult.ok && ticketStatus === "ok";
+      : firstTicket.message) || (pushResult.ok && !sent ? "expo_ticket_invalid_unknown" : null);
     if (sent) expoSent += 1;
     else expoFailed += 1;
     expoReason = sent ? "sent" : errorCode || "expo_provider_failed";
@@ -1054,20 +1136,24 @@ Deno.serve(async (req): Promise<Response> => {
       return jsonResponse(403, { error: "thread_membership_required" });
     }
 
-    if (await hasAudienceBlock(adminClient, callerUserId, calleeUserId)) {
-      return jsonResponse(200, blockedDispatch("audience_block"));
-    }
-
-    if (
-      await isAccountAccessRestricted(adminClient, callerUserId)
-      || await isAccountAccessRestricted(adminClient, calleeUserId)
-    ) {
-      return jsonResponse(200, blockedDispatch("account_access_restricted"));
-    }
-
     const status = toText(invite.status).toLowerCase();
     const now = Date.now();
     const expiresAt = Date.parse(toText(invite.expires_at));
+    const validatedExpiredMissed = (action === "timeout" || action === "missed")
+      && status === "missed" && Number.isFinite(expiresAt) && expiresAt <= now;
+    // Only an exact participant/thread and expired missed invite may retire
+    // its old alert before fresh presentation eligibility is known.
+    if (!validatedExpiredMissed) {
+      if (await hasAudienceBlock(adminClient, callerUserId, calleeUserId)) {
+        return jsonResponse(200, blockedDispatch("audience_block"));
+      }
+      if (
+        await isAccountAccessRestricted(adminClient, callerUserId)
+        || await isAccountAccessRestricted(adminClient, calleeUserId)
+      ) {
+        return jsonResponse(200, blockedDispatch("account_access_restricted"));
+      }
+    }
     if (action === "incoming") {
       if (actorUserId !== callerUserId) return jsonResponse(403, { error: "caller_required" });
       if (status !== "ringing") {
@@ -1081,6 +1167,9 @@ Deno.serve(async (req): Promise<Response> => {
     if (action === "missed") {
       if (status !== "missed") {
         return jsonResponse(200, blockedDispatch(TERMINAL_STATUSES.has(status) ? `invite_${status}` : "invite_not_missed"));
+      }
+      if (!Number.isFinite(expiresAt) || expiresAt > now) {
+        return jsonResponse(200, blockedDispatch("invite_not_expired"));
       }
     }
 
@@ -1112,8 +1201,7 @@ Deno.serve(async (req): Promise<Response> => {
       : action === "end"
         ? (actorUserId === callerUserId ? calleeUserId : callerUserId)
         : calleeUserId;
-    const result = await dispatchCallNotification(adminClient, {
-      action,
+    const dispatchInput = {
       actorUserId: callerUserId,
       callerName: toText(caller?.display_name) || "Someone",
       callType: normalizeCallType(invite.call_type),
@@ -1122,7 +1210,28 @@ Deno.serve(async (req): Promise<Response> => {
       authHeader: dispatchAuthorization,
       deliveryId: deliveryId || undefined,
       retryToken: retryToken || undefined,
+    };
+    // Keep the durable SQL action as timeout: native receivers require its
+    // terminal payload to stop the old alert. An expired missed invite also
+    // receives a separate, non-VoIP presentation with its own dedupe key.
+    const presentsMissedCall = (action === "timeout" || action === "missed") && status === "missed";
+    const result = await dispatchCallNotification(adminClient, {
+      ...dispatchInput,
+      action: presentsMissedCall ? "timeout" : action,
     });
+    if (presentsMissedCall) {
+      if (await hasAudienceBlock(adminClient, callerUserId, calleeUserId, true)) {
+        return jsonResponse(200, combineChillyChatTimeoutAndMissedDispatch(result, blockedDispatch("audience_block")));
+      }
+      if (
+        await isAccountAccessRestricted(adminClient, callerUserId)
+        || await isAccountAccessRestricted(adminClient, calleeUserId)
+      ) {
+        return jsonResponse(200, combineChillyChatTimeoutAndMissedDispatch(result, blockedDispatch("account_access_restricted")));
+      }
+      const missed = await dispatchCallNotification(adminClient, { ...dispatchInput, action: "missed" });
+      return jsonResponse(200, combineChillyChatTimeoutAndMissedDispatch(result, missed));
+    }
 
     return jsonResponse(200, result);
   } catch (error) {

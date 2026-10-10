@@ -575,33 +575,58 @@ export async function drainIosNativeCallPendingEvents() {
 
 export async function waitForIosNativeCallAnswerRouteReadiness(
   event: SanitizedNativeCallEvent,
-) {
+): Promise<boolean | "stale"> {
   const generation = voipLifecycleGeneration;
   const context = voipAuthorityContext;
-  if (!context || event.nativeEventGeneration !== generation) return false;
+  if (!context || event.nativeEventGeneration !== generation) return "stale";
   // Swift replays durable Answer before its one-shot incoming/recovered
   // events, both through the observer and the explicit pending-event drain.
   // Wait briefly for that presentation rather than reject a valid Answer at
   // the first missing JS map entry. This grants no routing authority: the
-  // exact UUID/account/generation and stable foreground checks still follow.
+  // exact UUID/account/generation checks still follow.
   const presentation = await waitForIosNativeCallPresentation(event.callInviteId, 2_000);
   if (presentation !== "presented") return false;
+  const isExactContextCurrent = async (candidateEvent: unknown) => {
+    const candidate = candidateEvent as SanitizedNativeCallEvent;
+    const inviteId = toText(candidate.callInviteId);
+    const callUuid = toText(candidate.callUuid).toLowerCase();
+    const callGeneration = toText(candidate.nativeCallGeneration).toLowerCase();
+    const ownsContext = () => !!inviteId
+      && !!callUuid
+      && candidate.nativeEventGeneration === generation
+      && voipRegistrationActive
+      && generation === voipLifecycleGeneration
+      && context === voipAuthorityContext
+      && nativePresentedCallUuidsByInviteId.get(inviteId) === callUuid
+      && (!callGeneration || nativePresentedCallGenerations.get(callUuid) === callGeneration);
+    return ownsContext() && await isExactVoipAuthorityCurrent(context) && ownsContext();
+  };
+  const callUuid = toText(event.callUuid).toLowerCase();
+  const nativeCallGeneration = toText(event.nativeCallGeneration).toLowerCase();
+  const ownsVoiceAnswerReceipt = () => event.type === "answerRequested"
+    && event.callType === "voice"
+    && !!nativeCallGeneration
+    && event.nativeSessionGeneration === context.authority.sessionGeneration
+    && nativePresentedCallGenerations.get(callUuid) === nativeCallGeneration;
+  // Locked voice Answer does not activate the app. A fresh native pending
+  // action is an explicit user handoff; a stored event/presentation alone is
+  // insufficient. Older binaries and video keep the foreground-only path.
+  if (ownsVoiceAnswerReceipt() && typeof NativeCallsModule?.hasPendingVoiceAnswerAsync === "function"
+    && await isExactContextCurrent(event)) {
+    const pendingVoiceAnswer = await NativeCallsModule.hasPendingVoiceAnswerAsync({
+      callUuid, callInviteId: toText(event.callInviteId), threadId: toText(event.threadId), nativeCallGeneration,
+      userId: context.authority.userId, accountId: context.authority.accountId,
+      sessionGeneration: context.authority.sessionGeneration, installId: context.installId,
+    }).catch(() => false);
+    if (pendingVoiceAnswer === true && await isExactContextCurrent(event) && ownsVoiceAnswerReceipt()) return true;
+  }
   const readiness = await waitForIosCallKitAnswerRouteReadiness(event, {
     isApplicationActive: readIosNativeApplicationActive,
-    isExactContextCurrent: async (candidateEvent: unknown) => {
-      const candidate = candidateEvent as SanitizedNativeCallEvent;
-      const inviteId = toText(candidate.callInviteId);
-      const callUuid = toText(candidate.callUuid).toLowerCase();
-      return !!inviteId
-        && !!callUuid
-        && candidate.nativeEventGeneration === generation
-        && voipRegistrationActive
-        && generation === voipLifecycleGeneration
-        && context === voipAuthorityContext
-        && nativePresentedCallUuidsByInviteId.get(inviteId) === callUuid
-        && await isExactVoipAuthorityCurrent(context);
-    },
+    isExactContextCurrent,
   });
+  // The final foreground read is itself asynchronous. A terminal/replacement
+  // receipt during that await must neither route nor fail the retired Answer.
+  if (readiness === "stale" || !await isExactContextCurrent(event)) return "stale";
   return readiness === "ready";
 }
 

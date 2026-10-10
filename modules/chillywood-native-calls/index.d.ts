@@ -34,6 +34,7 @@ export type NativeCallsModule = {
   }): Promise<string>;
   endCallAsync(callUuid: string, reason?: string): Promise<void>;
   reportRemoteEndAsync(callUuid: string, reason?: string): Promise<void>;
+  hasPendingVoiceAnswerAsync?(binding: Record<string, string>): Promise<boolean>;
   completeAnswerAsync(callUuid: string, connected: boolean): Promise<void>;
   requestAnswerAsync?(callUuid: string, inviteId: string): Promise<boolean>;
   completeTerminalTransitionAsync(callUuid: string): Promise<void>;

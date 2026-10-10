@@ -577,10 +577,12 @@ export function subscribeToIncomingChillyChatCallInvites(
 export function subscribeToChillyChatCallInvite(
   inviteId: string,
   onChange: () => void,
+  onReady?: () => void,
 ) {
   const normalizedInviteId = toText(inviteId);
   if (!normalizedInviteId) return () => {};
 
+  let active = true;
   let channel: RealtimeChannel | null = supabase
     .channel(`chat-call-invite-${normalizedInviteId}`)
     .on(
@@ -591,11 +593,16 @@ export function subscribeToChillyChatCallInvite(
         table: CHAT_CALL_INVITES_TABLE,
         filter: `id=eq.${normalizedInviteId}`,
       },
-      () => onChange(),
+      () => { if (active) onChange(); },
     )
-    .subscribe();
+    .subscribe((status) => {
+      // A ready/reconnected subscription does not replay earlier row changes.
+      // Opt-in owners can reconcile them without changing row-only consumers.
+      if (active && status === "SUBSCRIBED") onReady?.();
+    });
 
   return () => {
+    active = false;
     if (channel) {
       supabase.removeChannel(channel);
       channel = null;

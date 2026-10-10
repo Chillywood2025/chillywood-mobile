@@ -317,6 +317,8 @@ import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
@@ -325,6 +327,7 @@ import androidx.core.app.Person
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
+import java.util.UUID
 
 object ChillyChatCallNotifications {
   const val CALL_CHANNEL_ID = "chilly_chat_calls_fullscreen_v1"
@@ -335,7 +338,60 @@ object ChillyChatCallNotifications {
   private const val EXTRA_INVITE_DEADLINE = "chillywood.invite.expiresAtMs"
   private const val EXTRA_ELAPSED_DEADLINE = "chillywood.invite.elapsedDeadlineMs"
   private const val EXTRA_THREAD_SCOPE = "chillywood.invite.threadId"
+  private const val EXTRA_PRESENTATION_NONCE = "chillywood.invite.presentationNonce"
+  private const val EXTRA_CALL_TYPE = "chillywood.invite.callType"
+  private val PRESENTATION_UUID = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")
   private val RING_VIBRATION_PATTERN = longArrayOf(0, 480, 220, 480, 220, 720)
+  private val presentationObservers = mutableSetOf<(String, String?) -> Unit>()
+
+  data class IncomingPresentation(
+    val inviteId: String,
+    val threadId: String,
+    val nonce: String,
+    val expiresAtMs: Long,
+    val elapsedDeadlineMs: Long,
+    val callType: String,
+  )
+
+  // Only a currently posted, app-owned notification grants presentation. Intent
+  // extras alone never grant an Answer/Decline action or server/media authority.
+  @Synchronized
+  fun readIncomingPresentation(context: Context, intent: Intent): IncomingPresentation? {
+    val inviteId = intent.getStringExtra("callInviteId") ?: return null
+    val threadId = intent.getStringExtra("threadId") ?: return null
+    val nonce = intent.getStringExtra(EXTRA_PRESENTATION_NONCE) ?: return null
+    if (!PRESENTATION_UUID.matches(inviteId) || !PRESENTATION_UUID.matches(threadId) || !PRESENTATION_UUID.matches(nonce)) return null
+    val extras = context.getSystemService(NotificationManager::class.java).activeNotifications
+      .firstOrNull { it.tag == notificationTagForInvite(inviteId) && it.id == notificationIdForInvite(inviteId) }
+      ?.notification?.extras ?: return null
+    if (extras.getString(EXTRA_THREAD_SCOPE) != threadId
+      || extras.getString(EXTRA_PRESENTATION_NONCE) != nonce || nonce.isBlank()) return null
+    val expiresAt = extras.getLong(EXTRA_INVITE_DEADLINE, 0L)
+    val elapsedDeadline = extras.getLong(EXTRA_ELAPSED_DEADLINE, 0L)
+    if (expiresAt - System.currentTimeMillis() !in 1..120_000L
+      || elapsedDeadline - SystemClock.elapsedRealtime() !in 1..120_000L) return null
+    val callType = extras.getString(EXTRA_CALL_TYPE)
+    if (callType != "voice" && callType != "video") return null
+    return IncomingPresentation(inviteId, threadId, nonce, expiresAt, elapsedDeadline, callType)
+  }
+
+  @Synchronized
+  fun observeIncomingPresentation(observer: (String, String?) -> Unit): () -> Unit {
+    presentationObservers.add(observer)
+    return { synchronized(this) { presentationObservers.remove(observer) }; Unit }
+  }
+
+  @Synchronized
+  fun performIncomingPresentationAction(
+    context: Context,
+    intent: Intent,
+    expected: IncomingPresentation,
+    action: String,
+  ): Boolean {
+    if (action !in setOf("answer", "decline") || readIncomingPresentation(context, intent) != expected) return false
+    launchAfterTrustedAction(context, expected.inviteId, expected.threadId, action)
+    return true
+  }
 
   fun shouldHandleNativeIncomingCall(data: Map<String, String>): Boolean {
     val triggerType = data["triggerType"].orEmpty()
@@ -354,6 +410,25 @@ object ChillyChatCallNotifications {
 
   fun isAppForegrounded(): Boolean =
     ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+
+  @Synchronized
+  fun handleNativeTerminalCall(context: Context, data: Map<String, String>): Boolean {
+    if (data["nativeCallStyle"] != "terminal" || data["dismissCall"] != "true"
+      || data["action"] !in setOf("cancel", "declined", "end", "timeout")) return false
+    val inviteId = data["callInviteId"].orEmpty()
+    val threadId = data["threadId"].orEmpty()
+    if (inviteId.isBlank() || threadId.isBlank()) return true
+    val posted = context.getSystemService(NotificationManager::class.java).activeNotifications
+      .firstOrNull { it.tag == notificationTagForInvite(inviteId) && it.id == notificationIdForInvite(inviteId) }
+      ?: return true
+    // A terminal push only retires its existing presentation. It cannot clear
+    // another invite/thread, create a user action, consume pending authority,
+    // or bring the app to the foreground.
+    if (posted.notification.extras.getString(EXTRA_THREAD_SCOPE) == threadId) {
+      clearIncomingCallNotification(context, inviteId)
+    }
+    return true
+  }
 
   fun ensureCallChannel(context: Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -431,7 +506,9 @@ object ChillyChatCallNotifications {
     val contentIntent = buildNavigationPendingIntent(context, data, 0)
     val answerIntent = buildActionPendingIntent(context, data, ACTION_ANSWER, 1)
     val declineIntent = buildActionPendingIntent(context, data, ACTION_DECLINE, 2)
-    val fullScreenIntent = buildNavigationPendingIntent(context, data, 3)
+    val presentationNonce = previous?.getString(EXTRA_PRESENTATION_NONCE)
+      ?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+    val fullScreenIntent = buildIncomingPresentationPendingIntent(context, data, presentationNonce)
     val caller = Person.Builder()
       .setName(callerName)
       .setImportant(true)
@@ -458,9 +535,12 @@ object ChillyChatCallNotifications {
         putLong(EXTRA_INVITE_DEADLINE, deadline.expiresAtMs)
         putLong(EXTRA_ELAPSED_DEADLINE, deadline.elapsedDeadlineMs)
         putString(EXTRA_THREAD_SCOPE, threadId)
+        putString(EXTRA_PRESENTATION_NONCE, presentationNonce)
+        putString(EXTRA_CALL_TYPE, resolvedCallType)
       })
       .setContentIntent(contentIntent)
-      .setDeleteIntent(buildActionPendingIntent(context, data, ACTION_DECLINE, 4))
+      // Android sends deleteIntent on automatic timeout too. Only the explicit
+      // CallStyle Decline button may create a Decline action and launch the app.
       .setFullScreenIntent(fullScreenIntent, canUseFullScreenIntent(context))
       .setStyle(callStyle)
       .build()
@@ -496,7 +576,12 @@ object ChillyChatCallNotifications {
   @Synchronized
   fun clearIncomingCallNotification(context: Context, inviteId: String?) {
     if (inviteId.isNullOrBlank()) return
+    val nonce = context.getSystemService(NotificationManager::class.java).activeNotifications
+      .firstOrNull { it.tag == notificationTagForInvite(inviteId) && it.id == notificationIdForInvite(inviteId) }
+      ?.notification?.extras?.getString(EXTRA_PRESENTATION_NONCE)
     NotificationManagerCompat.from(context).cancel(notificationTagForInvite(inviteId), notificationIdForInvite(inviteId))
+    val observers = presentationObservers.toList()
+    Handler(Looper.getMainLooper()).post { observers.forEach { it(inviteId, nonce) } }
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
       val intent = Intent(context, ChillyChatCallNotificationActionReceiver::class.java).apply {
         action = ACTION_EXPIRE
@@ -526,6 +611,24 @@ object ChillyChatCallNotifications {
       && (expiresAt <= System.currentTimeMillis() || elapsedDeadline in 1..SystemClock.elapsedRealtime())) {
       clearIncomingCallNotification(context, inviteId)
     }
+  }
+
+  private fun buildIncomingPresentationPendingIntent(
+    context: Context,
+    data: Map<String, String>,
+    nonce: String,
+  ): PendingIntent {
+    val inviteId = data["callInviteId"].orEmpty()
+    val intent = Intent(context, ChillyChatIncomingCallActivity::class.java).apply {
+      this.data = Uri.Builder().scheme("chillywoodinternal").authority("incoming-call")
+        .appendPath(inviteId).appendPath(nonce).build()
+      putExtra("callInviteId", inviteId)
+      putExtra("threadId", data["threadId"])
+      putExtra(EXTRA_PRESENTATION_NONCE, nonce)
+      flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+    }
+    return PendingIntent.getActivity(context, notificationIdForInvite(inviteId) + 3, intent,
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
   }
 
   private fun buildNavigationPendingIntent(
@@ -620,6 +723,196 @@ object ChillyChatCallNotifications {
   }
 }
 `,
+  "ChillyChatIncomingCallActivity.kt": String.raw`package com.chillywood.mobile
+
+import android.app.Activity
+import android.app.KeyguardManager
+import android.content.Intent
+import android.graphics.Color
+import android.os.Build
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.Gravity
+import android.view.WindowManager
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
+
+/** A private, call-only surface. The ordinary app never gains lock-screen visibility. */
+class ChillyChatIncomingCallActivity : Activity() {
+  private val handler = Handler(Looper.getMainLooper())
+  private var presentation: ChillyChatCallNotifications.IncomingPresentation? = null
+  private var presentationIntent: Intent? = null
+  private var unsubscribe: (() -> Unit)? = null
+  private var actionGeneration = 0L
+  private var pendingAction: String? = null
+  private data class CredentialAttempt(
+    val requestCode: Int,
+    val presentation: ChillyChatCallNotifications.IncomingPresentation,
+    val generation: Long,
+    val action: String,
+  )
+  private var credentialAttempt: CredentialAttempt? = null
+  private var nextCredentialRequestCode = 4101
+  private var legacyCredentialRequestsAllowed = true
+  private var answer: Button? = null
+  private var decline: Button? = null
+  private val checkPresentation = object : Runnable {
+    override fun run() {
+      if (ownsPresentation()) handler.postDelayed(this, 500L) else finish()
+    }
+  }
+
+  override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    // Android 7 reports credentials by a numeric request code. After recreation
+    // an old result may still arrive: require manual unlock and a fresh tap,
+    // instead of reusing codes or restoring a pending action as authority.
+    legacyCredentialRequestsAllowed = savedInstanceState == null
+    unsubscribe = ChillyChatCallNotifications.observeIncomingPresentation { inviteId, nonce ->
+      val current = presentation
+      if (current != null && current.inviteId == inviteId && current.nonce == nonce) finish()
+    }
+    bindPresentation(intent)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    bindPresentation(intent)
+  }
+
+  private fun bindPresentation(intent: Intent) {
+    val incoming = ChillyChatCallNotifications.readIncomingPresentation(this, intent)
+    if (incoming == null) {
+      // A stale notification tap must not replace or dismiss a newer live call.
+      if (!ownsPresentation()) finish()
+      return
+    }
+    actionGeneration += 1L
+    pendingAction = null
+    credentialAttempt = null
+    handler.removeCallbacks(checkPresentation)
+    setIntent(intent)
+    presentationIntent = Intent(intent)
+    presentation = incoming
+    if (Build.VERSION.SDK_INT >= 27) {
+      setShowWhenLocked(true)
+      setTurnScreenOn(true)
+    } else {
+      @Suppress("DEPRECATION")
+      window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
+    }
+    // Never render notification caller text, a chat route, or media on this surface.
+    val layout = LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL
+      gravity = Gravity.CENTER
+      setPadding(32, 48, 32, 48)
+      setBackgroundColor(Color.rgb(22, 22, 28))
+    }
+    layout.addView(TextView(this).apply {
+      text = if (presentation?.callType == "video") "Incoming Chi'lly Chat video call" else "Incoming Chi'lly Chat voice call"
+      textSize = 24f
+      gravity = Gravity.CENTER
+      setTextColor(Color.WHITE)
+    })
+    layout.addView(TextView(this).apply {
+      text = "Unlock to answer or decline"
+      setTextColor(Color.WHITE)
+      gravity = Gravity.CENTER
+    })
+    answer = Button(this).apply { text = "Answer"; setOnClickListener { requestAction("answer") } }
+    decline = Button(this).apply { text = "Decline"; setOnClickListener { requestAction("decline") } }
+    layout.addView(answer)
+    layout.addView(decline)
+    setContentView(layout)
+    handler.post(checkPresentation)
+  }
+
+  private fun ownsPresentation(): Boolean {
+    val expected = presentation ?: return false
+    val ownedIntent = presentationIntent ?: return false
+    return !isFinishing && !isDestroyed
+      && ChillyChatCallNotifications.readIncomingPresentation(this, ownedIntent) == expected
+  }
+
+  private fun requestAction(action: String) {
+    if (pendingAction != null || !ownsPresentation()) return
+    val expected = presentation ?: return
+    val generation = ++actionGeneration
+    pendingAction = action
+    answer?.isEnabled = false
+    decline?.isEnabled = false
+    val keyguard = getSystemService(KeyguardManager::class.java)
+    if (!keyguard.isKeyguardLocked) {
+      completeAction(expected, generation, action)
+    } else if (Build.VERSION.SDK_INT >= 26) {
+      try {
+        keyguard.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
+          override fun onDismissSucceeded() { completeAction(expected, generation, action) }
+          override fun onDismissCancelled() { releaseAction(expected, generation) }
+          override fun onDismissError() { releaseAction(expected, generation) }
+        })
+      } catch (_: RuntimeException) { releaseAction(expected, generation) }
+    } else {
+      // Older supported phones use the normal OS credential UI. A non-secure
+      // keyguard must be unlocked by its owner; no legacy bypass flags are used.
+      @Suppress("DEPRECATION")
+      val unlock = keyguard.createConfirmDeviceCredentialIntent("Chi'lly Chat", "Unlock to answer or decline")
+      if (legacyCredentialRequestsAllowed && unlock != null && nextCredentialRequestCode <= 65535) {
+        val requestCode = nextCredentialRequestCode++
+        credentialAttempt = CredentialAttempt(requestCode, expected, generation, action)
+        try { startActivityForResult(unlock, requestCode) }
+        catch (_: RuntimeException) { releaseAction(expected, generation) }
+      } else releaseAction(expected, generation)
+    }
+  }
+
+  private fun completeAction(expected: ChillyChatCallNotifications.IncomingPresentation, generation: Long, action: String) {
+    if (presentation != expected || generation != actionGeneration || pendingAction != action || !ownsPresentation()) return
+    if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) { releaseAction(expected, generation); return }
+    val ownedIntent = presentationIntent ?: return
+    // Re-read the exact presentation after the asynchronous OS credential UI.
+    // The established action store and JS/server checks still own acceptance.
+    ChillyChatCallNotifications.performIncomingPresentationAction(this, ownedIntent, expected, action)
+    finish()
+  }
+
+  private fun releaseAction(expected: ChillyChatCallNotifications.IncomingPresentation, generation: Long) {
+    if (presentation != expected || generation != actionGeneration || !ownsPresentation()) return
+    pendingAction = null
+    credentialAttempt = null
+    answer?.isEnabled = true
+    decline?.isEnabled = true
+  }
+
+  @Deprecated("Legacy credential result for Android 7")
+  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    super.onActivityResult(requestCode, resultCode, data)
+    val attempt = credentialAttempt?.takeIf { it.requestCode == requestCode } ?: return
+    credentialAttempt = null
+    if (resultCode == RESULT_OK) completeAction(attempt.presentation, attempt.generation, attempt.action)
+    else releaseAction(attempt.presentation, attempt.generation)
+  }
+
+  override fun onResume() {
+    super.onResume()
+    if (!ownsPresentation()) finish()
+  }
+
+  override fun onDestroy() {
+    actionGeneration += 1L
+    pendingAction = null
+    credentialAttempt = null
+    presentation = null
+    presentationIntent = null
+    handler.removeCallbacks(checkPresentation)
+    unsubscribe?.invoke()
+    unsubscribe = null
+    super.onDestroy()
+  }
+}
+`,
   "ChillyChatFirebaseMessagingService.kt": String.raw`package com.chillywood.mobile
 
 import com.google.firebase.messaging.RemoteMessage
@@ -628,6 +921,7 @@ import expo.modules.notifications.service.ExpoFirebaseMessagingService
 class ChillyChatFirebaseMessagingService : ExpoFirebaseMessagingService() {
   override fun onMessageReceived(remoteMessage: RemoteMessage) {
     val data = remoteMessage.data
+    if (ChillyChatCallNotifications.handleNativeTerminalCall(this, data)) return
     if (ChillyChatCallNotifications.shouldHandleNativeIncomingCall(data)) {
       if (!ChillyChatCallNotifications.isAppForegrounded()) {
         ChillyChatCallNotifications.showIncomingCallNotification(this, data)
@@ -1077,6 +1371,21 @@ function ensureManifestServices(androidManifest) {
     },
   });
   application.receiver = receivers;
+
+  const activities = (application.activity ?? []).filter((activity) => (
+    activity?.$?.["android:name"] !== ".ChillyChatIncomingCallActivity"
+  ));
+  activities.push({
+    $: {
+      "android:name": ".ChillyChatIncomingCallActivity",
+      "android:exported": "false",
+      "android:excludeFromRecents": "true",
+      "android:launchMode": "singleTop",
+      "android:taskAffinity": "",
+      "android:theme": "@android:style/Theme.Material.NoActionBar",
+    },
+  });
+  application.activity = activities;
 }
 
 function withChillyChatNativeCallNotifications(config) {
@@ -1124,5 +1433,6 @@ module.exports = createRunOncePlugin(
 module.exports.__test = {
   composeLegacyBackupRules,
   composeModernBackupRules,
+  ensureManifestServices,
   nativeFiles: Object.freeze({ ...NATIVE_FILES }),
 };

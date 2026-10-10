@@ -232,7 +232,9 @@ assertIncludes(
   "&& isDiscoveryFeedLifecycleCurrent(item)",
 );
 assertIncludes("Circle ranking exact target identity", circleRankingGate, "&& hasDiscoveryDestinationIdentity(item);");
-assertIncludes("Live Event destination label", live, ">Open Event</Text>");
+assertIncludes("Live exact discovery destination", live, "router.push(getDiscoveryItemDestination(item) as any)");
+assertIncludes("Live Event destination label", live, "Open ${getDiscoveryItemActionLabel(item)}");
+assertIncludes("Live canonical discovery", live, 'useLiveDiscoveryFeed({ surface: "home", liveOnly: true');
 assertNotIncludes("stale Live Event destination label", live, ">Open Platform</Text>");
 assertIncludes("Upcoming Event disclosure", live, "Upcoming Events opens the exact Event");
 assertNotIncludes("stale Upcoming Event disclosure", live, "Upcoming Events opens the hosting Platform");

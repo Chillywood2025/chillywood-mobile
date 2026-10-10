@@ -11212,6 +11212,8 @@ export type Database = {
       }
       notification_preferences: {
         Row: {
+          account_activity_enabled: boolean
+          circle_activity_enabled: boolean
           chilly_chat_call_custom_in_app_sound_uri: string | null
           chilly_chat_call_sound_key: string
           chilly_chat_call_vibrate_enabled: boolean
@@ -11221,15 +11223,23 @@ export type Database = {
           creator_money_purchases_enabled: boolean
           creator_money_sales_enabled: boolean
           event_starts_soon_enabled: boolean
+          event_updates_enabled: boolean
           followed_creator_live_enabled: boolean
           in_app_enabled: boolean
+          messages_enabled: boolean
           public_upload_enabled: boolean
           push_enabled: boolean
           replay_later_enabled: boolean
+          seat_activity_enabled: boolean
+          social_activity_enabled: boolean
           updated_at: string
           user_id: string
+          view_summary_enabled: boolean
+          view_summary_push_enabled: boolean
         }
         Insert: {
+          account_activity_enabled?: boolean
+          circle_activity_enabled?: boolean
           chilly_chat_call_custom_in_app_sound_uri?: string | null
           chilly_chat_call_sound_key?: string
           chilly_chat_call_vibrate_enabled?: boolean
@@ -11239,15 +11249,23 @@ export type Database = {
           creator_money_purchases_enabled?: boolean
           creator_money_sales_enabled?: boolean
           event_starts_soon_enabled?: boolean
+          event_updates_enabled?: boolean
           followed_creator_live_enabled?: boolean
           in_app_enabled?: boolean
+          messages_enabled?: boolean
           public_upload_enabled?: boolean
           push_enabled?: boolean
           replay_later_enabled?: boolean
+          seat_activity_enabled?: boolean
+          social_activity_enabled?: boolean
           updated_at?: string
           user_id: string
+          view_summary_enabled?: boolean
+          view_summary_push_enabled?: boolean
         }
         Update: {
+          account_activity_enabled?: boolean
+          circle_activity_enabled?: boolean
           chilly_chat_call_custom_in_app_sound_uri?: string | null
           chilly_chat_call_sound_key?: string
           chilly_chat_call_vibrate_enabled?: boolean
@@ -11257,13 +11275,19 @@ export type Database = {
           creator_money_purchases_enabled?: boolean
           creator_money_sales_enabled?: boolean
           event_starts_soon_enabled?: boolean
+          event_updates_enabled?: boolean
           followed_creator_live_enabled?: boolean
           in_app_enabled?: boolean
+          messages_enabled?: boolean
           public_upload_enabled?: boolean
           push_enabled?: boolean
           replay_later_enabled?: boolean
+          seat_activity_enabled?: boolean
+          social_activity_enabled?: boolean
           updated_at?: string
           user_id?: string
+          view_summary_enabled?: boolean
+          view_summary_push_enabled?: boolean
         }
         Relationships: []
       }
@@ -20599,6 +20623,9 @@ export type Database = {
         Returns: Json
       }
       wave1_session_authority_readback: { Args: never; Returns: Json }
+      begin_video_notification_view: { Args: { p_video_id: string }; Returns: string | null }
+      begin_spectator_notification_view: { Args: { p_record_id: string }; Returns: string | null }
+      complete_content_notification_view: { Args: { p_view_id: string }; Returns: boolean }
       account_access_status_readback: {
         Args: { p_user_id: string }
         Returns: Json

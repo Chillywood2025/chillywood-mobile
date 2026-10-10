@@ -166,6 +166,24 @@
       "physicalProofRequired": true
     },
     {
+      "id": "notification_activity_delivery_worker",
+      "owningSystem": "notification_delivery_operator",
+      "componentType": "registered_surface",
+      "supportedPlatforms": ["shared", "ios", "android"],
+      "paths": ["supabase/functions/notification-activity-worker/index.ts", "supabase/functions/_shared/notification-activity-worker.mjs", "supabase/migrations/20261010180545_notification_activity_outbox.sql"],
+      "schedulerCadence": "disabled by default; PostgreSQL cron every ten seconds only after separately authorized configuration",
+      "allowedReads": ["current source eligibility, exact recipient preferences, account/session-bound push tokens and leased activity events"],
+      "allowedWrites": ["bounded event leases, eligible bell records, exact-recipient push reservations, ordinary Expo delivery and sanitized outcomes"],
+      "forbiddenScope": ["silent activation", "preference or access bypass", "historical backfill", "raw token output", "resending uncertain provider deliveries", "purchase, entitlement or moderation-authority mutation"],
+      "approvalLevel": 4,
+      "proof": "tests/notification-activity-worker.test.mjs and supabase/tests/notification_activity_outbox_test.sql",
+      "guard": "guard:autonomous-component-inventory",
+      "killSwitch": "disable_notification_activity_worker disables configuration and unschedules notification-activity-worker cron",
+      "rollback": "disable worker and retain activity, reservation and delivery history; do not replay unknown sends",
+      "deploymentState": "source_complete",
+      "physicalProofRequired": true
+    },
+    {
       "id": "ios_terminal_call_delivery_retry",
       "owningSystem": "notification_delivery_operator",
       "componentType": "registered_surface",

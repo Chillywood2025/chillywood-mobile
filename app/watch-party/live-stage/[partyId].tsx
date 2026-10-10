@@ -67,10 +67,10 @@ import {
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../../_lib/betaProgram";
 import {
   isLiveKitParticipantTokenExpired,
-  markLiveStageRoomConnectedForDiscovery,
   type LiveKitTokenUnavailable,
   type LiveKitTokenReady,
 } from "../../../_lib/livekit/token-contract";
+import { useLiveStageConnectionPublication, useLiveStageDiscoveryPublication } from "../../../_lib/livekit/useLiveStageDiscoveryPublication";
 import { emitLiveKitRenderTelemetryEvent } from "../../../_lib/livekit/livekitRenderTelemetry";
 import {
   LiveKitRoom as HybridLiveKitRoom,
@@ -590,6 +590,7 @@ function LiveKitHybridCommunityRoomHost({
   joinContract,
   onFallback,
   onConnectedAuthoritative,
+  onDisconnectedAuthoritative,
   publishLocalAudio,
   publishLocalCamera,
   children,
@@ -597,6 +598,7 @@ function LiveKitHybridCommunityRoomHost({
   joinContract: LiveKitTokenReady;
   onFallback: (reason: LiveKitStageFallbackReason) => void;
   onConnectedAuthoritative?: () => void;
+  onDisconnectedAuthoritative?: () => void;
   publishLocalAudio: boolean;
   publishLocalCamera: boolean;
   children: React.ReactNode;
@@ -623,6 +625,9 @@ function LiveKitHybridCommunityRoomHost({
   }, [roomKey]);
   const shouldConnectRoom = appState === "active";
   shouldConnectRoomRef.current = shouldConnectRoom;
+  useLiveStageConnectionPublication({
+    room, active: shouldConnectRoom, retiredRooms: tearingDownRoomsRef.current, onConnected: onConnectedAuthoritative,
+  });
   const effectivePublishLocalAudio = shouldConnectRoom && publishLocalAudio;
   const effectivePublishLocalCamera = shouldConnectRoom && publishLocalCamera;
 
@@ -814,6 +819,7 @@ function LiveKitHybridCommunityRoomHost({
   }, [didConnectOnce, joinContract.participantRole, joinContract.roomName, room, shouldConnectRoom, triggerFallback]);
 
   const handleConnected = useCallback(() => {
+    if (tearingDownRoomsRef.current.has(room) || !shouldConnectRoomRef.current || room.state !== ConnectionState.Connected) return;
     clearDisconnectFallbackTimeout();
     tearingDownRoomsRef.current.delete(room);
     didConnectOnceRef.current = true;
@@ -827,7 +833,9 @@ function LiveKitHybridCommunityRoomHost({
   }, [clearDisconnectFallbackTimeout, joinContract.participantRole, joinContract.roomName, onConnectedAuthoritative, publishLocalCamera, room]);
 
   const handleDisconnected = useCallback((reason?: unknown) => {
-    if (tearingDownRoomsRef.current.has(room) || !shouldConnectRoomRef.current || isHybridLiveKitClientDisconnectReason(reason)) {
+    if (tearingDownRoomsRef.current.has(room)) return;
+    onDisconnectedAuthoritative?.();
+    if (!shouldConnectRoomRef.current || isHybridLiveKitClientDisconnectReason(reason)) {
       debugLog("livekit", "hybrid community room disconnected without fallback", {
         roomName: joinContract.roomName,
         participantRole: joinContract.participantRole,
@@ -862,12 +870,14 @@ function LiveKitHybridCommunityRoomHost({
     joinContract.roomName,
     room,
     triggerFallback,
+    onDisconnectedAuthoritative,
   ]);
 
   const handleError = useCallback((error: Error) => {
     if (tearingDownRoomsRef.current.has(room) || !shouldConnectRoomRef.current) return;
+    onDisconnectedAuthoritative?.();
     triggerFallback("room_error", error);
-  }, [room, triggerFallback]);
+  }, [onDisconnectedAuthoritative, room, triggerFallback]);
 
   const handleMediaDeviceFailure = useCallback((failure: unknown) => {
     if (tearingDownRoomsRef.current.has(room) || !shouldConnectRoomRef.current) {
@@ -1918,6 +1928,19 @@ export default function WatchPartyLiveStageScreen({
       ? liveKitRenderableJoinContract
       : null;
   const shouldRenderLiveKitStage = canOwnActiveStageSurface && Platform.OS !== "web" && !!liveKitStageSurfaceContract;
+  const discoveryPublication = useLiveStageDiscoveryPublication({
+    roomName: partyId,
+    hostUserId: room?.hostUserId ?? "",
+    visibility: room?.discoveryVisibility ?? "private",
+    isHost: isHost && trackedUserId === room?.hostUserId,
+    active: canUseBetaStage && shouldRenderLiveKitStage && mediaAppState === "active" && !saveReplayEnding
+      && room?.isActive === true && room.roomType === "live"
+      && room.roomCode.trim().toUpperCase() === partyId.trim().toUpperCase()
+      && liveKitStageSurfaceContract?.participantRole === "host",
+    connectionKey: liveKitStageSurfaceContract?.participantToken ?? "",
+  });
+  const cancelDiscoveryPublication = discoveryPublication.cancel;
+  const onDiscoveryDisconnected = discoveryPublication.onDisconnected;
   const shouldShowLiveKitJoinUnavailable = shouldShowLiveStageJoinUnavailable({
     unavailable: liveKitJoinUnavailable,
     hasRenderableContract: !!liveKitStageSurfaceContract,
@@ -3326,11 +3349,13 @@ export default function WatchPartyLiveStageScreen({
   }, [hybridComments, usesSharedStageCommentLane]);
 
   const leaveLiveRoom = useCallback(() => {
+    cancelDiscoveryPublication();
     router.push({ pathname: "/watch-party", params: { mode: "live" } });
-  }, [router]);
+  }, [cancelDiscoveryPublication, router]);
 
   const endLiveRoomWithoutSaving = useCallback(async () => {
     if (!partyId || saveReplayEnding) return;
+    cancelDiscoveryPublication();
     try {
       setSaveReplayEnding(true);
       await requestSaveReplay({
@@ -3347,10 +3372,11 @@ export default function WatchPartyLiveStageScreen({
     } finally {
       setSaveReplayEnding(false);
     }
-  }, [leaveLiveRoom, partyId, saveReplayEnding]);
+  }, [cancelDiscoveryPublication, leaveLiveRoom, partyId, saveReplayEnding]);
 
   const endLiveRoomAndSaveReplay = useCallback(async () => {
     if (!partyId || saveReplayEnding) return;
+    cancelDiscoveryPublication();
     try {
       setSaveReplayEnding(true);
       const result = await requestSaveReplay({
@@ -3381,7 +3407,7 @@ export default function WatchPartyLiveStageScreen({
     } finally {
       setSaveReplayEnding(false);
     }
-  }, [endLiveRoomWithoutSaving, leaveLiveRoom, partyId, saveReplayEnding]);
+  }, [cancelDiscoveryPublication, endLiveRoomWithoutSaving, leaveLiveRoom, partyId, saveReplayEnding]);
 
   const onEndLiveRoomAsHost = useCallback(() => {
     if (!isHost) {
@@ -3444,6 +3470,7 @@ export default function WatchPartyLiveStageScreen({
   }, [room?.capturePolicy, updateLiveRoomPolicies]);
 
   const onLiveKitStageFallback = useCallback((reason: "connection_timeout" | "disconnected" | "room_error") => {
+    onDiscoveryDisconnected();
     debugLog("livekit", "falling back to legacy live-stage media path", {
       reason,
       roomName: liveKitStageSurfaceContract?.roomName ?? liveKitJoinContract?.roomName ?? partyId,
@@ -3455,17 +3482,7 @@ export default function WatchPartyLiveStageScreen({
       return;
     }
     setLiveKitJoinContract(null);
-  }, [liveKitJoinContract?.roomName, liveKitStageSurfaceContract, partyId]);
-
-  const onLiveKitStageConnectedAuthoritative = useCallback(() => {
-    if (!isHost || !partyId) return;
-    void markLiveStageRoomConnectedForDiscovery(partyId).then((published) => {
-      debugLog("livekit", "canonical live discovery publication", {
-        partyId,
-        published,
-      });
-    });
-  }, [isHost, partyId]);
+  }, [onDiscoveryDisconnected, liveKitJoinContract?.roomName, liveKitStageSurfaceContract, partyId]);
 
   const resolveLiveKitStageEntryRole = useCallback(async (): Promise<LiveKitTokenReady["participantRole"]> => {
     if (
@@ -4009,6 +4026,10 @@ export default function WatchPartyLiveStageScreen({
   }, [partyId]);
 
   useEffect(() => {
+    if (discoveryPublication.status === "failed") armAndRevealStageOverlay();
+  }, [armAndRevealStageOverlay, discoveryPublication.status]);
+
+  useEffect(() => {
     if (isLiveRoomSurface) {
       setStageOverlayAutoHideArmed(false);
       stageOverlayLastInteractionAtRef.current = Date.now();
@@ -4321,6 +4342,19 @@ export default function WatchPartyLiveStageScreen({
           <Text numberOfLines={1} style={styles.stageTopChromeBody}>
             {stageTopChromeStatusLabel}
           </Text>
+          {isHost ? (
+            <>
+              <Text style={styles.stageTopChromeBody} accessibilityLiveRegion="polite" testID="live-stage-discovery-status">
+                {discoveryPublication.message}
+              </Text>
+              {discoveryPublication.canRetry ? (
+                <TouchableOpacity onPress={discoveryPublication.retry} accessibilityRole="button"
+                  accessibilityLabel="Retry live listing" testID="live-stage-discovery-retry" hitSlop={STAGE_CONTROL_HIT_SLOP}>
+                  <Text style={styles.stageTopChromeBody}>Retry live listing</Text>
+                </TouchableOpacity>
+              ) : null}
+            </>
+          ) : null}
           {activeStageLookLabel ? (
             <View style={styles.stageTopChromeLookRow}>
               <View style={styles.stageTopChromeLookPill}>
@@ -5244,7 +5278,8 @@ export default function WatchPartyLiveStageScreen({
             <LiveKitHybridCommunityRoomHost
               joinContract={liveKitStageSurfaceContract as LiveKitTokenReady}
               onFallback={onLiveKitStageFallback}
-              onConnectedAuthoritative={onLiveKitStageConnectedAuthoritative}
+              onConnectedAuthoritative={discoveryPublication.onConnected}
+              onDisconnectedAuthoritative={discoveryPublication.onDisconnected}
               publishLocalAudio={publishLocalStageAudio}
               publishLocalCamera={publishLocalStageCamera}
             >

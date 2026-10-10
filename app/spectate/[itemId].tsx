@@ -1,9 +1,12 @@
-import { useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { readPublicDiscoveryFeedItem } from "../../_lib/discoveryFeed";
 import { readCircleSpectatorFeedItem } from "../../_lib/circleSpectatorFeed";
+import { readCurrentAccountSessionAuthority, sameAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
+import { readCanonicalLiveStageRoomId } from "../../_lib/liveStageDiscoveryDestination";
+import { useSession } from "../../_lib/session";
 import LegacySpectatorMetadataScreen from "../spectate-metadata/[itemId]";
 
 type LiveLane = "public" | "circle";
@@ -11,6 +14,7 @@ type LiveLane = "public" | "circle";
 type Resolution =
   | { state: "checking" }
   | { state: "legacy" }
+  | { state: "unavailable" }
   | { state: "live"; lane: LiveLane };
 
 const normalizeParam = (value: string | string[] | undefined) =>
@@ -19,29 +23,70 @@ const normalizeParam = (value: string | string[] | undefined) =>
 export default function SpectatorEntryScreen() {
   const params = useLocalSearchParams<{ itemId?: string | string[] }>();
   const itemId = normalizeParam(params.itemId);
+  const router = useRouter();
+  const { authority, authorityStatus } = useSession();
+  const currentOwner = useRef({ itemId, authority, authorityStatus });
+  currentOwner.current = { itemId, authority, authorityStatus };
   const [resolution, setResolution] = useState<Resolution>({ state: "checking" });
 
   useEffect(() => {
     let mounted = true;
     setResolution({ state: "checking" });
+    const current = () => mounted && currentOwner.current.itemId === itemId
+      && currentOwner.current.authorityStatus === authorityStatus
+      && (authority ? sameAccountSessionAuthority(authority, currentOwner.current.authority) : !currentOwner.current.authority);
+
+    const openLive = async (item: NonNullable<Awaited<ReturnType<typeof readPublicDiscoveryFeedItem>>>, lane: LiveLane) => {
+      if (!current()) return;
+      if (item.source_type === "live_stage_room") {
+        const roomId = readCanonicalLiveStageRoomId(item, lane);
+        if (!roomId || !authority || authority.restoreOnly || authorityStatus !== "active"
+          || !sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority().catch(() => null))) {
+          if (current()) setResolution({ state: "unavailable" });
+          return;
+        }
+        if (!current()) return;
+        // Re-read after the authority wait: a terminal, hidden or replaced row
+        // cannot use the earlier projection to route into a different stage.
+        const latest = await (lane === "public" ? readPublicDiscoveryFeedItem(itemId) : readCircleSpectatorFeedItem(itemId)).catch(() => null);
+        if (!current()) return;
+        if (!latest || latest.id !== itemId || readCanonicalLiveStageRoomId(latest, lane) !== roomId) {
+          setResolution({ state: "unavailable" });
+          return;
+        }
+        // Auth may change before its React context rerenders while the row
+        // request is held. Verify the actual current session at route commit.
+        const finalAuthority = await readCurrentAccountSessionAuthority().catch(() => null);
+        if (!current()) return;
+        if (!sameAccountSessionAuthority(authority, finalAuthority)) {
+          setResolution({ state: "unavailable" });
+          return;
+        }
+        // No role, microphone, camera or host intent is carried by this route.
+        router.replace({ pathname: "/watch-party/live-stage/[partyId]", params: { partyId: roomId, source: "discovery" } });
+        return;
+      }
+      setResolution({ state: "live", lane });
+      router.replace(`/spectate-live/${encodeURIComponent(itemId)}?lane=${lane}` as never);
+    };
 
     const resolve = async () => {
       if (!itemId) {
-        if (mounted) setResolution({ state: "legacy" });
+        if (current()) setResolution({ state: "legacy" });
         return;
       }
 
       const publicItem = await readPublicDiscoveryFeedItem(itemId).catch(() => null);
-      if (!mounted) return;
-      if (publicItem?.live_state === "live") {
-        setResolution({ state: "live", lane: "public" });
+      if (!current()) return;
+      if (publicItem?.id === itemId && publicItem.live_state === "live") {
+        await openLive(publicItem, "public");
         return;
       }
 
       const circleItem = publicItem ? null : await readCircleSpectatorFeedItem(itemId).catch(() => null);
-      if (!mounted) return;
-      if (circleItem?.live_state === "live") {
-        setResolution({ state: "live", lane: "circle" });
+      if (!current()) return;
+      if (circleItem?.id === itemId && circleItem.live_state === "live") {
+        await openLive(circleItem, "circle");
         return;
       }
 
@@ -52,19 +97,19 @@ export default function SpectatorEntryScreen() {
     return () => {
       mounted = false;
     };
-  }, [itemId]);
-
-  useEffect(() => {
-    if (resolution.state !== "live" || !itemId) return;
-    // Expo Router resolves this href to the immersive live route. A replace keeps
-    // Back semantics anchored to the Home/Explore surface that opened Spectator.
-    const href = `/spectate-live/${encodeURIComponent(itemId)}?lane=${resolution.lane}`;
-    // Dynamic import avoids loading router mutation code while the legacy screen owns the route.
-    void import("expo-router").then(({ router }) => router.replace(href as never));
-  }, [itemId, resolution]);
+  }, [itemId, authority, authorityStatus, router]);
 
   if (resolution.state === "legacy") {
     return <LegacySpectatorMetadataScreen />;
+  }
+
+  if (resolution.state === "unavailable") {
+    return <View style={styles.screen}>
+      <Text style={styles.copy}>Unable to verify this live stage. Go back and try again.</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()}>
+        <Text style={styles.copy}>Back</Text>
+      </Pressable>
+    </View>;
   }
 
   return (

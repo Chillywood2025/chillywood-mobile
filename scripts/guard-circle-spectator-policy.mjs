@@ -20,6 +20,7 @@ const migration = read("supabase/migrations/20260622230809_circle_spectator_feed
 const childRoomCircleMigration = read("supabase/migrations/20260623001500_allow_circle_spectator_child_room_sources.sql");
 const discovery = read("_lib/discoveryFeed.ts");
 const circleFeed = read("_lib/circleSpectatorFeed.ts");
+const liveDiscoveryHook = read("_lib/useLiveDiscoveryFeed.ts");
 const access = read("_lib/spectatorAccess.ts");
 const playback = read("_lib/spectatorPlayback.ts");
 const startRoom = read("supabase/functions/spectator-start-room/index.ts");
@@ -94,11 +95,13 @@ assertIncludes(spectateMetadataRoute, "circleAccess: nextLane === \"circle\" ? \
 assertIncludes(spectateMetadataRoute, "readCircleSpectatorFeedItem", "/spectate metadata route");
 assertIncludes(spectateLiveRoute, "readRankedCircleSpectatorFeedItems", "/spectate live route");
 assertIncludes(spectateLiveRoute, "Chi'lly Circle", "/spectate live public copy");
-assertIncludes(home, "readRankedCircleSpectatorFeedItems", "Home");
+assertIncludes(home, 'useLiveDiscoveryFeed({ surface: "home", includeCircle: true', "Home scoped Circle discovery");
+assertIncludes(liveDiscoveryHook, "settings.includeCircle && !guest ? readRankedCircleSpectatorFeedItems", "Circle requires signed-in opt-in");
 assertIncludes(home, "Circle Live Now", "Home");
 assertIncludes(home, "Circle Watch-Party", "Home");
 assertNotIncludes(home, "Circle Watch-Party Ready", "Home");
 assertNotIncludes(explore, "readRankedCircleSpectatorFeedItems", "Explore public-only surface");
+assertNotIncludes(explore, "includeCircle: true", "Explore public-only scoped discovery");
 assertNotIncludes(explore, "circle_spectator_feed_items", "Explore public-only surface");
 
 [

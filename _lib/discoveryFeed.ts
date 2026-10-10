@@ -33,6 +33,10 @@ export type PublicDiscoveryFeedReadOptions = {
   surface?: Exclude<DiscoveryFeedSurface, "none">;
   channelUserId?: string;
   ownerUserId?: string;
+  creatorUserId?: string;
+  creatorUserIds?: string[];
+  liveOnly?: boolean;
+  signal?: AbortSignal;
   limit?: number;
 };
 
@@ -574,8 +578,11 @@ export async function readPublicDiscoveryFeedItems(
     .in("rights_status", [...PUBLIC_SPECTATOR_SAFE_RIGHTS])
     .order("ranking_score", { ascending: false })
     .order("starts_at", { ascending: false, nullsFirst: false })
-    .order("published_at", { ascending: false, nullsFirst: false })
-    .limit(limit);
+    .order("published_at", { ascending: false, nullsFirst: false });
+
+  if (options.liveOnly) {
+    query = query.eq("live_state", "live").or(`ended_at.is.null,ended_at.gt.${new Date().toISOString()}`);
+  }
 
   if (itemId) {
     query = query.eq("id", itemId);
@@ -591,9 +598,26 @@ export async function readPublicDiscoveryFeedItems(
   const ownerUserId = normalizeText(options.ownerUserId);
   if (ownerUserId) query = query.eq("owner_user_id", ownerUserId);
 
+  const creatorIds = normalizeDiscoveryCreatorIds(options);
+  if (creatorIds.length) {
+    query = query.or(`owner_user_id.in.(${creatorIds.join(",")}),channel_user_id.in.(${creatorIds.join(",")})`);
+  }
+  query = query.limit(limit);
+  if (options.signal) query = query.abortSignal(options.signal);
+
   const { data, error } = await query.returns<DiscoveryFeedItem[]>();
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error("Discovery response unavailable.");
   return data.filter(isDiscoveryFeedItemEligibleForRanking);
+}
+
+export function normalizeDiscoveryCreatorIds(options: Pick<PublicDiscoveryFeedReadOptions, "creatorUserId" | "creatorUserIds">) {
+  const ids = [...(options.creatorUserIds ?? []), ...(options.creatorUserId !== undefined ? [options.creatorUserId] : [])]
+    .map(normalizeText);
+  if ((options.creatorUserIds !== undefined && !options.creatorUserIds.length) || ids.length > 25 || ids.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) {
+    throw new Error("Invalid discovery creator.");
+  }
+  return Array.from(new Set(ids));
 }
 
 export async function readPublicDiscoveryFeedItem(itemId: string): Promise<DiscoveryFeedItem | null> {

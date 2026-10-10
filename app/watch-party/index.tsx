@@ -1762,7 +1762,7 @@ export default function WatchPartyIndexScreen() {
           <View style={styles.permissionsCard}>
             <AppText scale="caption" style={styles.permissionsLabel}>LIVE DISCOVERY</AppText>
             <AppText scale="footnote" style={styles.permissionsBody}>
-              Choose who can discover this session after your LiveKit room connects. Private sessions remain room-code only.
+              Choose who can find this session once you are connected. Private is selected by default and keeps your session off Home and public live feeds. Public allows discovery; Circle limits it to your approved Chi&apos;lly Circle.
             </AppText>
             <View style={styles.discoveryChoiceRow}>
               {(["public", "circle", "private"] as const).map((visibility) => (
@@ -1800,6 +1800,11 @@ export default function WatchPartyIndexScreen() {
           <AppText scale="footnote" style={styles.permissionsBody}>
             {waitingRoomPermissionsBody}
           </AppText>
+          {!isLiveWaitingRoom && hostLabel === "You are hosting" ? (
+            <AppText scale="footnote" style={styles.permissionsBody}>
+              This Party Room is private. Invite viewers with its room code or link; starting shared playback does not list it on Home or Explore Live.
+            </AppText>
+          ) : null}
         </View>
 
         {!isLiveWaitingRoom && topRoomCode ? (

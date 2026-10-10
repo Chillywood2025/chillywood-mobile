@@ -46,7 +46,8 @@ final class CXCallUpdate {
   var supportsUngrouping = true
   var supportsDTMF = true
 }
-enum EndReason { case remoteEnded, unanswered, failed }
+enum EndReason { case remoteEnded, unanswered, failed, answeredElsewhere }
+typealias CXCallEndedReason = EndReason
 public final class CXProvider {
   struct Request { let uuid: UUID; let update: CXCallUpdate; let callback: (Error?) -> Void }
   var requests: [Request] = []
@@ -108,10 +109,36 @@ private final class CXCallController {
     requests.append(transaction); completions.append(completion)
   }
 }
+private final class IncomingStateSocketProbe: ChillywoodIncomingCallStateSocket {
+  static var created: [IncomingStateSocketProbe] = []
+  let request: URLRequest
+  var callbacks: [(Result<Data, Error>) -> Void] = []
+  var resumed = 0, canceled = 0
+  init(request: URLRequest) { self.request=request }
+  func resume() { resumed += 1 }
+  func receive(_ completion: @escaping (Result<Data, Error>) -> Void) { callbacks.append(completion) }
+  func cancel() { canceled += 1 }
+  func deliver(_ status: String, sequence: Int = 1, callbackIndex: Int = 0) {
+    let fields: [String: Any] = ["observerId": request.value(forHTTPHeaderField: "x-chilly-call-observer")!,
+      "connectionId": request.value(forHTTPHeaderField: "x-chilly-call-connection")!,
+      "nativeGeneration": request.value(forHTTPHeaderField: "x-chilly-call-generation")!,
+      "sequence": sequence, "status": status]
+    callbacks[callbackIndex](.success(try! JSONSerialization.data(withJSONObject: fields)))
+  }
+}
 private final class CoordinatorProbe {
   var isBuildEnabled = true
   var isRuntimeDefaultEnabled = true
   var activeCalls: [UUID: ActiveNativeCall] = [:]
+  var incomingStateObservers: [UUID: ChillywoodIncomingCallStateObserver] = [:]
+  let incomingStateSocketFactory: (URLRequest) -> ChillywoodIncomingCallStateSocket = {
+    let socket = IncomingStateSocketProbe(request: $0); IncomingStateSocketProbe.created.append(socket); return socket
+  }
+  // INSERT_OBSERVER_OWNER
+  // INSERT_OBSERVER_CURRENT
+  // INSERT_OBSERVER_START
+  // INSERT_OBSERVER_TERMINAL
+  // INSERT_OBSERVER_STOP_ALL
   var callKitAudioSessionActive = false
   var callKitAudioActivationOwners: [UUID: (generation: UUID, authority: NativeVoipAuthority)] = [:]
   private let audioSessionDiagnostics = ChillywoodNativeCallDiagnostics.shared
@@ -988,5 +1015,73 @@ private let coldDrained = coldAudio.drainPendingEvents()
 expect(coldDrained.count == 1 && coldDrained[0]["audioSessionActive"] as? Bool == false,
   "cold drained recovery cannot inherit another native generation's activation")
 coldAudio.remove(detachedAudioUuid); detachedAudio.remove(detachedAudioUuid)
+
+private func observerPayload() -> [String: Any] {
+  var value=payload()
+  let formatter=ISO8601DateFormatter(); formatter.formatOptions=[.withInternetDateTime, .withFractionalSeconds]
+  let expiry=formatter.date(from:value["expiresAt"] as! String)!
+  value["stateObserverVersion"]=1; value["stateObserverId"]=UUID().uuidString
+  value["stateObserverCapability"]=String(repeating:"Z",count:43)
+  value["stateObserverUrl"]="wss://bmkkhihfbmsnnmcqkoly.supabase.co/functions/v1/ios-native-call-state"
+  value["stateObserverExpiresAtMillis"]=String(Int64((expiry.timeIntervalSince1970*1000).rounded()))
+  return value
+}
+for terminal in ["canceled", "declined", "missed", "ended", "accepted"] {
+  let probe=fresh(), input=observerPayload(), uuid=UUID(uuidString:input["callUuid"] as! String)!
+  let before=IncomingStateSocketProbe.created.count
+  var completion=0
+  probe.pushRegistry(PKPushRegistry(),didReceiveIncomingPushWith:PKPushPayload(input),for:.voIP){completion += 1}
+  expect(IncomingStateSocketProbe.created.count == before, "observer cannot connect before successful native presentation")
+  probe.provider!.complete(); pump()
+  expect(completion == 1 && IncomingStateSocketProbe.created.count == before+1,
+    "incoming wake starts one observer without holding PushKit completion")
+  let socket=IncomingStateSocketProbe.created.last!
+  expect(socket.request.allHTTPHeaderFields?.count == 5, "observer uses only capability and opaque binding headers")
+  socket.deliver(terminal); pump()
+  expect(probe.activeCalls[uuid] == nil && probe.provider!.ended.contains(uuid), "observed \(terminal) ends exact unaccepted native call")
+  expect(probe.events.filter{$0["type"] as? String == "remoteEnded"}.count == 1,
+    "server state emits one remote end rather than a user decline")
+  expect(!probe.callKitAudioSessionActive && probe.callKitAudioActivationOwners.isEmpty,
+    "observer terminal cannot activate audio")
+  socket.deliver(terminal,sequence:2);pump()
+  expect(probe.events.filter{$0["type"] as? String == "remoteEnded"}.count == 1,
+    "late duplicate status cannot emit another terminal")
+}
+for boundary in ["pending", "requested", "answered", "account", "generation", "removed", "reset"] {
+  let probe=fresh(), input=observerPayload(), uuid=UUID(uuidString:input["callUuid"] as! String)!
+  probe.pushRegistry(PKPushRegistry(),didReceiveIncomingPushWith:PKPushPayload(input),for:.voIP){}
+  probe.provider!.complete();pump();let socket=IncomingStateSocketProbe.created.last!
+  if boundary == "pending" { probe.pendingAnswerActions[uuid]=CXAnswerCallAction(call:uuid) }
+  if boundary == "requested" { probe.requestedAnswerTransactions.insert(uuid) }
+  if boundary == "answered" { probe.activeCalls[uuid]!.answered=true }
+  if boundary == "account" { probe.installAuthority(replacementAuthority) }
+  if boundary == "generation" {
+    let old=probe.activeCalls[uuid]!
+    probe.activeCalls[uuid]=ActiveNativeCall(uuid:uuid,inviteId:old.inviteId,threadId:old.threadId,callType:old.callType,
+      ringingDeadline:old.ringingDeadline,answered:false,timeoutWorkItem:nil,presentationConfirmed:true,presentationAuthority:authority)
+  }
+  if boundary == "removed" { probe.remove(uuid) }
+  if boundary == "reset" { probe.providerDidReset(probe.provider!) }
+  if boundary == "removed" || boundary == "reset" {
+    expect(socket.canceled == 1, "\(boundary) synchronously closes observer without waiting for another response")
+  }
+  let endedBefore=probe.provider!.ended.count
+  socket.deliver("accepted");pump()
+  expect(probe.provider!.ended.count == endedBefore && !hasEvent(probe,"remoteEnded"),
+    "\(boundary) boundary cannot be ended by older observed server state")
+  expect(socket.canceled == 1, "\(boundary) boundary retires observer transport")
+  probe.remove(uuid)
+}
+for boundary in ["absent", "invalid-url", "failed-presentation"] {
+  let probe=fresh();var input=observerPayload();let before=IncomingStateSocketProbe.created.count
+  if boundary == "absent" { input.removeValue(forKey:"stateObserverCapability") }
+  if boundary == "invalid-url" { input["stateObserverUrl"]="wss://other.invalid/functions/v1/ios-native-call-state" }
+  var completion=0
+  probe.pushRegistry(PKPushRegistry(),didReceiveIncomingPushWith:PKPushPayload(input),for:.voIP){completion += 1}
+  probe.provider!.complete(error:boundary == "failed-presentation" ? ReportProbeError.rejected : nil);pump()
+  expect(completion == 1 && IncomingStateSocketProbe.created.count == before,
+    "\(boundary) preserves native report settlement without an observer connection")
+  if let uuid=UUID(uuidString:input["callUuid"] as! String) { probe.remove(uuid) }
+}
 
 print("\(passed) native incoming-report checks PASS")

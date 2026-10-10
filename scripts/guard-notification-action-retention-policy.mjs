@@ -69,8 +69,8 @@ assertIncludes(notifications, "dismissed_at: new Date().toISOString(), status: \
   "notification-tray-recent-section",
   "Important / Action Needed",
   "These stay visible after read until handled, dismissed, revoked, or expired.",
-  "readImportantNotificationList(undefined, 30)",
-  "readNotificationListPage(undefined, 30)",
+  "readImportantNotificationList(user!.id, 30)",
+  "readNotificationListPage(user!.id, 30)",
   "Show More Activity",
   "Open Notification Settings",
 ].forEach((needle) => assertIncludes(bell, needle, "bell tray retention UI"));

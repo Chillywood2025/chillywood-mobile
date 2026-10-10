@@ -72,6 +72,12 @@ const recordedV11Source = {
   sha: "06e5482e3585fd7d30e3d06bf8576c3cd1cc077f",
   tree: "8897a6a6f4aceb2d308470e2e228170848933524",
 };
+// Retained signed Android 104 / iOS 38 artifacts; later JavaScript OTA uptake
+// does not change these binary-native inputs.
+const recordedV12Source = {
+  sha: "b70044e403e2b2d5d91e65e7281785d200286c8f",
+  tree: "be58959893f6afa816762d4c59fb6a80d18eac75",
+};
 
 test("recorded internal v3 cohorts retain their historical Git-native inputs", () => {
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
@@ -173,14 +179,24 @@ test("recorded internal v11 cohorts retain their historical Git-native inputs", 
   }
 });
 
-test("internal v12 supersedes the v11 runtimes without rewriting their historical digests", () => {
+test("recorded internal v12 cohorts retain their historical Git-native inputs", () => {
+  const recorded = JSON.parse(git(repo, "show", `${recordedV12Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(recorded.generation, "internal-native-v12");
+  for (const platform of ["android", "ios"]) {
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
+      repositoryRoot: repo, platform, sourceSha: recordedV12Source.sha, sourceTree: recordedV12Source.tree,
+    }).digest);
+  }
+});
+
+test("internal v13 supersedes the v12 runtimes without rewriting their historical digests", () => {
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
-  const recorded = JSON.parse(git(repo, "show", `${recordedV11Source.sha}:config/release/internal-native-generation.json`));
-  assert.equal(generation.generation, "internal-native-v12");
+  const recorded = JSON.parse(git(repo, "show", `${recordedV12Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(generation.generation, "internal-native-v13");
   assert.equal(generation.supersedes.generation, recorded.generation);
   assert.equal(generation.nativeCompatibility.algorithm, recorded.nativeCompatibility.algorithm);
   for (const platform of ["android", "ios"]) {
-    assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v12`);
+    assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v13`);
     assert.equal(generation.supersedes[`${platform}RuntimeVersion`], recorded.runtimeVersions[platform]);
     assert.equal(generation.supersedes[`${platform}CompatibilityDigest`], recorded.nativeCompatibility[`${platform}Digest`]);
     assert.match(generation.nativeCompatibility[`${platform}Digest`], /^[0-9a-f]{64}$/u);
@@ -308,7 +324,54 @@ if (args[0] === 'expo' && args[1] === 'config') {
   return { root, baseline, publish };
 }
 
+test("candidate internal generation digests match the canonical native input snapshot", (t) => {
+  const { root } = fixture(t);
+  // The publication fixtures are intentionally compact. The generation proof
+  // must retain every canonical Git input, including tracked platform resources
+  // and executable modes, rather than certify that reduced fixture's digest.
+  const sourceSha = git(repo, "rev-parse", "HEAD");
+  const snapshots = Object.fromEntries(["android", "ios"].map((platform) => [platform,
+    nativeSourceSnapshot({ repositoryRoot: repo, platform, sourceSha }),
+  ]));
+  for (const entry of new Map(Object.values(snapshots).flatMap((snapshot) =>
+    snapshot.input.files.map((entry) => [entry.path, entry]))).values()) {
+    const value = spawnSync("git", ["show", `${sourceSha}:${entry.path}`], { cwd: repo, maxBuffer: 32 * 1024 * 1024 });
+    assert.equal(value.status, 0);
+    write(root, entry.path, value.stdout);
+    fs.chmodSync(path.join(root, entry.path), entry.mode === "100755" ? 0o755 : 0o644);
+  }
+  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+  write(root, "config/release/internal-native-generation.json", `${JSON.stringify(generation, null, 2)}\n`);
+  const candidate = commit(root);
+  for (const platform of ["android", "ios"]) {
+    const snapshot = nativeSourceSnapshot({
+      repositoryRoot: root, platform, sourceSha: candidate.sha, sourceTree: candidate.tree,
+    });
+    assert.deepEqual(snapshot.input.files, snapshots[platform].input.files);
+    assert.equal(generation.nativeCompatibility[`${platform}Digest`], snapshot.digest);
+  }
+});
+
 for (const platform of ["android", "ios"]) {
+  test(`${platform}: notification native repair cannot reuse the installed v12 binary or runtime`, (t) => {
+    const { root, publish } = fixture(t, recordedV12Source.sha);
+    const changedPaths = platform === "android" ? ["plugins/withChillyChatNativeCallNotifications.js"] : [
+      "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift",
+      "modules/chillywood-native-calls/ios/ChillywoodIncomingCallStateObserver.swift",
+      "modules/chillywood-native-calls/ios/ChillywoodIncomingCallStatePolicy.swift",
+    ];
+    for (const name of changedPaths) write(root, name, fs.readFileSync(path.join(repo, name)));
+    const changedSource = commit(root);
+    const oldBinary = publish(platform);
+    assert.notEqual(oldBinary.status, 0);
+    assert.match(oldBinary.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(oldBinary.calls, [], "v12 binary must stop before Expo or provider calls");
+    const rebuiltInOldRuntime = publish(platform, changedSource);
+    assert.notEqual(rebuiltInOldRuntime.status, 0);
+    assert.match(rebuiltInOldRuntime.stderr, /OTA_RUNTIME_NATIVE_COHORT_INCOMPATIBLE/u);
+    assert.deepEqual(rebuiltInOldRuntime.calls, [], "new native repair cannot repurpose the v12 cohort");
+  });
+
   test(`${platform}: foreground presentation contract rejects the delivered v5 binary and runtime cohort`, (t) => {
     const { root, publish } = fixture(t, recordedV5Source.sha);
     const changedPaths = ["modules/chillywood-native-calls/index.d.ts",

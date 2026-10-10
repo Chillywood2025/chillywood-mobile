@@ -110,7 +110,9 @@ assert.ok(!replayPlayer.includes('"Ready Replay"'), "the public replay route mus
 assert.ok(home.includes('title: "Circle Watch-Party"'), "Home must use the customer-facing Circle Watch-Party heading");
 assert.ok(home.includes("Official Chi&apos;llywood"), "Rachi official identity must remain creator-tied rather than a section status");
 assert.ok(home.includes("readLatestPublicEventSummaries({ limit: 24 }).catch"), "Home Event failure must not erase independent public creator rails");
-assert.ok(live.includes("readLatestPublicEventSummaries({ limit: 32 }).catch"), "Live Event failure must not erase active discovery");
+assert.ok(live.includes('useLiveDiscoveryFeed({ surface: "home", liveOnly: true')
+  && !live.includes("setDiscoveryItems") && live.includes("setErrorMsg("),
+  "Live Event failure must remain visible without erasing independently refreshed discovery");
 assert.ok(live.includes("buildLiveTabDiscoveryBuckets(discoveryItems, events)"),
   "Live must use the tested lifecycle-aware discovery buckets");
 assert.ok(channelSettings.includes("styles.eventCardActionStack")
@@ -222,7 +224,13 @@ for (const [label, source, generationRef] of [
     `${label} must refresh authoritative state on focus and foreground resume`);
   assert.ok(source.includes("setInterval") && source.includes("SPECTATOR_LIFECYCLE_REFRESH_MS"),
     `${label} must bound stale lifecycle state while it remains open`);
-  assert.ok(source.includes(generationRef) && source.includes(`generation !== ${generationRef}.current`),
+  const rejectsStaleGeneration = generationRef === "liveLoadGenerationRef"
+    ? source.includes("const current = () => generation === liveLoadGenerationRef.current")
+      && source.includes("currentOwnerRef.current.initialItemId === initialItemId")
+      && source.includes("currentOwnerRef.current.lane === lane")
+      && source.includes("sameAccountSessionAuthority") && source.includes("if (!current()) return;")
+    : source.includes(`generation !== ${generationRef}.current`);
+  assert.ok(source.includes(generationRef) && rejectsStaleGeneration,
     `${label} must reject older lifecycle reads after a newer refresh`);
 }
 assert.ok(spectatorLive.includes("setItems([])") && spectatorLive.includes("setUnavailable(true)"),
@@ -307,9 +315,11 @@ for (const required of [
 ]) assert.ok(titleReleaseTest.includes(required), `title release pgTAP missing ${required}`);
 
 assert.ok(livekitClient.includes('action: "mark-room-live"'), "the connected host must request the exact server publication transition");
-assert.ok(livekitClient.includes("attempt < 3") && livekitClient.includes("response.status !== 409"),
-  "the connected host must retry only the bounded provider-propagation race");
-assert.ok(liveStage.includes("onConnectedAuthoritative") && liveStage.includes("markLiveStageRoomConnectedForDiscovery"),
+assert.ok(livekitClient.includes("attempt < 3") && livekitClient.includes("providerNotReady")
+  && livekitClient.includes("sameAccountSessionAuthority") && livekitClient.includes("options.signal.aborted"),
+  "publication retries must remain bounded and fenced to the current session and request lifetime");
+assert.ok(liveStage.includes("onConnectedAuthoritative={discoveryPublication.onConnected}")
+  && liveStage.includes("useLiveStageDiscoveryPublication") && liveStage.includes("live-stage-discovery-status"),
   "Live discovery must begin only at the provider-connected host boundary");
 assert.ok(livekitEdge.includes('action === "mark-room-live"') && livekitEdge.includes('surface !== "live-stage"'),
   "the LiveKit edge boundary must bind publication to Live Stage");

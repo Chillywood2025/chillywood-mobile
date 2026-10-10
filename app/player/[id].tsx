@@ -102,8 +102,10 @@ import {
     resolveWatchPartySourceType,
 } from "../../_lib/watchPartyContentSources";
 import { useSession } from "../../_lib/session";
+import { useNotificationViewTracking } from "../../_lib/useNotificationViewTracking";
+import { notificationPlaybackRecordId } from "../../_lib/notificationViewProgress.mjs";
 import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
-import { supabase } from "../../_lib/supabase";
+import { supabase, SUPABASE_URL } from "../../_lib/supabase";
 import { isPubliclyReleasedTitle } from "../../_lib/publicTitles";
 import type { Tables } from "../../supabase/database.types";
 import {
@@ -7286,6 +7288,16 @@ export default function PlayerScreen() {
     if (isCreatorVideoPlayback) return null;
     return displayItem?.video || fallbackVideo;
   }, [displayItem?.video, displayItem?.video_url, fallbackVideo, isCreatorVideoPlayback]);
+  const reportNotificationViewProgress = useNotificationViewTracking(
+    isCreatorVideoPlayback ? "video" : "spectator",
+    isCreatorVideoPlayback ? creatorVideo?.id ?? null
+      : isSpectatorPlayback ? notificationPlaybackRecordId(displayItem?.video_url, SUPABASE_URL) : null,
+    !titleLoading,
+  );
+  const onTrackedPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
+    reportNotificationViewProgress(status);
+    onPlaybackStatusUpdate(status);
+  }, [reportNotificationViewProgress, onPlaybackStatusUpdate]);
   useEffect(() => {
     setPlaybackLoadError(null);
     setIsVideoReady(false);
@@ -10189,7 +10201,7 @@ export default function PlayerScreen() {
                     shouldPlay={isLiveMode ? true : isPlaying}
                     playbackRate={playbackRate}
                     volume={playerVideoVolume}
-                    onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+                    onPlaybackStatusUpdate={onTrackedPlaybackStatusUpdate}
                     onLoad={onVideoLoad}
                   />
                 ) : (
@@ -10205,7 +10217,7 @@ export default function PlayerScreen() {
                     isLooping={false}
                     useNativeControls={false}
                     volume={playerVideoVolume}
-                    onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+                    onPlaybackStatusUpdate={onTrackedPlaybackStatusUpdate}
                     onLoad={onVideoLoad}
                     onError={onVideoError}
                   />

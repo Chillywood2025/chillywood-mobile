@@ -227,3 +227,13 @@ verify_jwt = true
 
 [functions.cognitive-level01-scheduler]
 verify_jwt = true
+
+# Authenticated by the dedicated Vault-held activity-worker credential before
+# any claim or provider action. This is not a public notification-send API.
+[functions.notification-activity-worker]
+verify_jwt = false
+
+# Random exact-issued capability is authenticated before any upgrade.
+# This endpoint returns status only and accepts no call mutation commands.
+[functions.ios-native-call-state]
+verify_jwt = false

@@ -47,6 +47,9 @@ const markers = {
   REMOVE_CALL: "private func removeCall(_ uuid: UUID,",
   PERSIST_CALLS: "private func persistActiveCallDescriptors() {",
   EMIT: "private func emit(type: String, call: ActiveNativeCall, reason: String? = nil) {",
+  PENDING_VOICE_ANSWER: "public func hasPendingVoiceAnswer(_ binding: [String: String]) -> Bool {",
+  VALID_AUTHORITY: "private func isValidVoipAuthority(_ authority: NativeVoipAuthority) -> Bool {",
+  TO_TEXT: "private func toText(_ value: Any?) -> String {",
 };
 function generated(source) {
   let output = harness;
@@ -82,6 +85,11 @@ function mutate(from, to) {
   assert.equal(original.split(from).length, 2, `mutation targets one exact Answer operation: ${from}`);
   return coordinator.replace(original, original.replace(from, to));
 }
+function mutatePendingVoice(from, to) {
+  const original = declaration(coordinator, markers.PENDING_VOICE_ANSWER);
+  assert.equal(original.split(from).length, 2, `mutation targets one pending voice guard: ${from}`);
+  return coordinator.replace(original, original.replace(from, to));
+}
 const category = "try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat,\n          options: [.allowBluetoothHFP, .allowBluetoothA2DP])";
 try {
   if (!checkSource) {
@@ -107,8 +115,16 @@ try {
       "Answer preparation must not activate the audio session");
     runCase("disconnected-answer-configures-audio", mutate("if connected {", "if true {"),
       "disconnected completion skips audio configuration");
+    runCase("pending-voice-generation-ignored", mutatePendingVoice("call.generation == generation", "true"),
+      "pending voice proof rejects mismatched nativeCallGeneration");
+    runCase("pending-voice-authority-ignored", mutatePendingVoice("call.presentationAuthority == authority", "true"),
+      "replacement session cannot borrow the previous presentation");
+    runCase("pending-voice-deadline-ignored", mutatePendingVoice("action.timeoutDate > Date()", "true"),
+      "pending voice proof rejects expired-action");
+    runCase("pending-voice-media-kind-ignored", mutatePendingVoice('call.callType == "voice"', "true"),
+      "video cannot use pending voice authority");
   }
   console.log(checkSource
-    ? `Answer-audio production declarations${sourceOverride ? "" : " and five mutations"} generated; Swift compilation/execution NOT RUN.`
-    : `Actual Swift Answer audio ordering/failure${sourceOverride ? "" : " and five mutation controls"} passed; controlled receipts do not prove OS activation or physical audio.`);
+    ? `Answer-audio production declarations${sourceOverride ? "" : " and nine mutations"} generated; Swift compilation/execution NOT RUN.`
+    : `Actual Swift Answer audio ordering/failure and pending voice authority${sourceOverride ? "" : " with nine mutation controls"} passed; controlled receipts do not prove OS activation or physical audio.`);
 } finally { rmSync(temporary, { recursive: true, force: true }); }

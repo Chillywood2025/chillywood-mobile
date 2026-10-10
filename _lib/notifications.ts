@@ -71,7 +71,10 @@ export type NotificationCategory =
   | "chilly_chat_call"
   | "chilly_chat_missed_call"
   | "creator_money_purchase"
-  | "creator_money_sale";
+  | "creator_money_sale"
+  | "social_activity"
+  | "circle_activity"
+  | "view_summary";
 
 export type CreatorMoneyBuyerNotificationType =
   | "paid_video_unlocked"
@@ -191,7 +194,7 @@ export const DISCOVERY_ACTIVITY_TRIGGER_FOUNDATION: readonly DiscoveryActivityTr
   {
     key: "replay_available_later",
     notificationCategory: "content_dropped",
-    targetRoute: "/channel/[userId]",
+    targetRoute: "/player/replay/[replayId]",
     sendingConnected: false,
     requiredFilters: ["replay_rights", "public_visibility", "blocked_relationships", "notification_permission"],
   },
@@ -201,6 +204,7 @@ export const readDiscoveryActivityTriggerFoundation = () => DISCOVERY_ACTIVITY_T
 
 export type NotificationTargetRoute =
   | "/profile/[userId]"
+  | "/chilly-circle"
   | "/channel/[userId]"
   | "/channel-settings"
   | "/channel-studio"
@@ -217,6 +221,7 @@ export type NotificationTargetRoute =
   | "/spectate/[itemId]"
   | "/title/[id]"
   | "/player/[id]"
+  | "/player/replay/[replayId]"
   | "/admin";
 
 export type NormalizedNotificationTarget = {
@@ -417,6 +422,9 @@ const normalizeNotificationCategory = (value: unknown): NotificationCategory => 
     || normalized === "chilly_chat_missed_call"
     || normalized === "creator_money_purchase"
     || normalized === "creator_money_sale"
+    || normalized === "social_activity"
+    || normalized === "circle_activity"
+    || normalized === "view_summary"
   ) {
     return normalized;
   }
@@ -427,6 +435,7 @@ const normalizeTargetRoute = (value: unknown): NotificationTargetRoute | "unknow
   const normalized = normalizeText(value);
   if (
     normalized === "/profile/[userId]"
+    || normalized === "/chilly-circle"
     || normalized === "/channel/[userId]"
     || normalized === "/channel-settings"
     || normalized === "/channel-studio"
@@ -443,6 +452,7 @@ const normalizeTargetRoute = (value: unknown): NotificationTargetRoute | "unknow
     || normalized === "/spectate/[itemId]"
     || normalized === "/title/[id]"
     || normalized === "/player/[id]"
+    || normalized === "/player/replay/[replayId]"
     || normalized === "/admin"
   ) {
     return normalized;
@@ -547,6 +557,25 @@ export function classifyNotificationAction(input: {
   } else if (input.category === "access_granted" || input.category === "payment_access_confirmation") {
     actionGroup = "access_ready";
     actionLabel = "Open";
+  } else if (input.category === "circle_activity") {
+    actionGroup = notificationType === "circle_request" ? "action_required" : "general_activity";
+    actionLabel = notificationType === "circle_request" ? "Review request"
+      : notificationType === "circle_post" ? "Open profile" : "Open Chi'lly Circle";
+  } else if (notificationType === "social_follow_request") {
+    actionGroup = "action_required";
+    actionLabel = "Open profile";
+  } else if (notificationType === "video_comment" || notificationType === "video_reply") {
+    actionLabel = "Open video";
+  } else if (notificationType === "content_shared") {
+    actionLabel = "Open title";
+  } else if (notificationType === "profile_comment" || notificationType === "profile_reply"
+    || notificationType === "profile_post_liked" || notificationType === "social_follow"
+    || notificationType === "social_follow_accepted") {
+    actionLabel = "Open profile";
+  } else if (input.category === "new_message") {
+    actionLabel = "Open Chat";
+  } else if (input.category === "view_summary") {
+    actionLabel = "View activity";
   }
 
   const baseImportant = IMPORTANT_NOTIFICATION_CATEGORIES.includes(input.category)
@@ -1116,13 +1145,16 @@ export async function markNotificationRead(
   }
 
   const payload: NotificationUpdate = { read_at: new Date().toISOString(), status: "read" };
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from(NOTIFICATIONS_TABLE)
     .update(payload)
     .eq("id", normalizedNotificationId)
-    .eq("user_id", viewerUserId);
+    .eq("user_id", viewerUserId)
+    .select("id,user_id,read_at")
+    .maybeSingle();
 
-  if (error) {
+  if (error || data?.id !== normalizedNotificationId || data?.user_id !== viewerUserId
+    || !normalizeIsoTimestamp(data?.read_at)) {
     return buildNotificationActionResult({
       action: "mark_read",
       status: "error",
@@ -1194,13 +1226,16 @@ export async function dismissNotification(
   }
 
   const payload: NotificationUpdate = { dismissed_at: new Date().toISOString(), status: "dismissed" };
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from(NOTIFICATIONS_TABLE)
     .update(payload)
     .eq("id", normalizedNotificationId)
-    .eq("user_id", viewerUserId);
+    .eq("user_id", viewerUserId)
+    .select("id,user_id,dismissed_at")
+    .maybeSingle();
 
-  if (error) {
+  if (error || data?.id !== normalizedNotificationId || data?.user_id !== viewerUserId
+    || !normalizeIsoTimestamp(data?.dismissed_at)) {
     return buildNotificationActionResult({
       action: "dismiss",
       status: "error",
@@ -1506,6 +1541,14 @@ export async function readPublicEventReminderSummaries(
 }
 
 export type NotificationPreferenceSettings = {
+  socialActivityEnabled: boolean;
+  circleActivityEnabled: boolean;
+  messagesEnabled: boolean;
+  viewSummaryEnabled: boolean;
+  viewSummaryPushEnabled: boolean;
+  eventUpdatesEnabled: boolean;
+  seatActivityEnabled: boolean;
+  accountActivityEnabled: boolean;
   followedCreatorLiveEnabled: boolean;
   circleFriendLiveEnabled: boolean;
   eventStartsSoonEnabled: boolean;
@@ -1609,6 +1652,14 @@ const IOS_ORDINARY_PUSH_ENABLED = String(
 const handledNotificationResponseKeys = new Set<string>();
 
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferenceSettings = {
+  socialActivityEnabled: true,
+  circleActivityEnabled: true,
+  messagesEnabled: true,
+  viewSummaryEnabled: true,
+  viewSummaryPushEnabled: false,
+  eventUpdatesEnabled: true,
+  seatActivityEnabled: true,
+  accountActivityEnabled: true,
   circleFriendLiveEnabled: true,
   eventStartsSoonEnabled: true,
   followedCreatorLiveEnabled: true,
@@ -1747,6 +1798,14 @@ const samePushSessionBinding = (
 const parsePreferenceRow = (row: NotificationPreferenceRow | null): NotificationPreferenceSettings => {
   if (!row) return DEFAULT_NOTIFICATION_PREFERENCES;
   return {
+    socialActivityEnabled: row.social_activity_enabled !== false,
+    circleActivityEnabled: row.circle_activity_enabled !== false,
+    messagesEnabled: row.messages_enabled !== false,
+    viewSummaryEnabled: row.view_summary_enabled !== false,
+    viewSummaryPushEnabled: row.view_summary_push_enabled === true,
+    eventUpdatesEnabled: row.event_updates_enabled !== false,
+    seatActivityEnabled: row.seat_activity_enabled !== false,
+    accountActivityEnabled: row.account_activity_enabled !== false,
     circleFriendLiveEnabled: row.circle_friend_live_enabled !== false,
     chillyChatCallCustomInAppSoundUri: normalizeText(row.chilly_chat_call_custom_in_app_sound_uri) || null,
     chillyChatCallSoundKey: normalizeChillyChatRingtoneKey(row.chilly_chat_call_sound_key),
@@ -1766,6 +1825,14 @@ const parsePreferenceRow = (row: NotificationPreferenceRow | null): Notification
 
 const buildPreferenceUpdate = (patch: NotificationPreferencePatch): NotificationPreferenceUpdate => {
   const update: NotificationPreferenceUpdate = {};
+  if (typeof patch.socialActivityEnabled === "boolean") update.social_activity_enabled = patch.socialActivityEnabled;
+  if (typeof patch.circleActivityEnabled === "boolean") update.circle_activity_enabled = patch.circleActivityEnabled;
+  if (typeof patch.messagesEnabled === "boolean") update.messages_enabled = patch.messagesEnabled;
+  if (typeof patch.viewSummaryEnabled === "boolean") update.view_summary_enabled = patch.viewSummaryEnabled;
+  if (typeof patch.viewSummaryPushEnabled === "boolean") update.view_summary_push_enabled = patch.viewSummaryPushEnabled;
+  if (typeof patch.eventUpdatesEnabled === "boolean") update.event_updates_enabled = patch.eventUpdatesEnabled;
+  if (typeof patch.seatActivityEnabled === "boolean") update.seat_activity_enabled = patch.seatActivityEnabled;
+  if (typeof patch.accountActivityEnabled === "boolean") update.account_activity_enabled = patch.accountActivityEnabled;
   if (typeof patch.followedCreatorLiveEnabled === "boolean") {
     update.followed_creator_live_enabled = patch.followedCreatorLiveEnabled;
   }
@@ -1819,17 +1886,19 @@ export async function readNotificationPreferences(userId?: string): Promise<Noti
     .returns<NotificationPreferenceRow>()
     .maybeSingle();
 
-  if (!error && data) return parsePreferenceRow(data);
+  if (error) throw new Error("Unable to read notification preferences.");
+  if (data) return parsePreferenceRow(data);
 
   const insert: NotificationPreferenceInsert = { user_id: viewerUserId };
-  const { data: created } = await supabase
+  const { data: created, error: createError } = await supabase
     .from("notification_preferences")
     .insert(insert)
     .select("*")
     .returns<NotificationPreferenceRow>()
     .maybeSingle();
 
-  return parsePreferenceRow(created ?? null);
+  if (createError || !created) throw new Error("Unable to create notification preferences.");
+  return parsePreferenceRow(created);
 }
 
 export async function updateNotificationPreferences(
@@ -2276,12 +2345,40 @@ async function registerCurrentPushProvidersWithDeadline(
   const registration = (async () => {
     const authority = await readCurrentPushSessionBinding();
     if (!authority) throw new Error("Push registration requires an active session binding.");
-    const token = await Notifications.getExpoPushTokenAsync({ projectId });
-    const rawToken = normalizeText(token.data);
-    if (!rawToken) throw new Error("Expo returned an empty push token.");
-    const expoResult = await registerPushTokenWithBackend({ authority, permissionStatus: permissionState, provider: "expo", token: rawToken });
-    const nativeResult = await registerAndroidNativeFcmToken(permissionState, authority);
-    return mergeAndroidPushRegistrationResults(expoResult, nativeResult);
+    if (Platform.OS === "android") {
+      // Both providers must reuse one installation identity even on first run.
+      await getNotificationInstallId();
+      await getNotificationRevocationCredential();
+    }
+    const expoRegistration = (async () => {
+      const token = await Notifications.getExpoPushTokenAsync({ projectId });
+      const rawToken = normalizeText(token.data);
+      if (!rawToken) throw new Error("Expo returned an empty push token.");
+      return registerPushTokenWithBackend({ authority, permissionStatus: permissionState, provider: "expo", token: rawToken });
+    })();
+    if (Platform.OS !== "android") return expoRegistration;
+
+    // Expo availability must not prevent native Android call registration, or
+    // hold a verified provider's result behind the other provider's network.
+    // Late completions retain registerPushTokenWithBackend's ownership checks.
+    return new Promise<PushRegistrationState>((resolve) => {
+      let expoResult = fallback;
+      let nativeResult: PushRegistrationState | null = null;
+      let remaining = 2;
+      const settle = () => {
+        remaining -= 1;
+        const result = mergeAndroidPushRegistrationResults(expoResult, nativeResult);
+        if (result.status === "registered" || remaining === 0) resolve(result);
+      };
+      void expoRegistration.catch(() => fallback).then((result) => {
+        expoResult = result;
+        settle();
+      });
+      void registerAndroidNativeFcmToken(permissionState, authority).catch(() => null).then((result) => {
+        nativeResult = result;
+        settle();
+      });
+    });
   })();
 
   // Permission prompts remain user-controlled. Once permission is settled, the
@@ -2683,10 +2780,16 @@ export function subscribeToForegroundNotificationAlerts(onAlert: (alert: Foregro
   });
 }
 
-export function subscribeToForegroundActivityNotifications(onAlert: (alert: ForegroundActivityNotification) => void) {
+export function subscribeToForegroundActivityNotifications(
+  onAlert: (alert: ForegroundActivityNotification) => void,
+  onReceived?: (data: Record<string, unknown>) => boolean | void,
+) {
   return Notifications.addNotificationReceivedListener((notification) => {
     const content = notification.request.content;
     const data = content.data as Record<string, unknown>;
+    // Toast eligibility must not suppress a durable Activity refresh (for
+    // example, a missed-call row). The current root owner scopes the reread.
+    if (onReceived?.(data) === false) return;
     const path = normalizeNotificationPath(data.path || data.url || data.deepLink);
     if (!path) return;
 
