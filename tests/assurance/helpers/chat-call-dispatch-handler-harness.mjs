@@ -31,11 +31,16 @@ export const DISPATCH_IDS = Object.freeze({
 
 export function createCallDispatchHarness(options = {}) {
   const ids = DISPATCH_IDS;
-  let now = Date.parse("2026-09-28T12:00:00Z");
+  let now = options.nowMs ?? Date.parse("2026-09-28T12:00:00Z");
   let serial = 10;
   const nextId = () => `00000000-0000-4000-8000-${String(serial++).padStart(12, "0")}`;
   const events = [];
   const unexpected = [];
+  const timers = new Map();
+  const providerHolds = [];
+  let timerSerial = 0;
+  let expoMode = options.expoMode ?? "success";
+  let receiptMode = options.receiptMode ?? "success";
   const tables = {
     chat_call_invites: [{
       id: ids.invite, thread_id: ids.thread, communication_room_id: null,
@@ -66,6 +71,7 @@ export function createCallDispatchHarness(options = {}) {
     }],
     notifications: [], notification_event_dedupes: [],
     notification_delivery_attempts: [], voip_push_delivery_attempts: [],
+    chat_call_transition_deliveries: options.transitionDeliveries ?? [],
   };
   const fault = (message) => {
     unexpected.push(message);
@@ -78,10 +84,11 @@ export function createCallDispatchHarness(options = {}) {
     let single = false;
     let limit = Infinity;
     const predicates = [];
+    const equalities = new Map();
     let resultPromise;
     const builder = {
       select() { return builder; },
-      eq(key, value) { predicates.push((row) => row[key] === value); return builder; },
+      eq(key, value) { equalities.set(key, value); predicates.push((row) => row[key] === value); return builder; },
       is(key, value) { predicates.push((row) => (row[key] ?? null) === value); return builder; },
       in(key, values) { predicates.push((row) => values.includes(row[key])); return builder; },
       not(key, operator, value) {
@@ -97,7 +104,13 @@ export function createCallDispatchHarness(options = {}) {
       then(resolve, reject) {
         resultPromise ??= Promise.resolve().then(() => {
           events.push({ kind: "database", table, operation, values: clone(values) });
-          if (options.databaseFailure === table) return { data: null, error: { message: "controlled read failure" } };
+          if (table === "channel_audience_blocks" && operation === "select"
+            && options.blockReadFailureOwner === equalities.get("channel_user_id")) {
+            return { data: null, error: { code: "XX000", message: "controlled directional block read failure" } };
+          }
+          if (options.databaseFailure === table && (!options.databaseFailureOperation || options.databaseFailureOperation === operation)) {
+            return { data: null, error: { code: "XX000", message: "controlled database failure" } };
+          }
           let rows = tables[table].filter((row) => predicates.every((predicate) => predicate(row))).slice(0, limit);
           if (operation === "insert") {
             const key = table === "notification_event_dedupes" ? "dedupe_key"
@@ -123,10 +136,14 @@ export function createCallDispatchHarness(options = {}) {
     events.push({ kind: "rpc", name, parameters: clone(parameters) });
     if (name === "wave1_session_authority_readback") return {
       data: { authoritative: true, state: "ACTIVE", restoreOnly: false,
-        userId: ids.caller, accountId: ids.caller, sessionGeneration: ids.session,
+        userId: options.actorUserId ?? ids.caller, accountId: options.actorUserId ?? ids.caller, sessionGeneration: ids.session,
         ...options.sessionAuthority }, error: null,
     };
-    if (name === "is_account_access_restricted") return { data: false, error: null };
+    if (name === "is_account_access_restricted") return {
+      data: options.accountRestrictedUserId === parameters.p_user_id,
+      error: options.accountReadError ? { message: "controlled account eligibility failure" } : null,
+    };
+    if (name === "authorize_chilly_chat_call_transition_retry") return { data: options.retryAuthorized === true, error: null };
     if (name === "enforce_abuse_rate_limit") return {
       data: null, error: options.rateLimited ? { message: "rate_limited" } : null,
     };
@@ -139,7 +156,7 @@ export function createCallDispatchHarness(options = {}) {
     return fault(`Unmodeled database RPC: ${name}`);
   };
   const client = { from: query, rpc, auth: { getUser: async () => ({
-    data: { user: { id: ids.caller, email: null } }, error: null,
+    data: { user: { id: options.actorUserId ?? ids.caller, email: null } }, error: null,
   }) } };
   const env = {
     SUPABASE_URL: "https://dispatch.test.invalid", SUPABASE_ANON_KEY: "test-anon-key",
@@ -181,10 +198,32 @@ export function createCallDispatchHarness(options = {}) {
         ? response({ error: { status: "UNAVAILABLE" } }, 503)
         : response({ name: "projects/test-project/messages/test-message" });
     }
-    if (address === "https://exp.host/--/api/v2/push/send") return options.expoFailure
-      ? response({ data: { status: "error", message: "test-provider-failure", details: { error: "DeviceNotRegistered" } } })
-      : response({ data: { status: "ok", id: "test-expo-ticket" } });
-    if (address === "https://exp.host/--/api/v2/push/getReceipts") return response({ data: {} });
+    if (address === "https://exp.host/--/api/v2/push/send") {
+      if (options.expoTransportError) throw new TypeError("controlled Expo outcome unavailable with private-provider-detail");
+      const success = () => response({ data: { status: "ok", id: "test-expo-ticket" } });
+      if (expoMode === "hold_fetch") {
+        events.push({ kind: "provider_hold", boundary: "fetch", signal: init.signal });
+        return new Promise((resolve) => providerHolds.push(() => resolve(success())));
+      }
+      if (expoMode === "hold_body") return { ok: true, status: 200, json() {
+        events.push({ kind: "provider_hold", boundary: "body", signal: init.signal });
+        return new Promise((resolve) => providerHolds.push(() => resolve({ data: { status: "ok", id: "late-ticket" } })));
+      } };
+      if (expoMode === "reject_body") return { ok: true, status: 200, json: async () => { throw new Error("controlled truncated response"); } };
+      if (expoMode === "missing_ticket_id") return response({ data: { status: "ok" } });
+      if (expoMode === "null_body") return response(null);
+      if (expoMode === "null_ticket") return response({ data: [null] });
+      return options.expoFailure
+        ? response({ data: { status: "error", message: "test-provider-failure", details: { error: "DeviceNotRegistered" } } })
+        : response({ data: { status: "ok", id: "test-expo-ticket" } });
+    }
+    if (address === "https://exp.host/--/api/v2/push/getReceipts") {
+      if (receiptMode === "hold") {
+        events.push({ kind: "provider_hold", boundary: "receipts" });
+        return new Promise((resolve) => providerHolds.push(() => resolve(response({ data: {} }))));
+      }
+      return response({ data: {} });
+    }
     return fault(`Unexpected network request: ${address}`);
   };
   class ClockDate extends Date {
@@ -210,9 +249,18 @@ export function createCallDispatchHarness(options = {}) {
     modules.set(file, module);
     const context = vm.createContext({
       module, exports: module.exports, console,
-      Request, Response, Headers, URL, URLSearchParams, AbortSignal, TextEncoder,
+      Request, Response, Headers, URL, URLSearchParams, AbortSignal, AbortController, TextEncoder,
       Uint8Array, crypto: webcrypto, Date: ClockDate, atob, btoa, fetch: controlledFetch,
-      setTimeout(callback, milliseconds) { now += milliseconds; queueMicrotask(callback); return 1; },
+      setTimeout(callback, milliseconds) {
+        const id = ++timerSerial;
+        const timer = { at: now + milliseconds, callback, handle: null };
+        timers.set(id, timer);
+        if (!options.manualTimers) timer.handle = setTimeout(() => {
+          timers.delete(id); now += milliseconds; callback();
+        }, milliseconds);
+        return id;
+      },
+      clearTimeout(id) { const timer = timers.get(id); if (timer?.handle) clearTimeout(timer.handle); timers.delete(id); },
       Deno: { env: { get: (key) => env[key] }, serve: (handler) => handlerTarget.handler = handler },
       require(specifier) {
         if (specifier === "jsr:@supabase/functions-js/edge-runtime.d.ts") return {};
@@ -235,9 +283,27 @@ export function createCallDispatchHarness(options = {}) {
   assert.equal(typeof ordinary.handler, "function");
   return {
     events, tables, ids,
-    async dispatch(body = { action: "incoming", inviteId: ids.invite }, { ios = false } = {}) {
+    async waitForHold(boundary) {
+      for (let attempt = 0; attempt < 200; attempt++) {
+        if (events.some((event) => event.kind === "provider_hold" && event.boundary === boundary)) return;
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      throw new Error(`provider boundary was not reached: ${boundary}`);
+    },
+    async advance(milliseconds) {
+      assert.equal(options.manualTimers, true);
+      now += milliseconds;
+      for (const [id, timer] of [...timers]) if (timer.at <= now) { timers.delete(id); timer.callback(); }
+      for (let index = 0; index < 80; index++) await Promise.resolve();
+    },
+    async releaseProviderHolds() {
+      expoMode = "success"; receiptMode = "success";
+      providerHolds.splice(0).forEach((release) => release());
+      for (let index = 0; index < 80; index++) await Promise.resolve();
+    },
+    async dispatch(body = { action: "incoming", inviteId: ids.invite }, { ios = false, headers = {} } = {}) {
       const result = await (ios ? iosHandler : ordinary.handler)(new Request(`${env.SUPABASE_URL}/test`, {
-        method: "POST", headers: { authorization: "Bearer test-caller-session", "content-type": "application/json" },
+        method: "POST", headers: { authorization: "Bearer test-caller-session", "content-type": "application/json", ...headers },
         body: JSON.stringify(body),
       }));
       assert.deepEqual(unexpected, [], "unknown SDK/module/network boundaries must not silently pass");

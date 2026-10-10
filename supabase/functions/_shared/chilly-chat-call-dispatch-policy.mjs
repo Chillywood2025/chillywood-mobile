@@ -89,6 +89,44 @@ export const buildBlockedChillyChatCallDispatch = (reason) => {
   }, reason);
 };
 
+// A durable timeout has two different jobs: retire the native incoming UI and
+// present missed-call activity. Preserve both receipts, but do not describe a
+// successful cleanup push as successful missed-call delivery.
+export const combineChillyChatTimeoutAndMissedDispatch = (cleanup, missed) => {
+  const channels = Object.fromEntries(CHILLY_CHAT_CALL_CHANNEL_KEYS.map((key) => {
+    const left = cleanup.channels[key];
+    const right = missed.channels[key];
+    const failed = left.status === "failed" || right.status === "failed";
+    const detail = right.attempted || right.notificationCreated || right.failedCount > 0 ? right : left;
+    const pushSent = left.pushSent || right.pushSent;
+    const notificationCreated = left.notificationCreated || right.notificationCreated;
+    return [key, createChillyChatCallChannelResult({
+      eligible: left.eligible || right.eligible,
+      attempted: left.attempted || right.attempted,
+      notificationCreated,
+      presentationAcknowledged: left.presentationAcknowledged || right.presentationAcknowledged,
+      pushSent,
+      sentCount: left.sentCount + right.sentCount,
+      failedCount: left.failedCount + right.failedCount,
+      skippedCount: left.skippedCount + right.skippedCount,
+      reason: detail.reason,
+      status: failed ? "failed" : pushSent ? "sent" : notificationCreated ? "created" : detail.status,
+    })];
+  }));
+  const result = summarizeChillyChatCallDispatch(cleanup.eligible || missed.eligible, channels);
+  const missedFailed = Object.values(missed.channels).some((channel) => channel.failedCount > 0);
+  result.result.status = cleanup.result.status === "failed" || missedFailed
+    ? "failed" : missed.result.status;
+  result.result.reason = missedFailed
+    ? "missed_presentation_failed"
+    : cleanup.result.status === "failed"
+      ? "terminal_cleanup_failed"
+      : missed.channels.inAppNotification.reason === "duplicate_prevented"
+        ? "missed_duplicate_prevented"
+        : `missed_${missed.result.reason}`;
+  return result;
+};
+
 export const resolveChillyChatCallPreferencePolicy = (input) => {
   const action = toText(input.action).toLowerCase();
   const callEnabled = input.chillyChatCallsEnabled !== false;
