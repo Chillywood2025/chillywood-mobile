@@ -88,8 +88,11 @@ jobs:
           node --test tests/assurance/communication-operation-error-truth.test.mjs
           node --test tests/assurance/android-chat-call-mic-control.test.mjs
           node --test tests/assurance/chat-thread-answer-mounted.test.mjs tests/assurance/ios-native-call-bridge-mounted.test.mjs
-          node --test tests/assurance/chat-thread-integration-mounted.test.mjs
+          node --test tests/assurance/ios-foreground-call-presentation.test.mjs
+          node --test tests/assurance/chat-thread-integration-mounted.test.mjs tests/assurance/chat-thread-expired-ringing-mounted.test.mjs
+          node --test tests/assurance/chat-thread-call-keyboard-mounted.test.mjs
           node --test tests/assurance/chat-call-native-state-mounted.test.mjs
+          node --test tests/assurance/android-legacy-audio-route-mounted.test.mjs
           node --test tests/assurance/chat-call-dispatch-integration.test.mjs
           node --test tests/assurance/chat-call-sdk-contract.test.mjs
           npm run test:communication-terminal-postgres
@@ -171,6 +174,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Compile and execute pinned WebRTC sender methods and former-source controls
         run: node scripts/test-webrtc-native-sender-contract.mjs
+      - name: Compile owned Android audio routing and stale-owner counterexamples
+        run: node scripts/test-owned-android-audio-session.mjs
       - name: Execute actual Swift audio routing, observers, and JS call ownership
         run: node scripts/test-ios-native-call-audio.mjs
 

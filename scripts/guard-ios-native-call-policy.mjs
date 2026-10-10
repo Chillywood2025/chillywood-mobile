@@ -156,7 +156,10 @@ for (const framework of ["CallKit", "PushKit", "AVFAudio", "UIKit"]) {
 for (const event of ["answerRequested", "answered", "declined", "timeout", "providerReset", "audioSessionActivated", "audioSessionDeactivated", "audioInterruptionBegan"]) {
   requireText(coordinator, `\"${event}\"`, `The native bridge must expose ${event} lifecycle state.`);
 }
-requireText(coordinator, "existing = activeCalls.values.first", "Duplicate incoming invites must reuse the active CallKit call.");
+requireText(coordinator, "activeCalls[callUuid] ?? activeCalls.values.first(where:", "Duplicate incoming UUIDs and invites must share native ownership.");
+requireText(coordinator, "pending.generation == existing.generation", "Pending duplicate presentations must retain the exact report generation.");
+requireText(coordinator, "pending.completions.append(completion)", "Foreground duplicates must await the actual shared presentation completion.");
+requireText(coordinator, "existing.presentationConfirmed", "Only a confirmed report may recover native presentation ownership.");
 requireText(coordinator, "reportNewIncomingCall", "PushKit delivery must immediately report an incoming CallKit call.");
 requireText(coordinator, "startVoipRegistrationOnMain()", "PushKit registration must be prepared from application launch for terminated delivery.");
 requireText(coordinator, "terminalInvitesDefaultsKey", "Caller-cancel ordering must persist a bounded native tombstone across cold launch.");
@@ -185,7 +188,7 @@ requireText(coordinator, "requestedReason == nil", "Only a customer-originated n
 requireText(coordinator, "NativeVoipAuthority", "Terminated PushKit delivery must retain only an exact account/session/install binding.");
 requireText(coordinator, "voipPayloadMatchesPersistedAuthority", "Native CallKit presentation must reject a provider payload for another account/session/install.");
 requireText(coordinator, "resetAccountContextOnMain", "Logout and account switch must end stale CallKit state and clear persisted descriptors.");
-requireText(coordinator, "completion?(error)", "PushKit completion must wait for CallKit reporting.");
+requireText(coordinator, "self.settleIncomingReport(callUuid, generation: call.generation, error: nil)", "Report success must settle only the exact confirmed native generation.");
 requireText(coordinator, "acknowledgeIncomingCallPresentation", "CallKit presentation must acknowledge only the exact APNs delivery attempt.");
 requireText(coordinator, "URLSessionConfiguration.ephemeral", "CallKit presentation acknowledgement transport must retain no cookies or cache.");
 requireText(coordinator, 'url.scheme?.lowercased() == "https"', "CallKit presentation acknowledgement must require HTTPS.");
@@ -196,9 +199,25 @@ const incomingReportCompletion = coordinator.slice(
   coordinator.indexOf("provider.reportNewIncomingCall(with: callUuid, update: update)"),
   coordinator.indexOf("private func normalizedCallAction"),
 );
-if (!/DispatchQueue\.main\.async\s*\{[\s\S]*?self\.activeCalls\[callUuid\]\?\.generation == call\.generation[\s\S]*?if let error\s*\{[\s\S]*?completion\?\(error\)\s*return\s*\}\s*self\.acknowledgeIncomingCallPresentation\(/u.test(incomingReportCompletion)) {
-  failures.push("CallKit presentation acknowledgement must occur only after reportNewIncomingCall succeeds.");
-}
+requireText(incomingReportCompletion, "current.generation == call.generation", "A stale report callback must not confirm a replacement call.");
+requireText(incomingReportCompletion, "self.removeCall(callUuid, incomingReportError: error)", "CallKit report errors must fail shared presentation waiters.");
+requireText(incomingReportCompletion, "current.presentationConfirmed = true", "Only the actual CallKit success callback may confirm presentation.");
+rejectText(incomingReportCompletion, "acknowledgeIncomingCallPresentation(", "Shared foreground reporting cannot manufacture an APNs presentation acknowledgement.");
+const incomingPush = coordinator.slice(coordinator.indexOf("didReceiveIncomingPushWith payload:"), coordinator.indexOf("// MARK: - CallKit"));
+requireText(incomingPush, "requiresPushReport: true", "Every legacy PushKit ingress must retain its own CallKit report obligation.");
+const duplicatePushReport = coordinator.slice(coordinator.indexOf("private func reportDuplicateVoipPushOnMain("), coordinator.indexOf("private func settleIncomingReport("));
+requireText(duplicatePushReport, "provider.reportNewIncomingCall(with: call.uuid, update: update)", "Duplicate PushKit notifications must issue an actual report for the exact existing UUID.");
+requireText(duplicatePushReport, "current?.generation == call.generation", "Duplicate report completion must retain immutable native generation ownership.");
+requireText(duplicatePushReport, "nativeError.domain == CXErrorDomainIncomingCall", "Expected duplicate errors must be scoped to the CallKit incoming-call domain.");
+rejectText(duplicatePushReport, "removeCall(", "A duplicate report error must never remove an established native call.");
+requireText(incomingPush, "if error == nil, let self,", "PushKit acknowledgement must await a successful shared report.");
+requireText(incomingPush, "call.presentationConfirmed", "PushKit acknowledgement must require confirmed native presentation.");
+requireText(incomingPush, "self.voipPayloadMatchesPersistedAuthority(normalizedPayload)", "Delayed PushKit acknowledgement must recheck exact authority.");
+requireText(incomingPush, "acknowledgeIncomingCallPresentation(payload: normalizedPayload", "Acknowledgement capabilities must originate in the actual PushKit payload.");
+requireText(coordinator, "UIApplication.shared.applicationState == .active", "Foreground presentation must be rejected outside active native application state.");
+requireText(coordinator, "persistedVoipAuthority() == authority", "Foreground presentation must match native persisted authority.");
+requireText(coordinator, "callUuid == inviteId", "Foreground presentation must retain the deterministic server call UUID.");
+requireText(moduleSource, "reportForegroundIncomingCallAsync", "The foreground Answer path must expose an awaited native presentation operation.");
 requireText(coordinator, "#if DEBUG", "The local CallKit trigger must compile only in debug builds.");
 rejectText(coordinator, "AVCapture", "The native incoming-call bridge must not activate a camera before answer.");
 requireText(moduleSource, "stopVoipRegistrationAsync", "The native bridge must support logout/account-transition teardown.");
@@ -242,7 +261,8 @@ requireText(facade, 'event.type === "applicationActive"', "Returning from CallKi
 requireText(facade, "iosNativeAnswerApplicationActiveBaselines", "A native foreground witness must be newer than the exact invite's Answer request.");
 requireText(facade, "nativePresentedCallUuidsByInviteId", "Foreground native ownership must bind the exact invite to its CallKit UUID.");
 requireText(facade, "shouldReuseIosNativeCallReadiness", "A harmless exact-account/session refresh must preserve active CallKit presentation ownership.");
-requireText(facade, "requestIosNativeCallAnswer(inviteId: string)", "Foreground app Answer must delegate through the exact native CallKit call.");
+requireText(facade, "requestIosNativeCallAnswer(inviteId: string, isCurrent: () => boolean)", "Foreground app Answer must delegate through the exact native CallKit call and mounted operation.");
+requireText(facade, "foregroundAnswerValidations.get(isCurrent)", "Every foreground Answer must own its own fresh-validation admission.");
 requireText(facade, 'typeof NativeCallsModule.requestAnswerAsync !== "function"', "Older same-runtime binaries must fail closed when the additive native Answer API is absent.");
 requireText(facade, "requestAnswerAsync(callUuid, normalizedInviteId)", "The JavaScript-to-native Answer request must carry both exact UUID and invite authority.");
 requireText(facade, "readIosNativeApplicationActiveSerial(inviteId: string)", "The call screen must read only an exact-invite native foreground witness.");
@@ -263,12 +283,14 @@ requireText(bridgeLifecycle, 'authorityStatus === "loading" && !hadActiveAuthori
 requireText(bridgeLifecycle, "REVOKE_STATUSES", "Terminal and indeterminate session authority must revoke native VoIP ownership.");
 rejectText(bridgeLifecycle, "console.", "The native-call bridge lifecycle policy must not log account authority.");
 requireText(rootLayout, "createIosCallKitAnswerRouteHandler", "CallKit Answer must create a bounded claim through the canonical bridge handler.");
-requireText(rootLayout, "waitForIosNativeCallPresentation(invite.id)", "The foreground banner must wait for late exact-invite CallKit ownership before accepting an invite.");
+requireText(rootLayout, "ensureIosForegroundIncomingCallPresentation({", "The foreground banner must verify and request actual exact-invite CallKit presentation before accepting an invite.");
 requireText(rootLayout, "resolveIosForegroundIncomingAnswerAuthority(nativePresentationWaitOutcome)", "The foreground banner must resolve answer authority through the fail-closed iOS arbitration policy.");
 requireText(rootLayout, 'answerAuthority === "native_answer"', "The foreground banner must delegate exact native-owned calls to CallKit.");
 requireText(rootLayout, 'answerAuthority === "blocked"', "The foreground banner must block indeterminate late native ownership rather than accepting directly.");
-requireText(rootLayout, "requestIosNativeCallAnswer(invite.id)", "The foreground banner must ask CallKit to answer its exact native-owned invite.");
-requireText(chatThread, "waitForIosNativeCallPresentation(invite.id)", "The same-thread answer path must wait for late exact-invite CallKit ownership.");
+requireText(rootLayout, "requestIosNativeCallAnswer(invite.id, ownsForegroundAnswer)", "The foreground banner must ask CallKit to answer its exact native-owned invite under its current UI operation.");
+requireText(chatThread, "ensureIosForegroundIncomingCallPresentation({", "The same-thread answer path must freshly verify and await actual exact-invite CallKit ownership.");
+requireText(facade, "nativePresentedCallUuidsByInviteId.get(inviteId) !== inviteId", "Foreground presentation must require the deterministic UUID from a real native receipt.");
+requireText(facade, "const invite = await readExactRingingInvite()", "Foreground presentation must freshly verify the raw invite and member-bound thread.");
 requireText(chatThread, "resolveIosForegroundIncomingAnswerAuthority(presentationWaitOutcome)", "The same-thread answer path must share the fail-closed iOS arbitration policy.");
 requireText(chatThread, 'answerAuthority === "blocked"', "The same-thread answer path must block indeterminate native ownership rather than accepting directly.");
 requireText(provenance, 'if (outcome === "presented") return "native_answer"', "Presented exact-invite CallKit ownership must route through native Answer.");

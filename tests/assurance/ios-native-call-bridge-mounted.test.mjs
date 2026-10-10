@@ -8,6 +8,9 @@ import ts from "typescript";
 import { getIosNativeCallAuthorityBindingKey, resolveIosNativeCallBridgeLifecycle } from "../../_lib/iosNativeCallBridgeLifecycle.mjs";
 import * as lifecycle from "../../_lib/iosNativeCallBridgeLifecycle.mjs";
 import * as provenance from "../../_lib/nativeCallTransitionProvenance.mjs";
+import * as nativeCallErrorDiagnostics from "../../_lib/nativeCallErrorDiagnostics.mjs";
+import * as roomIdentifiers from "../../_lib/communicationRoomIdentifier.mjs";
+import * as callMediaPolicy from "../../_lib/communicationCallMediaPolicy.mjs";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const noop = () => {};
@@ -24,11 +27,12 @@ const ids = {
   user: "00000000-0000-4000-8000-000000000001",
   invite: "00000000-0000-4000-8000-000000000002",
   thread: "00000000-0000-4000-8000-000000000003",
-  uuid: "00000000-0000-4000-8000-000000000004",
+  uuid: "00000000-0000-4000-8000-000000000002",
   replacementUuid: "00000000-0000-4000-8000-000000000005",
   session: "00000000-0000-4000-8000-000000000006",
 };
-const nativeEvent = (type, extra = {}) => ({ type, callInviteId: ids.invite, callUuid: ids.uuid, threadId: ids.thread, callType: "video", ...extra });
+const nativeEvent = (type, extra = {}) => ({ type, callInviteId: ids.invite, callUuid: ids.uuid, threadId: ids.thread, callType: "video",
+  nativeCallGeneration: "00000000-0000-4000-8000-000000000007", nativeSessionGeneration: ids.session, ...extra });
 
 async function mount(t, { realFacade = false, initialNativeEvents = [], persistedSameAuthority = true, controlledRetryTimers = false } = {}) {
   let session = { user: { id: "user-a" }, authority: binding(), authorityStatus: "active" };
@@ -37,6 +41,8 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
   let router = { replace: noop };
   const subscriptions = new Map();
   const presentations = new Map();
+  const errorReports = [];
+  const mediaDiagnostics = [];
   const activations = new Set();
   const ends = [];
   const starts = [];
@@ -47,6 +53,30 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
   const routes = [];
   const nativeSteps = [];
   const pendingEvents = [...initialNativeEvents];
+  const nativePresentedCalls = new Map();
+  const nativeAnsweredCallUuids = new Set();
+  const nativeAudioOwnerGenerations = new Map();
+  const pendingRebindReceipts = new WeakSet();
+  const observeNativeReceipt = (event) => {
+    if (event.type === "audioSessionActivated" && nativePresentedCalls.get(event.callUuid)?.nativeCallGeneration === event.nativeCallGeneration) {
+      nativeAudioOwnerGenerations.set(event.callUuid, event.nativeCallGeneration);
+    }
+    if (["audioSessionDeactivated", "providerReset", "audioSessionFailed", "audioInterruptionBegan"].includes(event.type)) nativeAudioOwnerGenerations.clear();
+    if (event.type === "incoming" || event.type === "recovered") {
+      if (nativePresentedCalls.get(event.callUuid)?.nativeCallGeneration !== event.nativeCallGeneration) {
+        nativeAnsweredCallUuids.delete(event.callUuid);
+        nativeAudioOwnerGenerations.delete(event.callUuid);
+      }
+      nativePresentedCalls.set(event.callUuid, event);
+    }
+    if (["remoteEnded", "ended", "declined", "timeout", "answerFailed"].includes(event.type)) {
+      nativePresentedCalls.delete(event.callUuid);
+      nativeAnsweredCallUuids.delete(event.callUuid);
+      nativeAudioOwnerGenerations.delete(event.callUuid);
+    }
+  };
+  const drainNativeEvents = () => pendingEvents.splice(0).filter(event => !pendingRebindReceipts.has(event)
+    || nativePresentedCalls.has(event.callUuid));
   const nativeLifecycleOrder = [];
   const bridgeWork = new Set();
   const retryTimers = new Map();
@@ -77,6 +107,7 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
     resolveIosNativeCallBridgeLifecycle,
     AppState: { addEventListener: (_name, listener) => { activations.add(listener); return { remove: () => activations.delete(listener) }; } },
     startIosNativeCallsReadiness: async (authority, listener) => {
+      if (stageHandlers.has("readiness-start")) return stageHandlers.get("readiness-start")(authority, listener);
       const nextAuthority = getIosNativeCallAuthorityBindingKey(authority);
       // The real readiness owner preserves presentations for equivalent
       // authority and clears them before installing a different binding.
@@ -120,6 +151,7 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
     provenance.clearNativeCallTransitionClaims("ios");
     session = { ...session, user: { id: ids.user }, authority: { ...binding(ids.session), userId: ids.user, accountId: ids.user } };
     let nativeBindingKey = persistedSameAuthority ? getIosNativeCallAuthorityBindingKey(session.authority) : "retired-native-account";
+    const foregroundInviteExpiry = new Date(Date.now() + 90_000).toISOString();
     router = { replace: (destination) => routes.push(destination) };
     const nativeModule = {
       isBuildEnabledAsync: async () => true,
@@ -129,16 +161,30 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
         nativeModuleListener = listener;
         // Swift startObserving replays its queue on the main queue. This must
         // not deliver a retired native binding's events under the next JS user.
-        queueMicrotask(() => { if (nativeModuleListener === listener) pendingEvents.splice(0).forEach(listener); });
+        queueMicrotask(() => { if (nativeModuleListener === listener) drainNativeEvents().forEach(listener); });
         return { remove: () => { if (nativeModuleListener === listener) nativeModuleListener = null; } };
       },
-      getPendingEventsAsync: async () => { nativeLifecycleOrder.push("drain"); return pendingEvents.splice(0); },
+      getPendingEventsAsync: async () => { nativeLifecycleOrder.push("drain"); return drainNativeEvents(); },
       startVoipRegistrationAsync: async (userId, accountId, sessionGeneration) => {
         nativeLifecycleOrder.push("bind");
         const nextBindingKey = getIosNativeCallAuthorityBindingKey({ ...binding(sessionGeneration), userId, accountId });
         // Mirrors Swift: only a DIFFERENT existing authority resets pending
         // native calls/events. Same-authority cold launch preserves Answer.
-        if (nativeBindingKey && nativeBindingKey !== nextBindingKey) pendingEvents.length = 0;
+        if (nativeBindingKey && nativeBindingKey !== nextBindingKey) {
+          pendingEvents.length = 0;
+          nativePresentedCalls.clear();
+          nativeAnsweredCallUuids.clear();
+          nativeAudioOwnerGenerations.clear();
+        } else if (nativeBindingKey === nextBindingKey) {
+          // Native rebind emits genuine recovered receipts for its confirmed,
+          // still-live CallKit calls. The facade must consume those events.
+          for (const event of nativePresentedCalls.values()) {
+            const recovered = { ...event, type: "recovered", audioSessionActive:
+              nativeAudioOwnerGenerations.get(event.callUuid) === event.nativeCallGeneration && nativeAnsweredCallUuids.has(event.callUuid) };
+            pendingRebindReceipts.add(recovered);
+            pendingEvents.push(recovered);
+          }
+        }
         nativeBindingKey = nextBindingKey;
         return true;
       },
@@ -146,9 +192,32 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
       reportRemoteEndAsync: async (uuid, reason) => {
         nativeSteps.push({ name: "remoteEnd", uuid, reason });
         if (stageHandlers.has("os-remoteEnd")) return stageHandlers.get("os-remoteEnd")(uuid, reason);
+        nativePresentedCalls.delete(uuid);
         nativeModuleListener?.({ type: "remoteEnded", callUuid: uuid, callInviteId: ids.invite, threadId: ids.thread });
       },
-      completeAnswerAsync: async (uuid, connected) => { nativeSteps.push({ name: "answer", uuid, connected }); },
+      completeAnswerAsync: async (uuid, connected) => {
+        nativeSteps.push({ name: "answer", uuid, connected });
+        if (stageHandlers.has("os-completeAnswer")) return stageHandlers.get("os-completeAnswer")(uuid, connected);
+        if (connected) nativeAnsweredCallUuids.add(uuid);
+      },
+      endCallAsync: async (uuid, reason) => {
+        nativeSteps.push({ name: "end", uuid, reason });
+        if (stageHandlers.has("os-endCall")) return stageHandlers.get("os-endCall")(uuid, reason);
+        // Transaction acceptance does not manufacture its CXEndCallAction delegate event.
+      },
+      requestAnswerAsync: async (uuid, inviteId) => {
+        nativeSteps.push({ name: "requestAnswer", uuid, inviteId });
+        // The OS edge must explicitly deliver its event; a request promise
+        // alone never fabricates an Answer route or server acceptance.
+        return stageHandlers.has("os-requestAnswer")
+          ? stageHandlers.get("os-requestAnswer")(uuid, inviteId) : false;
+      },
+      setMutedAsync: async (uuid, muted) => {
+        nativeSteps.push({ name: "setMuted", uuid, muted });
+        // A queued CXSetMutedCallAction is not its delegate receipt. Tests
+        // control delivery separately through the native-module listener.
+        if (stageHandlers.has("os-setMuted")) return stageHandlers.get("os-setMuted")(uuid, muted);
+      },
       completeTerminalTransitionAsync: async (uuid) => { nativeSteps.push({ name: "terminal", uuid }); },
     };
     const imports = {
@@ -156,15 +225,39 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
       "expo-application": { nativeApplicationVersion: "test", nativeBuildVersion: "test" },
       "react-native": { Platform: { OS: "ios" } },
       "../modules/chillywood-native-calls": { default: nativeModule },
-      "./accountSessionAuthority": { isCurrentAccountSessionAuthority: async (value) => getIosNativeCallAuthorityBindingKey(value) === getIosNativeCallAuthorityBindingKey(session.authority) },
+      "./accountSessionAuthority": {
+        isCurrentAccountSessionAuthority: async (value) => getIosNativeCallAuthorityBindingKey(value)
+          === getIosNativeCallAuthorityBindingKey(stageHandlers.has("authority-read") ? await stageHandlers.get("authority-read")() : session.authority),
+        readCurrentAccountSessionAuthority: async () => stageHandlers.has("authority-read") ? stageHandlers.get("authority-read")() : session.authority,
+        sameAccountSessionAuthority: (left, right) => !!left && !!right
+          && getIosNativeCallAuthorityBindingKey(left) === getIosNativeCallAuthorityBindingKey(right),
+      },
+      "./communicationRoomIdentifier.mjs": roomIdentifiers,
       "./iosNativeCallBridgeLifecycle.mjs": lifecycle,
-      "./livekit/bootstrap": { synchronizeLiveKitCallKitAudioSession: noop },
+      "./livekit/bootstrap": { synchronizeLiveKitCallKitAudioSession: lifecycle => stageHandlers.has("sdk-audio-sync") ? stageHandlers.get("sdk-audio-sync")(lifecycle) : true },
+      "./communicationCallMediaPolicy.mjs": callMediaPolicy,
+      "./internalCallMediaDiagnostics": { reportInternalCallMediaDiagnostic: (phase, input) => mediaDiagnostics.push({ phase, ...input }) },
       "./nativeCallTransitionProvenance.mjs": provenance,
+      "./nativeCallErrorDiagnostics.mjs": nativeCallErrorDiagnostics,
+      "./logger": { reportRuntimeError: (scope, error, metadata) => {
+        errorReports.push({ scope, error, metadata });
+        if (stageHandlers.has("diagnostic-report")) stageHandlers.get("diagnostic-report")();
+      } },
       "./notifications": { createPushOwnershipOperationKey: () => "test-operation", getNotificationInstallId: async () => "test-install", getNotificationRevocationCredential: async () => "test-credential" },
-      "./supabase": { supabase: { functions: { invoke: async () => ({ data: null, error: null }) } } },
+      "./supabase": { supabase: {
+        functions: { invoke: async () => ({ data: null, error: null }) },
+        from: (table) => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ error: null, data: table === "chat_call_invites" ? {
+          id: ids.invite, thread_id: ids.thread, communication_room_id: "ROOM-LEGACY",
+          caller_user_id: "00000000-0000-4000-8000-000000000099", callee_user_id: ids.user,
+          call_type: "voice", status: "ringing", expires_at: foregroundInviteExpiry,
+        } : {
+          id: ids.thread, active_communication_room_id: "ROOM-LEGACY", members: [ids.user, "00000000-0000-4000-8000-000000000099"].map(user_id => ({ user_id, thread_id: ids.thread })),
+        } }) }) }) }),
+      } },
     };
     const facadeContext = {
-      exports: {}, console, process: { env: {} }, __DEV__: false, setTimeout, clearTimeout,
+      exports: {}, console, performance: { now: () => stageHandlers.has("monotonic-now")
+        ? stageHandlers.get("monotonic-now")() : globalThis.performance.now() }, process: { env: {} }, __DEV__: false, setTimeout, clearTimeout,
       require: (name) => { assert.ok(imports[name], `unexpected facade import: ${name}`); return imports[name]; },
     };
     const facadeSource = ts.transpileModule(fs.readFileSync("_lib/iosNativeCalls.ts", "utf8"), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: false } }).outputText;
@@ -187,19 +280,20 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
   t.after(unmount);
   await render();
   return {
-    subscriptions, ends, starts, terminalSteps, routes, nativeSteps, nativeLifecycleOrder, retryTimers,
+    subscriptions, ends, starts, terminalSteps, routes, nativeSteps, nativeLifecycleOrder, retryTimers, errorReports, mediaDiagnostics,
     get facade() { return facade; },
     get revokes() { return revokes; },
     setReader(next) { reader = next; },
     setStage(name, handler) { stageHandlers.set(name, handler); },
     async event(event) {
       if (!realFacade) return nativeListener(event);
+      observeNativeReceipt(event);
       nativeModuleListener?.(event);
       await settle();
       await Promise.all([...bridgeWork]);
       await settle();
     },
-    emitWithoutWaiting(event) { nativeModuleListener?.(event); },
+    emitWithoutWaiting(event) { observeNativeReceipt(event); nativeModuleListener?.(event); },
     async flush() { await settle(); await Promise.all([...bridgeWork]); await settle(); },
     setApplicationActive(next) { applicationActive = next; },
     queue(event) { pendingEvents.push(event); },
@@ -222,6 +316,80 @@ async function mount(t, { realFacade = false, initialNativeEvents = [], persiste
     unmount,
   };
 }
+
+test("transient readiness quarantine recovers a live CallKit receipt before a later native Answer", async (t) => {
+  const h = await mount(t, { realFacade: true, controlledRetryTimers: true });
+  await h.event(nativeEvent("incoming"));
+  assert.equal(h.facade.hasIosNativeCallPresentation(ids.invite), true);
+  h.setStage("authority-read", async () => null);
+  await h.activate();
+  assert.equal(h.facade.hasIosNativeCallPresentation(ids.invite), false, "unknown authority quarantines JS presentation claims");
+  h.setStage("authority-read", async () => ({ ...binding(ids.session), userId: ids.user, accountId: ids.user }));
+  await h.activate();
+  await h.flush();
+  assert.equal(h.facade.hasIosNativeCallPresentation(ids.invite), true, "rebind drains the native recovered receipt");
+  await h.event(nativeEvent("answerRequested"));
+  await h.flush();
+  assert.equal(h.routes.length, 1, "an actual native Answer remains eligible after transient recovery");
+  assert.equal(h.nativeSteps.some(step => step.name === "requestAnswer"), false, "no foreground report or fabricated Answer was needed");
+});
+
+test("root readiness retries two transient failures and foreground can recover after exhaustion", async (t) => {
+  const h = await mount(t, { controlledRetryTimers: true });
+  let attempts = 0;
+  h.setStage("readiness-start", async () => { attempts += 1; return { status: "error" }; });
+  await h.activate();
+  assert.equal(attempts, 1);
+  assert.equal(await h.runRetry(), 1_000);
+  assert.equal(await h.runRetry(), 3_000);
+  assert.equal(attempts, 3);
+  assert.equal(h.retryTimers.size, 0, "network failure cannot create an unbounded retry loop");
+  h.setStage("readiness-start", async () => { attempts += 1; return { status: "started" }; });
+  await h.activate();
+  assert.equal(attempts, 4, "a new foreground transition revalidates native readiness");
+  assert.equal(h.retryTimers.size, 0);
+});
+
+test("readiness retry timer cannot restart native registration after bridge unmount", async (t) => {
+  const h = await mount(t, { controlledRetryTimers: true });
+  let attempts = 0;
+  h.setStage("readiness-start", async () => { attempts += 1; return { status: "error" }; });
+  await h.activate();
+  const retainedTimer = h.retryTimers.values().next().value;
+  assert.ok(retainedTimer);
+  await h.unmount();
+  assert.equal(h.retryTimers.size, 0);
+  retainedTimer.callback();
+  await h.flush();
+  assert.equal(attempts, 1);
+});
+
+test("failed readiness from a retired session cannot schedule recovery under its old authority", async (t) => {
+  const h = await mount(t, { controlledRetryTimers: true });
+  const old = deferred();
+  const requests = [];
+  h.setStage("readiness-start", async (authority) => {
+    requests.push(authority.sessionGeneration);
+    return authority.sessionGeneration === "session-a" ? old.promise : { status: "started" };
+  });
+  await h.activate();
+  await h.rerender({ authority: binding("session-b") });
+  await h.resolve(old, { status: "error" });
+  assert.deepEqual(requests, ["session-a", "session-b"]);
+  assert.equal(h.retryTimers.size, 0);
+});
+
+test("overlapping foreground notifications do not start concurrent readiness checks", async (t) => {
+  const h = await mount(t, { controlledRetryTimers: true });
+  const pending = deferred();
+  let attempts = 0;
+  h.setStage("readiness-start", async () => { attempts += 1; return pending.promise; });
+  await h.activate();
+  await h.activate();
+  assert.equal(attempts, 1);
+  await h.resolve(pending, { status: "started" });
+  assert.equal(h.retryTimers.size, 0);
+});
 
 test("native terminal retries are bounded and activation remains an explicit retry after exhaustion", async (t) => {
   const h = await mount(t, { controlledRetryTimers: true });
@@ -422,6 +590,100 @@ test("native Answer failure before server acceptance settles the ringing callee 
   assert.equal(h.terminalSteps[0]?.name, "transition");
   assert.equal(h.terminalSteps[0]?.args[0].status, "declined");
   assert.equal(h.terminalSteps.at(-1)?.name, "native");
+});
+
+const acceptedConfigurationFailureInvite = {
+  id: ids.invite, status: "accepted", threadId: ids.thread, communicationRoomId: "ROOM-LEGACY",
+  callerUserId: "00000000-0000-4000-8000-000000000099", calleeUserId: ids.user,
+};
+const configurationFailureEvent = () => nativeEvent("answerFailed", { reason: "audio_session_configuration_failed" });
+
+test("actual root and facade settle an accepted call after native Answer audio configuration failure", async (t) => {
+  const h = await mount(t, { realFacade: true });
+  let record = { ...acceptedConfigurationFailureInvite };
+  h.setReader(async () => ({ ...record }));
+  h.setStage("transition", ({ actorUserId, invite, status }) => {
+    assert.equal(actorUserId, ids.user);
+    assert.equal(invite.id, ids.invite);
+    assert.equal(status, "ended", "configuration failure follows server acceptance, so decline is no longer legal");
+    record = { ...record, status };
+    return { ...record };
+  });
+  await h.event(nativeEvent("incoming"));
+  assert.equal(await h.facade.completeIosNativeCallAnswer(ids.uuid, true), true);
+  assert.equal(h.terminalSteps.length, 0, "native dispatch acknowledgment alone does not settle the server invite");
+  await h.event(configurationFailureEvent());
+  assert.equal(record.status, "ended");
+  assert.equal(h.facade.hasIosNativeCallPresentation(ids.invite), false);
+  assert.deepEqual(h.terminalSteps.map(({ name }) => name), ["transition", "thread", "presented", "rows"]);
+  const threadArgs = h.terminalSteps.find(({ name }) => name === "thread").args;
+  assert.equal(threadArgs[0], ids.thread);
+  assert.equal(threadArgs[1], "ROOM-LEGACY");
+  assert.equal(threadArgs[2].userId, ids.user);
+  assert.equal(threadArgs[2].sessionGeneration, ids.session);
+  for (const name of ["presented", "rows"]) {
+    const input = h.terminalSteps.find(step => step.name === name).args[0];
+    assert.equal(input.callInviteId, ids.invite);
+    assert.equal(input.threadId, ids.thread);
+    assert.equal(input.exactInviteOnly, true);
+  }
+  assert.equal(h.terminalSteps.find(({ name }) => name === "rows").args[0].userId, ids.user);
+  assert.deepEqual(h.nativeSteps.filter(({ name }) => name === "terminal"), [{ name: "terminal", uuid: ids.uuid }]);
+  assert.equal(h.subscriptions.has(ids.invite), false);
+  assert.equal(h.routes.length, 0, "terminal recovery must not route another Answer");
+});
+
+test("actual root and facade retry rejected accepted-call configuration failure cleanup on foreground", async (t) => {
+  const h = await mount(t, { realFacade: true });
+  let record = { ...acceptedConfigurationFailureInvite };
+  h.setReader(async () => ({ ...record }));
+  h.setStage("transition", async () => { throw Error("temporary terminal transition rejection"); });
+  await h.event(nativeEvent("incoming"));
+  await h.event(configurationFailureEvent());
+  assert.equal(record.status, "accepted", "local CallKit failure is not proof of server termination");
+  assert.equal(h.terminalSteps.length, 3, "one failure receipt has bounded transition retries");
+  assert.ok(h.terminalSteps.every(({ name, args }) => name === "transition" && args[0].status === "ended"));
+  assert.equal(h.nativeSteps.some(({ name }) => name === "terminal"), false);
+  assert.equal(h.facade.hasIosNativeCallPresentation(ids.invite), false, "native failure retires presentation even when server cleanup fails");
+  h.setStage("transition", ({ status }) => { record = { ...record, status }; return { ...record }; });
+  await h.activate();
+  await h.flush();
+  assert.equal(record.status, "ended");
+  assert.equal(h.terminalSteps.filter(({ name }) => name === "transition").length, 4);
+  assert.equal(h.terminalSteps.filter(({ name }) => name === "thread").length, 1);
+  assert.deepEqual(h.nativeSteps.filter(({ name }) => name === "terminal"), [{ name: "terminal", uuid: ids.uuid }]);
+  assert.equal(h.subscriptions.has(ids.invite), false);
+});
+
+test("actual root and facade cannot apply late configuration-failure cleanup to replacement authority", async (t) => {
+  const h = await mount(t, { realFacade: true });
+  const pending = deferred();
+  h.setReader(async () => ({ ...acceptedConfigurationFailureInvite }));
+  h.setStage("transition", () => pending.promise);
+  await h.event(nativeEvent("incoming"));
+  const failure = h.event(configurationFailureEvent());
+  await settle();
+  assert.deepEqual(h.terminalSteps.map(({ name }) => name), ["transition"]);
+  const nextUser = "00000000-0000-4000-8000-000000000007";
+  const nextInvite = "00000000-0000-4000-8000-000000000008";
+  const nextSession = "00000000-0000-4000-8000-000000000009";
+  const replacement = { ...acceptedConfigurationFailureInvite, id: nextInvite,
+    communicationRoomId: "ROOM-REPLACEMENT", calleeUserId: nextUser };
+  h.setReader(async id => id === nextInvite ? { ...replacement } : { ...acceptedConfigurationFailureInvite });
+  await h.rerender({ user: { id: nextUser }, authority: {
+    ...binding(nextSession), userId: nextUser, accountId: nextUser,
+  } });
+  h.emitWithoutWaiting(nativeEvent("incoming", { callUuid: ids.replacementUuid, callInviteId: nextInvite, nativeSessionGeneration: nextSession }));
+  await settle();
+  await h.resolve(pending, { ...acceptedConfigurationFailureInvite, status: "ended" });
+  await failure;
+  await h.activate();
+  await h.flush();
+  assert.deepEqual(h.terminalSteps.map(({ name }) => name), ["transition"], "retired mutation cannot clear thread or notifications under the new account");
+  assert.equal(h.nativeSteps.some(({ name }) => name === "terminal" || name === "remoteEnd"), false);
+  assert.equal(h.facade.hasIosNativeCallPresentation(nextInvite), true);
+  assert.equal(h.subscriptions.has(nextInvite), true);
+  assert.equal(h.routes.length, 0);
 });
 
 test("late failed route readiness from a retired account cannot fail a replacement native Answer", async (t) => {
@@ -673,6 +935,39 @@ test("same-authority cold launch preserves queued CallKit Answer through native 
   assert.equal(h.routes.length, 1);
   assert.equal(h.subscriptions.has(ids.invite), true);
   const swift = fs.readFileSync("modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", "utf8");
-  assert.match(swift, /if previousAuthority != nil && previousAuthority != authority \{\s*self.resetAccountContextOnMain\(\)/u, "native reset is conditional on a different binding, not every startup");
+  assert.match(swift, /if previousAuthority != nil && previousAuthority != authority \{\s*ChillywoodNativeCallDiagnostics.shared.record\(\.registrationAuthorityReplaced\)\s*self.resetAccountContextOnMain\(\)/u, "native reset is conditional on a different binding, not every startup");
   assert.match(swift, /private func resetAccountContextOnMain\(\)[\s\S]*?pendingEvents.removeAll\(\)/u);
 });
+
+for (const operation of ["request", "complete"]) {
+  for (const reporterThrows of [false, true]) {
+    test(`actual native Answer ${operation} rejection stays false with bounded evidence: reporter throws ${reporterThrows}`, async t => {
+      const h = await mount(t, { realFacade: true });
+      await h.event(nativeEvent("incoming"));
+      const privateMarker = "PRIVATE-NATIVE-ANSWER-PAYLOAD-TOKEN";
+      const original = Object.assign(new Error(privateMarker), {
+        domain: "com.apple.CallKit.error.requesttransaction", code: 4,
+        callUuid: ids.uuid, inviteId: ids.invite, userInfo: { payload: privateMarker },
+      });
+      h.setStage(operation === "request" ? "os-requestAnswer" : "os-completeAnswer", async () => { throw original; });
+      if (reporterThrows) h.setStage("diagnostic-report", () => { throw new Error("reporter unavailable"); });
+      const isCurrent = () => true;
+      if (operation === "request") {
+        assert.equal(await h.facade.ensureIosForegroundIncomingCallPresentation({
+          inviteId: ids.invite, threadId: ids.thread, roomId: "ROOM-LEGACY", isCurrent,
+          authority: { ...binding(ids.session), userId: ids.user, accountId: ids.user },
+        }), "presented");
+      }
+      const result = operation === "request"
+        ? await h.facade.requestIosNativeCallAnswer(ids.invite, isCurrent)
+        : await h.facade.completeIosNativeCallAnswer(ids.uuid, true);
+      assert.equal(result, false, "native rejection retains its existing public result");
+      assert.equal(h.errorReports.length, 1);
+      assert.equal(h.errorReports[0].scope, `ios-native-answer-${operation}`);
+      assert.equal(h.errorReports[0].metadata.nativeErrorDomain, "com.apple.CallKit.error.requesttransaction");
+      assert.equal(h.errorReports[0].metadata.nativeErrorCode, 4);
+      const evidence = JSON.stringify(h.errorReports);
+      for (const prohibited of [privateMarker, ids.uuid, ids.invite]) assert.equal(evidence.includes(prohibited), false);
+    });
+  }
+}

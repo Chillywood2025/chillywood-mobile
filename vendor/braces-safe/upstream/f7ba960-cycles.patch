@@ -1,0 +1,107 @@
+From f7ba960d37ddb452b0ad304812635b7259abb173 Mon Sep 17 00:00:00 2001
+From: Huanyi Xie <74809554+xiehuanyi@users.noreply.github.com>
+Date: Sat, 3 Oct 2026 13:26:29 +0300
+Subject: [PATCH] fix(expand): reject cyclic AST parent chains
+
+---
+ lib/expand.js         | 30 ++++++++++++++++--------------
+ test/braces.expand.js | 24 ++++++++++++++++++++++++
+ 2 files changed, 40 insertions(+), 14 deletions(-)
+
+diff --git a/lib/expand.js b/lib/expand.js
+index 80ea368..8211c5b 100644
+--- a/lib/expand.js
++++ b/lib/expand.js
+@@ -31,6 +31,20 @@ const append = (queue = '', stash = '', enclose = false) => {
+   return utils.flatten(result);
+ };
+ 
++const queueOwner = node => {
++  if (node.type === 'brace' || node.type === 'root' || !node.parent) return node;
++
++  const seen = new Set();
++  while (node.type !== 'brace' && node.type !== 'root' && node.parent) {
++    if (seen.has(node)) {
++      throw new RangeError('AST parent chain contains a cycle');
++    }
++    seen.add(node);
++    node = node.parent;
++  }
++  return node;
++};
++
+ const expand = (ast, options = {}) => {
+   const rangeLimit = options.rangeLimit === undefined ? 1000 : options.rangeLimit;
+   const maxDepth = Number.isFinite(options.maxDepth) ? Math.min(MAX_DEPTH, options.maxDepth) : MAX_DEPTH;
+@@ -41,13 +55,7 @@ const expand = (ast, options = {}) => {
+     }
+     node.queue = [];
+ 
+-    let p = parent;
+-    let q = parent.queue;
+-
+-    while (p.type !== 'brace' && p.type !== 'root' && p.parent) {
+-      p = p.parent;
+-      q = p.queue;
+-    }
++    const q = queueOwner(parent).queue;
+ 
+     if (node.invalid || node.dollar) {
+       q.push(append(q.pop(), stringify(node, options)));
+@@ -77,13 +85,7 @@ const expand = (ast, options = {}) => {
+     }
+ 
+     const enclose = utils.encloseBrace(node);
+-    let queue = node.queue;
+-    let block = node;
+-
+-    while (block.type !== 'brace' && block.type !== 'root' && block.parent) {
+-      block = block.parent;
+-      queue = block.queue;
+-    }
++    const queue = queueOwner(node).queue;
+ 
+     for (let i = 0; i < node.nodes.length; i++) {
+       const child = node.nodes[i];
+diff --git a/test/braces.expand.js b/test/braces.expand.js
+index 7da2bd6..e61ef2f 100644
+--- a/test/braces.expand.js
++++ b/test/braces.expand.js
+@@ -2,6 +2,7 @@
+ 
+ require('mocha');
+ const assert = require('assert').strict;
++const vm = require('vm');
+ const expand = require('../lib/expand');
+ const parse = require('../lib/parse');
+ const bashPath = require('bash-path');
+@@ -28,6 +29,29 @@ describe('unit tests from brace-expand', () => {
+       ast = { type: 'root', nodes: [ast] };
+       assert.throws(() => expand(ast), /exceeds max depth/);
+     });
++
++    it('should reject a self-referencing AST parent', () => {
++      const ast = { type: 'paren', nodes: [{ type: 'text', value: 'a' }] };
++      ast.parent = ast;
++      assert.throws(
++        () => vm.runInNewContext('expand(ast)', { expand, ast }, { timeout: 250 }),
++        error => error instanceof RangeError && /parent chain contains a cycle/.test(error.message)
++      );
++    });
++
++    it('should reject a cycle involving multiple AST parents', () => {
++      const parent = { type: 'paren' };
++      const ast = { type: 'paren', parent, nodes: [{ type: 'text', value: 'a' }] };
++      parent.parent = ast;
++      assert.throws(
++        () => vm.runInNewContext('expand(ast)', { expand, ast }, { timeout: 250 }),
++        error => error instanceof RangeError && /parent chain contains a cycle/.test(error.message)
++      );
++    });
++
++    it('should expand parsed parentheses with ordinary parent links', () => {
++      assert.deepEqual(expand(parse('foo/({a,b})')), ['foo/(a)', 'foo/(b)']);
++    });
+   });
+ 
+   describe('extglobs', () => {

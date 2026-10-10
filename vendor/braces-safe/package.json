@@ -1,0 +1,92 @@
+{
+  "name": "@chillywood/braces-safe",
+  "description": "Chi'llywood-maintained braces 3.0.3 depth-guard security backport",
+  "version": "3.0.3-chillywood.1",
+  "homepage": "https://github.com/micromatch/braces",
+  "author": "Jon Schlinkert (https://github.com/jonschlinkert)",
+  "contributors": [
+    "Brian Woodward (https://twitter.com/doowb)",
+    "Elan Shanker (https://github.com/es128)",
+    "Eugene Sharygin (https://github.com/eush77)",
+    "hemanth.hm (http://h3manth.com)",
+    "Jon Schlinkert (http://twitter.com/jonschlinkert)"
+  ],
+  "repository": "micromatch/braces",
+  "bugs": {
+    "url": "https://github.com/micromatch/braces/issues"
+  },
+  "license": "MIT",
+  "files": [
+    "index.js",
+    "lib"
+  ],
+  "main": "index.js",
+  "engines": {
+    "node": ">=8"
+  },
+  "dependencies": {
+    "fill-range": "^7.1.1"
+  },
+  "keywords": [
+    "alpha",
+    "alphabetical",
+    "bash",
+    "brace",
+    "braces",
+    "expand",
+    "expansion",
+    "filepath",
+    "fill",
+    "fs",
+    "glob",
+    "globbing",
+    "letter",
+    "match",
+    "matches",
+    "matching",
+    "number",
+    "numerical",
+    "path",
+    "range",
+    "ranges",
+    "sh"
+  ],
+  "private": true,
+  "chillywoodSource": {
+    "advisory": "GHSA-vfj7-8cjw-p6xm",
+    "sourcePackage": "braces@3.0.3",
+    "sourceRepository": "https://github.com/micromatch/braces",
+    "sourceRegistryGitHead": "74b2db2938fad48a2ea54a9c8bf27a37a62c350d",
+    "sourceRegistryIntegrity": "sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==",
+    "upstreamPullRequest": "https://github.com/micromatch/braces/pull/72",
+    "upstreamPullRequestStatus": "closed-unmerged",
+    "reviewedPatchHead": "28d440b5dd449dbf1fe6f3506cf94ecca4d02660",
+    "securityCommits": [
+      "d0d575e55e74a4e0218e5248fafb79efc3e54ebb",
+      "2569eada352a032decd189db906c3c7d87be0ad0",
+      "e072fe408812dbcb428cf85fde4cfb12ec4021f0",
+      "f7ba960d37ddb452b0ad304812635b7259abb173"
+    ],
+    "adaptation": "Only recursion-depth, fractional-limit, stringify compatibility and cyclic-parent guards backported to the published 3.0.3 runtime. No unrelated master parser changes.",
+    "maxDepth": 100,
+    "upstreamArtifactsSha256": {
+      "2569ead-fractional.patch": "0f959df71f0cabc58f40547f17f5f52dcfc28446304e3855da30ae44f74165ac",
+      "braces-3.0.3-source.tgz": "91ef3e089fa4f712e7c7b2753541d3cb58dbc87231a62f75fbf0bdbec0b4f14f",
+      "braces-3.0.3.tgz": "1cd18e862c8640b4568b1425a7df4ee030ff201d45b2da8f9f222d2987494ffc",
+      "braces-pr72-28d440b-source.tgz": "63bd890064b272ca0152084639d7ed8011b2a608f716c77bbe50d9b11a7a74fe",
+      "d0d575e-depth.patch": "152af73bccc5e483ea0212ab795495e80e2903d92794f3e45baa81002f39dcec",
+      "e072fe4-stringify.patch": "a16921634dd8c33bc085cb8ae14b66b30b53ae16d9edfe4c10816719e713b031",
+      "f7ba960-cycles.patch": "33b7d271b3c178641938c033aebd3d471a6c933e8ccef5b3606f8c64329b5803"
+    },
+    "runtimeFilesSha256": {
+      "index.js": "332ea07c7b006361aad12aa994ca75dc1db8e8382b884909e2f38f10b85c88a4",
+      "LICENSE": "35bdd8a44339719441900fb50fbefc5e2dca1ca662cbaed7a687de842c8b70f2",
+      "lib/compile.js": "b651f7715e6db8942ce61d3394357b4d81c8ece88240aa31a458ea1165edd195",
+      "lib/constants.js": "f9fb688959232eee3e6ad7906a5b0e3234815db49ee857ef86983d65b917dc7c",
+      "lib/expand.js": "7ea3e14c2b2b256ef244fd3d83b8fcaa20aa2232b4e6d768c3bb6ab567f66cf5",
+      "lib/parse.js": "72aabaadaa555cdfbd07fbd7c7f743373e4dc8eec04a97550cc57bbeec30eb6c",
+      "lib/stringify.js": "b2cc4ab4afb4a42ac58d871937b9d380ede5bbc644a466b1b544cc7401d3b9dc",
+      "lib/utils.js": "b5a7596aa67730412b3c029ef09e84e6b67b8e445cffd35d1d295549c89066c7"
+    }
+  }
+}

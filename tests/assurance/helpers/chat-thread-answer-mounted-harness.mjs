@@ -17,6 +17,7 @@ const declarations = screen.body.statements.filter((node) => ts.isVariableStatem
 if (declarations.length !== names.size) throw new Error("Chat Answer source selection changed; review harness.");
 const ownershipHook = tree.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "useChatThreadOperationOwnership");
 const microphoneHook = tree.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "useIosNativeMicrophoneAcknowledgements");
+const presentationHook = tree.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "useExpiredIncomingCallPresentation");
 
 export const deferred = () => {
   let resolve;
@@ -92,25 +93,32 @@ export async function mountChatAnswer(options = {}) {
   ) || (ts.isExpressionStatement(node) && node.getText(tree).includes("const route = resolveIosChatCallAudioRoute")))
     : options.declineMode ? screen.body.statements.filter((node) => ts.isVariableStatement(node) && node.declarationList.declarations.some((declaration) => declineNames.has(declaration.name.getText(tree))))
     : options.endedMode ? [] : options.micMode ? screen.body.statements.filter((node) => (
-    ts.isVariableStatement(node) && node.declarationList.declarations.some((declaration) => declaration.name.getText(tree) === "handleToggleCallMic")
+    ts.isVariableStatement(node) && node.declarationList.declarations.some((declaration) => ["microphoneControlOperationRef", "handleToggleCallMic"].includes(declaration.name.getText(tree)))
   ) || (ts.isExpressionStatement(node) && node.getText(tree).includes("return subscribeToIosNativeCallEvents")))
     : options.readMode ? screen.body.statements.filter((node) => ts.isVariableStatement(node)
       && node.declarationList.declarations.some((declaration) => readNames.has(declaration.name.getText(tree)))) : declarations;
   const compiled = ts.transpileModule(`
     ${ownershipHook?.getText(tree) ?? ""}
     ${microphoneHook?.getText(tree) ?? ""}
+    ${presentationHook?.getText(tree) ?? ""}
     exports.Component = function Component() {
       const { currentUserId, threadId, isSignedIn, sessionGeneration, requestedNativeCallUuid } = runtime;
+      const activeIosNativeAudioCallUuid = runtime.requestedNativeCallUuid;
+      const nativeControlCallUuid = runtime.requestedNativeCallUuid;
+      const isIosNativeMediaAuthorityCurrent = () => true;
       const [callBusy, setCallBusy] = useState(false);
       const [nativeSpeakerEnabled, setNativeSpeakerState] = useState(false);
       const setNativeSpeakerEnabled = useCallback((value) => { runtime.speakerWrites.push(value); setNativeSpeakerState(value); }, []);
       const { callChannelState, activeCallRoomId, callMediaProvider, nativeMediaActivationSerial } = runtime;
+      const canSetCallMediaSpeaker = runtime.canSetSpeaker ?? callMediaProvider === "livekit";
+      const callMediaSpeakerEnabled = runtime.speakerEnabled ?? false;
       const activeCallInvite = runtime.invite;
       const thread = { activeCallType: runtime.activeCallType, activeCommunicationRoomId: runtime.threadRoomId ?? null };
       const resolvedCallType = thread.activeCallType;
-      const authority = { userId: currentUserId, sessionGeneration };
+      const authority = { userId: currentUserId, accountId: currentUserId, sessionGeneration, state: "ACTIVE", restoreOnly: false };
       const incomingCallInvite = runtime.incomingInvite === null ? null : runtime.invite;
       const outgoingCallInvite = runtime.terminalMode === "outgoing" && runtime.outgoingPresent !== false ? runtime.invite : null;
+      ${screen.body.statements.filter(node => ts.isVariableStatement(node) && node.declarationList.declarations.some(declaration => ["expiredIncomingCallPresentation", "incomingCallPresentationExpired", "presentedThread"].includes(declaration.name.getText(tree)))).map(node => node.getText(tree)).join("\n")}
       const outgoingCallRinging = outgoingCallInvite?.status === "ringing";
       const callError = null; const callLoading = false;
       const callPanelOpen = runtime.callPanelOpen ?? true;
@@ -159,6 +167,7 @@ export async function mountChatAnswer(options = {}) {
     Date, Promise, setTimeout: options.timerMode ? (callback, delay) => { const timer = { callback, delay }; runtime.timeouts.push(timer); return timer; } : setTimeout, clearTimeout: options.timerMode ? noop : clearTimeout,
     resolveAcceptedChatCallRoomId,
     Platform: { OS: runtime.platform }, Vibration: { cancel: noop },
+    AppState: { addEventListener: () => ({ remove: noop }) },
     readChillyChatCallInvite: (id) => runtime.readInvite(id),
     getChatThread: (id) => runtime.readThread(id),
     listChatMessages: (id) => runtime.readMessages(id),
@@ -171,6 +180,9 @@ export async function mountChatAnswer(options = {}) {
     shouldKeepAcceptedChatCallPanelOpen: ({ wasOpen }) => wasOpen,
     markThreadReadWithThrottle: async () => { runtime.markRead = (runtime.markRead ?? 0) + 1; },
     stopOutgoingRingback: noop,
+    // These extracted incoming-handler probes own no outgoing audio lease;
+    // the full-screen harness executes the actual outgoing hook separately.
+    retireOutgoingIosAudioHandoff: noop,
     reportRuntimeError: noop,
     setThread: (thread) => { runtime.thread = thread; },
     setMessages: (messages) => { runtime.messages = messages; },
@@ -178,10 +190,11 @@ export async function mountChatAnswer(options = {}) {
     setIncomingCallInvite: noop, setActiveCallInvite: (value) => { runtime.activeWrites ??= []; runtime.activeWrites.push(value); }, setOutgoingCallInvite: value => { runtime.outgoingPresent = !!value; },
     setCallPanelOpen: (value) => { runtime.panelOpen = typeof value === "function" ? value(runtime.panelOpen) : value; },
     updateChillyChatCallInviteStatus: (input) => { runtime.updates.push(input); return runtime.update(input); },
-    waitForIosNativeCallPresentation: (id) => runtime.presentation(id),
+    ensureIosForegroundIncomingCallPresentation: (input) => runtime.presentation(input.inviteId, input),
     resolveIosForegroundIncomingAnswerAuthority: (outcome) => outcome === "presented" ? "native_answer" : outcome === "not_expected" ? "foreground_answer" : "blocked",
-    requestIosNativeCallAnswer: (id) => { runtime.nativeRequests.push(id); return runtime.requestNative(id); },
+    requestIosNativeCallAnswer: (id, isCurrent) => { runtime.nativeRequests.push(id); return runtime.requestNative(id, isCurrent); },
     setMicrophoneEnabled: async (enabled) => { runtime.mediaMutations.push(enabled); runtime.micEnabled = enabled; return true; },
+    consumeAutomaticMicrophoneFeedback: () => false,
     setIosNativeCallMuted: async (callUuid, muted) => {
       runtime.nativeMuteRequests.push({ callUuid, muted });
       if (runtime.nativeMuteFailure) return false;

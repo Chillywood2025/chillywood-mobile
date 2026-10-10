@@ -56,14 +56,14 @@ assert.notEqual(easJson.build?.["ios-qa"]?.channel, productionOtaGeneration.chan
 assert.notEqual(productionOtaGeneration.iosRuntimeVersion, appJson.runtimeVersion);
 assert.notEqual(productionOtaGeneration.androidRuntimeVersion, manifest.runtimeVersion);
 assert.equal(internalNativeGeneration.schemaVersion, 1);
-assert.equal(internalNativeGeneration.generation, "internal-native-v4");
+assert.equal(internalNativeGeneration.generation, "internal-native-v12");
 assert.equal(internalNativeGeneration.channels?.android, "android-internal-v2");
 assert.equal(internalNativeGeneration.channels?.ios, "ios-internal-v2");
-assert.equal(internalNativeGeneration.runtimeVersions?.android, "1.0.0-android-production-v4");
-assert.equal(internalNativeGeneration.runtimeVersions?.ios, "1.0.0-ios-production-v4");
-assert.equal(internalNativeGeneration.supersedes?.generation, "internal-native-v3");
-assert.equal(internalNativeGeneration.supersedes?.androidRuntimeVersion, "1.0.0-android-production-v3");
-assert.equal(internalNativeGeneration.supersedes?.iosRuntimeVersion, "1.0.0-ios-production-v3");
+assert.equal(internalNativeGeneration.runtimeVersions?.android, "1.0.0-android-production-v12");
+assert.equal(internalNativeGeneration.runtimeVersions?.ios, "1.0.0-ios-production-v12");
+assert.equal(internalNativeGeneration.supersedes?.generation, "internal-native-v11");
+assert.equal(internalNativeGeneration.supersedes?.androidRuntimeVersion, "1.0.0-android-production-v11");
+assert.equal(internalNativeGeneration.supersedes?.iosRuntimeVersion, "1.0.0-ios-production-v11");
 assert.equal(internalNativeGeneration.policy?.internalOnly, true);
 assert.equal(internalNativeGeneration.policy?.publicReleaseAuthorized, false);
 assert.equal(internalNativeGeneration.policy?.storeSubmissionOutsideInternalTestersAuthorized, false);
@@ -80,12 +80,18 @@ assert.equal(easJson.build?.["android-internal-v2"]?.env?.CHILLYWOOD_INTERNAL_V2
 assert.equal(easJson.submit?.["android-internal-v2"]?.android?.track, "internal");
 assert.equal(easJson.build?.["ios-internal-v2"]?.distribution, "store");
 assert.equal(easJson.build?.["ios-internal-v2"]?.env?.CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM, "ios");
+assert.equal(easJson.build?.["ios-internal-v2"]?.env?.CHILLYWOOD_INTERNAL_CALL_DIAGNOSTICS, "true");
 assert.deepEqual(easJson.submit?.["ios-internal-v2"]?.ios?.groups, ["Chillywood Internal"]);
 assert.equal(easJson.build?.["android-internal-device-v3"]?.distribution, "internal");
 assert.equal(easJson.build?.["android-internal-device-v3"]?.channel, undefined);
 assert.equal(easJson.build?.["android-internal-device-v3"]?.extends, "android-internal-v2");
 assert.equal(easJson.build?.["ios-internal-device-v3"]?.distribution, "internal");
 assert.equal(easJson.build?.["ios-internal-device-v3"]?.extends, "ios-internal-v2");
+assert.equal(easJson.build?.["ios-internal-device-v3"]?.env?.CHILLYWOOD_INTERNAL_CALL_DIAGNOSTICS, "false");
+for (const name of ["android-internal-v2", "android-internal-device-v3", "production", "production-apk", "android-chat-livekit-qa"]) {
+  assert.equal(easJson.build?.[name]?.env?.CHILLYWOOD_INTERNAL_CALL_DIAGNOSTICS, undefined,
+    `${name} cannot opt Android or public profiles into iOS native diagnostics`);
+}
 assert.match(appConfig, /checkAutomatically:\s*"NEVER"/u,
   "native Expo automatic update activation must remain disabled so the app gate owns activation");
 assert.match(appConfig, /runtimeVersion:\s*androidChatQaRuntimeVersion\s*\|\|\s*selectedAndroidRuntimeVersion/u);

@@ -12,6 +12,7 @@ type CommunicationPreviewCardProps = {
   avatarUrl?: string;
   tagline?: string;
   streamURL?: string;
+  cameraFacingMode?: "user" | "environment";
   cameraEnabled: boolean;
   micEnabled: boolean;
   cameraPermissionState: MediaPermissionState;
@@ -45,6 +46,7 @@ export function CommunicationPreviewCard({
   avatarUrl,
   tagline,
   streamURL,
+  cameraFacingMode,
   cameraEnabled,
   micEnabled,
   cameraPermissionState,
@@ -71,7 +73,7 @@ export function CommunicationPreviewCard({
       <Text style={styles.kicker}>LOCAL PREVIEW</Text>
       <View style={styles.previewFrame}>
         {showVideo && RTCView ? (
-          <RTCView streamURL={streamURL} style={styles.video} objectFit="cover" mirror />
+          <RTCView streamURL={streamURL} style={styles.video} objectFit="cover" mirror={cameraFacingMode === "user"} />
         ) : (
           <View style={styles.fallbackFrame}>
             <View style={styles.avatarShell}>

@@ -17,7 +17,7 @@
     "test:communication-terminal-postgres": "node ./scripts/test-communication-terminal-postgres.mjs",
     "test:communication-terminal-http": "node ./scripts/test-communication-terminal-http.mjs",
     "test:chat-message-call-lifecycle-http": "node ./scripts/test-chat-message-call-lifecycle-http.mjs",
-    "test:chilly-chat-real-peer": "node ./scripts/test-chilly-chat-real-peer-integration.mjs",
+    "test:chilly-chat-real-peer": "node ./scripts/test-chilly-chat-real-peer-integration.mjs && node ./scripts/test-chilly-chat-startup-peer-regression.mjs",
     "proof:livekit-operator-scheduler": "node ./scripts/proof-livekit-operator-scheduler.mjs",
     "proof:autonomous-approval-live-flow": "node ./scripts/proof-autonomous-approval-live-flow.mjs",
     "proof:money-flow-control": "node ./scripts/proof-money-flow-control.mjs",
@@ -609,6 +609,7 @@
     "@react-navigation/native": "^7.1.8",
     "@supabase/realtime-js": "file:vendor/supabase-presence-backport/realtime-js-2.100.0-chillywood.1.tgz",
     "@supabase/supabase-js": "file:vendor/supabase-presence-backport/supabase-js-2.100.0-chillywood.1.tgz",
+    "braces": "file:vendor/braces-safe/chillywood-braces-safe-3.0.3-chillywood.1.tgz",
     "decode-uri-component": "file:vendor/decode-uri-component-safe/chillywood-decode-uri-component-safe-0.5.0-chillywood.1.tgz",
     "expo": "~54.0.37",
     "expo-application": "~7.0.8",
@@ -642,6 +643,7 @@
     "expo-web-browser": "~15.0.11",
     "image-size": "file:vendor/image-size-safe/chillywood-image-size-safe-1.2.1-chillywood.1.tgz",
     "livekit-client": "2.22.0",
+    "node-forge": "file:vendor/node-forge-safe/chillywood-node-forge-safe-1.4.0-chillywood.1.tgz",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
@@ -676,39 +678,45 @@
     }
   },
   "overrides": {
+    "@grpc/grpc-js": "1.13.6",
     "@istanbuljs/load-nyc-config": {
       "js-yaml": "3.15.2"
     },
     "@xmldom/xmldom": "0.8.15",
     "@expo/fingerprint@0.15.5": {
       "minimatch@10.2.5": {
-        "brace-expansion": "5.0.9"
+        "brace-expansion": "5.0.12"
       }
     },
     "@typescript-eslint/typescript-estree@8.57.2": {
       "minimatch@10.2.4": {
-        "brace-expansion": "5.0.9"
+        "brace-expansion": "5.0.12"
       }
     },
     "@humanfs/node": "0.16.8",
     "@supabase/realtime-js": "$@supabase/realtime-js",
+    "braces": "$braces",
+    "compression": "1.8.2",
     "decode-uri-component": "$decode-uri-component",
     "fast-uri": "3.1.7",
     "glob@13.0.6": {
       "minimatch@10.2.4": {
-        "brace-expansion": "5.0.9"
+        "brace-expansion": "5.0.12"
       }
     },
     "image-size": "$image-size",
     "js-yaml": "4.3.2",
     "minimatch@3.1.5": {
-      "brace-expansion": "1.1.18"
+      "brace-expansion": "1.1.21"
     },
     "minimatch@9.0.9": {
-      "brace-expansion": "2.1.4"
+      "brace-expansion": "2.1.7"
     },
     "nanoid": "3.3.18",
+    "node-forge": "$node-forge",
     "postcss": "8.5.23",
+    "shell-quote": "1.11.0",
+    "source-map-js": "1.2.2",
     "undici": "6.28.1",
     "xcode@3.0.1": {
       "uuid": "11.1.1"

@@ -6,6 +6,8 @@ import { createRequire } from "node:module";
 import test from "node:test";
 import vm from "node:vm";
 import { invokeAccountBoundSupabaseRpc, isAccountBoundSupabaseRpcOutcomeAmbiguous } from "../../_lib/accountBoundSupabaseRpc.mjs";
+import * as actualCallMediaPolicy from "../../_lib/communicationCallMediaPolicy.mjs";
+import * as nativeCallErrorDiagnostics from "../../_lib/nativeCallErrorDiagnostics.mjs";
 
 import {
   evaluateLegacyReleaseReachability,
@@ -36,7 +38,7 @@ const legacyPeerSyncMarker = "  const syncPeerConnections = useCallback";
 assert.equal(legacyHookSource.split(legacyPeerSyncMarker).length - 1, 1, "unique legacy peer sync exposure marker");
 const instrumentedLegacyHookSource = legacyHookSource.replace(
   legacyRefMarker,
-  `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { appStateLifecycleHandlerRef, auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, joinedMembershipRef, legacyMicAnswerWaitersRef, legacyMicControlRef, legacyMicLocalPrivacyStopRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, nativePermissionRequestDepthRef, peerConnectionsRef, roomRef, setChannelState, setLoading, presenceRegistrationRef: typeof presenceRegistrationRef === "undefined" ? null : presenceRegistrationRef };`,
+  `${legacyRefMarker}\n  (globalThis as any).__chillywoodLegacyMicAssuranceRefs = { acquireOwnedLegacyMedia, appStateLifecycleHandlerRef, auxiliaryStreamsRef, cameraEnabledRef, channelRef, channelStateRef, identityRef, joinedMembershipRef, legacyMicAnswerWaitersRef, legacyMicControlRef, legacyMicLocalPrivacyStopRef, legacySessionGenerationRef, localStreamRef, micEnabledRef, microphonePermissionRef, nativePermissionRequestDepthRef, peerConnectionsRef, roomRef, setChannelState, setLoading, presenceRegistrationRef: typeof presenceRegistrationRef === "undefined" ? null : presenceRegistrationRef };`,
 ).replace(
   legacyOfferQueueMarker,
   `  Object.assign((globalThis as any).__chillywoodLegacyMicAssuranceRefs, { runSerializedPeerOffer, runSerializedPeerSignaling, peerLocalOffersRef, pendingPeerIceRef });\n${legacyOfferQueueMarker}`,
@@ -159,11 +161,12 @@ const makeRoom = (runtime) => ({
 
 function createLegacyMountedRuntime(options = {}) {
   const runtime = {
-    appState: "active",
+    appState: options.appState ?? "active",
     appStateListeners: [],
     broadcasts: [],
     cameraPermission: grantedPermission(),
     channels: [],
+    clockMs: 0,
     cleanupCalls: 0,
     durableCamera: false,
     durableMic: false,
@@ -210,6 +213,7 @@ function createLegacyMountedRuntime(options = {}) {
     snapshotReads: 0,
     timeoutHandles: [],
     timeoutCallbacks: [],
+    timeoutDelays: [],
     tokenRequests: 0,
     userId: "local-user",
   };
@@ -368,7 +372,7 @@ function createLegacyMountedRuntime(options = {}) {
     runtime.mediaCreateCalls.push({ audio, video });
     const action = runtime.mediaActions.shift() ?? {};
     if (action.wait) await action.wait;
-    if (action.outcome === "reject") throw new Error("media creation rejected");
+    if (action.outcome === "reject") throw action.error ?? new Error("media creation rejected");
     if (action.outcome === "missing") return null;
     const tracks = [];
     if (audio) tracks.push(new FakeTrack("audio", action.audio));
@@ -672,8 +676,9 @@ function createLegacyMountedRuntime(options = {}) {
       },
     },
     "../_lib/communicationCallMediaPolicy.mjs": {
-      canAttemptNativeCallBackgroundAudio: () => false,
-      resolveLegacyChatSessionRecovery: ({ alreadyRequested, enabled, ending, generationIsCurrent }) => (
+      canAttemptNativeCallBackgroundAudio: options.nativeBackgroundPolicy
+        ? actualCallMediaPolicy.canAttemptNativeCallBackgroundAudio : () => false,
+      resolveLegacyChatSessionRecovery: options.actualRecoveryPolicy ? actualCallMediaPolicy.resolveLegacyChatSessionRecovery : ({ alreadyRequested, enabled, ending, generationIsCurrent }) => (
         enabled && generationIsCurrent && !ending && !alreadyRequested ? { delayMs: 1 } : null
       ),
       setActiveCommunicationTracksEnabled: (tracks, enabled) => {
@@ -685,9 +690,17 @@ function createLegacyMountedRuntime(options = {}) {
         }
         return updated;
       },
-      shouldPreserveNativeCallBackgroundAudio: () => false,
+      shouldPreserveNativeCallBackgroundAudio: options.nativeBackgroundPolicy
+        ? actualCallMediaPolicy.shouldPreserveNativeCallBackgroundAudio : () => false,
     },
-    "../_lib/logger": { reportRuntimeError: (scope, error) => runtime.errors.push({ message: String(error?.message ?? error), scope }) },
+    "../_lib/nativeCallErrorDiagnostics.mjs": nativeCallErrorDiagnostics,
+    "../_lib/internalCallMediaDiagnostics": { reportInternalCallMediaDiagnostic: (phase, input) => {
+      (runtime.mediaDiagnostics ??= []).push({ phase, ...input });
+    } },
+    "../_lib/logger": { reportRuntimeError: (scope, error, metadata) => {
+      runtime.errors.push({ message: String(error?.message ?? error), scope, metadata });
+      if (options.throwRuntimeErrors) throw new Error("controlled diagnostic reporter failure");
+    } },
     "../_lib/mediaPermissions": {
       getMediaPermissionRecoveryMessage: (kind, snapshot) => snapshot.state === "denied" ? `${kind} permission denied` : null,
       resolveMediaPermission: permissionSnapshot,
@@ -718,8 +731,10 @@ function createLegacyMountedRuntime(options = {}) {
         requestPermissionsAsync: async () => {
           runtime.permissionRequestCalls += 1;
           if (options.permissionAppStateCycle) {
-            runtime.appState = "background";
-            runtime.readAssuranceRefs().appStateLifecycleHandlerRef.current?.("background");
+            // Model the transient permission dialog. A real background event
+            // has its own immediate privacy tests and must never be ignored.
+            runtime.appState = "inactive";
+            runtime.readAssuranceRefs().appStateLifecycleHandlerRef.current?.("inactive");
             runtime.appState = "active";
             runtime.readAssuranceRefs().appStateLifecycleHandlerRef.current?.("active");
           }
@@ -760,11 +775,12 @@ function createLegacyMountedRuntime(options = {}) {
       throw new Error(`UNEXPECTED_LEGACY_HOOK_IMPORT:${specifier}`);
     },
     setInterval: (callback, delay) => {
-      runtime.intervals.push({ callback, delay });
+      runtime.intervals.push({ callback, delay, nextAt: runtime.clockMs + delay });
       return runtime.intervals.length;
     },
     setTimeout: (callback, delay) => {
       runtime.timeoutCallbacks.push(callback);
+      runtime.timeoutDelays.push(delay);
       runtime.timeoutHandles.push((options.fireOperationTimeouts && (delay === 3_000 || delay === 4_000)) || (options.fireRetryTimeouts && delay === 250) ? hostSetTimeout(callback, 1) : null);
       return runtime.timeoutCallbacks.length;
     },
@@ -1359,6 +1375,216 @@ test("legacy server state hint: unavailable room retains failed native shutdown 
   assert.equal(runtime.leaveRequests.at(-1).expectedMembershipGeneration, runtime.membershipGeneration);
 });
 
+for (const cancelCamera of [false, true]) {
+test(`legacy background resubscription preserves camera intent unless explicitly cancelled: ${cancelCamera}`, async (t) => {
+  const runtime = createLegacyMountedRuntime({ ownedAdmission: true, actualRecoveryPolicy: true, nativeBackgroundPolicy: true });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true,
+    restartDisconnectedSession: true, initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    analyticsContext: { surface: "chat-thread" } });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  await harness.run(() => runtime.emitAppState("background"));
+  await harness.run(() => channel.emitSubscriptionStatus("SUBSCRIBED"));
+  assert.equal(runtime.durableCamera, false, "stopped background capture must be projected Off");
+  if (cancelCamera) await harness.rerender({ initialMediaPreferences: { cameraEnabled: false, micEnabled: true } });
+  await harness.run(() => runtime.emitAppState("active"));
+  const liveVideo = [...new Set(runtime.localStreams.flatMap(stream => stream.getVideoTracks()))]
+    .filter(track => track.readyState === "live" && track.enabled);
+  assert.equal(liveVideo.length, Number(!cancelCamera), "resubscription cannot erase or override deliberate camera intent");
+  assert.equal(runtime.durableCamera, !cancelCamera);
+});
+}
+
+for (const cancellation of ["Camera Off", "account replacement"]) {
+test(`legacy delayed background camera projection cannot override ${cancellation}`, async (t) => {
+  const runtime = createLegacyMountedRuntime({ ownedAdmission: true, actualRecoveryPolicy: true, nativeBackgroundPolicy: true });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true,
+    restartDisconnectedSession: true, initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    analyticsContext: { surface: "chat-thread" } });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  let releaseWrite;
+  runtime.queueMembership({ wait: new Promise(resolve => { releaseWrite = resolve; }) });
+  await harness.run(() => runtime.emitAppState("background"));
+  await harness.run(() => channel.emitSubscriptionStatus("SUBSCRIBED"));
+  let releaseCamera;
+  runtime.queueMedia({ wait: new Promise(resolve => { releaseCamera = resolve; }) });
+  await harness.run(() => runtime.emitAppState("active"));
+  assert.equal(runtime.mediaCreateCalls.at(-1).audio, false);
+  assert.equal(runtime.mediaCreateCalls.at(-1).video, true);
+  if (cancellation === "Camera Off") {
+    await harness.rerender({ initialMediaPreferences: { cameraEnabled: false, micEnabled: true } });
+  } else {
+    runtime.userId = "replacement-user";
+    await harness.rerender({ authenticatedUserId: runtime.userId, authenticatedAccessToken: "replacement-token", enabled: false });
+  }
+  await harness.run(() => releaseWrite());
+  await harness.run(() => releaseCamera());
+  const enabledVideo = [...new Set(runtime.localStreams.flatMap(stream => stream.getVideoTracks()))]
+    .filter(track => track.readyState === "live" && track.enabled);
+  assert.equal(enabledVideo.length, 0, "late capture remains retired after the owner cancels its intent");
+  assert.equal(runtime.durableCamera, false);
+  if (cancellation === "Camera Off") assert.equal(harness.getResult().cameraEnabled, false);
+  assert.equal(runtime.joinCalls.length, 1, "an obsolete projection cannot create a replacement admission");
+});
+}
+
+for (const outcome of ["recover", "explicit End", "new mute", "admission denied", "native stop failure", "account replacement"]) {
+test(`legacy background lease recovery: pending invisible-room read before foreground restart respects ${outcome}`, async (t) => {
+  const runtime = createLegacyMountedRuntime({ ownedAdmission: true, actualRecoveryPolicy: true, nativeBackgroundPolicy: true });
+  const ended = [];
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true,
+    restartDisconnectedSession: true, initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    analyticsContext: { surface: "chat-thread" }, onRoomEnded: reason => ended.push(reason) });
+  t.after(() => harness.unmount());
+  const live = kind => runtime.localStreams.flatMap(stream => stream.getTracks())
+    .filter(track => track.kind === kind && track.readyState === "live" && track.enabled);
+  assert.equal(runtime.joinCalls.length, 1);
+  assert.equal(live("audio").length, 1);
+  const originalAudio = live("audio")[0];
+  if (outcome === "native stop failure") originalAudio.refuseStop = true;
+  const channel = harness.refs.channelRef.current;
+  await harness.run(() => runtime.emitAppState("background"));
+  assert.equal(live("audio").length, 0);
+  assert.equal(live("video").length, 0);
+  let release;
+  // The backend denies non-host room SELECT after its own 45s membership
+  // lease expires. Model an already-pending response, not instantaneous HTTP.
+  runtime.queueSnapshot({ outcome: "missing", wait: new Promise(resolve => { release = resolve; }) });
+  await harness.run(() => channel.emitBroadcast("state:update", {}));
+  const timerStart = runtime.timeoutCallbacks.length;
+  await harness.run(() => runtime.emitAppState("active"));
+  await harness.run(async () => { release(); await settle(96); });
+  assert.deepEqual(ended, [], "lease invisibility must not end the other participant's accepted call");
+  assert.equal(live("audio").length, 0);
+  assert.equal(live("video").length, 0);
+  const capturesBefore = runtime.mediaCreateCalls.length;
+  if (outcome === "explicit End") await harness.run(() => harness.getResult().leaveRoom());
+  if (outcome === "new mute") await harness.run(() => harness.getResult().setMicrophoneEnabled(false));
+  if (outcome === "admission denied") runtime.admissionPrepareActions.push({ outcome: "reject", message: "communication_chat_call_authority_required" });
+  if (outcome === "account replacement") {
+    runtime.userId = "replacement-user";
+    await harness.rerender({ authenticatedUserId: runtime.userId, authenticatedAccessToken: "replacement-token", enabled: false });
+  }
+  for (let index = timerStart; index < runtime.timeoutCallbacks.length; index += 1) {
+    if (runtime.timeoutDelays[index] === 0 && runtime.timeoutCallbacks[index]) {
+      const callback = runtime.timeoutCallbacks[index]; runtime.timeoutCallbacks[index] = null;
+      await harness.run(callback);
+    }
+  }
+  await harness.run(() => settle(160));
+  assert.deepEqual(ended, []);
+  if (outcome === "recover" || outcome === "new mute") {
+    assert.equal(runtime.joinCalls.length, 2, "restart must obtain a new authorized admission");
+    assert.equal(live("video").length, 1);
+    assert.equal(live("audio").length, outcome === "recover" ? 1 : 0);
+  } else {
+    assert.equal(runtime.joinCalls.length, 1);
+    assert.equal(runtime.mediaCreateCalls.length, capturesBefore, "unproved recovery cannot capture");
+    assert.equal(live("audio").length, 0);
+    assert.equal(live("video").length, 0);
+  }
+  if (outcome === "admission denied" || outcome === "native stop failure") {
+    originalAudio.refuseStop = false;
+    await harness.run(() => harness.getResult().leaveRoom());
+    assert.equal(runtime.leaveRequests.at(-1)?.expectedMembershipGeneration,
+      runtime.membershipGeneration, "End must retain the pre-recovery membership for exact cleanup");
+  }
+});
+}
+
+for (const pendingStage of ["prepare", "join", "join with wrong cleanup token", "join with refused cleanup"]) {
+test(`legacy background lease recovery: End fences the pending ${pendingStage} receipt and retains exact cleanup`, async (t) => {
+  const runtime = createLegacyMountedRuntime({ ownedAdmission: true, actualRecoveryPolicy: true, nativeBackgroundPolicy: true });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true,
+    restartDisconnectedSession: true, initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    analyticsContext: { surface: "chat-thread" } });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  await harness.run(() => runtime.emitAppState("background"));
+  let releaseRead;
+  runtime.queueSnapshot({ outcome: "missing", wait: new Promise(resolve => { releaseRead = resolve; }) });
+  await harness.run(() => channel.emitBroadcast("state:update", {}));
+  const timerStart = runtime.timeoutCallbacks.length;
+  await harness.run(() => runtime.emitAppState("active"));
+  await harness.run(async () => { releaseRead(); await settle(96); });
+  let releaseAdmission;
+  const admissionBarrier = new Promise(resolve => { releaseAdmission = resolve; });
+  (pendingStage === "prepare" ? runtime.admissionPrepareActions : runtime.joinActions).push({ wait: admissionBarrier });
+  const capturesBefore = runtime.mediaCreateCalls.length;
+  for (let index = timerStart; index < runtime.timeoutCallbacks.length; index += 1) {
+    if (runtime.timeoutDelays[index] === 0 && runtime.timeoutCallbacks[index]) {
+      const callback = runtime.timeoutCallbacks[index]; runtime.timeoutCallbacks[index] = null;
+      await harness.run(callback);
+    }
+  }
+  assert.equal(runtime.admissionPrepareCalls.length, 2);
+  assert.equal(runtime.joinCalls.length, pendingStage === "prepare" ? 1 : 2);
+  if (pendingStage === "join with wrong cleanup token") runtime.leaveActions.push({ membership:
+    makeMembership(runtime, { membershipState: "left", leftAt: new Date().toISOString(),
+      membershipGeneration: "99000000-0000-4000-8000-000000000001", cameraEnabled: false, micEnabled: false }) });
+  if (pendingStage === "join with refused cleanup") runtime.leaveActions.push({ outcome: "reject" });
+  let end;
+  await harness.run(async () => { end = harness.getResult().leaveRoom(); end.catch(() => {}); await settle(32); });
+  await harness.run(async () => { releaseAdmission(); await settle(160); });
+  if (pendingStage.includes("with")) await assert.rejects(harness.run(() => end));
+  else await harness.run(() => end);
+  assert.equal(runtime.mediaCreateCalls.length, capturesBefore);
+  if (!pendingStage.includes("with")) {
+    assert.equal(runtime.leaveRequests.at(-1)?.expectedMembershipGeneration, runtime.membershipGeneration);
+  } else {
+    assert.ok(runtime.errors.some(entry => entry.scope === "communication-retired-admission-cleanup"));
+  }
+  assert.ok(runtime.localStreams.flatMap(stream => stream.getTracks()).every(track => track.readyState === "ended"));
+});
+}
+
+for (const ordering of ["reply while background", "reply after restart", "explicit terminal receipt"]) {
+test(`legacy background lease recovery: ${ordering} preserves the authority boundary`, async (t) => {
+  const runtime = createLegacyMountedRuntime({ ownedAdmission: true, actualRecoveryPolicy: true, nativeBackgroundPolicy: true });
+  const ended = [];
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true,
+    restartDisconnectedSession: true, initialMediaPreferences: { cameraEnabled: true, micEnabled: true },
+    analyticsContext: { surface: "chat-thread" }, onRoomEnded: reason => ended.push(reason) });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  await harness.run(() => runtime.emitAppState("background"));
+  let release;
+  runtime.queueSnapshot({ ...(ordering === "explicit terminal receipt"
+    ? { room: { ...makeRoom(runtime), status: "ended" } } : { outcome: "missing" }),
+  wait: new Promise(resolve => { release = resolve; }) });
+  await harness.run(() => channel.emitBroadcast("state:update", {}));
+  const timerStart = runtime.timeoutCallbacks.length;
+  if (ordering === "reply while background") {
+    await harness.run(async () => { release(); await settle(96); });
+    assert.equal(runtime.joinCalls.length, 1, "background may not renew capture authority");
+    assert.deepEqual(ended, []);
+  }
+  await harness.run(() => runtime.emitAppState("active"));
+  if (ordering === "explicit terminal receipt") await harness.run(async () => { release(); await settle(96); });
+  for (let index = timerStart; index < runtime.timeoutCallbacks.length; index += 1) {
+    if (runtime.timeoutDelays[index] === 0 && runtime.timeoutCallbacks[index]) {
+      const callback = runtime.timeoutCallbacks[index]; runtime.timeoutCallbacks[index] = null;
+      await harness.run(callback);
+    }
+  }
+  if (ordering === "reply after restart") await harness.run(async () => { release(); await settle(96); });
+  const live = kind => runtime.localStreams.flatMap(stream => stream.getTracks())
+    .filter(track => track.kind === kind && track.readyState === "live" && track.enabled);
+  if (ordering === "explicit terminal receipt") {
+    assert.deepEqual(ended, ["ended"]);
+    assert.equal(runtime.joinCalls.length, 1);
+    assert.equal(live("audio").length, 0);
+    assert.equal(live("video").length, 0);
+  } else {
+    assert.deepEqual(ended, []);
+    assert.equal(runtime.joinCalls.length, 2);
+    assert.equal(live("audio").length, 1);
+    assert.equal(live("video").length, 1);
+  }
+});
+}
+
 test("legacy server state hint: an older null cannot retire a call after a newer active snapshot", async (t) => {
   let release;
   const ended = [];
@@ -1467,6 +1693,55 @@ test("legacy media projection: a server-relayed media update refreshes durable r
   const mutedRemote = harness.getResult().participants.find((participant) => participant.userId === runtime.remoteUserId);
   assert.equal(mutedRemote?.cameraOn, false, "stale Presence=true cannot override durable camera=false");
   assert.equal(mutedRemote?.micOn, false, "stale Presence=true cannot override durable mic=false");
+});
+
+for (const cancelIntent of [false, true]) {
+  test(`legacy native background Answer retains foreground mic intent; explicit mute=${cancelIntent}`, async (t) => {
+    const runtime = createLegacyMountedRuntime({ appState: "background", nativeBackgroundPolicy: true });
+    const harness = await mountLegacyHook(runtime, {
+      enabled: true, naturalLifecycle: true, allowBackgroundAudio: true,
+      initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    });
+    t.after(() => harness.unmount());
+    assert.equal(harness.getResult().micEnabled, false, "background permission/capture unavailability is never live mic proof");
+    assert.equal(runtime.durableMic, false);
+    if (cancelIntent) await harness.run(() => harness.getResult().setMicrophoneEnabled(false));
+    await harness.run(() => runtime.emitAppState("inactive"));
+    await harness.run(() => runtime.emitAppState("active"));
+    assert.equal(harness.getResult().micEnabled, !cancelIntent,
+      "foreground restores only the retained Answer intent, without requiring another Unmute");
+    assert.equal(runtime.durableMic, !cancelIntent);
+    assert.equal(runtime.localStreams.flatMap(stream => stream.getAudioTracks())
+      .filter(track => track.enabled && track.readyState !== "ended").length, cancelIntent ? 0 : 1);
+  });
+}
+
+test("legacy native background Answer cannot restore a microphone denied in Settings", async (t) => {
+  const runtime = createLegacyMountedRuntime({ appState: "background", nativeBackgroundPolicy: true });
+  const harness = await mountLegacyHook(runtime, {
+    enabled: true, naturalLifecycle: true, allowBackgroundAudio: true,
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+  runtime.microphonePermission = { granted: false, canAskAgain: false, status: "denied" };
+  await harness.run(() => runtime.emitAppState("active"));
+  assert.equal(harness.getResult().micEnabled, false);
+  assert.equal(runtime.durableMic, false);
+  assert.equal(runtime.localStreams.length, 0);
+});
+
+test("legacy native background Answer intent is retired by End before foreground", async (t) => {
+  const runtime = createLegacyMountedRuntime({ appState: "background", nativeBackgroundPolicy: true });
+  const harness = await mountLegacyHook(runtime, {
+    enabled: true, naturalLifecycle: true, allowBackgroundAudio: true,
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+  });
+  t.after(() => harness.unmount());
+  await harness.run(() => harness.getResult().leaveRoom());
+  const acquisitions = runtime.mediaCreateCalls.length;
+  await harness.run(() => runtime.emitAppState("active"));
+  assert.equal(runtime.mediaCreateCalls.length, acquisitions);
+  assert.equal(runtime.durableMic, false);
 });
 
 test("legacy grouped media lifecycle: failed initial media promotion disables tracks and restores muted membership", async (t) => {
@@ -1809,11 +2084,11 @@ test("legacy call-domain closure: unprovable quarantine never claims muted succe
 
 test("legacy call-domain closure: background lifecycle commits proved camera state and catches controller rejection", () => {
   const stopperBlock = legacyHookSource.match(/registerActiveMediaSessionStopper\(async \(reason\) => \{[\s\S]*?\n    \}\);/u)?.[0] ?? "";
-  assert.match(stopperBlock, /try \{[\s\S]*?await legacyMicControlRef\.current\?\.\(\s*LEGACY_BACKGROUND_MEDIA_STATE\.micEnabled,\s*cameraStopped \? LEGACY_BACKGROUND_MEDIA_STATE\.cameraEnabled : hasUsableLocalTrack\("video"\),\s*\)[\s\S]*?\} catch \(error\) \{/u);
-  assert.match(stopperBlock, /catch \(error\) \{\s*legacyMicLocalPrivacyStopRef\.current\?\.\(\);/u);
+  assert.match(stopperBlock, /try \{[\s\S]*?await applyAutomaticMicrophoneEnabled\(\s*LEGACY_BACKGROUND_MEDIA_STATE\.micEnabled,\s*cameraStopped \? LEGACY_BACKGROUND_MEDIA_STATE\.cameraEnabled : hasUsableLocalTrack\("video"\),\s*\)[\s\S]*?\} catch \(error\) \{/u);
+  assert.match(stopperBlock, /catch \(error\) \{\s*if \(!isActiveLegacyGeneration\(generation\)\) return;\s*if \(intentRevision === foregroundMicIntentRevisionRef\.current\) legacyMicLocalPrivacyStopRef\.current\?\.\(\);/u);
   assert.match(stopperBlock, /reportRuntimeError\("communication-media-session-background"/u);
   assert.match(legacyHookSource, /const LEGACY_BACKGROUND_MEDIA_STATE = \{\s*cameraEnabled: false,\s*micEnabled: false,/u);
-  assert.match(legacyHookSource, /legacyMicControlRef\.current\?\.\(true, !cameraStopped && hasUsableLocalTrack\("video"\)\)/u);
+  assert.match(legacyHookSource, /applyAutomaticMicrophoneEnabled\(true, !cameraStopped && hasUsableLocalTrack\("video"\)\)/u);
 });
 
 test("legacy call-domain closure: background pause converges durable camera false without erasing foreground intent", async (t) => {
@@ -2183,6 +2458,73 @@ test("legacy chat readiness: ICE loss demotes a previously connected peer before
     peer.emit("iceconnectionstatechange");
   });
   assert.equal(harness.getResult().channelState, "live");
+});
+
+async function advanceLegacyIntervalClock(harness, runtime, elapsedMs) {
+  const target = runtime.clockMs + elapsedMs;
+  let fired = 0;
+  while (true) {
+    const next = runtime.intervals.filter((entry) => entry && entry.nextAt <= target)
+      .sort((left, right) => left.nextAt - right.nextAt)[0];
+    if (!next) break;
+    assert.ok(fired++ < 1_000, "controlled interval clock must make progress");
+    runtime.clockMs = next.nextAt;
+    next.nextAt += next.delay;
+    await harness.run(() => next.callback());
+  }
+  runtime.clockMs = target;
+}
+
+test("legacy heartbeat: frequent authoritative snapshots cannot starve participant liveness", async (t) => {
+  const runtime = createLegacyMountedRuntime({ ownedAdmission: true });
+  const ended = [];
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true,
+    initialMediaPreferences: { cameraEnabled: false, micEnabled: true },
+    onRoomEnded: (reason) => ended.push(reason) });
+  t.after(() => harness.unmount());
+  const channel = harness.refs.channelRef.current;
+  const timer = runtime.intervals.find((entry) => entry?.delay === 15_000);
+  assert.ok(timer, "natural admission starts the actual production heartbeat");
+  const admission = runtime.membershipGeneration;
+  for (let refresh = 0; refresh < 12; refresh += 1) {
+    await advanceLegacyIntervalClock(harness, runtime, 8_000);
+    await harness.run(() => channel.emitBroadcast("state:update", {}));
+  }
+  assert.equal(runtime.clockMs, 96_000);
+  assert.equal(runtime.heartbeatCalls.length, 6, "liveness continues at 15 seconds despite 8-second invalidations");
+  assert.ok(runtime.heartbeatCalls.every((call) => call.expectedMembershipGeneration === admission
+    && call.userId === runtime.userId && call.roomId === runtime.roomId));
+  assert.equal(runtime.joinCalls.length, 1, "snapshot projection does not reacquire admission");
+  assert.equal(runtime.durableMic, true, "heartbeats preserve current media intent");
+  assert.deepEqual(ended, []);
+});
+
+test("legacy heartbeat: exact session replacement retires its timer and End prevents future mutations", async (t) => {
+  const runtime = createLegacyMountedRuntime({ ownedAdmission: true });
+  const harness = await mountLegacyHook(runtime, { enabled: true, naturalLifecycle: true });
+  t.after(() => harness.unmount());
+  const oldTimer = runtime.intervals.find((entry) => entry?.delay === 15_000);
+  const oldAdmission = runtime.membershipGeneration;
+  assert.ok(oldTimer);
+  await advanceLegacyIntervalClock(harness, runtime, 8_000);
+  await harness.rerender({ authenticatedAccessToken: "replacement-test-token" });
+  const replacementTimer = runtime.intervals.find((entry) => entry?.delay === 15_000);
+  assert.ok(replacementTimer);
+  assert.notEqual(replacementTimer, oldTimer);
+  assert.notEqual(runtime.membershipGeneration, oldAdmission);
+  assert.equal(runtime.intervals.includes(oldTimer), false, "old timer is cleared on session replacement");
+  await harness.run(() => oldTimer.callback());
+  assert.equal(runtime.heartbeatCalls.length, 0, "a queued retired callback cannot touch either admission");
+  await advanceLegacyIntervalClock(harness, runtime, 15_000);
+  assert.equal(runtime.heartbeatCalls.length, 1);
+  assert.equal(runtime.heartbeatCalls[0].expectedMembershipGeneration, runtime.membershipGeneration);
+  await harness.run(() => harness.getResult().leaveRoom());
+  const callsAtEnd = runtime.heartbeatCalls.length;
+  const readsAtEnd = runtime.snapshotReads;
+  await advanceLegacyIntervalClock(harness, runtime, 90_000);
+  await harness.run(() => { oldTimer.callback(); replacementTimer.callback(); });
+  assert.equal(runtime.heartbeatCalls.length, callsAtEnd, "End retires periodic and queued heartbeat work");
+  assert.equal(runtime.snapshotReads, readsAtEnd, "End cannot be followed by heartbeat snapshot resurrection");
 });
 
 test("legacy heartbeat: a late liveness response cannot overwrite a newer mute", async (t) => {
@@ -3462,3 +3804,26 @@ test("legacy ending generation: an explicit new room can establish fresh media a
   assert.ok(runtime.localStreams.some((stream) => stream.getTracks().some((track) => track.readyState === "live")));
   assert.equal(runtime.joinCalls.at(-1).roomId, runtime.roomId);
 });
+
+for (const throwRuntimeErrors of [false, true]) {
+  test(`legacy capture preserves the identical native rejection and one bounded report: reporter throws ${throwRuntimeErrors}`, async t => {
+    const runtime = createLegacyMountedRuntime({ throwRuntimeErrors });
+    const harness = await mountLegacyHook(runtime);
+    t.after(() => harness.unmount());
+    const original = Object.assign(new Error("PRIVATE-CAPTURE-DETAIL-AND-TOKEN"), {
+      name: "NotReadableError", domain: "AVFoundationErrorDomain", code: -11819,
+    });
+    runtime.queueMedia({ outcome: "reject", error: original });
+    await assert.rejects(() => harness.run(() => harness.refs.acquireOwnedLegacyMedia({
+      audio: true, video: false, facingMode: "environment",
+    })), error => error === original, "diagnostic reporting cannot replace the native exception");
+    const reports = runtime.errors.filter(report => report.scope === "communication-native-capture");
+    assert.equal(reports.length, 1, "the acquisition boundary reports the cause exactly once");
+    assert.equal(reports[0].metadata.nativeErrorName, "NotReadableError");
+    assert.equal(reports[0].metadata.nativeErrorCode, -11819);
+    assert.equal(reports[0].metadata.audio, true);
+    assert.equal(reports[0].metadata.video, false);
+    assert.equal(reports[0].metadata.appState, "active");
+    assert.equal(JSON.stringify(reports).includes(original.message), false);
+  });
+}

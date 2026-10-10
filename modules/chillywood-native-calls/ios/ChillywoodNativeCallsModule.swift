@@ -55,6 +55,10 @@ public final class ChillywoodNativeCallsModule: Module {
       try await ChillywoodNativeCallCoordinator.shared.reportIncomingCall(payload: payload)
     }
 
+    AsyncFunction("reportForegroundIncomingCallAsync") { (payload: [String: Any], authority: [String: Any]) async throws -> String in
+      try await ChillywoodNativeCallCoordinator.shared.reportForegroundIncomingCall(payload: payload, authority: authority)
+    }
+
     AsyncFunction("endCallAsync") { (callUuid: String, reason: String?) in
       try ChillywoodNativeCallCoordinator.shared.endCall(callUuid: callUuid, reason: reason ?? "local_end")
     }
@@ -82,6 +86,18 @@ public final class ChillywoodNativeCallsModule: Module {
 
     AsyncFunction("setAudioRouteAsync") { (route: String) in
       try ChillywoodNativeCallCoordinator.shared.setAudioRoute(route)
+    }
+
+    AsyncFunction("beginOutgoingAudioHandoffAsync") { (binding: [String: Any]) async throws in
+      try await MainActor.run { try ChillywoodNativeCallCoordinator.shared.beginOutgoingAudioHandoff(binding) }
+    }
+
+    AsyncFunction("prepareOutgoingAudioHandoffAsync") { (ownerId: String) async throws in
+      try await MainActor.run { try ChillywoodNativeCallCoordinator.shared.prepareOutgoingAudioHandoff(ownerId) }
+    }
+
+    AsyncFunction("retireOutgoingAudioHandoffAsync") { (ownerId: String) async in
+      await MainActor.run { ChillywoodNativeCallCoordinator.shared.retireOutgoingAudioHandoff(ownerId) }
     }
 
     AsyncFunction("presentDebugIncomingCallAsync") { (payload: [String: Any]?) async throws -> String in

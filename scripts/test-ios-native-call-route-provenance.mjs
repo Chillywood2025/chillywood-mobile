@@ -439,7 +439,7 @@ assert.ok(!sources["_lib/nativeCallTransitionProvenance.mjs"].match(/AsyncStorag
 assert.ok(!sources["_lib/nativeCallTransitionProvenance.mjs"].match(/livekit|token|camera|microphone|media/i), "claim creation has no token or media authority");
 assert.ok(sources["_lib/nativeCallTransitionProvenance.mjs"].includes("expectedAction !== claim.action"), "registry consumption atomically binds the expected action");
 assert.ok(provenanceDeclarations.includes("action: NativeCallTransitionAction;"), "the registry declaration requires an expected action");
-assert.equal((sources["_lib/iosNativeCalls.ts"].match(/clearNativeCallTransitionClaims\("ios"\)/gu) ?? []).length, 2, "readiness/account lifecycle clears only iOS claims");
+assert.equal((sources["_lib/iosNativeCalls.ts"].match(/clearNativeCallTransitionClaims\("ios"\)/gu) ?? []).length, 3, "readiness, transient quarantine, and account lifecycle clear only iOS claims");
 
 let mutantImportSerial = 0;
 const provenanceModuleHref = new URL("../_lib/nativeCallTransitionProvenance.mjs", import.meta.url).href;

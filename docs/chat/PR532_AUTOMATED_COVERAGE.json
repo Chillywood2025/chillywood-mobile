@@ -4031,18 +4031,23 @@
       "case_id": "AR01",
       "original_scenario": "Android speaker/earpiece during voice",
       "reported_status": "NOT RUN",
-      "coverage_status": "UNSUPPORTED_CAPABILITY",
+      "coverage_status": "PARTIAL_AUTOMATION",
       "automated_refs": [
         {
-          "file": "tests/assurance/chat-call-native-state-mounted.test.mjs",
-          "anchor": "actual legacy adapter and screen capability expression do not promise Android app speaker selection",
+          "file": "tests/assurance/android-legacy-audio-route-mounted.test.mjs",
+          "anchor": "capability waits for the native read receipt and then follows its confirmed route",
           "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "scripts/test-owned-android-audio-session.mjs",
+          "anchor": "Regression mutant unexpectedly passed",
+          "ci_lane": "Validation / Native SDK Contracts"
         }
       ],
-      "software_proof": "The actual legacy adapter is mounted with its real legacy hook and returns canSetSpeaker=false/setSpeaker=false. The actual screen JSX capability expression is extracted and evaluated: Android legacy exposes no app route callback, while iOS retains its distinct native route surface. This proves an unsupported capability is not offered; it does not implement Android speaker selection.",
-      "controlled_assumptions": "No claim about route selection available through Android system UI or hardware; source inspection establishes only app capability.",
-      "physical_remainder": "Android system-selected or accessory route and actual audible output remain device observations. An app speaker toggle cannot pass this row while capability is absent.",
-      "software_gap": "No app speaker feature exists for Android legacy. Adding it is a separate product decision; a system-selected route does not make this app-control row pass. Keep this explicit unsupported limitation rather than silently removing the scenario."
+      "software_proof": "The actual legacy route hook, native JS facade, media adapter, screen and control-bar bindings execute speaker/receiver changes with exact owner and selected-route receipts. Failed or stale receipts cannot change the confirmed label. Compiled production Java coordinator, playback probe and patched pinned AudioSwitch manager exercise actual-OS readback, exact shared-ADM and playing-track identity, delayed confirmation, owner replacement, failed cleanup retry and stale queued commands. Requested speaker flags and scanner preferences cannot confirm actual output; behavioral mutants must fail.",
+      "controlled_assumptions": "Mounted SDK/media and Android AudioManager, AudioSwitch, React Native and main-looper edges are controlled. The Java coordinator and manager are actual generated source; Kotlin forwarding assertions are source checks, not a full Android binary. Android 12 or newer uses the actual communication-device receipt. Android 11 requires the actual playing track of the shared WebRTC factory ADM and its routed-device receipt; absent, stopped, replaced or unreadable playback remains unknown. Both built-ins must be available for the two-way control.",
+      "physical_remainder": "Build and install the successor native candidate, verify Android actual selected-device receipts during voice (playing-track routed device on Android 11; communication device on Android 12 or newer), and independently confirm actual audible speaker/receiver output, media continuity and End cleanup.",
+      "software_gap": "The previously unsupported app route capability now has source and executable regression coverage. Full Kotlin/Android build, installed native receipts and audible destination remain unverified; no historical physical status is promoted."
     },
     {
       "case_id": "AR02",
@@ -4092,7 +4097,7 @@
         }
       ],
       "software_proof": "Production screen route handler executes the complete production iosNativeCalls JS facade; rejected native command leaves UI unchanged and allows retry; issued old command is followed by current replacement receiver choice. Native command sequence and UI acknowledgement are asserted. The required macOS probe compiles complete actual Swift routing, activation/deactivation, interruption and observer-registration methods. Controlled AVAudioSession receipts exercise requested routes, rejection propagation, ordering and exact current call descriptors; real Foundation notifications execute actual observer closures. Production JS root/facade tests reject duplicate navigation or terminal actions from audio events and preserve replacement UUID ownership.",
-      "controlled_assumptions": "Screen/native-facade calls, AVAudioSession and CallKit API receipts are controlled. Swift method bodies and registered observer closures are actual source, with a recorded emitRaw sink; asynchronous native sink persistence is outside this probe. It does not load iOS AVFoundation/CallKit or exercise physical output selection. The JS root receives controlled native events. Native deactivation is best effort and its callback is not proof that setActive(false) or capture shutdown succeeded. Android legacy app route selection remains unsupported.",
+      "controlled_assumptions": "Screen/native-facade calls, AVAudioSession and CallKit API receipts are controlled. Swift method bodies and registered observer closures are actual source, with a recorded emitRaw sink; asynchronous native sink persistence is outside this probe. It does not load iOS AVFoundation/CallKit or exercise physical output selection. The JS root receives controlled native events. Native deactivation is best effort and its callback is not proof that setActive(false) or capture shutdown succeeded. Android legacy routing has separate owner-fenced coverage; its new native binary and physical output remain unverified.",
       "physical_remainder": "iPhone speaker/receiver selection during voice; actual native route and audible destination, interruptions and restoration.",
       "software_gap": "Concrete app-owned route/interruption mechanisms have required executable assertions, pending candidate exact-head macOS results. Hardware output readback, audible audio, Bluetooth attach/detach and actual OS interruptions still require device qualification. Successful command acknowledgement cannot establish physical routing."
     },
@@ -4100,18 +4105,23 @@
       "case_id": "AR03",
       "original_scenario": "Android speaker routing during video",
       "reported_status": "NOT RUN",
-      "coverage_status": "UNSUPPORTED_CAPABILITY",
+      "coverage_status": "PARTIAL_AUTOMATION",
       "automated_refs": [
         {
-          "file": "tests/assurance/chat-call-native-state-mounted.test.mjs",
-          "anchor": "actual legacy adapter and screen capability expression do not promise Android app speaker selection",
+          "file": "tests/assurance/android-legacy-audio-route-mounted.test.mjs",
+          "anchor": "video acquisition preserves a selected accessory and does not issue an automatic built-in selection",
           "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "scripts/test-owned-android-audio-session.mjs",
+          "anchor": "Regression mutant unexpectedly passed",
+          "ci_lane": "Validation / Native SDK Contracts"
         }
       ],
-      "software_proof": "The actual legacy adapter is mounted with its real legacy hook and returns canSetSpeaker=false/setSpeaker=false. The actual screen JSX capability expression is extracted and evaluated: Android legacy exposes no app route callback, while iOS retains its distinct native route surface. This proves an unsupported capability is not offered; it does not implement Android speaker selection.",
-      "controlled_assumptions": "No claim about route selection available through Android system UI or hardware; source inspection establishes only app capability.",
-      "physical_remainder": "Android system-selected or accessory route and actual audible output remain device observations. An app speaker toggle cannot pass this row while capability is absent.",
-      "software_gap": "No app speaker feature exists for Android legacy. Adding it is a separate product decision; a system-selected route does not make this app-control row pass. Keep this explicit unsupported limitation rather than silently removing the scenario."
+      "software_proof": "The actual legacy route hook, native JS facade, media adapter, screen and control-bar bindings execute speaker/receiver changes with exact owner and selected-route receipts. Video acquisition preserves an observed accessory and does not issue a JS default override. Compiled production Java coordinator, playback probe and patched pinned AudioSwitch manager exercise actual selected-device confirmation, exact shared-ADM and playing-track identity, owner replacement, failed cleanup retry and stale queued commands. Requested speaker flags and scanner preferences cannot confirm actual output; behavioral mutants must fail.",
+      "controlled_assumptions": "Mounted SDK/media and Android AudioManager, AudioSwitch, React Native and main-looper edges are controlled. The Java coordinator and manager are actual generated source; Kotlin forwarding assertions are source checks, not a full Android binary. Android 12 or newer uses the actual communication-device receipt. Android 11 requires the actual playing track of the shared WebRTC factory ADM and its routed-device receipt; absent, stopped, replaced or unreadable playback remains unknown. Both built-ins must be available for the two-way control.",
+      "physical_remainder": "Build and install the successor native candidate, verify Android actual selected-device receipts during video (playing-track routed device on Android 11; communication device on Android 12 or newer), and independently confirm actual audible destination, moving video, media continuity and End cleanup.",
+      "software_gap": "The previously unsupported app route capability now has source and executable regression coverage. Full Kotlin/Android build, installed native receipts and audible destination remain unverified; no historical physical status is promoted."
     },
     {
       "case_id": "AR04",
@@ -4161,7 +4171,7 @@
         }
       ],
       "software_proof": "Production screen route handler executes the complete production iosNativeCalls JS facade; rejected native command leaves UI unchanged and allows retry; issued old command is followed by current replacement receiver choice. Native command sequence and UI acknowledgement are asserted. The required macOS probe compiles complete actual Swift routing, activation/deactivation, interruption and observer-registration methods. Controlled AVAudioSession receipts exercise requested routes, rejection propagation, ordering and exact current call descriptors; real Foundation notifications execute actual observer closures. Production JS root/facade tests reject duplicate navigation or terminal actions from audio events and preserve replacement UUID ownership.",
-      "controlled_assumptions": "Screen/native-facade calls, AVAudioSession and CallKit API receipts are controlled. Swift method bodies and registered observer closures are actual source, with a recorded emitRaw sink; asynchronous native sink persistence is outside this probe. It does not load iOS AVFoundation/CallKit or exercise physical output selection. The JS root receives controlled native events. Native deactivation is best effort and its callback is not proof that setActive(false) or capture shutdown succeeded. Android legacy app route selection remains unsupported.",
+      "controlled_assumptions": "Screen/native-facade calls, AVAudioSession and CallKit API receipts are controlled. Swift method bodies and registered observer closures are actual source, with a recorded emitRaw sink; asynchronous native sink persistence is outside this probe. It does not load iOS AVFoundation/CallKit or exercise physical output selection. The JS root receives controlled native events. Native deactivation is best effort and its callback is not proof that setActive(false) or capture shutdown succeeded. Android legacy routing has separate owner-fenced coverage; its new native binary and physical output remain unverified.",
       "physical_remainder": "iPhone speaker/receiver selection during video; actual native route and audible destination, interruptions and restoration.",
       "software_gap": "Concrete app-owned route/interruption mechanisms have required executable assertions, pending candidate exact-head macOS results. Hardware output readback, audible audio, Bluetooth attach/detach and actual OS interruptions still require device qualification. Successful command acknowledgement cannot establish physical routing."
     },
@@ -4172,15 +4182,20 @@
       "coverage_status": "PARTIAL_AUTOMATION",
       "automated_refs": [
         {
-          "file": "tests/assurance/chat-thread-answer-mounted.test.mjs",
-          "anchor": "reconnection preserves the current call's manual audio route",
+          "file": "tests/assurance/android-legacy-audio-route-mounted.test.mjs",
+          "anchor": "current native route events update the actual label and next request without a foreground transition",
           "ci_lane": "Validation / Product"
+        },
+        {
+          "file": "scripts/test-owned-android-audio-session.mjs",
+          "anchor": "route_events_are_owner_fenced",
+          "ci_lane": "Validation / Native SDK Contracts"
         }
       ],
-      "software_proof": "Generic screen reconnect preserves chosen route state only. Read-only source inspection of hooks/use-chat-call-media-session.ts, hooks/use-communication-room-session.ts, _lib/livekit/bootstrap.ts, app/chat/[threadId].tsx and the Android native/plugins sources found no app-owned legacy audio-device/route-change callback or app speaker selection. This inspection is not an executed Bluetooth interruption, headset-removal or OS-route test.",
-      "controlled_assumptions": "Pinned source inspected: @livekit/react-native-expo-plugin 1.0.2 Android LiveKitApplicationLifecycleListener selects the default CommunicationAudioType and calls LiveKitReactNative.setup; @livekit/react-native 2.10.0 LiveKitReactNative.kt installs its JavaAudioDeviceModule through WebRTCModuleOptions; @livekit/react-native-webrtc 144.0.0 WebRTCModule.java consumes that module. This configures capture/playout audio attributes, not proof of a selected headset or route recovery. The separate SDK AudioSwitchManager starts on startAudioSession and has an empty default device-change listener; the legacy hook does not call that routing lifecycle or selectAudioOutput. Android route choice/recovery is consequently left to platform/native WebRTC behavior for this lane, without an app-owned callback policy to test. No current Bluetooth event test exists, and a fixture list containing bluetooth is not behavioral proof.",
+      "software_proof": "The successor uses the existing pinned AudioSwitch under an exact native owner. Actual production Java communication-device and AudioSwitch availability callbacks emit owner-fenced route receipts; the actual mounted legacy route hook updates capability and confirmed selection, ignores retired events and preserves a failed manual intent. These controlled callbacks do not constitute an executed Bluetooth interruption or headset-removal test.",
+      "controlled_assumptions": "Pinned AudioSwitch manager and new coordinator are compiled with controlled Android, React Native and AudioSwitch edges. Bluetooth and wired outputs are conservatively represented as other; no accessory identity or audible path is inferred. The device scanner remains the existing SDK implementation, and actual Android Bluetooth permission, radio, audio-focus and headset behavior are outside these tests.",
       "physical_remainder": "Android actual Bluetooth headset connection/disconnection and interruption during owned call, correct audible route, microphone recovery, no unwanted capture, and latest intended route.",
-      "software_gap": "Android legacy audio ownership is now documented against the application and pinned SDK source; no app-owned route/device-change callback was found to execute at a native seam. Bluetooth compatibility, actual selected output, interruption recovery and capture privacy remain unverified device outcomes. Adding an explicit Android route/recovery policy or controls would be a separate product change. Retain this row as partial and AR01/AR03 as unsupported; generic reconnect and dependency setup cannot satisfy them."
+      "software_gap": "Owner-fenced route and availability callbacks now have executable regression coverage. Physical Bluetooth compatibility, selected output, interruption recovery, capture privacy and audible media remain unverified; this row remains partial and historically dependency blocked."
     },
     {
       "case_id": "BT02",
@@ -4215,7 +4230,7 @@
         }
       ],
       "software_proof": "Generic screen reconnect preserves the chosen route. The required macOS probe compiles complete actual Swift routing, activation/deactivation, interruption and observer-registration methods. Controlled AVAudioSession receipts exercise requested routes, rejection propagation, ordering and exact current call descriptors; real Foundation notifications execute actual observer closures. Production JS root/facade tests reject duplicate navigation or terminal actions from audio events and preserve replacement UUID ownership.",
-      "controlled_assumptions": "Screen/native-facade calls, AVAudioSession and CallKit API receipts are controlled. Swift method bodies and registered observer closures are actual source, with a recorded emitRaw sink; asynchronous native sink persistence is outside this probe. It does not load iOS AVFoundation/CallKit or exercise physical output selection. The JS root receives controlled native events. Native deactivation is best effort and its callback is not proof that setActive(false) or capture shutdown succeeded. Android legacy app route selection remains unsupported.",
+      "controlled_assumptions": "Screen/native-facade calls, AVAudioSession and CallKit API receipts are controlled. Swift method bodies and registered observer closures are actual source, with a recorded emitRaw sink; asynchronous native sink persistence is outside this probe. It does not load iOS AVFoundation/CallKit or exercise physical output selection. The JS root receives controlled native events. Native deactivation is best effort and its callback is not proof that setActive(false) or capture shutdown succeeded. Android legacy routing has separate owner-fenced coverage; its new native binary and physical output remain unverified.",
       "physical_remainder": "iPhone actual Bluetooth headset connection/disconnection and interruption during owned call, correct audible route, microphone recovery, no unwanted capture, and latest intended route.",
       "software_gap": "Concrete app-owned route/interruption mechanisms have required executable assertions, pending candidate exact-head macOS results. Hardware output readback, audible audio, Bluetooth attach/detach and actual OS interruptions still require device qualification. Successful command acknowledgement cannot establish physical routing."
     },

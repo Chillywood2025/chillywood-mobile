@@ -41,6 +41,9 @@ const compiledAudioRouting = ts.transpileModule(audioRoutingSource, {
   },
   fileName: "_lib/livekit/audioRouting.ts",
 }).outputText;
+const compiledOwnedAudio = ts.transpileModule(fs.readFileSync("_lib/livekit/ownedAudioSession.ts", "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
 
 const loadActualAudioRouting = (LiveKitAudioSession, platformOS) => {
   const commonJsModule = { exports: {} };
@@ -170,6 +173,7 @@ export function createLiveKitMountedRuntime(options = {}) {
     audioResetCalls: 0,
     audioStopActions: [],
     audioStopCalls: 0,
+    audioStartCalls: 0,
     iosAudioConfigurationActive: false,
     nativeAudioSessionActive: false,
     cameraActions: [],
@@ -813,6 +817,7 @@ export function createLiveKitMountedRuntime(options = {}) {
       if (action.outcome !== "mismatch") runtime.nativeAudioOutput = output;
     },
     startAudioSession: async () => {
+      runtime.audioStartCalls += 1;
       runtime.nativeAudioSessionActive = true;
     },
     stopAudioSession: async () => {
@@ -824,8 +829,71 @@ export function createLiveKitMountedRuntime(options = {}) {
     },
   };
   const actualAudioRouting = loadActualAudioRouting(liveKitAudioSession, runtime.platformOS);
+  let nativeAudioOwner = null;
+  const pendingAudioCleanup = new Set();
+  const routeReceipt = (owner) => ({ owner, supported: true,
+    selected: runtime.nativeAudioOutput === "speaker" ? "speaker" : "earpiece",
+    available: ["speaker", "earpiece"] });
+  const checkAudioOwner = (owner) => {
+    if (nativeAudioOwner !== owner) throw Error("stale native audio owner");
+  };
+  const ownedAudioBridge = {
+    acquireOwnedAudioSession: async (owner, defaultOutput) => {
+      if (nativeAudioOwner && nativeAudioOwner !== owner) throw Error("native audio owner conflict");
+      nativeAudioOwner = owner;
+      await liveKitAudioSession.startAudioSession();
+      checkAudioOwner(owner);
+      runtime.nativeAudioOutput = defaultOutput === "speaker" ? "speaker" : "earpiece";
+      return routeReceipt(owner);
+    },
+    readOwnedAudioRoute: async (owner) => { checkAudioOwner(owner); return routeReceipt(owner); },
+    selectOwnedAudioOutput: async (owner, output) => {
+      checkAudioOwner(owner);
+      if (options.useActualAudioRouting) {
+        const available = await liveKitAudioSession.getAudioOutputs();
+        checkAudioOwner(owner);
+        if (!available.includes(output)) throw Error("native output unavailable");
+        runtime.nativeAudioOutputCommands.push(output);
+        const action = runtime.nativeAudioSelectionActions.shift() ?? { outcome: "success" };
+        if (action.gate) await action.gate.promise;
+        checkAudioOwner(owner);
+        if (action.outcome === "reject") throw Error("native output rejected");
+        if (action.outcome !== "mismatch") runtime.nativeAudioOutput = output;
+      } else {
+        runtime.audioOutputCalls.push(output);
+        const action = runtime.audioOutputActions.shift() ?? { outcome: "success" };
+        if (action.gate) await action.gate.promise;
+        checkAudioOwner(owner);
+        if (action.outcome === "reject") throw Error("native output rejected");
+        if (action.outcome !== "mismatch") runtime.nativeAudioOutput = output;
+      }
+      return routeReceipt(owner);
+    },
+    releaseOwnedAudioSession: async (owner) => {
+      if (nativeAudioOwner !== owner && !pendingAudioCleanup.has(owner)) return true;
+      if (nativeAudioOwner === owner) nativeAudioOwner = null;
+      pendingAudioCleanup.add(owner);
+      runtime.audioStopCalls += 1;
+      const action = runtime.audioStopActions.shift() ?? { outcome: "success" };
+      if (action.gate) await action.gate.promise;
+      if (action.outcome === "reject") throw Error("audio stop rejected");
+      if (!nativeAudioOwner) runtime.nativeAudioSessionActive = false;
+      pendingAudioCleanup.delete(owner);
+      return true;
+    },
+  };
+  const ownedAudioModule = { exports: {} };
+  vm.runInNewContext(compiledOwnedAudio, {
+    exports: ownedAudioModule.exports, module: ownedAudioModule,
+    require: (name) => {
+      if (name === "react-native") return { Platform: { OS: runtime.platformOS }, NativeModules: { LivekitReactNativeModule: ownedAudioBridge } };
+      if (name === "./react-native-module") return { LiveKitAudioSession: liveKitAudioSession };
+      throw Error(`UNEXPECTED_OWNED_AUDIO_IMPORT:${name}`);
+    },
+  });
 
   const moduleMocks = {
+    "../_lib/livekit/ownedAudioSession": ownedAudioModule.exports,
     "expo-camera": {
       Camera: {
         getCameraPermissionsAsync: async () => {

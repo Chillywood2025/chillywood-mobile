@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
+import { runInNewContext } from "node:vm";
 import ts from "typescript";
 
 import {
@@ -1290,11 +1291,51 @@ assert.match(
   /invite\.threadId !== input\.threadId[\s\S]{0,420}invite\.callerUserId !== input\.actorUserId[\s\S]{0,220}invite\.callType !== input\.callType/u,
   "post-commit call recovery remains bound to the exact thread, room, caller, and call type",
 );
-assert.match(
-  startThreadCallBlock,
-  /begunCall = await beginChillyChatCall[\s\S]{0,600}if \(begunCall\.created\)[\s\S]{0,220}dispatchChillyChatCallPush/u,
-  "a reconciled committed invite resumes the canonical receiver-dispatch path instead of becoming an undispatched missed call",
-);
+// Check executable syntax and ownership, not the number of characters in an
+// intervening error handler. Runtime success/failure cases also execute the
+// complete production function in chat-call-rate-limit-message.test.mjs.
+function assertCommittedInviteDispatch(source) {
+  const ast = ts.createSourceFile("chat.ts", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  assert.equal(ast.parseDiagnostics.length, 0);
+  const start = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "startChatThreadCall");
+  assert.ok(start?.body, "one actual call-start function");
+  const calls = [];
+  const visit = node => { if (ts.isCallExpression(node)) calls.push(node); ts.forEachChild(node, visit); };
+  visit(start.body);
+  const named = name => calls.filter(node => ts.isIdentifier(node.expression) && node.expression.text === name);
+  const begins = named("beginChillyChatCall"), dispatches = named("dispatchChillyChatCallPush");
+  assert.equal(begins.length, 1, "one authoritative begin operation");
+  assert.equal(dispatches.length, 1, "one canonical dispatch operation");
+  const assignment = (call, name) => {
+    assert.ok(ts.isAwaitExpression(call.parent), `${name} must await its operation`);
+    const expression = call.parent.parent;
+    assert.ok(ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      && ts.isIdentifier(expression.left) && expression.left.text === name, `operation must assign ${name}`);
+    return expression;
+  };
+  const begin = assignment(begins[0], "begunCall");
+  const dispatch = assignment(dispatches[0], "delivery");
+  const owner = node => { while (node.parent && node.parent !== start.body) node = node.parent; return node; };
+  const beginStatement = owner(begin), dispatchStatement = owner(dispatch);
+  assert.ok(ts.isTryStatement(beginStatement), "begin must retain its failure cleanup");
+  assert.ok(ts.isIfStatement(dispatchStatement)
+    && ts.isPropertyAccessExpression(dispatchStatement.expression)
+    && dispatchStatement.expression.expression.getText(ast) === "begunCall"
+    && dispatchStatement.expression.name.text === "created", "dispatch is guarded by the authoritative created result");
+  assert.ok(dispatch.pos >= dispatchStatement.thenStatement.pos && dispatch.end <= dispatchStatement.thenStatement.end,
+    "dispatch belongs to the created branch, never a reused/busy branch");
+  assert.ok(beginStatement.end <= dispatchStatement.pos, "dispatch follows completed begin and failure handling");
+}
+assertCommittedInviteDispatch(startThreadCallBlock);
+for (const [from, to] of [
+  ["if (begunCall.created)", "if (true)"],
+  ["delivery = await dispatchChillyChatCallPush", "delivery = dispatchChillyChatCallPush"],
+  ["dispatchChillyChatCallPush({", "discardDispatch({"],
+]) {
+  assert.ok(startThreadCallBlock.includes(from), "negative control targets actual source");
+  assert.throws(() => assertCommittedInviteDispatch(startThreadCallBlock.replace(from, to)),
+    "broken dispatch control must be rejected");
+}
 assert.match(chatLibSource, /getCurrentAccountSessionAuthoritySnapshot\(\)[\s\S]{0,420}getWritablePartyUserId/u, "direct chat operations prefer established exact mounted authority and retain a bounded fallback");
 const communicationJoinBlock = communicationLibSource.slice(
   communicationLibSource.indexOf("export async function joinCommunicationRoomSession"),
@@ -1499,20 +1540,285 @@ assert.match(
   "the app-wide foreground surface remains customer-visible after bounded native grace",
 );
 assert.match(iosNativeCallsSource, /const nativePresentedCallUuidsByInviteId = new Map<string, string>\(\)/u, "native presentation ownership binds each invite to its exact CallKit UUID");
-assert.match(iosNativeCallsSource, /shouldReuseIosNativeCallReadiness[\s\S]{0,1200}eventListener = listener \?\? null;[\s\S]{0,240}drainPendingEventsForExactLifecycle/u, "same account/session revalidation preserves an already-presented exact CallKit invite while rebinding its current event listener");
-assert.match(iosNativeCallsSource, /event\.type === "incoming" \|\| event\.type === "recovered"/u, "only confirmed native incoming/recovered events acquire presentation ownership");
-assert.match(iosNativeCallsSource, /nativePresentedCallUuidsByInviteId\.set\(inviteId, callUuid\)/u, "confirmed CallKit presentation records the exact invite/UUID pair");
-assert.match(iosNativeCallsSource, /requestIosNativeCallAnswer\(inviteId: string\)[\s\S]{0,520}requestAnswerAsync\(callUuid, normalizedInviteId\)/u, "foreground Answer delegates the exact native invite/UUID pair to CallKit");
-assert.match(iosNativeCallsSource, /waitForIosNativeCallPresentation[\s\S]{0,1800}nativePresentedCallUuidsByInviteId\.has\(normalizedInviteId\)[\s\S]{0,1200}finish\("timeout"\)/u, "foreground Answer waits a bounded interval for exact late CallKit ownership");
-assert.match(rootLayoutSource, /waitForIosNativeCallPresentation\(invite\.id\)[\s\S]{0,240}resolveIosForegroundIncomingAnswerAuthority[\s\S]{0,760}answerAuthority === "blocked"/u, "app-wide Answer arbitrates late CallKit ownership and fails closed while ownership is unknown");
-assert.match(chatThreadSource, /waitForIosNativeCallPresentation\(invite\.id\)[\s\S]{0,240}resolveIosForegroundIncomingAnswerAuthority[\s\S]{0,680}answerAuthority === "blocked"/u, "same-thread Answer uses the same late CallKit ownership arbitration");
+// These checks follow the executable function/branch structure. Comments,
+// diagnostics and recovery code cannot invalidate a character-distance proxy.
+// Runtime admission and cancellation are independently exercised by the actual
+// facade and mounted-root/thread suites, including withheld native receipts.
+function assertIosForegroundAnswerStructure(facadeSource, layoutSource, threadSource) {
+  const parse = (name, source) => {
+    const ast = ts.createSourceFile(name, source, ts.ScriptTarget.Latest, true,
+      name.endsWith("tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+    assert.equal(ast.parseDiagnostics.length, 0, `${name} must parse`);
+    return ast;
+  };
+  const find = (owner, predicate) => {
+    const matches = [];
+    const visit = node => { if (predicate(node)) matches.push(node); ts.forEachChild(node, visit); };
+    visit(owner);
+    return matches;
+  };
+  const one = (matches, description) => {
+    assert.equal(matches.length, 1, description);
+    return matches[0];
+  };
+  const namedFunction = (ast, name) => one(ast.statements.filter(node => ts.isFunctionDeclaration(node)
+    && node.name?.text === name && node.body), `one production ${name}`);
+  const calls = (owner, name) => find(owner, node => ts.isCallExpression(node)
+    && node.expression.getText() === name);
+  const variable = (owner, name) => one(find(owner, node => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name) && node.name.text === name), `one ${name} declaration`);
+  const inside = (owner, node) => node.pos >= owner.pos && node.end <= owner.end;
+  const returns = owner => find(owner, ts.isReturnStatement);
+  const rejects = owner => returns(owner).some(node => node.expression?.kind === ts.SyntaxKind.FalseKeyword);
+  const authorityBranch = (owner, value) => one(find(owner, node => ts.isIfStatement(node)
+    && ts.isBinaryExpression(node.expression)
+    && node.expression.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+    && node.expression.left.getText() === "answerAuthority"
+    && ts.isStringLiteral(node.expression.right) && node.expression.right.text === value), `one ${value} branch`);
+  const property = (object, name) => one(object.properties.filter(node => ts.isPropertyAssignment(node)
+    && node.name.getText() === name), `one ${name} property`);
+
+  const facadeAst = parse("iosNativeCalls.ts", facadeSource);
+  const readiness = namedFunction(facadeAst, "startIosNativeCallsReadiness");
+  const reuse = one(find(readiness, node => ts.isIfStatement(node)
+    && calls(node.expression, "shouldReuseIosNativeCallReadiness").length === 1), "one same-authority reuse branch").thenStatement;
+  const listener = one(find(reuse, node => ts.isBinaryExpression(node)
+    && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && node.left.getText() === "eventListener"), "reuse installs one current listener");
+  assert.equal(listener.right.getText(), "listener ?? null");
+  const rebound = one(calls(reuse, "NativeCallsModule.startVoipRegistrationAsync"), "reuse requests genuine native token/presentation replay");
+  const drain = one(calls(reuse, "drainPendingEventsForExactLifecycle"), "reuse drains exact native receipts");
+  assert.ok(ts.isAwaitExpression(variable(reuse, "rebound").initializer)
+    && ts.isAwaitExpression(drain.parent), "native replay and receipt drain are awaited");
+  assert.ok(listener.end < rebound.pos && rebound.end < drain.pos, "listener precedes native rebind and exact receipt drain");
+  assert.equal(calls(reuse, "clearNativePresentedInvites").length, 0, "healthy reuse cannot erase native ownership");
+  assert.equal(calls(reuse, "nativeSubscription?.remove").length, 0, "healthy reuse retains its observer");
+
+  const ownership = variable(facadeAst, "updateNativePresentationOwnership");
+  const record = one(calls(facadeAst, "nativePresentedCallUuidsByInviteId.set"), "only the native receipt owner can record invite/UUID ownership");
+  const confirmedEvent = (node, type) => ts.isBinaryExpression(node)
+    && node.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+    && node.left.getText() === "event.type" && ts.isStringLiteral(node.right) && node.right.text === type;
+  const confirmedBranch = one(find(ownership, node => ts.isIfStatement(node)
+    && ts.isBinaryExpression(node.expression) && node.expression.operatorToken.kind === ts.SyntaxKind.BarBarToken
+    && confirmedEvent(node.expression.left, "incoming") && confirmedEvent(node.expression.right, "recovered")), "incoming/recovered receipts own presentation");
+  assert.ok(inside(confirmedBranch.thenStatement, record));
+  assert.deepEqual(record.arguments.map(node => node.getText()), ["inviteId", "callUuid"]);
+
+  const presentationWait = namedFunction(facadeAst, "waitForIosNativeCallPresentation");
+  const presentedResults = [
+    ...returns(presentationWait).filter(node => node.expression && ts.isStringLiteral(node.expression) && node.expression.text === "presented"),
+    ...calls(presentationWait, "finish").filter(node => ts.isStringLiteral(node.arguments[0]) && node.arguments[0].text === "presented"),
+  ];
+  assert.equal(presentedResults.length, 3, "initial, notification and deadline checks can confirm native presentation");
+  for (const result of presentedResults) {
+    const confirmed = find(presentationWait, node => ts.isIfStatement(node)
+      && ts.isCallExpression(node.expression)
+      && node.expression.expression.getText() === "nativePresentedCallUuidsByInviteId.has"
+      && node.expression.arguments.length === 1
+      && node.expression.arguments[0].getText() === "normalizedInviteId"
+      && inside(node.thenStatement, result));
+    assert.equal(confirmed.length, 1, "every presented outcome requires the exact native receipt");
+  }
+  const timeout = one(calls(presentationWait, "setTimeout"), "exact native receipt wait has one deadline");
+  assert.ok(ts.isArrowFunction(timeout.arguments[0]));
+  assert.equal(timeout.arguments[1].getText(), "boundedTimeoutMs");
+  assert.equal(calls(timeout.arguments[0], "finish").filter(call => ts.isStringLiteral(call.arguments[0])
+    && call.arguments[0].text === "timeout").length, 1, "missing native receipt resolves timeout");
+  const boundedWait = variable(presentationWait, "boundedTimeoutMs");
+  const upperBound = one(calls(boundedWait, "Math.min"), "receipt deadline has a fixed maximum");
+  assert.ok(ts.isNumericLiteral(upperBound.arguments[0]) && Number(upperBound.arguments[0].text) === 20_000);
+  assert.equal(upperBound.arguments[1].getText(), "timeoutMs");
+
+  const ensure = namedFunction(facadeAst, "ensureIosForegroundIncomingCallPresentation");
+  const report = one(calls(ensure, "native.reportForegroundIncomingCallAsync"), "foreground fallback requests native presentation");
+  const wait = one(calls(ensure, "waitForIosNativeCallPresentation"), "foreground fallback awaits an actual presentation receipt");
+  const admitted = one(calls(ensure, "foregroundAnswerValidations.set"), "foreground admission is operation-bound");
+  assert.equal(admitted.arguments[0].getText(), "input.isCurrent");
+  assert.ok(report.end < wait.pos && wait.end < admitted.pos, "report and confirmed receipt precede foreground admission");
+  assert.equal(calls(ensure, "nativePresentedCallUuidsByInviteId.set").length, 0, "a returned report UUID cannot manufacture native ownership");
+
+  const request = namedFunction(facadeAst, "requestIosNativeCallAnswer");
+  assert.equal(request.parameters.length, 2, "native Answer requires invite and current UI operation");
+  assert.equal(request.parameters[1].name.getText(), "isCurrent");
+  assert.ok(ts.isFunctionTypeNode(request.parameters[1].type) && !request.parameters[1].initializer
+    && !request.parameters[1].questionToken, "UI operation cannot default to an always-current callback");
+  const admission = one(calls(request, "foregroundAnswerValidations.get"), "native Answer reads its own admission");
+  const consume = one(calls(request, "foregroundAnswerValidations.delete"), "native Answer consumes admission once");
+  assert.equal(admission.arguments[0].getText(), "isCurrent", "admission lookup belongs to the current UI operation");
+  assert.equal(consume.arguments[0].getText(), "isCurrent", "admission consumption belongs to the current UI operation");
+  const exactAdmission = one(find(request, node => ts.isIfStatement(node)
+    && find(node.expression, child => ts.isPrefixUnaryExpression(child)
+      && child.operator === ts.SyntaxKind.ExclamationToken && child.operand.getText() === "foregroundValidation").length > 0), "missing foreground admission is rejected");
+  assert.ok(rejects(exactAdmission.thenStatement));
+  for (const [field, expected] of [["inviteId", "normalizedInviteId"], ["generation", "generation"], ["context", "context"]]) {
+    assert.equal(find(exactAdmission.expression, node => ts.isBinaryExpression(node)
+      && node.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken
+      && node.left.getText() === `foregroundValidation.${field}` && node.right.getText() === expected).length,
+    1, `foreground admission binds exact ${field}`);
+  }
+  const freshValidation = one(calls(request, "foregroundValidation.validate"), "native Answer revalidates current raw server state");
+  const validationGuard = one(find(request, node => ts.isIfStatement(node) && inside(node.expression, freshValidation)), "fresh validation guards native dispatch");
+  assert.ok(rejects(validationGuard.thenStatement));
+  const nativeAnswer = one(calls(request, "NativeCallsModule.requestAnswerAsync"), "one exact native Answer dispatch");
+  assert.deepEqual(nativeAnswer.arguments.map(node => node.getText()), ["callUuid", "normalizedInviteId"]);
+  assert.ok(admission.end < consume.pos && consume.end < exactAdmission.pos
+    && exactAdmission.end < freshValidation.pos && validationGuard.end < nativeAnswer.pos,
+  "admission is consumed and freshly validated before exact native Answer dispatch");
+
+  for (const [name, source, component, handler, outcome] of [
+    ["_layout.tsx", layoutSource, "IncomingCallNotificationBridge", "openCall", "nativePresentationWaitOutcome"],
+    ["thread.tsx", threadSource, "ChillyChatThreadScreen", "acceptIncomingInvite", "presentationWaitOutcome"],
+  ]) {
+    const ast = parse(name, source);
+    const owner = variable(namedFunction(ast, component), handler).initializer;
+    const presentation = one(calls(owner, "ensureIosForegroundIncomingCallPresentation"), `${name} uses authenticated foreground presentation`);
+    const options = presentation.arguments[0];
+    assert.ok(ts.isObjectLiteralExpression(options));
+    assert.equal(property(options, "isCurrent").initializer.getText(), "ownsForegroundAnswer");
+    const current = variable(owner, "ownsForegroundAnswer");
+    assert.ok(ts.isArrowFunction(current.initializer), "the handler captures its mounted operation");
+    const currentCheck = one(calls(current, handler === "openCall" ? "incomingActionOwner.isCurrent" : "isAnswerOperationCurrent"), "UI callback checks the mounted operation owner");
+    assert.equal(currentCheck.arguments[0].getText(), "operation");
+    const arbitration = one(calls(owner, "resolveIosForegroundIncomingAnswerAuthority"), `${name} arbitrates native ownership`);
+    assert.equal(arbitration.arguments[0].getText(), outcome);
+    assert.ok(inside(variable(owner, outcome).initializer, presentation), "arbitration uses the actual presentation outcome");
+    const nativeBranch = authorityBranch(owner, "native_answer");
+    const blockedBranch = authorityBranch(owner, "blocked");
+    const dispatch = one(calls(owner, "requestIosNativeCallAnswer"), `${name} dispatches one native Answer`);
+    assert.ok(ts.isAwaitExpression(presentation.parent) && ts.isAwaitExpression(dispatch.parent), "UI waits for native presentation and native Answer acknowledgments");
+    assert.deepEqual(dispatch.arguments.map(node => node.getText()), ["invite.id", "ownsForegroundAnswer"],
+      "native dispatch retains the same UI operation that obtained presentation");
+    assert.ok(inside(nativeBranch.thenStatement, dispatch), "native dispatch belongs exclusively to native-owned arbitration");
+    assert.ok(ts.isBlock(nativeBranch.thenStatement) && ts.isReturnStatement(nativeBranch.thenStatement.statements.at(-1)),
+      "native-owned Answer returns without falling through to server acceptance");
+    assert.ok(ts.isBlock(blockedBranch.thenStatement) && ts.isReturnStatement(blockedBranch.thenStatement.statements.at(-1)),
+      "unknown or timed-out presentation stops the foreground Answer");
+    const blockedReturn = blockedBranch.thenStatement.statements.at(-1).expression;
+    assert.ok(!blockedReturn || blockedReturn.kind === ts.SyntaxKind.FalseKeyword, "blocked presentation cannot report successful Answer");
+    assert.ok(presentation.end <= arbitration.pos && arbitration.end <= nativeBranch.pos && nativeBranch.end <= blockedBranch.pos,
+      "presentation receipt is arbitrated before native Answer or blocked return");
+    const accepts = calls(owner, "updateChillyChatCallInviteStatus");
+    assert.equal(accepts.length, 1, "one fallback server acceptance remains");
+    assert.ok(blockedBranch.end < accepts[0].pos, "server acceptance cannot precede native-owned or blocked arbitration");
+    if (handler === "openCall") {
+      const clear = one(calls(nativeBranch.thenStatement, "clearAlert"), "native app-wide Answer clears its alert once");
+      assert.ok(dispatch.end < clear.pos, "app-wide alert clears only after awaiting native Answer");
+    }
+  }
+}
+assertIosForegroundAnswerStructure(iosNativeCallsSource, rootLayoutSource, chatThreadSource);
+for (const [target, from, to, expectedFailure] of [
+  [0, "eventListener = listener ?? null;", "retiredListener = listener ?? null;", "reuse installs one current listener"],
+  [0, "const rebound = await NativeCallsModule.startVoipRegistrationAsync(", "const rebound = await discardNativeReplay(", "reuse requests genuine native token/presentation replay"],
+  [0, "foregroundAnswerValidations.get(isCurrent)", "foregroundAnswerValidations.get(() => true)", "admission lookup belongs to the current UI operation"],
+  [0, "foregroundAnswerValidations.delete(isCurrent)", "discardAdmission(isCurrent)", "native Answer consumes admission once"],
+  [0, "foregroundValidation.validate()", "skipFreshValidation()", "native Answer revalidates current raw server state"],
+  [0, 'finish("timeout")', 'finish("stale")', "missing native receipt resolves timeout"],
+  [0, 'if (nativePresentedCallUuidsByInviteId.has(normalizedInviteId)) return "presented";', 'if (true) return "presented";', "every presented outcome requires the exact native receipt"],
+  [1, "requestIosNativeCallAnswer(invite.id, ownsForegroundAnswer)", "requestIosNativeCallAnswer(invite.id, () => true)", "native dispatch retains the same UI operation that obtained presentation"],
+  [2, 'if (answerAuthority === "blocked")', 'if (answerAuthority === "allowed")', "one blocked branch"],
+  [2, "ensureIosForegroundIncomingCallPresentation({", "waitForIosNativeCallPresentation({", "thread.tsx uses authenticated foreground presentation"],
+]) {
+  const sources = [iosNativeCallsSource, rootLayoutSource, chatThreadSource];
+  assert.ok(sources[target].includes(from), "foreground negative control targets actual source");
+  sources[target] = sources[target].replace(from, to);
+  assert.throws(() => assertIosForegroundAnswerStructure(...sources),
+    error => error?.code === "ERR_ASSERTION" && error.message.startsWith(expectedFailure),
+    `broken foreground admission must fail its intended guard: ${expectedFailure}`);
+}
 assert.match(iosNativeCallsSource, /typeof NativeCallsModule\.requestAnswerAsync !== "function"/u, "older same-runtime native binaries fail closed instead of invoking an unavailable Answer API");
 assert.match(iosNativeCallsSource, /"reportFailed"/u, "failed CallKit reporting releases fallback presentation ownership");
-assert.match(
-  iosNativeCallsSource,
-  /event\.type === "audioSessionActivated"[\s\S]{0,180}synchronizeLiveKitCallKitAudioSession\("activated"\)[\s\S]{0,180}event\.type === "audioSessionDeactivated"[\s\S]{0,180}synchronizeLiveKitCallKitAudioSession\("deactivated"\)/u,
-  "trusted CallKit activation and deactivation events close the installed WebRTC audio-session lifecycle",
-);
+// Execute the production event handler: receipt validation and grouped loss
+// events may grow without making source proximity an audio-lifecycle contract.
+const nativeAudioLifecycleAst = ts.createSourceFile("iosNativeCalls.ts", iosNativeCallsSource,
+  ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+const nativeAudioLifecycleDeclarations = new Map();
+for (const statement of nativeAudioLifecycleAst.statements) {
+  if (!ts.isVariableStatement(statement)) continue;
+  for (const declaration of statement.declarationList.declarations) {
+    if (["handleNativeEvent", "invalidateNativeAudioReadiness"].includes(declaration.name.getText())) {
+      nativeAudioLifecycleDeclarations.set(declaration.name.getText(), declaration.getText());
+    }
+  }
+}
+assert.equal(nativeAudioLifecycleDeclarations.size, 2, "audio fixtures execute both production lifecycle functions");
+const nativeAudioLifecycleCode = ts.transpileModule(
+  [...nativeAudioLifecycleDeclarations.values()].map(declaration => `const ${declaration};`).join("\n")
+    + "\nhandleNativeEvent;",
+  { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
+).outputText;
+const createNativeAudioLifecycleFixture = (sdkResult) => {
+  const context = { authority: { sessionGeneration: "current-session" } };
+  const phases = [];
+  const delivered = [];
+  const readyUuids = new Set(["current-call"]);
+  const scope = {
+    voipRegistrationActive: true,
+    voipLifecycleGeneration: 7,
+    voipAuthorityContext: context,
+    nativePresentedCallGenerations: new Map([["current-call", "current-generation"]]),
+    nativePresentedCallUuidsByInviteId: new Map([["current-invite", "current-call"], ["other-invite", "other-call"]]),
+    nativeAudioActivatedCallUuids: readyUuids,
+    acceptedNativeMediaSessions: new Map(),
+    nativeEventSubscribers: new Set(),
+    iosNativeAnswerApplicationActiveBaselines: new Map(),
+    toText: value => typeof value === "string" ? value.trim() : "",
+    synchronizeLiveKitCallKitAudioSession: phase => { phases.push(phase); return sdkResult; },
+    reportInternalCallMediaDiagnostic: () => {},
+    sanitizeNativeEvent: event => ({ ...event }),
+    updateNativePresentationOwnership: () => {},
+    notifyNativePresentationSubscribers: () => {},
+    eventListener: event => delivered.push(event),
+  };
+  const handle = runInNewContext(nativeAudioLifecycleCode, scope);
+  return { context, delivered, handle, phases, readyUuids, scope };
+};
+const nativeAudioEvent = {
+  type: "audioSessionActivated",
+  callInviteId: "current-invite",
+  callUuid: "current-call",
+  nativeCallGeneration: "current-generation",
+  nativeSessionGeneration: "current-session",
+};
+for (const sdkResult of [true, false, undefined]) {
+  const fixture = createNativeAudioLifecycleFixture(sdkResult);
+  fixture.handle(nativeAudioEvent, 7, fixture.context);
+  assert.deepEqual(fixture.phases, ["activated"], "an exact current activation synchronizes the installed WebRTC SDK once");
+  assert.equal(fixture.readyUuids.has("current-call"), sdkResult === true,
+    "native audio readiness requires explicit SDK synchronization success, including after a prior activation");
+  assert.equal(fixture.readyUuids.has("other-call"), false, "one activation cannot grant readiness to another call");
+  assert.equal(fixture.delivered.at(-1)?.audioSdkSynchronized, sdkResult === true,
+    "downstream consumers receive the actual SDK synchronization outcome");
+}
+for (const type of ["audioSessionDeactivated", "audioSessionFailed", "audioInterruptionBegan"]) {
+  const fixture = createNativeAudioLifecycleFixture(true);
+  fixture.handle({ ...nativeAudioEvent, type }, 7, fixture.context);
+  assert.deepEqual(fixture.phases, ["deactivated"], `${type} closes the installed WebRTC audio-session lifecycle`);
+  assert.equal(fixture.readyUuids.size, 0, `${type} revokes the prior native audio readiness`);
+}
+for (const eventOverrides of [
+  { callUuid: "other-call" },
+  { callUuid: "" },
+  { nativeCallGeneration: "retired-generation" },
+  { nativeCallGeneration: undefined },
+  { nativeSessionGeneration: "retired-session" },
+  { nativeSessionGeneration: undefined },
+]) {
+  const fixture = createNativeAudioLifecycleFixture(true);
+  fixture.readyUuids.clear();
+  fixture.handle({ ...nativeAudioEvent, ...eventOverrides }, 7, fixture.context);
+  assert.deepEqual(fixture.phases, [], "missing or mismatched native receipts cannot synchronize SDK audio");
+  assert.equal(fixture.readyUuids.size, 0, "rejected activation cannot manufacture native audio readiness");
+  assert.equal(fixture.delivered.length, 0, "rejected activation cannot reach downstream media consumers");
+}
+for (const retiredLifecycle of ["registration", "generation", "context"]) {
+  const fixture = createNativeAudioLifecycleFixture(true);
+  if (retiredLifecycle === "registration") fixture.scope.voipRegistrationActive = false;
+  fixture.handle(nativeAudioEvent, retiredLifecycle === "generation" ? 6 : 7,
+    retiredLifecycle === "context" ? { ...fixture.context } : fixture.context);
+  assert.deepEqual(fixture.phases, [], `retired ${retiredLifecycle} cannot synchronize SDK audio`);
+  assert.equal(fixture.delivered.length, 0, `retired ${retiredLifecycle} cannot reach downstream media consumers`);
+}
 assert.doesNotMatch(rootLayoutSource, /<Modal/u, "background/full-screen presentation remains native rather than a React modal");
 assert.match(rootLayoutSource, /presentation === "native_background"/u, "background state defers to native CallStyle or CallKit");
 assert.match(rootLayoutSource, /presentation === "native_ios"/u, "an exact CallKit record continues to own background and terminated presentation");
@@ -1525,21 +1831,6 @@ assert.doesNotMatch(
 assert.doesNotMatch(rootLayoutSource, /nativeCallAction:\s*"answer"/u, "CallKit and foreground routes never carry authoritative action text");
 assert.match(rootLayoutSource, /createIosCallKitAnswerRouteHandler/u, "CallKit Answer uses the canonical bridge-auth-router provenance handler");
 assert.match(rootLayoutSource, /await waitForIosNativeCallAnswerRouteReadiness\(event\)[\s\S]*?await routeNativeAnswer\(event\)/u, "CallKit Answer waits for exact stable application readiness before native-authority navigation");
-assert.match(chatThreadSource, /answerAuthority === "native_answer"[\s\S]*?requestIosNativeCallAnswer\(invite\.id\)/u, "same-thread iOS Answer enters the exact CallKit handoff instead of bypassing native presentation state");
-const appWideOpenCallBlock = rootLayoutSource.slice(
-  rootLayoutSource.indexOf("const openCall = async () =>"),
-  rootLayoutSource.indexOf("const decline = async () =>"),
-);
-assert.match(
-  appWideOpenCallBlock,
-  /if \(answerAuthority === "native_answer"\)[\s\S]{0,180}requestIosNativeCallAnswer\(invite\.id\)[\s\S]{0,520}clearAlert\(\);[\s\S]{0,80}return;/u,
-  "an app-wide iOS Answer owned by CallKit must request the exact native answer instead of racing it",
-);
-assert.ok(
-  appWideOpenCallBlock.indexOf("requestIosNativeCallAnswer(invite.id)")
-    < appWideOpenCallBlock.indexOf("const acceptedInvite ="),
-  "native-owned foreground Answer must delegate to CallKit before any fallback server acceptance",
-);
 const nativeForegroundAnswerBlock = nativeCoordinatorSource.slice(
   nativeCoordinatorSource.indexOf("public func requestAnswer(callUuid: String, inviteId: String)"),
   nativeCoordinatorSource.indexOf("public func completeTerminalTransition(callUuid: String)"),
@@ -1584,11 +1875,30 @@ assert.match(
   /DispatchQueue\.main\.asyncAfter\(deadline: \.now\(\) \+ 3\)[\s\S]{0,360}answerNotPending/u,
   "a CallKit transaction that never reaches the provider releases every waiting foreground Answer within a bounded deadline",
 );
-assert.match(
-  chatThreadSource,
-  /const releaseTrustedNativeCallSession = useCallback[\s\S]{0,620}setTrustedNativeCallClaim\(null\)[\s\S]{0,360}setNativeMediaActivationSerial\(0\)/u,
-  "terminal cleanup revokes the consumed native Answer claim before a later ordinary call can inherit its media gates",
+const readSourceVariableInitializer = (source, fileName, name) => {
+  const ast = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const matches = [];
+  const visit = node => {
+    if (ts.isVariableDeclaration(node) && node.name.getText() === name) matches.push(node.initializer);
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  assert.equal(matches.length, 1, `${fileName} has one ${name} initializer`);
+  assert.ok(matches[0], `${name} has a production implementation`);
+  return matches[0].getText();
+};
+const releaseTrustedNativeCallSessionSource = readSourceVariableInitializer(
+  chatThreadSource, "thread.tsx", "releaseTrustedNativeCallSession",
 );
+assert.match(releaseTrustedNativeCallSessionSource,
+  /trustedNativeCallClaim\?\.inviteId !== expectedInviteId\s*&& acceptedIosNativeMediaDescriptorRef\.current\?\.inviteId !== expectedInviteId\s*\) return false;/u,
+  "terminal cleanup rejects an invite owned by neither the routing claim nor the accepted native session");
+assert.match(releaseTrustedNativeCallSessionSource,
+  /releaseIosAcceptedNativeMediaSession\(expectedInviteId, ownedUuid, \{\s*authenticatedUserId: currentUserId, sessionGeneration: authority\?\.sessionGeneration \?\? "",\s*\}\);/u,
+  "terminal cleanup releases the retained accepted native session with exact account and session ownership");
+assert.match(releaseTrustedNativeCallSessionSource,
+  /acceptedIosNativeMediaDescriptorRef\.current = null;[\s\S]*setTrustedNativeCallClaim\(null\)[\s\S]*setNativeAudioSessionCallUuid\(""\)[\s\S]*setNativeMediaActivationSerial\(0\)/u,
+  "terminal cleanup revokes accepted native ownership, the Answer claim, and audio gates before another call can inherit them");
 assert.match(
   liveKitChatCallSessionSource,
   /NATIVE_MEDIA_ACTIVATION_RETRY_DELAYS_MS = \[0, 250, 750, 1_500, 3_000\]/u,
@@ -1909,15 +2219,59 @@ assert.match(
   /const loadThreadState = useCallback\(async \(\) => \{[\s\S]{0,200}const read = beginThreadRead\(\)[\s\S]{0,140}isThreadReadCurrent\(read\)[\s\S]{0,1250}if \(!isCurrent\(\)\) return;[\s\S]{0,180}reconcileEndedCallState\(loadedThread, isCurrent\)/u,
   "thread-state loading rejects obsolete session/read generations before call reconciliation",
 );
+const nativeAudioGateStart = chatThreadSource.indexOf("const acceptedNativeAudioDescriptor =");
+const nativeAudioGateEnd = chatThreadSource.indexOf("  const {\n    room: callRoom", nativeAudioGateStart);
+assert.ok(nativeAudioGateStart >= 0 && nativeAudioGateEnd > nativeAudioGateStart,
+  "the current accepted CallKit audio gate is present");
+const nativeAudioGateSource = chatThreadSource.slice(nativeAudioGateStart, nativeAudioGateEnd);
+assert.match(
+  nativeAudioGateSource,
+  /const acceptedNativeAudioCallUuid = Platform\.OS === "ios" && isSignedIn\s*&& doesIosAcceptedCallKitMediaDescriptorOwnSession\(\{\s*authenticatedUserId: currentUserId,\s*descriptor: acceptedNativeAudioDescriptor,\s*inviteId: activeCallInvite\?\.id,\s*inviteStatus: activeCallInvite\?\.status,\s*mediaProvider: activeCallInvite\?\.mediaProvider,\s*roomId: activeCallRoomId,\s*threadId,\s*\}\) \? acceptedNativeAudioDescriptor\?\.callUuid \?\? "" : ""/u,
+  "accepted CallKit readiness remains bound to the exact signed-in account, invite, provider, room, and thread after the routing claim expires",
+);
+assert.match(
+  nativeAudioGateSource,
+  /const activeIosNativeAudioCallUuid = acceptedNativeAudioCallUuid \|\| \(\s*Platform\.OS === "ios" && requestedNativeCallAction === "answer"\s*&& requestedNativeCallOwnsTransition \? requestedNativeCallUuid : ""\s*\);/u,
+  "the routing fallback requires the still-owned iOS Answer transition; ordinary foreground calls do not acquire a CallKit gate",
+);
+const nativeAudioWaitExpression = readSourceVariableInitializer(
+  chatThreadSource, "thread.tsx", "waitingForIosNativeAudioSession",
+);
+for (const [acceptedUuid, retainedReady, observedUuid, expectedWait] of [
+  ["current-call", true, "", false],
+  ["current-call", false, "current-call", true],
+  ["current-call", undefined, "current-call", true],
+  ["", undefined, "current-call", false],
+  ["", true, "other-call", true],
+  ["", undefined, "", true],
+]) {
+  assert.equal(runInNewContext(nativeAudioWaitExpression, {
+    activeIosNativeAudioCallUuid: "current-call",
+    acceptedNativeAudioCallUuid: acceptedUuid,
+    retainedIosNativeMediaSession: retainedReady === undefined ? null : { audioSessionActive: retainedReady },
+    nativeAudioSessionCallUuid: observedUuid,
+  }), expectedWait, "accepted CallKit media requires retained readiness; an attested Answer requires its exact activation UUID");
+}
+assert.equal(runInNewContext(nativeAudioWaitExpression, {
+  activeIosNativeAudioCallUuid: "",
+  acceptedNativeAudioCallUuid: "",
+  retainedIosNativeMediaSession: null,
+  nativeAudioSessionCallUuid: "",
+}), false, "ordinary foreground calls do not acquire a native audio prerequisite");
 assert.match(
   chatThreadSource,
-  /nativeAudioSessionCallUuid !== requestedNativeCallUuid[\s\S]{0,900}enabled:[\s\S]{0,260}!waitingForIosNativeAudioSession/u,
-  "iOS CallKit media initialization waits for the matching native audio-session activation",
+  /enabled: shouldActivateAcceptedChatCallMedia\(\{[\s\S]{0,220}\}\) && !waitingForIosNativeAudioSession && !iosNativeAnswerRecoveryBlocked && !unclaimedIosNativeMediaBlocked/u,
+  "accepted media requires native readiness and cannot bypass blocked recovery or missing accepted-call authority",
 );
 assert.match(
   chatThreadSource,
-  /event\.type === "audioSessionActivated"[\s\S]{0,180}setNativeAudioSessionCallUuid\(requestedNativeCallUuid\)/u,
-  "only CallKit audio-session activation releases the matching accepted call's media gate",
+  /const appliesToActiveCall = !eventCallUuid \|\| eventCallUuid === activeIosNativeAudioCallUuid;\s*if \(!appliesToActiveCall\) return;/u,
+  "a different explicit native call UUID cannot release the current call's media gate",
+);
+assert.match(
+  chatThreadSource,
+  /if \(event\.type === "audioSessionActivated" && event\.audioSdkSynchronized !== false\) \{[\s\S]{0,320}setNativeAudioSessionCallUuid\(activeIosNativeAudioCallUuid\)/u,
+  "native audio activation releases the attested Answer gate only when SDK synchronization did not fail",
 );
 assert.doesNotMatch(
   rootLayoutSource,
@@ -2004,9 +2358,14 @@ const cameraControlSource = communicationSessionSource.slice(
   communicationSessionSource.indexOf("const toggleCamera"),
 );
 const microphoneControlSource = communicationSessionSource.slice(
-  communicationSessionSource.indexOf("const setMicrophoneEnabled"),
+  communicationSessionSource.indexOf("const applyMicrophoneEnabled"),
   communicationSessionSource.indexOf("const toggleMic"),
 );
+assert.match(microphoneControlSource, /legacyMicControlRef\.current = applyMicrophoneEnabled/u,
+  "automatic lifecycle controls use the same serialized microphone transaction");
+assert.match(microphoneControlSource,
+  /const setMicrophoneEnabled[\s\S]*foregroundMicIntentRevisionRef\.current \+= 1;[\s\S]*return applyMicrophoneEnabled\(nextEnabled, requestedCameraOverride\)/u,
+  "explicit microphone controls supersede old intent and delegate to the verified transaction");
 assert.doesNotMatch(cameraControlSource, /stopLocalMediaKind/u, "camera controls must not stop a negotiated sender");
 assert.equal(
   (cameraControlSource.match(/updatePresence\(/gu) ?? []).length,
@@ -2104,7 +2463,7 @@ for (const permanentSurfaceId of [
 }
 assert.match(
   chatThreadSource,
-  /mediaControlMessage=\{callControlError \?\? mediaControlError\}/u,
+  /mediaControlMessage=\{outgoingIosAudioError \?\? callControlError \?\? mediaControlError\}/u,
   "call-control failures remain visible inside the fullscreen call surface",
 );
 assert.match(
@@ -2146,7 +2505,7 @@ assert.match(
 );
 assert.match(
   liveKitChatCallSessionSource,
-  /const setMicrophoneEnabled[\s\S]{0,420}if \(nextEnabled\)[\s\S]{0,180}LiveKitAudioSession\.startAudioSession/u,
+  /const setMicrophoneEnabled[\s\S]{0,420}if \(nextEnabled\)[\s\S]{0,180}startCallAudioSession\(binding\)/u,
   "turning the microphone back on restores the native audio session before capture",
 );
 assert.match(
@@ -2171,8 +2530,13 @@ assert.match(
 );
 assert.match(
   liveKitChatCallSessionSource,
-  /if \(nextState === "active"\)[\s\S]{0,260}LiveKitAudioSession\.startAudioSession\(\)[\s\S]{0,420}setSpeaker\(speakerRequestedRef\.current\)/u,
+  /if \(nextState === "active"\)[\s\S]{0,260}startCallAudioSession\(binding\)[\s\S]{0,420}setSpeaker\(speakerRequestedRef\.current\)/u,
   "foreground recovery restores capture and the last selected audio output",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /const startCallAudioSession[\s\S]{0,280}if \(!committedSessionOwnsCurrentRoom\(binding\) \|\| !binding\?\.liveKitRoom\)[\s\S]{0,700}await owner\.start\(\);[\s\S]{0,160}if \(!committedSessionOwnsCurrentRoom\(binding\)\)/u,
+  "Android audio startup must retain the exact admitted room owner before and after native activation",
 );
 const legacyAppStateBlock = communicationSessionSource.slice(
   communicationSessionSource.indexOf("const handleAppStateLifecycleChange"),
@@ -2185,7 +2549,7 @@ const foregroundMediaRestoreSource = communicationSessionSource.slice(
 const preservesVideoForegroundRecovery = (source) => (
   /nextCameraEnabled[\s\S]{0,500}ensureTrackKind\("video", \{[\s\S]{0,140}attachToPeers: false,[\s\S]{0,140}expectedGeneration: generation,[\s\S]{0,260}if \(!restoredCameraTrack\)[\s\S]{0,180}setCameraEnabled\(false\)[\s\S]{0,120}return false;/u.test(source)
   && source.includes("attachMissingLocalTracks(peerConnection, false, generation)")
-  && source.indexOf("renegotiateAllPeers(true)") > source.indexOf("attachMissingLocalTracks(peerConnection, false, generation)")
+  && source.indexOf("renegotiateAllPeers(true, canReuseNegotiatedCamera)") > source.indexOf("attachMissingLocalTracks(peerConnection, false, generation)")
   && source.includes("sender.track === restoredCameraTrack")
   && !/nextCameraEnabled[\s\S]{0,260}ensureInitialLocalStream\(false\)/u.test(source)
 );
@@ -2223,6 +2587,15 @@ assert.equal(
   false,
   "the regression guard rejects successful foreground recovery without sender readback",
 );
+for (const replacement of ["true", "renegotiateAllPeers(false, canReuseNegotiatedCamera)", "renegotiateAllPeers(true)"]) {
+  assert.equal(
+    preservesVideoForegroundRecovery(
+      foregroundMediaRestoreSource.replace("renegotiateAllPeers(true, canReuseNegotiatedCamera)", replacement),
+    ),
+    false,
+    "foreground camera recovery retains forced negotiation with the exact initial-camera reuse predicate",
+  );
+}
 assert.equal(
   preservesGenerationBoundTrackRecovery(trackKindRecoverySource),
   true,
@@ -2265,7 +2638,39 @@ assert.match(legacyRealtimeFailureBlock, /presenceRegistrationRef\.current\.subs
 assert.match(legacyRealtimeFailureBlock,
   /requestLegacySessionRestart\(status === "CHANNEL_ERROR"\s*\? "realtime_error"\s*: status === "TIMED_OUT"\s*\? "realtime_timeout"\s*: "realtime_closed", sessionGeneration\)/u,
   "every Realtime terminal/error status rebuilds the exact-generation transport instead of only changing UI state");
-assert.match(communicationSessionSource, /mappedState === "failed"\) requestLegacySessionRestart\("peer_failed", generation\)[\s\S]{0,140}mappedState === "disconnected"\) requestLegacySessionRestart\("peer_disconnected", generation\)/u, "peer failures enter the same generation-bound recovery supervisor");
+const preservesPeerRecoverySupervisor = (source) => (
+  /if \(!isCurrentPeer\(\)\) return;\s*const mappedState = readPeerConnectionState\(peerConnection\);/u.test(source)
+  && /if \(mappedState === "failed"\) requestLegacySessionRestart\("peer_failed", generation\);\s*else if \(mappedState === "disconnected"\) requestLegacySessionRestart\("peer_disconnected", generation, \{\s*peer: peerConnection, isStillNeeded: \(\) => isCurrentPeer\(\) && readPeerConnectionState\(peerConnection\) !== "connected",\s*\}\);/u.test(source)
+);
+for (const event of ["connectionstatechange", "iceconnectionstatechange"]) {
+  const marker = `(peerConnection as any).addEventListener("${event}", () => {`;
+  const start = communicationSessionSource.indexOf(marker);
+  assert.notEqual(start, -1, `${event} recovery handler exists`);
+  assert.equal(communicationSessionSource.indexOf(marker, start + marker.length), -1,
+    `${event} recovery handler is unambiguous`);
+  const end = communicationSessionSource.indexOf("\n    });", start);
+  assert.ok(end > start, `${event} recovery handler has its expected boundary`);
+  const handler = communicationSessionSource.slice(start, end);
+  assert.equal(preservesPeerRecoverySupervisor(handler), true,
+    `${event} failures use exact-generation recovery with a current disconnected-peer owner`);
+  for (const [before, after, description] of [
+    ["if (!isCurrentPeer()) return;", "", "missing event ownership"],
+    ["const mappedState = readPeerConnectionState(peerConnection);", "const mappedState = readPeerConnectionState(otherPeer);", "wrong observed peer"],
+    ['requestLegacySessionRestart("peer_failed", generation);', 'void 0;', "missing failed recovery"],
+    ['requestLegacySessionRestart("peer_failed", generation);', 'requestLegacySessionRestart("peer_failed", otherGeneration);', "wrong failed generation"],
+    ['requestLegacySessionRestart("peer_disconnected", generation, {', 'unrelatedRestart("peer_disconnected", generation, {', "missing disconnected supervisor"],
+    ['requestLegacySessionRestart("peer_disconnected", generation, {', 'requestLegacySessionRestart("peer_disconnected", otherGeneration, {', "wrong disconnected generation"],
+    ["peer: peerConnection", "peer: otherPeer", "wrong disconnected owner"],
+    ["isStillNeeded: () => isCurrentPeer() && ", "isStillNeeded: () => ", "missing delayed ownership check"],
+    ['readPeerConnectionState(peerConnection) !== "connected"', "true", "missing recovered-state check"],
+    ['requestLegacySessionRestart("peer_disconnected", generation, {\n        peer: peerConnection, isStillNeeded: () => isCurrentPeer() && readPeerConnectionState(peerConnection) !== "connected",\n      });', 'requestLegacySessionRestart("peer_disconnected", generation);', "obsolete unowned two-argument call"],
+  ]) {
+    const mutant = handler.replace(before, after);
+    assert.notEqual(mutant, handler, `${event}: ${description} changes the actual handler`);
+    assert.equal(preservesPeerRecoverySupervisor(mutant), false,
+      `${event}: recovery guard rejects ${description}`);
+  }
+}
 const activeInviteReconciliationSource = chatThreadSource.slice(
   chatThreadSource.indexOf("const reconcileActiveInvite"),
   chatThreadSource.indexOf("const otherMember ="),

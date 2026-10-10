@@ -1,0 +1,4 @@
+# Preserve hash-verified upstream patch context and the vendored file's original
+# EOF bytes. These rules affect whitespace diagnostics only, not text diffs.
+vendor/braces-safe/upstream/*.patch whitespace=-blank-at-eol
+vendor/braces-safe/lib/stringify.js whitespace=-blank-at-eof

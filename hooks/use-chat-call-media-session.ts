@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useCallback, useRef } from "react";
 
 import type {
   ChillyChatCallInvite,
@@ -11,6 +11,7 @@ import type {
 } from "../_lib/communication";
 import { createIosAcceptedCallKitMediaDescriptor } from "../_lib/communicationCallMediaPolicy.mjs";
 import { useCommunicationRoomSession } from "./use-communication-room-session";
+import { useLegacyAndroidAudioRoute } from "./use-legacy-android-audio-route";
 import {
   type ChatCallFirstMediaState,
   useLiveKitChatCallSession,
@@ -44,6 +45,8 @@ const EMPTY_FIRST_MEDIA_STATE: ChatCallFirstMediaState = {
   remoteAudioSubscribed: false,
   remoteVideoSubscribed: false,
 };
+
+const noAutomaticMicrophoneFeedback = (_muted: boolean) => false;
 
 export function useChatCallMediaSession(options: UseChatCallMediaSessionOptions) {
   const fixedProviderRef = useRef<{
@@ -98,6 +101,22 @@ export function useChatCallMediaSession(options: UseChatCallMediaSessionOptions)
     onRoomEnded: options.onRoomEnded,
     threadId: options.threadId,
   });
+  const legacyAudio = useLegacyAndroidAudioRoute({
+    active: shouldEnableLegacy && options.invite?.status === "accepted"
+      && (legacySession.channelState === "live" || legacySession.channelState === "reconnecting"),
+    identity: `${options.authenticatedUserId}:${options.roomId}:${inviteId}`,
+    video: options.invite?.callType === "video",
+  });
+  const stopLegacyAudio = legacyAudio.stop;
+  const leaveLegacyMedia = legacySession.leaveRoom;
+  const leaveLegacyRoom = useCallback(async (...args: Parameters<typeof leaveLegacyMedia>) => {
+    // Retire routing synchronously alongside End; native selection never
+    // postpones capture/membership cleanup. Preserve either cleanup failure.
+    const routeStop = stopLegacyAudio();
+    const results = await Promise.allSettled([leaveLegacyMedia(...args), routeStop]);
+    for (const result of results) if (result.status === "rejected") throw result.reason;
+    return (results[0] as PromiseFulfilledResult<Awaited<ReturnType<typeof leaveLegacyMedia>>>).value;
+  }, [leaveLegacyMedia, stopLegacyAudio]);
 
   if (mediaProvider === "livekit") {
     return {
@@ -106,6 +125,7 @@ export function useChatCallMediaSession(options: UseChatCallMediaSessionOptions)
       mediaProvider,
       legacyTransportActive: false,
       liveKitTransportActive: shouldEnableLiveKit,
+      consumeAutomaticMicrophoneFeedback: noAutomaticMicrophoneFeedback,
     };
   }
 
@@ -114,9 +134,11 @@ export function useChatCallMediaSession(options: UseChatCallMediaSessionOptions)
     mediaProvider,
     legacyTransportActive: shouldEnableLegacy,
     liveKitTransportActive: false,
-    setSpeaker: async (_enabled: boolean) => false,
-    speakerEnabled: false,
-    canSetSpeaker: false,
+    leaveRoom: leaveLegacyRoom,
+    setSpeaker: legacyAudio.setSpeaker,
+    speakerEnabled: legacyAudio.speakerEnabled,
+    canSetSpeaker: legacyAudio.canSetSpeaker,
+    mediaControlError: legacySession.mediaControlError ?? legacyAudio.error,
     firstMediaState: EMPTY_FIRST_MEDIA_STATE,
     markInstalledUiConnected: () => undefined,
     markParticipantVideoRendered: (_participant: CommunicationParticipantView) => undefined,

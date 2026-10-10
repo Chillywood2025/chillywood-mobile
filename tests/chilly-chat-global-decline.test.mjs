@@ -69,7 +69,7 @@ async function mount(t, initial = {}) {
     setAlert: (next) => { context.props.alert = typeof next === "function" ? next(context.props.alert) : next; },
     readChillyChatCallInvite: (...args) => reader(...args),
     Platform: { OS: "android" },
-    waitForIosNativeCallPresentation: (...args) => step("presentation", args, "presented"),
+    ensureIosForegroundIncomingCallPresentation: (...args) => step("presentation", args, "presented"),
     resolveIosForegroundIncomingAnswerAuthority: (outcome) => outcome === "presented" ? "native_answer" : "fallback",
     requestIosNativeCallAnswer: (...args) => step("native-answer", args, true),
     createForegroundAuthenticatedUiCallIntent: (...args) => {

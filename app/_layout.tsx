@@ -88,6 +88,7 @@ import {
   completeIosNativeCallAnswer,
   completeIosNativeCallTerminalTransition,
   drainIosNativeCallPendingEvents,
+  ensureIosForegroundIncomingCallPresentation,
   hasIosNativeCallPresentation,
   isIosNativeCallsRuntimeEnabled,
   readIosNativeCallPresentations,
@@ -97,7 +98,6 @@ import {
   startIosNativeCallsReadiness,
   subscribeToIosNativeCallPresentation,
   waitForIosNativeCallAnswerRouteReadiness,
-  waitForIosNativeCallPresentation,
   type SanitizedNativeCallEvent,
 } from "../_lib/iosNativeCalls";
 import { resolveIosNativeCallBridgeLifecycle } from "../_lib/iosNativeCallBridgeLifecycle.mjs";
@@ -812,13 +812,20 @@ function IncomingCallNotificationBridge() {
         Alert.alert("Call unavailable", "This Chi'lly Chat call can no longer be answered.");
         return;
       }
+      const ownsForegroundAnswer = () => incomingActionOwner.isCurrent(operation);
       const nativePresentationWaitOutcome = Platform.OS === "ios"
-        ? await waitForIosNativeCallPresentation(invite.id)
+        ? await ensureIosForegroundIncomingCallPresentation({
+          inviteId: invite.id,
+          threadId: invite.threadId,
+          roomId: invite.communicationRoomId ?? "",
+          authority,
+          isCurrent: ownsForegroundAnswer,
+        })
         : "not_expected";
       if (!incomingActionOwner.isCurrent(operation)) return;
       const answerAuthority = resolveIosForegroundIncomingAnswerAuthority(nativePresentationWaitOutcome);
       if (answerAuthority === "native_answer") {
-        const nativeAnswerRequested = await requestIosNativeCallAnswer(invite.id);
+        const nativeAnswerRequested = await requestIosNativeCallAnswer(invite.id, ownsForegroundAnswer);
         if (!incomingActionOwner.isCurrent(operation)) return;
         if (!nativeAnswerRequested) {
           Alert.alert("Unable to answer", "The call remains available if it is still ringing. Try again from the chat thread.");
@@ -1532,13 +1539,42 @@ function IosNativeCallsBridge() {
       }
     };
 
-    void startIosNativeCallsReadiness(authority, handleNativeCallEvent).then((readiness) => {
-      if (!active || readiness.status !== "started") return;
-      readIosNativeCallPresentations().forEach(watchInviteLifecycle);
-    }).catch((error) => reportRuntimeError("ios-native-call-readiness", error));
+    let readinessInFlight = false;
+    let readinessRetryCount = 0;
+    let readinessRetryTimer: ReturnType<typeof setTimeout> | null = null;
+    const recoverReadiness = async () => {
+      if (!ownsAuthority() || readinessInFlight) return;
+      if (readinessRetryTimer !== null) clearTimeout(readinessRetryTimer);
+      readinessRetryTimer = null;
+      readinessInFlight = true;
+      let retryNeeded = false;
+      try {
+        const readiness = await startIosNativeCallsReadiness(authority, handleNativeCallEvent);
+        if (!ownsAuthority()) return;
+        retryNeeded = readiness.status === "error";
+        if (readiness.status === "started") {
+          readinessRetryCount = 0;
+          readIosNativeCallPresentations().forEach(watchInviteLifecycle);
+        }
+      } catch (error) {
+        if (!ownsAuthority()) return;
+        retryNeeded = true;
+        reportRuntimeError("ios-native-call-readiness", error);
+      } finally {
+        readinessInFlight = false;
+        if (ownsAuthority() && retryNeeded && readinessRetryCount < 2) {
+          const delay = [1_000, 3_000][readinessRetryCount++];
+          readinessRetryTimer = setTimeout(() => { void recoverReadiness(); }, delay);
+        }
+      }
+    };
+    void recoverReadiness();
     const activationSubscription = AppState.addEventListener("change", (state) => {
       if (state !== "active") return;
-      void drainIosNativeCallPendingEvents();
+      readinessRetryCount = 0;
+      void recoverReadiness().then(() => {
+        if (ownsAuthority()) void drainIosNativeCallPendingEvents();
+      });
       pendingNativeTerminalActions.forEach(({ event, status }) => {
         void settleNativeTerminalAction(event, status);
       });
@@ -1547,6 +1583,7 @@ function IosNativeCallsBridge() {
 
     return () => {
       active = false;
+      if (readinessRetryTimer !== null) clearTimeout(readinessRetryTimer);
       activationSubscription.remove();
       clearInviteSubscriptions();
     };

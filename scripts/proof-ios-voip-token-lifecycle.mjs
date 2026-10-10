@@ -98,7 +98,21 @@ assert.equal(bridgeLifecycle.resolveIosNativeCallBridgeLifecycle({
 }).action, "revoke");
 assert.match(rootLayout, /activeNativeAuthorityKeyRef/u);
 assert.match(facade, /shouldReuseIosNativeCallReadiness/u);
-assert.match(facade, /eventListener = listener \?\? null;[\s\S]{0,180}drainPendingEventsForExactLifecycle/u);
+const reuseStart = facade.indexOf("// React can re-enter this bridge");
+const reuseEnd = facade.indexOf("const generation = ++voipLifecycleGeneration;", reuseStart);
+assert.ok(reuseStart > 0 && reuseEnd > reuseStart, "inspect the exact same-authority reuse branch");
+const reuseSource = facade.slice(reuseStart, reuseEnd);
+for (const receipt of ["eventListener = listener ?? null;", "const rebound = await NativeCallsModule.startVoipRegistrationAsync(", "await drainPendingEventsForExactLifecycle("]) {
+  assert.ok(reuseSource.includes(receipt), `same-authority reuse retains ${receipt}`);
+}
+assert.ok(reuseSource.indexOf("eventListener = listener ?? null;")
+  < reuseSource.indexOf("const rebound = await NativeCallsModule.startVoipRegistrationAsync("),
+"install the current listener before native replay");
+assert.ok(reuseSource.indexOf("const rebound = await NativeCallsModule.startVoipRegistrationAsync(")
+  < reuseSource.indexOf("await drainPendingEventsForExactLifecycle("),
+"same-authority reuse replays real native token/presentation receipts before draining");
+assert.doesNotMatch(reuseSource, /nativeSubscription\?\.remove\(|clearNativePresentedInvites\(/u,
+  "healthy same-authority reuse retains current listener and presentation ownership");
 assert.match(rootLayout, /resolveIosNativeCallBridgeLifecycle/u);
 assert.doesNotMatch(
   rootLayout,

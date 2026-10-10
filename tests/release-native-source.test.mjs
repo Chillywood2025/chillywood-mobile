@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import test from "node:test";
 import { nativeSourceSnapshot } from "../scripts/ota-native-source-compatibility.mjs";
 
@@ -31,6 +32,46 @@ const recordedV3Source = {
   sha: "442f9c6d1d3ed23a7626474cdecd7cf606d3c1d3",
   tree: "bd6833408192d1ea547a7317f764b231dd08a422",
 };
+// Installed Android 95 / iOS 30 qualification source recorded by PR #538.
+const recordedV4Source = {
+  sha: "f44437c8acf9c9ad0f1621c985b3a70831e8459c",
+  tree: "1ed514c1c377cad857eea5a33dabb89de6a78390",
+};
+// Signed internal binaries Android 96 / iOS 31, installed and physically tested.
+const recordedV5Source = {
+  sha: "2f6560724ba821c0fcc07a38b57b311b177a8e15",
+  tree: "c929e6c9013ef3d1966ab6e5675997ec240654d7",
+};
+// Signed internal binaries Android 97 / iOS 32, installed for paired diagnostics.
+const recordedV6Source = {
+  sha: "936107eca963440599c4f3a2c9c247dcaca5faef",
+  tree: "efca05683c171e4d7e55f77e342df9daf455c057",
+};
+// Signed internal binaries Android 98 / iOS 33, installed for paired diagnostics.
+const recordedV7Source = {
+  sha: "0d942593fe7db6187212ebdf234eca03f83c342d",
+  tree: "280e5b59ebfeb21f1275ad1dc102e8b6a7cfc27a",
+};
+// Signed internal binaries Android 99 / iOS 34, installed for paired diagnostics.
+const recordedV8Source = {
+  sha: "5c545e324a010bb1bcad47bdaf15e86108c0785e",
+  tree: "259b1d5c3851c2caad2fa87c0de6bde13ba11d5e",
+};
+// Signed internal binaries Android 100 / iOS 35, installed for paired diagnostics.
+const recordedV9Source = {
+  sha: "61d1deef026d58f395f621a1f51f4eb79b6c9b4c",
+  tree: "d396aafad0a79f272c4f04750987787188a5737e",
+};
+// Signed internal binaries Android 101 / iOS 36, installed for paired diagnostics.
+const recordedV10Source = {
+  sha: "e0bcc6c9b350ed2df51ca57b49ad49ccbb253e09",
+  tree: "d173d5256f95b1b3631d5a8b0b66f389f76c34e1",
+};
+// Signed internal binaries Android 102 / iOS 37, installed for paired diagnostics.
+const recordedV11Source = {
+  sha: "06e5482e3585fd7d30e3d06bf8576c3cd1cc077f",
+  tree: "8897a6a6f4aceb2d308470e2e228170848933524",
+};
 
 test("recorded internal v3 cohorts retain their historical Git-native inputs", () => {
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
@@ -52,20 +93,124 @@ test("recorded internal v3 cohorts retain their historical Git-native inputs", (
   }
 });
 
-test("internal v4 supersedes the incompatible v3 runtimes without rewriting their historical digests", () => {
+test("recorded internal v4 cohorts retain their historical Git-native inputs", () => {
+  const recorded = JSON.parse(git(repo, "show", `${recordedV4Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(recorded.generation, "internal-native-v4");
+  for (const platform of ["android", "ios"]) {
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
+      repositoryRoot: repo, platform, sourceSha: recordedV4Source.sha, sourceTree: recordedV4Source.tree,
+    }).digest);
+  }
+});
+
+test("recorded internal v5 cohorts retain their historical Git-native inputs", () => {
+  const recorded = JSON.parse(git(repo, "show", `${recordedV5Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(recorded.generation, "internal-native-v5");
+  for (const platform of ["android", "ios"]) {
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
+      repositoryRoot: repo, platform, sourceSha: recordedV5Source.sha, sourceTree: recordedV5Source.tree,
+    }).digest);
+  }
+});
+
+test("recorded internal v6 cohorts retain their historical Git-native inputs", () => {
+  const recorded = JSON.parse(git(repo, "show", `${recordedV6Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(recorded.generation, "internal-native-v6");
+  for (const platform of ["android", "ios"]) {
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
+      repositoryRoot: repo, platform, sourceSha: recordedV6Source.sha, sourceTree: recordedV6Source.tree,
+    }).digest);
+  }
+});
+
+test("recorded internal v7 cohorts retain their historical Git-native inputs", () => {
+  const recorded = JSON.parse(git(repo, "show", `${recordedV7Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(recorded.generation, "internal-native-v7");
+  for (const platform of ["android", "ios"]) {
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
+      repositoryRoot: repo, platform, sourceSha: recordedV7Source.sha, sourceTree: recordedV7Source.tree,
+    }).digest);
+  }
+});
+
+test("recorded internal v8 cohorts retain their historical Git-native inputs", () => {
+  const recorded = JSON.parse(git(repo, "show", `${recordedV8Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(recorded.generation, "internal-native-v8");
+  for (const platform of ["android", "ios"]) {
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
+      repositoryRoot: repo, platform, sourceSha: recordedV8Source.sha, sourceTree: recordedV8Source.tree,
+    }).digest);
+  }
+});
+
+test("recorded internal v9 cohorts retain their historical Git-native inputs", () => {
+  const recorded = JSON.parse(git(repo, "show", `${recordedV9Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(recorded.generation, "internal-native-v9");
+  for (const platform of ["android", "ios"]) {
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
+      repositoryRoot: repo, platform, sourceSha: recordedV9Source.sha, sourceTree: recordedV9Source.tree,
+    }).digest);
+  }
+});
+
+test("recorded internal v10 cohorts retain their historical Git-native inputs", () => {
+  const recorded = JSON.parse(git(repo, "show", `${recordedV10Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(recorded.generation, "internal-native-v10");
+  for (const platform of ["android", "ios"]) {
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
+      repositoryRoot: repo, platform, sourceSha: recordedV10Source.sha, sourceTree: recordedV10Source.tree,
+    }).digest);
+  }
+});
+
+test("recorded internal v11 cohorts retain their historical Git-native inputs", () => {
+  const recorded = JSON.parse(git(repo, "show", `${recordedV11Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(recorded.generation, "internal-native-v11");
+  for (const platform of ["android", "ios"]) {
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
+      repositoryRoot: repo, platform, sourceSha: recordedV11Source.sha, sourceTree: recordedV11Source.tree,
+    }).digest);
+  }
+});
+
+test("internal v12 supersedes the v11 runtimes without rewriting their historical digests", () => {
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
-  const recorded = JSON.parse(git(repo, "show", `${recordedV3Source.sha}:config/release/internal-native-generation.json`));
-  assert.equal(generation.generation, "internal-native-v4");
+  const recorded = JSON.parse(git(repo, "show", `${recordedV11Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(generation.generation, "internal-native-v12");
   assert.equal(generation.supersedes.generation, recorded.generation);
   assert.equal(generation.nativeCompatibility.algorithm, recorded.nativeCompatibility.algorithm);
   for (const platform of ["android", "ios"]) {
-    assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v4`);
+    assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v12`);
     assert.equal(generation.supersedes[`${platform}RuntimeVersion`], recorded.runtimeVersions[platform]);
     assert.equal(generation.supersedes[`${platform}CompatibilityDigest`], recorded.nativeCompatibility[`${platform}Digest`]);
     assert.match(generation.nativeCompatibility[`${platform}Digest`], /^[0-9a-f]{64}$/u);
     assert.notEqual(generation.nativeCompatibility[`${platform}Digest`], recorded.nativeCompatibility[`${platform}Digest`]);
     assert.equal(generation.channels[platform], recorded.channels[platform]);
   }
+});
+
+test("effective EAS inheritance enables diagnostics only for the exact reviewed iOS tester build", () => {
+  const eas = JSON.parse(fs.readFileSync(path.join(repo, "eas.json"), "utf8"));
+  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+  const { resolveDiagnosticsGate } = createRequire(import.meta.url)("../plugins/withChillyChatIosNativeCalls.js").__test;
+  const resolveEnv = (name, platform, parents = new Set()) => {
+    assert.ok(eas.build[name] && !parents.has(name), "profile inheritance must resolve without a cycle");
+    const profile = eas.build[name];
+    return { ...(profile.extends ? resolveEnv(profile.extends, platform, new Set([...parents, name])) : {}),
+      ...profile.env, ...profile[platform]?.env, EAS_BUILD_PROFILE: name };
+  };
+  const config = { extra: { runtime: { otaGeneration: {
+    internalOnly: generation.policy.internalOnly, channel: generation.channels.ios,
+  } } } };
+  for (const name of Object.keys(eas.build)) for (const platform of ["ios", "android"]) {
+    assert.equal(resolveDiagnosticsGate(config, resolveEnv(name, platform)), name === "ios-internal-v2", name);
+  }
+  assert.equal(eas.build["ios-internal-device-v3"].env.CHILLYWOOD_INTERNAL_CALL_DIAGNOSTICS, "false");
+  delete eas.build["ios-internal-device-v3"].env.CHILLYWOOD_INTERNAL_CALL_DIAGNOSTICS;
+  assert.throws(() => resolveDiagnosticsGate(config, resolveEnv("ios-internal-device-v3", "ios")),
+    /explicit ios-internal-v2/, "a new child profile may not inherit an unreviewed diagnostic build");
+  eas.build.production.env = { CHILLYWOOD_INTERNAL_CALL_DIAGNOSTICS: "true" };
+  assert.throws(() => resolveDiagnosticsGate(config, resolveEnv("production", "ios")), /explicit ios-internal-v2/);
 });
 
 test("internal tester store profiles bind current runtimes only to their private audiences", () => {
@@ -164,6 +309,41 @@ if (args[0] === 'expo' && args[1] === 'config') {
 }
 
 for (const platform of ["android", "ios"]) {
+  test(`${platform}: foreground presentation contract rejects the delivered v5 binary and runtime cohort`, (t) => {
+    const { root, publish } = fixture(t, recordedV5Source.sha);
+    const changedPaths = ["modules/chillywood-native-calls/index.d.ts",
+      ...(platform === "ios" ? ["modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift"] : [])];
+    for (const name of changedPaths) write(root, name, fs.readFileSync(path.join(repo, name)));
+    const changedSource = commit(root);
+    const oldBinary = publish(platform);
+    assert.notEqual(oldBinary.status, 0);
+    assert.match(oldBinary.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(oldBinary.calls, [], "v5 signed artifacts must stop before Expo or provider calls");
+    const rebuiltInOldRuntime = publish(platform, changedSource);
+    assert.notEqual(rebuiltInOldRuntime.status, 0);
+    assert.match(rebuiltInOldRuntime.stderr, /OTA_RUNTIME_NATIVE_COHORT_INCOMPATIBLE/u);
+    assert.deepEqual(rebuiltInOldRuntime.calls, [], "new native presentation cannot repurpose the delivered v5 cohort");
+  });
+
+  test(`${platform}: diagnostic candidate native inputs reject the recorded v4 binary and runtime cohort`, (t) => {
+    const { root, publish } = fixture(t, recordedV4Source.sha);
+    const changedPaths = platform === "ios" ? [
+      "plugins/withChillyChatIosNativeCalls.js",
+      "modules/chillywood-native-calls/ios/ChillywoodNativeCallDiagnostics.swift",
+      "modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift",
+    ] : ["eas.json"];
+    for (const name of changedPaths) write(root, name, fs.readFileSync(path.join(repo, name)));
+    const changedSource = commit(root);
+    const oldBinary = publish(platform);
+    assert.notEqual(oldBinary.status, 0);
+    assert.match(oldBinary.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(oldBinary.calls, [], "v4 signed artifacts must stop before Expo or provider calls");
+    const rebuiltInOldRuntime = publish(platform, changedSource);
+    assert.notEqual(rebuiltInOldRuntime.status, 0);
+    assert.match(rebuiltInOldRuntime.stderr, /OTA_RUNTIME_NATIVE_COHORT_INCOMPATIBLE/u);
+    assert.deepEqual(rebuiltInOldRuntime.calls, [], "new diagnostics cannot repurpose the immutable v4 cohort");
+  });
+
   test(`${platform}: current sender patch rejects the recorded v3 binary and runtime cohort`, (t) => {
     const { root, publish } = fixture(t, recordedV3Source.sha);
     for (const name of ["app.config.ts", "plugins/withWebRtcSenderAcknowledgment.js"]) {

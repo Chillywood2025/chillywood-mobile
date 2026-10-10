@@ -30,10 +30,13 @@ for (const platform of ["android", "ios"]) {
     assert.equal(transformSource(platform, patched), patched);
     assert.equal(transformSource(platform, patched, true), original);
     assert.equal(transformSource(platform, original, true), original);
-    const start = platform === "android" ? "    public void senderReplaceTrack(" : "RCT_EXPORT_METHOD(senderReplaceTrack";
-    const end = platform === "android" ? "    public void transceiverSetDirection(" : "RCT_EXPORT_METHOD(senderSetParameters";
-    assert.equal(patched.slice(0, patched.indexOf(start)), original.slice(0, original.indexOf(start)));
-    assert.equal(patched.slice(patched.indexOf(end)), original.slice(original.indexOf(end)));
+    // Every difference must be one of the reviewed exact bridge replacements,
+    // including Android's shared-track retirement before stream disposal.
+    const restored = definition.changes.reduce((source, [before, after]) => {
+      assert.equal(source.split(after).length, 2);
+      return source.replace(after, before);
+    }, patched);
+    assert.equal(restored, original);
   });
   test(`${platform} native sender patch rejects unknown and partially modified source`, () => {
     assert.throws(() => transformSource(platform, `${original}\n`), /unreviewed/u);

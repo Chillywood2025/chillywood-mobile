@@ -10,6 +10,18 @@ const normalizeRuntimeEnvironment = (value: unknown) => (
 const normalizeBoolean = (value: unknown) => ["1", "true", "yes", "on"].includes(
   normalizeText(value).toLowerCase(),
 );
+export const resolveInternalCallMediaDiagnosticsEnabled = ({
+  flag, buildProfile, platform, channel, internalOnly,
+}: {
+  flag?: unknown;
+  buildProfile?: unknown;
+  platform?: unknown;
+  channel?: unknown;
+  internalOnly?: unknown;
+}) => flag === "true" && internalOnly === true && (
+  (platform === "android" && buildProfile === "android-internal-v2" && channel === "android-internal-v2")
+  || (platform === "ios" && buildProfile === "ios-internal-v2" && channel === "ios-internal-v2")
+);
 const CONFIG_DIR = process.cwd();
 const DEPLOYED_LIVEKIT_SERVER_URL = "wss://live.chillywoodstream.com";
 const DEPLOYED_SUPABASE_FUNCTIONS_URL = "https://network-proof.chillywoodstream.com";
@@ -363,6 +375,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       "expo-asset",
       "@livekit/react-native-expo-plugin",
       "./plugins/withWebRtcSenderAcknowledgment",
+      "./plugins/withOwnedAndroidAudioSession",
       "./plugins/withLiveKitIosStaticFrameworkCompatibility",
       [
         "expo-notifications",
@@ -389,6 +402,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...existingExtra,
       runtime: {
         ...existingRuntime,
+        internalCallMediaDiagnosticsEnabled: resolveInternalCallMediaDiagnosticsEnabled({
+          flag: process.env.CHILLYWOOD_INTERNAL_CALL_MEDIA_DIAGNOSTICS,
+          buildProfile: process.env.EAS_BUILD_PROFILE,
+          platform: internalV2OtaPlatform,
+          channel: internalV2OtaPlatform === "ios" ? internalIosChannel : internalAndroidChannel,
+          internalOnly: internalV2OtaPlatform ? internalNativeGeneration.policy?.internalOnly : false,
+        }),
         ...(internalV2OtaPlatform ? { internalV2OtaPlatform } : {}),
         otaGeneration: internalV2OtaPlatform
           ? {

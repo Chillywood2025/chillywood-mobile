@@ -3421,17 +3421,18 @@ test("a newer user audio-route request wins after an older native request settle
   assert.equal(harness.getResult().speakerEnabled, false);
 });
 
-test("actual audio routing falls back only within the current request", async (t) => {
+test("Android routing does not turn a rejected speaker command into an unconfirmed fallback success", async (t) => {
   const runtime = createLiveKitMountedRuntime({ useActualAudioRouting: true });
   const harness = await mountLiveKitHook(runtime, defaultHookOptions());
   t.after(() => harness.unmount());
   runtime.queueNativeAudioSelection({ outcome: "reject" });
 
-  assert.equal(await runOperation(harness, () => harness.getResult().setSpeaker(true)), true);
+  assert.equal(await runOperation(harness, () => harness.getResult().setSpeaker(true)), false);
 
-  assert.deepEqual(runtime.nativeAudioOutputCommands.slice(-2), ["speaker", "force_speaker"]);
-  assert.equal(runtime.nativeAudioOutput, "force_speaker");
-  assert.equal(harness.getResult().speakerEnabled, true);
+  assert.equal(runtime.nativeAudioOutputCommands.at(-1), "speaker");
+  assert.equal(runtime.nativeAudioOutputCommands.includes("force_speaker"), false);
+  assert.equal(runtime.nativeAudioOutput, "earpiece");
+  assert.equal(harness.getResult().speakerEnabled, false);
 });
 
 test("cleanup does not claim completion when local capture and transport shutdown are unproved", async (t) => {
@@ -4090,7 +4091,7 @@ test("cleanup waiting on an old Room disconnect never stops replacement-call aud
   assert.equal(runtime.rooms.at(-1).state, "connected");
 });
 
-test("a timed-out old audio stop completion restores the current replacement session", async (t) => {
+test("a timed-out old Android audio stop blocks replacement acquisition until exact cleanup completes", async (t) => {
   const { harness, runtime } = await mountCase(t, { useActualAudioRouting: true });
   const delayedAudioStop = runtime.deferAudioStop();
   const cleanup = await harness.startOperation(() => (
@@ -4101,12 +4102,17 @@ test("a timed-out old audio stop completion restores the current replacement ses
   assert.match((await settleOperation(cleanup, harness)).message, /Unable to prove/u);
 
   runtime.roomId = "ROOM-2";
+  const startsBeforeReplacement = runtime.audioStartCalls;
+  assert.equal(startsBeforeReplacement, 1, "the old call acquired one native audio session");
   await harness.commitRender(replacementOptions());
-  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement call live");
-  assert.equal(runtime.nativeAudioSessionActive, true);
+  await waitFor(harness, () => runtime.rooms.length === 2, "replacement room prepared");
+  assert.notEqual(harness.getResult().channelState, "live");
+  assert.equal(runtime.audioStartCalls, startsBeforeReplacement, "unproved old cleanup cannot be bypassed by a new audio owner");
 
   await harness.resolveDeferred(delayedAudioStop);
-  await waitFor(harness, () => runtime.nativeAudioSessionActive, "replacement audio session restored");
+  await waitFor(harness, () => harness.getResult().channelState === "live", "replacement admitted after exact audio cleanup");
+  assert.equal(runtime.nativeAudioSessionActive, true);
+  assert.equal(runtime.audioStartCalls, startsBeforeReplacement + 1, "replacement starts only after old release");
   assert.equal(runtime.nativeAudioOutput, "earpiece");
   assert.equal(harness.getResult().channelState, "live");
 });

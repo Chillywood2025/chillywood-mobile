@@ -29,6 +29,12 @@ export function getUserFacingErrorMessage(error: unknown, fallback: string) {
   if (!message) return fallback;
   if (error instanceof UserFacingError) return rawMessage;
 
+  // The database abuse guard uses this exact machine-readable message.
+  // Do not expose it as a storage failure or suggest an immediate retry.
+  if (message === "rate_limited") {
+    return "Too many attempts. Wait a few minutes, then try again.";
+  }
+
   if (
     message.includes("invalid login credentials")
     || message.includes("invalid credentials")
