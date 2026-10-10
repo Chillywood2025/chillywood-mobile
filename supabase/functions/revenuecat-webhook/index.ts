@@ -34,6 +34,7 @@ const APP_STORE_PREMIUM_PRODUCT_IDS = new Set([
   "com.chillywood.premium.yearly",
 ]);
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+const CREATOR_MONEY_PUSH_TIMEOUT_MS = 5_000;
 const ANDROID_NOTIFICATION_CHANNEL_ID = "default";
 const UNRESOLVED_PROVIDER_PRODUCT_ID = "<missing-or-ambiguous>";
 const UNRESOLVED_PROVIDER_PRODUCT_REASON = "provider_product_identity_missing_or_ambiguous";
@@ -607,17 +608,18 @@ const readMoneyNotificationPreference = async (
   userId: string,
 ): Promise<NotificationPreference | null> => {
   if (!userId) return null;
-  const { data } = await adminClient
+  const { data, error } = await adminClient
     .from("notification_preferences")
     .select("user_id,in_app_enabled,push_enabled,creator_money_purchases_enabled,creator_money_sales_enabled")
     .eq("user_id", userId)
     .maybeSingle();
+  if (error) throw new Error("creator_money_notification_preferences_unavailable");
   return (data ?? null) as NotificationPreference | null;
 };
 
 const readPushTokens = async (adminClient: SupabaseClientLike, userId: string): Promise<PushToken[]> => {
   const readPlatformTokens = async (platform: PushToken["platform"]) => {
-    const { data } = await adminClient
+    const { data, error } = await adminClient
       .from("user_push_tokens")
       .select("id,platform,provider,token")
       .eq("user_id", userId)
@@ -627,6 +629,7 @@ const readPushTokens = async (adminClient: SupabaseClientLike, userId: string): 
       .is("revoked_at", null)
       .order("last_seen_at", { ascending: false })
       .limit(5);
+    if (error) throw new Error("creator_money_push_tokens_unavailable");
     return (data ?? []) as PushToken[];
   };
   const [androidTokens, iosTokens] = await Promise.all([
@@ -661,17 +664,48 @@ const insertMoneyNotificationDeliveryAttempt = async (
   });
 };
 
+const withCreatorMoneyPushDeadline = async <T>(operation: (signal: AbortSignal) => Promise<T>) => {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation(controller.signal),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error("creator_money_push_timeout"));
+          controller.abort();
+        }, CREATOR_MONEY_PUSH_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+};
+
 const sendCreatorMoneyExpoPush = async (message: Record<string, unknown>) => {
-  const response = await fetch(EXPO_PUSH_URL, {
-    body: JSON.stringify(message),
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    method: "POST",
-  });
-  const body = await response.json().catch(() => ({}));
-  return { body, ok: response.ok, status: response.status };
+  try {
+    return await withCreatorMoneyPushDeadline(async (signal) => {
+      const response = await fetch(EXPO_PUSH_URL, {
+        body: JSON.stringify(message),
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+        signal,
+      });
+      const body = await response.json();
+      return { body, ok: response.ok, status: response.status, transportError: null as string | null };
+    });
+  } catch (error) {
+    // A thrown/aborted request may already have reached Expo. Retain the dedupe
+    // reservation; a replay must not blindly resend an uncertain delivery.
+    return {
+      body: {}, ok: false, status: 0,
+      transportError: error instanceof Error && error.message === "creator_money_push_timeout"
+        ? "expo_transport_timeout_unknown" : "expo_transport_unavailable_unknown",
+    };
+  }
 };
 
 const notificationRoutePath = (deepLink: string) => deepLink.replace(/^chillywoodmobile:\/\//u, "/");
@@ -682,13 +716,14 @@ const isAudienceBlocked = async (
   buyerId: string,
 ) => {
   if (!creatorId || !buyerId) return false;
-  const { data } = await adminClient
+  const { data, error } = await adminClient
     .from("channel_audience_blocks")
     .select("blocked_user_id")
     .eq("channel_user_id", creatorId)
     .eq("blocked_user_id", buyerId)
     .limit(1)
     .maybeSingle();
+  if (error) throw new Error("creator_money_notification_block_check_unavailable");
   return !!data;
 };
 
@@ -993,6 +1028,7 @@ const dispatchCreatorMoneyPushIfEligible = async (
     plan: CreatorMoneyNotificationPlan;
     preference: NotificationPreference | null;
     target: CreatorMoneyNotificationTarget;
+    tokens: PushToken[];
   },
 ) => {
   const prefEnabled = input.plan.category === "creator_money_sale"
@@ -1010,8 +1046,7 @@ const dispatchCreatorMoneyPushIfEligible = async (
     return;
   }
 
-  await reconcileRecentExpoPushReceipts(adminClient, input.plan.recipientUserId);
-  const tokens = await readPushTokens(adminClient, input.plan.recipientUserId);
+  const tokens = input.tokens;
   if (!tokens.length) {
     await insertMoneyNotificationDeliveryAttempt(adminClient, {
       errorCode: "no_enabled_push_token",
@@ -1063,15 +1098,19 @@ const dispatchCreatorMoneyPushIfEligible = async (
     const body = safeObject(pushResult.body);
     const ticketRaw = Array.isArray(body.data) ? body.data[0] : body.data;
     const ticket = safeObject(ticketRaw);
-    const status = toText(ticket.status || (pushResult.ok ? "sent" : "failed"));
-    const sent = pushResult.ok && (status === "ok" || status === "sent");
-    const details = safeObject(ticket.details);
-    const errorCode = toText(details.error || ticket.message) || null;
+    const status = toText(ticket.status);
     const providerMessageId = toText(ticket.id) || null;
+    const sent = pushResult.ok && status === "ok" && !!providerMessageId;
+    const details = safeObject(ticket.details);
+    const unknownOutcome = pushResult.transportError
+      || (pushResult.ok && status !== "error" && !sent ? "expo_ticket_invalid_unknown" : null);
+    const errorCode = unknownOutcome || toText(details.error || ticket.message) || null;
     if (sent) sentCount += 1;
     await insertMoneyNotificationDeliveryAttempt(adminClient, {
       errorCode,
-      errorMessage: sent ? null : toText(ticket.message) || `Expo push returned ${pushResult.status}`,
+      errorMessage: sent ? null : unknownOutcome
+        ? "Expo delivery outcome is unknown; automatic resend is suppressed."
+        : toText(ticket.message) || `Expo push returned ${pushResult.status}`,
       notificationId: input.notificationId,
       provider: token.provider,
       providerMessageId,
@@ -1120,6 +1159,16 @@ const createCreatorMoneyNotification = async (
     ? preference?.creator_money_sales_enabled !== false
     : preference?.creator_money_purchases_enabled !== false;
   const inAppAllowed = preference?.in_app_enabled !== false && prefEnabled;
+  let tokens: PushToken[] = [];
+  if (preference?.push_enabled !== false && prefEnabled) {
+    // This reconciles only old receipts. If it cannot settle, no current-send
+    // reservation exists yet, so a same-event replay can safely try again.
+    await withCreatorMoneyPushDeadline(() => reconcileRecentExpoPushReceipts(adminClient, input.plan.recipientUserId));
+    // A failed lookup is not evidence that this recipient has no devices.
+    // Prepare every platform before reserving or sending this event so a
+    // proven-unsent database failure can retry without duplicate alerts.
+    tokens = await readPushTokens(adminClient, input.plan.recipientUserId);
+  }
   const timingKey = input.dedupeEventId || input.ledgerEventId;
   const dedupeKey = [
     "creator_money",
@@ -1138,7 +1187,10 @@ const createCreatorMoneyNotification = async (
     timing_key: timingKey,
     trigger_type: input.plan.notificationType,
   });
-  if (dedupeError) return;
+  if (dedupeError) {
+    if (dedupeError.code === "23505") return;
+    throw new Error("creator_money_notification_reservation_unavailable");
+  }
 
   let notificationId: string | null = null;
   if (inAppAllowed) {
@@ -1175,8 +1227,9 @@ const createCreatorMoneyNotification = async (
       .select("id")
       .maybeSingle();
     if (error || !data?.id) {
-      await adminClient.from("notification_event_dedupes").delete().eq("dedupe_key", dedupeKey);
-      return;
+      const { error: releaseError } = await adminClient.from("notification_event_dedupes").delete().eq("dedupe_key", dedupeKey);
+      if (releaseError) throw new Error("creator_money_notification_unsent_reservation_release_failed");
+      throw new Error("creator_money_notification_record_unavailable");
     }
     notificationId = data.id;
     await adminClient.from("notification_event_dedupes").update({ notification_id: notificationId }).eq("dedupe_key", dedupeKey);
@@ -1187,6 +1240,7 @@ const createCreatorMoneyNotification = async (
     plan: input.plan,
     preference,
     target: input.target,
+    tokens,
   });
 };
 
@@ -1221,8 +1275,9 @@ const createCreatorMoneyNotifications = async (
   if (!buyerTarget) return;
 
   const buyerPlan = buyerNotificationPlanForProduct(input.productType, input.buyerUserId);
+  const pendingNotifications: Promise<void>[] = [];
   if (buyerPlan) {
-    await createCreatorMoneyNotification(adminClient, {
+    pendingNotifications.push(createCreatorMoneyNotification(adminClient, {
       actorUserId: input.creatorId || input.buyerUserId,
       dedupeEventId: input.providerEventId,
       ledgerEventId: input.ledgerEventId,
@@ -1231,14 +1286,14 @@ const createCreatorMoneyNotifications = async (
       sourceId: input.sourceId,
       sourceType: input.sourceType,
       target: buyerTarget,
-    });
+    }));
   }
 
   const creatorPlan = input.creatorId === input.buyerUserId
     ? null
     : creatorNotificationPlanForProduct(input.productType, input.creatorId);
   if (creatorPlan) {
-    await createCreatorMoneyNotification(adminClient, {
+    pendingNotifications.push(createCreatorMoneyNotification(adminClient, {
       actorUserId: input.buyerUserId,
       dedupeEventId: input.providerEventId,
       ledgerEventId: input.ledgerEventId,
@@ -1251,8 +1306,11 @@ const createCreatorMoneyNotifications = async (
         entityId: input.creatorId || input.buyerUserId,
         route: "/channel-studio",
       },
-    });
+    }));
   }
+  const results = await Promise.allSettled(pendingNotifications);
+  const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+  if (failed) throw failed.reason;
 };
 
 const createLiveWatchPartyTerminalNotifications = async (
@@ -1350,11 +1408,12 @@ const writeIosConsumableFromRevenueCatEvent = async (
   const resultStatus = toText(result.status) === "processed" ? "processed" : "ignored";
 
   if (resultStatus === "processed" && purchaseIntentId && ledgerEventId && providerEventId) {
-    const { data: intent } = await adminClient
+    const { data: intent, error: intentError } = await adminClient
       .from("money_purchase_intents")
       .select("creator_id,metadata,source_id,source_type")
       .eq("id", purchaseIntentId)
       .maybeSingle();
+    if (intentError) throw new Error(`App Store creator-money notification intent lookup failed: ${intentError.message}`);
     await createCreatorMoneyNotifications(adminClient, {
       buyerUserId: userId,
       creatorId: toText(intent?.creator_id) || null,
@@ -1430,10 +1489,11 @@ const writeLiveWatchPartyMoneyFromRevenueCatEvent = async (
   const providerEventId = toText(result.providerEventId) || null;
   const status = toText(result.status) === "processed" ? "processed" : "ignored";
   if (status === "processed" && purchaseIntentId && ledgerEventId && providerEventId) {
-    const { data: intent } = await adminClient.from("money_purchase_intents")
+    const { data: intent, error: intentError } = await adminClient.from("money_purchase_intents")
       .select("creator_id,metadata,source_id,source_type")
       .eq("id", purchaseIntentId)
       .maybeSingle();
+    if (intentError) throw new Error(`Live Watch-Party creator-money notification intent lookup failed: ${intentError.message}`);
     await createCreatorMoneyNotifications(adminClient, {
       buyerUserId: userId,
       creatorId: toText(intent?.creator_id) || null,
