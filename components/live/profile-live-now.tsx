@@ -21,7 +21,7 @@ export function ProfileLiveNow({ live, displayedEventIds }: {
       {live.status === "error" ? (
         <View>
           <Text style={styles.body}>Live sessions could not be checked.</Text>
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry profile live sessions" onPress={() => { void live.reload(); }}>
+          <TouchableOpacity style={styles.retry} accessibilityRole="button" accessibilityLabel="Retry profile live sessions" onPress={() => { void live.reload(); }}>
             <Text style={styles.title}>Try again</Text>
           </TouchableOpacity>
         </View>
@@ -44,6 +44,7 @@ export function ProfileLiveNow({ live, displayedEventIds }: {
 
 const styles = StyleSheet.create({
   list: { gap: 12 },
+  retry: { minHeight: 44, justifyContent: "center", paddingVertical: 10 },
   card: { borderRadius: 18, borderWidth: 1, borderColor: "rgba(126,215,255,0.18)", backgroundColor: "rgba(14,20,30,0.96)", padding: 17, gap: 9 },
   kicker: { color: "#7ED7FF", fontSize: 11, fontWeight: "900" },
   title: { color: "#F8FAFF", fontSize: 18, lineHeight: 24, fontWeight: "900" },
