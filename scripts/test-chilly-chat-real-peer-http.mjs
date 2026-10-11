@@ -163,7 +163,7 @@ async function main() {
     assert.equal(started.invite.call_type, "video");
     assert.equal(started.invite.status, "ringing");
     assert.equal(started.invite.chat_call_media_provider, "legacy_webrtc", "actual immutable invite provider must select legacy hooks; the fixture never overrides provider authority");
-    assert.equal(Date.parse(started.invite.expires_at) - Date.parse(started.invite.created_at), 90_000, "actual call begin declares the current server ringing deadline");
+    assert.equal(Date.parse(started.invite.expires_at) - Date.parse(started.invite.created_at), 45_000, "actual call begin declares the current server ringing deadline");
     requireData(await admin.rpc("transition_chilly_chat_call_invite", {
       p_invite_id: started.invite.id, p_actor_user_id: users[1], p_target_status: "accepted", p_duration_seconds: null,
     }), "canonical server Answer setup transaction");
