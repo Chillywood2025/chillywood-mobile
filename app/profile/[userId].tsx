@@ -35,6 +35,8 @@ import {
   type ChannelViewerFollowState,
 } from "../../_lib/channelAudience";
 import { useLiveDiscoveryFeed } from "../../_lib/useLiveDiscoveryFeed";
+import { useProfileLiveState } from "../../_lib/useProfileLiveState";
+import { ProfileLiveNow } from "../../components/live/profile-live-now";
 import type { DiscoveryFeedItem } from "../../_lib/discoveryFeed";
 import {
   type CreatorEventSummary,
@@ -611,6 +613,8 @@ export default function ProfileScreen() {
   const taglineParam = String(Array.isArray(params.tagline) ? params.tagline[0] : params.tagline ?? "").trim();
   const roleParam = String(Array.isArray(params.role) ? params.role[0] : params.role ?? "").trim();
   const isLiveParam = String(Array.isArray(params.isLive) ? params.isLive[0] : params.isLive ?? "").trim().toLowerCase();
+  // Legacy linked-room routing hint only; public live status comes from current discovery.
+  const linkedLiveRoute = isLiveParam === "1" || isLiveParam === "true" || isLiveParam === "yes" || isLiveParam === "live";
   const selfParam = String(Array.isArray(params.self) ? params.self[0] : params.self ?? "").trim().toLowerCase();
   const partyIdParam = String(Array.isArray(params.partyId) ? params.partyId[0] : params.partyId ?? "").trim();
   const modeParam = String(Array.isArray(params.mode) ? params.mode[0] : params.mode ?? "").trim();
@@ -624,7 +628,6 @@ export default function ProfileScreen() {
     avatarUrl: hasBackedProfileIdentity ? undefined : avatarUrlParam,
     tagline: hasBackedProfileIdentity ? undefined : taglineParam,
     role: hasBackedProfileIdentity ? undefined : roleParam,
-    isLive: isLiveParam === "1" || isLiveParam === "true" || isLiveParam === "yes" || isLiveParam === "live",
     fallbackDisplayName: "Profile",
   });
   const branding = resolveBrandingConfig(appConfig);
@@ -721,6 +724,7 @@ export default function ProfileScreen() {
     limit: 50,
     enabled: !!userId && profilePrivacyReady && canViewFullProfile && !isOfficialProfile,
   });
+  const profileLive = useProfileLiveState(userId, !!userId && profilePrivacyReady && canViewFullProfile && !isOfficialProfile);
   const shouldShowLockedShell = profilePrivacyReady
     && !!profilePrivacyAccess?.isLocked
     && !isOfficialProfile
@@ -1401,15 +1405,15 @@ export default function ProfileScreen() {
     if (normalizedHandle) return `@${normalizedHandle}`;
     return isSelfProfile ? "@you" : "@profile";
   }, [isSelfProfile, profile.displayName, profile.handle]);
-  const liveActionLabel = profile.isLive ? "Join Live" : "View Live";
+  const liveActionLabel = partyIdParam ? "Open Room" : profileLive.isLive ? "Join Live" : "View Live";
   const hasLiveRouteContext = !!partyIdParam;
   const canReportProfile = !isSelfProfile && !!userId;
-  const hasLiveTabEntry = !hasLiveRouteContext && (!!liveNowEvent || !!nextUpcomingEvent || profile.isLive);
+  const hasLiveTabEntry = !hasLiveRouteContext && (!!liveNowEvent || !!nextUpcomingEvent || profileLive.isLive);
   const scheduledWatchPartyTitleId = String(scheduledWatchPartyEvent?.linkedTitleId ?? "").trim();
   const canOpenWatchPartyEntry = hasLiveRouteContext || !!scheduledWatchPartyTitleId;
   const liveActionTitle = hasLiveRouteContext ? liveActionLabel : "Live Events";
   const officialGuidanceTopics = officialAccount?.guidanceTopics ?? [];
-  const liveStateLabel = profile.isLive ? "LIVE NOW" : "OFF AIR";
+  const liveStateLabel = profileLive.label;
   const routeContextLabel = isOfficialProfile ? "OFFICIAL PROFILE" : hasLiveRouteContext ? "ROOM LINKED" : "PROFILE";
   const channelHomeBody = isOfficialProfile
     ? officialAccount?.trustSummary
@@ -1419,13 +1423,13 @@ export default function ProfileScreen() {
       : "Read public updates, connect through Chi'lly Chat, and visit the Platform for creator videos.";
   const liveStatusTitle = isOfficialProfile
     ? "Official updates"
-    : profile.isLive
+    : profileLive.isLive
       ? "Platform is live now"
-      : "Platform is off air";
+      : profileLive.status === "offline" ? "Platform is off air" : "Checking live sessions";
   const liveStatusBody = isOfficialProfile
     ? "Rachi shares official updates and tips here. Rachi does not read your private chats."
     : hasLiveRouteContext
-      ? profile.isLive
+      ? profileLive.isLive
         ? "Live and watch-party entry both hand back into the linked room."
         : "Room context is attached, so live and watch-party entry stay pointed at the linked room."
       : hasLiveTabEntry
@@ -1450,7 +1454,7 @@ export default function ProfileScreen() {
   };
   const onPressLive = () => {
     if (hasLiveRouteContext) {
-      if (profile.isLive) {
+      if (linkedLiveRoute) {
         router.push({
           pathname: "/watch-party/live-stage/[partyId]",
           params: {
@@ -2715,7 +2719,7 @@ export default function ProfileScreen() {
       title: liveStatusTitle,
       kicker: "LIVE",
       body: liveStatusBody,
-      accent: profile.isLive ? "live" : "default",
+      accent: profileLive.isLive ? "live" : "default",
     },
     content: {
       title: isSelfProfile ? "Your Platform" : "Platform",
@@ -2767,10 +2771,6 @@ export default function ProfileScreen() {
           body: contentCreatorEventsBody,
         },
       ];
-  const liveNowEvents = useMemo(
-    () => publicEvents.filter((event) => event.isLiveNow),
-    [publicEvents],
-  );
   const upcomingEvents = useMemo(
     () => publicEvents.filter((event) => event.isUpcoming),
     [publicEvents],
@@ -2793,12 +2793,14 @@ export default function ProfileScreen() {
   );
   const liveTabSections: readonly ProfileSurfaceCard[] = [
     {
-      title: liveNowEvent ? "Live Now" : "Live",
+      title: profileLive.isLive ? "Live Now" : "Live",
       kicker: "LIVE",
-      body: liveNowEvent
-        ? `${liveNowEvent.eventTitle} is live now. Tap the live entry to watch.`
-        : "Nothing is live right now.",
-      accent: liveNowEvent ? "live" : "default",
+      body: profileLive.isLive
+        ? `${profileLive.items[0].title || "A live session"} is live now. Open a live session below.`
+        : profileLive.status === "offline" ? "No public live session right now."
+          : profileLive.status === "error" ? "Live sessions could not be checked. Try again below."
+            : "Checking current live sessions.",
+      accent: profileLive.isLive ? "live" : "default",
     },
     {
       title: "Upcoming",
@@ -3013,11 +3015,12 @@ export default function ProfileScreen() {
   const publicEventSummaryCards: readonly OwnerStatCard[] = [
     {
       label: "Live Now",
-      value: String(liveNowEvents.length),
-      body: liveNowEvents.length
-        ? liveNowEvents.map((event) => event.eventTitle).slice(0, 2).join(" · ")
-        : "no public creator event is live now",
-      tone: liveNowEvents.length ? "live" : "default",
+      value: profileLive.ready ? String(profileLive.items.length) : "…",
+      body: profileLive.isLive
+        ? profileLive.items.map((item) => item.title).slice(0, 2).join(" · ")
+        : profileLive.status === "offline" ? "no public live session right now"
+          : profileLive.status === "error" ? "live status unavailable" : "checking live sessions",
+      tone: profileLive.isLive ? "live" : "default",
     },
     {
       label: "Upcoming",
@@ -4012,8 +4015,8 @@ export default function ProfileScreen() {
                     </View>
                   ) : null}
                   {!isOfficialProfile ? (
-                    <View style={[styles.heroBadge, profile.isLive ? styles.heroBadgeLive : styles.heroBadgeDefault]}>
-                      <Text style={[styles.heroBadgeText, profile.isLive && styles.heroBadgeTextLive]}>{liveStateLabel}</Text>
+                    <View style={[styles.heroBadge, profileLive.isLive ? styles.heroBadgeLive : styles.heroBadgeDefault]}>
+                      <Text style={[styles.heroBadgeText, profileLive.isLive && styles.heroBadgeTextLive]}>{liveStateLabel}</Text>
                     </View>
                   ) : null}
                 </View>
@@ -4045,7 +4048,7 @@ export default function ProfileScreen() {
                     <AppText scale="title1" style={styles.avatarInitial}>{profile.displayName.slice(0, 1).toUpperCase()}</AppText>
                   )}
                 </View>
-                {!shouldShowLockedShell && profile.isLive ? <View style={styles.avatarLiveDot} /> : null}
+                {!shouldShowLockedShell && profileLive.isLive ? <View style={styles.avatarLiveDot} /> : null}
               </View>
             </Pressable>
             <View style={styles.profileIdentityCopy}>
@@ -4228,7 +4231,7 @@ export default function ProfileScreen() {
                     <TouchableOpacity
                       style={[
                         styles.actionChip,
-                        hasLiveRouteContext && profile.isLive ? styles.actionChipReport : styles.actionChipConnected,
+                        hasLiveRouteContext && profileLive.isLive ? styles.actionChipReport : styles.actionChipConnected,
                       ]}
                       activeOpacity={0.86}
                       onPress={onPressLive}
@@ -4236,7 +4239,7 @@ export default function ProfileScreen() {
                       <Text
                         style={[
                           styles.actionChipText,
-                          hasLiveRouteContext && profile.isLive ? styles.actionChipTextReport : styles.actionChipTextConnected,
+                          hasLiveRouteContext && profileLive.isLive ? styles.actionChipTextReport : styles.actionChipTextConnected,
                         ]}
                       >
                         {liveActionTitle}
@@ -4454,6 +4457,7 @@ export default function ProfileScreen() {
           ) : null}
           {activeTab === "live" ? (
             <>
+              <ProfileLiveNow live={profileLive} displayedEventIds={currentPublicEvents.map((event) => event.id)} />
               <View style={styles.ownerStatsRow}>
                 {publicEventSummaryCards.map((card) => (
                   <View
