@@ -36,7 +36,7 @@ const code = ts.transpileModule(source, {
   }, context)] },
 }).outputText;
 const owner = (id = 'host', generation = 'session-a') => ({ userId: id, accountId: id, sessionGeneration: generation, state: 'ACTIVE', restoreOnly: false });
-const room = (id = 'ROOM01') => ({ partyId: id, roomCode: id, hostUserId: 'host', roomType: 'live', status: 'active', joinPolicy: 'open', contentAccessRule: 'open', discoveryVisibility: 'private', discoveryTitle: null, titleId: null, sourceType: null, sourceId: null });
+const room = (id = 'ROOM01') => ({ partyId: id, roomCode: id, hostUserId: 'host', roomType: 'live', isActive: true, status: 'active', joinPolicy: 'open', contentAccessRule: 'open', discoveryVisibility: 'private', discoveryTitle: null, titleId: null, sourceType: null, sourceId: null });
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 const sheetSource = fs.readFileSync(new URL('../components/monetization/access-sheet.tsx', import.meta.url), 'utf8');
 const sheetAst = ts.createSourceFile('access-sheet.tsx', sheetSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -62,13 +62,33 @@ const walk = (tree, predicate) => {
 };
 const settle = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
 
-async function mount(t) {
+async function mount(t, { normal = false, prepared = true, viewer = false, roomReader = null } = {}) {
   let tree;
   const runtime = { authority: owner(), focused: true, room: room(), params: { mode: 'live', partyId: 'ROOM01' }, premiumAllowed: true,
     reads: [], writes: [], premium: [], navigations: [], alerts: [], policy: null, gate: null, userReader: null };
+  if (normal) {
+    runtime.room = { ...room(), roomType: 'title', titleId: 'title-a', sourceType: 'platform_title', sourceId: 'title-a' };
+    runtime.params = { source: 'player', titleId: 'title-a', sourceType: 'platform_title', sourceId: 'title-a', ...(prepared ? { partyId: 'ROOM01' } : {}) };
+  }
+  runtime.created = 0;
+  if (viewer) {
+    runtime.authority = owner('viewer');
+    runtime.params = { partyId: 'ROOM01', source: 'discovery', discoveryItemId: 'projection-a', discoveryLane: 'public' };
+  }
+  runtime.listed = true; runtime.accessAllowed = true;
   const appListeners = new Set();
   const AppState = { currentState: 'active', addEventListener: (_, listener) => { appListeners.add(listener); return { remove: () => appListeners.delete(listener) }; } };
   const gate = async options => { runtime.premium.push(options); return runtime.gate ? runtime.gate(options) : { allowed: runtime.premiumAllowed, reason: runtime.premiumAllowed ? 'allowed' : 'premium_required' }; };
+  const save = async (id, changes) => { runtime.writes.push({ id, changes }); return runtime.policy ? runtime.policy(id, changes) : (runtime.room = { ...runtime.room, ...changes, discoveryTitle: changes.discoveryTitle?.trim() || null }); };
+  const intent = { exports: {}, Date, require(name) {
+    if (name === 'react-native') return { AppState };
+    if (name === './accountSessionAuthority') return { getCurrentAccountSessionAuthoritySnapshot: () => runtime.authority,
+      sameAccountSessionAuthority: (a, b) => !!a && !!b && a.userId === b.userId && a.accountId === b.accountId && a.sessionGeneration === b.sessionGeneration };
+    throw Error(`unmodeled intent dependency ${name}`);
+  } };
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('_lib/partyRoomStartIntent.ts', 'utf8'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+  }).outputText, intent);
   const mocks = {
     'react': React,
     'expo-router': { useRouter: () => ({ push: value => runtime.navigations.push(value), replace: noop, back: noop, canGoBack: () => true }), useLocalSearchParams: () => runtime.params,
@@ -78,17 +98,22 @@ async function mount(t) {
     '../../_lib/betaProgram': { useBetaProgram: () => ({ accessState: { status: 'active' }, isLoading: false, isActive: true }), getBetaAccessBlockCopy: () => ({ title: '', body: '' }) },
     '../../_lib/appConfig': { DEFAULT_APP_CONFIG: {}, readAppConfig: async () => ({}), resolveBrandingConfig: () => ({ appDisplayName: "Chi'llywood" }), resolveFeatureConfig: () => ({ watchPartyEnabled: true }), resolveMonetizationConfig: () => ({}) },
     '../../_lib/premiumWatchPartyAccess': { requireLiveFirstPremium: gate, requireWatchPartyLivePremium: gate, isRuntimeControlBlockedAccess: a => a?.reason === 'runtime_control_blocked', getRuntimeControlBlockedCopy: () => ({ message: 'Live is temporarily unavailable.' }), LIVE_FIRST_PREMIUM_UPSELL_COPY: { title: 'Premium required', message: 'Premium required' }, WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY: { title: 'Premium required', message: 'Premium required' } },
-    '../../_lib/watchParty': { getPartyRoom: async id => { runtime.reads.push(id); return { ...runtime.room }; }, getSafePartyUserId: async () => runtime.userReader ? runtime.userReader() : runtime.authority.userId,
-      setPartyRoomPolicies: async (id, changes) => { runtime.writes.push({ id, changes }); return runtime.policy ? runtime.policy(id, changes) : (runtime.room = { ...runtime.room, ...changes, discoveryTitle: changes.discoveryTitle?.trim() || null }); },
-      createPartyRoom: async () => { throw new Error('prepared-room tests must not create another room'); }, touchOwnedPartyRoomActivity: noop },
+    '../../_lib/watchParty': { getPartyRoom: async id => { runtime.reads.push(id); return roomReader ? roomReader(runtime) : { ...runtime.room }; }, getSafePartyUserId: async () => runtime.userReader ? runtime.userReader() : runtime.authority.userId,
+      setPartyRoomPolicies: save, setPartyRoomDiscoverySettings: save, paidWatchPartyResolutionIsExactFreeRoom: value => value?.reason === 'free_room',
+      createPartyRoom: async () => { assert.ok(!prepared, 'prepared-room tests must not create another room'); runtime.created += 1; return { ...runtime.room }; }, touchOwnedPartyRoomActivity: noop },
+    '../../_lib/partyRoomStartIntent': intent.exports,
+    '../../_lib/accountSessionAuthority': { getCurrentAccountSessionAuthoritySnapshot: () => runtime.authority,
+      sameAccountSessionAuthority: (a, b) => !!a && !!b && a.userId === b.userId && a.accountId === b.accountId && a.sessionGeneration === b.sessionGeneration },
+    '../../_lib/partyRoomDiscoveryDestination': { readCurrentPartyRoomDiscoveryDestination: async () => runtime.listed
+      ? { partyId: runtime.room.partyId, hostUserId: runtime.room.hostUserId, sourceType: runtime.room.sourceType, sourceId: runtime.room.sourceId } : null },
     '../../_lib/watchPartyContentSources': { resolveWatchPartyContentDisplay: async () => ({ displayName: null }), resolveWatchPartyContentDisplayByParts: async () => ({ displayName: null }), resolveWatchPartySourceId: () => null, resolveWatchPartySourceType: () => null, rememberWatchPartyContentDisplayHandoff: noop },
-    '../../_lib/paidWatchPartyTickets': { listMyPaidWatchPartyOffers: async () => [], formatPaidWatchPartyTicketPrice: () => '' },
+    '../../_lib/paidWatchPartyTickets': { listMyPaidWatchPartyOffers: async () => [], formatPaidWatchPartyTicketPrice: () => '', resolvePaidWatchPartyTicketAccess: async () => ({ allowed: true, reason: 'free_room', offer: null }) },
     '../../_lib/monetization': { getMonetizationAccessSheetPresentation: () => ({}) },
     '../../_lib/actionSingleFlight.mjs': { createActionSingleFlightLatch },
     '../../_lib/watchPartyPreparedRoomReuse.mjs': { resolvePreparedWatchPartyRoomReuse },
     '../../_lib/watchPartyReturnNavigation.mjs': { WATCH_PARTY_WAITING_ROOM_ENTRY_SOURCE: 'waiting-room' },
     '../../_lib/creatorMoneyPurchaseAuthority': { isCreatorDigitalCheckoutShellAvailable: () => false },
-    '../../_lib/accessEntitlements': { resolveRoomAccess: async () => ({ allowed: true }) },
+    '../../_lib/accessEntitlements': { resolveRoomAccess: async () => ({ isAllowed: runtime.accessAllowed }) },
     '../../_lib/analytics': { trackEvent: noop }, '../../_lib/logger': { debugLog: noop, reportRuntimeError: noop },
     '../../_lib/performancePolicy': { ROOM_HEARTBEAT_MS: 15000 }, '../../_data/titles': { titles: [] },
     '../../_lib/creatorMonetizationSetup': {}, '../../_lib/watch-party/room-shared': { PLAYER_WATCH_PARTY_SOURCE: 'player' },
@@ -105,8 +130,8 @@ async function mount(t) {
   const find = (predicate) => { const values = walk(tree, predicate); assert.equal(values.length, 1, 'one actual rendered control'); return values[0].props; };
   return { runtime, find, tree: () => tree,
     text: () => walk(tree, n => n.type === 'AppText').map(n => n.props.children).filter(x => typeof x === 'string').join('\n'),
-    audience: value => find(n => n.props?.accessibilityLabel === `Set Live discovery to ${value}`),
-    title: () => find(n => n.props?.accessibilityLabel === 'Live discovery title'),
+    audience: value => find(n => n.props?.accessibilityLabel === `Set ${normal ? 'Party audience' : 'Live discovery'} to ${value}`),
+    title: () => find(n => n.props?.accessibilityLabel === (normal ? 'Party discovery title' : 'Live discovery title')),
     continue: () => find(n => n.props?.testID === 'watch-party-create-room'),
     sheet: () => find(n => n.type === 'AccessSheet' && n.props.visible),
     entered: () => walk(tree, n => n.type === 'LiveStage').length,
@@ -126,6 +151,109 @@ test('a rejected audience save is visibly unsaved and retry preserves the reques
   const retry = h.find(n => n.props?.accessibilityLabel === 'Retry saving Live discovery');
   h.runtime.policy = null; await h.act(() => retry.onPress());
   assert.equal(h.runtime.room.discoveryVisibility, 'public');
+});
+
+test('normal Party defaults private and audience saves do not navigate or start publication', async t => {
+  const h = await mount(t, { normal: true });
+  assert.equal(h.audience('private').accessibilityState.selected, true);
+  await h.act(() => h.audience('public').onPress());
+  assert.equal(h.runtime.room.discoveryVisibility, 'public');
+  assert.match(h.text(), /Party audience saved/); assert.equal(h.runtime.navigations.length, 0);
+});
+
+test('discovery opens actual viewer preview and Join Now preserves ordinary admission without Start intent', async t => {
+  const h = await mount(t, { normal: true, viewer: true });
+  const join = h.find(n => n.props?.testID === 'watch-party-preview-join');
+  await h.act(() => join.onPress());
+  assert.equal(h.runtime.navigations.length, 1); assert.equal(h.runtime.writes.length, 0);
+  assert.equal(h.runtime.navigations[0].params.startIntent, undefined);
+  assert.ok(h.runtime.premium.length > 0);
+});
+
+test('replacing a discovery route reloads the actual waiting preview before joining', async t => {
+  const h = await mount(t, { normal: true, viewer: true });
+  h.runtime.room = { ...h.runtime.room, partyId: 'ROOM02', roomCode: 'ROOM02' };
+  h.runtime.params = { ...h.runtime.params, partyId: 'ROOM02', discoveryItemId: 'projection-b' };
+  await h.render();
+  await h.act(() => h.find(n => n.props?.testID === 'watch-party-preview-join').onPress());
+  assert.equal(h.runtime.navigations.length, 1); assert.equal(h.runtime.navigations[0].params.partyId, 'ROOM02');
+  assert.equal(h.runtime.navigations[0].params.startIntent, undefined);
+});
+
+test('account replacement reloads discovery as viewer and retires old host audience controls', async t => {
+  const h = await mount(t, { normal: true });
+  h.runtime.params = { partyId: 'ROOM01', source: 'discovery', discoveryItemId: 'projection-a', discoveryLane: 'public' };
+  await h.account('viewer');
+  assert.equal(walk(h.tree(), n => n.props?.accessibilityLabel === 'Set Party audience to public').length, 0);
+  assert.ok(h.find(n => n.props?.testID === 'watch-party-preview-join'));
+  assert.equal(h.runtime.writes.length, 0);
+});
+
+for (const transition of ['foreground', 'focus', 'same-authority']) test(`held initial discovery load recovers after ${transition} without accepting its old completion`, async t => {
+  const oldRead = deferred(); let hold = true;
+  const h = await mount(t, { normal: true, viewer: true, roomReader: runtime => hold ? oldRead.promise : { ...runtime.room } });
+  assert.equal(walk(h.tree(), n => n.props?.testID === 'watch-party-preview-join').length, 0);
+  if (transition === 'foreground') await h.state('background');
+  if (transition === 'focus') await h.focus(false);
+  hold = false;
+  if (transition === 'foreground') await h.state('active');
+  else if (transition === 'focus') await h.focus(true);
+  else { h.runtime.authority = { ...h.runtime.authority }; await h.render(); }
+  assert.ok(h.find(n => n.props?.testID === 'watch-party-preview-join'));
+  await h.act(() => oldRead.resolve({ ...h.runtime.room, partyId: 'OBSOLETE', roomCode: 'OBSOLETE' }));
+  await h.act(() => h.find(n => n.props?.testID === 'watch-party-preview-join').onPress());
+  assert.equal(h.runtime.navigations.length, 1); assert.equal(h.runtime.navigations[0].params.partyId, 'ROOM01');
+});
+
+for (const failure of ['ended', 'missing', 'error']) test(`initial discovery ${failure} is visibly unavailable without a stale Join action`, async t => {
+  const h = await mount(t, { normal: true, viewer: true, roomReader: runtime => {
+    if (failure === 'error') throw Error('read unavailable');
+    return failure === 'missing' ? null : { ...runtime.room, isActive: false };
+  } });
+  assert.match(h.text(), /no longer available|Unable to load this Party/);
+  assert.equal(walk(h.tree(), n => n.props?.testID === 'watch-party-preview-join').length, 0);
+  assert.equal(h.runtime.navigations.length, 0); assert.equal(h.runtime.writes.length, 0);
+});
+
+for (const blocked of ['listing', 'premium', 'access']) test(`discovery preview Join cannot bypass current ${blocked} denial`, async t => {
+  const h = await mount(t, { normal: true, viewer: true });
+  if (blocked === 'listing') h.runtime.listed = false;
+  if (blocked === 'premium') h.runtime.premiumAllowed = false;
+  if (blocked === 'access') h.runtime.accessAllowed = false;
+  await h.act(() => h.find(n => n.props?.testID === 'watch-party-preview-join').onPress());
+  assert.equal(h.runtime.navigations.length, 0); assert.equal(h.runtime.writes.length, 0);
+});
+
+test('normal explicit Start carries one process-owned intent through the existing Party Room route', async t => {
+  const h = await mount(t, { normal: true });
+  await h.act(() => h.audience("Chi'lly Circle").onPress());
+  const start = h.continue().onPress;
+  await h.act(() => { void start(); void start(); });
+  assert.equal(h.runtime.navigations.length, 1);
+  const route = h.runtime.navigations[0];
+  assert.equal(route.pathname, '/watch-party/[partyId]');
+  assert.match(route.params.startIntent, /^party-start-/);
+  assert.equal(route.params.sourceType, 'platform_title'); assert.equal(route.params.sourceId, 'title-a');
+  assert.equal(h.runtime.created, 0);
+});
+
+test('new normal Party retains its created room and requested audience when saving fails', async t => {
+  const h = await mount(t, { normal: true, prepared: false });
+  await h.act(() => h.audience('public').onPress()); h.runtime.policy = async () => null;
+  await h.act(() => h.continue().onPress());
+  assert.equal(h.runtime.created, 1); assert.equal(h.runtime.navigations.length, 0);
+  assert.equal(h.audience('public').accessibilityState.selected, true); assert.match(h.text(), /not saved/);
+  h.runtime.policy = null;
+  await h.act(() => h.continue().onPress());
+  assert.equal(h.runtime.created, 1); assert.equal(h.runtime.navigations.length, 1);
+});
+
+for (const transition of ['account', 'generation', 'focus', 'state']) test(`normal Party audience save cannot finish after ${transition} retirement`, async t => {
+  const h = await mount(t, { normal: true }), d = deferred(); h.runtime.policy = () => d.promise;
+  await h.act(() => h.audience('public').onPress());
+  await h[transition](transition === 'focus' ? false : transition === 'state' ? 'background' : 'replacement');
+  await h.act(() => d.resolve({ ...h.runtime.room, discoveryVisibility: 'public' }));
+  assert.doesNotMatch(h.text(), /Party audience saved/); assert.equal(h.runtime.navigations.length, 0);
 });
 
 test('a rejected title save reports failure without discarding the typed title', async t => {
@@ -166,7 +294,9 @@ for (const transition of ['account', 'generation', 'replaceRoom', 'focus', 'stat
     await h.act(() => h.audience('public').onPress());
     await h[transition](transition === 'focus' ? false : transition === 'state' ? 'background' : 'replacement');
     await h.act(() => d.resolve({ ...room(), discoveryVisibility: 'public', discoveryTitle: 'obsolete' }));
-    assert.doesNotMatch(h.text(), /Live discovery saved/); assert.notEqual(h.title().value, 'obsolete');
+    assert.doesNotMatch(h.text(), /Live discovery saved/);
+    assert.equal(walk(h.tree(), n => n.props?.accessibilityLabel === 'Live discovery title' && n.props.value === 'obsolete').length, 0);
+    if (transition === 'account') assert.equal(walk(h.tree(), n => n.props?.accessibilityLabel === 'Live discovery title').length, 0);
   });
 }
 

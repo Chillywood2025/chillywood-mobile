@@ -2,6 +2,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { usePartyRoomDiscoveryPublication } from "../../_lib/usePartyRoomDiscoveryPublication";
 import { useIsFocused } from "@react-navigation/native";
 
 
@@ -335,6 +336,7 @@ export default function WatchPartyRoomScreen() {
     mode: modeParam,
     source: sourceParam,
     entrySource: entrySourceParam,
+    startIntent: startIntentParam,
   } = useLocalSearchParams<{
     partyId?: string;
     titleId?: string;
@@ -342,6 +344,7 @@ export default function WatchPartyRoomScreen() {
     mode?: string;
     source?: string;
     entrySource?: string;
+    startIntent?: string;
   }>();
   const router = useRouter();
 
@@ -354,6 +357,7 @@ export default function WatchPartyRoomScreen() {
     Array.isArray(entrySourceParam) ? entrySourceParam[0] : entrySourceParam ?? "",
   ).trim().toLowerCase();
   const sharedRoomMode = normalizeSharedRoomMode(roomModeParam, "live");
+  const startIntent = String(Array.isArray(startIntentParam) ? startIntentParam[0] : startIntentParam ?? "");
   const returnToWatchPartyEntry = useCallback(() => {
     const returnAction = resolveWatchPartyReturnNavigation({
       canGoBack: router.canGoBack(),
@@ -518,6 +522,13 @@ export default function WatchPartyRoomScreen() {
   const pinCoachTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const watchPartyLiveOpeningRef = useRef(false);
   const activityPulse = useRef(new Animated.Value(0)).current;
+  const partyDiscovery = usePartyRoomDiscoveryPublication({
+    room,
+    membership: room?.hostUserId ? membershipMapRef.current[room.hostUserId] ?? null : null,
+    active: isFocused && partyRoomAppState === "active" && !loading && !notFound
+      && !accessGate && !blockedRoomAccess && isSignedIn,
+    startIntent,
+  });
   const liveBubbleOrderRef = useRef<string>("");
   const branding = resolveBrandingConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
@@ -3139,6 +3150,16 @@ export default function WatchPartyRoomScreen() {
 
     return (
       <View style={styles.partyRoomActionDockCard}>
+        {myRole === "host" ? <View>
+          <Text style={styles.watchPartyScreenMetaValue} accessibilityLiveRegion="polite" testID="party-room-discovery-status">
+            {partyDiscovery.message}
+          </Text>
+          {partyDiscovery.canRetry ? <Pressable onPress={() => { void partyDiscovery.retry(); }}
+            accessibilityRole="button" accessibilityLabel="Retry Party listing" testID="party-room-discovery-retry"
+            style={{ minHeight: 44, justifyContent: "center" }}>
+            <Text style={styles.watchPartyScreenMetaValue}>Retry Party listing</Text>
+          </Pressable> : null}
+        </View> : null}
         <View style={styles.partyRoomActionDock}>
           <Pressable
             testID="watch-party-action-player-button"

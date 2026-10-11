@@ -844,7 +844,14 @@ select ok(
   )
   and pg_get_functiondef(
     'public.join_watch_party_room_session(text,text,text,text,boolean,boolean,boolean)'::regprocedure
+  ) like '%join_watch_party_room_session_pre_party_room%'
+  and pg_get_functiondef(
+    'public.join_watch_party_room_session_pre_party_room(text,text,text,text,boolean,boolean,boolean)'::regprocedure
   ) like '%join_watch_party_room_session_pre_discovery_rfgc%'
+  and not has_function_privilege('authenticated',
+    'public.join_watch_party_room_session_pre_party_room(text,text,text,text,boolean,boolean,boolean)','EXECUTE')
+  and not has_function_privilege('service_role',
+    'public.join_watch_party_room_session_pre_party_room(text,text,text,text,boolean,boolean,boolean)','EXECUTE')
   and pg_get_functiondef(
     'public.join_watch_party_room_session_pre_discovery_rfgc(text,text,text,text,boolean,boolean,boolean)'::regprocedure
   ) like '%watch_party_room_self_access_allowed_internal%',

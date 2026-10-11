@@ -104,14 +104,30 @@ export function isPublicSpectatorSafeRightsStatus(rightsStatus: string | null | 
   return PUBLIC_SPECTATOR_SAFE_RIGHTS.includes(rightsStatus as DiscoveryFeedRightsStatus);
 }
 
+export function isCanonicalPartyRoomMetadata(item: Partial<DiscoveryFeedItem>): boolean {
+  const metadata = item.metadata;
+  return item.source_type === "party_room" && item.item_type === "watch_party"
+    && item.rights_status === "metadata_only" && item.moderation_status === "clean"
+    && item.live_state === "live" && !item.ended_at
+    && item.is_spectator_enabled === false && item.is_spectator_playback_enabled === false
+    && typeof item.room_id === "string" && !!item.room_id.trim() && item.room_id === item.source_id
+    && !!item.host_user_id && item.host_user_id === item.owner_user_id && item.host_user_id === item.channel_user_id
+    && !!metadata && typeof metadata === "object" && !Array.isArray(metadata)
+    && metadata.producer === "canonical_party_room_v1" && metadata.destination === "party_room_join"
+    && metadata.canonical_projection_active === true && metadata.room_id === item.room_id
+    && typeof metadata.publication_id === "string" && !!metadata.publication_id
+    && (metadata.content_source_type === "platform_title" || metadata.content_source_type === "creator_video")
+    && typeof metadata.content_source_id === "string" && !!metadata.content_source_id.trim();
+}
+
 export function isFeedItemPubliclyDiscoverable(item: Pick<
   DiscoveryFeedItem,
   "is_publicly_discoverable" | "visibility" | "moderation_status" | "rights_status"
->) {
+> & Partial<DiscoveryFeedItem>) {
   return item.is_publicly_discoverable === true
     && item.visibility === "public"
     && item.moderation_status === "clean"
-    && isPublicSpectatorSafeRightsStatus(item.rights_status);
+    && (item.source_type === "party_room" ? isCanonicalPartyRoomMetadata(item) : isPublicSpectatorSafeRightsStatus(item.rights_status));
 }
 
 export function hasDiscoveryDestinationIdentity(item: Partial<Pick<
@@ -154,12 +170,12 @@ export function isCircleSpectatorFeedItemEligibleForRanking(item: Pick<
   | "rights_status"
   | "starts_at"
   | "visibility"
-> & Parameters<typeof hasDiscoveryDestinationIdentity>[0]) {
+> & Parameters<typeof hasDiscoveryDestinationIdentity>[0] & Partial<DiscoveryFeedItem>) {
   return item.is_publicly_discoverable !== true
     && (item.visibility === "circle" || item.visibility === "chilly_circle")
     && item.moderation_status === "clean"
-    && item.is_spectator_enabled === true
-    && isPublicSpectatorSafeRightsStatus(item.rights_status)
+    && (item.source_type === "party_room" ? isCanonicalPartyRoomMetadata(item)
+      : item.is_spectator_enabled === true && isPublicSpectatorSafeRightsStatus(item.rights_status))
     && isDiscoveryFeedLifecycleCurrent(item)
     && hasDiscoveryDestinationIdentity(item);
 }
@@ -173,7 +189,7 @@ export function isDiscoveryFeedItemEligibleForRanking(item: Pick<
   | "rights_status"
   | "starts_at"
   | "visibility"
-> & Parameters<typeof hasDiscoveryDestinationIdentity>[0]) {
+> & Parameters<typeof hasDiscoveryDestinationIdentity>[0] & Partial<DiscoveryFeedItem>) {
   return isFeedItemPubliclyDiscoverable(item)
     && isDiscoveryFeedLifecycleCurrent(item)
     && hasDiscoveryDestinationIdentity(item);
@@ -193,7 +209,7 @@ export function getDiscoveryPassLabel(item: DiscoveryPassContext) {
   if (item.item_type === "watch_party") return "Party Room Pass";
   if (item.item_type === "creator_event") return "Event Pass";
   if (item.source_type === "live_stage" || item.source_type === "live_stage_room") return "Live Stage Pass";
-  if (item.source_type === "watch_party_room") return "Party Room Pass";
+  if (item.source_type === "watch_party_room" || item.source_type === "party_room") return "Party Room Pass";
   if (item.source_type === "creator_event" || item.source_type === "event") return "Event Pass";
   return "Pass required";
 }
@@ -575,7 +591,7 @@ export async function readPublicDiscoveryFeedItems(
     .eq("is_publicly_discoverable", true)
     .eq("visibility", "public")
     .eq("moderation_status", "clean")
-    .in("rights_status", [...PUBLIC_SPECTATOR_SAFE_RIGHTS])
+    .in("rights_status", [...PUBLIC_SPECTATOR_SAFE_RIGHTS, "metadata_only"])
     .order("ranking_score", { ascending: false })
     .order("starts_at", { ascending: false, nullsFirst: false })
     .order("published_at", { ascending: false, nullsFirst: false });

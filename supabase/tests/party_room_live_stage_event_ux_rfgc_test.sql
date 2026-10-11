@@ -122,9 +122,16 @@ select ok(
   and position('speakerEligible' in pg_get_functiondef(
     'public.set_watch_party_participant_authority(text,text,text,boolean,text)'::regprocedure
   ))>0
-  and position('resolve_watch_party_livekit_authority_pre_discovery_rfgc' in pg_get_functiondef(
+  and position('resolve_watch_party_livekit_pre_party_room' in pg_get_functiondef(
     'public.resolve_watch_party_livekit_viewer_authority(text,uuid,uuid)'::regprocedure
   ))>0
+  and position('resolve_watch_party_livekit_authority_pre_discovery_rfgc' in pg_get_functiondef(
+    'public.resolve_watch_party_livekit_pre_party_room(text,uuid,uuid)'::regprocedure
+  ))>0
+  and not has_function_privilege('authenticated',
+    'public.resolve_watch_party_livekit_pre_party_room(text,uuid,uuid)','EXECUTE')
+  and not has_function_privilege('service_role',
+    'public.resolve_watch_party_livekit_pre_party_room(text,uuid,uuid)','EXECUTE')
   and position('resolve_live_watch_party_livekit_authority_internal' in pg_get_functiondef(
     'public.resolve_watch_party_livekit_authority_pre_discovery_rfgc(text,uuid,uuid)'::regprocedure
   ))>0,
