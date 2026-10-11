@@ -18,6 +18,17 @@ if (declarations.length !== names.size) throw new Error("Chat Answer source sele
 const ownershipHook = tree.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "useChatThreadOperationOwnership");
 const microphoneHook = tree.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "useIosNativeMicrophoneAcknowledgements");
 const presentationHook = tree.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "useExpiredIncomingCallPresentation");
+const messageEntryNames = new Set(["routeMessageId", "messageOwnerKey", "messageEntryKey", "loadedMessageEntryKey"]);
+const messageEntryDeclarations = screen.body.statements.filter((node) => ts.isVariableStatement(node)
+  && node.declarationList.declarations.some(({ name }) => ts.isArrayBindingPattern(name)
+    ? name.elements.some((element) => ts.isBindingElement(element) && messageEntryNames.has(element.name.getText(tree)))
+    : messageEntryNames.has(name.getText(tree))));
+if (messageEntryDeclarations.length !== messageEntryNames.size) throw new Error("Chat message-entry source selection changed; review harness.");
+const messageTargetPath = "_lib/notificationMessageTarget.ts";
+const messageTargetTree = ts.createSourceFile(messageTargetPath, fs.readFileSync(messageTargetPath, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+const messageNormalizerDeclarations = messageTargetTree.statements.filter((node) => ts.isVariableStatement(node)
+  && node.declarationList.declarations.some(({ name }) => ["UUID", "normalizeChatMessageId"].includes(name.getText(messageTargetTree))));
+if (messageNormalizerDeclarations.length !== 2) throw new Error("Chat message normalizer source selection changed; review harness.");
 
 export const deferred = () => {
   let resolve;
@@ -98,6 +109,7 @@ export async function mountChatAnswer(options = {}) {
     : options.readMode ? screen.body.statements.filter((node) => ts.isVariableStatement(node)
       && node.declarationList.declarations.some((declaration) => readNames.has(declaration.name.getText(tree)))) : declarations;
   const compiled = ts.transpileModule(`
+    ${options.readMode ? messageNormalizerDeclarations.map((node) => `${node.declarationList.getText(messageTargetTree)};`).join("\n") : ""}
     ${ownershipHook?.getText(tree) ?? ""}
     ${microphoneHook?.getText(tree) ?? ""}
     ${presentationHook?.getText(tree) ?? ""}
@@ -116,6 +128,8 @@ export async function mountChatAnswer(options = {}) {
       const thread = { activeCallType: runtime.activeCallType, activeCommunicationRoomId: runtime.threadRoomId ?? null };
       const resolvedCallType = thread.activeCallType;
       const authority = { userId: currentUserId, accountId: currentUserId, sessionGeneration, state: "ACTIVE", restoreOnly: false };
+      ${options.readMode ? `const messageIdParam = runtime.messageIdParam;
+      ${messageEntryDeclarations.map((node) => node.getText(tree)).join("\n")}` : ""}
       const incomingCallInvite = runtime.incomingInvite === null ? null : runtime.invite;
       const outgoingCallInvite = runtime.terminalMode === "outgoing" && runtime.outgoingPresent !== false ? runtime.invite : null;
       ${screen.body.statements.filter(node => ts.isVariableStatement(node) && node.declarationList.declarations.some(declaration => ["expiredIncomingCallPresentation", "incomingCallPresentationExpired", "presentedThread"].includes(declaration.name.getText(tree)))).map(node => node.getText(tree)).join("\n")}
@@ -152,7 +166,7 @@ export async function mountChatAnswer(options = {}) {
       ${(options.terminalMode || options.nativeMode || options.endedMode) ? screen.body.statements.find(node => ts.isVariableStatement(node) && node.declarationList.declarations.some(declaration => declaration.name.getText(tree) === "finishTerminalInviteCleanup")).getText(tree) : ""}
       ${selected.map((node) => node.getText(tree)).join("\n")}
       ${options.endedMode ? `const onRoomEnded = ${endedCallback.getText(tree)};` : ""}
-      useLayoutEffect(() => { runtime.snapshot = {callBusy, nativeSpeakerEnabled, resolvedCallRoomId: ${screen.body.statements.find(node => ts.isVariableStatement(node) && node.declarationList.declarations.some(declaration => declaration.name.getText(tree) === "activeCallRoomId")).declarationList.declarations[0].initializer.getText(tree)}, showControls: ${panel.showControls}, showMediaControls: ${panel.showMediaControls}, ${options.timerMode || options.nativeMode || options.settlementMode ? "" : (options.joinMode || options.terminalMode) ? "handleJoinOrCloseCall" : options.controlsMode ? "handleToggleNativeAudioRoute, handleToggleCallCamera, handleSwitchCallCamera" : options.declineMode ? "handleDeclineIncomingCall" : options.endedMode ? "onRoomEnded" : options.micMode ? "handleToggleCallMic" : options.readMode ? "loadThreadState, invalidateThreadReads" : "acceptIncomingInvite, resumeAcceptedIncomingInvite, handleAcceptIncomingCall"}}; });
+      useLayoutEffect(() => { runtime.snapshot = {callBusy, nativeSpeakerEnabled, resolvedCallRoomId: ${screen.body.statements.find(node => ts.isVariableStatement(node) && node.declarationList.declarations.some(declaration => declaration.name.getText(tree) === "activeCallRoomId")).declarationList.declarations[0].initializer.getText(tree)}, showControls: ${panel.showControls}, showMediaControls: ${panel.showMediaControls}, ${options.timerMode || options.nativeMode || options.settlementMode ? "" : (options.joinMode || options.terminalMode) ? "handleJoinOrCloseCall" : options.controlsMode ? "handleToggleNativeAudioRoute, handleToggleCallCamera, handleSwitchCallCamera" : options.declineMode ? "handleDeclineIncomingCall" : options.endedMode ? "onRoomEnded" : options.micMode ? "handleToggleCallMic" : options.readMode ? "loadThreadState, invalidateThreadReads, messageEntryKey, loadedMessageEntryKey" : "acceptIncomingInvite, resumeAcceptedIncomingInvite, handleAcceptIncomingCall"}}; });
       return null;
     };
   `, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
