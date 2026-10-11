@@ -527,9 +527,16 @@ export default function ChillyChatThreadScreen() {
   const [callControlError, setCallControlError] = useState<string | null>(null);
   const [callPreferences, setCallPreferences] = useState<NotificationPreferenceSettings | null>(null);
   const [headerQuickActionsOpen, setHeaderQuickActionsOpen] = useState(false);
-  const [friendState, setFriendState] = useState<FriendRelationshipState | null>(null);
-  const [friendLoading, setFriendLoading] = useState(true);
-  const [friendBusy, setFriendBusy] = useState<"request" | "accept" | "decline" | "cancel" | "remove" | null>(null);
+  const [friendResult, setFriendResult] = useState<{ scope: string; state: FriendRelationshipState | null; loading: boolean; error: string | null } | null>(null);
+  type FriendAction = "request" | "accept" | "decline" | "cancel" | "remove";
+  const [friendMutation, setFriendMutation] = useState<{ scope: string; action: FriendAction } | null>(null);
+  const friendMutationRef = useRef<typeof friendMutation>(null);
+  const friendScopeRef = useRef("");
+  const friendFocusedRef = useRef(false);
+  const friendReadSequenceRef = useRef(0);
+  const friendReadPendingRef = useRef<{ scope: string } | null>(null);
+  const friendResultRef = useRef(friendResult);
+  friendResultRef.current = friendResult;
   const [composerFocused, setComposerFocused] = useState(false);
   const [iosNativePresentationRevision, bumpIosNativePresentationRevision] = useState(0);
   const [iosNativePresentationGraceReadyInviteId, setIosNativePresentationGraceReadyInviteId] = useState("");
@@ -2008,6 +2015,57 @@ export default function ChillyChatThreadScreen() {
   const otherMemberDisplayName = officialAccount?.displayName ?? otherMember?.displayName ?? "Direct Thread";
   const otherMemberHandle = officialAccount?.handle ?? formatUsernameHandle(otherMember?.username);
   const otherMemberTagline = officialAccount?.tagline ?? otherMember?.tagline;
+  const friendTargetUserId = String(otherMember?.userId ?? "").trim();
+  const friendScope = JSON.stringify([currentUserId, authority?.accountId, authority?.sessionGeneration, authority?.state, authority?.restoreOnly, isSignedIn, authLoading, threadId, friendTargetUserId, !!officialAccount]);
+  friendScopeRef.current = friendScope;
+  const canReadFriendState = isSignedIn && !authLoading && !!currentUserId && !!threadId
+    && authority?.userId === currentUserId && authority.state === "ACTIVE" && !authority.restoreOnly
+    && !!friendTargetUserId && !officialAccount;
+  const friendState = friendResult?.scope === friendScope ? friendResult.state : null;
+  const friendLoading = canReadFriendState && (friendResult?.scope !== friendScope || friendResult.loading);
+  const friendError = friendResult?.scope === friendScope ? friendResult.error : null;
+  const friendBusy = friendMutation?.scope === friendScope ? friendMutation.action : null;
+  const friendPresentationSequence = friendReadSequenceRef.current;
+
+  const refreshFriendState = useCallback(async () => {
+    if (!canReadFriendState || !friendFocusedRef.current || AppState.currentState !== "active"
+      || friendScopeRef.current !== friendScope || friendMutationRef.current?.scope === friendScope) return;
+    const sequence = ++friendReadSequenceRef.current;
+    const pending = { scope: friendScope };
+    friendReadPendingRef.current = pending;
+    const isCurrent = () => friendScopeRef.current === friendScope && friendFocusedRef.current
+      && AppState.currentState === "active" && sequence === friendReadSequenceRef.current;
+    setFriendResult(previous => ({ scope: friendScope, state: previous?.scope === friendScope ? previous.state : null, loading: true, error: null }));
+    try {
+      const nextState = await readFriendRelationshipState(friendTargetUserId);
+      if (!isCurrent()) return;
+      if (nextState.viewerUserId !== currentUserId || nextState.otherUserId !== friendTargetUserId) throw new Error("Chi'lly Circle status is unavailable right now.");
+      setFriendResult({ scope: friendScope, state: nextState, loading: false, error: null });
+    } catch {
+      if (isCurrent()) setFriendResult({ scope: friendScope, state: null, loading: false, error: "Chi'lly Circle status is unavailable right now." });
+    } finally {
+      if (friendReadPendingRef.current === pending) friendReadPendingRef.current = null;
+    }
+  }, [canReadFriendState, currentUserId, friendScope, friendTargetUserId]);
+
+  useFocusEffect(useCallback(() => {
+    friendFocusedRef.current = true;
+    void refreshFriendState();
+    const subscription = AppState.addEventListener("change", state => {
+      if (state === "active") void refreshFriendState();
+      else friendReadSequenceRef.current += 1;
+    });
+    return () => {
+      friendFocusedRef.current = false;
+      friendReadSequenceRef.current += 1;
+      subscription.remove();
+    };
+  }, [refreshFriendState]));
+
+  const handleToggleHeaderQuickActions = useCallback(() => {
+    if (!headerQuickActionsOpen) void refreshFriendState();
+    setHeaderQuickActionsOpen(current => !current);
+  }, [headerQuickActionsOpen, refreshFriendState]);
   const outgoingCallRinging = !!outgoingCallInvite
     && shouldShowOutgoingRingingPanel({
       currentUserId,
@@ -2073,6 +2131,10 @@ export default function ChillyChatThreadScreen() {
       };
     }
 
+    if (friendError) {
+      return { pill: "Circle unavailable", title: "Chi'lly Circle unavailable", body: "Close and reopen thread actions to retry checking this connection." };
+    }
+
     if (!friendState) {
       return {
         pill: "Direct thread only",
@@ -2126,7 +2188,7 @@ export default function ChillyChatThreadScreen() {
       title: "Direct thread only",
       body: "Messaging here does not automatically add someone to Chi'lly Circle. Add them only if you both want a private mutual connection.",
     };
-  }, [friendLoading, friendState, officialAccount, otherMember?.userId, otherMemberDisplayName]);
+  }, [friendError, friendLoading, friendState, officialAccount, otherMember?.userId, otherMemberDisplayName]);
 
   const emptyThreadPrompts = useMemo(() => {
     return buildSmartReplySuggestions({
@@ -2134,35 +2196,6 @@ export default function ChillyChatThreadScreen() {
       otherMemberName: otherMemberDisplayName,
     });
   }, [otherMemberDisplayName, thread?.activeCallType]);
-
-  useEffect(() => {
-    let active = true;
-    const targetUserId = String(otherMember?.userId ?? "").trim();
-
-    if (!targetUserId || officialAccount) {
-      setFriendState(null);
-      setFriendLoading(false);
-      return () => {
-        active = false;
-      };
-    }
-
-    setFriendLoading(true);
-    readFriendRelationshipState(targetUserId)
-      .then((nextState) => {
-        if (active) setFriendState(nextState);
-      })
-      .catch(() => {
-        if (active) setFriendState(null);
-      })
-      .finally(() => {
-        if (active) setFriendLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [officialAccount, otherMember?.userId]);
 
   const handlePickAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {
     try {
@@ -3292,11 +3325,21 @@ export default function ChillyChatThreadScreen() {
     }
   }, [messageReportBusy, messageReportTarget, thread?.members, threadId]);
 
-  const handleFriendAction = useCallback(async (action: "request" | "accept" | "decline" | "cancel" | "remove") => {
-    const targetUserId = String(otherMember?.userId ?? "").trim();
-    if (!targetUserId || officialAccount || friendBusy) return;
-
-    setFriendBusy(action);
+  const handleFriendAction = useCallback(async (action: FriendAction) => {
+    const targetUserId = friendTargetUserId;
+    const allowed = { request: friendState?.canRequest, accept: friendState?.canAccept, decline: friendState?.canDecline, cancel: friendState?.canCancel, remove: friendState?.canRemove };
+    if (!canReadFriendState || !friendFocusedRef.current || AppState.currentState !== "active"
+      || friendScopeRef.current !== friendScope || friendLoading || friendError || !allowed[action]
+      || friendResultRef.current !== friendResult
+      || friendPresentationSequence !== friendReadSequenceRef.current
+      || friendReadPendingRef.current?.scope === friendScope || friendMutationRef.current?.scope === friendScope) return;
+    const mutation = { scope: friendScope, action };
+    friendMutationRef.current = mutation;
+    const sequence = ++friendReadSequenceRef.current;
+    setFriendMutation(mutation);
+    const isCurrent = () => friendScopeRef.current === friendScope && friendFocusedRef.current
+      && AppState.currentState === "active" && friendMutationRef.current === mutation
+      && sequence === friendReadSequenceRef.current;
     try {
       const nextState = action === "request"
         ? await sendChillyCircleRequest(targetUserId)
@@ -3307,17 +3350,27 @@ export default function ChillyChatThreadScreen() {
             : action === "cancel"
               ? await cancelChillyCircleRequest(targetUserId)
               : await removeFromChillyCircle(targetUserId);
-      setFriendState(nextState);
+      if (!isCurrent()) return;
+      if (nextState.viewerUserId !== currentUserId || nextState.otherUserId !== targetUserId) throw new Error("Chi'lly Circle status is unavailable right now.");
+      setFriendResult({ scope: friendScope, state: nextState, loading: false, error: null });
     } catch (friendError) {
+      if (!isCurrent()) return;
       const message = getUserFacingErrorMessage(
         friendError,
         "Unable to update Chi'lly Circle right now.",
       );
+      setFriendResult({ scope: friendScope, state: null, loading: false, error: message });
       Alert.alert("Chi'lly Circle unavailable", message);
     } finally {
-      setFriendBusy(null);
+      if (friendMutationRef.current === mutation) {
+        friendMutationRef.current = null;
+        setFriendMutation(null);
+        // A return to this thread may have deferred its read while the old
+        // mutation was pending. Reconcile now; its prior-focus result is stale.
+        if (sequence !== friendReadSequenceRef.current) void refreshFriendState();
+      }
     }
-  }, [friendBusy, officialAccount, otherMember?.userId]);
+  }, [canReadFriendState, currentUserId, friendError, friendLoading, friendPresentationSequence, friendResult, friendScope, friendState, friendTargetUserId, refreshFriendState]);
 
   if (authLoading || loading) {
     return (
@@ -3414,8 +3467,8 @@ export default function ChillyChatThreadScreen() {
         <TouchableOpacity
           style={styles.headerAvatarButton}
           activeOpacity={0.86}
-          onLongPress={() => setHeaderQuickActionsOpen((current) => !current)}
-          onPress={() => setHeaderQuickActionsOpen((current) => !current)}
+          onLongPress={handleToggleHeaderQuickActions}
+          onPress={handleToggleHeaderQuickActions}
         >
           {otherMemberAvatarUrl ? (
             <Image source={{ uri: otherMemberAvatarUrl }} style={styles.headerAvatarImage} />
