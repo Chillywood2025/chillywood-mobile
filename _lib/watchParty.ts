@@ -49,7 +49,7 @@ import {
   type SocialAttachment,
 } from "./socialAttachments";
 import { supabase } from "./supabase";
-import { runExactSessionAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
+import { captureAccountBoundSupabaseMutationSubject, invokeAccountBoundSupabaseMutationRpc, runExactSessionAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 import { readUserProfile } from "./userData";
 export {
   PARTY_SEAT_REQUEST_MESSAGE_PREFIX,
@@ -1566,6 +1566,60 @@ export async function setPartyRoomPolicies(
 
   if (error || !data) return null;
   return rowToState(data);
+}
+
+export type PartyRoomDiscoveryResult = {
+  partyId: string;
+  sourceType: WatchPartyContentSourceType;
+  sourceId: string;
+  visibility: WatchPartyDiscoveryVisibility;
+  title: string | null;
+  published: boolean;
+  startedAt: string | null;
+  projectionId: string | null;
+};
+
+async function writePartyRoomDiscovery(
+  expectedRoom: WatchPartyState,
+  policies?: Pick<SetPartyRoomPoliciesOptions, "discoveryVisibility" | "discoveryTitle">,
+): Promise<{ room: WatchPartyState; result: PartyRoomDiscoveryResult } | null> {
+  const subject = await captureAccountBoundSupabaseMutationSubject();
+  const room = await getPartyRoom(String(expectedRoom.partyId).trim().toUpperCase());
+  if (!room || !room.isActive || room.roomType !== "title" || room.hostUserId !== subject.authority.userId
+    || room.partyId !== expectedRoom.partyId || room.hostUserId !== expectedRoom.hostUserId
+    || room.sourceType !== expectedRoom.sourceType || room.sourceId !== expectedRoom.sourceId
+    || (!policies && (room.discoveryVisibility !== expectedRoom.discoveryVisibility || room.discoveryTitle !== expectedRoom.discoveryTitle))
+    || !room.sourceId || !room.sourceType || room.sourceType === "spectator_playback") return null;
+  const visibility = policies?.discoveryVisibility ?? room.discoveryVisibility;
+  const title = (policies?.discoveryTitle !== undefined ? policies.discoveryTitle ?? "" : room.discoveryTitle ?? "").trim() || null;
+  const { data, error } = await invokeAccountBoundSupabaseMutationRpc<PartyRoomDiscoveryResult>(subject,
+    policies ? "set_party_room_discovery" : "publish_party_room_discovery", {
+      p_party_id: room.partyId,
+      p_expected_source_type: room.sourceType,
+      p_expected_source_id: room.sourceId,
+      p_session_generation: subject.authority.sessionGeneration,
+      ...(policies ? { p_visibility: visibility, p_title: title } : {}),
+    });
+  if (error || !data || data.partyId !== room.partyId || data.sourceType !== room.sourceType
+    || data.sourceId !== room.sourceId || data.visibility !== visibility || data.title !== title
+    || typeof data.published !== "boolean"
+    || (data.published && (!data.startedAt || !data.projectionId || visibility === "private"))) return null;
+  return { room: { ...room, discoveryVisibility: data.visibility, discoveryTitle: data.title }, result: data };
+}
+
+// The server owns source/audience/session validation. Saving a prepared room
+// cannot publish it; publication additionally requires its joined host.
+export async function setPartyRoomDiscoverySettings(
+  partyId: string,
+  policies: Pick<SetPartyRoomPoliciesOptions, "discoveryVisibility" | "discoveryTitle">,
+  expectedRoom: WatchPartyState,
+): Promise<WatchPartyState | null> {
+  if (partyId !== expectedRoom.partyId) return null;
+  return (await writePartyRoomDiscovery(expectedRoom, policies))?.room ?? null;
+}
+
+export async function publishPartyRoomDiscovery(expectedRoom: WatchPartyState): Promise<PartyRoomDiscoveryResult | null> {
+  return (await writePartyRoomDiscovery(expectedRoom))?.result ?? null;
 }
 
 export async function setPartyParticipantState(

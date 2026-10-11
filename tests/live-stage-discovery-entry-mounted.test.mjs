@@ -39,6 +39,8 @@ async function mount(t, { lane = "public", row = projection(lane), initialAuthor
   let authority = initialAuthority, itemId = row?.id ?? "projection-a", reader = authorityRead ?? (async () => authority);
   let disposed = false;
   const routes = [], reads = [], lists = [], cache = new Map();
+  const appListeners = new Set();
+  const AppState = { currentState: 'active', addEventListener: (_, fn) => { appListeners.add(fn); return { remove: () => appListeners.delete(fn) }; } };
   const router = { replace: value => routes.push(JSON.parse(JSON.stringify(value))), back: noop };
   const database = { from(table) {
     const filters = [];
@@ -59,7 +61,7 @@ async function mount(t, { lane = "public", row = projection(lane), initialAuthor
     const exports = {};
     const context = { exports, console, setTimeout, clearTimeout, setInterval: () => 1, clearInterval: noop, require(name) {
       if (name === "react") return React;
-      if (name === "react-native") return { ActivityIndicator: () => null, Text: () => null,
+      if (name === "react-native") return { AppState, ActivityIndicator: () => null, Text: () => null,
         View: ({ children }) => React.createElement(React.Fragment, null, children), Pressable: () => null,
         FlatList: ({ data }) => { lists.push(Array.from(data, item => item.id)); return null; },
         Image: () => null, Modal: () => null, TouchableOpacity: () => null, Alert: {}, Share: {},
@@ -76,6 +78,7 @@ async function mount(t, { lane = "public", row = projection(lane), initialAuthor
       if (name.endsWith("/discoveryFeed")) return load("_lib/discoveryFeed.ts");
       if (name.endsWith("/circleSpectatorFeed")) return load("_lib/circleSpectatorFeed.ts");
       if (name.endsWith("/liveStageDiscoveryDestination")) return load("_lib/liveStageDiscoveryDestination.ts");
+      if (name.endsWith("/partyRoomDiscoveryDestination")) return load("_lib/partyRoomDiscoveryDestination.ts");
       if (name.endsWith("/spectatorAccess")) return { resolveSpectatorAccess: () => ({}) };
       if (name.endsWith("/spectatorPlayback")) return {};
       if (name.endsWith("/spectatorChildRooms")) return {};
@@ -102,10 +105,50 @@ async function mount(t, { lane = "public", row = projection(lane), initialAuthor
   await render();
   t.after(async () => { if (!disposed) await React.act(async () => root.unmount()); });
   return { routes, reads, lists, async account(value) { authority = value; await render(); },
+    async background() { await React.act(async () => { AppState.currentState = 'background'; for (const fn of appListeners) fn('background'); }); },
     async item(value) { itemId = value; await render(); }, readAuthority(fn) { reader = fn; },
     async resolve(d, value) { await React.act(async () => d.resolve(value)); },
     async unmount() { disposed = true; await React.act(async () => root.unmount()); } };
 }
+
+const partyProjection = (lane = 'public', changes = {}) => projection(lane, {
+  source_type: 'party_room', source_id: 'PARTY42', room_id: 'PARTY42', item_type: 'watch_party',
+  rights_status: 'metadata_only', is_spectator_enabled: false, is_spectator_playback_enabled: false,
+  requires_premium_to_join: true, access_type: lane === 'public' ? 'premium_only' : 'circle',
+  metadata: { producer: 'canonical_party_room_v1', destination: 'party_room_join', room_id: 'PARTY42',
+    canonical_projection_active: true, content_source_type: 'platform_title', content_source_id: 'title-a', publication_id: 'publication-a' },
+  ...changes,
+});
+
+for (const lane of ['public', 'circle']) test(`actual ${lane} metadata-only Party card enters guarded waiting preview without host or playback intent`, async t => {
+  const h = await mount(t, { lane, row: partyProjection(lane) });
+  assert.deepEqual(h.routes, [{ pathname: '/watch-party', params: { partyId: 'PARTY42', source: 'discovery', discoveryItemId: 'projection-a', discoveryLane: lane } }]);
+});
+
+for (const [name, change] of Object.entries({
+  rights: { rights_status: 'creator_owned' }, playback: { is_spectator_playback_enabled: true },
+  spectator: { is_spectator_enabled: true }, ended: { ended_at: new Date().toISOString() },
+  private: { visibility: 'private' }, owner: { owner_user_id: 'someone-else' },
+  destination: { metadata: { ...partyProjection().metadata, destination: 'spectate_live' } },
+  source: { metadata: { ...partyProjection().metadata, content_source_id: '' } },
+  publication: { metadata: { ...partyProjection().metadata, publication_id: null } },
+})) test(`metadata-only Party rejects ${name} mismatch`, async t => {
+  const h = await mount(t, { row: partyProjection('public', change) });
+  assert.equal(h.routes.length, 0);
+});
+
+test('Party source replaced during session read cannot commit the old destination', async t => {
+  let reads = 0;
+  const h = await mount(t, { row: partyProjection(), query: table => ({ data: table === 'discovery_feed_items'
+    ? [++reads === 1 ? partyProjection() : partyProjection('public', { metadata: { ...partyProjection().metadata, content_source_id: 'replacement' } })] : [], error: null }) });
+  assert.equal(h.routes.length, 0);
+});
+
+test('Party route held in background cannot open after its response returns', async t => {
+  const d = deferred();
+  const h = await mount(t, { row: partyProjection(), authorityRead: () => d.promise });
+  await h.background(); await h.resolve(d, owner()); assert.equal(h.routes.length, 0);
+});
 
 for (const lane of ["public", "circle"]) test(`actual ${lane} canonical Live Stage enters existing viewer-stage route, not HLS`, async t => {
   const h = await mount(t, { lane });
