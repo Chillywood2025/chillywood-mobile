@@ -1592,7 +1592,7 @@ async function readOwnedPartyRoomForPreparation(
     || (expectedRoom.sourceType !== "platform_title" && expectedRoom.sourceType !== "creator_video")) return null;
   const row = await fetchPartyRoomRow(expectedRoom.partyId);
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
-  if (!row || row.is_active !== true) return null;
+  if (!row || !("is_active" in row) || row.is_active !== true) return null;
   const room = rowToState(row);
   if (!room || room.roomType !== "title" || room.partyId !== expectedRoom.partyId
     || room.hostUserId !== expectedRoom.hostUserId || room.titleId !== expectedRoom.titleId
