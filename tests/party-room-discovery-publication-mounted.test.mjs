@@ -30,10 +30,17 @@ async function mount(t, { start = true, joined = true, server, bootstrapJoin = n
   // are the real watchParty.ts functions, not a test reimplementation.
   const source = fs.readFileSync('_lib/watchParty.ts', 'utf8');
   const ast = ts.createSourceFile('watchParty.ts', source, ts.ScriptTarget.Latest, true);
-  const names = new Set(['writePartyRoomDiscovery', 'setPartyRoomDiscoverySettings', 'publishPartyRoomDiscovery']);
+  const names = new Set(['readOwnedPartyRoomForPreparation', 'writePartyRoomDiscovery', 'setPartyRoomDiscoverySettings', 'publishPartyRoomDiscovery']);
   const production = ast.statements.filter(node => ts.isFunctionDeclaration(node) && names.has(node.name?.text)).map(node => node.getText(ast)).join('\n');
-  assert.equal(production.match(/(?:export )?async function /g).length, 3);
+  assert.equal(production.match(/(?:export )?async function /g).length, 4);
   const rpcScope = { exports: {}, getPartyRoom: async () => state.stored,
+    // This mounted publication suite models room reads; the separate prepared-owner
+    // suite executes actual raw-row fetch/conversion/activity filtering.
+    fetchPartyRoomRow: async () => state.stored ? { ...state.stored, is_active: state.stored.isActive } : null,
+    rowToState: value => value,
+    assertAccountBoundSupabaseMutationSubjectCurrent(subject) {
+      if (!same(subject.authority, state.authority)) throw Error('account_changed');
+    },
     captureAccountBoundSupabaseMutationSubject: async () => ({ authority: state.authority }),
     async invokeAccountBoundSupabaseMutationRpc(subject, name, args) {
       if (!same(subject.authority, state.authority)) throw Error('account_changed');

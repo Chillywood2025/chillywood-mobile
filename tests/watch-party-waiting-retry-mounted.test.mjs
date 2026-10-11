@@ -161,6 +161,15 @@ test('normal Party defaults private and audience saves do not navigate or start 
   assert.match(h.text(), /Party audience saved/); assert.equal(h.runtime.navigations.length, 0);
 });
 
+test('expired normal prepared Start stays denied and directs a fresh Player preparation', async t => {
+  const h = await mount(t, { normal: true, roomReader: runtime => runtime.reads.length === 1 ? { ...runtime.room } : null });
+  await h.act(() => h.continue().onPress());
+  assert.equal(h.runtime.navigations.length, 0);
+  assert.equal(h.runtime.created, 0);
+  assert.equal(h.runtime.writes.length, 0);
+  assert.match(h.text(), /prepared room is no longer available.*Return to the Player/);
+});
+
 test('discovery opens actual viewer preview and Join Now preserves ordinary admission without Start intent', async t => {
   const h = await mount(t, { normal: true, viewer: true });
   const join = h.find(n => n.props?.testID === 'watch-party-preview-join');
