@@ -155,7 +155,7 @@ export function SupportScreen() {
         defaultCategory: "moderation" as const,
         defaultSeverity: "major" as const,
         title: "Report a safety issue",
-        description: "Send a safety concern with screen context. This is reviewed for safety, but it is not an emergency channel.",
+        description: "Send a safety concern with screen context. This is reviewed for safety, but it is not an emergency service.",
       };
     }
     if (reportMode === "help") {

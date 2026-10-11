@@ -189,7 +189,7 @@ for (const [itemType, expectedAction] of [
   ["watch_party", "Watch-Party"],
   ["creator_event", "Event"],
   ["creator_upload", "Video"],
-  ["channel_update", "Creator Channel"],
+  ["channel_update", "Creator Platform"],
   ["replay_later", "Replay"],
   ["unknown", "Content"],
 ]) {

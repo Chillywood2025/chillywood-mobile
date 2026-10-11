@@ -460,7 +460,7 @@ const makeNotificationHarness = ({ notificationCount = 75, removeAfterFirstPage 
     "expo-notifications": {},
     "./liveEvents": {},
     "./supabase": { supabase },
-    "./userFacingProductCopy": { normalizePlatformSubscriptionNotificationCopy: (value) => String(value ?? "") },
+    "./userFacingProductCopy": { normalizeProductNotificationCopy: (value) => String(value ?? "") },
     "./chillyChatCalls": {},
     "./chillyChatCallSoundAssets": {},
     "./appLinks": {},

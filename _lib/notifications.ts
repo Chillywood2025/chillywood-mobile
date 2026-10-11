@@ -16,7 +16,7 @@ import {
   readPublicEventSummaries,
 } from "./liveEvents";
 import { supabase } from "./supabase";
-import { normalizePlatformSubscriptionNotificationCopy } from "./userFacingProductCopy";
+import { normalizeProductNotificationCopy } from "./userFacingProductCopy";
 import {
   CHAT_CALL_INVITES_TABLE,
   normalizeChillyChatRingtoneKey,
@@ -708,7 +708,7 @@ const parseNotificationRow = (row: NotificationRow | null): NotificationRecord |
   const id = normalizeText(row.id);
   const userId = normalizeText(row.user_id);
   const notificationType = normalizeText(row.notification_type) || normalizeNotificationCategory(row.category);
-  const title = normalizePlatformSubscriptionNotificationCopy(row.title, notificationType);
+  const title = normalizeProductNotificationCopy(row.title, row.notification_type);
   if (!id || !userId || !title) return null;
 
   const target = normalizeNotificationTarget({
@@ -733,7 +733,7 @@ const parseNotificationRow = (row: NotificationRow | null): NotificationRecord |
     category: normalizeNotificationCategory(row.category),
     notificationType,
     title,
-    body: normalizePlatformSubscriptionNotificationCopy(row.body, notificationType) || null,
+    body: normalizeProductNotificationCopy(row.body, row.notification_type) || null,
     deepLink: normalizeText(row.deep_link) || null,
     status,
     target,

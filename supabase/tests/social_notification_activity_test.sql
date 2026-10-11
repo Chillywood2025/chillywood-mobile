@@ -42,11 +42,14 @@ insert into public.channel_followers(channel_user_id,follower_user_id) values
 select is((select recipient_user_id::text from public.notification_activity_events where event_kind='social_follow' and actor_user_id='9b330000-0000-4000-8000-000000000001'),
  '9b330000-0000-4000-8000-000000000002','follower insert derives the exact channel owner');
 select is(pg_temp.social_plan('social_follow')->>'eligible','true','real follow source resolves');
+select is(pg_temp.social_plan('social_follow')->>'body','Someone followed your Platform.','follow delivery plan uses the current user-facing Platform name');
 update public.channel_followers set updated_at=now() where follower_user_id='9b330000-0000-4000-8000-000000000001';
 select is((select count(*)::integer from public.notification_activity_events where event_kind='social_follow' and actor_user_id='9b330000-0000-4000-8000-000000000001'),1,'follow metadata edits do not duplicate');
 select pg_temp.social_drain();
 select is((select count(*)::integer from public.notifications where notification_type='social_follow' and user_id='9b330000-0000-4000-8000-000000000002'),1,
  'actual common materializer creates one exact recipient bell row');
+select is((select body from public.notifications where notification_type='social_follow' and user_id='9b330000-0000-4000-8000-000000000002'),
+ 'Someone followed your Platform.','actual materialized follow notification preserves Platform wording');
 select is((select deep_link from public.notifications where notification_type='social_follow' and user_id='9b330000-0000-4000-8000-000000000002'),
  '/profile/9b330000-0000-4000-8000-000000000001','follow route contains the actual actor only');
 delete from public.channel_followers where follower_user_id='9b330000-0000-4000-8000-000000000001';
