@@ -1051,11 +1051,11 @@ export default function HomeScreen() {
 
           {renderHomeEventRail({
             title: "Circle Watch-Party",
-            subtitle: "Watch-only spectator sources available to your Chi'lly Circle.",
+            subtitle: "Watch parties available to your Chi'lly Circle.",
             feedItems: circleWatchPartySpectatorItems,
             events: [],
-            emptyTitle: "No Circle watch-party sources yet",
-            emptyText: "Circle-private spectator sources appear here only when backed access and playback rules allow them.",
+            emptyTitle: "No Circle watch parties right now",
+            emptyText: "Watch parties appear here when they are shared with your Chi'lly Circle and available to you.",
           })}
 
           {renderHomeEventRail({
