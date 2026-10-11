@@ -18,8 +18,9 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
 const result = changes => ({ partyId: 'PARTY42', sourceType: 'platform_title', sourceId: 'title-a', visibility: 'public', title: 'Tonight', published: true, startedAt: new Date().toISOString(), projectionId: 'projection-a', ...changes });
 const compilerOptions = { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true };
 
-async function mount(t, { start = true, joined = true, server } = {}) {
+async function mount(t, { start = true, joined = true, server, bootstrapJoin = null } = {}) {
   const state = { authority: authority(), room: room(), stored: room(), member: joined ? member() : null, active: true, startIntent: '', calls: [], server, view: null };
+  if (bootstrapJoin) state.active = false;
   const appListeners = new Set(), accountListeners = new Set();
   const AppState = { currentState: 'active', addEventListener: (_, fn) => { appListeners.add(fn); return { remove: () => appListeners.delete(fn) }; } };
   const account = { getCurrentAccountSessionAuthoritySnapshot: () => state.authority, sameAccountSessionAuthority: same,
@@ -60,7 +61,66 @@ async function mount(t, { start = true, joined = true, server } = {}) {
   const intents = load('_lib/partyRoomStartIntent.ts');
   if (start) state.startIntent = intents.rememberPartyRoomStartIntent(state.room, state.authority);
   const { usePartyRoomDiscoveryPublication } = load('_lib/usePartyRoomDiscoveryPublication.ts');
-  function Harness() { state.view = usePartyRoomDiscoveryPublication({ room: state.room, membership: state.member, active: state.active, startIntent: state.startIntent }); return null; }
+  let bootstrapEffect = null;
+  if (bootstrapJoin) {
+    // Run the complete real Party Room bootstrap effect unchanged alongside the
+    // real publication hook. This verifies its loading/join boundary; it does
+    // not claim a complete native screen or real server/media execution.
+    const screen = fs.readFileSync('app/watch-party/[partyId].tsx', 'utf8');
+    const screenAst = ts.createSourceFile('room.tsx', screen, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const effects = [];
+    function visit(node) {
+      if (ts.isCallExpression(node) && node.expression.getText(screenAst) === 'useEffect'
+        && node.arguments[0]?.getText(screenAst).includes('const bootstrap = async')) effects.push(node.arguments[0]);
+      ts.forEachChild(node, visit);
+    }
+    visit(screenAst); assert.equal(effects.length, 1);
+    const membershipMapRef = { current: {} };
+    const snapshot = () => ({ room: state.room, memberships: state.member ? [state.member] : [] });
+    state.lifecycle = [];
+    const ref = value => ({ current: value });
+    const context = {
+      canUseBetaRoom: true, partyId: 'PARTY42',
+      setLoading(value) { state.lifecycle.push(`loading:${value}`); state.active = !value; root.render(React.createElement(Harness)); },
+      setNotFound: noop, setConnState: noop, setAccessGate: noop, setBlockedRoomAccess: noop, setPaidTicketGate: noop,
+      setPaidTicketNotice: noop, setAccessSheetVisible: noop, setRoom: noop, setTitleName: noop, setSourceAttribution: noop, setMessages: noop,
+      readUserProfile: async () => ({ username: 'Host' }), getSafePartyUserId: async () => 'host',
+      getPartyRoomSnapshot: async () => snapshot(), resolvePaidWatchPartyTicketAccess: async () => ({ allowed: true, reason: 'free_room' }),
+      paidWatchPartyResolutionIsExactFreeRoom: value => value.reason === 'free_room',
+      resolvePremiumAccessKeyForRoom: () => 'PARTY42', requireWatchPartyLivePremium: async () => ({ allowed: true }),
+      requireLiveFirstPremium: async () => ({ allowed: true }), isRuntimeControlBlockedAccess: () => false,
+      resolveRoomAccess: async () => ({ isAllowed: true }),
+      syncRoomFromSnapshot(value) { for (const m of value.memberships) membershipMapRef.current[m.userId] = m; },
+      async joinPartyRoomSession(options) {
+        state.lifecycle.push('join:started'); assert.equal(options.role, 'host');
+        const joinedMembership = await bootstrapJoin(); state.lifecycle.push('join:completed');
+        state.member = joinedMembership; return joinedMembership;
+      },
+      async refreshRoomSnapshot() { if (state.member) membershipMapRef.current.host = state.member; return snapshot(); },
+      resolveWatchPartyContentDisplay: async () => ({ displayName: 'Title' }), resolveWatchPartySourceType: () => 'platform_title',
+      resolveWatchPartySourceId: () => 'title-a', readWatchPartyContentDisplayHandoff: () => null,
+      resolveIdentityName: value => value, isAccessSheetReason: () => false, trackEvent: noop,
+      myUserIdRef: ref(null), myProfileUsernameRef: ref(''), myCameraPreviewUrlRef: ref(''), myRoleRef: ref('host'),
+      paidTicketAuthoritySeenRef: ref(false), membershipMapRef, pollRef: ref(null), heartbeatRef: ref(null),
+      chatChannelRef: ref(null), roomChatRealtimeChannelRef: ref(null), roomRealtimeChannelRef: ref(null), participantReactionTimeoutsRef: ref({}),
+      ROOM_SNAPSHOT_REFRESH_MS: 15000, ROOM_HEARTBEAT_INTERVAL_MILLIS: 15000,
+      setInterval: () => 1, clearInterval: noop, clearTimeout: noop,
+      saveLastPartySession: async () => {}, startChatChannel: noop, startRoomRealtimeSync: noop, startRoomChatRealtimeSync: noop,
+      reportRuntimeError: (_, error) => { throw error; },
+      prepareLiveKitJoinBoundary: () => assert.fail('bootstrap must not wait for media-token readiness before publication'),
+      supabase: { auth: { getUser: async () => ({ data: { user: {} } }) }, from: () => {
+        const query = Object.fromEntries(['select', 'eq', 'order', 'limit'].map(name => [name, () => query]));
+        query.returns = async () => ({ data: [] }); return query;
+      } },
+    };
+    vm.runInNewContext(ts.transpileModule(`globalThis.effect = ${effects[0].getText(screenAst)}`, { compilerOptions }).outputText, context);
+    bootstrapEffect = context.effect;
+  }
+  function Harness() {
+    state.view = usePartyRoomDiscoveryPublication({ room: state.room, membership: state.member, active: state.active, startIntent: state.startIntent });
+    React.useEffect(() => bootstrapEffect?.(), []);
+    return null;
+  }
   const root = createRoot(container());
   const render = async () => React.act(async () => { root.render(React.createElement(Harness)); for (let i = 0; i < 20; i++) await Promise.resolve(); });
   await render(); t.after(() => React.act(async () => root.unmount()));
@@ -81,6 +141,16 @@ test('only explicit Start plus actual joined host publishes, with exact session/
     p_party_id: 'PARTY42', p_expected_source_type: 'platform_title', p_expected_source_id: 'title-a', p_session_generation: 'session-a',
   } });
   await h.render(); await h.retry(); assert.equal(h.state.calls.length, 1);
+});
+
+test('actual Party Room bootstrap completes normal host join and clears loading before publication without awaiting media readiness', async t => {
+  const joining = deferred();
+  const h = await mount(t, { joined: false, bootstrapJoin: () => joining.promise });
+  assert.deepEqual(h.state.lifecycle, ['join:started']); assert.equal(h.state.calls.length, 0);
+  await h.resolve(joining, member());
+  assert.deepEqual(h.state.lifecycle, ['join:started', 'join:completed', 'loading:false']);
+  assert.equal(h.state.calls.length, 1); assert.equal(h.state.calls[0].name, 'publish_party_room_discovery');
+  assert.equal(h.state.view.status, 'published');
 });
 
 test('prepared/direct viewer route cannot manufacture Start from a query string', async t => {
