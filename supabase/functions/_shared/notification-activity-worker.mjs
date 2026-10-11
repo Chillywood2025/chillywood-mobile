@@ -23,9 +23,14 @@ export async function withActivityDeadline(operation, milliseconds = 5_000) {
 export async function sendActivityPush(reservation, { fetchImpl = fetch, deadlineMs = 5_000 } = {}) {
   try {
     return await withActivityDeadline(async (signal) => {
+      // SQL reserves a concrete route; installed clients consume deepLink.
+      // Keep existing link fields and their client-side precedence intact.
+      const data = reservation.data;
+      const pushData = typeof data?.route === 'string' && data.deepLink == null
+        ? { ...data, deepLink: data.route } : data;
       const payload = buildPlatformExpoPushMessage({
         to: reservation.token, platform: reservation.platform,
-        title: reservation.title, body: reservation.body, data: reservation.data,
+        title: reservation.title, body: reservation.body, data: pushData,
         badge: reservation.badge, androidChannelId: 'default',
         ttl: reservation.ttl,
         categoryId: IOS_NOTIFICATION_CATEGORIES.activity,
