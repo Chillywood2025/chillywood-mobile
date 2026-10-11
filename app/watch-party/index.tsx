@@ -138,12 +138,12 @@ const getCapturePolicyCopy = (capturePolicy: WatchPartyState["capturePolicy"] | 
 const getPartyJoinPolicyCopy = (joinPolicy: WatchPartyState["joinPolicy"] | null | undefined) =>
   joinPolicy === "locked"
     ? "Party entry stays locked until the host reopens it."
-    : "Signed-in members can join with the room code while the host keeps it open.";
+    : "Signed-in members can request entry with the room code while the host keeps it open.";
 
 const getPartyContentAccessCopy = (contentAccessRule: WatchPartyState["contentAccessRule"] | null | undefined) => {
-  if (contentAccessRule === "premium") return "Premium title access is locked for this device or account.";
-  if (contentAccessRule === "party_pass") return "Party Room Pass access is locked for this device or account.";
-  return "No extra entitlement is required.";
+  if (contentAccessRule === "premium") return "Premium content access is also required.";
+  if (contentAccessRule === "party_pass") return "Any required Party Room Pass is checked for this exact room.";
+  return "Content access is checked separately before joining.";
 };
 
 const getPartyCapturePolicyCopy = (capturePolicy: WatchPartyState["capturePolicy"] | null | undefined) =>
@@ -1873,7 +1873,7 @@ export default function WatchPartyIndexScreen() {
       tone: topRoomCode ? "ready" as const : (isPreparingInitialCode ? "pending" as const : "needed" as const),
     },
   ];
-  const partyPermissionsBody = `${getPartyJoinPolicyCopy(activeRoomContext?.joinPolicy)} ${getPartyContentAccessCopy(activeRoomContext?.contentAccessRule)} ${getPartyCapturePolicyCopy(activeRoomContext?.capturePolicy)}`;
+  const partyPermissionsBody = `${getPartyJoinPolicyCopy(activeRoomContext?.joinPolicy)} Free Party Room entry requires Premium; paid entry requires a valid Party Room Pass for this exact room. ${getPartyContentAccessCopy(activeRoomContext?.contentAccessRule)} ${getPartyCapturePolicyCopy(activeRoomContext?.capturePolicy)}`;
   const waitingRoomReadinessRows = isLiveWaitingRoom ? liveReadinessRows : partyReadinessRows;
   const waitingRoomPermissionsBody = isLiveWaitingRoom ? livePermissionsBody : partyPermissionsBody;
   const sourceGuideStatus = isLiveWaitingRoom
