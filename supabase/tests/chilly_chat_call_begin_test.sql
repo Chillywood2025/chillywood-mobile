@@ -1,5 +1,5 @@
 begin;
-select plan(37);
+select plan(38);
 
 insert into auth.users (id, is_sso_user, is_anonymous)
 values
@@ -73,8 +73,8 @@ select is(
   (select extract(epoch from (expires_at - created_at))::integer
    from public.chat_call_invites
    where thread_id = '4aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
-  90,
-  'new calls retain a full 90-second authority window for delayed provider delivery and native answer'
+  45,
+  'new calls share the server-owned 45-second ringing window without renewing it on delivery'
 );
 
 select set_config(
@@ -162,6 +162,13 @@ values (
 
 select ok(not (select (payload ->> 'created')::boolean from call_begin_results where label = 'busy'), 'callee overlap is rejected before incoming delivery');
 select is((select payload #>> '{invite,status}' from call_begin_results where label = 'busy'), 'busy', 'overlap returns an authoritative busy invite');
+select is(
+  (select extract(epoch from (expires_at - created_at))::integer
+   from public.chat_call_invites
+   where id = ((select payload #>> '{invite,id}' from call_begin_results where label = 'busy'))::uuid),
+  45,
+  'the busy insert branch also uses the prospective 45-second window'
+);
 select is(
   (select count(*)::integer
    from public.chat_call_events

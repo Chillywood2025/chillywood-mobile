@@ -100,6 +100,31 @@ expect(wake(now.addingTimeInterval(-600), elapsed: 90) == .expire,
 expect(wake(now.addingTimeInterval(120), elapsed: 20) == .expire,
   "forward clock adjustment cannot restart an elapsed absolute deadline")
 
+// New server policy is 45 seconds; legacy 90-second invitations above keep
+// their original authority. The same production deadline accepts either value.
+let newExpiry = now.addingTimeInterval(45)
+let newDeadline = ChillywoodIncomingCallDeadline(serverExpiresAt: newExpiry, now: now, uptime: uptime)!
+expect(newDeadline.wakeup(now: now.addingTimeInterval(44), uptime: uptime + 44,
+  ownsCall: true, answered: false, answerPending: false) == .wait(1),
+  "new 45-second invite remains answerable before its exact server deadline")
+expect(newDeadline.wakeup(now: newExpiry, uptime: uptime + 45,
+  ownsCall: true, answered: false, answerPending: false) == .expire,
+  "new invite expires at 45 rather than waiting for a system 60-second end")
+let delayedNewDeadline = ChillywoodIncomingCallDeadline(serverExpiresAt: newExpiry,
+  now: now.addingTimeInterval(30), uptime: uptime + 30)!
+expect(delayedNewDeadline.wakeup(now: now.addingTimeInterval(30), uptime: uptime + 30,
+  ownsCall: true, answered: false, answerPending: false) == .wait(15),
+  "30-second provider delay leaves only the original remaining 15 seconds")
+expect(delayedNewDeadline.wakeup(now: now.addingTimeInterval(60), uptime: uptime + 60,
+  ownsCall: true, answered: false, answerPending: false) == .expire,
+  "late native wakeup never renews the expired 45-second invite")
+expect(newDeadline.wakeup(now: newExpiry, uptime: uptime + 45,
+  ownsCall: true, answered: false, answerPending: true) == .ignore,
+  "new policy preserves a genuine pending Answer completion deadline")
+expect(newDeadline.wakeup(now: newExpiry, uptime: uptime + 45,
+  ownsCall: true, answered: true, answerPending: false) == .ignore,
+  "accepted media outlives the new ringing deadline")
+
 let formatter = ISO8601DateFormatter()
 formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 let serialized = formatter.string(from: serverExpiry)

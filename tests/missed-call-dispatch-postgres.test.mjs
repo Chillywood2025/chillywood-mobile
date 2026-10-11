@@ -10,6 +10,7 @@ import { createCallDispatchHarness, DISPATCH_IDS } from "./assurance/helpers/cha
 const read = (name) => fs.readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8");
 const transition = read("20260718103000_durable_chat_call_status_transition.sql");
 const expiry = read("20260719213953_expire_stale_chilly_chat_calls.sql");
+const authoritativeDeadline = read("20261011101744_chilly_chat_authoritative_ringing_deadline.sql");
 
 // Execute the real response subscription and complete route parser. Only the
 // Expo/OS boundary is controlled; no replacement route or expiry logic is used.
@@ -77,7 +78,8 @@ for (const platform of ["android", "ios"]) {
 // Real checked-in SQL runs in disposable PostgreSQL. Its exact durable result
 // then enters the production HTTP dispatcher at the controlled SDK/provider
 // boundary. This is not a deployed migration, external push or physical proof.
-test("missed PostgreSQL expiry retains durable cleanup and drives exact callee notification dispatch", async () => {
+for (const settlement of ["expiry worker", "late callee decline"]) {
+test(`missed PostgreSQL ${settlement} creates one delivery and exact callee notifications`, async () => {
   const db = new PGlite();
   const ids = DISPATCH_IDS;
   try {
@@ -101,6 +103,7 @@ test("missed PostgreSQL expiry retains durable cleanup and drives exact callee n
     await db.exec(activity.slice(touchStart, activity.indexOf("$$;", touchStart) + 3));
     await db.exec(transition);
     await db.exec(expiry);
+    await db.exec(authoritativeDeadline);
     await db.query("insert into auth.users values($1),($2)", [ids.caller, ids.callee]);
     await db.query("insert into chat_threads values($1,null,null,now())", [ids.thread]);
     await db.query("insert into chat_thread_members values($1,$2),($1,$3)", [ids.thread, ids.caller, ids.callee]);
@@ -109,9 +112,28 @@ test("missed PostgreSQL expiry retains durable cleanup and drives exact callee n
     await assert.rejects(db.query("select transition_chilly_chat_call_invite($1,$2,'missed')", [ids.invite, ids.caller]), /transition_timeout_forbidden/u);
     await assert.rejects(db.query("select transition_chilly_chat_call_invite($1,$2,'missed')", [ids.invite, "00000000-0000-4000-8000-000000000099"]), /transition_not_call_participant/u);
     await db.query("update chat_call_invites set expires_at=now()-interval '1 second' where id=$1", [ids.invite]);
+    if (settlement === "late callee decline") {
+      const lateDecline = (await db.query(
+        "select transition_chilly_chat_call_invite($1,$2,'declined') as result",
+        [ids.invite, ids.callee],
+      )).rows[0].result;
+      assert.equal(lateDecline.invite.status, "missed", "the native End request settles against the actual server deadline");
+      assert.equal(lateDecline.delivery.action, "timeout");
+      assert.equal(lateDecline.idempotent, false);
+      const replay = (await db.query(
+        "select transition_chilly_chat_call_invite($1,$2,'declined') as result",
+        [ids.invite, ids.callee],
+      )).rows[0].result;
+      assert.equal(replay.idempotent, true);
+      assert.equal(replay.delivery.id, lateDecline.delivery.id, "a repeated native End retains the same missed delivery");
+      await assert.rejects(db.query(
+        "select transition_chilly_chat_call_invite($1,$2,'declined')",
+        [ids.invite, ids.caller],
+      ), /transition_decline_forbidden/u);
+    }
     const first = (await db.query("select expire_stale_chilly_chat_call_invites(10) as result")).rows[0].result;
     const second = (await db.query("select expire_stale_chilly_chat_call_invites(10) as result")).rows[0].result;
-    assert.equal(first.expiredCount, 1);
+    assert.equal(first.expiredCount, settlement === "expiry worker" ? 1 : 0);
     assert.equal(second.expiredCount, 0);
     const invite = (await db.query("select * from chat_call_invites where id=$1", [ids.invite])).rows[0];
     const deliveries = (await db.query("select * from chat_call_transition_deliveries")).rows;
@@ -163,3 +185,4 @@ test("missed PostgreSQL expiry retains durable cleanup and drives exact callee n
     await db.close();
   }
 });
+}
