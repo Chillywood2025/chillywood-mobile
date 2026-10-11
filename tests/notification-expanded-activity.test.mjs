@@ -33,6 +33,7 @@ const run = (source, context = {}) => {
   return sandbox;
 };
 const links = run(read("_lib/appLinks.ts")).exports;
+const messageTargets = run(read("_lib/notificationMessageTarget.ts"), { require: () => links }).exports;
 const notifications = sourceAst("_lib/notifications.ts");
 const names = [
   "normalizeJsonRecord", "normalizeText", "normalizeIsoTimestamp", "normalizeNotificationCategory",
@@ -49,6 +50,7 @@ const parseService = (extra = {}) => run(serviceSource, {
   normalizePlatformSubscriptionNotificationCopy: (value) => value,
   normalizeChillyChatRingtoneKey: (value) => value || "chilly_ring",
   resolveApplicationRoute: links.resolveApplicationRoute,
+  resolveNotificationMessagePath: messageTargets.resolveNotificationMessagePath,
   ...extra,
 }).service;
 const service = parseService();
@@ -276,6 +278,6 @@ test("notification navigation never invents focus or action authority", () => {
     assert.equal(service.resolveNotificationPath(route), null, route);
   }
   assert.equal(service.resolveNotificationPath("/chilly-circle?from=notification"), "/chilly-circle?from=notification");
-  const rendered = rowRenderer({ id: "unsafe", notificationType: "circle_request", deepLink: "/chilly-circle?accept=1" });
+  const rendered = rowRenderer({ id: "unsafe", notificationType: "circle_request", deepLink: "/chilly-circle?accept=1", target: { entityId: null, context: {} } });
   assert.equal(descendants(rendered, "TouchableOpacity")[0].props.disabled, true);
 });

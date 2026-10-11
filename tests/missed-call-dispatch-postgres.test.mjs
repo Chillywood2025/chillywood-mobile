@@ -18,9 +18,11 @@ const compile = (source) => ts.transpileModule(source, {
 }).outputText;
 const routeContext = { exports: {}, URL, URLSearchParams };
 vm.runInNewContext(compile(fs.readFileSync(new URL("../_lib/appLinks.ts", import.meta.url), "utf8")), routeContext);
+const messageTargetContext = { exports: {}, URLSearchParams, require: () => routeContext.exports };
+vm.runInNewContext(compile(fs.readFileSync(new URL("../_lib/notificationMessageTarget.ts", import.meta.url), "utf8")), messageTargetContext);
 const notificationSource = fs.readFileSync(new URL("../_lib/notifications.ts", import.meta.url), "utf8");
 const notificationAst = ts.createSourceFile("notifications.ts", notificationSource, ts.ScriptTarget.Latest, true);
-const responseDeclarations = ["normalizeText", "normalizeNotificationPath", "handledNotificationResponseKeys",
+const responseDeclarations = ["normalizeText", "normalizeNotificationPath", "resolveNotificationPath", "handledNotificationResponseKeys",
   "clearApplicationNotificationBadge", "subscribeToNotificationResponses"].map((name) => {
   const declaration = notificationAst.statements.find((node) =>
     (ts.isFunctionDeclaration(node) && node.name?.text === name)
@@ -50,6 +52,7 @@ for (const platform of ["android", "ios"]) {
       let clears = 0;
       const context = { exports: {}, Platform: { OS: platform },
         resolveApplicationRoute: routeContext.exports.resolveApplicationRoute,
+        resolveNotificationMessagePath: messageTargetContext.exports.resolveNotificationMessagePath,
         Notifications: {
           getLastNotificationResponseAsync: async () => entry === "cold" ? response : null,
           addNotificationResponseReceivedListener: (callback) => { listener = callback; return { remove: () => { removed = true; } }; },

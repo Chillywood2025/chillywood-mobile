@@ -20,6 +20,9 @@ const run = (source, extra = {}) => {
 // Execute the actual client response handler and complete route resolver. Only
 // storage, provider transport and native Notifications boundaries are modeled.
 const links = run(read('_lib/appLinks.ts')).exports;
+const messageTargets = run(read('_lib/notificationMessageTarget.ts'), { require: name => {
+  assert.equal(name, './appLinks'); return links;
+} }).exports;
 const ast = ts.createSourceFile('_lib/notifications.ts', read('_lib/notifications.ts'), ts.ScriptTarget.Latest, true);
 const declaration = name => {
   let found;
@@ -32,7 +35,7 @@ const declaration = name => {
   assert.ok(found, `actual client declaration ${name}`);
   return ts.isVariableDeclaration(found) ? `const ${found.getText(ast)};` : found.getText(ast);
 };
-const responseSource = ['normalizeText', 'normalizeNotificationPath', 'subscribeToNotificationResponses']
+const responseSource = ['normalizeText', 'normalizeNotificationPath', 'resolveNotificationPath', 'subscribeToNotificationResponses']
   .map(declaration).join('\n') + '\nglobalThis.subscribe = subscribeToNotificationResponses;';
 const threadId = '00000000-0000-4000-8000-000000000111';
 const route = `/chat/${threadId}`;
@@ -83,6 +86,7 @@ async function client(data, mode = 'listener') {
   const response = { actionIdentifier: 'expo.modules.notifications.actions.DEFAULT',
     notification: { request: { identifier: 'notification-one', content: { data } } } };
   const sandbox = run(responseSource, { resolveApplicationRoute: links.resolveApplicationRoute,
+    resolveNotificationMessagePath: messageTargets.resolveNotificationMessagePath,
     handledNotificationResponseKeys: new Set(),
     clearApplicationNotificationBadge: async () => { observed.badgeClears++; },
     Notifications: {
@@ -106,6 +110,14 @@ for (const platform of ['android', 'ios']) {
       assert.equal(data.deepLink, route);
       repeat();
       assert.deepEqual(observed, { paths: [route], badgeClears: 1, responseClears: 1 });
+    });
+  }
+  for (const mode of ['listener', 'last-response']) {
+    test(`${platform} ${mode}: actual worker message metadata reaches the exact presentation target once`, async () => {
+      const messageId = '00000000-0000-4000-8000-000000000222';
+      const { observed, repeat } = await client(await emittedData(platform, { targetContext: { threadId, messageId } }), mode);
+      repeat();
+      assert.deepEqual(observed, { paths: [`${route}?messageId=${messageId}`], badgeClears: 1, responseClears: 1 });
     });
   }
   for (const [name, data, expected] of [

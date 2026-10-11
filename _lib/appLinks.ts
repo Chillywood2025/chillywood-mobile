@@ -333,7 +333,7 @@ const navigationParams = (pathname: string, params: URLSearchParams) => {
     if (!pathname.startsWith("/chat/")) { valid = false; return; }
     if (name === "openCall" && value === "1") safe.set(name, value);
     else if (name === "startCall" && (value === "voice" || value === "video")) safe.set(name, value);
-    else if ((name === "callInviteId") && UUID_PATTERN.test(value)) safe.set(name, value);
+    else if ((name === "callInviteId" || name === "messageId") && UUID_PATTERN.test(value)) safe.set(name, value);
     else if ((name === "foregroundCallClaim" || name === "nativeCallClaim") && CLAIM_PATTERN.test(value)) safe.set(name, value);
     else if (name === "nativeCallUuid" && (UUID_PATTERN.test(value) || CLAIM_PATTERN.test(value))) safe.set(name, value);
     else if (name === "nativeCallAction" && (value === "answer" || value === "decline")) safe.set(name, value);

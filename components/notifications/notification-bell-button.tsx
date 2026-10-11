@@ -208,7 +208,11 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
     setLoading(false);
     setLoadingMore(false);
     try {
-      const path = resolveNotificationPath(notification.deepLink);
+      const path = resolveNotificationPath(notification.deepLink, {
+        notificationType: notification.notificationType,
+        targetEntityId: notification.target.entityId,
+        targetContext: notification.target.context,
+      });
       const result = await markNotificationRead(notification.id).catch(() => null);
       if (!isCurrent()) return;
       refreshSequence.current += 1;
@@ -268,7 +272,11 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
 
   const renderRow = (notification: NotificationRecord) => {
     const busy = busyId === notification.id;
-    const routeReady = !!resolveNotificationPath(notification.deepLink);
+    const routeReady = !!resolveNotificationPath(notification.deepLink, {
+      notificationType: notification.notificationType,
+      targetEntityId: notification.target.entityId,
+      targetContext: notification.target.context,
+    });
     const createdLabel = formatNotificationTimestamp(notification.createdAt);
     const actionCopy = notification.isExpired
       ? "Expired"

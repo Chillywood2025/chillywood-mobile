@@ -29,6 +29,7 @@ import {
   CHILLY_CHAT_NATIVE_CALL_CHANNEL_ID,
 } from "./chillyChatCallSoundAssets";
 import { resolveApplicationRoute } from "./appLinks";
+import { resolveNotificationMessagePath, type NotificationMessageTarget } from "./notificationMessageTarget";
 import { readCurrentAccountSessionAuthority } from "./accountSessionAuthority";
 import { withAuthorityReadDeadline } from "./entitlementAuthority";
 
@@ -2660,7 +2661,7 @@ export async function revokeCurrentPushInstall(
 
 const normalizeNotificationPath = (value: unknown) => resolveApplicationRoute(value);
 
-export const resolveNotificationPath = (value: unknown) => normalizeNotificationPath(value);
+export const resolveNotificationPath = (value: unknown, target?: NotificationMessageTarget) => resolveNotificationMessagePath(value, target);
 
 export function subscribeToNotificationResponses(onPath: (path: string) => void) {
   const handleResponse = (response: Notifications.NotificationResponse | null) => {
@@ -2670,7 +2671,7 @@ export function subscribeToNotificationResponses(onPath: (path: string) => void)
     const responseKey = `${requestIdentifier}:${actionIdentifier || "default"}`;
     if (responseKey !== ":" && handledNotificationResponseKeys.has(responseKey)) return;
     const data = response.notification.request.content.data as Record<string, unknown>;
-    const path = normalizeNotificationPath(data.path || data.url || data.deepLink);
+    const path = resolveNotificationPath(data.path || data.url || data.deepLink, data);
     if (!path) return;
     if (responseKey !== ":") {
       if (handledNotificationResponseKeys.size >= 128) handledNotificationResponseKeys.clear();
