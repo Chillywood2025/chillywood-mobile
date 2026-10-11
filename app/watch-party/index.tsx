@@ -2069,7 +2069,7 @@ export default function WatchPartyIndexScreen() {
           </AppText>
           {!isLiveWaitingRoom && hostLabel === "You are hosting" ? (
             <AppText scale="footnote" style={styles.permissionsBody}>
-              This Party Room is private. Invite viewers with its room code or link; starting shared playback does not list it on Home or Explore Live.
+              Private keeps your Party off live feeds. Circle shares it with approved Chi&apos;lly Circle members in Home&apos;s Circle Watch-Party section. Public makes it eligible for public live discovery after you start. Viewers still need their own room and content access.
             </AppText>
           ) : null}
         </View>
