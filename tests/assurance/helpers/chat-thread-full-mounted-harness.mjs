@@ -238,7 +238,7 @@ export async function mountFullChatThread(options = {}) {
     userId: "local-user", remoteUserId: "remote-user", threadId: "thread", roomId: "ROOM-LEGACY",
     platform: "android", sessionGeneration: "session-1", errors: [], transitions: [],
     leaves: [], hostEnds: 0, clears: [], nativeEnds: [], notifications: [], timers: [], intervals: [],
-    subscriptions: new Set(), threadSubscriptions: new Set(), ...options,
+    subscriptions: new Set(), threadSubscriptions: new Set(), focused: true, ...options,
   };
   runtime.keyboard = { visible: options.keyboardVisible ?? false, dismissals: 0 };
   runtime.appState = options.appState ?? "active";
@@ -436,10 +436,14 @@ export async function mountFullChatThread(options = {}) {
   const router = { setParams: patch => Object.assign(runtime.params, patch), push: noop, replace: noop, back: noop };
   const modules = {
     "../../_lib/internalCallMediaDiagnostics": { reportInternalCallMediaDiagnostic() {} },
-    react: React, "expo-router": { useFocusEffect: (callback) => React.useEffect(callback, [callback]),
+    react: React, "expo-router": { useFocusEffect: (callback) => {
+      const focused = runtime.focused;
+      React.useEffect(() => focused ? callback() : undefined, [callback, focused]);
+    },
       useLocalSearchParams: () => ({ ...runtime.params, threadId: runtime.threadId }), useRouter: () => router },
     "@expo/vector-icons/MaterialIcons": noop,
     "react-native": { Platform: { OS: runtime.platform }, StyleSheet: { create: (v) => v }, Vibration: { cancel: noop, vibrate: noop },
+      Alert: { alert: (...args) => runtime.errors.push({ alert: args }) },
       AppState: { get currentState() { return runtime.appState; }, addEventListener: (_event, listener) => {
         appStateListeners.add(listener); return { remove: () => appStateListeners.delete(listener) };
       } },
@@ -457,7 +461,7 @@ export async function mountFullChatThread(options = {}) {
     "../../_lib/chillyChatCallDeliveryCopy": { isChillyChatCallDeviceAlertConfirmed: () => false, getChillyChatCallDeliveryMessage: () => "Waiting for answer" },
     "../../_lib/chillyChatCallSoundAssets": { playChillyChatCallSound: async () => null, stopChillyChatCallSound: async () => {} },
     "../../_lib/displayText": { decodeVisiblePercentEscapes: (v) => v },
-    "../../_lib/friendGraph": { readFriendRelationshipState: async () => null },
+    "../../_lib/friendGraph": { readFriendRelationshipState: async () => null, ...options.friendGraph },
     "../../_lib/logger": { reportRuntimeError: (scope, error) => runtime.errors.push({ scope, message: error?.message }) },
     "../../_lib/iosNativeCalls": native,
     "../../_lib/nativeCallTransitionProvenance.mjs": nativeProvenance,
@@ -513,10 +517,23 @@ export async function mountFullChatThread(options = {}) {
   const parsedScreen = ts.createSourceFile("thread.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const panelBindings = new Map();
   const presentationBindings = new Map();
+  const circleBindings = new Map();
+  let circleToggle;
   const requiredPanelBindings = ["showControls", "showMediaControls", "mediaControlsBusy", "onToggleCamera", "onToggleMic", "onSwitchCamera", "onLeave", "onToggleAudioRoute", "speakerEnabled", "mediaControlMessage"];
   const visit = node => {
     if (ts.isJsxElement(node)) {
       const attrs = node.openingElement.attributes.properties;
+      const press = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === "onPress")?.initializer?.expression;
+      const style = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === "style")?.initializer?.expression;
+      if (style?.getText(parsedScreen) === "styles.headerAvatarButton") circleToggle = press.getText(parsedScreen);
+      if (press?.getText(parsedScreen).includes("handleFriendAction(")) {
+        const action = press.getText(parsedScreen).match(/handleFriendAction\("(\w+)"\)/)?.[1];
+        let branch = node;
+        while (ts.isParenthesizedExpression(branch.parent)) branch = branch.parent;
+        assert.ok(action && ts.isConditionalExpression(branch.parent), "Circle actions must retain their real render condition");
+        const disabled = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === "disabled").initializer.expression;
+        circleBindings.set(action, `{ visible: Boolean(${branch.parent.condition.getText(parsedScreen)}), disabled: (${disabled.getText(parsedScreen)}), onPress: (${press.getText(parsedScreen)}) }`);
+      }
       const testId = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === "testID")?.initializer?.text;
       if (testId === "chat-thread-incoming-call-banner") {
         let branch = node;
@@ -545,6 +562,9 @@ export async function mountFullChatThread(options = {}) {
   visit(parsedScreen);
   assert.equal(panelBindings.size, requiredPanelBindings.length, "actual panel bindings must remain observable");
   assert.equal(presentationBindings.size, 4, "actual ringing presentation bindings must remain observable");
+  assert.equal(circleBindings.size, 5, "actual Circle actions must remain observable");
+  assert.ok(circleToggle, "actual header action must remain observable");
+  const circleBindingSource = [...circleBindings].map(([name, expression]) => `${name}: ${expression}`).join(",");
   const panelBindingSource = [...panelBindings].map(([name, expression]) => `${name}: (${expression})`).join(",");
   const presentationBindingSource = [...presentationBindings].map(([name, expression]) => `${name}: (${expression})`).join(",");
   const screenFunction = parsedScreen.statements.find(node => ts.isFunctionDeclaration(node) && node.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.DefaultKeyword));
@@ -558,6 +578,8 @@ export async function mountFullChatThread(options = {}) {
   source = source.slice(0, source.indexOf(marker)) + `
     ${presentationDeclarations}
     useLayoutEffect(() => { runtime.snapshot = { loading, error, callControlError,
+      friendState, friendStatusSummary, friendLoading, friendBusy,
+      circleControls: { ${circleBindingSource} }, circleToggle: (${circleToggle}), handleFriendAction,
       panelBindings: { ${panelBindingSource} },
       presentation: { ${presentationBindingSource} },
       callBusy, callPanelOpen, activeCallInvite, activeCallRoomId, incomingCallInvite,
