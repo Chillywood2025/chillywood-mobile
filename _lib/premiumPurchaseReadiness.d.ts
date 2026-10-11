@@ -1,6 +1,7 @@
 export type PremiumPurchaseReadinessCode =
   | "sign_in_required"
   | "premium_already_active"
+  | "premium_verification_pending"
   | "purchase_shell_unavailable"
   | "store_rail_readback_unavailable"
   | "store_rail_not_sandbox"
@@ -19,6 +20,7 @@ export type PremiumPurchaseReadiness = {
 export function resolvePremiumPurchaseReadiness(input: {
   isSignedIn: boolean;
   hasPremium: boolean;
+  storePremiumActive?: boolean;
   purchaseMode: "public" | "internal_tester_sandbox";
   purchaseShellAvailable: boolean;
   sandboxModeReason?: string | null;

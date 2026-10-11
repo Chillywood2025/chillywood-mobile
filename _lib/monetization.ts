@@ -562,6 +562,9 @@ let cachedMonetizationSnapshot: MonetizationSnapshot = createEmptyMonetizationSn
   null,
 );
 let cachedMonetizationAuthority: AccountSessionAuthorityBinding | null = null;
+let monetizationReadGeneration = 0;
+let cachedMonetizationReadGeneration = -1;
+let observedMonetizationAuthority = getCurrentAccountSessionAuthoritySnapshot();
 let lastTrackedMonetizationSnapshotSignature = "";
 
 const monetizationSnapshotListeners = new Set<() => void>();
@@ -666,8 +669,12 @@ const notifyMonetizationSnapshotListeners = () => {
 };
 
 subscribeToAccountSessionAuthority((authority) => {
+  if (!sameAccountSessionAuthority(observedMonetizationAuthority, authority)
+    && (observedMonetizationAuthority !== null || authority !== null)) monetizationReadGeneration += 1;
+  observedMonetizationAuthority = authority;
   if (sameAccountSessionAuthority(cachedMonetizationAuthority, authority)) return;
   cachedMonetizationAuthority = null;
+  cachedMonetizationReadGeneration = -1;
   cachedMonetizationSnapshot = createEmptyMonetizationSnapshot(cachedMonetizationSnapshot.configuration, authority?.userId ?? null);
   notifyMonetizationSnapshotListeners();
 });
@@ -1001,6 +1008,7 @@ export const buildMonetizationGateResolution = (
 export const setCachedMonetizationSnapshot = (
   snapshot: MonetizationSnapshot,
   authority: AccountSessionAuthorityBinding | null,
+  readGeneration?: number,
 ) => {
   const currentAuthority = getCurrentAccountSessionAuthoritySnapshot();
   const authorityStillCurrent = authority
@@ -1010,7 +1018,14 @@ export const setCachedMonetizationSnapshot = (
     const current = createEmptyMonetizationSnapshot(snapshot.configuration, currentAuthority?.userId ?? null);
     return { ...current, issues: [...current.issues, "Account changed before monetization authority could be committed."] };
   }
+  if (readGeneration !== undefined && readGeneration !== monetizationReadGeneration) {
+    if (cachedMonetizationReadGeneration === monetizationReadGeneration
+      && sameAccountSessionAuthority(cachedMonetizationAuthority, currentAuthority)) return cachedMonetizationSnapshot;
+    const current = createEmptyMonetizationSnapshot(snapshot.configuration, currentAuthority?.userId ?? null);
+    return { ...current, issues: [...current.issues, "A newer Premium status check is in progress. Recheck before continuing."] };
+  }
   cachedMonetizationSnapshot = snapshot;
+  cachedMonetizationReadGeneration = readGeneration ?? ++monetizationReadGeneration;
   cachedMonetizationAuthority = authority;
   notifyMonetizationSnapshotListeners();
   return snapshot;
@@ -1066,12 +1081,28 @@ export function subscribeToMonetizationSnapshot(listener: () => void) {
   };
 }
 
+export const PREMIUM_VERIFICATION_PENDING_MESSAGE =
+  "Your store reports an active Premium subscription. Account access is still being verified. Recheck status or restore purchases; do not purchase again.";
+
+// This provider signal prevents a duplicate purchase; it never grants access.
+export function hasCurrentStorePremiumSubscription(snapshot: MonetizationSnapshot) {
+  if (!snapshot.customerInfoLoaded || snapshot.isAnonymousCustomer || !snapshot.userId
+    || snapshot.revenueCatAppUserId !== snapshot.userId) return false;
+  return snapshot.activeProductIds.some((raw) => {
+    const product = String(raw ?? "").trim();
+    return Platform.OS === "ios"
+      ? product === "com.chillywood.premium.monthly" || product === "com.chillywood.premium.yearly"
+      : Platform.OS === "android" && product.split(":")[0] === "premium_subscription";
+  });
+}
+
 export async function readMonetizationSnapshot(options?: {
   forceRefresh?: boolean;
   userId?: string | null;
   purchaseMode?: MonetizationPurchaseMode | null;
   expectedAuthority?: AccountSessionAuthorityBinding | null;
 }): Promise<MonetizationSnapshot> {
+  const readGeneration = ++monetizationReadGeneration;
   if (options?.userId === null) return createEmptyMonetizationSnapshot(cachedMonetizationSnapshot.configuration, null);
   const requestedUserId = normalizeOptionalIdentity(options?.userId);
   const expectedAuthority = options?.expectedAuthority;
@@ -1182,7 +1213,7 @@ export async function readMonetizationSnapshot(options?: {
       status: snapshot.status,
     });
 
-    const resolvedSnapshot = setCachedMonetizationSnapshot(snapshot, authority);
+    const resolvedSnapshot = setCachedMonetizationSnapshot(snapshot, authority, readGeneration);
     trackMonetizationSnapshotResolution(resolvedSnapshot);
     return resolvedSnapshot;
   } catch {
@@ -1197,7 +1228,7 @@ export async function readMonetizationSnapshot(options?: {
       status: "partial",
       issues: [...baseSnapshot.issues, "Failed to refresh the monetization snapshot."],
       updatedAt: Date.now(),
-    }, authority);
+    }, authority, readGeneration);
     trackMonetizationSnapshotResolution(fallbackSnapshot);
     return fallbackSnapshot;
   }
@@ -1299,6 +1330,10 @@ export async function purchaseMonetizationTarget(
       customerInfo: null,
       message: `${target.label} is already active for this account.`,
     };
+  }
+
+  if (targetId === "premium_subscription" && hasCurrentStorePremiumSubscription(snapshot)) {
+    return { ok: false, target: targetId, snapshot, customerInfo: null, message: PREMIUM_VERIFICATION_PENDING_MESSAGE };
   }
 
   const offerings = await readRevenueCatOfferings();
@@ -1670,6 +1705,14 @@ export async function readMonetizationAccessSheetState(options: {
     || targetId === "premium_watch_party_access"
     || targetId === "paid_title_access";
   const purchaseShellAvailable = isPremiumPurchaseShellAvailableForMode(purchaseMode);
+  if ((targetId === "premium_subscription" || gateReason === "premium_required") && !snapshot.targets.premium_subscription.hasEntitlement
+    && hasCurrentStorePremiumSubscription(snapshot)) {
+    return {
+      snapshot, presentation, primaryAction: "retry", primaryLabel: "Recheck Premium Status", primaryDisabled: false,
+      helperKicker: "VERIFICATION PENDING", helperBody: PREMIUM_VERIFICATION_PENDING_MESSAGE,
+      helperTone: "warning", offer: null, canRestore: true, canManage: true,
+    };
+  }
   if (gateReason === "entitlement_unknown") {
     return {
       snapshot, presentation, primaryAction: "retry", primaryLabel: "Check Premium Status", primaryDisabled: false,

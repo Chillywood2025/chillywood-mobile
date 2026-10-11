@@ -101,15 +101,17 @@ const checks = [
     ok: subscribe.includes("hasCurrentStorePremiumSubscription")
       && subscribe.includes("currentStorePremiumActive")
       && subscribe.includes("premiumActiveOutsideCurrentStore")
-      && subscribe.includes("canManage = isSignedIn && snapshot.configuration.shouldConfigure && currentStorePremiumActive")
+      && subscribe.includes("canManage = currentOwner() && snapshot.configuration.shouldConfigure && currentStorePremiumActive")
       && subscribe.includes("There is no active ${STORE_PROVIDER_NAME} Premium subscription to manage on this device."),
     detail: "Account-wide Premium does not imply the current device store has a subscription to manage.",
   },
   {
     id: "ios_premium_management_requires_ios_product",
-    ok: subscribe.includes('"com.chillywood.premium.monthly"')
-      && subscribe.includes('"com.chillywood.premium.yearly"')
-      && subscribe.includes("Platform.OS === \"ios\" ? IOS_PREMIUM_PRODUCT_IDS : ANDROID_PREMIUM_PRODUCT_IDS"),
+    ok: subscribe.includes("hasCurrentStorePremiumSubscription(snapshot)")
+      && monetization.includes("export function hasCurrentStorePremiumSubscription(snapshot: MonetizationSnapshot)")
+      && monetization.includes('snapshot.revenueCatAppUserId !== snapshot.userId')
+      && monetization.includes('return Platform.OS === "ios"\n      ? product === "com.chillywood.premium.monthly" || product === "com.chillywood.premium.yearly"')
+      && monetization.includes('Platform.OS === "android" && product.split(":")[0] === "premium_subscription"'),
     detail: "iOS subscription management is exposed only when RevenueCat reports an active Chi'llywood App Store Premium product.",
   },
   {

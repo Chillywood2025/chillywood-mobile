@@ -1,11 +1,12 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, ImageBackground, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
 import {
   getCachedMonetizationSnapshot,
+  hasCurrentStorePremiumSubscription,
   INTERNAL_TESTER_SANDBOX_PURCHASE_MODE,
   isPremiumPurchaseShellAvailableForMode,
   openManageSubscriptionFlow,
@@ -19,7 +20,7 @@ import {
   type MonetizationPurchaseMode,
 } from "../_lib/monetization";
 import { useOptionalBetaProgram } from "../_lib/betaProgram";
-import { getCurrentAccountSessionAuthoritySnapshot } from "../_lib/accountSessionAuthority";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../_lib/accountSessionAuthority";
 import { resolvePremiumPurchaseReadiness } from "../_lib/premiumPurchaseReadiness.mjs";
 import { useSession } from "../_lib/session";
 import {
@@ -36,22 +37,6 @@ const PREMIUM_PURCHASE_PREVIEW_NOTICE =
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../assets/images/chillywood-branded-background.png");
 const STORE_PROVIDER_NAME = Platform.OS === "ios" ? "App Store" : "Google Play";
 const STORE_PROVIDER_PAIR = `${STORE_PROVIDER_NAME} / RevenueCat`;
-const IOS_PREMIUM_PRODUCT_IDS = new Set([
-  "com.chillywood.premium.monthly",
-  "com.chillywood.premium.yearly",
-]);
-const ANDROID_PREMIUM_PRODUCT_IDS = new Set(["premium_subscription"]);
-
-const hasCurrentStorePremiumSubscription = (snapshot: MonetizationSnapshot) => {
-  const allowed = Platform.OS === "ios" ? IOS_PREMIUM_PRODUCT_IDS : ANDROID_PREMIUM_PRODUCT_IDS;
-  return snapshot.activeProductIds.some((rawProductId) => {
-    const productId = String(rawProductId ?? "").trim();
-    if (!productId) return false;
-    if (allowed.has(productId)) return true;
-    return Platform.OS === "android" && allowed.has(productId.split(":")[0] ?? "");
-  });
-};
-
 const buildPurchaseReadiness = (
   snapshot: MonetizationSnapshot,
   purchaseMode: MonetizationPurchaseMode,
@@ -62,6 +47,7 @@ const buildPurchaseReadiness = (
   return resolvePremiumPurchaseReadiness({
     isSignedIn,
     hasPremium: target.hasEntitlement,
+    storePremiumActive: hasCurrentStorePremiumSubscription(snapshot),
     purchaseMode,
     purchaseShellAvailable: isPremiumPurchaseShellAvailableForMode(purchaseMode),
     sandboxModeReason: sandboxMode.reason,
@@ -150,9 +136,23 @@ function StatusLine({
 export default function SubscribeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isLoading: sessionLoading, isSignedIn, user } = useSession();
+  const { isLoading: sessionLoading, isSignedIn, user, authority, authorityStatus } = useSession();
   const betaProgram = useOptionalBetaProgram();
-  const [snapshot, setSnapshot] = useState(() => getCachedMonetizationSnapshot());
+  const ownerKey = !sessionLoading && isSignedIn && authorityStatus === "active" && authority && !authority.restoreOnly
+    && authority.userId === user?.id
+    ? JSON.stringify([authority.userId, authority.accountId, authority.sessionGeneration]) : "unavailable";
+  const scopeRef = useRef({ key: ownerKey, readGeneration: 0 });
+  if (scopeRef.current.key !== ownerKey) scopeRef.current = { key: ownerKey, readGeneration: 0 };
+  const scope = scopeRef.current;
+  const actionRef = useRef<typeof scope | null>(null);
+  const mountedRef = useRef(true);
+  const currentOwner = useCallback(() => mountedRef.current && scopeRef.current === scope && ownerKey !== "unavailable"
+    && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot()), [authority, ownerKey, scope]);
+  const [snapshotState, setSnapshotState] = useState(() => ({ key: ownerKey, value: getCachedMonetizationSnapshot() }));
+  const snapshot = snapshotState.key === ownerKey ? snapshotState.value : getCachedMonetizationSnapshot();
+  const setSnapshot = useCallback((value: MonetizationSnapshot) => {
+    if (currentOwner() && value.userId === authority?.userId) setSnapshotState({ key: ownerKey, value });
+  }, [authority?.userId, currentOwner, ownerKey]);
   const [sandboxMode, setSandboxMode] = useState<InternalTesterSandboxPurchaseModeState>({
     enabled: false,
     mode: "public",
@@ -167,6 +167,7 @@ export default function SubscribeScreen() {
     storePurchaseRailReadbackComplete: false,
   });
   const [loading, setLoading] = useState(false);
+  const [snapshotReadFailed, setSnapshotReadFailed] = useState(false);
   const [purchaseBusy, setPurchaseBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [manageBusy, setManageBusy] = useState(false);
@@ -174,28 +175,49 @@ export default function SubscribeScreen() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; scopeRef.current.readGeneration += 1; };
+  }, []);
+
+  useEffect(() => {
+    setLoading(false); setSnapshotReadFailed(false); setPurchaseBusy(false); setRestoreBusy(false); setManageBusy(false); setNotice(null);
+  }, [ownerKey]);
+
+  useEffect(() => {
     const unsubscribe = subscribeToMonetizationSnapshot(() => {
       setSnapshot(getCachedMonetizationSnapshot());
     });
     return unsubscribe;
-  }, []);
+  }, [setSnapshot]);
 
   const activePurchaseMode = sandboxMode.enabled ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE : "public";
 
   const refreshSnapshot = useCallback(async (forceRefresh = true, mode: MonetizationPurchaseMode = activePurchaseMode) => {
+    if (!currentOwner()) return null;
+    const generation = ++scope.readGeneration;
+    const current = () => currentOwner() && generation === scope.readGeneration;
     setLoading(true);
     try {
       const nextSnapshot = await readMonetizationSnapshot({
         forceRefresh,
         purchaseMode: mode,
         userId: user?.id ?? null,
+        expectedAuthority: authority,
       });
+      if (!current()) return null;
+      setSnapshotReadFailed(false);
       setSnapshot(nextSnapshot);
       return nextSnapshot;
+    } catch {
+      if (current()) {
+        setSnapshotReadFailed(true);
+        setNotice("Unable to check Premium status. Try again or restore purchases.");
+      }
+      return null;
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
-  }, [activePurchaseMode, user?.id]);
+  }, [activePurchaseMode, authority, currentOwner, scope, setSnapshot, user?.id]);
 
   useEffect(() => {
     if (sessionLoading || !isSignedIn) {
@@ -222,12 +244,12 @@ export default function SubscribeScreen() {
       betaAccessActive: betaProgram?.isActive === true,
     })
       .then((state) => {
-        if (!active) return;
+        if (!active || !currentOwner()) return;
         setSandboxMode(state);
         void refreshSnapshot(false, state.mode);
       })
       .catch(() => {
-        if (!active) return;
+        if (!active || !currentOwner()) return;
         setSandboxMode({
           enabled: false,
           mode: "public",
@@ -246,14 +268,14 @@ export default function SubscribeScreen() {
     return () => {
       active = false;
     };
-  }, [betaProgram?.isActive, isSignedIn, refreshSnapshot, sessionLoading, user?.email, user?.id]);
+  }, [betaProgram?.isActive, currentOwner, isSignedIn, refreshSnapshot, sessionLoading, user?.email, user?.id]);
 
   useFocusEffect(
     useCallback(() => {
       if (sessionLoading) return undefined;
       void refreshSnapshot(true, activePurchaseMode);
-      return undefined;
-    }, [activePurchaseMode, refreshSnapshot, sessionLoading]),
+      return () => { scope.readGeneration += 1; };
+    }, [activePurchaseMode, refreshSnapshot, scope, sessionLoading]),
   );
 
   useEffect(() => {
@@ -271,25 +293,28 @@ export default function SubscribeScreen() {
   }, []);
 
   const premiumTarget = snapshot.targets.premium_subscription;
-  const hasPremium = !!premiumTarget.hasEntitlement;
-  const currentStorePremiumActive = hasPremium && hasCurrentStorePremiumSubscription(snapshot);
+  const hasPremium = currentOwner() && !snapshotReadFailed && !!premiumTarget.hasEntitlement;
+  const currentStorePremiumActive = currentOwner() && hasCurrentStorePremiumSubscription(snapshot);
+  const premiumVerificationPending = currentStorePremiumActive && !hasPremium;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained subscription state contract; the current render path intentionally does not read it.
   const premiumActiveOutsideCurrentStore = hasPremium && !currentStorePremiumActive;
-  const purchaseReadiness = buildPurchaseReadiness(snapshot, activePurchaseMode, sandboxMode, isSignedIn);
-  const purchaseReady = purchaseReadiness.ready;
+  const purchaseReadiness = snapshotReadFailed
+    ? { ready: false, message: "Unable to check Premium status. Recheck or restore purchases before continuing." }
+    : buildPurchaseReadiness(snapshot, activePurchaseMode, sandboxMode, isSignedIn);
+  const purchaseReady = !snapshotReadFailed && purchaseReadiness.ready;
   const sandboxPurchaseAvailable = sandboxMode.enabled && purchaseReady && !hasPremium;
   const sandboxBlockedReason = purchaseReadiness.message;
-  const canPurchase = isSignedIn && purchaseReady && !hasPremium;
-  const canRestore = isSignedIn && snapshot.configuration.shouldConfigure;
-  const canManage = isSignedIn && snapshot.configuration.shouldConfigure && currentStorePremiumActive;
+  const canPurchase = currentOwner() && purchaseReady && !hasPremium;
+  const canRestore = currentOwner() && snapshot.configuration.shouldConfigure;
+  const canManage = currentOwner() && snapshot.configuration.shouldConfigure && currentStorePremiumActive;
   const busy = loading || purchaseBusy || restoreBusy || manageBusy;
-  const purchaseStatusLabel = hasPremium
+  const purchaseStatusLabel = premiumVerificationPending ? "Verification pending" : hasPremium
     ? "Entitled"
     : sandboxMode.enabled
       ? purchaseReady ? "Purchase available" : "Temporarily unavailable"
       : purchaseReady ? "Available" : "Temporarily unavailable";
   const purchaseStatusTone = purchaseReady || hasPremium ? "default" : "warning";
-  const availabilitySummary = hasPremium
+  const availabilitySummary = premiumVerificationPending ? purchaseReadiness.message : hasPremium
     ? currentStorePremiumActive
       ? `An active Premium subscription is present on ${STORE_PROVIDER_NAME}.`
       : `Premium is active for this account, but there is no active ${STORE_PROVIDER_NAME} Premium subscription to manage on this device.`
@@ -298,7 +323,7 @@ export default function SubscribeScreen() {
         ? `Premium is available through ${STORE_PROVIDER_NAME} for this account.`
         : "A verified store subscription is ready for this account."
       : FRIENDLY_UNAVAILABLE_MESSAGE;
-  const primaryActionLabel = hasPremium
+  const primaryActionLabel = premiumVerificationPending ? "Recheck Premium status" : hasPremium
     ? currentStorePremiumActive ? "Manage subscription" : "Done"
     : purchaseReady
       ? "Start Premium"
@@ -321,6 +346,21 @@ export default function SubscribeScreen() {
     router.replace("/");
   }, [router]);
 
+  const onRecheckPendingPremium = useCallback(async () => {
+    if (!currentOwner() || actionRef.current === scope) return;
+    actionRef.current = scope;
+    setPurchaseBusy(true);
+    setNotice("Checking Premium status…");
+    try {
+      const nextSnapshot = await refreshSnapshot(true, activePurchaseMode);
+      if (!nextSnapshot || !currentOwner()) return;
+      setNotice(buildPurchaseReadiness(nextSnapshot, activePurchaseMode, sandboxMode, true).message);
+    } finally {
+      if (actionRef.current === scope) actionRef.current = null;
+      if (currentOwner()) setPurchaseBusy(false);
+    }
+  }, [activePurchaseMode, currentOwner, refreshSnapshot, sandboxMode, scope]);
+
   const onPurchase = useCallback(async () => {
     if (!isSignedIn) {
       onSignIn();
@@ -328,7 +368,7 @@ export default function SubscribeScreen() {
     }
     const initiatingAuthority = getCurrentAccountSessionAuthoritySnapshot();
     if (
-      !initiatingAuthority
+      !currentOwner() || actionRef.current === scope || !initiatingAuthority
       || initiatingAuthority.restoreOnly
       || initiatingAuthority.userId !== user?.id
     ) {
@@ -336,82 +376,93 @@ export default function SubscribeScreen() {
       return;
     }
 
-    let requestedPurchaseMode: MonetizationPurchaseMode = activePurchaseMode;
-    let requestedPackageId = premiumTarget.recommendedPackageId;
+    actionRef.current = scope;
+    setPurchaseBusy(true);
+    try {
+      let requestedPurchaseMode: MonetizationPurchaseMode = activePurchaseMode;
+      let requestedPackageId = premiumTarget.recommendedPackageId;
 
-    if (!canPurchase) {
-      setNotice(`Checking ${STORE_PROVIDER_NAME} purchase availability...`);
-      setExpanded((current) => ({ ...current, "purchase-details": true }));
+      if (!canPurchase) {
+        setNotice(`Checking ${STORE_PROVIDER_NAME} purchase availability...`);
+        setExpanded((current) => ({ ...current, "purchase-details": true }));
 
-      try {
-        const nextSandboxMode = await resolveInternalTesterSandboxPurchaseMode({
-          userId: user?.id ?? null,
-          email: user?.email ?? null,
-          betaAccessActive: betaProgram?.isActive === true,
-        });
-        requestedPurchaseMode = nextSandboxMode.enabled
-          ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE
-          : "public";
-        setSandboxMode(nextSandboxMode);
+        try {
+          const nextSandboxMode = await resolveInternalTesterSandboxPurchaseMode({
+            userId: user?.id ?? null,
+            email: user?.email ?? null,
+            betaAccessActive: betaProgram?.isActive === true,
+          });
+          if (!currentOwner()) return;
+          requestedPurchaseMode = nextSandboxMode.enabled
+            ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE
+            : "public";
+          setSandboxMode(nextSandboxMode);
 
-        const nextSnapshot = await refreshSnapshot(true, requestedPurchaseMode);
-        setSnapshot(nextSnapshot);
-        requestedPackageId = nextSnapshot.targets.premium_subscription.recommendedPackageId;
-        const nextReadiness = buildPurchaseReadiness(
-          nextSnapshot,
-          requestedPurchaseMode,
-          nextSandboxMode,
-          true,
-        );
+          const nextSnapshot = await refreshSnapshot(true, requestedPurchaseMode);
+          if (!nextSnapshot || !currentOwner()) return;
+          requestedPackageId = nextSnapshot.targets.premium_subscription.recommendedPackageId;
+          const nextReadiness = buildPurchaseReadiness(
+            nextSnapshot,
+            requestedPurchaseMode,
+            nextSandboxMode,
+            true,
+          );
 
-        if (!nextReadiness.ready) {
-          setNotice(nextReadiness.message);
+          if (!nextReadiness.ready) {
+            setNotice(nextReadiness.message);
+            return;
+          }
+        } catch {
+          if (currentOwner()) setNotice(`Unable to verify ${STORE_PROVIDER_NAME} purchase availability right now. Try again.`);
           return;
         }
-      } catch {
-        setNotice(`Unable to verify ${STORE_PROVIDER_NAME} purchase availability right now. Try again.`);
-        return;
       }
-    }
 
-    setPurchaseBusy(true);
-    setNotice(`Opening ${STORE_PROVIDER_NAME}…`);
-    trackEvent("premium_subscribe_purchase_requested", {
-      source: "subscribe",
-      snapshotStatus: snapshot.status,
-      packageId: requestedPackageId ?? "recommended",
-      purchaseMode: requestedPurchaseMode,
-    });
-
-    try {
-      const result = await purchaseMonetizationTarget("premium_subscription", {
-        userId: user?.id ?? null,
-        packageId: requestedPackageId,
+      if (!currentOwner()) return;
+      setNotice(`Opening ${STORE_PROVIDER_NAME}…`);
+      trackEvent("premium_subscribe_purchase_requested", {
+        source: "subscribe",
+        snapshotStatus: snapshot.status,
+        packageId: requestedPackageId ?? "recommended",
         purchaseMode: requestedPurchaseMode,
-        initiatingAuthority,
-        onPhase: (phase) => {
-          setNotice(phase === "store_processing"
-            ? `${STORE_PROVIDER_NAME} is processing the subscription…`
-            : phase === "restoring_existing"
-              ? "Existing subscription found. Restoring it to this account…"
-              : "Verifying Premium access…");
-        },
       });
-      setNotice(result.message);
-      setSnapshot(result.snapshot);
-    } catch {
-      setNotice("Unable to start Premium purchase right now.");
+
+      try {
+        const result = await purchaseMonetizationTarget("premium_subscription", {
+          userId: user?.id ?? null,
+          packageId: requestedPackageId,
+          purchaseMode: requestedPurchaseMode,
+          initiatingAuthority,
+          onPhase: (phase) => {
+            if (!currentOwner()) return;
+            setNotice(phase === "store_processing"
+              ? `${STORE_PROVIDER_NAME} is processing the subscription…`
+              : phase === "restoring_existing"
+                ? "Existing subscription found. Restoring it to this account…"
+                : "Verifying Premium access…");
+          },
+        });
+        if (!currentOwner()) return;
+        setNotice(result.message);
+        setSnapshot(getCachedMonetizationSnapshot());
+      } catch {
+        if (currentOwner()) setNotice("Unable to start Premium purchase right now.");
+      }
     } finally {
-      setPurchaseBusy(false);
+      if (actionRef.current === scope) actionRef.current = null;
+      if (currentOwner()) setPurchaseBusy(false);
     }
   }, [
     activePurchaseMode,
     betaProgram?.isActive,
     canPurchase,
+    currentOwner,
     isSignedIn,
     onSignIn,
     premiumTarget.recommendedPackageId,
     refreshSnapshot,
+    scope,
+    setSnapshot,
     snapshot.status,
     user?.email,
     user?.id,
@@ -424,7 +475,7 @@ export default function SubscribeScreen() {
     }
     const initiatingAuthority = getCurrentAccountSessionAuthoritySnapshot();
     if (
-      !initiatingAuthority
+      !currentOwner() || actionRef.current === scope || !initiatingAuthority
       || initiatingAuthority.restoreOnly
       || initiatingAuthority.userId !== user?.id
     ) {
@@ -437,6 +488,7 @@ export default function SubscribeScreen() {
       return;
     }
 
+    actionRef.current = scope;
     setRestoreBusy(true);
     setNotice("Restoring purchases...");
     trackEvent("premium_subscribe_restore_requested", {
@@ -450,21 +502,25 @@ export default function SubscribeScreen() {
         userId: user?.id ?? null,
         initiatingAuthority,
         onPhase: (phase) => {
+          if (!currentOwner()) return;
           setNotice(phase === "verifying_authority"
             ? "Verifying restored Premium access…"
             : "Restoring purchases for this account…");
         },
       });
-      setNotice(result.snapshot.targets.premium_subscription.hasEntitlement
+      if (!currentOwner()) return;
+      const currentSnapshot = getCachedMonetizationSnapshot();
+      setNotice(currentSnapshot.targets.premium_subscription.hasEntitlement
         ? "Purchases restored. Premium is active."
         : result.message);
-      setSnapshot(result.snapshot);
+      setSnapshot(currentSnapshot);
     } catch {
-      setNotice("Unable to restore purchases right now.");
+      if (currentOwner()) setNotice("Unable to restore purchases right now.");
     } finally {
-      setRestoreBusy(false);
+      if (actionRef.current === scope) actionRef.current = null;
+      if (currentOwner()) setRestoreBusy(false);
     }
-  }, [activePurchaseMode, canRestore, isSignedIn, onSignIn, snapshot.status, user?.id]);
+  }, [activePurchaseMode, canRestore, currentOwner, isSignedIn, onSignIn, scope, setSnapshot, snapshot.status, user?.id]);
 
   const onManage = useCallback(async () => {
     if (!isSignedIn) {
@@ -480,11 +536,12 @@ export default function SubscribeScreen() {
     setManageBusy(true);
     try {
       const opened = await openManageSubscriptionFlow();
+      if (!currentOwner()) return;
       setNotice(opened ? `Opened the ${STORE_PROVIDER_NAME} subscription manager.` : `Unable to open ${STORE_PROVIDER_NAME} subscription management on this device.`);
     } finally {
-      setManageBusy(false);
+      if (currentOwner()) setManageBusy(false);
     }
-  }, [canManage, isSignedIn, onSignIn]);
+  }, [canManage, currentOwner, isSignedIn, onSignIn]);
 
   return (
     <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.background} resizeMode="cover">
@@ -538,16 +595,16 @@ export default function SubscribeScreen() {
         <>
           <View style={styles.card} testID="premium-status-card" collapsable={false}>
             <View testID={hasPremium ? "premium-active-receipt" : undefined}>
-              <Text style={styles.cardTitle}>{hasPremium ? "Premium is active." : "Premium is not active."}</Text>
+              <Text style={styles.cardTitle}>{premiumVerificationPending ? "Premium verification is pending." : hasPremium ? "Premium is active." : "Premium is not active."}</Text>
               <Text style={styles.body}>
-                {hasPremium
+                {premiumVerificationPending ? purchaseReadiness.message : hasPremium
                   ? currentStorePremiumActive
                     ? `Your Premium access is active and managed through ${STORE_PROVIDER_NAME}.`
                     : `Your Premium access is active on this account. There is no active ${STORE_PROVIDER_NAME} Premium subscription on this device to manage.`
                   : purchaseReady ? "Choose Premium to continue." : FRIENDLY_UNAVAILABLE_MESSAGE}
               </Text>
             </View>
-            {sandboxMode.enabled && !hasPremium ? (
+            {sandboxMode.enabled && !hasPremium && !premiumVerificationPending ? (
               <View style={styles.sandboxNotice}>
                 <Text style={styles.sandboxNoticeText}>{PREMIUM_PURCHASE_PREVIEW_NOTICE}</Text>
               </View>
@@ -557,10 +614,10 @@ export default function SubscribeScreen() {
               style={[styles.primaryButton, busy && styles.primaryButtonDisabled]}
               activeOpacity={0.88}
               disabled={busy}
-              onPress={hasPremium ? (currentStorePremiumActive ? onManage : onSecondaryClose) : onPurchase}
+              onPress={premiumVerificationPending ? onRecheckPendingPremium : hasPremium ? (currentStorePremiumActive ? onManage : onSecondaryClose) : onPurchase}
               testID="premium-purchase-button"
               accessibilityRole="button"
-              accessibilityLabel={hasPremium
+              accessibilityLabel={premiumVerificationPending ? "Recheck Premium status" : hasPremium
                 ? currentStorePremiumActive
                   ? `Manage Chi'llywood Premium subscription in ${STORE_PROVIDER_NAME}`
                   : "Done with Chi'llywood Premium"
