@@ -12,7 +12,7 @@ export type LiveDiscoveryFeedOptions = Omit<PublicDiscoveryFeedReadOptions, 'ite
   enabled?: boolean;
   includeCircle?: boolean;
 };
-const empty = () => ({ items: [] as DiscoveryFeedItem[], publicItems: [] as DiscoveryFeedItem[], circleItems: [] as DiscoveryFeedItem[], signals: {} as DiscoveryFeedRankingSignals });
+const empty = () => ({ items: [] as DiscoveryFeedItem[], publicItems: [] as DiscoveryFeedItem[], circleItems: [] as DiscoveryFeedItem[], signals: {} as DiscoveryFeedRankingSignals, ready: false });
 
 // Read-only refresh; audience and playback access continue to be enforced by the existing views and destinations.
 export function useLiveDiscoveryFeed(options: LiveDiscoveryFeedOptions = {}) {
@@ -61,7 +61,7 @@ export function useLiveDiscoveryFeed(options: LiveDiscoveryFeedOptions = {}) {
           const publicItems = publicResult.items;
           const circleItems = circleResult?.items ?? [];
           const items = Array.from(new Map([...publicItems, ...circleItems].map((item) => [item.id, item])).values());
-          setState({ lifetime, publicItems, circleItems, items, signals: publicResult.signals, loading: false, error: null });
+          setState({ lifetime, publicItems, circleItems, items, signals: publicResult.signals, ready: true, loading: false, error: null });
         } catch {
           ownedController.abort();
           if (current() && request === sequence) setState({ ...empty(), lifetime, loading: false, error: 'Live discovery could not refresh. Please try again.' });
