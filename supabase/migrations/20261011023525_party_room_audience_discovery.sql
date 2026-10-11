@@ -163,7 +163,7 @@ grant execute on function public.can_read_party_room_discovery(uuid,text) to aut
 create policy discovery_party_room_metadata_authenticated on public.discovery_feed_items for select to authenticated
   using(source_type='party_room' and public.can_read_party_room_discovery(id,'public'));
 alter function public.can_read_circle_spectator_feed_item(uuid,text) rename to can_read_circle_spectator_pre_party_room;
-create function public.can_read_circle_spectator_feed_item(p_item_id uuid,p_viewer_user_id text)
+create function public.can_read_circle_spectator_feed_item(p_item_id uuid,p_viewer_user_id text default (auth.uid())::text)
 returns boolean language plpgsql stable security definer set search_path='' as $$
 begin
   if p_viewer_user_id is distinct from auth.uid()::text then return false; end if;
@@ -173,7 +173,7 @@ begin
 end $$;
 revoke all on function public.can_read_circle_spectator_pre_party_room(uuid,text) from public,anon,authenticated,service_role;
 revoke all on function public.can_read_circle_spectator_feed_item(uuid,text) from public,anon,authenticated,service_role;
-grant execute on function public.can_read_circle_spectator_feed_item(uuid,text) to authenticated;
+grant execute on function public.can_read_circle_spectator_feed_item(uuid,text) to authenticated,service_role;
 alter policy circle_spectator_feed_items_select_member_gated on public.circle_spectator_feed_items
   using(public.can_read_circle_spectator_feed_item(id,auth.uid()::text));
 

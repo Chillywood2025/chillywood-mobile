@@ -51,6 +51,8 @@ select lives_ok($$insert into public.watch_party_rooms(party_id,host_user_id,tit
   values('PARTY-AUDIENCE-01',auth.uid(),'ac110002-0000-4000-8000-000000000001','platform_title','ac110002-0000-4000-8000-000000000001','title','premium')$$,
   'normal host creates actual room under unchanged RLS');
 select is((select discovery_visibility from public.watch_party_rooms where party_id='PARTY-AUDIENCE-01'),'private','new ordinary room defaults private');
+select ok(has_function_privilege('service_role','public.can_read_circle_spectator_feed_item(uuid,text)','EXECUTE'),'Circle wrapper preserves existing service RPC permission');
+select ok(not has_function_privilege('anon','public.can_read_circle_spectator_feed_item(uuid,text)','EXECUTE'),'Circle compatibility does not grant anonymous RPC access');
 select is(public.set_party_room_discovery('PARTY-AUDIENCE-01','public','Exact party title','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)->>'published','false','prepared public selection is not publication');
 select throws_ok($$select public.publish_party_room_discovery('PARTY-AUDIENCE-01','platform_title','ac110002-0000-4000-8000-000000000001',pg_temp.party_session(1)::text)$$,
   'party_room_joined_host_required','preparation/navigation without actual joined host cannot publish');
@@ -102,12 +104,20 @@ reset role;
 select pg_temp.party_login(2);
 set local role authenticated;
 select is((select count(*)::integer from public.circle_spectator_feed_items where source_type='party_room'),1,'active Circle member reads metadata');
+select ok(public.can_read_circle_spectator_feed_item((select id from public.circle_spectator_feed_items where source_type='party_room')),
+  'one-argument Circle RPC retains current-caller default and actually reads eligible metadata');
+select ok(not public.can_read_circle_spectator_feed_item((select id from public.circle_spectator_feed_items where source_type='party_room'),pg_temp.party_user(3)::text),
+  'explicit viewer argument cannot substitute a different caller');
 select lives_ok($$select public.join_watch_party_room_session('PARTY-AUDIENCE-01')$$,'current eligible Circle member joins normally');
 reset role;
 select set_config('request.jwt.claim.role','service_role',true);
 select set_config('request.jwt.claims','{"role":"service_role"}',true);
 set local role service_role;
 select is(public.resolve_watch_party_livekit_viewer_authority('PARTY-AUDIENCE-01',pg_temp.party_user(2),pg_temp.party_session(2))->>'allowed','true','Circle member retains actual service media authority');
+select ok(not public.can_read_circle_spectator_feed_item((select id from public.circle_spectator_feed_items where source_type='party_room')),
+  'pure service claim without user JWT keeps default Circle read denied');
+select ok(not public.can_read_circle_spectator_feed_item((select id from public.circle_spectator_feed_items where source_type='party_room'),pg_temp.party_user(2)::text),
+  'service execute compatibility does not impersonate the explicit viewer');
 reset role;
 select pg_temp.party_login(1);
 set local role authenticated;
