@@ -19,6 +19,7 @@ import { WATCH_PARTY_WAITING_ROOM_ENTRY_SOURCE } from "../../_lib/watchPartyRetu
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../_lib/betaProgram";
 import {
     ActivityIndicator,
+    AppState,
     ImageBackground,
     type ImageSourcePropType,
     KeyboardAvoidingView,
@@ -162,7 +163,7 @@ const getWatchPartyRoomAccessMessage = (access: Pick<RoomAccessResolution, "reas
 
 export default function WatchPartyIndexScreen() {
   const router = useRouter();
-  const { isLoading: authLoading, isSignedIn } = useSession();
+  const { isLoading: authLoading, isSignedIn, user, authority, authorityStatus } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const params = useLocalSearchParams<{
     roomId?: string;
@@ -226,14 +227,51 @@ export default function WatchPartyIndexScreen() {
       : null,
   );
   const [preparedRoom, setPreparedRoom] = useState<RoomPreview | null>(null);
+  const [embeddedLiveStageEntry, setEmbeddedLiveStageEntry] = useState<EmbeddedLiveStageEntry | null>(null);
+  const waitingOwnerKey = JSON.stringify([
+    user?.id, authority?.accountId, authority?.sessionGeneration, authorityStatus,
+    authority?.state, authority?.restoreOnly, isSignedIn, entryLaneKey,
+    initialLookupId, initialRouteSourceId, initialRouteTitleId, preparedRoom?.room.partyId,
+  ]);
+  const waitingOwnerRef = useRef(waitingOwnerKey);
+  waitingOwnerRef.current = waitingOwnerKey;
+  const waitingFocusedRef = useRef(false);
+  const waitingControlsActiveRef = useRef(false);
+  const waitingLifetimeRef = useRef(0);
+  const waitingFocusGenerationRef = useRef(0);
+  const createOperationRef = useRef<object | null>(null);
+  const discoverySaveRef = useRef<object | null>(null);
+  const pendingPremiumCreateRef = useRef<{ owner: string; focusGeneration: number } | null>(null);
+  const captureWaitingOwner = useCallback(() => {
+    const lifetime = waitingLifetimeRef.current;
+    return () => waitingOwnerRef.current === waitingOwnerKey
+      && waitingLifetimeRef.current === lifetime
+      && waitingFocusedRef.current && waitingControlsActiveRef.current && AppState.currentState === "active"
+      && isSignedIn && authorityStatus === "active" && authority?.userId === user?.id
+      && authority?.state === "ACTIVE" && !authority.restoreOnly;
+  }, [authority, authorityStatus, isSignedIn, user?.id, waitingOwnerKey]);
 
   useFocusEffect(
     useCallback(() => {
+      if (waitingOwnerRef.current !== waitingOwnerKey) return;
+      waitingFocusedRef.current = true;
+      waitingControlsActiveRef.current = !embeddedLiveStageEntry;
+      waitingLifetimeRef.current += 1;
+      waitingFocusGenerationRef.current += 1;
       createRoomLatchRef.current.release();
       joinRoomLatchRef.current.release();
-      setCreating(false);
+      if (!createOperationRef.current) setCreating(false);
       setJoinActionBusy(false);
-    }, []),
+      const subscription = AppState.addEventListener("change", (state) => {
+        if (state !== "active") waitingLifetimeRef.current += 1;
+      });
+      return () => {
+        waitingFocusedRef.current = false;
+        waitingLifetimeRef.current += 1;
+        waitingFocusGenerationRef.current += 1;
+        subscription.remove();
+      };
+    }, [embeddedLiveStageEntry, waitingOwnerKey]),
   );
   const [initialCodeStatus, setInitialCodeStatus] = useState<"idle" | "preparing" | "failed">(() =>
     isLiveEntryMode && !isPlayerWatchPartyLiveFlow && !initialRouteRoomCode ? "preparing" : "idle",
@@ -249,7 +287,6 @@ export default function WatchPartyIndexScreen() {
   const [watchPartyPremiumSheetVisible, setWatchPartyPremiumSheetVisible] = useState(false);
   const [watchPartyPremiumSheetCopy, setWatchPartyPremiumSheetCopy] = useState<PremiumLiveUpsellCopy>(WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY);
   const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
-  const [embeddedLiveStageEntry, setEmbeddedLiveStageEntry] = useState<EmbeddedLiveStageEntry | null>(null);
   const [paidTicketGate, setPaidTicketGate] = useState<PaidWatchPartyTicketAccess | null>(null);
   const [paidTicketBusy, setPaidTicketBusy] = useState(false);
   const [paidTicketNotice, setPaidTicketNotice] = useState<string | null>(null);
@@ -257,6 +294,9 @@ export default function WatchPartyIndexScreen() {
   const [partyRoomEntryPaid, setPartyRoomEntryPaid] = useState<boolean | null>(null);
   const [liveDiscoveryVisibility, setLiveDiscoveryVisibility] = useState<WatchPartyDiscoveryVisibility>("private");
   const [liveDiscoveryTitle, setLiveDiscoveryTitle] = useState("");
+  const [discoverySaveStatus, setDiscoverySaveStatus] = useState<"idle" | "dirty" | "saving" | "saved" | "error">("idle");
+  const liveDiscoveryDraftRef = useRef({ visibility: liveDiscoveryVisibility, title: liveDiscoveryTitle });
+  const discoveryDraftRoomRef = useRef<string | null>(null);
   const handoffLoadedRef = useRef(false);
   const liveWaitingRoomLoadedRef = useRef(false);
   const lastEntryLaneKeyRef = useRef(entryLaneKey);
@@ -334,15 +374,27 @@ export default function WatchPartyIndexScreen() {
     roomType: WatchPartyRoomType,
     accessKey: string | null | undefined,
   ) => {
+    const isCurrent = captureWaitingOwner();
+    if (!isCurrent()) return false;
     const safeAccessKey = String(accessKey ?? "").trim();
     const isLiveRoom = roomType === "live";
     const copy = isLiveRoom ? LIVE_FIRST_PREMIUM_UPSELL_COPY : WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY;
     const access = await (isLiveRoom ? requireLiveFirstPremium : requireWatchPartyLivePremium)({
       accessKey: safeAccessKey || (isLiveRoom ? "live-first" : "watch-party-live"),
     }).catch(() => null);
+    if (!isCurrent()) return false;
     if (access?.allowed) {
       setWatchPartyPremiumGate(null);
+      setWatchPartyPremiumSheetVisible(false);
       return true;
+    }
+    if (!access) {
+      setWatchPartyPremiumGate(null);
+      setWatchPartyPremiumSheetVisible(false);
+      const message = "Unable to confirm current Premium access. Check your connection and try again.";
+      if (isLiveRoom) setCreateError(message);
+      else setJoinError(message);
+      return false;
     }
 
     if (isRuntimeControlBlockedAccess(access)) {
@@ -371,7 +423,7 @@ export default function WatchPartyIndexScreen() {
       accessKey: safeAccessKey || (isLiveRoom ? "live-first" : "watch-party-live"),
     });
     return false;
-  }, []);
+  }, [captureWaitingOwner]);
 
   const paidWatchPartyCheckoutAvailable = useMemo(() => {
     return isCreatorDigitalCheckoutShellAvailable();
@@ -499,9 +551,15 @@ export default function WatchPartyIndexScreen() {
   useEffect(() => {
     const liveRoom = preparedRoom?.room;
     if (!liveRoom || liveRoom.roomType !== "live") return;
+    // A policy response must not overwrite a newer local title/audience draft.
+    const draftRoom = `${waitingOwnerKey}:${liveRoom.partyId}`;
+    if (discoveryDraftRoomRef.current === draftRoom) return;
+    discoveryDraftRoomRef.current = draftRoom;
+    liveDiscoveryDraftRef.current = { visibility: liveRoom.discoveryVisibility, title: liveRoom.discoveryTitle ?? "" };
     setLiveDiscoveryVisibility(liveRoom.discoveryVisibility);
     setLiveDiscoveryTitle(liveRoom.discoveryTitle ?? "");
-  }, [preparedRoom?.room]);
+    setDiscoverySaveStatus("idle");
+  }, [preparedRoom?.room, waitingOwnerKey]);
 
   useEffect(() => {
     const liveRoom = preparedRoom?.room;
@@ -763,6 +821,7 @@ export default function WatchPartyIndexScreen() {
         partyId: options.partyId,
         source: isPlayerWatchPartyLiveFlow ? PLAYER_WATCH_PARTY_SOURCE : "watch-party-index-proof",
       });
+      waitingControlsActiveRef.current = false;
       return true;
     }
 
@@ -770,6 +829,7 @@ export default function WatchPartyIndexScreen() {
       pathname: "/watch-party/[partyId]",
       params,
     });
+    waitingControlsActiveRef.current = false;
     return true;
   }, [buildRoomEntryParams, isPlayerWatchPartyLiveFlow, router]);
 
@@ -1233,6 +1293,8 @@ export default function WatchPartyIndexScreen() {
   }, [accessSheetReason, navigateToPreviewRoom, pendingAccessDecision, pendingAccessPreview, requirePremiumRoomEntry]);
 
   const onCreateRoom = async () => {
+    const isCurrent = captureWaitingOwner();
+    if (!isCurrent() || discoverySaveRef.current || createOperationRef.current) return;
     debugLog("watch-party", "watch_party_create_room_pressed", {
       roomType: inferredWaitingRoomType,
       hasPreparedRoom: Boolean(preparedRoom?.room.partyId),
@@ -1267,21 +1329,28 @@ export default function WatchPartyIndexScreen() {
     }
 
     if (!createRoomLatchRef.current.tryAcquire()) return;
+    const operation = {};
+    createOperationRef.current = operation;
     setCreateError(null);
     setCreating(true);
     let navigationAccepted = false;
 
     try {
+      pendingPremiumCreateRef.current = { owner: waitingOwnerKey, focusGeneration: waitingFocusGenerationRef.current };
       if (!(await requirePremiumRoomEntry(
         activeWaitingRoomType,
         effectiveSourceId ?? effectiveTitleId ?? preparedTargetPartyId,
       ))) {
         return;
       }
+      if (!isCurrent()) return;
+      pendingPremiumCreateRef.current = null;
 
       const hostUserId = await getSafePartyUserId();
+      if (!isCurrent() || hostUserId !== authority?.userId) return;
       if (preparedTargetPartyId) {
         let preparedRoomForNavigation = await getPartyRoom(preparedTargetPartyId).catch(() => null);
+        if (!isCurrent()) return;
         const reuse = resolvePreparedWatchPartyRoomReuse({
           expectedPartyId: preparedTargetPartyId,
           expectedRoomType: activeWaitingRoomType,
@@ -1304,15 +1373,19 @@ export default function WatchPartyIndexScreen() {
 
         const nextPartyId = preparedRoomForNavigation.partyId;
         if (preparedRoomForNavigation.roomType === "live") {
+          const draft = liveDiscoveryDraftRef.current;
           const persistedLiveRoom = await setPartyRoomPolicies(nextPartyId, {
-                discoveryVisibility: liveDiscoveryVisibility,
-                discoveryTitle: liveDiscoveryTitle,
+                discoveryVisibility: draft.visibility,
+                discoveryTitle: draft.title,
           }).catch(() => null);
+          if (!isCurrent()) return;
           const persistedPreparedRoomMatches = Boolean(
             persistedLiveRoom
             && persistedLiveRoom.partyId === nextPartyId
             && persistedLiveRoom.hostUserId === hostUserId
-            && persistedLiveRoom.roomType === "live",
+            && persistedLiveRoom.roomType === "live"
+            && persistedLiveRoom.discoveryVisibility === draft.visibility
+            && (persistedLiveRoom.discoveryTitle ?? "") === draft.title.trim(),
           );
           if (!persistedPreparedRoomMatches || !persistedLiveRoom) {
             setCreateError("Unable to save Live discovery settings. Check your connection and try again.");
@@ -1321,6 +1394,7 @@ export default function WatchPartyIndexScreen() {
           preparedRoomForNavigation = persistedLiveRoom;
         }
         const nextPreview = await buildRoomPreview(preparedRoomForNavigation);
+        if (!isCurrent()) return;
         setPreparedRoom(nextPreview);
         setIncomingHandoff({
           roomCode: preparedRoomForNavigation.roomCode,
@@ -1357,6 +1431,7 @@ export default function WatchPartyIndexScreen() {
         discoveryVisibility: roomType === "live" ? liveDiscoveryVisibility : "private",
         discoveryTitle: roomType === "live" ? liveDiscoveryTitle : null,
       });
+      if (!isCurrent()) return;
 
       if (!room || "error" in room) {
         trackEvent("room_create_failure", {
@@ -1388,6 +1463,7 @@ export default function WatchPartyIndexScreen() {
         contentTitle: entryTitleName,
       });
     } catch (error) {
+      if (!isCurrent()) return;
       reportRuntimeError("watch-party-create", error, {
         titleId: effectiveTitleId,
         sourceType: effectiveSourceType,
@@ -1399,9 +1475,12 @@ export default function WatchPartyIndexScreen() {
       });
       setCreateError("Unable to create room right now.");
     } finally {
+      if (createOperationRef.current === operation) {
+        createOperationRef.current = null;
+        if (!navigationAccepted) setCreating(false);
+      }
       if (!navigationAccepted) {
         createRoomLatchRef.current.release();
-        setCreating(false);
       }
     }
   };
@@ -1410,34 +1489,67 @@ export default function WatchPartyIndexScreen() {
     router.push("/(tabs)/explore");
   }, [router]);
 
-  const onSelectLiveDiscoveryVisibility = useCallback(async (
-    visibility: WatchPartyDiscoveryVisibility,
-  ) => {
-    setLiveDiscoveryVisibility(visibility);
+  const onSaveLiveDiscovery = useCallback(async () => {
+    const isCurrent = captureWaitingOwner();
+    if (!isCurrent() || discoverySaveRef.current || createOperationRef.current) return;
     const room = preparedRoom?.room;
     if (!room || room.roomType !== "live") return;
-    const currentUserId = await getSafePartyUserId().catch(() => "");
-    if (!currentUserId || room.hostUserId !== currentUserId) return;
-    const updated = await setPartyRoomPolicies(room.partyId, {
-      discoveryVisibility: visibility,
-      discoveryTitle: liveDiscoveryTitle,
-    }).catch(() => null);
-    if (!updated) return;
-    setPreparedRoom((current) => current ? { ...current, room: updated } : current);
-  }, [liveDiscoveryTitle, preparedRoom?.room]);
+    const operation = {};
+    const draft = liveDiscoveryDraftRef.current;
+    discoverySaveRef.current = operation;
+    setDiscoverySaveStatus("saving");
+    try {
+      const currentUserId = await getSafePartyUserId().catch(() => "");
+      if (!isCurrent()) return;
+      if (currentUserId !== authority?.userId || room.hostUserId !== currentUserId) {
+        setDiscoverySaveStatus("error");
+        return;
+      }
+      const updated = await setPartyRoomPolicies(room.partyId, {
+        discoveryVisibility: draft.visibility, discoveryTitle: draft.title,
+      }).catch(() => null);
+      if (!isCurrent()) return;
+      if (!updated || updated.partyId !== room.partyId || updated.hostUserId !== currentUserId
+        || updated.roomType !== "live" || updated.discoveryVisibility !== draft.visibility
+        || (updated.discoveryTitle ?? "") !== draft.title.trim()) {
+        setDiscoverySaveStatus("error");
+        return;
+      }
+      setPreparedRoom(current => current?.room.partyId === room.partyId ? { ...current, room: updated } : current);
+      setDiscoverySaveStatus(liveDiscoveryDraftRef.current === draft ? "saved" : "dirty");
+    } finally {
+      if (discoverySaveRef.current === operation) discoverySaveRef.current = null;
+      if (!isCurrent() && waitingOwnerRef.current === waitingOwnerKey) setDiscoverySaveStatus("dirty");
+    }
+  }, [authority?.userId, captureWaitingOwner, preparedRoom?.room, waitingOwnerKey]);
 
-  const onSaveLiveDiscoveryTitle = useCallback(async () => {
-    const room = preparedRoom?.room;
-    if (!room || room.roomType !== "live") return;
-    const currentUserId = await getSafePartyUserId().catch(() => "");
-    if (!currentUserId || room.hostUserId !== currentUserId) return;
-    const updated = await setPartyRoomPolicies(room.partyId, {
-      discoveryTitle: liveDiscoveryTitle,
-      discoveryVisibility: liveDiscoveryVisibility,
-    }).catch(() => null);
-    if (!updated) return;
-    setPreparedRoom((current) => current ? { ...current, room: updated } : current);
-  }, [liveDiscoveryTitle, liveDiscoveryVisibility, preparedRoom?.room]);
+  const onSelectLiveDiscoveryVisibility = (visibility: WatchPartyDiscoveryVisibility) => {
+    if (!captureWaitingOwner()() || discoverySaveRef.current || createOperationRef.current) return;
+    liveDiscoveryDraftRef.current = { ...liveDiscoveryDraftRef.current, visibility };
+    setLiveDiscoveryVisibility(visibility);
+    return onSaveLiveDiscovery();
+  };
+  const onChangeLiveDiscoveryTitle = (title: string) => {
+    if (!captureWaitingOwner()() || discoverySaveRef.current || createOperationRef.current) return;
+    liveDiscoveryDraftRef.current = { ...liveDiscoveryDraftRef.current, title };
+    setLiveDiscoveryTitle(title);
+    setDiscoverySaveStatus("dirty");
+  };
+  const renderedPremiumCreate = pendingPremiumCreateRef.current;
+  const onResolvePremiumCreate = async (result: { ok: boolean; message: string }) => {
+    if (!result.ok) return { message: result.message, tone: "error" as const };
+    const isCurrent = captureWaitingOwner();
+    if (!isCurrent()) return;
+    const pending = pendingPremiumCreateRef.current;
+    if (pending && pending === renderedPremiumCreate && pending.owner === waitingOwnerKey
+      && pending.focusGeneration === waitingFocusGenerationRef.current) {
+      pendingPremiumCreateRef.current = null;
+      setWatchPartyPremiumSheetVisible(false);
+      await onCreateRoom();
+    } else if (!pending && !renderedPremiumCreate) {
+      setWatchPartyPremiumSheetVisible(false);
+    }
+  };
 
   if (authLoading || betaLoading) {
     return (
@@ -1540,7 +1652,7 @@ export default function WatchPartyIndexScreen() {
   const shouldGuardCreateDuringInitialPrep = !trimmedCreateTitleId && isPreparingInitialCode && !preparedTargetPartyId;
   const isMissingWatchPartyContent = !isLiveWaitingRoom && !partyTitleLocked && !preparedTargetPartyId;
   const createActionBusy = creating || shouldGuardCreateDuringInitialPrep;
-  const createActionDisabled = createActionBusy || isMissingWatchPartyContent || !features.watchPartyEnabled;
+  const createActionDisabled = createActionBusy || discoverySaveStatus === "saving" || isMissingWatchPartyContent || !features.watchPartyEnabled;
   const liveCreateActionLabel = preparedTargetPartyId ? "Continue to Live Room" : "Create Live Room";
   const createActionLabel = isMissingWatchPartyContent
     ? "Choose Content First"
@@ -1773,8 +1885,9 @@ export default function WatchPartyIndexScreen() {
                     liveDiscoveryVisibility === visibility && styles.discoveryChoiceSelected,
                   ]}
                   onPress={() => { void onSelectLiveDiscoveryVisibility(visibility); }}
+                  disabled={discoverySaveStatus === "saving" || creating}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: liveDiscoveryVisibility === visibility }}
+                  accessibilityState={{ selected: liveDiscoveryVisibility === visibility, disabled: discoverySaveStatus === "saving" || creating }}
                   accessibilityLabel={`Set Live discovery to ${visibility === "circle" ? "Chi'lly Circle" : visibility}`}
                 >
                   <AppText scale="footnote" style={styles.discoveryChoiceText}>
@@ -1785,13 +1898,27 @@ export default function WatchPartyIndexScreen() {
             </View>
             <TextInput
               value={liveDiscoveryTitle}
-              onChangeText={setLiveDiscoveryTitle}
-              onBlur={() => { void onSaveLiveDiscoveryTitle(); }}
+              onChangeText={onChangeLiveDiscoveryTitle}
+              onBlur={() => { void onSaveLiveDiscovery(); }}
+              editable={discoverySaveStatus !== "saving" && !creating}
               placeholder="Live title (optional)"
               placeholderTextColor="#6F7788"
               style={styles.input}
               accessibilityLabel="Live discovery title"
             />
+            {discoverySaveStatus !== "idle" ? (
+              <AppText scale="footnote" accessibilityLiveRegion="polite" style={discoverySaveStatus === "error" ? styles.errorText : styles.permissionsBody}>
+                {discoverySaveStatus === "saving" ? "Saving Live discovery…"
+                  : discoverySaveStatus === "saved" ? "Live discovery saved."
+                    : discoverySaveStatus === "error" ? "Live discovery was not saved. Check your connection and current Premium access, then retry."
+                      : "Live discovery changes are not saved yet."}
+              </AppText>
+            ) : null}
+            {discoverySaveStatus === "error" || discoverySaveStatus === "dirty" ? (
+              <Pressable onPress={() => { void onSaveLiveDiscovery(); }} accessibilityRole="button" accessibilityLabel="Retry saving Live discovery">
+                <AppText scale="footnote">Save Live discovery</AppText>
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
 
@@ -2301,31 +2428,14 @@ export default function WatchPartyIndexScreen() {
           titleOverride={watchPartyPremiumSheetCopy.title}
           bodyOverride={watchPartyPremiumSheetCopy.message}
           actionLabelOverride={watchPartyPremiumGatePresentation?.actionLabel}
-          onPurchaseResult={(result) => {
-            if (!result.ok) {
-              return {
-                message: result.message,
-                tone: "error" as const,
-              };
-            }
-            return {
-              message: "Premium access updated. Try Watch-Party Live again.",
-              tone: "success" as const,
-            };
+          onPurchaseResult={onResolvePremiumCreate}
+          onRestoreResult={onResolvePremiumCreate}
+          onClose={() => {
+            if (!captureWaitingOwner()()) return;
+            if (pendingPremiumCreateRef.current !== renderedPremiumCreate) return;
+            pendingPremiumCreateRef.current = null;
+            setWatchPartyPremiumSheetVisible(false);
           }}
-          onRestoreResult={(result) => {
-            if (!result.ok) {
-              return {
-                message: result.message,
-                tone: "error" as const,
-              };
-            }
-            return {
-              message: "Purchases restored. Try Watch-Party Live again.",
-              tone: "success" as const,
-            };
-          }}
-          onClose={() => setWatchPartyPremiumSheetVisible(false)}
         />
       ) : null}
       <InternalInviteSheet

@@ -922,9 +922,16 @@ assertIncludes(
 );
 assertIncludes(
   liveWatchPartyCreateHandler,
-  "discoveryVisibility: liveDiscoveryVisibility,\n                discoveryTitle: liveDiscoveryTitle,",
+  "const draft = liveDiscoveryDraftRef.current;",
+  "Live Watch-Party entry must capture the latest synchronous discovery draft before saving.",
+);
+assertIncludes(
+  liveWatchPartyCreateHandler,
+  "discoveryVisibility: draft.visibility,\n                discoveryTitle: draft.title,",
   "Live Watch-Party entry persistence must bind both visibility and title to the prepared room update.",
 );
+assertIncludes(liveWatchPartyCreateHandler, "persistedLiveRoom.discoveryVisibility === draft.visibility", "Live entry must confirm the requested visibility was saved.");
+assertIncludes(liveWatchPartyCreateHandler, "(persistedLiveRoom.discoveryTitle ?? \"\") === draft.title.trim()", "Live entry must confirm the requested title was saved.");
 assertIncludes(
   liveWatchPartyCreateHandler,
   "persistedLiveRoom.hostUserId === hostUserId",
