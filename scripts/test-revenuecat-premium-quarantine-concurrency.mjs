@@ -46,6 +46,148 @@ function openSession(applicationName, sql, database = transientDatabase) {
   return { child, done, output: () => stdout };
 }
 
+// These fixtures live only in the existing isolated database clone. Initial
+// ownership/grants come from the real provider projector, never direct grants.
+function seedGoogleRestore(label) {
+  const user = randomUUID();
+  const original = `google-restore-${label}-${user}`;
+  const base = Number(query("select extract(epoch from clock_timestamp())*1000;"));
+  const iso = (offset) => new Date(base + offset).toISOString();
+  const record = { user, original, subscription: `subscription-${label}`, base, iso };
+  query(`insert into auth.users(id,is_sso_user,is_anonymous) values (${literal(user)}::uuid,false,false);
+select public.process_revenuecat_premium_event_atomic(
+ 'revenuecat_google_play',${literal(`initial-${original}`)},'INITIAL_PURCHASE',${literal(user)}::uuid,
+ 'premium_subscription','monthly','sandbox','active',${literal(iso(-7200000))}::timestamptz,
+ ${literal(iso(3600000))}::timestamptz,${literal(iso(-7200000))}::timestamptz,
+ 999,'usd',${literal(hash(original))},'NORMAL','google_play','android',null,product.id,${literal(original)}
+) from public.monetization_products product where product.provider='revenuecat_google_play'
+ and product.provider_product_id='premium_subscription' and product.provider_base_plan_id='monthly'
+ and product.environment='sandbox' and product.status='sandbox';
+-- Model the already-persisted period becoming clock-expired, not a provider revocation.
+update public.user_entitlements set expires_at=${literal(iso(-3600000))}::timestamptz
+ where user_id=${literal(user)} and entitlement_key='premium';
+update public.access_grants set expires_at=${literal(iso(-3600000))}::timestamptz
+ where user_id=${literal(user)}::uuid and grant_type='premium';`);
+  assert.equal(query(`select public.premium_subject_has_finite_authority_internal(${literal(user)})::text;`), "false");
+  return record;
+}
+
+function googleRestoreSql(record, { id = `snapshot-${record.original}`, starts = record.iso(-600000), expires = record.iso(3600000), observed = record.iso(0) } = {}) {
+  return `select public.reconcile_revenuecat_google_premium_snapshot_atomic(
+${literal(id)},${literal(record.user)}::uuid,${literal(record.user)},${literal(record.subscription)},
+${literal(record.original)},'premium_subscription','monthly','active',${literal(starts)}::timestamptz,
+${literal(expires)}::timestamptz,${literal(observed)}::timestamptz,${literal(hash(id))});`;
+}
+
+function googleOwnedGraph(record) {
+  return query(`select md5(jsonb_build_object(
+ 'events',(select jsonb_agg(to_jsonb(r) order by r.id) from public.provider_events r where r.user_id=${literal(record.user)}::uuid),
+ 'entitlement',(select jsonb_agg(to_jsonb(r) order by r.entitlement_key) from public.user_entitlements r where r.user_id=${literal(record.user)}),
+ 'grants',(select jsonb_agg(to_jsonb(r) order by r.id) from public.access_grants r where r.user_id=${literal(record.user)}::uuid),
+ 'binding',(select jsonb_agg(to_jsonb(r) order by r.id) from public.revenuecat_premium_transaction_authority r where r.user_id=${literal(record.user)}::uuid),
+ 'billing',(select jsonb_agg(to_jsonb(r) order by r.id) from public.billing_events r where r.user_id=${literal(record.user)}),
+ 'ledger',(select jsonb_agg(to_jsonb(r) order by r.id) from public.money_access_ledger_events r where r.user_id=${literal(record.user)}::uuid)
+)::text);`);
+}
+
+async function googleSerializedRace(label, firstSql, secondSql, { expireAt = null, secondError = null } = {}) {
+  const firstName = `google-restore-${label}-first`;
+  const secondName = `google-restore-${label}-second`;
+  let first;
+  let second;
+  try {
+    first = openSession(firstName, `begin; set local statement_timeout='15s';\n${firstSql}\nselect 'GOOGLE_HOLDER_READY';`);
+    await waitUntil(() => first.output().includes("GOOGLE_HOLDER_READY"), `${label} first operation`);
+    second = openSession(secondName, `begin; set local statement_timeout='15s';\n${secondSql}\ncommit;\n\\q\n`);
+    second.child.stdin.end();
+    await waitUntil(() => Number(query(`select count(*) from pg_stat_activity
+where application_name=${literal(secondName)} and wait_event_type='Lock';`)) === 1, `${label} actual lock wait`);
+    if (expireAt) await waitUntil(() => query(`select (clock_timestamp()>=${literal(expireAt)}::timestamptz)::text;`) === "true", `${label} actual provider expiry`);
+    first.child.stdin.end("commit;\n\\q\n");
+    const [a, b] = await Promise.all([first.done, second.done]);
+    assert.equal(a.code, 0, a.stderr);
+    if (secondError) {
+      assert.notEqual(b.code, 0, `${label} unexpectedly succeeded`);
+      assert.match(b.stderr, secondError);
+    } else assert.equal(b.code, 0, b.stderr);
+    return b.stdout;
+  } finally {
+    await terminate(firstName, first);
+    await terminate(secondName, second);
+  }
+}
+
+async function proveGoogleRestoreConcurrency() {
+  // Original-lock waits cross actual expiry, including the stale no-op path.
+  for (const stale of [false, true]) {
+    const record = seedGoogleRestore(stale ? "stale-clock" : "write-clock");
+    if (stale) query(googleRestoreSql(record));
+    const before = googleOwnedGraph(record);
+    const expires = new Date(Number(query("select extract(epoch from clock_timestamp())*1000;")) + 6000).toISOString();
+    await googleSerializedRace(stale ? "stale-clock" : "write-clock",
+      `select pg_advisory_xact_lock(hashtextextended(${literal(`revenuecat-original:revenuecat_google_play:${record.original}`)},0));`,
+      googleRestoreSql(record, { id: `clock-${record.original}`, expires, ...(stale ? { starts: record.iso(-1200000) } : {}) }),
+      { expireAt: expires, secondError: /premium_reconciliation_period_invalid/u });
+    assert.equal(googleOwnedGraph(record), before, "expired waiter changed the existing authority graph");
+  }
+
+  // A duplicate may wait on the provider-event row after the initial time check.
+  {
+    const record = seedGoogleRestore("duplicate-clock");
+    const expires = new Date(Number(query("select extract(epoch from clock_timestamp())*1000;")) + 6000).toISOString();
+    const sql = googleRestoreSql(record, { expires });
+    query(sql);
+    const before = googleOwnedGraph(record);
+    await googleSerializedRace("duplicate-clock",
+      `select id from public.provider_events where provider_event_id=${literal(`snapshot-${record.original}`)} for update;`,
+      sql, { expireAt: expires, secondError: /premium_reconciliation_period_invalid/u });
+    assert.equal(googleOwnedGraph(record), before, "expired duplicate changed the existing authority graph");
+  }
+
+  // Concurrent exact restore calls create one verification event and no money row.
+  {
+    const record = seedGoogleRestore("duplicate");
+    const beforeMoney = query(`select (select count(*) from public.billing_events where user_id=${literal(record.user)})||':'||
+(select count(*) from public.money_access_ledger_events where user_id=${literal(record.user)}::uuid);`);
+    const result = await googleSerializedRace("duplicate", googleRestoreSql(record), googleRestoreSql(record));
+    assert.match(result, /"duplicateEvent": true/u);
+    assert.equal(query(`select count(*) from public.provider_events where provider_event_id=${literal(`snapshot-${record.original}`)};`), "1");
+    assert.equal(query(`select (select count(*) from public.billing_events where user_id=${literal(record.user)})||':'||
+(select count(*) from public.money_access_ledger_events where user_id=${literal(record.user)}::uuid);`), beforeMoney);
+  }
+
+  for (const terminalFirst of [false, true]) {
+    const record = seedGoogleRestore(terminalFirst ? "terminal-first" : "restore-first");
+    const terminal = `select public.process_revenuecat_terminal_event_atomic(
+'revenuecat_google_play',${literal(`refund-${record.original}`)},'REFUND',${literal(record.user)}::uuid,
+'premium_subscription','monthly','sandbox','revoked',${literal(record.iso(-7200000))}::timestamptz,
+${literal(record.iso(3600000))}::timestamptz,${literal(record.iso(-300000))}::timestamptz,
+${literal(hash(`refund-${record.original}`))},'NORMAL','google_play','android',${literal(record.original)});`;
+    await googleSerializedRace(terminalFirst ? "terminal-first" : "restore-first",
+      terminalFirst ? terminal : googleRestoreSql(record), terminalFirst ? googleRestoreSql(record) : terminal,
+      { secondError: terminalFirst ? /premium_reconciliation_terminal_authority_not_superseded/u : null });
+    assert.equal(query(`select authority_state||':'||public.premium_subject_has_finite_authority_internal(${literal(record.user)})::text
+from public.revenuecat_premium_transaction_authority where original_transaction_id=${literal(record.original)};`), "financial_terminal:false");
+  }
+
+  for (const renewalFirst of [false, true]) {
+    const record = seedGoogleRestore(renewalFirst ? "renewal-first" : "restore-renewal");
+    const renewalId = `renewal-${record.original}`;
+    const renewal = `select public.process_revenuecat_premium_event_atomic(
+'revenuecat_google_play',${literal(renewalId)},'RENEWAL',${literal(record.user)}::uuid,
+'premium_subscription','monthly','sandbox','active',${literal(record.iso(-300000))}::timestamptz,
+${literal(record.iso(7200000))}::timestamptz,${literal(record.iso(-300000))}::timestamptz,999,'usd',
+${literal(hash(renewalId))},'NORMAL','google_play','android',null,product.id,${literal(record.original)})
+from public.monetization_products product where product.provider='revenuecat_google_play'
+and product.provider_product_id='premium_subscription' and product.provider_base_plan_id='monthly'
+and product.environment='sandbox' and product.status='sandbox';`;
+    await googleSerializedRace(renewalFirst ? "renewal-first" : "restore-renewal",
+      renewalFirst ? renewal : googleRestoreSql(record), renewalFirst ? googleRestoreSql(record) : renewal);
+    assert.equal(query(`select latest_event_id||':'||public.premium_subject_has_finite_authority_internal(${literal(record.user)})::text
+from public.revenuecat_premium_transaction_authority where original_transaction_id=${literal(record.original)};`), `${renewalId}:true`);
+  }
+}
+
 async function waitUntil(predicate, label) {
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
@@ -501,7 +643,8 @@ assert.equal(query(`select
 `), `${chainNextTarget}:false:false:true:true:true`);
 assert.equal(query(`select count(*)::text from pg_stat_activity where application_name=${literal(sourceSentinelName)};`, sourceDatabase), "1", "read-only source sentinel did not survive isolated proof");
 
-process.stdout.write(`RevenueCat Premium/quarantine concurrency: ${scenarios.length} scope + 5 lifecycle races passed\n`);
+await proveGoogleRestoreConcurrency();
+process.stdout.write(`RevenueCat Premium/quarantine concurrency: ${scenarios.length} scope + 5 lifecycle races + 8 Google Restore races passed\n`);
 } finally {
   dropTransientDatabase();
   if (sourceSentinel) {

@@ -126,6 +126,7 @@ jobs:
           npm run guard:chat-thread-hide-from-inbox-policy
           npm run guard:chilly-chat-call-push-policy
           npm run test:chilly-chat-livekit-authority
+          deno test --node-modules-dir=none --no-lock --allow-env supabase/functions/revenuecat-premium-reconcile/authority.test.ts supabase/functions/revenuecat-premium-reconcile/index_test.ts
 
   database:
     name: Validation / Database
