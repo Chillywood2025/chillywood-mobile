@@ -36,8 +36,8 @@ insert into public.channel_followers(channel_user_id,follower_user_id)
 
 select ok(has_function_privilege('authenticated','public.request_friendship(text)','execute'),
   'authenticated callers retain the normal request RPC');
-select ok(has_function_privilege('anon','public.request_friendship(text)','execute'),
-  'preexisting anonymous EXECUTE is unchanged; signed-in enforcement remains in the function');
+select ok(not has_function_privilege('anon','public.request_friendship(text)','execute'),
+  'canonical migrations do not grant anonymous request execution');
 select ok(has_function_privilege('service_role','public.request_friendship(text)','execute'),
   'preexisting service EXECUTE is unchanged');
 select ok(has_function_privilege('authenticated','public.respond_to_friendship(text,text)','execute'),
@@ -152,9 +152,9 @@ select is((select count(*)::integer from public.profile_posts where id='9b361000
   0,'unrelated user still cannot SELECT the accepted pair’s private post');
 reset role;
 
-insert into public.channel_audience_blocks(channel_user_id,blocked_user_id) values
-  (pg_temp.admission_user(9),pg_temp.admission_user(1)),
-  (pg_temp.admission_user(1),pg_temp.admission_user(10));
+insert into public.channel_audience_blocks(channel_user_id,blocked_user_id,blocked_by_user_id) values
+  (pg_temp.admission_user(9),pg_temp.admission_user(1),pg_temp.admission_user(9)),
+  (pg_temp.admission_user(1),pg_temp.admission_user(10),pg_temp.admission_user(1));
 select pg_temp.admission_actor(1);
 set local role authenticated;
 select throws_ok(format('select public.request_friendship(%L)',pg_temp.admission_user(9)),
@@ -171,7 +171,12 @@ select is((select count(*)::integer from public.user_friendships where user_low_
 select set_config('request.jwt.claims','{"role":"anon"}',true);
 set local role anon;
 select throws_ok(format('select public.request_friendship(%L)',pg_temp.admission_user(2)),
-  'P0001','Chi''lly Circle requires a signed-in user.','anonymous EXECUTE cannot create a request');
+  '42501','permission denied for function request_friendship','anonymous role cannot execute the canonical request RPC');
+reset role;
+select set_config('request.jwt.claims','{"role":"authenticated"}',true);
+set local role authenticated;
+select throws_ok(format('select public.request_friendship(%L)',pg_temp.admission_user(2)),
+  'P0001','Chi''lly Circle requires a signed-in user.','EXECUTE without an authenticated subject cannot create a request');
 reset role;
 select is(pg_temp.admission_events('circle_request',1,2),1,'rejected and repeated actions add no private request event');
 select is(pg_temp.admission_events('circle_accepted',2,1),1,'acceptance remains exactly once');
