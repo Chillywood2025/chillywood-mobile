@@ -2755,7 +2755,7 @@ assert.equal(deliveryCopy.getChillyChatCallDeliveryMessage(deliveryFixture({ ord
 assert.equal(deliveryCopy.getChillyChatCallDeliveryMessage(deliveryFixture({
   androidNative: copyChannel(true),
   iosVoip: copyChannel(true, true),
-})), "Call alert sent through available device channels.");
+})), "Call alert sent.");
 const inAppOnlyDelivery = {
   ...deliveryFixture({}),
   notificationCreated: true,

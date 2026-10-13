@@ -183,6 +183,7 @@ test("thread refresh ignores an older message response arriving after a newer re
   await h.act(async () => { older.resolve([{ id: "old-message" }]); await first; });
   assert.deepEqual(h.runtime.messages, [{ id: "new-message" }]);
   assert.equal(h.runtime.markRead, 1);
+  assert.equal(h.runtime.snapshot.loadedMessageEntryKey, h.runtime.snapshot.messageEntryKey);
   await h.unmount();
 });
 
@@ -196,6 +197,7 @@ test("thread refresh cannot project old account data after account replacement",
   assert.equal(h.runtime.messages, undefined);
   assert.equal(h.runtime.thread, undefined);
   assert.equal(h.runtime.markRead, undefined);
+  assert.equal(h.runtime.snapshot.loadedMessageEntryKey, null);
   await h.unmount();
 });
 
@@ -208,6 +210,7 @@ test("thread refresh late reconciliation cannot close a replacement call panel",
   await h.act(async () => { snapshot.resolve({ room: { status: "ended" } }); await operation; });
   assert.equal(h.runtime.panelOpen, true);
   assert.equal(h.runtime.clears.length, 0);
+  assert.equal(h.runtime.snapshot.loadedMessageEntryKey, null);
   await h.unmount();
 });
 
@@ -533,6 +536,7 @@ test("thread refresh preserves an ended call's cleanup retry surface after serve
   assert.equal(h.runtime.panelOpen, true);
   assert.equal(h.runtime.clears.length, 0);
   assert.equal(h.runtime.activeWrites?.length ?? 0, 0);
+  assert.equal(h.runtime.snapshot.loadedMessageEntryKey, h.runtime.snapshot.messageEntryKey);
   await h.unmount();
 });
 

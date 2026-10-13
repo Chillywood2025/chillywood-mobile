@@ -28,6 +28,10 @@ const dismissAction = ast.statements.find(n => ts.isFunctionDeclaration(n) && n.
 const builder = ast.statements.find(n => ts.isVariableStatement(n) && n.declarationList.declarations.some(d => d.name.getText(ast) === 'buildNotificationActionResult'));
 assert.ok(mark && builder, 'execute the actual action-result builder and mark-read function');
 const compile = source => ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText;
+const linkContext = { exports: {}, URL, URLSearchParams };
+vm.runInNewContext(compile(readSource('_lib/appLinks.ts')), linkContext);
+const targetContext = { exports: {}, URLSearchParams, require: () => linkContext.exports };
+vm.runInNewContext(compile(readSource('_lib/notificationMessageTarget.ts')), targetContext);
 const compiledBell = compile(bellSource);
 assert.ok(dismissAction);
 const compiledAction = compile(`${builder.getText(ast)}\n${mark.getText(ast)}\n${dismissAction.getText(ast)}`);
@@ -42,7 +46,7 @@ const compiledBridge = compile(`${bridge.getText(rootAst)}\nglobalThis.Bridge = 
 const compiledInvalidation = compile(fs.readFileSync(`${REPO}/_lib/notificationActivity.ts`, 'utf8'));
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 const activeSession = (id = 'account-a', generation = 'generation-a') => ({ user: { id }, authorityStatus: 'active', authority: { userId: id, accountId: id, sessionGeneration: generation, state: 'ACTIVE', restoreOnly: false } });
-const notification = { id: 'notification-a', notificationType: 'creator_tip_received', title: 'Creator activity', body: 'Test activity', deepLink: '/channel-settings', createdAt: '2026-10-10T10:00:00.000Z', isRead: false, readAt: null, isDismissed: false, isImportant: false, isExpired: false, actionStatus: 'pending', actionLabel: 'Open' };
+const notification = { id: 'notification-a', notificationType: 'creator_tip_received', title: 'Creator activity', body: 'Test activity', deepLink: '/channel-studio', target: { entityId: null, context: {} }, createdAt: '2026-10-10T10:00:00.000Z', isRead: false, readAt: null, isDismissed: false, isImportant: false, isExpired: false, actionStatus: 'pending', actionLabel: 'Open' };
 function descend(node, predicate, found = []) {
   if (Array.isArray(node)) { node.forEach(n => descend(n, predicate, found)); return found; }
   if (!node || typeof node !== 'object') return found;
@@ -56,7 +60,7 @@ function textOf(node) {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   return textOf(node.props?.children);
 }
-async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBell = false } = {}) {
+async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBell = false, notificationOverride = {} } = {}) {
   const captures = new Map(); const routes = []; const results = []; let writes = 0; let summaryReads = 0; let pageReads = 0; let markCalls = 0;
   let activeOutcome = outcome;
   let markResultGate = null;
@@ -79,7 +83,7 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
   } };
   vm.runInNewContext(compiledInvalidation, invalidationContext);
   const invalidation = invalidationContext.exports;
-  const row = { ...notification };
+  const row = { ...notification, ...notificationOverride };
   let pageReader = async () => ({ status: 'resolved', items: row.isDismissed ? [] : [{ ...row }], nextCursor: null });
   const actionContext = {
     exports: {}, Date, Promise,
@@ -126,7 +130,7 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
     readNotificationSummary: async id => { summaryReads++; requestedUsers.push(id); return summaryReader(id); },
     readImportantNotificationList: async () => [],
     readNotificationListPage: (...args) => { pageReads++; return pageReader(...args); },
-    resolveNotificationPath: value => value,
+    resolveNotificationPath: targetContext.exports.resolveNotificationMessagePath,
   };
   const deps = {
     react: React,
@@ -164,7 +168,7 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
     trayText: textOf(captures.get('Modal').children), rowDisabled: descend(captures.get('Modal').children, n => n.props?.accessibilityLabel?.startsWith('Open notification:'))[0]?.props.disabled,
     loadMoreDisabled: descend(captures.get('Modal').children, n => n.props?.accessibilityLabel === 'Load more notifications')[0]?.props.disabled,
     peerLabel: captures.get('peer-notification-bell')?.accessibilityLabel,
-    markCalls, summaryReads, pageReads, writes, durableRead, durableDismissed, routes: routes.length, requestedUsers: [...requestedUsers],
+    markCalls, summaryReads, pageReads, writes, durableRead, durableDismissed, routes: routes.length, routePaths: [...routes], requestedUsers: [...requestedUsers],
     toast: captures.has('room-safe-notification-toast'), result: results.at(-1)?.status ?? null });
   return {
     snapshot,
@@ -230,6 +234,18 @@ for (const outcome of ['blocked', 'error', 'throw', 'completed', 'noop']) {
 }
 
 const summary = unreadCount => ({ unreadCount, undismissedCount: unreadCount, totalCount: unreadCount, latestCreatedAt: notification.createdAt, categories: [] });
+
+test('actual mounted bell passes backed chat context through the real shared route resolver', async t => {
+  const threadId = '00000000-0000-4000-8000-000000000111';
+  const messageId = '00000000-0000-4000-8000-000000000222';
+  const h = await mount(t, 'completed', { notificationOverride: {
+    notificationType: 'chat_message', deepLink: `/chat/${threadId}`,
+    target: { entityId: threadId, context: { threadId, messageId } },
+  } });
+  await h.openTray(); await h.openRow();
+  assert.deepEqual(h.snapshot().routePaths, [`/chat/${threadId}?messageId=${messageId}`]);
+  assert.equal(h.snapshot().durableRead, true);
+});
 
 test('live badge uses the actual root receipt before toast filtering and foreground activation', async t => {
   const h = await mount(t, 'completed', { withRoot: true });

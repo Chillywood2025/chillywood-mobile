@@ -260,7 +260,7 @@ export function getDiscoveryItemActionLabel(item: Pick<DiscoveryFeedItem, "item_
     case "creator_upload":
       return "Video";
     case "channel_update":
-      return "Creator Channel";
+      return "Creator Platform";
     case "replay_later":
       return "Replay";
     default:

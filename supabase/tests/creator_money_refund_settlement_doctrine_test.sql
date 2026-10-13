@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path=public,extensions;
-select plan(31);
+select plan(39);
 
 select has_table('public','creator_money_settlement_policies','server-owned settlement policy exists');
 select has_table('public','creator_money_obligation_completion_receipts','obligation completion receipts exist');
@@ -158,5 +158,50 @@ select throws_ok(
   'canonical completion time cannot be rewritten'
 );
 
+-- Copy-only regression through the real public RPC. Paused offers are the
+-- existing non-exposing save path; no purchase, active sale or entitlement is
+-- created. Synthetic sandbox configuration and rows roll back with this test.
+select is(
+  pg_get_function_arguments('public.set_creator_channel_subscription_offer(text,text,text)'::regprocedure),
+  'p_title text DEFAULT ''Platform subscription''::text, p_description text DEFAULT NULL::text, p_status text DEFAULT ''sandbox''::text',
+  'omitted public offer title uses the established Platform name'
+);
+select is(
+  pg_get_function_arguments('public.set_creator_channel_subscription_offer_pre_integrity_closeout(text,text,text)'::regprocedure),
+  'p_title text DEFAULT ''Platform subscription''::text, p_description text DEFAULT NULL::text, p_status text DEFAULT ''sandbox''::text',
+  'hidden predecessor retains compatible Platform defaults'
+);
+select ok(
+  has_function_privilege('authenticated','public.set_creator_channel_subscription_offer(text,text,text)','EXECUTE')
+  and has_function_privilege('service_role','public.set_creator_channel_subscription_offer(text,text,text)','EXECUTE')
+  and not has_function_privilege('anon','public.set_creator_channel_subscription_offer(text,text,text)','EXECUTE')
+  and not has_function_privilege('authenticated','public.set_creator_channel_subscription_offer_pre_integrity_closeout(text,text,text)','EXECUTE')
+  and not has_function_privilege('service_role','public.set_creator_channel_subscription_offer_pre_integrity_closeout(text,text,text)','EXECUTE'),
+  'copy correction preserves the public wrapper and inaccessible predecessor'
+);
+insert into auth.users(id,is_sso_user,is_anonymous)
+values ('d4310000-0000-4000-8000-000000000001',false,false);
+insert into auth.sessions(id,user_id)
+values ('d4310000-0000-4000-8000-000000000002','d4310000-0000-4000-8000-000000000001');
+update public.platform_money_kill_switches set state='sandbox_only'
+where key in ('digital_sales_enabled','revenuecat_google_play_enabled');
+update public.monetization_products
+set provider='revenuecat_google_play',environment='sandbox',status='sandbox',
+  provider_product_id='platform_copy_test_product'
+where product_key='channel_subscription_sandbox_monthly_499' and product_type='channel_subscription';
+set local role authenticated;
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"d4310000-0000-4000-8000-000000000001","session_id":"d4310000-0000-4000-8000-000000000002"}',true);
+select is(public.set_creator_channel_subscription_offer(p_status=>'paused')->>'title',
+  'Platform subscription','actual paused public save with omitted title uses Platform');
+select is(public.set_creator_channel_subscription_offer(p_title=>'   ',p_status=>'paused')->>'title',
+  'Platform subscription','actual paused public save normalizes a blank title to Platform');
+select is(public.set_creator_channel_subscription_offer(p_title=>null,p_status=>'paused')->>'title',
+  'Platform subscription','actual paused public save normalizes a null title to Platform');
+select is(public.set_creator_channel_subscription_offer(p_title=>'My Channel Notes',p_status=>'paused')->>'title',
+  'My Channel Notes','explicit custom user title is preserved without a broad text replacement');
+select set_config('request.jwt.claims','{}',true);
+select throws_ok($$select public.set_creator_channel_subscription_offer(p_status=>'paused')$$,
+  'P0001','auth_required','copy-only default does not remove authenticated ownership');
+reset role;
 select * from finish();
 rollback;

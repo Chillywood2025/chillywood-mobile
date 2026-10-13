@@ -298,6 +298,7 @@ import {
   type DmcaContentType,
 } from "../_lib/dmca";
 import { supabase } from "../_lib/supabase";
+import { formatContentTypeLabel, normalizeAdminCanaryDisplayCopy } from "../_lib/userFacingProductCopy";
 import { runCurrentAccountBoundSupabaseMutationRpc } from "../_lib/accountBoundSupabaseMutation";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
 import { CognitiveControlCenterFoundation } from "../components/admin/cognitive-control-center";
@@ -1604,7 +1605,7 @@ const formatContentAuditActor = (row: ContentAuditRow) => {
 };
 
 const formatContentAuditTarget = (row: ContentAuditRow) => {
-  const targetType = row.target_type ? formatModerationToken(row.target_type) : "Content";
+  const targetType = row.target_type ? formatModerationToken(formatContentTypeLabel(row.target_type)) : "Content";
   const targetId = row.target_id || row.target_user_id;
   return targetId ? `${targetType} ${formatCompactIdentifier(targetId)}` : targetType;
 };
@@ -2476,7 +2477,9 @@ const canaryStructuredRows = (result: OwnerControlCanaryResult) => {
     .slice(0, 8)
     .map(([key, value]) => ({
       label: formatModerationToken(key),
-      value: formatOwnerDetailValue(value),
+      value: formatOwnerDetailValue(result.key === "dmca_content_mutation_channel" && key === "content_type"
+        ? formatContentTypeLabel(value)
+        : value),
     }));
 };
 
@@ -3073,7 +3076,7 @@ const formatImmutableAuditActor = (entry: PlatformAdminAuditLogRow) => {
 
 const formatImmutableAuditTarget = (entry: PlatformAdminAuditLogRow) => {
   if (!entry.targetType && !entry.targetId) return "Target not set";
-  const targetType = entry.targetType ? formatModerationToken(entry.targetType) : "Target";
+  const targetType = entry.targetType ? formatModerationToken(formatContentTypeLabel(entry.targetType)) : "Target";
   return entry.targetId ? `${targetType} ${formatCompactIdentifier(entry.targetId)}` : targetType;
 };
 
@@ -6957,7 +6960,7 @@ export default function AdminStudioScreen() {
       ["disabled", "hidden", "restored"].includes(dmcaContentAction)
       && !dmcaSupportedStateContentTypes.has(dmcaContentType)
     ) {
-      setDmcaNotice(`Missing backend piece: ${formatModerationToken(dmcaContentType)} does not have a safe DMCA disable/restore route yet.`);
+      setDmcaNotice(`Missing backend piece: ${formatModerationToken(formatContentTypeLabel(dmcaContentType))} does not have a safe DMCA disable/restore route yet.`);
       return;
     }
 
@@ -7272,7 +7275,7 @@ export default function AdminStudioScreen() {
       ["disabled", "hidden", "restored"].includes(dmcaContentAction)
       && !dmcaSupportedStateContentTypes.has(dmcaContentType)
     ) {
-      return `Missing backend piece: safe DMCA disable/restore route for ${formatModerationToken(dmcaContentType)}.`;
+      return `Missing backend piece: safe DMCA disable/restore route for ${formatModerationToken(formatContentTypeLabel(dmcaContentType))}.`;
     }
     return null;
   }, [dmcaActionReason, dmcaContentAction, dmcaContentId, dmcaContentType, selectedDmcaCase]);
@@ -9029,7 +9032,7 @@ export default function AdminStudioScreen() {
   const latestCanaryRun = canaryRuns[0] ?? null;
   const latestCanarySummary = useMemo(() => summarizeCanaryRun(latestCanaryRun), [latestCanaryRun]);
   const latestCanaryResults = useMemo(
-    () => (Array.isArray(latestCanaryRun?.results) ? latestCanaryRun.results : []),
+    () => (Array.isArray(latestCanaryRun?.results) ? latestCanaryRun.results.map(normalizeAdminCanaryDisplayCopy) : []),
     [latestCanaryRun],
   );
   const filteredCanaryResults = useMemo(
@@ -12979,7 +12982,7 @@ export default function AdminStudioScreen() {
                       <View style={styles.reportHeaderRow}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.reportKicker}>
-                            {`${dmcaCase.caseNumber || dmcaCase.id} · ${formatModerationToken(dmcaCase.contentType)}`}
+                            {`${dmcaCase.caseNumber || dmcaCase.id} · ${formatModerationToken(formatContentTypeLabel(dmcaCase.contentType))}`}
                           </Text>
                           <Text style={styles.reportTitle}>{formatAuditDisplayText(dmcaCase.reporterName)}</Text>
                           <Text style={styles.reportMeta}>{`Reporter ${formatAuditDisplayText(dmcaCase.reporterEmail)}`}</Text>
@@ -17055,7 +17058,7 @@ export default function AdminStudioScreen() {
                     )) : <Text style={styles.configListBody}>No timeline events recorded yet.</Text>
                   ) : legalSubsection === "holds" ? (
                     selectedLegalRequestDetail.holds.length ? selectedLegalRequestDetail.holds.map((hold) => (
-                      <Text key={String(hold.id)} style={styles.configListBody}>{`Hold ${formatCompactIdentifier(hold.id)} · ${formatModerationToken(hold.status)} · ${formatModerationToken(hold.target_type)} ${formatCompactIdentifier(hold.target_id)}`}</Text>
+                      <Text key={String(hold.id)} style={styles.configListBody}>{`Hold ${formatCompactIdentifier(hold.id)} · ${formatModerationToken(hold.status)} · ${formatModerationToken(formatContentTypeLabel(hold.target_type))} ${formatCompactIdentifier(hold.target_id)}`}</Text>
                     )) : <Text style={styles.configListBody}>No legal holds linked to this request.</Text>
                   ) : (
                     selectedLegalRequestDetail.evidenceRequests.filter((row) => String(row.request_kind) === "export").length ? selectedLegalRequestDetail.evidenceRequests.filter((row) => String(row.request_kind) === "export").map((row) => (
@@ -17162,7 +17165,7 @@ export default function AdminStudioScreen() {
                   <OwnerDetailGrid
                     rows={[
                       { label: "Actor", value: row.actorEmail ? maskOperatorIdentity(row.actorEmail) : formatCompactIdentifier(row.actorUserId) },
-                      { label: "Target", value: `${formatModerationToken(row.targetType)} ${formatCompactIdentifier(row.targetId)}` },
+                      { label: "Target", value: `${formatModerationToken(formatContentTypeLabel(row.targetType))} ${formatCompactIdentifier(row.targetId)}` },
                       { label: "Permission", value: row.permissionKey ? formatModerationToken(row.permissionKey) : "not supplied" },
                       { label: "Network Verification", value: formatOwnerSecurityNetworkProof(row.securityContext) },
                       { label: "Network Status", value: row.securityContext ? formatOwnerSecurityNetworkMeta(row.securityContext) : ownerSecurityStatusLabel(row.securityContextStatus || "missing") },
@@ -18735,7 +18738,7 @@ export default function AdminStudioScreen() {
                       message={`${entry.occurredAt ? formatModerationTimestamp(entry.occurredAt) : "time unavailable"} · ${entry.resultLabel ? formatAuditDisplayText(entry.resultLabel) : "No result label"} · ${entry.metadataFieldCount} metadata field${entry.metadataFieldCount === 1 ? "" : "s"} hidden`}
                       meta={[
                         entry.actorRole ? formatModerationToken(entry.actorRole) : null,
-                        entry.targetType ? `${formatModerationToken(entry.targetType)} ${entry.targetId ? formatCompactIdentifier(entry.targetId) : ""}`.trim() : null,
+                        entry.targetType ? `${formatModerationToken(formatContentTypeLabel(entry.targetType))} ${entry.targetId ? formatCompactIdentifier(entry.targetId) : ""}`.trim() : null,
                         entry.roomId ? `Room ${formatCompactIdentifier(entry.roomId)}` : null,
                       ].filter(Boolean).join(" · ") || "No actor or target returned"}
                       onPress={() => openAdminDrilldown({
@@ -18762,7 +18765,7 @@ export default function AdminStudioScreen() {
                             rows: [
                               { label: "Actor role", value: entry.actorRole ? formatModerationToken(entry.actorRole) : "not returned" },
                               { label: "Actor user", value: entry.actorUserId ? formatCompactIdentifier(entry.actorUserId) : "not returned" },
-                              { label: "Target", value: entry.targetType ? `${formatModerationToken(entry.targetType)} ${entry.targetId ? formatCompactIdentifier(entry.targetId) : ""}`.trim() : "not returned" },
+                              { label: "Target", value: entry.targetType ? `${formatModerationToken(formatContentTypeLabel(entry.targetType))} ${entry.targetId ? formatCompactIdentifier(entry.targetId) : ""}`.trim() : "not returned" },
                               { label: "Room", value: entry.roomId ? formatCompactIdentifier(entry.roomId) : "not returned" },
                               { label: "Metadata field count", value: String(entry.metadataFieldCount) },
                             ],
@@ -20618,7 +20621,7 @@ export default function AdminStudioScreen() {
                     <Text style={styles.badgeText}>{formatModerationToken(selectedDmcaDetail.case.status)}</Text>
                   </View>
                   <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{formatModerationToken(selectedDmcaDetail.case.contentType)}</Text>
+                    <Text style={styles.badgeText}>{formatModerationToken(formatContentTypeLabel(selectedDmcaDetail.case.contentType))}</Text>
                   </View>
                   <View style={[styles.badge, selectedDmcaDetail.case.activeStrikeCount > 0 ? styles.badgeDraft : styles.badgeOff]}>
                     <Text style={styles.badgeText}>{`${selectedDmcaDetail.case.activeStrikeCount} active strikes`}</Text>
@@ -20665,7 +20668,7 @@ export default function AdminStudioScreen() {
                   <View style={styles.configListRow}>
                     <View style={styles.configListCopy}>
                       <Text style={styles.configListTitle}>Content / Uploader</Text>
-                      <Text style={styles.configListBody}>{`Content type: ${formatModerationToken(selectedDmcaDetail.case.contentType)}`}</Text>
+                      <Text style={styles.configListBody}>{`Content type: ${formatModerationToken(formatContentTypeLabel(selectedDmcaDetail.case.contentType))}`}</Text>
                       <Text style={styles.configListBody}>{`Content id: ${formatCompactIdentifier(selectedDmcaDetail.case.contentId)}`}</Text>
                       <Text style={styles.configListBody}>{`Content URL/path: ${formatAuditDisplayText(selectedDmcaDetail.case.contentUrl)}`}</Text>
                       <Text style={styles.configListBody}>{`Uploader id: ${formatCompactIdentifier(selectedDmcaDetail.case.uploaderUserId)}`}</Text>
@@ -20797,7 +20800,7 @@ export default function AdminStudioScreen() {
                             onPress={() => setDmcaContentType(type)}
                           >
                             <Text style={[styles.toggleChipText, dmcaContentType === type && styles.toggleChipTextActive]}>
-                              {formatModerationToken(type)}
+                              {formatModerationToken(formatContentTypeLabel(type))}
                             </Text>
                           </TouchableOpacity>
                         ))}
@@ -21030,7 +21033,7 @@ export default function AdminStudioScreen() {
                       {selectedDmcaDetail.contentActions.length ? selectedDmcaDetail.contentActions.map((action) => (
                         <View key={action.id} style={styles.configListRowSubtle}>
                           <Text style={styles.configListTitle}>{formatModerationToken(action.action)}</Text>
-                          <Text style={styles.configListBody}>{`${formatModerationTimestamp(action.createdAt)} · ${formatModerationToken(action.contentType)} ${formatCompactIdentifier(action.contentId)}`}</Text>
+                          <Text style={styles.configListBody}>{`${formatModerationTimestamp(action.createdAt)} · ${formatModerationToken(formatContentTypeLabel(action.contentType))} ${formatCompactIdentifier(action.contentId)}`}</Text>
                           <Text style={styles.configListBody}>{formatAuditDisplayText(action.reason)}</Text>
                         </View>
                       )) : (
@@ -21134,7 +21137,7 @@ export default function AdminStudioScreen() {
                     onPress={() => updateDmcaIntakeForm("contentType", type)}
                   >
                     <Text style={[styles.toggleChipText, dmcaIntakeForm.contentType === type && styles.toggleChipTextActive]}>
-                      {formatModerationToken(type)}
+                      {formatModerationToken(formatContentTypeLabel(type))}
                     </Text>
                   </TouchableOpacity>
                 ))}

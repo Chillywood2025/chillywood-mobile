@@ -23,6 +23,7 @@ import {
 } from "../_lib/dmca";
 import { LEGAL_SUPPORT_EMAIL } from "../_lib/legalPolicies";
 import { getUserFacingErrorMessage } from "../_lib/userFacingErrors";
+import { formatContentTypeLabel } from "../_lib/userFacingProductCopy";
 import { LegalMeta, LegalPageShell, LegalParagraph, LegalSection } from "../components/legal/legal-page-shell";
 
 const LAST_UPDATED = "May 22, 2026";
@@ -264,7 +265,7 @@ export default function CopyrightReportPage() {
                 onPress={() => setContentType(entry)}
               >
                 <Text style={[styles.typeChipText, contentType === entry && styles.typeChipTextActive]}>
-                  {entry.replaceAll("_", " ")}
+                  {formatContentTypeLabel(entry)}
                 </Text>
               </TouchableOpacity>
             ))}

@@ -49,7 +49,7 @@ import {
   type SocialAttachment,
 } from "./socialAttachments";
 import { supabase } from "./supabase";
-import { captureAccountBoundSupabaseMutationSubject, invokeAccountBoundSupabaseMutationRpc, runExactSessionAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
+import { assertAccountBoundSupabaseMutationSubjectCurrent, captureAccountBoundSupabaseMutationSubject, invokeAccountBoundSupabaseMutationRpc, runExactSessionAccountBoundSupabaseMutationRpc, type AccountBoundSupabaseMutationSubject } from "./accountBoundSupabaseMutation";
 import { readUserProfile } from "./userData";
 export {
   PARTY_SEAT_REQUEST_MESSAGE_PREFIX,
@@ -1579,12 +1579,35 @@ export type PartyRoomDiscoveryResult = {
   projectionId: string | null;
 };
 
+// A host can still edit an exact prepared room after its viewer activity window
+// elapses. This read grants no admission, heartbeat, membership or publication.
+async function readOwnedPartyRoomForPreparation(
+  expectedRoom: WatchPartyState,
+  subject: AccountBoundSupabaseMutationSubject,
+): Promise<WatchPartyState | null> {
+  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+  if (!expectedRoom.isActive || expectedRoom.roomType !== "title"
+    || expectedRoom.hostUserId !== subject.authority.userId
+    || !expectedRoom.sourceId
+    || (expectedRoom.sourceType !== "platform_title" && expectedRoom.sourceType !== "creator_video")) return null;
+  const row = await fetchPartyRoomRow(expectedRoom.partyId);
+  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+  if (!row || !("is_active" in row) || row.is_active !== true) return null;
+  const room = rowToState(row);
+  if (!room || room.roomType !== "title" || room.partyId !== expectedRoom.partyId
+    || room.hostUserId !== expectedRoom.hostUserId || room.titleId !== expectedRoom.titleId
+    || room.sourceType !== expectedRoom.sourceType || room.sourceId !== expectedRoom.sourceId) return null;
+  return room;
+}
+
 async function writePartyRoomDiscovery(
   expectedRoom: WatchPartyState,
   policies?: Pick<SetPartyRoomPoliciesOptions, "discoveryVisibility" | "discoveryTitle">,
 ): Promise<{ room: WatchPartyState; result: PartyRoomDiscoveryResult } | null> {
   const subject = await captureAccountBoundSupabaseMutationSubject();
-  const room = await getPartyRoom(String(expectedRoom.partyId).trim().toUpperCase());
+  const room = policies
+    ? await readOwnedPartyRoomForPreparation(expectedRoom, subject)
+    : await getPartyRoom(String(expectedRoom.partyId).trim().toUpperCase());
   if (!room || !room.isActive || room.roomType !== "title" || room.hostUserId !== subject.authority.userId
     || room.partyId !== expectedRoom.partyId || room.hostUserId !== expectedRoom.hostUserId
     || room.sourceType !== expectedRoom.sourceType || room.sourceId !== expectedRoom.sourceId

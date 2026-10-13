@@ -24,6 +24,14 @@ export function resolvePremiumPurchaseReadiness(input) {
     };
   }
 
+  if (input.storePremiumActive) {
+    return {
+      ready: false,
+      code: "premium_verification_pending",
+      message: "Your store reports an active Premium subscription. Account access is still being verified. Recheck status or restore purchases; do not purchase again.",
+    };
+  }
+
   if (!input.purchaseShellAvailable) {
     return {
       ready: false,

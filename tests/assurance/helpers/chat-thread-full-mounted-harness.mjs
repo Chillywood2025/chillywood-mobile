@@ -352,7 +352,8 @@ export async function mountFullChatThread(options = {}) {
   const chat = {
     getChatThread: async (id) => runtime.readThread ? runtime.readThread(id)
       : durableThread && id !== durableThread.threadId ? null : ({ ...runtime.thread }),
-    listChatMessages: async (id) => durableThread ? durableThread.list(runtime.userId, id) : [],
+    listChatMessages: async (id) => runtime.readMessages ? runtime.readMessages(id)
+      : durableThread ? durableThread.list(runtime.userId, id) : [],
     sendChatMessage: async (id, body, attachment) => {
       if (!durableThread) throw Error("message writes require the durable thread fixture");
       return durableThread.send(runtime.userId, id, body, attachment);
@@ -511,6 +512,11 @@ export async function mountFullChatThread(options = {}) {
       clearTimeout: timer => { if (timer) timer.canceled = true; },
     });
   let source = fs.readFileSync(process.env.CHILLY_CHAT_FULL_THREAD_TEST_SOURCE ?? "app/chat/[threadId].tsx", "utf8");
+  const links = compile(fs.readFileSync("_lib/appLinks.ts", "utf8"), "_lib/appLinks.ts", {}, { URLSearchParams });
+  modules["../../_lib/notificationMessageTarget"] = compile(fs.readFileSync("_lib/notificationMessageTarget.ts", "utf8"), "_lib/notificationMessageTarget.ts", { "./appLinks": links }, { URLSearchParams });
+  modules["../../_lib/useChatMessagePosition"] = compile(fs.readFileSync("_lib/useChatMessagePosition.ts", "utf8"), "_lib/useChatMessagePosition.ts", {
+    react: React, "react-native": modules["react-native"], "@react-navigation/native": { useIsFocused: () => runtime.focused },
+  });
   // Preserve the actual screen-to-panel expressions even though native JSX
   // rendering is outside this fixture. Copied handler names would hide a
   // no-op button binding or a permanently busy panel in the production JSX.
@@ -518,6 +524,8 @@ export async function mountFullChatThread(options = {}) {
   const panelBindings = new Map();
   const presentationBindings = new Map();
   const circleBindings = new Map();
+  const messageScrollBindings = new Map();
+  let messageLayoutBinding;
   let circleToggle;
   const requiredPanelBindings = ["showControls", "showMediaControls", "mediaControlsBusy", "onToggleCamera", "onToggleMic", "onSwitchCamera", "onLeave", "onToggleAudioRoute", "speakerEnabled", "mediaControlMessage"];
   const visit = node => {
@@ -535,6 +543,16 @@ export async function mountFullChatThread(options = {}) {
         circleBindings.set(action, `{ visible: Boolean(${branch.parent.condition.getText(parsedScreen)}), disabled: (${disabled.getText(parsedScreen)}), onPress: (${press.getText(parsedScreen)}) }`);
       }
       const testId = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === "testID")?.initializer?.text;
+      if (testId === "chat-thread-messages-scroll") {
+        for (const name of ["key", "ref", "onLayout", "onContentSizeChange", "onScrollBeginDrag"]) {
+          const expression = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === name)?.initializer?.expression;
+          assert.ok(expression, `actual message scroll ${name}`);
+          messageScrollBindings.set(name, expression.getText(parsedScreen));
+        }
+      }
+      if (attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === "key")?.initializer?.expression?.getText(parsedScreen) === "message.id") {
+        messageLayoutBinding = attrs.find(attr => ts.isJsxAttribute(attr) && attr.name.text === "onLayout")?.initializer?.expression?.getText(parsedScreen);
+      }
       if (testId === "chat-thread-incoming-call-banner") {
         let branch = node;
         while (ts.isParenthesizedExpression(branch.parent)) branch = branch.parent;
@@ -564,6 +582,9 @@ export async function mountFullChatThread(options = {}) {
   assert.equal(presentationBindings.size, 4, "actual ringing presentation bindings must remain observable");
   assert.equal(circleBindings.size, 5, "actual Circle actions must remain observable");
   assert.ok(circleToggle, "actual header action must remain observable");
+  assert.equal(messageScrollBindings.size, 5);
+  assert.ok(messageLayoutBinding, "actual message bubble layout binding");
+  const messageBindingSource = [...messageScrollBindings].map(([name, expression]) => `${name}: (${expression})`).join(",");
   const circleBindingSource = [...circleBindings].map(([name, expression]) => `${name}: ${expression}`).join(",");
   const panelBindingSource = [...panelBindings].map(([name, expression]) => `${name}: (${expression})`).join(",");
   const presentationBindingSource = [...presentationBindings].map(([name, expression]) => `${name}: (${expression})`).join(",");
@@ -581,6 +602,7 @@ export async function mountFullChatThread(options = {}) {
       friendState, friendStatusSummary, friendLoading, friendBusy,
       circleControls: { ${circleBindingSource} }, circleToggle: (${circleToggle}), handleFriendAction,
       panelBindings: { ${panelBindingSource} },
+      messageBindings: { ${messageBindingSource}, bubble: message => (${messageLayoutBinding}) },
       presentation: { ${presentationBindingSource} },
       callBusy, callPanelOpen, activeCallInvite, activeCallRoomId, incomingCallInvite,
       callChannelState, cameraEnabled, micEnabled, participantCount, participants,

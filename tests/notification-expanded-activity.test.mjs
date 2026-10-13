@@ -33,6 +33,8 @@ const run = (source, context = {}) => {
   return sandbox;
 };
 const links = run(read("_lib/appLinks.ts")).exports;
+const productCopy = run(read("_lib/userFacingProductCopy.ts")).exports;
+const messageTargets = run(read("_lib/notificationMessageTarget.ts"), { require: () => links }).exports;
 const notifications = sourceAst("_lib/notifications.ts");
 const names = [
   "normalizeJsonRecord", "normalizeText", "normalizeIsoTimestamp", "normalizeNotificationCategory",
@@ -46,12 +48,30 @@ const serviceSource = names.map((name) => declaration(notifications, name)).join
   + "\nglobalThis.service = { parseNotificationRow, parsePreferenceRow, buildPreferenceUpdate, readNotificationPreferences, updateNotificationPreferences, resolveNotificationPath };";
 const identity = "00000000-0000-4000-8000-000000000111";
 const parseService = (extra = {}) => run(serviceSource, {
-  normalizePlatformSubscriptionNotificationCopy: (value) => value,
+  normalizeProductNotificationCopy: productCopy.normalizeProductNotificationCopy,
   normalizeChillyChatRingtoneKey: (value) => value || "chilly_ring",
   resolveApplicationRoute: links.resolveApplicationRoute,
+  resolveNotificationMessagePath: messageTargets.resolveNotificationMessagePath,
   ...extra,
 }).service;
 const service = parseService();
+test("actual bell-row parser updates legacy Follow copy without changing its target or other messages", () => {
+  const stored = { id: "follow-notification", user_id: identity, category: "social_activity",
+    notification_type: "social_follow", title: "New follower", body: "Someone followed your channel.",
+    target_route: "/profile/[userId]", target_entity_id: identity, status: "sent", target_context: {} };
+  const parsed = service.parseNotificationRow(stored);
+  assert.equal(parsed.body, "Someone followed your Platform.");
+  assert.equal(parsed.title, stored.title);
+  assert.equal(parsed.notificationType, stored.notification_type);
+  assert.equal(parsed.target.route, stored.target_route);
+  assert.equal(parsed.target.entityId, stored.target_entity_id);
+  assert.equal(stored.body, "Someone followed your channel.", "stored input is not backfilled or mutated");
+  assert.equal(service.parseNotificationRow({ ...stored, notification_type: "chat_message" }).body, stored.body);
+  assert.equal(service.parseNotificationRow({ ...stored, notification_type: " social_follow " }).body, stored.body,
+    "the exact stored event type is required even though routing normalizes its own type");
+  assert.equal(service.parseNotificationRow({ ...stored, body: "A user's channel description." }).body,
+    "A user's channel description.");
+});
 test("ready replay uses the actual guarded replay screen without adding access authority", () => {
   const row = service.parseNotificationRow({ id: "replay-notification", user_id: identity,
     category: "content_dropped", notification_type: "replay_later", title: "Replay ready",
@@ -276,6 +296,6 @@ test("notification navigation never invents focus or action authority", () => {
     assert.equal(service.resolveNotificationPath(route), null, route);
   }
   assert.equal(service.resolveNotificationPath("/chilly-circle?from=notification"), "/chilly-circle?from=notification");
-  const rendered = rowRenderer({ id: "unsafe", notificationType: "circle_request", deepLink: "/chilly-circle?accept=1" });
+  const rendered = rowRenderer({ id: "unsafe", notificationType: "circle_request", deepLink: "/chilly-circle?accept=1", target: { entityId: null, context: {} } });
   assert.equal(descendants(rendered, "TouchableOpacity")[0].props.disabled, true);
 });

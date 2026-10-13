@@ -23,6 +23,8 @@ import { ChillywoodBrandedSurface } from "../../components/ui/chillywood-branded
 import { ChillywoodPrimaryActionFill } from "../../components/ui/chillywood-visual-system";
 
 import { trackEvent } from "../../_lib/analytics";
+import { normalizeChatMessageId } from "../../_lib/notificationMessageTarget";
+import { useChatMessagePosition } from "../../_lib/useChatMessagePosition";
 import { DEFAULT_APP_CONFIG, readAppConfig } from "../../_lib/appConfig";
 import {
   listChillyChatCallEvents,
@@ -414,6 +416,7 @@ export default function ChillyChatThreadScreen() {
   const currentUserId = String(user?.id ?? "").trim();
   const {
     threadId: threadIdParam,
+    messageId: messageIdParam,
     callInviteId: callInviteIdParam,
     foregroundCallClaim: foregroundCallClaimParam,
     nativeCallClaim: nativeCallClaimParam,
@@ -426,8 +429,13 @@ export default function ChillyChatThreadScreen() {
       nativeCallAction?: string;
       nativeCallUuid?: string;
       threadId?: string;
+      messageId?: string;
     }>();
   const threadId = String(Array.isArray(threadIdParam) ? threadIdParam[0] : threadIdParam ?? "").trim();
+  const routeMessageId = normalizeChatMessageId(messageIdParam);
+  const messageOwnerKey = JSON.stringify([currentUserId, authority?.sessionGeneration ?? "", isSignedIn, threadId]);
+  const messageEntryKey = JSON.stringify([messageOwnerKey, routeMessageId]);
+  const [loadedMessageEntryKey, setLoadedMessageEntryKey] = useState<string | null>(null);
   const routeCallInviteId = String(Array.isArray(callInviteIdParam) ? callInviteIdParam[0] : callInviteIdParam ?? "").trim();
   const routeForegroundCallClaim = String(Array.isArray(foregroundCallClaimParam) ? foregroundCallClaimParam[0] : foregroundCallClaimParam ?? "").trim();
   const routeNativeCallClaim = String(Array.isArray(nativeCallClaimParam) ? nativeCallClaimParam[0] : nativeCallClaimParam ?? "").trim();
@@ -465,6 +473,13 @@ export default function ChillyChatThreadScreen() {
   const [error, setError] = useState<string | null>(null);
   const [thread, setThread] = useState<ChatThreadSummary | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messagePosition = useChatMessagePosition({
+    entryKey: messageEntryKey,
+    ready: loadedMessageEntryKey === messageEntryKey && !loading && !authLoading && isSignedIn
+      && thread?.threadId === threadId && thread.currentMember?.userId === currentUserId,
+    messageIds: messages.filter((message) => message.threadId === threadId && !message.isModerationHidden).map((message) => message.id),
+    targetMessageId: routeMessageId,
+  });
   const [draft, setDraft] = useState("");
   const [attachmentFile, setAttachmentFile] = useState<SocialAttachmentFile | null>(null);
   const [attachmentSheetVisible, setAttachmentSheetVisible] = useState(false);
@@ -1067,6 +1082,7 @@ export default function ChillyChatThreadScreen() {
 
       setThread(visibleThread);
       setMessages(nextMessages);
+      setLoadedMessageEntryKey(messageEntryKey);
       setCallEvents(nextCallEvents);
       setCallPreferences(nextCallPreferences);
       const visibleIncomingInvite = latestInviteForCurrentUser && !latestInviteWasHandled
@@ -1118,7 +1134,7 @@ export default function ChillyChatThreadScreen() {
       setError(getUserFacingErrorMessage(loadError, "Unable to load this Chi'lly Chat thread."));
       setLoading(false);
     }
-  }, [applyAcceptedIncomingInviteState, beginThreadRead, currentUserId, isSignedIn, isThreadReadCurrent, markThreadReadWithThrottle, reconcileEndedCallState, stopOutgoingRingback, threadId]);
+  }, [applyAcceptedIncomingInviteState, beginThreadRead, currentUserId, isSignedIn, isThreadReadCurrent, markThreadReadWithThrottle, messageEntryKey, reconcileEndedCallState, stopOutgoingRingback, threadId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -3713,6 +3729,11 @@ export default function ChillyChatThreadScreen() {
       ) : null}
 
       <ScrollView
+        key={loadedMessageEntryKey ?? messageEntryKey}
+        ref={messagePosition.scrollRef}
+        onLayout={messagePosition.onLayout}
+        onContentSizeChange={messagePosition.onContentSizeChange}
+        onScrollBeginDrag={messagePosition.onScrollBeginDrag}
         style={styles.messages}
         contentContainerStyle={styles.messagesContent}
         keyboardShouldPersistTaps="handled"
@@ -3722,6 +3743,7 @@ export default function ChillyChatThreadScreen() {
         {renderedMessages.map((message) => (
           <View
             key={message.id}
+            onLayout={(event) => messagePosition.onMessageLayout(message.id, event)}
             style={[
               styles.messageBubble,
               message.isMe ? styles.messageBubbleMe : styles.messageBubbleThem,

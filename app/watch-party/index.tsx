@@ -138,12 +138,12 @@ const getCapturePolicyCopy = (capturePolicy: WatchPartyState["capturePolicy"] | 
 const getPartyJoinPolicyCopy = (joinPolicy: WatchPartyState["joinPolicy"] | null | undefined) =>
   joinPolicy === "locked"
     ? "Party entry stays locked until the host reopens it."
-    : "Signed-in members can join with the room code while the host keeps it open.";
+    : "Signed-in members can request entry with the room code while the host keeps it open.";
 
 const getPartyContentAccessCopy = (contentAccessRule: WatchPartyState["contentAccessRule"] | null | undefined) => {
-  if (contentAccessRule === "premium") return "Premium title access is locked for this device or account.";
-  if (contentAccessRule === "party_pass") return "Party Room Pass access is locked for this device or account.";
-  return "No extra entitlement is required.";
+  if (contentAccessRule === "premium") return "Premium content access is also required.";
+  if (contentAccessRule === "party_pass") return "Any required Party Room Pass is checked for this exact room.";
+  return "Content access is checked separately before joining.";
 };
 
 const getPartyCapturePolicyCopy = (capturePolicy: WatchPartyState["capturePolicy"] | null | undefined) =>
@@ -1873,7 +1873,7 @@ export default function WatchPartyIndexScreen() {
       tone: topRoomCode ? "ready" as const : (isPreparingInitialCode ? "pending" as const : "needed" as const),
     },
   ];
-  const partyPermissionsBody = `${getPartyJoinPolicyCopy(activeRoomContext?.joinPolicy)} ${getPartyContentAccessCopy(activeRoomContext?.contentAccessRule)} ${getPartyCapturePolicyCopy(activeRoomContext?.capturePolicy)}`;
+  const partyPermissionsBody = `${getPartyJoinPolicyCopy(activeRoomContext?.joinPolicy)} Free Party Room entry requires Premium; paid entry requires a valid Party Room Pass for this exact room. ${getPartyContentAccessCopy(activeRoomContext?.contentAccessRule)} ${getPartyCapturePolicyCopy(activeRoomContext?.capturePolicy)}`;
   const waitingRoomReadinessRows = isLiveWaitingRoom ? liveReadinessRows : partyReadinessRows;
   const waitingRoomPermissionsBody = isLiveWaitingRoom ? livePermissionsBody : partyPermissionsBody;
   const sourceGuideStatus = isLiveWaitingRoom
@@ -1960,6 +1960,62 @@ export default function WatchPartyIndexScreen() {
       })
     : null;
 
+  const waitingRoomAudiencePanel = shouldShowWaitingRoomSetupShell
+    && (isLiveWaitingRoom || partySourceType === "platform_title" || partySourceType === "creator_video")
+    && (hostLabel === "You are hosting" || (!preparedRoom && !preview && partyTitleLocked)) ? (
+    <View style={styles.permissionsCard}>
+      <AppText scale="caption" style={styles.permissionsLabel}>{isLiveWaitingRoom ? "LIVE DISCOVERY" : "PARTY AUDIENCE"}</AppText>
+      <AppText scale="footnote" style={styles.permissionsBody}>
+        {isLiveWaitingRoom
+          ? "Choose who can find this session once you are connected. Private is selected by default and keeps your session off Home and public live feeds. Public allows discovery; Circle limits it to your approved Chi'lly Circle."
+          : "Private keeps your Party off live feeds. Circle lets your approved Chi'lly Circle find it; Public lets others find it after you start. Each viewer still needs their own room and content access."}
+      </AppText>
+      <View style={styles.discoveryChoiceRow}>
+        {(["public", "circle", "private"] as const).map((visibility) => (
+          <Pressable
+            key={visibility}
+            style={[
+              styles.discoveryChoice,
+              liveDiscoveryVisibility === visibility && styles.discoveryChoiceSelected,
+            ]}
+            onPress={() => { void onSelectLiveDiscoveryVisibility(visibility); }}
+            disabled={discoverySaveStatus === "saving" || creating}
+            accessibilityRole="button"
+            accessibilityState={{ selected: liveDiscoveryVisibility === visibility, disabled: discoverySaveStatus === "saving" || creating }}
+            accessibilityLabel={`Set ${isLiveWaitingRoom ? "Live discovery" : "Party audience"} to ${visibility === "circle" ? "Chi'lly Circle" : visibility}`}
+          >
+            <AppText scale="footnote" style={styles.discoveryChoiceText}>
+              {visibility === "circle" ? "Circle" : visibility === "public" ? "Public" : "Private"}
+            </AppText>
+          </Pressable>
+        ))}
+      </View>
+      <TextInput
+        value={liveDiscoveryTitle}
+        onChangeText={onChangeLiveDiscoveryTitle}
+        onBlur={() => { void onSaveLiveDiscovery(); }}
+        editable={discoverySaveStatus !== "saving" && !creating}
+        placeholder={isLiveWaitingRoom ? "Live title (optional)" : "Party title (optional)"}
+        placeholderTextColor="#6F7788"
+        style={styles.input}
+        accessibilityLabel={isLiveWaitingRoom ? "Live discovery title" : "Party discovery title"}
+      />
+      {discoverySaveStatus !== "idle" ? (
+        <AppText scale="footnote" accessibilityLiveRegion="polite" style={discoverySaveStatus === "error" ? styles.errorText : styles.permissionsBody}>
+          {discoverySaveStatus === "saving" ? `Saving ${isLiveWaitingRoom ? "Live discovery" : "Party audience"}…`
+            : discoverySaveStatus === "saved" ? `${isLiveWaitingRoom ? "Live discovery" : "Party audience"} saved.`
+              : discoverySaveStatus === "error" ? `${isLiveWaitingRoom ? "Live discovery" : "Party audience"} was not saved. Check your connection, content availability and current Premium access, then retry.`
+                : `${isLiveWaitingRoom ? "Live discovery" : "Party audience"} changes are not saved yet.`}
+        </AppText>
+      ) : null}
+      {discoverySaveStatus === "error" || discoverySaveStatus === "dirty" ? (
+        <Pressable onPress={() => { void onSaveLiveDiscovery(); }} accessibilityRole="button" accessibilityLabel={`Retry saving ${isLiveWaitingRoom ? "Live discovery" : "Party audience"}`} style={{ minHeight: 44, justifyContent: "center" }}>
+          <AppText scale="footnote">Save {isLiveWaitingRoom ? "Live discovery" : "Party audience"}</AppText>
+        </Pressable>
+      ) : null}
+    </View>
+  ) : null;
+
   const renderWaitingRoomSetupShell = () => {
     if (!shouldShowWaitingRoomSetupShell) return null;
 
@@ -2007,60 +2063,7 @@ export default function WatchPartyIndexScreen() {
           ))}
         </View>
 
-        {(isLiveWaitingRoom || partySourceType === "platform_title" || partySourceType === "creator_video")
-          && (hostLabel === "You are hosting" || (!preparedRoom && !preview && partyTitleLocked)) ? (
-          <View style={styles.permissionsCard}>
-            <AppText scale="caption" style={styles.permissionsLabel}>{isLiveWaitingRoom ? "LIVE DISCOVERY" : "PARTY AUDIENCE"}</AppText>
-            <AppText scale="footnote" style={styles.permissionsBody}>
-              {isLiveWaitingRoom
-                ? "Choose who can find this session once you are connected. Private is selected by default and keeps your session off Home and public live feeds. Public allows discovery; Circle limits it to your approved Chi'lly Circle."
-                : "Private keeps your Party off live feeds. Circle lets your approved Chi'lly Circle find it; Public lets others find it after you start. Each viewer still needs their own room and content access."}
-            </AppText>
-            <View style={styles.discoveryChoiceRow}>
-              {(["public", "circle", "private"] as const).map((visibility) => (
-                <Pressable
-                  key={visibility}
-                  style={[
-                    styles.discoveryChoice,
-                    liveDiscoveryVisibility === visibility && styles.discoveryChoiceSelected,
-                  ]}
-                  onPress={() => { void onSelectLiveDiscoveryVisibility(visibility); }}
-                  disabled={discoverySaveStatus === "saving" || creating}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: liveDiscoveryVisibility === visibility, disabled: discoverySaveStatus === "saving" || creating }}
-                  accessibilityLabel={`Set ${isLiveWaitingRoom ? "Live discovery" : "Party audience"} to ${visibility === "circle" ? "Chi'lly Circle" : visibility}`}
-                >
-                  <AppText scale="footnote" style={styles.discoveryChoiceText}>
-                    {visibility === "circle" ? "Circle" : visibility === "public" ? "Public" : "Private"}
-                  </AppText>
-                </Pressable>
-              ))}
-            </View>
-            <TextInput
-              value={liveDiscoveryTitle}
-              onChangeText={onChangeLiveDiscoveryTitle}
-              onBlur={() => { void onSaveLiveDiscovery(); }}
-              editable={discoverySaveStatus !== "saving" && !creating}
-              placeholder={isLiveWaitingRoom ? "Live title (optional)" : "Party title (optional)"}
-              placeholderTextColor="#6F7788"
-              style={styles.input}
-              accessibilityLabel={isLiveWaitingRoom ? "Live discovery title" : "Party discovery title"}
-            />
-            {discoverySaveStatus !== "idle" ? (
-              <AppText scale="footnote" accessibilityLiveRegion="polite" style={discoverySaveStatus === "error" ? styles.errorText : styles.permissionsBody}>
-                {discoverySaveStatus === "saving" ? `Saving ${isLiveWaitingRoom ? "Live discovery" : "Party audience"}…`
-                  : discoverySaveStatus === "saved" ? `${isLiveWaitingRoom ? "Live discovery" : "Party audience"} saved.`
-                    : discoverySaveStatus === "error" ? `${isLiveWaitingRoom ? "Live discovery" : "Party audience"} was not saved. Check your connection, content availability and current Premium access, then retry.`
-                      : `${isLiveWaitingRoom ? "Live discovery" : "Party audience"} changes are not saved yet.`}
-              </AppText>
-            ) : null}
-            {discoverySaveStatus === "error" || discoverySaveStatus === "dirty" ? (
-              <Pressable onPress={() => { void onSaveLiveDiscovery(); }} accessibilityRole="button" accessibilityLabel={`Retry saving ${isLiveWaitingRoom ? "Live discovery" : "Party audience"}`} style={{ minHeight: 44, justifyContent: "center" }}>
-                <AppText scale="footnote">Save {isLiveWaitingRoom ? "Live discovery" : "Party audience"}</AppText>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
+        {isLiveWaitingRoom ? waitingRoomAudiencePanel : null}
 
         <View style={styles.permissionsCard}>
           <AppText scale="caption" style={styles.permissionsLabel}>ROOM ACCESS</AppText>
@@ -2069,7 +2072,7 @@ export default function WatchPartyIndexScreen() {
           </AppText>
           {!isLiveWaitingRoom && hostLabel === "You are hosting" ? (
             <AppText scale="footnote" style={styles.permissionsBody}>
-              This Party Room is private. Invite viewers with its room code or link; starting shared playback does not list it on Home or Explore Live.
+              Private keeps your Party off live feeds. Circle shares it with approved Chi&apos;lly Circle members in Home&apos;s Circle Watch-Party section. Public makes it eligible for public live discovery after you start. Viewers still need their own room and content access.
             </AppText>
           ) : null}
         </View>
@@ -2314,6 +2317,7 @@ export default function WatchPartyIndexScreen() {
               </View>
             )}
             {createError ? <AppText scale="footnote" style={styles.errorText}>{createError}</AppText> : null}
+            {!isLiveWaitingRoom ? waitingRoomAudiencePanel : null}
             <Pressable
               style={[styles.primaryButton, createActionDisabled && styles.primaryButtonDisabled]}
               onPressIn={() => {

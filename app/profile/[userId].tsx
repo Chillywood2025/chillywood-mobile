@@ -45,6 +45,7 @@ import {
 import {
   readNotificationList,
   readPublicEventReminderSummaries,
+  resolveNotificationPath,
   setEventReminderEnrollment,
   type EventReminderEnrollment,
   type NotificationRecord,
@@ -3279,7 +3280,12 @@ export default function ProfileScreen() {
         return;
       case "/chat/[threadId]":
         if (entityId) {
-          router.push({ pathname: "/chat/[threadId]", params: { threadId: entityId } });
+          const path = resolveNotificationPath(`/chat/${entityId}`, {
+            notificationType: item.notification.notificationType,
+            targetEntityId: target.entityId,
+            targetContext: target.context,
+          });
+          if (path) router.push(path as Parameters<typeof router.push>[0]);
         }
         return;
       default:

@@ -234,8 +234,8 @@ try {
       `${label}: actual account-bound API starts a distinct call`);
     check(started.invite.callerUserId === initiator && started.invite.calleeUserId === participant.otherUser,
       `${label}: server invitation retains the authenticated initiator and exact other participant`);
-    check(Date.parse(started.invite.expiresAt) - Date.parse(started.invite.createdAt) === 90_000,
-      `${label}: server declares a 90-second deadline, not an inferred UI timeout`);
+    check(Date.parse(started.invite.expiresAt) - Date.parse(started.invite.createdAt) === 45_000,
+      `${label}: server declares a 45-second deadline, not an inferred UI timeout`);
     return started.invite;
   }
   async function assertTerminal(invite, status) {
@@ -340,7 +340,22 @@ try {
   const lateEvents = requireData(await callerClient.from("chat_call_events").select("event_type")
     .eq("call_invite_id", expired.id), "expired event readback");
   check(!lateEvents.some((row) => row.event_type === "accepted"), "late Answer creates no accepted event");
-  requireData(await transition(expired, expired.caller_user_id, "missed"), "server expiry terminal transaction");
+  // Two independent HTTP requests race on the actual locked SQL invite. Both
+  // must settle the same missed transition regardless of lock acquisition order;
+  // the late native decline may never overwrite or duplicate server expiry.
+  const expiryRace = await Promise.all([
+    transition(expired, expired.callee_user_id, "declined"),
+    transition(expired, expired.caller_user_id, "missed"),
+  ]);
+  const expiryResults = expiryRace.map((result) => requireData(result, "late Decline/server expiry race"));
+  check(expiryResults.every((result) => result.invite.status === "missed")
+    && expiryResults[0].delivery.id === expiryResults[1].delivery.id,
+  "concurrent late native Decline and server expiry reuse one missed delivery");
+  const expiryEvents = requireData(await callerClient.from("chat_call_events").select("event_type")
+    .eq("call_invite_id", expired.id), "expiry race event readback");
+  check(expiryEvents.filter((row) => row.event_type === "missed").length === 1
+    && !expiryEvents.some((row) => row.event_type === "declined"),
+  "expiry race records exactly one missed event and no manufactured decline");
   await assertTerminal(expired, "missed");
   await messagesBothWays("after-authoritative-expiry");
 

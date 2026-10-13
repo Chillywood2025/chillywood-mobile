@@ -23,6 +23,7 @@ import {
   validateDmcaAttachmentFile,
 } from "../_lib/dmca";
 import { useSession } from "../_lib/session";
+import { formatContentTypeLabel } from "../_lib/userFacingProductCopy";
 import { LegalMeta, LegalPageShell, LegalParagraph, LegalSection } from "../components/legal/legal-page-shell";
 
 const LAST_UPDATED = "May 22, 2026";
@@ -298,7 +299,7 @@ export default function CounterNoticePage() {
             <View style={styles.caseBox}>
               <Text style={styles.caseTitle}>{caseRecord.caseNumber || caseRecord.id}</Text>
               <Text style={styles.caseText}>{`Status: ${caseRecord.status.replaceAll("_", " ")}`}</Text>
-              <Text style={styles.caseText}>{`Content: ${caseRecord.contentType.replaceAll("_", " ")} · ${caseRecord.contentId || caseRecord.contentUrl || "location recorded"}`}</Text>
+              <Text style={styles.caseText}>{`Content: ${formatContentTypeLabel(caseRecord.contentType)} · ${caseRecord.contentId || caseRecord.contentUrl || "location recorded"}`}</Text>
               <Text style={styles.caseText}>{caseRecord.publicSafeSummary || "No public-safe summary recorded."}</Text>
             </View>
           ) : null}
