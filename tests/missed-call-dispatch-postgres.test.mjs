@@ -10,7 +10,7 @@ import { createCallDispatchHarness, DISPATCH_IDS } from "./assurance/helpers/cha
 const read = (name) => fs.readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8");
 const transition = read("20260718103000_durable_chat_call_status_transition.sql");
 const expiry = read("20260719213953_expire_stale_chilly_chat_calls.sql");
-const authoritativeDeadline = read("20261011101744_chilly_chat_authoritative_ringing_deadline.sql");
+const authoritativeDeadline = read("20261013110039_chilly_chat_authoritative_ringing_deadline.sql");
 
 // Execute the real response subscription and complete route parser. Only the
 // Expo/OS boundary is controlled; no replacement route or expiry logic is used.
