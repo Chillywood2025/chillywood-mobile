@@ -346,11 +346,8 @@ update public.platform_money_kill_switches set state='on' where key='payouts_ena
 select throws_ok($$select pg_temp.google_snapshot(7,'google-restore-payouts')$$,
   'premium_reconciliation_pre_activation_switches_required','active payouts block this sandbox repair');
 rollback to rail_gate;
-select set_config('request.jwt.claim.role','service_role',true);
-update public.platform_money_kill_switches set state='on' where key='cashout_enabled';
-select throws_ok($$select pg_temp.google_snapshot(7,'google-restore-cashout')$$,
-  'premium_reconciliation_pre_activation_switches_required','active cashout blocks this sandbox repair');
-rollback to rail_gate;
+-- The canonical key constraint excludes cashout_enabled. A valid fixture cannot
+-- switch it on; the real positive restores above cover its absent-as-off state.
 
 -- A real failure after event INSERT and entitlement UPDATE must roll them back.
 -- The temporary trigger is test-only, restricted to one fake account, and the
