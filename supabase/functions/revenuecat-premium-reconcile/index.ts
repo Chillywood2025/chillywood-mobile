@@ -17,6 +17,7 @@ import {
   resolveRevenueCatStoreProductIdentifier,
   revenueCatProductId,
 } from "./authority.ts";
+import { eligibleGooglePremiumSubscription, googlePremiumSnapshot } from "./google-authority.ts";
 
 const FUNCTION_NAME = "revenuecat-premium-reconcile";
 const REVENUECAT_API_BASE = "https://api.revenuecat.com";
@@ -94,11 +95,18 @@ const readAllRevenueCatPages = async (
   apiKey: string,
   firstPath: string,
   projectId: string,
+  strict = false,
 ) => {
   const items: JsonObject[] = [];
   let nextPath = firstPath;
   for (let page = 0; page < 10; page += 1) {
     const response = await revenueCatGet(apiKey, nextPath, projectId);
+    if (strict && (response.object !== "list" || !Array.isArray(response.items)
+      || response.items.some((item) => !isRecord(item))
+      || (response.next_page != null && (typeof response.next_page !== "string"
+        || response.next_page.trim() !== response.next_page)))) {
+      throw new Error("revenuecat_list_response_invalid");
+    }
     items.push(...listItems(response));
     const next = toText(response.next_page);
     if (!next) return items;
@@ -171,7 +179,7 @@ const enforceReconciliationRateLimit = async (adminClient: SupabaseClientLike, u
   throw new Error("premium_reconciliation_rate_limit_failed");
 };
 
-Deno.serve(async (req) => {
+export const handler = async (req: Request) => {
   if (req.method === "OPTIONS") return optionsResponse();
   if (req.method !== "POST") {
     return jsonResponse(405, { error: "method_not_allowed", message: "Use POST to reconcile Premium." });
@@ -208,7 +216,8 @@ Deno.serve(async (req) => {
       projectId,
     );
     const now = Date.now();
-    const eligible = subscriptions.filter((subscription) => eligibleSubscription(subscription, userId, now));
+    const eligible = subscriptions.filter((subscription) => eligibleSubscription(subscription, userId, now)
+      || eligibleGooglePremiumSubscription(subscription, userId, now));
     if (eligible.length === 0) {
       await writeProviderReadinessAudit(adminConfig.client, {
         actorUserId: userId,
@@ -216,7 +225,7 @@ Deno.serve(async (req) => {
         capability: "premium_entitlement",
         action: "premium_current_customer_reconciliation",
         statusAfter: "blocked",
-        reason: "No exact active purchased App Store sandbox Premium subscription was returned for the authenticated RevenueCat customer.",
+        reason: "No exact active purchased supported-store sandbox Premium subscription was returned for the authenticated RevenueCat customer.",
         proofSource: FUNCTION_NAME,
         metadata: {
           active_subscription_count: 0,
@@ -246,14 +255,24 @@ Deno.serve(async (req) => {
       projectId,
     );
     const providerProductId = resolveRevenueCatStoreProductIdentifier(subscription, product);
-    if (!PREMIUM_PRODUCT_IDS.has(providerProductId)) {
+    const isGoogle = subscription.store === "play_store";
+    if (!isGoogle && !PREMIUM_PRODUCT_IDS.has(providerProductId)) {
       throw new Error("revenuecat_subscription_product_invalid");
     }
     const startsAt = finiteMillis(subscription.current_period_starts_at);
     const expiresAt = finiteMillis(subscription.current_period_ends_at ?? subscription.ends_at);
     if (!startsAt || !expiresAt) throw new Error("revenuecat_subscription_period_invalid");
-    const originalTransactionId = await readOriginalTransactionId(apiKey, projectId, subscription);
-    const snapshot = {
+    const googleSnapshot = isGoogle ? googlePremiumSnapshot(
+      subscription, product, await readAllRevenueCatPages(
+        apiKey,
+        `/v2/projects/${encodeURIComponent(projectId)}/subscriptions/${encodeURIComponent(subscriptionId)}/transactions?limit=100`,
+        projectId,
+        true,
+      ), userId, now,
+    ) : null;
+    const originalTransactionId = googleSnapshot?.originalTransactionId
+      ?? await readOriginalTransactionId(apiKey, projectId, subscription);
+    const snapshot = googleSnapshot ?? {
       customerId: userId,
       environment: "sandbox",
       entitlement: PREMIUM_LOOKUP_KEY,
@@ -273,14 +292,16 @@ Deno.serve(async (req) => {
     if (!SAFE_ID.test(snapshotId)) throw new Error("revenuecat_snapshot_id_invalid");
 
     const { data, error } = await adminConfig.client.rpc(
-      "reconcile_revenuecat_premium_current_owner_snapshot_atomic",
+      isGoogle ? "reconcile_revenuecat_google_premium_snapshot_atomic"
+        : "reconcile_revenuecat_premium_current_owner_snapshot_atomic",
       {
         p_entitlement_status: normalizedEntitlementStatus(subscription.status),
         p_expires_at: new Date(expiresAt).toISOString(),
         p_observed_at: new Date(now).toISOString(),
         p_original_customer_id: originalCustomerId,
         p_original_transaction_id: originalTransactionId,
-        p_provider_product_id: providerProductId,
+        p_provider_product_id: googleSnapshot?.productIdentifier ?? providerProductId,
+        ...(googleSnapshot ? { p_provider_base_plan_id: googleSnapshot.basePlanId } : {}),
         p_raw_payload_hash: payloadHash,
         p_revenuecat_subscription_id: subscriptionId,
         p_snapshot_id: snapshotId,
@@ -299,7 +320,7 @@ Deno.serve(async (req) => {
       capability: "premium_entitlement",
       action: "premium_current_customer_reconciliation",
       statusAfter: "sandbox_ready",
-      reason: "Exact active RevenueCat App Store sandbox current-customer authority was projected for the authenticated account.",
+      reason: "Exact active RevenueCat supported-store sandbox current-customer authority was projected for the authenticated account.",
       proofSource: FUNCTION_NAME,
       metadata: {
         authority_granted: true,
@@ -337,4 +358,6 @@ Deno.serve(async (req) => {
       message: sanitizeErrorMessage(error),
     });
   }
-});
+};
+
+if (import.meta.main) Deno.serve(handler);
