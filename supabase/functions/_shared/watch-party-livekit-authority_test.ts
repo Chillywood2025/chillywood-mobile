@@ -1,5 +1,6 @@
 import {
   parseWatchPartyLiveKitAuthority,
+  parseWatchPartyLiveKitAuthorityDecision,
   resolveWatchPartyLiveKitTokenTtlSeconds,
 } from "./watch-party-livekit-authority.ts";
 
@@ -93,4 +94,54 @@ Deno.test("missing paid seat eligibility preserves viewer entry but cannot publi
   assertEquals(viewer?.allowed, true, "viewer admission stays valid");
   assertEquals(viewer?.speakerEligible, false, "missing Seat Pass cannot publish");
   assertEquals(viewer?.hostAuthority, false, "missing Seat Pass cannot become host");
+});
+
+Deno.test("canonical title recovery accepts host or viewer and preserves finite token TTL", () => {
+  for (const hostAuthority of [false, true]) {
+    const proof = parseWatchPartyLiveKitAuthority({
+      allowed: true,
+      expiresAt: "2026-08-25T12:00:25.000Z",
+      hostAuthority,
+      paidSeatRequired: false,
+      speakerEligible: true,
+      reason: "canonical_party_room_target_premium_authority",
+    }, NOW);
+    assertEquals(proof?.hostAuthority, hostAuthority, "exact host status retained");
+    assertEquals(proof?.paidSeatRequired, false, "Premium does not invent a Seat Pass");
+    assertEquals(resolveWatchPartyLiveKitTokenTtlSeconds(proof!, 300, NOW), 25, "Premium proof TTL");
+    assertEquals(resolveWatchPartyLiveKitTokenTtlSeconds(proof!, 10, NOW), 10, "shorter cost guard TTL");
+  }
+});
+
+Deno.test("title recovery cannot weaken paid boundaries or extend stale authority", () => {
+  const base = {
+    allowed: true,
+    expiresAt: "2026-08-25T12:00:25.000Z",
+    hostAuthority: false,
+    paidSeatRequired: false,
+    speakerEligible: true,
+    reason: "canonical_party_room_target_premium_authority",
+  };
+  for (const mutation of [
+    { paidSeatRequired: true },
+    { speakerEligible: undefined },
+    { speakerEligible: false },
+    { hostAuthority: "true" },
+    { expiresAt: null },
+    { expiresAt: "invalid" },
+    { expiresAt: "2026-08-25T12:00:00.000Z" },
+    { expiresAt: "2026-08-25T12:00:36.000Z" },
+    { reason: "unrecognized_recovery" },
+  ]) {
+    assertEquals(parseWatchPartyLiveKitAuthority({ ...base, ...mutation }, NOW), null, JSON.stringify(mutation));
+  }
+});
+
+Deno.test("deployed denial aliases remain denials, never viewer authority", () => {
+  for (const reason of ["viewer_authority_invalid", "exact_live_access_authority_required"]) {
+    const value = { allowed: false, paidSeatRequired: true, hostAuthority: false, expiresAt: null, reason };
+    assertEquals(parseWatchPartyLiveKitAuthorityDecision(value, NOW)?.allowed, false, reason);
+    assertEquals(parseWatchPartyLiveKitAuthority(value, NOW), null, "denial cannot issue token");
+    assertEquals(parseWatchPartyLiveKitAuthority({ ...value, allowed: true }, NOW), null, "denial reason cannot allow");
+  }
 });

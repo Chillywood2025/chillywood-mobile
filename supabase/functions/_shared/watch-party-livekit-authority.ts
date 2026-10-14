@@ -11,6 +11,7 @@ export type WatchPartyLiveKitAuthority = {
     | "exact_live_seat_eligibility_authority_required"
     | "non_seat_room_authority"
     | "non_seat_room_host_authority"
+    | "canonical_party_room_target_premium_authority"
     | "paid_room_host_authority";
 };
 
@@ -23,9 +24,11 @@ export type WatchPartyLiveKitAuthorityDecision = WatchPartyLiveKitAuthority | {
   reason:
     | "exact_paid_seat_authority_required"
     | "exact_live_pass_authority_required"
+    | "exact_live_access_authority_required"
     | "paid_room_host_creator_authority_required"
     | "room_viewer_authority_required"
-    | "viewer_session_authority_invalid";
+    | "viewer_session_authority_invalid"
+    | "viewer_authority_invalid";
 };
 
 const ALLOWED_REASONS = new Set<WatchPartyLiveKitAuthority["reason"]>([
@@ -35,14 +38,17 @@ const ALLOWED_REASONS = new Set<WatchPartyLiveKitAuthority["reason"]>([
   "exact_live_seat_eligibility_authority_required",
   "non_seat_room_authority",
   "non_seat_room_host_authority",
+  "canonical_party_room_target_premium_authority",
   "paid_room_host_authority",
 ]);
 const DENIED_REASONS = new Set<Extract<WatchPartyLiveKitAuthorityDecision, { allowed: false }>["reason"]>([
   "exact_paid_seat_authority_required",
   "exact_live_pass_authority_required",
+  "exact_live_access_authority_required",
   "paid_room_host_creator_authority_required",
   "room_viewer_authority_required",
   "viewer_session_authority_invalid",
+  "viewer_authority_invalid",
 ]);
 
 const isExactBoolean = (value: unknown): value is boolean =>
@@ -84,6 +90,26 @@ export const parseWatchPartyLiveKitAuthorityDecision = (
   if (!ALLOWED_REASONS.has(row.reason as WatchPartyLiveKitAuthority["reason"])) return null;
 
   const reason = row.reason as WatchPartyLiveKitAuthority["reason"];
+  // The canonical title-room recovery RPC proves exact current Premium and
+  // membership authority for either host or viewer. Its proof is intentionally
+  // finite even though no paid Seat Pass is required. Do not generalize this
+  // exception to arbitrary non-seat responses or discard its expiry.
+  if (reason === "canonical_party_room_target_premium_authority") {
+    if (
+      row.paidSeatRequired !== false
+      || row.speakerEligible !== true
+      || typeof row.expiresAt !== "string"
+      || !isCurrentBoundedExpiry(row.expiresAt, nowMillis)
+    ) return null;
+    return {
+      allowed: true,
+      paidSeatRequired: false,
+      speakerEligible: true,
+      hostAuthority: row.hostAuthority,
+      expiresAt: row.expiresAt,
+      reason,
+    };
+  }
   if (!row.paidSeatRequired) {
     if (
       row.expiresAt !== null
@@ -110,14 +136,7 @@ export const parseWatchPartyLiveKitAuthorityDecision = (
       && reason !== "paid_room_host_authority")
     || row.hostAuthority !== (reason === "paid_room_host_authority")
   ) return null;
-  const expiresAtMillis = Date.parse(row.expiresAt);
-  // DB authority intentionally expires within 30 seconds. A small skew margin
-  // prevents clock jitter from turning a valid proof into a false denial.
-  if (
-    !Number.isFinite(expiresAtMillis)
-    || expiresAtMillis <= nowMillis
-    || expiresAtMillis > nowMillis + 35_000
-  ) return null;
+  if (!isCurrentBoundedExpiry(row.expiresAt, nowMillis)) return null;
   return {
     allowed: true,
     paidSeatRequired: true,
@@ -126,6 +145,15 @@ export const parseWatchPartyLiveKitAuthorityDecision = (
     expiresAt: row.expiresAt,
     reason,
   };
+};
+
+const isCurrentBoundedExpiry = (expiresAt: string, nowMillis: number) => {
+  const expiresAtMillis = Date.parse(expiresAt);
+  // DB authority intentionally expires within 30 seconds. A small skew margin
+  // prevents clock jitter from turning a valid proof into a false denial.
+  return Number.isFinite(expiresAtMillis)
+    && expiresAtMillis > nowMillis
+    && expiresAtMillis <= nowMillis + 35_000;
 };
 
 export const parseWatchPartyLiveKitAuthority = (
@@ -144,7 +172,7 @@ export const resolveWatchPartyLiveKitTokenTtlSeconds = (
   const configured = Number.isFinite(configuredTtlSeconds)
     ? Math.max(1, Math.floor(Number(configuredTtlSeconds)))
     : 3600;
-  if (!authority.paidSeatRequired || !authority.expiresAt) return configured;
+  if (!authority.expiresAt) return configured;
   const authoritySeconds = Math.max(
     1,
     Math.floor((Date.parse(authority.expiresAt) - nowMillis) / 1000),
