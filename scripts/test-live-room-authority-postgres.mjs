@@ -13,7 +13,7 @@ const lifecycle = read("202608250001_chilly_chat_room_authority_closure");
 const live = read("20260827235000_live_room_access_independence_closure");
 const session = read("20260826055737_exact_current_session_not_after_authority");
 const baseline = read("202604190004_baseline_current_schema_truth");
-const repair = read("20261014224422_live_stage_party_authority_repair");
+const repair = read("20261014234628_live_stage_party_authority_repair");
 const extract = (source, name) => {
   const start = source.indexOf(`create or replace function public."${name}"`);
   assert.ok(start >= 0, `real function ${name} exists`);
