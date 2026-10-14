@@ -241,6 +241,12 @@ type LiveStageComment = {
   attachments: SocialAttachment[];
 };
 
+type LiveStageCommentSendFlight = {
+  ownerKey: string;
+  partyId: string;
+  realtimeChanges: Map<string, LiveStageComment | null>;
+};
+
 type LiveStageCommentRow = {
   id?: string | null;
   user_id?: string | null;
@@ -1085,7 +1091,7 @@ export default function WatchPartyLiveStageScreen({
   const roomReactionPolicyRef = useRef(room?.reactionsPolicy);
   roomReactionPolicyRef.current = room?.reactionsPolicy;
   const hybridCommentRevisionRef = useRef(0);
-  const hybridCommentSendingRef = useRef(false);
+  const hybridCommentSendRef = useRef<LiveStageCommentSendFlight | null>(null);
   const stageEntryOwnerRef = useRef(createLiveStageEntryOwner());
   const stageOperationOwnerKey = isFocused && canUseBetaStage && mediaAppState === "active"
     ? `${partyId}:${authority?.userId ?? ""}:${authority?.sessionGeneration ?? ""}` : "";
@@ -1094,6 +1100,7 @@ export default function WatchPartyLiveStageScreen({
   stageOperationOwnerKeyRef.current = stageOperationOwnerKey;
   const liveKitRecoveryCountRef = useRef(0);
   const liveKitRecoveryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const liveKitPendingRecoveryRef = useRef<{ ownerKey: string } | null>(null);
   const stageOverlayLastInteractionAtRef = useRef(Date.now());
   const stageOverlayAutoHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stageOverlayFinalizeHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1132,6 +1139,7 @@ export default function WatchPartyLiveStageScreen({
     return () => {
       liveKitStageMountedRef.current = false;
       entryOwner.invalidate();
+      liveKitPendingRecoveryRef.current = null;
       if (liveKitRecoveryTimeoutRef.current) clearTimeout(liveKitRecoveryTimeoutRef.current);
       if (liveKitStageAuthorityRetryTimeoutRef.current) {
         clearTimeout(liveKitStageAuthorityRetryTimeoutRef.current);
@@ -1141,9 +1149,26 @@ export default function WatchPartyLiveStageScreen({
   }, []);
 
   useEffect(() => {
+    hybridCommentSendRef.current = null;
     setStageEntryBusy(false);
     setHybridCommentSending(false);
+    return () => { hybridCommentSendRef.current = null; };
   }, [stageOperationOwnerKey]);
+
+  useEffect(() => {
+    const pending = liveKitPendingRecoveryRef.current;
+    if (!stageOperationOwnerKey || liveSurface !== "stage" || !pending) return;
+    if (pending.ownerKey === stageOperationOwnerKey && liveKitRecoveryTimeoutRef.current) return;
+    // Resume an elapsed cooldown after focus/foreground return. Only a pending
+    // transient recovery may clear this error; denied/exhausted access has none.
+    if (liveKitRecoveryTimeoutRef.current) clearTimeout(liveKitRecoveryTimeoutRef.current);
+    liveKitRecoveryTimeoutRef.current = null;
+    liveKitPendingRecoveryRef.current = null;
+    if (pending.ownerKey !== stageOperationOwnerKey) liveKitRecoveryCountRef.current = 0;
+    liveKitStageContractRefreshKeyRef.current = "";
+    setLiveKitRecoveryError("");
+    setLiveKitRefreshVersion((value) => value + 1);
+  }, [stageOperationOwnerKey, liveSurface]);
 
   useEffect(() => {
     let active = true;
@@ -1215,7 +1240,9 @@ export default function WatchPartyLiveStageScreen({
     setLiveKitRecoveryError("");
     liveKitRecoveryCountRef.current = 0;
     liveKitStageContractRefreshKeyRef.current = "";
+    liveKitPendingRecoveryRef.current = null;
     if (liveKitRecoveryTimeoutRef.current) clearTimeout(liveKitRecoveryTimeoutRef.current);
+    liveKitRecoveryTimeoutRef.current = null;
   }, [partyId]);
 
   const syncStageSnapshot = useCallback((snapshot: { room: WatchPartyState; memberships: WatchPartyRoomMembership[] }, trackedUserId: string) => {
@@ -3435,13 +3462,18 @@ export default function WatchPartyLiveStageScreen({
         (payload) => {
           if (!active) return;
           hybridCommentRevisionRef.current += 1;
+          const pendingSend = hybridCommentSendRef.current;
+          const ownedSend = pendingSend && pendingSend.partyId === partyId
+            && pendingSend.ownerKey === stageOperationOwnerKeyRef.current ? pendingSend : null;
           if (payload.eventType === "DELETE") {
             const deletedId = String((payload.old as LiveStageCommentRow)?.id ?? "");
+            if (deletedId) ownedSend?.realtimeChanges.set(deletedId, null);
             setHybridComments((prev) => prev.filter((comment) => comment.id !== deletedId));
             return;
           }
           const nextComment = mapLiveStageCommentRow(payload.new as LiveStageCommentRow);
           if (!nextComment) return;
+          if (payload.eventType === "UPDATE") ownedSend?.realtimeChanges.set(nextComment.id, nextComment);
           setHybridComments((prev) => {
             if (prev.some((comment) => comment.id === nextComment.id)) return prev.map((comment) => (
               comment.id === nextComment.id ? { ...nextComment, attachments: comment.attachments } : comment
@@ -3634,7 +3666,10 @@ export default function WatchPartyLiveStageScreen({
     if (!stageOperationOwnerKeyRef.current || liveSurfaceRef.current !== "stage") return;
     const ownerKey = stageOperationOwnerKeyRef.current;
     if (liveKitRecoveryTimeoutRef.current) clearTimeout(liveKitRecoveryTimeoutRef.current);
+    liveKitRecoveryTimeoutRef.current = null;
     liveKitRecoveryCountRef.current += 1;
+    const pending = { ownerKey };
+    liveKitPendingRecoveryRef.current = liveKitRecoveryCountRef.current <= LIVE_STAGE_AUTHORITY_REFRESH_MAX_ATTEMPTS ? pending : null;
     setLiveKitRecoveryError(liveKitRecoveryCountRef.current > LIVE_STAGE_AUTHORITY_REFRESH_MAX_ATTEMPTS
       ? "Live Stage could not reconnect. Tap Retry connection to try again." : message);
     if (retireContract) {
@@ -3643,8 +3678,10 @@ export default function WatchPartyLiveStageScreen({
     }
     if (liveKitRecoveryCountRef.current > LIVE_STAGE_AUTHORITY_REFRESH_MAX_ATTEMPTS) return;
     liveKitRecoveryTimeoutRef.current = setTimeout(() => {
+      if (liveKitPendingRecoveryRef.current !== pending) return;
       liveKitRecoveryTimeoutRef.current = null;
       if (!liveKitStageMountedRef.current || stageOperationOwnerKeyRef.current !== ownerKey || liveSurfaceRef.current !== "stage") return;
+      liveKitPendingRecoveryRef.current = null;
       liveKitStageContractRefreshKeyRef.current = "";
       setLiveKitRecoveryError("");
       setLiveKitRefreshVersion((value) => value + 1);
@@ -3655,6 +3692,7 @@ export default function WatchPartyLiveStageScreen({
     if (!stageOperationOwnerKeyRef.current || liveSurfaceRef.current !== "stage") return;
     if (liveKitRecoveryTimeoutRef.current) clearTimeout(liveKitRecoveryTimeoutRef.current);
     liveKitRecoveryTimeoutRef.current = null;
+    liveKitPendingRecoveryRef.current = null;
     liveKitRecoveryCountRef.current = 0;
     liveKitStageContractRefreshKeyRef.current = "";
     setLiveKitJoinContract(null);
@@ -3675,6 +3713,9 @@ export default function WatchPartyLiveStageScreen({
   }, [onDiscoveryDisconnected, liveKitJoinContract?.roomName, liveKitStageSurfaceContract, partyId, scheduleLiveKitRecovery]);
 
   const onLiveKitStageConnected = useCallback(() => {
+    liveKitPendingRecoveryRef.current = null;
+    if (liveKitRecoveryTimeoutRef.current) clearTimeout(liveKitRecoveryTimeoutRef.current);
+    liveKitRecoveryTimeoutRef.current = null;
     liveKitRecoveryCountRef.current = 0;
     setLiveKitRecoveryError("");
     onDiscoveryConnected();
@@ -3830,6 +3871,9 @@ export default function WatchPartyLiveStageScreen({
     }
 
     closeStageOverlayPanels();
+    liveKitPendingRecoveryRef.current = null;
+    if (liveKitRecoveryTimeoutRef.current) clearTimeout(liveKitRecoveryTimeoutRef.current);
+    liveKitRecoveryTimeoutRef.current = null;
     liveKitRecoveryCountRef.current = 0;
     setLiveKitRecoveryError("");
     setStageOverlayAutoHideArmed(true);
@@ -4035,6 +4079,9 @@ export default function WatchPartyLiveStageScreen({
         || [401, 403, 404, 410].includes(joinResult.responseStatus ?? 0)
         || ["room_expired", "room_not_found", "room_surface_mismatch"].includes(joinResult.responseError ?? "");
       if (accessDenied) {
+        liveKitPendingRecoveryRef.current = null;
+        if (liveKitRecoveryTimeoutRef.current) clearTimeout(liveKitRecoveryTimeoutRef.current);
+        liveKitRecoveryTimeoutRef.current = null;
         setLiveKitJoinContract(null);
         setLiveKitRenderableJoinContract(null);
         setLiveKitJoinUnavailable(joinResult);
@@ -4106,6 +4153,7 @@ export default function WatchPartyLiveStageScreen({
     setStageEntryBusy(false);
     if (liveKitRecoveryTimeoutRef.current) clearTimeout(liveKitRecoveryTimeoutRef.current);
     liveKitRecoveryTimeoutRef.current = null;
+    liveKitPendingRecoveryRef.current = null;
     setLiveKitRecoveryError("");
     closeStageOverlayPanels();
     setStageOverlayAutoHideArmed(false);
@@ -4193,7 +4241,7 @@ export default function WatchPartyLiveStageScreen({
   const onSendHybridComment = useCallback(async () => {
     const safeBody = hybridCommentDraft.trim();
     const hasAttachment = !!hybridCommentAttachmentFile;
-    if ((!safeBody && !hasAttachment) || !partyId || hybridCommentSendingRef.current || !stageOperationOwnerKeyRef.current) return;
+    if ((!safeBody && !hasAttachment) || !partyId || hybridCommentSendRef.current || !stageOperationOwnerKeyRef.current) return;
     if (!appConfig.runtimeControls.chat_enabled) {
       setHybridCommentError("Room comments are temporarily paused. You can still read existing comments.");
       return;
@@ -4203,9 +4251,11 @@ export default function WatchPartyLiveStageScreen({
       return;
     }
 
-    hybridCommentSendingRef.current = true;
     const ownerKey = stageOperationOwnerKeyRef.current;
-    const isCurrent = () => liveKitStageMountedRef.current && stageOperationOwnerKeyRef.current === ownerKey;
+    const flight: LiveStageCommentSendFlight = { ownerKey, partyId, realtimeChanges: new Map() };
+    hybridCommentSendRef.current = flight;
+    const isCurrent = () => liveKitStageMountedRef.current && hybridCommentSendRef.current === flight
+      && stageOperationOwnerKeyRef.current === ownerKey;
     setHybridCommentSending(true);
     setHybridCommentError("");
     try {
@@ -4219,6 +4269,17 @@ export default function WatchPartyLiveStageScreen({
         return;
       }
 
+      const finishSavedDraft = () => {
+        setHybridCommentDraft("");
+        setHybridCommentAttachmentFile(null);
+        setCommentsOpen(true);
+      };
+      // An insert receipt may arrive after a later realtime edit or deletion.
+      // Keep only this flight's superseding events; retiring it drops the map.
+      if (flight.realtimeChanges.get(sent.id) === null) {
+        finishSavedDraft();
+        return;
+      }
       const savedAttachments: SocialAttachment[] = [];
       if (hybridCommentAttachmentFile) {
         try {
@@ -4229,6 +4290,17 @@ export default function WatchPartyLiveStageScreen({
           });
           savedAttachments.push(attachment);
         } catch (attachmentError) {
+          if (!isCurrent()) return;
+          const newerComment = flight.realtimeChanges.get(sent.id);
+          if (newerComment !== undefined) {
+            // Do not roll back a newer edit or turn an authoritative removal
+            // into a failed-send prompt that encourages a duplicate comment.
+            finishSavedDraft();
+            if (newerComment !== null) {
+              setHybridCommentError("Your comment was saved, but the attachment failed. Send the attachment separately to avoid repeating the comment.");
+            }
+            return;
+          }
           let deleted = false;
           try { await deletePartyMessage(sent.id); deleted = true; } catch { /* Saved text remains authoritative. */ }
           if (!isCurrent()) return;
@@ -4250,15 +4322,24 @@ export default function WatchPartyLiveStageScreen({
         createdAt: sent.createdAt, isMe: true, attachments: savedAttachments,
       };
       hybridCommentRevisionRef.current += 1;
-      setHybridComments((prev) => [...prev.filter((comment) => comment.id !== sent.id), savedComment].slice(-120));
-      setHybridCommentDraft("");
-      setHybridCommentAttachmentFile(null);
-      setCommentsOpen(true);
+      setHybridComments((prev) => {
+        const newerComment = flight.realtimeChanges.get(sent.id);
+        if (newerComment === null) return prev.filter((comment) => comment.id !== sent.id);
+        const existingComment = prev.find((comment) => comment.id === sent.id);
+        const nextComment = {
+          ...(newerComment ?? savedComment),
+          attachments: savedAttachments.length ? savedAttachments : existingComment?.attachments ?? [],
+        };
+        return existingComment
+          ? prev.map((comment) => comment.id === sent.id ? nextComment : comment)
+          : [...prev, nextComment].slice(-120);
+      });
+      finishSavedDraft();
     } catch (error) {
       if (isCurrent()) setHybridCommentError(getUserFacingErrorMessage(error, "Comment could not be saved. Try sending it again."));
     } finally {
-      hybridCommentSendingRef.current = false;
       if (isCurrent()) setHybridCommentSending(false);
+      if (hybridCommentSendRef.current === flight) hybridCommentSendRef.current = null;
     }
   }, [
     appConfig.runtimeControls.chat_attachments_enabled,

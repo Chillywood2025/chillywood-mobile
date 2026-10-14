@@ -4,7 +4,7 @@
 
 - Base: `f2f58478871630f59e20d9bb9f0057dd096e105c` (`origin/main` at checkout).
 - Work was done in a fresh cloud checkout on `repair/live-stage-watch-party-20261014`.
-- No existing Codex checkout, branch, uncommitted work, or running task was touched. No stash, reset, rebase, merge, remote push, deployment, OTA, device installation, or production database/provider mutation was performed.
+- During the original offline repair phase, no existing Codex checkout, branch, uncommitted work, or running task was touched. No stash, reset, rebase, merge, remote push, deployment, OTA, device installation, or production database/provider mutation was performed. Authorized publication and review follow-up are recorded below.
 - Product boundaries: `live-stage` and `watch-party-live` in the feature registry; canonical Live Stage and Player routes remain separate. Premium, host approval, exact account sessions, paid access, and native media ownership remain authoritative.
 - Platforms: JavaScript/source checks cover shared Android/iOS behavior. They are not installed Android or iOS evidence. Web fallback remains separate.
 
@@ -84,3 +84,17 @@ Review this isolated branch or apply the supplied commits in a separate review w
 Proposed draft PR title: **Repair Live Stage and Watch-Party lifecycle, comments, and authority enforcement**.
 
 The draft PR should retain the finding dispositions and deferred checks above. Publishing a PR, merging, applying the forward migration, deploying Edge functions, and distributing a build are separate actions and were not performed.
+
+## Authorized publication and review follow-up
+
+The repairs were subsequently published as draft [PR #553](https://github.com/Chillywood2025/chillywood-mobile/pull/553). GitHub connector-created commits preserve the exact local Git trees; commit identities and timestamps differ. The original local commits remain intact. The PR's current head and exact-head checks are the publication/validation source of truth.
+
+Full local validation found a stale discovery guard that expected the pre-repair direct callback. The guard now executes the actual authoritative-connected wrapper and proves recovery resets before exactly one canonical discovery publication; it does not remove the provider-connected, host, or server checks.
+
+Independent diff review identified three additional Stage timing regressions, repaired before merge:
+
+1. An abandoned comment send could hold a boolean latch across room/account/session/focus replacement. Per-flight identity is now retired by ownership cleanup, and an old completion cannot release or mutate a newer send. Tests include inactive-to-same-owner return.
+2. A recovery cooldown that elapsed while unfocused could leave the refresh effect permanently blocked by its transient error. An explicit pending-recovery marker resumes only interrupted transient recovery. Early refocus retains the original timer, same-owner resume retains its attempt count, and denied/exhausted states still require explicit retry.
+3. A delayed durable comment insert response could overwrite a newer realtime edit or resurrect a deleted message. A room/session-owned per-flight event map now preserves the newer event and list position without reporting saved text as a failed send. Attachment upload/removal races are covered, and the map is discarded with the flight.
+
+The follow-up tests execute the production callbacks, effects, and realtime handler, including negative ordering and ownership cases. They remain source/mock evidence. Hosted full-schema migration replay, pgTAP, native contracts, all other selected validation lanes, and the integration-owned protected required check must succeed on the final PR head before merge. Physical Android/iOS testing, actual provider behavior, database/Edge rollout, and app distribution remain separate evidence and action boundaries.

@@ -344,6 +344,7 @@ const connectedExports = {};
 const recoveryCount = { current: 3 };
 const connectedEvents = [];
 new Function("exports", "useCallback", "discoveryPublication", "liveKitRecoveryCountRef", "setLiveKitRecoveryError",
+  "liveKitPendingRecoveryRef", "liveKitRecoveryTimeoutRef", "clearTimeout",
   ts.transpileModule(`${connectedSource}\nexport { onLiveKitStageConnected };`, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText)(connectedExports, (callback) => callback, {
@@ -351,7 +352,7 @@ new Function("exports", "useCallback", "discoveryPublication", "liveKitRecoveryC
     assert.equal(recoveryCount.current, 0, "an authoritative connection must reset recovery before publication");
     connectedEvents.push("publish");
   },
-}, recoveryCount, (message) => connectedEvents.push(["recovery-error", message]));
+}, recoveryCount, (message) => connectedEvents.push(["recovery-error", message]), { current: null }, { current: null }, () => {});
 assert.deepEqual(connectedEvents, [], "rendering the recovery callback must not publish discovery");
 connectedExports.onLiveKitStageConnected();
 assert.deepEqual(connectedEvents, [["recovery-error", ""], "publish"],

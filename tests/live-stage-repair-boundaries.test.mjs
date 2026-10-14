@@ -65,6 +65,7 @@ function entryHarness({ premium = async () => true, join = async () => ({ status
     setStageOverlayAutoHideArmed: noop, stageOverlayLastInteractionAtRef: { current: 0 },
     setStageOverlayVisible: noop, stageOverlayMotion: { setValue: noop },
     setLiveSurface: value => surfaces.push(value), liveKitRecoveryCountRef: { current: 0 },
+    liveKitPendingRecoveryRef: { current: null }, liveKitRecoveryTimeoutRef: { current: null },
     setLiveKitRecoveryError: noop, getUserFacingErrorMessage: (_, fallback) => fallback, setRoomEntryError: noop,
   };
   return { owner, context, surfaces, contracts, busy, enter: screenCallback('onEnterLiveStage', context) };
@@ -110,6 +111,7 @@ function refreshHarness(result, overrides = {}) {
     currentMembershipAuthoritySignature: 'host|unmuted|active', liveKitRefreshVersion: 1,
     liveKitStageAuthorityRetryKeyRef: { current: '' }, liveKitStageContractRefreshKeyRef: { current: '' },
     liveKitStageAuthorityRetryCountRef: { current: {} }, liveKitStageAuthorityRetryTimeoutRef: { current: null },
+    liveKitPendingRecoveryRef: { current: null }, liveKitRecoveryTimeoutRef: { current: null },
     liveKitStageMountedRef: { current: true }, LIVE_STAGE_AUTHORITY_REFRESH_MAX_ATTEMPTS: 6,
     LIVE_STAGE_AUTHORITY_REFRESH_RETRY_MILLIS: 700, resolvedCurrentUsername: 'Host',
     isCurrentStageParticipantMuted: false, room: { roomCode: 'ROOM' }, liveKitStageSurfaceContract: goodContract,
@@ -162,8 +164,10 @@ test('near-expiry replacement is cooled down, and canceled authority response is
 });
 
 test('actual authoritative connection resets recovery and publishes discovery exactly once', () => {
-  const recoveryCount = { current: 3 }, events = [];
+  const recoveryCount = { current: 3 }, pending = { current: { ownerKey: 'ROOM:user:session' } }, timer = { current: 17 }, events = [];
   const connected = screenCallback('onLiveKitStageConnected', {
+    liveKitPendingRecoveryRef: pending, liveKitRecoveryTimeoutRef: timer,
+    clearTimeout: value => assert.equal(value, 17),
     liveKitRecoveryCountRef: recoveryCount,
     setLiveKitRecoveryError: value => events.push(['recovery-error', value]),
     onDiscoveryConnected: () => {
@@ -173,6 +177,7 @@ test('actual authoritative connection resets recovery and publishes discovery ex
   });
   assert.deepEqual(events, []);
   connected();
+  assert.equal(pending.current, null); assert.equal(timer.current, null);
   assert.deepEqual(events, [['recovery-error', ''], 'publish']);
 });
 
@@ -180,6 +185,7 @@ test('actual terminal recovery retires the failed room, retries with a bounded f
   const clock = fakeClock(), writes = [], refreshes = [];
   const context = { ...clock, stageOperationOwnerKeyRef: { current: 'ROOM:user:session' }, liveSurfaceRef: { current: 'stage' },
     liveKitRecoveryTimeoutRef: { current: null }, liveKitRecoveryCountRef: { current: 0 }, liveKitStageMountedRef: { current: true },
+    liveKitPendingRecoveryRef: { current: null },
     LIVE_STAGE_AUTHORITY_REFRESH_MAX_ATTEMPTS: 2, LIVE_STAGE_AUTHORITY_REFRESH_RETRY_MILLIS: 700,
     setLiveKitRecoveryError: value => writes.push(['error', value]), setLiveKitJoinContract: value => writes.push(['active', value]),
     setLiveKitRenderableJoinContract: value => writes.push(['renderable', value]), liveKitStageContractRefreshKeyRef: { current: 'failed' },
@@ -194,6 +200,67 @@ test('actual terminal recovery retires the failed room, retries with a bounded f
   assert.ok(writes.at(-3)[1].includes('Retry connection'));
   context.liveKitRecoveryCountRef.current = 0; recover('Interrupted', true);
   context.liveSurfaceRef.current = 'room'; clock.advance(700); assert.equal(refreshes.length, 2);
+});
+
+function recoveryResumeHarness() {
+  const clock = fakeClock(); let error = '', version = 0;
+  const context = { ...clock, stageOperationOwnerKeyRef: { current: 'ROOM:user:session' }, liveSurfaceRef: { current: 'stage' },
+    liveKitRecoveryTimeoutRef: { current: null }, liveKitPendingRecoveryRef: { current: null },
+    liveKitRecoveryCountRef: { current: 0 }, liveKitStageMountedRef: { current: true },
+    LIVE_STAGE_AUTHORITY_REFRESH_MAX_ATTEMPTS: 2, LIVE_STAGE_AUTHORITY_REFRESH_RETRY_MILLIS: 700,
+    setLiveKitRecoveryError: value => { error = value; }, setLiveKitJoinContract: noop, setLiveKitRenderableJoinContract: noop,
+    liveKitStageContractRefreshKeyRef: { current: 'failed' }, setLiveKitRefreshVersion: fn => { version = fn(version); } };
+  let resumeSource;
+  const visit = node => {
+    if (ts.isCallExpression(node) && node.expression.getText(ast) === 'useEffect'
+      && node.arguments[1]?.getText(ast) === '[stageOperationOwnerKey, liveSurface]') resumeSource = node.arguments[0].getText(ast);
+    ts.forEachChild(node, visit);
+  };
+  visit(ast); assert.ok(resumeSource);
+  return { context, clock, get error() { return error; }, get version() { return version; },
+    recover: screenCallback('scheduleLiveKitRecovery', context),
+    resume() { return evaluate(`export const callback = ${resumeSource};`, { ...context,
+      stageOperationOwnerKey: context.stageOperationOwnerKeyRef.current, liveSurface: context.liveSurfaceRef.current }).callback(); } };
+}
+
+test('actual recovery resumes elapsed cooldown after focus/foreground return without losing attempt count', async () => {
+  const h = recoveryResumeHarness(); h.recover('Reconnecting', true);
+  h.context.stageOperationOwnerKeyRef.current = ''; h.clock.advance(700); h.resume();
+  assert.equal(h.version, 0); assert.equal(h.error, 'Reconnecting');
+  assert.equal(h.context.liveKitRecoveryTimeoutRef.current, null); assert.ok(h.context.liveKitPendingRecoveryRef.current);
+  h.context.stageOperationOwnerKeyRef.current = 'ROOM:user:session'; h.resume();
+  assert.equal(h.version, 1); assert.equal(h.error, ''); assert.equal(h.context.liveKitRecoveryCountRef.current, 1);
+  assert.equal(h.context.liveKitPendingRecoveryRef.current, null);
+  const refresh = refreshHarness(goodContract, { ...h.context, liveKitRecoveryError: h.error, liveKitJoinContract: null });
+  refresh.run(); await Promise.resolve(); assert.equal(refresh.requests.length, 1);
+  h.resume(); assert.equal(h.version, 1);
+});
+
+test('actual refocus before cooldown expiry waits for the existing timer and never retries early twice', () => {
+  const h = recoveryResumeHarness(); h.recover('Reconnecting', true);
+  h.context.stageOperationOwnerKeyRef.current = ''; h.resume(); h.clock.advance(200);
+  h.context.stageOperationOwnerKeyRef.current = 'ROOM:user:session'; h.resume();
+  assert.equal(h.version, 0); assert.equal(h.error, 'Reconnecting'); assert.equal(h.clock.count(), 1);
+  h.clock.advance(499); assert.equal(h.version, 0); h.clock.advance(1); assert.equal(h.version, 1);
+  h.resume(); assert.equal(h.version, 1); assert.equal(h.clock.count(), 0);
+});
+
+test('actual recovery resume preserves exhausted and denied states instead of making an unbounded retry loop', async () => {
+  const exhausted = recoveryResumeHarness();
+  exhausted.recover('Reconnecting', true); exhausted.recover('Reconnecting', true); exhausted.recover('Reconnecting', true);
+  assert.equal(exhausted.context.liveKitPendingRecoveryRef.current, null); assert.equal(exhausted.clock.count(), 0);
+  exhausted.context.stageOperationOwnerKeyRef.current = ''; exhausted.resume();
+  exhausted.context.stageOperationOwnerKeyRef.current = 'ROOM:user:session'; exhausted.resume();
+  assert.match(exhausted.error, /Retry connection/); assert.equal(exhausted.version, 0);
+  const denied = recoveryResumeHarness(); denied.recover('Reconnecting', true);
+  const refresh = refreshHarness({ status: 'unavailable', reason: 'request_failed', responseStatus: 403 }, {
+    ...denied.context, liveKitRecoveryError: '', liveKitJoinContract: null,
+  });
+  refresh.run(); await Promise.resolve();
+  assert.equal(denied.context.liveKitPendingRecoveryRef.current, null); assert.equal(denied.clock.count(), 0);
+  denied.context.stageOperationOwnerKeyRef.current = ''; denied.resume();
+  denied.context.stageOperationOwnerKeyRef.current = 'ROOM:user:session'; denied.resume();
+  assert.match(denied.error, /Check access/); assert.equal(denied.version, 0);
 });
 
 test('native host focus leaves selected speaker and moderation controls in the real member roster', () => {
@@ -237,7 +304,7 @@ test('actual recent-comment reader returns newest 120 in chronological display o
 test('actual send trusts durable insert #126 without a list reread and suppresses duplicate taps', async () => {
   const d = deferred(); let sends = 0, comments = [], draft = 'saved comment', busy;
   const context = { hybridCommentDraft: draft, hybridCommentAttachmentFile: null, partyId: 'ROOM',
-    hybridCommentSendingRef: { current: false }, stageOperationOwnerKeyRef: { current: 'ROOM:user:session' }, liveKitStageMountedRef: { current: true },
+    hybridCommentSendRef: { current: null }, stageOperationOwnerKeyRef: { current: 'ROOM:user:session' }, liveKitStageMountedRef: { current: true },
     appConfig: { runtimeControls: { chat_enabled: true, chat_attachments_enabled: true } }, trackedUserId: 'user', resolvedCurrentUsername: 'Me',
     setHybridCommentSending: value => { busy = value; }, setHybridCommentError: value => assert.equal(value, ''),
     sendPartyMessageRecord: () => { sends++; return d.promise; }, hybridCommentRevisionRef: { current: 0 },
@@ -249,6 +316,155 @@ test('actual send trusts durable insert #126 without a list reread and suppresse
   d.resolve({ id: '126', userId: 'user', body: 'saved comment', createdAt: '0126' }); await Promise.all([first, second]);
   assert.equal(draft, ''); assert.equal(busy, false); assert.equal(comments[0].id, '126');
   assert.equal(lifecycle.canApplyLiveStageCommentSnapshot(0, context.hybridCommentRevisionRef.current), false);
+});
+
+for (const replacementOwner of ['OTHER:user:session', 'ROOM:other:session', 'ROOM:user:new-session', 'ROOM:user:session']) {
+  test(`actual comment owner replacement releases abandoned flight without releasing new send: ${replacementOwner}`, async () => {
+    const first = deferred(), second = deferred(), persistedRooms = []; let sends = 0, busy = false, comments = [], draft = 'new comment';
+    const context = {
+      hybridCommentDraft: draft, hybridCommentAttachmentFile: null, partyId: 'ROOM',
+      hybridCommentSendRef: { current: null }, stageOperationOwnerKeyRef: { current: 'ROOM:user:session' },
+      liveKitStageMountedRef: { current: true }, appConfig: { runtimeControls: { chat_enabled: true, chat_attachments_enabled: true } },
+      trackedUserId: 'user', resolvedCurrentUsername: 'Me', setStageEntryBusy: noop,
+      setHybridCommentSending: value => { busy = value; }, setHybridCommentError: value => assert.equal(value, ''),
+      sendPartyMessageRecord: (room, user) => { persistedRooms.push([room, user]); return ++sends === 1 ? first.promise : second.promise; },
+      hybridCommentRevisionRef: { current: 0 },
+      setHybridComments: fn => { comments = fn(comments); }, setHybridCommentDraft: value => { draft = value; },
+      setHybridCommentAttachmentFile: noop, setCommentsOpen: noop, getUserFacingErrorMessage: (_, fallback) => fallback,
+    };
+    let ownerEffectSource;
+    const visit = node => {
+      if (ts.isCallExpression(node) && node.expression.getText(ast) === 'useEffect'
+        && node.arguments[1]?.getText(ast) === '[stageOperationOwnerKey]') ownerEffectSource = node.arguments[0].getText(ast);
+      ts.forEachChild(node, visit);
+    };
+    visit(ast); assert.ok(ownerEffectSource);
+    const ownerEffect = evaluate(`export const callback = ${ownerEffectSource};`, context).callback;
+    const retire = ownerEffect(), send = screenCallback('onSendHybridComment', context);
+    const abandoned = send(); assert.equal(sends, 1); assert.equal(busy, true);
+    retire(); context.stageOperationOwnerKeyRef.current = '';
+    ownerEffect(); assert.equal(busy, false); assert.equal(context.hybridCommentSendRef.current, null);
+    context.stageOperationOwnerKeyRef.current = replacementOwner; ownerEffect();
+    [context.partyId, context.trackedUserId] = replacementOwner.split(':');
+    const replacementSend = screenCallback('onSendHybridComment', context);
+    const current = replacementSend(), currentFlight = context.hybridCommentSendRef.current;
+    assert.equal(sends, 2); assert.ok(currentFlight); assert.equal(busy, true);
+    assert.deepEqual(persistedRooms, [['ROOM', 'user'], [context.partyId, context.trackedUserId]]);
+    first.resolve({ id: 'old', userId: 'user', body: 'old comment', createdAt: '0001' }); await abandoned;
+    assert.equal(context.hybridCommentSendRef.current, currentFlight); assert.equal(busy, true);
+    assert.equal(comments.length, 0); assert.equal(draft, 'new comment');
+    await replacementSend(); assert.equal(sends, 2, 'abandoned finally cannot release the replacement single flight');
+    second.resolve({ id: 'new', userId: 'user', body: 'new comment', createdAt: '0002' }); await current;
+    assert.equal(context.hybridCommentSendRef.current, null); assert.equal(busy, false);
+    assert.equal(comments.length, 1); assert.equal(comments[0].id, 'new'); assert.equal(draft, '');
+  });
+}
+
+function commentReconciliationHarness({ attachment = false } = {}) {
+  const receipt = deferred();
+  let uploadResolve, uploadReject;
+  const upload = new Promise((resolve, reject) => { uploadResolve = resolve; uploadReject = reject; });
+  const state = { comments: [], draft: 'Original comment', busy: false, errors: [], uploads: 0, rollbacks: 0 };
+  const context = {
+    hybridCommentDraft: state.draft, hybridCommentAttachmentFile: attachment ? { name: 'photo.jpg' } : null,
+    partyId: 'ROOM', hybridCommentSendRef: { current: null }, stageOperationOwnerKeyRef: { current: 'ROOM:user:session' },
+    liveKitStageMountedRef: { current: true }, appConfig: { runtimeControls: { chat_enabled: true, chat_attachments_enabled: true } },
+    trackedUserId: 'user', resolvedCurrentUsername: 'Me', setHybridCommentSending: value => { state.busy = value; },
+    setHybridCommentError: value => { if (value) state.errors.push(value); }, sendPartyMessageRecord: () => receipt.promise,
+    hybridCommentRevisionRef: { current: 0 }, setHybridComments: fn => { state.comments = fn(state.comments); },
+    setHybridCommentDraft: value => { state.draft = value; }, setHybridCommentAttachmentFile: noop, setCommentsOpen: noop,
+    getUserFacingErrorMessage: (_, fallback) => fallback,
+    createSocialAttachmentForSurface: () => { state.uploads++; return upload; },
+    deletePartyMessage: async () => { state.rollbacks++; },
+    mapLiveStageCommentRow: row => ({ id: row.id, userId: row.user_id, body: row.text,
+      createdAt: row.created_at, authorLabel: 'You', isMe: true, attachments: [] }),
+  };
+  let eventSource;
+  const visit = node => {
+    if (ts.isCallExpression(node) && node.arguments[0]?.getText(ast) === '"postgres_changes"'
+      && node.arguments[1]?.getText(ast).includes('table: "watch_party_room_messages"')) eventSource = node.arguments[2].getText(ast);
+    ts.forEachChild(node, visit);
+  };
+  visit(ast); assert.ok(eventSource, 'actual room-message realtime callback exists');
+  const makeEvent = overrides => evaluate(`export const callback = ${eventSource};`, { ...context, active: true, ...overrides }).callback;
+  const event = makeEvent();
+  const saved = { id: 'saved-comment', userId: 'user', body: 'Original comment', createdAt: '2026-10-14T20:00:00Z' };
+  const row = { id: saved.id, user_id: saved.userId, text: saved.body, created_at: saved.createdAt };
+  return { state, context, receipt, saved, row, event, makeEvent, send: screenCallback('onSendHybridComment', context), uploadResolve, uploadReject };
+}
+
+test('delayed durable insert receipt cannot resurrect a newer realtime deletion', async () => {
+  const h = commentReconciliationHarness(), sending = h.send();
+  h.event({ eventType: 'INSERT', new: h.row });
+  h.event({ eventType: 'DELETE', old: { id: h.saved.id } });
+  assert.equal(h.state.comments.length, 0);
+  h.receipt.resolve(h.saved); await sending;
+  assert.equal(h.state.comments.length, 0); assert.equal(h.state.draft, ''); assert.equal(h.state.busy, false);
+  assert.deepEqual(h.state.errors, []); assert.equal(h.context.hybridCommentSendRef.current, null);
+});
+
+test('delayed durable insert receipt preserves a newer realtime edit and existing list order', async () => {
+  const h = commentReconciliationHarness(), sending = h.send();
+  h.event({ eventType: 'INSERT', new: h.row });
+  h.event({ eventType: 'INSERT', new: { ...h.row, id: 'later-comment', text: 'Later comment' } });
+  h.event({ eventType: 'UPDATE', new: { ...h.row, text: 'Edited comment' } });
+  h.receipt.resolve(h.saved); await sending;
+  assert.deepEqual(Array.from(h.state.comments, comment => [comment.id, comment.body]), [
+    ['saved-comment', 'Edited comment'], ['later-comment', 'Later comment'],
+  ]);
+  assert.equal(h.state.draft, ''); assert.deepEqual(h.state.errors, []);
+});
+
+test('unrelated realtime changes do not suppress a durable receipt or survive its flight', async () => {
+  const h = commentReconciliationHarness(), sending = h.send();
+  h.event({ eventType: 'UPDATE', new: { ...h.row, id: 'other-comment', text: 'Other edit' } });
+  h.receipt.resolve(h.saved); await sending;
+  assert.equal(h.state.comments.find(comment => comment.id === h.saved.id)?.body, 'Original comment');
+  assert.equal(h.context.hybridCommentSendRef.current, null);
+});
+
+test('retired channel events and foreign room callbacks cannot poison the current send flight', async () => {
+  const h = commentReconciliationHarness(), sending = h.send(), flight = h.context.hybridCommentSendRef.current;
+  h.makeEvent({ active: false })({ eventType: 'DELETE', old: { id: h.saved.id } });
+  h.makeEvent({ partyId: 'OLD-ROOM' })({ eventType: 'DELETE', old: { id: h.saved.id } });
+  assert.equal(flight.realtimeChanges.size, 0);
+  h.context.stageOperationOwnerKeyRef.current = 'ROOM:user:new-session';
+  h.event({ eventType: 'DELETE', old: { id: h.saved.id } });
+  assert.equal(flight.realtimeChanges.size, 0, 'an abandoned owner cannot collect newer-session events');
+  h.receipt.resolve(h.saved); await sending;
+  assert.equal(h.state.comments.length, 0, 'abandoned completion stays suppressed');
+});
+
+test('a deletion received before the save receipt skips attachment upload without suggesting a resend', async () => {
+  const h = commentReconciliationHarness({ attachment: true }), sending = h.send();
+  h.event({ eventType: 'DELETE', old: { id: h.saved.id } });
+  h.receipt.resolve(h.saved); await sending;
+  assert.equal(h.state.uploads, 0); assert.equal(h.state.comments.length, 0);
+  assert.equal(h.state.draft, ''); assert.deepEqual(h.state.errors, []);
+});
+
+for (const uploadFails of [false, true]) {
+  test(`deletion during attachment upload wins over its ${uploadFails ? 'failure' : 'success'} without rollback/resend`, async () => {
+    const h = commentReconciliationHarness({ attachment: true }), sending = h.send();
+    h.receipt.resolve(h.saved); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.state.uploads, 1);
+    h.event({ eventType: 'INSERT', new: h.row });
+    h.event({ eventType: 'DELETE', old: { id: h.saved.id } });
+    if (uploadFails) h.uploadReject(Error('upload rejected after deletion'));
+    else h.uploadResolve({ id: 'attachment', surfaceId: h.saved.id });
+    await sending;
+    assert.equal(h.state.comments.length, 0); assert.equal(h.state.rollbacks, 0);
+    assert.equal(h.state.draft, ''); assert.deepEqual(h.state.errors, []);
+  });
+}
+
+test('attachment failure cannot roll back a newer authoritative text edit', async () => {
+  const h = commentReconciliationHarness({ attachment: true }), sending = h.send();
+  h.receipt.resolve(h.saved); await new Promise(resolve => setImmediate(resolve));
+  h.event({ eventType: 'UPDATE', new: { ...h.row, text: 'Authoritative edit' } });
+  h.uploadReject(Error('attachment upload failed')); await sending;
+  assert.equal(h.state.rollbacks, 0); assert.equal(h.state.comments[0].body, 'Authoritative edit');
+  assert.equal(h.state.draft, ''); assert.ok(h.state.errors[0].includes('comment was saved'));
 });
 
 test('actual reaction sender broadcasts chosen emoji once; other participant validates it and self echo is ignored', async () => {
