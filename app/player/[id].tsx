@@ -132,6 +132,7 @@ import {
     PARTY_SEAT_REQUEST_MESSAGE_TTL_MILLIS,
     resolvePremiumAccessKeyForRoom,
     sendPartyMessage,
+    sendPartyMessageRecord,
     setOwnPartyParticipantMuteState,
     setPartyParticipantState,
     updateRoomPlayback,
@@ -1245,6 +1246,12 @@ export default function PlayerScreen() {
   const [partyCommentsOpen, setPartyCommentsOpen] = useState(false);
   const [partyCommentDraft, setPartyCommentDraft] = useState("");
   const [partyCommentSending, setPartyCommentSending] = useState(false);
+  const partyCommentSendRef = useRef<object | null>(null);
+  useEffect(() => {
+    partyCommentSendRef.current = null;
+    setPartyCommentSending(false);
+    return () => { partyCommentSendRef.current = null; };
+  }, [inWatchParty, partyId, sessionUser?.id]);
   const [watchPartyCameraRequestError, setWatchPartyCameraRequestError] = useState("");
   const [watchPartyLocalMediaIntent, setWatchPartyLocalMediaIntent] = useState(false);
   const [watchPartyLocalMediaPermissionBusy, setWatchPartyLocalMediaPermissionBusy] = useState(false);
@@ -3570,45 +3577,57 @@ export default function PlayerScreen() {
   }, [inWatchParty, isLiveModeFlag, isPlaying, isVideoReady, shouldPinWatchPartyControls]);
 
   const onSendPartyComment = useCallback(async () => {
-    if (!inWatchParty || !partyId || partyCommentSending) return;
+    if (!inWatchParty || !partyId || partyCommentSendRef.current) return;
 
     const body = String(partyCommentDraft ?? "").trim();
     if (!body) return;
 
-    const commentUserId = String(partyUserId || (await getSafePartyUserId().catch(() => "")) || "").trim();
-    const localId = `party-msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const flight = {};
+    partyCommentSendRef.current = flight;
     const authorLabel = String(partyDisplayNameRef.current ?? "").trim() || "Guest";
-
-    pushPartyOverlayMessage({
-      id: localId,
-      author: "You",
-      body,
-    });
-    setPartyCommentDraft("");
     setControlsVisible(true);
     resetAutoHideTimer();
     setPartyCommentSending(true);
 
     try {
-      await sendPartyMessage(partyId, commentUserId, "chat", body, { username: authorLabel });
-      await partySocialChannelRef.current?.send({
-        type: "broadcast",
-        event: "message",
-        payload: {
-          id: localId,
-          kind: "chat",
-          body,
-          userId: commentUserId,
-          authorLabel,
-        },
-      }).catch(() => {});
+      const commentUserId = String(partyUserId || (await getSafePartyUserId().catch(() => "")) || "").trim();
+      if (partyCommentSendRef.current !== flight) return;
+      const saved = await sendPartyMessageRecord(partyId, commentUserId, "chat", body, { username: authorLabel });
+      if (partyCommentSendRef.current !== flight) return;
+      if (!saved) {
+        Alert.alert("Comment not sent", "Your comment could not be saved. Your draft is still here so you can try again.");
+        return;
+      }
+      pushPartyOverlayMessage({ id: saved.id, author: "You", body: saved.body });
+      setPartyCommentDraft((current) => current.trim() === body ? "" : current);
+      try {
+        await partySocialChannelRef.current?.send({
+          type: "broadcast",
+          event: "message",
+          payload: {
+            id: saved.id,
+            kind: "chat",
+            body: saved.body,
+            userId: saved.userId,
+            authorLabel,
+          },
+        });
+      } catch {
+        // The durable message already exists; a realtime failure is not a failed send.
+      }
+    } catch {
+      if (partyCommentSendRef.current === flight) {
+        Alert.alert("Comment not sent", "Your comment could not be saved. Your draft is still here so you can try again.");
+      }
     } finally {
-      setPartyCommentSending(false);
+      if (partyCommentSendRef.current === flight) {
+        partyCommentSendRef.current = null;
+        setPartyCommentSending(false);
+      }
     }
   }, [
     inWatchParty,
     partyCommentDraft,
-    partyCommentSending,
     partyId,
     partyUserId,
     pushPartyOverlayMessage,
@@ -3670,17 +3689,18 @@ export default function PlayerScreen() {
     if (!inWatchParty || !partyId || !participantId || !authority.isHost) return false;
 
     const existingMembership = partyMembershipMapRef.current[participantId];
+    const requestedHostMuted = options.isMuted ?? (options.canSpeak ? existingMembership?.hostMuted : false) ?? false;
     const clearingRequestVersion = pendingPartySeatRequestsRef.current[participantId]?.requestVersion ?? "";
     let nextMembership = await setPartyParticipantState(partyId, participantId, {
       role: existingMembership?.role ?? "viewer",
       stageRole: options.stageRole,
       canSpeak: options.canSpeak,
-      isMuted: options.isMuted ?? (options.canSpeak ? existingMembership?.isMuted : false),
+      isMuted: requestedHostMuted,
       membershipState: existingMembership?.membershipState ?? "active",
     }).catch(() => null);
 
     if (!nextMembership) {
-      const serverPersisted = await enforceLiveKitParticipantState({
+      await enforceLiveKitParticipantState({
         surface: "watch-party-live",
         roomName: partyId,
         targetParticipantIdentity: participantId,
@@ -3689,13 +3709,16 @@ export default function PlayerScreen() {
           persistMembershipState: true,
           stageRole: options.stageRole,
           canSpeak: options.canSpeak,
-          isMuted: options.isMuted ?? existingMembership?.isMuted ?? false,
+          isMuted: requestedHostMuted,
         },
       }).catch(() => false);
-      if (serverPersisted) {
-        const refreshedSnapshot = await refreshPartyMembershipSnapshot().catch(() => null);
-        nextMembership = refreshedSnapshot?.memberships.find((membership) => membership.userId === participantId) ?? null;
-      }
+      // The server can save membership before provider enforcement fails. Read
+      // it back even after a false response, but never infer the requested role.
+      const refreshedSnapshot = await refreshPartyMembershipSnapshot().catch(() => null);
+      const refreshedMembership = refreshedSnapshot?.memberships.find((membership) => membership.userId === participantId) ?? null;
+      if (refreshedMembership?.stageRole === options.stageRole
+        && refreshedMembership.canSpeak === options.canSpeak
+        && refreshedMembership.hostMuted === requestedHostMuted) nextMembership = refreshedMembership;
     }
 
     if (!nextMembership) {
@@ -3719,17 +3742,22 @@ export default function PlayerScreen() {
         entry.id === participantId
           ? {
               ...entry,
-              canSpeak: options.canSpeak,
-              stageRole: options.stageRole,
-              muted: options.isMuted ?? entry.muted,
+              canSpeak: nextMembership.canSpeak,
+              stageRole: nextMembership.stageRole,
+              muted: nextMembership.isMuted,
               isRequestingToSpeak: !!options.isRequestingToSpeak,
-              isSpeaking: options.canSpeak ? entry.isSpeaking : false,
+              isSpeaking: nextMembership.canSpeak && !nextMembership.isMuted ? entry.isSpeaking : false,
             }
           : entry,
       ),
     );
 
-    await broadcastPartySeatState(participantId, options);
+    await broadcastPartySeatState(participantId, {
+      ...options,
+      canSpeak: nextMembership.canSpeak,
+      stageRole: nextMembership.stageRole,
+      isMuted: nextMembership.isMuted,
+    });
     if (options.isRequestingToSpeak === false) {
       await broadcastPartySeatRequest(participantId, false, clearingRequestVersion).catch((error) => {
         debugLog("livekit", "watch-party-live seat request clear broadcast failed after persistence", {
@@ -3740,7 +3768,7 @@ export default function PlayerScreen() {
         });
       });
     }
-    await enforceLiveKitParticipantState({
+    const providerEnforced = await enforceLiveKitParticipantState({
       surface: "watch-party-live",
       roomName: partyId,
       targetParticipantIdentity: participantId,
@@ -3758,7 +3786,7 @@ export default function PlayerScreen() {
         muted: options.isMuted,
       }).catch(() => {});
     }
-    return true;
+    return providerEnforced ? true : "provider_pending";
   }, [
     broadcastPartySeatRequest,
     broadcastPartySeatState,
@@ -6311,7 +6339,15 @@ export default function PlayerScreen() {
     });
     if (currentWatchPartyHostAuthority.isHost) {
       const hostTarget = tappedParticipant ?? null;
-      if (!hostTarget || hostTarget.id === trackedUserId || hostTarget.role === "host") return;
+      if (!hostTarget) return;
+      // Review and local media controls live in the regular shared-player dock.
+      Keyboard.dismiss();
+      setWatchPartyCommentKeyboardOpen(false);
+      setIsStandaloneFullscreen(false);
+      if (hostTarget.id === trackedUserId || hostTarget.role === "host") {
+        setControlsVisible(true);
+        return;
+      }
       setActiveParticipantId(hostTarget.id);
       setActiveParticipantToolsId(hostTarget.id);
       setControlsVisible(true);
@@ -8064,16 +8100,44 @@ export default function PlayerScreen() {
       onPressSharedPlayerRequestCamera("bubble");
     }
     if (!isHost) return;
+    Keyboard.dismiss();
+    setWatchPartyCommentKeyboardOpen(false);
+    setIsStandaloneFullscreen(false);
     const nextParticipantId = activeParticipantId === participant.id ? null : participant.id;
     setActiveParticipantId(nextParticipantId);
     setActiveParticipantToolsId(null);
   }, [activeParticipantId, bumpRoomEnergy, currentWatchPartyHostAuthority.isHost, markParticipantActive, onPressSharedPlayerRequestCamera, trackedUserId]);
 
-  const reportPartySeatUpdateUnavailable = useCallback(async () => {
-    showLivePresenceEvent("Seat update unavailable. Try again in a moment.");
-    Alert.alert("Seat update unavailable", "The seat change could not be saved yet. Try again in a moment.");
+  const reportPartySeatUpdateUnavailable = useCallback(async (result: boolean | "provider_pending" = false, participantId?: string) => {
+    const message = result === "provider_pending"
+      ? "The seat change was saved, but live media enforcement could not be confirmed. The participant may still be broadcasting. Retry the live update without changing the saved seat."
+      : "The seat change could not be saved yet. Try again in a moment.";
+    showLivePresenceEvent(result === "provider_pending" ? "Seat saved. Live media enforcement needs retry." : "Seat update unavailable. Try again in a moment.");
+    if (result === "provider_pending" && participantId) {
+      let retrying = false;
+      const retryEnforcement = async () => {
+        if (retrying) return;
+        retrying = true;
+        const enforced = await enforceLiveKitParticipantState({
+          surface: "watch-party-live",
+          roomName: partyId,
+          targetParticipantIdentity: participantId,
+          metadata: { source: "watch-party-live-seat-control-retry" },
+        }).catch(() => false);
+        retrying = false;
+        if (enforced) showLivePresenceEvent("Live media update confirmed.");
+        else showRetryPrompt();
+      };
+      const showRetryPrompt = () => Alert.alert("Live media update unconfirmed", message, [
+        { text: "Close", style: "cancel" },
+        { text: "Retry live update", onPress: () => { void retryEnforcement(); } },
+      ]);
+      showRetryPrompt();
+    } else {
+      Alert.alert("Seat update unavailable", message);
+    }
     await refreshPartyMembershipSnapshot().catch(() => null);
-  }, [refreshPartyMembershipSnapshot, showLivePresenceEvent]);
+  }, [partyId, refreshPartyMembershipSnapshot, showLivePresenceEvent]);
 
   const approvePartyParticipantSeat = useCallback(async (participant: PartyParticipant) => {
     if (!canAddPartySpeakerSeat(participant)) {
@@ -8085,8 +8149,8 @@ export default function PlayerScreen() {
       stageRole: "speaker",
       isRequestingToSpeak: false,
     });
-    if (!seatPersisted) {
-      await reportPartySeatUpdateUnavailable();
+    if (seatPersisted !== true) {
+      await reportPartySeatUpdateUnavailable(seatPersisted, participant.id);
       return false;
     }
     suppressNextSpeakingEventRef.current[participant.id] = "start";
@@ -8264,8 +8328,8 @@ export default function PlayerScreen() {
                   stageRole: "listener",
                   isRequestingToSpeak: false,
                 });
-                if (!seatPersisted) {
-                  await reportPartySeatUpdateUnavailable();
+                if (seatPersisted !== true) {
+                  await reportPartySeatUpdateUnavailable(seatPersisted, participant.id);
                   return;
                 }
                 setPartyParticipants((prev) =>
@@ -8292,27 +8356,23 @@ export default function PlayerScreen() {
           <TouchableOpacity
             style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
             onPress={async () => {
-              const nextMuted = !participant.muted;
+              const nextMuted = !partyMembershipMapRef.current[participant.id]?.hostMuted;
               const seatPersisted = await persistPartySeatState(participant.id, {
                 canSpeak: participant.canSpeak,
                 stageRole: participant.stageRole,
                 isRequestingToSpeak: participant.isRequestingToSpeak,
                 isMuted: nextMuted,
               });
-              if (!seatPersisted) {
-                await reportPartySeatUpdateUnavailable();
+              if (seatPersisted !== true) {
+                await reportPartySeatUpdateUnavailable(seatPersisted, participant.id);
                 return;
               }
-              setPartyParticipants((prev) =>
-                prev.map((entry) =>
-                  entry.id === participant.id ? { ...entry, muted: nextMuted, isSpeaking: nextMuted ? false : entry.isSpeaking } : entry,
-                ),
-              );
+              // persistPartySeatState owns the combined host/self mute result.
               bumpRoomEnergy(0.03);
             }}
             activeOpacity={0.85}
           >
-            <Text style={styles.partyParticipantControlBtnText}>{participant.muted ? "Unmute" : "Mute"}</Text>
+            <Text style={styles.partyParticipantControlBtnText}>{partyMembershipMapRef.current[participant.id]?.hostMuted ? "Unmute" : "Mute"}</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -8657,8 +8717,8 @@ export default function PlayerScreen() {
                 stageRole: nextCanSpeak ? "speaker" : "listener",
                 isRequestingToSpeak: false,
               });
-              if (!seatPersisted) {
-                await reportPartySeatUpdateUnavailable();
+              if (seatPersisted !== true) {
+                await reportPartySeatUpdateUnavailable(seatPersisted, participant.id);
                 return;
               }
               setPartyParticipants((prev) =>
@@ -9380,6 +9440,23 @@ export default function PlayerScreen() {
       style={[styles.sharedFullscreenParticipantRail, { width: sharedFullscreenRightRailWidth }]}
       pointerEvents="auto"
     >
+      {shouldRenderSharedPlayerLocalMediaControl || shouldRenderSharedPlayerSelfMuteControl ? (
+        <TouchableOpacity
+          style={[styles.watchPartyDockActionBtn, { flexGrow: 0, flexShrink: 0, minWidth: 0 }]}
+          onPress={() => {
+            Keyboard.dismiss();
+            setWatchPartyCommentKeyboardOpen(false);
+            setIsStandaloneFullscreen(false);
+            setControlsVisible(true);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open camera and microphone controls"
+          testID="shared-player-fullscreen-media-controls"
+          activeOpacity={0.88}
+        >
+          <Text style={styles.watchPartyDockActionText}>Camera & Mic</Text>
+        </TouchableOpacity>
+      ) : null}
       {(shouldRenderWatchPartyLiveKit && activeWatchPartyLiveKitJoinContract) || shouldRenderWatchPartyLiveKitStableShell
         ? renderWatchPartyBubbleGridSurface(styles.sharedFullscreenLiveKitBubbleSurface)
         : null}
