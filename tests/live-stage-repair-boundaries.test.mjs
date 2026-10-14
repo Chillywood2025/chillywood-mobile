@@ -161,6 +161,21 @@ test('near-expiry replacement is cooled down, and canceled authority response is
   assert.equal(canceled.writes.length, 0);
 });
 
+test('actual authoritative connection resets recovery and publishes discovery exactly once', () => {
+  const recoveryCount = { current: 3 }, events = [];
+  const connected = screenCallback('onLiveKitStageConnected', {
+    liveKitRecoveryCountRef: recoveryCount,
+    setLiveKitRecoveryError: value => events.push(['recovery-error', value]),
+    onDiscoveryConnected: () => {
+      assert.equal(recoveryCount.current, 0);
+      events.push('publish');
+    },
+  });
+  assert.deepEqual(events, []);
+  connected();
+  assert.deepEqual(events, [['recovery-error', ''], 'publish']);
+});
+
 test('actual terminal recovery retires the failed room, retries with a bounded fresh-contract trigger, and cancels on leave', () => {
   const clock = fakeClock(), writes = [], refreshes = [];
   const context = { ...clock, stageOperationOwnerKeyRef: { current: 'ROOM:user:session' }, liveSurfaceRef: { current: 'stage' },
