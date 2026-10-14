@@ -210,7 +210,7 @@ assertIncludes(liveStage, "HYBRID_LIVEKIT_CONNECT_TIMEOUT_MILLIS = 30_000", "Liv
 assertIncludes(liveStage, "HYBRID_LIVEKIT_DISCONNECT_FALLBACK_GRACE_MILLIS = 4_500", "Live Stage reconnect grace timeout");
 assertIncludes(liveStage, "isHybridLiveKitConnectedishState(room.state)", "Live Stage reconnect grace checks connectedish state");
 assertIncludes(liveStage, "hybrid community room disconnected during reconnect grace", "Live Stage reconnect grace debug proof");
-assertIncludes(liveStage, "falling back to legacy live-stage media path", "Live Stage fallback logged as fallback");
+assertIncludes(liveStage, "recovering live-stage media with a fresh LiveKit contract", "Live Stage terminal recovery must be observable and use the authorized LiveKit path");
 assertIncludes(liveStage, "live-stage join contract unavailable", "Live Stage unavailable token logged separately from media success");
 assertIncludes(liveStage, "live-stage viewer entered without host-granted camera seat", "Live Stage unapproved viewer no-publish proof log");
 assertIncludes(livekitSurface, "hasPublishedLocalCameraTrack: !!publishedLocalCameraTrackRef", "Shared media surface logs published local camera proof");
@@ -238,7 +238,8 @@ assertIncludes(liveStage, "const selfHeroFallbackBody = currentStageParticipantS
 assertIncludes(liveStage, "shouldUseViewerSelfHero,", "Live Stage self-hero state must feed shared party-box helper");
 assertIncludes(liveStage, "showHeroLocalRtcVideo && RTCView", "Live Stage self-hero uses local visual immediately when available");
 assertIncludes(liveStage, "\"Local self view\"", "Live Stage self-hero fallback explains local-only layout instead of syncing or approval");
-assertIncludes(liveStage, "forceLocalHeroFallback={false}", "Live Stage self-hero must not force the LiveKit syncing fallback");
+assertIncludes(liveStage, "forceLocalHeroFallback={heroParticipantIsCurrentUser}", "Live Stage self-hero must never substitute another participant's camera");
+assertIncludes(liveStage, "participantId={heroParticipantId}", "Live Stage hero and identity must stay aligned with its participant controls");
 assertIncludes(liveStage, "testID=\"live-stage-self-hero-toggle\"", "Live Stage self-hero toggle is exposed for proof");
 assertIncludes(liveStage, "testID=\"live-stage-request-camera-button\"", "Live Stage request-camera button is exposed for installed proof");
 assertIncludes(watchParty, "export async function setOwnPartyParticipantMuteState", "Watch-Party shared helper exposes current-user self mute persistence");

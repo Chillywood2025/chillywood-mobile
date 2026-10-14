@@ -1885,7 +1885,8 @@ export async function fetchPartyMessages(
       .from(WATCH_PARTY_MESSAGES_TABLE)
       .select("id,party_id,user_id,username,text,created_at")
       .eq("party_id", normalizedPartyId)
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .limit(limit)
       .returns<WatchPartyMessageRow[]>();
 
@@ -1896,7 +1897,9 @@ export async function fetchPartyMessages(
       data.map((row) => String(row.id ?? "")),
     );
 
-    return data.map((row) => ({
+    // Limit the newest rows on the server, then present them chronologically.
+    // Limiting an ascending query permanently hides new comments and seat markers.
+    return [...data].reverse().map((row) => ({
       id: String(row.id ?? ""),
       partyId: String(row.party_id ?? normalizedPartyId),
       userId: String(row.user_id ?? ""),

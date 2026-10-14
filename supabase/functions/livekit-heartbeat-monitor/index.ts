@@ -170,6 +170,28 @@ const countLiveKitState = async (
       }
       return authority.data;
     },
+    readPublishAuthorityEvidence: async (roomName) => {
+      const [room, memberships] = await Promise.all([
+        adminClient
+          .from("watch_party_rooms")
+          .select("host_user_id,is_active")
+          .eq("party_id", roomName)
+          .maybeSingle(),
+        adminClient
+          .from("watch_party_room_memberships")
+          .select("user_id,role,stage_role,can_speak,is_muted,host_muted,self_muted,membership_state,joined_at,last_seen_at,updated_at")
+          .eq("party_id", roomName),
+      ]);
+      if (room.error || memberships.error) {
+        throw new Error("LiveKit publishing authority lookup failed");
+      }
+      if (!room.data) return null;
+      return {
+        hostUserId: room.data.host_user_id,
+        memberships: memberships.data,
+        roomActive: room.data.is_active,
+      };
+    },
     roomService,
   });
 };

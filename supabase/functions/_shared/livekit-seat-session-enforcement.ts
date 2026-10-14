@@ -1,10 +1,15 @@
 import { readLiveKitParticipantSessionGeneration } from "./livekit-session-generation.ts";
+import {
+  parseWatchPartyLiveKitAuthorityDecision,
+  type WatchPartyLiveKitAuthority,
+} from "./watch-party-livekit-authority.ts";
 
 type JsonObject = Record<string, unknown>;
 
 type LiveKitParticipantLike = {
   identity?: unknown;
   metadata?: unknown;
+  permission?: unknown;
   tracks?: unknown;
 };
 
@@ -46,15 +51,8 @@ type SeatSessionEnforcementInput = {
     participantIdentity: string,
     sessionGeneration: string,
   ): Promise<unknown>;
+  readPublishAuthorityEvidence(roomName: string): Promise<unknown>;
   roomService: LiveKitRoomServiceLike;
-};
-
-type ViewerAuthority = {
-  allowed: boolean;
-  expiresAt: string | null;
-  hostAuthority: boolean;
-  paidSeatRequired: boolean;
-  reason: string;
 };
 
 const UUID_PATTERN =
@@ -94,44 +92,118 @@ export const resolveRoomAuthorityScopeFromEvidence = (input: {
   return input.watchPartyRoomExists ? "watch_party" : "other";
 };
 
-const parseViewerAuthority = (value: unknown): ViewerAuthority | null => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const row = value as JsonObject;
+const isRecord = (value: unknown): value is JsonObject => (
+  !!value && typeof value === "object" && !Array.isArray(value)
+);
+
+const WATCH_PARTY_MEMBERSHIP_ACTIVE_WINDOW_MS = 45_000;
+const LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS = 4;
+const ACTIVE_MEMBERSHIP_STATES = new Set(["active", "reconnecting"]);
+
+const membershipIsFresh = (row: JsonObject, nowMillis: number) => {
+  const lastSeenMillis = Date.parse(toText(row.last_seen_at));
+  return ACTIVE_MEMBERSHIP_STATES.has(toText(row.membership_state).toLowerCase())
+    && Number.isFinite(lastSeenMillis)
+    && nowMillis - lastSeenMillis <= WATCH_PARTY_MEMBERSHIP_ACTIVE_WINDOW_MS;
+};
+
+const membershipHasSpeakerSeat = (row: JsonObject) => (
+  toText(row.role).toLowerCase() === "host"
+  || ["host", "speaker"].includes(toText(row.stage_role).toLowerCase())
+  || row.can_speak === true
+);
+
+const membershipSeatMillis = (row: JsonObject) => {
+  for (const value of [row.updated_at, row.joined_at, row.last_seen_at]) {
+    const millis = Date.parse(toText(value));
+    if (Number.isFinite(millis)) return millis;
+  }
+  return Number.MAX_SAFE_INTEGER;
+};
+
+export const resolveWatchPartyMembershipAuthority = (
+  evidence: unknown,
+  participantIdentity: string,
+  authority: WatchPartyLiveKitAuthority,
+  nowMillis = Date.now(),
+): boolean | null => {
+  if (!isRecord(evidence) || typeof evidence.hostUserId !== "string"
+    || !UUID_PATTERN.test(evidence.hostUserId) || typeof evidence.roomActive !== "boolean"
+    || !Array.isArray(evidence.memberships) || !evidence.memberships.every(isRecord)) return null;
+  if (!evidence.roomActive) return false;
+  if (authority.expiresAt !== null && !(Date.parse(authority.expiresAt) > nowMillis)) return false;
+  if (participantIdentity === evidence.hostUserId) return authority.hostAuthority;
+  const membership = evidence.memberships.find((row) => row.user_id === participantIdentity);
+  return !authority.hostAuthority && !!membership && membershipIsFresh(membership, nowMillis);
+};
+
+// Keep the same reserved-host, freshness, and deterministic seat ordering as
+// token issuance. A viewer grant alone cannot keep an old publisher connected.
+export const resolveWatchPartyPublishAuthority = (
+  evidence: unknown,
+  participantIdentity: string,
+  authority: WatchPartyLiveKitAuthority,
+  nowMillis = Date.now(),
+): boolean | null => {
   if (
-    typeof row.allowed !== "boolean" ||
-    typeof row.hostAuthority !== "boolean" ||
-    typeof row.paidSeatRequired !== "boolean" ||
-    typeof row.reason !== "string" ||
-    !row.reason.trim() ||
-    !(
-      row.expiresAt === null ||
-      row.expiresAt === undefined ||
-      (typeof row.expiresAt === "string" && row.expiresAt.trim())
-    )
+    !isRecord(evidence)
+    || typeof evidence.hostUserId !== "string"
+    || !UUID_PATTERN.test(evidence.hostUserId)
+    || typeof evidence.roomActive !== "boolean"
+    || !Array.isArray(evidence.memberships)
+    || !evidence.memberships.every(isRecord)
   ) return null;
-  const expiresAt = typeof row.expiresAt === "string"
-    ? row.expiresAt.trim()
-    : null;
+  if (!evidence.roomActive) return false;
+  // Membership reads can outlast a short-lived viewer proof. Recheck its
+  // deadline before retaining provider publish authority.
+  if (authority.expiresAt !== null) {
+    const expiresAtMillis = Date.parse(authority.expiresAt);
+    if (!Number.isFinite(expiresAtMillis) || expiresAtMillis <= nowMillis) return false;
+  }
+
+  const hostUserId = evidence.hostUserId;
+  const memberships = evidence.memberships as JsonObject[];
+  const membership = memberships.find((row) => row.user_id === participantIdentity);
+  if (participantIdentity === hostUserId) {
+    // Match token issuance: the exact authoritative host can publish before a
+    // membership heartbeat, and its local self-mute does not revoke that grant.
+    return authority.hostAuthority;
+  }
   if (
-    row.allowed &&
-    row.paidSeatRequired &&
-    (
-      expiresAt === null ||
-      !Number.isFinite(Date.parse(expiresAt)) ||
-      Date.parse(expiresAt) <= Date.now()
-    )
-  ) return null;
-  return {
-    allowed: row.allowed,
-    expiresAt,
-    hostAuthority: row.hostAuthority,
-    paidSeatRequired: row.paidSeatRequired,
-    reason: row.reason.trim(),
-  };
+    authority.hostAuthority
+    || (authority.paidSeatRequired && !authority.speakerEligible)
+    || !membership
+    || !membershipIsFresh(membership, nowMillis)
+    || !membershipHasSpeakerSeat(membership)
+    || membership.is_muted !== false
+    || membership.host_muted !== false
+    || membership.self_muted !== false
+  ) return false;
+
+  const speakerMemberships = memberships.filter((row) => (
+    UUID_PATTERN.test(toText(row.user_id))
+    && row.user_id !== hostUserId
+    && membershipIsFresh(row, nowMillis)
+    && membershipHasSpeakerSeat(row)
+  )).sort((a, b) => (
+    membershipSeatMillis(a) - membershipSeatMillis(b)
+    || toText(a.user_id).localeCompare(toText(b.user_id))
+  ));
+  const speakerSeatIds = new Set([hostUserId]);
+  for (const row of speakerMemberships) {
+    if (speakerSeatIds.size >= LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS) break;
+    speakerSeatIds.add(toText(row.user_id));
+  }
+  return speakerSeatIds.has(participantIdentity);
 };
 
 const participantIsPublishing = (participant: LiveKitParticipantLike) => (
   Array.isArray(participant.tracks) && participant.tracks.length > 0
+);
+
+const participantHasPublishAuthority = (participant: LiveKitParticipantLike) => (
+  participantIsPublishing(participant)
+  || (isRecord(participant.permission) && participant.permission.canPublish === true)
 );
 
 const safeAudit = async (
@@ -170,6 +242,12 @@ export const countLiveKitStateWithPaidSeatEnforcement = async (
     }
 
     const participants = await input.roomService.listParticipants(roomName);
+    // One consistent membership read per room/pass, including listener removal.
+    // A rejected read stays rejected for this pass; the next monitor retries.
+    let roomEvidence: Promise<unknown> | undefined;
+    const readRoomEvidence = () => roomEvidence ??= Promise.resolve().then(
+      () => input.readPublishAuthorityEvidence(roomName),
+    );
     for (const participant of participants) {
       const participantIdentity = toText(participant.identity);
       let removed = false;
@@ -194,11 +272,21 @@ export const countLiveKitStateWithPaidSeatEnforcement = async (
                 participantIdentity,
                 sessionGeneration,
               );
-              const authority = parseViewerAuthority(rawAuthority);
+              const authority = parseWatchPartyLiveKitAuthorityDecision(rawAuthority);
               if (!authority) {
                 enforcementCause = "authority_malformed";
               } else if (!authority.allowed) {
                 enforcementCause = "authority_denied";
+              } else {
+                const evidence = await readRoomEvidence();
+                const canRemain = resolveWatchPartyMembershipAuthority(evidence, participantIdentity, authority);
+                if (canRemain === null) enforcementCause = "authority_malformed";
+                else if (!canRemain) enforcementCause = "authority_denied";
+                else if (participantHasPublishAuthority(participant)) {
+                  const canPublish = resolveWatchPartyPublishAuthority(evidence, participantIdentity, authority);
+                  if (canPublish === null) enforcementCause = "authority_malformed";
+                  else if (!canPublish) enforcementCause = "authority_denied";
+                }
               }
             } catch {
               enforcementCause = "authority_lookup_failed";

@@ -1087,6 +1087,7 @@ async function resolveEffectiveParticipantRole(
         canPublish: false,
         membership: currentMembership,
         reason: "speaker_not_approved_or_over_cap",
+        watchPartyAuthority: authority,
       };
     }
 

@@ -642,6 +642,18 @@ const liveStageFallbackHandler = sliceBetween(
   "const resolveLiveKitStageEntryRole = useCallback",
   "Live Stage LiveKit fallback handler boundary",
 );
+const liveStageRecoveryHandler = sliceBetween(
+  liveStage,
+  "const scheduleLiveKitRecovery = useCallback(",
+  "const onLiveKitStageFallback = useCallback(",
+  "Live Stage terminal recovery boundary",
+);
+const liveStageAuthorityRefresh = sliceBetween(
+  liveStage,
+  "const desiredCanPublish = desiredLiveKitAuthority.canPublish;",
+  "const onReturnToLiveRoom = useCallback(",
+  "Live Stage authority refresh boundary",
+);
 const liveWatchPartyCreateHandler = sliceBetween(
   watchPartyIndex,
   "const onCreateRoom = async () => {",
@@ -875,9 +887,11 @@ assertIncludes(
 );
 assertIncludes(
   liveStage,
-  "forceLocalHeroFallback={false}",
-  "Live Stage self-hero must not route viewer fallback through LiveKit syncing state",
+  "forceLocalHeroFallback={heroParticipantIsCurrentUser}",
+  "Live Stage local hero must never borrow another participant's track",
 );
+assertIncludes(liveStage, "participantId={heroParticipantId}", "Live Stage hero must receive its exact visible identity");
+assertIncludes(liveStage, "trackRef.participant.identity === participantId", "Live Stage hero must bind the remote track to that identity");
 assertIncludes(
   liveStage,
   "testID=\"live-stage-seat-request-sheet\"",
@@ -1547,9 +1561,11 @@ assertIncludes(
 assertBefore(
   playerWatchPartySeatPersistence,
   "if (!nextMembership)",
-  "await broadcastPartySeatState(participantId, options);",
+  "await broadcastPartySeatState(participantId, {",
   "Player Watch-Party seat broadcasts must wait until membership authority is persisted.",
 );
+assertIncludes(playerWatchPartySeatPersistence, "isMuted: nextMembership.isMuted", "Player seat broadcasts must preserve durable combined mute authority");
+assertIncludes(playerWatchPartySeatPersistence, 'return providerEnforced ? true : "provider_pending";', "Player must distinguish provider enforcement failure from a completed seat update");
 assertBefore(
   playerWatchPartyHostSeatApproval,
   "const seatPersisted = await persistPartySeatState(participant.id, {",
@@ -2100,15 +2116,19 @@ assertIncludes(
   "Live Stage must log viewer-role proof blockers instead of treating viewer fallback as media proof",
 );
 assertIncludes(
-  liveStageFallbackHandler,
+  liveStageAuthorityRefresh,
   "setLiveKitRenderableJoinContract(liveKitStageSurfaceContract);",
-  "Live Stage fallback must preserve a valid renderable contract during transient room fallback",
+  "Live Stage token refresh must preserve a valid renderable contract during a transient token miss",
 );
 assertIncludes(
-  liveStageFallbackHandler,
+  liveStageAuthorityRefresh,
   "setLiveKitJoinUnavailable(null);",
-  "Live Stage fallback must not let transient fallback replace a renderable surface with unavailable copy",
+  "Live Stage token refresh must not replace a renderable surface with unavailable copy",
 );
+assertIncludes(liveStageFallbackHandler, 'scheduleLiveKitRecovery("The live connection was interrupted. Reconnecting…", true);', "Terminal SDK failure must retire the failed contract and schedule recovery");
+assertIncludes(liveStageRecoveryHandler, "setLiveKitJoinContract(null);", "Terminal recovery must clear the active token");
+assertIncludes(liveStageRecoveryHandler, "setLiveKitRenderableJoinContract(null);", "Terminal recovery must clear the failed renderable token");
+assertIncludes(liveStageRecoveryHandler, "setLiveKitRefreshVersion((value) => value + 1);", "Terminal recovery must schedule a real fresh-token attempt");
 assertIncludes(
   liveStage,
   "const liveKitStageSurfaceContract = canUseLiveStageRenderableContract(",

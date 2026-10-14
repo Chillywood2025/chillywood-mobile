@@ -318,9 +318,45 @@ assert.ok(livekitClient.includes('action: "mark-room-live"'), "the connected hos
 assert.ok(livekitClient.includes("attempt < 3") && livekitClient.includes("providerNotReady")
   && livekitClient.includes("sameAccountSessionAuthority") && livekitClient.includes("options.signal.aborted"),
   "publication retries must remain bounded and fenced to the current session and request lifetime");
-assert.ok(liveStage.includes("onConnectedAuthoritative={discoveryPublication.onConnected}")
+assert.ok(liveStage.includes("onConnectedAuthoritative={onLiveKitStageConnected}")
   && liveStage.includes("useLiveStageDiscoveryPublication") && liveStage.includes("live-stage-discovery-status"),
   "Live discovery must begin only at the provider-connected host boundary");
+const liveStageAst = ts.createSourceFile("live-stage.tsx", liveStage, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const connectedDeclarations = new Map();
+function collectConnectedDeclarations(node) {
+  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)
+    && ["onDiscoveryConnected", "onLiveKitStageConnected"].includes(node.name.text)) {
+    assert.ok(!connectedDeclarations.has(node.name.text), `duplicate connected callback: ${node.name.text}`);
+    connectedDeclarations.set(node.name.text, node);
+  }
+  ts.forEachChild(node, collectConnectedDeclarations);
+}
+collectConnectedDeclarations(liveStageAst);
+assert.equal(connectedDeclarations.get("onDiscoveryConnected")?.initializer?.getText(liveStageAst),
+  "discoveryPublication.onConnected", "the recovery wrapper must retain the canonical discovery callback");
+const connectedInitializer = connectedDeclarations.get("onLiveKitStageConnected")?.initializer;
+assert.ok(connectedInitializer && ts.isCallExpression(connectedInitializer)
+  && connectedInitializer.expression.getText(liveStageAst) === "useCallback",
+  "the authoritative connection must use the actual recovery callback");
+const connectedSource = [...connectedDeclarations.values()]
+  .map((declaration) => `const ${declaration.getText(liveStageAst)};`).join("\n");
+const connectedExports = {};
+const recoveryCount = { current: 3 };
+const connectedEvents = [];
+new Function("exports", "useCallback", "discoveryPublication", "liveKitRecoveryCountRef", "setLiveKitRecoveryError",
+  "liveKitPendingRecoveryRef", "liveKitRecoveryTimeoutRef", "clearTimeout",
+  ts.transpileModule(`${connectedSource}\nexport { onLiveKitStageConnected };`, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText)(connectedExports, (callback) => callback, {
+  onConnected() {
+    assert.equal(recoveryCount.current, 0, "an authoritative connection must reset recovery before publication");
+    connectedEvents.push("publish");
+  },
+}, recoveryCount, (message) => connectedEvents.push(["recovery-error", message]), { current: null }, { current: null }, () => {});
+assert.deepEqual(connectedEvents, [], "rendering the recovery callback must not publish discovery");
+connectedExports.onLiveKitStageConnected();
+assert.deepEqual(connectedEvents, [["recovery-error", ""], "publish"],
+  "one authoritative connection must clear recovery state and publish discovery exactly once");
 assert.ok(livekitEdge.includes('action === "mark-room-live"') && livekitEdge.includes('surface !== "live-stage"'),
   "the LiveKit edge boundary must bind publication to Live Stage");
 assert.ok(livekitEdge.includes("fetchExistingLiveKitAssignmentEndpoint")
