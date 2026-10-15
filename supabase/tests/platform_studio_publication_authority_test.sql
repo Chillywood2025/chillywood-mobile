@@ -42,11 +42,29 @@ select is((select public.process_revenuecat_premium_event_atomic(
   from public.monetization_products p where p.provider='revenuecat_google_play' and p.environment='sandbox'
     and p.product_type='premium_subscription' and p.status='sandbox' order by p.created_at,p.id limit 1),
   'processed','publisher receives finite Premium through actual sandbox authority');
+-- Exercise real, nonnull private Profile media without bypassing the existing
+-- storage-provenance guard. The URLs must reference owned stored objects.
+insert into storage.objects(bucket_id,name,owner,owner_id,metadata)
+  select 'profile-media',pg_temp.studio_user(n)::text || '/' || surface || '/studio.png',
+    pg_temp.studio_user(n),pg_temp.studio_user(n)::text,'{"mimetype":"image/png","size":1024}'::jsonb
+  from generate_series(1,6) n cross join unnest(array['avatar','background']) surface;
+select throws_ok($$insert into public.user_profiles(user_id,username,avatar_url)
+  values(pg_temp.studio_user(1)::text,'studioinvalidmedia','https://example.invalid/private-avatar')$$,
+  '42501','profile_avatar_storage_provenance_invalid','external Profile media remains rejected during trusted fixture setup');
 insert into public.user_profiles(user_id,username,display_name,tagline,profile_access_visibility,platform_access_visibility,
   follower_surface_enabled,subscriber_surface_enabled,avatar_url,profile_background_url,default_watch_party_join_policy)
   select pg_temp.studio_user(n)::text, 'studiofixture' || n, 'Platform ' || n, 'Platform tagline',
-    'private','public',true,true,'https://example.invalid/private-avatar','https://example.invalid/private-background','invite_only'
+    'private','public',true,true,
+    public.profile_media_public_url(pg_temp.studio_user(n)::text,pg_temp.studio_user(n)::text || '/avatar/studio.png'),
+    public.profile_media_public_url(pg_temp.studio_user(n)::text,pg_temp.studio_user(n)::text || '/background/studio.png'),
+    'invite_only'
   from generate_series(1,6) n;
+select is((select count(*)::integer from public.user_profiles
+  where user_id in (select pg_temp.studio_user(n)::text from generate_series(1,6) n)
+    and avatar_url is not null and profile_background_url is not null
+    and public.profile_media_storage_object_valid(user_id,public.media_scan_object_key_from_public_url('profile-media',avatar_url))
+    and public.profile_media_storage_object_valid(user_id,public.media_scan_object_key_from_public_url('profile-media',profile_background_url))),
+  6,'private Profile media fixtures have real canonical storage provenance');
 insert into public.channel_followers(channel_user_id,follower_user_id)
   values(pg_temp.studio_user(1)::text,pg_temp.studio_user(2)::text),
     (pg_temp.studio_user(1)::text,pg_temp.studio_user(3)::text);
@@ -261,6 +279,9 @@ select is((select count(*)::integer from public.platform_brand_asset_cleanup_can
   where asset_id=pg_temp.studio_asset(1)),0,'cleanup protects asset referenced only by published snapshot');
 reset role;
 
+-- RESET ROLE leaves the prior request claims intact. Admin fixture updates
+-- must not impersonate an unrelated viewer when media provenance is checked.
+select pg_temp.studio_login(null);
 update public.user_profiles set platform_access_visibility='private' where user_id=pg_temp.studio_user(1)::text;
 select pg_temp.studio_login(4);
 set local role authenticated;
@@ -268,11 +289,15 @@ select is(public.read_public_channel_follower_count(pg_temp.studio_user(1)::text
 select is((select count(*)::integer from public.read_public_platform_identity(pg_temp.studio_user(1)::text)),0,'private Platform hides identity');
 select is((select count(*)::integer from public.read_public_platform_brand_profile(pg_temp.studio_user(1)::text)),0,'private Platform hides published Brand');
 reset role;
+select pg_temp.studio_login(null);
 update public.user_profiles set platform_access_visibility='public',follower_surface_enabled=false where user_id=pg_temp.studio_user(1)::text;
+select pg_temp.studio_login(4);
 set local role authenticated;
 select is(public.read_public_channel_follower_count(pg_temp.studio_user(1)::text),null::bigint,'disabled follower surface hides aggregate');
 reset role;
+select pg_temp.studio_login(null);
 update public.user_profiles set follower_surface_enabled=true where user_id=pg_temp.studio_user(1)::text;
+select pg_temp.studio_login(4);
 insert into public.channel_audience_blocks(channel_user_id,blocked_user_id,blocked_by_user_id)
   values(pg_temp.studio_user(1)::text,pg_temp.studio_user(4)::text,pg_temp.studio_user(1)::text);
 set local role authenticated;

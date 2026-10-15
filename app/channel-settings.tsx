@@ -1547,6 +1547,7 @@ export function ChannelStudioScreen() {
     });
   };
   const recordStudioSection = useCallback((key: string) => {
+    if (key === "tab-monetization") return;
     const root = studioContentRootRef.current;
     const section = studioSectionRefs.current[key];
     if (!root || !section || pendingStudioFocusRef.current !== key) return;
