@@ -2,6 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
@@ -164,7 +165,33 @@ assertIncludes(channelSettings, "money-section-${id}", "Money Center section foc
 assertNotIncludes(channelSettings, "monetizationStackOffsetRef.current + sectionOffset", "Money Center must not depend on absolute section offsets");
 assertNotIncludes(channelSettings, "startingScrollY + 920", "Money Center must not depend on forward scroll guesses");
 assertNotIncludes(channelSettings, "id === \"ways_to_earn\" ? 3600 : 2600", "Money Center must not depend on hardcoded Ways to Earn offsets");
-assertNotIncludes(channelSettings, "studioScrollRef.current?.scrollTo", "Money Center focus must not require imperative scrollTo");
+// Studio's non-money tabs use measured viewport focus. Money Center continues
+// to reveal sections and inline managers declaratively, without scroll retries.
+// Permit the one measured helper only when its first statement excludes Money
+// Center, and reject imperative scrolling everywhere else in this component.
+const studioAst = ts.createSourceFile("channel-settings.tsx", channelSettings, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+let measuredStudioFocus;
+const imperativeScrollCalls = [];
+const inspectStudioFocus = (node) => {
+  if (ts.isVariableDeclaration(node) && node.name.getText(studioAst) === "recordStudioSection") measuredStudioFocus = node;
+  if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+    && ["scrollTo", "scrollToOffset", "scrollToIndex", "scrollToEnd"].includes(node.expression.name.text)) imperativeScrollCalls.push(node);
+  ts.forEachChild(node, inspectStudioFocus);
+};
+inspectStudioFocus(studioAst);
+const measuredCallback = measuredStudioFocus?.initializer;
+const measuredBody = measuredCallback && ts.isCallExpression(measuredCallback)
+  && measuredCallback.expression.getText(studioAst) === "useCallback"
+  ? measuredCallback.arguments[0]?.body : null;
+const firstFocusStatement = measuredBody?.statements?.[0]?.getText(studioAst).replace(/\s+/gu, "");
+if (firstFocusStatement !== 'if(key==="tab-monetization")return;') {
+  fail("measured Studio focus must exclude Money Center before measuring or scrolling");
+}
+for (const call of imperativeScrollCalls) {
+  if (!measuredBody || call.pos < measuredBody.pos || call.end > measuredBody.end) {
+    fail("Money Center focus must remain declarative; imperative scroll is allowed only in the non-money measured Studio helper");
+  }
+}
 assertNotIncludes(channelSettings, "focusActiveMoneyManagerPanel", "Money Center manager focus must not use timed scroll retries");
 assertNotIncludes(channelSettings, "money-center-creator-setup-button", "Money Center duplicate creator setup action removed");
 assertNotIncludes(channelSettings, "money-center-cashout-readiness-button", "Money Center duplicate cashout action removed");

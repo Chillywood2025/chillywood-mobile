@@ -380,7 +380,7 @@ const toUpsertPayload = (ownerUserId: string, videoId: string, patch: ClipStudio
   updated_at: new Date().toISOString(),
 });
 
-export async function readClipStudioEdit(videoId: string): Promise<ClipStudioEdit | null> {
+export async function readClipStudioEdit(videoId: string, options?: { throwOnUnavailable?: boolean }): Promise<ClipStudioEdit | null> {
   const normalizedVideoId = toText(videoId);
   if (!normalizedVideoId) return null;
 
@@ -391,7 +391,11 @@ export async function readClipStudioEdit(videoId: string): Promise<ClipStudioEdi
     .maybeSingle()
     .returns<ClipStudioEditRow | null>();
 
-  if (error || !data) return null;
+  if (error) {
+    if (options?.throwOnUnavailable) throw new Error("Clip settings could not be loaded. Please try again before saving.");
+    return null;
+  }
+  if (!data) return null;
   return parseClipEdit(data);
 }
 

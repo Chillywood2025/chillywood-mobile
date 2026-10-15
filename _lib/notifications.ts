@@ -906,7 +906,7 @@ const buildReminderEnrollment = (
   };
 };
 
-async function readEventReminderRowsForEvents(eventIds: string[]): Promise<EventReminderRow[]> {
+async function readEventReminderRowsForEvents(eventIds: string[], options?: { throwOnUnavailable?: boolean }): Promise<EventReminderRow[]> {
   const normalizedEventIds = Array.from(new Set(eventIds.map((value) => normalizeText(value)).filter(Boolean)));
   if (!normalizedEventIds.length) return [];
 
@@ -916,7 +916,10 @@ async function readEventReminderRowsForEvents(eventIds: string[]): Promise<Event
     .in("event_id", normalizedEventIds)
     .returns<EventReminderRow[]>();
 
-  if (error || !data) return [];
+  if (error || !data) {
+    if (options?.throwOnUnavailable) throw new Error("Event reminders could not be loaded. Please try again.");
+    return [];
+  }
   return data
     .map((row) => parseEventReminderRow(row))
     .filter(isDefined);
@@ -1497,11 +1500,12 @@ export async function setEventReminderEnrollment(
 
 export async function readCreatorEventReminderSummaries(
   hostUserId: string,
+  options?: { throwOnUnavailable?: boolean },
 ): Promise<CreatorEventReminderSummary[]> {
-  const events = await readCreatorEventSummaries(hostUserId);
+  const events = await readCreatorEventSummaries(hostUserId, options);
   if (!events.length) return [];
 
-  const reminderRows = await readEventReminderRowsForEvents(events.map((event) => event.id));
+  const reminderRows = await readEventReminderRowsForEvents(events.map((event) => event.id), options);
 
   return events.map((event) => {
     const matchingRows = reminderRows.filter((row) => normalizeText(row.event_id) === event.id);

@@ -493,6 +493,7 @@ export async function updateCreatorEvent(
 
 export async function readCreatorEventSummaries(
   hostUserId: string,
+  options?: { throwOnUnavailable?: boolean },
 ): Promise<CreatorEventSummary[]> {
   const normalizedHostUserId = String(hostUserId ?? "").trim();
   if (!normalizedHostUserId) return [];
@@ -504,7 +505,10 @@ export async function readCreatorEventSummaries(
     .order("starts_at", { ascending: true, nullsFirst: false })
     .returns<CreatorEventRow[]>();
 
-  if (error || !data) return [];
+  if (error || !data) {
+    if (options?.throwOnUnavailable) throw new Error("Creator events could not be loaded. Please try again.");
+    return [];
+  }
   return data
     .map((row) => parseCreatorEventRow(row))
     .filter(isDefined)
@@ -513,6 +517,7 @@ export async function readCreatorEventSummaries(
 
 export async function readPublicEventSummaries(
   hostUserId: string,
+  options?: { throwOnUnavailable?: boolean },
 ): Promise<CreatorEventSummary[]> {
   const normalizedHostUserId = String(hostUserId ?? "").trim();
   if (!normalizedHostUserId) return [];
@@ -526,7 +531,10 @@ export async function readPublicEventSummaries(
     .order("starts_at", { ascending: true, nullsFirst: false })
     .returns<CreatorEventRow[]>();
 
-  if (error || !data) return [];
+  if (error || !data) {
+    if (options?.throwOnUnavailable) throw new Error("Platform events could not be loaded. Please try again.");
+    return [];
+  }
   return data
     .map((row) => parseCreatorEventRow(row))
     .filter(isDefined)

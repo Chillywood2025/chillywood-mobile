@@ -573,6 +573,21 @@ export async function readUserProfileByUserId(userId: string): Promise<UserProfi
   return profile;
 }
 
+/** Platform identity follows Platform access, independently of personal Profile privacy. */
+export async function readPublicPlatformIdentity(userId: string): Promise<UserProfile | null> {
+  const binding = captureUserDataAccountBinding();
+  const normalizedUserId = toIdString(userId);
+  if (!normalizedUserId) return null;
+  const rpc = (supabase.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => PublicChannelProfileRpc)("read_public_platform_identity", { profile_user_id: normalizedUserId });
+  const { data, error } = await rpc.maybeSingle();
+  assertUserDataAccountBindingIsCurrent(binding);
+  if (error) throw new Error("Platform identity is unavailable. Please try again.");
+  return data ? parseRemoteUserProfile(data) : null;
+}
+
 async function syncUserProfileToRemote(profile: UserProfile, binding: UserDataAccountBinding): Promise<boolean> {
   assertUserDataAccountBindingIsCurrent(binding);
   const userId = getBoundUserId(binding);
@@ -1369,6 +1384,23 @@ export async function saveUserProfile(profile: UserProfile, expectedUserId?: str
   if (remoteSynced) {
     await refreshSignedInIdentitySnapshots(normalized, binding);
   }
+}
+
+/** User-initiated Studio saves require server acknowledgement before marking the draft saved. */
+export async function saveUserProfileRemote(profile: UserProfile, expectedUserId: string): Promise<void> {
+  const binding = captureUserDataAccountBinding();
+  const userId = getBoundUserId(binding);
+  if (!expectedUserId || userId !== expectedUserId) {
+    throw new Error("Account changed before the profile could be saved.");
+  }
+  const normalized = normalizeUserProfile(profile);
+  const remoteSynced = await syncUserProfileToRemote(normalized, binding);
+  assertUserDataAccountBindingIsCurrent(binding);
+  if (!remoteSynced) {
+    throw new Error("Platform details could not be saved. Your changes are still ready to retry.");
+  }
+  await writeAccountValue(USER_PROFILE_KEY, binding, normalized);
+  await refreshSignedInIdentitySnapshots(normalized, binding);
 }
 
 // ── Last Party Session (for auto-rejoin) ──────────────────────────────────────

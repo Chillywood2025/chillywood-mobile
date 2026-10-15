@@ -29,6 +29,7 @@ const reviewQueueMigration = read("supabase/migrations/202605240004_platform_bra
 const reviewContextMigration = read("supabase/migrations/202605240007_platform_brand_review_rpc_trigger_context.sql");
 const ownerPublishReviewRepairMigration = read("supabase/migrations/20260603033000_platform_brand_owner_publish_review_repair.sql");
 const ownerPublishAssetsMigration = read("supabase/migrations/20260615142151_platform_brand_owner_publish_assets_rpc.sql");
+const publicationMigration = read("supabase/migrations/20261015073423_platform_studio_publication_and_audience_authority.sql");
 const cleanupMigration = [
   read("supabase/migrations/202605240005_platform_brand_asset_cleanup_candidates.sql"),
   read("supabase/migrations/202605240006_platform_brand_cleanup_service_role_guard.sql"),
@@ -89,13 +90,24 @@ assertIncludes(ownerPublishAssetsMigration, `asset."moderation_status" in ('clea
 assertIncludes(ownerPublishAssetsMigration, `asset."scan_status" in ('clean', 'manual_review')`, "owner publish selected assets scan-safe publish gate");
 assertIncludes(ownerPublishAssetsMigration, `'fake_approval', false`, "owner publish selected assets no fake approval audit marker");
 assertIncludes(ownerPublishAssetsMigration, `'self_review', true`, "owner publish selected assets self-review audit marker");
-assertIncludes(platformBranding, `Approved by the creator during Brand Studio publish.`, "creator publish approves selected owned assets");
-assertIncludes(platformBranding, `publish_platform_brand_profile_assets`, "client publish selected assets RPC");
-assertIncludes(platformBranding, `selectedReviewAssetIds`, "creator publish filters selected self-review assets");
+assertIncludes(platformBranding, `"publish_platform_brand_profile",`, "client atomic publication RPC");
+assertIncludes(platformBranding, `{ p_profile: payload },\n    normalizedOwnerId,`, "atomic publication initiating owner binding");
+assertIncludes(platformBranding, `delete payload.published_at`, "client cannot forge publication timestamp");
+assertNotIncludes(platformBranding, `published_at: patch.publishedAt`, "draft payloads cannot mutate server publication metadata");
+assertIncludes(publicationMigration, `create table public.platform_brand_publications`, "separate published snapshot");
+assertIncludes(publicationMigration, `alter table public.platform_brand_publications force row level security`, "published snapshot FORCE RLS");
+assertIncludes(publicationMigration, `public.publish_platform_brand_profile_assets(v_asset_ids`, "atomic publish retains owned asset review workflow");
+assertIncludes(publicationMigration, `brand_publish_asset_not_ready`, "all selected assets must be safe before publish");
+assertIncludes(publicationMigration, `whole_app_exact_current_session_authority_internal()`, "publication exact-session authority");
+assertIncludes(publicationMigration, `has_active_premium_creator_tool_access(auth.uid()::text)`, "publication preserves canonical Premium gate");
+assertIncludes(publicationMigration, `platform_studio_current_creator_tool_access_internal()`, "publication rechecks current creator-tool authority");
+assertIncludes(publicationMigration, `entitlement.expires_at > clock_timestamp()`, "queued publication cannot retain expired Premium authority");
+assertIncludes(publicationMigration, `public.platform_brand_publication_asset_safe_internal`, "visitor-neutral public media safety predicate");
+assertIncludes(publicationMigration, `from public."platform_brand_publications"`, "cleanup preserves published snapshot references");
 assertNotIncludes(platformBranding, `reviewPlatformBrandAsset(\n      assetId,\n      "approve",\n      "Approved by the creator during Brand Studio publish.",\n    ).catch`, "Brand Studio selected publish must not swallow self-review failures");
 assertIncludes(platformBranding, `resolveBrandPublishReadbackStatus`, "Brand Studio publish public readback helper");
 assertIncludes(platformBranding, `publicReadbackMissingCount`, "Brand Studio public readback mismatch classification");
-assertIncludes(platformBranding, `return savePlatformBrandProfileDraft(normalizedOwnerId, {\n    ...profile,\n    publishedAt,`, "Brand Studio publish marks profile published after asset repair");
+assertNotIncludes(platformBranding, `return savePlatformBrandProfileDraft(normalizedOwnerId, {\n    ...profile,\n    publishedAt,`, "publication must not use a non-atomic timestamp update");
 assertNotIncludes(platformBranding, `...assetIds,\n    ...((waitingAssetRows`, "Brand Studio publish self-review must not include unfiltered selected assets");
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('content_moderation')`, "review queue content moderation access");
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('reports_review')`, "review queue reports access");
@@ -163,7 +175,7 @@ assertNotMatches(
 );
 assertIncludes(publicChannel, `brandDraftPreviewMode`, "public Platform owner draft preview mode");
 assertIncludes(publicChannel, `showDraftBranding = isOwner && brandDraftPreviewMode`, "draft preview owner guard");
-assertIncludes(publicChannel, `readPlatformBrandStudio(routeUserId)`, "owner draft preview Brand Studio reader");
+assertIncludes(publicChannel, `readPlatformBrandStudio(routeUserId, { throwOnUnavailable: true })`, "owner draft preview reports unavailable reads");
 assertIncludes(platformBranding, `preparePlatformBrandUploadUri`, "Android content URI staging");
 assertIncludes(platformBranding, `FileSystem.uploadAsync`, "Brand Studio robust Android upload");
 assertIncludes(platformBranding, `assertPlatformBrandUploadReadable`, "Brand Studio upload read-back verification");

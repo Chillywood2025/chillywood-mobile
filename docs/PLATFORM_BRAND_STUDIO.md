@@ -1,8 +1,34 @@
 # Platform Brand Studio
 
-Updated: 2026-06-14
+Updated: 2026-10-15
+
+## October 15, 2026 Source Repair (deployment pending)
+
+This section supersedes the historical publish implementation described below.
+The forward-only migration `20261015073423_platform_studio_publication_and_audience_authority.sql`
+must be separately reviewed and deployed before the new client publication RPC is available.
+Deployment is blocked until a verified rollout plan prevents old clients from entering Brand publication after this migration. Shipping the migration and new client together is not enough: installed clients may remain old. The old multi-call publish sequence cannot replace the new public snapshot, and its error classifier can falsely claim success even after a rejected write. No fixed-client enforcement or installed-device staging proof is established by these source tests. Reverting only the client restores this incompatibility; use a forward repair rather than reopening draft-to-public writes.
+
+- `platform_brand_profiles` is the editable owner draft; `platform_brand_publications` is a separate server-owned snapshot. Save Draft cannot change the visitor presentation. New draft payloads omit publication metadata. Direct authenticated attempts to change `published_at` are rejected by the server; an unchanged existing timestamp remains accepted for older draft saves. This metadata guard fails obsolete publish writes closed, but does not repair their old UI notices or establish client compatibility.
+- Publish Changes sends one complete, initiating-account-bound presentation to `publish_platform_brand_profile(jsonb)`. The transaction validates the current session, owner, Premium authority, references and every selected asset before replacing the published snapshot. If any selected media is not ready, the entire operation rolls back; the previous public presentation stays intact. There is no partial publication fallback.
+- Public readback applies current, viewer-neutral clean-scan/moderation/storage checks to the snapshot on every read. Owner draft access never makes an unsafe asset public. Cleanup excludes references in both draft and published snapshots.
+- Name, tagline and Platform defaults remain intentionally shared Profile settings and save immediately, after an acknowledged remote write. Profile photo/background remain separate. A failed remote save stays retryable; it cannot advance the saved snapshot.
+- Existing City Night, Studio Red, Clean Dark, Spotlight and Classic theme presets, accent color and blur now affect the public Platform and owner draft preview. Unsupported media controls remain subject to their existing UI availability.
+- Public Platform identity follows Platform visibility independently of Profile privacy, using a minimal identity projection. The follower aggregate returns a count only and does not open follower roster access.
+- Pending follow requests are reviewed through one owner/authorized-role transaction. General self-follow restrictions, subscriber purchase authority, protected accounts and cancellation remain enforced.
+
+Source regression commands:
+
+- `node --test tests/platform-studio-helper-regression.test.mjs tests/platform-studio-sql-bridge.test.mjs tests/platform-public-mounted.test.mjs`
+- `node scripts/guard-platform-brand-studio-policy.mjs`
+- Full database environment: `supabase test db supabase/tests/platform_studio_publication_authority_test.sql`
+- Native, fully migrated local database: `node scripts/test-platform-studio-authority-concurrency.mjs` (disposable clone; rejects remote targets)
+
+The SQL bridge runs the actual production functions and migration in an isolated PGlite fixture, including current role/session/visibility/RLS functions and old-behavior controls. Infrastructure tables and the Premium input are controlled fixtures; this is not full migration-chain, live Supabase, provider, installed-device or multi-connection concurrency proof. The pgTAP file remains required in the full database environment before deployment.
 
 ## June 14, 2026 Production Closeout Audit
+
+Historical release record. Its partial-publication sequence and scan eligibility description are superseded by the current source repair above and subsequent safety migrations.
 
 Brand Studio remains inside Platform Studio and continues to customize the creator's public Platform visuals, not Profile Appearance. Profile photo/background stay separate from Platform hero/background/avatar/logo.
 
