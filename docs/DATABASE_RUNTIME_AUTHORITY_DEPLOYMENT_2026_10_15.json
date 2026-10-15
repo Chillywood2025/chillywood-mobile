@@ -1,0 +1,20 @@
+{
+  "version": "20261015220128",
+  "name": "runtime_authority_forward_repair",
+  "sourceFilename": "20261015220128_runtime_authority_forward_repair.sql",
+  "originalSourceVersion": "20261015150707",
+  "sourceCommit": "8959f058f2f2d652d9ea5dd283f2d0b29d5fd184",
+  "sourceSha256": "ca0cc25dc6feae53cb6c865cfd9c9c775ddab6b2af075f57b5c1f64ccc143b8f",
+  "payloadSha256": "b09d4921a3efff3e1bb3eb7d26fba30c069ee060d20513a8a510b22f9461a0c3",
+  "insertAfterFirstBegin": "\nSET LOCAL lock_timeout = '5s';\nSET LOCAL statement_timeout = '120s';",
+  "readbackAt": "2026-10-15T22:02:21Z",
+  "historyCount": 426,
+  "priorHistoryCount": 425,
+  "priorHistoryFingerprint": "472236859500665abbda9c6b99935e44",
+  "priorHistoryPreserved": true,
+  "repairedFunctionsMatching": 15,
+  "unchangedFunctions": 1090,
+  "studioApplied": false,
+  "productionBehavioralTests": false,
+  "physicalQualification": false
+}

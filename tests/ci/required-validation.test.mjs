@@ -65,7 +65,7 @@ test("runtime authority repair requires native lock-queue proof in the database 
     assert.throws(() => assertWired(altered), assert.AssertionError,
       `${weakened} must invalidate native authority wiring`);
   }
-  for (const file of ["supabase/migrations/20261015150707_runtime_authority_forward_repair.sql",
+  for (const file of ["supabase/migrations/20261015220128_runtime_authority_forward_repair.sql",
     "scripts/test-database-runtime-authority-concurrency.mjs", "tests/fixtures/database-runtime-production-20261015.sql"]) {
     const plan = computeValidationPlan([file]);
     assert.equal(plan.categories.database, true, `${file} must select native Database validation`);
@@ -74,6 +74,7 @@ test("runtime authority repair requires native lock-queue proof in the database 
   for (const file of ["tests/database-runtime-mutation-repair.test.mjs", "tests/database-runtime-catalog-repair.test.mjs",
     "tests/database-runtime-paid-authority-repair.test.mjs", "tests/database-runtime-real-paid-repair.test.mjs",
     "tests/database-runtime-party-composition-repair.test.mjs",
+    "tests/database-runtime-version-alignment.test.mjs", "docs/DATABASE_RUNTIME_AUTHORITY_DEPLOYMENT_2026_10_15.json",
     "tests/database-runtime-permissions-repair.test.mjs", "tests/helpers/database-runtime-authority-fixture.mjs",
     "tests/helpers/database-runtime-paid-fixture.mjs", "tests/fixtures/database-managed-schema-20261015.json",
     "tests/fixtures/database-runtime-premium-composition-before.sql"]) {

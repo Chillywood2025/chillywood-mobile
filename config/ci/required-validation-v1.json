@@ -42,6 +42,7 @@
       "scripts/test-webrtc-native-sender-contract.mjs",
       "docs/chat/PR532_AUTOMATED_COVERAGE.json",
       "docs/chat/PR532_AUDITED_CASES.tsv",
+      "docs/DATABASE_RUNTIME_AUTHORITY_DEPLOYMENT_2026_10_15.json",
       "tests/**"
     ],
     "sensitive": [

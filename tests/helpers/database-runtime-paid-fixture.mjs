@@ -7,7 +7,7 @@ import {PGlite} from '@electric-sql/pglite';
 // It supplements, and cannot replace, the separate real full-schema suite.
 const root=new URL('../../',import.meta.url);
 export async function createControlledPaidDatabase(){
-const candidateSource=fs.readFileSync(new URL('supabase/migrations/20261015150707_runtime_authority_forward_repair.sql',root),'utf8');
+const candidateSource=fs.readFileSync(new URL('supabase/migrations/20261015220128_runtime_authority_forward_repair.sql',root),'utf8');
 const liveSource=fs.readFileSync(new URL('tests/fixtures/database-runtime-production-20261015.sql',root),'utf8');
 const candidateHash=crypto.createHash('sha256').update(candidateSource).digest('hex');
 function definition(file,name,newName=name){
