@@ -525,6 +525,7 @@ test('mounted actual native hero renders approved self track once, exact remote 
   const stranger = { participant: { identity: 'other' }, source: 'camera', publication: { track: {} } };
   const Hero = evaluate(`export ${heroSource}`, { React, useMemo: React.useMemo, useEffect: React.useEffect,
     useHybridLiveKitConnectionState: () => 'connected', useHybridLiveKitLocalParticipant: () => ({ localParticipant, cameraTrack: camera.publication }),
+    useLocalCameraMirror: () => true,
     useHybridLiveKitTracks: () => [stranger, host, camera], isHybridLiveKitTrackReference: value => !!value?.publication?.track,
     Track: { Source: { ScreenShare: 'screen', Camera: 'camera' } }, debugLog: noop,
     View: ({ children }) => React.createElement(React.Fragment, null, children), Text: ({ children }) => { texts.push(children); return null; },

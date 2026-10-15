@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
-import { ConnectionState, RoomEvent, Track, type LocalVideoTrack, type Room } from "livekit-client";
+import { ConnectionState, RoomEvent, Track, type LocalTrackPublication, type LocalVideoTrack, type Room } from "livekit-client";
 import { useEffect, useRef } from "react";
 import { AppState, Platform } from "react-native";
 
@@ -37,6 +37,7 @@ export function useLiveCameraEffects({
     let stopped = false;
     let appState = AppState.currentState;
     let switchOwner: LocalVideoTrack | null = null;
+    let switchPublication: LocalTrackPublication | undefined;
     let switchBinding: OwnedLiveCameraSwitch | null = null;
     const authorized = () => {
       const publication = room.localParticipant.getTrackPublication(Track.Source.Camera);
@@ -64,12 +65,15 @@ export function useLiveCameraEffects({
       const publication = room.localParticipant.getTrackPublication(Track.Source.Camera);
       const allowedNow = authorized();
       const owner = publication?.track as LocalVideoTrack | undefined;
-      if ((owner ?? null) !== switchOwner) {
+      if ((owner ?? null) !== switchOwner || publication !== switchPublication) {
         switchBinding?.cancel();
         switchOwner = owner ?? null;
+        switchPublication = publication;
+        const retained = () => room.localParticipant.getTrackPublication(Track.Source.Camera) === publication
+          && publication?.track === owner;
         switchBinding = owner && typeof owner.replaceTrack === "function" ? new OwnedLiveCameraSwitch(owner,
           (facingMode, captureSettings) => createCommunicationMediaStream({ audio: false, video: true, facingMode, captureSettings }),
-          () => authorized() && room.localParticipant.getTrackPublication(Track.Source.Camera)?.track === owner) : null;
+          () => authorized() && retained(), retained) : null;
       }
       const track = publication?.track?.mediaStreamTrack as CameraEffectsTrack | undefined;
       controller.bind(track ?? null, allowedNow, switchBinding);

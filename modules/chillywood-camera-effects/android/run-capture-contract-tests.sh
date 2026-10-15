@@ -37,3 +37,4 @@ if "$JAVA" -cp "$OUT/original-classes:$OUT:$CAMERA_EFFECTS_TEST_CLASSPATH" \
 fi
 grep -q 'queued empty chain must preserve capturer ownership' "$OUT/former-source.log"
 echo "Former SDK source fails the exact delayed-attach queue counterexample as expected"
+bash "$HERE/run-fallback-tests.sh"

@@ -18,7 +18,7 @@
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
-    "androidDigest": "fd1769d1ef5a129be29cf17c13e3dfe3a466775fd6894af7d373d3571e5ab714",
+    "androidDigest": "831741a268f6535e817ae5af6deb3b5c1ad17a0e4274923fa9dfcf5baa93119e",
     "iosDigest": "2379ee957676700297617c60ad6b4cdb76566df3d20e8f768c763f919277f594"
   },
   "policy": {

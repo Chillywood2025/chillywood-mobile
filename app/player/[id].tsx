@@ -1,4 +1,5 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { useIsFocused } from "@react-navigation/native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useEventListener } from "expo";
 import { Asset } from "expo-asset";
@@ -78,6 +79,7 @@ import {
     type LiveKitTokenReady,
 } from "../../_lib/livekit/token-contract";
 import { emitLiveKitRenderTelemetryEvent } from "../../_lib/livekit/livekitRenderTelemetry";
+import { LIVE_COMMENT_FALLBACK_REFRESH_MS } from "../../_lib/performancePolicy";
 import { debugLog } from "../../_lib/logger";
 import { getVideoSource } from "../../_lib/mediaSources";
 import { readCreatorVideoForPlayer, readCreatorVideosByIds, type CreatorVideo } from "../../_lib/creatorVideos";
@@ -428,6 +430,20 @@ const buildStandaloneTitleDeepLink = (titleId: string) => (
 );
 
 const formatPlaybackRateLabel = (rate: number) => `${Number(rate.toFixed(2)).toString()}x`;
+
+type PartyOverlayMessage = {
+  id: string;
+  author: string;
+  body: string;
+  persisted?: boolean;
+  createdAt?: string;
+};
+
+type PartyCommentSendFlight = {
+  partyId: string;
+  ownerKey: string;
+  realtimeChanges: Map<string, PartyOverlayMessage | null>;
+};
 
 type PartyParticipant = {
   id: string;
@@ -1058,8 +1074,10 @@ const clampZoomTranslation = (translation: ZoomTranslation, scale: number, layou
 };
 
 export default function PlayerScreen() {
-  const { isSignedIn, user: sessionUser } = useSession();
+  const { isSignedIn, user: sessionUser, authority: sessionAuthority } = useSession();
+  const isFocused = useIsFocused();
   const sessionUserId = String(sessionUser?.id ?? "").trim();
+  const sessionGeneration = sessionAuthority?.sessionGeneration ?? "";
   const { width: viewportWidth } = useWindowDimensions();
   const {
     id,
@@ -1211,6 +1229,7 @@ export default function PlayerScreen() {
   const [watchPartyLiveKitJoinContract, setWatchPartyLiveKitJoinContract] = useState<LiveKitTokenReady | null>(null);
   const [watchPartyLiveKitRenderableContract, setWatchPartyLiveKitRenderableContract] = useState<LiveKitTokenReady | null>(null);
   const [watchPartyLiveKitAuthorityRetrySerial, setWatchPartyLiveKitAuthorityRetrySerial] = useState(0);
+  const [watchPartyLiveKitRetryStatus, setWatchPartyLiveKitRetryStatus] = useState<{ message: string; canRetry: boolean } | null>(null);
   const [watchPartyLiveKitFallbackRosterAllowed, setWatchPartyLiveKitFallbackRosterAllowed] = useState(false);
   const [watchPartyLiveKitHardFallbackReason, setWatchPartyLiveKitHardFallbackReason] = useState<"expired_contract" | "room_error" | "room_mismatch" | null>(null);
   // Live-stage controls stay persistent; shared Player chrome should auto-hide like standalone Player chrome.
@@ -1248,12 +1267,17 @@ export default function PlayerScreen() {
   const [partyCommentsOpen, setPartyCommentsOpen] = useState(false);
   const [partyCommentDraft, setPartyCommentDraft] = useState("");
   const [partyCommentSending, setPartyCommentSending] = useState(false);
-  const partyCommentSendRef = useRef<object | null>(null);
+  const partyCommentSendRef = useRef<PartyCommentSendFlight | null>(null);
+  const partyCommentOwnerKey = `${partyId}:${sessionUserId}:${sessionGeneration}`;
+  const partyCommentOwnerKeyRef = useRef(partyCommentOwnerKey);
+  partyCommentOwnerKeyRef.current = partyCommentOwnerKey;
+  const partyCommentRevisionRef = useRef(0);
+  const refreshPartyCommentsRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     partyCommentSendRef.current = null;
     setPartyCommentSending(false);
     return () => { partyCommentSendRef.current = null; };
-  }, [inWatchParty, partyId, sessionUser?.id]);
+  }, [inWatchParty, partyId, sessionUser?.id, sessionGeneration]);
   const [watchPartyCameraRequestError, setWatchPartyCameraRequestError] = useState("");
   const [watchPartyLocalMediaIntent, setWatchPartyLocalMediaIntent] = useState(false);
   const [watchPartyLocalMediaPermissionBusy, setWatchPartyLocalMediaPermissionBusy] = useState(false);
@@ -1268,7 +1292,7 @@ export default function PlayerScreen() {
   const [liveCameraControls, setLiveCameraControls] = useState<LiveCameraEffectsControls | null>(null);
   const [liveFaceFilter, setLiveFaceFilter] = useState<LiveFaceFilterId>("none");
   const [recentReactionEmojis, setRecentReactionEmojis] = useState<string[]>([]);
-  const [partyOverlayMessages, setPartyOverlayMessages] = useState<{ id: string; author: string; body: string }[]>([]);
+  const [partyOverlayMessages, setPartyOverlayMessages] = useState<PartyOverlayMessage[]>([]);
   const [partyReactionBursts, setPartyReactionBursts] = useState<{ id: string; emoji: string }[]>([]);
   const [partyLocalReactions, setPartyLocalReactions] = useState<{ id: string; emoji: string; rightOffset: number }[]>([]);
   const [partyParticipantReactions, setPartyParticipantReactions] = useState<
@@ -1289,6 +1313,7 @@ export default function PlayerScreen() {
   const previousParticipantsRef = useRef<{ id: string; name: string; isSpeaking: boolean }[]>([]);
   const suppressNextSpeakingEventRef = useRef<Record<string, "start" | "stop" | undefined>>({});
   const watchPartyLiveKitContractRequestKeyRef = useRef("");
+  const watchPartyLiveKitOperationOwnerRef = useRef("");
   const watchPartyLiveKitAuthorityRetryKeyRef = useRef("");
   const watchPartyLiveKitAuthorityRetryAttemptsRef = useRef<Record<string, number>>({});
   const watchPartyLiveKitAutoStartedLocalMediaKeyRef = useRef("");
@@ -1347,6 +1372,7 @@ export default function PlayerScreen() {
   }, [partyUserId, watchPartyLiveKitIdentity]);
 
   useEffect(() => {
+    watchPartyLiveKitMountedRef.current = true;
     return () => {
       watchPartyLiveKitMountedRef.current = false;
       if (watchPartyLiveKitAuthorityRetryTimeoutRef.current) {
@@ -1453,15 +1479,87 @@ export default function PlayerScreen() {
     return String(nextTitle.id ?? "").trim();
   }, [nextTitle]);
 
-  const pushPartyOverlayMessage = useCallback((msg: { id: string; author: string; body: string }) => {
+  const pushPartyOverlayMessage = useCallback((msg: PartyOverlayMessage) => {
     const safeBody = String(msg.body ?? "").trim();
     if (!safeBody) return;
 
     setPartyOverlayMessages((prev) => {
       if (prev.some((entry) => entry.id === msg.id)) return prev;
-      return [...prev.slice(-11), { ...msg, body: safeBody }];
+      return [...prev.slice(-11), { ...msg, body: safeBody, createdAt: msg.createdAt ?? new Date().toISOString() }];
     });
   }, []);
+
+  useEffect(() => {
+    setPartyOverlayMessages([]);
+    if (!inWatchParty || !partyId || !watchPartyEntryAllowed || !sessionUserId) return;
+    const normalizedPartyId = partyId.trim().toUpperCase();
+    const commentOwner = partyCommentOwnerKeyRef.current;
+    let active = true;
+    let loading = false;
+    let reloadRequested = false;
+    const mapComment = (row: { id?: unknown; user_id?: unknown; username?: unknown; text?: unknown; created_at?: unknown }): PartyOverlayMessage | null => {
+      const id = String(row.id ?? "").trim();
+      const userId = String(row.user_id ?? "").trim();
+      const body = String(row.text ?? "").trim();
+      if (!id || !userId || !body || decodePartySeatRequestMessage(body)) return null;
+      return { id, body, persisted: true, createdAt: String(row.created_at ?? ""),
+        author: userId === sessionUserId ? "You" : String(row.username ?? "").trim()
+          || partyMembershipMapRef.current[userId]?.displayName || "Guest" };
+    };
+    const loadComments = async () => {
+      if (!active || partyCommentOwnerKeyRef.current !== commentOwner) return;
+      if (loading) { reloadRequested = true; return; }
+      loading = true;
+      const revision = partyCommentRevisionRef.current;
+      try {
+        const { data, error } = await supabase.from("watch_party_room_messages")
+          .select("id,user_id,username,text,created_at").eq("party_id", normalizedPartyId)
+          .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(30);
+        // A failed read is not an empty history. A newer realtime change or
+        // durable local send also outranks the snapshot that preceded it.
+        if (!active || partyCommentOwnerKeyRef.current !== commentOwner || error || !data || revision !== partyCommentRevisionRef.current) return;
+        const comments = [...data].reverse().map(mapComment).filter((value): value is PartyOverlayMessage => !!value);
+        setPartyOverlayMessages((previous) => [...previous.filter((message) => !message.persisted), ...comments]
+          .sort((a, b) => String(a.createdAt ?? "").localeCompare(String(b.createdAt ?? "")) || a.id.localeCompare(b.id))
+          .slice(-12));
+      } catch {
+        // Keep the last confirmed comments until the next owned refresh.
+      } finally {
+        loading = false;
+        if (active && reloadRequested) { reloadRequested = false; void loadComments(); }
+      }
+    };
+    const refresh = () => { void loadComments(); };
+    refreshPartyCommentsRef.current = refresh;
+    const channel = supabase.channel(`player-comments-${normalizedPartyId}-${sessionUserId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "watch_party_room_messages", filter: `party_id=eq.${normalizedPartyId}` }, (payload) => {
+        if (!active || partyCommentOwnerKeyRef.current !== commentOwner) return;
+        const row = (payload.eventType === "DELETE" ? payload.old : payload.new) as { id?: unknown; user_id?: unknown; username?: unknown; text?: unknown; created_at?: unknown };
+        const id = String(row.id ?? "").trim();
+        if (!id) return;
+        const comment = payload.eventType === "DELETE" ? null : mapComment(row);
+        partyCommentRevisionRef.current += 1;
+        const pendingSend = partyCommentSendRef.current;
+        if (pendingSend?.partyId === partyId && pendingSend.ownerKey === partyCommentOwnerKeyRef.current) {
+          pendingSend.realtimeChanges.set(id, comment);
+        }
+        setPartyOverlayMessages((previous) => {
+          if (!comment) return previous.filter((message) => message.id !== id);
+          const exists = previous.some((message) => message.id === id);
+          return exists ? previous.map((message) => message.id === id ? comment : message)
+            : [...previous.slice(-11), comment];
+        });
+      })
+      .subscribe((status) => { if (status === "SUBSCRIBED") refresh(); });
+    refresh();
+    const timer = setInterval(refresh, LIVE_COMMENT_FALLBACK_REFRESH_MS);
+    return () => {
+      active = false;
+      if (refreshPartyCommentsRef.current === refresh) refreshPartyCommentsRef.current = null;
+      clearInterval(timer);
+      void supabase.removeChannel(channel);
+    };
+  }, [inWatchParty, partyId, sessionUserId, sessionGeneration, watchPartyEntryAllowed]);
 
   useEffect(() => {
     const listener = zoomScale.addListener(({ value }) => {
@@ -2037,13 +2135,13 @@ export default function PlayerScreen() {
   }, [cleanId, expectsCreatorVideo, expectsSpectatorPlayback, inWatchParty, partyId, updatePartyMembershipMap, watchPartyEntryRetryToken]);
 
   const refreshPartyMembershipSnapshot = useCallback(async () => {
-    if (!partyId) return null;
+    if (!partyId || !watchPartyLiveKitMountedRef.current || partyCommentOwnerKeyRef.current !== partyCommentOwnerKey) return null;
     const snapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
-    if (!snapshot) return null;
+    if (!snapshot || !watchPartyLiveKitMountedRef.current || partyCommentOwnerKeyRef.current !== partyCommentOwnerKey) return null;
     partyRoomHostUserIdRef.current = String(snapshot.room.hostUserId ?? "").trim();
     updatePartyMembershipMap(snapshot.memberships);
     return snapshot;
-  }, [partyId, updatePartyMembershipMap]);
+  }, [partyId, partyCommentOwnerKey, updatePartyMembershipMap]);
 
   const getWatchPartyHostAuthority = useCallback((userIdOverride?: string | null) => {
     const currentUserId = String(
@@ -2688,15 +2786,6 @@ export default function PlayerScreen() {
 
       const history = await fetchPartyMessages(partyId, 30).catch(() => []);
       if (!active) return;
-      const chatHistory = history
-        .filter((m) => m.kind === "chat" && !decodePartySeatRequestMessage(m.body))
-        .slice(-8)
-        .map((m) => ({
-          id: m.id,
-          author: isCurrentIdentity(m.userId) ? "You" : String((m as any).authorLabel ?? "").trim() || "Guest",
-          body: String(m.body ?? ""),
-        }));
-      setPartyOverlayMessages(chatHistory);
       applyPersistedSeatRequestMessages(
         history.map((message) => ({ body: String(message.body ?? ""), createdAt: message.createdAt })),
         "history",
@@ -2715,6 +2804,7 @@ export default function PlayerScreen() {
       if (channelsToRemove.length > 0) {
         await Promise.all(channelsToRemove.map((existingChannel) => supabase.removeChannel(existingChannel).catch(() => null)));
       }
+      if (!active) return;
 
       const channel = supabase.channel(channelName, {
         config: { presence: { key: watchPartyLiveKitIdentityRef.current || trackedUserId } },
@@ -3082,18 +3172,10 @@ export default function PlayerScreen() {
       });
 
       channel.on("broadcast", { event: "message" }, ({ payload }: { payload: Record<string, unknown> }) => {
-        const kind = payload?.kind;
-        if (kind !== "chat") return;
-        const body = String(payload?.body ?? "").trim();
-        if (!body) return;
-        if (decodePartySeatRequestMessage(body)) return;
-        const authorLabel = String(payload?.authorLabel ?? "User");
-        const incomingUserId = String(payload?.userId ?? "").trim();
-        pushPartyOverlayMessage({
-          id: String(payload?.id ?? `party-msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
-          author: isCurrentIdentity(incomingUserId) ? "You" : authorLabel,
-          body,
-        });
+        if (!active || payload?.kind !== "chat") return;
+        // Broadcasts are wake-up hints. Re-reading persisted state prevents a
+        // delayed sender broadcast from reverting an edit or reviving a delete.
+        refreshPartyCommentsRef.current?.();
       });
 
       channel.subscribe(async (status) => {
@@ -3587,7 +3669,8 @@ export default function PlayerScreen() {
     const body = String(partyCommentDraft ?? "").trim();
     if (!body) return;
 
-    const flight = {};
+    const flight: PartyCommentSendFlight = { partyId, ownerKey: partyCommentOwnerKeyRef.current, realtimeChanges: new Map() };
+    const isCurrent = () => partyCommentSendRef.current === flight && partyCommentOwnerKeyRef.current === flight.ownerKey;
     partyCommentSendRef.current = flight;
     const authorLabel = String(partyDisplayNameRef.current ?? "").trim() || "Guest";
     setControlsVisible(true);
@@ -3596,14 +3679,20 @@ export default function PlayerScreen() {
 
     try {
       const commentUserId = String(partyUserId || (await getSafePartyUserId().catch(() => "")) || "").trim();
-      if (partyCommentSendRef.current !== flight) return;
+      if (!isCurrent()) return;
       const saved = await sendPartyMessageRecord(partyId, commentUserId, "chat", body, { username: authorLabel });
-      if (partyCommentSendRef.current !== flight) return;
+      if (!isCurrent()) return;
       if (!saved) {
         Alert.alert("Comment not sent", "Your comment could not be saved. Your draft is still here so you can try again.");
         return;
       }
-      pushPartyOverlayMessage({ id: saved.id, author: "You", body: saved.body });
+      partyCommentRevisionRef.current += 1;
+      const newerChange = flight.realtimeChanges.get(saved.id);
+      if (!flight.realtimeChanges.has(saved.id)) {
+        pushPartyOverlayMessage({ id: saved.id, author: "You", body: saved.body, createdAt: saved.createdAt, persisted: true });
+      } else if (newerChange) {
+        pushPartyOverlayMessage(newerChange);
+      }
       setPartyCommentDraft((current) => current.trim() === body ? "" : current);
       try {
         await partySocialChannelRef.current?.send({
@@ -3621,11 +3710,11 @@ export default function PlayerScreen() {
         // The durable message already exists; a realtime failure is not a failed send.
       }
     } catch {
-      if (partyCommentSendRef.current === flight) {
+      if (isCurrent()) {
         Alert.alert("Comment not sent", "Your comment could not be saved. Your draft is still here so you can try again.");
       }
     } finally {
-      if (partyCommentSendRef.current === flight) {
+      if (isCurrent()) {
         partyCommentSendRef.current = null;
         setPartyCommentSending(false);
       }
@@ -6597,6 +6686,33 @@ export default function PlayerScreen() {
     return `🎤 ${livePrimarySpeakers[0].name} +${livePrimarySpeakers.length - 1} speaking`;
   }, [livePrimarySpeakers]);
 
+  const watchPartyLiveKitOperationOwner = inWatchParty && watchPartyEntryAllowed && isSignedIn && !!sessionUserId && isFocused && playerMediaIsInteractive
+    ? `${partyId}:${sessionUserId}:${sessionGeneration}` : "";
+  watchPartyLiveKitOperationOwnerRef.current = watchPartyLiveKitOperationOwner;
+
+  useEffect(() => {
+    watchPartyLiveKitContractRequestKeyRef.current = "";
+    watchPartyLiveKitAuthorityRetryAttemptsRef.current = {};
+    setWatchPartyLiveKitRetryStatus(null);
+    setWatchPartyLiveKitJoinContract(null);
+    setWatchPartyLiveKitRenderableContract(null);
+    return () => {
+      if (watchPartyLiveKitAuthorityRetryTimeoutRef.current) clearTimeout(watchPartyLiveKitAuthorityRetryTimeoutRef.current);
+      watchPartyLiveKitAuthorityRetryTimeoutRef.current = null;
+      watchPartyLiveKitContractRequestKeyRef.current = "";
+    };
+  }, [partyId, sessionUserId, sessionGeneration]);
+
+  const retryWatchPartyLiveKit = useCallback(() => {
+    if (!watchPartyLiveKitOperationOwnerRef.current) return;
+    if (watchPartyLiveKitAuthorityRetryTimeoutRef.current) clearTimeout(watchPartyLiveKitAuthorityRetryTimeoutRef.current);
+    watchPartyLiveKitAuthorityRetryTimeoutRef.current = null;
+    watchPartyLiveKitContractRequestKeyRef.current = "";
+    watchPartyLiveKitAuthorityRetryAttemptsRef.current = {};
+    setWatchPartyLiveKitRetryStatus(null);
+    setWatchPartyLiveKitAuthorityRetrySerial((value) => value + 1);
+  }, []);
+
   useEffect(() => {
     if (!inWatchParty || !partyId || !watchPartyEntryAllowed || Platform.OS === "web") {
       setWatchPartyLiveKitJoinContract(null);
@@ -6606,6 +6722,7 @@ export default function PlayerScreen() {
       watchPartyLiveKitAuthorityRetryAttemptsRef.current = {};
       return;
     }
+    if (!watchPartyLiveKitOperationOwner) return;
 
     const liveKitParticipantIdentity = watchPartyLiveKitIdentity || trackedUserId;
     if (!liveKitParticipantIdentity || (!watchPartyLiveKitIdentity && liveKitParticipantIdentity === "anon")) return;
@@ -6641,6 +6758,7 @@ export default function PlayerScreen() {
       watchPartyLiveKitAuthorityRetryKeyRef.current = "";
       watchPartyLiveKitAuthorityRetryAttemptsRef.current = {};
       setWatchPartyLiveKitHardFallbackReason(null);
+      setWatchPartyLiveKitRetryStatus(null);
       return;
     }
 
@@ -6693,6 +6811,7 @@ export default function PlayerScreen() {
         watchPartyLiveKitAuthorityRetryKeyRef.current = "";
         watchPartyLiveKitAuthorityRetryAttemptsRef.current = {};
         setWatchPartyLiveKitHardFallbackReason(null);
+        setWatchPartyLiveKitRetryStatus(null);
         setWatchPartyLiveKitJoinContract(preparedContract);
         debugLog("livekit", "consumed watch-party-live join contract", {
           roomName: preparedContract.roomName,
@@ -6737,6 +6856,37 @@ export default function PlayerScreen() {
     watchPartyLiveKitContractRequestKeyRef.current = requestKey;
 
     let active = true;
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+    const requestOwner = watchPartyLiveKitOperationOwner;
+    const isCurrent = () => active && watchPartyLiveKitOperationOwnerRef.current === requestOwner;
+    const scheduleRetry = (refreshAuthority = false) => {
+      if (!isCurrent()) return;
+      const previousRetryCount = watchPartyLiveKitAuthorityRetryAttemptsRef.current[authorityRetryKey] ?? 0;
+      if (previousRetryCount >= WATCH_PARTY_LIVEKIT_AUTHORITY_RETRY_LIMIT) {
+        setWatchPartyLiveKitRetryStatus({ message: "Live media could not connect. Try again when your connection is ready.", canRetry: true });
+        return;
+      }
+      const nextRetryCount = previousRetryCount + 1;
+      watchPartyLiveKitAuthorityRetryAttemptsRef.current = {
+        ...watchPartyLiveKitAuthorityRetryAttemptsRef.current, [authorityRetryKey]: nextRetryCount,
+      };
+      setWatchPartyLiveKitRetryStatus({ message: "Live media was interrupted. Reconnecting…", canRetry: false });
+      retryTimeout = setTimeout(() => {
+        if (!isCurrent()) return;
+        if (watchPartyLiveKitAuthorityRetryTimeoutRef.current === retryTimeout) watchPartyLiveKitAuthorityRetryTimeoutRef.current = null;
+        retryTimeout = null;
+        const retry = () => {
+          if (!isCurrent()) return;
+          watchPartyLiveKitContractRequestKeyRef.current = "";
+          setWatchPartyLiveKitAuthorityRetrySerial((value) => value + 1);
+        };
+        // Preserve promotion readback, but never let a late snapshot restart
+        // credentials owned by a departed room, account, or foreground session.
+        if (refreshAuthority) void refreshPartyMembershipSnapshot().finally(retry);
+        else retry();
+      }, WATCH_PARTY_LIVEKIT_AUTHORITY_RETRY_BASE_DELAY_MILLIS + (nextRetryCount - 1) * 350);
+      watchPartyLiveKitAuthorityRetryTimeoutRef.current = retryTimeout;
+    };
     prepareLiveKitJoinBoundary({
       surface: "watch-party-live",
       roomName: partyId,
@@ -6748,9 +6898,12 @@ export default function PlayerScreen() {
         muted: currentWatchPartyParticipantMuted,
       },
     }).then((joinResult) => {
-      if (!active) return;
+      if (!isCurrent()) return;
       if (joinResult.status === "ready") {
-        const joinResultCanPublish = joinResult.requestedGrants.canPublish === true;
+        if (isLiveKitParticipantTokenExpired(joinResult.participantToken)) {
+          scheduleRetry();
+          return;
+        }
         const joinResultMatchesDesired = watchPartyLiveContractMatchesDesiredAuthority(
           joinResult,
           desiredWatchPartyLiveKitAuthority,
@@ -6768,6 +6921,7 @@ export default function PlayerScreen() {
 
         if (joinResultMatchesDesired) {
           setWatchPartyLiveKitHardFallbackReason(null);
+          setWatchPartyLiveKitRetryStatus(null);
           setWatchPartyLiveKitJoinContract(joinResult);
           watchPartyLiveKitContractRequestKeyRef.current = "";
           watchPartyLiveKitAuthorityRetryKeyRef.current = "";
@@ -6779,54 +6933,7 @@ export default function PlayerScreen() {
           setWatchPartyLiveKitRenderableContract(joinResult);
         }
         setWatchPartyLiveKitJoinContract(null);
-        if (desiredWatchPartyLiveKitCanPublish) {
-          const previousRetryCount = watchPartyLiveKitAuthorityRetryAttemptsRef.current[authorityRetryKey] ?? 0;
-          if (previousRetryCount < WATCH_PARTY_LIVEKIT_AUTHORITY_RETRY_LIMIT) {
-            const nextRetryCount = previousRetryCount + 1;
-            const retryDelayMillis = WATCH_PARTY_LIVEKIT_AUTHORITY_RETRY_BASE_DELAY_MILLIS + ((nextRetryCount - 1) * 350);
-            watchPartyLiveKitAuthorityRetryKeyRef.current = authorityRetryKey;
-            watchPartyLiveKitAuthorityRetryAttemptsRef.current = {
-              ...watchPartyLiveKitAuthorityRetryAttemptsRef.current,
-              [authorityRetryKey]: nextRetryCount,
-            };
-            if (watchPartyLiveKitAuthorityRetryTimeoutRef.current) {
-              clearTimeout(watchPartyLiveKitAuthorityRetryTimeoutRef.current);
-            }
-            debugLog("livekit", "watch-party-live publish contract still downgraded; refreshing snapshot before bounded retry", {
-              roomName: joinResult.roomName,
-              currentUserId: trackedUserId,
-              desiredParticipantRole: desiredWatchPartyLiveKitParticipantRole,
-              desiredCanPublish: desiredWatchPartyLiveKitCanPublish,
-              participantRole: joinResult.participantRole,
-              canPublish: joinResultCanPublish,
-              membershipAuthority: currentWatchPartyMembershipAuthoritySignature,
-              retryAttempt: nextRetryCount,
-              retryLimit: WATCH_PARTY_LIVEKIT_AUTHORITY_RETRY_LIMIT,
-              retryDelayMillis,
-            });
-            watchPartyLiveKitAuthorityRetryTimeoutRef.current = setTimeout(() => {
-              watchPartyLiveKitAuthorityRetryTimeoutRef.current = null;
-              if (!watchPartyLiveKitMountedRef.current) return;
-              refreshPartyMembershipSnapshot().finally(() => {
-                if (!watchPartyLiveKitMountedRef.current) return;
-                watchPartyLiveKitContractRequestKeyRef.current = "";
-                setWatchPartyLiveKitJoinContract(null);
-                setWatchPartyLiveKitAuthorityRetrySerial((value) => value + 1);
-              });
-            }, retryDelayMillis);
-          } else {
-            debugLog("livekit", "watch-party-live publish contract bounded retry exhausted", {
-              roomName: joinResult.roomName,
-              currentUserId: trackedUserId,
-              desiredParticipantRole: desiredWatchPartyLiveKitParticipantRole,
-              desiredCanPublish: desiredWatchPartyLiveKitCanPublish,
-              participantRole: joinResult.participantRole,
-              canPublish: joinResultCanPublish,
-              membershipAuthority: currentWatchPartyMembershipAuthoritySignature,
-              retryLimit: WATCH_PARTY_LIVEKIT_AUTHORITY_RETRY_LIMIT,
-            });
-          }
-        }
+        scheduleRetry(true);
         return;
       }
 
@@ -6837,12 +6944,25 @@ export default function PlayerScreen() {
         responseStatus: joinResult.responseStatus ?? null,
         responseError: joinResult.responseError ?? null,
       });
+      const accessDenied = joinResult.reason === "unauthenticated"
+        || [400, 401, 403, 404, 410].includes(joinResult.responseStatus ?? 0);
+      if (accessDenied || joinResult.reason === "not_configured") {
+        setWatchPartyLiveKitRenderableContract(null);
+        setWatchPartyLiveKitRetryStatus({ message: "Live media access is unavailable. Recheck access before retrying.", canRetry: true });
+      } else scheduleRetry();
     }).catch(() => {
-      if (active) setWatchPartyLiveKitJoinContract(null);
+      if (!isCurrent()) return;
+      setWatchPartyLiveKitJoinContract(null);
+      scheduleRetry();
     });
 
     return () => {
       active = false;
+      if (retryTimeout !== null) {
+        clearTimeout(retryTimeout);
+        if (watchPartyLiveKitAuthorityRetryTimeoutRef.current === retryTimeout) watchPartyLiveKitAuthorityRetryTimeoutRef.current = null;
+      }
+      if (watchPartyLiveKitContractRequestKeyRef.current === requestKey) watchPartyLiveKitContractRequestKeyRef.current = "";
     };
   // The request owns the listed semantic contract fields. Depending on the
   // whole response object can cancel it while the matching request-key guard
@@ -6866,6 +6986,7 @@ export default function PlayerScreen() {
     watchPartyLiveKitJoinContract?.requestedGrants.canPublish,
     watchPartyLiveKitJoinContract?.roomName,
     watchPartyLiveKitJoinContractExpired,
+    watchPartyLiveKitOperationOwner,
   ]);
 
   const onWatchPartyLiveKitFallback = useCallback((reason: "connection_timeout" | "disconnected" | "room_error") => {
@@ -8789,7 +8910,8 @@ export default function PlayerScreen() {
   };
 
   const renderWatchPartyBubbleGridSurface = (containerStyle?: object) => (
-    shouldRenderWatchPartyLiveKit && activeWatchPartyLiveKitJoinContract ? (
+    <>
+    {shouldRenderWatchPartyLiveKit && activeWatchPartyLiveKitJoinContract ? (
       <LiveKitStageMediaSurface
         joinContract={activeWatchPartyLiveKitJoinContract}
         onFallback={onWatchPartyLiveKitFallback}
@@ -8885,7 +9007,19 @@ export default function PlayerScreen() {
           </View>
         )}
       </View>
-    )
+    )}
+    {watchPartyLiveKitRetryStatus ? (
+      <View style={styles.watchPartySocialPlaceholder} testID="shared-player-livekit-retry-status">
+        <Text style={styles.watchPartySocialPlaceholderBody} accessibilityLiveRegion="polite">{watchPartyLiveKitRetryStatus.message}</Text>
+        {watchPartyLiveKitRetryStatus.canRetry ? (
+          <TouchableOpacity style={styles.watchPartyDockActionBtn} onPress={retryWatchPartyLiveKit}
+            accessibilityRole="button" accessibilityLabel="Retry live media connection" testID="shared-player-livekit-retry">
+            <Text style={styles.watchPartyDockActionText}>Retry connection</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    ) : null}
+    </>
   );
 
   const renderWatchPartySocialPanel = (hideForKeyboard = true) => (
@@ -9465,7 +9599,7 @@ export default function PlayerScreen() {
           <Text style={styles.watchPartyDockActionText}>Camera & Mic</Text>
         </TouchableOpacity>
       ) : null}
-      {(shouldRenderWatchPartyLiveKit && activeWatchPartyLiveKitJoinContract) || shouldRenderWatchPartyLiveKitStableShell
+      {(shouldRenderWatchPartyLiveKit && activeWatchPartyLiveKitJoinContract) || shouldRenderWatchPartyLiveKitStableShell || watchPartyLiveKitRetryStatus
         ? renderWatchPartyBubbleGridSurface(styles.sharedFullscreenLiveKitBubbleSurface)
         : null}
     </View>

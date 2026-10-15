@@ -222,7 +222,8 @@ assertIncludes(liveStage, "const participantIsLocal = participantId === localPar
 assertIncludes(liveStage, "canRenderParticipantSpecificLiveKitTrack", "Live Stage member tile must require exact participant identity for LiveKit video");
 assertIncludes(liveStage, "canRenderLocalParticipantLiveKitTrack", "Live Stage self tile must require exact local participant identity");
 assertIncludes(liveStage, "publishLocalCamera={isCurrentUser && publishLocalStageCamera}", "Live Stage self tile renders local video only while camera publishing is active");
-assertIncludes(liveStage, "mirror={participantIsLocal}", "Live Stage mirrors only the current device's local preview");
+assertIncludes(liveStage, "mirror={participantIsLocal && mirrorLocalCamera}", "Live Stage mirrors only the current device's front-facing local preview");
+assertIncludes(liveStage, "mirror={showLocalPrimary && mirrorLocalCamera}", "Live Stage hero mirrors only a front-facing local preview");
 assertIncludes(liveStage, "Your preview appears in Party Members while the host remains the hero.", "Live Stage viewer copy matches self-preview behavior");
 assertNotIncludes(liveStage, "matchingTrack ?? fallbackRemoteTrack", "Live Stage member tile must not borrow arbitrary remote tracks");
 assertIncludes(liveStage, "resolveActualVisualHeroParticipantId", "Live Stage must separate actual visual hero from active/focus participant");

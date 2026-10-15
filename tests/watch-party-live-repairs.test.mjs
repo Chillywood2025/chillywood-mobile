@@ -168,7 +168,8 @@ function commentHarness() {
   state.identity = async () => 'host';
   const scope = {
     inWatchParty: true, partyId: 'PARTY42', partyUserId: 'host', partyCommentDraft: state.draft,
-    partyCommentSendRef: { current: null }, partyDisplayNameRef: { current: 'Host' },
+    partyCommentSendRef: { current: null }, partyCommentRevisionRef: { current: 0 },
+    partyCommentOwnerKeyRef: { current: 'PARTY42:host:session' }, partyDisplayNameRef: { current: 'Host' },
     setControlsVisible: noop, resetAutoHideTimer: noop,
     setPartyCommentSending(value) { state.sending = value; },
     setPartyCommentDraft(value) { state.draft = typeof value === 'function' ? value(state.draft) : value; },
@@ -441,7 +442,7 @@ function fullscreenHarness() {
     markParticipantActive: noop, bumpRoomEnergy: noop, debugLog: noop,
     sharedFullscreenRightRailWidth: 130, shouldRenderSharedPlayerLocalMediaControl: true,
     shouldRenderSharedPlayerSelfMuteControl: false, shouldRenderWatchPartyLiveKit: false,
-    activeWatchPartyLiveKitJoinContract: null, shouldRenderWatchPartyLiveKitStableShell: false,
+    activeWatchPartyLiveKitJoinContract: null, shouldRenderWatchPartyLiveKitStableShell: false, watchPartyLiveKitRetryStatus: null,
     renderWatchPartyBubbleGridSurface: () => React.createElement('BubbleGrid'),
   };
   return { state, scope, host, speaker,

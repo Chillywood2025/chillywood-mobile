@@ -7,6 +7,7 @@ type Operation = {
   old: MediaStreamTrack;
   next: MediaStreamTrack | null;
   reservation: ReturnType<typeof reserveCommunicationCapture>;
+  cleanup?: Promise<void>;
 };
 
 /** One video-only replacement on the existing published LiveKit owner. */
@@ -16,7 +17,11 @@ export class OwnedLiveCameraSwitch implements CameraSwitchBinding {
 
   constructor(private readonly owner: LocalVideoTrack,
     private readonly capture: (facingMode: "user" | "environment", settings: MediaTrackSettings) => ReturnType<typeof createCommunicationMediaStream>,
-    private readonly isOwnerCurrent: () => boolean) {}
+    private readonly isOwnerCurrent: () => boolean,
+    // Capture authority can disappear temporarily during signal reconnect or
+    // backgrounding without replacing this publication. Cleanup must still
+    // reflect that its owned source was stopped, but never affect a successor.
+    private readonly isOwnerRetained: () => boolean = isOwnerCurrent) {}
 
   available() {
     // Primary simulcast encodings share one sender and are supported. Additional
@@ -38,7 +43,21 @@ export class OwnedLiveCameraSwitch implements CameraSwitchBinding {
   cancel() {
     // A not-yet-resolved native acquisition remains recorded; received() stops
     // it later even if the hook and room owner have already disappeared.
-    this.operation?.reservation.retire();
+    if (this.operation) void this.retire(this.operation);
+  }
+
+  private retire(op: Operation): Promise<void> {
+    op.reservation.retire();
+    // Start cleanup on cancellation, not after an indefinitely pending native
+    // capture. Do it once: a later completion must not re-mute a camera which
+    // the user has explicitly restarted after this interruption.
+    if (!op.cleanup) op.cleanup = (async () => {
+      if (!this.isOwnerRetained()
+        || (this.owner.mediaStreamTrack !== op.old && this.owner.mediaStreamTrack !== op.next)) return;
+      this.failure = "Camera switch interrupted. Turn the camera off and on to try again.";
+      await this.owner.mute().catch(() => undefined);
+    })();
+    return op.cleanup;
   }
 
   async switchCamera(facingMode: "user" | "environment", isCurrent: () => boolean): Promise<CameraEffectsTrack | null> {
@@ -83,13 +102,8 @@ export class OwnedLiveCameraSwitch implements CameraSwitchBinding {
       this.owner.emit(TrackEvent.Restarted, this.owner);
       return next as CameraEffectsTrack;
     } catch {
-      if (isCurrent()) this.failure = "Camera switch failed. Turn the camera off and on to try again.";
       if (!captureResolved) op.reservation.rejected();
-      op.reservation.retire();
-      // Do not mute an externally replaced camera or a different publication.
-      if (this.isOwnerCurrent() && (this.owner.mediaStreamTrack === old || this.owner.mediaStreamTrack === op.next)) {
-        await this.owner.mute().catch(() => undefined);
-      }
+      await this.retire(op);
       return null;
     } finally {
       if (this.operation === op) this.operation = null;

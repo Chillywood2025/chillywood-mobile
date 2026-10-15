@@ -21,6 +21,7 @@ const deferred = () => {
 // controlled. This is SDK contract evidence, not native capture/RTP proof.
 export function runtime({ platform = "android", cameraGranted = true } = {}) {
   const calls = { permissions: [], captures: [], enabled: [], replacements: [] };
+  const nativeSettings = new Map();
   let nextId = 0;
   let replace = async () => true;
   let capture = (constraints, success) => {
@@ -38,7 +39,10 @@ export function runtime({ platform = "android", cameraGranted = true } = {}) {
   const bridge = {
     getUserMedia(constraints, success, failure) {
       calls.captures.push(plain(constraints));
-      capture(constraints, success, failure);
+      capture(constraints, (streamId, tracks) => {
+        tracks.forEach(track => nativeSettings.set(track.id, track.settings));
+        success(streamId, tracks);
+      }, failure);
     },
     mediaStreamTrackSetEnabled(peer, id, enabled) { calls.enabled.push({ peer, id, enabled }); },
     async senderReplaceTrack(peer, id, track) {
@@ -46,6 +50,11 @@ export function runtime({ platform = "android", cameraGranted = true } = {}) {
       return replace(peer, id, track);
     },
     async senderSetParameters(_peer, _id, parameters) { return parameters; },
+    async mediaStreamTrackApplyConstraints(id, constraints) {
+      // Pinned native applyConstraints changes dimensions/FPS, not the lens.
+      const original = nativeSettings.get(id) ?? {};
+      return { ...original, width: constraints.width, height: constraints.height, frameRate: constraints.frameRate };
+    },
     async requestPermission(name) {
       calls.permissions.push(name);
       return name !== "camera" || cameraGranted;
@@ -108,7 +117,7 @@ export function runtime({ platform = "android", cameraGranted = true } = {}) {
     },
   }, { filename: "_lib/communication.ts" });
   return {
-    calls, api: app.exports, MediaStream: loadSdk("MediaStream").default,
+    calls, api: app.exports, MediaStream: loadSdk("MediaStream").default, mediaDevices: { getUserMedia },
     setCapture(next) { capture = next; },
     setReplace(next) { replace = next; },
     sender(track, id = "video-sender") {
