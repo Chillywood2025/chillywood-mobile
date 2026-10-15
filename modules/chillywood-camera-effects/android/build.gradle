@@ -1,0 +1,24 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.chillywoodcameraeffects'
+version = '1.0.0'
+
+android {
+  namespace 'expo.modules.chillywoodcameraeffects'
+  defaultConfig {
+    minSdkVersion 24
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // This is the name emitted by React Native autolinking for the pinned fork.
+  implementation project(':livekit_react-native-webrtc')
+  // Bundled models: no model downloads, cloud inference, or additional account.
+  implementation 'com.google.mlkit:face-detection:16.1.7'
+  implementation 'com.google.mlkit:segmentation-selfie:16.0.0-beta6'
+}

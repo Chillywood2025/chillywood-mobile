@@ -34,6 +34,7 @@ import {
 import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 import { emitLiveKitRenderTelemetryEvent } from "../../_lib/livekit/livekitRenderTelemetry";
 import { ProfileMediaImage as Image } from "../ui/ProfileMediaImage";
+import { useLiveCameraEffects, type LiveCameraEffectsProps } from "../../hooks/use-live-camera-effects";
 
 export type LiveKitStageParticipantRosterEntry = {
   identity: string;
@@ -46,7 +47,7 @@ export type LiveKitStageParticipantRosterEntry = {
   identityAliases?: string[];
 };
 
-type LiveKitStageMediaSurfaceProps = {
+type LiveKitStageMediaSurfaceProps = LiveCameraEffectsProps & {
   joinContract: LiveKitTokenReady;
   onFallback: (reason: "connection_timeout" | "disconnected" | "room_error") => void;
   active?: boolean;
@@ -789,6 +790,9 @@ export function LiveKitStageMediaSurface({
   surfaceLabel = "Live Stage",
   publishLocalAudio = joinContract.participantRole !== "viewer",
   publishLocalVideo,
+  cameraEffectId,
+  cameraEffectIntensity,
+  onCameraEffectsControls,
 }: LiveKitStageMediaSurfaceProps) {
   const fallbackTriggeredRef = useRef(false);
   const didConnectOnceRef = useRef(false);
@@ -826,6 +830,11 @@ export function LiveKitStageMediaSurface({
     );
     return nextRoom;
   }, [layout, roomKey, surfaceLabel]);
+
+  useLiveCameraEffects({ room,
+    allowed: effectivePublishLocalCamera && joinContract.participantRole !== "viewer" && joinContract.requestedGrants.canPublish,
+    cameraEffectId, cameraEffectIntensity, onCameraEffectsControls,
+  });
 
   const clearDisconnectFallbackTimeout = useCallback(() => {
     if (!disconnectFallbackTimeoutRef.current) return;

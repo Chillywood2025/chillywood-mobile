@@ -158,6 +158,8 @@ import { LiveLowerDock } from "../../components/room/live-lower-dock";
 import { pushRecentReaction } from "../../components/room/reaction-picker";
 import { useChannelFollowAction } from "../../hooks/use-channel-follow-action";
 import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
+import { LiveCameraControls } from "../../components/live/live-camera-controls";
+import type { LiveCameraEffectsControls } from "../../hooks/use-live-camera-effects";
 import {
   LiveKitStageMediaSurface,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Player LiveKit source contract; the current render path intentionally does not read it.
@@ -1261,6 +1263,9 @@ export default function PlayerScreen() {
   const [watchPartyMenuOpen, setWatchPartyMenuOpen] = useState(false);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [liveFilterSheetOpen, setLiveFilterSheetOpen] = useState(false);
+  const [cameraEffectId, setCameraEffectId] = useState("off");
+  const [cameraEffectIntensity, setCameraEffectIntensity] = useState(0.5);
+  const [liveCameraControls, setLiveCameraControls] = useState<LiveCameraEffectsControls | null>(null);
   const [liveFaceFilter, setLiveFaceFilter] = useState<LiveFaceFilterId>("none");
   const [recentReactionEmojis, setRecentReactionEmojis] = useState<string[]>([]);
   const [partyOverlayMessages, setPartyOverlayMessages] = useState<{ id: string; author: string; body: string }[]>([]);
@@ -8801,6 +8806,9 @@ export default function PlayerScreen() {
         surfaceLabel="Watch-Party Live"
         publishLocalAudio={publishWatchPartyLiveKitAudio}
         publishLocalVideo={publishWatchPartyLiveKitVideo}
+        cameraEffectId={cameraEffectId}
+        cameraEffectIntensity={cameraEffectIntensity}
+        onCameraEffectsControls={setLiveCameraControls}
         containerStyle={containerStyle ?? styles.watchPartySocialMediaFrameInner}
       />
     ) : shouldRenderWatchPartyLiveKitStableShell ? (
@@ -9467,8 +9475,8 @@ export default function PlayerScreen() {
     <View style={[styles.liveFilterSheet, sheetStyle]}>
       <View style={styles.liveFilterSheetHeader}>
         <View style={styles.liveFilterSheetHeaderCopy}>
-          <Text style={styles.liveFilterSheetKicker}>CHI’LLYFECTS PREVIEW</Text>
-          <Text style={styles.liveFilterSheetTitle}>{activeLiveFaceFilter.label}</Text>
+          <Text style={styles.liveFilterSheetKicker}>CHI’LLYFECTS</Text>
+          <Text style={styles.liveFilterSheetTitle}>Live Camera</Text>
         </View>
         <TouchableOpacity
           style={styles.liveFilterSheetDismissBtn}
@@ -9478,8 +9486,11 @@ export default function PlayerScreen() {
           <Text style={styles.liveFilterSheetDismissText}>Done</Text>
         </TouchableOpacity>
       </View>
+      <ScrollView style={{ maxHeight: 340 }} contentContainerStyle={{ gap: 10 }} nestedScrollEnabled>
+      <LiveCameraControls controls={liveCameraControls} effectId={cameraEffectId}
+        intensity={cameraEffectIntensity} onSelect={setCameraEffectId} onIntensity={setCameraEffectIntensity} />
       <Text style={styles.liveFilterSheetBody}>
-        Chi’llyfects here are preview-only looks. Live camera effects are still being prepared.
+        The looks below are local preview tints only. They do not change outgoing live video.
       </Text>
       <Text style={styles.liveFilterSheetHelper}>{activeLiveFaceFilter.subtitle}</Text>
       <View style={styles.liveFilterOptionRow}>
@@ -9499,6 +9510,7 @@ export default function PlayerScreen() {
           );
         })}
       </View>
+      </ScrollView>
     </View>
   );
 

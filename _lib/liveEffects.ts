@@ -8,9 +8,9 @@ export type LiveEffectCategoryId =
   | "mirror_invert"
   | "novelty_face_card";
 
-export type LiveEffectStatus = "available" | "preview_only" | "coming_soon" | "disabled";
+export type LiveEffectStatus = "available" | "preview_only" | "coming_soon" | "disabled" | "native_required";
 
-export type LiveEffectPhase = "v1_foundation" | "later_native_processor";
+export type LiveEffectPhase = "v1_foundation" | "later_native_processor" | "internal_native";
 
 export type LiveEffectCategory = {
   id: LiveEffectCategoryId;
@@ -87,8 +87,43 @@ export const LIVE_EFFECT_ITEMS: LiveEffectItem[] = [
     category: "off",
     status: "available",
     phase: "v1_foundation",
-    description: "Natural camera with no Chi’llyfect. This is the only active v1 Chi’llyfect state.",
+    description: "Natural camera with no Chi’llyfect.",
     requiresNativeProcessor: false,
+  },
+  {
+    id: "studio-light",
+    label: "Studio Light",
+    category: "beauty_retouch",
+    status: "native_required",
+    phase: "internal_native",
+    description: "On-device face-following light that adapts to detected face brightness. Requires the new internal native build.",
+    requiresNativeProcessor: true,
+    intensity: { min: 0, max: 100, defaultValue: 50 },
+  },
+  {
+    id: "crimson-aura", label: "Crimson Aura", category: "glam_signature", status: "native_required", phase: "internal_native",
+    description: "A bold crimson glow around your silhouette, with your face kept clear. Requires the new internal native build.",
+    requiresNativeProcessor: true, intensity: { min: 0, max: 100, defaultValue: 50 },
+  },
+  {
+    id: "neon-edge", label: "Neon Edge", category: "glam_signature", status: "native_required", phase: "internal_native",
+    description: "Bright neon outlines follow your silhouette. Requires the new internal native build.",
+    requiresNativeProcessor: true, intensity: { min: 0, max: 100, defaultValue: 50 },
+  },
+  {
+    id: "spotlight", label: "Spotlight", category: "glam_signature", status: "native_required", phase: "internal_native",
+    description: "A slow-moving colored spotlight behind you against a darker background. Requires the new internal native build.",
+    requiresNativeProcessor: true, intensity: { min: 0, max: 100, defaultValue: 50 },
+  },
+  {
+    id: "chicago-skyline",
+    label: "Chicago Skyline",
+    category: "glam_signature",
+    status: "native_required",
+    phase: "internal_native",
+    description: "Person-separated Chicago skyline with layered 2.5D subject parallax. No hardware depth measurement. Requires the new internal native build.",
+    requiresNativeProcessor: true,
+    intensity: { min: 0, max: 100, defaultValue: 50 },
   },
   {
     id: "soft-studio-retouch",
@@ -174,6 +209,7 @@ export const getLiveEffectStatusLabel = (effect: LiveEffectItem) => {
   if (effect.id === LIVE_EFFECT_OFF_ID) return "Active";
   if (effect.status === "available") return "Available";
   if (effect.status === "preview_only") return "Preview only";
+  if (effect.status === "native_required") return "Internal native build required";
   if (effect.status === "disabled") return "Disabled";
   return "Status path";
 };
@@ -188,6 +224,7 @@ export const getLiveEffectStatusCopy = (effect: LiveEffectItem) => {
   if (effect.status === "preview_only") {
     return "Preview-only Chi’llyfects do not change the outgoing LiveKit camera track.";
   }
+  if (effect.status === "native_required") return effect.description;
   if (effect.status === "disabled") {
     return "This Chi’llyfect is disabled for this room or device.";
   }

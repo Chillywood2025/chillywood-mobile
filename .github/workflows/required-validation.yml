@@ -166,7 +166,7 @@ jobs:
     if: needs.plan.outputs.nativeRelease == 'true'
     needs: plan
     runs-on: macos-15
-    timeout-minutes: 15
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
@@ -179,6 +179,14 @@ jobs:
         run: node scripts/test-owned-android-audio-session.mjs
       - name: Execute actual Swift audio routing, observers, and JS call ownership
         run: node scripts/test-ios-native-call-audio.mjs
+      - name: Verify outgoing camera lifecycle and controls
+        run: |
+          node --test tests/live-camera-effects.test.mjs tests/live-camera-effects-mounted.test.mjs tests/live-camera-controls.test.mjs
+          bash modules/chillywood-camera-effects/android/run-math-tests.sh
+          cc -std=c11 -Wall -Wextra -Werror -pedantic modules/chillywood-camera-effects/ios/tests/camera_effect_math_test.c -lm -o "$RUNNER_TEMP/camera-effect-math-test"
+          "$RUNNER_TEMP/camera-effect-math-test"
+      - name: Compile actual Android and iOS camera modules without signing or provider credentials
+        run: JAVA_HOME="${JAVA_HOME_17_X64:-$JAVA_HOME}" node scripts/compile-native-camera-effects.mjs --android --ios
 
   native-release:
     name: Validation / Native and Release
