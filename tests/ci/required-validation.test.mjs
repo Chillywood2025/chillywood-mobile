@@ -73,8 +73,10 @@ test("runtime authority repair requires native lock-queue proof in the database 
   }
   for (const file of ["tests/database-runtime-mutation-repair.test.mjs", "tests/database-runtime-catalog-repair.test.mjs",
     "tests/database-runtime-paid-authority-repair.test.mjs", "tests/database-runtime-real-paid-repair.test.mjs",
+    "tests/database-runtime-party-composition-repair.test.mjs",
     "tests/database-runtime-permissions-repair.test.mjs", "tests/helpers/database-runtime-authority-fixture.mjs",
-    "tests/helpers/database-runtime-paid-fixture.mjs", "tests/fixtures/database-managed-schema-20261015.json"]) {
+    "tests/helpers/database-runtime-paid-fixture.mjs", "tests/fixtures/database-managed-schema-20261015.json",
+    "tests/fixtures/database-runtime-premium-composition-before.sql"]) {
     const plan = computeValidationPlan([file]);
     assert.equal(plan.categories.product, true, `${file} must select actual-SQL product regressions`);
     assert.ok(expectedJobs(plan).includes("Validation / Product"));

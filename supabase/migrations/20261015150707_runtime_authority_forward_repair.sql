@@ -998,7 +998,7 @@ begin
       p_user_id,p_session_generation::text
     )
   then
-    return jsonb_build_object('allowed',false,'paidSeatRequired',false,'hostAuthority',false,'expiresAt',null,'reason','viewer_authority_invalid');
+    return jsonb_build_object('allowed',false,'paidSeatRequired',false,'hostAuthority',false,'expiresAt',null,'reason','viewer_session_authority_invalid');
   end if;
   select room.* into v_room from public."watch_party_rooms" room
   where room."party_id"=p_party_id;
@@ -1290,7 +1290,11 @@ begin
     or public.is_account_access_restricted(r.host_user_id::text)
   then
     return jsonb_build_object('allowed',false,'paidSeatRequired',false,
-      'speakerEligible',false,'hostAuthority',false,'expiresAt',null,'reason','viewer_authority_invalid');
+      'speakerEligible',false,'hostAuthority',false,'expiresAt',null,'reason',
+      case when p_session_generation is not null
+        and exists(select 1 from auth.users subject where subject.id=p_user_id and subject.deleted_at is null)
+        and public.is_account_access_restricted(p_user_id::text)
+        then 'viewer_session_authority_invalid' else 'viewer_authority_invalid' end);
   end if;
   baseline:=public.resolve_watch_party_livekit_pre_party_room(p_party_id,p_user_id,p_session_generation);
   select * into r from public.watch_party_rooms where party_id=upper(nullif(btrim(p_party_id),''));
@@ -1325,6 +1329,36 @@ begin
   if not private.party_room_viewer_source_allowed(r,p_user_id) then
     return jsonb_build_object('allowed',false,'paidSeatRequired',coalesce((baseline->>'paidSeatRequired')::boolean,false),
       'speakerEligible',false,'hostAuthority',false,'expiresAt',null,'reason','room_viewer_authority_required');
+  end if;
+  -- Restored target-bound Premium authority can make the predecessor succeed.
+  -- That must not bypass the newer published Party Room membership/TTL closure,
+  -- which previously ran only while correcting a predecessor false negative.
+  if auth.role()='service_role' and r.room_type='title'
+    and r.content_access_rule in ('premium','party_pass')
+    and not coalesce((baseline->>'paidSeatRequired')::boolean,true)
+    and not exists(select 1 from public.paid_watch_party_offers o where o.party_id=r.party_id
+      and o.status in ('sandbox','active','paused','sold_out','blocked'))
+    and r.discovery_visibility in ('public','circle')
+  then
+    if not private.party_room_publication_current(r.party_id)
+      or not exists(select 1 from public.watch_party_room_memberships m
+      where m.party_id=r.party_id and m.user_id=p_user_id::text
+        and m.membership_state in ('active','reconnecting') and m.left_at is null
+        and m.last_seen_at>=now()-interval '45 seconds')
+    then
+      return jsonb_build_object('allowed',false,'paidSeatRequired',false,
+        'speakerEligible',false,'hostAuthority',false,'expiresAt',null,
+        'reason','room_viewer_authority_required');
+    end if;
+    -- Exact-target enforcement has no viewer JWT/token expiry. Its existing
+    -- fresh-membership contract still requires the public/Circle publication.
+    if p_session_generation is null then return baseline; end if;
+    return baseline||jsonb_build_object('expiresAt',least(
+      (baseline->>'expiresAt')::timestamptz,now()+interval '30 seconds',
+      (select s.not_after from auth.sessions s where s.id=p_session_generation and s.user_id=p_user_id),
+      (select min(e.expires_at) from public.user_entitlements e
+        where e.user_id in (p_user_id::text,r.host_user_id::text)
+          and e.entitlement_key='premium' and e.expires_at>now())));
   end if;
   return baseline;
 end $$;

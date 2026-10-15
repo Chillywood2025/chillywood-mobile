@@ -38,7 +38,11 @@ test("Studio database CI guard rejects omitted, skipped, swallowed, wrong-target
     if (mutation === "omit") step.run = step.run.replace(command, "");
     else if (mutation === "skip") step.if = "false";
     else if (mutation === "swallow") step["continue-on-error"] = true;
-    else if (mutation === "wrong-target") step.run = step.run.replace(`supabase_db_${projectId}`, "supabase_db_wrong_checkout_name");
+    else if (mutation === "wrong-target") {
+      // Other required runners share this container. Mutate this exact command,
+      // not the first container occurrence elsewhere in the shell block.
+      step.run = step.run.replace(command, command.replace(`supabase_db_${projectId}`, "supabase_db_wrong_checkout_name"));
+    }
     else step.run = `${command}\n${step.run.replace(command, "")}`;
     assert.throws(() => assertNativeDatabaseGate(changed), assert.AssertionError, mutation);
   }
