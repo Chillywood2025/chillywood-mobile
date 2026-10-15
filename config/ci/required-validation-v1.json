@@ -86,6 +86,8 @@
     ],
     "database": [
       "supabase/**",
+      "scripts/test-database-runtime-authority-concurrency.mjs",
+      "tests/fixtures/database-runtime-production-20261015.sql",
       "app/_layout.tsx",
       "app/chat/**",
       "hooks/use-chat-call-media-session.ts",

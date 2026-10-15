@@ -1,0 +1,224 @@
+{
+  "reconstruction": true,
+  "metadataObservedAtUtc": "2026-10-15T18:52:45.112434Z",
+  "managedSchemaFixture": {
+    "file": "database-managed-schema-20261015.json",
+    "columns": 344,
+    "schemas": ["auth", "storage"],
+    "sha256": "ef6af1ec92e599fa487883782a784945462a4064b7a0c73176ddb1cab3668b59",
+    "originalLostFixtureSha256": "d4883a7b09491fb68e121ad054e3156b64e8c69868475ac35eb2a3f2a364ab06",
+    "provenance": "Fresh read-only catalog reconstruction; not byte-exact recovery of the lost serialized fixture. No user rows included."
+  },
+  "originalFixtureSha256": "eda52757e4407affe97eb7588829f99794758ab48245fa204cfe2abc5d5475d6",
+  "fixtureSha256": "55849a56c6d1b80ae1956cf0e661deb95ba6c2e51fb7a3cf5905d1cc3ede324a",
+  "productionRowsIncluded": false,
+  "liveHistoryRows": 425,
+  "liveHistoryFingerprintSha256": "b494ef89342a56be892ca46906bf5baecfe83260164dcfb4505dd0295ff7d26e",
+  "liveFunctionCount": 1105,
+  "liveFunctionFingerprintSha256": "530cd12c32262ec3dad80216390c2b37ad79ba90f173b01ac6c592986c476b96",
+  "exactRecoveredDriftBodies": 16,
+  "untouchedCanonicalFormattingSubstitutions": 1,
+  "knownLimitation": "Exact live whitespace for sync_paid_creator_event_pass_from_access_grant was not recovered. This untouched function was previously independently verified to differ only in whitespace; its live body fingerprint remains unchanged. No byte-exact whole-fixture claim is made.",
+  "functions": [
+    {
+      "name": "admin_grant_platform_role_by_email",
+      "identity_arguments": "p_target_email text, p_role text, p_reason text",
+      "liveSourceMd5": "3ae1bd97624a7054013f15a7bb230195",
+      "fixtureSourceMd5": "3ae1bd97624a7054013f15a7bb230195",
+      "exactBodyRecovered": true,
+      "provenance": {
+        "kind": "verified retained history",
+        "version": "20260824034109",
+        "index": 78
+      }
+    },
+    {
+      "name": "admin_grant_platform_role_by_email_pre_exact_subject_closure",
+      "identity_arguments": "p_target_email text, p_role text, p_reason text",
+      "liveSourceMd5": "e067be20200ca1a4524a2e711c96541c",
+      "fixtureSourceMd5": "e067be20200ca1a4524a2e711c96541c",
+      "exactBodyRecovered": true,
+      "provenance": {
+        "kind": "verified retained history",
+        "version": "20260625192527",
+        "index": 14
+      }
+    },
+    {
+      "name": "admin_grant_platform_role_by_email_pre_subject_closeout",
+      "identity_arguments": "p_target_email text, p_role text, p_reason text",
+      "liveSourceMd5": "bb0e51b6b4f31f3462160dad3b0ec463",
+      "fixtureSourceMd5": "bb0e51b6b4f31f3462160dad3b0ec463",
+      "exactBodyRecovered": true,
+      "provenance": {
+        "kind": "verified retained history",
+        "version": "202608250004",
+        "index": 60
+      }
+    },
+    {
+      "name": "admin_update_official_rachi_profile_image",
+      "identity_arguments": "p_avatar_url text, p_reason text",
+      "liveSourceMd5": "8ee0d05ca5e5b65e29da980e44fe7e06",
+      "fixtureSourceMd5": "8ee0d05ca5e5b65e29da980e44fe7e06",
+      "exactBodyRecovered": true,
+      "provenance": {
+        "kind": "verified retained history",
+        "version": "202605260009",
+        "index": 0
+      }
+    },
+    {
+      "name": "grant_sandbox_monetization_tester",
+      "identity_arguments": "p_email text, p_user_id text, p_expires_at timestamp with time zone, p_note text",
+      "liveSourceMd5": "f166d985c36ceb274cecea52727bcc4f",
+      "fixtureSourceMd5": "f166d985c36ceb274cecea52727bcc4f",
+      "exactBodyRecovered": true,
+      "provenance": {
+        "kind": "verified retained history",
+        "version": "20260824034109",
+        "index": 511
+      }
+    },
+    {
+      "name": "has_active_beta_access",
+      "identity_arguments": "",
+      "liveSourceMd5": "968479f0f37fdc474f385b9a8c9d4306",
+      "fixtureSourceMd5": "968479f0f37fdc474f385b9a8c9d4306",
+      "exactBodyRecovered": true,
+      "provenance": {
+        "kind": "verified retained history",
+        "version": "20260824034109",
+        "index": 505
+      }
+    },
+    {
+      "name": "has_platform_permission",
+      "identity_arguments": "p_permission_key text",
+      "liveSourceMd5": "c5729bdf60a49c6122c17214fc2ceb37",
+      "fixtureSourceMd5": "c5729bdf60a49c6122c17214fc2ceb37",
+      "exactBodyRecovered": true,
+      "provenance": {
+        "kind": "verified retained history",
+        "version": "20260824034109",
+        "index": 70
+      }
+    },
+    {
+      "name": "has_platform_role",
+      "identity_arguments": "required_roles text[]",
+      "liveSourceMd5": "8e909f193a11398318462821726b1939",
+      "fixtureSourceMd5": "8e909f193a11398318462821726b1939",
+      "exactBodyRecovered": true,
+      "provenance": {
+        "kind": "verified retained history",
+        "version": "20260824034109",
+        "index": 64
+      }
+    },
+    {
+      "name": "is_platform_owner_user",
+      "identity_arguments": "target_user_id text",
+      "liveSourceMd5": "ced582c1b1b95e18b1fcfb1965d614cb",
+      "fixtureSourceMd5": "ced582c1b1b95e18b1fcfb1965d614cb",
+      "exactBodyRecovered": true,
+      "provenance": {
+        "kind": "verified retained history",
+        "version": "20260824034109",
+        "index": 69
+      }
+    },
+    {
+      "name": "product_quality_detection_assessment_hash",
+      "identity_arguments": "p_sentinel_run_id uuid, p_finding_key text, p_route_or_surface text, p_build_runtime_hash text, p_severity text, p_user_impact_hash text, p_evidence_hashes text[], p_suspected_layer text, p_confidence numeric, p_reproduction_state text, p_affected_components_hash text, p_provider_backend_state_hash text, p_proposed_next_investigation_hash text, p_physical_proof_status text",
+      "liveSourceMd5": "0f72d23a74870c8cef6a7bf98569b09f",
+      "fixtureSourceMd5": "0f72d23a74870c8cef6a7bf98569b09f",
+      "exactBodyRecovered": true,
+      "provenance": {
+        "kind": "verified retained history",
+        "version": "20260728004416",
+        "index": 0
+      }
+    },
+    {
+      "name": "product_quality_require_evaluator_for_collected_run",
+      "identity_arguments": "",
+      "liveSourceMd5": "b5f0c87e18647b58fd3e6df46358b975",
+      "fixtureSourceMd5": "b5f0c87e18647b58fd3e6df46358b975",
+      "exactBodyRecovered": true,
+      "provenance": {
+        "kind": "verified retained history",
+        "version": "20260728005610",
+        "index": 0
+      }
+    },
+    {
+      "name": "resolve_sandbox_monetization_tester",
+      "identity_arguments": "p_user_id text, p_email text",
+      "liveSourceMd5": "688b0b8edbe2a43cef035a8184659423",
+      "fixtureSourceMd5": "688b0b8edbe2a43cef035a8184659423",
+      "exactBodyRecovered": true,
+      "provenance": {
+        "kind": "verified retained history",
+        "version": "20260824034109",
+        "index": 508
+      }
+    },
+    {
+      "name": "resolve_watch_party_livekit_authority_pre_service_fix",
+      "identity_arguments": "p_party_id text, p_user_id uuid, p_session_generation uuid",
+      "liveSourceMd5": "1eaa476f6b503e0732846758a7eb8715",
+      "fixtureSourceMd5": "1eaa476f6b503e0732846758a7eb8715",
+      "exactBodyRecovered": true,
+      "provenance": {
+        "kind": "verified retained history",
+        "version": "20260824034109",
+        "index": 459
+      }
+    },
+    {
+      "name": "search_public_people",
+      "identity_arguments": "p_query text, p_limit integer",
+      "liveSourceMd5": "62152632134d020cf0002cae877ceb66",
+      "fixtureSourceMd5": "62152632134d020cf0002cae877ceb66",
+      "exactBodyRecovered": true,
+      "provenance": {
+        "kind": "verified retained history",
+        "version": "20260603014500",
+        "index": 26
+      }
+    },
+    {
+      "name": "sync_paid_creator_event_pass_from_access_grant",
+      "identity_arguments": "",
+      "liveSourceMd5": "85082651b8ef3ce6688310bd893a9795",
+      "fixtureSourceMd5": "6e9069481a3142f95d4d52f70dbb0d61",
+      "exactBodyRecovered": false,
+      "provenance": {
+        "kind": "canonical formatting; previously independently established whitespace-only live difference; unchanged live function fingerprint reconfirmed"
+      }
+    },
+    {
+      "name": "sync_paid_watch_party_ticket_from_access_grant",
+      "identity_arguments": "",
+      "liveSourceMd5": "94ed9d6618315c54a687ce7ef6f63908",
+      "fixtureSourceMd5": "94ed9d6618315c54a687ce7ef6f63908",
+      "exactBodyRecovered": true,
+      "provenance": {
+        "kind": "reconstructed known omitted source-only capacity branch, exact live body MD5 verified"
+      }
+    },
+    {
+      "name": "watch_party_room_access_pre_live_decouple",
+      "identity_arguments": "p_party_id text, p_user_id text",
+      "liveSourceMd5": "4560dca2740e0cbe41c2ff9fe1c382d7",
+      "fixtureSourceMd5": "4560dca2740e0cbe41c2ff9fe1c382d7",
+      "exactBodyRecovered": true,
+      "provenance": {
+        "kind": "verified retained history",
+        "version": "20260824034109",
+        "index": 457
+      }
+    }
+  ]
+}

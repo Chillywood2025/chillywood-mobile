@@ -29,6 +29,25 @@ values (
   '9d000000-0000-4000-8000-000000000001'
 );
 
+-- Preserve the deployed same-session account-legal requirement while testing
+-- operation idempotency; a role membership alone is not caller authority.
+insert into public.wave1_legal_acceptances (
+  user_id, subject_hash, document_key, document_version, market,
+  role_key, capability, session_generation, authority_source
+)
+select
+  fixture_session.user_id, public.wave1_sha256(fixture_session.user_id::text),
+  document.document_key, document.version, document.market,
+  coalesce(nullif(lower(trim(profile.channel_role)), ''), 'member'),
+  document.capability, fixture_session.id::text, 'service_reconciliation'
+from auth.sessions fixture_session
+left join public.user_profiles profile
+  on profile.user_id = fixture_session.user_id::text
+cross join public.wave1_legal_document_versions document
+where fixture_session.id = '9e000000-0000-4000-8000-000000000001'
+  and document.active and document.market = 'UNITED_STATES'
+  and document.capability = 'account';
+
 insert into public.platform_role_memberships (
   role, user_id, email, status, notes, granted_by
 ) values (

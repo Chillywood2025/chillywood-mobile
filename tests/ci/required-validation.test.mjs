@@ -26,6 +26,61 @@ const evaluate = (paths, overrides = {}) => evaluateRun({
   ...overrides,
 });
 
+test("runtime authority repair requires native lock-queue proof in the database job", () => {
+  const workflow = parse(fs.readFileSync(".github/workflows/required-validation.yml", "utf8"));
+  const command = "SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-database-runtime-authority-concurrency.mjs";
+  const assertWired = (candidate) => {
+    const job = candidate.jobs.database;
+    assert.equal(job["continue-on-error"], undefined);
+    const steps = job.steps.filter((step) => step.run?.split("\n").some((line) => line.trim() === command));
+    assert.equal(steps.length, 1, "native authority runner must execute exactly once in required Database validation");
+    assert.equal(steps[0].if, undefined, "native queue proof cannot have a separate skip condition");
+    assert.equal(steps[0]["continue-on-error"], undefined);
+    for (const prerequisite of ["supabase db reset", "supabase test db"]) {
+      const position = steps[0].run.indexOf(prerequisite);
+      assert.ok(position >= 0 && position < steps[0].run.indexOf(command), `${prerequisite} must precede native authority proof`);
+    }
+  };
+  assertWired(workflow);
+  const removed = structuredClone(workflow);
+  for (const step of removed.jobs.database.steps) {
+    if (step.run) step.run = step.run.replace(command, "");
+  }
+  assert.throws(() => assertWired(removed), assert.AssertionError,
+    "the old workflow without native authority invocation must fail the wiring assertion");
+  for (const prerequisite of ["supabase db reset", "supabase test db"]) {
+    const absent = structuredClone(workflow);
+    for (const step of absent.jobs.database.steps) {
+      if (step.run) step.run = step.run.replace(prerequisite, "");
+    }
+    assert.throws(() => assertWired(absent), assert.AssertionError,
+      `removing ${prerequisite} must invalidate native authority wiring`);
+  }
+  for (const weakened of ["skip", "ignore-failure", "duplicate"]) {
+    const altered = structuredClone(workflow);
+    const step = altered.jobs.database.steps.find((entry) => entry.run?.includes(command));
+    if (weakened === "skip") step.if = "false";
+    if (weakened === "ignore-failure") step["continue-on-error"] = true;
+    if (weakened === "duplicate") altered.jobs.database.steps.push(structuredClone(step));
+    assert.throws(() => assertWired(altered), assert.AssertionError,
+      `${weakened} must invalidate native authority wiring`);
+  }
+  for (const file of ["supabase/migrations/20261015150707_runtime_authority_forward_repair.sql",
+    "scripts/test-database-runtime-authority-concurrency.mjs", "tests/fixtures/database-runtime-production-20261015.sql"]) {
+    const plan = computeValidationPlan([file]);
+    assert.equal(plan.categories.database, true, `${file} must select native Database validation`);
+    assert.ok(expectedJobs(plan).includes("Validation / Database"));
+  }
+  for (const file of ["tests/database-runtime-mutation-repair.test.mjs", "tests/database-runtime-catalog-repair.test.mjs",
+    "tests/database-runtime-paid-authority-repair.test.mjs", "tests/database-runtime-real-paid-repair.test.mjs",
+    "tests/database-runtime-permissions-repair.test.mjs", "tests/helpers/database-runtime-authority-fixture.mjs",
+    "tests/helpers/database-runtime-paid-fixture.mjs", "tests/fixtures/database-managed-schema-20261015.json"]) {
+    const plan = computeValidationPlan([file]);
+    assert.equal(plan.categories.product, true, `${file} must select actual-SQL product regressions`);
+    assert.ok(expectedJobs(plan).includes("Validation / Product"));
+  }
+});
+
 test("ordinary product source selects core and product checks without legacy authority", () => {
   const result = evaluate(["app/index.tsx"]);
   assert.equal(result.ok, true);
