@@ -148,7 +148,7 @@ const sourceFingerprintSql=`select jsonb_build_object('users',(select count(*) f
   'roles',(select count(*) from public.platform_role_memberships),'audits',(select count(*) from public.platform_staff_role_audit),
   'receipts',(select count(*) from public.privileged_mutation_operation_receipts),
   'wrapper',md5(pg_get_functiondef('public.admin_grant_platform_role_by_email(text,text,text,text)'::regprocedure)))::text;`;
-const repairPath=path.join(root,'supabase/migrations/20261015150707_runtime_authority_forward_repair.sql');
+const repairPath=path.join(root,'supabase/migrations/20261015220128_runtime_authority_forward_repair.sql');
 const repairSql=readFileSync(repairPath,'utf8');
 let cloned=false,sourceFingerprint;
 try{
@@ -156,7 +156,7 @@ try{
   assert.match(success(docker(['context','inspect','--format','{{.Endpoints.docker.Host}}']),'local Docker required').trim(),/^(unix|npipe):\/\//u,'remote Docker context forbidden');
   const containers=success(docker(['ps','--filter','label=com.supabase.cli.project','--format','{{.Names}}']),'local Supabase discovery').trim().split('\n');
   assert.ok(containers.includes(container),'selected local CLI database is not running');
-  assert.equal(query("select exists(select 1 from supabase_migrations.schema_migrations where version='20261015150707');",'postgres'),'t','local source must have reset through repair');
+  assert.equal(query("select exists(select 1 from supabase_migrations.schema_migrations where version='20261015220128');",'postgres'),'t','local source must have reset through repair');
   sourceFingerprint=query(sourceFingerprintSql,'postgres');
   success(docker(['exec',container,'createdb','-U','postgres','-T','template0',database]),'create generated disposable clone');cloned=true;
   success(docker(psqlArgs(),'create schema vault;create extension supabase_vault with schema vault;'),'initialize clone extension');

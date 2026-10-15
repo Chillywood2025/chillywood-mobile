@@ -20,12 +20,45 @@ file hashes. Other tests and this document were reconstructed and strengthened;
 their previous test results do not certify this new source head.
 
 Baseline: `535c56439a6fa0a855323dd8a5c6e8d1f1a43665`. The migration is
-`20261015150707_runtime_authority_forward_repair.sql`. All existing migration
-files remain immutable. The Studio migration `20261015073423` remains held for
+`20261015220128_runtime_authority_forward_repair.sql`, aligned to the version
+assigned at deployment (original source timestamp `20261015150707`). Its SQL
+bytes are unchanged. All preceding migration files remain immutable. The Studio migration `20261015073423` remains held for
 old-client compatibility, and this repair does not depend on applying it.
 
-No production deployment, provider operation or migration-history mutation is
-authorized by this source repair, publication or merge.
+Source publication or merge alone does not authorize production operations.
+The separately authorized deployment and its verification are recorded below.
+
+## Deployment and source-version alignment
+
+PR #558 merged as `8959f058f2f2d652d9ea5dd283f2d0b29d5fd184` after all ten
+jobs in [run 38796878817](https://github.com/Chillywood2025/chillywood-mobile/actions/runs/38796878817)
+passed. Actual native execution included 4,355 pgTAP assertions in 111 files,
+all 25 runtime queue cases, HTTP/realtime integration and paired browser media.
+Android and iOS unsigned native compilation also passed.
+
+The separately authorized production application succeeded on 2026-10-15 at
+version `20261015220128`, name `runtime_authority_forward_repair`. Readback at
+22:02:21 UTC verified 426 history records, the prior 425-record fingerprint
+unchanged, all 15 repaired function bodies matching, and 1,090 other functions
+unchanged. Grants and policies matched the intended delta; table security,
+replica identity, constraints and triggers were unchanged. Studio remains absent.
+
+The source SQL retains SHA-256 `ca0cc25dc6feae53cb6c865cfd9c9c775ddab6b2af075f57b5c1f64ccc143b8f`.
+The recorded execution payload is distinct: only transaction-local lock and
+statement timeouts were inserted immediately after the first `begin;`:
+
+```sql
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
+```
+
+Its SHA-256 `b09d4921a3efff3e1bb3eb7d26fba30c069ee060d20513a8a510b22f9461a0c3`
+matches the stored history payload. The source rename prevents the old source
+timestamp appearing as an unapplied duplicate; it does not rewrite database
+history or claim byte equality between source and timeout-wrapped payload.
+The companion deployment receipt and regression bind both hashes, the exact
+version/name and single migration file. Catalog verification does not claim
+production behavioral tests, provider purchase tests or physical qualification.
 
 ## Exact repair scope
 
@@ -204,13 +237,13 @@ passing evidence, and the lost commit's earlier receipt is not reused.
 The first native pgTAP run executed 111 files and 4,355 assertions and failed 21
 assertions across three fixtures. Local exact-SQL replays reproduce those
 failures and verify the corrections without weakening their assertions. A fresh
-passing native run and the subsequent real queue runner remain required.
+passing native run and the subsequent real queue runner subsequently passed in
+run 38796878817, as recorded above. The source-version alignment follow-up still
+requires its own exact-head checks and review.
 
-Any later production rollout requires separate authorization, a fresh complete
-425-record history fingerprint and the exact reviewed migration hash. An
-isolated staging directory can contain actual applied-version filenames/bodies
-plus only this repair, excluding Studio and disabling seed/role loading. A
-canonical pinned-CLI dry-run must list only the repair. Offline inventory
-comparison is not that dry-run. Ordinary repository-wide `db push` would include
-held Studio and must not be used. Do not invent skip records or rewrite history.
-Later Studio rollout needs its own explicit reviewed order plan.
+This repair is already applied; do not apply its old timestamp again. Any later
+production rollout requires separate authorization, a fresh complete history
+fingerprint and exact reviewed bytes. Ordinary repository-wide `db push` would
+include held Studio and must not be used. Offline inventory is not a canonical
+pinned-CLI dry-run. Do not invent skip records or rewrite history. Later Studio
+rollout needs its own explicit reviewed order plan.
