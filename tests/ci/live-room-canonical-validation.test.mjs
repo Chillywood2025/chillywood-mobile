@@ -33,6 +33,9 @@ test("canonical Deno authority tests and both real Edge entry typechecks recur i
     "supabase/functions/livekit-heartbeat-monitor/index.ts", "app/player/[id].tsx",
     "app/watch-party/live-stage/[partyId].tsx", "_lib/watch-party/watch-party-live-source-truth.ts"])
     assert.equal(computeValidationPlan([path]).categories.sensitive, true, path);
+  for (const path of ["app/player/[id].tsx", "app/watch-party/live-stage/[partyId].tsx",
+    "_lib/watch-party/watch-party-live-source-truth.ts", "_lib/watch-party/live-stage-presentation.ts"])
+    assert.equal(computeValidationPlan([path]).categories.product, true, `mounted regressions run for ${path}`);
 });
 
 test("canonical CI wiring rejects removal, optional execution and swallowed failures", () => {
