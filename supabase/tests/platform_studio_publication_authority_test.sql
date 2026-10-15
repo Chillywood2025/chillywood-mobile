@@ -26,6 +26,9 @@ $$;
 
 insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at)
   select pg_temp.studio_user(n),false,false,now() from generate_series(1,6) n;
+select is((select count(*)::integer from public.user_profiles
+  where user_id in (select pg_temp.studio_user(n)::text from generate_series(1,6) n)),6,
+  'real auth signup trigger already creates all fixture Profiles');
 insert into auth.sessions(id,user_id,not_after)
   select pg_temp.studio_session(n),pg_temp.studio_user(n),now()+interval '1 day' from generate_series(1,6) n;
 insert into public.wave1_legal_acceptances(user_id,subject_hash,document_key,document_version,market,role_key,capability,session_generation,authority_source)
@@ -58,7 +61,24 @@ insert into public.user_profiles(user_id,username,display_name,tagline,profile_a
     public.profile_media_public_url(pg_temp.studio_user(n)::text,pg_temp.studio_user(n)::text || '/avatar/studio.png'),
     public.profile_media_public_url(pg_temp.studio_user(n)::text,pg_temp.studio_user(n)::text || '/background/studio.png'),
     'invite_only'
-  from generate_series(1,6) n;
+  from generate_series(1,6) n where true
+  on conflict (user_id) do update set
+    username=excluded.username,display_name=excluded.display_name,tagline=excluded.tagline,
+    profile_access_visibility=excluded.profile_access_visibility,
+    platform_access_visibility=excluded.platform_access_visibility,
+    follower_surface_enabled=excluded.follower_surface_enabled,
+    subscriber_surface_enabled=excluded.subscriber_surface_enabled,
+    avatar_url=excluded.avatar_url,profile_background_url=excluded.profile_background_url,
+    default_watch_party_join_policy=excluded.default_watch_party_join_policy;
+select is((select count(*)::integer
+  from generate_series(1,6) as fixture(n) join public.user_profiles profile on profile.user_id=pg_temp.studio_user(n)::text
+  where profile.username='studiofixture' || n and profile.display_name='Platform ' || n and profile.tagline='Platform tagline'
+    and profile.profile_access_visibility='private' and profile.platform_access_visibility='public'
+    and profile.follower_surface_enabled and profile.subscriber_surface_enabled
+    and profile.default_watch_party_join_policy='invite_only'
+    and profile.avatar_url=public.profile_media_public_url(profile.user_id,profile.user_id || '/avatar/studio.png')
+    and profile.profile_background_url=public.profile_media_public_url(profile.user_id,profile.user_id || '/background/studio.png')),
+  6,'signup-created Profiles are customized with every intended private Profile/public Platform fixture field');
 select is((select count(*)::integer from public.user_profiles
   where user_id in (select pg_temp.studio_user(n)::text from generate_series(1,6) n)
     and avatar_url is not null and profile_background_url is not null

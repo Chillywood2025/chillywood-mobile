@@ -19,9 +19,9 @@ const write = (root, name, value) => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, value);
 };
-const commit = (root) => {
+const commit = (root, options = {}) => {
   git(root, "add", "--all");
-  git(root, "commit", "--quiet", "-m", "isolated compatibility fixture");
+  run(root, "git", ["commit", "--quiet", "-m", "isolated compatibility fixture"], options);
   return { sha: git(root, "rev-parse", "HEAD"), tree: git(root, "rev-parse", "HEAD^{tree}") };
 };
 
@@ -274,6 +274,10 @@ function fixture(t, sourceSha = "HEAD") {
   fs.mkdirSync(root);
   t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
   git(root, "init", "--quiet", "--initial-branch=main");
+  // A synchronous commit can start detached maintenance that keeps writing
+  // .git after it returns. Disposable fixtures must not outlive their cleanup.
+  git(root, "config", "maintenance.auto", "false");
+  git(root, "config", "gc.auto", "0");
   git(root, "config", "user.name", "Local test");
   git(root, "config", "user.email", "test@example.invalid");
   git(root, "remote", "add", "origin", root); // ls-remote stays entirely local.
@@ -348,6 +352,30 @@ if (args[0] === 'expo' && args[1] === 'config') {
   };
   return { root, baseline, publish };
 }
+
+test("native publication fixture commits cannot leave automatic Git maintenance behind", (t) => {
+  const { root } = fixture(t);
+  const trace = path.join(root, "..", "git-maintenance-trace.jsonl");
+  const options = { env: { ...process.env, GIT_TRACE2_EVENT: trace } };
+  const maintenanceStarts = () => fs.readFileSync(trace, "utf8").trim().split("\n").map(JSON.parse)
+    .filter((event) => event.event === "child_start" && event.argv?.includes("--auto")
+      && event.argv.some((arg) => ["maintenance", "gc"].includes(arg)));
+  const assertNoAutomaticMaintenance = () => assert.deepEqual(maintenanceStarts(), [],
+    "fixture commits must finish all Git work before strict directory cleanup");
+  write(root, "fixture-lifecycle.txt", "first commit\n");
+  commit(root, options);
+  assertNoAutomaticMaintenance();
+
+  // Prove that the same trace assertion detects the old automatic-maintenance
+  // path. Force foreground work in this negative control so the test itself
+  // never leaves a background writer behind or needs cleanup-error suppression.
+  fs.writeFileSync(trace, "");
+  write(root, "fixture-lifecycle.txt", "control commit\n");
+  git(root, "add", "--all");
+  run(root, "git", ["-c", "maintenance.auto=true", "-c", "maintenance.autoDetach=false",
+    "-c", "gc.autoDetach=false", "-c", "gc.auto=0", "commit", "--quiet", "-m", "foreground maintenance control"], options);
+  assert.throws(assertNoAutomaticMaintenance, assert.AssertionError);
+});
 
 test("candidate internal generation digests match the canonical native input snapshot", (t) => {
   const { root } = fixture(t);

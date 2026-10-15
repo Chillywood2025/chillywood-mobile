@@ -138,14 +138,24 @@ try {
 
   for (const [index, person] of actors.entries()) {
     query(`insert into auth.users(id,is_sso_user,is_anonymous,email_confirmed_at)
-      values(${literal(person.user)},false,false,now());
-      insert into auth.sessions(id,user_id,not_after) values(${literal(person.session)},${literal(person.user)},now()+interval '1 day');
+      values(${literal(person.user)},false,false,now());`);
+    assert.equal(query(`select count(*) from public.user_profiles where user_id=${literal(person.user)};`), "1",
+      "real auth signup trigger must create the fixture Profile before customization");
+    query(`insert into auth.sessions(id,user_id,not_after) values(${literal(person.session)},${literal(person.user)},now()+interval '1 day');
       insert into public.user_profiles(user_id,username,display_name,platform_access_visibility,follower_surface_enabled)
-        values(${literal(person.user)},${literal("studioc" + person.user.replaceAll("-", "").slice(0, 15))},'Concurrency fixture','public',true);
+        values(${literal(person.user)},${literal("studioc" + person.user.replaceAll("-", "").slice(0, 15))},'Concurrency fixture','public',true)
+        on conflict(user_id) do update set username=excluded.username,display_name=excluded.display_name,
+          platform_access_visibility=excluded.platform_access_visibility,follower_surface_enabled=excluded.follower_surface_enabled;
       insert into public.wave1_legal_acceptances(user_id,subject_hash,document_key,document_version,market,role_key,capability,session_generation,authority_source)
         select ${literal(person.user)}::uuid,public.wave1_sha256(${literal(person.user)}),d.document_key,d.version,d.market,
           'member',d.capability,${literal(person.session)},'service_reconciliation'
         from public.wave1_legal_document_versions d where d.active and d.market='UNITED_STATES' and d.capability='account';`);
+    assert.deepEqual(JSON.parse(query(`select jsonb_build_object('username',username,'display_name',display_name,
+      'platform_access_visibility',platform_access_visibility,'follower_surface_enabled',follower_surface_enabled)::text
+      from public.user_profiles where user_id=${literal(person.user)};`)), {
+      username: "studioc" + person.user.replaceAll("-", "").slice(0, 15), display_name: "Concurrency fixture",
+      platform_access_visibility: "public", follower_surface_enabled: true,
+    }, "native fixture must override every intended signup-created Profile field");
     if (index < 2) {
       query("update public.platform_money_kill_switches set state='sandbox_only' where key in ('revenuecat_google_play_enabled','provider_webhooks_enabled');");
       assert.equal(query(`select public.process_revenuecat_premium_event_atomic(
@@ -261,8 +271,14 @@ try {
   await serializedRace("queued-review-role-cutoff", lockRequest,
     `${claims(otherOwner)} select public.review_channel_audience_request(${queuedReviewId},'approved');`, {
       secondError: /audience_review_forbidden/u,
-      whileBlocked: () => query(`update public.platform_role_memberships set expires_at=clock_timestamp()
-        where user_id=${literal(otherOwner.user)} and role='operator';`),
+      whileBlocked: async () => {
+        // The real role trigger rejects already-expired active grants. Set a
+        // valid finite cutoff, then observe expiry before releasing the lock.
+        query(`update public.platform_role_memberships set expires_at=clock_timestamp()+interval '250 milliseconds'
+          where user_id=${literal(otherOwner.user)} and role='operator';`);
+        await waitUntil(() => query(`select clock_timestamp()>=expires_at from public.platform_role_memberships
+          where user_id=${literal(otherOwner.user)} and role='operator';`) === "t", "queued role expiry reached");
+      },
     });
   assert.equal(query(`select status from public.channel_audience_requests where id=${queuedReviewId};`), "pending");
   console.log(`Platform Studio native PostgreSQL concurrency: ${checks} deterministic cases passed.`);
