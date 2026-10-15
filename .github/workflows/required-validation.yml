@@ -128,6 +128,7 @@ jobs:
           npm run test:chilly-chat-livekit-authority
           deno test --node-modules-dir=none --no-lock --allow-env supabase/functions/revenuecat-premium-reconcile/authority.test.ts supabase/functions/revenuecat-premium-reconcile/index_test.ts
       - name: Run canonical Live Stage and Watch-Party Edge authority checks
+        shell: bash --noprofile --norc -eo pipefail {0}
         run: |
           deno test --node-modules-dir=none --no-lock supabase/functions/_shared/livekit-seat-session-enforcement_test.ts supabase/functions/_shared/watch-party-livekit-authority_test.ts
           deno check --node-modules-dir=none --no-lock supabase/functions/livekit-token/index.ts supabase/functions/livekit-heartbeat-monitor/index.ts

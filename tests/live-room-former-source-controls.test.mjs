@@ -31,6 +31,14 @@ test("live-room regression expectations pass current source and reject all three
   const previous = run(beforeRepairs);
   assert.equal(previous.status, 1, previous.output);
   for (const name of names) assert.match(previous.output, new RegExp(`^not ok \\d+ - ${escaped(name)}$`, "mu"));
+  for (const [index, name] of names.entries()) {
+    const block = previous.output.split(`# Subtest: ${name}\n`)[1]?.split("\n# Subtest:")[0];
+    assert.ok(block, `historical diagnostic exists for ${name}`);
+    assert.match(block, /code: 'ERR_ASSERTION'/u);
+    assert.match(block, /operator: 'strictEqual'/u);
+    assert.match(block, new RegExp(`expected: ${index === 2 ? 0 : 1}\\n\\s+actual: ${index === 2 ? 2 : 0}\\b`, "u"),
+      `historical behavior must fail its specific count expectation: ${name}`);
+  }
   assert.equal((previous.output.match(/code: 'ERR_ASSERTION'/gu) ?? []).length, 3, previous.output);
   assert.match(previous.output, /# fail 3\b/u);
   assert.match(previous.output, /persisted remote chat must not depend on a best-effort sender broadcast/u);

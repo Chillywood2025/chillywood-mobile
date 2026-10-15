@@ -9,6 +9,8 @@ Watch-Party Live and camera repair reviews. It does not change product behavior.
   real Deno runtime and typechecks both complete Edge entry points. The existing
   Node/VM runner remains additional monitor-wiring coverage, not a replacement
   for Deno's real imports and typechecker. No production credentials are needed.
+  Player, Watch-Party routes and shared Watch-Party helpers explicitly select
+  Sensitive validation, so changing their source cannot omit these checks.
 - A React root mounts minimal compositions of the actual Player and Stage
   production statements. State declarations, complete effects, callbacks,
   dependency arrays and cleanup are selected verbatim from source. The tests do
@@ -16,7 +18,8 @@ Watch-Party Live and camera repair reviews. It does not change product behavior.
   responses and subscriptions are controlled external boundaries.
 - Player cases exercise unchanged-authority transport recovery, the actual
   bounded retry policy, explicit retry, StrictMode effect replay, ownership
-  changes and background/unmount cleanup. Pure authority matching uses the
+  changes, cancellation of still-pending timers and inertness of already-queued
+  retired callbacks, plus background/unmount cleanup. Pure authority matching uses the
   actual production helper; JWT parsing is outside these mounted cases.
 - Comment cases exercise React state updates from persisted insert/edit/delete,
   subscription resync, fallback polling, failed reads and retired room/account/
@@ -24,6 +27,9 @@ Watch-Party Live and camera repair reviews. It does not change product behavior.
 - Stage cases execute its complete initialization effect and production state/
   refs through the final asynchronous snapshot, resource creation, heartbeat,
   room replacement, access revocation and unmount.
+  The actual refresh callback is included: changing myUserId recreates it and
+  React retires the first initialization before the replacement can publish
+  resources. The service snapshot promises are the controlled boundary.
 
 ## Controls against false confidence
 
@@ -38,8 +44,9 @@ Watch-Party Live and camera repair reviews. It does not change product behavior.
   The same three expectations must also pass current source. Product CI already
   checks out complete Git history for historical native compatibility tests.
 - Workflow regressions require both exact canonical Deno commands in the
-  non-optional required lane. Removal, optional execution and swallowed-failure
-  mutations are rejected.
+  non-optional required lane with an explicit fail-fast shell. Removal, optional
+  execution, inert conditional wrappers, early exits, disabled error handling,
+  shell overrides and swallowed-failure mutations are rejected.
 
 ## Boundaries of the claim
 
