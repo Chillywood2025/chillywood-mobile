@@ -9,19 +9,31 @@ const NON_MODULAR_HEADER_WARNING_FLAG = "-Wno-non-modular-include-in-framework-m
 const LIVEKIT_COMPATIBILITY_BLOCK = `${START_MARKER}
     # LiveKit WebRTC is a framework module when use_frameworks! is static, while
     # its React dependencies expose headers that are intentionally non-modular.
-    # Module precompilation happens from both the WebRTC target and its LiveKit
-    # consumer, so scope the compatibility setting to those two pods only.
+    # Clang precompiles the SDK umbrella in each importing target's context.
+    # Keep this exception on the SDK and its two direct consumers only; app,
+    # Expo, React and every unrelated pod retain their normal diagnostics.
     installer.pods_project.targets.each do |target|
       next unless [
         'livekit-react-native-webrtc',
         'livekit_react_native_webrtc',
         'livekit-react-native',
-        'livekit_react_native'
+        'livekit_react_native',
+        'ChillywoodCameraEffects'
       ].include?(target.name)
 
       target.build_configurations.each do |build_configuration|
         build_configuration.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
-        build_configuration.build_settings['OTHER_CFLAGS'] = '$(inherited) ${NON_MODULAR_HEADER_WARNING_FLAG}'
+        flags = build_configuration.build_settings['OTHER_CFLAGS']
+        if flags.is_a?(Array)
+          flags = flags.dup
+          flags.unshift('$(inherited)') unless flags.include?('$(inherited)')
+          flags.push('${NON_MODULAR_HEADER_WARNING_FLAG}') unless flags.include?('${NON_MODULAR_HEADER_WARNING_FLAG}')
+        else
+          flags = flags.to_s
+          flags = "$(inherited) #{flags}" unless flags.include?('$(inherited)')
+          flags = "#{flags} ${NON_MODULAR_HEADER_WARNING_FLAG}" unless flags.split.include?('${NON_MODULAR_HEADER_WARNING_FLAG}')
+        end
+        build_configuration.build_settings['OTHER_CFLAGS'] = flags
       end
     end
     ${END_MARKER}
@@ -67,3 +79,4 @@ module.exports = createRunOncePlugin(
   PLUGIN_NAME,
   "1.0.0",
 );
+module.exports.__test = { addLiveKitCompatibilityBlock, START_MARKER, END_MARKER };

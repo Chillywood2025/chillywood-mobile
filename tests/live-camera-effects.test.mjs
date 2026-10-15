@@ -24,15 +24,24 @@ function setup({ internal = true, module = true, capabilities = {} } = {}) {
   };
   const track = (id = "camera-a") => {
     const settings = { facingMode: "user", width: 640, height: 480 };
-    return { id, kind: "video", remote: false, enabled: true, readyState: "live",
+    const value = { id, kind: "video", remote: false, enabled: true, readyState: "live",
       _setVideoEffects: names => calls.push(["setEffects", id, names === null ? null : [...names]]),
       getSettings: () => settings,
       getConstraints: () => ({ deviceId: "front-id", width: 640, frameRate: 30 }),
-      async applyConstraints(constraints) { calls.push(["constraints", id, constraints]); settings.facingMode = constraints.facingMode; },
     };
+    let current = value;
+    value.switchBinding = { available: () => true, ownsTrack: t => t === current, cancel() {},
+      async switchCamera(facingMode) {
+        calls.push(["owned-replacement", facingMode]);
+        current = { ...current, id: `${current.id}-next`, getSettings: () => ({ ...settings, facingMode }) };
+        return current;
+      } };
+    return value;
   };
-  return { native, calls, track, setStatus: value => { status = value; },
-    controller: new CameraEffectsController(module ? native : null, internal) };
+  const controller = new CameraEffectsController(module ? native : null, internal);
+  const bind = controller.bind.bind(controller);
+  controller.bind = (value, allowed) => bind(value, allowed, value?.switchBinding ?? null);
+  return { native, calls, track, setStatus: value => { status = value; }, controller };
 }
 
 test("effects require both the native internal channel and matching internal runtime", () => {
@@ -139,20 +148,20 @@ for (const [effect, capability] of [["crimson-aura", "crimsonAura"], ["neon-edge
   });
 }
 
-test("camera switching awaits applyConstraints, removes stale device id and resets detections", async () => {
+test("camera switching awaits owned replacement and resets detections on the new raw track", async () => {
   const h = setup(); h.controller.bind(h.track(), true); h.controller.select("studio-light", 0.5); h.calls.length = 0;
   assert.equal(await h.controller.switchCamera(), true);
   assert.equal(h.calls[0][0], "release");
-  const constraints = h.calls.find(c => c[0] === "constraints")[2];
-  assert.equal(constraints.deviceId, undefined); assert.equal(constraints.width, 640);
-  assert.equal(constraints.facingMode, "environment"); assert.equal(h.controller.snapshot().facingMode, "environment");
+  assert.deepEqual(h.calls.find(c => c[0] === "owned-replacement"), ["owned-replacement", "environment"]);
+  assert.equal(h.controller.snapshot().facingMode, "environment");
+  assert.equal(h.calls.find(c => c[0] === "configure")[1], "camera-a-next");
   assert.equal(h.calls.at(-1)[0], "setEffects");
   assert.equal(await h.controller.switchCamera(), true); assert.equal(h.controller.snapshot().facingMode, "user");
 });
 
 for (const boundary of ["demote", "dispose", "replacement"]) test(`late camera switch cannot attach effects after ${boundary}`, async () => {
   const h = setup(), held = deferred(), track = h.track();
-  track.applyConstraints = () => held.promise;
+  track.switchBinding.switchCamera = () => held.promise;
   h.controller.bind(track, true); h.controller.select("chicago-skyline", 1);
   const switching = h.controller.switchCamera();
   assert.equal(h.controller.snapshot().switchingCamera, true);
@@ -165,7 +174,7 @@ for (const boundary of ["demote", "dispose", "replacement"]) test(`late camera s
 
 test("off during camera switch stays off after native completion", async () => {
   const h = setup(), track = h.track(), held = deferred();
-  track.applyConstraints = async () => { await held.promise; track.getSettings().facingMode = "environment"; };
+  track.switchBinding.switchCamera = async () => { await held.promise; return { ...track, id: "new", getSettings: () => ({ facingMode: "environment" }) }; };
   h.controller.bind(track, true); h.controller.select("studio-light", 0.5);
   const switching = h.controller.switchCamera(); h.controller.select("off"); h.calls.length = 0;
   held.resolve(); assert.equal(await switching, true); assert.equal(h.calls.length, 0);
@@ -175,7 +184,7 @@ test("off during camera switch stays off after native completion", async () => {
 test("switch rejection or missing facing-mode acknowledgment does not report success", async () => {
   for (const reject of [true, false]) {
     const h = setup(), track = h.track();
-    track.applyConstraints = async () => { if (reject) throw new Error("no back camera"); };
+    track.switchBinding.switchCamera = async () => { if (reject) throw new Error("no back camera"); return track; };
     h.controller.bind(track, true); assert.equal(await h.controller.switchCamera(), false);
     assert.equal(h.controller.snapshot().state, "error");
     assert.equal(h.controller.snapshot().switchingCamera, false);

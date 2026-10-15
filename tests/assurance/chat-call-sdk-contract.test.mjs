@@ -19,7 +19,7 @@ const deferred = () => {
 // Execute the installed SDK and complete application capture helper unchanged.
 // Only React Native's OS/bridge edge and unrelated application services are
 // controlled. This is SDK contract evidence, not native capture/RTP proof.
-function runtime({ platform = "android", cameraGranted = true } = {}) {
+export function runtime({ platform = "android", cameraGranted = true } = {}) {
   const calls = { permissions: [], captures: [], enabled: [], replacements: [] };
   let nextId = 0;
   let replace = async () => true;
@@ -45,6 +45,7 @@ function runtime({ platform = "android", cameraGranted = true } = {}) {
       calls.replacements.push({ peer, id, track });
       return replace(peer, id, track);
     },
+    async senderSetParameters(_peer, _id, parameters) { return parameters; },
     async requestPermission(name) {
       calls.permissions.push(name);
       return name !== "camera" || cameraGranted;
@@ -107,7 +108,7 @@ function runtime({ platform = "android", cameraGranted = true } = {}) {
     },
   }, { filename: "_lib/communication.ts" });
   return {
-    calls, api: app.exports,
+    calls, api: app.exports, MediaStream: loadSdk("MediaStream").default,
     setCapture(next) { capture = next; },
     setReplace(next) { replace = next; },
     sender(track, id = "video-sender") {

@@ -1,6 +1,7 @@
 package expo.modules.chillywoodcameraeffects;
 
 import com.oney.WebRTCModule.videoEffects.VideoEffectProcessor;
+import com.oney.WebRTCModule.CameraEffectQueueContract;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -11,7 +12,12 @@ import org.webrtc.VideoFrame;
 public final class CaptureContractTest {
   private static int assertions;
   public static void main(String[] args) {
-    passthroughOwnership(); transformedOwnership(); poolOwnership(); closedGeneration(); upstreamEmptyListHazard();
+    if (args.length == 1 && args[0].equals("--queue-only")) {
+      CameraEffectQueueContract.verify();
+      return;
+    }
+    passthroughOwnership(); transformedOwnership(); poolOwnership(); closedGeneration(); emptyChainOwnership();
+    CameraEffectQueueContract.verify();
     System.out.println("Camera capture contract: " + assertions + " assertions passed");
   }
   private static void check(boolean condition, String message) {
@@ -74,15 +80,20 @@ public final class CaptureContractTest {
     check(releases.get() == 0, "closed generation does not retain or release input");
     frame.release();
   }
-  private static void upstreamEmptyListHazard() {
+  private static void emptyChainOwnership() {
     AtomicInteger releases = new AtomicInteger();
     VideoFrame input = new VideoFrame(buffer(releases), 0, 7L);
     VideoEffectProcessor empty = new VideoEffectProcessor(Collections.emptyList(), null);
     empty.setSink(f -> check(f == input, "empty upstream chain returns original input"));
     empty.onFrameCaptured(input);
-    // This assertion documents a pinned-upstream hazard, not desired behavior:
-    // the empty processor consumes the capturer's original reference. Android
-    // detach MUST pass null to GetUserMediaImpl, never an empty names array.
-    check(releases.get() == 1, "pinned 144 empty-chain bug requires null detachment");
+    check(releases.get() == 0, "empty chain must preserve the capturer-owned reference");
+    input.release();
+    check(releases.get() == 1, "empty-chain input freed only by its capturer");
+    AtomicInteger sinklessReleases = new AtomicInteger();
+    VideoFrame sinklessInput = new VideoFrame(buffer(sinklessReleases), 0, 8L);
+    VideoEffectProcessor sinkless = new VideoEffectProcessor(Collections.emptyList(), null);
+    sinkless.onFrameCaptured(sinklessInput);
+    check(sinklessReleases.get() == 0, "empty chain without sink does not consume input");
+    sinklessInput.release();
   }
 }

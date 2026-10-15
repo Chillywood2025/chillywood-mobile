@@ -34,6 +34,7 @@ export function LiveCameraControls({ controls, effectId, intensity, onSelect, on
       >
         <Text style={styles.label}>{controls?.switchingCamera ? "Switching camera…" : "Switch Camera"}</Text>
       </TouchableOpacity>
+      {controls?.cameraSwitchReason ? <Text accessibilityLiveRegion="polite" style={styles.detail}>{controls.cameraSwitchReason}</Text> : null}
       <View style={styles.row}>
         {options.map((option) => (
           <TouchableOpacity key={option.id} accessibilityRole="button"

@@ -23,16 +23,27 @@ function evaluate(file, dependencies, extra = {}) {
   }, ...extra }); return exports;
 }
 const controller = evaluate("_lib/livekit/cameraEffectsController.ts", {});
-async function mount(t, { allowed = true, channel = "android-internal-v2" } = {}) {
+const ownedSwitch = evaluate("_lib/livekit/ownedCameraSwitch.ts", {
+  "livekit-client": { TrackEvent: { Restarted: "restarted" } },
+  "../communicationCaptureRetirement": evaluate("_lib/communicationCaptureRetirement.ts", {}),
+});
+async function mount(t, { allowed = true, channel = "android-internal-v2", switching = false } = {}) {
   const calls = [], snapshots = [], timers = new Set(), listeners = new Map(), appListeners = new Set();
   let status = { state: "starting", processedFrames: 0 };
   const native = { capabilities: () => ({ studioLighting: true, chicagoSkyline: true, depthMode: "subject-parallax" }),
     configure: (id, effect) => { calls.push(["configure", id, effect]); return { processorName: id }; },
     release: id => calls.push(["release", id]), status: () => status };
-  const track = id => ({ id, kind: "video", enabled: true, readyState: "live", remote: false,
+  const track = (id, facingMode = "user") => ({ id, kind: "video", enabled: true, readyState: "live", remote: false,
     _setVideoEffects: names => calls.push(["effects", id, names === null ? null : [...names]]),
-    getSettings: () => ({ facingMode: "user" }), applyConstraints: async () => {} });
+    getSettings: () => ({ facingMode }), stop() { this.enabled = false; this.readyState = "ended"; } });
   let publication = { isMuted: false, track: { mediaStreamTrack: track("camera-a") } };
+  let acquire = async facingMode => ({ getTracks: () => [track("camera-new", facingMode)] });
+  let replace = async next => { publication.track.sender.track = next; publication.track.mediaStreamTrack = next; next.enabled = true; };
+  if (switching) Object.assign(publication.track, {
+    sender: { track: publication.track.mediaStreamTrack }, simulcastCodecs: new Map(),
+    replaceTrack: next => replace(next), emit: name => calls.push(["track-event", name]),
+    async mute() { publication.isMuted = true; publication.track.mediaStreamTrack.stop(); },
+  });
   const room = { state: "connected", localParticipant: { permissions: { canPublish: true }, getTrackPublication: () => publication },
     on(event, fn) { if (!listeners.has(event)) listeners.set(event, new Set()); listeners.get(event).add(fn); },
     off(event, fn) { listeners.get(event)?.delete(fn); } };
@@ -44,6 +55,8 @@ async function mount(t, { allowed = true, channel = "android-internal-v2" } = {}
     "expo-constants": { expoConfig: { extra: { runtime: { otaGeneration: { internalOnly: true, channel: "android-internal-v2" } } } } },
     "expo-updates": { channel }, "livekit-client": { ConnectionState: { Connected: "connected" }, RoomEvent: events, Track: { Source: { Camera: "camera" } } },
     "../modules/chillywood-camera-effects": native, "../_lib/livekit/cameraEffectsController": controller,
+    "../_lib/communication": { createCommunicationMediaStream: options => { calls.push(["capture", options]); return acquire(options.facingMode); } },
+    "../_lib/livekit/ownedCameraSwitch": ownedSwitch,
   }, { setInterval(fn) { timers.add(fn); return fn; }, clearInterval(fn) { timers.delete(fn); } });
   let props = { room, allowed, cameraEffectId: "studio-light", cameraEffectIntensity: 0.5,
     onCameraEffectsControls: value => snapshots.push(value) };
@@ -53,6 +66,7 @@ async function mount(t, { allowed = true, channel = "android-internal-v2" } = {}
   async function unmount() { if (mounted) { mounted = false; await React.act(async () => root.unmount()); } }
   t.after(unmount); await update();
   return { calls, snapshots, timers, listeners, room, track, update, unmount,
+    setCapture(value) { acquire = value; }, setReplacement(value) { replace = value; },
     appState(value) { for (const fn of appListeners) fn(value); },
     setPublication(value) { publication = value; }, get publication() { return publication; },
     setStatus(value) { status = value; }, tick() { for (const fn of timers) fn(); },
@@ -67,6 +81,35 @@ test("mounted hook applies only to the published authorized camera", async t => 
   h.setStatus({ state: "active", processedFrames: 1 }); h.tick(); assert.equal(h.snapshots.at(-1).state, "active");
   const notifications = h.snapshots.length;
   h.setStatus({ state: "active", processedFrames: 50 }); h.tick(); assert.equal(h.snapshots.length, notifications);
+});
+
+test("mounted owned camera replacement survives polling its stopped old track and rebinds effects to the new one", async t => {
+  const h = await mount(t, { switching: true });
+  let finish;
+  h.setCapture(facingMode => new Promise(resolve => { finish = () => resolve({ getTracks: () => [h.track("replacement", facingMode)] }); }));
+  const switching = h.snapshots.at(-1).switchCamera();
+  h.tick(); h.tick();
+  assert.equal(h.snapshots.at(-1).switchingCamera, true);
+  assert.equal(await h.snapshots.at(-1).switchCamera(), false);
+  finish(); assert.equal(await switching, true);
+  assert.equal(h.snapshots.at(-1).facingMode, "environment");
+  assert.ok(h.calls.some(call => call[0] === "configure" && call[1] === "replacement"));
+  const capture = h.calls.find(call => call[0] === "capture")[1];
+  assert.equal(capture.audio, false); assert.equal(capture.video, true);
+  assert.ok(h.calls.some(call => call[0] === "track-event" && call[1] === "restarted"));
+});
+
+for (const boundary of ["background", "demotion", "unmount"]) test(`mounted ${boundary} retires a late camera acquisition before publication`, async t => {
+  const h = await mount(t, { switching: true }), replacement = h.track("late", "environment");
+  let finish;
+  h.setCapture(() => new Promise(resolve => { finish = () => resolve({ getTracks: () => [replacement] }); }));
+  const switching = h.snapshots.at(-1).switchCamera();
+  if (boundary === "background") h.appState("background");
+  else if (boundary === "demotion") await h.update({ allowed: false });
+  else await h.unmount();
+  h.calls.length = 0; finish(); assert.equal(await switching, false);
+  assert.equal(replacement.readyState, "ended");
+  assert.ok(!h.calls.some(call => call[0] === "configure" || call[0] === "track-event"));
 });
 
 test("mounted role revocation detaches before later polling", async t => {

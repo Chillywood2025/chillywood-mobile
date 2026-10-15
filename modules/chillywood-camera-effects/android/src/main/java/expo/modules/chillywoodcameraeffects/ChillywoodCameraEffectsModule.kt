@@ -1,6 +1,8 @@
 package expo.modules.chillywoodcameraeffects
 
 import android.os.Build
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
 import com.oney.WebRTCModule.ChillywoodProcessorRegistry
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -9,7 +11,9 @@ import java.util.UUID
 class ChillywoodCameraEffectsModule : Module() {
   private data class Registration(val name: String, val processor: CameraEffectProcessor)
   private val registrations = mutableMapOf<String, Registration>()
-  private val lock = Any()
+  // This same monitor protects eligibility and the complete registration step.
+  private val lifecycle = CameraEffectsLifecyclePolicy()
+  private val lock = lifecycle
 
   override fun definition() = ModuleDefinition {
     Name("ChillywoodCameraEffects")
@@ -31,7 +35,7 @@ class ChillywoodCameraEffectsModule : Module() {
       require(intensity.isFinite()) { "Camera effect intensity must be finite" }
       synchronized(lock) {
         releaseLocked(trackId)
-        if (effect == "off" || intensity <= 0.0) {
+        if (effect == "off" || intensity <= 0.0 || !lifecycle.allowsConfiguration(nativeActivityIsResumed())) {
           mapOf("processorName" to null)
         } else {
           val name = "chillywood-camera-${UUID.randomUUID()}"
@@ -56,8 +60,25 @@ class ChillywoodCameraEffectsModule : Module() {
       }
     }
 
-    OnActivityEntersBackground { releaseAll() }
-    OnDestroy { releaseAll() }
+    OnActivityEntersBackground { suspendAll() }
+    OnActivityDestroys { suspendAll() }
+    OnActivityEntersForeground {
+      // Eligibility only: JS must explicitly configure/rebind the current track.
+      synchronized(lock) { lifecycle.resume() }
+    }
+    OnDestroy {
+      synchronized(lock) {
+        lifecycle.destroy()
+        releaseAllLocked()
+      }
+    }
+  }
+
+  private fun nativeActivityIsResumed(): Boolean {
+    val activity = appContext.currentActivity ?: return false
+    if (activity.isFinishing || activity.isDestroyed) return false
+    val owner = activity as? LifecycleOwner ?: return false
+    return owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
   }
 
   private fun releaseLocked(trackId: String) {
@@ -69,7 +90,14 @@ class ChillywoodCameraEffectsModule : Module() {
     }
   }
 
-  private fun releaseAll() = synchronized(lock) {
+  private fun suspendAll() = synchronized(lock) {
+    // Set before cleanup: even a delayed JS call carrying stale foreground
+    // knowledge cannot install another processor after native suspension.
+    lifecycle.suspend()
+    releaseAllLocked()
+  }
+
+  private fun releaseAllLocked() {
     registrations.keys.toList().forEach(::releaseLocked)
   }
 }

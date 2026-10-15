@@ -3,9 +3,10 @@
 ## Scope
 
 This additive implementation preserves the Live Stage/Watch-Party repairs and
-uses the existing authorized local LiveKit camera. It never creates a secondary
-capture, grants a speaking seat, requests new camera permission, or publishes a
-new track. No database change is needed for camera effects.
+uses the existing authorized local LiveKit camera. Effects add no secondary
+capture, speaking-seat grant or publication. Camera switching stops only the
+owned video source, follows the existing camera-permission path and replaces
+that source within the same publication. No database change is needed.
 
 Surfaces: `app/watch-party/live-stage/[partyId].tsx` (Live Stage) and the shared
 Player's `LiveKitStageMediaSurface` (Watch-Party Live). The Party Room's explicit
@@ -45,19 +46,40 @@ follows from source/algorithm tests.
   native module destruction release processing. Foreground rebinds the current
   authorized track. Native background invalidation does not depend on JS running.
 - Off synchronously invalidates native work before asynchronous SDK detach.
-- Android 144.0.0 must detach with `_setVideoEffects(null)`: an empty array
-  creates an upstream empty processor chain that double-releases the input.
+- Android detaches with `_setVideoEffects(null)`. A version/hash-checked config
+  plugin also repairs the pinned wrapper's empty-chain ownership bug: a delayed
+  RN bridge lookup can follow synchronous Expo provider removal despite using
+  the same final SDK executor. The real executor/provider/wrapper regression
+  exercises both orderings; the former SDK fails the delayed-attach control.
   iOS's declared nonnull array uses its separate, safe empty-list implementation.
-  The Android regression executes the actual pinned wrapper/refcount contract.
-- Camera switching uses awaited `applyConstraints`, removes stale `deviceId`,
-  checks returned facing mode, rejects double taps, invalidates old-camera
-  detections and ignores stale switch completion after authority/track changes.
+- Camera switching uses the existing video-only native acquisition helper and
+  the published `LocalVideoTrack.replaceTrack` owner, never facing changes through
+  unsupported `applyConstraints`. Only old video stops; microphone/publication
+  remain. A retained capture reservation stops late results after authority,
+  background or teardown changes. New facing, sender identity and native
+  acknowledgment are checked before effects rebind or success; RN preview gets
+  the SDK Restarted event. Failure leaves retry guidance rather than success.
+  Primary simulcast is supported; extra backup-codec capture disables switching
+  with an explicit reason instead of partially replacing its senders. Measured
+  resolution/FPS is preserved within the existing live policy (up to 720p/30);
+  the shared helper's original conservative defaults remain unchanged elsewhere.
+- Android lifecycle suspension, configuration and registry changes share one
+  lock. Configuration additionally requires a resumed native Activity. A late
+  configure cannot recreate processing after background/destroy cleanup, and
+  foreground still requires explicit current-owner rebind.
 - Inference, detection freshness, rendering time and output-buffer ownership are
   bounded. Missing subjects, unsupported formats, errors and overload return
   original video. This is **not a privacy-background feature**: the real
   background can become visible whenever processing falls back.
 - Active means the native callback produced a transformed frame, not merely
   that a configuration call returned. It expires when processed output stops.
+- The iOS camera Pod consumes the pinned SDK's actual frame-processor headers.
+  Its importer context needs the same narrowly scoped non-modular React-header
+  compatibility as the repository's two existing LiveKit Pods. The existing
+  plugin now includes this exact target, preserves custom/inherited flags, and
+  leaves unrelated Pods, app diagnostics and Swift modules unchanged. The
+  validation runner executes generated Ruby boundary fixtures and verifies the
+  actual Pods project settings before the complete unsigned Simulator compile.
 
 ## Privacy and dependencies
 
@@ -124,10 +146,11 @@ before exact-head validation. Release tests reject both a V13 binary and a new
 camera binary mislabeled with the V13 runtime before any provider call.
 
 Native inputs measured from committed source
-`352af4601c59159951dca4d6c256ab7f917d5e07`:
+`af2159ef718e788bb6bf53ec29c3813a0288ed91` (including independent-review repairs
+and the target-scoped iOS importer compatibility fix):
 
-- Android: `bd72fdf8c5125154a7d013375cad6421324e8a2f0353d7681dc9dcaa8554108e`
-- iOS: `d29abe27d7197091ab2e17a9a142b2840a0992b706eeaa511af66eccca286352`
+- Android: `fd1769d1ef5a129be29cf17c13e3dfe3a466775fd6894af7d373d3571e5ab714`
+- iOS: `2379ee957676700297617c60ad6b4cdb76566df3d20e8f768c763f919277f594`
 
 The digest receipt fields do not participate in their own hash. Recompute on
 the final candidate; these values describe source inputs, not signed artifacts.

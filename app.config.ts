@@ -375,6 +375,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       "expo-asset",
       "@livekit/react-native-expo-plugin",
       "./plugins/withWebRtcSenderAcknowledgment",
+      "./plugins/withWebRtcCameraEffectOwnership",
       "./plugins/withOwnedAndroidAudioSession",
       "./plugins/withLiveKitIosStaticFrameworkCompatibility",
       [

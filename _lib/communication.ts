@@ -1060,10 +1060,22 @@ export async function createCommunicationMediaStream(options: {
   audio: boolean;
   video: boolean;
   facingMode?: "user" | "environment";
+  captureSettings?: Pick<MediaTrackSettings, "width" | "height" | "frameRate">;
 }): Promise<MediaStream | null> {
   const rtc = getCommunicationRTCModule();
   if (!rtc) return null;
   if (!options.audio && !options.video) return null;
+
+  // An existing LiveKit camera may use the room's 720p/30 profile. Preserve its
+  // measured dimensions during an owned lens replacement, bounded by the same
+  // live-video policy; ordinary communication capture keeps its defaults below.
+  const bounded = (value: number | undefined, fallback: number, maximum: number) =>
+    Number.isFinite(value) ? Math.min(maximum, Math.max(1, Math.round(value!))) : fallback;
+  const replacementSettings = options.captureSettings ? {
+    width: { ideal: bounded(options.captureSettings.width, 640, 1280), max: 1280 },
+    height: { ideal: bounded(options.captureSettings.height, 480, 720), max: 720 },
+    frameRate: { ideal: bounded(options.captureSettings.frameRate, 15, 30), max: 30 },
+  } : {};
 
   return rtc.mediaDevices.getUserMedia({
     audio: options.audio,
@@ -1076,6 +1088,7 @@ export async function createCommunicationMediaStream(options: {
           width: { ideal: 640, max: 1280 },
           height: { ideal: 480, max: 720 },
           frameRate: { ideal: 15, max: 24 },
+          ...replacementSettings,
         }
       : false,
   });

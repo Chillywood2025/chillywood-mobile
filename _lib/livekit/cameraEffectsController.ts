@@ -9,9 +9,14 @@ export type CameraEffectsTrack = {
   enabled: boolean;
   readyState: string;
   _setVideoEffects?: (names: string[] | null) => void;
-  applyConstraints?: (constraints: MediaTrackConstraints) => Promise<void>;
   getSettings?: () => MediaTrackSettings;
-  getConstraints?: () => MediaTrackConstraints;
+};
+export type CameraSwitchBinding = {
+  available: () => boolean;
+  ownsTrack: (track: CameraEffectsTrack | null) => boolean;
+  switchCamera: (facingMode: "user" | "environment", isCurrent: () => boolean) => Promise<CameraEffectsTrack | null>;
+  cancel: () => void;
+  unavailableReason?: () => string | undefined;
 };
 export type CameraEffectsSnapshot = CameraEffectStatus & {
   effect: CameraEffect;
@@ -20,6 +25,7 @@ export type CameraEffectsSnapshot = CameraEffectStatus & {
   canSwitchCamera: boolean;
   switchingCamera: boolean;
   facingMode: string | null;
+  cameraSwitchReason?: string;
 };
 
 export const CAMERA_EFFECTS_UNAVAILABLE: CameraEffectsCapabilities = {
@@ -88,6 +94,7 @@ export class CameraEffectsController {
   private switching = false;
   private generation = 0;
   private failure: string | null = null;
+  private switchBinding: CameraSwitchBinding | null = null;
   readonly capabilities: CameraEffectsCapabilities;
 
   constructor(private readonly native: CameraEffectsModule | null, private readonly internalBuild: boolean,
@@ -114,21 +121,27 @@ export class CameraEffectsController {
     if (!attached) return;
     // Native release invalidates queued inference before the asynchronous WebRTC detach.
     try { this.native?.release(attached.id); } catch { /* Detach still restores natural camera. */ }
-    // Pinned Android 144 treats [] as an empty processor chain with a double
-    // input release. Null removes VideoSource's processor. iOS declares a
+    // Null removes Android's processor instead of keeping an empty chain. The
+    // pinned empty-chain ownership bug is additionally patched for stale bridge
+    // lookups that race provider removal. iOS declares a
     // nonnull array and its empty chain correctly forwards the original frame.
     try { attached._setVideoEffects?.(this.platform === "android" ? null : []); }
     catch { /* An already-ended track needs no restart. */ }
   }
 
-  bind(track: CameraEffectsTrack | null, allowed: boolean) {
+  bind(track: CameraEffectsTrack | null, allowed: boolean, switchBinding: CameraSwitchBinding | null = null) {
+    // The owned switch intentionally ends the old raw camera before acquisition.
+    // Polling its ended track or its own pending replacement is not revocation.
+    if (this.switching && allowed && switchBinding === this.switchBinding && switchBinding?.ownsTrack(track)) return;
     const next = allowed && track?.enabled && track.readyState === "live" && track.remote !== true ? track : null;
-    if (next !== this.track || this.allowed !== allowed) {
+    if (next !== this.track || this.allowed !== allowed || switchBinding !== this.switchBinding) {
       this.generation += 1;
+      this.switchBinding?.cancel();
       this.switching = false;
       this.detach();
       this.track = next;
       this.allowed = allowed;
+      this.switchBinding = switchBinding;
       this.failure = null;
       this.apply();
     }
@@ -183,34 +196,36 @@ export class CameraEffectsController {
       }
     }
     return { ...status, reason: cameraEffectReasonCopy(status.reason), effect: this.effect, intensity: this.intensity, capabilities: this.capabilities,
-      canSwitchCamera: this.internalBuild && usable && typeof track.applyConstraints === "function",
+      canSwitchCamera: this.internalBuild && usable && this.switchBinding?.available() === true,
+      cameraSwitchReason: this.switchBinding?.unavailableReason?.(),
       switchingCamera: this.switching, facingMode: usable ? track.getSettings?.().facingMode ?? null : null };
   }
 
   async switchCamera(): Promise<boolean> {
     const track = this.track;
-    if (!this.internalBuild || !this.usable(track) || !track.applyConstraints || this.switching) return false;
+    const binding = this.switchBinding;
+    if (!this.internalBuild || !this.usable(track) || !binding?.available() || this.switching) return false;
     const generation = this.generation;
     const previousFacing = track.getSettings?.().facingMode;
     const facingMode = previousFacing === "environment" ? "user" : "environment";
-    const constraints = { ...track.getConstraints?.(), facingMode };
-    delete constraints.deviceId;
     this.switching = true;
     this.failure = null;
     this.detach(); // Old-camera masks must never be reused on the new camera.
     try {
-      await track.applyConstraints!(constraints);
-      if (generation !== this.generation || this.track !== track || !this.usable()) return false;
-      if (track.getSettings?.().facingMode !== facingMode) {
-        this.failure = "This device did not confirm the other camera. Check your preview before continuing.";
+      const isCurrent = () => generation === this.generation && this.switchBinding === binding && this.allowed && !this.disposed;
+      const replacement = await binding.switchCamera(facingMode, isCurrent);
+      if (!isCurrent()) return false;
+      if (!replacement || replacement.getSettings?.().facingMode !== facingMode) {
+        this.failure = "Camera switch failed. Turn the camera off and on to try again.";
         return false;
       }
+      this.track = replacement;
       return true;
     } catch {
       if (generation === this.generation) this.failure = "Could not confirm the camera switch. Check your preview before continuing.";
       return false;
     } finally {
-      if (generation === this.generation && this.track === track) {
+      if (generation === this.generation && this.switchBinding === binding) {
         this.switching = false;
         this.apply();
       }
@@ -221,6 +236,8 @@ export class CameraEffectsController {
     this.disposed = true;
     this.allowed = false;
     this.generation += 1;
+    this.switchBinding?.cancel();
+    this.switchBinding = null;
     this.detach();
     this.track = null;
   }

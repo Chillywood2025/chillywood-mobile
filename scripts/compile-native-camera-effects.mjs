@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 
 // Credential-free native validation only. Never builds/signs the app, publishes
 // an OTA, calls EAS, submits to a store, or accepts SDK license prompts.
@@ -87,6 +88,14 @@ try {
     const digest = createHash("sha256");
     for (const file of files(generated).sort()) { digest.update(path.relative(generated, file)); digest.update(fs.readFileSync(file)); }
     receipts[platform] = { generatedSourceSha256: digest.digest("hex"), compiled: false };
+    if (platform === "android") {
+      const ownership = createRequire(import.meta.url)(path.join(project, "plugins/withWebRtcCameraEffectOwnership.js")).__test;
+      const dependency = fs.readFileSync(path.join(project, "node_modules/@livekit/react-native-webrtc", ownership.RELATIVE_PATH), "utf8");
+      const nativeDependencySha256 = ownership.digest(dependency);
+      assert.equal(nativeDependencySha256, ownership.PATCHED_SHA256, "Actual prebuild must apply empty-chain ownership protection");
+      receipts.android.nativeDependencySha256 = nativeDependencySha256;
+      console.log(`Android WebRTC camera ownership source SHA-256: ${nativeDependencySha256}`);
+    }
     if (generateOnly) continue;
     if (platform === "android") {
       assert(env.ANDROID_HOME || env.ANDROID_SDK_ROOT, "Android SDK must be supplied by the runner; no automatic license acceptance");
@@ -116,6 +125,16 @@ try {
       run("xcrun", ["--sdk", "iphonesimulator", "--show-sdk-path"]);
       run("pod", ["install"], generated, platformEnv);
       assert(fs.existsSync(path.join(generated, "Pods/Pods.xcodeproj")), "CocoaPods native project must exist");
+      console.log(run("ruby", [path.join(root, "scripts", "verify-livekit-ios-compatibility.rb"),
+        path.join(generated, "Podfile"), path.join(generated, "Pods/Pods.xcodeproj")], generated, platformEnv).trim());
+      const settings = JSON.parse(run("xcodebuild", ["-project", "Pods/Pods.xcodeproj", "-target", "ChillywoodCameraEffects",
+        "-configuration", "Debug", "-sdk", "iphonesimulator", "-showBuildSettings", "-json"], generated, platformEnv))
+        .find(value => value.target === "ChillywoodCameraEffects")?.buildSettings;
+      assert.equal(settings?.CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES, "YES");
+      assert.match(settings.OTHER_CFLAGS, /-Wno-non-modular-include-in-framework-module/u);
+      assert.equal(settings.CLANG_ENABLE_MODULES, "YES", "Actual compile must retain Clang modules");
+      assert.notEqual(settings.GCC_WARN_INHIBIT_ALL_WARNINGS, "YES");
+      console.log("iOS: effective Simulator importer settings verified; unrelated diagnostics remain enabled");
       run("xcodebuild", ["-project", "Pods/Pods.xcodeproj", "-target", "ChillywoodCameraEffects", "-configuration", "Debug",
         "-sdk", "iphonesimulator", "-arch", process.arch === "arm64" ? "arm64" : "x86_64",
         "ONLY_ACTIVE_ARCH=YES", "CODE_SIGNING_ALLOWED=NO", "CODE_SIGNING_REQUIRED=NO",

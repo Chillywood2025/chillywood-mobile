@@ -15,9 +15,15 @@ directly imports `ProcessorProvider`, preserving compiler-checked SDK signatures
 These two headers import only WebRTC frame/capturer headers in 144.0.0.
 CocoaPods sanitizes the dependency's framework/module name to
 `livekit_react_native_webrtc`, so that prefix is selected first; a conditional
-fallback handles the hyphenated non-framework public-header directory. No new
-non-modular-header suppression flags are added. Actual framework/module build
-behavior must be confirmed by the simulator compilation gate. Changing the
+fallback handles the hyphenated non-framework public-header directory. Clang
+still precompiles the SDK's complete umbrella in the importing Pod's context,
+which includes its non-modular React headers. The existing LiveKit compatibility
+plugin therefore extends its exact-target exception to `ChillywoodCameraEffects`:
+`CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES` and the single
+`-Wno-non-modular-include-in-framework-module` C flag. Custom/inherited flags are
+retained; Swift modules, unrelated Pods and other diagnostics remain enabled.
+The simulator gate executes generated Ruby fixtures, checks effective target
+settings and compiles the full module with actual SDK headers. Changing the
 pinned SDK requires reviewing and compiling this boundary again.
 
 ## Contract and lifecycle

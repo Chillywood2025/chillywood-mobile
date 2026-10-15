@@ -42,9 +42,17 @@ use the same processed stream. This code does not create a display overlay.
 - For this pinned WebRTC wrapper, `null` is the safe passthrough value. A new
   output has one reference, which the wrapper releases. Never return the input
   without retaining it, or chain another processor without rechecking ownership.
-- Android detachment must pass a `null` names argument to the pinned WebRTC API.
-  An empty array creates an empty upstream processor chain that incorrectly
-  releases the input twice. This is covered by an explicit pinned-contract test.
+- Android detachment passes a `null` names argument to the pinned WebRTC API.
+  The unpatched SDK's empty array creates an empty processor chain that incorrectly
+  releases the input twice. The version/hash-checked
+  `withWebRtcCameraEffectOwnership` prebuild plugin fixes that path because a
+  delayed attach can resolve an already-removed provider even when Off passes
+  null. Real SDK executor tests cover both queue orderings; the old SDK is a
+  required failing control.
+- Native suspension and configure share one lifecycle monitor. A currently
+  resumed Activity is required at configure time, background marks suspension
+  before cleanup, and destruction is terminal. Foreground does not recreate
+  processors without a new explicit configuration.
 
 ## Privacy and dependency review
 
@@ -74,6 +82,8 @@ SDK. `run-capture-contract-tests.sh` additionally needs
 `CAMERA_EFFECTS_TEST_CLASSPATH` pointing at real Android, pinned WebRTC and ML Kit
 dependency jars. It tests the actual WebRTC wrapper's frame ownership, pooled
 buffer lifetime and closed-generation fallback without initializing ML Kit.
+`run-lifecycle-tests.sh` executes the production admission policy, including
+background/late-configure, foreground/rebind and concurrent cleanup ordering.
 
 These host-JVM checks do not replace a full Android Gradle/Kotlin build or a
 physical-device call. Before release, verify portrait/landscape, front/rear

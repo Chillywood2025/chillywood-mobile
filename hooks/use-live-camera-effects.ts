@@ -1,10 +1,12 @@
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
-import { ConnectionState, RoomEvent, Track, type Room } from "livekit-client";
+import { ConnectionState, RoomEvent, Track, type LocalVideoTrack, type Room } from "livekit-client";
 import { useEffect, useRef } from "react";
 import { AppState, Platform } from "react-native";
 
 import NativeCameraEffects from "../modules/chillywood-camera-effects";
+import { createCommunicationMediaStream } from "../_lib/communication";
+import { OwnedLiveCameraSwitch } from "../_lib/livekit/ownedCameraSwitch";
 import {
   CameraEffectsController, cameraEffectsInternalBuild, type CameraEffectsSnapshot, type CameraEffectsTrack,
 } from "../_lib/livekit/cameraEffectsController";
@@ -34,6 +36,13 @@ export function useLiveCameraEffects({
     let lastSnapshot = "";
     let stopped = false;
     let appState = AppState.currentState;
+    let switchOwner: LocalVideoTrack | null = null;
+    let switchBinding: OwnedLiveCameraSwitch | null = null;
+    const authorized = () => {
+      const publication = room.localParticipant.getTrackPublication(Track.Source.Camera);
+      return !stopped && current.current.allowed && appState === "active" && room.state === ConnectionState.Connected
+        && room.localParticipant.permissions?.canPublish === true && publication?.isMuted === false;
+    };
     const notify = () => {
       const snapshot = controller.snapshot();
       // Frame counters are diagnostics, not a reason to rerender the entire player.
@@ -46,17 +55,24 @@ export function useLiveCameraEffects({
           const result = controller.switchCamera();
           notify();
           const succeeded = await result;
-          if (!stopped) notify();
+          if (!stopped) sync();
           return succeeded;
         },
       });
     };
     const sync = () => {
       const publication = room.localParticipant.getTrackPublication(Track.Source.Camera);
-      const allowedNow = current.current.allowed && appState === "active" && room.state === ConnectionState.Connected
-        && room.localParticipant.permissions?.canPublish === true && publication?.isMuted === false;
+      const allowedNow = authorized();
+      const owner = publication?.track as LocalVideoTrack | undefined;
+      if ((owner ?? null) !== switchOwner) {
+        switchBinding?.cancel();
+        switchOwner = owner ?? null;
+        switchBinding = owner && typeof owner.replaceTrack === "function" ? new OwnedLiveCameraSwitch(owner,
+          (facingMode, captureSettings) => createCommunicationMediaStream({ audio: false, video: true, facingMode, captureSettings }),
+          () => authorized() && room.localParticipant.getTrackPublication(Track.Source.Camera)?.track === owner) : null;
+      }
       const track = publication?.track?.mediaStreamTrack as CameraEffectsTrack | undefined;
-      controller.bind(track ?? null, allowedNow);
+      controller.bind(track ?? null, allowedNow, switchBinding);
       controller.select(current.current.cameraEffectId, current.current.cameraEffectIntensity);
       notify();
     };
