@@ -63,6 +63,13 @@ follows from source/algorithm tests.
   with an explicit reason instead of partially replacing its senders. Measured
   resolution/FPS is preserved within the existing live policy (up to 720p/30);
   the shared helper's original conservative defaults remain unchanged elsewhere.
+- Interrupted switching distinguishes retained publication ownership from
+  temporary capture authorization. Signal reconnect/background cancellation
+  immediately marks the stopped owned camera muted and gives Off/On retry
+  guidance, without acquiring another camera automatically. The same publication
+  and microphone survive; late native results cannot re-mute a newer user
+  restart or a successor publication. Mounted real-SDK regression cases run on
+  both platform normalizations and reject the preserved former source.
 - Android lifecycle suspension, configuration and registry changes share one
   lock. Configuration additionally requires a resumed native Activity. A late
   configure cannot recreate processing after background/destroy cleanup, and
@@ -71,6 +78,12 @@ follows from source/algorithm tests.
   bounded. Missing subjects, unsupported formats, errors and overload return
   original video. This is **not a privacy-background feature**: the real
   background can become visible whenever processing falls back.
+- Android skips texture conversion when it has neither fresh analysis nor an
+  admitted inference job. Synchronous conversion/preparation and fallback paths
+  also enforce the processing budget; model-unavailable/cooldown frames remain
+  cheap original-frame pass-through. Deterministic production-processor tests
+  use real SDK classes with only clock/executor control, including former-source
+  counterexamples. These checks do not measure physical-device performance.
 - Active means the native callback produced a transformed frame, not merely
   that a configuration call returned. It expires when processed output stops.
 - The iOS camera Pod consumes the pinned SDK's actual frame-processor headers.
@@ -146,10 +159,11 @@ before exact-head validation. Release tests reject both a V13 binary and a new
 camera binary mislabeled with the V13 runtime before any provider call.
 
 Native inputs measured from committed source
-`af2159ef718e788bb6bf53ec29c3813a0288ed91` (including independent-review repairs
-and the target-scoped iOS importer compatibility fix):
+`27fbc44bbcec100e1501d65b5c779ca75d7fb132` (including interrupted-camera recovery,
+Android fallback budget repairs and the previously compiled target-scoped iOS
+importer compatibility fix):
 
-- Android: `fd1769d1ef5a129be29cf17c13e3dfe3a466775fd6894af7d373d3571e5ab714`
+- Android: `831741a268f6535e817ae5af6deb3b5c1ad17a0e4274923fa9dfcf5baa93119e`
 - iOS: `2379ee957676700297617c60ad6b4cdb76566df3d20e8f768c763f919277f594`
 
 The digest receipt fields do not participate in their own hash. Recompute on

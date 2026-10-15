@@ -147,6 +147,7 @@ import { BetaAccessScreen } from "../../../components/system/beta-access-screen"
 import { useChannelFollowAction } from "../../../hooks/use-channel-follow-action";
 import { LiveCameraControls } from "../../../components/live/live-camera-controls";
 import { useLiveCameraEffects, type LiveCameraEffectsControls, type LiveCameraEffectsProps } from "../../../hooks/use-live-camera-effects";
+import { useLocalCameraMirror } from "../../../hooks/use-local-camera-mirror";
 import { SocialAttachmentActionSheet } from "../../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../../components/social/social-attachment-card";
 import { AppBackButton } from "../../../components/navigation/app-back-button";
@@ -357,6 +358,7 @@ function LiveKitHybridParticipantVideo({
   publishLocalCamera: boolean;
 }) {
   const { cameraTrack, localParticipant } = useHybridLiveKitLocalParticipant();
+  const mirrorLocalCamera = useLocalCameraMirror(cameraTrack?.track);
   const tracks = useHybridLiveKitTracks(
     [
       { source: Track.Source.Camera, withPlaceholder: false },
@@ -454,7 +456,7 @@ function LiveKitHybridParticipantVideo({
           trackRef={resolvedTrack}
           style={styles.stagePresenceCameraFill}
           objectFit="cover"
-          mirror={participantIsLocal}
+          mirror={participantIsLocal && mirrorLocalCamera}
           zOrder={0}
         />
       </View>
@@ -487,6 +489,7 @@ function LiveKitHybridHeroVideo({
     lastCameraError,
     localParticipant,
   } = useHybridLiveKitLocalParticipant();
+  const mirrorLocalCamera = useLocalCameraMirror(cameraTrack?.track);
   const canPublishLocalCamera = participantRole !== "viewer";
   const shouldPublishLocalCamera = canPublishLocalCamera && publishLocalCamera;
   const tracks = useHybridLiveKitTracks(
@@ -577,7 +580,7 @@ function LiveKitHybridHeroVideo({
           trackRef={primaryTrack}
           style={styles.stageHeroMediaFill}
           objectFit="cover"
-          mirror={showLocalPrimary}
+          mirror={showLocalPrimary && mirrorLocalCamera}
           zOrder={0}
         />
       </View>
@@ -1696,6 +1699,9 @@ export default function WatchPartyLiveStageScreen({
         }).catch(() => null);
         if (cancelled) return;
         const refreshedSnapshot = await refreshStageSnapshot(trackedUserId).catch(() => null);
+        // Cleanup can run during the snapshot read. Never create room channels
+        // or a heartbeat after the effect that owns them has been retired.
+        if (cancelled) return;
         const persistedTrackedMembership = persistedSessionMembership
           ?? refreshedSnapshot?.memberships.find((membership) => membership.userId === trackedUserId)
           ?? membershipMapRef.current[trackedUserId]

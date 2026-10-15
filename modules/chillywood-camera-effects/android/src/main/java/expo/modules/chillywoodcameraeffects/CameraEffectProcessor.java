@@ -21,6 +21,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.LongSupplier;
 import org.webrtc.JavaI420Buffer;
 import org.webrtc.SurfaceTextureHelper;
 import org.webrtc.VideoFrame;
@@ -42,9 +43,8 @@ public final class CameraEffectProcessor implements VideoFrameProcessor, AutoClo
   private final Object stateLock = new Object();
   private final FrameBufferPool buffers = new FrameBufferPool();
   private final AtomicBoolean inferenceInFlight = new AtomicBoolean(false);
-  private final ExecutorService inferenceExecutor = Executors.newSingleThreadExecutor(r -> {
-    Thread t = new Thread(r, "ChillywoodCameraInference"); t.setDaemon(true); return t;
-  });
+  private final LongSupplier nanoTime;
+  private final ExecutorService inferenceExecutor;
   private volatile boolean closed;
   private volatile Observation observation;
   private volatile long nextInferenceNs;
@@ -76,13 +76,21 @@ public final class CameraEffectProcessor implements VideoFrameProcessor, AutoClo
   }
 
   public CameraEffectProcessor(String effect, float intensity) {
+    this(effect, intensity, SystemClock::elapsedRealtimeNanos, Executors.newSingleThreadExecutor(r -> {
+      Thread t = new Thread(r, "ChillywoodCameraInference"); t.setDaemon(true); return t;
+    }));
+  }
+
+  // Deterministic host tests control time and the asynchronous ML work boundary.
+  CameraEffectProcessor(String effect, float intensity, LongSupplier nanoTime, ExecutorService inferenceExecutor) {
     this.effect = effect; this.intensity = intensity;
+    this.nanoTime = nanoTime; this.inferenceExecutor = inferenceExecutor;
   }
 
   public Map<String, Object> status() {
     synchronized (stateLock) {
       Map<String, Object> result = new HashMap<>();
-      boolean expired = state.equals("active") && SystemClock.elapsedRealtimeNanos() - lastOutputNs > MAX_AGE_NS;
+      boolean expired = state.equals("active") && nanoTime.getAsLong() - lastOutputNs > MAX_AGE_NS;
       result.put("state", expired ? "starting" : state);
       result.put("processedFrames", processedFrames);
       if (expired) result.put("reason", "Waiting for a fresh processed camera frame");
@@ -93,7 +101,7 @@ public final class CameraEffectProcessor implements VideoFrameProcessor, AutoClo
 
   @Override public VideoFrame process(VideoFrame frame, SurfaceTextureHelper ignored) {
     if (closed) return null;
-    long now = SystemClock.elapsedRealtimeNanos();
+    long now = nanoTime.getAsLong();
     int width = frame.getBuffer().getWidth(), height = frame.getBuffer().getHeight();
     int rotation = frame.getRotation();
     if (!EffectMath.validDimensions(width, height, rotation)) {
@@ -103,21 +111,30 @@ public final class CameraEffectProcessor implements VideoFrameProcessor, AutoClo
     if (now < pauseUntilNs) return null;
     VideoFrame.I420Buffer input = null;
     JavaI420Buffer output = null;
+    boolean inferenceReserved = false;
     try {
+      Observation current = observation;
+      inferenceReserved = reserveInference(now);
+      if (!inferenceReserved && (current == null || !current.matches(width, height, rotation, now))) {
+        awaitingObservation();
+        return null;
+      }
+      // Texture readback is expensive. Do it only for usable analysis or work
+      // that already owns the single inference slot, including across generations.
       input = frame.getBuffer().toI420();
       if (input == null) {
         update("unavailable", "The camera did not provide a convertible video frame");
         return null;
       }
-      maybeInfer(input, rotation, now);
-      Observation current = observation;
+      if (nanoTime.getAsLong() - now > COMPOSITE_BUDGET_NS) return null;
+      if (inferenceReserved) {
+        inferenceReserved = false; // submitInference now owns completion/release.
+        submitInference(input, rotation, now);
+      }
+      current = observation;
       if (current == null || !current.matches(width, height, rotation, now)) {
         // Never use an old orientation or an old subject mask after a camera switch.
-        synchronized (stateLock) {
-          if (!closed && state.equals("active")) {
-            state = "starting"; reason = "Waiting for fresh subject detection";
-          }
-        }
+        awaitingObservation();
         return null;
       }
       output = buffers.acquire(width, height);
@@ -129,12 +146,8 @@ public final class CameraEffectProcessor implements VideoFrameProcessor, AutoClo
           input.getDataY(), input.getStrideY(), input.getDataU(), input.getStrideU(), input.getDataV(), input.getStrideV(),
           output.getDataY(), output.getStrideY(), output.getDataU(), output.getStrideU(), output.getDataV(), output.getStrideV(),
           current.face, current.mask, current.skyline, effect, frame.getTimestampNs());
-      long completed = SystemClock.elapsedRealtimeNanos();
-      if (completed - now > COMPOSITE_BUDGET_NS) {
-        pauseUntilNs = completed + 500_000_000L;
-        update("unavailable", "Camera effect paused to preserve call performance");
-        return null;
-      }
+      long completed = nanoTime.getAsLong();
+      if (completed - now > COMPOSITE_BUDGET_NS) return null;
       synchronized (stateLock) {
         if (closed || !current.matches(width, height, rotation, completed)) return null;
         VideoFrame result = new VideoFrame(output, rotation, frame.getTimestampNs());
@@ -143,22 +156,49 @@ public final class CameraEffectProcessor implements VideoFrameProcessor, AutoClo
         return result;
       }
     } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
-      pauseUntilNs = SystemClock.elapsedRealtimeNanos() + 1_000_000_000L;
+      pauseUntilNs = nanoTime.getAsLong() + 1_000_000_000L;
       update("error", "Camera processing failed; original video is continuing");
       return null;
     } finally {
+      if (inferenceReserved) finishInference();
       if (output != null) output.release();
       if (input != null) input.release();
+      // Conversion, NV21 copying and pool-pressure/failure exits consume the
+      // capture thread too. They must not bypass the same budget as composition.
+      long completed = nanoTime.getAsLong();
+      if (completed - now > COMPOSITE_BUDGET_NS) {
+        synchronized (stateLock) {
+          if (!closed) {
+            pauseUntilNs = Math.max(pauseUntilNs, completed + 500_000_000L);
+            if (!state.equals("error")) {
+              state = "unavailable"; reason = "Camera effect paused to preserve call performance";
+            }
+          }
+        }
+      }
     }
     // In pinned WebRTC 144, null is the safe original-frame path: its wrapper
     // retains input and releases it once. Returning input without retain would
     // cause a double release. We never retain input across asynchronous work.
   }
 
-  private void maybeInfer(VideoFrame.I420Buffer input, int rotation, long capturedNs) {
-    if (closed || capturedNs < nextInferenceNs || !INFERENCE_SLOT.tryAcquire()) return;
-    if (!inferenceInFlight.compareAndSet(false, true)) { INFERENCE_SLOT.release(); return; }
+  private void awaitingObservation() {
+    synchronized (stateLock) {
+      if (!closed && state.equals("active")) {
+        state = "starting"; reason = "Waiting for fresh subject detection";
+      }
+    }
+  }
+
+  private boolean reserveInference(long capturedNs) {
+    if (closed || capturedNs < nextInferenceNs || !INFERENCE_SLOT.tryAcquire()) return false;
+    if (!inferenceInFlight.compareAndSet(false, true)) { INFERENCE_SLOT.release(); return false; }
     nextInferenceNs = capturedNs + INFERENCE_INTERVAL_NS;
+    return true;
+  }
+
+  private void submitInference(VideoFrame.I420Buffer input, int rotation, long capturedNs) {
+    if (closed) { finishInference(); return; }
     if (observation == null) update("starting", "Detecting the subject on this device");
     try {
       int width = input.getWidth(), height = input.getHeight();
@@ -166,7 +206,7 @@ public final class CameraEffectProcessor implements VideoFrameProcessor, AutoClo
       byte[] nv21 = EffectMath.toNv21(width, height, input.getDataY(), input.getStrideY(),
           input.getDataU(), input.getStrideU(), input.getDataV(), input.getStrideV());
       inferenceExecutor.execute(() -> infer(nv21, width, height, rotation, capturedNs));
-    } catch (RuntimeException | OutOfMemoryError failure) {
+    } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
       failInference(); finishInference();
     }
   }
@@ -209,7 +249,7 @@ public final class CameraEffectProcessor implements VideoFrameProcessor, AutoClo
   }
 
   private void acceptFaces(List<Face> faces, int width, int height, int rotation, long capturedNs) {
-    if (closed || SystemClock.elapsedRealtimeNanos() - capturedNs > MAX_AGE_NS) return;
+    if (closed || nanoTime.getAsLong() - capturedNs > MAX_AGE_NS) return;
     Face selected = null;
     for (Face face : faces) {
       Rect box = face.getBoundingBox();
@@ -232,7 +272,7 @@ public final class CameraEffectProcessor implements VideoFrameProcessor, AutoClo
   }
 
   private void acceptMask(SegmentationMask result, int width, int height, int rotation, long capturedNs) {
-    if (closed || SystemClock.elapsedRealtimeNanos() - capturedNs > MAX_AGE_NS) return;
+    if (closed || nanoTime.getAsLong() - capturedNs > MAX_AGE_NS) return;
     int maskWidth = result.getWidth(), maskHeight = result.getHeight();
     if (maskWidth < 2 || maskHeight < 2 || maskWidth > 2048 || maskHeight > 2048) { failInference(); return; }
     ByteBuffer buffer = result.getBuffer().duplicate().order(result.getBuffer().order());
@@ -259,13 +299,13 @@ public final class CameraEffectProcessor implements VideoFrameProcessor, AutoClo
 
   private void publish(Observation next) {
     synchronized (stateLock) {
-      if (!closed && SystemClock.elapsedRealtimeNanos() - next.capturedNs <= MAX_AGE_NS) observation = next;
+      if (!closed && nanoTime.getAsLong() - next.capturedNs <= MAX_AGE_NS) observation = next;
     }
   }
 
   private void failInference() {
     observation = null;
-    nextInferenceNs = SystemClock.elapsedRealtimeNanos() + 1_000_000_000L;
+    nextInferenceNs = nanoTime.getAsLong() + 1_000_000_000L;
     update("unavailable", "On-device subject detection is unavailable; original video is continuing");
   }
 

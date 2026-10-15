@@ -32,7 +32,10 @@ use the same processed stream. This code does not create a display overlay.
   used asynchronously; camera frames are never held for inference. Results
   expire 250 ms after capture, including inference time.
 - Three pooled output buffers bound memory while downstream consumers retain
-  references. Slow composition pauses effects temporarily; stale detection,
+  references. Texture conversion is skipped unless fresh analysis is usable or
+  the generation has reserved inference work. The synchronous capture budget
+  includes conversion, NV21 copying and fallback exits as well as composition.
+  Slow work pauses effects temporarily; stale detection,
   unavailable models, pool pressure and errors preserve original video.
 - Closing a generation disables it immediately. Expo destruction/backgrounding
   releases registrations and ML resources. Late asynchronous results cannot
@@ -82,6 +85,17 @@ SDK. `run-capture-contract-tests.sh` additionally needs
 `CAMERA_EFFECTS_TEST_CLASSPATH` pointing at real Android, pinned WebRTC and ML Kit
 dependency jars. It tests the actual WebRTC wrapper's frame ownership, pooled
 buffer lifetime and closed-generation fallback without initializing ML Kit.
+It also runs `run-fallback-tests.sh`, whose deterministic tests execute the
+production processor, compositor, pool and real pinned WebRTC wrapper with an
+injected monotonic clock and controlled asynchronous ML boundary. They cover
+model cooldown, cross-generation admission, expensive fallback exits, rejection,
+close-during-conversion and fresh cached analysis while inference is busy.
+Every run also removes the admission guard and fallback budget guard in separate
+temporary production-source copies and requires their counterexamples to fail.
+The fallback runner accepts `--former-source /path/to/CameraEffectProcessor.java`
+for the pre-fix source: only its clock/executor construction is adapted to the
+test seam, and four actual old-algorithm counterexamples must fail. No Android,
+WebRTC or ML Kit API classes are replaced by test stubs.
 `run-lifecycle-tests.sh` executes the production admission policy, including
 background/late-configure, foreground/rebind and concurrent cleanup ordering.
 

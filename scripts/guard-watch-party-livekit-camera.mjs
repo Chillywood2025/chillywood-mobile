@@ -48,6 +48,7 @@ const sliceBetween = (source, startNeedle, endNeedle, label) => {
 };
 
 const livekitSurface = readSource("components/watch-party-live/livekit-stage-media-surface.tsx");
+const localCameraMirror = readSource("hooks/use-local-camera-mirror.ts");
 const watchPartyIndex = readSource("app/watch-party/index.tsx");
 const partyRoom = readSource("app/watch-party/[partyId].tsx");
 const liveStage = readSource("app/watch-party/live-stage/[partyId].tsx");
@@ -692,8 +693,18 @@ assertNotIncludes(
 );
 assertIncludes(
   livekitSurface,
-  "mirror={isLocalParticipant}",
-  "LiveKit bubble grid mirrored local VideoTrack rendering",
+  "mirror={isLocalParticipant && mirrorLocalCamera}",
+  "LiveKit bubble grid must mirror only front-facing local VideoTrack rendering",
+);
+assertIncludes(
+  localCameraMirror,
+  'track?.mediaStreamTrack?.getSettings?.().facingMode !== "environment"',
+  "LiveKit local mirror must follow actual capture facing mode",
+);
+assertIncludes(
+  localCameraMirror,
+  "track?.on(TrackEvent.Restarted, refresh)",
+  "LiveKit local mirror must update when the current capture restarts",
 );
 assertIncludes(
   livekitSurface,
@@ -1019,8 +1030,23 @@ assertIncludes(
 );
 assertIncludes(
   playerWatchPartyLiveKitContractRefresh,
-  "watch-party-live publish contract still downgraded; refreshing snapshot before bounded retry",
+  "previousRetryCount >= WATCH_PARTY_LIVEKIT_AUTHORITY_RETRY_LIMIT",
   "Player Watch-Party LiveKit must retry with a bounded membership/token refresh window",
+);
+assertIncludes(
+  playerWatchPartyLiveKitContractRefresh,
+  "if (refreshAuthority) void refreshPartyMembershipSnapshot().finally(retry)",
+  "Player Watch-Party LiveKit authority retries must preserve membership readback",
+);
+assertIncludes(
+  playerWatchPartyLiveKitContractRefresh,
+  "scheduleRetry(true)",
+  "Player Watch-Party LiveKit downgraded responses must request authority readback",
+);
+assertIncludes(
+  playerWatchPartyLiveKitContractRefresh,
+  "active && watchPartyLiveKitOperationOwnerRef.current === requestOwner",
+  "Player Watch-Party LiveKit retries must remain owned by the current active session",
 );
 assertIncludes(
   playerWatchPartyLiveKitContractRefresh,
@@ -1440,7 +1466,7 @@ assertIncludes(
 );
 assertIncludes(
   player,
-  "!decodePartySeatRequestMessage(m.body)",
+  "if (!id || !userId || !body || decodePartySeatRequestMessage(body)) return null",
   "Player Watch-Party LiveKit hidden request markers must not render as chat",
 );
 assertIncludes(

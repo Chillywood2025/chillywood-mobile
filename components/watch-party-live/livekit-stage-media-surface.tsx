@@ -35,6 +35,7 @@ import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 import { emitLiveKitRenderTelemetryEvent } from "../../_lib/livekit/livekitRenderTelemetry";
 import { ProfileMediaImage as Image } from "../ui/ProfileMediaImage";
 import { useLiveCameraEffects, type LiveCameraEffectsProps } from "../../hooks/use-live-camera-effects";
+import { useLocalCameraMirror } from "../../hooks/use-local-camera-mirror";
 
 export type LiveKitStageParticipantRosterEntry = {
   identity: string;
@@ -279,6 +280,7 @@ function LiveKitStageMediaContent({
     lastMicrophoneError,
     localParticipant,
   } = useLocalParticipant();
+  const mirrorLocalCamera = useLocalCameraMirror(cameraTrack?.track);
   const currentIdentitySet = useMemo(() => new Set(normalizeIdentityList(
     localParticipant.identity,
     currentParticipantIdentity,
@@ -627,7 +629,7 @@ function LiveKitStageMediaContent({
                       trackRef={item.trackRef}
                       style={styles.bubbleVideo}
                       objectFit="cover"
-                      mirror={isLocalParticipant}
+                      mirror={isLocalParticipant && mirrorLocalCamera}
                       zOrder={0}
                     />
                   </View>
@@ -695,7 +697,7 @@ function LiveKitStageMediaContent({
           trackRef={primaryTrack}
           style={StyleSheet.absoluteFillObject}
           objectFit="cover"
-          mirror={isShowingLocalPreview}
+          mirror={isShowingLocalPreview && mirrorLocalCamera}
         />
         <View pointerEvents="none" style={styles.videoOverlay}>
           <View style={styles.videoBadge}>
@@ -710,7 +712,7 @@ function LiveKitStageMediaContent({
               trackRef={secondaryTrack}
               style={styles.secondaryVideo}
               objectFit="cover"
-              mirror={isShowingSecondaryLocalPreview}
+              mirror={isShowingSecondaryLocalPreview && mirrorLocalCamera}
             />
             <View style={styles.secondaryVideoBadge}>
               <Text style={styles.secondaryVideoBadgeText}>
