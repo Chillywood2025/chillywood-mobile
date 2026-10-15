@@ -145,7 +145,8 @@ import { getProtectedSessionCopy } from "../../../components/prototype/protected
 import { ReportSheet } from "../../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../../components/system/beta-access-screen";
 import { useChannelFollowAction } from "../../../hooks/use-channel-follow-action";
-import { LiveEffectsPanel } from "../../../components/live/live-effects-sheet";
+import { LiveCameraControls } from "../../../components/live/live-camera-controls";
+import { useLiveCameraEffects, type LiveCameraEffectsControls, type LiveCameraEffectsProps } from "../../../hooks/use-live-camera-effects";
 import { SocialAttachmentActionSheet } from "../../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../../components/social/social-attachment-card";
 import { AppBackButton } from "../../../components/navigation/app-back-button";
@@ -160,8 +161,6 @@ import {
   CHILLYFECTS_BRAND_NAME,
   LIVE_EFFECT_OFF_ID,
   getLiveEffectById,
-  getLiveEffectStatusCopy,
-  isLiveEffectAppliedToCamera,
 } from "../../../_lib/liveEffects";
 import { isReactNativeNewArchitecture } from "../../../_lib/reactNativeRuntime";
 import { requestSaveReplay } from "../../../_lib/creatorReplays";
@@ -613,8 +612,11 @@ function LiveKitHybridCommunityRoomHost({
   onDisconnectedAuthoritative,
   publishLocalAudio,
   publishLocalCamera,
+  cameraEffectId,
+  cameraEffectIntensity,
+  onCameraEffectsControls,
   children,
-}: {
+}: LiveCameraEffectsProps & {
   joinContract: LiveKitTokenReady;
   onFallback: (reason: LiveKitStageFallbackReason) => void;
   onConnectedAuthoritative?: () => void;
@@ -650,6 +652,11 @@ function LiveKitHybridCommunityRoomHost({
   });
   const effectivePublishLocalAudio = shouldConnectRoom && publishLocalAudio;
   const effectivePublishLocalCamera = shouldConnectRoom && publishLocalCamera;
+
+  useLiveCameraEffects({ room,
+    allowed: effectivePublishLocalCamera && joinContract.participantRole !== "viewer" && joinContract.requestedGrants.canPublish,
+    cameraEffectId, cameraEffectIntensity, onCameraEffectsControls,
+  });
 
   const clearDisconnectFallbackTimeout = useCallback(() => {
     if (!disconnectFallbackTimeoutRef.current) return;
@@ -1036,6 +1043,8 @@ export default function WatchPartyLiveStageScreen({
   const [hybridCommentAttachmentSheetVisible, setHybridCommentAttachmentSheetVisible] = useState(false);
   const [stageKeyboardHeight, setStageKeyboardHeight] = useState(0);
   const [selectedStageEffectId, setSelectedStageEffectId] = useState(LIVE_EFFECT_OFF_ID);
+  const [stageEffectIntensity, setStageEffectIntensity] = useState(0.5);
+  const [stageCameraControls, setStageCameraControls] = useState<LiveCameraEffectsControls | null>(null);
   const [stageOverlayVisible, setStageOverlayVisible] = useState(true);
   const [stageOverlayAutoHideArmed, setStageOverlayAutoHideArmed] = useState(false);
   const [stageOverlayActivityVersion, setStageOverlayActivityVersion] = useState(0);
@@ -3299,7 +3308,7 @@ export default function WatchPartyLiveStageScreen({
     ? "Live video is temporarily unavailable. Try again in a moment."
     : "";
   const selectedStageEffect = getLiveEffectById(selectedStageEffectId);
-  const stageEffectAppliedToCamera = isLiveEffectAppliedToCamera(selectedStageEffect);
+  const stageEffectAppliedToCamera = stageCameraControls?.state === "active";
   const activeStageLookLabel = canUseStageEffects && stageEffectAppliedToCamera
     ? selectedStageEffect.label
     : "";
@@ -3308,9 +3317,8 @@ export default function WatchPartyLiveStageScreen({
   const hybridCommentDisabled = (!hybridCommentDraft.trim() && !hybridCommentAttachmentFile) || hybridCommentSending;
   const stageEffectsTitle = canUseStageEffects ? CHILLYFECTS_BRAND_NAME : "Chi'llyfects catalog";
   const stageEffectsBody = canUseStageEffects
-    ? "Chi'llyfects can be previewed here. Live camera effects are still being prepared."
-    : "Viewers can browse the Chi'llyfects catalog. Camera Chi'llyfects require a speaker or host camera role.";
-  const stageEffectsHelper = getLiveEffectStatusCopy(selectedStageEffect);
+    ? "Choose your camera and an on-device effect for your live video."
+    : "Camera Chi'llyfects require an active speaker or host camera role.";
   const stageTopChromeStatusLabel = `${lowerCommunityCountLabel} · ${liveStageProtectionStatus}${controlsLocked ? " · Controls locked" : ""}`;
 
   const mapLiveStageCommentRow = useCallback((row: LiveStageCommentRow): LiveStageComment | null => {
@@ -4823,15 +4831,16 @@ export default function WatchPartyLiveStageScreen({
             <Text style={styles.stageUtilityDismissText}>Done</Text>
           </TouchableOpacity>
         </View>
+        <ScrollView style={{ maxHeight: 340 }} contentContainerStyle={{ gap: 10 }} nestedScrollEnabled>
         <Text style={styles.stageUtilityBody}>{stageEffectsBody}</Text>
-        <Text style={styles.stageUtilityHelper}>{stageEffectsHelper}</Text>
-        <LiveEffectsPanel
-          selectedEffectId={selectedStageEffectId}
-          onSelectEffect={setSelectedStageEffectId}
-          cameraAvailable={canUseStageEffects}
-          surfaceLabel="Live Stage"
-          showHeader={false}
+        <LiveCameraControls
+          controls={stageCameraControls}
+          effectId={selectedStageEffectId}
+          intensity={stageEffectIntensity}
+          onSelect={setSelectedStageEffectId}
+          onIntensity={setStageEffectIntensity}
         />
+        </ScrollView>
       </View>
     );
   };
@@ -5607,6 +5616,9 @@ export default function WatchPartyLiveStageScreen({
               onDisconnectedAuthoritative={discoveryPublication.onDisconnected}
               publishLocalAudio={publishLocalStageAudio}
               publishLocalCamera={publishLocalStageCamera}
+              cameraEffectId={selectedStageEffectId}
+              cameraEffectIntensity={stageEffectIntensity}
+              onCameraEffectsControls={setStageCameraControls}
             >
               {children}
             </LiveKitHybridCommunityRoomHost>
