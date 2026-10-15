@@ -129,6 +129,37 @@ values
   ('95000000-0000-4000-8000-000000000012', '94000000-0000-4000-8000-000000000012'),
   ('95000000-0000-4000-8000-000000000013', '94000000-0000-4000-8000-000000000001');
 
+-- Staff, beta and sandbox authority retains the deployed account-legal gate.
+-- Positive sessions must accept the actual current documents themselves;
+-- malformed, missing and cross-user generations below still fail independently.
+insert into public.wave1_legal_acceptances (
+  user_id, subject_hash, document_key, document_version, market,
+  role_key, capability, session_generation, authority_source
+)
+select
+  fixture_session.user_id, public.wave1_sha256(fixture_session.user_id::text),
+  document.document_key, document.version, document.market,
+  coalesce(nullif(lower(trim(profile.channel_role)), ''), 'member'),
+  document.capability, fixture_session.id::text, 'service_reconciliation'
+from auth.sessions fixture_session
+left join public.user_profiles profile
+  on profile.user_id = fixture_session.user_id::text
+cross join public.wave1_legal_document_versions document
+where fixture_session.id in (
+  '95000000-0000-4000-8000-000000000001',
+  '95000000-0000-4000-8000-000000000002',
+  '95000000-0000-4000-8000-000000000003',
+  '95000000-0000-4000-8000-000000000004',
+  '95000000-0000-4000-8000-000000000006',
+  '95000000-0000-4000-8000-000000000007',
+  '95000000-0000-4000-8000-000000000008',
+  '95000000-0000-4000-8000-000000000009',
+  '95000000-0000-4000-8000-000000000012',
+  '95000000-0000-4000-8000-000000000013'
+)
+  and document.active and document.market = 'UNITED_STATES'
+  and document.capability = 'account';
+
 insert into public.platform_role_memberships (
   role, user_id, email, status, notes, granted_by
 )
@@ -989,10 +1020,19 @@ select set_config(
   true
 );
 select ok(
-  public.resolve_sandbox_monetization_tester(
+  not public.resolve_sandbox_monetization_tester(
     '94000000-0000-4000-8000-999999999999','fabricated@example.test'
   ),
-  'resolver authorizes only the exact current tester despite irrelevant compatibility inputs'
+  'resolver retains deployed denial of explicit mismatched tester identity arguments'
+);
+-- The original exact-subject fixture treated these compatibility arguments as
+-- irrelevant. The forward repair deliberately preserves the stricter deployed
+-- binding: omitted or matching arguments work, but explicit mismatches do not.
+select ok(
+  public.resolve_sandbox_monetization_tester(
+    '94000000-0000-4000-8000-000000000007','sandbox-exact@example.test'
+  ) and public.resolve_sandbox_monetization_tester(null,null),
+  'exact current tester remains authorized with matching or omitted arguments'
 );
 
 select set_config(

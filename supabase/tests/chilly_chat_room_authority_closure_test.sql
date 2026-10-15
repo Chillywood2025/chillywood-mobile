@@ -251,6 +251,30 @@ where document.active
     ('creator_terms', 'creator'),
     ('money_terms', 'creator_money')
   );
+
+-- The paid viewer also needs current account legal authority bound to the
+-- exact session used below. Creator acceptance cannot authorize the buyer.
+insert into public.wave1_legal_acceptances (
+  user_id, subject_hash, document_key, document_version, market,
+  role_key, capability, session_generation, authority_source
+)
+select
+  session.user_id,
+  public.wave1_sha256(session.user_id::text),
+  document.document_key,
+  document.version,
+  document.market,
+  'member',
+  document.capability,
+  session.id::text,
+  'service_reconciliation'
+from auth.sessions session
+cross join public.wave1_legal_document_versions document
+where session.id = 'b2222222-2222-4222-8222-222222222201'
+  and session.user_id = 'b2222222-2222-4222-8222-222222222222'
+  and document.active
+  and document.market = 'UNITED_STATES'
+  and document.capability = 'account';
 set local role service_role;
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 insert into public.watch_party_rooms (
@@ -1245,6 +1269,31 @@ insert into public.provider_events (
   )
 from public.monetization_products product
 where product.product_key = 'watch_party_live_ticket_sandbox_099';
+
+-- Match the exact nonterminal transaction binding created by the provider
+-- processor. A projected grant/ticket without this link is not paid authority.
+insert into public.revenuecat_consumable_transaction_intents (
+  provider, original_transaction_id, provider_event_id, user_id,
+  product_id, purchase_intent_id, binding_state, terminal
+)
+select
+  event.provider,
+  event.metadata ->> 'original_transaction_id',
+  event.id,
+  intent.user_id,
+  intent.product_id,
+  intent.id,
+  'exact',
+  false
+from public.money_purchase_intents intent
+join public.provider_events event
+  on event.metadata ->> 'purchase_intent_id' = intent.id::text
+  and event.user_id = intent.user_id
+  and event.product_id = intent.product_id
+  and event.provider = intent.provider
+  and event.environment = intent.environment
+where intent.id = 'ab333333-3333-4333-8333-333333333333'
+  and event.id = 'ab444444-4444-4444-8444-444444444444';
 
 insert into public.access_grants (
   id, user_id, grant_type, source_type, source_id, product_id, provider,

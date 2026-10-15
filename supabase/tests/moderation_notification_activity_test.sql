@@ -9,6 +9,24 @@ insert into auth.users(id,email,email_confirmed_at,aud,role,is_sso_user,is_anony
 insert into auth.sessions(id,user_id) values
  ('9a140000-0000-4000-8000-000000000011','9a140000-0000-4000-8000-000000000001'),
  ('9a140000-0000-4000-8000-000000000012','9a140000-0000-4000-8000-000000000002');
+-- Make both sessions legally current so ordinary-versus-staff assertions test
+-- role authority rather than missing account acceptance. Keep real guards.
+insert into public.wave1_legal_acceptances(
+ user_id,subject_hash,document_key,document_version,market,
+ role_key,capability,session_generation,authority_source
+)
+select fixture_session.user_id,public.wave1_sha256(fixture_session.user_id::text),
+ document.document_key,document.version,document.market,
+ coalesce(nullif(lower(trim(profile.channel_role)),''),'member'),
+ document.capability,fixture_session.id::text,'service_reconciliation'
+from auth.sessions fixture_session
+left join public.user_profiles profile on profile.user_id=fixture_session.user_id::text
+cross join public.wave1_legal_document_versions document
+where fixture_session.id in (
+ '9a140000-0000-4000-8000-000000000011','9a140000-0000-4000-8000-000000000012'
+)
+ and document.active and document.market='UNITED_STATES'
+ and document.capability='account';
 insert into public.platform_role_memberships(role,user_id,email,status,notes,granted_by)
  values('owner','9a140000-0000-4000-8000-000000000001','mod-operator@example.test','active','Rollback notification fixture','pgtap');
 insert into public.platform_first_owner_authority(owner_membership_id,owner_user_id,owner_email,established_by,established_reason)

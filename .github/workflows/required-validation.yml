@@ -149,6 +149,7 @@ jobs:
           supabase start
           supabase db reset
           supabase test db
+          SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-database-runtime-authority-concurrency.mjs
           SUPABASE_DB_CONTAINER=supabase_db_chillywood-mobile node scripts/test-platform-studio-authority-concurrency.mjs
           npm run test:communication-terminal-http
           npm run test:chat-message-call-lifecycle-http
