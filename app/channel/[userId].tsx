@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -57,6 +57,7 @@ import { readPublicEventSummaries, type CreatorEventSummary } from "../../_lib/l
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import { resolvePlatformDisplayIdentity } from "../../_lib/platformIdentity";
+import { resolvePlatformPresentation } from "../../_lib/platformPresentation";
 import { isOwnerPlatformMode, isViewerPurchasePlatformMode, resolvePublicPlatformMode } from "../../_lib/platformModes";
 import {
   readPlatformBrandStudio,
@@ -67,7 +68,7 @@ import {
 } from "../../_lib/platformBranding";
 import { resolveSandboxMonetizationTester } from "../../_lib/sandboxMonetizationTesters";
 import { useSession } from "../../_lib/session";
-import { buildUserChannelProfile, readUserProfileByUserId, type UserChannelProfile, type UserProfile } from "../../_lib/userData";
+import { buildUserChannelProfile, readPublicPlatformIdentity, type UserChannelProfile, type UserProfile } from "../../_lib/userData";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import {
   formatOneTimePrice,
@@ -83,7 +84,7 @@ import { NotificationBellButton } from "../../components/notifications/notificat
 import { PlatformLiveNow } from "../../components/live/platform-live-now";
 import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
 
-type ChannelLoadState = "loading" | "ready" | "not_found" | "blocked" | "locked";
+type ChannelLoadState = "loading" | "ready" | "not_found" | "blocked" | "locked" | "error";
 
 const normalizeRouteParam = (value: string | string[] | undefined) =>
   String(Array.isArray(value) ? value[0] : value ?? "").trim();
@@ -182,6 +183,7 @@ export default function PublicChannelScreen() {
   const showOwnerControls = isOwner && !publicPreviewMode && !brandDraftPreviewMode;
 
   const [loadState, setLoadState] = useState<ChannelLoadState>("loading");
+  const [reloadKey, setReloadKey] = useState(0);
   const [platformAccessResolution, setPlatformAccessResolution] = useState<VisibilityAccessResolution | null>(null);
   const [channel, setChannel] = useState<UserChannelProfile | null>(null);
   const [channelProfile, setChannelProfile] = useState<UserProfile | null>(null);
@@ -213,7 +215,7 @@ export default function PublicChannelScreen() {
     setTipSheetVisible(true);
   }, []);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let active = true;
 
     if (sessionLoading) return () => {
@@ -244,36 +246,7 @@ export default function PublicChannelScreen() {
         return;
       }
 
-      const [profile, officialAccount] = await Promise.all([
-        readUserProfileByUserId(routeUserId).catch(() => null),
-        Promise.resolve(getOfficialPlatformAccount(routeUserId)),
-      ]);
-
-      if (!active) return;
-
-      if (!profile && !officialAccount) {
-        setLoadState("not_found");
-        return;
-      }
-
-      const nextChannel = buildUserChannelProfile({
-        id: routeUserId,
-        profile,
-        fallbackDisplayName: "Untitled Platform",
-      });
-
-      const nextAudienceState = await readPublicChannelAudienceState(routeUserId).catch(() => null);
-      if (!active) return;
-
-      setChannel(nextChannel);
-      setChannelProfile(profile);
-      setAudienceState(nextAudienceState);
-
-      if (nextAudienceState?.isViewerBlocked) {
-        setLoadState("blocked");
-        return;
-      }
-
+      const officialAccount = getOfficialPlatformAccount(routeUserId);
       const nextPlatformAccess = officialAccount
         ? {
           allowed: true,
@@ -287,24 +260,41 @@ export default function PublicChannelScreen() {
           viewerUserId: viewerUserId || null,
           ownerUserId: routeUserId,
         }
-        : await resolvePlatformVisibilityAccess(routeUserId).catch(() => null);
+        : await resolvePlatformVisibilityAccess(routeUserId);
       if (!active) return;
       setPlatformAccessResolution(nextPlatformAccess);
 
-      if (!isOwner && nextPlatformAccess?.allowed !== true) {
-        setLoadState("locked");
+      if (nextPlatformAccess?.allowed !== true) {
+        setLoadState(nextPlatformAccess?.isBlocked ? "blocked" : nextPlatformAccess?.reason === "not_found" ? "not_found" : "locked");
+        return;
+      }
+
+      const profile = officialAccount ? null : await readPublicPlatformIdentity(routeUserId);
+      if (!active) return;
+      if (!profile && !officialAccount) {
+        setLoadState("not_found");
+        return;
+      }
+      const nextChannel = buildUserChannelProfile({ id: routeUserId, profile, fallbackDisplayName: "Untitled Platform" });
+      const nextAudienceState = await readPublicChannelAudienceState(routeUserId);
+      if (!active) return;
+      setChannel(nextChannel);
+      setChannelProfile(profile);
+      setAudienceState(nextAudienceState);
+      if (nextAudienceState.isViewerBlocked) {
+        setLoadState("blocked");
         return;
       }
 
       const brandPromise = showDraftBranding
-        ? readPlatformBrandStudio(routeUserId).catch(() => null)
-        : readPublicPlatformBranding(routeUserId).catch(() => null);
+        ? readPlatformBrandStudio(routeUserId, { throwOnUnavailable: true })
+        : readPublicPlatformBranding(routeUserId, { throwOnUnavailable: true });
       const videosPromise = showOwnerControls
-        ? readCreatorVideos(routeUserId, { includeDrafts: showOwnerControls, limit: 50 }).catch(() => [])
-        : readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50 }).catch(() => []);
+        ? readCreatorVideos(routeUserId, { includeDrafts: showOwnerControls, limit: 50, throwOnUnavailable: true })
+        : readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50, throwOnUnavailable: true });
       const [publicVideos, publicEvents, nextCommerceSurface, nextTipStatus, nextSubscriptionAccess, nextVipAccess, nextWatchPartyTicketOffer, nextSandboxTesterActive, nextPlatformBranding] = await Promise.all([
         videosPromise,
-        readPublicEventSummaries(routeUserId).catch(() => []),
+        readPublicEventSummaries(routeUserId, { throwOnUnavailable: true }),
         readCreatorMiniPlatformCommerceSurface(routeUserId).catch(() => null),
         readCreatorTipPublicStatus(routeUserId).catch(() => null),
         resolveChannelSubscriptionAccess(routeUserId).catch(() => null),
@@ -335,12 +325,15 @@ export default function PublicChannelScreen() {
       }
     };
 
-    void loadChannel();
+    void loadChannel().catch(() => {
+      if (active) setLoadState("error");
+    });
 
     return () => {
       active = false;
     };
-  }, [isOwner, routeUserId, sessionLoading, showDraftBranding, showOwnerControls, user?.email, viewerUserId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Retry intentionally restarts the focused read even when the route and account are unchanged.
+  }, [reloadKey, routeUserId, sessionLoading, showDraftBranding, showOwnerControls, user?.email, viewerUserId]));
 
   const spotlightVideoId = platformBranding?.profile.spotlightVideoId ?? null;
   const featuredVideo = useMemo(() => (
@@ -400,6 +393,7 @@ export default function PublicChannelScreen() {
   const heroResizeMode = resolveBrandResizeMode(platformBranding?.profile.heroFitMode);
   const backgroundResizeMode = resolveBrandResizeMode(platformBranding?.profile.backgroundFitMode);
   const heroOverlayColor = buildBrandOverlayColor(platformBranding?.profile.overlayStrength);
+  const brandPresentation = resolvePlatformPresentation(platformBranding?.profile);
 
   const aboutItems = useMemo(() => {
     if (!channel) return [];
@@ -853,7 +847,7 @@ export default function PublicChannelScreen() {
         : "Subscribe";
 
     return (
-      <View style={styles.hero}>
+      <View style={[styles.hero, { backgroundColor: brandPresentation.heroBackgroundColor }]}>
         <View style={styles.heroBackdrop}>
           {brandHeroSource ? (
             <Image source={{ uri: brandHeroSource }} resizeMode={heroResizeMode} style={styles.heroImage} />
@@ -863,7 +857,7 @@ export default function PublicChannelScreen() {
             {brandLogoSource ? (
               <Image source={{ uri: brandLogoSource }} style={styles.heroLogoMark} resizeMode="contain" />
             ) : null}
-            <View style={styles.avatarWrap}>
+            <View style={[styles.avatarWrap, platformBranding ? { borderColor: brandPresentation.accentColor } : null]}>
               {brandAvatarSource ? (
                 <Image source={{ uri: brandAvatarSource }} style={styles.avatarImage} />
               ) : (
@@ -897,7 +891,7 @@ export default function PublicChannelScreen() {
             {channel.tagline ? <Text style={styles.channelTagline} numberOfLines={2}>{channel.tagline}</Text> : null}
             <View style={styles.statsRow}>
               {visibleStats.map((stat) => (
-                <View key={stat.label} style={styles.statPill}>
+                <View key={stat.label} style={[styles.statPill, platformBranding ? { borderColor: brandPresentation.accentColor } : null]}>
                   <Text style={styles.statValue}>{stat.value}</Text>
                   <Text style={styles.statLabel}>{stat.label}</Text>
                 </View>
@@ -1581,6 +1575,19 @@ export default function PublicChannelScreen() {
     return renderUnavailable("This platform could not be found.");
   }
 
+  if (loadState === "error") {
+    return (
+      <View style={styles.screen} testID="screen-platform" collapsable={false}>
+        {renderBackHeader()}
+        <View style={styles.unavailableCard} testID="platform-load-error">
+          <Text style={styles.unavailableTitle}>Platform could not load</Text>
+          <Text style={styles.unavailableBody}>Please try again to load this Platform.</Text>
+          <AppActionButton label="Retry" onPress={() => setReloadKey((value) => value + 1)} variant="primary" />
+        </View>
+      </View>
+    );
+  }
+
   if (loadState === "blocked") {
     return renderUnavailable("You cannot view this platform.");
   }
@@ -1595,11 +1602,12 @@ export default function PublicChannelScreen() {
   }
 
   return (
-    <View style={styles.screen} testID="screen-platform" collapsable={false}>
+    <View style={[styles.screen, { backgroundColor: brandPresentation.backgroundColor }]} testID="screen-platform" collapsable={false}>
       {brandBackgroundSource ? (
         <Image
           source={{ uri: brandBackgroundSource }}
           resizeMode={backgroundResizeMode}
+          blurRadius={brandPresentation.blurRadius}
           style={styles.platformBackgroundImage}
         />
       ) : null}

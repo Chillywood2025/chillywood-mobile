@@ -581,7 +581,7 @@ const getProfileSelectedAssetIds = (profile: PlatformBrandProfile | null | undef
     profile?.watermarkAssetId,
   ].filter(Boolean))) as string[];
 
-export async function readPlatformBrandStudio(ownerUserId: string): Promise<PlatformBrandingBundle> {
+export async function readPlatformBrandStudio(ownerUserId: string, options?: { throwOnUnavailable?: boolean }): Promise<PlatformBrandingBundle> {
   const normalizedOwnerId = toText(ownerUserId);
   const emptyProfile = createDefaultPlatformBrandProfile(normalizedOwnerId);
   if (!normalizedOwnerId) return createBundle(emptyProfile, []);
@@ -603,10 +603,30 @@ export async function readPlatformBrandStudio(ownerUserId: string): Promise<Plat
       .returns<PlatformBrandAssetRow[]>(),
   ]);
 
+  if (options?.throwOnUnavailable && (profileResult.error || assetResult.error)) {
+    throw new Error("Brand Studio could not be loaded. Please try again.");
+  }
+
   const profile = parseProfile(profileResult.data, normalizedOwnerId);
-  const assets = assetResult.error || !assetResult.data
-    ? []
-    : await Promise.all(assetResult.data.map((row) => parseAsset(row)));
+  const assetRows = assetResult.error || !assetResult.data ? [] : [...assetResult.data];
+  // The recent-media list is bounded, but a still-selected older asset must not
+  // disappear from its preview or adjustment controls when more media is uploaded.
+  const loadedIds = new Set(assetRows.map((row) => row.id));
+  const missingSelectedIds = getProfileSelectedAssetIds(profile).filter((id) => !loadedIds.has(id));
+  if (missingSelectedIds.length) {
+    const selectedResult = await supabase
+      .from("platform_brand_assets")
+      .select(PLATFORM_BRAND_ASSET_SELECT)
+      .eq("owner_user_id", normalizedOwnerId)
+      .in("id", missingSelectedIds)
+      .is("deleted_at", null)
+      .returns<PlatformBrandAssetRow[]>();
+    if (selectedResult.error && options?.throwOnUnavailable) {
+      throw new Error("Selected Brand Studio media could not be loaded. Please try again.");
+    }
+    if (!selectedResult.error && selectedResult.data) assetRows.push(...selectedResult.data);
+  }
+  const assets = await Promise.all(assetRows.map((row) => parseAsset(row)));
   return createBundle(profile, assets);
 }
 
@@ -625,14 +645,18 @@ export async function readPlatformBrandReviewQueue(limit = 24): Promise<Platform
   return Promise.all(data.map((row) => parseAsset(row)));
 }
 
-export async function readPublicPlatformBranding(ownerUserId: string): Promise<PlatformBrandingBundle | null> {
+export async function readPublicPlatformBranding(ownerUserId: string, options?: { throwOnUnavailable?: boolean }): Promise<PlatformBrandingBundle | null> {
   const normalizedOwnerId = toText(ownerUserId);
   if (!normalizedOwnerId) return null;
 
   const { data: profileRow, error } = await supabase
     .rpc("read_public_platform_brand_profile", { profile_user_id: normalizedOwnerId })
     .maybeSingle();
-  if (error || !profileRow) return null;
+  if (error) {
+    if (options?.throwOnUnavailable) throw new Error("Platform appearance could not be loaded. Please try again.");
+    return null;
+  }
+  if (!profileRow) return null;
 
   const profile = parseProfile(profileRow as PublicPlatformBrandProfileRow, normalizedOwnerId);
   const assetIds = Array.from(new Set([
@@ -656,6 +680,8 @@ export async function readPublicPlatformBranding(ownerUserId: string): Promise<P
     .in("scan_status", PLATFORM_BRAND_PUBLIC_SCAN_STATUSES)
     .is("deleted_at", null)
     .returns<PlatformBrandAssetRow[]>();
+
+  if (assetError && options?.throwOnUnavailable) throw new Error("Platform media could not be loaded. Please try again.");
 
   const assets = assetError || !assetRows
     ? []
@@ -763,7 +789,7 @@ const toProfileUpsert = (
   background_focal_y: patch.backgroundFocalY,
   overlay_strength: patch.overlayStrength,
   blur_strength: patch.blurStrength,
-  published_at: patch.publishedAt === undefined ? undefined : patch.publishedAt,
+  // Publication metadata is server-owned, including when saving a previously published draft.
   updated_at: new Date().toISOString(),
 });
 
@@ -791,96 +817,23 @@ export async function publishPlatformBrandProfile(
   patch: Partial<PlatformBrandProfile>,
 ): Promise<PlatformBrandProfile> {
   const normalizedOwnerId = toText(ownerUserId);
-  const publishedAt = new Date().toISOString();
-  const profile = await savePlatformBrandProfileDraft(normalizedOwnerId, patch);
-  const assetIds = Array.from(new Set([
-    profile.heroImageAssetId,
-    profile.heroVideoAssetId,
-    profile.heroPosterAssetId,
-    profile.backgroundImageAssetId,
-    profile.avatarAssetId,
-    profile.logoAssetId,
-    profile.watermarkAssetId,
-  ].filter(Boolean))) as string[];
-
-  let selectedAssetRows: Pick<PlatformBrandAssetRow, "id" | "asset_state" | "moderation_status" | "scan_status" | "deleted_at">[] = [];
-  if (assetIds.length) {
-    const { data, error } = await supabase
-      .from("platform_brand_assets")
-      .select("id,asset_state,moderation_status,scan_status,deleted_at")
-      .eq("owner_user_id", normalizedOwnerId)
-      .in("id", assetIds)
-      .is("deleted_at", null)
-      .returns<Pick<PlatformBrandAssetRow, "id" | "asset_state" | "moderation_status" | "scan_status" | "deleted_at">[]>();
-    if (error) throw error;
-    selectedAssetRows = data ?? [];
+  if (!normalizedOwnerId) throw new Error("Sign in before publishing Brand Studio changes.");
+  const payload = toProfileUpsert(normalizedOwnerId, patch);
+  // Publication is one owner-bound transaction. Client timestamps never publish a draft.
+  delete payload.published_at;
+  delete payload.updated_at;
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<Record<string, unknown>>(
+    "publish_platform_brand_profile",
+    { p_profile: payload },
+    normalizedOwnerId,
+  );
+  if (String(error?.message ?? "").includes("brand_publish_asset_not_ready")) {
+    throw new Error("Some selected media is not ready to publish. Your public Platform has not changed. Try again when the media is ready.");
   }
-
-  const repairedByPublishRpc = await publishSelectedPlatformBrandAssets(assetIds);
-
-  if (!repairedByPublishRpc) {
-    const selectedReviewAssetIds = selectedAssetRows
-      .filter((row) => (
-        normalizeModerationStatus(row.moderation_status) === "pending_review"
-        && PLATFORM_BRAND_PUBLIC_SCAN_STATUSES.includes(normalizeScanStatus(row.scan_status))
-        && !row.deleted_at
-      ))
-      .map((row) => toText(row.id))
-      .filter(Boolean);
-
-    for (const assetId of selectedReviewAssetIds) {
-      try {
-        await reviewPlatformBrandAsset(
-          assetId,
-          "approve",
-          "Approved by the creator during Brand Studio publish.",
-        );
-      } catch {
-        // Keep publish moving for any other selected asset that is already eligible.
-        // Readback below decides whether the creator sees public, pending, or blocked status.
-      }
-    }
+  if (error || !data || toText(data.owner_user_id) !== normalizedOwnerId || !toText(data.published_at)) {
+    throw new Error("Brand Studio changes could not be published. Check your connection and try again.");
   }
-
-  if (assetIds.length) {
-    const { data: publishedAssetRows, error } = await supabase
-      .from("platform_brand_assets")
-      .update({ asset_state: "published" } satisfies PlatformBrandAssetUpdate)
-      .eq("owner_user_id", normalizedOwnerId)
-      .in("id", assetIds)
-      .in("moderation_status", ["clean", "reported"])
-      .in("scan_status", PLATFORM_BRAND_PUBLIC_SCAN_STATUSES)
-      .is("deleted_at", null)
-      .select("id,asset_state,moderation_status,scan_status,deleted_at")
-      .returns<Pick<PlatformBrandAssetRow, "id" | "asset_state" | "moderation_status" | "scan_status" | "deleted_at">[]>();
-    if (error) throw error;
-
-    const publishedIds = new Set((publishedAssetRows ?? []).map((row) => toText(row.id)).filter(Boolean));
-    const { data: postPublishAssetRows, error: postPublishError } = await supabase
-      .from("platform_brand_assets")
-      .select("id,asset_state,moderation_status,scan_status,deleted_at")
-      .eq("owner_user_id", normalizedOwnerId)
-      .in("id", assetIds)
-      .is("deleted_at", null)
-      .returns<Pick<PlatformBrandAssetRow, "id" | "asset_state" | "moderation_status" | "scan_status" | "deleted_at">[]>();
-    if (postPublishError) throw postPublishError;
-
-    const eligibleUnpublished = (postPublishAssetRows ?? []).some((row) => (
-      !publishedIds.has(toText(row.id))
-      && normalizeAssetState(row.asset_state) !== "published"
-      && ["clean", "reported"].includes(normalizeModerationStatus(row.moderation_status))
-      && PLATFORM_BRAND_PUBLIC_SCAN_STATUSES.includes(normalizeScanStatus(row.scan_status))
-      && !row.deleted_at
-    ));
-    if (eligibleUnpublished) {
-      throw new Error("Selected Platform media could not be published yet.");
-    }
-  }
-
-  return savePlatformBrandProfileDraft(normalizedOwnerId, {
-    ...profile,
-    publishedAt,
-  });
+  return parseProfile(data as PlatformBrandProfileRow, normalizedOwnerId);
 }
 
 export async function uploadPlatformBrandAsset(input: {
@@ -989,27 +942,3 @@ export async function reviewPlatformBrandAsset(
   if (error) throw error;
   return parsePlatformBrandReviewResult(data);
 }
-
-const publishSelectedPlatformBrandAssets = async (assetIds: string[]) => {
-  const selectedAssetIds = Array.from(new Set(assetIds.map(toText).filter(Boolean)));
-  if (!selectedAssetIds.length) return true;
-
-  const { error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("publish_platform_brand_profile_assets", {
-    p_asset_ids: selectedAssetIds,
-    p_reason: "Approved by the creator during Brand Studio publish.",
-  });
-
-  if (!error) return true;
-  const normalizedMessage = String(error.message ?? "").toLowerCase();
-  if (
-    normalizedMessage.includes("publish_platform_brand_profile_assets")
-    && (
-      normalizedMessage.includes("schema cache")
-      || normalizedMessage.includes("could not find the function")
-      || normalizedMessage.includes("pgrst202")
-    )
-  ) {
-    return false;
-  }
-  throw error;
-};

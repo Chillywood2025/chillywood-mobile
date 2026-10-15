@@ -297,10 +297,17 @@ const isRevenueCatUserCancellation = (error: unknown) => {
 export const formatPaidVideoPrice = (amountCents: number, currency = "usd") =>
   formatMonetizationCurrency(amountCents, currency);
 
-export async function listMyPaidVideoOffers(): Promise<CreatorPaidVideoOffer[]> {
+export async function listMyPaidVideoOffers(options?: { throwOnUnavailable?: boolean }): Promise<CreatorPaidVideoOffer[]> {
   const { data, error } = await paidVideoClient.rpc("list_my_paid_video_offers");
-  if (error) return [];
-  return parseJsonArray(data, parseOffer);
+  if (error || !Array.isArray(data)) {
+    if (options?.throwOnUnavailable) throw new Error("Paid video settings could not be loaded. Please try again.");
+    return [];
+  }
+  const offers = parseJsonArray(data, parseOffer);
+  if (options?.throwOnUnavailable && offers.length !== data.length) {
+    throw new Error("Paid video settings could not be loaded. Please try again.");
+  }
+  return offers;
 }
 
 export async function listMyPaidVideoTransactions(limit = 50): Promise<CreatorPaidVideoTransaction[]> {
@@ -324,7 +331,14 @@ export async function savePaidVideoOffer(input: {
     p_price_cents: Math.max(0, Math.trunc(input.priceCents || 0)),
     p_currency: input.currency ?? "usd",
   });
-  if (error) throw new Error("Paid video settings could not be saved.");
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Paid video settings could not be saved.");
+  }
+  const receipt = data as Record<string, unknown>;
+  if (!((receipt.status === "saved" && toText(receipt.id))
+    || (receipt.status === "blocked" && toText(receipt.reason)))) {
+    throw new Error("Paid video settings could not be saved.");
+  }
   return data;
 }
 

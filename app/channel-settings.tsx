@@ -287,7 +287,7 @@ import {
   type CreatorEventReminderSummary,
 } from "../_lib/notifications";
 import type { UserChannelRole, UserProfile } from "../_lib/userData";
-import { normalizeUserProfile, readUserProfile, saveUserProfile, updateMyPlatformAccessVisibility } from "../_lib/userData";
+import { normalizeUserProfile, readUserProfile, saveUserProfileRemote, updateMyPlatformAccessVisibility } from "../_lib/userData";
 import { CreatorVideoCard } from "../components/creator-media/creator-video-card";
 import { CreatorContentActionSheet, type CreatorContentActionSheetVisibilityAction } from "../components/creator-media/CreatorContentActionSheet";
 import { MoneyScopeInfoButton, type MoneyScopeKey } from "../components/monetization/MoneyScopeInfoButton";
@@ -387,6 +387,7 @@ type ClipStudioSectionId = "media" | "cover" | "title" | "templates" | "format" 
 const LAUNCH_CRITICAL_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 } as const;
 const SANDBOX_SETUP_TIMEOUT_MS = 30000;
 const SANDBOX_SETUP_TIMEOUT_ERROR = "sandbox_setup_timed_out";
+const CONTENT_PAGE_SIZE = 50;
 
 const getBrandSectionTestId = (id: BrandStudioSectionId) => {
   if (id === "hero") return "brand-hero-media-section";
@@ -908,7 +909,6 @@ const STUDIO_TABS: readonly { id: StudioTabId; label: string }[] = [
   { id: "brand", label: "Brand" },
 ];
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
 const CONTENT_STATUS_FILTERS: readonly { id: ContentStatusFilter; label: string }[] = [
   { id: "all", label: "All" },
   { id: "uploads", label: "Uploads" },
@@ -922,7 +922,6 @@ const CONTENT_STATUS_FILTERS: readonly { id: ContentStatusFilter; label: string 
   { id: "needs_attention", label: "Needs Attention" },
 ];
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
 const CONTENT_SORT_OPTIONS: readonly { id: ContentSortId; label: string }[] = [
   { id: "newest", label: "Newest" },
   { id: "oldest", label: "Oldest" },
@@ -1217,6 +1216,13 @@ const getCreatorVideoCreatedTimestamp = (video: CreatorVideo) => {
 };
 
 const hasPlayableCreatorVideoSource = (video: CreatorVideo) => !!(video.playbackUrl || video.storagePath);
+const getPaidVideoSetupUnavailableReason = (video: CreatorVideo): string | null => {
+  if (video.vipAccessRequired) return "Remove VIP access first in Content. VIP and per-video purchase are separate tiers.";
+  if (video.visibility !== "public") return "Publish this video before managing a paid unlock.";
+  if (!["clean", "reported"].includes(video.moderationStatus)) return "Paid setup is unavailable while this video is restricted by moderation.";
+  if (!hasPlayableCreatorVideoSource(video)) return "This video must be playable before managing a paid unlock.";
+  return null;
+};
 
 const getVideoLifecycleCopy = (input: {
   editingVideoId: string | null;
@@ -1303,6 +1309,7 @@ export function ChannelStudioScreen() {
     thumbnail?: string;
     suggestedEventType?: string;
     spotlightVideoId?: string;
+    videoId?: string;
   }>();
   const { isLoading: authLoading, isSignedIn, user } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
@@ -1310,13 +1317,17 @@ export function ChannelStudioScreen() {
   const initialStudioTab = normalizeStudioTabId(routeParams.tab)
     ?? normalizeStudioTabId(routeParams.focus)
     ?? (routeAction === "clip" || routeAction === "create-clip" ? "clip" : null)
-    ?? (routeAction === "upload" ? "content" : null)
+    ?? (routeAction === "upload" ? "clip" : null)
     ?? "home";
   const studioContentContainerStyle = useMemo(
     () => [styles.content, { paddingTop: Math.max(54, safeAreaInsets.top + 18) }],
     [safeAreaInsets.top],
   );
   const [activeStudioTab, setActiveStudioTab] = useState<StudioTabId>(initialStudioTab);
+  const studioScrollRef = useRef<ScrollView | null>(null);
+  const studioContentRootRef = useRef<View | null>(null);
+  const studioSectionRefs = useRef<Record<string, View | null>>({});
+  const pendingStudioFocusRef = useRef<string | null>(null);
   const [expandedHomeSections, setExpandedHomeSections] = useState<ReadonlySet<StudioHomeSectionId>>(
     () => new Set<StudioHomeSectionId>(["create"]),
   );
@@ -1335,8 +1346,20 @@ export function ChannelStudioScreen() {
   );
   const [contentStatusFilter, setContentStatusFilter] = useState<ContentStatusFilter>("all");
   const [contentSearchQuery, setContentSearchQuery] = useState("");
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const [contentSort, setContentSort] = useState<ContentSortId>("newest");
+  const [contentSearchVideos, setContentSearchVideos] = useState<CreatorVideo[]>([]);
+  const [contentSearchLoading, setContentSearchLoading] = useState(false);
+  const [contentSearchRetry, setContentSearchRetry] = useState(0);
+  const [contentSearchError, setContentSearchError] = useState<string | null>(null);
+  const [contentSearchHasMore, setContentSearchHasMore] = useState(false);
+  const [creatorVideosHasMore, setCreatorVideosHasMore] = useState(false);
+  const [creatorVideosOffset, setCreatorVideosOffset] = useState(0);
+  const [contentLoadingMore, setContentLoadingMore] = useState(false);
+  const contentQueryGenerationRef = useRef(0);
+  const contentPageInFlightRef = useRef(false);
+  const [contentSearchOffset, setContentSearchOffset] = useState(0);
+  const contentVisibility = contentStatusFilter === "published" ? "public" : contentStatusFilter === "drafts" ? "draft" : contentStatusFilter === "circle" ? "circle" : undefined;
+  const contentUsesQuery = !!contentSearchQuery.trim() || !!contentVisibility || contentSort === "oldest";
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [platformVisibilitySaving, setPlatformVisibilitySaving] = useState<AccessVisibility | null>(null);
   const [platformVisibilityNotice, setPlatformVisibilityNotice] = useState<string | null>(null);
@@ -1421,10 +1444,13 @@ export function ChannelStudioScreen() {
   const [creatorReminderSummaries, setCreatorReminderSummaries] = useState<CreatorEventReminderSummary[]>([]);
   const [audienceMembers, setAudienceMembers] = useState<ChannelAudienceMemberSummary[]>([]);
   const [audienceMembersLoading, setAudienceMembersLoading] = useState(false);
+  const [audienceMembersError, setAudienceMembersError] = useState<string | null>(null);
+  const [audienceFilter, setAudienceFilter] = useState<"all" | "pending_request" | "blocked">("all");
   const [audienceActionNotice, setAudienceActionNotice] = useState<string | null>(null);
   const [audienceActionResult, setAudienceActionResult] = useState<ChannelAudienceActionResult | null>(null);
   const [audienceActionLoading, setAudienceActionLoading] = useState<ChannelAudienceActionResult["action"] | null>(null);
   const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsLoadError, setEventsLoadError] = useState<string | null>(null);
   const [eventSaving, setEventSaving] = useState(false);
   const [eventNotice, setEventNotice] = useState<string | null>(null);
   const [eventEditor, setEventEditor] = useState<ChannelEventEditorState>(createEmptyEventEditorState);
@@ -1438,7 +1464,14 @@ export function ChannelStudioScreen() {
   const [uploadSourceTarget, setUploadSourceTarget] = useState<CreatorVideoSourceTarget | null>(null);
   const [clipNotice, setClipNotice] = useState<string | null>(null);
   const [clipSaving, setClipSaving] = useState(false);
+  const [clipLoading, setClipLoading] = useState(false);
+  const [clipLoadError, setClipLoadError] = useState<string | null>(null);
+  const clipEditorGenerationRef = useRef(0);
   const clipSaveInFlightRef = useRef(false);
+  const paidVideoSaveInFlightRef = useRef(false);
+  const [selectedPaidVideo, setSelectedPaidVideo] = useState<CreatorVideo | null>(null);
+  const paidVideoRouteGenerationRef = useRef(0);
+  const eventSaveInFlightRef = useRef(false);
   const brandProfileSaveInFlightRef = useRef(false);
   const sourceVideoEventPrefillRef = useRef<string | null>(null);
   const spotlightRouteAppliedRef = useRef<string | null>(null);
@@ -1496,6 +1529,10 @@ export function ChannelStudioScreen() {
   ) => {
     setActiveStudioTab(tab);
     if (options?.filter) setContentStatusFilter(options.filter);
+    if (tab === "audience") setAudienceFilter(options?.focus === "requests" ? "pending_request" : options?.focus === "blocks" ? "blocked" : "all");
+    const focusKey = tab === "live" && options?.focus === "schedule" ? "event-editor" : tab === "live" && options?.focus === "safety" ? "room-defaults" : `tab-${tab}`;
+    pendingStudioFocusRef.current = focusKey;
+    requestAnimationFrame(() => recordStudioSection(focusKey));
     if (tab === "monetization") {
       const routedSection = normalizeMonetizationSectionId(options?.focus);
       if (routedSection) {
@@ -1509,6 +1546,16 @@ export function ChannelStudioScreen() {
       manage: options?.manage ?? "",
     });
   };
+  const recordStudioSection = useCallback((key: string) => {
+    const root = studioContentRootRef.current;
+    const section = studioSectionRefs.current[key];
+    if (!root || !section || pendingStudioFocusRef.current !== key) return;
+    section.measureLayout(root, (_x, y) => {
+      if (pendingStudioFocusRef.current !== key) return;
+      pendingStudioFocusRef.current = null;
+      studioScrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+    }, () => {});
+  }, []);
   const showStudioUnavailable = (title: string, body: string) => {
     Alert.alert(title, body);
   };
@@ -1553,9 +1600,14 @@ export function ChannelStudioScreen() {
     const nextTab = normalizeStudioTabId(routeParams.tab)
       ?? normalizeStudioTabId(routeParams.focus)
       ?? (routeAction === "clip" || routeAction === "create-clip" ? "clip" : null)
-      ?? (routeAction === "upload" ? "content" : null);
+      ?? (routeAction === "upload" ? "clip" : null);
     if (nextTab) {
       setActiveStudioTab(nextTab);
+      const focus = String(Array.isArray(routeParams.focus) ? routeParams.focus[0] : routeParams.focus ?? "");
+      pendingStudioFocusRef.current = nextTab === "live" && focus === "schedule" ? "event-editor" : nextTab === "live" && focus === "safety" ? "room-defaults" : `tab-${nextTab}`;
+      const focusKey = pendingStudioFocusRef.current;
+      requestAnimationFrame(() => recordStudioSection(focusKey));
+      if (nextTab === "audience") setAudienceFilter(focus === "requests" ? "pending_request" : focus === "blocks" ? "blocked" : "all");
     }
     const monetizationSection = normalizeMonetizationSectionId(routeParams.tab)
       ?? normalizeMonetizationSectionId(routeParams.focus);
@@ -1568,7 +1620,7 @@ export function ChannelStudioScreen() {
       setExpandedMonetizationSections((current) => new Set([...current, "ways_to_earn"]));
     }
     if (routeAction === "upload") setContentStatusFilter("all");
-  }, [routeAction, routeParams.focus, routeParams.manage, routeParams.tab]);
+  }, [routeAction, routeParams.focus, routeParams.manage, routeParams.tab, recordStudioSection]);
 
   useEffect(() => {
     if (activeStudioTab !== "monetization") return;
@@ -1663,7 +1715,7 @@ export function ChannelStudioScreen() {
       readAppConfig().catch(() => DEFAULT_APP_CONFIG),
       readCreatorPermissions().catch(() => null),
       readChannelAudienceSummary(String(user?.id ?? "")).catch(() => null),
-      readChannelAudienceMembers(String(user?.id ?? "")).catch(() => []),
+      readChannelAudienceMembers(String(user?.id ?? ""), { throwOnUnavailable: true }).catch(() => null),
       readChannelSafetyAdminSummary(String(user?.id ?? "")).catch(() => null),
       readCreatorAnalyticsSummary(String(user?.id ?? "")).catch(() => null),
       readCreatorPayoutDashboardSummary({ creatorUserId: String(user?.id ?? ""), limit: 5 }),
@@ -1687,7 +1739,7 @@ export function ChannelStudioScreen() {
       listSandboxMonetizationTesters().catch(() => []),
       readProviderReadinessSummary().catch(getProviderReadinessFallbackSummary),
       readMoneyFeatureFlagSummary().catch(getMoneyFeatureFlagFallbackSummary),
-      readPlatformBrandStudio(String(user?.id ?? "")).catch(() => null),
+      readPlatformBrandStudio(String(user?.id ?? ""), { throwOnUnavailable: true }).catch(() => null),
       readMyPlatformRoleMemberships().catch(() => []),
       readCurrentUserEntitlement("premium").catch(() => null),
     ])
@@ -1735,7 +1787,8 @@ export function ChannelStudioScreen() {
         setMaxUploadSizeMb(resolvedConfig.runtimeControls.max_upload_size_mb);
         setCreatorPermissions(resolvedPermissions);
         setAudienceSummary(resolvedAudienceSummary);
-        setAudienceMembers(resolvedAudienceMembers);
+        setAudienceMembers(resolvedAudienceMembers ?? []);
+        setAudienceMembersError(resolvedAudienceMembers === null ? "Audience could not load. Retry to check current requests and followers." : null);
         setSafetyAdminSummary(resolvedSafetyAdminSummary);
         setCreatorAnalyticsSummary(resolvedCreatorAnalyticsSummary);
         setCreatorPayoutSummary(resolvedCreatorPayoutSummary);
@@ -1761,6 +1814,7 @@ export function ChannelStudioScreen() {
         setMoneyFeatureFlags(resolvedMoneyFeatureFlags);
         setPlatformBranding(resolvedPlatformBranding);
         setBrandDraft(resolvedPlatformBranding?.profile ?? null);
+        if (!resolvedPlatformBranding) setBrandNotice("Brand Studio could not load. Retry before editing or publishing.");
         setPlatformRoleMemberships(resolvedPlatformRoleMemberships);
         setPremiumEntitlement(resolvedPremiumEntitlement);
         setPremiumSnapshotActive(getCachedMonetizationSnapshot().targets.premium_subscription.hasEntitlement);
@@ -1874,21 +1928,6 @@ export function ChannelStudioScreen() {
     ]);
     setCreatorTipSettings(nextSettings);
     setCreatorTipTransactions(nextTransactions);
-  }, [user?.id]);
-
-  const refreshPaidVideos = useCallback(async () => {
-    if (!user?.id) {
-      setCreatorPaidVideoOffers([]);
-      setCreatorPaidVideoTransactions([]);
-      return;
-    }
-
-    const [nextOffers, nextTransactions] = await Promise.all([
-      listMyPaidVideoOffers().catch(() => []),
-      listMyPaidVideoTransactions(50).catch(() => []),
-    ]);
-    setCreatorPaidVideoOffers(nextOffers);
-    setCreatorPaidVideoTransactions(nextTransactions);
   }, [user?.id]);
 
   const refreshPaidEvents = useCallback(async () => {
@@ -2600,8 +2639,9 @@ export function ChannelStudioScreen() {
     }
 
     setEventsLoading(true);
+    setEventsLoadError(null);
 
-    void readCreatorEventReminderSummaries(String(user?.id ?? ""))
+    void readCreatorEventReminderSummaries(String(user?.id ?? ""), { throwOnUnavailable: true })
       .then((summaries) => {
         if (!active) return;
         setCreatorReminderSummaries(summaries);
@@ -2610,8 +2650,7 @@ export function ChannelStudioScreen() {
       })
       .catch(() => {
         if (!active) return;
-        setCreatorEvents([]);
-        setCreatorReminderSummaries([]);
+        setEventsLoadError("Events could not refresh. Retry to check your current schedule.");
         setEventsLoading(false);
       });
 
@@ -2636,12 +2675,14 @@ export function ChannelStudioScreen() {
     setVideosLoading(true);
     setVideosLoadError(null);
     void Promise.all([
-      readCreatorVideos(String(user.id), { includeDrafts: true, limit: 50 }),
+      readCreatorVideos(String(user.id), { includeDrafts: true, limit: CONTENT_PAGE_SIZE + 1, throwOnUnavailable: true }),
       readCreatorReplayLibraryItems(String(user.id)),
     ])
       .then(async ([videos, replays]) => {
         if (!active) return;
-        setCreatorVideos(videos);
+        setCreatorVideos(videos.slice(0, CONTENT_PAGE_SIZE));
+        setCreatorVideosOffset(Math.min(videos.length, CONTENT_PAGE_SIZE));
+        setCreatorVideosHasMore(videos.length > CONTENT_PAGE_SIZE);
         setCreatorReplays(replays);
         const editMap = await readClipStudioEditsForVideos(videos.map((video) => video.id)).catch(() => new Map());
         if (!active) return;
@@ -2650,9 +2691,6 @@ export function ChannelStudioScreen() {
       })
       .catch(() => {
         if (!active) return;
-        setCreatorVideos([]);
-        setCreatorReplays([]);
-        setCreatorVideoClipEdits({});
         setVideosLoadError("Unable to load creator videos right now. Check your connection and retry.");
         setVideosLoading(false);
       });
@@ -2662,7 +2700,39 @@ export function ChannelStudioScreen() {
     };
   }, [canUseChannelSettings, user?.id]);
 
+  useEffect(() => {
+    const generation = ++contentQueryGenerationRef.current;
+    const query = contentSearchQuery.trim();
+    setContentSearchError(null);
+    setContentSearchVideos([]);
+    setContentSearchHasMore(false);
+    if (!contentUsesQuery || !canUseChannelSettings || !user?.id) {
+      setContentSearchLoading(false);
+      return;
+    }
+    setContentSearchLoading(true);
+    const timer = setTimeout(() => {
+      void readCreatorVideos(String(user.id), { includeDrafts: true, limit: CONTENT_PAGE_SIZE + 1, searchQuery: query, visibility: contentVisibility, sort: contentSort, throwOnUnavailable: true })
+        .then((videos) => {
+          if (generation !== contentQueryGenerationRef.current) return;
+          setContentSearchVideos(videos.slice(0, CONTENT_PAGE_SIZE));
+          setContentSearchOffset(Math.min(videos.length, CONTENT_PAGE_SIZE));
+          setContentSearchHasMore(videos.length > CONTENT_PAGE_SIZE);
+        })
+        .catch(() => {
+          if (generation === contentQueryGenerationRef.current) setContentSearchError("Content could not load for these filters. Retry or change your filters.");
+        })
+        .finally(() => {
+          if (generation === contentQueryGenerationRef.current) setContentSearchLoading(false);
+        });
+    }, 250);
+    return () => { clearTimeout(timer); contentQueryGenerationRef.current += 1; };
+  }, [canUseChannelSettings, contentSearchQuery, contentSearchRetry, contentVisibility, contentSort, contentUsesQuery, user?.id]);
+
+  useEffect(() => () => { clipEditorGenerationRef.current += 1; }, []);
+
   const updateProfile = (patch: Partial<UserProfile>) => {
+    if (saving || brandSaving || brandProfileSaveInFlightRef.current) return;
     setProfile((prev) => normalizeUserProfile({ ...(prev ?? {}), ...patch }));
     setNotice(null);
   };
@@ -2687,11 +2757,13 @@ export function ChannelStudioScreen() {
   };
 
   const updateEventEditor = (patch: Partial<ChannelEventEditorState>) => {
+    if (eventSaveInFlightRef.current) return;
     setEventEditor((prev) => ({ ...prev, ...patch }));
     setEventNotice(null);
   };
 
   const updateVideoEditor = (patch: Partial<ChannelVideoEditorState>) => {
+    if (paidVideoSaveInFlightRef.current) return;
     setVideoEditor((prev) => ({ ...prev, ...patch }));
     setVideoLifecycleState((current) => current === "succeeded" ? "idle" : current);
     setVideoNotice(null);
@@ -2705,12 +2777,14 @@ export function ChannelStudioScreen() {
   };
 
   const updateClipEditor = (patch: Partial<ClipStudioEditorState>) => {
+    if (clipLoading || clipLoadError || clipSaveInFlightRef.current) return;
     setClipEditor((prev) => ({ ...prev, ...patch }));
     markClipStudioDirty();
     setClipNotice(null);
   };
 
   const applyClipTemplatePreset = (preset: ClipStudioTemplatePreset) => {
+    if (clipLoading || clipLoadError || clipSaveInFlightRef.current) return;
     const templateConfig = getClipStudioTemplatePresetConfig(preset);
     updateClipEditor({
       templatePreset: templateConfig.preset,
@@ -2723,39 +2797,26 @@ export function ChannelStudioScreen() {
     setClipNotice(`${formatClipStudioTemplateLabel(templateConfig.preset)} template selected. Preview updated.`);
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
-  const resetClipStudio = () => {
-    clipSaveInFlightRef.current = false;
+  const openClipStudioForNew = () => {
+    if (clipSaveInFlightRef.current) return;
+    clipEditorGenerationRef.current += 1;
+    setClipLoading(false);
+    setClipLoadError(null);
+    setSelectedVideoFile(null);
     setClipEditor(createEmptyClipStudioEditorState());
     setSelectedClipVideoFile(null);
     setSelectedClipCoverFile(null);
     setClipSaveState("idle");
     setClipSavedVideoId(null);
-    setClipNotice(null);
-  };
-
-  const openClipStudioForNew = () => {
-    const transferredFile = selectedVideoFile;
-    setSelectedVideoFile(null);
-    setClipEditor({
-      ...createEmptyClipStudioEditorState(),
-      title: videoEditor.title,
-      description: videoEditor.description,
-      visibility: "draft",
-    });
-    setSelectedClipVideoFile(transferredFile);
-    setSelectedClipCoverFile(null);
-    setClipSaveState(transferredFile ? "video_selected" : "idle");
-    setClipSavedVideoId(null);
-    setClipNotice(
-      transferredFile
-        ? "Video moved into Clip Studio. Choose format, cover, and title metadata before saving."
-        : "Choose a video to start a new Clip Studio draft.",
-    );
+    setClipNotice("Choose a video to start a new Clip Studio draft.");
     openStudioTab("clip", { focus: "create" });
   };
 
   const openClipStudioForVideo = (video: CreatorVideo) => {
+    if (clipSaveInFlightRef.current) return;
+    const generation = ++clipEditorGenerationRef.current;
+    setClipLoading(true);
+    setClipLoadError(null);
     setClipEditor({
       ...createEmptyClipStudioEditorState(),
       editingVideoId: video.id,
@@ -2773,10 +2834,11 @@ export function ChannelStudioScreen() {
     setClipNotice("Loading Clip Studio settings for this video...");
     openStudioTab("clip", { focus: "edit" });
     void Promise.all([
-      readClipStudioEdit(video.id),
+      readClipStudioEdit(video.id, { throwOnUnavailable: true }),
       readCreatorVideoForPlayer(video.id).catch(() => null),
     ])
       .then(([edit, previewVideo]) => {
+        if (generation !== clipEditorGenerationRef.current) return;
         if (!edit) {
           setClipEditor((current) => ({
             ...current,
@@ -2808,7 +2870,12 @@ export function ChannelStudioScreen() {
         setClipNotice("Clip Studio settings loaded.");
       })
       .catch(() => {
-        setClipNotice("Clip Studio settings could not load. You can still edit this video safely.");
+        if (generation !== clipEditorGenerationRef.current) return;
+        setClipLoadError("Clip settings could not load. Retry before changing or saving this video.");
+        setClipNotice("Clip settings could not load. Your saved metadata has not been changed.");
+      })
+      .finally(() => {
+        if (generation === clipEditorGenerationRef.current) setClipLoading(false);
       });
   };
 
@@ -2821,10 +2888,15 @@ export function ChannelStudioScreen() {
 
     const [nextSummary, nextMembers] = await Promise.all([
       readChannelAudienceSummary(String(user.id)).catch(() => null),
-      readChannelAudienceMembers(String(user.id)).catch(() => []),
+      readChannelAudienceMembers(String(user.id), { throwOnUnavailable: true }).catch(() => null),
     ]);
     setAudienceSummary(nextSummary);
-    setAudienceMembers(nextMembers);
+    if (nextMembers) {
+      setAudienceMembers(nextMembers);
+      setAudienceMembersError(null);
+    } else {
+      setAudienceMembersError("The audience action completed, but the list could not refresh. Retry to check current people and requests.");
+    }
   };
 
   const loadAudienceMembers = async () => {
@@ -2834,11 +2906,12 @@ export function ChannelStudioScreen() {
     }
 
     setAudienceMembersLoading(true);
+    setAudienceMembersError(null);
     try {
-      const nextMembers = await readChannelAudienceMembers(String(user.id));
+      const nextMembers = await readChannelAudienceMembers(String(user.id), { throwOnUnavailable: true });
       setAudienceMembers(nextMembers);
     } catch {
-      setAudienceMembers([]);
+      setAudienceMembersError("Audience could not refresh. Your last loaded people are shown. Retry to check current requests.");
     } finally {
       setAudienceMembersLoading(false);
     }
@@ -2942,7 +3015,6 @@ export function ChannelStudioScreen() {
       buttons.push(
         { text: "Approve", onPress: () => runAudienceMemberAction("approve_request", member) },
         { text: "Decline", style: "destructive", onPress: () => runAudienceMemberAction("decline_request", member) },
-        { text: "Block", style: "destructive", onPress: () => runAudienceMemberAction("block", member) },
       );
     } else if (member.kind === "blocked") {
       buttons.push({ text: "Unblock", onPress: () => runAudienceMemberAction("unblock", member) });
@@ -3023,6 +3095,18 @@ export function ChannelStudioScreen() {
               >
                 <Text style={styles.memberActionButtonText}>Decline</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.memberActionButton, busy && styles.eventPrimaryButtonDisabled]}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel={`Block ${member.displayName}`}
+                onPress={() => Alert.alert("Block audience member?", `Block ${member.displayName} from this Platform?`, [
+                  { text: "Cancel", style: "cancel" },
+                  { text: "Block", style: "destructive", onPress: () => runAudienceMemberAction("block", member) },
+                ])}
+              >
+                <Text style={styles.memberActionButtonText}>Block</Text>
+              </TouchableOpacity>
             </>
           ) : member.kind === "blocked" ? (
             <TouchableOpacity
@@ -3057,20 +3141,29 @@ export function ChannelStudioScreen() {
     if (!user?.id) {
       setCreatorEvents([]);
       setCreatorReminderSummaries([]);
-      return;
+      return false;
     }
 
     setEventsLoading(true);
+    setEventsLoadError(null);
     try {
-      const summaries = await readCreatorEventReminderSummaries(String(user.id));
+      const summaries = await readCreatorEventReminderSummaries(String(user.id), { throwOnUnavailable: true });
       setCreatorReminderSummaries(summaries);
       setCreatorEvents(summaries.map((summary) => summary.event));
+      return true;
+    } catch {
+      setEventsLoadError("Events could not refresh. Retry to check your current schedule.");
+      return false;
     } finally {
       setEventsLoading(false);
     }
   };
 
-  const loadCreatorVideos = async () => {
+  const loadCreatorVideos = async (confirmedVideo?: CreatorVideo) => {
+    // Mutations refresh this library. Invalidate any cached filtered/search page
+    // as well, including a query that changed while the mutation was in flight.
+    contentQueryGenerationRef.current += 1;
+    setContentSearchRetry((current) => current + 1);
     if (!user?.id) {
       setCreatorVideos([]);
       setCreatorReplays([]);
@@ -3082,18 +3175,19 @@ export function ChannelStudioScreen() {
     setVideosLoadError(null);
     try {
       const [videos, replays] = await Promise.all([
-        readCreatorVideos(String(user.id), { includeDrafts: true, limit: 50 }),
+        readCreatorVideos(String(user.id), { includeDrafts: true, limit: CONTENT_PAGE_SIZE + 1, throwOnUnavailable: true }),
         readCreatorReplayLibraryItems(String(user.id)),
       ]);
-      setCreatorVideos(videos);
+      const visibleVideos = videos.slice(0, CONTENT_PAGE_SIZE);
+      if (confirmedVideo && !visibleVideos.some((video) => video.id === confirmedVideo.id)) visibleVideos.push(confirmedVideo);
+      setCreatorVideos(visibleVideos);
+      setCreatorVideosOffset(Math.min(videos.length, CONTENT_PAGE_SIZE));
+      setCreatorVideosHasMore(videos.length > CONTENT_PAGE_SIZE);
       setCreatorReplays(replays);
       const editMap = await readClipStudioEditsForVideos(videos.map((video) => video.id)).catch(() => new Map());
       setCreatorVideoClipEdits(Object.fromEntries(editMap));
-      return videos;
+      return visibleVideos;
     } catch (error) {
-      setCreatorVideos([]);
-      setCreatorReplays([]);
-      setCreatorVideoClipEdits({});
       setVideosLoadError(formatCreatorVideoUiError(
         error,
         "Unable to load creator videos right now. Check your connection and retry.",
@@ -3101,6 +3195,41 @@ export function ChannelStudioScreen() {
       return [];
     } finally {
       setVideosLoading(false);
+    }
+  };
+
+  const loadMoreContentVideos = async (libraryOnly = false) => {
+    if (!user?.id || contentPageInFlightRef.current) return;
+    contentPageInFlightRef.current = true;
+    const query = libraryOnly ? "" : contentSearchQuery.trim();
+    const useQuery = !libraryOnly && contentUsesQuery;
+    const generation = contentQueryGenerationRef.current;
+    const currentRows = useQuery ? contentSearchVideos : creatorVideos;
+    setContentLoadingMore(true);
+    try {
+      const page = await readCreatorVideos(String(user.id), { includeDrafts: true, limit: CONTENT_PAGE_SIZE + 1, offset: useQuery ? contentSearchOffset : creatorVideosOffset, searchQuery: query, visibility: useQuery ? contentVisibility : undefined, sort: useQuery ? contentSort : "newest", throwOnUnavailable: true });
+      if (generation !== contentQueryGenerationRef.current) return;
+      const next = [...currentRows, ...page.slice(0, CONTENT_PAGE_SIZE).filter((video) => !currentRows.some((current) => current.id === video.id))];
+      if (useQuery) {
+        setContentSearchVideos(next);
+        setContentSearchOffset((current) => current + Math.min(page.length, CONTENT_PAGE_SIZE));
+        setContentSearchHasMore(page.length > CONTENT_PAGE_SIZE);
+        setContentSearchError(null);
+      } else {
+        setCreatorVideos(next);
+        setCreatorVideosOffset((current) => current + Math.min(page.length, CONTENT_PAGE_SIZE));
+        setCreatorVideosHasMore(page.length > CONTENT_PAGE_SIZE);
+        setVideosLoadError(null);
+      }
+      const edits = await readClipStudioEditsForVideos(page.map((video) => video.id)).catch(() => new Map());
+      if (generation === contentQueryGenerationRef.current) setCreatorVideoClipEdits((current) => ({ ...current, ...Object.fromEntries(edits) }));
+    } catch {
+      if (generation !== contentQueryGenerationRef.current) return;
+      if (useQuery) setContentSearchError("More search results could not load. Please retry.");
+      else setVideosLoadError("More content could not load. Your loaded videos are unchanged. Please retry.");
+    } finally {
+      contentPageInFlightRef.current = false;
+      setContentLoadingMore(false);
     }
   };
 
@@ -3114,7 +3243,7 @@ export function ChannelStudioScreen() {
 
     setBrandLoading(true);
     try {
-      const bundle = await readPlatformBrandStudio(ownerUserId);
+      const bundle = await readPlatformBrandStudio(ownerUserId, { throwOnUnavailable: true });
       setPlatformBranding(bundle);
       setBrandDraft(bundle.profile);
       return bundle;
@@ -3180,6 +3309,7 @@ export function ChannelStudioScreen() {
   };
 
   const applyClipStudioVideoFile = (pickedFile: CreatorVideoFile) => {
+    if (clipSaveInFlightRef.current) return;
     if (!pickedFile.uri) {
       setClipSaveState("save_failed");
       setClipNotice("Choose a video before opening Clip Studio preview.");
@@ -3204,6 +3334,9 @@ export function ChannelStudioScreen() {
     }
 
     setSelectedClipVideoFile(pickedFile);
+    clipEditorGenerationRef.current += 1;
+    setClipLoading(false);
+    setClipLoadError(null);
     setSelectedClipCoverFile(null);
     setClipSavedVideoId(null);
     setClipSaveState("video_selected");
@@ -3235,6 +3368,8 @@ export function ChannelStudioScreen() {
   };
 
   const pickCreatorVideoFromFiles = async (target: CreatorVideoSourceTarget) => {
+    if (clipSaveInFlightRef.current || clipLoading) return;
+    const generation = clipEditorGenerationRef.current;
     try {
       if (target === "clip_video") {
         setClipSaveState("selecting_video");
@@ -3251,6 +3386,7 @@ export function ChannelStudioScreen() {
         multiple: false,
       });
 
+      if (generation !== clipEditorGenerationRef.current) return;
       if (result.canceled) {
         if (target === "clip_video") {
           setClipSaveState((current) => (clipEditor.editingVideoId || selectedClipVideoFile ? "ready_to_save" : current === "selecting_video" ? "idle" : current));
@@ -3272,6 +3408,7 @@ export function ChannelStudioScreen() {
         size: asset?.size,
       });
     } catch (error) {
+      if (generation !== clipEditorGenerationRef.current) return;
       if (target === "clip_video") {
         setClipSaveState("save_failed");
         setClipNotice("Unable to open the video picker right now.");
@@ -3288,6 +3425,8 @@ export function ChannelStudioScreen() {
   };
 
   const pickCreatorVideoFromGallery = async (target: CreatorVideoSourceTarget) => {
+    if (clipSaveInFlightRef.current || clipLoading) return;
+    const generation = clipEditorGenerationRef.current;
     try {
       if (target === "clip_video") {
         setClipSaveState("selecting_video");
@@ -3307,6 +3446,7 @@ export function ChannelStudioScreen() {
         legacy: false,
       });
 
+      if (generation !== clipEditorGenerationRef.current) return;
       if (result.canceled) {
         if (target === "clip_video") {
           setClipSaveState((current) => (clipEditor.editingVideoId || selectedClipVideoFile ? "ready_to_save" : current === "selecting_video" ? "idle" : current));
@@ -3328,6 +3468,7 @@ export function ChannelStudioScreen() {
         size: asset?.fileSize,
       });
     } catch (error) {
+      if (generation !== clipEditorGenerationRef.current) return;
       if (target === "clip_video") {
         setClipSaveState("save_failed");
         setClipNotice("Unable to open Photos / Gallery right now. Try Files if the video is saved elsewhere.");
@@ -3363,6 +3504,8 @@ export function ChannelStudioScreen() {
   };
 
   const onPickClipCoverFile = async () => {
+    if (clipSaveInFlightRef.current || clipLoading || clipLoadError) return;
+    const generation = clipEditorGenerationRef.current;
     try {
       setClipSaveState("selecting_cover");
       setClipNotice(null);
@@ -3373,6 +3516,7 @@ export function ChannelStudioScreen() {
         multiple: false,
       });
 
+      if (generation !== clipEditorGenerationRef.current) return;
       if (result.canceled) {
         setClipSaveState((current) => (current === "selecting_cover" ? "ready_to_save" : current));
         setClipNotice("No cover image selected.");
@@ -3405,6 +3549,7 @@ export function ChannelStudioScreen() {
         size: pickedFile.size ?? null,
       });
     } catch {
+      if (generation !== clipEditorGenerationRef.current) return;
       setClipSaveState("save_failed");
       setClipNotice("Unable to open the cover picker right now.");
       logClipStudioUi("clip_cover_select_failed", { reason: "picker_unavailable" });
@@ -3412,6 +3557,7 @@ export function ChannelStudioScreen() {
   };
 
   const onRemoveClipCoverFile = () => {
+    if (clipLoading || clipLoadError || clipSaveInFlightRef.current) return;
     setSelectedClipCoverFile(null);
     updateClipEditor({
       coverStoragePath: null,
@@ -3424,6 +3570,7 @@ export function ChannelStudioScreen() {
   };
 
   const updateBrandDraft = (patch: Partial<PlatformBrandProfile>) => {
+    if (brandSaving || brandBusyAssetType || brandProfileSaveInFlightRef.current) return;
     setBrandDraft((current) => {
       const source = current ?? platformBranding?.profile;
       if (!source) return current;
@@ -3488,13 +3635,6 @@ export function ChannelStudioScreen() {
     return `Published, but Preview Platform has not refreshed yet.${profileRetryCopy} Reopen Preview Platform to check it.`;
   };
 
-  const getBrandPublishFailureNotice = (
-    readback: PlatformBrandPublishReadbackStatus | null | undefined,
-  ) => {
-    if (readback) return getBrandPublishNotice(readback, false);
-    return "Unable to publish Brand Studio changes right now. Reopen Brand Studio, check the selected media, and try again.";
-  };
-
   const getNormalizedProfileForSave = () => {
     if (!profile) return null;
     return normalizeUserProfile({
@@ -3513,8 +3653,8 @@ export function ChannelStudioScreen() {
   const saveCurrentProfileSettings = async () => {
     const normalized = getNormalizedProfileForSave();
     if (!normalized) throw new Error("Platform profile unavailable.");
-    await saveUserProfile(normalized);
-    setProfile(normalized);
+    await saveUserProfileRemote(normalized, String(user?.id ?? ""));
+    setProfile((current) => current === profile ? normalized : current);
     savedProfilePublishSnapshotRef.current = getProfilePublishSnapshot(normalized);
     return normalized;
   };
@@ -3526,8 +3666,8 @@ export function ChannelStudioScreen() {
     if (savedProfilePublishSnapshotRef.current === nextSnapshot) {
       return { saved: false, profile: normalized };
     }
-    await saveUserProfile(normalized);
-    setProfile(normalized);
+    await saveUserProfileRemote(normalized, String(user?.id ?? ""));
+    setProfile((current) => current === profile ? normalized : current);
     savedProfilePublishSnapshotRef.current = nextSnapshot;
     return { saved: true, profile: normalized };
   };
@@ -3582,30 +3722,8 @@ export function ChannelStudioScreen() {
     const savedProfile = await publishPlatformBrandProfile(ownerUserId, draft);
     setBrandDraft(savedProfile);
     const bundle = await loadPlatformBranding();
-    const readback = await resolveBrandPublishReadbackStatus(ownerUserId, selectedAssetIds);
+    const readback = await resolveBrandPublishReadbackStatus(ownerUserId, selectedAssetIds).catch(() => null);
     return { bundle, readback };
-  };
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
-  const publishBrandDraft = async () => {
-    if (brandProfileSaveInFlightRef.current) return;
-    brandProfileSaveInFlightRef.current = true;
-    setBrandSaving(true);
-    setBrandNotice(null);
-    const ownerUserId = String(user?.id ?? "").trim();
-    const selectedAssetIds = getBrandSelectedAssetIds(getCurrentBrandDraft());
-    try {
-      const { readback } = await persistBrandPublish();
-      setBrandNotice(getBrandPublishNotice(readback, true));
-    } catch {
-      const readback = ownerUserId
-        ? await resolveBrandPublishReadbackStatus(ownerUserId, selectedAssetIds).catch(() => null)
-        : null;
-      setBrandNotice(getBrandPublishFailureNotice(readback));
-    } finally {
-      brandProfileSaveInFlightRef.current = false;
-      setBrandSaving(false);
-    }
   };
 
   const saveBrandStudioDraftAndProfile = async () => {
@@ -3645,15 +3763,10 @@ export function ChannelStudioScreen() {
     setBrandNotice(null);
     setNotice(null);
     let publishResult: { bundle: PlatformBrandingBundle | null; readback: PlatformBrandPublishReadbackStatus | null } | null = null;
-    const ownerUserId = String(user?.id ?? "").trim();
-    const selectedAssetIds = getBrandSelectedAssetIds(getCurrentBrandDraft());
     try {
       publishResult = await persistBrandPublish();
-    } catch {
-      const readback = ownerUserId
-        ? await resolveBrandPublishReadbackStatus(ownerUserId, selectedAssetIds).catch(() => null)
-        : null;
-      setBrandNotice(getBrandPublishFailureNotice(readback));
+    } catch (error) {
+      setBrandNotice(getUserFacingErrorMessage(error, "Brand changes could not be published. Your edits are preserved; retry after checking the media and connection."));
       brandProfileSaveInFlightRef.current = false;
       setBrandSaving(false);
       setSaving(false);
@@ -3833,7 +3946,17 @@ export function ChannelStudioScreen() {
   };
 
   const onEditVideo = (video: CreatorVideo) => {
+    if (paidVideoSaveInFlightRef.current) return;
+    const unavailableReason = getPaidVideoSetupUnavailableReason(video);
+    if (unavailableReason) {
+      setSelectedPaidVideo(null);
+      setVideoEditor(createEmptyVideoEditorState());
+      setVideoNotice(unavailableReason);
+      openStudioTab("monetization", { focus: "ways_to_earn", manage: "paid_videos" });
+      return;
+    }
     const paidOffer = paidVideoOfferByVideoId.get(video.id);
+    setSelectedPaidVideo(video);
     setVideoEditor({
       editingVideoId: video.id,
       title: video.title,
@@ -3845,122 +3968,70 @@ export function ChannelStudioScreen() {
     setSelectedVideoFile(null);
     setVideoLifecycleState("idle");
     setVideoNotice(null);
+    openStudioTab("monetization", { focus: "ways_to_earn", manage: "paid_videos" });
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
-  const onSaveVideo = async () => {
-    if (!videoEditor.title.trim()) {
-      logCreatorVideoUploadUi("submit_blocked", { reason: "missing_title" });
-      setVideoNotice(videoEditor.editingVideoId ? "Enter a title before updating." : "Enter a title before uploading.");
+  const savePaidVideoSetup = async () => {
+    if (!videoEditor.editingVideoId || paidVideoSaveInFlightRef.current) return;
+    const unavailableReason = selectedPaidVideo?.id === videoEditor.editingVideoId
+      ? getPaidVideoSetupUnavailableReason(selectedPaidVideo)
+      : "Select a video again before saving its paid access settings.";
+    if (unavailableReason) {
+      setVideoNotice(unavailableReason);
       return;
     }
-
-    if (!videoEditor.editingVideoId && !selectedVideoFile) {
-      logCreatorVideoUploadUi("submit_blocked", { reason: "missing_file" });
-      setVideoNotice("Choose a video file before uploading.");
+    const isPaid = videoEditor.accessMode === "paid";
+    const priceCents = parseDollarInputToCents(videoEditor.priceDollars);
+    if (isPaid && priceCents !== 99) {
+      setVideoNotice("The current sandbox Paid Video catalog supports the exact $0.99 tier only.");
       return;
     }
-
-    if (!videoEditor.editingVideoId && selectedVideoFile && isCreatorVideoFileOverChannelMovieLimit(selectedVideoFile, maxUploadSizeMb)) {
-      logCreatorVideoUploadUi("submit_blocked", {
-        reason: "file_too_large",
-        fileSize: selectedVideoFile.size ?? null,
-      });
-      setVideoNotice(getCreatorVideoTooLargeMessage(selectedVideoFile.size, maxUploadSizeMb));
-      return;
-    }
-
-    if (!videoEditor.editingVideoId && !uploadsEnabled) {
-      logCreatorVideoUploadUi("submit_blocked", { reason: "uploads_paused" });
-      setVideoLifecycleState("idle");
-      setVideoNotice("Creator video uploads are temporarily paused. Existing videos can still be managed.");
-      return;
-    }
-
-    const fileToUpload = selectedVideoFile;
-
+    paidVideoSaveInFlightRef.current = true;
+    setVideoSaving(true);
+    setVideoNotice(null);
     try {
-      setVideoSaving(true);
-      setVideoLifecycleState(videoEditor.editingVideoId ? "idle" : "uploading");
-      setVideoNotice(videoEditor.editingVideoId ? "Saving creator video..." : "Uploading creator video...");
-      logCreatorVideoUploadUi("submit_start", {
-        mode: videoEditor.editingVideoId ? "edit" : "upload",
-        fileName: selectedVideoFile?.name ?? null,
-        fileSize: selectedVideoFile?.size ?? null,
-        visibility: videoEditor.visibility,
-      });
-
-      let savedVideoId = videoEditor.editingVideoId ?? "";
-      if (videoEditor.editingVideoId) {
-        const updatedVideo = await updateCreatorVideoMetadata(videoEditor.editingVideoId, {
-          title: videoEditor.title,
-          description: videoEditor.description,
-          visibility: videoEditor.visibility,
-        });
-        savedVideoId = updatedVideo.id;
-        setVideoNotice("Creator video updated.");
-      } else {
-        const uploadedVideo = await uploadCreatorVideo({
-          file: fileToUpload!,
-          title: videoEditor.title,
-          description: videoEditor.description,
-          visibility: videoEditor.visibility,
-          maxUploadSizeMb,
-        });
-        savedVideoId = uploadedVideo.id;
-        setVideoNotice(`Creator video uploaded: ${uploadedVideo.title}.`);
+      const saved = await savePaidVideoOffer({ videoId: videoEditor.editingVideoId, isPaid, priceCents: isPaid ? priceCents : 99, currency: "usd" });
+      const status = String((saved as Record<string, unknown> | null)?.status ?? "");
+      if (status === "blocked") throw new Error(String((saved as Record<string, unknown>).reason ?? "Paid video setup is unavailable."));
+      if (isPaid) {
+        await saveCreatorSetupConfig({ displayName: "Sandbox Paid Video", metadata: { setup_surface: "money_center_paid_video_manager" }, productKey: "paid_content_access_sandbox_099", sourceId: videoEditor.editingVideoId, sourceType: "paid_content" });
       }
-
-      if (savedVideoId) {
-        const paidVideoPriceCents = parseDollarInputToCents(videoEditor.priceDollars);
-        const paidVideoEnabled = videoEditor.accessMode === "paid";
-        if (paidVideoEnabled && paidVideoPriceCents !== 99) {
-          setVideoNotice("Video saved. The current Paid Video sandbox catalog supports the exact $0.99 tier only.");
-        } else {
-          const result = await savePaidVideoOffer({
-            videoId: savedVideoId,
-            isPaid: paidVideoEnabled,
-            priceCents: paidVideoPriceCents,
-            currency: "usd",
-          });
-          const status = String((result as Record<string, unknown> | null)?.status ?? "");
-          const reason = String((result as Record<string, unknown> | null)?.reason ?? "");
-          if (status === "blocked") {
-            setVideoNotice(`Video saved. Paid video setup is blocked: ${reason || "provider not ready"}.`);
-          } else if (paidVideoEnabled) {
-            await saveCreatorSetupConfig({
-              displayName: "Sandbox Paid Video",
-              metadata: {
-                setup_surface: "content_video_editor",
-              },
-              productKey: "paid_content_access_sandbox_099",
-              sourceId: savedVideoId,
-              sourceType: "paid_content",
-            });
-            setVideoNotice(`Video saved as a sandbox paid video at ${formatMonetizationCurrency(paidVideoPriceCents, "usd")}.`);
-          }
-        }
+      const offers = await listMyPaidVideoOffers({ throwOnUnavailable: true });
+      const confirmed = offers.find((offer) => offer.videoId === videoEditor.editingVideoId && offer.creatorId === String(user?.id ?? ""));
+      if (!confirmed || confirmed.isPaid !== isPaid || (isPaid && (confirmed.priceCents !== 99 || !["sandbox", "active"].includes(confirmed.status)))) {
+        throw new Error("The saved access settings could not be verified for this video. Your selection is preserved; refresh before retrying.");
       }
-
-      await loadCreatorVideos();
-      await refreshPaidVideos();
-      resetVideoEditor(videoEditor.editingVideoId ? "idle" : "succeeded");
+      setCreatorPaidVideoOffers(offers);
+      setVideoNotice(isPaid ? "Paid Video setup saved at $0.99 in sandbox mode. Production sales and payouts remain unchanged." : "Free access saved. The prior paid offer is no longer available for new purchases.");
     } catch (error) {
-      logCreatorVideoUploadUi("submit_failed", {
-        message: error instanceof Error ? error.message : "unknown",
-      });
-      setVideoLifecycleState("failed");
-      setVideoNotice(
-        formatCreatorVideoUiError(
-          error,
-          formatCreatorSetupError(error, "Unable to save creator video right now. Try again in a moment."),
-          fileToUpload?.size,
-        ),
-      );
+      setVideoNotice(formatCreatorSetupError(error, "Paid Video setup could not be confirmed. Your selection is preserved; refresh status before retrying."));
     } finally {
+      paidVideoSaveInFlightRef.current = false;
       setVideoSaving(false);
     }
   };
+
+  const openPaidVideoRef = useRef(onEditVideo);
+  openPaidVideoRef.current = onEditVideo;
+  useEffect(() => {
+    const videoId = String(Array.isArray(routeParams.videoId) ? routeParams.videoId[0] : routeParams.videoId ?? "").trim();
+    if (!videoId || !user?.id) return;
+    const generation = ++paidVideoRouteGenerationRef.current;
+    setVideoNotice("Loading selected video...");
+    void readCreatorVideoForOwner(videoId).then((video) => {
+      if (generation !== paidVideoRouteGenerationRef.current) return;
+      if (!video || video.ownerId !== user.id) {
+        setVideoNotice("That video is unavailable for this creator account.");
+        return;
+      }
+      setCreatorVideos((current) => current.some((entry) => entry.id === video.id) ? current : [...current, video]);
+      openPaidVideoRef.current(video);
+      router.setParams({ videoId: "" });
+    }).catch(() => {
+      if (generation === paidVideoRouteGenerationRef.current) setVideoNotice("The selected video could not load. Retry from its Content action.");
+    });
+    return () => { paidVideoRouteGenerationRef.current += 1; };
+  }, [routeParams.videoId, user?.id, router]);
 
   const buildClipStudioEditPatch = (coverUpload?: ClipStudioCoverUpload | null) => {
     const brandAsset = approvedClipBrandAsset;
@@ -4017,6 +4088,10 @@ export function ChannelStudioScreen() {
 
   const saveClipStudio = async (targetVisibility: CreatorVideoVisibility) => {
     if (clipSaveInFlightRef.current) return;
+    if (clipLoading || clipLoadError) {
+      setClipNotice(clipLoadError ?? "Wait for this video's settings to load before saving.");
+      return;
+    }
 
     const title = clipEditor.title.trim();
     const isPublishing = targetVisibility === "public";
@@ -4139,7 +4214,7 @@ export function ChannelStudioScreen() {
       if (coverUpload && confirmedEdit.coverStoragePath !== coverUpload.storagePath) {
         throw new Error("Clip Studio cover settings could not be confirmed.");
       }
-      const refreshedVideos = await loadCreatorVideos();
+      const refreshedVideos = await loadCreatorVideos(confirmedVideo);
       const contentLibraryContainsDraft = refreshedVideos.some((video) => (
         video.id === savedVideoId && video.visibility === targetVisibility
       ));
@@ -4414,6 +4489,7 @@ export function ChannelStudioScreen() {
   };
 
   const onCreateEventFromVideo = (video: CreatorVideo) => {
+    if (eventSaveInFlightRef.current) return;
     setSelectedContentActionVideo(null);
     openStudioTab("live", { focus: "schedule" });
     setEventEditor({
@@ -4532,6 +4608,7 @@ export function ChannelStudioScreen() {
   };
 
   const onEditEvent = (event: CreatorEventSummary) => {
+    if (eventSaveInFlightRef.current) return;
     setEventEditor({
       editingEventId: event.id,
       eventTitle: event.eventTitle,
@@ -4548,10 +4625,11 @@ export function ChannelStudioScreen() {
     });
     setLiveReplayAccepted(false);
     setEventNotice(null);
+    openStudioTab("live", { focus: "schedule" });
   };
 
   const onSaveEvent = async () => {
-    if (!user?.id) return;
+    if (!user?.id || eventSaveInFlightRef.current) return;
 
     if (!eventEditor.editingEventId && !creatorPostingEnabled) {
       setEventNotice("Creator event creation is temporarily paused. Existing events can still be managed.");
@@ -4563,6 +4641,7 @@ export function ChannelStudioScreen() {
       return;
     }
 
+    eventSaveInFlightRef.current = true;
     try {
       setEventSaving(true);
       const payload = {
@@ -4592,12 +4671,18 @@ export function ChannelStudioScreen() {
         return;
       }
 
-      await loadCreatorEvents();
+      setEventEditor((current) => ({ ...current, editingEventId: result.id }));
+      const refreshed = await loadCreatorEvents().catch(() => false);
+      if (!refreshed) {
+        setEventNotice("Event saved. The schedule could not refresh; retry Refresh Events. Further saves update this same event.");
+        return;
+      }
       resetEventEditor();
       setEventNotice(eventEditor.editingEventId ? "Creator event updated." : "Creator event created.");
     } catch {
       setEventNotice("Unable to save creator event right now.");
     } finally {
+      eventSaveInFlightRef.current = false;
       setEventSaving(false);
     }
   };
@@ -4648,17 +4733,18 @@ export function ChannelStudioScreen() {
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const onSave = async () => {
-    if (!profile) return;
+    if (!profile || brandProfileSaveInFlightRef.current) return;
+    brandProfileSaveInFlightRef.current = true;
 
     try {
       setSaving(true);
       await saveCurrentProfileSettings();
-      setNotice("Platform Studio saved.");
+      setNotice("Room defaults saved. New rooms will use these access rules.");
     } catch {
       setNotice("Unable to save Platform Studio changes right now.");
     } finally {
+      brandProfileSaveInFlightRef.current = false;
       setSaving(false);
     }
   };
@@ -5115,29 +5201,29 @@ export function ChannelStudioScreen() {
   const eventSummaryCards: readonly SummaryMetricCard[] = [
     {
       label: "Upcoming",
-      value: String(upcomingEvents.length),
-      body: nextUpcomingEvent
+      value: eventsLoading ? "..." : eventsLoadError ? "Unavailable" : String(upcomingEvents.length),
+      body: eventsLoading ? "Loading schedule..." : eventsLoadError ? "Schedule and reminder metrics could not refresh. Retry in Live." : nextUpcomingEvent
         ? `Next up: ${nextUpcomingEvent.eventTitle}`
         : "No future scheduled event is available yet.",
     },
     {
       label: "Live Now",
-      value: String(liveNowEvents.length),
-      body: liveNowEvents.length
+      value: eventsLoading ? "..." : eventsLoadError ? "Unavailable" : String(liveNowEvents.length),
+      body: eventsLoading ? "Loading schedule..." : eventsLoadError ? "Schedule and reminder metrics could not refresh. Retry in Live." : liveNowEvents.length
         ? liveNowEvents.map((event) => event.eventTitle).slice(0, 2).join(" · ")
         : "No creator event is currently marked live now.",
     },
     {
       label: "Replay Ready",
-      value: String(replayReadyEvents.length),
-      body: replayReadyEvents.length
+      value: eventsLoading ? "..." : eventsLoadError ? "Unavailable" : String(replayReadyEvents.length),
+      body: eventsLoading ? "Loading schedule..." : eventsLoadError ? "Schedule and reminder metrics could not refresh. Retry in Live." : replayReadyEvents.length
         ? "Replay is available for ended events currently open for viewing."
         : "No creator event replay is currently available.",
     },
     {
       label: "Reminder Ready",
-      value: String(reminderReadyEvents.length),
-      body: reminderReadyEvents.length
+      value: eventsLoading ? "..." : eventsLoadError ? "Unavailable" : String(reminderReadyEvents.length),
+      body: eventsLoading ? "Loading schedule..." : eventsLoadError ? "Schedule and reminder metrics could not refresh. Retry in Live." : reminderReadyEvents.length
         ? "Scheduled events with start times are reminder-ready."
         : "No scheduled event is currently reminder-ready.",
     },
@@ -5145,15 +5231,15 @@ export function ChannelStudioScreen() {
   const reminderEnrollmentCards: readonly SummaryMetricCard[] = [
     {
       label: "Reminder Enrollments",
-      value: String(activeReminderEnrollments),
-      body: activeReminderEnrollments
+      value: eventsLoading ? "..." : eventsLoadError ? "Unavailable" : String(activeReminderEnrollments),
+      body: eventsLoading ? "Loading schedule..." : eventsLoadError ? "Schedule and reminder metrics could not refresh. Retry in Live." : activeReminderEnrollments
         ? `${activeReminderEnrollments} active reminder enrollment${activeReminderEnrollments === 1 ? "" : "s"} now back this creator schedule.`
         : "No viewer has enrolled in a reminder yet.",
     },
     {
       label: "Events With Interest",
-      value: String(eventsWithReminderInterest.length),
-      body: eventsWithReminderInterest.length
+      value: eventsLoading ? "..." : eventsLoadError ? "Unavailable" : String(eventsWithReminderInterest.length),
+      body: eventsLoading ? "Loading schedule..." : eventsLoadError ? "Schedule and reminder metrics could not refresh. Retry in Live." : eventsWithReminderInterest.length
         ? eventsWithReminderInterest.map((summary) => summary.event.eventTitle).slice(0, 2).join(" · ")
         : "No creator event currently shows reminder interest.",
       tone: eventsWithReminderInterest.length ? "default" : "unavailable",
@@ -5234,45 +5320,6 @@ export function ChannelStudioScreen() {
     return map;
   }, [enabledCreatorPaidEventOffers]);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
-  const filteredCreatorVideos = useMemo(() => {
-    const query = contentSearchQuery.trim().toLowerCase();
-    return creatorVideos
-      .filter((video) => {
-        if (contentStatusFilter === "published" && video.visibility !== "public") return false;
-        if (contentStatusFilter === "circle" && video.visibility !== "circle") return false;
-        if (contentStatusFilter === "drafts" && video.visibility !== "draft") return false;
-        if (contentStatusFilter === "replays" || contentStatusFilter === "processing" || contentStatusFilter === "needs_attention" || contentStatusFilter === "events") return false;
-        if (contentStatusFilter === "paid" && !paidVideoOfferByVideoId.get(video.id)?.isPaid) return false;
-        if (!query) return true;
-        return `${video.title} ${video.description}`.toLowerCase().includes(query);
-      })
-      .sort((a, b) => {
-        const diff = getCreatorVideoCreatedTimestamp(a) - getCreatorVideoCreatedTimestamp(b);
-        return contentSort === "oldest" ? diff : -diff;
-      });
-  }, [contentSearchQuery, contentSort, contentStatusFilter, creatorVideos, paidVideoOfferByVideoId]);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
-  const filteredCreatorReplays = useMemo(() => {
-    const query = contentSearchQuery.trim().toLowerCase();
-    return creatorReplays
-      .filter((replay) => {
-        if (contentStatusFilter === "uploads" || contentStatusFilter === "events" || contentStatusFilter === "paid") return false;
-        if (contentStatusFilter === "published" && replay.visibility !== "public") return false;
-        if (contentStatusFilter === "circle" && replay.visibility !== "circle") return false;
-        if (contentStatusFilter === "drafts" && replay.visibility !== "draft") return false;
-        if (contentStatusFilter === "processing" && !["requested", "recording_active", "recording_stopping", "processing_replay"].includes(replay.saveStatus)) return false;
-        if (contentStatusFilter === "needs_attention" && !["failed", "recording_not_started"].includes(replay.saveStatus) && replay.moderationStatus !== "hidden") return false;
-        if (!query) return true;
-        return `${replay.title} ${replay.description ?? ""}`.toLowerCase().includes(query);
-      })
-      .sort((a, b) => {
-        const aTime = new Date(a.createdAt || a.updatedAt).getTime();
-        const bTime = new Date(b.createdAt || b.updatedAt).getTime();
-        const diff = (Number.isFinite(aTime) ? aTime : 0) - (Number.isFinite(bTime) ? bTime : 0);
-        return contentSort === "oldest" ? diff : -diff;
-      });
-  }, [contentSearchQuery, contentSort, contentStatusFilter, creatorReplays]);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   const videoLifecycleCopy = getVideoLifecycleCopy({
     editingVideoId: videoEditor.editingVideoId,
     selectedFile: selectedVideoFile,
@@ -5295,6 +5342,9 @@ export function ChannelStudioScreen() {
     body: string;
     tab: StudioTabId;
   }[] = [
+    ...(videosLoadError ? [{ title: "Content could not refresh", body: "Retry Content before relying on library counts.", tab: "content" as const }] : []),
+    ...(eventsLoadError ? [{ title: "Events could not refresh", body: "Retry Live to check your current schedule.", tab: "live" as const }] : []),
+    ...(audienceMembersError ? [{ title: "Audience could not refresh", body: "Retry Audience to check pending requests.", tab: "audience" as const }] : []),
     ...(draftVideoCount > 0 ? [{
       title: "Drafts waiting",
       body: `${draftVideoCount} draft${draftVideoCount === 1 ? "" : "s"} can be reviewed for publish.`,
@@ -5319,49 +5369,49 @@ export function ChannelStudioScreen() {
   }[] = [
     {
       label: "Published",
-      value: videosLoading ? "..." : String(publishedVideoCount),
-      body: publishedVideoCount ? "Public videos" : "No public videos",
+      value: videosLoading ? "..." : videosLoadError ? "Unavailable" : String(publishedVideoCount),
+      body: videosLoading ? "Loading content..." : videosLoadError ? "Could not refresh" : creatorVideosHasMore ? "Public videos in loaded page" : publishedVideoCount ? "Public videos" : "No public videos",
       tab: "content",
     },
     {
       label: "Drafts",
-      value: videosLoading ? "..." : String(draftVideoCount),
-      body: draftVideoCount ? "Waiting to publish" : "No drafts",
+      value: videosLoading ? "..." : videosLoadError ? "Unavailable" : String(draftVideoCount),
+      body: videosLoading ? "Loading content..." : videosLoadError ? "Could not refresh" : creatorVideosHasMore ? "Drafts in loaded page" : draftVideoCount ? "Waiting to publish" : "No drafts",
       tab: "content",
     },
     {
       label: "Circle",
-      value: videosLoading ? "..." : String(circleVideoCount),
-      body: circleVideoCount ? "Private to Chi'lly Circle" : "No Circle-private videos",
+      value: videosLoading ? "..." : videosLoadError ? "Unavailable" : String(circleVideoCount),
+      body: videosLoading ? "Loading content..." : videosLoadError ? "Could not refresh" : creatorVideosHasMore ? "Circle videos in loaded page" : circleVideoCount ? "Private to Chi'lly Circle" : "No Circle-private videos",
       tab: "content",
     },
     {
       label: "Events",
-      value: eventsLoading ? "..." : String(upcomingEvents.length),
-      body: upcomingEvents.length ? "Upcoming" : "No events scheduled",
+      value: eventsLoading ? "..." : eventsLoadError ? "Unavailable" : String(upcomingEvents.length),
+      body: eventsLoading ? "Loading schedule..." : eventsLoadError ? "Could not refresh" : upcomingEvents.length ? "Upcoming" : "No events scheduled",
       tab: "live",
     },
     {
       label: "Needs attention",
-      value: needsAttentionItems.length ? String(needsAttentionItems.length) : "Clear",
-      body: needsAttentionItems.length ? "Review tasks" : "All clear",
+      value: needsAttentionItems.length ? String(needsAttentionItems.length) : "No tasks",
+      body: needsAttentionItems.length ? "Review tasks" : creatorVideosHasMore ? "Loaded content checked" : "Available data checked",
       tab: needsAttentionItems[0]?.tab ?? "home",
     },
   ];
   const insightMetricCards: readonly SummaryMetricCard[] = [
     {
       label: "Published Videos",
-      value: videosLoading ? "..." : String(publishedVideoCount),
+      value: videosLoading ? "..." : videosLoadError ? "Unavailable" : String(publishedVideoCount),
       body: "Public creator videos loaded for this Platform.",
     },
     {
       label: "Drafts",
-      value: videosLoading ? "..." : String(draftVideoCount),
+      value: videosLoading ? "..." : videosLoadError ? "Unavailable" : String(draftVideoCount),
       body: "Owner-only creator uploads loaded for this Platform.",
     },
     {
       label: "Chi'lly Circle",
-      value: videosLoading ? "..." : String(circleVideoCount),
+      value: videosLoading ? "..." : videosLoadError ? "Unavailable" : String(circleVideoCount),
       body: "Circle-private videos loaded for this Platform Studio.",
     },
     ...(audienceFollowerCount == null ? [] : [{
@@ -5386,15 +5436,24 @@ export function ChannelStudioScreen() {
     }]),
     {
       label: "Upcoming Events",
-      value: eventsLoading ? "..." : String(upcomingEvents.length),
+      value: eventsLoading ? "..." : eventsLoadError ? "Unavailable" : String(upcomingEvents.length),
       body: "Scheduled creator events with future start times.",
     },
   ];
 
   const renderContentPanel = () => {
     const query = contentSearchQuery.trim().toLowerCase();
-    const sortedVideos = [...creatorVideos]
+    const sortedVideos = [...(contentUsesQuery ? contentSearchVideos : creatorVideos)]
       .filter((video) => !query || `${video.title} ${video.description}`.toLowerCase().includes(query))
+      .filter((video) => {
+        if (["replays", "processing", "events"].includes(contentStatusFilter)) return false;
+        if (contentStatusFilter === "published") return video.visibility === "public";
+        if (contentStatusFilter === "drafts") return video.visibility === "draft";
+        if (contentStatusFilter === "circle") return video.visibility === "circle";
+        if (contentStatusFilter === "paid") return !!paidVideoOfferByVideoId.get(video.id)?.isPaid;
+        if (contentStatusFilter === "needs_attention") return ["hidden", "removed", "banned"].includes(video.moderationStatus) || video.renditionStatuses.some((rendition) => rendition.status === "failed");
+        return true;
+      })
       .sort((a, b) => {
         const diff = getCreatorVideoCreatedTimestamp(a) - getCreatorVideoCreatedTimestamp(b);
         return contentSort === "oldest" ? diff : -diff;
@@ -5414,18 +5473,32 @@ export function ChannelStudioScreen() {
       ["hidden", "removed", "banned"].includes(video.moderationStatus)
       || video.renditionStatuses.some((rendition) => rendition.status === "failed")
     ));
-    const searchedReplays = creatorReplays.filter((replay) => (
+    const searchedReplays = creatorReplays.filter((replay) => {
+      if (["uploads", "events", "paid"].includes(contentStatusFilter)) return false;
+      if (contentStatusFilter === "published" && replay.visibility !== "public") return false;
+      if (contentStatusFilter === "drafts" && replay.visibility !== "draft") return false;
+      if (contentStatusFilter === "circle" && replay.visibility !== "circle") return false;
+      if (contentStatusFilter === "processing" && !["requested", "recording_active", "recording_stopping", "processing_replay"].includes(replay.saveStatus)) return false;
+      if (contentStatusFilter === "needs_attention" && !["failed", "recording_not_started"].includes(replay.saveStatus) && replay.moderationStatus !== "hidden") return false;
+      return true;
+    }).filter((replay) => (
       !query || `${replay.title} ${replay.description ?? ""}`.toLowerCase().includes(query)
-    ));
+    )).sort((a, b) => {
+      const difference = (Date.parse(a.createdAt || a.updatedAt) || 0) - (Date.parse(b.createdAt || b.updatedAt) || 0);
+      return contentSort === "oldest" ? difference : -difference;
+    });
     const processingReplays = searchedReplays.filter((replay) => (
       ["requested", "recording_active", "recording_stopping", "processing_replay"].includes(replay.saveStatus)
     ));
     const attentionReplays = searchedReplays.filter((replay) => (
       ["failed", "recording_not_started"].includes(replay.saveStatus) || replay.moderationStatus === "hidden"
     ));
-    const searchedEvents = creatorEvents.filter((event) => (
+    const searchedEvents = creatorEvents.filter(() => contentStatusFilter === "all" || contentStatusFilter === "events").filter((event) => (
       !query || `${event.eventTitle} ${formatEventTypeLabel(event.eventType)}`.toLowerCase().includes(query)
-    ));
+    )).sort((a, b) => {
+      const difference = (Date.parse(a.startsAt || "") || 0) - (Date.parse(b.startsAt || "") || 0);
+      return contentSort === "oldest" ? difference : -difference;
+    });
     const videoShelves = [
       { key: "recent", title: "Recent Uploads", items: sortedVideos },
       { key: "featured", title: "Featured", items: featuredVideos },
@@ -5529,7 +5602,7 @@ export function ChannelStudioScreen() {
         <View style={styles.panelHeader}>
           <View style={styles.panelHeaderCopy}>
             <Text style={styles.panelTitle}>Content</Text>
-            <Text style={styles.panelSubtitle}>A clean library of your uploads, drafts, paid videos, Circle media, replays, and events.</Text>
+            <Text style={styles.panelSubtitle}>Search and manage your library. Add videos in Clip Studio.</Text>
           </View>
           <AppActionButton
             accessibilityLabel="Add Video to Content Library"
@@ -5544,7 +5617,7 @@ export function ChannelStudioScreen() {
 
         <View style={styles.contentLibraryStatsRow}>
           {[
-            `All ${totalContentItems}`,
+            `Loaded ${totalContentItems}${creatorVideosHasMore ? "+" : ""}`,
             `Published ${publishedVideoCount}`,
             `Drafts ${draftVideoCount}`,
             `Paid ${paidVideos.length}`,
@@ -5555,6 +5628,8 @@ export function ChannelStudioScreen() {
           ))}
         </View>
 
+        {routeParams.focus === "comments" ? <Text style={styles.noticeText}>Choose a video and open it to use its Comments and replies panel. Comment controls live on each video&apos;s player.</Text> : null}
+
         <TextInput
           style={[styles.input, styles.contentSearchInput]}
           placeholder="Search your content"
@@ -5562,15 +5637,27 @@ export function ChannelStudioScreen() {
           value={contentSearchQuery}
           onChangeText={setContentSearchQuery}
           autoCapitalize="none"
+          accessibilityLabel="Search all creator videos and loaded replays or events"
         />
 
-        {videosLoading ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+          {CONTENT_STATUS_FILTERS.map((filter) => (
+            <TouchableOpacity key={filter.id} style={[styles.chip, contentStatusFilter === filter.id && styles.chipActive]} onPress={() => setContentStatusFilter(filter.id)} accessibilityRole="button" accessibilityState={{ selected: contentStatusFilter === filter.id }} accessibilityLabel={`Filter content: ${filter.label}`}>
+              <Text style={[styles.chipText, contentStatusFilter === filter.id && styles.chipTextActive]}>{filter.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        <View style={styles.eventActionRow}>
+          {CONTENT_SORT_OPTIONS.map((sort) => <TouchableOpacity key={sort.id} style={styles.eventSecondaryButtonCompact} onPress={() => setContentSort(sort.id)} accessibilityRole="button" accessibilityState={{ selected: contentSort === sort.id }}><Text style={styles.eventSecondaryButtonText}>{sort.label}</Text></TouchableOpacity>)}
+          <TouchableOpacity style={styles.eventSecondaryButtonCompact} disabled={videosLoading || contentSearchLoading} onPress={() => { if (contentUsesQuery) setContentSearchRetry((current) => current + 1); else void loadCreatorVideos(); }} accessibilityRole="button"><Text style={styles.eventSecondaryButtonText}>Refresh</Text></TouchableOpacity>
+        </View>
+        {(contentUsesQuery ? contentSearchError : videosLoadError) ? <AppEmptyState actionLabel="Retry" body={(contentUsesQuery ? contentSearchError : videosLoadError) ?? "Content is unavailable."} onAction={() => { if (contentUsesQuery) setContentSearchRetry((current) => current + 1); else void loadCreatorVideos(); }} title="Content couldn't refresh" /> : null}
+
+        {(contentUsesQuery ? contentSearchLoading : videosLoading) ? (
           <View style={styles.loadingCard}>
             <ActivityIndicator color="#fff" />
             <Text style={styles.loadingText}>Loading content...</Text>
           </View>
-        ) : videosLoadError ? (
-          <AppEmptyState actionLabel="Retry" body={videosLoadError} onAction={() => { void loadCreatorVideos(); }} title="Content couldn't refresh" />
         ) : hasVisibleRows ? (
           <>
             {videoShelves.map((shelf) => (
@@ -5615,9 +5702,10 @@ export function ChannelStudioScreen() {
               </View>
             ) : null}
           </>
-        ) : (
-          <AppEmptyState title={query ? "No matching content" : "No content yet"} body={query ? "Try another search." : "Open Clip Studio to add your first Platform video."} />
+        ) : (contentUsesQuery ? contentSearchError : videosLoadError) ? null : (
+          <AppEmptyState title="No matching content" body={(contentUsesQuery ? contentSearchHasMore : creatorVideosHasMore) ? "No matches in the videos loaded so far. Load more videos below, or change the filters." : "Try another filter or search, or open Clip Studio to add a video."} />
         )}
+        {(contentUsesQuery ? contentSearchHasMore : creatorVideosHasMore) ? <AppActionButton label={contentLoadingMore ? "Loading more..." : "Load more videos"} disabled={contentLoadingMore || videosLoading || contentSearchLoading} onPress={() => void loadMoreContentVideos()} accessibilityLabel="Load more creator videos" /> : null}
 
         <View style={styles.contentCreateFooter}>
           <View style={styles.studioActionRowCopy}>
@@ -5642,7 +5730,7 @@ export function ChannelStudioScreen() {
       clipEditor.titleOverlayText,
       clipEditor.titleOverlaySubtitle,
     );
-    const clipSaveDraftRequirement = !hasSavedVideo && !selectedClipVideoFile
+    const clipSaveDraftRequirement = clipLoading ? "Loading this video's saved settings..." : clipLoadError ? clipLoadError : !hasSavedVideo && !selectedClipVideoFile
       ? "Choose a video to enable Save Draft."
       : !clipTitleReady
         ? "Enter a title to enable Save Draft."
@@ -5655,7 +5743,7 @@ export function ChannelStudioScreen() {
               : clipEditor.brandMarkEnabled && !approvedClipBrandAsset
                 ? "Publish and approve a Platform avatar or logo before using the brand mark."
                 : "";
-    const clipPublishRequirement = !hasWorkingVideo
+    const clipPublishRequirement = clipLoading ? "Loading this video's saved settings..." : clipLoadError ? clipLoadError : !hasWorkingVideo
       ? "Choose a video before publishing."
       : !clipTitleReady
         ? "Enter a title before publishing."
@@ -5792,6 +5880,8 @@ export function ChannelStudioScreen() {
             <Text style={styles.noticeText}>{clipNotice}</Text>
           </View>
         ) : null}
+        {clipLoading ? <ActivityIndicator color="#fff" accessibilityLabel="Loading saved clip settings" /> : null}
+        {clipLoadError ? <AppEmptyState title="Clip settings unavailable" body={clipLoadError} actionLabel="Retry" onAction={() => { const video = creatorVideos.find((entry) => entry.id === clipEditor.editingVideoId); if (video) openClipStudioForVideo(video); }} /> : null}
 
 
         <View style={styles.studioAccordionStack}>
@@ -5897,6 +5987,7 @@ export function ChannelStudioScreen() {
               <>
                 <Text style={styles.brandPreviewMeta}>Add a title for this clip.</Text>
                 <TextInput
+                editable={!clipLoading && !clipLoadError && !clipSaving}
                   style={styles.input}
                   placeholder="Title text"
                   placeholderTextColor="#8d8d8d"
@@ -5908,6 +5999,7 @@ export function ChannelStudioScreen() {
                   {titleOverlayCharacterCount}/{CLIP_STUDIO_TITLE_OVERLAY_MAX_LENGTH}
                 </Text>
                 <TextInput
+                editable={!clipLoading && !clipLoadError && !clipSaving}
                   style={styles.input}
                   placeholder="Subtitle text"
                   placeholderTextColor="#8d8d8d"
@@ -6052,6 +6144,7 @@ export function ChannelStudioScreen() {
               <>
                 <Text style={styles.sectionLabel}>Clip Details</Text>
                 <TextInput
+                editable={!clipLoading && !clipLoadError && !clipSaving}
                   style={styles.input}
                   placeholder="Clip title"
                   placeholderTextColor="#8d8d8d"
@@ -6059,6 +6152,7 @@ export function ChannelStudioScreen() {
                   onChangeText={(text) => updateClipEditor({ title: text })}
                 />
                 <TextInput
+                editable={!clipLoading && !clipLoadError && !clipSaving}
                   style={[styles.input, styles.textArea]}
                   placeholder="Description"
                   placeholderTextColor="#8d8d8d"
@@ -6156,7 +6250,7 @@ export function ChannelStudioScreen() {
             statusTone: "muted",
             children: (
               <View style={styles.roadmapList}>
-                <Text style={styles.roadmapItem}>Multi-clip timeline, split clip, transitions, beat sync, auto captions, AI cut, green screen, effects, stickers, and full export rendering open status paths in this MVP.</Text>
+                <Text style={styles.roadmapItem}>Multi-clip timeline, split clip, transitions, beat sync, auto captions, AI cut, green screen, effects, stickers, and full export rendering are not active in this MVP.</Text>
                 <Text style={styles.roadmapItem}>Trim/export status stays visible until the backed editor path is active.</Text>
                 <Text style={styles.roadmapItem}>Poster frame extraction status stays visible until the backed extraction path is active.</Text>
               </View>
@@ -6218,10 +6312,10 @@ export function ChannelStudioScreen() {
 
   const renderStudioHeader = () => (
     <View style={styles.studioHeaderCard}>
-      <Text style={styles.heroTitle}>Platform Studio</Text>
-      <Text style={styles.studioSubtitle}>Run your platform from one place.</Text>
-      <Text style={styles.studioClarifier}>Profile settings stay separate.</Text>
-      {profile ? (
+      <Text style={[styles.heroTitle, activeStudioTab !== "home" && { fontSize: 22 }]}>{activeStudioTab === "home" ? "Platform Studio" : `${STUDIO_TABS.find((tab) => tab.id === activeStudioTab)?.label ?? "Platform"} Studio`}</Text>
+      {activeStudioTab === "home" ? <Text style={styles.studioSubtitle}>Run your platform from one place.</Text> : null}
+      {activeStudioTab === "home" ? <Text style={styles.studioClarifier}>Profile settings stay separate.</Text> : null}
+      {profile && activeStudioTab === "home" ? (
         <View style={styles.channelIdentityRow}>
           {profile.avatarUrl ? (
             <Image source={{ uri: profile.avatarUrl }} style={styles.channelAvatarImage} />
@@ -6241,7 +6335,7 @@ export function ChannelStudioScreen() {
           </View>
         </View>
       ) : null}
-      <View style={styles.studioHeaderActions}>
+      {activeStudioTab === "home" ? <View style={styles.studioHeaderActions}>
         {renderPreviewChannelAction()}
         <TouchableOpacity
           style={styles.studioActionButton}
@@ -6260,7 +6354,7 @@ export function ChannelStudioScreen() {
           <Text style={styles.studioActionButtonText}>Brand Studio</Text>
           <Text style={styles.studioActionButtonCopy}>Stage Design</Text>
         </TouchableOpacity>
-      </View>
+      </View> : null}
     </View>
   );
 
@@ -6281,6 +6375,8 @@ export function ChannelStudioScreen() {
             onPress={() => openStudioTab(tab.id)}
             testID={tab.id === "brand" ? "platform-studio-tab-brand" : undefined}
             accessibilityLabel={tab.id === "brand" ? "Open Brand Studio" : tab.label}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
           >
             {active ? <ChillywoodPrimaryActionFill radius={999} /> : null}
             <Text style={[styles.studioTabButtonText, active && styles.studioTabButtonTextActive]}>
@@ -6300,6 +6396,9 @@ export function ChannelStudioScreen() {
     ]}>
       <Text style={styles.studioStatusPillText}>{label}</Text>
     </View>
+  );
+  const renderTabBody = (tab: StudioTabId, children: React.ReactNode) => (
+    <View ref={(view) => { studioSectionRefs.current[`tab-${tab}`] = view; }} collapsable={false} style={{ gap: 16 }} onLayout={() => recordStudioSection(`tab-${tab}`)}>{children}</View>
   );
 
   const renderStudioActionRow = ({
@@ -6659,6 +6758,8 @@ export function ChannelStudioScreen() {
   );
 
   const renderLatestContentCard = () => {
+    if (videosLoading) return <Text style={styles.loadingText}>Loading latest content...</Text>;
+    if (videosLoadError) return <AppEmptyState title="Latest content unavailable" body={videosLoadError} actionLabel="Retry" onAction={() => void loadCreatorVideos()} />;
     if (!latestCreatorVideo) {
       return (
         <View style={styles.eventEmptyCard}>
@@ -6728,7 +6829,7 @@ export function ChannelStudioScreen() {
               key={card.label}
               style={styles.homeSnapshotCard}
               activeOpacity={0.86}
-              onPress={() => openStudioTab(card.tab)}
+              onPress={() => openStudioTab(card.tab, card.label === "Published" ? { filter: "published" } : card.label === "Drafts" ? { filter: "drafts" } : card.label === "Circle" ? { filter: "circle" } : undefined)}
             >
               <Text style={styles.homeSnapshotValue}>{card.value}</Text>
               <Text style={styles.homeSnapshotLabel}>{card.label}</Text>
@@ -6752,7 +6853,7 @@ export function ChannelStudioScreen() {
                 key={item.title}
                 style={styles.attentionCard}
                 activeOpacity={0.86}
-                onPress={() => openStudioTab(item.tab, item.tab === "content" ? { filter: "drafts", focus: "drafts" } : undefined)}
+                onPress={() => openStudioTab(item.tab, item.title === "Drafts waiting" ? { filter: "drafts", focus: "drafts" } : item.title === "Audience requests" ? { focus: "requests" } : item.tab === "content" ? { filter: "all" } : undefined)}
               >
                 <Text style={styles.attentionTitle}>{item.title}</Text>
                 <Text style={styles.attentionBody}>{item.body}</Text>
@@ -6762,7 +6863,7 @@ export function ChannelStudioScreen() {
         </View>
       ) : (
         <View style={styles.homeEmptyTaskCard}>
-          <Text style={styles.homeEmptyTaskText}>All clear. Nothing needs attention right now.</Text>
+          <Text style={styles.homeEmptyTaskText}>{creatorVideosHasMore ? "No tasks in loaded content. Open Content and load more to check the rest." : "No tasks in the available data. Check each tab for source status."}</Text>
         </View>
       )}
 
@@ -6771,7 +6872,7 @@ export function ChannelStudioScreen() {
           id: "create",
           title: "Create and Manage",
           summary: "Upload, drafts, library, and latest content.",
-          status: draftVideoCount ? `${draftVideoCount} draft${draftVideoCount === 1 ? "" : "s"}` : "Ready",
+          status: videosLoading ? "Loading" : videosLoadError ? "Unavailable" : creatorVideosHasMore ? "Loaded page" : draftVideoCount ? `${draftVideoCount} draft${draftVideoCount === 1 ? "" : "s"}` : "Ready",
           statusTone: draftVideoCount ? "warning" : "default",
           children: (
             <>
@@ -6783,21 +6884,21 @@ export function ChannelStudioScreen() {
               })}
               {renderStudioActionRow({
                 title: "Upload video",
-                body: uploadsEnabled ? "Open the existing upload form." : "Uploads are temporarily paused by app configuration.",
+                body: uploadsEnabled ? "Choose a video in Clip Studio." : "Uploads are temporarily paused by app configuration.",
                 value: uploadsEnabled ? "Open" : "Paused",
                 tone: uploadsEnabled ? "default" : "warning",
-                onPress: () => openStudioTab("content", { filter: "all", focus: "upload" }),
+                onPress: openClipStudioForNew,
               })}
               {renderStudioActionRow({
                 title: "Drafts",
-                body: draftVideoCount ? `${draftVideoCount} draft${draftVideoCount === 1 ? "" : "s"} waiting.` : "No drafts right now.",
-                value: draftVideoCount ? String(draftVideoCount) : "Clear",
+                body: videosLoading ? "Loading content..." : videosLoadError ? "Could not refresh" : creatorVideosHasMore ? `${draftVideoCount} drafts in loaded content. Open Drafts to check the full library.` : draftVideoCount ? `${draftVideoCount} draft${draftVideoCount === 1 ? "" : "s"} waiting.` : "No drafts right now.",
+                value: videosLoading ? "Loading" : videosLoadError ? "Unavailable" : creatorVideosHasMore ? `${draftVideoCount} loaded` : draftVideoCount ? String(draftVideoCount) : "Clear",
                 onPress: () => openStudioTab("content", { filter: "drafts", focus: "drafts" }),
               })}
               {renderStudioActionRow({
                 title: "Published library",
-                body: publishedVideoCount ? `${publishedVideoCount} public video${publishedVideoCount === 1 ? "" : "s"}.` : "No public videos yet.",
-                value: publishedVideoCount ? String(publishedVideoCount) : "Empty",
+                body: videosLoading ? "Loading content..." : videosLoadError ? "Could not refresh" : creatorVideosHasMore ? `${publishedVideoCount} public videos in loaded content. Open Published library to check all public videos.` : publishedVideoCount ? `${publishedVideoCount} public video${publishedVideoCount === 1 ? "" : "s"}.` : "No public videos yet.",
+                value: videosLoading ? "Loading" : videosLoadError ? "Unavailable" : creatorVideosHasMore ? `${publishedVideoCount} loaded` : publishedVideoCount ? String(publishedVideoCount) : "Empty",
                 onPress: () => openStudioTab("content", { filter: "published", focus: "library" }),
               })}
               {renderStudioActionRow({
@@ -6818,7 +6919,7 @@ export function ChannelStudioScreen() {
           id: "live",
           title: "Live and Events",
           summary: "Go live, schedule events, and manage reminders.",
-          status: upcomingEvents.length ? `${upcomingEvents.length} upcoming` : "No events",
+          status: eventsLoading ? "Loading" : eventsLoadError ? "Unavailable" : upcomingEvents.length ? `${upcomingEvents.length} upcoming` : "No events",
           children: (
             <>
               {renderStudioActionRow({
@@ -6831,8 +6932,8 @@ export function ChannelStudioScreen() {
               })}
               {renderStudioActionRow({
                 title: "Live Events",
-                body: nextUpcomingEvent ? `Next: ${nextUpcomingEvent.eventTitle}` : "No events scheduled.",
-                value: upcomingEvents.length ? String(upcomingEvents.length) : "Empty",
+                body: eventsLoading ? "Loading schedule..." : eventsLoadError ? "Schedule unavailable. Retry in Live." : nextUpcomingEvent ? `Next: ${nextUpcomingEvent.eventTitle}` : "No events scheduled.",
+                value: eventsLoading ? "Loading" : eventsLoadError ? "Unavailable" : upcomingEvents.length ? String(upcomingEvents.length) : "Empty",
                 onPress: () => openStudioTab("live", { focus: "events" }),
               })}
               {renderStudioActionRow({
@@ -6867,7 +6968,7 @@ export function ChannelStudioScreen() {
           id: "audience",
           title: "Audience",
           summary: "Followers, subscribers, requests, and audience activity.",
-          status: audienceFollowerCount == null ? "Protected" : `${audienceFollowerCount} followers`,
+          status: audienceFollowerCount == null ? "Unavailable" : `${audienceFollowerCount} followers`,
           children: (
             <>
               {renderStudioActionRow({
@@ -6878,15 +6979,15 @@ export function ChannelStudioScreen() {
               })}
               {renderStudioActionRow({
                 title: "Requests",
-                body: pendingAudienceRequestCount ? `${pendingAudienceRequestCount} request${pendingAudienceRequestCount === 1 ? "" : "s"} waiting.` : "No requests waiting.",
-                value: pendingAudienceRequestCount ? String(pendingAudienceRequestCount) : "Clear",
+                body: pendingAudienceRequestCount == null ? "Request counts are unavailable. Open Audience to check current requests." : pendingAudienceRequestCount ? `${pendingAudienceRequestCount} request${pendingAudienceRequestCount === 1 ? "" : "s"} waiting.` : "No requests waiting.",
+                value: pendingAudienceRequestCount == null ? "Unavailable" : pendingAudienceRequestCount ? String(pendingAudienceRequestCount) : "Clear",
                 onPress: () => openStudioTab("audience", { focus: "requests" }),
               })}
               {renderStudioActionRow({
                 title: "Blocked accounts",
-                body: blockedAudienceCount ? `${blockedAudienceCount} blocked account${blockedAudienceCount === 1 ? "" : "s"}.` : "No blocked accounts.",
-                value: blockedAudienceCount ? String(blockedAudienceCount) : "Clear",
-                onPress: () => openStudioTab("moderation", { focus: "blocks" }),
+                body: blockedAudienceCount == null ? "Blocked account counts are unavailable. Open Audience to check." : blockedAudienceCount ? `${blockedAudienceCount} blocked account${blockedAudienceCount === 1 ? "" : "s"}.` : "No blocked accounts.",
+                value: blockedAudienceCount == null ? "Unavailable" : blockedAudienceCount ? String(blockedAudienceCount) : "Clear",
+                onPress: () => openStudioTab("audience", { focus: "blocks" }),
               })}
             </>
           ),
@@ -6936,9 +7037,9 @@ export function ChannelStudioScreen() {
               })}
               {renderStudioActionRow({
                 title: "Blocked accounts",
-                body: blockedAudienceCount ? "Manage real Platform-owned audience blocks." : "No blocked accounts.",
-                value: blockedAudienceCount ? String(blockedAudienceCount) : "Clear",
-                onPress: () => openStudioTab("moderation", { focus: "blocks" }),
+                body: blockedAudienceCount == null ? "Blocked account counts are unavailable. Open Audience to check." : blockedAudienceCount ? "Manage real Platform-owned audience blocks." : "No blocked accounts.",
+                value: blockedAudienceCount == null ? "Unavailable" : blockedAudienceCount ? String(blockedAudienceCount) : "Clear",
+                onPress: () => openStudioTab("audience", { focus: "blocks" }),
               })}
               {renderStudioActionRow({
                 title: "Comments and replies",
@@ -7066,6 +7167,8 @@ export function ChannelStudioScreen() {
         </View>
       );
     }
+
+    if (!draft) return <AppEmptyState title="Brand Studio unavailable" body={brandNotice ?? "Your saved brand could not load. Retry before editing or publishing."} actionLabel="Retry" onAction={() => void loadPlatformBranding()} />;
 
     return (
       <>
@@ -7375,6 +7478,7 @@ export function ChannelStudioScreen() {
               <>
                 <Text style={styles.sectionLabel}>Platform Name</Text>
                 <TextInput
+                  editable={!saving && !brandSaving}
                   style={styles.input}
                   placeholder="Platform Name"
                   placeholderTextColor="#8d8d8d"
@@ -7382,6 +7486,7 @@ export function ChannelStudioScreen() {
                   onChangeText={(text) => updateProfile({ displayName: text })}
                 />
                 <TextInput
+                  editable={!saving && !brandSaving}
                   style={styles.input}
                   placeholder="Platform Tagline"
                   placeholderTextColor="#8d8d8d"
@@ -7708,12 +7813,7 @@ export function ChannelStudioScreen() {
     const vipGrossCents = vipPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
     const channelSubscriptionPaidTransactions = creatorChannelSubscriptionTransactions.filter((transaction) => transaction.status === "paid" || transaction.status === "renewal_paid");
     const channelSubscriptionGrossCents = channelSubscriptionPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
-    const creatorTipSandboxConfig = creatorSandboxConfigs.find((config) => (
-      config.sourceType === "creator_tip"
-      && config.productKey === "creator_tip_sandbox_099"
-      && config.status !== "revoked"
-    )) ?? null;
-    const tipSetupSaved = !!creatorTipSandboxConfig || creatorTipSettings?.tipsEnabled === true;
+    const tipSetupSaved = creatorTipSettings?.tipsEnabled === true;
     const tipFeatureStatus: MonetizationFeatureStatus = (() => {
       if (tipsFlag.state === "locked") return "Blocked";
       if (tipSetupSaved) return "Setup mode";
@@ -8346,13 +8446,13 @@ export function ChannelStudioScreen() {
                     style={[styles.eventSecondaryButton, tipSettingsBusy && styles.eventPrimaryButtonDisabled]}
                     activeOpacity={0.88}
                     disabled={tipSettingsBusy}
-                    onPress={() => handleSaveTipSettings(true)}
+                    onPress={() => handleSaveTipSettings(false)}
                     hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
                     accessibilityRole="button"
-                    accessibilityLabel="Refresh Tips setup"
-                    testID="money-manager-tips-refresh-button"
+                    accessibilityLabel="Pause Tips"
+                    testID="money-manager-tips-pause-button"
                   >
-                    <Text style={styles.eventSecondaryButtonText}>Refresh Tips setup</Text>
+                    <Text style={styles.eventSecondaryButtonText}>Pause Tips</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -8376,13 +8476,23 @@ export function ChannelStudioScreen() {
         }
 
         if (activeMoneyManageTarget === "paid_videos") {
-          const manageableVideos = creatorVideos.filter((video) => (
-            video.visibility === "public"
-            && ["clean", "reported"].includes(video.moderationStatus)
-            && hasPlayableCreatorVideoSource(video)
-          ));
+          const manageableVideos = creatorVideos.filter((video) => !getPaidVideoSetupUnavailableReason(video));
+          const selectedVideo = selectedPaidVideo?.id === videoEditor.editingVideoId && !getPaidVideoSetupUnavailableReason(selectedPaidVideo)
+            ? selectedPaidVideo
+            : manageableVideos.find((video) => video.id === videoEditor.editingVideoId);
           return (
             <>
+              {selectedVideo ? (
+                <View style={styles.eventEmptyCard} testID="money-paid-video-editor">
+                  <Text style={styles.eventEmptyTitle}>{selectedVideo.title}</Text>
+                  <Text style={styles.eventEmptyBody}>Choose access for this exact video. The current sandbox paid tier is $0.99.</Text>
+                  <View style={styles.eventActionRow}>
+                    {(["free", "paid"] as const).map((accessMode) => <TouchableOpacity key={accessMode} style={[styles.chip, videoEditor.accessMode === accessMode && styles.chipActive]} disabled={videoSaving} accessibilityRole="button" accessibilityState={{ selected: videoEditor.accessMode === accessMode, disabled: videoSaving }} onPress={() => updateVideoEditor({ accessMode, priceDollars: "0.99" })}><Text style={styles.chipText}>{accessMode === "free" ? "Free" : "Paid · $0.99"}</Text></TouchableOpacity>)}
+                  </View>
+                  <AppActionButton label={videoSaving ? "Saving..." : "Save video access"} disabled={videoSaving} onPress={() => void savePaidVideoSetup()} testID="money-paid-video-save-button" />
+                </View>
+              ) : null}
+              {videoNotice ? <Text style={styles.noticeText}>{videoNotice}</Text> : null}
               {!manageableVideos.length ? (
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>Publish a video before enabling paid unlocks.</Text>
@@ -8390,7 +8500,7 @@ export function ChannelStudioScreen() {
                 </View>
               ) : (
                 <View style={styles.eventList}>
-                  {manageableVideos.slice(0, 4).map((video) => {
+                  {manageableVideos.map((video) => {
                     const offer = creatorPaidVideoOffers.find((entry) => entry.videoId === video.id);
                     return (
                       <View key={video.id} style={styles.eventEmptyCard}>
@@ -8419,6 +8529,7 @@ export function ChannelStudioScreen() {
                   })}
                 </View>
               )}
+              {creatorVideosHasMore ? <AppActionButton label={contentLoadingMore ? "Loading..." : "Load more videos"} disabled={contentLoadingMore} onPress={() => void loadMoreContentVideos(true)} /> : null}
               <TouchableOpacity
                 style={styles.eventPrimaryButton}
                 activeOpacity={0.88}
@@ -8621,7 +8732,7 @@ export function ChannelStudioScreen() {
               </View>
             ) : (
               <View style={styles.eventList}>
-                {creatorEvents.slice(0, 4).map((event) => {
+                {creatorEvents.map((event) => {
                   const offer = paidEventOfferByCreatorEventId.get(event.id);
                   return (
                     <View key={event.id} style={styles.eventEmptyCard}>
@@ -9572,9 +9683,9 @@ export function ChannelStudioScreen() {
                     onPress={openMoneyTransactions}
                     testID="money-sandbox-manage-testers-button"
                     accessibilityRole="button"
-                    accessibilityLabel="View tester access"
+                  accessibilityLabel="View transactions"
                   >
-                    <Text style={styles.eventSecondaryButtonText}>View tester access</Text>
+                    <Text style={styles.eventSecondaryButtonText}>View transactions</Text>
                   </TouchableOpacity>
                 </View>
                 {sandboxSetupNotice ? <Text style={styles.noticeText}>{sandboxSetupNotice}</Text> : null}
@@ -9614,9 +9725,9 @@ export function ChannelStudioScreen() {
           </View>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>Blocked accounts</Text>
-            <Text style={styles.summaryValue}>{blockedAudienceCount == null ? "Protected" : String(blockedAudienceCount)}</Text>
+            <Text style={styles.summaryValue}>{blockedAudienceCount == null ? "Unavailable" : String(blockedAudienceCount)}</Text>
             <Text style={styles.summaryBody}>
-              {blockedAudienceCount ? "Platform-owned audience blocks appear here." : "No blocked accounts."}
+              {blockedAudienceCount == null ? "Audience block counts could not be verified." : blockedAudienceCount ? "Platform-owned audience blocks appear here." : "No blocked accounts."}
             </Text>
           </View>
           <View style={styles.summaryCard}>
@@ -9861,9 +9972,11 @@ export function ChannelStudioScreen() {
       <View style={styles.overlay} />
 
       <ScrollView
+        ref={studioScrollRef}
         style={styles.scroll}
         contentContainerStyle={studioContentContainerStyle}
       >
+        <View ref={studioContentRootRef} collapsable={false} style={{ gap: 16 }}>
         <View style={styles.header}>
           <TouchableOpacity
             accessible
@@ -9904,16 +10017,16 @@ export function ChannelStudioScreen() {
             ) : null}
 
             {renderStudioTabBar()}
-            {activeStudioTab === "home" ? renderStudioHomeTab() : null}
-            {activeStudioTab === "content" ? renderContentPanel() : null}
-            {activeStudioTab === "clip" ? renderClipStudioTab() : null}
-            {activeStudioTab === "monetization" ? renderMonetizationTab() : null}
-            {activeStudioTab === "moderation" ? renderModerationTab() : null}
+            {activeStudioTab === "home" ? renderTabBody("home", renderStudioHomeTab()) : null}
+            {activeStudioTab === "content" ? renderTabBody("content", renderContentPanel()) : null}
+            {activeStudioTab === "clip" ? renderTabBody("clip", renderClipStudioTab()) : null}
+            {activeStudioTab === "monetization" ? renderTabBody("monetization", renderMonetizationTab()) : null}
+            {activeStudioTab === "moderation" ? renderTabBody("moderation", renderModerationTab()) : null}
 
-            {activeStudioTab === "brand" ? renderBrandStudioTab() : null}
+            {activeStudioTab === "brand" ? renderTabBody("brand", renderBrandStudioTab()) : null}
 
             {activeStudioTab === "live" ? (
-              <>
+              <View ref={(view) => { studioSectionRefs.current["tab-live"] = view; }} collapsable={false} style={{ gap: 16 }} onLayout={() => recordStudioSection("tab-live")}>
                 {renderLiveActionsPanel()}
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
@@ -9932,6 +10045,8 @@ export function ChannelStudioScreen() {
                   <Text style={styles.noticeText}>{eventNotice}</Text>
                 </View>
               ) : null}
+              {eventsLoadError ? <AppEmptyState title="Events unavailable" body={eventsLoadError} actionLabel="Retry" onAction={() => void loadCreatorEvents()} /> : null}
+              <AppActionButton label={eventsLoading ? "Refreshing..." : "Refresh Events"} disabled={eventsLoading} onPress={() => void loadCreatorEvents()} />
 
               <View style={styles.summaryGrid}>
                 {eventSummaryCards.map((card) => (
@@ -9961,10 +10076,10 @@ export function ChannelStudioScreen() {
               <View style={styles.eventSnapshotCard}>
                 <Text style={styles.accessSummaryKicker}>NEXT REAL EVENT</Text>
                 <Text style={styles.accessSummaryTitle}>
-                  {nextUpcomingEvent ? nextUpcomingEvent.eventTitle : "No upcoming event scheduled"}
+                  {eventsLoading ? "Loading schedule..." : eventsLoadError ? "Schedule unavailable" : nextUpcomingEvent ? nextUpcomingEvent.eventTitle : "No upcoming event scheduled"}
                 </Text>
                 <Text style={styles.accessSummaryBody}>
-                  {nextUpcomingEvent
+                  {eventsLoadError ? "Retry Refresh Events to check your schedule." : eventsLoading ? "Reading current event status." : nextUpcomingEvent
                     ? `${formatEventTypeLabel(nextUpcomingEvent.eventType)} · ${formatIsoDate(nextUpcomingEvent.startsAt)}`
                     : "Create the first scheduled event here. Countdown, reminder delivery, and event access still stay later."}
                 </Text>
@@ -9980,7 +10095,7 @@ export function ChannelStudioScreen() {
                 <View style={styles.eventList}>
                   {upcomingEvents.map(renderCreatorEventCard)}
                 </View>
-              ) : (
+              ) : eventsLoadError ? null : (
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>No upcoming events yet.</Text>
                   <Text style={styles.eventEmptyBody}>No upcoming events yet.</Text>
@@ -9996,10 +10111,35 @@ export function ChannelStudioScreen() {
                 </>
               ) : null}
 
+              <View ref={(view) => { studioSectionRefs.current["room-defaults"] = view; }} collapsable={false} onLayout={() => recordStudioSection("room-defaults")} style={styles.panel}>
+                <Text style={styles.panelTitle}>New room access defaults</Text>
+                <Text style={styles.panelSubtitle}>These defaults apply when you create a new room. Existing rooms and purchase entitlements keep their current rules.</Text>
+                {([
+                  { key: "defaultWatchPartyContentAccessRule", label: "Watch parties" },
+                  { key: "defaultCommunicationContentAccessRule", label: "Communication rooms" },
+                ] as const).map(({ key, label }) => (
+                  <View key={key}>
+                    <Text style={styles.sectionLabel}>{label}</Text>
+                    <View style={styles.chipRow}>
+                      {(["open", "party_pass", "premium"] as const).map((rule) => {
+                        const allowed = sanitizeCreatorRoomAccessRule(rule, creatorPermissions) === rule;
+                        const selected = sanitizeCreatorRoomAccessRule(profile?.[key], creatorPermissions) === rule;
+                        return <TouchableOpacity key={rule} style={[styles.chip, selected && styles.chipActive]} disabled={!profile || saving || brandSaving || !allowed} accessibilityRole="button" accessibilityLabel={`${label}: ${rule.replaceAll("_", " ")}`} accessibilityState={{ selected, disabled: !profile || saving || brandSaving || !allowed }} onPress={() => updateProfile({ [key]: rule })}><Text style={[styles.chipText, selected && styles.chipTextActive]}>{rule === "open" ? "Open" : rule === "party_pass" ? "Party Pass" : "Premium"}{!allowed ? " · unavailable" : ""}</Text></TouchableOpacity>;
+                      })}
+                    </View>
+                  </View>
+                ))}
+                <AppActionButton label={saving ? "Saving..." : "Save room defaults"} disabled={!profile || saving || brandSaving} onPress={() => void onSave()} />
+                {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
+              </View>
+
+              <View ref={(view) => { studioSectionRefs.current["event-editor"] = view; }} collapsable={false} onLayout={() => recordStudioSection("event-editor")} pointerEvents={eventSaving ? "none" : "auto"}>
               <Text style={styles.sectionLabel}>
                 {eventEditor.editingEventId ? "Edit Event" : "Create Event"}
               </Text>
+              <Text style={styles.permissionCopy}>Enter local date and time for this device. Time zone: {Intl.DateTimeFormat().resolvedOptions().timeZone}.</Text>
               <TextInput
+                editable={!eventSaving}
                 style={styles.input}
                 placeholder="Event title"
                 placeholderTextColor="#8d8d8d"
@@ -10056,6 +10196,7 @@ export function ChannelStudioScreen() {
               </View>
 
               <TextInput
+                editable={!eventSaving}
                 style={styles.input}
                 placeholder="Starts at (YYYY-MM-DDTHH:mm)"
                 placeholderTextColor="#8d8d8d"
@@ -10063,6 +10204,7 @@ export function ChannelStudioScreen() {
                 onChangeText={(text) => updateEventEditor({ startsAt: text })}
               />
               <TextInput
+                editable={!eventSaving}
                 style={styles.input}
                 placeholder="Ends at (YYYY-MM-DDTHH:mm)"
                 placeholderTextColor="#8d8d8d"
@@ -10072,6 +10214,7 @@ export function ChannelStudioScreen() {
 
               {eventEditor.eventType === "watch_party_live" ? (
                 <TextInput
+                editable={!eventSaving}
                   style={styles.input}
                   placeholder="Linked title id"
                   placeholderTextColor="#8d8d8d"
@@ -10098,6 +10241,7 @@ export function ChannelStudioScreen() {
               {eventEditor.replayPolicy !== "none" ? (
                 <>
                   <TextInput
+                editable={!eventSaving}
                     style={styles.input}
                     placeholder="Replay available at (YYYY-MM-DDTHH:mm)"
                     placeholderTextColor="#8d8d8d"
@@ -10106,6 +10250,7 @@ export function ChannelStudioScreen() {
                   />
                   {eventEditor.replayPolicy === "until_expiration" ? (
                     <TextInput
+                editable={!eventSaving}
                       style={styles.input}
                       placeholder="Replay expires at (YYYY-MM-DDTHH:mm)"
                       placeholderTextColor="#8d8d8d"
@@ -10185,13 +10330,14 @@ export function ChannelStudioScreen() {
                   <Text style={styles.eventSecondaryButtonText}>Reset</Text>
                 </TouchableOpacity>
               </View>
+              </View>
             </View>
 
-              </>
+              </View>
             ) : null}
 
             {activeStudioTab === "audience" ? (
-              <>
+              <View ref={(view) => { studioSectionRefs.current["tab-audience"] = view; }} collapsable={false} onLayout={() => recordStudioSection("tab-audience")}>
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
                 <View style={styles.panelHeaderCopy}>
@@ -10302,16 +10448,18 @@ export function ChannelStudioScreen() {
               <Text style={styles.permissionCopy}>
                 Pending requests, followers, and blocked people appear here. Hold a profile photo or tap a row for actions.
               </Text>
+              <View style={styles.chipRow}>{(["all", "pending_request", "blocked"] as const).map((filter) => <TouchableOpacity key={filter} style={[styles.chip, audienceFilter === filter && styles.chipActive]} onPress={() => setAudienceFilter(filter)} accessibilityRole="button" accessibilityState={{ selected: audienceFilter === filter }}><Text style={styles.chipText}>{filter === "all" ? "All people" : filter === "pending_request" ? "Requests" : "Blocked"}</Text></TouchableOpacity>)}</View>
+              {audienceMembersError ? <AppEmptyState title="Audience unavailable" body={audienceMembersError} actionLabel="Retry" onAction={() => void loadAudienceMembers()} /> : null}
               {audienceMembersLoading ? (
                 <View style={styles.loadingCard}>
                   <ActivityIndicator color="#fff" />
                   <Text style={styles.loadingText}>Loading audience…</Text>
                 </View>
-              ) : audienceMembers.length ? (
+              ) : audienceMembers.filter((member) => audienceFilter === "all" || member.kind === audienceFilter).length ? (
                 <View style={styles.eventList}>
-                  {audienceMembers.map(renderAudienceMemberRow)}
+                  {audienceMembers.filter((member) => audienceFilter === "all" || member.kind === audienceFilter).map(renderAudienceMemberRow)}
                 </View>
-              ) : (
+              ) : audienceMembersError ? null : (
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>No audience actions waiting.</Text>
                   <Text style={styles.eventEmptyBody}>Pending requests, followers, and blocked people will appear here when available.</Text>
@@ -10319,11 +10467,11 @@ export function ChannelStudioScreen() {
               )}
             </View>
 
-              </>
+              </View>
             ) : null}
 
             {activeStudioTab === "insights" ? (
-              <>
+              <View ref={(view) => { studioSectionRefs.current["tab-insights"] = view; }} collapsable={false} onLayout={() => recordStudioSection("tab-insights")}>
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
                 <View style={styles.panelHeaderCopy}>
@@ -10335,6 +10483,7 @@ export function ChannelStudioScreen() {
               <Text style={styles.permissionCopy}>
                 Only available creator analytics appear here. Unsupported metrics stay unavailable instead of being zeroed or fabricated.
               </Text>
+              {videosLoadError || eventsLoadError || audienceMembersError ? <AppEmptyState title="Some metrics are unavailable" body="A source could not refresh. Unavailable counts are not zero." actionLabel="Retry sources" onAction={() => { void loadCreatorVideos(); void loadCreatorEvents(); void loadAudienceMembers(); }} /> : null}
               <Text style={styles.sectionLabel}>Platform Metrics</Text>
               <View style={styles.summaryGrid}>
                 {insightMetricCards.map((card) => (
@@ -10367,10 +10516,11 @@ export function ChannelStudioScreen() {
               </View>
             </View>
 
-              </>
+              </View>
             ) : null}
           </>
         ) : null}
+        </View>
       </ScrollView>
 	    </ImageBackground>
 	    <CreatorContentActionSheet

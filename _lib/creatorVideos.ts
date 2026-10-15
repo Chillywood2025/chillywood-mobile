@@ -489,7 +489,7 @@ async function readPublicCreatorVideoCards(input: {
   ownerId?: string;
   ownerIds?: string[];
   limit?: number;
-}): Promise<CreatorVideo[]> {
+}, options?: { throwOnUnavailable?: boolean }): Promise<CreatorVideo[]> {
   const response = await fetch(PUBLIC_CREATOR_VIDEO_CARDS_URL, {
     method: "POST",
     headers: {
@@ -499,7 +499,10 @@ async function readPublicCreatorVideoCards(input: {
     body: JSON.stringify(input),
   });
   const payload = await response.json().catch(() => null) as { videos?: PublicCreatorVideoCardRow[] } | null;
-  if (!response.ok || !Array.isArray(payload?.videos)) return [];
+  if (!response.ok || !Array.isArray(payload?.videos)) {
+    if (options?.throwOnUnavailable) throw new Error("Platform videos could not be loaded. Please try again.");
+    return [];
+  }
   return payload.videos.map(parsePublicCreatorVideoCard).filter((video) => !!video.id && video.visibility === "public");
 }
 
@@ -524,29 +527,57 @@ async function getRequiredUserId() {
 
 export async function readCreatorVideos(
   ownerId: string,
-  options?: { includeDrafts?: boolean; limit?: number },
+  options?: {
+    includeDrafts?: boolean;
+    limit?: number;
+    offset?: number;
+    searchQuery?: string;
+    visibility?: "public" | "draft" | "circle";
+    sort?: "newest" | "oldest";
+    throwOnUnavailable?: boolean;
+  },
 ): Promise<CreatorVideo[]> {
   const normalizedOwnerId = toText(ownerId);
-  if (!normalizedOwnerId) return [];
-  const limit = options?.limit ?? 24;
+  if (!normalizedOwnerId) {
+    if (options?.throwOnUnavailable) throw new Error("Sign in before loading creator videos.");
+    return [];
+  }
+  const limit = Math.max(1, Math.min(100, Math.floor(Number(options?.limit) || 24)));
+  const offset = Math.max(0, Math.floor(Number(options?.offset) || 0));
 
   if (!options?.includeDrafts) {
     return readPublicCreatorVideoCards({
       action: "list_by_owner",
       ownerId: normalizedOwnerId,
       limit,
-    }).catch(() => []);
+    }, options).catch((error) => {
+      if (options?.throwOnUnavailable) throw error;
+      return [];
+    });
   }
 
   let query = supabase
     .from("videos")
     .select(CREATOR_VIDEO_SELECT)
     .eq("owner_id", normalizedOwnerId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
+    .order("created_at", { ascending: options?.sort === "oldest" })
+    .order("id", { ascending: options?.sort === "oldest" })
+    .range(offset, offset + limit - 1);
+
+  if (options?.visibility) query = query.eq("visibility", options.visibility);
+
+  const searchQuery = toText(options?.searchQuery).slice(0, 200);
+  if (searchQuery) {
+    // Quote PostgREST filter values so punctuation cannot become a second filter.
+    const pattern = `%${searchQuery.replace(/[\\%_]/g, "\\$&")}%`;
+    query = query.or(`title.ilike.${JSON.stringify(pattern)},description.ilike.${JSON.stringify(pattern)}`);
+  }
 
   const { data, error } = await query.returns<CreatorVideoRow[]>();
-  if (error || !data) return [];
+  if (error || !data) {
+    if (options?.throwOnUnavailable) throw new Error("Creator videos could not be loaded. Please try again.");
+    return [];
+  }
   return attachRenditionStatuses(await Promise.all(data.map((row) => parseCreatorVideo(row))));
 }
 

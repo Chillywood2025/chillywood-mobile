@@ -1,7 +1,8 @@
-import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
+import type { Tables, TablesInsert } from "../supabase/database.types";
 
-import { hasPlatformRoleMembership, hasPlatformStaffPermission, readMyPlatformRoleMemberships } from "./moderation";
+import { hasPlatformRoleMembership, readMyPlatformRoleMemberships } from "./moderation";
 import { supabase } from "./supabase";
+import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
 
 export const CHANNEL_FOLLOWERS_TABLE = "channel_followers";
 export const CHANNEL_SUBSCRIBERS_TABLE = "channel_subscribers";
@@ -95,7 +96,6 @@ type UserProfileRow = Tables<"user_profiles">;
 
 type ChannelFollowerInsert = TablesInsert<"channel_followers">;
 type ChannelAudienceRequestInsert = TablesInsert<"channel_audience_requests">;
-type ChannelAudienceRequestUpdate = TablesUpdate<"channel_audience_requests">;
 type ChannelAudienceBlockInsert = TablesInsert<"channel_audience_blocks">;
 
 export type ChannelAudienceMemberKind = "pending_request" | "follower" | "blocked";
@@ -188,9 +188,10 @@ async function readAudienceActorContext(channelUserId: string): Promise<ChannelA
   }
 
   const memberships = await readMyPlatformRoleMemberships().catch(() => []);
-  const canOperateAcrossChannels = hasPlatformRoleMembership(memberships, ["owner"])
-    || hasPlatformStaffPermission(memberships, ["creator_support", "content_moderation"]);
   const isOwner = viewerUserId === normalizedChannelUserId;
+  const hasCrossChannelRole = hasPlatformRoleMembership(memberships, ["owner", "operator"]);
+  const canOperateAcrossChannels = hasCrossChannelRole && !isOwner
+    && await isProtectedPlatformOwnerTarget(normalizedChannelUserId) === false;
 
   return {
     channelUserId: normalizedChannelUserId,
@@ -302,13 +303,15 @@ const formatAudienceMemberName = (
 
 export async function readChannelAudienceMembers(
   channelUserId: string,
-  limit = 50,
+  options: number | { limit?: number; throwOnUnavailable?: boolean } = 50,
 ): Promise<ChannelAudienceMemberSummary[]> {
   const context = await readAudienceActorContext(channelUserId);
   if (!context.channelUserId || (!context.isOwner && !context.canOperateAcrossChannels)) {
+    if (typeof options !== "number" && options.throwOnUnavailable) throw new Error("Audience access could not be verified. Please try again.");
     return [];
   }
 
+  const limit = typeof options === "number" ? options : options.limit ?? 50;
   const rowLimit = Math.max(1, Math.min(limit, 100));
   const [
     { data: requestRows, error: requestError },
@@ -351,11 +354,15 @@ export async function readChannelAudienceMembers(
 
   let profilesByUserId = new Map<string, Pick<UserProfileRow, "avatar_url" | "display_name" | "username" | "user_id">>();
   if (userIds.length) {
-    const { data: profileRows } = await supabase
+    const { data: profileRows, error: profileError } = await supabase
       .from("user_profiles")
       .select("user_id,display_name,username,avatar_url")
       .in("user_id", userIds)
       .returns<Pick<UserProfileRow, "avatar_url" | "display_name" | "username" | "user_id">[]>();
+
+    if (profileError && typeof options !== "number" && options.throwOnUnavailable) {
+      throw new Error("Audience details could not be loaded. Please try again.");
+    }
 
     profilesByUserId = new Map(
       (profileRows ?? []).map((profileRow) => [profileRow.user_id, profileRow]),
@@ -588,13 +595,12 @@ export async function readPublicChannelAudienceState(channelUserId: string): Pro
     : null;
 
   let followerCount: number | null = null;
-  const { count, error } = await supabase
-    .from(CHANNEL_FOLLOWERS_TABLE)
-    .select("*", { count: "exact", head: true })
-    .eq("channel_user_id", context.channelUserId);
+  const { data: count, error } = await (supabase as unknown as {
+    rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+  }).rpc("read_public_channel_follower_count", { p_channel_user_id: context.channelUserId });
 
-  if (!error) {
-    followerCount = Number(count ?? 0);
+  if (!error && count !== null && Number.isSafeInteger(Number(count)) && Number(count) >= 0) {
+    followerCount = Number(count);
   }
 
   if (!context.viewerUserId) {
@@ -1219,52 +1225,14 @@ async function reviewChannelAudienceRequest(
     });
   }
 
-  if (action === "approve_request" && requestKind === "follow" && requesterUserId) {
-    const existingFollower = await readFollowerRow(request.channel_user_id, requesterUserId);
-
-    if (!existingFollower) {
-      const followerPayload: ChannelFollowerInsert = {
-        channel_user_id: request.channel_user_id,
-        follower_user_id: requesterUserId,
-        updated_at: new Date().toISOString(),
-      };
-      const { error: followerInsertError } = await supabase.from(CHANNEL_FOLLOWERS_TABLE).insert(followerPayload);
-
-      if (followerInsertError) {
-        return buildActionResult({
-          action,
-          status: "error",
-          reason: "insert_failed",
-          message: "The follow request could not be approved right now. Try again later.",
-          actorScope: context.actorScope,
-          requiredScope: "owner_or_operator",
-          channelUserId: request.channel_user_id,
-          viewerUserId: context.viewerUserId,
-          targetUserId: requesterUserId,
-          requestId: Number(request.id ?? 0),
-          requestKind,
-          requestStatus,
-        });
-      }
-    }
-  }
-
-  const payload: ChannelAudienceRequestUpdate = {
-    status: nextStatus,
-    reviewed_at: new Date().toISOString(),
-    reviewed_by: context.viewerUserId,
-    updated_at: new Date().toISOString(),
-  };
-  const { data, error } = await supabase
-    .from(CHANNEL_AUDIENCE_REQUESTS_TABLE)
-    .update(payload)
-    .eq("id", Number(request.id ?? 0))
-    .select("*")
-    .returns<ChannelAudienceRequestRow>()
-    .single();
+  const { data, error } = await runCurrentAccountBoundSupabaseMutationRpc<ChannelAudienceRequestRow>(
+    "review_channel_audience_request",
+    { p_request_id: Number(request.id), p_status: nextStatus },
+    context.viewerUserId,
+  );
   const reviewedRequestId = Number(((data as { id?: number } | null)?.id) ?? 0);
 
-  if (error || !data) {
+  if (error || !data || data.status !== nextStatus || reviewedRequestId !== Number(request.id)) {
     return buildActionResult({
       action,
       status: "error",
