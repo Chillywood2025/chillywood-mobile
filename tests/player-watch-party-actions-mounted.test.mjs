@@ -51,7 +51,12 @@ async function mount(t, overrides = {}) {
     './logger': { debugLog: noop },
     './supabase': { supabase: { from: () => ({ select: () => ({ eq: () => ({ returns: () => ({ maybeSingle: () => runtime.lookup() }) }) }) }) } },
     './watchPartyContentSources': { getCreatorVideoWatchPartyBlockCopy: () => null, getCreatorVideoWatchPartyBlockReason: () => null },
-    './watchParty': { getSafePartyUserId: () => runtime.host(), getPartyRoom: id => runtime.readRoom(id), createPartyRoom: (...args) => { runtime.creates.push(args); return runtime.create(...args); } },
+    './watchParty': { getSafePartyUserId: () => runtime.host(), getPartyRoom: id => runtime.readRoom(id),
+      readOwnedPartyCreationRecovery: async expected => {
+        const room = await runtime.readRoom(expected.partyId);
+        return room ? { status: room.isActive === false ? 'terminal' : 'active', room } : { status: 'unknown' };
+      },
+      createPartyRoom: (...args) => { runtime.creates.push(args); return runtime.create(...args); } },
     './watch-party/room-shared': { PLAYER_WATCH_PARTY_SOURCE: 'player-watch-party-live' },
     './premiumWatchPartyAccess': { requireWatchPartyLivePremium: args => { runtime.gates.push(args); return runtime.gate(args); },
       isRuntimeControlBlockedAccess: value => value?.reason === 'feature_disabled' || value?.reason === 'entitlement_unknown',
@@ -237,6 +242,72 @@ test('retired creation resumes only the exact current owned room on fresh Start'
   await h.start(); assert.equal(h.runtime.creates.length, 1); assert.equal(h.runtime.navigations.length, 1);
   assert.equal(h.runtime.navigations[0].params.roomId, 'ROOM-A');
 });
+
+async function holdSuccessfulCreationAcrossBlur(h) {
+  const existing = await h.runtime.create(), pendingCreate = deferred();
+  h.runtime.create = () => pendingCreate.promise;
+  const pending = await h.beginStart();
+  await h.update({ isFocused: false });
+  await h.act(() => pendingCreate.resolve(existing)); await pending.promise;
+  await h.update({ isFocused: true });
+  assert.equal(h.runtime.navigations.length, 0);
+  return existing;
+}
+
+test('fresh Start replaces an exactly confirmed terminal creation once after delayed creation and return', async t => {
+  const h = await mount(t), oldRoom = await holdSuccessfulCreationAcrossBlur(h);
+  h.runtime.readRoom = async () => ({ ...oldRoom, isActive: false });
+  h.runtime.create = async () => ({ ...oldRoom, partyId: 'ROOM-B', roomCode: 'ROOM-B' });
+  assert.equal(h.runtime.creates.length, 1, 'terminal state alone never creates');
+  let first, second;
+  await h.act(() => { first = h.current.onWatchParty(); second = h.current.onWatchParty(); });
+  await Promise.all([first, second]);
+  assert.equal(h.runtime.creates.length, 2);
+  assert.equal(h.runtime.navigations.length, 1);
+  assert.equal(h.runtime.navigations[0].params.roomId, 'ROOM-B');
+  await h.start(); assert.equal(h.runtime.creates.length, 2);
+});
+
+for (const mode of ['missing', 'denied', 'transient', 'wrong-party', 'wrong-host', 'wrong-source-type', 'wrong-source-id'])
+  test(`retained creation remains guarded after ${mode} recovery and can later resume`, async t => {
+    const h = await mount(t), oldRoom = await holdSuccessfulCreationAcrossBlur(h);
+    h.runtime.readRoom = async () => {
+      if (mode === 'missing') return null;
+      if (mode === 'denied' || mode === 'transient') throw Error(mode);
+      return { ...oldRoom, isActive: false, ...{
+        'wrong-party': { partyId: 'OTHER' }, 'wrong-host': { hostUserId: 'other' },
+        'wrong-source-type': { sourceType: 'creator_video' }, 'wrong-source-id': { sourceId: 'other-title' },
+      }[mode] };
+    };
+    await h.start(); await h.start();
+    assert.equal(h.runtime.creates.length, 1); assert.equal(h.runtime.navigations.length, 0);
+    h.runtime.readRoom = async () => oldRoom;
+    await h.start();
+    assert.equal(h.runtime.creates.length, 1); assert.equal(h.runtime.navigations[0].params.roomId, oldRoom.partyId);
+  });
+
+for (const retirement of ['focus', 'background', 'title', 'account', 'generation', 'logout', 'unmount'])
+  test(`pending terminal recovery cannot clear or recreate after ${retirement}`, async t => {
+    const h = await mount(t), oldRoom = await holdSuccessfulCreationAcrossBlur(h), read = deferred();
+    h.runtime.readRoom = () => read.promise;
+    const pending = await h.beginStart();
+    if (retirement === 'focus') { await h.update({ isFocused: false }); await h.update({ isFocused: true }); }
+    if (retirement === 'background') { await h.state('background'); await h.state('active'); }
+    if (retirement === 'title') await h.update({ cleanId: 'next-title', titleId: 'next-title', item: { id: 'next-title' } });
+    if (retirement === 'account') await h.authority(owner('other'));
+    if (retirement === 'generation') await h.authority(owner('host', 'generation-b'));
+    if (retirement === 'logout') await h.authority(null);
+    if (retirement === 'unmount') await h.unmount();
+    await h.act(() => read.resolve({ ...oldRoom, isActive: false })); await pending.promise;
+    assert.equal(h.runtime.creates.length, 1); assert.equal(h.runtime.navigations.length, 0);
+    if (retirement === 'unmount') return;
+    await h.authority(owner());
+    await h.update({ cleanId: title, titleId: title, item: { id: title, title: 'Title' } });
+    h.runtime.readRoom = async () => oldRoom;
+    await h.start();
+    assert.equal(h.runtime.creates.length, 1, 'retired terminal read did not discard the retained exact room');
+    assert.equal(h.runtime.navigations[0].params.roomId, oldRoom.partyId);
+  });
 
 test('creator-video Start retains the creator source and uses no platform title', async t => {
   const h = await mount(t, { playbackSourceKind: 'creator-video', creatorVideo: { id: 'creator-source' }, item: null });

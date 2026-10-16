@@ -6,7 +6,7 @@ import { supabase } from "./supabase";
 import type { Tables } from "../supabase/database.types";
 import type { CreatorVideo } from "./creatorVideos";
 import { getCreatorVideoWatchPartyBlockCopy, getCreatorVideoWatchPartyBlockReason } from "./watchPartyContentSources";
-import { createPartyRoom, getPartyRoom, getSafePartyUserId, type WatchPartyCreateResult, type WatchPartyState } from "./watchParty";
+import { createPartyRoom, readOwnedPartyCreationRecovery, getSafePartyUserId, type WatchPartyCreateResult, type WatchPartyState } from "./watchParty";
 import { PLAYER_WATCH_PARTY_SOURCE } from "./watch-party/room-shared";
 import { getRuntimeControlBlockedCopy, isRuntimeControlBlockedAccess, requireWatchPartyLivePremium,
   type PremiumWatchPartyFeatureAccessDecision } from "./premiumWatchPartyAccess";
@@ -43,7 +43,8 @@ export type PlayerWatchPartyActionsOptions = {
 
 type HeldCreation = { pending: boolean; result?: WatchPartyCreateResult };
 // A dispatched mutation can outlive the screen. Retain its exact outcome across
-// remounts; retirement never authorizes another insert or deletes another room.
+// remounts. Only exact, positively confirmed terminal state retires an
+// acknowledged result for another insert; unknown outcomes stay held.
 const heldCreations = new Map<string, HeldCreation>();
 
 // These are the Player's production actions. Continue only rechecks access;
@@ -185,12 +186,24 @@ export function usePlayerWatchPartyActions(options: PlayerWatchPartyActionsOptio
         }
         if (held.result && "partyId" in held.result) {
           const previous = held.result;
-          room = await getPartyRoom(previous.partyId).catch(() => null);
-          if (!isCurrent()) return;
-          if (!room || room.partyId !== previous.partyId || room.hostUserId !== hostUserId
-            || room.sourceType !== sourceType || room.sourceId !== sourceId || !room.isActive) room = null;
+          const recovery = sessionAuthority
+            ? await readOwnedPartyCreationRecovery(previous, sessionAuthority).catch(() => null) : null;
+          // A second mount may already have consumed/replaced this record while
+          // this read was pending. It cannot retire the newer pending creation.
+          if (!isCurrent() || heldCreations.get(creationKey) !== held) return;
+          if (recovery && recovery.status !== "unknown") {
+            const recovered = recovery.room;
+            if (recovered.partyId === previous.partyId && recovered.hostUserId === hostUserId
+              && recovered.sourceType === sourceType && recovered.sourceId === sourceId) {
+              if (recovery.status === "terminal" && recovered.isActive === false) {
+                heldCreations.delete(creationKey);
+                held = undefined;
+              } else if (recovery.status === "active" && recovered.isActive) room = recovered;
+            }
+          }
         }
-      } else {
+      }
+      if (!held) {
         held = { pending: true };
         heldCreations.set(creationKey, held);
         try {

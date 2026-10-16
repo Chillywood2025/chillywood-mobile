@@ -36,7 +36,7 @@ const code = ts.transpileModule(source, {
   }, context)] },
 }).outputText;
 const owner = (id = 'host', generation = 'session-a') => ({ userId: id, accountId: id, sessionGeneration: generation, state: 'ACTIVE', restoreOnly: false });
-const room = (id = 'ROOM01') => ({ partyId: id, roomCode: id, hostUserId: 'host', roomType: 'live', isActive: true, status: 'active', joinPolicy: 'open', contentAccessRule: 'open', discoveryVisibility: 'private', discoveryTitle: null, titleId: null, sourceType: null, sourceId: null });
+const room = (id = 'ROOM01') => ({ partyId: id, roomCode: id, hostUserId: 'host', roomType: 'live', isActive: true, status: 'active', joinPolicy: 'open', contentAccessRule: 'open', discoveryVisibility: 'private', discoveryTitle: null, titleId: null, sourceType: null, sourceId: null, lastActivityAt: new Date().toISOString() });
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 const sheetSource = fs.readFileSync(new URL('../components/monetization/access-sheet.tsx', import.meta.url), 'utf8');
 const sheetAst = ts.createSourceFile('access-sheet.tsx', sheetSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -66,22 +66,23 @@ const walk = (tree, predicate) => {
 };
 const settle = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
 
-async function mount(t, { normal = false, prepared = true, viewer = false, roomReader = null, offers = [], checkoutAvailable = false, offerSave = null, offerRead = null, setupSave = null } = {}) {
+async function mount(t, { normal = false, prepared = true, viewer = false, roomReader = null, age = 0, offers = [], checkoutAvailable = false, offerSave = null, offerRead = null, setupSave = null } = {}) {
   let tree;
   const runtime = { authority: owner(), focused: true, room: room(), params: { mode: 'live', partyId: 'ROOM01' }, premiumAllowed: true,
-    reads: [], writes: [], premium: [], navigations: [], alerts: [], policy: null, gate: null, userReader: null,
+    reads: [], preparedReads: [], refreshes: [], writes: [], premium: [], navigations: [], alerts: [], policy: null, gate: null, userReader: null,
     offers, paidWrites: [], setupWrites: [], checkoutCalls: 0 };
   if (normal) {
     runtime.room = { ...room(), roomType: 'title', titleId: 'title-a', sourceType: 'platform_title', sourceId: 'title-a' };
     runtime.params = { source: 'player', titleId: 'title-a', sourceType: 'platform_title', sourceId: 'title-a', ...(prepared ? { partyId: 'ROOM01' } : {}) };
   }
   runtime.created = 0;
+  runtime.room.lastActivityAt = new Date(Date.now() - age).toISOString();
   if (viewer) {
     runtime.authority = owner('viewer');
     runtime.params = { partyId: 'ROOM01', source: 'discovery', discoveryItemId: 'projection-a', discoveryLane: 'public' };
   }
   runtime.listed = true; runtime.accessAllowed = true;
-  const appListeners = new Set();
+  const appListeners = new Set(), authorityListeners = new Set();
   const AppState = { currentState: 'active', addEventListener: (_, listener) => { appListeners.add(listener); return { remove: () => appListeners.delete(listener) }; } };
   const gate = async options => { runtime.premium.push(options); return runtime.gate ? runtime.gate(options) : { allowed: runtime.premiumAllowed, reason: runtime.premiumAllowed ? 'allowed' : 'premium_required' }; };
   const save = async (id, changes) => { runtime.writes.push({ id, changes }); return runtime.policy ? runtime.policy(id, changes) : (runtime.room = { ...runtime.room, ...changes, discoveryTitle: changes.discoveryTitle?.trim() || null }); };
@@ -103,11 +104,24 @@ async function mount(t, { normal = false, prepared = true, viewer = false, roomR
     '../../_lib/betaProgram': { useBetaProgram: () => ({ accessState: { status: 'active' }, isLoading: false, isActive: true }), getBetaAccessBlockCopy: () => ({ title: '', body: '' }) },
     '../../_lib/appConfig': { DEFAULT_APP_CONFIG: {}, readAppConfig: async () => ({}), resolveBrandingConfig: () => ({ appDisplayName: "Chi'llywood" }), resolveFeatureConfig: () => ({ watchPartyEnabled: true }), resolveMonetizationConfig: () => ({}) },
     '../../_lib/premiumWatchPartyAccess': { requireLiveFirstPremium: gate, requireWatchPartyLivePremium: gate, isRuntimeControlBlockedAccess: a => a?.reason === 'runtime_control_blocked', getRuntimeControlBlockedCopy: () => ({ message: 'Live is temporarily unavailable.' }), LIVE_FIRST_PREMIUM_UPSELL_COPY: { title: 'Premium required', message: 'Premium required' }, WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY: { title: 'Premium required', message: 'Premium required' } },
-    '../../_lib/watchParty': { getPartyRoom: async id => { runtime.reads.push(id); return roomReader ? roomReader(runtime) : { ...runtime.room }; }, getSafePartyUserId: async () => runtime.userReader ? runtime.userReader() : runtime.authority.userId,
+    '../../_lib/watchParty': { getPartyRoom: async id => { runtime.reads.push(id); return roomReader ? roomReader(runtime) : Date.now() - Date.parse(runtime.room.lastActivityAt) > 15 * 60_000 ? null : { ...runtime.room }; },
+      getOwnedPartyRoomForPreparation: async (expected, authority) => {
+        runtime.reads.push(expected.partyId); runtime.preparedReads.push(expected);
+        const current = runtime.preparation ? await runtime.preparation(expected) : roomReader ? await roomReader(runtime) : { ...runtime.room };
+        return authority.userId === runtime.authority.userId && current?.isActive
+          && ['partyId', 'hostUserId', 'roomType', 'titleId', 'sourceType', 'sourceId'].every(key => current[key] === expected[key]) ? current : null;
+      },
+      refreshOwnedPartyRoomForStart: async (expected, authority, isCurrent) => {
+        runtime.refreshes.push({ expected, authority });
+        if (runtime.refresh) return runtime.refresh(expected, isCurrent);
+        if (!isCurrent() || !runtime.room.isActive) return null;
+        runtime.room = { ...runtime.room, lastActivityAt: new Date().toISOString() }; return { ...runtime.room };
+      }, getSafePartyUserId: async () => runtime.userReader ? runtime.userReader() : runtime.authority.userId,
       setPartyRoomPolicies: save, setPartyRoomDiscoverySettings: save, paidWatchPartyResolutionIsExactFreeRoom: value => value?.reason === 'free_room',
       createPartyRoom: async () => { assert.ok(!prepared, 'prepared-room tests must not create another room'); runtime.created += 1; return { ...runtime.room }; }, touchOwnedPartyRoomActivity: noop },
     '../../_lib/partyRoomStartIntent': intent.exports,
     '../../_lib/accountSessionAuthority': { getCurrentAccountSessionAuthoritySnapshot: () => runtime.authority,
+      subscribeToAccountSessionAuthority: listener => { authorityListeners.add(listener); return () => authorityListeners.delete(listener); },
       sameAccountSessionAuthority: (a, b) => !!a && !!b && a.userId === b.userId && a.accountId === b.accountId && a.sessionGeneration === b.sessionGeneration },
     '../../_lib/partyRoomDiscoveryDestination': { readCurrentPartyRoomDiscoveryDestination: async () => runtime.listed
       ? { partyId: runtime.room.partyId, hostUserId: runtime.room.hostUserId, sourceType: runtime.room.sourceType, sourceId: runtime.room.sourceId } : null },
@@ -147,6 +161,7 @@ async function mount(t, { normal = false, prepared = true, viewer = false, roomR
     sheet: () => find(n => n.type === 'AccessSheet' && n.props.visible),
     entered: () => walk(tree, n => n.type === 'LiveStage').length,
     act: async fn => React.act(async () => { await fn(); await settle(); }),
+    publishAuthority(next) { runtime.authority = next; for (const listener of authorityListeners) listener(next); },
     render, async account(id) { runtime.authority = owner(id); await render(); },
     async generation(value) { runtime.authority = owner(runtime.authority.userId, value); await render(); },
     async replaceRoom(id) { runtime.room = room(id); runtime.params = { mode: 'live', partyId: id }; await render(); },
@@ -172,7 +187,7 @@ test('normal Party defaults private and audience saves do not navigate or start 
   assert.match(h.text(), /Party audience saved/); assert.equal(h.runtime.navigations.length, 0);
 });
 
-test('expired normal prepared Start stays denied and directs a fresh Player preparation', async t => {
+test('unavailable normal prepared Start stays denied and directs a fresh Player preparation', async t => {
   const h = await mount(t, { normal: true, roomReader: runtime => runtime.reads.length === 1 ? { ...runtime.room } : null });
   await h.act(() => h.continue().onPress());
   assert.equal(h.runtime.navigations.length, 0);
@@ -180,6 +195,114 @@ test('expired normal prepared Start stays denied and directs a fresh Player prep
   assert.equal(h.runtime.writes.length, 0);
   assert.match(h.text(), /prepared room is no longer available.*Return to the Player/);
 });
+
+test('age-expired Player hydration stays read-only and duplicate explicit Start renews exactly once after audience save', async t => {
+  const h = await mount(t, { normal: true, age: 20 * 60_000 });
+  assert.equal(h.runtime.preparedReads.length, 1); assert.equal(h.runtime.refreshes.length, 0);
+  assert.equal(h.runtime.writes.length, 0); assert.equal(h.runtime.created, 0);
+  const pending = deferred(); h.runtime.refresh = async expected => {
+    assert.equal(h.runtime.writes.length, 1, 'audience persistence precedes activity renewal');
+    assert.ok(h.runtime.premium.length > 0, 'fresh Premium gate precedes renewal');
+    return pending.promise;
+  };
+  const start = h.continue().onPress;
+  await h.act(() => { void start(); void start(); });
+  assert.equal(h.runtime.refreshes.length, 1); assert.equal(h.runtime.navigations.length, 0);
+  const renewed = { ...h.runtime.room, lastActivityAt: new Date().toISOString() };
+  await h.act(() => pending.resolve(renewed));
+  assert.equal(h.runtime.navigations.length, 1); assert.equal(h.runtime.navigations[0].params.partyId, 'ROOM01');
+  assert.equal(h.runtime.created, 0);
+});
+
+test('ordinary discovery hydration continues to reject an age-expired room without an owner preparation read', async t => {
+  const h = await mount(t, { normal: true, viewer: true, age: 20 * 60_000 });
+  assert.equal(h.runtime.preparedReads.length, 0); assert.equal(h.runtime.refreshes.length, 0);
+  assert.equal(walk(h.tree(), n => n.props?.testID === 'watch-party-preview-join').length, 0);
+  assert.equal(h.runtime.navigations.length, 0); assert.equal(h.runtime.created, 0);
+});
+
+for (const failure of ['ended', 'missing', 'error', 'owner', 'source', 'title']) test(`Player owner hydration ${failure} cannot prepare or renew a room`, async t => {
+  const h = await mount(t, { normal: true, age: 20 * 60_000, roomReader: runtime => {
+    if (failure === 'error') throw Error('unavailable');
+    if (failure === 'missing') return null;
+    return { ...runtime.room, ...(failure === 'ended' ? { isActive: false } : failure === 'owner' ? { hostUserId: 'other' }
+      : failure === 'source' ? { sourceType: 'creator_video' } : failure === 'title' ? { titleId: 'other-title' } : {}) };
+  } });
+  assert.match(h.text(), /no longer available|Unable to load this Party/);
+  assert.equal(h.runtime.refreshes.length, 0); assert.equal(h.runtime.navigations.length, 0); assert.equal(h.runtime.created, 0);
+});
+
+for (const failure of ['ended', 'lost-response', 'provider-error']) test(`Start ${failure} preserves exact prepared target and needs an explicit retry`, async t => {
+  const h = await mount(t, { normal: true, age: 20 * 60_000 });
+  h.runtime.refresh = async () => {
+    if (failure === 'ended') h.runtime.room.isActive = false;
+    if (failure === 'lost-response') h.runtime.room.lastActivityAt = new Date().toISOString();
+    if (failure === 'provider-error') throw Error('provider failed');
+    return null;
+  };
+  await h.act(() => h.continue().onPress());
+  assert.equal(h.runtime.navigations.length, 0); assert.equal(h.runtime.created, 0); assert.equal(h.runtime.refreshes.length, 1);
+  assert.match(h.text(), /Unable to confirm this Party is ready/);
+  h.runtime.refresh = null;
+  await h.act(() => h.continue().onPress());
+  assert.equal(h.runtime.navigations.length, failure === 'ended' ? 0 : 1);
+  assert.ok(h.runtime.preparedReads.every(value => value.partyId === 'ROOM01'));
+  assert.equal(h.runtime.created, 0);
+});
+
+for (const block of ['premium', 'audience', 'reuse']) test(`${block} failure cannot renew prepared-room activity`, async t => {
+  const h = await mount(t, { normal: true, age: 20 * 60_000 });
+  if (block === 'premium') h.runtime.premiumAllowed = false;
+  if (block === 'audience') h.runtime.policy = async () => null;
+  if (block === 'reuse') h.runtime.room.sourceId = 'different-title';
+  await h.act(() => h.continue().onPress());
+  assert.equal(h.runtime.refreshes.length, 0); assert.equal(h.runtime.navigations.length, 0); assert.equal(h.runtime.created, 0);
+});
+
+for (const stage of ['preparation', 'refresh']) for (const transition of ['account', 'generation', 'title', 'title-aba', 'source-type', 'focus', 'background', 'authority-aba'])
+  test(`held ${stage} cannot navigate after ${transition} retires waiting Start`, async t => {
+    const h = await mount(t, { normal: true, age: 20 * 60_000 }), pending = deferred(), old = { ...h.runtime.room };
+    h.runtime[stage] = () => pending.promise;
+    await h.act(() => { void h.continue().onPress(); });
+    if (transition === 'account') await h.account('other');
+    if (transition === 'generation') await h.generation('session-b');
+    if (transition === 'title' || transition === 'title-aba' || transition === 'source-type') {
+      const previous = h.runtime.params;
+      h.runtime.params = { ...h.runtime.params, ...(transition.startsWith('title') ? { titleId: 'replacement' } : { sourceType: 'creator_video' }) };
+      await h.render();
+      if (transition === 'title-aba') { h.runtime.params = previous; await h.render(); }
+    }
+    if (transition === 'focus') { await h.focus(false); await h.focus(true); }
+    if (transition === 'background') { await h.state('background'); await h.state('active'); }
+    if (transition === 'authority-aba') {
+      const previous = h.runtime.authority;
+      h.publishAuthority(null); h.publishAuthority(previous);
+    }
+    await h.act(() => pending.resolve({ ...old, lastActivityAt: new Date().toISOString() }));
+    assert.equal(h.runtime.navigations.length, 0); assert.equal(h.runtime.created, 0);
+    if (stage === 'preparation') assert.equal(h.runtime.refreshes.length, 0);
+  });
+
+test('late inactive Player hydration stays unavailable and Start cannot refresh its activity', async t => {
+  const pending = deferred();
+  const h = await mount(t, { normal: true, age: 20 * 60_000, roomReader: () => pending.promise });
+  assert.equal(h.runtime.refreshes.length, 0);
+  await h.act(() => pending.resolve({ ...h.runtime.room, isActive: false }));
+  assert.match(h.text(), /no longer available/);
+  await h.act(() => h.continue().onPress());
+  assert.equal(h.runtime.refreshes.length, 0); assert.equal(h.runtime.navigations.length, 0); assert.equal(h.runtime.created, 0);
+});
+
+for (const change of [{ partyId: 'ROOM02' }, { titleId: 'different-title' }])
+  test(`route replacement with stable lookup and changed ${Object.keys(change)[0]} reloads exact owner hydration`, async t => {
+    const h = await mount(t, { normal: true });
+    h.runtime.params = { ...h.runtime.params, roomCode: 'ROOM01' }; await h.render();
+    const reads = h.runtime.preparedReads.length;
+    h.runtime.params = { ...h.runtime.params, ...change }; await h.render();
+    assert.ok(h.runtime.preparedReads.length > reads);
+    await h.act(() => h.continue().onPress());
+    assert.equal(h.runtime.navigations.length, 0); assert.equal(h.runtime.refreshes.length, 0); assert.equal(h.runtime.created, 0);
+  });
 
 test('discovery opens actual viewer preview and Join Now preserves ordinary admission without Start intent', async t => {
   const h = await mount(t, { normal: true, viewer: true });

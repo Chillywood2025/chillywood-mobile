@@ -1424,6 +1424,40 @@ export async function getPartyRoom(partyId: string): Promise<WatchPartyState | n
   return isWatchPartyRoomActive(room) ? room : null;
 }
 
+export type OwnedPartyCreationRecovery =
+  | { status: "active" | "terminal"; room: WatchPartyState }
+  | { status: "unknown" };
+
+// Recovery of an acknowledged Player creation needs explicit terminal evidence.
+// General reads deliberately hide inactive rooms, and an expired activity window
+// is not terminal: an exact prepared host can resume that active row. The waiting
+// room's explicit Start must renew it before admission. This read neither renews
+// the room nor grants membership or publication.
+export async function readOwnedPartyCreationRecovery(
+  expectedRoom: WatchPartyState,
+  authority: AccountSessionAuthorityBinding,
+): Promise<OwnedPartyCreationRecovery> {
+  const unknown = { status: "unknown" } as const;
+  const isCurrent = () => !authority.restoreOnly
+    && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+  if (!isCurrent() || !expectedRoom.isActive || expectedRoom.roomType !== "title"
+    || expectedRoom.hostUserId !== authority.userId || !expectedRoom.partyId || !expectedRoom.sourceId
+    || (expectedRoom.sourceType !== "platform_title" && expectedRoom.sourceType !== "creator_video")) return unknown;
+  const row = await fetchPartyRoomRow(expectedRoom.partyId).catch(() => null);
+  if (!isCurrent() || !row || row.party_id !== expectedRoom.partyId
+    || row.host_user_id !== expectedRoom.hostUserId || row.room_type !== expectedRoom.roomType
+    || row.title_id !== expectedRoom.titleId
+    || !("source_type" in row) || row.source_type !== expectedRoom.sourceType
+    || !("source_id" in row) || row.source_id !== expectedRoom.sourceId) return unknown;
+  const room = rowToState(row);
+  if (!room) return unknown;
+  if (row.is_active === false) return { status: "terminal", room };
+  const activityMillis = toTimeMillis("last_activity_at" in row ? row.last_activity_at : null)
+    ?? toTimeMillis(row.updated_at) ?? toTimeMillis(row.started_at);
+  if (row.is_active !== true || activityMillis === null) return unknown;
+  return { status: "active", room };
+}
+
 export async function touchOwnedPartyRoomActivity(partyId: string): Promise<boolean> {
   const normalizedPartyId = String(partyId ?? "").trim().toUpperCase();
   const writableUserId = await getWritablePartyUserId();
@@ -1662,10 +1696,14 @@ export type PartyRoomDiscoveryResult = {
   projectionId: string | null;
 };
 
+type OwnedPartyRoomPreparationIdentity = Pick<WatchPartyState,
+  "partyId" | "hostUserId" | "roomType" | "titleId" | "sourceType" | "sourceId"
+>;
+
 // A host can still edit an exact prepared room after its viewer activity window
 // elapses. This read grants no admission, heartbeat, membership or publication.
 async function readOwnedPartyRoomForPreparation(
-  expectedRoom: WatchPartyState,
+  expectedRoom: OwnedPartyRoomPreparationIdentity & { isActive: boolean },
   subject: AccountBoundSupabaseMutationSubject,
 ): Promise<WatchPartyState | null> {
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
@@ -1675,12 +1713,79 @@ async function readOwnedPartyRoomForPreparation(
     || (expectedRoom.sourceType !== "platform_title" && expectedRoom.sourceType !== "creator_video")) return null;
   const row = await fetchPartyRoomRow(expectedRoom.partyId);
   assertAccountBoundSupabaseMutationSubjectCurrent(subject);
-  if (!row || !("is_active" in row) || row.is_active !== true) return null;
+  if (!row || row.is_active !== true || row.party_id !== expectedRoom.partyId
+    || row.host_user_id !== expectedRoom.hostUserId || row.room_type !== expectedRoom.roomType
+    || row.title_id !== expectedRoom.titleId
+    || !("source_type" in row) || row.source_type !== expectedRoom.sourceType
+    || !("source_id" in row) || row.source_id !== expectedRoom.sourceId
+    || (toTimeMillis("last_activity_at" in row ? row.last_activity_at : null)
+      ?? toTimeMillis(row.updated_at) ?? toTimeMillis(row.started_at)) === null) return null;
   const room = rowToState(row);
   if (!room || room.roomType !== "title" || room.partyId !== expectedRoom.partyId
     || room.hostUserId !== expectedRoom.hostUserId || room.titleId !== expectedRoom.titleId
     || room.sourceType !== expectedRoom.sourceType || room.sourceId !== expectedRoom.sourceId) return null;
   return room;
+}
+
+// Only exact Player handoffs and prepared-owner Start use this read. Viewer
+// lookup, room bootstrap, membership, and publication keep their age filters.
+export async function getOwnedPartyRoomForPreparation(
+  identity: OwnedPartyRoomPreparationIdentity,
+  authority: AccountSessionAuthorityBinding,
+): Promise<WatchPartyState | null> {
+  if (!sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())
+    || authority.restoreOnly || authority.state !== "ACTIVE"
+    || identity.hostUserId !== authority.userId) return null;
+  const subject = await captureAccountBoundSupabaseMutationSubject(identity.hostUserId);
+  if (!sameAccountSessionAuthority(authority, subject.authority)) return null;
+  return readOwnedPartyRoomForPreparation({ ...identity, isActive: true }, subject);
+}
+
+// Explicit owner Start renews activity only after current Premium, identity and
+// audience checks. The frozen token and affected-row acknowledgement are required:
+// a generic heartbeat cannot prove a still-active exact room was actually renewed.
+export async function refreshOwnedPartyRoomForStart(
+  expectedRoom: WatchPartyState,
+  authority: AccountSessionAuthorityBinding,
+  isCurrent: () => boolean,
+): Promise<WatchPartyState | null> {
+  const current = () => isCurrent()
+    && authority.state === "ACTIVE" && !authority.restoreOnly
+    && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+  if (!current() || !expectedRoom.isActive || expectedRoom.roomType !== "title"
+    || expectedRoom.hostUserId !== authority.userId || !expectedRoom.partyId || !expectedRoom.sourceId
+    || (expectedRoom.sourceType !== "platform_title" && expectedRoom.sourceType !== "creator_video")) return null;
+  const subject = await captureAccountBoundSupabaseMutationSubject(expectedRoom.hostUserId);
+  if (!current() || !sameAccountSessionAuthority(authority, subject.authority)) return null;
+  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+  const refreshedAt = new Date().toISOString();
+  let query = supabase.from(PARTY_ROOMS_TABLE)
+    .update({ last_activity_at: refreshedAt })
+    .setHeader("Authorization", `Bearer ${subject.accessToken}`)
+    .eq("party_id", expectedRoom.partyId)
+    .eq("host_user_id", expectedRoom.hostUserId)
+    .eq("room_type", expectedRoom.roomType)
+    .eq("source_type", expectedRoom.sourceType)
+    .eq("source_id", expectedRoom.sourceId)
+    .eq("is_active", true)
+    // Do not replace a newer heartbeat if this request is delayed in transport.
+    .lte("last_activity_at", refreshedAt);
+  query = expectedRoom.titleId === null
+    ? query.is("title_id", null)
+    : query.eq("title_id", expectedRoom.titleId);
+  const { data, error } = await query.select(PARTY_ROOMS_POLICY_SELECT)
+    .returns<PartyRoomFullRow[]>().maybeSingle();
+  if (!current()) return null;
+  assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+  if (error || !data || data.is_active !== true
+    || data.party_id !== expectedRoom.partyId || data.host_user_id !== expectedRoom.hostUserId
+    || data.room_type !== expectedRoom.roomType || data.title_id !== expectedRoom.titleId
+    || data.source_type !== expectedRoom.sourceType || data.source_id !== expectedRoom.sourceId
+    || data.discovery_visibility !== expectedRoom.discoveryVisibility
+    || (data.discovery_title ?? null) !== expectedRoom.discoveryTitle
+    || toTimeMillis(data.last_activity_at) !== toTimeMillis(refreshedAt)) return null;
+  const room = rowToState(data);
+  return isWatchPartyRoomActive(room) ? room : null;
 }
 
 async function writePartyRoomDiscovery(

@@ -17,7 +17,7 @@ import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs
 import { resolvePreparedWatchPartyRoomReuse } from "../../_lib/watchPartyPreparedRoomReuse.mjs";
 import { rememberPartyRoomStartIntent } from "../../_lib/partyRoomStartIntent";
 import { readCurrentPartyRoomDiscoveryDestination } from "../../_lib/partyRoomDiscoveryDestination";
-import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, subscribeToAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
 import { WATCH_PARTY_WAITING_ROOM_ENTRY_SOURCE } from "../../_lib/watchPartyReturnNavigation.mjs";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../_lib/betaProgram";
 import {
@@ -64,9 +64,11 @@ import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet
 import { useSession } from "../../_lib/session";
 import {
   createPartyRoom,
+  getOwnedPartyRoomForPreparation,
   getPartyRoom,
   getSafePartyUserId,
   paidWatchPartyResolutionIsExactFreeRoom,
+  refreshOwnedPartyRoomForStart,
   setPartyRoomDiscoverySettings,
   setPartyRoomPolicies,
   touchOwnedPartyRoomActivity,
@@ -238,7 +240,8 @@ export default function WatchPartyIndexScreen() {
   const waitingOwnerKey = JSON.stringify([
     user?.id, authority?.accountId, authority?.sessionGeneration, authorityStatus,
     authority?.state, authority?.restoreOnly, isSignedIn, entryLaneKey,
-    initialLookupId, initialRouteSourceId, initialRouteTitleId, preparedRoom?.room.partyId,
+    initialLookupId, initialRoutePartyId, initialRouteRoomCode, initialRouteSourceType,
+    initialRouteSourceId, initialRouteTitleId, preparedRoom?.room.partyId,
     params.source, params.discoveryItemId, params.discoveryLane,
   ]);
   const waitingOwnerRef = useRef(waitingOwnerKey);
@@ -251,6 +254,11 @@ export default function WatchPartyIndexScreen() {
   const createOperationRef = useRef<object | null>(null);
   const discoverySaveRef = useRef<object | null>(null);
   const pendingPremiumCreateRef = useRef<{ owner: string; focusGeneration: number } | null>(null);
+  useEffect(() => subscribeToAccountSessionAuthority(next => {
+    // Retire in-flight Start even if authority changes away and back before a
+    // React render. Returning to the same account cannot revive an old intent.
+    if (!sameAccountSessionAuthority(authority, next)) waitingLifetimeRef.current += 1;
+  }), [authority]);
   const captureWaitingOwner = useCallback(() => {
     const lifetime = waitingLifetimeRef.current;
     return () => waitingOwnerRef.current === waitingOwnerKey
@@ -646,7 +654,8 @@ export default function WatchPartyIndexScreen() {
 
     if (!incomingLookupId) return;
     const handoffKey = JSON.stringify([authority?.userId, authority?.accountId, authority?.sessionGeneration, authorityStatus,
-      incomingLookupId, incomingSourceType, incomingSourceId, params.source, params.discoveryItemId, params.discoveryLane]);
+      incomingLookupId, incomingPartyId, incomingRoomCode, incomingTitleId, incomingSourceType,
+      incomingSourceId, params.source, params.discoveryItemId, params.discoveryLane]);
     if (handoffLoadedRef.current === handoffKey) return;
     handoffLoadedRef.current = handoffKey;
     let active = true;
@@ -666,7 +675,16 @@ export default function WatchPartyIndexScreen() {
     });
     const loadIncomingRoom = async () => {
       try {
-        const room = await getPartyRoom(incomingLookupId);
+        const room = isPlayerWatchPartyLiveFlow && authority
+          ? await getOwnedPartyRoomForPreparation({
+            partyId: incomingPartyId,
+            hostUserId: authority.userId,
+            roomType: "title",
+            titleId: incomingTitleId || null,
+            sourceType: incomingSourceType ?? (incomingTitleId ? "platform_title" : null),
+            sourceId: incomingSourceId || null,
+          }, authority)
+          : await getPartyRoom(incomingLookupId);
         if (!active || !isCurrent()) return;
         if (!room?.isActive) {
           completed = true;
@@ -717,7 +735,7 @@ export default function WatchPartyIndexScreen() {
       active = false;
       if (!completed && handoffLoadedRef.current === handoffKey) handoffLoadedRef.current = null;
     };
-  }, [authority?.userId, authority?.accountId, authority?.sessionGeneration, authorityStatus, buildRoomPreview, canUseBetaRooms, captureWaitingOwner, configReady, features.watchPartyEnabled, isPlayerWatchPartyLiveFlow, params.discoveryItemId, params.discoveryLane, params.partyId, params.roomCode, params.roomId, params.source, params.sourceId, params.sourceType, params.titleId, verifyDiscoveryRoom, waitingResumeGeneration]);
+  }, [authority, authorityStatus, buildRoomPreview, canUseBetaRooms, captureWaitingOwner, configReady, features.watchPartyEnabled, isPlayerWatchPartyLiveFlow, params.discoveryItemId, params.discoveryLane, params.partyId, params.roomCode, params.roomId, params.source, params.sourceId, params.sourceType, params.titleId, verifyDiscoveryRoom, waitingResumeGeneration]);
 
   useEffect(() => {
     if (!canUseBetaRooms) return;
@@ -1477,7 +1495,17 @@ export default function WatchPartyIndexScreen() {
       const hostUserId = await getSafePartyUserId();
       if (!isCurrent() || hostUserId !== authority?.userId) return;
       if (preparedTargetPartyId) {
-        let preparedRoomForNavigation = await getPartyRoom(preparedTargetPartyId).catch(() => null);
+        let preparedRoomForNavigation = activeWaitingRoomType === "title" && authority
+          && (isPlayerWatchPartyLiveFlow || preparedRoom?.room.hostUserId === hostUserId)
+          ? await getOwnedPartyRoomForPreparation({
+            partyId: preparedTargetPartyId,
+            hostUserId,
+            roomType: activeWaitingRoomType,
+            titleId: effectiveTitleId,
+            sourceType: effectiveSourceType,
+            sourceId: effectiveSourceId,
+          }, authority).catch(() => null)
+          : await getPartyRoom(preparedTargetPartyId).catch(() => null);
         if (!isCurrent()) return;
         const reuse = resolvePreparedWatchPartyRoomReuse({
           expectedPartyId: preparedTargetPartyId,
@@ -1538,8 +1566,20 @@ export default function WatchPartyIndexScreen() {
           }
           preparedRoomForNavigation = savedParty;
         }
-        const nextPreview = await buildRoomPreview(preparedRoomForNavigation);
+        let nextPreview = await buildRoomPreview(preparedRoomForNavigation);
         if (!isCurrent()) return;
+        if (preparedRoomForNavigation.roomType === "title") {
+          const refreshedRoom = authority
+            ? await refreshOwnedPartyRoomForStart(preparedRoomForNavigation, authority, isCurrent).catch(() => null)
+            : null;
+          if (!isCurrent()) return;
+          if (!refreshedRoom) {
+            setCreateError("Unable to confirm this Party is ready. Retry this room, or return to the Player if it has ended.");
+            return;
+          }
+          preparedRoomForNavigation = refreshedRoom;
+          nextPreview = { ...nextPreview, room: refreshedRoom };
+        }
         const startIntent = preparedRoomForNavigation.roomType === "title"
           ? rememberPartyRoomStartIntent(preparedRoomForNavigation, authority) : null;
         if (preparedRoomForNavigation.roomType === "title" && preparedRoomForNavigation.discoveryVisibility !== "private" && !startIntent) {
