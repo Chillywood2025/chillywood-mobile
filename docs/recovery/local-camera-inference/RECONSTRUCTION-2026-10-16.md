@@ -134,3 +134,58 @@ verification attempt failed because plain Ruby could not load the `xcodeproj`
 gem supplied by the CocoaPods wrapper. The compiler is being corrected to use
 that actual interpreter and gem context. No complete native compile pass is
 claimed by this follow-up.
+
+## Executed iOS compile and Android graph-query repair
+
+At source `984c7b22cdfab0992bdd8e1ceec5e27a2896110a`, the full unsigned
+Debug x86_64 Simulator camera-module and native-dependency compile passed on
+macOS 26.6.2 with Xcode 26.5 (17F42), explicitly using `ios-internal-v2`.
+The actual CocoaPods Ruby context, generated importer settings and all eight
+recorded commands passed. The [sanitized compile receipt](./IOS_NATIVE_COMPILE_PROOF_984C7B22.json)
+binds the source, module/generated-input hashes, command-output hashes and
+compiled framework hash. Its original receipt SHA-256 is
+`5010ea4d0018d446f4c5b94ba7c42887636764809e0714f4a490ed52d08e766c`.
+This does not establish a signed app, Release iphoneos linkage, device execution,
+or physical camera behavior.
+
+The second Android run and CI run `38975966230` failed in the audit query:
+the unqualified legacy `resolvedArtifacts` request could not choose among AGP
+project artifact variants. The repair separates the complete strict app runtime
+component graph from a typed original-AAR view used only for the two LiteRT byte
+hashes. Provider exclusions still inspect the entire graph, including project
+and JAR dependencies; unresolved edges, missing actual camera projects and the
+prebuilt Expo Camera publication remain failures. Complete redacted command
+diagnostics are retained in the persistent validation directory. The repaired
+query subsequently executed successfully against the retained generated project:
+478 components, both reviewed original AAR hashes, both camera Kotlin targets
+and the actual merged manifest were obtained. The provider guard then correctly
+failed on seven scanner/ML Kit components from Expo Dev Launcher 6.0.21. The
+original failed receipt was not rewritten as a pass.
+
+The launcher declared both scanner dependencies unconditionally and requested
+`barcode_ui` in its main manifest. Three exact-version/hash-guarded changes
+remove those edges and metadata and make the QR action report that scanning is
+disabled, directing development users to the unchanged manual URL entry.
+Discovery, history and other launcher methods remain unchanged. Both package
+versions and all thirteen source hashes validate before any write. Canonical
+path checks also reject ancestor dependency fallback and escaping symlinks,
+preserving other checkouts when a private dependency copy is incomplete.
+Independent review and all 19 scanner tests passed; actual native validation
+of these new launcher changes remains pending.
+
+The compiler now requires independent Debug and Release app runtime graphs,
+merged manifests and original AAR byte proofs, both camera variants, and the
+changed launcher Debug Kotlin source. It binds the literal canonical Android
+internal profile environment while declaring its dummy backend fixtures and
+absence of remote EAS environment. These local checks do not certify an exact
+signed build. Fresh complete execution and exact-head Required Validation remain
+pending. The latest plugin inputs require resealing the unshipped V15 candidate;
+the earlier component-scoped AOSP and iOS receipts remain preserved at their
+original source identities.
+
+Final build dependency/linker inputs and inspection of the exact signed artifacts
+remain separate distribution gates. Android must bind every packaged module,
+manifest, DEX/native-library input and bundled model hash; iOS must bind Release
+iphoneos pod/linker inputs and the signed IPA. Static linking, stripping or
+obfuscation must not be mistaken for provider exclusion merely because a name is
+absent.

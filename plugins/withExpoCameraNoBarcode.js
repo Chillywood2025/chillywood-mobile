@@ -8,13 +8,15 @@ const PLUGIN_NAME = "with-expo-camera-no-barcode";
 const SDK_VERSION = "17.0.10";
 const SOURCE_BUILD_PATTERN = "^expo-camera$";
 const PATCHES = specification.files;
+const DEV_LAUNCHER_VERSION = "6.0.21";
+const DEV_LAUNCHER_PATCHES = specification.devLauncher.files;
 const digest = (source) => crypto.createHash("sha256").update(source).digest("hex");
 
 // Offsets are in the exact original UTF-8 source (all patched files are ASCII).
 // Reverse offsets include preceding size changes, so deleted blocks can be
 // restored without ambiguous empty-string or substring replacements.
-function transformSource(relativePath, source, reverse = false) {
-  const patch = PATCHES.find((entry) => entry.path === relativePath);
+function transformNativeSource(patches, relativePath, source, reverse = false) {
+  const patch = patches.find((entry) => entry.path === relativePath);
   if (!patch) throw new Error(`${PLUGIN_NAME}: unknown native source ${relativePath}.`);
   const required = reverse ? patch.patchedSha256 : patch.originalSha256;
   const desired = reverse ? patch.originalSha256 : patch.patchedSha256;
@@ -45,6 +47,14 @@ function transformSource(relativePath, source, reverse = false) {
   return result;
 }
 
+function transformSource(relativePath, source, reverse = false) {
+  return transformNativeSource(PATCHES, relativePath, source, reverse);
+}
+
+function transformDevLauncherSource(relativePath, source, reverse = false) {
+  return transformNativeSource(DEV_LAUNCHER_PATCHES, relativePath, source, reverse);
+}
+
 function assertSourceBuildConfigured(projectRoot) {
   const application = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"));
   const patterns = application.expo?.autolinking?.android?.buildFromSource;
@@ -58,25 +68,40 @@ function assertSourceBuildConfigured(projectRoot) {
 
 function applyNoBarcodePatch(projectRoot) {
   assertSourceBuildConfigured(projectRoot);
-  const packagePath = require.resolve("expo-camera/package.json", { paths: [projectRoot] });
-  const sdk = JSON.parse(fs.readFileSync(packagePath, "utf8"));
-  if (sdk.version !== SDK_VERSION || specification.packageVersion !== SDK_VERSION) {
-    throw new Error(`${PLUGIN_NAME}: review required for SDK version ${sdk.version}.`);
-  }
-  const sdkRoot = path.dirname(packagePath);
-
-  // Complete validation is a single read/transform phase. In particular, a bad
-  // LAST file must not leave the earlier files partially patched. Both original
-  // and already-patched hashes are accepted to make repeated prebuild safe.
-  const plan = PATCHES.map(({ path: relativePath, patchedSha256 }) => {
-    const filename = path.join(sdkRoot, relativePath);
-    const original = fs.readFileSync(filename, "utf8");
-    return { filename, relativePath, original, patched: transformSource(relativePath, original), sha256: patchedSha256 };
+  const canonicalProjectRoot = fs.realpathSync(projectRoot);
+  const requireContainedPath = (root, filename, description) => {
+    const relative = path.relative(root, filename);
+    if (!relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+      throw new Error(`${PLUGIN_NAME}: ${description} escapes projectRoot/package; refusing to patch ancestor or shared dependencies.`);
+    }
+  };
+  // Validate BOTH packages and ALL thirteen files before any write. A late
+  // launcher mismatch must not leave the camera partially patched, and vice
+  // versa. Accept original or reviewed patched hashes for repeatable prebuild.
+  const packages = [
+    { name: "expo-camera", version: SDK_VERSION, spec: specification },
+    { name: "expo-dev-launcher", version: DEV_LAUNCHER_VERSION, spec: specification.devLauncher },
+  ];
+  const plans = packages.map(({ name, version, spec }) => {
+    const packagePath = fs.realpathSync(require.resolve(`${name}/package.json`, { paths: [projectRoot] }));
+    const sdkRoot = path.dirname(packagePath);
+    requireContainedPath(canonicalProjectRoot, sdkRoot, `resolved ${name} package`);
+    const sdk = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+    if (sdk.version !== version || spec.packageVersion !== version) {
+      throw new Error(`${PLUGIN_NAME}: review required for SDK version ${sdk.version} (${name}).`);
+    }
+    return spec.files.map(({ path: relativePath, patchedSha256 }) => {
+      const filename = fs.realpathSync(path.join(sdkRoot, relativePath));
+      requireContainedPath(sdkRoot, filename, `${name} source ${relativePath}`);
+      const original = fs.readFileSync(filename, "utf8");
+      return { filename, relativePath, original, patched: transformNativeSource(spec.files, relativePath, original), sha256: patchedSha256 };
+    });
   });
-  for (const item of plan) {
+  for (const item of plans.flat()) {
     if (item.patched !== item.original) fs.writeFileSync(item.filename, item.patched);
   }
-  return { sdkVersion: sdk.version, files: plan.map(({ relativePath, sha256 }) => ({ path: relativePath, sha256 })) };
+  const receipt = (plan) => plan.map(({ relativePath, sha256 }) => ({ path: relativePath, sha256 }));
+  return { sdkVersion: SDK_VERSION, files: receipt(plans[0]), devLauncherVersion: DEV_LAUNCHER_VERSION, devLauncherFiles: receipt(plans[1]) };
 }
 
 function withExpoCameraNoBarcode(config) {
@@ -87,4 +112,4 @@ function withExpoCameraNoBarcode(config) {
 }
 
 module.exports = createRunOncePlugin(withExpoCameraNoBarcode, PLUGIN_NAME, "1.0.0");
-module.exports.__test = { SDK_VERSION, SOURCE_BUILD_PATTERN, PATCHES, digest, transformSource, assertSourceBuildConfigured, applyNoBarcodePatch };
+module.exports.__test = { SDK_VERSION, SOURCE_BUILD_PATTERN, PATCHES, DEV_LAUNCHER_VERSION, DEV_LAUNCHER_PATCHES, digest, transformSource, transformDevLauncherSource, assertSourceBuildConfigured, applyNoBarcodePatch };

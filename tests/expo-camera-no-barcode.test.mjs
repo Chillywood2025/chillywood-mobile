@@ -18,6 +18,11 @@ const original = new Map(patch.PATCHES.map(({ path: name }) => [
   name, patch.transformSource(name, fs.readFileSync(path.join(sdkRoot, name), "utf8"), true),
 ]));
 const transformed = new Map([...original].map(([name, source]) => [name, patch.transformSource(name, source)]));
+const launcherRoot = path.dirname(require.resolve("expo-dev-launcher/package.json"));
+const launcherOriginal = new Map(patch.DEV_LAUNCHER_PATCHES.map(({ path: name }) => [
+  name, patch.transformDevLauncherSource(name, fs.readFileSync(path.join(launcherRoot, name), "utf8"), true),
+]));
+const launcherTransformed = new Map([...launcherOriginal].map(([name, source]) => [name, patch.transformDevLauncherSource(name, source)]));
 
 function fixture(t, version = patch.SDK_VERSION) {
   // Disposable generated test data, never a source checkout or retained proof.
@@ -35,7 +40,15 @@ function fixture(t, version = patch.SDK_VERSION) {
     fs.mkdirSync(path.dirname(filename), { recursive: true });
     fs.writeFileSync(filename, source);
   }
-  return { root, sdk };
+  const launcher = path.join(root, "node_modules/expo-dev-launcher");
+  fs.mkdirSync(launcher, { recursive: true });
+  fs.writeFileSync(path.join(launcher, "package.json"), JSON.stringify({ name: "expo-dev-launcher", version: patch.DEV_LAUNCHER_VERSION }));
+  for (const [name, source] of launcherOriginal) {
+    const filename = path.join(launcher, name);
+    fs.mkdirSync(path.dirname(filename), { recursive: true });
+    fs.writeFileSync(filename, source);
+  }
+  return { root, sdk, launcher };
 }
 
 // Independent brace-aware extraction keeps comments and strings in the body
@@ -86,12 +99,104 @@ test("all ten pinned native transformations are exact, idempotent and reversible
   assert.match(fs.readFileSync(path.join(projectRoot, "app.config.ts"), "utf8"), /\.\/plugins\/withExpoCameraNoBarcode/u);
 });
 
-test("prebuild applies all files and repeated runs preserve the same bytes", (t) => {
-  const { root, sdk } = fixture(t);
+test("prebuild applies both packages and repeated runs preserve the same bytes", (t) => {
+  const { root, sdk, launcher } = fixture(t);
   const first = patch.applyNoBarcodePatch(root);
   assert.deepEqual(patch.applyNoBarcodePatch(root), first);
   assert.equal(first.files.length, 10);
+  assert.equal(first.devLauncherVersion, "6.0.21");
+  assert.equal(first.devLauncherFiles.length, 3);
   for (const [name, source] of transformed) assert.equal(fs.readFileSync(path.join(sdk, name), "utf8"), source);
+  for (const [name, source] of launcherTransformed) assert.equal(fs.readFileSync(path.join(launcher, name), "utf8"), source);
+});
+
+test("launcher repair is pinned to official bytes, reversible and preserves every non-scanner method", () => {
+  const locked = require("../package-lock.json").packages["node_modules/expo-dev-launcher"];
+  assert.equal(patch.DEV_LAUNCHER_VERSION, "6.0.21");
+  assert.equal(specification.devLauncher.upstreamTarball, locked.resolved);
+  assert.equal(specification.devLauncher.upstreamIntegrity, locked.integrity);
+  assert.equal(specification.devLauncher.upstreamTarballSha256, "e259fc80b71f36155f8487498c0b1af33e921349083ebb96b7c5f03ba864f5e7");
+  assert.equal(patch.DEV_LAUNCHER_PATCHES.length, 3);
+  for (const spec of patch.DEV_LAUNCHER_PATCHES) {
+    const before = launcherOriginal.get(spec.path);
+    const after = launcherTransformed.get(spec.path);
+    assert.equal(patch.digest(before), spec.originalSha256);
+    assert.equal(patch.digest(after), spec.patchedSha256);
+    assert.equal(patch.transformDevLauncherSource(spec.path, after), after);
+    assert.equal(patch.transformDevLauncherSource(spec.path, after, true), before);
+    assert.equal(patch.transformDevLauncherSource(spec.path, before, true), before);
+  }
+  assert.doesNotMatch([...launcherTransformed.values()].join("\n"), /com\.google\.(?:mlkit|android\.gms)|barcode_ui|startScan|GmsBarcode/u);
+  const modelPath = "android/src/debug/java/expo/modules/devlauncher/compose/models/HomeViewModel.kt";
+  const before = launcherOriginal.get(modelPath);
+  const after = launcherTransformed.get(modelPath);
+  assert.equal(body(before, "fun onAction("), body(after, "fun onAction("), "manual URL launch, history and errors are unchanged");
+  assert.match(body(after, "fun scanQRCode("), /onError\("QR scanning is disabled in this build\. Enter the development server URL manually\."\)/u);
+  assert.doesNotMatch(body(after, "fun scanQRCode("), /onResult\(|getClient|startScan/u);
+});
+
+test("launcher drift, missing source and provider restoration fail before either package is written", (t) => {
+  const { root, sdk, launcher } = fixture(t);
+  const assertCameraUnchanged = () => {
+    for (const [name, source] of original) assert.equal(fs.readFileSync(path.join(sdk, name), "utf8"), source, name);
+  };
+  fs.writeFileSync(path.join(launcher, "package.json"), JSON.stringify({ name: "expo-dev-launcher", version: "6.0.22" }));
+  assert.throws(() => patch.applyNoBarcodePatch(root), /review required for SDK version.*expo-dev-launcher/u);
+  assertCameraUnchanged();
+  fs.writeFileSync(path.join(launcher, "package.json"), JSON.stringify({ name: "expo-dev-launcher", version: patch.DEV_LAUNCHER_VERSION }));
+  for (const baseline of [launcherOriginal, launcherTransformed]) {
+    for (const target of patch.DEV_LAUNCHER_PATCHES) {
+      for (const [name, source] of baseline) fs.writeFileSync(path.join(launcher, name), source);
+      const addition = target.path.endsWith("build.gradle")
+        ? '\nimplementation "com.google.mlkit:barcode-scanning:17.3.0"\n'
+        : target.path.endsWith("AndroidManifest.xml")
+          ? '\n<application><meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="barcode_ui" /></application>\n'
+          : '\nimport com.google.mlkit.vision.codescanner.GmsBarcodeScanning\n';
+      fs.appendFileSync(path.join(launcher, target.path), addition);
+      assert.throws(() => patch.applyNoBarcodePatch(root), /unreviewed native source digest/u);
+      assertCameraUnchanged();
+      for (const [name, source] of baseline) assert.equal(fs.readFileSync(path.join(launcher, name), "utf8"), source + (name === target.path ? addition : ""));
+    }
+  }
+  for (const [name, source] of launcherOriginal) fs.writeFileSync(path.join(launcher, name), source);
+  fs.unlinkSync(path.join(launcher, patch.DEV_LAUNCHER_PATCHES.at(-1).path));
+  assert.throws(() => patch.applyNoBarcodePatch(root), /ENOENT/u);
+  assertCameraUnchanged();
+});
+
+test("missing private packages cannot fall back to or symlink ancestor dependencies", (t) => {
+  for (const missing of ["expo-camera", "expo-dev-launcher"]) {
+    for (const useSymlink of [false, true]) {
+      const { root, sdk, launcher } = fixture(t);
+      const privateRoot = path.join(root, "private-project");
+      fs.mkdirSync(path.join(privateRoot, "node_modules"), { recursive: true });
+      fs.copyFileSync(path.join(root, "package.json"), path.join(privateRoot, "package.json"));
+      const retained = missing === "expo-camera" ? "expo-dev-launcher" : "expo-camera";
+      fs.cpSync(path.join(root, "node_modules", retained), path.join(privateRoot, "node_modules", retained), { recursive: true });
+      if (useSymlink) fs.symlinkSync(path.join(root, "node_modules", missing), path.join(privateRoot, "node_modules", missing), "dir");
+      assert.throws(() => patch.applyNoBarcodePatch(privateRoot), /resolved expo-(?:camera|dev-launcher) package escapes projectRoot/u);
+      for (const [directory, files] of [[sdk, original], [launcher, launcherOriginal]]) {
+        for (const [name, source] of files) assert.equal(fs.readFileSync(path.join(directory, name), "utf8"), source, `ancestor ${name}`);
+      }
+      for (const [name, source] of retained === "expo-camera" ? original : launcherOriginal) {
+        assert.equal(fs.readFileSync(path.join(privateRoot, "node_modules", retained, name), "utf8"), source, `private ${name}`);
+      }
+    }
+  }
+});
+
+test("a source-file symlink cannot escape its private package before any write", (t) => {
+  const { root, sdk, launcher } = fixture(t);
+  const target = patch.DEV_LAUNCHER_PATCHES.at(-1).path;
+  const outside = path.join(root, "ancestor-source.kt");
+  const source = launcherOriginal.get(target);
+  fs.writeFileSync(outside, source);
+  fs.unlinkSync(path.join(launcher, target));
+  fs.symlinkSync(outside, path.join(launcher, target));
+  assert.throws(() => patch.applyNoBarcodePatch(root), /source .* escapes projectRoot\/package/u);
+  assert.equal(fs.readFileSync(outside, "utf8"), source);
+  for (const [name, originalSource] of original) assert.equal(fs.readFileSync(path.join(sdk, name), "utf8"), originalSource);
+  for (const [name, originalSource] of launcherOriginal) assert.equal(fs.readFileSync(path.join(launcher, name), "utf8"), originalSource);
 });
 
 test("production Android autolinking resolves the exact patched Expo Camera source project", () => {

@@ -264,5 +264,54 @@
         }
       ]
     }
-  ]
+  ],
+  "devLauncher": {
+    "packageVersion": "6.0.21",
+    "upstreamTarball": "https://registry.npmjs.org/expo-dev-launcher/-/expo-dev-launcher-6.0.21.tgz",
+    "upstreamIntegrity": "sha512-QZ9gcKMZbp6EsIhzS0QoGB8Cf4xeVJhjbNgWUwcoBIk8gshoFz8CkCQOnX+HNv2sSY3rdCaNpx3Xo0Rflyq7rA==",
+    "upstreamTarballSha256": "e259fc80b71f36155f8487498c0b1af33e921349083ebb96b7c5f03ba864f5e7",
+    "files": [
+      {
+        "path": "android/build.gradle",
+        "originalSha256": "67ffc390d2fcf0a84ab0e48ef9a9a305969705b1a6fa16fba1c8def978c77413",
+        "patchedSha256": "2a255588f3f951e7bc457bad06e3b58dfe0c017f4025e85667e066a4020e0a7b",
+        "changes": [
+          {
+            "offset": 3181,
+            "before": "  implementation \"com.google.android.gms:play-services-code-scanner:16.1.0\"\n  implementation \"com.google.mlkit:barcode-scanning:17.3.0\"\n",
+            "after": ""
+          }
+        ]
+      },
+      {
+        "path": "android/src/main/AndroidManifest.xml",
+        "originalSha256": "6a379f557c5328fd71191a0651dc0fb0598bc4a4a5215a378f2cffb44065d427",
+        "patchedSha256": "bfe643676c7bfecf2683b1ad8044a754bc53141c9e4fc6714ad58c1530937b6d",
+        "changes": [
+          {
+            "offset": 70,
+            "before": "  <application>\n    <meta-data\n      android:name=\"com.google.mlkit.vision.DEPENDENCIES\"\n      android:value=\"barcode_ui\"/>\n  </application>\n",
+            "after": ""
+          }
+        ]
+      },
+      {
+        "path": "android/src/debug/java/expo/modules/devlauncher/compose/models/HomeViewModel.kt",
+        "originalSha256": "05bedd558345012d22d12da5f748f87452137758f2aa08ff5807b2270803cddf",
+        "patchedSha256": "641c794c4733e3f06137d41cc472b3ab9699dc030552a128270259b7a6123139",
+        "changes": [
+          {
+            "offset": 235,
+            "before": "import com.google.mlkit.vision.barcode.common.Barcode\nimport com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions\nimport com.google.mlkit.vision.codescanner.GmsBarcodeScanning\n",
+            "after": ""
+          },
+          {
+            "offset": 3627,
+            "before": "    val options = GmsBarcodeScannerOptions.Builder()\n      .setBarcodeFormats(Barcode.FORMAT_QR_CODE)\n      .build()\n\n    val scanner = GmsBarcodeScanning.getClient(context, options)\n\n    scanner.startScan()\n      .addOnSuccessListener { barcode ->\n        barcode.rawValue?.let {\n          onResult(it)\n        } ?: onError(\"No QR code data found\")\n      }\n      .addOnCanceledListener {\n        onError(\"Scanning cancelled\")\n      }\n      .addOnFailureListener { exception ->\n        onError(\"Scanning failed: ${exception.message ?: \"Unknown error\"}\")\n      }\n",
+            "after": "    onError(\"QR scanning is disabled in this build. Enter the development server URL manually.\")\n"
+          }
+        ]
+      }
+    ]
+  }
 }
