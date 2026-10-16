@@ -18,7 +18,7 @@ doc.documentElement = container();
 globalThis.document = doc;
 globalThis.window = globalThis;
 globalThis.HTMLIFrameElement = class {};
-const source = fs.readFileSync(new URL('../app/watch-party/index.tsx', import.meta.url), 'utf8');
+const source = fs.readFileSync(process.env.WATCH_PARTY_SCREEN_SOURCE ?? new URL('../app/watch-party/index.tsx', import.meta.url), 'utf8');
 // Execute the complete production screen with real React hooks. Capture its actual JSX
 // instead of rendering native views; no event handler or ownership predicate is copied.
 const code = ts.transpileModule(source, {
@@ -47,9 +47,13 @@ const findSheetPrimary = node => {
 };
 findSheetPrimary(sheetAst); assert.ok(sheetPrimary, 'actual AccessSheet primary declaration exists');
 const activeSheetContinue = async onPurchaseResult => {
+  // This composition witness holds the sheet's local lifetime current; the
+  // complete mounted AccessSheet suite separately exercises its retirement and
+  // single-flight ownership. The actual primary callback still calls this screen.
   const scope = { renderDeferredUnavailable: false, isPremiumGateSheet: true, freshGateEntitled: true,
+    beginAction: () => ({ current: () => true, finish: noop }),
     freshGateEntitledTargetId: 'premium', sheetState: { snapshot: {} }, setLoadingState: noop, setStatusMessage: noop,
-    setStatusTone: noop, onPurchaseResult, onClose: () => assert.fail('current sheet must invoke its parent recheck') };
+    setStatusTone: noop, onPurchaseResult, onCloseTracked: () => assert.fail('current sheet must invoke its parent recheck') };
   vm.runInNewContext(ts.transpileModule(`globalThis.primary = ${sheetPrimary.getText(sheetAst)}`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
   }).outputText, scope);
@@ -62,10 +66,11 @@ const walk = (tree, predicate) => {
 };
 const settle = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
 
-async function mount(t, { normal = false, prepared = true, viewer = false, roomReader = null } = {}) {
+async function mount(t, { normal = false, prepared = true, viewer = false, roomReader = null, offers = [], checkoutAvailable = false, offerSave = null, offerRead = null, setupSave = null } = {}) {
   let tree;
   const runtime = { authority: owner(), focused: true, room: room(), params: { mode: 'live', partyId: 'ROOM01' }, premiumAllowed: true,
-    reads: [], writes: [], premium: [], navigations: [], alerts: [], policy: null, gate: null, userReader: null };
+    reads: [], writes: [], premium: [], navigations: [], alerts: [], policy: null, gate: null, userReader: null,
+    offers, paidWrites: [], setupWrites: [], checkoutCalls: 0 };
   if (normal) {
     runtime.room = { ...room(), roomType: 'title', titleId: 'title-a', sourceType: 'platform_title', sourceId: 'title-a' };
     runtime.params = { source: 'player', titleId: 'title-a', sourceType: 'platform_title', sourceId: 'title-a', ...(prepared ? { partyId: 'ROOM01' } : {}) };
@@ -107,16 +112,22 @@ async function mount(t, { normal = false, prepared = true, viewer = false, roomR
     '../../_lib/partyRoomDiscoveryDestination': { readCurrentPartyRoomDiscoveryDestination: async () => runtime.listed
       ? { partyId: runtime.room.partyId, hostUserId: runtime.room.hostUserId, sourceType: runtime.room.sourceType, sourceId: runtime.room.sourceId } : null },
     '../../_lib/watchPartyContentSources': { resolveWatchPartyContentDisplay: async () => ({ displayName: null }), resolveWatchPartyContentDisplayByParts: async () => ({ displayName: null }), resolveWatchPartySourceId: () => null, resolveWatchPartySourceType: () => null, rememberWatchPartyContentDisplayHandoff: noop },
-    '../../_lib/paidWatchPartyTickets': { listMyPaidWatchPartyOffers: async () => [], formatPaidWatchPartyTicketPrice: () => '', resolvePaidWatchPartyTicketAccess: async () => ({ allowed: true, reason: 'free_room', offer: null }) },
+    '../../_lib/paidWatchPartyTickets': {
+      listMyPaidWatchPartyOffers: async () => offerRead ? offerRead(runtime) : runtime.offers,
+      formatPaidWatchPartyTicketPrice: (cents, currency) => new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100),
+      savePaidWatchPartyOffer: async input => { runtime.paidWrites.push(input); return offerSave(input); },
+      purchasePaidWatchPartyTicket: async () => { runtime.checkoutCalls += 1; throw Error('host setup must not purchase'); },
+      resolvePaidWatchPartyTicketAccess: async () => ({ allowed: true, reason: 'free_room', offer: null }),
+    },
     '../../_lib/monetization': { getMonetizationAccessSheetPresentation: () => ({}) },
     '../../_lib/actionSingleFlight.mjs': { createActionSingleFlightLatch },
     '../../_lib/watchPartyPreparedRoomReuse.mjs': { resolvePreparedWatchPartyRoomReuse },
     '../../_lib/watchPartyReturnNavigation.mjs': { WATCH_PARTY_WAITING_ROOM_ENTRY_SOURCE: 'waiting-room' },
-    '../../_lib/creatorMoneyPurchaseAuthority': { isCreatorDigitalCheckoutShellAvailable: () => false },
+    '../../_lib/creatorMoneyPurchaseAuthority': { isCreatorDigitalCheckoutShellAvailable: () => checkoutAvailable },
     '../../_lib/accessEntitlements': { resolveRoomAccess: async () => ({ isAllowed: runtime.accessAllowed }) },
     '../../_lib/analytics': { trackEvent: noop }, '../../_lib/logger': { debugLog: noop, reportRuntimeError: noop },
     '../../_lib/performancePolicy': { ROOM_HEARTBEAT_MS: 15000 }, '../../_data/titles': { titles: [] },
-    '../../_lib/creatorMonetizationSetup': {}, '../../_lib/watch-party/room-shared': { PLAYER_WATCH_PARTY_SOURCE: 'player' },
+    '../../_lib/creatorMonetizationSetup': { saveCreatorSandboxMonetizationConfig: async input => { runtime.setupWrites.push(input); return setupSave ? setupSave(input) : { id: 'config' }; } }, '../../_lib/watch-party/room-shared': { PLAYER_WATCH_PARTY_SOURCE: 'player' },
     '../../components/monetization/access-sheet': { AccessSheet: 'AccessSheet' },
     '../../components/ui/chillywood-visual-system': { CHILLYWOOD_VISUAL: {}, ChillywoodPrimaryActionFill: 'Fill' },
     './live-stage/[partyId]': { __esModule: true, default: 'LiveStage' },
@@ -460,3 +471,216 @@ test('refocusing the actual waiting room still permits a fresh discovery save', 
   assert.equal(h.runtime.writes.length, 1); assert.equal(h.runtime.room.discoveryVisibility, 'public');
   assert.match(h.text(), /Live discovery saved/);
 });
+
+const sandboxOffer = { id: 'offer-a', partyId: 'ROOM01', status: 'sandbox', priceCents: 99, currency: 'usd', seatLimit: 12 };
+
+test('Party Room sandbox setup stays explicitly test-only after save and a fresh screen mount', async t => {
+  const h = await mount(t, { normal: true, checkoutAvailable: true, offerSave: async () => sandboxOffer });
+  const paid = () => h.find(n => n.props?.testID === 'party-room-entry-paid');
+  assert.equal(paid().accessibilityLabel, 'Set up sandbox Party Room entry at 99 cents');
+  assert.match(h.text(), /Sandbox · \$0\.99/);
+  await h.act(() => paid().onPress());
+  assert.equal(h.runtime.paidWrites.length, 1);
+  assert.equal(h.runtime.paidWrites[0].partyId, 'ROOM01');
+  assert.equal(h.runtime.paidWrites[0].status, 'sandbox');
+  assert.equal(h.runtime.paidWrites[0].priceCents, 99);
+  assert.equal(h.runtime.setupWrites.length, 1);
+  assert.equal(h.runtime.checkoutCalls, 0);
+  assert.equal(paid().accessibilityState.selected, true);
+  assert.match(h.text(), /Saved sandbox entry: \$0\.99\. Test-only; live money is not active/);
+  assert.match(h.text(), /Sandbox Party Room entry saved/);
+
+  const reopened = await mount(t, { normal: true, offers: [sandboxOffer] });
+  assert.match(reopened.text(), /Saved sandbox entry: \$0\.99\. Test-only; live money is not active/);
+  assert.doesNotMatch(reopened.text(), /Sandbox Party Room entry saved/); // No transient success notice on reload.
+  assert.equal(reopened.runtime.paidWrites.length, 0);
+  assert.equal(reopened.runtime.checkoutCalls, 0);
+});
+
+test('Party Room sandbox summary binds the persisted status and price to this exact room', async t => {
+  const h = await mount(t, { normal: true, offers: [
+    { ...sandboxOffer, partyId: 'OTHER', priceCents: 799 },
+    { ...sandboxOffer, priceCents: 249 },
+  ] });
+  assert.match(h.text(), /Saved sandbox entry: \$2\.49/);
+  assert.doesNotMatch(h.text(), /\$7\.99|Viewer preview: Join Party Room — \$0\.99/);
+  assert.match(h.text(), /Party Room Pass gives entry to this exact Party Room only/);
+});
+
+for (const [status, expected] of [['active', 'Saved paid entry: $2.49.'], ['sold_out', 'Saved Party Room entry: Sold out at $2.49.']]) {
+  test(`Party Room sandbox setup does not relabel an existing ${status} offer as a saved sandbox offer`, async t => {
+    const h = await mount(t, { normal: true, offers: [{ ...sandboxOffer, status, priceCents: 249 }] });
+    assert.ok(h.text().includes(expected));
+    assert.doesNotMatch(h.text(), /Saved sandbox entry:/);
+    assert.equal(h.find(n => n.props?.testID === 'party-room-entry-paid').accessibilityState.selected, false);
+    assert.equal(h.runtime.paidWrites.length, 0);
+  });
+}
+
+test('Party Room sandbox save failure preserves Free entry and never claims a saved sandbox offer', async t => {
+  let attempts = 0;
+  const h = await mount(t, { normal: true, checkoutAvailable: true, offerSave: async () => {
+    if (++attempts === 1) throw Error('modeled save failure');
+    return sandboxOffer;
+  } });
+  await h.act(() => h.find(n => n.props?.testID === 'party-room-entry-paid').onPress());
+  assert.match(h.text(), /Viewer preview: Free entry/);
+  assert.doesNotMatch(h.text(), /Saved sandbox entry:|Sandbox Party Room entry saved/);
+  assert.equal(h.runtime.setupWrites.length, 0);
+  assert.equal(h.runtime.checkoutCalls, 0);
+  await h.act(() => h.find(n => n.props?.testID === 'party-room-entry-paid').onPress());
+  assert.equal(h.runtime.paidWrites.length, 2);
+  assert.equal(h.runtime.setupWrites.length, 1);
+  assert.match(h.text(), /Saved sandbox entry: \$0\.99/);
+  assert.equal(h.runtime.checkoutCalls, 0);
+});
+
+test('Party Room sandbox lookup failure keeps the saved setting unknown', async t => {
+  const h = await mount(t, { normal: true, offerRead: async () => { throw Error('modeled read failure'); } });
+  assert.match(h.text(), /Checking the current Party Room entry setting/);
+  assert.doesNotMatch(h.text(), /Saved sandbox entry:|Saved paid entry:|Viewer preview: Free entry/);
+});
+
+for (const rejects of [false, true]) test(`Party Room sandbox saved state survives an older pending offer read (rejects=${rejects})`, async t => {
+  let finish;
+  const pending = new Promise((resolve, reject) => { finish = rejects ? () => reject(Error('obsolete read failure')) : () => resolve([]); });
+  const h = await mount(t, { normal: true, checkoutAvailable: true, offerRead: () => pending, offerSave: async () => sandboxOffer });
+  assert.match(h.text(), /Checking the current Party Room entry setting/);
+  await h.act(() => h.find(n => n.props?.testID === 'party-room-entry-paid').onPress());
+  assert.match(h.text(), /Saved sandbox entry: \$0\.99/);
+  await h.act(() => finish());
+  assert.match(h.text(), /Saved sandbox entry: \$0\.99/);
+  assert.doesNotMatch(h.text(), /Viewer preview: Free entry|Checking the current Party Room entry setting/);
+});
+
+test('Party Room sandbox status clears only after a successful Free save', async t => {
+  const h = await mount(t, { normal: true, offers: [sandboxOffer], offerSave: async () => ({ ...sandboxOffer, status: 'canceled' }) });
+  assert.match(h.text(), /Saved sandbox entry: \$0\.99/);
+  await h.act(() => h.find(n => n.props?.testID === 'party-room-entry-free').onPress());
+  assert.equal(h.runtime.paidWrites[0].status, 'canceled');
+  assert.equal(h.find(n => n.props?.testID === 'party-room-entry-free').accessibilityState.selected, true);
+  assert.match(h.text(), /Viewer preview: Free entry/);
+  assert.doesNotMatch(h.text(), /Saved sandbox entry:|Saved paid entry:/);
+  assert.equal(h.runtime.setupWrites.length, 0);
+  assert.equal(h.runtime.checkoutCalls, 0);
+});
+
+test('Party Room sandbox offer remains visibly saved when follow-up setup fails, and retry completes setup', async t => {
+  let attempts = 0;
+  const h = await mount(t, { normal: true, checkoutAvailable: true, offerSave: async () => sandboxOffer, setupSave: async () => {
+    if (++attempts === 1) throw Error('modeled setup failure after offer persisted');
+    return { id: 'config' };
+  } });
+  await h.act(() => h.find(n => n.props?.testID === 'party-room-entry-paid').onPress());
+  assert.match(h.text(), /Saved sandbox entry: \$0\.99/);
+  assert.match(h.text(), /entry is saved, but setup could not finish\. Retry sandbox setup/);
+  assert.doesNotMatch(h.text(), /Viewer preview: Free entry|Sandbox Party Room entry saved at/);
+  assert.equal(h.find(n => n.props?.testID === 'party-room-entry-paid').disabled, false);
+  await h.act(() => h.find(n => n.props?.testID === 'party-room-entry-paid').onPress());
+  assert.equal(h.runtime.paidWrites.length, 2);
+  assert.equal(h.runtime.setupWrites.length, 2);
+  assert.match(h.text(), /Sandbox Party Room entry saved at \$0\.99/);
+  assert.doesNotMatch(h.text(), /setup could not finish/);
+  assert.equal(h.runtime.checkoutCalls, 0);
+});
+
+for (const [field, value] of [['partyId', 'OTHER'], ['status', 'active'], ['status', 'canceled']]) {
+  test(`Party Room sandbox save with mismatched ${field}=${value} cannot claim the requested setting`, async t => {
+    const h = await mount(t, { normal: true, checkoutAvailable: true, offerSave: async () => ({ ...sandboxOffer, [field]: value }) });
+    await h.act(() => h.find(n => n.props?.testID === 'party-room-entry-paid').onPress());
+    assert.match(h.text(), /entry change could not be confirmed/);
+    assert.doesNotMatch(h.text(), /Saved sandbox entry:|Sandbox Party Room entry saved|Viewer preview: Free entry/);
+    assert.equal(h.runtime.setupWrites.length, 0);
+    assert.equal(h.runtime.checkoutCalls, 0);
+  });
+}
+
+const replaceNormalRoom = async h => {
+  h.runtime.room = { ...h.runtime.room, partyId: 'ROOM02', roomCode: 'ROOM02' };
+  h.runtime.params = { ...h.runtime.params, partyId: 'ROOM02' };
+  h.runtime.offers = [];
+  await h.render();
+};
+
+for (const transition of ['room', 'account', 'generation', 'focus']) {
+  test(`Party Room sandbox save completion cannot project onto a retired ${transition}`, async t => {
+    const pending = deferred();
+    const h = await mount(t, { normal: true, checkoutAvailable: true, offerSave: () => pending.promise });
+    let save;
+    await h.act(() => { save = h.find(n => n.props?.testID === 'party-room-entry-paid').onPress(); });
+    if (transition === 'room') await replaceNormalRoom(h);
+    else if (transition === 'focus') { await h.focus(false); await h.focus(true); }
+    else await h[transition]('replacement');
+    await h.act(async () => { pending.resolve(sandboxOffer); await save; });
+    assert.doesNotMatch(h.text(), /Saved sandbox entry:|Sandbox Party Room entry saved/);
+    assert.equal(h.runtime.setupWrites.length, 0);
+    assert.equal(h.runtime.checkoutCalls, 0);
+  });
+}
+
+test('Party Room sandbox follow-up setup completion cannot publish success on a replacement room', async t => {
+  const pending = deferred();
+  const h = await mount(t, { normal: true, checkoutAvailable: true, offerSave: async () => sandboxOffer, setupSave: () => pending.promise });
+  let save;
+  await h.act(() => { save = h.find(n => n.props?.testID === 'party-room-entry-paid').onPress(); });
+  assert.match(h.text(), /Saved sandbox entry: \$0\.99/);
+  await replaceNormalRoom(h);
+  await h.act(async () => { pending.resolve({ id: 'config' }); await save; });
+  assert.doesNotMatch(h.text(), /Saved sandbox entry:|Sandbox Party Room entry saved/);
+  assert.equal(h.runtime.setupWrites.length, 1);
+  assert.equal(h.runtime.checkoutCalls, 0);
+});
+
+test('Party Room sandbox duplicate saved callbacks dispatch only one offer and setup write', async t => {
+  const pending = deferred();
+  const h = await mount(t, { normal: true, checkoutAvailable: true, offerSave: () => pending.promise });
+  const save = h.find(n => n.props?.testID === 'party-room-entry-paid').onPress;
+  let first;
+  await h.act(() => { first = save(); void save(); });
+  assert.equal(h.runtime.paidWrites.length, 1);
+  await h.act(async () => { pending.resolve(sandboxOffer); await first; });
+  assert.equal(h.runtime.setupWrites.length, 1);
+  assert.match(h.text(), /Saved sandbox entry: \$0\.99/);
+});
+
+test('Party Room sandbox save remains current when the same room audience changes', async t => {
+  const pending = deferred();
+  const h = await mount(t, { normal: true, checkoutAvailable: true, offerSave: () => pending.promise });
+  let save;
+  await h.act(() => { save = h.find(n => n.props?.testID === 'party-room-entry-paid').onPress(); });
+  await h.act(() => h.audience('public').onPress());
+  await h.act(async () => { pending.resolve(sandboxOffer); await save; });
+  assert.match(h.text(), /Saved sandbox entry: \$0\.99/);
+  assert.equal(h.runtime.paidWrites.length, 1);
+  assert.equal(h.runtime.setupWrites.length, 1);
+  assert.equal(h.runtime.room.discoveryVisibility, 'public');
+});
+
+for (const transition of ['focus', 'background']) {
+  for (const settleBeforeReturn of [true, false]) {
+    test(`Party Room reconciles durable sandbox save across ${transition}, settle before return=${settleBeforeReturn}`, async t => {
+      const pending = deferred();
+      const h = await mount(t, { normal: true, checkoutAvailable: true, offerSave: () => pending.promise });
+      let save;
+      await h.act(() => { save = h.find(n => n.props?.testID === 'party-room-entry-paid').onPress(); });
+      if (transition === 'focus') await h.focus(false); else await h.state('background');
+      const finish = async () => {
+        h.runtime.offers = [sandboxOffer];
+        await h.act(async () => { pending.resolve(sandboxOffer); await save; });
+      };
+      if (settleBeforeReturn) await finish();
+      if (transition === 'focus') await h.focus(true); else await h.state('active');
+      if (!settleBeforeReturn) {
+        // Resuming cannot release the in-flight write latch or advertise Free.
+        await h.act(() => h.find(n => n.props?.testID === 'party-room-entry-paid').onPress());
+        assert.equal(h.runtime.paidWrites.length, 1);
+        assert.doesNotMatch(h.text(), /Viewer preview: Free entry/);
+        await finish();
+      }
+      assert.match(h.text(), /Saved sandbox entry:/);
+      assert.doesNotMatch(h.text(), /Sandbox Party Room entry saved|Viewer preview: Free entry/);
+      assert.equal(h.runtime.setupWrites.length, 0);
+      assert.equal(h.runtime.checkoutCalls, 0);
+    });
+  }
+}

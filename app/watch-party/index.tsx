@@ -56,6 +56,7 @@ import {
   purchasePaidWatchPartyTicket,
   resolvePaidWatchPartyTicketAccess,
   savePaidWatchPartyOffer,
+  type PaidWatchPartyOffer,
   type PaidWatchPartyTicketAccess,
 } from "../../_lib/paidWatchPartyTickets";
 import { saveCreatorSandboxMonetizationConfig } from "../../_lib/creatorMonetizationSetup";
@@ -303,6 +304,9 @@ export default function WatchPartyIndexScreen() {
   const [paidTicketNotice, setPaidTicketNotice] = useState<string | null>(null);
   const [paidTicketSeatLimit, setPaidTicketSeatLimit] = useState("12");
   const [partyRoomEntryPaid, setPartyRoomEntryPaid] = useState<boolean | null>(null);
+  const [partyRoomEntryOffer, setPartyRoomEntryOffer] = useState<PaidWatchPartyOffer | null>(null);
+  const partyRoomEntryReadVersionRef = useRef(0);
+  const partyRoomEntrySaveRef = useRef<object | null>(null);
   const [liveDiscoveryVisibility, setLiveDiscoveryVisibility] = useState<WatchPartyDiscoveryVisibility>("private");
   const [liveDiscoveryTitle, setLiveDiscoveryTitle] = useState("");
   const [discoverySaveStatus, setDiscoverySaveStatus] = useState<"idle" | "dirty" | "saving" | "saved" | "error">("idle");
@@ -361,6 +365,7 @@ export default function WatchPartyIndexScreen() {
     setPaidTicketNotice(null);
     setPaidTicketBusy(false);
     setPartyRoomEntryPaid(null);
+    setPartyRoomEntryOffer(null);
   }, [entryLaneKey]);
 
   const resolveContentDisplayName = useCallback(async (input: {
@@ -449,32 +454,43 @@ export default function WatchPartyIndexScreen() {
   const paidWatchPartyCheckoutAvailable = useMemo(() => {
     return isCreatorDigitalCheckoutShellAvailable();
   }, []);
+  const partyRoomEntryPartyId = String((preparedRoom?.room ?? preview?.room)?.partyId ?? "").trim();
+  const partyRoomEntryRoomType = (preparedRoom?.room ?? preview?.room)?.roomType;
 
   useEffect(() => {
-    const targetRoom = preparedRoom?.room ?? preview?.room ?? null;
-    const targetPartyId = String(targetRoom?.partyId ?? "").trim();
-    if (hostLabel !== "You are hosting" || !targetPartyId || targetRoom?.roomType === "live") {
-      setPartyRoomEntryPaid(null);
+    partyRoomEntrySaveRef.current = null;
+    setPaidTicketBusy(false);
+    setPartyRoomEntryPaid(null);
+    setPartyRoomEntryOffer(null);
+  }, [hostLabel, partyRoomEntryPartyId, partyRoomEntryRoomType, waitingOwnerKey]);
+
+  useEffect(() => {
+    setPartyRoomEntryPaid(null);
+    setPartyRoomEntryOffer(null);
+    if (!waitingFocusedRef.current || AppState.currentState !== "active" || partyRoomEntrySaveRef.current) return;
+    if (hostLabel !== "You are hosting" || !partyRoomEntryPartyId || partyRoomEntryRoomType === "live") {
       return;
     }
     let active = true;
+    const readVersion = ++partyRoomEntryReadVersionRef.current;
     listMyPaidWatchPartyOffers()
       .then((offers) => {
-        if (!active) return;
+        if (!active || readVersion !== partyRoomEntryReadVersionRef.current) return;
         const enabledOffer = offers.find((offer) => (
-          offer.partyId === targetPartyId
+          offer.partyId === partyRoomEntryPartyId
           && ["sandbox", "active", "sold_out"].includes(offer.status)
         ));
         setPartyRoomEntryPaid(!!enabledOffer);
+        setPartyRoomEntryOffer(enabledOffer ?? null);
         if (enabledOffer?.seatLimit) setPaidTicketSeatLimit(String(enabledOffer.seatLimit));
       })
       .catch(() => {
-        if (active) setPartyRoomEntryPaid(null);
+        if (active && readVersion === partyRoomEntryReadVersionRef.current) setPartyRoomEntryPaid(null);
       });
     return () => {
       active = false;
     };
-  }, [hostLabel, preparedRoom?.room, preview?.room]);
+  }, [hostLabel, partyRoomEntryPartyId, partyRoomEntryRoomType, waitingOwnerKey, waitingResumeGeneration]);
 
   useEffect(() => {
     if (!canUseBetaRooms || !configReady || !features.watchPartyEnabled) return;
@@ -1133,6 +1149,8 @@ export default function WatchPartyIndexScreen() {
   };
 
   const onSavePaidTicketOffer = useCallback(async (paid: boolean) => {
+    const ownerIsCurrent = captureWaitingOwner();
+    if (!ownerIsCurrent() || partyRoomEntrySaveRef.current) return;
     if (paid && !paidWatchPartyCheckoutAvailable) {
       setPaidTicketNotice("Paid Party Room entry is not available for this account yet. Nothing was charged.");
       return;
@@ -1144,6 +1162,10 @@ export default function WatchPartyIndexScreen() {
       return;
     }
     const seatLimit = Number.parseInt(paidTicketSeatLimit, 10);
+    const operation = {};
+    partyRoomEntrySaveRef.current = operation;
+    const isCurrent = () => ownerIsCurrent() && partyRoomEntrySaveRef.current === operation;
+    let savedOffer: PaidWatchPartyOffer | null = null;
     setPaidTicketBusy(true);
     setPaidTicketNotice(null);
     try {
@@ -1154,6 +1176,18 @@ export default function WatchPartyIndexScreen() {
         seatLimit: Number.isFinite(seatLimit) && seatLimit > 0 ? seatLimit : null,
         status: paid ? "sandbox" : "canceled",
       });
+      if (!isCurrent()) return;
+      partyRoomEntryReadVersionRef.current += 1;
+      if (offer.partyId !== partyId || offer.status !== (paid ? "sandbox" : "canceled")) {
+        setPartyRoomEntryPaid(null);
+        setPartyRoomEntryOffer(null);
+        setPaidTicketNotice("Party Room entry change could not be confirmed. Check the saved setting before retrying.");
+        return;
+      }
+      savedOffer = offer;
+      setPaidTicketGate(null);
+      setPartyRoomEntryPaid(paid);
+      setPartyRoomEntryOffer(paid ? offer : null);
       if (paid) {
         await saveCreatorSandboxMonetizationConfig({
           displayName: "Party Room Pass",
@@ -1166,12 +1200,11 @@ export default function WatchPartyIndexScreen() {
           sourceId: offer.id,
           sourceType: "watch_party_live",
         });
+        if (!isCurrent()) return;
       }
-      setPaidTicketGate(null);
-      setPartyRoomEntryPaid(paid);
       setPaidTicketNotice(
         paid
-          ? `Party Room entry is Paid at ${formatPaidWatchPartyTicketPrice(offer.priceCents, offer.currency)}. Viewers receive a Party Room Pass for this exact room. Live money is not active.`
+          ? `Sandbox Party Room entry saved at ${formatPaidWatchPartyTicketPrice(offer.priceCents, offer.currency)}. Test-only; live money is not active. Viewers receive a Party Room Pass for this exact room.`
           : "Party Room entry is Free. Any prior offer is no longer purchasable; existing financial history remains unchanged.",
       );
       trackEvent("money_offer_created", {
@@ -1182,6 +1215,11 @@ export default function WatchPartyIndexScreen() {
         source_surface: "party_waiting_room",
       });
     } catch (error) {
+      if (!isCurrent()) return;
+      if (savedOffer) {
+        setPaidTicketNotice("Sandbox Party Room entry is saved, but setup could not finish. Retry sandbox setup. Live money is not active.");
+        return;
+      }
       const message = error instanceof Error ? error.message : "";
       if (
         message === "Enter a real source UUID before saving."
@@ -1197,9 +1235,17 @@ export default function WatchPartyIndexScreen() {
         setPaidTicketNotice("Party Room entry setup is not available for this room yet.");
       }
     } finally {
-      setPaidTicketBusy(false);
+      if (partyRoomEntrySaveRef.current === operation) {
+        partyRoomEntrySaveRef.current = null;
+        setPaidTicketBusy(false);
+        // A retired callback cannot publish success, but its durable write must
+        // be reconciled after focus/foreground returns, even if it settled later.
+        if (!ownerIsCurrent() && waitingOwnerRef.current === waitingOwnerKey) {
+          setWaitingResumeGeneration(value => value + 1);
+        }
+      }
     }
-  }, [entryTitleName, paidTicketSeatLimit, paidWatchPartyCheckoutAvailable, preparedRoom, preview]);
+  }, [captureWaitingOwner, entryTitleName, paidTicketSeatLimit, paidWatchPartyCheckoutAvailable, preparedRoom, preview, waitingOwnerKey]);
 
   const onBuyPaidTicketAndJoin = useCallback(async () => {
     if (!paidWatchPartyCheckoutAvailable) {
@@ -1950,6 +1996,14 @@ export default function WatchPartyIndexScreen() {
     ? formatPaidWatchPartyTicketPrice(paidTicketGate.priceCents, paidTicketGate.currency)
     : null;
   const paidTicketCheckoutReady = paidWatchPartyCheckoutAvailable && !!paidTicketPriceLabel;
+  const savedPartyRoomEntryPrice = partyRoomEntryOffer
+    ? formatPaidWatchPartyTicketPrice(partyRoomEntryOffer.priceCents, partyRoomEntryOffer.currency)
+    : null;
+  const savedPartyRoomEntryCopy = partyRoomEntryOffer?.status === "sandbox"
+    ? `Saved sandbox entry: ${savedPartyRoomEntryPrice}. Test-only; live money is not active. Party Room Pass gives entry to this exact Party Room only.`
+    : partyRoomEntryOffer?.status === "sold_out"
+      ? `Saved Party Room entry: Sold out at ${savedPartyRoomEntryPrice}. Party Room Pass gives entry to this exact Party Room only.`
+      : `Saved paid entry: ${savedPartyRoomEntryPrice}. Party Room Pass gives entry to this exact Party Room only.`;
   const roomCodeButtonLabel = topRoomCode ? "Generate New Code" : "Generate Room Code";
   const watchPartyPremiumGatePresentation = watchPartyPremiumGate
     ? getMonetizationAccessSheetPresentation({
@@ -2081,12 +2135,12 @@ export default function WatchPartyIndexScreen() {
           <View style={styles.permissionsCard}>
             <AppText scale="caption" style={styles.permissionsLabel}>PARTY ROOM ENTRY</AppText>
             <AppText scale="footnote" style={styles.permissionsBody}>
-              Choose Free or Paid entry for this exact Party Room. Paid entry uses a Party Room Pass; it never grants Live Stage, speaker, host, moderator, or broadcast permission.
+              A Party Room Pass gives entry to this exact Party Room only. It never grants Live Stage, speaker, host, moderator, or broadcast permission.
             </AppText>
             <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this Party Room Pass unlock?" />
             {hostLabel === "You are hosting" ? (
               <>
-                <AppText scale="footnote" style={styles.permissionsBody}>Party Room entry price: $0.99. Customer availability depends on device and account eligibility.</AppText>
+                <AppText scale="footnote" style={styles.permissionsBody}>Choose Free entry or set up a sandbox Party Room Pass at $0.99. Sandbox setup is test-only; live money is not active. Availability depends on device and account eligibility.</AppText>
                 <TextInput
                   value={paidTicketSeatLimit}
                   onChangeText={setPaidTicketSeatLimit}
@@ -2111,23 +2165,23 @@ export default function WatchPartyIndexScreen() {
                     <AppText scale="footnote" style={styles.generateCodeButtonText}>{paidTicketBusy ? "Saving" : "Free"}</AppText>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.generateCodeButton, partyRoomEntryPaid === true && styles.generateCodeButtonSelected, (paidTicketBusy || !paidWatchPartyCheckoutAvailable) && styles.generateCodeButtonDisabled]}
+                    style={[styles.generateCodeButton, partyRoomEntryOffer?.status === "sandbox" && styles.generateCodeButtonSelected, (paidTicketBusy || !paidWatchPartyCheckoutAvailable) && styles.generateCodeButtonDisabled]}
                     onPress={() => void onSavePaidTicketOffer(true)}
                     activeOpacity={0.85}
                     disabled={paidTicketBusy || !paidWatchPartyCheckoutAvailable}
                     accessibilityRole="button"
-                    accessibilityLabel="Charge for Party Room entry at 99 cents"
-                    accessibilityState={{ selected: partyRoomEntryPaid === true, disabled: paidTicketBusy || !paidWatchPartyCheckoutAvailable }}
+                    accessibilityLabel="Set up sandbox Party Room entry at 99 cents"
+                    accessibilityState={{ selected: partyRoomEntryOffer?.status === "sandbox", disabled: paidTicketBusy || !paidWatchPartyCheckoutAvailable }}
                     testID="party-room-entry-paid"
                   >
-                    <AppText scale="footnote" style={styles.generateCodeButtonText}>{paidTicketBusy ? "Saving" : "Paid · $0.99"}</AppText>
+                    <AppText scale="footnote" style={styles.generateCodeButtonText}>{paidTicketBusy ? "Saving" : "Sandbox · $0.99"}</AppText>
                   </TouchableOpacity>
                 </View>
                 <AppText scale="caption" style={styles.permissionsBody}>
                   {partyRoomEntryPaid === null
                     ? "Checking the current Party Room entry setting…"
                     : partyRoomEntryPaid
-                      ? "Viewer preview: Join Party Room — $0.99. Party Room Pass gives entry to this exact Party Room only."
+                      ? savedPartyRoomEntryCopy
                       : "Viewer preview: Free entry to this exact Party Room. No Party Room Pass is required."}
                 </AppText>
               </>

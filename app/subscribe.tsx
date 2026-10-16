@@ -510,7 +510,7 @@ export default function SubscribeScreen() {
       });
       if (!currentOwner()) return;
       const currentSnapshot = getCachedMonetizationSnapshot();
-      setNotice(currentSnapshot.targets.premium_subscription.hasEntitlement
+      setNotice(result.ok && currentSnapshot.targets.premium_subscription.hasEntitlement
         ? "Purchases restored. Premium is active."
         : result.message);
       setSnapshot(currentSnapshot);

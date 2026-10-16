@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { deferred, loadStudioFocusCallback, loadStudioFunctions } from "./helpers/studio-source-harness.mjs";
+import { loadStubbed } from "./customer-experience-adversarial-helpers.mjs";
+import { createClient } from "@supabase/supabase-js";
 
 const text = (value) => String(value ?? "").trim();
+const { UserFacingError } = loadStubbed("_lib/userFacingErrors.ts");
 
 function profileHarness() {
   let owner = "creator-a";
@@ -64,10 +67,14 @@ test("Studio rejects stale initiating owner before remote IO and account changes
 test("Brand draft saves omit publication metadata even for a previously published profile", async () => {
   const payloads = [];
   const api = loadStudioFunctions("_lib/platformBranding.ts", ["toProfileUpsert", "savePlatformBrandProfileDraft"], {
-    toText: text, parseProfile: (row) => row, PLATFORM_BRAND_PROFILE_SELECT: "*",
+    toText: text, parseProfile: (row) => row, PLATFORM_BRAND_PROFILE_SELECT: "*", UserFacingError,
+    getCurrentAccountSessionAuthoritySnapshot: () => ({ userId: "creator", state: "ACTIVE", restoreOnly: false }),
+    sameAccountSessionAuthority: (a, b) => a?.userId === b?.userId,
+    captureAccountBoundSupabaseMutationSubject: async () => ({ accessToken: "fixture-token" }),
+    invokeAccountBoundSupabaseMutationRpc: async () => ({ data: [{ user_id: "creator" }], error: null }),
     supabase: { from: () => ({ upsert: (payload) => {
       payloads.push(payload);
-      return { select: () => ({ returns: () => ({ single: async () => ({
+      return { setHeader() { return this; }, select: () => ({ returns: () => ({ single: async () => ({
         data: { ...payload, published_at: "server-owned-existing-time" }, error: null,
       }) }) }) };
     } }) },
@@ -78,6 +85,130 @@ test("Brand draft saves omit publication metadata even for a previously publishe
     assert.equal(Object.hasOwn(payloads.at(-1), "published_at"), false);
     assert.equal(payloads.at(-1).accent_color, "#123456");
   }
+});
+
+function brandDraftCompatibilityHarness() {
+  let authority = { userId: "creator", accountId: "creator", state: "ACTIVE", restoreOnly: false, sessionGeneration: "first" };
+  let capability = { data: [{ user_id: "creator" }], error: null };
+  let writeResult = null;
+  const writes = [], reads = [], writeStarted = deferred(), capabilityStarted = deferred();
+  const api = loadStudioFunctions("_lib/platformBranding.ts", ["toProfileUpsert", "savePlatformBrandProfileDraft"], {
+    toText: text, parseProfile: (row) => row, PLATFORM_BRAND_PROFILE_SELECT: "*", UserFacingError,
+    getCurrentAccountSessionAuthoritySnapshot: () => authority && ({ ...authority }),
+    sameAccountSessionAuthority: loadStudioFunctions("_lib/accountSessionAuthority.ts", ["sameAccountSessionAuthority"], {}).sameAccountSessionAuthority,
+    captureAccountBoundSupabaseMutationSubject: async (owner) => { assert.equal(owner, "creator"); return { accessToken: "fixture-token", authority: { ...authority } }; },
+    invokeAccountBoundSupabaseMutationRpc: async (subject, name, args) => {
+      reads.push([name, args, subject.authority.userId]); capabilityStarted.resolve(); return await capability;
+    },
+    supabase: { from: (table) => ({ upsert: (payload) => {
+      assert.equal(table, "platform_brand_profiles"); writes.push(payload); writeStarted.resolve();
+      return { setHeader(name, value) { assert.equal(name, "Authorization"); assert.equal(value, "Bearer fixture-token"); return this; },
+        select: () => ({ returns: () => ({ single: async () => await writeResult ?? ({ data: payload, error: null }) }) }) };
+    } }) },
+  });
+  return { api, writes, reads, writeStarted: writeStarted.promise, capabilityStarted: capabilityStarted.promise,
+    setCapability(value) { capability = value; }, setWriteResult(value) { writeResult = value; },
+    setAuthority(value) { authority = value; }, authority: () => ({ ...authority }) };
+}
+
+test("Brand draft compatibility rejects unavailable, denied and malformed capability without any draft write", async () => {
+  const h = brandDraftCompatibilityHarness();
+  for (const response of [
+    { data: null, error: { code: "PGRST202", message: "missing function" } },
+    { data: null, error: { code: "42501", message: "denied" } },
+    { data: [{ user_id: "creator" }], error: { message: "transport failed" } },
+    { data: null, error: null }, { data: [], error: null },
+    { data: [{ user_id: "other" }], error: null },
+    { data: [{ user_id: "creator" }, { user_id: "creator" }], error: null },
+    { data: { user_id: "creator" }, error: null },
+  ]) {
+    h.setCapability(response);
+    await assert.rejects(h.api.savePlatformBrandProfileDraft("creator", { accentColor: "#123456" }), /draft saving is temporarily unavailable/);
+    assert.equal(h.writes.length, 0);
+  }
+  assert.ok(h.reads.every(([name, args, owner]) => name === "read_public_platform_identity"
+    && args.profile_user_id === "creator" && owner === "creator"));
+});
+
+test("Brand draft compatibility retries unchanged edits and never caches a prior successful capability", async () => {
+  const h = brandDraftCompatibilityHarness(), draft = { accentColor: "#123456", publishedAt: "forged" };
+  h.setCapability({ data: null, error: { code: "PGRST202" } });
+  await assert.rejects(h.api.savePlatformBrandProfileDraft("creator", draft), /temporarily unavailable/);
+  h.setCapability({ data: [{ user_id: "creator" }], error: null });
+  await h.api.savePlatformBrandProfileDraft("creator", draft);
+  assert.equal(h.writes.length, 1); assert.equal(h.writes[0].accent_color, "#123456");
+  assert.equal(Object.hasOwn(h.writes[0], "published_at"), false);
+  h.setCapability({ data: null, error: { code: "PGRST202" } });
+  await assert.rejects(h.api.savePlatformBrandProfileDraft("creator", draft), /temporarily unavailable/);
+  assert.equal(h.reads.length, 3); assert.equal(h.writes.length, 1);
+});
+
+test("Brand draft compatibility rejects account, session-generation and restore-only replacement while capability is pending", async () => {
+  for (const replacement of [null,
+    { userId: "other", accountId: "other", sessionGeneration: "second", state: "ACTIVE", restoreOnly: false },
+    { userId: "creator", accountId: "creator", sessionGeneration: "second", state: "ACTIVE", restoreOnly: false },
+    { userId: "creator", accountId: "creator", sessionGeneration: "first", state: "ACTIVE", restoreOnly: true },
+  ]) {
+    const h = brandDraftCompatibilityHarness(), pending = deferred(); h.setCapability(pending.promise);
+    const save = h.api.savePlatformBrandProfileDraft("creator", {});
+    await h.capabilityStarted;
+    h.setAuthority(replacement); pending.resolve({ data: [{ user_id: "creator" }], error: null });
+    await assert.rejects(save, /account changed/); assert.equal(h.writes.length, 0);
+  }
+  for (const invalid of [null, { state: "PENDING" }, { restoreOnly: true }, { userId: "other" }]) {
+    const h = brandDraftCompatibilityHarness(); h.setAuthority(invalid && { ...h.authority(), ...invalid });
+    await assert.rejects(h.api.savePlatformBrandProfileDraft("creator", {}), /account changed/);
+    assert.equal(h.reads.length, 0); assert.equal(h.writes.length, 0);
+  }
+});
+
+test("Brand draft compatibility never acknowledges a write after the initiating session is replaced", async () => {
+  const h = brandDraftCompatibilityHarness(), pending = deferred(); h.setWriteResult(pending.promise);
+  const save = h.api.savePlatformBrandProfileDraft("creator", {});
+  await h.writeStarted;
+  assert.equal(h.writes.length, 1);
+  h.setAuthority({ ...h.authority(), sessionGeneration: "replacement" });
+  pending.resolve({ data: { owner_user_id: "creator" }, error: null });
+  await assert.rejects(save, /account changed/);
+});
+
+test("Brand draft production helper freezes the real Supabase SDK request token across delayed auth resolution", async () => {
+  const first = { userId: "creator", accountId: "creator", state: "ACTIVE", restoreOnly: false, sessionGeneration: "first" };
+  let authority = first;
+  const authStarted = deferred(), authRelease = deferred(), requests = [];
+  let authReads = 0;
+  const client = createClient("https://ci.invalid", "ci-placeholder-not-a-secret", {
+    accessToken: async () => {
+      // Supabase initializes Realtime auth once at construction. Hold the
+      // subsequent REST request's real token resolution, not that setup read.
+      if (++authReads === 1) return "initial-fixture-token";
+      authStarted.resolve(); await authRelease.promise; return "replacement-fixture-token";
+    },
+    global: { fetch: async (url, options) => {
+      requests.push({ url: String(url), authorization: new Headers(options.headers).get("Authorization"), body: JSON.parse(options.body) });
+      return new Response(JSON.stringify({ owner_user_id: "creator", accent_color: "#123456" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    } },
+  });
+  const api = loadStubbed(`${process.env.STUDIO_SOURCE_ROOT || process.cwd()}/_lib/platformBranding.ts`, {
+    "./userFacingErrors": { UserFacingError }, "./supabase": { supabase: client },
+    "./accountSessionAuthority": { getCurrentAccountSessionAuthoritySnapshot: () => authority,
+      sameAccountSessionAuthority: loadStudioFunctions("_lib/accountSessionAuthority.ts", ["sameAccountSessionAuthority"], {}).sameAccountSessionAuthority },
+    "./accountBoundSupabaseMutation": {
+      captureAccountBoundSupabaseMutationSubject: async (owner) => { assert.equal(owner, "creator"); return { accessToken: "initiating-fixture-token", authority: first }; },
+      invokeAccountBoundSupabaseMutationRpc: async (subject, name, args) => {
+        assert.equal(subject.accessToken, "initiating-fixture-token"); assert.equal(name, "read_public_platform_identity");
+        assert.equal(args.profile_user_id, "creator"); return { data: [{ user_id: "creator" }], error: null };
+      },
+    },
+  });
+  const save = api.savePlatformBrandProfileDraft("creator", { accentColor: "#123456" });
+  await authStarted.promise;
+  authority = { ...first, sessionGeneration: "replacement" }; authRelease.resolve();
+  await assert.rejects(save, /account changed/);
+  assert.equal(requests.length, 1, "Already-dispatched write is observed, not claimed cancelled");
+  assert.match(requests[0].url, /\/rest\/v1\/platform_brand_profiles\?/);
+  assert.equal(requests[0].authorization, "Bearer initiating-fixture-token");
+  assert.equal(requests[0].body.owner_user_id, "creator"); assert.equal(requests[0].body.accent_color, "#123456");
 });
 
 test("Brand publish is one owner-bound RPC, removes forged timestamps and rejects wrong-owner acknowledgements", async () => {

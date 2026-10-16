@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { makeFixture, ids, read } from "./helpers/studio-authority-fixture.mjs";
 import { loadStudioFunctions } from "./helpers/studio-source-harness.mjs";
+import { loadStubbed } from "./customer-experience-adversarial-helpers.mjs";
 
 const migration = "supabase/migrations/20261015073423_platform_studio_publication_and_audience_authority.sql";
 const text = (value) => String(value ?? "").trim();
+const { UserFacingError } = loadStubbed("_lib/userFacingErrors.ts");
 
 test("production Studio helpers cross the actual publication, identity, count and review SQL authority", async (t) => {
   const { db, as, user } = await makeFixture();
@@ -19,12 +21,25 @@ test("production Studio helpers cross the actual publication, identity, count an
     } catch (error) { return { data: null, error }; }
   };
   const brand = loadStudioFunctions("_lib/platformBranding.ts", ["createDefaultPlatformBrandProfile", "toProfileUpsert", "savePlatformBrandProfileDraft", "publishPlatformBrandProfile"], {
-    toText: text, PLATFORM_BRAND_PROFILE_SELECT: "*", parseProfile: (row) => row,
-    runCurrentAccountBoundSupabaseMutationRpc: async (name, args, expectedOwner) => {
-      assert.equal(expectedOwner, viewer, "Client binds the initiating owner");
-      return rpc(name, args);
+    toText: text, PLATFORM_BRAND_PROFILE_SELECT: "*", parseProfile: (row) => row, UserFacingError,
+    getCurrentAccountSessionAuthoritySnapshot: () => ({ userId: viewer, state: "ACTIVE", restoreOnly: false }),
+    sameAccountSessionAuthority: (a, b) => a?.userId === b?.userId,
+    captureAccountBoundSupabaseMutationSubject: async (expectedOwner) => {
+      assert.equal(expectedOwner, viewer); return { accessToken: "fixture-token", authority: { userId: viewer } };
     },
-    supabase: { from: (table) => ({ upsert: (payload) => ({ select: () => ({ returns: () => ({ single: async () => {
+    invokeAccountBoundSupabaseMutationRpc: async (subject, name, args) => {
+      assert.equal(subject.authority.userId, viewer); assert.equal(name, "read_public_platform_identity");
+      try {
+        const result = await user(viewer, "select * from public.read_public_platform_identity(profile_user_id => $1)", [args.profile_user_id]);
+        return { data: result.rows, error: null };
+      } catch (error) { return { data: null, error }; }
+    },
+    runCurrentAccountBoundSupabaseMutationRpc: async (name, args, expectedOwner) => {
+      assert.equal(expectedOwner, viewer, "Client binds the initiating owner"); return rpc(name, args);
+    },
+    supabase: { from: (table) => ({ upsert: (payload) => ({
+      setHeader(name, value) { assert.equal(name, "Authorization"); assert.equal(value, "Bearer fixture-token"); return this; },
+      select: () => ({ returns: () => ({ single: async () => {
       assert.equal(table, "platform_brand_profiles");
       const entries = Object.entries(payload).filter(([, value]) => value !== undefined);
       const names = entries.map(([key]) => key);
@@ -39,8 +54,13 @@ test("production Studio helpers cross the actual publication, identity, count an
   const profile = brand.createDefaultPlatformBrandProfile(ids.owner);
   await db.query("insert into public.platform_brand_profiles(owner_user_id,published_at) values($1,now())", [ids.owner]);
 
-  await t.test("old SQL control reproduces Save Draft leakage before repair", async () => {
-    await brand.savePlatformBrandProfileDraft(ids.owner, { accentColor: "#123456", themePreset: "studio_red" });
+  await t.test("new draft helper refuses old SQL while the legacy direct-write control still leaks", async () => {
+    const before = (await db.query("select to_jsonb(profile) row from public.platform_brand_profiles profile where owner_user_id=$1", [ids.owner])).rows[0].row;
+    await assert.rejects(brand.savePlatformBrandProfileDraft(ids.owner, { accentColor: "#ABCDEF", themePreset: "studio_red" }), /temporarily unavailable/);
+    assert.deepEqual((await db.query("select to_jsonb(profile) row from public.platform_brand_profiles profile where owner_user_id=$1", [ids.owner])).rows[0].row, before, "Missing Studio contract cannot mutate even a previously published row");
+    // This is the actual old database path, intentionally bypassing the new
+    // client guard as an old-client negative control. It remains unsafe.
+    await user(ids.owner, "update public.platform_brand_profiles set accent_color='#123456',theme_preset='studio_red' where owner_user_id=$1", [ids.owner]);
     await user(ids.owner, "update public.platform_brand_profiles set published_at='2099-01-01T00:00:00Z' where owner_user_id=$1", [ids.owner]);
     assert.equal((await db.query("select published_at='2099-01-01T00:00:00Z'::timestamptz as forged_timestamp_accepted from public.platform_brand_profiles where owner_user_id=$1", [ids.owner])).rows[0].forged_timestamp_accepted, true, "Old metadata authority accepts a client-authored publication timestamp");
     const oldPublic = await as("anon", null, "select accent_color from public.read_public_platform_brand_profile($1)", [ids.owner]);
@@ -48,6 +68,14 @@ test("production Studio helpers cross the actual publication, identity, count an
   });
 
   await db.exec(read(migration));
+  await t.test("migrated private Platform owner can save a draft without exposing it publicly", async () => {
+    await db.query("update public.user_profiles set platform_access_visibility='private' where user_id=$1", [ids.owner]);
+    await brand.savePlatformBrandProfileDraft(ids.owner, { accentColor: "#112233" });
+    assert.equal((await db.query("select accent_color from public.platform_brand_profiles where owner_user_id=$1", [ids.owner])).rows[0].accent_color, "#112233");
+    assert.equal((await as("anon", null, "select * from public.read_public_platform_brand_profile($1)", [ids.owner])).rows.length, 0);
+    assert.equal((await db.query("select accent_color from public.platform_brand_publications where owner_user_id=$1", [ids.owner])).rows[0].accent_color, "#123456");
+    await db.query("update public.user_profiles set platform_access_visibility='public' where user_id=$1", [ids.owner]);
+  });
   await t.test("obsolete direct publication upsert fails closed while unchanged draft metadata remains accepted", async () => {
     const before = (await db.query("select to_jsonb(profile) row from public.platform_brand_profiles profile where owner_user_id=$1", [ids.owner])).rows[0].row;
     await assert.rejects(user(ids.owner, `insert into public.platform_brand_profiles(owner_user_id,accent_color,published_at)

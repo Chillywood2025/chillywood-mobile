@@ -3,6 +3,7 @@ import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.ty
 
 import { readAppConfig, resolveRoomDefaultConfig } from "./appConfig";
 import { runKeyedSingleFlight } from "./actionSingleFlight.mjs";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, type AccountSessionAuthorityBinding } from "./accountSessionAuthority";
 import { debugLog, reportRuntimeError } from "./logger";
 import {
   createEmptyMonetizationGateResolution,
@@ -49,7 +50,7 @@ import {
   type SocialAttachment,
 } from "./socialAttachments";
 import { supabase } from "./supabase";
-import { assertAccountBoundSupabaseMutationSubjectCurrent, captureAccountBoundSupabaseMutationSubject, invokeAccountBoundSupabaseMutationRpc, runExactSessionAccountBoundSupabaseMutationRpc, type AccountBoundSupabaseMutationSubject } from "./accountBoundSupabaseMutation";
+import { AccountBoundSupabaseMutationError, assertAccountBoundSupabaseMutationSubjectCurrent, captureAccountBoundSupabaseMutationSubject, invokeAccountBoundSupabaseMutationRpc, runExactSessionAccountBoundSupabaseMutationRpc, type AccountBoundSupabaseMutationSubject } from "./accountBoundSupabaseMutation";
 import { readUserProfile } from "./userData";
 export {
   PARTY_SEAT_REQUEST_MESSAGE_PREFIX,
@@ -302,6 +303,7 @@ type PartyRoomLegacyBaseRow = Pick<
   | "title_id"
   | "playback_position_millis"
   | "playback_state"
+  | "is_active"
   | "started_at"
   | "updated_at"
 >;
@@ -866,10 +868,6 @@ async function resolvePartyTitleId(inputTitleId: string): Promise<string | null>
   return null;
 }
 
-async function resolvePartyHostUserId(_inputHostUserId: string): Promise<string | null> {
-  return getAuthBackedUserId();
-}
-
 async function fetchPartyRoomRow(lookupPartyId: string): Promise<PartyRoomRow | null> {
   const normalizedPartyId = String(lookupPartyId ?? "").trim().toUpperCase();
   if (!normalizedPartyId) return null;
@@ -978,12 +976,27 @@ async function upsertMembership(options: MembershipUpsertOptions): Promise<Watch
 
 const partyRoomCreateFlights = new Map<string, Promise<unknown>>();
 
+// A lost acknowledgement, timeout, or gateway error can follow a committed
+// insert. Only known statement rejections prove no commit. Representation or
+// unknown PostgREST errors must not release a caller's creation latch.
+const isRejectedPartyRoomCreateResponse = (error: unknown, status: number) => {
+  const raw = (error ?? {}) as { code?: unknown; message?: unknown };
+  return Number.isInteger(status) && status >= 400 && status < 500
+    && status !== 408 && status !== 499
+    && typeof raw.code === "string"
+    && ["23505", "23503", "23514", "23502", "42501", "42703", "42P01", "PGRST204"].includes(raw.code)
+    && typeof raw.message === "string" && Boolean(raw.message.trim());
+};
+
 const getPartyRoomCreateFlightKey = (
   titleId: string | null | undefined,
   hostUserId: string,
+  authority: AccountSessionAuthorityBinding,
   options?: WatchPartyRoomCreateOptions,
 ) => JSON.stringify([
   String(hostUserId ?? "").trim(),
+  authority.accountId,
+  authority.sessionGeneration,
   String(titleId ?? "").trim(),
   options?.roomType ?? "",
   options?.sourceType ?? "",
@@ -1001,8 +1014,25 @@ async function createPartyRoomOnce(
   hostUserId: string,
   positionMillis: number,
   state: "playing" | "paused",
-  options?: WatchPartyRoomCreateOptions,
+  options: WatchPartyRoomCreateOptions | undefined,
+  initiatingAuthority: AccountSessionAuthorityBinding,
+  dispatchState: { mutationDispatched: boolean; mutationRejected: boolean },
 ): Promise<WatchPartyCreateResult> {
+  const assertInitiatingAuthority = () => {
+    if (!sameAccountSessionAuthority(initiatingAuthority, getCurrentAccountSessionAuthoritySnapshot())) {
+      throw new AccountBoundSupabaseMutationError();
+    }
+  };
+  // The public entry point captures before single-flight's microtask. Bind the
+  // verified transport token before title, defaults, profile, or Premium IO.
+  assertInitiatingAuthority();
+  const requestedHostUserId = String(hostUserId ?? "").trim();
+  const subject = await captureAccountBoundSupabaseMutationSubject(requestedHostUserId);
+  assertInitiatingAuthority();
+  if (!sameAccountSessionAuthority(initiatingAuthority, subject.authority)) {
+    throw new AccountBoundSupabaseMutationError();
+  }
+  const resolvedHostUserId = subject.authority.userId;
   const requestedTitleId = String(titleId ?? "").trim();
   const requestedSourceType = normalizeWatchPartyContentSourceType(options?.sourceType);
   const requestedSourceId = String(options?.sourceId ?? "").trim();
@@ -1014,13 +1044,14 @@ async function createPartyRoomOnce(
   const resolvedTitleId = requestedRoomType === "title" && !isSourceLinkedTitleRoom
     ? await resolvePartyTitleId(platformTitleRequestId)
     : null;
-  const requestedHostUserId = String(hostUserId ?? "").trim();
-  const resolvedHostUserId = await resolvePartyHostUserId(requestedHostUserId);
+  assertInitiatingAuthority();
   const [appConfig, profile] = await Promise.all([
     readAppConfig().catch(() => null),
     readUserProfile().catch(() => null),
   ]);
+  assertInitiatingAuthority();
   const creatorPermissions = await readCreatorPermissions(resolvedHostUserId).catch(() => null);
+  assertInitiatingAuthority();
   const roomDefaults = resolveRoomDefaultConfig(appConfig).watchParty;
   const joinPolicy = normalizeJoinPolicy(
     options?.joinPolicy
@@ -1093,6 +1124,7 @@ async function createPartyRoomOnce(
     ? requestedHostUserId || resolvedHostUserId || "live-first"
     : creatorVideoSourceId || spectatorPlaybackSourceId || resolvedTitleId || platformTitleRequestId || "watch-party-live";
   const premiumAccess = await requirePremiumAccessForRoomType(requestedRoomType, premiumAccessKey).catch(() => null);
+  assertInitiatingAuthority();
   if (!premiumAccess?.allowed) {
     return {
       error: premiumAccess
@@ -1164,24 +1196,41 @@ async function createPartyRoomOnce(
             last_activity_at: now,
           };
 
-          const { data, error } = await supabase
+          assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+          dispatchState.mutationDispatched = true;
+          dispatchState.mutationRejected = false;
+          const { data, error, status } = await supabase
             .from(PARTY_ROOMS_TABLE)
             .insert(payload)
+            .setHeader("Authorization", `Bearer ${subject.accessToken}`)
             .select(PARTY_ROOMS_POLICY_SELECT)
-            .returns<PartyRoomFullRow>()
+            .returns<PartyRoomFullRow[]>()
             .single();
+          // A dispatched mutation is not canceled by a later account change.
+          // Reject its stale acknowledgement without issuing a replacement.
+          assertInitiatingAuthority();
 
           if (!error && data) {
             const createdState = rowToState(data);
-            if (createdState) return createdState;
-            lastError = toCreateError(
-              { message: "Created room payload missing required fields" },
+            if (data.is_active === true && createdState?.partyId === generatedPartyId && createdState.hostUserId === safeHostUserId
+              && createdState.roomType === requestedRoomType && createdState.titleId === safeTitleId
+              && createdState.sourceType === sourceType && createdState.sourceId === sourceId) return createdState;
+            return { error: toCreateError(
+              { code: "room_creation_outcome_unknown", message: "Room creation could not be verified. Check your rooms before trying again." },
               { ...payload, source: "createPartyRoom.insert" },
-            );
+            ) };
           }
+
+          if (!isRejectedPartyRoomCreateResponse(error, status)) {
+            return { error: toCreateError(
+              { code: "room_creation_outcome_unknown", message: "Room creation could not be verified. Check your rooms before trying again." },
+            ) };
+          }
+          dispatchState.mutationRejected = true;
 
           if (
             error
+            && ["42703", "PGRST204"].includes(error.code)
             && (
               isMissingColumnError(error, "join_policy")
               || isMissingColumnError(error, "source_type")
@@ -1200,6 +1249,7 @@ async function createPartyRoomOnce(
 
           if (
             error
+            && ["42703", "PGRST204"].includes(error.code)
             && (
               isMissingColumnError(error, "join_policy")
               || isMissingColumnError(error, "source_type")
@@ -1217,22 +1267,34 @@ async function createPartyRoomOnce(
               updated_at: now,
             };
 
-            const { data: fallbackData, error: fallbackError } = await supabase
+            assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+            dispatchState.mutationRejected = false;
+            const { data: fallbackData, error: fallbackError, status: fallbackStatus } = await supabase
               .from(PARTY_ROOMS_TABLE)
               .insert(fallbackPayload)
+              .setHeader("Authorization", `Bearer ${subject.accessToken}`)
               .select(PARTY_ROOMS_LEGACY_BASE_SELECT)
-              .returns<PartyRoomLegacyBaseRow>()
+              .returns<PartyRoomLegacyBaseRow[]>()
               .single();
+            assertInitiatingAuthority();
 
             if (!fallbackError && fallbackData) {
               const createdState = rowToState(fallbackData);
-              if (createdState) return createdState;
+              if (fallbackData.is_active === true && createdState?.partyId === generatedPartyId && createdState.hostUserId === safeHostUserId
+                && createdState.roomType === requestedRoomType && createdState.titleId === safeTitleId) return createdState;
             }
 
-            if (fallbackError) {
-              lastError = toCreateError(fallbackError, fallbackPayload);
-              debugLog("watch-party", "createPartyRoom fallback insert error", lastError);
+            if (!isRejectedPartyRoomCreateResponse(fallbackError, fallbackStatus)) {
+              return { error: toCreateError(
+                { code: "room_creation_outcome_unknown", message: "Room creation could not be verified. Check your rooms before trying again." },
+              ) };
             }
+            dispatchState.mutationRejected = true;
+            lastError = toCreateError(fallbackError, fallbackPayload);
+            debugLog("watch-party", "createPartyRoom fallback insert error", lastError);
+            if (isConflictError(fallbackError)) continue;
+            if (isForeignKeyError(fallbackError)) break;
+            return { error: lastError };
           } else if (error) {
             lastError = toCreateError(error, payload);
             debugLog("watch-party", "createPartyRoom insert error", lastError);
@@ -1240,7 +1302,7 @@ async function createPartyRoomOnce(
 
           if (error && isConflictError(error)) continue;
           if (error && isForeignKeyError(error)) break;
-          break;
+          return { error: lastError! };
         }
       }
     }
@@ -1304,10 +1366,30 @@ export function createPartyRoom(
   state: "playing" | "paused",
   options?: WatchPartyRoomCreateOptions,
 ): Promise<WatchPartyCreateResult> {
+  const initiatingAuthority = getCurrentAccountSessionAuthoritySnapshot();
+  const requestedHostUserId = String(hostUserId ?? "").trim();
+  if (!initiatingAuthority || initiatingAuthority.state !== "ACTIVE" || initiatingAuthority.restoreOnly
+    || !requestedHostUserId || requestedHostUserId !== initiatingAuthority.userId) {
+    return Promise.resolve({ error: toCreateError(new AccountBoundSupabaseMutationError(), { mutationDispatched: false, mutationRejected: false }) });
+  }
+  const initiatingOptions = options ? { ...options } : undefined;
   return runKeyedSingleFlight(
     partyRoomCreateFlights,
-    getPartyRoomCreateFlightKey(titleId, hostUserId, options),
-    () => createPartyRoomOnce(titleId, hostUserId, positionMillis, state, options),
+    getPartyRoomCreateFlightKey(titleId, requestedHostUserId, initiatingAuthority, initiatingOptions),
+    () => {
+      // Once submitted, even an authority change or lost acknowledgement cannot
+      // prove that the insert did not commit. Only an explicit rejection of the
+      // latest submitted insert permits a caller to offer a fresh manual retry.
+      const dispatchState = { mutationDispatched: false, mutationRejected: false };
+      return createPartyRoomOnce(titleId, requestedHostUserId, positionMillis, state, initiatingOptions, initiatingAuthority, dispatchState)
+        .catch((error: unknown) => ({ error: toCreateError(error) }))
+        .then((result): WatchPartyCreateResult => "error" in result ? {
+          error: {
+            ...result.error,
+            payload: { ...result.error.payload, ...dispatchState },
+          },
+        } : result);
+    },
   );
 }
 

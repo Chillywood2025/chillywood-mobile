@@ -2,6 +2,40 @@
 
 Updated: 2026-10-15
 
+## Held-migration draft compatibility guard
+
+New clients must not save Brand drafts to the legacy database contract. Before
+`20261015073423` is applied, the public reader still projects the editable
+`platform_brand_profiles` row: changing a previously published row would expose
+the new styling immediately, even though the UI called the action Save Draft.
+The client now checks `read_public_platform_identity` for its initiating owner
+through the existing account-bound RPC path before every draft upsert. This RPC
+and snapshot isolation are introduced by the same atomic migration; a successful
+own-identity response is the compatibility signal for that exact contract. The
+probe is never cached, and any missing/denied/failed/malformed response blocks
+the draft write. Private Platform owners remain eligible through owner access.
+The initiating active account and session generation are checked before and after the
+probe and again before acknowledging the write. The capability read and draft
+request use the same captured subject; the draft request explicitly freezes its
+Authorization header even if the SDK resolves a replacement session meanwhile.
+An already dispatched write may still settle; stale acknowledgement is rejected,
+not represented as server-side cancellation. Failed saves preserve edits and
+do not advance the subsequent shared name/tagline save; retry checks again.
+
+This is a client guard for the documented atomic migration, not a generic server
+capability protocol. Independently installing that identity RPC without snapshot
+isolation would violate the contract and must not be used as a deployment plan.
+It does not repair old installed clients, enforce their retirement, enable the
+other held RPCs, authorize the migration, or prove installed behavior. All
+existing old-client cutover and forward-repair requirements below still apply.
+
+The SQL bridge verifies that the new helper refuses the old schema, retains an
+old direct-write negative control that demonstrates the original leak, and
+allows a private owner draft under the migrated schema without changing the
+public snapshot. Production-helper and mounted-screen tests cover unavailable
+and malformed responses, fresh retry, account/session changes, stale completion,
+duplicate taps, truthful notices, preserved edits and released saving state.
+
 ## October 15, 2026 Source Repair (deployment pending)
 
 This section supersedes the historical publish implementation described below.

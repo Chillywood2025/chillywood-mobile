@@ -129,8 +129,8 @@ assert.ok(client.includes("@deprecated Use refreshPushRegistrationIfGranted"), "
 const providerDeadline = Number(client.match(/const PUSH_REGISTRATION_PROVIDER_DEADLINE_MS = ([0-9_]+);/u)?.[1]?.replaceAll("_", ""));
 assert.ok(Number.isFinite(providerDeadline) && providerDeadline >= 5_000 && providerDeadline <= 30_000, "post-permission push provider work must have a bounded customer-facing deadline");
 assert.ok(client.includes("registerCurrentPushProvidersWithDeadline"), "register and refresh paths must share one bounded provider workflow");
-assert.ok(client.includes("withAuthorityReadDeadline(registration, fallback, PUSH_REGISTRATION_PROVIDER_DEADLINE_MS)"), "token and backend uncertainty must release the registration UI with an error result");
-assert.equal((client.match(/return registerCurrentPushProvidersWithDeadline\(/gu) ?? []).length, 2, "both explicit registration and lifecycle refresh must use the bounded provider workflow");
+assert.ok(client.includes("withAuthorityReadDeadline(registration, fallback, PUSH_REGISTRATION_PROVIDER_DEADLINE_MS)"), "token and backend uncertainty must bound the public result without claiming cancellation");
+assert.equal((client.match(/return (?:await )?registerCurrentPushProvidersWithDeadline\(/gu) ?? []).length, 2, "both explicit registration and lifecycle refresh must use the bounded provider workflow");
 assert.ok(client.includes("handledNotificationResponseKeys"), "notification response dedupe must survive subscription replacement");
 assert.ok(client.includes("clearLastNotificationResponseAsync"), "handled notification responses must be cleared from native state");
 assert.ok(layout.includes("refreshPushRegistrationIfGranted"), "app activation must refresh platform-neutral registration");
