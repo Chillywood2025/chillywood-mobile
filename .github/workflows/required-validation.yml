@@ -168,10 +168,18 @@ jobs:
           npm run test:cognitive-product-sentinel-concurrency
           npm run test:cognitive-runtime-login-integration
 
+  native-inference:
+    name: Validation / Local Android Inference
+    if: needs.plan.outputs.nativeRelease == 'true'
+    needs: plan
+    uses: ./.github/workflows/local-camera-inference.yml
+    permissions:
+      contents: read
+
   native-sdk:
     name: Validation / Native SDK Contracts
     if: needs.plan.outputs.nativeRelease == 'true'
-    needs: plan
+    needs: [plan, native-inference]
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -200,7 +208,8 @@ jobs:
     name: Validation / Native and Release
     if: needs.plan.outputs.nativeRelease == 'true'
     # The existing required lane must not succeed unless the actual SDK
-    # Java/Objective-C contracts succeeded on this same source run.
+    # Java/Objective-C contracts and offline Android inference succeeded on
+    # this same source run (native-sdk also requires native-inference).
     needs: [plan, native-sdk]
     # This lane compiles the actual deadline policy with the bundled Swift
     # toolchain; keep its platform explicit across ubuntu-latest migrations.
@@ -395,7 +404,7 @@ jobs:
   result:
     name: Validation / Results
     if: always()
-    needs: [plan, core, product, sensitive, database, native-sdk, native-release, autonomous, policy]
+    needs: [plan, core, product, sensitive, database, native-inference, native-sdk, native-release, autonomous, policy]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:

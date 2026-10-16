@@ -8,7 +8,7 @@ use the same processed stream. This code does not create a display overlay.
 
 ## Implementation constraints
 
-- Face-following studio lighting uses bundled ML Kit face detection and samples
+- Face-following studio lighting uses bundled BlazeFace detection and samples
   the face's current luma for a feathered, highlight-preserving key light.
 - Chicago Skyline uses a real selfie foreground-confidence mask, original
   procedural skyline art and different layer offsets driven by subject centroid.
@@ -59,32 +59,39 @@ use the same processed stream. This code does not create a display overlay.
 
 ## Privacy and dependency review
 
-The selected versions are bundled `face-detection:16.1.7` and
-`segmentation-selfie:16.0.0-beta6`. There is no account creation, cloud inference,
-image upload or downloaded model in this implementation. Selfie segmentation
-is a beta API and must remain pinned until a reviewed upgrade.
+Android inference uses standalone LiteRT 1.4.1 and version-1 BlazeFace and
+SelfieSegmenter assets. Both models are Apache-2.0 and bundled in the native
+binary. Their SHA-256 hashes are verified before interpreter creation. See
+`../third-party/models.json`, the included model cards, complete runtime license
+and `../third-party/NOTICE.md` for provenance and bounded privacy evidence.
 
-This does **not** mean zero SDK telemetry. Google documents on-device processing
-of inputs and outputs, plus collection of API diagnostics such as device/app
-details, installation identifiers, latency, image dimensions, feature events and
-errors. No supported telemetry opt-out was found in the documented public API.
-Expo Camera already includes ML Kit barcode SDKs, but that does not prove the
-app's existing privacy policy or store disclosures cover these additional uses.
-Review these before any release:
+`LocalCameraInference` explicitly selects the application runtime and CPU
+XNNPACK. The segmentation model requires XNNPACK's supported
+Convolution2DTransposeBias custom operation; there is no fallback to a remote or
+Play Services engine. No model downloads, account, network client or telemetry
+profiler are created by this adapter. Android's optional local ATrace profiler
+is an OS debugging facility, not a remote upload. This is a scoped camera
+inference statement, not a claim about unrelated Firebase/app diagnostics.
 
-- https://developers.google.com/ml-kit/terms
-- https://developers.google.com/ml-kit/android-data-disclosure
-- https://developers.google.com/ml-kit/vision/face-detection/android
-- https://developers.google.com/ml-kit/vision/selfie-segmentation/android
+The prebuild patch `withExpoCameraNoBarcode` removes the unused scanner
+implementations, three native barcode dependency edges and model-download
+metadata from pinned Expo Camera 17.0.10 while preserving photo/video/preview
+and permission APIs. Native validation checks the actual runtime dependency
+graph and merged app manifest for ML Kit, scanner, MediaPipe Tasks and Play
+Services TFLite components. A JS Off switch would not remove SDK initialization
+providers from an installed binary, so this change requires a new native build.
 
 ## Validation
 
 `JAVA_HOME=/path/to/jdk bash modules/chillywood-camera-effects/android/run-math-tests.sh`
 runs the standalone compositor/rotation/stride/mask tests without an Android
-SDK. `run-capture-contract-tests.sh` additionally needs
-`CAMERA_EFFECTS_TEST_CLASSPATH` pointing at real Android, pinned WebRTC and ML Kit
+SDK. `run-local-inference-math-tests.sh` covers RGB conversion, rotation,
+letterboxing, face decoding/suppression and malformed outputs without an SDK.
+`run-capture-contract-tests.sh` additionally needs
+`CAMERA_EFFECTS_TEST_CLASSPATH` pointing at real Android, pinned WebRTC and LiteRT
 dependency jars. It tests the actual WebRTC wrapper's frame ownership, pooled
-buffer lifetime and closed-generation fallback without initializing ML Kit.
+buffer lifetime and closed-generation fallback without initializing inference.
+It also checks bundled-model hashes and rejection of corrupted/empty assets.
 It also runs `run-fallback-tests.sh`, whose deterministic tests execute the
 production processor, compositor, pool and real pinned WebRTC wrapper with an
 injected monotonic clock and controlled asynchronous ML boundary. They cover
@@ -95,7 +102,7 @@ temporary production-source copies and requires their counterexamples to fail.
 The fallback runner accepts `--former-source /path/to/CameraEffectProcessor.java`
 for the pre-fix source: only its clock/executor construction is adapted to the
 test seam, and four actual old-algorithm counterexamples must fail. No Android,
-WebRTC or ML Kit API classes are replaced by test stubs.
+WebRTC or LiteRT API classes are replaced by test stubs.
 `run-lifecycle-tests.sh` executes the production admission policy, including
 background/late-configure, foreground/rebind and concurrent cleanup ordering.
 

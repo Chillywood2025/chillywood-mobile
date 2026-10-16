@@ -6,7 +6,7 @@ OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
 JAVAC="${JAVA_HOME:+$JAVA_HOME/bin/}javac"
 JAVA="${JAVA_HOME:+$JAVA_HOME/bin/}java"
-: "${CAMERA_EFFECTS_TEST_CLASSPATH:?Set CAMERA_EFFECTS_TEST_CLASSPATH to the real Android, WebRTC and ML Kit dependency jars}"
+: "${CAMERA_EFFECTS_TEST_CLASSPATH:?Set CAMERA_EFFECTS_TEST_CLASSPATH to the real Android, WebRTC and standalone LiteRT dependency jars}"
 WEBRTC="$ROOT/node_modules/@livekit/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule"
 mkdir -p "$OUT/patched" "$OUT/original-source" "$OUT/original-classes"
 cp "$WEBRTC"/videoEffects/*.java "$OUT/patched/"
@@ -27,8 +27,10 @@ NODE
   "$HERE"/src/main/java/com/oney/WebRTCModule/*.java \
   "$WEBRTC/ThreadUtils.java" "$OUT"/patched/*.java \
   "$HERE/src/test/java/com/oney/WebRTCModule/CameraEffectQueueContract.java" \
-  "$HERE/src/test/java/expo/modules/chillywoodcameraeffects/CaptureContractTest.java"
+  "$HERE/src/test/java/expo/modules/chillywoodcameraeffects/CaptureContractTest.java" \
+  "$HERE/src/test/java/expo/modules/chillywoodcameraeffects/LocalModelIntegrityTest.java"
 "$JAVA" -cp "$CAMERA_EFFECTS_TEST_CLASSPATH:$OUT" expo.modules.chillywoodcameraeffects.CaptureContractTest
+"$JAVA" -cp "$CAMERA_EFFECTS_TEST_CLASSPATH:$OUT" expo.modules.chillywoodcameraeffects.LocalModelIntegrityTest "$HERE/src/main/assets"
 "$JAVAC" -cp "$CAMERA_EFFECTS_TEST_CLASSPATH:$OUT" -d "$OUT/original-classes" "$OUT/original-source/VideoEffectProcessor.java"
 if "$JAVA" -cp "$OUT/original-classes:$OUT:$CAMERA_EFFECTS_TEST_CLASSPATH" \
   expo.modules.chillywoodcameraeffects.CaptureContractTest --queue-only > "$OUT/former-source.log" 2>&1; then

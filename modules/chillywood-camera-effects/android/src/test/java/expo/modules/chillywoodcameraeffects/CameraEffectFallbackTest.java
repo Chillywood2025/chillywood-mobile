@@ -39,6 +39,7 @@ public final class CameraEffectFallbackTest {
       missingAndThrowingConversions();
       closeDuringConversion();
       rejectedInferenceSubmission();
+      missingLocalAssetsReleaseAdmission();
     }
     check(slot().availablePermits() == 1, "all paths restore the single global inference slot");
     System.out.println("Camera fallback contract (" + selected + "): " + assertions + " assertions passed");
@@ -104,6 +105,24 @@ public final class CameraEffectFallbackTest {
     final MlExecutor executor = new MlExecutor();
     final CameraEffectProcessor processor = new CameraEffectProcessor("studio-light", 1f, clock, executor);
     @Override public void close() { processor.close(); executor.drain(); }
+  }
+
+  private static void missingLocalAssetsReleaseAdmission() throws Exception {
+    try (Fixture fixture = new Fixture()) {
+      // The test constructor intentionally has no AssetManager. This executes
+      // the real local-adapter failure path without loading any native runtime.
+      Method infer = CameraEffectProcessor.class.getDeclaredMethod("infer", byte[].class,
+          int.class, int.class, int.class, long.class);
+      infer.setAccessible(true);
+      Method reserve = CameraEffectProcessor.class.getDeclaredMethod("reserveInference", long.class);
+      reserve.setAccessible(true);
+      check((Boolean) reserve.invoke(fixture.processor, fixture.clock.now), "reserve missing-assets inference");
+      infer.invoke(fixture.processor, new byte[24], 4, 4, 0, fixture.clock.now);
+      check(slot().availablePermits() == 1, "missing local models release admission");
+      check(fixture.processor.status().get("state").equals("unavailable"), "missing local models report unavailable");
+      check(field(fixture.processor, "observation") == null, "failed local inference has no stale analysis");
+      check(!(Boolean) reserve.invoke(fixture.processor, fixture.clock.now), "failed local inference is rate limited");
+    }
   }
 
   // A capture-side texture test double implementing the actual SDK Buffer API.

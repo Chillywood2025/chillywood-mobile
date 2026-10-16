@@ -18,7 +18,8 @@ android {
 dependencies {
   // This is the name emitted by React Native autolinking for the pinned fork.
   implementation project(':livekit_react-native-webrtc')
-  // Bundled models: no model downloads, cloud inference, or additional account.
-  implementation 'com.google.mlkit:face-detection:16.1.7'
-  implementation 'com.google.mlkit:segmentation-selfie:16.0.0-beta6'
+  // Standalone application runtime only. Never replace with Play Services or
+  // MediaPipe Tasks: their published artifacts include remote diagnostics.
+  implementation 'com.google.ai.edge.litert:litert:1.4.1'
+  implementation 'com.google.ai.edge.litert:litert-api:1.4.1'
 }

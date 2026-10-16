@@ -1,22 +1,10 @@
 package expo.modules.chillywoodcameraeffects;
 
-import android.graphics.Rect;
+import android.content.res.AssetManager;
 import android.os.SystemClock;
-import com.google.mlkit.vision.common.InputImage;
-import com.google.mlkit.vision.face.Face;
-import com.google.mlkit.vision.face.FaceDetection;
-import com.google.mlkit.vision.face.FaceDetector;
-import com.google.mlkit.vision.face.FaceDetectorOptions;
-import com.google.mlkit.vision.segmentation.Segmentation;
-import com.google.mlkit.vision.segmentation.SegmentationMask;
-import com.google.mlkit.vision.segmentation.Segmenter;
-import com.google.mlkit.vision.segmentation.selfie.SelfieSegmenterOptions;
 import com.oney.WebRTCModule.videoEffects.VideoFrameProcessor;
-import java.nio.ByteBuffer;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
@@ -35,7 +23,6 @@ public final class CameraEffectProcessor implements VideoFrameProcessor, AutoClo
   private static final long MAX_AGE_NS = 250_000_000L;
   private static final long INFERENCE_INTERVAL_NS = 80_000_000L;
   private static final long COMPOSITE_BUDGET_NS = 45_000_000L;
-  private static final Executor DIRECT = Runnable::run;
   // Also bounds overlap between an invalidated generation and its replacement.
   private static final Semaphore INFERENCE_SLOT = new Semaphore(1);
   private final String effect;
@@ -53,8 +40,8 @@ public final class CameraEffectProcessor implements VideoFrameProcessor, AutoClo
   private long processedFrames;
   private String state = "starting";
   private String reason = "Waiting for a camera frame";
-  private FaceDetector faceDetector;
-  private Segmenter segmenter;
+  private LocalCameraInference inference;
+  private AssetManager assets;
   // Inference callbacks are serialized by INFERENCE_SLOT. Kept within this
   // generation; no centroid history is shared between tracks or configurations.
   private float skylineCenterX = .5f, skylineCenterY = .5f;
@@ -79,6 +66,11 @@ public final class CameraEffectProcessor implements VideoFrameProcessor, AutoClo
     this(effect, intensity, SystemClock::elapsedRealtimeNanos, Executors.newSingleThreadExecutor(r -> {
       Thread t = new Thread(r, "ChillywoodCameraInference"); t.setDaemon(true); return t;
     }));
+  }
+
+  public CameraEffectProcessor(AssetManager assets, String effect, float intensity) {
+    this(effect, intensity);
+    this.assets = assets;
   }
 
   // Deterministic host tests control time and the asynchronous ML work boundary.
@@ -214,72 +206,31 @@ public final class CameraEffectProcessor implements VideoFrameProcessor, AutoClo
   private void infer(byte[] nv21, int width, int height, int rotation, long capturedNs) {
     if (closed) { finishInference(); return; }
     try {
-      InputImage image = InputImage.fromByteArray(nv21, width, height, rotation, InputImage.IMAGE_FORMAT_NV21);
+      if (inference == null) inference = new LocalCameraInference(assets, effect.equals("studio-light"));
       if (effect.equals("studio-light")) {
-        if (faceDetector == null) {
-          faceDetector = FaceDetection.getClient(new FaceDetectorOptions.Builder()
-              .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-              .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
-              .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
-              .enableTracking().build());
-        }
-        faceDetector.process(image).addOnCompleteListener(DIRECT, task -> {
-          try {
-            if (task.isSuccessful()) acceptFaces(task.getResult(), width, height, rotation, capturedNs);
-            else failInference();
-          } catch (RuntimeException | OutOfMemoryError failure) { failInference(); }
-          finally { finishInference(); }
-        });
+        acceptFace(inference.detectFace(nv21, width, height, rotation), width, height, rotation, capturedNs);
       } else {
-        if (segmenter == null) {
-          segmenter = Segmentation.getClient(new SelfieSegmenterOptions.Builder()
-              .setDetectorMode(SelfieSegmenterOptions.STREAM_MODE).enableRawSizeMask().build());
-        }
-        segmenter.process(image).addOnCompleteListener(DIRECT, task -> {
-          try {
-            if (task.isSuccessful()) acceptMask(task.getResult(), width, height, rotation, capturedNs);
-            else failInference();
-          } catch (RuntimeException | OutOfMemoryError failure) { failInference(); }
-          finally { finishInference(); }
-        });
+        acceptMask(inference.segment(nv21, width, height, rotation), width, height, rotation, capturedNs);
       }
     } catch (RuntimeException | LinkageError | OutOfMemoryError failure) {
-      failInference(); finishInference();
-    }
+      failInference();
+    } finally { finishInference(); }
   }
 
-  private void acceptFaces(List<Face> faces, int width, int height, int rotation, long capturedNs) {
+  private void acceptFace(EffectMath.FaceRegion face, int width, int height, int rotation, long capturedNs) {
     if (closed || nanoTime.getAsLong() - capturedNs > MAX_AGE_NS) return;
-    Face selected = null;
-    for (Face face : faces) {
-      Rect box = face.getBoundingBox();
-      if (selected == null || (long) box.width() * box.height()
-          > (long) selected.getBoundingBox().width() * selected.getBoundingBox().height()) selected = face;
-    }
-    if (selected == null) {
+    if (face == null) {
       observation = null;
       update("starting", "Move into view for face-following lighting");
       return;
     }
-    int uprightWidth = rotation % 180 == 0 ? width : height;
-    int uprightHeight = rotation % 180 == 0 ? height : width;
-    Rect box = selected.getBoundingBox();
-    EffectMath.FaceRegion face = new EffectMath.FaceRegion(box.left / (float) uprightWidth,
-        box.top / (float) uprightHeight, box.width() / (float) uprightWidth, box.height() / (float) uprightHeight);
     Observation old = observation;
     if (old != null && old.matches(width, height, rotation, capturedNs)) face = face.smooth(old.face);
     publish(new Observation(width, height, rotation, capturedNs, face, null, null));
   }
 
-  private void acceptMask(SegmentationMask result, int width, int height, int rotation, long capturedNs) {
+  private void acceptMask(EffectMath.Mask mask, int width, int height, int rotation, long capturedNs) {
     if (closed || nanoTime.getAsLong() - capturedNs > MAX_AGE_NS) return;
-    int maskWidth = result.getWidth(), maskHeight = result.getHeight();
-    if (maskWidth < 2 || maskHeight < 2 || maskWidth > 2048 || maskHeight > 2048) { failInference(); return; }
-    ByteBuffer buffer = result.getBuffer().duplicate().order(result.getBuffer().order());
-    buffer.rewind();
-    float[] values = new float[maskWidth * maskHeight];
-    buffer.asFloatBuffer().get(values);
-    EffectMath.Mask mask = new EffectMath.Mask(values, maskWidth, maskHeight);
     if (mask.coverage < .005f) {
       observation = null;
       update("starting", "Move into view for a subject-aware background");
@@ -333,19 +284,13 @@ public final class CameraEffectProcessor implements VideoFrameProcessor, AutoClo
 
   private synchronized void closeResources() {
     try {
-      if (faceDetector != null) faceDetector.close();
+      if (inference != null) inference.close();
     } catch (RuntimeException ignored) {
       // Cleanup still proceeds if a vendor client has already released itself.
     } finally {
-      faceDetector = null;
-      try {
-        if (segmenter != null) segmenter.close();
-      } catch (RuntimeException ignored) {
-        // No subject, frame or track data is logged during cleanup.
-      } finally {
-        segmenter = null;
-        inferenceExecutor.shutdown();
-      }
+      inference = null;
+      assets = null;
+      inferenceExecutor.shutdown();
     }
   }
 }

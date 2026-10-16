@@ -1,0 +1,38 @@
+name: Local Android Camera Inference
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-inference:
+    name: Production adapter on isolated AOSP emulator
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash --noprofile --norc -eo pipefail {0}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 20, cache: npm }
+      - run: npm ci --ignore-scripts
+      - name: Verify immutable assets and fail-closed harness contracts
+        run: |
+          node scripts/test-local-camera-inference-offline.mjs --source-check
+          node --test tests/ci/local-camera-inference-validation.test.mjs
+      - name: Provision official AOSP image using the runner's existing SDK licenses
+        # Do not pipe yes, accept licenses, enable SDK metrics, or alter host
+        # virtualization/security permissions. Missing license/access fails CI.
+        run: |
+          export JAVA_HOME="${JAVA_HOME_17_X64:?JDK 17 is required}"
+          sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:?Android SDK is required}}"
+          "$sdk/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-35" "build-tools;35.0.0" "emulator" "system-images;android-35;default;x86_64" </dev/null
+      - name: Compile actual camera modules and verify resolved app dependency/manifest closure
+        run: JAVA_HOME="$JAVA_HOME_17_X64" node scripts/compile-native-camera-effects.mjs --android
+      - name: Allocate and invoke exact bundled models through the production adapter
+        run: JAVA_HOME="$JAVA_HOME_17_X64" node scripts/test-local-camera-inference-offline.mjs --emulator

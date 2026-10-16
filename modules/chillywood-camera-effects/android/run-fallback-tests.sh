@@ -9,7 +9,7 @@ JAVAC=("${JAVA_HOME:+$JAVA_HOME/bin/}javac")
 if ! command -v "${JAVAC[0]}" >/dev/null 2>&1; then
   JAVAC=("$JAVA" -m jdk.compiler/com.sun.tools.javac.Main)
 fi
-: "${CAMERA_EFFECTS_TEST_CLASSPATH:?Set CAMERA_EFFECTS_TEST_CLASSPATH to the real Android, pinned WebRTC and ML Kit dependency jars}"
+: "${CAMERA_EFFECTS_TEST_CLASSPATH:?Set CAMERA_EFFECTS_TEST_CLASSPATH to the real Android, pinned WebRTC and standalone LiteRT dependency jars}"
 WEBRTC="$ROOT/node_modules/@livekit/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/videoEffects"
 PRODUCTION="$HERE/src/main/java/expo/modules/chillywoodcameraeffects"
 TEST="$HERE/src/test/java/expo/modules/chillywoodcameraeffects/CameraEffectFallbackTest.java"
@@ -19,6 +19,7 @@ compile() {
   mkdir -p "$destination"
   "${JAVAC[@]}" -cp "$CAMERA_EFFECTS_TEST_CLASSPATH" -d "$destination" \
     "$processor" "$PRODUCTION/EffectMath.java" "$PRODUCTION/FrameBufferPool.java" \
+    "$PRODUCTION/LocalCameraInference.java" "$PRODUCTION/LocalInferenceMath.java" \
     "$WEBRTC/VideoFrameProcessor.java" "$WEBRTC/VideoEffectProcessor.java" "$TEST"
 }
 

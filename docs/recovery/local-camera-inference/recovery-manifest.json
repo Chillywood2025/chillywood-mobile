@@ -1,0 +1,312 @@
+{
+  "status": "INCOMPLETE recovery checkpoint. Not mergeable or validated as a complete branch.",
+  "base": "d2ec4dc2a25d67e8f98b578496f5985359b9bebc",
+  "originalLocalCommit": "9b022600f552fb1594638577e2163c27bb5abcbd",
+  "originalTree": "3c5e54aad3623f24b95630515bfe73a817812c46",
+  "files": [
+    {
+      "path": ".github/workflows/local-camera-inference.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c4c4137151a63d5ab4d23add0c878a51c6ae8f92",
+      "size": 1833,
+      "published": true
+    },
+    {
+      "path": ".github/workflows/required-validation.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3f59bdc9e79afd68d384ff48fbe1b69e4ccf9315",
+      "size": 21974,
+      "published": true
+    },
+    {
+      "path": "app.config.ts",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "37477b167e15205d3f391f58475e7c0d5d876b59",
+      "size": 21579,
+      "published": true
+    },
+    {
+      "path": "config/ci/required-validation-v1.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4b44bcff188f95dbc4c00f1e54c5dc72b968904b",
+      "size": 5058,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/android/README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "69f305685a25769a25a73581a8294818403c306f",
+      "size": 7529,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/android/build.gradle",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e26d92e45cb4e4d2f93eaf6fe490ae2e122a5b5d",
+      "size": 715,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/android/run-capture-contract-tests.sh",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "11239a33bce47a02bde453beca716c6391523ab4",
+      "size": 2637,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/android/run-fallback-tests.sh",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "15bf486984d304f3667ced452201c3c0353a5bbf",
+      "size": 6550,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/android/run-local-inference-math-tests.sh",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fca141cbb5ca76e9ef7724215e629db0a899cc39",
+      "size": 1414,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/android/src/main/assets/chillywood_models/blaze_face_short_range.tflite",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1b2b5220b8035704fc1eb97461b9c34a73cbd1e2",
+      "size": 229746,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/android/src/main/assets/chillywood_models/selfie_segmenter.tflite",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a4ebd4777ede40ba04abc8e5c28a73407cb7a1a0",
+      "size": 249537,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/android/src/main/java/expo/modules/chillywoodcameraeffects/CameraEffectProcessor.java",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7a85ef7722f8868b495a3d32f43e0bf4bd71ae61",
+      "size": 13214,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/android/src/main/java/expo/modules/chillywoodcameraeffects/ChillywoodCameraEffectsModule.kt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d6d5dce6677eb48851b46a1d8061ce11b6eaeb5f",
+      "size": 4085,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/android/src/main/java/expo/modules/chillywoodcameraeffects/LocalCameraInference.java",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "52ef0d344382a6e912b4cabcfb901615489b2828",
+      "size": 6071,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/android/src/main/java/expo/modules/chillywoodcameraeffects/LocalInferenceMath.java",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ee3cb3f65688aa980364a4ce1e133c1aa4b77d78",
+      "size": 6463,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/android/src/test/java/expo/modules/chillywoodcameraeffects/CameraEffectFallbackTest.java",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "93dfd491a9375b7821e94ad1a78042f55546e1d1",
+      "size": 18496,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/android/src/test/java/expo/modules/chillywoodcameraeffects/LocalInferenceMathTest.java",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ea338b32759d94dcbb67003a99c3e61aaf75e6b2",
+      "size": 4280,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/android/src/test/java/expo/modules/chillywoodcameraeffects/LocalModelIntegrityTest.java",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4fe93ba1e2564b87c3dc3d79a17182a54f2ceb7c",
+      "size": 1385,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/third-party/BlazeFace-model-card.pdf",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f41827d1936418552cf19432fb13b2553c071502",
+      "size": 434425,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/third-party/LiteRT-1.4.1-LICENSE.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "12d255f8e0f049d3c3127e71788e219b86cdf55b",
+      "size": 13575,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/third-party/MediaPipe-LICENSE.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0e03e3911e0ac02c72ed527b34efe250f0fb9bef",
+      "size": 12331,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/third-party/NOTICE.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8b942cd8fcd41f893aa46f9893c6b1327071c29d",
+      "size": 2742,
+      "published": false
+    },
+    {
+      "path": "modules/chillywood-camera-effects/third-party/SelfieSegmenter-model-card.pdf",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "031a1b3dc30d9337107ee0bfa6db563767be4b2d",
+      "size": 2286837,
+      "published": true
+    },
+    {
+      "path": "modules/chillywood-camera-effects/third-party/models.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8d19168009a5bcde62075f87079e61bdd2bc11be",
+      "size": 1845,
+      "published": false
+    },
+    {
+      "path": "plugins/expo-camera-no-barcode/README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7c47cdc2375afc69b7f09144aba57646058914b2",
+      "size": 2588,
+      "published": false
+    },
+    {
+      "path": "plugins/expo-camera-no-barcode/patches.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c0caff9d62763ab02ed58af8a8e8c95c098401ff",
+      "size": 33105,
+      "published": false
+    },
+    {
+      "path": "plugins/withExpoCameraNoBarcode.js",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bc8c51f80566d473c5abcc339d1fe668da4078ea",
+      "size": 3091,
+      "published": false
+    },
+    {
+      "path": "scripts/camera-provider-closure.mjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "463b4d6c3d9e553c30ade1f7112da03be0266890",
+      "size": 2123,
+      "published": false
+    },
+    {
+      "path": "scripts/compile-native-camera-effects.mjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5ac9b9eabb16c1501c51089be192454d18bd3d84",
+      "size": 13016,
+      "published": false
+    },
+    {
+      "path": "scripts/test-local-camera-inference-offline.mjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "947437c100ab994952df5920f528cd392209590f",
+      "size": 16064,
+      "published": false
+    },
+    {
+      "path": "tests/camera-provider-closure.test.mjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4b8ca7e1e5bac1b556543a74ab1c15d19c963665",
+      "size": 3027,
+      "published": false
+    },
+    {
+      "path": "tests/ci/local-camera-inference-validation.test.mjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a6871bc8f8f739bdffdc77d24c5d5b1b5aa59fc2",
+      "size": 8055,
+      "published": false
+    },
+    {
+      "path": "tests/ci/required-validation.test.mjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7dc7f3cc420bf36a497ac2f86c5064a6ab940296",
+      "size": 23478,
+      "published": false
+    },
+    {
+      "path": "tests/expo-camera-no-barcode.test.mjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "93df772ff5529bbb00b1ef5ef56808c1601d426b",
+      "size": 8419,
+      "published": false
+    },
+    {
+      "path": "tests/local-camera-inference.test.mjs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "68659ba618f3cbd70e1821bf4d658c53f35e0c29",
+      "size": 2441,
+      "published": false
+    },
+    {
+      "path": "tools/local-camera-inference-harness/AndroidManifest.xml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d3c7eb9861fdc98b1db4d1e226592f2f8e3b0006",
+      "size": 742,
+      "published": false
+    },
+    {
+      "path": "tools/local-camera-inference-harness/OfflineInferenceInstrumentation.java",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "64c7be1331d3440118d2529f307ceac9380aa2b9",
+      "size": 9132,
+      "published": false
+    },
+    {
+      "path": "tools/local-camera-inference-harness/README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b894a60bc551b4074e6c9f6b8cb308b41f91338a",
+      "size": 3743,
+      "published": false
+    }
+  ]
+}
