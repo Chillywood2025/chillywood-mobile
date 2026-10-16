@@ -6,6 +6,64 @@ import path from 'node:path';
 import test from 'node:test';
 
 const root = new URL('../', import.meta.url);
+const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const assertControlFailure = (run, scenario) => {
+  const output = `${run.stdout}\n${run.stderr}`;
+  assert.equal(run.error, undefined, output);
+  assert.equal(run.status, 1, output);
+  // Node 20 retains the original ordinal when filtering; Node 24 renumbers it.
+  // Bind the assertion diagnostics to the exact scenario, not another failure.
+  const failure = output.match(new RegExp(`^not ok [0-9]+ - ${escapeRegExp(scenario)}\\r?\\n((?:[ \\t]+[^\\r\\n]*(?:\\r?\\n|$))*)`, 'm'));
+  assert.ok(failure, output);
+  assert.match(failure[1], /^  failureType: 'testCodeFailure'\r?$/m);
+  assert.match(failure[1], /^  code: 'ERR_ASSERTION'\r?$/m);
+  assert.doesNotMatch(output, /SyntaxError|ReferenceError|TypeError|Cannot find module|unmodeled import|cancelledByParent|testTimeoutFailure/);
+};
+
+const matcherScenario = 'iOS Restore (owned) [cache] + $receipt?';
+const assertionTap = (ordinal, scenario = matcherScenario) => `not ok ${ordinal} - ${scenario}
+  ---
+  failureType: 'testCodeFailure'
+  code: 'ERR_ASSERTION'
+  ...
+`;
+const validRun = stdout => ({ error: undefined, status: 1, stdout, stderr: '' });
+for (const ordinal of [1, 24]) test(`return control matcher accepts exact assertion at TAP ordinal ${ordinal}`, () => {
+  const skipped = ordinal === 24 ? 'ok 1 - unrelated earlier scenario # SKIP test name does not match pattern\n' : '';
+  assertControlFailure(validRun(`TAP version 13\n${skipped}${assertionTap(ordinal)}`), matcherScenario);
+});
+test('return control matcher accepts CRLF diagnostics', () => {
+  assertControlFailure(validRun(assertionTap(24).replaceAll('\n', '\r\n')), matcherScenario);
+});
+const invalidRuns = [
+  ['successful exit', { ...validRun(assertionTap(24)), status: 0 }],
+  ['unexpected exit', { ...validRun(assertionTap(24)), status: 2 }],
+  ['signal termination', { ...validRun(assertionTap(24)), status: null }],
+  ['spawn error', { ...validRun(assertionTap(24)), error: new Error('spawn failed') }],
+  ['empty test run', validRun('TAP version 13\n1..0\n')],
+  ['passing target', validRun(assertionTap(24).replace('not ok', 'ok'))],
+  ['unrelated scenario assertion', validRun(assertionTap(24, 'unrelated scenario'))],
+  ['prefixed scenario name', validRun(assertionTap(24, `other ${matcherScenario}`))],
+  ['suffixed scenario name', validRun(assertionTap(24, `${matcherScenario} extra`))],
+  ['unescaped regex-like scenario name', validRun(assertionTap(24, 'iOS Restore owned c  receipt'))],
+  ['nonnumeric ordinal', validRun(assertionTap('twenty-four'))],
+  ['diagnostic text imitating a result', validRun(assertionTap(24).replace('not ok', '# not ok'))],
+  ['missing failure type', validRun(assertionTap(24).replace("  failureType: 'testCodeFailure'\n", ''))],
+  ['missing assertion code', validRun(assertionTap(24).replace("  code: 'ERR_ASSERTION'\n", ''))],
+  ['unrelated assertion after target failure', validRun(
+    assertionTap(24).replace("code: 'ERR_ASSERTION'", "code: 'ERR_TEST_FAILURE'") + assertionTap(25, 'unrelated scenario'))],
+  ['unrelated failure type after target failure', validRun(
+    assertionTap(24).replace("failureType: 'testCodeFailure'", "failureType: 'hookFailed'") + assertionTap(25, 'unrelated scenario'))],
+];
+for (const [name, run] of invalidRuns) test(`return control matcher rejects ${name}`, () => {
+  assert.throws(() => assertControlFailure(run, matcherScenario), { code: 'ERR_ASSERTION' });
+});
+for (const crash of ['SyntaxError', 'ReferenceError', 'TypeError', 'Cannot find module', 'unmodeled import', 'cancelledByParent', 'testTimeoutFailure']) {
+  test(`return control matcher rejects ${crash} despite a matching assertion`, () => {
+    assert.throws(() => assertControlFailure({ ...validRun(assertionTap(24)), stderr: crash }, matcherScenario), { code: 'ERR_ASSERTION' });
+  });
+}
+
 const mutate = (file, before, after) => () => {
   const source = readFileSync(new URL(file, root), 'utf8');
   assert.equal(source.split(before).length, 2, `mutation anchor must occur exactly once: ${before}`);
@@ -78,16 +136,10 @@ for (const control of controls) test(`composed iOS return control rejects ${cont
     const env = { ...process.env };
     for (const variable of ['NODE_TEST_CONTEXT', 'PREMIUM_RETURN_SETTINGS_SOURCE', 'PREMIUM_RETURN_SUBSCRIBE_SOURCE', 'PREMIUM_RETURN_MONETIZATION_SOURCE']) delete env[variable];
     env[control.variable] = filename;
-    const pattern = `^${control.scenario.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`;
+    const pattern = `^${escapeRegExp(control.scenario)}$`;
     const run = spawnSync(process.execPath, ['--test', '--test-reporter=tap', `--test-name-pattern=${pattern}`, 'tests/premium-settings-return-mounted.test.mjs'], {
       cwd: root, env, encoding: 'utf8', timeout: 30_000,
     });
-    const output = `${run.stdout}\n${run.stderr}`;
-    assert.equal(run.error, undefined, output);
-    assert.equal(run.status, 1, output);
-    assert.ok(output.includes(`not ok 1 - ${control.scenario}`), output);
-    assert.match(output, /failureType: 'testCodeFailure'/);
-    assert.match(output, /code: 'ERR_ASSERTION'/);
-    assert.doesNotMatch(output, /SyntaxError|ReferenceError|TypeError|Cannot find module|unmodeled import|cancelledByParent|testTimeoutFailure/);
+    assertControlFailure(run, control.scenario);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
