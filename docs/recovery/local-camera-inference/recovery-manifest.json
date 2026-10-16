@@ -1,8 +1,12 @@
 {
-  "status": "INCOMPLETE recovery checkpoint. Not mergeable. Eight supporting files remain unrecovered.",
+  "status": "INCOMPLETE recovery checkpoint. Not mergeable. Five supporting files remain unrecovered.",
   "base": "d2ec4dc2a25d67e8f98b578496f5985359b9bebc",
   "originalLocalCommit": "9b022600f552fb1594638577e2163c27bb5abcbd",
   "originalTree": "3c5e54aad3623f24b95630515bfe73a817812c46",
+  "expoCameraTarball": {
+    "url": "https://registry.npmjs.org/expo-camera/-/expo-camera-17.0.10.tgz",
+    "sha256": "0f64d0221b88be7e75e72237fac5b043f903e11dd371e8608204316f48ce152c"
+  },
   "files": [
     {
       "path": ".github/workflows/local-camera-inference.yml",
@@ -202,7 +206,7 @@
       "type": "blob",
       "sha": "7c47cdc2375afc69b7f09144aba57646058914b2",
       "size": 2588,
-      "published": false
+      "published": true
     },
     {
       "path": "plugins/expo-camera-no-barcode/patches.json",
@@ -226,7 +230,7 @@
       "type": "blob",
       "sha": "463b4d6c3d9e553c30ade1f7112da03be0266890",
       "size": 2123,
-      "published": false
+      "published": true
     },
     {
       "path": "scripts/compile-native-camera-effects.mjs",
@@ -250,7 +254,7 @@
       "type": "blob",
       "sha": "4b8ca7e1e5bac1b556543a74ab1c15d19c963665",
       "size": 3027,
-      "published": false
+      "published": true
     },
     {
       "path": "tests/ci/local-camera-inference-validation.test.mjs",
