@@ -5,6 +5,8 @@ and `EffectMath` sources unchanged into a small self-instrumenting test APK. It
 does not build or launch the app. The only dependencies are two SHA-256-pinned
 standalone LiteRT 1.4.1 AARs downloaded from Google Maven by the build host. The
 exact bundled models and their license inventory must match the reviewed pins.
+All Java, model and manifest inputs are copied before downloads; compilation and
+receipt hashes use that same private snapshot even if the working tree changes.
 
 The test APK declares **no permissions**, activities, providers, receivers or
 services. It has no account data, camera access, Play services, runtime downloads
@@ -51,6 +53,18 @@ frames as faces. A negative control must reject Selfie Segmenter's actual
 the unchanged production adapter must then succeed. Corrupt models and the
 wrong model signature must fail closed. Success requires a complete native
 instrumentation receipt, not a parser/unit-test result or a compiled APK alone.
+Before every adapter invocation, the harness seeds raw output tensors with NaN
+and requires 1,170,432 output values to be overwritten with finite results.
+Together with the existing range and repeatability checks, a successful
+production receipt requires at least 2,219,042 assertions. Two
+separate test APKs then omit only the face or mask native interpreter call and
+must fail with the expected sentinel/invalid-confidence error. Each production
+and control run has a fresh nonce and variant in its receipt, an exact terminal
+instrumentation status, and a successful adb process result. Unrelated errors,
+crashes, stale receipts and generic command failure cannot pass a control.
+The final receipt includes both control APK hashes and their explicit rejection
+records. These mutants never modify production source or replace its normal APK
+in a tester build; they exist only inside this permission-free acceptance run.
 
 The lane first runs `scripts/compile-native-camera-effects.mjs --android`,
 including full camera Kotlin/Java compilation and app dependency/merged-manifest

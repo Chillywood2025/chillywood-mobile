@@ -1,19 +1,28 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { parse } from "yaml";
-import { ARTIFACTS, MODELS, parseInferenceResult, verifySource } from "../../scripts/test-local-camera-inference-offline.mjs";
+import { ARTIFACTS, MODELS, parseInferenceResult, parseRejectedNoOpResult, snapshotBuildInputs,
+  verifySource, withoutNativeCall } from "../../scripts/test-local-camera-inference-offline.mjs";
 import { computeValidationPlan, expectedJobs } from "../../scripts/ci/required-validation.mjs";
 
 const readWorkflow = file => parse(fs.readFileSync(`.github/workflows/${file}`, "utf8"));
+const proofNonce = "1234567890abcdef1234567890abcdef";
+const parseReceipt = value => parseInferenceResult(value, proofNonce);
 const validReceipt = () => ({
+  proofNonce,
+  variant: "production",
   scope: "isolated-android-x86_64-production-adapter-inference",
   runtime: "standalone-litert-1.4.1-application-only-xnnpack",
   faceSha256: MODELS[0].sha256,
   maskSha256: MODELS[1].sha256,
-  checks: 1_048_600,
+  checks: 2_219_042,
   faceInvocations: 8,
   maskInvocations: 16,
+  outputSentinelChecks: 1_170_432,
+  outputSentinelsOverwritten: true,
   customOpWithoutXnnpackRejected: true,
   corruptModelsRejected: true,
   internetPermission: false,
@@ -36,22 +45,24 @@ test("offline source gate verifies exact production assets, license inventory an
 test("receipt parser requires native execution, exact pins and all fail-closed controls", () => {
   // These are parser fixtures only; their success is never native inference proof.
   const valid = validReceipt();
-  assert.deepEqual(parseInferenceResult(output(valid)), valid);
+  assert.deepEqual(parseReceipt(output(valid)), valid);
   for (const key of Object.keys(valid)) {
     const missing = { ...valid };
     delete missing[key];
-    assert.throws(() => parseInferenceResult(output(missing)), assert.AssertionError, key);
+    assert.throws(() => parseReceipt(output(missing)), assert.AssertionError, key);
   }
   for (const [key, wrong] of Object.entries({
+    proofNonce: "0".repeat(32), variant: "face-no-op", outputSentinelChecks: 0, outputSentinelsOverwritten: false,
     scope: "host-mock", runtime: "play-services", faceSha256: "0".repeat(64), maskSha256: "0".repeat(64),
     checks: 12, faceInvocations: 0, maskInvocations: 0, customOpWithoutXnnpackRejected: false,
     corruptModelsRejected: false, internetPermission: true, syntheticInputsOnly: false,
     physicalDeviceEvidence: true, visualSubjectQualityEvidence: true,
-  })) assert.throws(() => parseInferenceResult(output({ ...valid, [key]: wrong })), assert.AssertionError, key);
+  })) assert.throws(() => parseReceipt(output({ ...valid, [key]: wrong })), assert.AssertionError, key);
   for (const invalid of ["", output(valid).replace("INSTRUMENTATION_CODE: -1", "INSTRUMENTATION_CODE: 0"),
     output(valid) + output(valid), output(valid) + "CHILLYWOOD_LOCAL_INFERENCE_FAIL custom op",
-    output(valid) + "INSTRUMENTATION_FAILED", output(valid) + "INSTRUMENTATION_ABORTED"]) {
-    assert.throws(() => parseInferenceResult(invalid), assert.AssertionError);
+    output(valid) + "INSTRUMENTATION_FAILED", output(valid) + "INSTRUMENTATION_ABORTED",
+    output(valid) + "INSTRUMENTATION_CODE: 0"]) {
+    assert.throws(() => parseReceipt(invalid), assert.AssertionError);
   }
 });
 
@@ -65,8 +76,61 @@ test("native instrumentation requests raw completion status and rejects a stream
     assert.AssertionError, "the former stream-only invocation must fail the regression gate");
   const receipt = validReceipt();
   const streamOnly = `CHILLYWOOD_LOCAL_INFERENCE_PASS ${JSON.stringify(receipt)}\n`;
-  assert.throws(() => parseInferenceResult(streamOnly), /Instrumentation must finish successfully/u);
-  assert.deepEqual(parseInferenceResult(output(receipt)), receipt);
+  assert.throws(() => parseReceipt(streamOnly), /Instrumentation must finish successfully/u);
+  assert.deepEqual(parseReceipt(output(receipt)), receipt);
+});
+
+test("no-op native-call controls require a nonce-bound specific rejection and canceled status", () => {
+  for (const [variant, errorType, message] of [
+    ["face-no-op", "java.lang.AssertionError", "Face output sentinel was not overwritten by native inference"],
+    ["mask-no-op", "java.lang.IllegalStateException", "Invalid local person confidence"],
+  ]) {
+    const receipt = { proofNonce, variant, errorType, message };
+    const failed = value => `CHILLYWOOD_LOCAL_INFERENCE_FAIL ${JSON.stringify(value)}\nINSTRUMENTATION_CODE: 0\n`;
+    const parseFailure = value => parseRejectedNoOpResult(value, proofNonce, variant);
+    assert.deepEqual(parseFailure(failed(receipt)), receipt);
+    for (const key of Object.keys(receipt)) {
+      const missing = { ...receipt };
+      delete missing[key];
+      assert.throws(() => parseFailure(failed(missing)), assert.AssertionError, key);
+      assert.throws(() => parseFailure(failed({ ...receipt, [key]: "unrelated" })), assert.AssertionError, key);
+    }
+    for (const invalid of ["", failed(receipt).replace("INSTRUMENTATION_CODE: 0", ""),
+      failed(receipt).replace("INSTRUMENTATION_CODE: 0", "INSTRUMENTATION_CODE: -1"),
+      failed(receipt) + failed(receipt), failed(receipt) + output(validReceipt()),
+      failed(receipt) + "INSTRUMENTATION_FAILED", failed(receipt) + "INSTRUMENTATION_ABORTED",
+      failed(receipt) + "INSTRUMENTATION_CODE: -1"]) assert.throws(() => parseFailure(invalid), assert.AssertionError);
+  }
+});
+
+test("each no-op mutation removes exactly its native call and preserves the other", () => {
+  const source = fs.readFileSync("modules/chillywood-camera-effects/android/src/main/java/expo/modules/chillywoodcameraeffects/LocalCameraInference.java", "utf8");
+  const faceCall = "interpreter.runForMultipleInputsOutputs(new Object[] {input}, output);";
+  const maskCall = "interpreter.run(input, maskValues);";
+  for (const [variant, removed, retained] of [["face-no-op", faceCall, maskCall], ["mask-no-op", maskCall, faceCall]]) {
+    const mutant = withoutNativeCall(source, variant);
+    assert(!mutant.includes(removed));
+    assert(mutant.includes(retained));
+    assert.equal(mutant.replace(`/* ${variant}: native interpreter call intentionally omitted */`, removed), source);
+    assert.throws(() => withoutNativeCall(mutant, variant), assert.AssertionError);
+    assert.throws(() => withoutNativeCall(source + removed, variant), assert.AssertionError);
+  }
+  assert.throws(() => withoutNativeCall(source, "production"), assert.AssertionError);
+});
+
+test("receipt hashes and build paths bind an independent snapshot despite later source edits", () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "camera-inference-snapshot-test-"));
+  try {
+    const first = snapshotBuildInputs(path.join(temporary, "first"));
+    const expected = verifySource(first);
+    const build = snapshotBuildInputs(path.join(temporary, "build"), first);
+    fs.writeFileSync(path.join(first.productionRoot, "java/expo/modules/chillywoodcameraeffects/LocalCameraInference.java"), "changed adapter");
+    fs.writeFileSync(path.join(first.productionRoot, "assets/chillywood_models/selfie_segmenter.tflite"), "changed model");
+    fs.writeFileSync(path.join(first.harnessRoot, "AndroidManifest.xml"), "changed manifest");
+    assert.deepEqual(verifySource(build), expected);
+    assert.deepEqual(build.harnessFiles, first.harnessFiles);
+    assert.notEqual(fs.readFileSync(path.join(build.harnessRoot, "AndroidManifest.xml"), "utf8"), "changed manifest");
+  } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
 });
 
 function assertRequiredLane(source, reusable) {

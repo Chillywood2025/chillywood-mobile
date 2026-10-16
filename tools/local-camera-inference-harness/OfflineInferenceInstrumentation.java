@@ -9,8 +9,12 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.json.JSONObject;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.InterpreterApi;
@@ -20,15 +24,23 @@ public final class OfflineInferenceInstrumentation extends Instrumentation {
   private int checks;
   private int faceInvocations;
   private int maskInvocations;
+  private int outputSentinelChecks;
+  private String proofNonce;
+  private String variant;
 
   @Override public void onCreate(Bundle arguments) {
     super.onCreate(arguments);
+    proofNonce = arguments == null ? null : arguments.getString("proofNonce");
+    variant = arguments == null ? null : arguments.getString("variant");
     start();
   }
 
   @Override public void onStart() {
     Bundle result = new Bundle();
     try {
+      check(proofNonce != null && proofNonce.matches("[0-9a-f]{32}"), "A valid proof nonce is required");
+      check("production".equals(variant) || "face-no-op".equals(variant) || "mask-no-op".equals(variant),
+          "A recognized inference variant is required");
       Context context = getTargetContext();
       assertIsolatedPackage(context);
       byte[] faceBytes = asset(context, LocalCameraInference.FACE_ASSET);
@@ -49,7 +61,9 @@ public final class OfflineInferenceInstrumentation extends Instrumentation {
           for (boolean pattern : new boolean[] {false, true}) {
             byte[] frame = syntheticNv21(128, 96, pattern);
             byte[] before = frame.clone();
+            seedFaceOutputSentinels(face);
             EffectMath.FaceRegion region = face.detectFace(frame, 128, 96, rotation);
+            assertFaceOutputSentinelsOverwritten(face);
             faceInvocations++;
             if (!pattern) check(region == null, "A blank synthetic frame must not invent a face");
             if (region != null) {
@@ -59,7 +73,9 @@ public final class OfflineInferenceInstrumentation extends Instrumentation {
                   && region.x + region.width <= 1.00001f && region.y + region.height <= 1.00001f,
                   "Normalized face bounds");
             }
+            seedMaskOutputSentinels(mask);
             EffectMath.Mask first = mask.segment(frame, 128, 96, rotation);
+            assertMaskOutputSentinelsOverwritten(mask);
             maskInvocations++;
             check(first.width == 256 && first.height == 256 && first.values.length == 65536,
                 "Exact segmentation tensor shape");
@@ -67,7 +83,9 @@ public final class OfflineInferenceInstrumentation extends Instrumentation {
               check(Float.isFinite(value) && value >= 0 && value <= 1, "Finite person confidence in [0,1]");
             }
             float[] firstValues = first.values.clone();
+            seedMaskOutputSentinels(mask);
             EffectMath.Mask repeat = mask.segment(frame, 128, 96, rotation);
+            assertMaskOutputSentinelsOverwritten(mask);
             maskInvocations++;
             for (int i = 0; i < firstValues.length; i++) {
               check(Math.abs(firstValues[i] - repeat.values[i]) <= .00001f,
@@ -78,7 +96,11 @@ public final class OfflineInferenceInstrumentation extends Instrumentation {
         }
       }
       check(faceInvocations == 8 && maskInvocations == 16, "All synthetic cases really invoked native inference");
+      check(outputSentinelChecks == 8 * 896 * 17 + 16 * 256 * 256,
+          "Every native output must overwrite its sentinel on every invocation");
       JSONObject report = new JSONObject();
+      report.put("proofNonce", proofNonce);
+      report.put("variant", variant);
       report.put("scope", "isolated-android-x86_64-production-adapter-inference");
       report.put("runtime", "standalone-litert-1.4.1-application-only-xnnpack");
       report.put("faceSha256", LocalCameraInference.FACE_SHA256);
@@ -86,6 +108,8 @@ public final class OfflineInferenceInstrumentation extends Instrumentation {
       report.put("checks", checks);
       report.put("faceInvocations", faceInvocations);
       report.put("maskInvocations", maskInvocations);
+      report.put("outputSentinelsOverwritten", true);
+      report.put("outputSentinelChecks", outputSentinelChecks);
       report.put("customOpWithoutXnnpackRejected", true);
       report.put("corruptModelsRejected", true);
       report.put("internetPermission", false);
@@ -97,9 +121,63 @@ public final class OfflineInferenceInstrumentation extends Instrumentation {
     } catch (Throwable failure) {
       String message = String.valueOf(failure.getMessage());
       if (message.length() > 600) message = message.substring(0, 600);
-      result.putString("stream", "\nCHILLYWOOD_LOCAL_INFERENCE_FAIL "
-          + failure.getClass().getName() + ": " + message + "\n");
+      Map<String, Object> report = new LinkedHashMap<>();
+      report.put("proofNonce", proofNonce == null ? JSONObject.NULL : proofNonce);
+      report.put("variant", variant == null ? JSONObject.NULL : variant);
+      report.put("errorType", failure.getClass().getName());
+      report.put("message", message);
+      result.putString("stream", "\nCHILLYWOOD_LOCAL_INFERENCE_FAIL " + new JSONObject(report) + "\n");
       finish(Activity.RESULT_CANCELED, result);
+    }
+  }
+
+  // Reflection is confined to this test APK: production source and APIs remain
+  // unchanged, while skipping a native run cannot pass using default zeros.
+  private static <T> T inferenceField(LocalCameraInference inference, String name, Class<T> type)
+      throws ReflectiveOperationException {
+    Field field = LocalCameraInference.class.getDeclaredField(name);
+    field.setAccessible(true);
+    return type.cast(field.get(inference));
+  }
+
+  private void seedFaceOutputSentinels(LocalCameraInference face) throws ReflectiveOperationException {
+    for (String name : new String[] {"faceBoxes", "faceScores"}) {
+      float[][][] output = inferenceField(face, name, float[][][].class);
+      for (float[][] batch : output) for (float[] row : batch) Arrays.fill(row, Float.NaN);
+    }
+  }
+
+  private void assertFaceOutputSentinelsOverwritten(LocalCameraInference face)
+      throws ReflectiveOperationException {
+    for (String name : new String[] {"faceBoxes", "faceScores"}) {
+      float[][][] output = inferenceField(face, name, float[][][].class);
+      for (float[][] batch : output) for (float[] row : batch) for (float value : row) {
+        check(Float.isFinite(value), "Face output sentinel was not overwritten by native inference");
+        outputSentinelChecks++;
+      }
+    }
+  }
+
+  private static ByteBuffer maskOutputView(LocalCameraInference mask) throws ReflectiveOperationException {
+    ByteBuffer output = inferenceField(mask, "maskValues", ByteBuffer.class);
+    // A duplicate shares bytes, but preserves the production buffer's position,
+    // limit and byte order. Duplicate buffers need their byte order set explicitly.
+    ByteBuffer view = output.duplicate().order(ByteOrder.nativeOrder());
+    view.clear();
+    return view;
+  }
+
+  private void seedMaskOutputSentinels(LocalCameraInference mask) throws ReflectiveOperationException {
+    ByteBuffer view = maskOutputView(mask);
+    for (int offset = 0; offset < view.capacity(); offset += Float.BYTES) view.putFloat(offset, Float.NaN);
+  }
+
+  private void assertMaskOutputSentinelsOverwritten(LocalCameraInference mask)
+      throws ReflectiveOperationException {
+    ByteBuffer view = maskOutputView(mask);
+    for (int offset = 0; offset < view.capacity(); offset += Float.BYTES) {
+      check(Float.isFinite(view.getFloat(offset)), "Mask output sentinel was not overwritten by native inference");
+      outputSentinelChecks++;
     }
   }
 
