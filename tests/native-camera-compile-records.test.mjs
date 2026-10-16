@@ -215,6 +215,17 @@ test("Gradle queries preserve the full graph while selecting strict original AAR
   assert.match(source, /type: artifact\.variant\.attributes\.getAttribute\(ArtifactTypeDefinition\.ARTIFACT_TYPE_ATTRIBUTE\)/u);
 });
 
+test("manifest task lookup is deferred until AGP has registered the selected variant tasks", () => {
+  const source = fs.readFileSync(new URL("../scripts/compile-native-camera-effects.mjs", import.meta.url), "utf8");
+  const app = source.slice(source.indexOf("if (p.path == ':app') {"));
+  const registration = app.indexOf("p.tasks.register('cameraEffects' + variant + 'RuntimeClosure')");
+  assert(registration > 0);
+  assert.doesNotMatch(app.slice(0, registration), /p\.tasks\.named/u,
+    "AGP may register process*MainManifest after the current afterEvaluate callback");
+  assert.match(app, /dependsOn manifestTaskName\s*doLast \{\s*def manifestTask = p\.tasks\.named\(manifestTaskName\)\.get\(\)/u);
+  assert.match(app, /manifestTaskPath: manifestTask\.path/u, "Proof must still bind the actual executed manifest task");
+});
+
 test("retained native diagnostics redact host paths, credentials and URL query payloads", () => {
   const output = "Failure in /private/worktree/run/project; HOME=/private; https://user:password@repo.example/artifact?token=abc\nAuthorization: Bearer bearer-secret\napi_key=value\nBUILD FAILED";
   const redacted = redactNativeDiagnostics(output, ["/private", "/private/worktree/run"]);
@@ -244,8 +255,10 @@ test("both exact source compile targets are derived from actual autolinking, nev
     ":chillywood-camera-effects:compileDebugKotlin", ":expo-camera:compileDebugKotlin",
   ]);
   assert.deepEqual(androidNativeCompileTasks(projects), [
-    ":chillywood-camera-effects:compileDebugKotlin", ":expo-camera:compileDebugKotlin",
-    ":chillywood-camera-effects:compileReleaseKotlin", ":expo-camera:compileReleaseKotlin",
+    ":chillywood-camera-effects:compileDebugKotlin", ":chillywood-camera-effects:compileDebugJavaWithJavac",
+    ":expo-camera:compileDebugKotlin", ":expo-camera:compileDebugJavaWithJavac",
+    ":chillywood-camera-effects:compileReleaseKotlin", ":chillywood-camera-effects:compileReleaseJavaWithJavac",
+    ":expo-camera:compileReleaseKotlin", ":expo-camera:compileReleaseJavaWithJavac",
     ":expo-dev-launcher:compileDebugKotlin", ":chillywood-camera-effects:cameraEffectsCompileClasspath",
     ":app:cameraEffectsDebugRuntimeClosure", ":app:cameraEffectsReleaseRuntimeClosure",
   ]);

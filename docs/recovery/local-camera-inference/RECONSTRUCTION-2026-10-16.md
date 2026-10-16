@@ -174,7 +174,8 @@ Independent review and all 19 scanner tests passed; actual native validation
 of these new launcher changes remains pending.
 
 The compiler now requires independent Debug and Release app runtime graphs,
-merged manifests and original AAR byte proofs, both camera variants, and the
+merged manifests and original AAR byte proofs, both camera variants' Java and
+Kotlin outputs, and the
 changed launcher Debug Kotlin source. It binds the literal canonical Android
 internal profile environment while declaring its dummy backend fixtures and
 absence of remote EAS environment. These local checks do not certify an exact
@@ -182,6 +183,14 @@ signed build. Fresh complete execution and exact-head Required Validation remain
 pending. The latest plugin inputs require resealing the unshipped V15 candidate;
 the earlier component-scoped AOSP and iOS receipts remain preserved at their
 original source identities.
+
+The next local run at `b334c0c4` stopped because a manifest task was resolved
+during project configuration before AGP had registered it. The correction keeps
+the task dependency lazy and reads the actual task during execution. A separate
+successful Gradle task-graph dry run also confirmed that requesting camera
+`compile*Kotlin` tasks does not schedule their final `compile*JavaWithJavac`
+outputs. Explicit Java targets for both variants close that coverage gap; a
+Kotlin-only pass is not presented as complete Java compilation.
 
 Final build dependency/linker inputs and inspection of the exact signed artifacts
 remain separate distribution gates. Android must bind every packaged module,

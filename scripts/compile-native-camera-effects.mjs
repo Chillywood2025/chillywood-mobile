@@ -24,7 +24,9 @@ export function resolveAndroidProfileEnvironment(eas) {
 }
 
 export function androidNativeCompileTasks(cameraProjects) {
-  return [...ANDROID_VARIANTS.flatMap(variant => cameraProjects.map(({ name }) => `:${name}:compile${variantTitle(variant)}Kotlin`)),
+  return [...ANDROID_VARIANTS.flatMap(variant => cameraProjects.flatMap(({ name }) => [
+    `:${name}:compile${variantTitle(variant)}Kotlin`, `:${name}:compile${variantTitle(variant)}JavaWithJavac`,
+  ])),
     ":expo-dev-launcher:compileDebugKotlin", ":chillywood-camera-effects:cameraEffectsCompileClasspath",
     ...ANDROID_VARIANTS.map(variant => `:app:cameraEffects${variantTitle(variant)}RuntimeClosure`)];
 }
@@ -405,8 +407,10 @@ gradle.projectsEvaluated {
       throw new GradleException('Camera source project directory differs from autolinking: ' + expected.name)
     }
     ['Debug', 'Release'].each { variant ->
-      if (actual.tasks.findByName('compile' + variant + 'Kotlin') == null) {
-        throw new GradleException('Required camera Kotlin compile task missing: ' + expected.name + ':' + variant)
+      ['Kotlin', 'JavaWithJavac'].each { compiler ->
+        if (actual.tasks.findByName('compile' + variant + compiler) == null) {
+          throw new GradleException('Required camera compile task missing: ' + expected.name + ':' + variant + compiler)
+        }
       }
     }
   }
@@ -434,10 +438,13 @@ allprojects { p ->
     if (p.path == ':app') {
       ['Debug', 'Release'].each { variant ->
       def variantName = variant.toLowerCase()
-      def manifestTask = p.tasks.named('process' + variant + 'MainManifest')
+      def manifestTaskName = 'process' + variant + 'MainManifest'
       p.tasks.register('cameraEffects' + variant + 'RuntimeClosure') {
-        dependsOn manifestTask
+        // AGP registers variant tasks after this afterEvaluate callback. Resolve
+        // the dependency by name lazily, and inspect its actual outputs at run time.
+        dependsOn manifestTaskName
         doLast {
+          def manifestTask = p.tasks.named(manifestTaskName).get()
           def runtime = p.configurations.getByName(variantName + 'RuntimeClasspath')
           def graph = runtime.incoming.resolutionResult
           def unresolved = graph.allDependencies.findAll { it instanceof UnresolvedDependencyResult }
@@ -475,14 +482,14 @@ allprojects { p ->
               type: artifact.variant.attributes.getAttribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE),
               file: artifact.file.absolutePath]
           }.sort { a, b -> a.coordinate <=> b.coordinate ?: a.file <=> b.file }
-          def manifests = manifestTask.get().outputs.files.asFileTree.files.findAll {
+          def manifests = manifestTask.outputs.files.asFileTree.files.findAll {
             it.name == 'AndroidManifest.xml'
           }.collect { it.absolutePath }.unique().sort()
           if (manifests.isEmpty()) throw new GradleException('Actual merged app manifest not found in manifest task outputs')
           println('CHILLYWOOD_CAMERA_' + variant.toUpperCase() + '_RUNTIME_CLOSURE=' + JsonOutput.toJson([
             variant: variantName, profile: System.getenv('EAS_BUILD_PROFILE'),
             platform: System.getenv('CHILLYWOOD_INTERNAL_V2_OTA_PLATFORM'),
-            graph: graphRecord, artifacts: artifacts, manifestTaskPath: manifestTask.get().path, manifests: manifests]))
+            graph: graphRecord, artifacts: artifacts, manifestTaskPath: manifestTask.path, manifests: manifests]))
         }
       }
       }
