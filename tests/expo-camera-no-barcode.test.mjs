@@ -25,6 +25,10 @@ function fixture(t, version = patch.SDK_VERSION) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const sdk = path.join(root, "node_modules/expo-camera");
   fs.mkdirSync(sdk, { recursive: true });
+  fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({
+    name: "camera-source-build-fixture",
+    expo: { autolinking: { android: { buildFromSource: ["^expo-camera$"] } } },
+  }));
   fs.writeFileSync(path.join(sdk, "package.json"), JSON.stringify({ name: "expo-camera", version }));
   for (const [name, source] of original) {
     const filename = path.join(sdk, name);
@@ -88,6 +92,53 @@ test("prebuild applies all files and repeated runs preserve the same bytes", (t)
   assert.deepEqual(patch.applyNoBarcodePatch(root), first);
   assert.equal(first.files.length, 10);
   for (const [name, source] of transformed) assert.equal(fs.readFileSync(path.join(sdk, name), "utf8"), source);
+});
+
+test("production Android autolinking resolves the exact patched Expo Camera source project", () => {
+  assert.doesNotThrow(() => patch.assertSourceBuildConfigured(projectRoot));
+  const autolinkingRoot = path.dirname(require.resolve("expo-modules-autolinking/package.json"));
+  const cli = path.join(autolinkingRoot, "bin/expo-modules-autolinking.js");
+  const resolved = JSON.parse(execFileSync(process.execPath, [cli, "resolve", "--platform", "android", "--json", "--project-root", projectRoot], {
+    cwd: projectRoot, encoding: "utf8", maxBuffer: 4 * 1024 * 1024,
+  }));
+  assert.deepEqual(resolved.configuration.buildFromSource, ["^expo-camera$"]);
+  const cameras = resolved.modules.filter(({ packageName }) => packageName === "expo-camera");
+  assert.equal(cameras.length, 1);
+  assert.equal(cameras[0].packageVersion, patch.SDK_VERSION);
+  assert.equal(cameras[0].projects.length, 1);
+  const camera = cameras[0].projects[0];
+  assert.equal(camera.name, "expo-camera");
+  assert.equal(fs.realpathSync(camera.sourceDir), fs.realpathSync(path.join(sdkRoot, "android")));
+  assert.equal(camera.publication.version, patch.SDK_VERSION, "published AAR exists, so source opt-out is necessary");
+  const pattern = new RegExp(resolved.configuration.buildFromSource[0]);
+  assert.equal(pattern.test(camera.name), true);
+  for (const unrelated of ["expo-camera-extra", "other-expo-camera", "expo-camera2", "expo"]) assert.equal(pattern.test(unrelated), false);
+
+  // Verify the installed Gradle implementation consumes this as a regex over
+  // project.name and short-circuits publication selection. The separate native
+  // compile gate must still prove the real Gradle source project is present.
+  const kotlinRoot = path.join(autolinkingRoot, "android/expo-gradle-plugin");
+  const configuration = fs.readFileSync(path.join(kotlinRoot, "expo-autolinking-plugin-shared/src/main/kotlin/expo/modules/plugin/configuration/ExpoAutolinkingConfig.kt"), "utf8");
+  const settings = fs.readFileSync(path.join(kotlinRoot, "expo-autolinking-settings-plugin/src/main/kotlin/expo/modules/plugin/SettingsManager.kt"), "utf8");
+  assert.match(configuration, /buildFromSource\.map\s*\{\s*it\.toRegex\(\)\s*\}/u);
+  assert.match(settings, /config\.configuration\.buildFromSourceRegex\.any\s*\{\s*it\.matches\(project\.name\)\s*\}/u);
+  assert.match(settings, /shouldUsePublication\s*=\s*!forceBuildFromSource\s*&&\s*evaluateShouldUsePublicationScript\(project\)/u);
+});
+
+test("missing, misplaced and wrong source-build pins fail before any source writes", (t) => {
+  const { root, sdk } = fixture(t);
+  for (const expo of [
+    undefined,
+    {},
+    { autolinking: { buildFromSource: ["^expo-camera$"] } },
+    { autolinking: { ios: { buildFromSource: ["^expo-camera$"] } } },
+    ...[undefined, [], "^expo-camera$", ["expo-camera"], ["^expo_camera$"], ["^expo-camera.*$"], [".*"], ["^expo-camera$", ".*"]]
+      .map(buildFromSource => ({ autolinking: { android: { buildFromSource } } })),
+  ]) {
+    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "camera-source-build-fixture", expo }));
+    assert.throws(() => patch.applyNoBarcodePatch(root), /expo\.autolinking\.android\.buildFromSource must be/u);
+    for (const [name, source] of original) assert.equal(fs.readFileSync(path.join(sdk, name), "utf8"), source, name);
+  }
 });
 
 test("version drift and an unknown source path fail closed", (t) => {

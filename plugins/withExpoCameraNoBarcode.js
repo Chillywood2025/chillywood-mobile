@@ -6,6 +6,7 @@ const specification = require("./expo-camera-no-barcode/patches.json");
 
 const PLUGIN_NAME = "with-expo-camera-no-barcode";
 const SDK_VERSION = "17.0.10";
+const SOURCE_BUILD_PATTERN = "^expo-camera$";
 const PATCHES = specification.files;
 const digest = (source) => crypto.createHash("sha256").update(source).digest("hex");
 
@@ -44,7 +45,19 @@ function transformSource(relativePath, source, reverse = false) {
   return result;
 }
 
+function assertSourceBuildConfigured(projectRoot) {
+  const application = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"));
+  const patterns = application.expo?.autolinking?.android?.buildFromSource;
+  // SDK 54 otherwise links Expo Camera's published AAR and ignores our Kotlin
+  // changes. Require the reviewed Android-only, exact Gradle-project regex;
+  // a broad wildcard, iOS option or top-level lookalike is not this contract.
+  if (!Array.isArray(patterns) || patterns.length !== 1 || patterns[0] !== SOURCE_BUILD_PATTERN) {
+    throw new Error(`${PLUGIN_NAME}: package.json expo.autolinking.android.buildFromSource must be ["${SOURCE_BUILD_PATTERN}"] so the patched Expo Camera source is compiled.`);
+  }
+}
+
 function applyNoBarcodePatch(projectRoot) {
+  assertSourceBuildConfigured(projectRoot);
   const packagePath = require.resolve("expo-camera/package.json", { paths: [projectRoot] });
   const sdk = JSON.parse(fs.readFileSync(packagePath, "utf8"));
   if (sdk.version !== SDK_VERSION || specification.packageVersion !== SDK_VERSION) {
@@ -74,4 +87,4 @@ function withExpoCameraNoBarcode(config) {
 }
 
 module.exports = createRunOncePlugin(withExpoCameraNoBarcode, PLUGIN_NAME, "1.0.0");
-module.exports.__test = { SDK_VERSION, PATCHES, digest, transformSource, applyNoBarcodePatch };
+module.exports.__test = { SDK_VERSION, SOURCE_BUILD_PATTERN, PATCHES, digest, transformSource, assertSourceBuildConfigured, applyNoBarcodePatch };
