@@ -24,6 +24,7 @@ export type CreatorVideoComment = {
   moderatedAt: string | null;
   moderatedBy: string | null;
   createdAt: string;
+  displayCreatedAt?: string | null;
   updatedAt: string;
   authorName: string;
   authorUsername: string | null;
@@ -98,6 +99,7 @@ const parseCreatorVideoComment = (
     moderatedAt: normalizeText(row.moderated_at) || null,
     moderatedBy: normalizeText(row.moderated_by) || null,
     createdAt: normalizeText(row.created_at) || new Date().toISOString(),
+    displayCreatedAt: normalizeText(row.created_at) || null,
     updatedAt: normalizeText(row.updated_at) || normalizeText(row.created_at) || new Date().toISOString(),
     authorName: displayName,
     authorUsername: username,

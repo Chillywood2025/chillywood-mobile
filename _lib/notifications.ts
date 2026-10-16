@@ -250,6 +250,7 @@ export type NotificationRecord = {
   dismissedAt: string | null;
   createdAt: string;
   deliveredAt: string | null;
+  displayCreatedAt?: string | null;
   isRead: boolean;
   isDismissed: boolean;
   isImportant: boolean;
@@ -743,6 +744,7 @@ const parseNotificationRow = (row: NotificationRow | null): NotificationRecord |
     readAt,
     dismissedAt,
     createdAt: normalizeIsoTimestamp(row.created_at) ?? new Date().toISOString(),
+    displayCreatedAt: normalizeText(row.created_at) || null,
     deliveredAt: normalizeIsoTimestamp(row.delivered_at),
     isRead: !!readAt,
     isDismissed: !!dismissedAt,

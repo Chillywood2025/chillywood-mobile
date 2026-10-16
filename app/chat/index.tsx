@@ -1,3 +1,4 @@
+import { ConversationTimestamp } from "../../components/social/conversation-timestamp";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -60,13 +61,6 @@ function buildPreview(thread: ChatThreadSummary) {
     return `${thread.activeCallType === "video" ? "Video" : "Voice"} call active`;
   }
   return thread.lastMessagePreview ? decodeVisiblePercentEscapes(thread.lastMessagePreview) : "Start the thread";
-}
-
-function formatThreadTime(value?: string) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "";
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
 function getIdentityLabel(thread: ChatThreadSummary) {
@@ -878,7 +872,7 @@ export default function ChillyChatInboxScreen() {
                       </View>
                     ) : null}
                   </View>
-                  <Text style={styles.threadTime}>{formatThreadTime(item.lastMessageAt ?? item.updatedAt)}</Text>
+                  <ConversationTimestamp style={styles.threadTime} value={item.displayLastActivityAt === undefined ? (item.lastMessageAt ?? item.updatedAt) : item.displayLastActivityAt} />
                 </View>
                 <View style={styles.threadMetaRow}>
                   <View style={[styles.threadKindPill, officialAccount && styles.threadKindPillOfficial]}>

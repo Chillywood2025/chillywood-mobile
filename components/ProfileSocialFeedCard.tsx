@@ -1,3 +1,5 @@
+import { ConversationTimestamp } from "./social/conversation-timestamp";
+import { conversationCreatedAt } from "../_lib/conversationTimestamp";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import React from "react";
 import {
@@ -191,7 +193,7 @@ export function ProfileSocialFeedCard({
           {item.notification.body ? (
             <Text style={styles.bodyText} numberOfLines={3}>{item.notification.body}</Text>
           ) : null}
-          <Text style={styles.meta}>{formatDate(item.notification.createdAt)}</Text>
+          <ConversationTimestamp style={styles.meta} value={conversationCreatedAt(item.notification)} />
         </View>
       </View>
       {item.notification.target.supported ? (

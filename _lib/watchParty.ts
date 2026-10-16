@@ -138,6 +138,7 @@ export type WatchPartyMessage = {
   kind: "chat" | "reaction" | "system";
   body: string;
   createdAt: string;
+  displayCreatedAt?: string | null;
   attachments: SocialAttachment[];
 };
 
@@ -1854,6 +1855,7 @@ export async function sendPartyMessageRecord(
       kind,
       body: String(created.text ?? safeBody),
       createdAt: String(created.created_at ?? new Date().toISOString()),
+      displayCreatedAt: created.created_at ?? null,
       attachments: [],
     };
   } catch {
@@ -1906,6 +1908,7 @@ export async function fetchPartyMessages(
       kind: "chat",
       body: String(row.text ?? ""),
       createdAt: String(row.created_at ?? new Date().toISOString()),
+      displayCreatedAt: row.created_at ?? null,
       attachments: attachmentsByMessageId.get(String(row.id ?? "")) ?? [],
     }));
   } catch {

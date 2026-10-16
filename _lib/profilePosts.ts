@@ -33,6 +33,7 @@ export type ProfilePost = {
 
 export type ProfilePostComment = {
   id: string;
+  displayCreatedAt?: string | null;
   postId: string;
   parentCommentId: string | null;
   userId: string;
@@ -127,6 +128,7 @@ const parseProfilePostComment = (
   return {
     id: normalizeText(row.id),
     postId: normalizeText(row.post_id),
+    displayCreatedAt: normalizeText(row.created_at) || null,
     parentCommentId: normalizeText(row.parent_comment_id) || null,
     userId,
     body: normalizeText(row.body),

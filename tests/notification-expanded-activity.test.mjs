@@ -259,7 +259,9 @@ const cases = [
   ["moderation_notice", "moderation_notice", "/settings", "Review notice"],
 ];
 const bellAst = sourceAst("components/notifications/notification-bell-button.tsx");
+const timestamps = run(fs.readFileSync(path.join(root, "_lib/conversationTimestamp.ts"), "utf8")).exports;
 const rowRenderer = run(`${declaration(bellAst, "renderRow")}\nglobalThis.render = renderRow;`, {
+  ...timestamps, ConversationTimestamp: "ConversationTimestamp",
   resolveNotificationPath: service.resolveNotificationPath, formatNotificationTimestamp: () => "Today",
   busyId: null, styles: {}, View: "View", Text: "Text", TouchableOpacity: "TouchableOpacity",
   MaterialIcons: "Icon", ActivityIndicator: "ActivityIndicator", openNotification: () => {}, dismiss: () => {},
