@@ -12,7 +12,7 @@ through `resolve_profile_media_delivery`. That resolver checked exact object,
 Profile visibility and clean scan, but omitted the moderation status. Hiding
 only the rendered URL therefore did not revoke a previously known exact URL.
 
-The forward migration `20261016002724_profile_media_report_enforcement_repair.sql`
+The forward migration `20261016113149_profile_media_report_enforcement_repair.sql`
 changes exactly three existing functions and does not apply itself:
 
 - The report RPC locks the exact Profile row and installs a temporary context
@@ -78,8 +78,8 @@ tests/*.test.mjs`; Database runs `supabase test db`, then
 cases. Full database and native multi-session results must pass at the candidate
 head; source and PGlite tests alone are not physical or provider qualification.
 
-Production rollout, any client delivery and physical testing remain separately
-held. No networked backend, provider or device test is part of this repair.
+These source tests do not authorize production rollout, client delivery or
+physical testing. The later database deployment is recorded below.
 
 ## Cloud validation boundary (2026-10-16)
 
@@ -94,8 +94,32 @@ client tests execute in the cloud with synthetic subjects. Verified locally:
   runtime validation with the workflow's synthetic CI values, and diff checks pass.
 
 Native PostgreSQL,
-pgTAP and the full hosted database job remain **unverified** here: this workspace
+pgTAP and the full hosted database job were **unverified** in that cloud run: the workspace
 has no Docker/PostgreSQL/Supabase CLI runtime. The native runner fails closed
 at Docker discovery before connecting to any database. Authored native cases
-are not execution evidence. This is a source repair candidate, not permission
-to merge, deploy, apply Studio SQL, build, publish an OTA or claim device proof.
+are not execution evidence. Source validation does not grant permission to
+merge, deploy, apply Studio SQL, build, publish an OTA or claim device proof.
+
+## Production deployment receipt (2026-10-16)
+
+The separately authorized repair was applied to `bmkkhihfbmsnnmcqkoly` as
+`20261016113149_profile_media_report_enforcement_repair`. Readback at
+`2026-10-16T11:33:56.556Z` confirmed one new migration row, 427 total, with all
+426 earlier entries preserved. Exactly three approved function definitions
+matched their expected hashes; their identities, OIDs, owners, ACLs, security
+and search paths were unchanged. The other 1,102 app functions, 2,376 relation
+records, 578 policies, 391 triggers and 71 Edge-function metadata records were
+unchanged. Security advisors were unchanged and the project was `ACTIVE_HEALTHY`.
+The invalid-identity read-only resolver probe denied access as expected.
+
+The concise [deployment receipt](PROFILE_MEDIA_REPORT_ENFORCEMENT_DEPLOYMENT_2026_10_16.json)
+records separate source and deployed-payload hashes. The source filename now
+matches the deployed timestamp; its SQL bytes are unchanged. The exact
+[stored deployment statement](deployments/20261016113149_profile_media_report_enforcement_repair.payload.sql)
+is retained only as evidence, outside `supabase/migrations`. Its production-only
+guards pin the predeployment 426-row history and function metadata: do not use
+that wrapper for normal migration replay or redeployment. This alignment makes
+no database change.
+
+Studio remains unapplied. No real report action, app build, OTA, device or
+provider behavioral qualification was performed by this deployment.
