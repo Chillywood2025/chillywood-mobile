@@ -84,6 +84,12 @@ const recordedV13Source = {
   sha: "f2f58478871630f59e20d9bb9f0057dd096e105c",
   tree: "131e0f5b2d4deb5bcfb4f65caf0efc8a2bef22b5",
 };
+// Held signed Android106 contains refused ML Kit and must not be distributed
+// or executed. No V14 iOS build or physical qualification is asserted here.
+const recordedV14Source = {
+  sha: "d2ec4dc2a25d67e8f98b578496f5985359b9bebc",
+  tree: "4a2181bbba47a4d61bf131856e5301c6b7b34046",
+};
 
 test("recorded internal v3 cohorts retain their historical Git-native inputs", () => {
   const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
@@ -211,8 +217,8 @@ test("internal v13 supersedes the v12 runtimes without rewriting their historica
   }
 });
 
-test("camera effects use v14 while retaining the reviewed v13 source cohort", () => {
-  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+test("recorded v14 camera effects retain the reviewed v13 source cohort", () => {
+  const generation = JSON.parse(git(repo, "show", `${recordedV14Source.sha}:config/release/internal-native-generation.json`));
   const recorded = JSON.parse(git(repo, "show", `${recordedV13Source.sha}:config/release/internal-native-generation.json`));
   assert.equal(generation.generation, "internal-native-v14");
   assert.equal(generation.supersedes.generation, recorded.generation);
@@ -222,6 +228,25 @@ test("camera effects use v14 while retaining the reviewed v13 source cohort", ()
       repositoryRoot: repo, platform, sourceSha: recordedV13Source.sha, sourceTree: recordedV13Source.tree,
     }).digest);
     assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v14`);
+    assert.equal(generation.supersedes[`${platform}RuntimeVersion`], recorded.runtimeVersions[platform]);
+    assert.equal(generation.supersedes[`${platform}CompatibilityDigest`], recorded.nativeCompatibility[`${platform}Digest`]);
+    assert.match(generation.nativeCompatibility[`${platform}Digest`], /^[0-9a-f]{64}$/u);
+    assert.notEqual(generation.nativeCompatibility[`${platform}Digest`], recorded.nativeCompatibility[`${platform}Digest`]);
+    assert.equal(generation.channels[platform], recorded.channels[platform]);
+  }
+});
+
+test("local camera inference uses v15 without rewriting the held v14 source cohort", () => {
+  const generation = JSON.parse(fs.readFileSync(path.join(repo, "config/release/internal-native-generation.json"), "utf8"));
+  const recorded = JSON.parse(git(repo, "show", `${recordedV14Source.sha}:config/release/internal-native-generation.json`));
+  assert.equal(generation.generation, "internal-native-v15");
+  assert.equal(generation.supersedes.generation, recorded.generation);
+  assert.equal(generation.nativeCompatibility.algorithm, recorded.nativeCompatibility.algorithm);
+  for (const platform of ["android", "ios"]) {
+    assert.equal(recorded.nativeCompatibility[`${platform}Digest`], nativeSourceSnapshot({
+      repositoryRoot: repo, platform, sourceSha: recordedV14Source.sha, sourceTree: recordedV14Source.tree,
+    }).digest);
+    assert.equal(generation.runtimeVersions[platform], `1.0.0-${platform}-production-v15`);
     assert.equal(generation.supersedes[`${platform}RuntimeVersion`], recorded.runtimeVersions[platform]);
     assert.equal(generation.supersedes[`${platform}CompatibilityDigest`], recorded.nativeCompatibility[`${platform}Digest`]);
     assert.match(generation.nativeCompatibility[`${platform}Digest`], /^[0-9a-f]{64}$/u);
@@ -404,6 +429,35 @@ test("candidate internal generation digests match the canonical native input sna
     assert.equal(generation.nativeCompatibility[`${platform}Digest`], snapshot.digest);
   }
 });
+
+for (const [change, changedPaths] of Object.entries({
+  "LiteRT model adapter": [
+    "modules/chillywood-camera-effects/android/build.gradle",
+    "modules/chillywood-camera-effects/android/src/main/java/expo/modules/chillywoodcameraeffects/LocalCameraInference.java",
+  ],
+  "Expo scanner compile-out": [
+    "plugins/withExpoCameraNoBarcode.js",
+    "plugins/expo-camera-no-barcode/patches.json",
+  ],
+})) {
+  test(`android: ${change} cannot reuse held v14 binary or runtime`, (t) => {
+    const { root, baseline, publish } = fixture(t, recordedV14Source.sha);
+    for (const name of changedPaths) write(root, name, fs.readFileSync(path.join(repo, name)));
+    const changedSource = commit(root);
+    assert.notEqual(nativeSourceSnapshot({ repositoryRoot: root, platform: "android", sourceSha: baseline.sha }).digest,
+      nativeSourceSnapshot({ repositoryRoot: root, platform: "android", sourceSha: changedSource.sha }).digest,
+      "the concrete repair must change the canonical native inputs");
+    const oldBinary = publish("android");
+    assert.notEqual(oldBinary.status, 0);
+    assert.match(oldBinary.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(oldBinary.calls, [], "held v14 binary must stop before Expo or provider calls");
+    const rebuiltInOldRuntime = publish("android", changedSource);
+    assert.notEqual(rebuiltInOldRuntime.status, 0);
+    assert.match(rebuiltInOldRuntime.stderr, /OTA_RUNTIME_NATIVE_COHORT_INCOMPATIBLE/u);
+    assert.doesNotMatch(rebuiltInOldRuntime.stderr, /OTA_BINARY_NATIVE_SOURCE_INCOMPATIBLE/u);
+    assert.deepEqual(rebuiltInOldRuntime.calls, [], "a matching rebuilt binary cannot repurpose the v14 cohort");
+  });
+}
 
 for (const platform of ["android", "ios"]) {
   test(`${platform}: native camera effects cannot reuse the v13 binary or runtime`, (t) => {

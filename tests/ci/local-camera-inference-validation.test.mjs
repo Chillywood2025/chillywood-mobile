@@ -55,6 +55,20 @@ test("receipt parser requires native execution, exact pins and all fail-closed c
   }
 });
 
+test("native instrumentation requests raw completion status and rejects a stream-only receipt", () => {
+  const runner = fs.readFileSync("scripts/test-local-camera-inference-offline.mjs", "utf8");
+  const requireRawCompletion = source => assert.match(source,
+    /run\(binaries\.adb,\s*\["-s",\s*serial,\s*"shell",\s*"am",\s*"instrument",\s*"-w",\s*"-r",/u,
+    "Wait for instrumentation and request raw output containing INSTRUMENTATION_CODE");
+  requireRawCompletion(runner);
+  assert.throws(() => requireRawCompletion(runner.replace('"instrument", "-w", "-r",', '"instrument", "-w",')),
+    assert.AssertionError, "the former stream-only invocation must fail the regression gate");
+  const receipt = validReceipt();
+  const streamOnly = `CHILLYWOOD_LOCAL_INFERENCE_PASS ${JSON.stringify(receipt)}\n`;
+  assert.throws(() => parseInferenceResult(streamOnly), /Instrumentation must finish successfully/u);
+  assert.deepEqual(parseInferenceResult(output(receipt)), receipt);
+});
+
 function assertRequiredLane(source, reusable) {
   const native = source.jobs["native-inference"];
   assert.equal(native.if, "needs.plan.outputs.nativeRelease == 'true'");
@@ -122,6 +136,8 @@ test("all inference, provider closure, model and plugin edits select the require
     "modules/chillywood-camera-effects/android/src/main/assets/chillywood_models/selfie_segmenter.tflite",
     "modules/chillywood-camera-effects/third-party/models.json", "tests/local-camera-inference.test.mjs",
     "tests/camera-provider-closure.test.mjs", "tests/expo-camera-no-barcode.test.mjs",
+    "tests/native-camera-compile-records.test.mjs", "tests/release-native-source.test.mjs",
+    "tests/livekit-ios-static-framework-compatibility.test.mjs",
     "tests/ci/local-camera-inference-validation.test.mjs", ".github/workflows/local-camera-inference.yml",
   ]) {
     const plan = computeValidationPlan([file]);

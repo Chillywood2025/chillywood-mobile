@@ -215,7 +215,9 @@ with zipfile.ZipFile('unsigned.apk','a') as z:
       "Use an AOSP image, not a Google/Play-services image");
     run(binaries.adb, ["-s", serial, "install", "-t", "--no-incremental", path.join(temporary, "test-only.apk")]);
     installed = true;
-    const output = run(binaries.adb, ["-s", serial, "shell", "am", "instrument", "-w", `${packageName}/${runnerName}`], 10 * 60_000);
+    // Raw mode retains the terminal instrumentation result code alongside the
+    // stream receipt. Android's formatted mode prints only the stream bundle.
+    const output = run(binaries.adb, ["-s", serial, "shell", "am", "instrument", "-w", "-r", `${packageName}/${runnerName}`], 10 * 60_000);
     const receipt = parseInferenceResult(output);
     console.log(JSON.stringify({ ...receipt, apkSha256, sourceFiles: sourceReceipt.sourceFiles, artifacts: ARTIFACTS }, null, 2));
   } finally {

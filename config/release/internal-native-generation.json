@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
-  "generation": "internal-native-v14",
+  "generation": "internal-native-v15",
   "channels": {
     "android": "android-internal-v2",
     "ios": "ios-internal-v2"
   },
   "runtimeVersions": {
-    "android": "1.0.0-android-production-v14",
-    "ios": "1.0.0-ios-production-v14"
+    "android": "1.0.0-android-production-v15",
+    "ios": "1.0.0-ios-production-v15"
   },
   "supersedes": {
-    "generation": "internal-native-v13",
-    "androidRuntimeVersion": "1.0.0-android-production-v13",
-    "iosRuntimeVersion": "1.0.0-ios-production-v13",
-    "androidCompatibilityDigest": "88264f9d61b35d435705797c247759e298ccc90e385691c797df6e04b9b4a769",
-    "iosCompatibilityDigest": "c1fb06a12caf03e5d3e14716ca2ac63eb5017aeef1103fe6845a04b6638c5fc8"
+    "generation": "internal-native-v14",
+    "androidRuntimeVersion": "1.0.0-android-production-v14",
+    "iosRuntimeVersion": "1.0.0-ios-production-v14",
+    "androidCompatibilityDigest": "831741a268f6535e817ae5af6deb3b5c1ad17a0e4274923fa9dfcf5baa93119e",
+    "iosCompatibilityDigest": "2379ee957676700297617c60ad6b4cdb76566df3d20e8f768c763f919277f594"
   },
   "nativeCompatibility": {
     "algorithm": "git-native-inputs/v1",
@@ -37,6 +37,6 @@
         "group": "Chillywood Internal"
       }
     },
-    "reason": "V14 adds the native outgoing-camera effect module while retaining the V13 notification repairs. Android adds bundled ML Kit face detection and person segmentation; iOS uses Apple Vision and Core Image. The new module requires fresh signed binaries and cannot be delivered to V13 or older binaries by OTA. Prior generations, signed artifacts and historical physical evidence remain immutable. Source, synthetic and compile checks do not establish installed or remotely received effect quality; paired physical verification remains required. Android delivery additionally requires explicit approval of Google ML Kit diagnostic transmission and privacy-declaration review. Future delivery stays limited to the existing Google Play internal track and TestFlight Chillywood Internal group. Native automatic activation remains disabled; the app owns update activation. This source generation grants no build, submission, server activation, OTA or public-release authority."
+    "reason": "V15 replaces Android camera ML Kit inference with standalone application-only LiteRT and bundled models, and compiles out unused Expo Camera scanner paths, while retaining all five effects and the prior notification repairs. ML Kit diagnostic transmission remains refused. The iOS Apple Vision and Core Image implementation is unchanged; shared native configuration inputs are conservatively bound to the new iOS source cohort. Fresh signed binaries are required. Held Android106 belongs to V14 and remains barred from distribution and execution; the changed Android native inputs cannot reuse its binary or runtime. Prior generations, signed artifacts and historical physical evidence remain immutable. Source, synthetic AOSP inference and native compile checks do not establish installed or remotely received effect quality; paired physical verification remains required. Future delivery stays limited to the existing Google Play internal track and TestFlight Chillywood Internal group. Native automatic activation remains disabled; the app owns update activation. This source generation grants no build, submission, server activation, OTA or public-release authority."
   }
 }
