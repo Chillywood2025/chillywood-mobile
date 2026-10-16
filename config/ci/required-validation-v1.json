@@ -31,6 +31,7 @@
   },
   "categories": {
     "product": [
+      "_lib/watch-party/**",
       "app/**",
       "assets/**",
       "components/**",
@@ -54,6 +55,9 @@
       "app/auth/**",
       "app/callback.tsx",
       "app/chat/**",
+      "app/player/**",
+      "app/watch-party/**",
+      "_lib/watch-party/**",
       "app/*money*",
       "app/*purchase*",
       "app/*payout*",
