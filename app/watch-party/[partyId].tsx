@@ -1,3 +1,4 @@
+import { ConversationTimestamp } from "../../components/social/conversation-timestamp";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -209,6 +210,7 @@ type LocalMsg = {
   isMe: boolean;
   ts: number;
   attachments: SocialAttachment[];
+  displayCreatedAt?: string | null;
 };
 
 type RoomChatMessageRow = {
@@ -1063,6 +1065,7 @@ export default function WatchPartyRoomScreen() {
               authorLabel: String(row.user_id) === String(userId) ? "You" : resolveIdentityName(row.username, "Guest"),
               isMe: String(row.user_id) === String(userId),
               ts: new Date(String(row.created_at ?? new Date().toISOString())).getTime(),
+              displayCreatedAt: row.created_at ?? null,
               attachments: attachmentsByMessageId.get(String(row.id ?? "")) ?? [],
             }));
           setMessages(loaded);
@@ -1327,6 +1330,7 @@ export default function WatchPartyRoomScreen() {
             authorLabel: rowUserId === String(myUserIdRef.current ?? "").trim() ? "You" : rowUsername,
             isMe: rowUserId === String(myUserIdRef.current ?? "").trim(),
             ts: new Date(String(row.created_at ?? new Date().toISOString())).getTime(),
+            displayCreatedAt: row.created_at ?? null,
             attachments: [],
           });
           setTimeout(() => {
@@ -3244,6 +3248,7 @@ export default function WatchPartyRoomScreen() {
               >
                 <Text style={styles.partyCommentAuthor}>{message.authorLabel}</Text>
                 <Text style={styles.partyCommentBody}>{message.body}</Text>
+                <ConversationTimestamp style={styles.partyCommentAuthor} value={message.displayCreatedAt === undefined ? message.ts : message.displayCreatedAt} />
                 {message.attachments.length ? (
                   <View style={styles.partyCommentAttachmentStack}>
                     {message.attachments.map((attachment) => (

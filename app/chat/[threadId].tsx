@@ -1,3 +1,5 @@
+import { ConversationTimestamp } from "../../components/social/conversation-timestamp";
+import { conversationCreatedAt } from "../../_lib/conversationTimestamp";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -162,11 +164,6 @@ const buildAuthor = (members: ChatThreadMember[], senderUserId: string) => {
   return members.find((member) => member.userId === senderUserId)?.displayName ?? "User";
 };
 
-const formatStamp = (value: string) => {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "";
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-};
 
 const formatCallEventTitle = (event: ChillyChatCallEvent, currentUserId: string) => {
   const callLabel = event.callType === "video" ? "Video call" : "Voice call";
@@ -3761,9 +3758,7 @@ export default function ChillyChatThreadScreen() {
                 ))}
               </View>
             ) : null}
-            <Text style={[styles.messageTime, message.isMe && styles.messageTimeMe]}>
-              {formatStamp(message.createdAt)}
-            </Text>
+            <ConversationTimestamp style={[styles.messageTime, message.isMe && styles.messageTimeMe]} value={conversationCreatedAt(message)} />
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="Report message"
@@ -3819,7 +3814,7 @@ export default function ChillyChatThreadScreen() {
                 </View>
                 <View style={styles.callEventCopy}>
                   <Text style={styles.callEventTitle}>{formatCallEventTitle(event, currentUserId)}</Text>
-                  <Text style={styles.callEventMeta}>{formatStamp(event.createdAt)}</Text>
+                  <ConversationTimestamp style={styles.callEventMeta} value={conversationCreatedAt(event)} />
                 </View>
               </View>
             ))}

@@ -1,3 +1,5 @@
+import { ConversationTimestamp } from "../../components/social/conversation-timestamp";
+import { conversationCreatedAt } from "../../_lib/conversationTimestamp";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -3497,7 +3499,7 @@ export default function ProfileScreen() {
               <AppText scale="footnote" style={styles.profilePostCommentAuthor} numberOfLines={1}>
                 {commentAuthorLabel}
               </AppText>
-            <AppText scale="caption" style={styles.profilePostCommentMeta}>{formatProfilePostDate(comment.createdAt)}</AppText>
+              <ConversationTimestamp scale="caption" style={styles.profilePostCommentMeta} value={conversationCreatedAt(comment)} />
           </View>
           <LinkedText text={comment.body} style={styles.profilePostCommentBody} />
           {comment.attachments.length ? (

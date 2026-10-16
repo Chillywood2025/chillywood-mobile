@@ -13,6 +13,7 @@ import vm from "node:vm";
 import { createClient } from "@supabase/supabase-js";
 import { normalizeCommunicationRoomIdentifier } from "../_lib/communicationRoomIdentifier.mjs";
 import { buildLegacyPairedBrowserBundle } from "../tests/assurance/helpers/legacy-paired-browser-harness.mjs";
+import { waitForLegacyBrowserReceivedSilence } from "../tests/assurance/helpers/legacy-browser-silence-wait.mjs";
 
 const secrets = new Set();
 const redact = (input) => {
@@ -352,12 +353,10 @@ async function main() {
       let projected = await wait((state) => state.endpoints.every((endpoint) => endpoint.participants.some((participant) => participant.userId === userId && participant.micOn === false)),
         "authenticated mute must project through both production hooks");
       await proveOwnedRows(initialCall.roomId, projected, (id) => ({ mic: id !== userId, camera: true }));
-      await pause(300);
-      const silentStart = (await read()).endpoints.find((endpoint) => endpoint.userId !== userId);
-      await pause(300);
-      const silentEnd = (await read()).endpoints.find((endpoint) => endpoint.userId !== userId);
-      assert.ok(samples(silentEnd) > samples(silentStart) && packets(silentEnd) > packets(silentStart), "mute preserves actual received PCM samples and RTP for the silence measurement");
-      assert.ok(energy(silentEnd) - energy(silentStart) < 0.0001, "actual receiver observes muted PCM silence");
+      await waitForLegacyBrowserReceivedSilence({
+        receiver: projected.endpoints.find((endpoint) => endpoint.userId !== userId),
+        read: async () => (await read()).endpoints.find((endpoint) => endpoint.userId !== userId),
+      });
       await control(userId, "setMicrophoneEnabled", true, "authenticated microphone unmute");
       await control(userId, "toggleCamera", undefined, "authenticated camera off");
       projected = await wait((state) => state.endpoints.every((endpoint) => endpoint.participants.some((participant) => participant.userId === userId && participant.cameraOn === false && participant.micOn === true)),

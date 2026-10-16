@@ -1,3 +1,5 @@
+import { ConversationTimestamp } from "../../components/social/conversation-timestamp";
+import { conversationCreatedAt } from "../../_lib/conversationTimestamp";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useIsFocused } from "@react-navigation/native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -214,16 +216,6 @@ const NEXT_AUTOPLAY_DELAY_MILLIS = 1_500;
 const UP_NEXT_TRIGGER_MILLIS = 12_000;
 const UP_NEXT_COUNTDOWN_SECONDS = 5;
 
-const formatCreatorCommentTime = (value?: string | null) => {
-  const parsed = Date.parse(String(value ?? "").trim());
-  if (!Number.isFinite(parsed)) return "Recently";
-  return new Date(parsed).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-};
 const PARTY_HOST_SYNC_WRITE_INTERVAL_MILLIS = 600;
 const PARTY_GUEST_NOOP_DRIFT_MILLIS = 900;
 const PARTY_GUEST_SOFT_SEEK_THRESHOLD_MILLIS = 2400;
@@ -437,6 +429,7 @@ type PartyOverlayMessage = {
   body: string;
   persisted?: boolean;
   createdAt?: string;
+  displayCreatedAt?: string | null;
 };
 
 type PartyCommentSendFlight = {
@@ -1485,7 +1478,8 @@ export default function PlayerScreen() {
 
     setPartyOverlayMessages((prev) => {
       if (prev.some((entry) => entry.id === msg.id)) return prev;
-      return [...prev.slice(-11), { ...msg, body: safeBody, createdAt: msg.createdAt ?? new Date().toISOString() }];
+      return [...prev.slice(-11), { ...msg, body: safeBody, createdAt: msg.createdAt ?? new Date().toISOString(),
+        displayCreatedAt: msg.displayCreatedAt === undefined ? (msg.createdAt ?? null) : msg.displayCreatedAt }];
     });
   }, []);
 
@@ -3689,7 +3683,8 @@ export default function PlayerScreen() {
       partyCommentRevisionRef.current += 1;
       const newerChange = flight.realtimeChanges.get(saved.id);
       if (!flight.realtimeChanges.has(saved.id)) {
-        pushPartyOverlayMessage({ id: saved.id, author: "You", body: saved.body, createdAt: saved.createdAt, persisted: true });
+        pushPartyOverlayMessage({ id: saved.id, author: "You", body: saved.body, createdAt: saved.createdAt,
+          displayCreatedAt: saved.displayCreatedAt, persisted: true });
       } else if (newerChange) {
         pushPartyOverlayMessage(newerChange);
       }
@@ -9292,7 +9287,7 @@ export default function PlayerScreen() {
           <View style={styles.creatorCommentBodyWrap}>
             <View style={styles.creatorCommentMetaRow}>
               <Text style={styles.creatorCommentAuthor} numberOfLines={1}>{comment.authorName}</Text>
-              <Text style={styles.creatorCommentTime}>{formatCreatorCommentTime(comment.createdAt)}</Text>
+              <ConversationTimestamp style={styles.creatorCommentTime} value={conversationCreatedAt(comment)} />
             </View>
             <LinkedText text={comment.body} style={styles.creatorCommentBody} />
             {comment.attachments.length ? (
@@ -9500,7 +9495,7 @@ export default function PlayerScreen() {
                 partyOverlayMessages.map((msg) => (
                   <Text key={msg.id} style={styles.partyCommentsLine}>
                     <Text style={styles.partyCommentsAuthor}>{msg.author}: </Text>
-                    {msg.body}
+                    {msg.body}{" · "}<ConversationTimestamp value={conversationCreatedAt(msg)} />
                   </Text>
                 ))
               ) : (
