@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "sourceCommitAtRun": "006ad5359069a0465f060235caff4304ab9d2937",
+  "scope": "component-only synthetic AOSP inference; not signed application or physical qualification",
+  "environment": {
+    "systemImagePackage": "system-images;android-35;default;x86_64",
+    "physicalDevice": false,
+    "productionBackendUsed": false,
+    "inputs": "synthetic NV21 only",
+    "requestedAppPermissions": []
+  },
+  "originalReceiptSha256": "65cfa857025c24be374b95f9ff6e36823c7349796378c4d4bd8612b42a9ff20e",
+  "receipt": {
+    "proofNonce": "eb0032ca5f7ee56a9fe4b4851407c9da",
+    "variant": "production",
+    "scope": "isolated-android-x86_64-production-adapter-inference",
+    "runtime": "standalone-litert-1.4.1-application-only-xnnpack",
+    "faceSha256": "b4578f35940bf5a1a655214a1cce5cab13eba73c1297cd78e1a04c2380b0152f",
+    "maskSha256": "191ac9529ae506ee0beefa6b2c945a172dab9d07d1e802a290a4e4038226658b",
+    "checks": 2219042,
+    "faceInvocations": 8,
+    "maskInvocations": 16,
+    "outputSentinelsOverwritten": true,
+    "outputSentinelChecks": 1170432,
+    "customOpWithoutXnnpackRejected": true,
+    "corruptModelsRejected": true,
+    "internetPermission": false,
+    "syntheticInputsOnly": true,
+    "physicalDeviceEvidence": false,
+    "visualSubjectQualityEvidence": false,
+    "apkSha256": "9fcfaf745afeebcc1407b5e4a2b2c6bfe186f543099c41b71a01eb5d174a4cb6",
+    "sourceFiles": [
+      {
+        "file": "LocalCameraInference.java",
+        "sha256": "5a1671f36fbf0092ada60a1f88eefc3a4459e452e700def120e65349a2f911e0"
+      },
+      {
+        "file": "LocalInferenceMath.java",
+        "sha256": "f09d6d56517e7ec81745d0cca9d408ea0e3144aa670a6158a36c07819b1400c0"
+      },
+      {
+        "file": "EffectMath.java",
+        "sha256": "2ed428cf9265588d608a207966e0bb37b4ad1773d4ce360f2290b92f67d83b4c"
+      }
+    ],
+    "harnessFiles": [
+      {
+        "file": "OfflineInferenceInstrumentation.java",
+        "sha256": "4c4285f0a954ae8d9b822ccd26b4e2e66521abe0c706f5a6564d254ab26577aa"
+      },
+      {
+        "file": "AndroidManifest.xml",
+        "sha256": "bff2b7dd8295640ced6de1866a35e1cca11bdc072aecae83a4ec2404cb0326cb"
+      }
+    ],
+    "artifacts": [
+      {
+        "name": "litert",
+        "sha256": "815ef39f7d40f579adda1c7bcb7ce090685fb286777ffd8283f33202f67da1b4",
+        "url": "https://dl.google.com/dl/android/maven2/com/google/ai/edge/litert/litert/1.4.1/litert-1.4.1.aar"
+      },
+      {
+        "name": "litert-api",
+        "sha256": "ce5f6cc1924f0b9eb0fc339e0d3a3e6c9d041b9deb5e99f800fd6a42150f1875",
+        "url": "https://dl.google.com/dl/android/maven2/com/google/ai/edge/litert/litert-api/1.4.1/litert-api-1.4.1.aar"
+      }
+    ],
+    "noOpControls": [
+      {
+        "variant": "face-no-op",
+        "apkSha256": "30dc2d866fc618be0cc59093fb56a8283caab8c8128321f764261af8e1cb2efe",
+        "rejected": true,
+        "proofNonce": "938d7b78b21900afe4aa4c6534325f6a",
+        "errorType": "java.lang.AssertionError",
+        "message": "Face output sentinel was not overwritten by native inference"
+      },
+      {
+        "variant": "mask-no-op",
+        "apkSha256": "ceb4d40691c20be2c2c1adc820931cc6c349efa301f540d308d0cc6785bd3c58",
+        "rejected": true,
+        "proofNonce": "c69b3885140ce96ecaedb975645d4ce2",
+        "errorType": "java.lang.IllegalStateException",
+        "message": "Invalid local person confidence"
+      }
+    ]
+  }
+}

@@ -88,9 +88,9 @@ Historical pass counts in the incomplete handoff do not certify this worktree.
 
 Full `:chillywood-camera-effects:compileDebugKotlin` and
 `:expo-camera:compileDebugKotlin`, actual resolved AAR/merged-manifest checks,
-and actual permission-free AOSP synthetic model inference are being executed by
-the coordinating task. **No successful native or emulator execution receipt is
-asserted here.** Root will append verified final-head results and blockers.
+and actual permission-free AOSP synthetic model inference were pending at this
+reconstruction snapshot. Subsequent execution results and blockers are recorded
+in the follow-up section below.
 Exact-head Required Validation and live merge rules also remain mandatory.
 
 V15 is a candidate native generation and remains held pending those gates and
@@ -104,3 +104,33 @@ Neon Edge and Spotlight. Synthetic inference and compilation do not establish
 real-subject quality, ARM/thermal performance, permission behavior on a phone,
 or remote participant receipt. No physical testing, new signed build, Studio
 cutover, public release or provider/account change is claimed by this record.
+
+## Follow-up validation and packaging correction
+
+At source `006ad5359069a0465f060235caff4304ab9d2937`, the actual permission-free
+AOSP run passed 2,219,042 checks, including 1,170,432 native output sentinel
+checks. It invoked face inference eight times and segmentation sixteen times;
+two separately compiled controls removing the respective interpreter call were
+rejected with the expected nonce-bound error and terminal status. The production
+Java and model bytes remain the recovered originals. Harness changes add raw
+instrumentation status, immutable input snapshots, output sentinels and executed
+no-op controls. The retained receipt SHA-256 is
+`65cfa857025c24be374b95f9ff6e36823c7349796378c4d4bd8612b42a9ff20e`.
+The sanitized [synthetic receipt](./AOSP_SYNTHETIC_PROOF_006AD535.json) retains
+the source, model, runtime AAR, test APK and harness hashes and both controls.
+This is component-level synthetic x86_64 proof, not signed-app or physical proof.
+
+Full Android compilation then exposed a production packaging defect: SDK 54
+selected Expo Camera's published AAR, so the patched Kotlin source was not a
+Gradle project. The mandatory compile target correctly failed. Commit `27522cd0`
+adds the production Android `buildFromSource: ["^expo-camera$"]` setting, a
+fail-closed plugin check and installed-resolver negative controls. This changes
+native inputs and requires resealing V15; it does not invalidate the unchanged
+adapter/model component proof. All 15 scanner tests pass, but an actual successful
+Gradle source-project compile and resolved closure are still required.
+
+iOS generation, SDK discovery and CocoaPods installation succeeded. Its first
+verification attempt failed because plain Ruby could not load the `xcodeproj`
+gem supplied by the CocoaPods wrapper. The compiler is being corrected to use
+that actual interpreter and gem context. No complete native compile pass is
+claimed by this follow-up.

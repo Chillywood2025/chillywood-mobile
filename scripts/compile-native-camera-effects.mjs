@@ -24,6 +24,8 @@ export function verifyRuntimeAars(artifacts) {
     assert.equal(typeof artifact.coordinate, "string");
     assert.equal(typeof artifact.file, "string");
     assert(path.isAbsolute(artifact.file), "Gradle artifact paths must be absolute");
+    assert(!artifact.coordinate.startsWith("host.exp.exponent:expo.modules.camera:"),
+      "Expo Camera must use patched source, never the prebuilt runtime publication");
   }
   return ARTIFACTS.map(pin => {
     const coordinate = `com.google.ai.edge.litert:${pin.name}:1.4.1`;
@@ -37,6 +39,62 @@ export function verifyRuntimeAars(artifacts) {
     assert.equal(sha256, pin.sha256, `Resolved ${coordinate} AAR bytes differ from the reviewed runtime`);
     return { coordinate, sha256 };
   });
+}
+
+export function resolveAndroidCameraProjects(resolution, projectRoot) {
+  assert(Array.isArray(resolution?.modules), "Actual Android autolinking resolution is required");
+  return [
+    ["chillywood-camera-effects", "expo.modules.chillywoodcameraeffects.ChillywoodCameraEffectsModule"],
+    ["expo-camera", "expo.modules.camera.CameraViewModule"],
+  ].map(([packageName, moduleClass]) => {
+    const modules = resolution.modules.filter(module => module.packageName === packageName);
+    assert.equal(modules.length, 1, `Exactly one autolinked ${packageName} package is required`);
+    const projects = modules[0].projects?.filter(project => project.modules?.includes(moduleClass)) ?? [];
+    assert.equal(projects.length, 1, `Exactly one ${packageName} source project must provide ${moduleClass}`);
+    const project = projects[0];
+    assert.equal(project.name, packageName, "Reviewed camera Gradle project identity changed");
+    assert.equal(typeof project.sourceDir, "string");
+    assert(path.isAbsolute(project.sourceDir), "Camera source directory must be absolute");
+    const relative = path.relative(projectRoot, project.sourceDir);
+    assert(relative && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative),
+      "Camera source project must belong to this isolated input copy");
+    if (project.publication) {
+      const patterns = resolution.configuration?.buildFromSource;
+      // SDK 54 otherwise links the unpatched prebuilt Maven AAR and excludes
+      // :expo-camera entirely. Match Kotlin Regex.matches semantics, not a
+      // partial substring test or a validation-only settings override.
+      assert(Array.isArray(patterns) && patterns.some(pattern => typeof pattern === "string"
+        && new RegExp(`^(?:${pattern})$`, "u").test(project.name)),
+      `${packageName} must be forced to build from source by the actual app autolinking configuration`);
+    }
+    return { name: project.name, sourceDir: project.sourceDir };
+  });
+}
+
+export const COCOAPODS_RUNTIME_PROBE = `require 'rbconfig'
+require 'json'
+at_exit do
+  require 'xcodeproj'
+  puts 'CHILLYWOOD_COCOAPODS_RUBY=' + JSON.generate({
+    ruby: RbConfig.ruby, rubyVersion: RUBY_VERSION,
+    gemHome: Gem.dir, gemPath: Gem.path,
+    xcodeprojVersion: Xcodeproj::VERSION
+  })
+end
+`;
+
+export function parseCocoaPodsRubyContext(output) {
+  const prefix = "CHILLYWOOD_COCOAPODS_RUBY=";
+  const records = output.split(/\r?\n/u).filter(line => line.startsWith(prefix));
+  assert.equal(records.length, 1, "Existing CocoaPods must report exactly one usable Ruby context");
+  const context = JSON.parse(records[0].slice(prefix.length));
+  for (const key of ["ruby", "gemHome"]) {
+    assert(typeof context[key] === "string" && path.isAbsolute(context[key]), `CocoaPods ${key} must be absolute`);
+  }
+  assert(Array.isArray(context.gemPath) && context.gemPath.length > 0
+    && context.gemPath.every(value => typeof value === "string" && path.isAbsolute(value)), "CocoaPods gem paths required");
+  for (const key of ["rubyVersion", "xcodeprojVersion"]) assert.match(context[key], /^\d+(?:\.\d+)+/u);
+  return context;
 }
 
 // Credential-free native validation only. Never builds/signs the app, publishes
@@ -155,6 +213,7 @@ try {
     const resolution = JSON.parse(run(process.execPath, ["node_modules/expo-modules-autolinking/bin/expo-modules-autolinking.js",
       "resolve", "--platform", platform === "ios" ? "apple" : "android", "--json"], project, platformEnv));
     assert(resolution.modules.some(module => module.packageName === "chillywood-camera-effects"), `${platform}: real module must autolink`);
+    const cameraProjects = platform === "android" ? resolveAndroidCameraProjects(resolution, project) : undefined;
     run(process.execPath, ["node_modules/expo/bin/cli", "prebuild", "--platform", platform, "--no-install"], project, platformEnv);
     const generated = path.join(project, platform);
     assert(fs.existsSync(generated), `Expo must generate ${platform} sources`);
@@ -174,7 +233,27 @@ try {
       assert(env.ANDROID_HOME || env.ANDROID_SDK_ROOT, "Android SDK must be supplied by the runner; no automatic license acceptance");
       const initScript = path.join(workspace, "camera-classpath.gradle");
       fs.writeFileSync(initScript, `import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+def expectedCameraProjects = new JsonSlurper().parseText(System.getenv('CHILLYWOOD_CAMERA_SOURCE_PROJECTS'))
+def expectedCameraRoot = new File(System.getenv('CHILLYWOOD_CAMERA_GRADLE_ROOT')).canonicalFile
+gradle.projectsEvaluated {
+  // Init scripts also run for included Expo/React Native plugin builds.
+  // Only the generated application build may emit the required proof marker.
+  if (gradle.rootProject.projectDir.canonicalFile != expectedCameraRoot) return
+  expectedCameraProjects.each { expected ->
+    def actual = gradle.rootProject.findProject(':' + expected.name)
+    if (actual == null) throw new GradleException('Required camera source project missing: ' + expected.name)
+    if (actual.projectDir.canonicalFile != new File(expected.sourceDir).canonicalFile) {
+      throw new GradleException('Camera source project directory differs from autolinking: ' + expected.name)
+    }
+    if (actual.tasks.findByName('compileDebugKotlin') == null) {
+      throw new GradleException('Required camera Kotlin compile task missing: ' + expected.name)
+    }
+  }
+  println('CHILLYWOOD_CAMERA_SOURCE_PROJECTS=' + JsonOutput.toJson(expectedCameraProjects))
+}
 allprojects { p ->
+  if (p.rootProject.projectDir.canonicalFile != expectedCameraRoot) return
   p.afterEvaluate {
     if (p.name == 'chillywood-camera-effects') {
       p.tasks.register('cameraEffectsCompileClasspath') {
@@ -205,9 +284,14 @@ allprojects { p ->
     }
   }
 }`);
-      const output = run("./gradlew", [":chillywood-camera-effects:compileDebugKotlin", ":expo-camera:compileDebugKotlin",
+      const output = run("./gradlew", [...cameraProjects.map(({ name }) => `:${name}:compileDebugKotlin`),
         ":chillywood-camera-effects:cameraEffectsCompileClasspath", ":app:cameraEffectsRuntimeClosure", "--init-script", initScript,
-        "--no-daemon", "--console=plain"], generated, platformEnv);
+        "--no-daemon", "--console=plain"], generated,
+      { ...platformEnv, CHILLYWOOD_CAMERA_SOURCE_PROJECTS: JSON.stringify(cameraProjects),
+        CHILLYWOOD_CAMERA_GRADLE_ROOT: fs.realpathSync(generated) });
+      assert.deepEqual(parseGradleRecord(output, "SOURCE_PROJECTS"), cameraProjects,
+        "Both actual camera Gradle source projects must match autolinking");
+      receipts.android.sourceProjects = cameraProjects.map(({ name, sourceDir }) => ({ name, sourceDir: path.relative(project, sourceDir) }));
       const jars = parseGradleRecord(output, "CLASSPATH");
       assert(Array.isArray(jars) && jars.length > 0, "Use the actual resolved Gradle API classpath for ownership contracts");
       for (const jar of jars) assert(typeof jar === "string" && path.isAbsolute(jar) && fs.existsSync(jar), "Gradle classpath input must exist");
@@ -246,8 +330,17 @@ allprojects { p ->
       run("xcrun", ["--sdk", "iphonesimulator", "--show-sdk-path"]);
       run("pod", ["install"], generated, platformEnv);
       assert(fs.existsSync(path.join(generated, "Pods/Pods.xcodeproj")), "CocoaPods native project must exist");
-      console.log(run("ruby", [path.join(root, "scripts", "verify-livekit-ios-compatibility.rb"),
-        path.join(generated, "Podfile"), path.join(generated, "Pods/Pods.xcodeproj")], generated, platformEnv).trim());
+      // Ask the installed pod executable itself for its Ruby/gem context. This
+      // survives Homebrew wrappers which set GEM_HOME before launching Ruby;
+      // plain `ruby` on PATH need not have CocoaPods' xcodeproj gem available.
+      fs.writeFileSync(path.join(generated, ".chillywood-cocoapods-runtime-probe.rb"), COCOAPODS_RUNTIME_PROBE);
+      const podRuby = parseCocoaPodsRubyContext(run("pod", ["--version"], generated,
+        { ...platformEnv, RUBYOPT: "-r./.chillywood-cocoapods-runtime-probe.rb" }));
+      assert(fs.existsSync(podRuby.ruby), "CocoaPods Ruby interpreter must already exist");
+      receipts.ios.cocoaPodsRuntime = { rubyVersion: podRuby.rubyVersion, xcodeprojVersion: podRuby.xcodeprojVersion };
+      console.log(run(podRuby.ruby, [path.join(root, "scripts", "verify-livekit-ios-compatibility.rb"),
+        path.join(generated, "Podfile"), path.join(generated, "Pods/Pods.xcodeproj")], generated,
+      { ...platformEnv, GEM_HOME: podRuby.gemHome, GEM_PATH: podRuby.gemPath.join(path.delimiter) }).trim());
       const settings = JSON.parse(run("xcodebuild", ["-project", "Pods/Pods.xcodeproj", "-target", "ChillywoodCameraEffects",
         "-configuration", "Debug", "-sdk", "iphonesimulator", "-showBuildSettings", "-json"], generated, platformEnv))
         .find(value => value.target === "ChillywoodCameraEffects")?.buildSettings;
