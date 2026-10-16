@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 import {createDatabase, splitSQL} from './helpers/database-runtime-authority-fixture.mjs';
 
-const migration = new URL('../supabase/migrations/20261016002724_profile_media_report_enforcement_repair.sql', import.meta.url);
+const migration = new URL('../supabase/migrations/20261016113149_profile_media_report_enforcement_repair.sql', import.meta.url);
 const sourceRepair = fs.readFileSync(migration, 'utf8');
 const mutations = {
   delivery: sql => sql.replace("if v_media_status is distinct from 'active' then", 'if false then'),
