@@ -1,0 +1,375 @@
+const PLATFORM_BRAND_PROFILE_SELECT =
+  "owner_user_id,hero_image_asset_id,hero_video_asset_id,hero_poster_asset_id,background_image_asset_id,avatar_asset_id,logo_asset_id,watermark_asset_id,spotlight_video_id,theme_preset,accent_color,hero_fit_mode,hero_focal_x,hero_focal_y,hero_crop_scale,background_fit_mode,background_focal_x,background_focal_y,overlay_strength,blur_strength,published_at,created_at,updated_at";
+
+const PLATFORM_BRAND_PUBLIC_SCAN_STATUSES: PlatformBrandScanStatus[] = ["clean"];
+
+const toText = (value: unknown) => String(value ?? "").trim();
+
+const clamp = (value: unknown, fallback: number, min: number, max: number) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+};
+
+const normalizeAssetState = (value: unknown): PlatformBrandAssetState => {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === "published" || normalized === "archived") return normalized;
+  return "draft";
+};
+
+const normalizeModerationStatus = (value: unknown): PlatformBrandModerationStatus => {
+  const normalized = toText(value).toLowerCase();
+  if (
+    normalized === "clean"
+    || normalized === "reported"
+    || normalized === "hidden"
+    || normalized === "removed"
+    || normalized === "rejected"
+  ) {
+    return normalized;
+  }
+  return "pending_review";
+};
+
+const normalizeScanStatus = (value: unknown): PlatformBrandScanStatus => {
+  const normalized = toText(value).toLowerCase();
+  if (
+    normalized === "scanning"
+    || normalized === "clean"
+    || normalized === "malware_detected"
+    || normalized === "scan_failed"
+    || normalized === "manual_review"
+    || normalized === "quarantined"
+    || normalized === "skipped"
+  ) {
+    return normalized;
+  }
+  return "pending_scan";
+};
+
+export const normalizePlatformBrandFitMode = (value: unknown): PlatformBrandFitMode => {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === "fit" || normalized === "center") return normalized;
+  return "fill";
+};
+
+export const normalizePlatformBrandThemePreset = (value: unknown): PlatformBrandThemePreset => {
+  const normalized = toText(value).toLowerCase();
+  if (
+    normalized === "studio_red"
+    || normalized === "clean_dark"
+    || normalized === "spotlight"
+    || normalized === "classic"
+  ) {
+    return normalized;
+  }
+  return "city_night";
+};
+
+const createDefaultPlatformBrandProfile = (ownerUserId: string): PlatformBrandProfile => ({
+  ownerUserId,
+  heroImageAssetId: null,
+  heroVideoAssetId: null,
+  heroPosterAssetId: null,
+  backgroundImageAssetId: null,
+  avatarAssetId: null,
+  logoAssetId: null,
+  watermarkAssetId: null,
+  spotlightVideoId: null,
+  themePreset: "city_night",
+  accentColor: "#DC143C",
+  heroFitMode: "fill",
+  heroFocalX: 0.5,
+  heroFocalY: 0.5,
+  heroCropScale: 1,
+  backgroundFitMode: "fill",
+  backgroundFocalX: 0.5,
+  backgroundFocalY: 0.5,
+  overlayStrength: 0.7,
+  blurStrength: 0,
+  publishedAt: null,
+  updatedAt: new Date().toISOString(),
+});
+
+const parseProfile = (row: PlatformBrandProfileRow | PublicPlatformBrandProfileRow | null | undefined, ownerUserId: string) => {
+  if (!row) return createDefaultPlatformBrandProfile(ownerUserId);
+  return {
+    ownerUserId: toText(row.owner_user_id) || ownerUserId,
+    heroImageAssetId: toText(row.hero_image_asset_id) || null,
+    heroVideoAssetId: toText(row.hero_video_asset_id) || null,
+    heroPosterAssetId: toText(row.hero_poster_asset_id) || null,
+    backgroundImageAssetId: toText(row.background_image_asset_id) || null,
+    avatarAssetId: toText(row.avatar_asset_id) || null,
+    logoAssetId: toText(row.logo_asset_id) || null,
+    watermarkAssetId: toText(row.watermark_asset_id) || null,
+    spotlightVideoId: toText(row.spotlight_video_id) || null,
+    themePreset: normalizePlatformBrandThemePreset(row.theme_preset),
+    accentColor: /^#[0-9a-f]{6}$/i.test(toText(row.accent_color)) ? toText(row.accent_color) : "#DC143C",
+    heroFitMode: normalizePlatformBrandFitMode(row.hero_fit_mode),
+    heroFocalX: clamp(row.hero_focal_x, 0.5, 0, 1),
+    heroFocalY: clamp(row.hero_focal_y, 0.5, 0, 1),
+    heroCropScale: clamp(row.hero_crop_scale, 1, 1, 3),
+    backgroundFitMode: normalizePlatformBrandFitMode(row.background_fit_mode),
+    backgroundFocalX: clamp(row.background_focal_x, 0.5, 0, 1),
+    backgroundFocalY: clamp(row.background_focal_y, 0.5, 0, 1),
+    overlayStrength: clamp(row.overlay_strength, 0.7, 0, 1),
+    blurStrength: clamp(row.blur_strength, 0, 0, 1),
+    publishedAt: toText(row.published_at) || null,
+    updatedAt: toText(row.updated_at) || new Date().toISOString(),
+  } satisfies PlatformBrandProfile;
+};
+
+const getProfileSelectedAssetIds = (profile: PlatformBrandProfile | null | undefined) =>
+  Array.from(new Set([
+    profile?.heroImageAssetId,
+    profile?.heroVideoAssetId,
+    profile?.heroPosterAssetId,
+    profile?.backgroundImageAssetId,
+    profile?.avatarAssetId,
+    profile?.logoAssetId,
+    profile?.watermarkAssetId,
+  ].filter(Boolean))) as string[];
+
+export async function resolveBrandPublishReadbackStatus(
+  ownerUserId: string,
+  selectedAssetIds?: string[] | null,
+): Promise<PlatformBrandPublishReadbackStatus> {
+  const normalizedOwnerId = toText(ownerUserId);
+  if (!normalizedOwnerId) {
+    return {
+      selectedAssetIds: [],
+      selectedCount: 0,
+      publicReadyCount: 0,
+      publicReturnedCount: 0,
+      waitingScanCount: 0,
+      waitingReviewCount: 0,
+      blockedCount: 0,
+      notPublishedCount: 0,
+      publicReadbackMissingCount: 0,
+    };
+  }
+
+  const [studioBundle, publicBundle] = await Promise.all([
+    readPlatformBrandStudio(normalizedOwnerId),
+    readPublicPlatformBranding(normalizedOwnerId).catch(() => null),
+  ]);
+  const selectedIds = Array.from(new Set((selectedAssetIds?.length ? selectedAssetIds : getProfileSelectedAssetIds(studioBundle.profile))
+    .map(toText)
+    .filter(Boolean)));
+  const selectedIdSet = new Set(selectedIds);
+  const selectedAssets = studioBundle.assets.filter((asset) => selectedIdSet.has(asset.id));
+  const publicAssetIds = new Set([
+    ...getProfileSelectedAssetIds(publicBundle?.profile),
+    ...(publicBundle?.assets ?? []).map((asset) => asset.id),
+  ].map(toText).filter(Boolean));
+
+  let waitingScanCount = 0;
+  let waitingReviewCount = 0;
+  let blockedCount = 0;
+  let notPublishedCount = 0;
+  let publicReadyCount = 0;
+
+  selectedAssets.forEach((asset) => {
+    const scanSafe = PLATFORM_BRAND_PUBLIC_SCAN_STATUSES.includes(asset.scanStatus);
+    const moderationSafe = ["clean", "reported"].includes(asset.moderationStatus);
+    const published = asset.assetState === "published";
+    if (asset.deletedAt || ["malware_detected", "scan_failed", "quarantined"].includes(asset.scanStatus) || ["rejected", "hidden", "removed"].includes(asset.moderationStatus)) {
+      blockedCount += 1;
+      return;
+    }
+    if (!scanSafe) {
+      waitingScanCount += 1;
+      return;
+    }
+    if (!moderationSafe) {
+      waitingReviewCount += 1;
+      return;
+    }
+    if (!published) {
+      notPublishedCount += 1;
+      return;
+    }
+    publicReadyCount += 1;
+  });
+
+  const publicReturnedCount = selectedIds.filter((assetId) => publicAssetIds.has(assetId)).length;
+  return {
+    selectedAssetIds: selectedIds,
+    selectedCount: selectedIds.length,
+    publicReadyCount,
+    publicReturnedCount,
+    waitingScanCount,
+    waitingReviewCount,
+    blockedCount,
+    notPublishedCount,
+    publicReadbackMissingCount: Math.max(0, publicReadyCount - publicReturnedCount),
+  };
+}
+
+const toProfileUpsert = (
+  ownerUserId: string,
+  patch: Partial<PlatformBrandProfile>,
+): PlatformBrandProfileInsert => ({
+  owner_user_id: ownerUserId,
+  hero_image_asset_id: patch.heroImageAssetId === undefined ? undefined : patch.heroImageAssetId,
+  hero_video_asset_id: patch.heroVideoAssetId === undefined ? undefined : patch.heroVideoAssetId,
+  hero_poster_asset_id: patch.heroPosterAssetId === undefined ? undefined : patch.heroPosterAssetId,
+  background_image_asset_id: patch.backgroundImageAssetId === undefined ? undefined : patch.backgroundImageAssetId,
+  avatar_asset_id: patch.avatarAssetId === undefined ? undefined : patch.avatarAssetId,
+  logo_asset_id: patch.logoAssetId === undefined ? undefined : patch.logoAssetId,
+  watermark_asset_id: patch.watermarkAssetId === undefined ? undefined : patch.watermarkAssetId,
+  spotlight_video_id: patch.spotlightVideoId === undefined ? undefined : patch.spotlightVideoId,
+  theme_preset: patch.themePreset,
+  accent_color: patch.accentColor,
+  hero_fit_mode: patch.heroFitMode,
+  hero_focal_x: patch.heroFocalX,
+  hero_focal_y: patch.heroFocalY,
+  hero_crop_scale: patch.heroCropScale,
+  background_fit_mode: patch.backgroundFitMode,
+  background_focal_x: patch.backgroundFocalX,
+  background_focal_y: patch.backgroundFocalY,
+  overlay_strength: patch.overlayStrength,
+  blur_strength: patch.blurStrength,
+  published_at: patch.publishedAt === undefined ? undefined : patch.publishedAt,
+  updated_at: new Date().toISOString(),
+});
+
+export async function savePlatformBrandProfileDraft(
+  ownerUserId: string,
+  patch: Partial<PlatformBrandProfile>,
+): Promise<PlatformBrandProfile> {
+  const normalizedOwnerId = toText(ownerUserId);
+  if (!normalizedOwnerId) throw new Error("Sign in before saving Brand Studio changes.");
+
+  const payload = toProfileUpsert(normalizedOwnerId, patch);
+  const { data, error } = await supabase
+    .from("platform_brand_profiles")
+    .upsert(payload, { onConflict: "owner_user_id" })
+    .select(PLATFORM_BRAND_PROFILE_SELECT)
+    .returns<PlatformBrandProfileRow>()
+    .single();
+
+  if (error || !data) throw error ?? new Error("Unable to save Brand Studio changes.");
+  return parseProfile(data, normalizedOwnerId);
+}
+
+export async function publishPlatformBrandProfile(
+  ownerUserId: string,
+  patch: Partial<PlatformBrandProfile>,
+): Promise<PlatformBrandProfile> {
+  const normalizedOwnerId = toText(ownerUserId);
+  const publishedAt = new Date().toISOString();
+  const profile = await savePlatformBrandProfileDraft(normalizedOwnerId, patch);
+  const assetIds = Array.from(new Set([
+    profile.heroImageAssetId,
+    profile.heroVideoAssetId,
+    profile.heroPosterAssetId,
+    profile.backgroundImageAssetId,
+    profile.avatarAssetId,
+    profile.logoAssetId,
+    profile.watermarkAssetId,
+  ].filter(Boolean))) as string[];
+
+  let selectedAssetRows: Pick<PlatformBrandAssetRow, "id" | "asset_state" | "moderation_status" | "scan_status" | "deleted_at">[] = [];
+  if (assetIds.length) {
+    const { data, error } = await supabase
+      .from("platform_brand_assets")
+      .select("id,asset_state,moderation_status,scan_status,deleted_at")
+      .eq("owner_user_id", normalizedOwnerId)
+      .in("id", assetIds)
+      .is("deleted_at", null)
+      .returns<Pick<PlatformBrandAssetRow, "id" | "asset_state" | "moderation_status" | "scan_status" | "deleted_at">[]>();
+    if (error) throw error;
+    selectedAssetRows = data ?? [];
+  }
+
+  const repairedByPublishRpc = await publishSelectedPlatformBrandAssets(assetIds);
+
+  if (!repairedByPublishRpc) {
+    const selectedReviewAssetIds = selectedAssetRows
+      .filter((row) => (
+        normalizeModerationStatus(row.moderation_status) === "pending_review"
+        && PLATFORM_BRAND_PUBLIC_SCAN_STATUSES.includes(normalizeScanStatus(row.scan_status))
+        && !row.deleted_at
+      ))
+      .map((row) => toText(row.id))
+      .filter(Boolean);
+
+    for (const assetId of selectedReviewAssetIds) {
+      try {
+        await reviewPlatformBrandAsset(
+          assetId,
+          "approve",
+          "Approved by the creator during Brand Studio publish.",
+        );
+      } catch {
+        // Keep publish moving for any other selected asset that is already eligible.
+        // Readback below decides whether the creator sees public, pending, or blocked status.
+      }
+    }
+  }
+
+  if (assetIds.length) {
+    const { data: publishedAssetRows, error } = await supabase
+      .from("platform_brand_assets")
+      .update({ asset_state: "published" } satisfies PlatformBrandAssetUpdate)
+      .eq("owner_user_id", normalizedOwnerId)
+      .in("id", assetIds)
+      .in("moderation_status", ["clean", "reported"])
+      .in("scan_status", PLATFORM_BRAND_PUBLIC_SCAN_STATUSES)
+      .is("deleted_at", null)
+      .select("id,asset_state,moderation_status,scan_status,deleted_at")
+      .returns<Pick<PlatformBrandAssetRow, "id" | "asset_state" | "moderation_status" | "scan_status" | "deleted_at">[]>();
+    if (error) throw error;
+
+    const publishedIds = new Set((publishedAssetRows ?? []).map((row) => toText(row.id)).filter(Boolean));
+    const { data: postPublishAssetRows, error: postPublishError } = await supabase
+      .from("platform_brand_assets")
+      .select("id,asset_state,moderation_status,scan_status,deleted_at")
+      .eq("owner_user_id", normalizedOwnerId)
+      .in("id", assetIds)
+      .is("deleted_at", null)
+      .returns<Pick<PlatformBrandAssetRow, "id" | "asset_state" | "moderation_status" | "scan_status" | "deleted_at">[]>();
+    if (postPublishError) throw postPublishError;
+
+    const eligibleUnpublished = (postPublishAssetRows ?? []).some((row) => (
+      !publishedIds.has(toText(row.id))
+      && normalizeAssetState(row.asset_state) !== "published"
+      && ["clean", "reported"].includes(normalizeModerationStatus(row.moderation_status))
+      && PLATFORM_BRAND_PUBLIC_SCAN_STATUSES.includes(normalizeScanStatus(row.scan_status))
+      && !row.deleted_at
+    ));
+    if (eligibleUnpublished) {
+      throw new Error("Selected Platform media could not be published yet.");
+    }
+  }
+
+  return savePlatformBrandProfileDraft(normalizedOwnerId, {
+    ...profile,
+    publishedAt,
+  });
+}
+
+const publishSelectedPlatformBrandAssets = async (assetIds: string[]) => {
+  const selectedAssetIds = Array.from(new Set(assetIds.map(toText).filter(Boolean)));
+  if (!selectedAssetIds.length) return true;
+
+  const { error } = await runCurrentAccountBoundSupabaseMutationRpc<unknown>("publish_platform_brand_profile_assets", {
+    p_asset_ids: selectedAssetIds,
+    p_reason: "Approved by the creator during Brand Studio publish.",
+  });
+
+  if (!error) return true;
+  const normalizedMessage = String(error.message ?? "").toLowerCase();
+  if (
+    normalizedMessage.includes("publish_platform_brand_profile_assets")
+    && (
+      normalizedMessage.includes("schema cache")
+      || normalizedMessage.includes("could not find the function")
+      || normalizedMessage.includes("pgrst202")
+    )
+  ) {
+    return false;
+  }
+  throw error;
+};

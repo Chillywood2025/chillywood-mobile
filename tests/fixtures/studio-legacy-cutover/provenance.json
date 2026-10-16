@@ -1,0 +1,154 @@
+{
+  "commit": "423b10f12ae2a3b6c42c1587210fadaea5418b18",
+  "description": "Byte-exact declaration slices, including containing variable statements, extracted once from git blobs. Runtime requires no history. Expected unsafe historical behavior; not a compatibility repair.",
+  "files": [
+    {
+      "path": "_lib/platformBranding.ts",
+      "sourceBlob": "40f67cd8bc62e331124a126913713a0d164518b3",
+      "sourceSha256": "6f367d42d5b6e143acd20c99af7b1bb84d3c8f9b3b99fe2afdb11a244f83d8d4",
+      "fixtureSha256": "d23d147cf63bed353c763f9d82b7ce309e2dbaf305a18ba799a5a23a9b9b6255",
+      "declarations": [
+        {
+          "name": "PLATFORM_BRAND_PROFILE_SELECT",
+          "start": 4844,
+          "end": 5261,
+          "sha256": "6ece98a4daa2da56d29d85ae2b5662a04f2034bc62b164b06bdc9a6fbcd915a6"
+        },
+        {
+          "name": "PLATFORM_BRAND_PUBLIC_SCAN_STATUSES",
+          "start": 5471,
+          "end": 5552,
+          "sha256": "86bffdf7112767fe9057d7452b84a60863ac6b5cc497a5b611bc1b0cc94d3c00"
+        },
+        {
+          "name": "toText",
+          "start": 5554,
+          "end": 5616,
+          "sha256": "3ed7ee3e9f0ea5120a8c895522f00a2a62399ccb4055521016668b5a05395d5b"
+        },
+        {
+          "name": "clamp",
+          "start": 5755,
+          "end": 5965,
+          "sha256": "b16e7d081fcd33e6763c5446ebf5e07eb2b46e799898cecb1e28e7e2d6ad222b"
+        },
+        {
+          "name": "normalizeAssetState",
+          "start": 8066,
+          "end": 8293,
+          "sha256": "6abfc0a651079aadca3596b835b2033400e7fb69840ed04a0e3927a38e01fb4b"
+        },
+        {
+          "name": "normalizeModerationStatus",
+          "start": 8295,
+          "end": 8657,
+          "sha256": "bd4a2d1536cb0b979d6ebbcd01b7643f3943932269c89128599d7ab5c932973c"
+        },
+        {
+          "name": "normalizeScanStatus",
+          "start": 8659,
+          "end": 9094,
+          "sha256": "52a60dcfe102cbea35f79355de6f0004a5bcf0097957c319abe43067196d2da6"
+        },
+        {
+          "name": "normalizePlatformBrandFitMode",
+          "start": 9096,
+          "end": 9328,
+          "sha256": "ec5423f2fc26d55a0e89eebc1146cf5fdfc0185ee9b72b82245630ab201b0267"
+        },
+        {
+          "name": "normalizePlatformBrandThemePreset",
+          "start": 9330,
+          "end": 9675,
+          "sha256": "4045abda58db1657b55c49c3e8e32cc8af20dd94dfc63d5756fb5010619b6f27"
+        },
+        {
+          "name": "createDefaultPlatformBrandProfile",
+          "start": 12540,
+          "end": 13175,
+          "sha256": "1f968a81fdf50fbfacb70664c78c5737378140f0660675c04f634b489ab1bf9f"
+        },
+        {
+          "name": "parseProfile",
+          "start": 13177,
+          "end": 14821,
+          "sha256": "3e142cc0e281a6fce15938326ac94259b49000fffdae7c5416dc56f6ffaa75ed"
+        },
+        {
+          "name": "getProfileSelectedAssetIds",
+          "start": 21988,
+          "end": 22350,
+          "sha256": "1df62d5717f1ce0818f0958939371d8cb3f6e5263a9057297947139c96034a69"
+        },
+        {
+          "name": "resolveBrandPublishReadbackStatus",
+          "start": 25438,
+          "end": 27938,
+          "sha256": "14b18df22f0028234ce3f4b92847084b7d75a40d83cb4908dc319c58a94821f1"
+        },
+        {
+          "name": "toProfileUpsert",
+          "start": 27940,
+          "end": 29430,
+          "sha256": "c8a43674cd1a64ccb1791e6bede6e52b0e788fc935c9772c97338fdc37697260"
+        },
+        {
+          "name": "savePlatformBrandProfileDraft",
+          "start": 29432,
+          "end": 30152,
+          "sha256": "1d8814a5aa76f6a4d13f7fd58a72866c9993774cb67321e7c1b79dac817b7958"
+        },
+        {
+          "name": "publishPlatformBrandProfile",
+          "start": 30154,
+          "end": 34113,
+          "sha256": "956a4c1c06c64b67eacbbd16f01ca91b4d0b556b5fb1d9bdd6ba0fb25833f661"
+        },
+        {
+          "name": "publishSelectedPlatformBrandAssets",
+          "start": 37851,
+          "end": 38691,
+          "sha256": "59e27f0e8152f6c2347efa02ab9f00c2712bef0b9c80a94ad448978a11694987"
+        }
+      ]
+    },
+    {
+      "path": "app/channel-settings.tsx",
+      "sourceBlob": "2955884d10cda269c078757c46a2a64b31164aaa",
+      "sourceSha256": "c9726559620de3099da7fcf33e4fffbdc99a8948a1f2dbbecbe9b9921536ed64",
+      "fixtureSha256": "d64ff0e4978c6f76f3ffe57c5a5e992fcbf26a19a3c53e6abbbb779c182f9209",
+      "declarations": [
+        {
+          "name": "getBrandSelectedAssetIds",
+          "start": 136429,
+          "end": 136913,
+          "sha256": "479ab9842f04683904dfef52f9afde62be06930cbca1839e98645f2809a94b22"
+        },
+        {
+          "name": "getBrandPublishNotice",
+          "start": 136917,
+          "end": 138678,
+          "sha256": "7a1909a29a63b8093f37374a260d0241c434bb66c933dd77f30654f1c8e4f798"
+        },
+        {
+          "name": "getBrandPublishFailureNotice",
+          "start": 138682,
+          "end": 138994,
+          "sha256": "68306280dc90caa636934d07c7584f3e54bd1e5699afb29065598500072b63ec"
+        },
+        {
+          "name": "persistBrandPublish",
+          "start": 141882,
+          "end": 142490,
+          "sha256": "90aebd8de9f6d840ab0d78afd8f69aa4d9bcd26a0d51c3000763f7b9f4fa3982"
+        },
+        {
+          "name": "publishBrandStudioAndProfile",
+          "start": 144494,
+          "end": 145776,
+          "sha256": "889370ea5c06eb1f29cddc0838633aa49256849fa2b33fd58d7e6f758262ec5b"
+        }
+      ]
+    }
+  ]
+}
