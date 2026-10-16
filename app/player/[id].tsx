@@ -1,3 +1,5 @@
+import { ConversationTimestamp } from "../../components/social/conversation-timestamp";
+import { conversationCreatedAt } from "../../_lib/conversationTimestamp";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useIsFocused } from "@react-navigation/native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -5,7 +7,7 @@ import { useEventListener } from "expo";
 import { Asset } from "expo-asset";
 import { Audio, ResizeMode, Video, type AVPlaybackStatus } from "expo-av";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { VideoView, useVideoPlayer } from "expo-video";
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
@@ -57,6 +59,7 @@ import {
 } from "../../_lib/appConfig";
 import { trackEvent } from "../../_lib/analytics";
 import { createActionSingleFlightLatch } from "../../_lib/actionSingleFlight.mjs";
+import { usePlayerWatchPartyActions } from "../../_lib/usePlayerWatchPartyActions";
 import { getMonetizationAccessSheetPresentation } from "../../_lib/monetization";
 import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
 import { formatOneTimePrice } from "../../_lib/customerExperiencePresentation";
@@ -97,8 +100,6 @@ import {
 import { pickSocialAttachmentFile } from "../../_lib/socialAttachmentPicker";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import {
-    getCreatorVideoWatchPartyBlockCopy,
-    getCreatorVideoWatchPartyBlockReason,
     resolveWatchPartyContentSourceByParts,
     resolveWatchPartySourceId,
     resolveWatchPartySourceType,
@@ -120,7 +121,6 @@ import {
 } from "../../_lib/userData";
 import { isReactNativeNewArchitecture } from "../../_lib/reactNativeRuntime";
 import {
-    createPartyRoom,
     decodePartySeatRequestMessage,
     emitSyncEvent,
     encodePartySeatRequestMessage,
@@ -177,7 +177,6 @@ import {
   getInitials,
   getLiveParticipantStatusText,
   LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS,
-  PLAYER_WATCH_PARTY_SOURCE,
   resolveIdentityName,
 } from "../../_lib/watch-party/room-shared";
 import {
@@ -214,16 +213,6 @@ const NEXT_AUTOPLAY_DELAY_MILLIS = 1_500;
 const UP_NEXT_TRIGGER_MILLIS = 12_000;
 const UP_NEXT_COUNTDOWN_SECONDS = 5;
 
-const formatCreatorCommentTime = (value?: string | null) => {
-  const parsed = Date.parse(String(value ?? "").trim());
-  if (!Number.isFinite(parsed)) return "Recently";
-  return new Date(parsed).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-};
 const PARTY_HOST_SYNC_WRITE_INTERVAL_MILLIS = 600;
 const PARTY_GUEST_NOOP_DRIFT_MILLIS = 900;
 const PARTY_GUEST_SOFT_SEEK_THRESHOLD_MILLIS = 2400;
@@ -236,7 +225,6 @@ const LIVE_FACE_FILTER_OPTIONS = [
   { id: "cool", label: "City Cool", subtitle: "Preview-only clarity" },
   { id: "midnight", label: "Midnight", subtitle: "Preview-only contrast" },
 ] as const;
-const UUID_LIKE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
 const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
 const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
@@ -289,7 +277,6 @@ type TitleDbAdvancedRow = TitleDbBaseRow & Pick<
   "status" | "is_published" | "release_at" | "release_date"
 >;
 
-type TitleIdLookupRow = Pick<Tables<"titles">, "id">;
 
 type TitleRow = TitleDbBaseRow & {
   thumbnail_url?: string | null;
@@ -437,6 +424,7 @@ type PartyOverlayMessage = {
   body: string;
   persisted?: boolean;
   createdAt?: string;
+  displayCreatedAt?: string | null;
 };
 
 type PartyCommentSendFlight = {
@@ -1143,8 +1131,6 @@ export default function PlayerScreen() {
   const [standaloneAccessSheetVisible, setStandaloneAccessSheetVisible] = useState(false);
   const [watchPartyPremiumGate, setWatchPartyPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
   const [watchPartyPremiumSheetVisible, setWatchPartyPremiumSheetVisible] = useState(false);
-  const watchPartyTransitionLatchRef = useRef(createActionSingleFlightLatch());
-  const [watchPartyTransitionInFlight, setWatchPartyTransitionInFlight] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [watchPartyEntryLoading, setWatchPartyEntryLoading] = useState(inWatchParty);
   const [watchPartyEntryMissing, setWatchPartyEntryMissing] = useState(false);
@@ -1157,13 +1143,6 @@ export default function PlayerScreen() {
     && !watchPartyEntryError
     && !watchPartyPremiumGate
     && !!watchPartyAccess?.isAllowed
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      watchPartyTransitionLatchRef.current.release();
-      setWatchPartyTransitionInFlight(false);
-    }, []),
   );
 
   useEffect(() => {
@@ -1485,7 +1464,8 @@ export default function PlayerScreen() {
 
     setPartyOverlayMessages((prev) => {
       if (prev.some((entry) => entry.id === msg.id)) return prev;
-      return [...prev.slice(-11), { ...msg, body: safeBody, createdAt: msg.createdAt ?? new Date().toISOString() }];
+      return [...prev.slice(-11), { ...msg, body: safeBody, createdAt: msg.createdAt ?? new Date().toISOString(),
+        displayCreatedAt: msg.displayCreatedAt === undefined ? (msg.createdAt ?? null) : msg.displayCreatedAt }];
     });
   }, []);
 
@@ -3689,7 +3669,8 @@ export default function PlayerScreen() {
       partyCommentRevisionRef.current += 1;
       const newerChange = flight.realtimeChanges.get(saved.id);
       if (!flight.realtimeChanges.has(saved.id)) {
-        pushPartyOverlayMessage({ id: saved.id, author: "You", body: saved.body, createdAt: saved.createdAt, persisted: true });
+        pushPartyOverlayMessage({ id: saved.id, author: "You", body: saved.body, createdAt: saved.createdAt,
+          displayCreatedAt: saved.displayCreatedAt, persisted: true });
       } else if (newerChange) {
         pushPartyOverlayMessage(newerChange);
       }
@@ -4743,209 +4724,6 @@ export default function PlayerScreen() {
       Alert.alert("Share unavailable", "Unable to open the share sheet right now.");
     }
   }, [creatorVideo, resetAutoHideTimer]);
-
-  const ensureWatchPartyLivePremium = useCallback(async (accessKey: string) => {
-    const safeAccessKey = String(accessKey ?? "").trim();
-    const access = await requireWatchPartyLivePremium({ accessKey: safeAccessKey }).catch(() => null);
-    if (access?.allowed) {
-      setWatchPartyPremiumGate(null);
-      return true;
-    }
-
-    if (isRuntimeControlBlockedAccess(access)) {
-      const blockedCopy = getRuntimeControlBlockedCopy(access);
-      setWatchPartyPremiumGate(null);
-      setWatchPartyPremiumSheetVisible(false);
-      Alert.alert(blockedCopy.title, blockedCopy.message);
-      trackEvent("runtime_control_blocked", {
-        surface: "standalone-player-watch-party-live",
-        controlKey: access?.runtimeControlKey ?? "watch_party_live_enabled",
-        titleId: safeAccessKey || String(titleId ?? cleanId).trim(),
-      });
-      return false;
-    }
-
-    if (access) setWatchPartyPremiumGate(access);
-    setWatchPartyPremiumSheetVisible(true);
-    trackEvent("monetization_gate_shown", {
-      surface: "standalone-player-watch-party-live",
-      reason: access?.reason ?? "premium_required",
-      titleId: safeAccessKey || String(titleId ?? cleanId).trim(),
-    });
-    return false;
-  }, [cleanId, titleId]);
-
-  const onWatchParty = useCallback(async () => {
-    if (!watchPartyTransitionLatchRef.current.tryAcquire()) return;
-    setWatchPartyTransitionInFlight(true);
-    let navigationAccepted = false;
-
-    try {
-      if (playbackSourceKind === "spectator-playback") {
-        Alert.alert("Watch-Party unavailable", "Start a watch party from the Spectator page for this source.");
-        return;
-      }
-
-    if (playbackSourceKind === "creator-video") {
-      if (!isSignedIn) {
-        Alert.alert("Sign in required", "Sign in before starting Watch-Party Live from a creator video.");
-        return;
-      }
-
-      if (titleLoading) {
-        Alert.alert("Checking video", "Chi'llywood is still resolving this creator video.");
-        return;
-      }
-
-      const blockReason = getCreatorVideoWatchPartyBlockReason(creatorVideo);
-      const blockCopy = getCreatorVideoWatchPartyBlockCopy(blockReason);
-      if (blockCopy) {
-        Alert.alert(blockCopy.title, blockCopy.body);
-        return;
-      }
-
-      const creatorVideoId = String(creatorVideo?.id ?? titleId ?? "").trim();
-      if (!creatorVideoId) {
-        Alert.alert("Creator video unavailable", "Chi'llywood could not resolve this uploaded video for Watch-Party Live.");
-        return;
-      }
-
-      if (!(await ensureWatchPartyLivePremium(creatorVideoId))) return;
-
-      try {
-        const hostUserId = await getSafePartyUserId();
-        debugLog("watch-party", "source resolved", { sourceType: "creator_video", sourceId: creatorVideoId });
-        const room = await createPartyRoom(null, hostUserId, currentPositionRef.current, isPlaying ? "playing" : "paused", {
-          roomType: "title",
-          sourceType: "creator_video",
-          sourceId: creatorVideoId,
-        });
-
-        if (room && "partyId" in room && room.partyId) {
-          router.push({
-            pathname: "/watch-party",
-            params: {
-              roomId: room.partyId,
-              roomCode: room.roomCode,
-              source: PLAYER_WATCH_PARTY_SOURCE,
-              sourceType: "creator_video",
-              sourceId: creatorVideoId,
-            },
-          });
-          navigationAccepted = true;
-          return;
-        }
-
-        Alert.alert("Watch-Party unavailable", "Watch-Party is unavailable for this video right now.");
-      } catch {
-        Alert.alert("Watch-Party unavailable", "Unable to create a Watch-Party room for this creator video right now.");
-      }
-      return;
-    }
-
-    if (!titleId || !hasResolvedPlatformTitle) {
-      Alert.alert(
-        "Watch-Party unavailable",
-        "Chi'llywood could not resolve this platform title for Watch-Party Live.",
-      );
-      return;
-    }
-
-    const initialAccessKey = String(item?.id ?? titleId ?? cleanId).trim();
-    if (!(await ensureWatchPartyLivePremium(initialAccessKey))) return;
-
-    try {
-      const hostUserId = await getSafePartyUserId();
-      const preferredRawId = String(item?.id ?? "").trim();
-      const fallbackRawId = String(titleId ?? "").trim();
-
-      let createTitleId = preferredRawId || fallbackRawId;
-
-      if (!UUID_LIKE_REGEX.test(createTitleId)) {
-        const titleNameCandidate = String(item?.title ?? (localTitle as any)?.title ?? "").trim();
-        if (titleNameCandidate) {
-          try {
-            const byName: { data: TitleIdLookupRow | null } = await supabase
-              .from("titles")
-              .select("id")
-              .eq("title", titleNameCandidate)
-              .returns<TitleIdLookupRow>()
-              .maybeSingle();
-
-            const dbTitleId = String(byName.data?.id ?? "").trim();
-            if (dbTitleId) createTitleId = dbTitleId;
-          } catch {
-            // keep existing createTitleId
-          }
-        }
-      }
-
-      debugLog("watch-party", "creating room", {
-        titleId: createTitleId,
-        hostUserId,
-        positionMillis: currentPositionRef.current,
-        playbackState: isPlaying ? "playing" : "paused",
-      });
-
-      const room = await createPartyRoom(createTitleId || null, hostUserId, currentPositionRef.current, isPlaying ? "playing" : "paused", {
-        roomType: "title",
-        sourceType: createTitleId ? "platform_title" : null,
-        sourceId: createTitleId || null,
-      });
-      debugLog("watch-party", "createPartyRoom returned", {
-        ok: !!(room && "partyId" in room && room.partyId),
-        partyId: room && "partyId" in room ? room.partyId : null,
-        roomCode: room && "roomCode" in room ? room.roomCode : null,
-        sourceType: room && "sourceType" in room ? room.sourceType : null,
-        sourceId: room && "sourceId" in room ? room.sourceId : null,
-      });
-
-      if (room && "partyId" in room && room.partyId) {
-        const roomSourceType = room.sourceType ?? (createTitleId ? "platform_title" : null);
-        const roomSourceId = room.sourceId ?? createTitleId;
-        const navParams = {
-          roomId: room.partyId,
-          roomCode: room.roomCode,
-          titleId: room.titleId || createTitleId,
-          source: PLAYER_WATCH_PARTY_SOURCE,
-          ...(roomSourceType ? { sourceType: roomSourceType } : {}),
-          ...(roomSourceId ? { sourceId: roomSourceId } : {}),
-        };
-        debugLog("watch-party", "navigating to waiting room", {
-          roomId: navParams.roomId,
-          roomCode: navParams.roomCode,
-          sourceType: roomSourceType,
-          sourceId: roomSourceId,
-        });
-        router.push({ pathname: "/watch-party", params: navParams });
-        navigationAccepted = true;
-        return;
-      }
-    } catch {
-      // fallback navigation below
-    }
-
-    debugLog("watch-party", "room creation failed, using waiting room fallback");
-    const fallbackTitleId = String(item?.id ?? titleId ?? "").trim();
-    router.push({
-      pathname: "/watch-party",
-      params: {
-        source: PLAYER_WATCH_PARTY_SOURCE,
-        ...(fallbackTitleId ? {
-          titleId: fallbackTitleId,
-          sourceType: "platform_title",
-          sourceId: fallbackTitleId,
-        } : {}),
-      },
-    });
-    navigationAccepted = true;
-    } finally {
-      if (!navigationAccepted) {
-        watchPartyTransitionLatchRef.current.release();
-        setWatchPartyTransitionInFlight(false);
-      }
-    }
-  }, [cleanId, creatorVideo, ensureWatchPartyLivePremium, hasResolvedPlatformTitle, isPlaying, isSignedIn, playbackSourceKind, titleId, titleLoading, item?.id, item?.title, localTitle]);
 
   const onSubmitTitleReport = useCallback(async (input: { category: SafetyReportCategory; note: string }) => {
     if (!titleId || !hasResolvedPlatformTitle || titleReportBusy) return;
@@ -7907,58 +7685,13 @@ export default function PlayerScreen() {
       tone: "error" as const,
     };
   }, [cleanId, displayItem?.content_access_rule, displayItem?.id]);
-  const refreshWatchPartyPremiumAfterSheetAction = useCallback(async (action: "purchase" | "restore") => {
-    const accessKey = String(
-      watchPartyPremiumGate?.accessKey
-      ?? (playbackSourceKind === "creator-video" ? creatorVideo?.id : displayItem?.id)
-      ?? titleId
-      ?? cleanId,
-    ).trim();
-    const refreshed = await requireWatchPartyLivePremium({ accessKey }).catch(() => null);
-
-    if (refreshed?.allowed) {
-      trackEvent("monetization_unlock_success", {
-        action,
-        surface: inWatchParty ? "watch-party-live-player-entry" : "standalone-player-watch-party-live",
-        titleId: accessKey,
-      });
-      setWatchPartyPremiumGate(null);
-      setWatchPartyPremiumSheetVisible(false);
-      if (inWatchParty) setWatchPartyEntryRetryToken((current) => current + 1);
-      return {
-        message: action === "restore" ? "Purchases restored. Watch-Party Live is ready." : "Premium access unlocked. Watch-Party Live is ready.",
-        tone: "success" as const,
-      };
-    }
-
-    if (isRuntimeControlBlockedAccess(refreshed)) {
-      const blockedCopy = getRuntimeControlBlockedCopy(refreshed);
-      setWatchPartyPremiumGate(null);
-      setWatchPartyPremiumSheetVisible(false);
-      if (inWatchParty) setWatchPartyEntryError(blockedCopy.message);
-      trackEvent("runtime_control_blocked", {
-        surface: inWatchParty ? "watch-party-live-player-entry" : "standalone-player-watch-party-live",
-        controlKey: refreshed?.runtimeControlKey ?? "watch_party_live_enabled",
-        titleId: accessKey,
-      });
-      return {
-        message: blockedCopy.message,
-        tone: "error" as const,
-      };
-    }
-
-    if (refreshed) setWatchPartyPremiumGate(refreshed);
-    const message = refreshed?.monetization.issues[0] ?? "Watch-Party Live still needs Premium access on this account.";
-    trackEvent("monetization_unlock_failure", {
-      action,
-      surface: inWatchParty ? "watch-party-live-player-entry" : "standalone-player-watch-party-live",
-      titleId: accessKey,
-    });
-    return {
-      message,
-      tone: "error" as const,
-    };
-  }, [cleanId, creatorVideo?.id, displayItem?.id, inWatchParty, playbackSourceKind, titleId, watchPartyPremiumGate?.accessKey]);
+  const { onWatchParty, refreshWatchPartyPremiumAfterSheetAction, closeWatchPartyPremiumSheet, watchPartyTransitionInFlight } = usePlayerWatchPartyActions({
+    cleanId, creatorVideo, displayItem, hasResolvedPlatformTitle, inWatchParty, partyId, isFocused,
+    isPlaying, isSignedIn, item, localTitle, playbackSourceKind, titleId, titleLoading,
+    currentPositionRef, sessionAuthority, watchPartyPremiumGate, watchPartyPremiumSheetVisible,
+    setWatchPartyPremiumGate, setWatchPartyPremiumSheetVisible,
+    setWatchPartyEntryRetryToken, setWatchPartyEntryError,
+  });
 
   useEffect(() => {
     if (inWatchParty || isLiveMode) {
@@ -9292,7 +9025,7 @@ export default function PlayerScreen() {
           <View style={styles.creatorCommentBodyWrap}>
             <View style={styles.creatorCommentMetaRow}>
               <Text style={styles.creatorCommentAuthor} numberOfLines={1}>{comment.authorName}</Text>
-              <Text style={styles.creatorCommentTime}>{formatCreatorCommentTime(comment.createdAt)}</Text>
+              <ConversationTimestamp style={styles.creatorCommentTime} value={conversationCreatedAt(comment)} />
             </View>
             <LinkedText text={comment.body} style={styles.creatorCommentBody} />
             {comment.attachments.length ? (
@@ -9500,7 +9233,7 @@ export default function PlayerScreen() {
                 partyOverlayMessages.map((msg) => (
                   <Text key={msg.id} style={styles.partyCommentsLine}>
                     <Text style={styles.partyCommentsAuthor}>{msg.author}: </Text>
-                    {msg.body}
+                    {msg.body}{" · "}<ConversationTimestamp value={conversationCreatedAt(msg)} />
                   </Text>
                 ))
               ) : (
@@ -10005,7 +9738,7 @@ export default function PlayerScreen() {
               }
               return refreshWatchPartyPremiumAfterSheetAction("restore");
             }}
-            onClose={() => setWatchPartyPremiumSheetVisible(false)}
+            onClose={closeWatchPartyPremiumSheet}
           />
         ) : null}
       </SafeAreaView>
@@ -10635,7 +10368,7 @@ export default function PlayerScreen() {
                   }
                   return refreshWatchPartyPremiumAfterSheetAction("restore");
                 }}
-                onClose={() => setWatchPartyPremiumSheetVisible(false)}
+                onClose={closeWatchPartyPremiumSheet}
               />
             ) : null}
 

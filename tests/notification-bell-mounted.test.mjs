@@ -120,6 +120,26 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
     native[name] = function Host(props) { captures.set(props.testID || name, props); return null; };
   }
   native.StyleSheet = { create: value => value, absoluteFillObject: {} };
+  native.Platform = { OS: 'ios', select: value => value.ios ?? value.default };
+  native.useWindowDimensions = () => ({ fontScale: 1 });
+  native.AppState = { addEventListener: (_type, callback) => { activations.add(callback); return { remove: () => activations.delete(callback) }; } };
+  // Load the actual timestamp dependency graph; these action tests still use
+  // shallow native hosts, while conversation-timestamps mounts the full tree.
+  const timestampModules = new Map();
+  const loadTimestamp = file => {
+    if (timestampModules.has(file)) return timestampModules.get(file);
+    const scope = { exports: {}, Date, Intl, setTimeout, clearTimeout, setInterval, clearInterval,
+      require: name => {
+        if (name === 'react') return React;
+        if (name === 'react-native') return native;
+        const target = new URL(name, new URL(`../${file}`, import.meta.url));
+        const resolved = [target.pathname, `${target.pathname}.ts`, `${target.pathname}.tsx`].find(fs.existsSync);
+        assert.ok(resolved, name);
+        return loadTimestamp(resolved.slice(REPO.length + 1));
+      } };
+    vm.runInNewContext(compile(fs.readFileSync(`${REPO}/${file}`, 'utf8')), scope);
+    timestampModules.set(file, scope.exports); return scope.exports;
+  };
   const services = {
     markNotificationRead: async id => { markCalls++; const result = await actionContext.exports.markNotificationRead(id); results.push(result);
       if (result.status === 'completed' || result.status === 'noop') { row.isRead = true; backendCount = 0; }
@@ -133,6 +153,9 @@ async function mount(t, outcome, { withRoot = false, pathname = '/', withPeerBel
     resolveNotificationPath: targetContext.exports.resolveNotificationMessagePath,
   };
   const deps = {
+    '../../components/social/conversation-timestamp': loadTimestamp('components/social/conversation-timestamp.tsx'),
+    '../../_lib/conversationTimestamp': loadTimestamp('_lib/conversationTimestamp.ts'),
+    '../../hooks/use-conversation-clock': loadTimestamp('hooks/use-conversation-clock.ts'),
     react: React,
     'react-native': native,
     'expo-router': { router: { push: value => routes.push(value) }, useFocusEffect: callback => React.useEffect(callback, [callback]) },

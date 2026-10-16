@@ -51,12 +51,16 @@ test("display-layer product names map onto unchanged internal authority identifi
   assert.match(eventMoney, /cw_event_pass_sandbox_099/u);
 });
 
-test("Party Room creator setup is contextual Free or Paid entry with an exact viewer preview", () => {
+test("Party Room creator setup distinguishes Free, sandbox and saved payable entry", () => {
   assert.match(partySetup, /PARTY ROOM ENTRY/u);
   assert.match(partySetup, /: "Free"/u);
-  assert.match(partySetup, /Paid · \$0\.99/u);
-  assert.match(partySetup, /Charge for Party Room entry/u);
-  assert.match(partySetup, /Viewer preview: Join Party Room/u);
+  assert.match(partySetup, /Sandbox · \$0\.99/u);
+  assert.match(partySetup, /Set up sandbox Party Room entry at 99 cents/u);
+  assert.match(partySetup, /Saved sandbox entry:/u);
+  assert.match(partySetup, /Test-only; live money is not active/u);
+  assert.match(partySetup, /Saved paid entry:/u);
+  assert.match(partySetup, /Saved Party Room entry: Sold out/u);
+  assert.match(partySetup, /formatPaidWatchPartyTicketPrice\(partyRoomEntryOffer.priceCents, partyRoomEntryOffer.currency\)/u);
   assert.match(partySetup, /never grants Live Stage, speaker, host, moderator, or broadcast permission/u);
   assert.match(partySetup, /status: paid \? "sandbox" : "canceled"/u);
   assert.match(partySetup, /listMyPaidWatchPartyOffers/u);

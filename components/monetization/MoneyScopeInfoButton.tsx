@@ -127,7 +127,7 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
     whereItWorks: "Only on the linked Party Room target. It does not unlock Live Stage.",
     whoControlsIt: "Entry still depends on the exact Party Room, Party Room Pass resolver, and route policy.",
     lifecycleNote: "Cancellation, unavailable-room, or creator/platform delivery failure may enter remedy review before meaningful entry. Successful use blocks a standard refund; authoritative reversals still reconcile.",
-    payoutNote: "Earnings remain Pending through successful canonical room completion plus 48 hours. Advance purchases, canceled rooms, and reserved funds are not payout-ready.",
+    payoutNote: "Sandbox Party Room Passes are test-only and not payable. Any future live-money earnings remain Pending through successful canonical room completion plus 48 hours. Advance purchases, canceled rooms, and reserved funds are not payout-ready.",
   },
   live_watch_party_access_pass: {
     title: "Live Stage Pass",

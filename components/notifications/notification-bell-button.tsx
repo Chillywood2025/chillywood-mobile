@@ -1,3 +1,6 @@
+import { ConversationTimestamp } from "../../components/social/conversation-timestamp";
+import { conversationCreatedAt, formatConversationTimestamp } from "../../_lib/conversationTimestamp";
+import { useConversationClock } from "../../hooks/use-conversation-clock";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -48,19 +51,9 @@ const EMPTY_SUMMARY: NotificationSummary = {
 
 const formatBadgeCount = (count: number) => (count > 99 ? "99+" : String(count));
 
-const formatNotificationTimestamp = (value: string) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Time unavailable";
-  return date.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-};
 
 export function NotificationBellButton({ surface, roomSafe = false, style }: NotificationBellButtonProps) {
+  useConversationClock();
   const { authority, authorityStatus, user } = useSession();
   const ownerKey = authorityStatus === "active" && authority?.userId === user?.id
     ? getNotificationActivityOwnerKey(authority) : "";
@@ -277,7 +270,7 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
       targetEntityId: notification.target.entityId,
       targetContext: notification.target.context,
     });
-    const createdLabel = formatNotificationTimestamp(notification.createdAt);
+    const timestamp = formatConversationTimestamp(conversationCreatedAt(notification));
     const actionCopy = notification.isExpired
       ? "Expired"
       : notification.actionStatus === "handled"
@@ -299,14 +292,14 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
             void openNotification(notification);
           }}
           accessibilityRole="button"
-          accessibilityLabel={`Open notification: ${notification.title}. ${createdLabel}`}
+          accessibilityLabel={`Open notification: ${notification.title}. ${timestamp.fullLabel}`}
         >
           <Text style={[styles.notificationTitle, !notification.isRead && styles.notificationTitleUnread]}>
             {notification.title}
           </Text>
           {notification.body ? <Text style={styles.notificationBody}>{notification.body}</Text> : null}
           <Text style={styles.notificationMeta}>
-            {createdLabel} · {notification.isRead ? "Read" : "Unread"} · {actionCopy}
+            <ConversationTimestamp value={conversationCreatedAt(notification)} /> · {notification.isRead ? "Read" : "Unread"} · {actionCopy}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity

@@ -9,6 +9,7 @@ const normalizeErrorText = (error: unknown) => {
 
 export type UserFacingErrorCode =
   | "attachment_action"
+  | "brand_draft"
   | "chat_action"
   | "circle_action";
 

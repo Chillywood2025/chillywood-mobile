@@ -83,6 +83,7 @@ export type ChatThreadSummary = {
   createdAt: string;
   updatedAt: string;
   lastMessageAt?: string;
+  displayLastActivityAt?: string | null;
   lastMessagePreview?: string;
   activeCommunicationRoomId?: string;
   activeCallType?: ChatCallType;
@@ -98,6 +99,7 @@ export type ChatMessage = {
   body: string;
   messageType: "text";
   createdAt: string;
+  displayCreatedAt?: string | null;
   attachments: SocialAttachment[];
   moderationStatus: "clean" | "hidden" | "removed";
   moderationReason?: string;
@@ -375,6 +377,7 @@ function parseChatThread(
     createdAt: toText(row.created_at) || new Date().toISOString(),
     updatedAt: toText(row.updated_at) || new Date().toISOString(),
     lastMessageAt: toText(row.last_message_at) || undefined,
+    displayLastActivityAt: toText(row.last_message_at) || toText(row.updated_at) || null,
     lastMessagePreview: toText(row.last_message_preview) || undefined,
     activeCommunicationRoomId: toText(row.active_communication_room_id) || undefined,
     activeCallType: normalizeCallType(row.active_call_type),
@@ -410,6 +413,7 @@ function parseChatMessage(
       : body,
     messageType: "text",
     createdAt: toText(row.created_at) || new Date().toISOString(),
+    displayCreatedAt: toText(row.created_at) || null,
     attachments: isModerationHidden ? [] : attachments,
     moderationStatus,
     moderationReason: toText(row.moderation_reason) || undefined,

@@ -7,6 +7,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 const liveStage = read("app/watch-party/live-stage/[partyId].tsx");
 const partyRoom = read("app/watch-party/[partyId].tsx");
 const player = read("app/player/[id].tsx");
+const playerActions = read("_lib/usePlayerWatchPartyActions.ts");
 const liveMoney = read("_lib/liveWatchPartyMoney.ts");
 const webhook = read("supabase/functions/revenuecat-webhook/index.ts");
 const liveKit = read("supabase/functions/livekit-token/index.ts");
@@ -14,7 +15,8 @@ const migration = read("supabase/migrations/20260901010000_watch_party_live_mone
 const uxMigration = read("supabase/migrations/20260902091803_party_room_live_stage_event_ux_rfgc.sql");
 
 test("Player remains Party Waiting Room -> Party Room and Party Room cannot shortcut to Live Stage", () => {
-  assert.match(player, /pathname:\s*"\/watch-party"/u);
+  assert.match(player, /usePlayerWatchPartyActions\(\{/u);
+  assert.match(playerActions, /pathname:\s*"\/watch-party"/u);
   assert.doesNotMatch(partyRoom, /\/watch-party\/live-stage/u);
   assert.doesNotMatch(partyRoom, /readLiveWatchPartyMoneyAccess|live_watch_party_access_pass|live_watch_party_seat_pass/u);
 });

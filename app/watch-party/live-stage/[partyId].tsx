@@ -1,3 +1,5 @@
+import { ConversationTimestamp } from "../../../components/social/conversation-timestamp";
+import { conversationCreatedAt } from "../../../_lib/conversationTimestamp";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -233,6 +235,7 @@ type FloatingReaction = {
 
 type LiveStageComment = {
   id: string;
+  displayCreatedAt?: string | null;
   userId: string;
   authorLabel: string;
   body: string;
@@ -3348,6 +3351,7 @@ export default function WatchPartyLiveStageScreen({
       authorLabel,
       body,
       createdAt: String(row.created_at ?? new Date().toISOString()),
+      displayCreatedAt: row.created_at ?? null,
       isMe: userId === trackedUserId,
       attachments: [],
     };
@@ -3363,6 +3367,7 @@ export default function WatchPartyLiveStageScreen({
             && comment.id === nextComment.id
             && comment.body === nextComment.body
             && comment.createdAt === nextComment.createdAt
+            && comment.displayCreatedAt === nextComment.displayCreatedAt
             && comment.attachments.map((attachment) => attachment.id).join(",") === nextComment.attachments.map((attachment) => attachment.id).join(",");
         })
       ) {
@@ -4333,7 +4338,7 @@ export default function WatchPartyLiveStageScreen({
       // The insert readback is the save receipt. A delayed/windowed list is not a failed send.
       const savedComment: LiveStageComment = {
         id: sent.id, userId: sent.userId, authorLabel: "You", body: sent.body,
-        createdAt: sent.createdAt, isMe: true, attachments: savedAttachments,
+        createdAt: sent.createdAt, displayCreatedAt: sent.displayCreatedAt, isMe: true, attachments: savedAttachments,
       };
       hybridCommentRevisionRef.current += 1;
       setHybridComments((prev) => {
@@ -4956,6 +4961,7 @@ export default function WatchPartyLiveStageScreen({
                       {comment.authorLabel}
                     </Text>
                   </View>
+                  <ConversationTimestamp style={styles.stageHybridCommentAuthor} value={conversationCreatedAt(comment)} />
                   <Text style={styles.stageHybridCommentBody}>{comment.body}</Text>
                   {comment.attachments.length ? (
                     <View style={styles.stageHybridCommentAttachmentStack}>

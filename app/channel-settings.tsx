@@ -3703,8 +3703,8 @@ export function ChannelStudioScreen() {
       const savedProfile = await persistBrandDraftPatch(patch);
       setBrandNotice("Draft changes saved. Publish Changes when you are ready to update your public Platform.");
       return savedProfile;
-    } catch {
-      setBrandNotice("Unable to save Brand Studio changes right now.");
+    } catch (error) {
+      setBrandNotice(getUserFacingErrorMessage(error, "Unable to save Brand Studio changes right now."));
       return null;
     } finally {
       brandProfileSaveInFlightRef.current = false;
@@ -3736,8 +3736,8 @@ export function ChannelStudioScreen() {
     setNotice(null);
     try {
       await persistBrandDraftPatch();
-    } catch {
-      setBrandNotice("Unable to save Brand Studio changes. Platform name and tagline were not saved from this action.");
+    } catch (error) {
+      setBrandNotice(`${getUserFacingErrorMessage(error, "Unable to save Brand Studio changes.")} Platform name and tagline were not saved from this action.`);
       brandProfileSaveInFlightRef.current = false;
       setBrandSaving(false);
       setSaving(false);

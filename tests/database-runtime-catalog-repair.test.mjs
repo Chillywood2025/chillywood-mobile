@@ -65,7 +65,7 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718211432_harden_media_scan_retry_recovery.sql',index:6,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
-    assert.equal(replayReport.files.length,includeHeldStudio?425:424);
+    assert.equal(replayReport.files.length,includeHeldStudio?426:425);
     await db.exec(repairSql);assert.deepEqual(await snapshot(db),after,'repeat application is catalog-idempotent');
   }finally{await db.close()}
 });

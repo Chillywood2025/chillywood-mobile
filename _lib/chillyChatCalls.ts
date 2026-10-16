@@ -92,6 +92,7 @@ export type ChillyChatCallEvent = {
   eventType: ChillyChatCallEventType;
   durationSeconds: number | null;
   createdAt: string;
+  displayCreatedAt?: string | null;
 };
 
 type CallInviteRow = Tables<"chat_call_invites">;
@@ -245,6 +246,7 @@ const parseEvent = (row: CallEventRow | null): ChillyChatCallEvent | null => {
     eventType: normalizeEventType(row.event_type),
     durationSeconds: typeof row.duration_seconds === "number" ? row.duration_seconds : null,
     createdAt: toText(row.created_at) || new Date().toISOString(),
+    displayCreatedAt: toText(row.created_at) || null,
   };
 };
 

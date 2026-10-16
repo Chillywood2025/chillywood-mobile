@@ -63,6 +63,7 @@ const appLayout = read("app/_layout.tsx");
 const watchPartyIndex = read("app/watch-party/index.tsx");
 const partyRoom = read("app/watch-party/[partyId].tsx");
 const player = read("app/player/[id].tsx");
+const playerActions = read("_lib/usePlayerWatchPartyActions.ts");
 const title = read("app/title/[id].tsx");
 const channelStudio = read("app/channel-studio/index.tsx");
 const channelSettings = read("app/channel-settings.tsx");
@@ -108,11 +109,11 @@ const paidTicketPurchaseScope = assertScopedIncludes(
 assertNotIncludes(paidTicketPurchaseScope, "/watch-party/live-stage", "Paid Watch-Party Seat Pass buyer path");
 assertNotIncludes(paidTicketPurchaseScope, "setEmbeddedLiveStageEntry", "Paid Watch-Party Seat Pass buyer path");
 
-assertIncludes(player, "PLAYER_WATCH_PARTY_SOURCE", "Player content-first Watch-Party handoff source");
-assertIncludes(player, 'pathname: "/watch-party"', "Player to Watch-Party Waiting Room handoff");
-assertIncludes(player, "sourceType: \"creator_video\"", "Player creator-video handoff");
-assertIncludes(player, "sourceType: \"platform_title\"", "Player platform-title handoff");
-assertIncludes(player, "ensureWatchPartyLivePremium", "Player Watch-Party Premium preflight");
+assertIncludes(player, "usePlayerWatchPartyActions({", "Player uses its owned Watch-Party actions");
+assertIncludes(playerActions, "PLAYER_WATCH_PARTY_SOURCE", "Player content-first Watch-Party handoff source");
+assertIncludes(playerActions, 'pathname: "/watch-party"', "Player to Watch-Party Waiting Room handoff");
+assertIncludes(playerActions, 'creator ? "creator_video" as const : "platform_title" as const', "Player creator-video and platform-title handoff");
+assertIncludes(playerActions, "await ensureWatchPartyLivePremium(accessKey, isCurrent)", "Player Watch-Party Premium preflight");
 assertIncludes(title, 'pathname: "/watch-party"', "Title to Watch-Party Waiting Room handoff");
 assertIncludes(title, "requireWatchPartyLivePremium", "Title Watch-Party Premium preflight");
 
