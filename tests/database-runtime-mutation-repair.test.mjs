@@ -178,7 +178,7 @@ for(const includeHeldStudio of [false,true]) test(`staff mutation repair with St
         check(`${table} post-write deletion denied`,outcome.error?.message,'platform_staff_auth_required');check(`${table} all effects rolled back`,await snapshot(),before);check(`${table} injected deletion rolled back`,(await one('select count(*)::int n from auth.sessions where id=$1',[session])).n,1);
       }finally{await db.exec('rollback')}
     }
-    check('expected migration chain',replayReport.files.length,includeHeldStudio?425:424);
+    check('expected migration chain',replayReport.files.length,includeHeldStudio?426:425);
     check('Studio presence is isolated',!(await one("select to_regclass('public.platform_brand_publications') is null absent")).absent,includeHeldStudio);
     t.diagnostic(`${assertions} real-SQL assertions; SHA256 ${crypto.createHash('sha256').update(sql).digest('hex')}`);
   }finally{await db.close()}

@@ -3,6 +3,7 @@ import test from 'node:test';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {mount,React,ROOT,ts,deferred,video,edit,textOf} from './platform-studio-mounted-harness.mjs';
+import {loadStubbed} from './customer-experience-adversarial-helpers.mjs';
 const singleFlight=await import(`${ROOT}/_lib/actionSingleFlight.mjs`);
 async function openClip(h,id){await h.press(h.button(`Open actions for Title ${id}`));await h.press(h.button('Edit details'));}
 test('mounted Content card/action sheet opens Clip; stale A cannot overwrite B metadata or preview',async t=>{
@@ -79,6 +80,43 @@ test('mounted Content queries Drafts and oldest globally, and advances server of
 
 const brandProfile=()=>({ownerUserId:'owner',heroImageAssetId:null,heroVideoAssetId:null,heroPosterAssetId:null,backgroundImageAssetId:null,avatarAssetId:null,logoAssetId:null,watermarkAssetId:null,spotlightVideoId:null,themePreset:'city_night',accentColor:'#DC143C',heroFitMode:'fill',heroFocalX:0.5,heroFocalY:0.5,heroCropScale:1,backgroundFitMode:'fill',backgroundFocalX:0.5,backgroundFocalY:0.5,overlayStrength:0.62,blurStrength:0,publishedAt:null,updatedAt:'2026-10-01T00:00:00Z'});
 const brandBundle=profile=>({profile,assets:[],heroImage:null,heroVideo:null,heroPoster:null,backgroundImage:null,avatar:null,logo:null,watermark:null});
+test('mounted Brand draft uses production compatibility guard, preserves edits, and retries once after recovery',async t=>{
+ const errors=loadStubbed(`${ROOT}/_lib/userFacingErrors.ts`);
+ let profile=brandProfile(),writes=0,profileSaves=0,reads=0;
+ const authority={userId:'owner',accountId:'owner',state:'ACTIVE',restoreOnly:false,sessionGeneration:'first'};
+ const gate=deferred();let capability=gate.promise;
+ const api=loadStubbed(`${ROOT}/_lib/platformBranding.ts`,{
+  './userFacingErrors':errors,
+  './accountSessionAuthority':{getCurrentAccountSessionAuthoritySnapshot:()=>authority,sameAccountSessionAuthority:(a,b)=>a===b},
+  './accountBoundSupabaseMutation':{captureAccountBoundSupabaseMutationSubject:async owner=>{
+   assert.equal(owner,'owner');return {accessToken:'fixture-token',authority};
+  },invokeAccountBoundSupabaseMutationRpc:async(subject,name,args)=>{
+   reads++;assert.equal(name,'read_public_platform_identity');assert.equal(args.profile_user_id,'owner');assert.equal(subject.authority.userId,'owner');return await capability;
+  }},
+  './supabase':{supabase:{from:table=>({upsert:payload=>{
+   writes++;assert.equal(table,'platform_brand_profiles');assert.equal(payload.owner_user_id,'owner');assert.equal(Object.hasOwn(payload,'published_at'),false);
+   return {setHeader(name,value){assert.equal(name,'Authorization');assert.equal(value,'Bearer fixture-token');return this;},select:()=>({returns:()=>({single:async()=>({data:{...payload,published_at:'existing-server-publication'},error:null})})})};
+  }})}},
+ });
+ const h=await mount(t,{route:{tab:'brand',focus:'theme'},overrides:{
+  getUserFacingErrorMessage:errors.getUserFacingErrorMessage,
+  readPlatformBrandStudio:async()=>brandBundle(profile),
+  savePlatformBrandProfileDraft:async(...args)=>{const saved=await api.savePlatformBrandProfileDraft(...args);profile=saved;return saved;},
+  saveUserProfileRemote:async(p,id)=>{profileSaves++;assert.equal(id,'owner');assert.equal(p.displayName,'Preserved edit');return p;},
+ }});
+ await h.change(h.input('Platform Name'),'Preserved edit');
+ const save=h.button('Save Brand Studio Draft');await h.press(save);await React.act(async()=>{void save.props.onPress();});
+ assert.equal(reads,1);assert.equal(writes,0);assert.equal(profileSaves,0);assert.equal(h.input('Platform Name').props.editable,false);
+ await h.resolve(gate,{data:null,error:{code:'PGRST202',message:'private_schema_detail'}});
+ assert.match(h.text(),/Brand draft saving is temporarily unavailable/);assert.match(h.text(),/name and tagline were not saved/);
+ assert.doesNotMatch(h.text(),/Draft changes saved|private_schema_detail/);assert.equal(h.input('Platform Name').props.value,'Preserved edit');
+ assert.equal(h.input('Platform Name').props.editable,true);assert.equal(writes,0);assert.equal(profileSaves,0);
+ capability={data:[{user_id:'owner'}],error:null};await h.press(h.button('Save Brand Studio Draft'));
+ assert.equal(reads,2);assert.equal(writes,1);assert.equal(profileSaves,1);assert.match(h.text(),/Draft changes saved/);
+ assert.equal(h.input('Platform Name').props.editable,true);
+ capability={data:null,error:{code:'PGRST202'}};await h.press(h.button('Save Brand Studio Draft'));
+ assert.equal(reads,3);assert.equal(writes,1);assert.equal(profileSaves,1);assert.match(h.text(),/temporarily unavailable/);
+});
 test('mounted Brand profile save failure stays visible and Publish retries unsaved identity',async t=>{
  let profile=brandProfile(),saves=0,publishes=0;const gate=deferred();const h=await mount(t,{route:{tab:'brand',focus:'theme'},overrides:{
   readPlatformBrandStudio:async()=>brandBundle(profile),savePlatformBrandProfileDraft:async(_owner,draft)=>{profile=draft;return profile;},

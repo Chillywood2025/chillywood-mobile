@@ -1,0 +1,463 @@
+--- _lib/notifications.ts
++++ _lib/notifications.ts
+@@ -30,7 +30,7 @@
+ } from "./chillyChatCallSoundAssets";
+ import { resolveApplicationRoute } from "./appLinks";
+ import { resolveNotificationMessagePath, type NotificationMessageTarget } from "./notificationMessageTarget";
+-import { getCurrentAccountSessionAuthoritySnapshot, readCurrentAccountSessionAuthority, subscribeToAccountSessionAuthority } from "./accountSessionAuthority";
++import { readCurrentAccountSessionAuthority } from "./accountSessionAuthority";
+ import { captureAccountBoundSupabaseMutationSubject } from "./accountBoundSupabaseMutation";
+ import { withAuthorityReadDeadline } from "./entitlementAuthority";
+ 
+@@ -1616,75 +1616,6 @@
+ };
+ type NotificationOperationTransport = NotificationOperationOwner & { accessToken: string };
+ 
+-// A dispatched preference mutation may still commit after its screen retires.
+-// Keep same-account callers serialized until the transport actually settles.
+-const pendingNotificationPreferenceWrites = new Set<string>();
+-const notificationPreferenceWriteListeners = new Set<(userId: string, pending: boolean) => void>();
+-export const hasPendingNotificationPreferenceWrite = (userId?: string) => !!userId && pendingNotificationPreferenceWrites.has(userId);
+-export const subscribeToNotificationPreferenceWrites = (listener: (userId: string, pending: boolean) => void) => {
+-  notificationPreferenceWriteListeners.add(listener);
+-  return () => { notificationPreferenceWriteListeners.delete(listener); };
+-};
+-function beginNotificationPreferenceWrite(userId: string) {
+-  if (pendingNotificationPreferenceWrites.has(userId)) throw new Error("A notification preference save is still pending.");
+-  const notify = (pending: boolean) => notificationPreferenceWriteListeners.forEach(listener => listener(userId, pending));
+-  pendingNotificationPreferenceWrites.add(userId);
+-  notify(true);
+-  return () => { pendingNotificationPreferenceWrites.delete(userId); notify(false); };
+-}
+-
+-// The public result can beat a slower provider or the deadline. It is not a
+-// cancellation receipt: keep all registration entry points serialized until
+-// every underlying provider and any exact-owner cleanup have actually settled.
+-// This is install-wide (including account switches), and only in this runtime.
+-const pendingNotificationPushRegistrations = new Set<string>();
+-type NotificationPushListener = (userId: string, pending: boolean, initiatedBy?: () => boolean) => void;
+-const notificationPushRegistrationListeners = new Set<NotificationPushListener>();
+-export const hasPendingNotificationPushRegistration = () => pendingNotificationPushRegistrations.size > 0;
+-export const subscribeToNotificationPushRegistrations = (listener: NotificationPushListener) => {
+-  notificationPushRegistrationListeners.add(listener);
+-  return () => { notificationPushRegistrationListeners.delete(listener); };
+-};
+-function beginNotificationPushRegistration(owner?: NotificationOperationOwner) {
+-  const authority = getCurrentAccountSessionAuthoritySnapshot();
+-  if (!authority || authority.restoreOnly || authority.accountId !== authority.userId
+-    || (owner && (!owner.isCurrent() || !samePushSessionBinding(owner.authority, authority)))
+-    || hasPendingNotificationPushRegistration()) return null;
+-  let retired = false;
+-  const unsubscribe = subscribeToAccountSessionAuthority(next => {
+-    if (!next || next.restoreOnly || !samePushSessionBinding(authority, next)) retired = true;
+-  });
+-  const isCurrent = () => !retired && owner?.isCurrent() !== false
+-    && samePushSessionBinding(authority, getCurrentAccountSessionAuthoritySnapshot());
+-  const notify = (pending: boolean) => notificationPushRegistrationListeners.forEach(listener => listener(authority.userId, pending, owner?.isCurrent));
+-  pendingNotificationPushRegistrations.add(authority.userId);
+-  notify(true);
+-  let settled = false;
+-  return { owner: { authority, isCurrent }, finish: () => {
+-    if (settled) return;
+-    settled = true;
+-    unsubscribe();
+-    pendingNotificationPushRegistrations.delete(authority.userId);
+-    notify(false);
+-  } };
+-}
+-
+-// Keep preference-disable and its follow-on revoke under the same install
+-// boundary as registration. A preference transport alone ends too early: an
+-// automatic registration could otherwise slip into the save-to-revoke gap.
+-export async function withNotificationPushPreferenceChange<T>(
+-  owner: NotificationOperationOwner,
+-  operation: () => Promise<T>,
+-): Promise<T> {
+-  const lease = beginNotificationPushRegistration(owner);
+-  if (!lease) throw new Error("An earlier device notification change is still unresolved.");
+-  try {
+-    return await operation();
+-  } finally {
+-    lease.finish();
+-  }
+-}
+-
+ export type PushOwnershipEvent =
+   | { type: "register" }
+   | { type: "auth_terminated" }
+@@ -1988,20 +1919,17 @@
+   if (data) return parsePreferenceRow(data);
+ 
+   if (owner && !owner.isCurrent()) throw new Error("Notification preference creation is no longer current.");
+-  const settleWrite = owner ? beginNotificationPreferenceWrite(viewerUserId) : () => {};
+-  try {
+-    const insert: NotificationPreferenceInsert = { user_id: viewerUserId };
+-    const create = supabase
+-      .from("notification_preferences")
+-      .insert(insert)
+-      .select("*")
+-      .returns<NotificationPreferenceRow>();
+-    if (transport) create.setHeader("Authorization", `Bearer ${transport.accessToken}`);
+-    const { data: created, error: createError } = await create.maybeSingle();
+-
+-    if (createError || !created) throw new Error("Unable to create notification preferences.");
+-    return parsePreferenceRow(created);
+-  } finally { settleWrite(); }
++  const insert: NotificationPreferenceInsert = { user_id: viewerUserId };
++  const create = supabase
++    .from("notification_preferences")
++    .insert(insert)
++    .select("*")
++    .returns<NotificationPreferenceRow>();
++  if (transport) create.setHeader("Authorization", `Bearer ${transport.accessToken}`);
++  const { data: created, error: createError } = await create.maybeSingle();
++
++  if (createError || !created) throw new Error("Unable to create notification preferences.");
++  return parsePreferenceRow(created);
+ }
+ 
+ export async function updateNotificationPreferences(
+@@ -2017,20 +1945,17 @@
+   const transport = owner ? await captureNotificationOperationTransport(owner) : null;
+   if (owner && !owner.isCurrent()) throw new Error("Notification preference update is no longer current.");
+ 
+-  const settleWrite = owner ? beginNotificationPreferenceWrite(viewerUserId) : () => {};
+-  try {
+-    const update = buildPreferenceUpdate(patch);
+-    const write = supabase
+-      .from("notification_preferences")
+-      .upsert({ ...update, user_id: viewerUserId }, { onConflict: "user_id" })
+-      .select("*")
+-      .returns<NotificationPreferenceRow>();
+-    if (transport) write.setHeader("Authorization", `Bearer ${transport.accessToken}`);
+-    const { data, error } = await write.maybeSingle();
+-
+-    if (error || !data) throw new Error("Unable to update notification preferences.");
+-    return parsePreferenceRow(data);
+-  } finally { settleWrite(); }
++  const update = buildPreferenceUpdate(patch);
++  const write = supabase
++    .from("notification_preferences")
++    .upsert({ ...update, user_id: viewerUserId }, { onConflict: "user_id" })
++    .select("*")
++    .returns<NotificationPreferenceRow>();
++  if (transport) write.setHeader("Authorization", `Bearer ${transport.accessToken}`);
++  const { data, error } = await write.maybeSingle();
++
++  if (error || !data) throw new Error("Unable to update notification preferences.");
++  return parsePreferenceRow(data);
+ }
+ 
+ const resolvePushPermissionState = (
+@@ -2371,9 +2296,6 @@
+     && /^[0-9a-f]{12}$/u.test(normalizeText(response.tokenFingerprint));
+   const currentAuthority = await readCurrentPushSessionBinding();
+   if (!samePushSessionBinding(input.authority, currentAuthority)) {
+-    // Exact old-session cleanup cannot revoke the successor generation. A
+-    // retired screen alone is not permission to queue a same-session revoke:
+-    // that queue could outlive the lease and revoke a later valid registration.
+     await revokePushOwnershipForSession({ ...input.authority, reason: "account_switch" }).catch(() => null);
+   }
+ 
+@@ -2466,63 +2388,53 @@
+   permissionState: PushPermissionState,
+   projectId: string,
+   failureMessage: string,
+-  owner: NotificationOperationTransport,
+-  onSettled: () => void,
++  owner?: NotificationOperationTransport,
+ ): Promise<PushRegistrationState> {
+   const fallback = buildPushRegistrationProviderError(permissionState, failureMessage);
+   const registration = (async () => {
+-    let providersOwnSettlement = false;
+-    try {
+-      const authority = await readCurrentPushSessionBinding();
+-      if (!authority) throw new Error("Push registration requires an active session binding.");
+-      if (!owner.isCurrent() || !samePushSessionBinding(owner.authority, authority)) return fallback;
+-      if (Platform.OS === "android") {
+-        // Both providers must reuse one installation identity even on first run.
+-        await getNotificationInstallId();
+-        await getNotificationRevocationCredential();
+-      }
+-      const expoRegistration = (async () => {
+-        const token = await Notifications.getExpoPushTokenAsync({ projectId });
+-        const rawToken = normalizeText(token.data);
+-        if (!rawToken) throw new Error("Expo returned an empty push token.");
+-        return registerPushTokenWithBackend({ authority, permissionStatus: permissionState, provider: "expo", token: rawToken,
+-          isCurrent: owner.isCurrent, accessToken: owner.accessToken });
+-      })();
+-      if (Platform.OS !== "android") return await expoRegistration;
+-
+-      const nativeRegistration = registerAndroidNativeFcmToken(permissionState, authority, owner.isCurrent, owner.accessToken).catch(() => null);
+-      providersOwnSettlement = true;
+-      void Promise.allSettled([expoRegistration, nativeRegistration]).then(onSettled);
+-
+-      // Expo availability must not prevent native Android call registration, or
+-      // hold a verified provider's result behind the other provider's network.
+-      // Late completions retain registerPushTokenWithBackend's ownership checks.
+-      return new Promise<PushRegistrationState>((resolve) => {
+-        let expoResult = fallback;
+-        let nativeResult: PushRegistrationState | null = null;
+-        let remaining = 2;
+-        const settle = () => {
+-          remaining -= 1;
+-          const result = mergeAndroidPushRegistrationResults(expoResult, nativeResult);
+-          if (result.status === "registered" || remaining === 0) resolve(result);
+-        };
+-        void expoRegistration.catch(() => fallback).then((result) => {
+-          expoResult = result;
+-          settle();
+-        });
+-        void nativeRegistration.then((result) => {
+-          nativeResult = result;
+-          settle();
+-        });
++    const authority = await readCurrentPushSessionBinding();
++    if (!authority) throw new Error("Push registration requires an active session binding.");
++    if (owner && (!owner.isCurrent() || !samePushSessionBinding(owner.authority, authority))) return fallback;
++    if (Platform.OS === "android") {
++      // Both providers must reuse one installation identity even on first run.
++      await getNotificationInstallId();
++      await getNotificationRevocationCredential();
++    }
++    const expoRegistration = (async () => {
++      const token = await Notifications.getExpoPushTokenAsync({ projectId });
++      const rawToken = normalizeText(token.data);
++      if (!rawToken) throw new Error("Expo returned an empty push token.");
++      return registerPushTokenWithBackend({ authority, permissionStatus: permissionState, provider: "expo", token: rawToken,
++        isCurrent: owner?.isCurrent, accessToken: owner?.accessToken });
++    })();
++    if (Platform.OS !== "android") return expoRegistration;
++
++    // Expo availability must not prevent native Android call registration, or
++    // hold a verified provider's result behind the other provider's network.
++    // Late completions retain registerPushTokenWithBackend's ownership checks.
++    return new Promise<PushRegistrationState>((resolve) => {
++      let expoResult = fallback;
++      let nativeResult: PushRegistrationState | null = null;
++      let remaining = 2;
++      const settle = () => {
++        remaining -= 1;
++        const result = mergeAndroidPushRegistrationResults(expoResult, nativeResult);
++        if (result.status === "registered" || remaining === 0) resolve(result);
++      };
++      void expoRegistration.catch(() => fallback).then((result) => {
++        expoResult = result;
++        settle();
+       });
+-    } finally {
+-      if (!providersOwnSettlement) onSettled();
+-    }
++      void registerAndroidNativeFcmToken(permissionState, authority, owner?.isCurrent, owner?.accessToken).catch(() => null).then((result) => {
++        nativeResult = result;
++        settle();
++      });
++    });
+   })();
+ 
+   // Permission prompts remain user-controlled. Once permission is settled, the
+-  // public result is bounded, but its lease is not: an unresolved transport can
+-  // still commit and must remain explicitly pending in the caller's UI.
++  // provider/backend portion must not leave the customer in a permanent busy
++  // state when token or network infrastructure stops responding.
+   return withAuthorityReadDeadline(registration, fallback, PUSH_REGISTRATION_PROVIDER_DEADLINE_MS);
+ }
+ 
+@@ -2537,68 +2449,53 @@
+     };
+   }
+ 
+-  const lease = beginNotificationPushRegistration(owner);
+-  if (!lease) return buildPushRegistrationProviderError("error", "Notification ownership is unavailable or an earlier registration is still unresolved.");
+-  let providersOwnSettlement = false;
+-  try {
+-    const transport = await captureNotificationOperationTransport(lease.owner);
+-    if (!transport.isCurrent()) return buildPushRegistrationProviderError("error", "Notification registration was canceled.");
+-    await configureNotificationRuntime();
+-    if ((await readPendingPushRevocations()).length) {
+-      return buildPushRegistrationProviderError("error", "An earlier device revocation is still unresolved. Retry registration after it can be confirmed.");
+-    }
+-    if (!transport.isCurrent()) return buildPushRegistrationProviderError("error", "Notification registration was canceled.");
+-    const current = await Notifications.getPermissionsAsync();
+-    if (!transport.isCurrent()) return buildPushRegistrationProviderError("error", "Notification registration was canceled.");
+-    const currentPermissionState = resolvePushPermissionState(current);
+-    const finalPermission = pushPermissionAllowsRegistration(currentPermissionState)
+-      ? current
+-      : await Notifications.requestPermissionsAsync({
+-        android: {},
+-        ios: {
+-          allowAlert: true,
+-          allowBadge: true,
+-          allowSound: true,
+-        },
+-      });
+-    const finalPermissionState = resolvePushPermissionState(finalPermission);
+-    if (!transport.isCurrent()) return buildPushRegistrationProviderError("error", "Notification registration was canceled.");
+-
+-    if (!pushPermissionAllowsRegistration(finalPermissionState)) {
+-      return {
+-        message: "Notifications are off for this device. Chi'llywood still works; enable notifications in system Settings when you want alerts.",
+-        permissionState: finalPermissionState,
+-        provider: "expo",
+-        status: finalPermissionState === "denied" ? "denied" : "not_registered",
+-        tokenFingerprint: null,
+-      };
+-    }
+-
+-    const projectId = readExpoProjectId();
+-    if (!projectId) {
+-      return {
+-        message: "Expo project id is missing from this build, so push token registration cannot complete.",
+-        permissionState: finalPermissionState,
+-        provider: "expo",
+-        status: "blocked",
+-        tokenFingerprint: null,
+-      };
+-    }
+-
+-    providersOwnSettlement = true;
+-    return await registerCurrentPushProvidersWithDeadline(
+-      finalPermissionState,
+-      projectId,
+-      `Unable to get a production push token for this ${Platform.OS === "ios" ? "iOS" : "Android"} build.`,
+-      transport,
+-      lease.finish,
+-    );
+-  } finally {
+-    if (!providersOwnSettlement) lease.finish();
+-  }
+-}
+-
+-export async function refreshPushRegistrationIfGranted(owner?: NotificationOperationOwner): Promise<PushRegistrationState> {
++  const transport = owner ? await captureNotificationOperationTransport(owner) : undefined;
++  await configureNotificationRuntime();
++  const current = await Notifications.getPermissionsAsync();
++  if (owner && !owner.isCurrent()) return buildPushRegistrationProviderError("error", "Notification registration was canceled.");
++  const currentPermissionState = resolvePushPermissionState(current);
++  const finalPermission = pushPermissionAllowsRegistration(currentPermissionState)
++    ? current
++    : await Notifications.requestPermissionsAsync({
++      android: {},
++      ios: {
++        allowAlert: true,
++        allowBadge: true,
++        allowSound: true,
++      },
++    });
++  const finalPermissionState = resolvePushPermissionState(finalPermission);
++
++  if (!pushPermissionAllowsRegistration(finalPermissionState)) {
++    return {
++      message: "Notifications are off for this device. Chi'llywood still works; enable notifications in system Settings when you want alerts.",
++      permissionState: finalPermissionState,
++      provider: "expo",
++      status: finalPermissionState === "denied" ? "denied" : "not_registered",
++      tokenFingerprint: null,
++    };
++  }
++
++  const projectId = readExpoProjectId();
++  if (!projectId) {
++    return {
++      message: "Expo project id is missing from this build, so push token registration cannot complete.",
++      permissionState: finalPermissionState,
++      provider: "expo",
++      status: "blocked",
++      tokenFingerprint: null,
++    };
++  }
++
++  return registerCurrentPushProvidersWithDeadline(
++    finalPermissionState,
++    projectId,
++    `Unable to get a production push token for this ${Platform.OS === "ios" ? "iOS" : "Android"} build.`,
++    transport,
++  );
++}
++
++export async function refreshPushRegistrationIfGranted(): Promise<PushRegistrationState> {
+   if (Platform.OS === "web" || !Device.isDevice) {
+     return {
+       message: "Push notifications require a physical mobile device.",
+@@ -2609,52 +2506,35 @@
+     };
+   }
+ 
+-  const lease = beginNotificationPushRegistration(owner);
+-  if (!lease) return buildPushRegistrationProviderError("error", "Notification ownership is unavailable or an earlier registration is still unresolved.");
+-  let providersOwnSettlement = false;
+-  try {
+-    const transport = await captureNotificationOperationTransport(lease.owner);
+-    if (!transport.isCurrent()) return buildPushRegistrationProviderError("error", "Notification registration was canceled.");
+-    await configureNotificationRuntime();
+-    if ((await readPendingPushRevocations()).length) {
+-      return buildPushRegistrationProviderError("error", "An earlier device revocation is still unresolved. Retry registration after it can be confirmed.");
+-    }
+-    if (!transport.isCurrent()) return buildPushRegistrationProviderError("error", "Notification registration was canceled.");
+-    const current = await Notifications.getPermissionsAsync();
+-    if (!transport.isCurrent()) return buildPushRegistrationProviderError("error", "Notification registration was canceled.");
+-    const permissionState = resolvePushPermissionState(current);
+-    if (!pushPermissionAllowsRegistration(permissionState)) {
+-      return {
+-        message: "Notifications are not enabled for this device.",
+-        permissionState,
+-        provider: "expo",
+-        status: permissionState === "denied" ? "denied" : "not_registered",
+-        tokenFingerprint: null,
+-      };
+-    }
+-
+-    const projectId = readExpoProjectId();
+-    if (!projectId) {
+-      return {
+-        message: "Expo project id is missing from this build, so push token registration cannot complete.",
+-        permissionState,
+-        provider: "expo",
+-        status: "blocked",
+-        tokenFingerprint: null,
+-      };
+-    }
+-
+-    providersOwnSettlement = true;
+-    return await registerCurrentPushProvidersWithDeadline(
++  await configureNotificationRuntime();
++  const current = await Notifications.getPermissionsAsync();
++  const permissionState = resolvePushPermissionState(current);
++  if (!pushPermissionAllowsRegistration(permissionState)) {
++    return {
++      message: "Notifications are not enabled for this device.",
+       permissionState,
+-      projectId,
+-      `Unable to refresh the production push token for this ${Platform.OS === "ios" ? "iOS" : "Android"} build.`,
+-      transport,
+-      lease.finish,
+-    );
+-  } finally {
+-    if (!providersOwnSettlement) lease.finish();
+-  }
++      provider: "expo",
++      status: permissionState === "denied" ? "denied" : "not_registered",
++      tokenFingerprint: null,
++    };
++  }
++
++  const projectId = readExpoProjectId();
++  if (!projectId) {
++    return {
++      message: "Expo project id is missing from this build, so push token registration cannot complete.",
++      permissionState,
++      provider: "expo",
++      status: "blocked",
++      tokenFingerprint: null,
++    };
++  }
++
++  return registerCurrentPushProvidersWithDeadline(
++    permissionState,
++    projectId,
++    `Unable to refresh the production push token for this ${Platform.OS === "ios" ? "iOS" : "Android"} build.`,
++  );
+ }
+ 
+ /** @deprecated Use requestPushPermissionAndRegister for platform-neutral registration. */
+

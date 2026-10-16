@@ -3,7 +3,13 @@ import * as FileSystem from "expo-file-system/legacy";
 
 import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "./supabase";
-import { runCurrentAccountBoundSupabaseMutationRpc } from "./accountBoundSupabaseMutation";
+import {
+  captureAccountBoundSupabaseMutationSubject,
+  invokeAccountBoundSupabaseMutationRpc,
+  runCurrentAccountBoundSupabaseMutationRpc,
+} from "./accountBoundSupabaseMutation";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "./accountSessionAuthority";
+import { UserFacingError } from "./userFacingErrors";
 
 export const PLATFORM_BRAND_BUCKET = "platform-brand-assets";
 export const PLATFORM_BRAND_SIGNED_URL_SECONDS = 60 * 60;
@@ -800,14 +806,42 @@ export async function savePlatformBrandProfileDraft(
   const normalizedOwnerId = toText(ownerUserId);
   if (!normalizedOwnerId) throw new Error("Sign in before saving Brand Studio changes.");
 
+  const authority = getCurrentAccountSessionAuthoritySnapshot();
+  const assertCurrentOwner = () => {
+    if (!authority || authority.state !== "ACTIVE" || authority.restoreOnly || authority.userId !== normalizedOwnerId
+      || !sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())) {
+      throw new UserFacingError("brand_draft", "The signed-in account changed. Reopen Brand Studio before saving.");
+    }
+  };
+  assertCurrentOwner();
+  const subject = await captureAccountBoundSupabaseMutationSubject(normalizedOwnerId);
+  assertCurrentOwner();
+  // This read-only RPC and the separate public snapshot ship in the same
+  // atomic Studio migration. Until that contract is available, an upsert to
+  // an already published legacy row would change the visitor's presentation.
+  // Do not cache this check or fall back to the old public/profile readers.
+  const { data: identity, error: capabilityError } = await invokeAccountBoundSupabaseMutationRpc<{
+    user_id?: string;
+  }[]>(subject, "read_public_platform_identity", { profile_user_id: normalizedOwnerId });
+  assertCurrentOwner();
+  if (capabilityError || !Array.isArray(identity) || identity.length !== 1
+    || toText(identity[0]?.user_id) !== normalizedOwnerId) {
+    throw new UserFacingError("brand_draft", "Brand draft saving is temporarily unavailable. Your edits have not been saved. Please try again later.");
+  }
+
   const payload = toProfileUpsert(normalizedOwnerId, patch);
   const { data, error } = await supabase
     .from("platform_brand_profiles")
     .upsert(payload, { onConflict: "owner_user_id" })
+    .setHeader("Authorization", `Bearer ${subject.accessToken}`)
     .select(PLATFORM_BRAND_PROFILE_SELECT)
     .returns<PlatformBrandProfileRow>()
     .single();
 
+  // A dispatched request may settle after navigation/session replacement.
+  // Keep its initiating token and reject stale acknowledgement; do not claim
+  // that this client-side check cancels a database write already in flight.
+  assertCurrentOwner();
   if (error || !data) throw error ?? new Error("Unable to save Brand Studio changes.");
   return parseProfile(data, normalizedOwnerId);
 }

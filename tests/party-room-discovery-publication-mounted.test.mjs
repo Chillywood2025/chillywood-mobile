@@ -36,7 +36,13 @@ async function mount(t, { start = true, joined = true, server, bootstrapJoin = n
   const rpcScope = { exports: {}, getPartyRoom: async () => state.stored,
     // This mounted publication suite models room reads; the separate prepared-owner
     // suite executes actual raw-row fetch/conversion/activity filtering.
-    fetchPartyRoomRow: async () => state.stored ? { ...state.stored, is_active: state.stored.isActive } : null,
+    fetchPartyRoomRow: async () => state.stored ? {
+      ...state.stored, is_active: state.stored.isActive,
+      party_id: state.stored.partyId, host_user_id: state.stored.hostUserId, room_type: state.stored.roomType,
+      title_id: state.stored.titleId, source_type: state.stored.sourceType, source_id: state.stored.sourceId,
+      last_activity_at: new Date().toISOString(),
+    } : null,
+    toTimeMillis: value => { const millis = Date.parse(String(value ?? '')); return Number.isFinite(millis) ? millis : null; },
     rowToState: value => value,
     assertAccountBoundSupabaseMutationSubjectCurrent(subject) {
       if (!same(subject.authority, state.authority)) throw Error('account_changed');

@@ -671,10 +671,25 @@ test("ordinary commerce and notification copy does not expose internal qualifica
     customerCopySources,
     /(?:verified [^\n"']* sandbox|sandbox (?:product|tip purchase|sales|viewers)|(?:offer|request|rejection) proof|physical (?:APNs )?proof|pending physical proof|ordinary push readiness|real notification records|fake counts|internal Android build|LiveKit publish authority)/iu,
   );
-  assert.doesNotMatch(
-    read("app/watch-party/index.tsx"),
-    /setPaidTicketNotice\("[^"]*(?:sandbox|internal|provider|RevenueCat|Google Play)[^"]*"\)/iu,
-  );
+  const waitingRoomCopy = read("app/watch-party/index.tsx");
+  // This exact durable-state warning is customer truth, not internal diagnostics.
+  // Keep the existing broad rejection for every other sandbox/provider notice.
+  const savedSandboxWarning = 'setPaidTicketNotice("Sandbox Party Room entry is saved, but setup could not finish. Retry sandbox setup. Live money is not active.")';
+  const assertWaitingRoomCopy = (source) => {
+    assert.equal(source.split(savedSandboxWarning).length - 1, 1);
+    assert.doesNotMatch(
+      source.replace(savedSandboxWarning, ""),
+      /setPaidTicketNotice\("[^"]*(?:sandbox|internal|provider|RevenueCat|Google Play)[^"]*"\)/iu,
+    );
+  };
+  assertWaitingRoomCopy(waitingRoomCopy);
+  // Keep executable counterexamples so the narrow exception cannot silently widen.
+  for (const broken of [
+    waitingRoomCopy.replace(savedSandboxWarning, ""),
+    `${waitingRoomCopy}\n${savedSandboxWarning}`,
+    waitingRoomCopy.replace(savedSandboxWarning, savedSandboxWarning.replace("not active", "active")),
+    `${waitingRoomCopy}\nsetPaidTicketNotice("Internal provider diagnostics")`,
+  ]) assert.throws(() => assertWaitingRoomCopy(broken), { code: "ERR_ASSERTION" });
   const forbiddenCustomerLiterals = [
     "Sandbox test mode — no real money is charged.",
     "Sandbox test available",

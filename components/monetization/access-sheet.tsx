@@ -28,7 +28,7 @@ import {
   type MonetizationRestoreOutcome,
 } from "../../_lib/monetization";
 import { useOptionalBetaProgram } from "../../_lib/betaProgram";
-import { getCurrentAccountSessionAuthoritySnapshot } from "../../_lib/accountSessionAuthority";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, subscribeToAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
 import { useSession } from "../../_lib/session";
 import { MoneyScopeInfoButton } from "./MoneyScopeInfoButton";
 import { MoneyOfferCard } from "./money-ui";
@@ -123,16 +123,66 @@ export function AccessSheet({
   onRestoreResult,
   onClose,
 }: AccessSheetProps) {
-  const [sheetState, setSheetState] = useState<MonetizationAccessSheetState | null>(null);
-  const [loadingState, setLoadingState] = useState(false);
+  const { user, authority, authorityStatus } = useSession();
+  const ownerKey = authorityStatus === "active" && authority && !authority.restoreOnly && authority.userId === user?.id
+    ? JSON.stringify([authority.userId, authority.accountId, authority.sessionGeneration]) : "unavailable";
+  const scopeRef = useRef({ ownerKey, authority, gate, visible, reason, epoch: 0, focused: false, closed: false });
+  if (scopeRef.current.ownerKey !== ownerKey || scopeRef.current.gate !== gate
+    || scopeRef.current.visible !== visible || scopeRef.current.reason !== reason) {
+    scopeRef.current = { ownerKey, authority, gate, visible, reason, epoch: 0, focused: false, closed: false };
+  }
+  const scope = scopeRef.current;
+  const mountedRef = useRef(true);
+  const foregroundRef = useRef(AppState.currentState !== "background" && AppState.currentState !== "inactive");
+  const currentPresentation = useCallback(() => mountedRef.current && scopeRef.current === scope && visible
+    && scope.focused && !scope.closed && AppState.currentState === "active", [scope, visible]);
+  // Session readback may republish an equivalent object. Keep the presentation
+  // lifetime bound to its semantic owner; real authority events still retire it.
+  const currentSheet = useCallback(() => currentPresentation() && ownerKey !== "unavailable"
+    && sameAccountSessionAuthority(scope.authority, getCurrentAccountSessionAuthoritySnapshot()), [currentPresentation, ownerKey, scope]);
+  const [ownedSheetState, setOwnedSheetState] = useState<{ scope: typeof scope; value: MonetizationAccessSheetState | null } | null>(null);
+  const sheetState = ownedSheetState?.scope === scope ? ownedSheetState.value : null;
+  const setSheetState = useCallback((value: MonetizationAccessSheetState | null) => {
+    if (currentSheet()) setOwnedSheetState({ scope, value: value?.snapshot.userId === authority?.userId ? value : null });
+  }, [authority?.userId, currentSheet, scope]);
+  const [ownedLoadingState, setOwnedLoadingState] = useState<{ scope: typeof scope; epoch: number; value: boolean } | null>(null);
+  const loadingState = ownedLoadingState?.scope === scope && ownedLoadingState.epoch === scope.epoch && ownedLoadingState.value;
+  const setLoadingState = useCallback((value: boolean) => {
+    if (currentSheet()) setOwnedLoadingState({ scope, epoch: scope.epoch, value });
+  }, [currentSheet, scope]);
   const [purchaseBusy, setPurchaseBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [manageBusy, setManageBusy] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("");
+  const [feedback, setFeedback] = useState({ scope, message: "", tone: "neutral" as AccessSheetStatusTone });
+  const statusMessage = feedback.scope === scope ? feedback.message : "";
+  const statusTone = feedback.scope === scope ? feedback.tone : "neutral";
+  const setStatusMessage = useCallback((message: string) => {
+    if (currentSheet()) setFeedback((old) => ({ scope, message, tone: old.scope === scope ? old.tone : "neutral" }));
+  }, [currentSheet, scope]);
+  const setStatusTone = useCallback((tone: AccessSheetStatusTone) => {
+    if (currentSheet()) setFeedback((old) => ({ scope, tone, message: old.scope === scope ? old.message : "" }));
+  }, [currentSheet, scope]);
   const sheetLoadGenerationRef = useRef(0);
   const premiumConvergenceAttemptRef = useRef(0);
-  const [statusTone, setStatusTone] = useState<AccessSheetStatusTone>("neutral");
-  const { user } = useSession();
+  const actionRef = useRef<{ scope: typeof scope; epoch: number } | null>(null);
+  const [activeAction, setActiveAction] = useState<{ scope: typeof scope; epoch: number } | null>(null);
+  const renderedEpoch = scope.epoch;
+  const beginAction = useCallback(() => {
+    if (!currentSheet() || renderedEpoch !== scope.epoch) return null;
+    if (actionRef.current?.scope === scope && actionRef.current.epoch === scope.epoch) return null;
+    const action = { scope, epoch: scope.epoch };
+    actionRef.current = action;
+    setActiveAction(action);
+    return {
+      current: () => currentSheet() && action.epoch === scope.epoch && actionRef.current === action,
+      finish: () => {
+        if (actionRef.current === action) {
+          actionRef.current = null;
+          if (currentSheet() && action.epoch === scope.epoch) setActiveAction(null);
+        }
+      },
+    };
+  }, [currentSheet, renderedEpoch, scope]);
   const betaProgram = useOptionalBetaProgram();
   const [sandboxMode, setSandboxMode] = useState<InternalTesterSandboxPurchaseModeState>({
     enabled: false,
@@ -149,19 +199,23 @@ export function AccessSheet({
   });
 
   const resolvePurchaseMode = useCallback(async (): Promise<MonetizationPurchaseMode> => {
+    const epoch = scope.epoch;
     const state = await resolveInternalTesterSandboxPurchaseMode({
       userId: user?.id ?? null,
       email: user?.email ?? null,
       betaAccessActive: betaProgram?.isActive === true,
     });
-    setSandboxMode(state);
+    if (currentSheet() && epoch === scope.epoch) setSandboxMode(state);
     return state.enabled ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE : "public";
-  }, [betaProgram?.isActive, user?.email, user?.id]);
+  }, [betaProgram?.isActive, currentSheet, scope, user?.email, user?.id]);
 
   const loadSheetState = useCallback(async () => {
+    if (!currentSheet()) return null;
+    const epoch = scope.epoch;
     const generation = sheetLoadGenerationRef.current + 1;
     sheetLoadGenerationRef.current = generation;
     const purchaseMode = await resolvePurchaseMode();
+    if (!currentSheet() || epoch !== scope.epoch) return null;
     const nextState = await readMonetizationAccessSheetState({
       gate,
       purchaseMode,
@@ -170,22 +224,26 @@ export function AccessSheet({
       premiumUpsellTitle,
       premiumUpsellBody,
     });
-    if (generation === sheetLoadGenerationRef.current) {
+    if (currentSheet() && epoch === scope.epoch && generation === sheetLoadGenerationRef.current) {
       setSheetState(nextState);
     }
     return nextState;
-  }, [appDisplayName, gate, premiumUpsellBody, premiumUpsellTitle, resolvePurchaseMode, user?.id]);
+  }, [appDisplayName, currentSheet, gate, premiumUpsellBody, premiumUpsellTitle, resolvePurchaseMode, scope, setSheetState, user?.id]);
 
   const refreshVisibleSheetState = useCallback(() => {
     if (!visible) return;
-
-    let active = true;
+    scope.focused = true;
+    if (!currentSheet()) return;
+    const epoch = scope.epoch;
+    const generation = sheetLoadGenerationRef.current + 1;
+    const current = () => currentSheet() && epoch === scope.epoch;
     premiumConvergenceAttemptRef.current = 0;
+    setPurchaseBusy(false); setRestoreBusy(false); setManageBusy(false);
     setLoadingState(true);
 
     loadSheetState()
       .catch(() => {
-        if (!active) return;
+        if (!current() || generation !== sheetLoadGenerationRef.current) return;
         setSheetState(null);
         setStatusTone("error");
         setStatusMessage(
@@ -195,32 +253,56 @@ export function AccessSheet({
         );
       })
       .finally(() => {
-        if (active) setLoadingState(false);
+        if (current()) setLoadingState(false);
       });
 
     return () => {
-      active = false;
+      scope.focused = false;
+      scope.epoch += 1;
+      sheetLoadGenerationRef.current += 1;
     };
-  }, [deferredMonetization, loadSheetState, visible]);
+  }, [currentSheet, deferredMonetization, loadSheetState, scope, setLoadingState, setSheetState, setStatusMessage, setStatusTone, visible]);
 
   useFocusEffect(refreshVisibleSheetState);
 
   useEffect(() => {
     if (!visible) return undefined;
+    // Visibility can change while backgrounded; resync after events missed
+    // while hidden rather than retaining a stale foreground transition cache.
+    foregroundRef.current = AppState.currentState === "active";
     const subscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState !== "active") return;
+      const wasForeground = foregroundRef.current;
+      foregroundRef.current = nextState === "active";
+      if (!foregroundRef.current) {
+        scope.epoch += 1;
+        sheetLoadGenerationRef.current += 1;
+        return;
+      }
+      if (!scope.focused || wasForeground) return;
       // Overlapping route-focus and foreground reads are bounded by the
       // generation owned inside loadSheetState.
       refreshVisibleSheetState();
     });
     return () => subscription.remove();
-  }, [refreshVisibleSheetState, visible]);
+  }, [refreshVisibleSheetState, scope, visible]);
 
   useEffect(() => {
-    if (visible) return;
-    setStatusMessage("");
-    setStatusTone("neutral");
-  }, [visible]);
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; scopeRef.current.epoch += 1; };
+  }, []);
+
+  useEffect(() => subscribeToAccountSessionAuthority((next) => {
+    if (!sameAccountSessionAuthority(scope.authority, next)) {
+      scope.epoch += 1;
+      sheetLoadGenerationRef.current += 1;
+    }
+  }), [scope]);
+
+  useEffect(() => {
+    setPurchaseBusy(false); setRestoreBusy(false); setManageBusy(false);
+    setFeedback({ scope, message: "", tone: "neutral" });
+    setSandboxMode((old) => ({ ...old, enabled: false, mode: "public" }));
+  }, [scope]);
 
   const baseCopy = useMemo(() => (
     sheetState?.presentation
@@ -275,7 +357,8 @@ export function AccessSheet({
             : actionLabelOverride ?? sheetState?.primaryLabel ?? baseCopy.actionLabel
         ),
   };
-  const busy = loadingState || purchaseBusy || restoreBusy || manageBusy;
+  const busy = loadingState || purchaseBusy || restoreBusy || manageBusy
+    || (activeAction?.scope === scope && activeAction.epoch === scope.epoch);
   const analyticsPayload = useMemo(() => ({
     reason,
     gateReason: String(gate?.reason ?? "").trim().toLowerCase() || "unknown",
@@ -296,23 +379,29 @@ export function AccessSheet({
     sheetState?.snapshot.status,
   ]);
   const onCloseTracked = useCallback((source: "backdrop" | "button" | "system") => {
+    if (!currentPresentation()) return;
+    scope.closed = true;
+    scope.epoch += 1;
     trackEvent("monetization_paywall_dismissed", {
       ...analyticsPayload,
       source,
     });
     onClose();
-  }, [analyticsPayload, onClose]);
+  }, [analyticsPayload, currentPresentation, onClose, scope]);
   const opensPremiumManagement = reason === "premium_required"
     || gate?.monetization?.primaryTargetId === "premium_subscription"
     || gate?.monetization?.purchaseTargetId === "premium_subscription";
   const openPremiumManagement = useCallback((source: "primary" | "utility" | "fallback") => {
+    if (!currentSheet()) return;
+    scope.closed = true;
+    scope.epoch += 1;
     trackEvent("monetization_manage_premium_opened", {
       ...analyticsPayload,
       source,
     });
     onClose();
     router.push("/subscribe" as Parameters<typeof router.push>[0]);
-  }, [analyticsPayload, onClose]);
+  }, [analyticsPayload, currentSheet, onClose, scope]);
 
   const statusToneStyle = statusTone === "success"
     ? styles.statusCardSuccess
@@ -357,139 +446,150 @@ export function AccessSheet({
       };
 
   const onPrimaryPress = useCallback(async () => {
-    if (renderDeferredUnavailable) {
-      onCloseTracked("button");
-      return;
-    }
-
-    setStatusMessage("");
-    setStatusTone("neutral");
-
-    if (isPremiumGateSheet && freshGateEntitled && sheetState) {
-      setLoadingState(true);
-      try {
-        let feedback: AccessSheetActionFeedback = {
-          message: "Premium is active. Rechecking access…",
-          tone: "success",
-        };
-        if (onPurchaseResult) {
-          const nextFeedback = await onPurchaseResult({
-            ok: true,
-            targetId: freshGateEntitledTargetId,
-            snapshot: sheetState.snapshot,
-            customerInfo: null,
-            message: "Premium is already active for this account.",
-          });
-          if (nextFeedback?.message || nextFeedback?.tone) {
-            feedback = { ...feedback, ...nextFeedback };
-          }
-        } else {
-          onClose();
-        }
-        setStatusTone(feedback.tone ?? "neutral");
-        setStatusMessage(feedback.message ?? "");
-      } catch {
-        setStatusTone("error");
-        setStatusMessage("Premium is active, but this access path could not be rechecked right now.");
-      } finally {
-        setLoadingState(false);
+    const action = beginAction();
+    if (!action) return;
+    try {
+      if (renderDeferredUnavailable) {
+        onCloseTracked("button");
+        return;
       }
-      return;
-    }
 
-    if (isPremiumGateSheet && sheetState?.primaryAction !== "purchase") {
-      openPremiumManagement("primary");
-      return;
-    }
+      setStatusMessage("");
+      setStatusTone("neutral");
 
-    if (sheetState?.primaryDisabled) {
-      setStatusTone("error");
-      setStatusMessage(sheetState.helperBody || "This access path needs provider/setup resolution. Restore, manage, or recheck status from this sheet.");
-      await loadSheetState().catch(() => undefined);
-      return;
-    }
+      if (isPremiumGateSheet && freshGateEntitled && sheetState) {
+        setLoadingState(true);
+        try {
+          let feedback: AccessSheetActionFeedback = {
+            message: "Premium is active. Rechecking access…",
+            tone: "success",
+          };
+          if (onPurchaseResult) {
+            const nextFeedback = await onPurchaseResult({
+              ok: true,
+              targetId: freshGateEntitledTargetId,
+              snapshot: sheetState.snapshot,
+              customerInfo: null,
+              message: "Premium is already active for this account.",
+            });
+            if (!action.current()) return;
+            if (nextFeedback?.message || nextFeedback?.tone) {
+              feedback = { ...feedback, ...nextFeedback };
+            }
+          } else {
+            onCloseTracked("button");
+          }
+          setStatusTone(feedback.tone ?? "neutral");
+          setStatusMessage(feedback.message ?? "");
+        } catch {
+          if (!action.current()) return;
+          setStatusTone("error");
+          setStatusMessage("Premium is active, but this access path could not be rechecked right now.");
+        } finally {
+          if (action.current()) setLoadingState(false);
+        }
+        return;
+      }
 
-    if (sheetState?.primaryAction === "retry" || !gate) {
-      if (opensPremiumManagement && (
-        sandboxMode.enabled
-        || sheetState?.primaryLabel.toLowerCase().includes("premium")
-        || sheetState?.primaryLabel.toLowerCase().includes("status")
-      )) {
+      if (isPremiumGateSheet && sheetState?.primaryAction !== "purchase") {
         openPremiumManagement("primary");
         return;
       }
 
-      setLoadingState(true);
+      if (sheetState?.primaryDisabled) {
+        setStatusTone("error");
+        setStatusMessage(sheetState.helperBody || "This access path needs provider/setup resolution. Restore, manage, or recheck status from this sheet.");
+        await loadSheetState().catch(() => undefined);
+        return;
+      }
+
+      if (sheetState?.primaryAction === "retry" || !gate) {
+        if (opensPremiumManagement && (
+          sandboxMode.enabled
+          || sheetState?.primaryLabel.toLowerCase().includes("premium")
+          || sheetState?.primaryLabel.toLowerCase().includes("status")
+        )) {
+          openPremiumManagement("primary");
+          return;
+        }
+
+        setLoadingState(true);
+        try {
+          await loadSheetState();
+        } catch {
+          if (!action.current()) return;
+          setStatusTone("error");
+          setStatusMessage("Unable to refresh this offer right now.");
+        } finally {
+          if (action.current()) setLoadingState(false);
+        }
+        return;
+      }
+
+      setPurchaseBusy(true);
+      trackEvent("monetization_purchase_started", analyticsPayload);
       try {
+        const initiatingAuthority = getCurrentAccountSessionAuthoritySnapshot();
+        if (
+          !initiatingAuthority
+          || initiatingAuthority.restoreOnly
+          || initiatingAuthority.userId !== user?.id
+        ) throw new Error("account_changed");
+        const purchaseMode = sandboxMode.enabled ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE : await resolvePurchaseMode();
+        if (!action.current()) return;
+        const result = await purchaseBlockedAccess({
+          gate,
+          purchaseMode,
+          userId: user?.id ?? null,
+          initiatingAuthority,
+        });
+        if (!action.current()) return;
+        trackEvent(result.ok ? "monetization_purchase_success" : "monetization_purchase_failed", {
+          ...analyticsPayload,
+          message: result.message,
+          packageId: result.packageId ?? "none",
+          productId: result.productId ?? "none",
+          targetId: result.targetId ?? "none",
+        });
+        let feedback: AccessSheetActionFeedback = {
+          message: result.ok ? "Purchase completed. Rechecking access…" : result.message,
+          tone: result.ok ? "success" : "error",
+        };
+
+        if (onPurchaseResult) {
+          const nextFeedback = await onPurchaseResult(result);
+          if (!action.current()) return;
+          if (nextFeedback?.message || nextFeedback?.tone) {
+            feedback = {
+              ...feedback,
+              ...nextFeedback,
+            };
+          }
+        }
+
+        setStatusTone(feedback.tone ?? "neutral");
+        setStatusMessage(feedback.message ?? "");
         await loadSheetState();
       } catch {
+        if (!action.current()) return;
+        trackEvent("monetization_purchase_failed", {
+          ...analyticsPayload,
+          message: "Unable to complete this purchase right now.",
+        });
         setStatusTone("error");
-        setStatusMessage("Unable to refresh this offer right now.");
+        setStatusMessage("Unable to complete this purchase right now.");
       } finally {
-        setLoadingState(false);
+        if (action.current()) setPurchaseBusy(false);
       }
-      return;
-    }
-
-    setPurchaseBusy(true);
-    trackEvent("monetization_purchase_started", analyticsPayload);
-    try {
-      const initiatingAuthority = getCurrentAccountSessionAuthoritySnapshot();
-      if (
-        !initiatingAuthority
-        || initiatingAuthority.restoreOnly
-        || initiatingAuthority.userId !== user?.id
-      ) throw new Error("account_changed");
-      const purchaseMode = sandboxMode.enabled ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE : await resolvePurchaseMode();
-      const result = await purchaseBlockedAccess({
-        gate,
-        purchaseMode,
-        userId: user?.id ?? null,
-        initiatingAuthority,
-      });
-      trackEvent(result.ok ? "monetization_purchase_success" : "monetization_purchase_failed", {
-        ...analyticsPayload,
-        message: result.message,
-        packageId: result.packageId ?? "none",
-        productId: result.productId ?? "none",
-        targetId: result.targetId ?? "none",
-      });
-      let feedback: AccessSheetActionFeedback = {
-        message: result.ok ? "Purchase completed. Rechecking access…" : result.message,
-        tone: result.ok ? "success" : "error",
-      };
-
-      if (onPurchaseResult) {
-        const nextFeedback = await onPurchaseResult(result);
-        if (nextFeedback?.message || nextFeedback?.tone) {
-          feedback = {
-            ...feedback,
-            ...nextFeedback,
-          };
-        }
-      }
-
-      setStatusTone(feedback.tone ?? "neutral");
-      setStatusMessage(feedback.message ?? "");
-      await loadSheetState();
-    } catch {
-      trackEvent("monetization_purchase_failed", {
-        ...analyticsPayload,
-        message: "Unable to complete this purchase right now.",
-      });
-      setStatusTone("error");
-      setStatusMessage("Unable to complete this purchase right now.");
-    } finally {
-      setPurchaseBusy(false);
-    }
+    } finally { action.finish(); }
   }, [
     analyticsPayload,
+    beginAction,
     freshGateEntitled,
     freshGateEntitledTargetId,
     gate,
     isPremiumGateSheet,
     loadSheetState,
-    onClose,
     onCloseTracked,
     onPurchaseResult,
     openPremiumManagement,
@@ -498,6 +598,9 @@ export function AccessSheet({
     resolvePurchaseMode,
     sandboxMode.enabled,
     sheetState,
+    setLoadingState,
+    setStatusMessage,
+    setStatusTone,
     user?.id,
   ]);
   const primaryButtonTestID = isPremiumGateSheet && freshGateEntitled
@@ -511,66 +614,76 @@ export function AccessSheet({
           : undefined;
 
   const onRestorePress = useCallback(async () => {
-    const initiatingAuthority = getCurrentAccountSessionAuthoritySnapshot();
-    if (
-      !initiatingAuthority
-      || initiatingAuthority.restoreOnly
-      || initiatingAuthority.userId !== user?.id
-    ) {
-      setStatusTone("error");
-      setStatusMessage("Recheck the signed-in account before restoring purchases.");
-      return;
-    }
-    setRestoreBusy(true);
-    setStatusMessage("");
-    setStatusTone("neutral");
-    trackEvent("monetization_restore_started", analyticsPayload);
-
+    const action = beginAction();
+    if (!action) return;
     try {
-      const purchaseMode = sandboxMode.enabled ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE : await resolvePurchaseMode();
-      const result = await restoreMonetizationAccess({
-        purchaseMode,
-        userId: user?.id ?? null,
-        initiatingAuthority,
-      });
-      trackEvent("monetization_restore_result", {
-        ...analyticsPayload,
-        ok: result.ok,
-        message: result.message,
-        activeEntitlementCount: result.snapshot.activeEntitlementIds.length,
-      });
-      let feedback: AccessSheetActionFeedback = {
-        message: result.ok ? "Purchases restored. Rechecking access…" : result.message,
-        tone: result.ok ? "success" : "error",
-      };
-
-      if (onRestoreResult) {
-        const nextFeedback = await onRestoreResult(result);
-        if (nextFeedback?.message || nextFeedback?.tone) {
-          feedback = {
-            ...feedback,
-            ...nextFeedback,
-          };
-        }
+      const initiatingAuthority = getCurrentAccountSessionAuthoritySnapshot();
+      if (
+        !initiatingAuthority
+        || initiatingAuthority.restoreOnly
+        || initiatingAuthority.userId !== user?.id
+      ) {
+        setStatusTone("error");
+        setStatusMessage("Recheck the signed-in account before restoring purchases.");
+        return;
       }
+      setRestoreBusy(true);
+      setStatusMessage("");
+      setStatusTone("neutral");
+      trackEvent("monetization_restore_started", analyticsPayload);
 
-      setStatusTone(feedback.tone ?? "neutral");
-      setStatusMessage(feedback.message ?? "");
-      await loadSheetState();
-    } catch {
-      trackEvent("monetization_restore_result", {
-        ...analyticsPayload,
-        ok: false,
-        message: "Unable to restore purchases right now.",
-      });
-      setStatusTone("error");
-      setStatusMessage("Unable to restore purchases right now.");
-    } finally {
-      setRestoreBusy(false);
-    }
-  }, [analyticsPayload, loadSheetState, onRestoreResult, resolvePurchaseMode, sandboxMode.enabled, user?.id]);
+      try {
+        const purchaseMode = sandboxMode.enabled ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE : await resolvePurchaseMode();
+        if (!action.current()) return;
+        const result = await restoreMonetizationAccess({
+          purchaseMode,
+          userId: user?.id ?? null,
+          initiatingAuthority,
+        });
+        if (!action.current()) return;
+        trackEvent("monetization_restore_result", {
+          ...analyticsPayload,
+          ok: result.ok,
+          message: result.message,
+          activeEntitlementCount: result.snapshot.activeEntitlementIds.length,
+        });
+        let feedback: AccessSheetActionFeedback = {
+          message: result.ok ? "Purchases restored. Rechecking access…" : result.message,
+          tone: result.ok ? "success" : "error",
+        };
+
+        if (onRestoreResult) {
+          const nextFeedback = await onRestoreResult(result);
+          if (!action.current()) return;
+          if (nextFeedback?.message || nextFeedback?.tone) {
+            feedback = {
+              ...feedback,
+              ...nextFeedback,
+            };
+          }
+        }
+
+        setStatusTone(feedback.tone ?? "neutral");
+        setStatusMessage(feedback.message ?? "");
+        await loadSheetState();
+      } catch {
+        if (!action.current()) return;
+        trackEvent("monetization_restore_result", {
+          ...analyticsPayload,
+          ok: false,
+          message: "Unable to restore purchases right now.",
+        });
+        setStatusTone("error");
+        setStatusMessage("Unable to restore purchases right now.");
+      } finally {
+        if (action.current()) setRestoreBusy(false);
+      }
+    } finally { action.finish(); }
+  }, [analyticsPayload, beginAction, loadSheetState, onRestoreResult, resolvePurchaseMode, sandboxMode.enabled, setStatusMessage, setStatusTone, user?.id]);
 
   const onManagePress = useCallback(async () => {
+    const action = beginAction();
+    if (!action) return;
     setManageBusy(true);
     setStatusMessage("");
     setStatusTone("neutral");
@@ -581,6 +694,7 @@ export function AccessSheet({
         return;
       }
       const opened = await openManageSubscriptionFlow();
+      if (!action.current()) return;
       trackEvent("monetization_manage_subscription_opened", {
         ...analyticsPayload,
         opened,
@@ -591,10 +705,16 @@ export function AccessSheet({
       } else {
         openPremiumManagement("fallback");
       }
+    } catch {
+      if (action.current()) {
+        setStatusTone("error");
+        setStatusMessage("Unable to open subscription management right now.");
+      }
     } finally {
-      setManageBusy(false);
+      if (action.current()) setManageBusy(false);
+      action.finish();
     }
-  }, [analyticsPayload, openPremiumManagement, opensPremiumManagement, sandboxMode.enabled]);
+  }, [analyticsPayload, beginAction, openPremiumManagement, opensPremiumManagement, sandboxMode.enabled, setStatusMessage, setStatusTone]);
 
   return (
     <Modal

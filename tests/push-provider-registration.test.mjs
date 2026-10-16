@@ -25,6 +25,8 @@ const compiled = ts.transpileModule([
     "normalizeText", "NOTIFICATION_INSTALL_ID_STORAGE_KEY", "NOTIFICATION_REVOCATION_CREDENTIAL_STORAGE_KEY",
     "buildClientId", "randomHex", "getNotificationInstallId", "getNotificationRevocationCredential",
     "readCurrentPushSessionBinding", "samePushSessionBinding", "registerPushTokenWithBackend",
+    "pendingNotificationPushRegistrations", "notificationPushRegistrationListeners", "hasPendingNotificationPushRegistration",
+    "beginNotificationPushRegistration", "captureNotificationOperationTransport",
     "registerAndroidNativeFcmToken", "mergeAndroidPushRegistrationResults",
     "PUSH_REGISTRATION_PROVIDER_DEADLINE_MS", "buildPushRegistrationProviderError",
     "registerCurrentPushProvidersWithDeadline", "requestPushPermissionAndRegister", "refreshPushRegistrationIfGranted",
@@ -50,14 +52,19 @@ function load(options = {}) {
   let clock = 0;
   let nextTimer = 0;
   let current = options.authority === undefined ? binding() : options.authority;
+  const authorityListeners = new Set();
   const context = vm.createContext({
     exports: {}, crypto: webcrypto, Uint8Array,
     Platform: { OS: options.platform ?? "android" }, Device: { isDevice: true },
     Application: { nativeApplicationVersion: "1.0.0", nativeBuildVersion: "test-build" },
     IOS_ORDINARY_PUSH_ENABLED: true,
     configureNotificationRuntime: async () => {}, readExpoProjectId: () => "test-project",
+    readPendingPushRevocations: async () => [],
     resolvePushPermissionState: () => "granted", pushPermissionAllowsRegistration: () => true,
     readCurrentAccountSessionAuthority: async () => current,
+    getCurrentAccountSessionAuthoritySnapshot: () => current,
+    subscribeToAccountSessionAuthority: listener => { authorityListeners.add(listener); return () => authorityListeners.delete(listener); },
+    captureAccountBoundSupabaseMutationSubject: async () => ({ authority: current, accessToken: 'fixture-only-token' }),
     revokePushOwnershipForSession: async (old) => { revocations.push({ ...old }); },
     AsyncStorage: {
       getItem: async (key) => storage.get(key) ?? null,
@@ -85,7 +92,7 @@ function load(options = {}) {
   new vm.Script(compiled).runInContext(context);
   return {
     reads, registrations, revocations, storage, writes, timers,
-    changeAuthority(value) { current = value; },
+    changeAuthority(value) { current = value; for (const listener of authorityListeners) listener(value); },
     start(method = "refreshPushRegistrationIfGranted") {
       const observed = { settled: false, result: null };
       observed.promise = context.exports[method]().then((result) => { observed.settled = true; observed.result = result; return result; });

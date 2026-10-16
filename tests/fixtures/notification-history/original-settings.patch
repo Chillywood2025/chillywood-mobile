@@ -1,0 +1,426 @@
+--- app/settings.tsx
++++ app/settings.tsx
+@@ -21,7 +21,7 @@
+   subscribeToMonetizationSnapshot,
+   type MonetizationSnapshot,
+ } from "../_lib/monetization";
+-import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority, subscribeToAccountSessionAuthority } from "../_lib/accountSessionAuthority";
++import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../_lib/accountSessionAuthority";
+ import {
+   readNotificationPreferences,
+   readCurrentPushRegistration,
+@@ -30,11 +30,6 @@
+   openNativeCallAlertSettings,
+   revokeCurrentPushInstall,
+   updateNotificationPreferences,
+-  hasPendingNotificationPreferenceWrite,
+-  subscribeToNotificationPreferenceWrites,
+-  hasPendingNotificationPushRegistration,
+-  subscribeToNotificationPushRegistrations,
+-  withNotificationPushPreferenceChange,
+   type NativeCallAlertStatus,
+   type NotificationPreferencePatch,
+   type NotificationPreferenceSettings,
+@@ -121,18 +116,6 @@
+ 
+ type NotificationPreferenceKey = keyof Omit<NotificationPreferenceSettings, "updatedAt">;
+ 
+-type NotificationSettingsView = {
+-  preferences: NotificationPreferenceSettings | null;
+-  loading: boolean;
+-  error: string | null;
+-  savingKey: string | null;
+-  registration: PushRegistrationState | null;
+-  callAlertStatus: NativeCallAlertStatus | null;
+-};
+-const EMPTY_NOTIFICATION_SETTINGS: NotificationSettingsView = {
+-  preferences: null, loading: false, error: null, savingKey: null, registration: null, callAlertStatus: null,
+-};
+-
+ type NotificationPreferenceItem = {
+   key: NotificationPreferenceKey;
+   label: string;
+@@ -591,38 +574,12 @@
+     file: ProfileMediaImageFile;
+     fitMode: ProfileAppearanceFitMode;
+   } | null>(null);
+-  const notificationOwnerKey = !isLoading && isSignedIn && authorityStatus === "active"
+-    && authority && !authority.restoreOnly && authority.userId === user?.id
+-    ? JSON.stringify([authority.userId, authority.accountId, authority.sessionGeneration]) : "unavailable";
+-  const notificationScopeRef = useRef({ key: notificationOwnerKey, authority, generation: 0, focused: false, reading: false,
+-    action: null as string | null, actionGeneration: null as number | null, refreshNeeded: false,
+-    currentOperation: null as (() => boolean) | null });
+-  if (notificationScopeRef.current.key !== notificationOwnerKey) {
+-    notificationScopeRef.current = { key: notificationOwnerKey, authority, generation: 0, focused: false, reading: false,
+-      action: null, actionGeneration: null, refreshNeeded: false, currentOperation: null };
+-  }
+-  const notificationScope = notificationScopeRef.current;
+-  const notificationAuthority = notificationScope.authority;
+-  const [notificationState, setNotificationState] = useState({ scope: notificationScope, ...EMPTY_NOTIFICATION_SETTINGS });
+-  const { preferences: notificationPreferences, loading: notificationLoading, error: notificationPreferenceError,
+-    savingKey: notificationActionKey, registration: pushRegistration, callAlertStatus: nativeCallAlertStatus } =
+-    notificationState.scope === notificationScope ? notificationState : EMPTY_NOTIFICATION_SETTINGS;
+-  const [, notificationWriteChanged] = useState(0);
+-  const notificationPushPending = hasPendingNotificationPushRegistration();
+-  const notificationSavingKey = notificationActionKey
+-    || (hasPendingNotificationPreferenceWrite(notificationAuthority?.userId) ? "preference-save" : null)
+-    || (notificationPushPending ? "push-pending" : null);
+-  const notificationRefreshRef = useRef<() => Promise<void>>(async () => {});
+-  const patchNotificationSettings = useCallback((patch: Partial<NotificationSettingsView>) => {
+-    setNotificationState(current => ({
+-      ...(current.scope === notificationScope ? current : EMPTY_NOTIFICATION_SETTINGS), ...patch, scope: notificationScope,
+-    }));
+-  }, [notificationScope]);
+-  const currentNotificationOwner = useCallback(() => mountedRef.current
+-    && notificationScopeRef.current === notificationScope && notificationOwnerKey !== "unavailable"
+-    && notificationScope.focused && AppState.currentState === "active"
+-    && sameAccountSessionAuthority(notificationAuthority, getCurrentAccountSessionAuthoritySnapshot()),
+-  [notificationAuthority, notificationOwnerKey, notificationScope]);
++  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferenceSettings | null>(null);
++  const [notificationLoading, setNotificationLoading] = useState(false);
++  const [notificationPreferenceError, setNotificationPreferenceError] = useState<string | null>(null);
++  const [notificationSavingKey, setNotificationSavingKey] = useState<string | null>(null);
++  const [pushRegistration, setPushRegistration] = useState<PushRegistrationState | null>(null);
++  const [nativeCallAlertStatus, setNativeCallAlertStatus] = useState<NativeCallAlertStatus | null>(null);
+   const ringtonePreviewSoundRef = useRef<ChillyChatPlayingSound | null>(null);
+   const [canOpenAdminDashboard, setCanOpenAdminDashboard] = useState(false);
+   const [adminAccessLoading, setAdminAccessLoading] = useState(false);
+@@ -900,175 +857,71 @@
+     return () => clearTimeout(timeout);
+   }, [myProfile?.username, usernameDraft]);
+ 
+-  const retireNotificationOperation = useCallback(() => {
+-    notificationScope.generation += 1;
+-    notificationScope.reading = false;
+-    // Pure refreshes are replaceable reads. Any implicit missing-row insert
+-    // keeps its independent durable-write lease until transport settlement.
+-    if (notificationScope.action === "push-refresh") {
+-      notificationScope.action = null;
+-      notificationScope.actionGeneration = null;
+-    }
+-    patchNotificationSettings({ loading: false, savingKey: notificationScope.action });
+-  }, [notificationScope, patchNotificationSettings]);
+-
+-  useEffect(() => subscribeToAccountSessionAuthority(next => {
+-    if (sameAccountSessionAuthority(notificationAuthority, next)) return;
+-    retireNotificationOperation();
+-    patchNotificationSettings(EMPTY_NOTIFICATION_SETTINGS);
+-  }), [notificationAuthority, patchNotificationSettings, retireNotificationOperation]);
+-
+-  const beginNotificationOperation = useCallback((savingKey: string | null) => {
+-    if (!currentNotificationOwner() || notificationScope.action || (!savingKey && notificationScope.reading)
+-      || hasPendingNotificationPreferenceWrite(notificationAuthority?.userId)
+-      || hasPendingNotificationPushRegistration()) return null;
+-    // A user action supersedes an automatic read. The synchronous latch also
+-    // covers multiple native callbacks arriving before React renders disabled.
+-    const generation = ++notificationScope.generation;
+-    notificationScope.action = savingKey;
+-    notificationScope.actionGeneration = savingKey ? generation : null;
+-    notificationScope.reading = !savingKey;
+-    if (!savingKey || savingKey === "push-refresh") notificationScope.refreshNeeded = false;
+-    patchNotificationSettings({ loading: !savingKey, savingKey });
+-    const current = () => currentNotificationOwner() && generation === notificationScope.generation;
+-    notificationScope.currentOperation = current;
+-    return { current, finish: () => {
+-      if (savingKey && notificationScope.actionGeneration === generation) {
+-        notificationScope.action = null;
+-        notificationScope.actionGeneration = null;
+-        if (mountedRef.current && notificationScopeRef.current === notificationScope) {
+-          patchNotificationSettings({ savingKey: null });
+-          // Reconcile a committed/failed retired action against current truth.
+-          if ((!current() || notificationScope.refreshNeeded) && currentNotificationOwner()) void notificationRefreshRef.current();
+-        }
+-      }
+-      if (!current()) return;
+-      notificationScope.reading = false;
+-      patchNotificationSettings({ loading: false, savingKey: null });
+-      if (notificationScope.refreshNeeded) void notificationRefreshRef.current();
+-    } };
+-  }, [currentNotificationOwner, notificationAuthority?.userId, notificationScope, patchNotificationSettings]);
+-
+-  const refreshNotifications = useCallback(async (manual = false) => {
+-    const operation = beginNotificationOperation(manual ? "push-refresh" : null);
+-    if (!operation) return;
++  const refreshNotifications = useCallback(async () => {
++    if (!isSignedIn) return;
++    setNotificationLoading(true);
+     try {
+       const [preferences, registration, callAlertStatus] = await Promise.all([
+-        readNotificationPreferences(notificationAuthority?.userId, { authority: notificationAuthority, isCurrent: operation.current }),
++        readNotificationPreferences(),
+         readCurrentPushRegistration(),
+         readNativeCallAlertStatus(),
+       ]);
+-      if (!operation.current()) return;
+-      patchNotificationSettings({ preferences, registration, callAlertStatus, error: null });
++      setNotificationPreferences(preferences);
++      setNotificationPreferenceError(null);
++      setPushRegistration(registration);
++      setNativeCallAlertStatus(callAlertStatus);
+     } catch (error) {
+-      if (!operation.current()) return;
+-      patchNotificationSettings({ preferences: null,
+-        error: manual ? "Notification settings could not be verified. Try Refresh."
+-          : getUserFacingErrorMessage(error, "Notification settings could not be loaded. Try Refresh."),
+-        registration: {
+-          message: `${getUserFacingErrorMessage(error, "Unable to verify this device push registration.")} In-app Activity is tied to your account and still works in the app.`,
+-          permissionState: "error" as const, provider: "expo" as const, status: "error" as const,
+-          tokenFingerprint: null, nativeTokenFingerprint: null,
+-        },
+-      });
++      setNotificationPreferences(null);
++      setNotificationPreferenceError(getUserFacingErrorMessage(error, "Notification settings could not be loaded. Try Refresh."));
+     } finally {
+-      operation.finish();
+-    }
+-  }, [notificationAuthority, beginNotificationOperation, patchNotificationSettings]);
+-  notificationRefreshRef.current = refreshNotifications;
+-
+-  useEffect(() => subscribeToNotificationPreferenceWrites((userId, pending) => {
+-    if (userId !== notificationAuthority?.userId) return;
+-    notificationWriteChanged(version => version + 1);
+-    if (!pending) void refreshNotifications();
+-  }), [notificationAuthority?.userId, refreshNotifications]);
+-  useEffect(() => subscribeToNotificationPushRegistrations((_userId, pending, initiatedBy) => {
+-    notificationWriteChanged(version => version + 1);
+-    if (!pending) {
+-      // The active initiating handler owns its own success/error receipt. Do
+-      // not overwrite that result with an unrelated successful generic read.
+-      if (notificationScope.action && initiatedBy === notificationScope.currentOperation) return;
+-      // Another entry point can settle while a local preference action/read
+-      // owns the latch. Retry this readback when that action releases it.
+-      notificationScope.refreshNeeded = true;
+-      void refreshNotifications();
+-    }
+-  }), [notificationScope, refreshNotifications]);
+-
+-  useFocusEffect(useCallback(() => {
+-    notificationScope.focused = true;
++      setNotificationLoading(false);
++    }
++  }, [isSignedIn]);
++
++  useEffect(() => {
++    if (isLoading || !isSignedIn) return;
+     void refreshNotifications();
+-    return () => {
+-      notificationScope.focused = false;
+-      retireNotificationOperation();
+-    };
+-  }, [notificationScope, refreshNotifications, retireNotificationOperation]));
+-
+-  useEffect(() => {
+-    const subscription = AppState.addEventListener("change", state => {
+-      if (state === "active") void refreshNotifications();
+-      else retireNotificationOperation();
+-    });
+-    return () => subscription.remove();
+-  }, [refreshNotifications, retireNotificationOperation]);
++  }, [isLoading, isSignedIn, refreshNotifications]);
+ 
+   const onToggleNotificationPreference = useCallback(async (
+     key: keyof Omit<NotificationPreferenceSettings, "updatedAt">,
+     value: boolean,
+   ) => {
+-    if (!notificationPreferences) return;
+-    const operation = beginNotificationOperation(key);
+-    if (!operation) return;
++    if (!notificationPreferences || notificationSavingKey) return;
++
++    setNotificationSavingKey(key);
+     try {
+-      const save = async () => {
+-        const updated = await updateNotificationPreferences({ [key]: value } as NotificationPreferencePatch, notificationAuthority?.userId,
+-          { authority: notificationAuthority, isCurrent: operation.current });
+-        if (!operation.current()) return;
+-        patchNotificationSettings({ preferences: updated, error: null });
+-        if (key === "pushEnabled" && !value) {
+-          const revoked = await revokeCurrentPushInstall("user_request", { authority: notificationAuthority, isCurrent: operation.current });
+-          if (operation.current()) {
+-            notificationScope.refreshNeeded = false;
+-            patchNotificationSettings({ registration: revoked });
+-          }
+-        }
+-      };
+-      if (key === "pushEnabled" && !value) await withNotificationPushPreferenceChange(
+-        { authority: notificationAuthority, isCurrent: operation.current }, save,
+-      );
+-      else await save();
++      const updated = await updateNotificationPreferences({ [key]: value } as NotificationPreferencePatch);
++      setNotificationPreferences(updated);
++      if (key === "pushEnabled" && !value) {
++        const revoked = await revokeCurrentPushInstall();
++        setPushRegistration(revoked);
++      }
+     } catch (error) {
+-      if (!operation.current()) return;
+       const message = getUserFacingErrorMessage(error, "Unable to update notification preferences.");
+       Alert.alert("Notifications", message);
+     } finally {
+-      operation.finish();
+-    }
+-  }, [notificationAuthority, beginNotificationOperation, notificationPreferences, notificationScope, patchNotificationSettings]);
++      setNotificationSavingKey(null);
++    }
++  }, [notificationPreferences, notificationSavingKey]);
+ 
+   const onPressRegisterPush = useCallback(async () => {
+-    const operation = beginNotificationOperation("push-register");
+-    if (!operation) return;
++    if (notificationSavingKey) return;
++
++    setNotificationSavingKey("push-register");
+     try {
+-      const result = await requestPushPermissionAndRegister({ authority: notificationAuthority, isCurrent: operation.current });
+-      if (!operation.current()) return;
++      const result = await requestPushPermissionAndRegister();
+       let nextRegistration = result;
+       if (result.status === "registered") {
+-        const updated = await updateNotificationPreferences({ pushEnabled: true }, notificationAuthority?.userId, { authority: notificationAuthority, isCurrent: operation.current });
+-        if (!operation.current()) return;
+-        patchNotificationSettings({ preferences: updated, error: null });
++        const updated = await updateNotificationPreferences({ pushEnabled: true });
++        setNotificationPreferences(updated);
+         nextRegistration = await readCurrentPushRegistration();
+       }
+-      if (operation.current()) {
+-        notificationScope.refreshNeeded = false;
+-        patchNotificationSettings({ registration: nextRegistration });
+-      }
+-    } catch (error) {
+-      if (operation.current()) Alert.alert("Notifications", getUserFacingErrorMessage(error, "Unable to register this device for push alerts."));
++      setPushRegistration(nextRegistration);
+     } finally {
+-      operation.finish();
+-    }
+-  }, [notificationAuthority, beginNotificationOperation, notificationScope, patchNotificationSettings]);
++      setNotificationSavingKey(null);
++    }
++  }, [notificationSavingKey]);
+ 
+   const onPressOpenNotificationSettings = useCallback(async () => {
+     await Linking.openSettings().catch(() => {
+@@ -1077,8 +930,35 @@
+   }, []);
+ 
+   const onPressRefreshPushRegistration = useCallback(async () => {
+-    await refreshNotifications(true);
+-  }, [refreshNotifications]);
++    if (notificationSavingKey) return;
++
++    setNotificationSavingKey("push-refresh");
++    try {
++      const [nextRegistration, callAlertStatus, preferences] = await Promise.all([
++        readCurrentPushRegistration(),
++        readNativeCallAlertStatus(),
++        readNotificationPreferences(),
++      ]);
++      setPushRegistration(nextRegistration);
++      setNativeCallAlertStatus(callAlertStatus);
++      setNotificationPreferences(preferences);
++      setNotificationPreferenceError(null);
++    } catch (error) {
++      setNotificationPreferences(null);
++      setNotificationPreferenceError("Notification settings could not be verified. Try Refresh.");
++      const message = getUserFacingErrorMessage(error, "Unable to verify this device push registration.");
++      setPushRegistration({
++        message: `${message} In-app Activity is tied to your account and still works in the app.`,
++        permissionState: "error",
++        provider: "expo",
++        status: "error",
++        tokenFingerprint: null,
++        nativeTokenFingerprint: null,
++      });
++    } finally {
++      setNotificationSavingKey(null);
++    }
++  }, [notificationSavingKey]);
+ 
+   const onPressNativeCallAlertSettings = useCallback(async () => {
+     const opened = await openNativeCallAlertSettings();
+@@ -1091,23 +971,21 @@
+   }, []);
+ 
+   const onSelectChillyChatRingtone = useCallback(async (key: ChillyChatRingtoneKey) => {
+-    if (!notificationPreferences) return;
+-    const operation = beginNotificationOperation("chillyChatCallSoundKey");
+-    if (!operation) return;
++    if (!notificationPreferences || notificationSavingKey) return;
++    setNotificationSavingKey("chillyChatCallSoundKey");
+     try {
+-      const updated = await updateNotificationPreferences({ chillyChatCallSoundKey: key }, notificationAuthority?.userId, { authority: notificationAuthority, isCurrent: operation.current });
+-      if (operation.current()) patchNotificationSettings({ preferences: updated, error: null });
++      const updated = await updateNotificationPreferences({ chillyChatCallSoundKey: key });
++      setNotificationPreferences(updated);
+     } catch (error) {
+-      if (!operation.current()) return;
+       const message = getUserFacingErrorMessage(error, "Unable to update Chi'lly Chat call sound.");
+       Alert.alert("Chi'lly Chat calls", message);
+     } finally {
+-      operation.finish();
+-    }
+-  }, [notificationAuthority, beginNotificationOperation, notificationPreferences, patchNotificationSettings]);
++      setNotificationSavingKey(null);
++    }
++  }, [notificationPreferences, notificationSavingKey]);
+ 
+   const onToggleChillyChatCallRing = useCallback(async (enabled: boolean) => {
+-    if (!notificationPreferences) return;
++    if (!notificationPreferences || notificationSavingKey) return;
+ 
+     const nextSoundKey: ChillyChatRingtoneKey = enabled
+       ? notificationPreferences.chillyChatCallSoundKey === "silent_vibrate"
+@@ -1115,19 +993,17 @@
+         : notificationPreferences.chillyChatCallSoundKey
+       : "silent_vibrate";
+ 
+-    const operation = beginNotificationOperation("chillyChatCallSoundKey");
+-    if (!operation) return;
++    setNotificationSavingKey("chillyChatCallSoundKey");
+     try {
+-      const updated = await updateNotificationPreferences({ chillyChatCallSoundKey: nextSoundKey }, notificationAuthority?.userId, { authority: notificationAuthority, isCurrent: operation.current });
+-      if (operation.current()) patchNotificationSettings({ preferences: updated, error: null });
++      const updated = await updateNotificationPreferences({ chillyChatCallSoundKey: nextSoundKey });
++      setNotificationPreferences(updated);
+     } catch (error) {
+-      if (!operation.current()) return;
+       const message = getUserFacingErrorMessage(error, "Unable to update Chi'lly Chat call ring.");
+       Alert.alert("Chi'lly Chat calls", message);
+     } finally {
+-      operation.finish();
+-    }
+-  }, [notificationAuthority, beginNotificationOperation, notificationPreferences, patchNotificationSettings]);
++      setNotificationSavingKey(null);
++    }
++  }, [notificationPreferences, notificationSavingKey]);
+ 
+   const onPreviewChillyChatRingtone = useCallback(async () => {
+     if (!notificationPreferences) return;
+@@ -1202,14 +1078,13 @@
+     : "Premium purchases are temporarily unavailable while setup is being finalized.";
+ 
+   const pushStatusLabel = useMemo(() => {
+-    if (notificationPushPending) return "Device change pending";
+     if (pushRegistration?.status === "registered") return "Registered";
+     if (pushRegistration?.permissionState === "denied") return "Off";
+     if (pushRegistration?.status === "error") return "Unable to verify";
+     if (pushRegistration?.status === "blocked") return "Unavailable";
+     if (pushRegistration?.status === "unsupported") return "Unsupported";
+     return "Not registered";
+-  }, [notificationPushPending, pushRegistration?.permissionState, pushRegistration?.status]);
++  }, [pushRegistration?.permissionState, pushRegistration?.status]);
+   const showRegisterPushButton = !pushRegistration
+     || pushRegistration.status === "not_registered"
+     || pushRegistration.status === "denied"
+@@ -2353,9 +2228,7 @@
+       >
+         <SettingsRow
+           title="Device push status"
+-          subtitle={notificationPushPending
+-            ? "An earlier device notification change is still unresolved. Notification changes are paused until it settles; a timeout does not cancel a request already sent."
+-            : pushRegistration?.message ?? "Register this device for push alerts."}
++          subtitle={pushRegistration?.message ?? "Register this device for push alerts."}
+           value={pushStatusLabel}
+         >
+           {pushRegistration?.tokenFingerprint ? (
+

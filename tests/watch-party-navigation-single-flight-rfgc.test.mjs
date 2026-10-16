@@ -15,6 +15,7 @@ import {
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
 const player = read("app/player/[id].tsx");
+const playerActions = read("_lib/usePlayerWatchPartyActions.ts");
 const titleDetail = read("app/title/[id].tsx");
 const liveTab = read("app/(tabs)/live.tsx");
 const waitingRoom = read("app/watch-party/index.tsx");
@@ -144,11 +145,13 @@ test("prepared-room reuse fails closed across host, target, type, and content bo
 });
 
 test("Player closes the same-frame tap window before Premium and route work", () => {
-  const handlerStart = player.indexOf("const onWatchParty = useCallback(async () =>");
-  const handler = player.slice(handlerStart, player.indexOf("const onSubmitTitleReport", handlerStart));
-  assert.ok(handler.indexOf("watchPartyTransitionLatchRef.current.tryAcquire()") < handler.indexOf("ensureWatchPartyLivePremium"));
-  assert.match(handler, /navigationAccepted = true;[\s\S]*finally[\s\S]*if \(!navigationAccepted\)[\s\S]*watchPartyTransitionLatchRef\.current\.release\(\)/u);
-  assert.match(player, /useFocusEffect\([\s\S]{0,220}watchPartyTransitionLatchRef\.current\.release\(\)/u);
+  const handlerStart = playerActions.indexOf("const onWatchParty = useCallback(async () =>");
+  const handler = playerActions.slice(handlerStart, playerActions.indexOf("const refreshWatchPartyPremiumAfterSheetAction", handlerStart));
+  assert.ok(handler.indexOf("startRef.current = operation") < handler.indexOf("await ensureWatchPartyLivePremium"));
+  assert.match(handler, /startRef\.current \|\| acceptedNavigationRef\.current/u);
+  assert.match(handler, /navigationAccepted = true;[\s\S]*acceptedNavigationRef\.current = true;[\s\S]*finally[\s\S]*startRef\.current === operation/u);
+  assert.match(playerActions, /useFocusEffect\([\s\S]{0,220}if \(!startRef\.current\)[\s\S]{0,120}acceptedNavigationRef\.current = false/u);
+  assert.match(player, /usePlayerWatchPartyActions\(\{/u);
   assert.match(player, /accessibilityState=\{\{[\s\S]{0,120}busy: watchPartyTransitionInFlight/u);
   assert.match(player, /disabled=\{watchPartyTransitionInFlight\}/u);
 });

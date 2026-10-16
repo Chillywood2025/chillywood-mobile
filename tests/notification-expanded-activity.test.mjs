@@ -6,6 +6,7 @@ import test from "node:test";
 import vm from "node:vm";
 import React from "react";
 import ts from "typescript";
+import { mount as mountNotificationSettings } from "./helpers/notification-settings-mounted-harness.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const read = (file) => process.env.NOTIFICATION_ACTIVITY_BASELINE === "1"
@@ -190,32 +191,16 @@ const descendants = (element, type) => {
   return [...(element.type === type ? [element] : []), ...descendants(element.props?.children, type)];
 };
 
-test("actual settings refresh presents read failure and can reload saved preferences", async () => {
-  let fail = true;
-  const state = { preferences: null, error: null, loading: false };
-  const refresh = run(`${declaration(settingsAst, "refreshNotifications")}\nglobalThis.refresh = refreshNotifications;`, {
-    useCallback: (fn) => fn, isSignedIn: true,
-    readNotificationPreferences: async () => {
-      if (fail) throw new Error("Preferences unavailable");
-      return service.parsePreferenceRow({ social_activity_enabled: false });
-    },
-    readCurrentPushRegistration: async () => ({ status: "registered" }),
-    readNativeCallAlertStatus: async () => ({ granted: true }),
-    setNotificationLoading: (value) => { state.loading = value; },
-    setNotificationPreferences: (value) => { state.preferences = value; },
-    setNotificationPreferenceError: (value) => { state.error = value; },
-    setPushRegistration: () => {}, setNativeCallAlertStatus: () => {},
-    getUserFacingErrorMessage: (error, fallback) => error?.message || fallback,
-  }).refresh;
-  await refresh();
-  assert.equal(state.preferences, null);
-  assert.match(state.error, /unavailable/i);
-  assert.equal(state.loading, false);
-  fail = false;
-  await refresh();
-  assert.equal(state.error, null);
-  assert.equal(state.preferences.socialActivityEnabled, false);
-  assert.equal(state.loading, false);
+test("actual settings refresh presents read failure and can reload saved preferences", async t => {
+  const m = await mountNotificationSettings(t, { read: async () => ({ data: null, error: {} }) });
+  assert.equal(m.row("Messages").props.value, "Loading");
+  assert.ok(m.row("Notification settings unavailable"));
+  assert.equal(m.button("Refresh").disabled, false);
+  m.state.read = async () => ({ data: { social_activity_enabled: false }, error: null });
+  await m.act(() => m.button("Refresh").onPress());
+  assert.equal(!!m.row("Notification settings unavailable"), false);
+  assert.equal(m.toggle("Follows and content activity").value, false);
+  assert.equal(m.button("Refresh").disabled, false);
 });
 
 test("actual settings renderer exposes each new preference once and routes its boolean change", () => {
