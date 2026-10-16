@@ -1,5 +1,5 @@
 {
-  "status": "INCOMPLETE recovery checkpoint. Not mergeable or validated as a complete branch.",
+  "status": "INCOMPLETE recovery checkpoint. Not mergeable. Eight supporting files remain unrecovered.",
   "base": "d2ec4dc2a25d67e8f98b578496f5985359b9bebc",
   "originalLocalCommit": "9b022600f552fb1594638577e2163c27bb5abcbd",
   "originalTree": "3c5e54aad3623f24b95630515bfe73a817812c46",
@@ -178,7 +178,7 @@
       "type": "blob",
       "sha": "8b942cd8fcd41f893aa46f9893c6b1327071c29d",
       "size": 2742,
-      "published": false
+      "published": true
     },
     {
       "path": "modules/chillywood-camera-effects/third-party/SelfieSegmenter-model-card.pdf",
@@ -242,7 +242,7 @@
       "type": "blob",
       "sha": "947437c100ab994952df5920f528cd392209590f",
       "size": 16064,
-      "published": false
+      "published": true
     },
     {
       "path": "tests/camera-provider-closure.test.mjs",
@@ -258,7 +258,7 @@
       "type": "blob",
       "sha": "a6871bc8f8f739bdffdc77d24c5d5b1b5aa59fc2",
       "size": 8055,
-      "published": false
+      "published": true
     },
     {
       "path": "tests/ci/required-validation.test.mjs",
@@ -266,7 +266,7 @@
       "type": "blob",
       "sha": "7dc7f3cc420bf36a497ac2f86c5064a6ab940296",
       "size": 23478,
-      "published": false
+      "published": true
     },
     {
       "path": "tests/expo-camera-no-barcode.test.mjs",
@@ -282,7 +282,7 @@
       "type": "blob",
       "sha": "68659ba618f3cbd70e1821bf4d658c53f35e0c29",
       "size": 2441,
-      "published": false
+      "published": true
     },
     {
       "path": "tools/local-camera-inference-harness/AndroidManifest.xml",
@@ -290,7 +290,7 @@
       "type": "blob",
       "sha": "d3c7eb9861fdc98b1db4d1e226592f2f8e3b0006",
       "size": 742,
-      "published": false
+      "published": true
     },
     {
       "path": "tools/local-camera-inference-harness/OfflineInferenceInstrumentation.java",
@@ -298,7 +298,7 @@
       "type": "blob",
       "sha": "64c7be1331d3440118d2529f307ceac9380aa2b9",
       "size": 9132,
-      "published": false
+      "published": true
     },
     {
       "path": "tools/local-camera-inference-harness/README.md",
@@ -306,7 +306,7 @@
       "type": "blob",
       "sha": "b894a60bc551b4074e6c9f6b8cb308b41f91338a",
       "size": 3743,
-      "published": false
+      "published": true
     }
   ]
 }

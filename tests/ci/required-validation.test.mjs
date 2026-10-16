@@ -160,7 +160,7 @@ test("native validation depends on executing actual SDK contracts on the same ru
   const sdk = jobs["native-sdk"];
   assert.equal(sdk["runs-on"], "macos-15");
   assert.equal(sdk.if, jobs["native-release"].if);
-  assert.equal(sdk.needs, "plan");
+  assert.deepEqual(sdk.needs, ["plan", "native-inference"]);
   assert.ok(sdk.steps.some((step) => step.run === "node scripts/test-webrtc-native-sender-contract.mjs"));
   assert.ok(!sdk["continue-on-error"] && sdk.steps.every((step) => !step["continue-on-error"]));
   assert.deepEqual(jobs["native-release"].needs, ["plan", "native-sdk"]);
