@@ -3243,6 +3243,7 @@ export function ChannelStudioScreen() {
     }
 
     setBrandLoading(true);
+    setBrandNotice(null);
     try {
       const bundle = await readPlatformBrandStudio(ownerUserId, { throwOnUnavailable: true });
       setPlatformBranding(bundle);
@@ -3933,7 +3934,8 @@ export function ChannelStudioScreen() {
                 if (assetType === "avatar") patch.avatarAssetId = null;
                 if (assetType === "logo") patch.logoAssetId = null;
                 if (assetType === "watermark") patch.watermarkAssetId = null;
-                await saveBrandDraftPatch(patch);
+                const savedProfile = await saveBrandDraftPatch(patch);
+                if (!savedProfile) return;
                 setBrandNotice("Platform asset removed from Brand Studio.");
               } catch {
                 setBrandNotice("Unable to remove that Platform asset right now.");

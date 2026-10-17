@@ -131,8 +131,39 @@ test('mounted Brand profile save failure stays visible and Publish retries unsav
 test('mounted Brand load failure exposes Retry and no destructive editor or publish action',async t=>{
  const h=await mount(t,{route:{tab:'brand'},overrides:{readPlatformBrandStudio:async()=>{throw Error('offline');}}});
  assert.match(h.text(),/Brand Studio unavailable/);assert.equal(h.button('Publish Brand Studio Changes'),undefined);
+ await h.press(h.button('Retry'));assert.match(h.text(),/Brand Studio could not load Platform media right now/);
  h.mocks.readPlatformBrandStudio=async()=>brandBundle(brandProfile());await h.press(h.button('Retry'));assert.ok(h.button('Publish Brand Studio Changes'));
+ assert.doesNotMatch(h.text(),/Brand Studio could not load|Brand Studio unavailable/);
 });
+for(const outcome of ['rejected','saved']){
+ test(`mounted Brand removal keeps truthful ${outcome} draft-save feedback`,async t=>{
+  let profile={...brandProfile(),heroImageAssetId:'hero-asset'},removes=0,saves=0;
+  const asset={id:'hero-asset',ownerUserId:'owner',assetType:'hero_image',assetState:'draft',moderationStatus:'clean',scanStatus:'clean',deletedAt:null,signedUrl:'fixture:hero-image',mimeType:'image/jpeg',fileSizeBytes:123};
+  const h=await mount(t,{route:{tab:'brand'},overrides:{
+   readPlatformBrandStudio:async()=>({...brandBundle(profile),assets:profile.heroImageAssetId?[asset]:[],heroImage:profile.heroImageAssetId?asset:null}),
+   formatPlatformBrandFileSize:()=> '123 bytes',
+   removePlatformBrandAsset:async value=>{assert.equal(value.id,asset.id);removes++;},
+   savePlatformBrandProfileDraft:async(owner,next)=>{
+    assert.equal(owner,'owner');assert.equal(next.heroImageAssetId,null);saves++;
+    if(outcome==='rejected')throw Error('modeled draft write rejection');
+    profile=next;return profile;
+   },
+  }});
+  await h.press(h.button('Open Hero Media'));await h.press(h.button('Remove Brand Studio Hero Image'));
+  const confirmation=h.alerts.at(-1);assert.equal(confirmation[0],'Remove Platform asset?');
+  await React.act(async()=>{confirmation[2].find(button=>button.text==='Remove').onPress();});
+  assert.equal(removes,1);assert.equal(saves,1);
+  assert.equal(h.button('Save Brand Studio Draft').props.disabled,false);
+  if(outcome==='rejected'){
+   assert.match(h.text(),/Unable to save Brand Studio changes right now/);
+   assert.doesNotMatch(h.text(),/Platform asset removed from Brand Studio/);
+   assert.equal(profile.heroImageAssetId,'hero-asset');assert.ok(h.button('Remove Brand Studio Hero Image'));
+  }else{
+   assert.match(h.text(),/Platform asset removed from Brand Studio/);
+   assert.equal(profile.heroImageAssetId,null);assert.equal(h.button('Remove Brand Studio Hero Image'),undefined);
+  }
+ });
+}
 test('mounted same-tab Schedule and Moderation Live safety focus the real editor/defaults wrappers',async t=>{
  const h=await mount(t,{route:{tab:'live'}});
  await h.press(h.find(n=>n.type==='TouchableOpacity'&&textOf(n).startsWith('Schedule Event')));
