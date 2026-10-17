@@ -16,6 +16,11 @@ temporary build directory; no app/release signing material is used.
 
 ## Commands
 
+Emulator execution is excluded from CI by user direction on 2026-10-17. The
+historical commands below document the retained harness; they are not a request
+to resume emulator work. CI runs the source/parser controls and actual native
+compilation only. See [the scope change](../../docs/recovery/local-camera-inference/CI_WITHOUT_EMULATOR_2026-10-17.md).
+
 From the repository root:
 
 ```sh
@@ -35,10 +40,11 @@ JAVA_HOME="$JAVA_HOME_17_X64" node scripts/test-local-camera-inference-offline.m
 JAVA_HOME="$JAVA_HOME_17_X64" node scripts/test-local-camera-inference-offline.mjs --serial=emulator-5554
 ```
 
-The runner never accepts SDK licenses. The reusable workflow installs missing
-official SDK components only under licenses already present on the hosted
-runner. It does not change host KVM permissions. Emulator startup/instrumentation
-and the CI job have explicit deadlines; failure is mandatory, never skipped.
+The runner never accepts SDK licenses. The reusable workflow installs Android
+platform/build tools only under licenses already present on the hosted runner;
+it does not install an emulator/system image or change host KVM permissions.
+The retained standalone harness and the CI job have explicit deadlines; errors
+in an invoked command fail rather than being ignored.
 Owned emulator state and the APK are removed after execution. A supplied
 emulator must be disposable: only this test package is installed/uninstalled.
 
@@ -66,11 +72,13 @@ The final receipt includes both control APK hashes and their explicit rejection
 records. These mutants never modify production source or replace its normal APK
 in a tester build; they exist only inside this permission-free acceptance run.
 
-The lane first runs `scripts/compile-native-camera-effects.mjs --android`,
+The CI lane runs `scripts/compile-native-camera-effects.mjs --android`,
 including full camera Kotlin/Java compilation and app dependency/merged-manifest
 provider checks. The existing required native aggregate depends on this lane;
-no existing checks are removed. Path-planning tests cover adapter, models,
-plugins, closure/compiler scripts and the harness itself.
+Android/iOS SDK contracts and native/release checks remain mandatory. The
+emulator invocation is excluded, so CI does not obtain the native inference
+receipt described above. Path-planning tests cover adapter, models, plugins,
+closure/compiler scripts and the harness itself.
 
 This is x86_64 Android emulator evidence with synthetic inputs. It does not prove
 real-person segmentation/face quality, visual correctness of all five effects,

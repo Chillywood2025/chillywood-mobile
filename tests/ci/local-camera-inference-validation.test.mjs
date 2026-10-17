@@ -153,39 +153,47 @@ function assertRequiredLane(source, reusable) {
   assert.equal(job["timeout-minutes"], 60);
   assert.equal(job.defaults.run.shell, "bash --noprofile --norc -eo pipefail {0}");
   const compile = 'JAVA_HOME="$JAVA_HOME_17_X64" node scripts/compile-native-camera-effects.mjs --android';
-  const execute = 'JAVA_HOME="$JAVA_HOME_17_X64" node scripts/test-local-camera-inference-offline.mjs --emulator';
-  for (const command of [compile, execute]) {
+  const verify = "node scripts/test-local-camera-inference-offline.mjs --source-check\n"
+    + "node --test tests/ci/local-camera-inference-validation.test.mjs\n";
+  for (const command of [verify, compile]) {
     const steps = job.steps.filter(step => step.run === command);
     assert.equal(steps.length, 1, `Exact mandatory command required: ${command}`);
     assert.equal(steps[0].if, undefined);
     assert.equal(steps[0]["continue-on-error"], undefined);
   }
-  assert(job.steps.findIndex(step => step.run === compile) < job.steps.findIndex(step => step.run === execute));
+  assert(job.steps.findIndex(step => step.run === verify) < job.steps.findIndex(step => step.run === compile));
   const commands = job.steps.map(step => step.run ?? "").join("\n");
-  assert.match(commands, /node scripts\/test-local-camera-inference-offline\.mjs --source-check/u);
-  assert.match(commands, /system-images;android-35;default;x86_64/u);
+  assert.match(commands, /"platforms;android-35" "build-tools;35\.0\.0"/u);
+  assert.doesNotMatch(commands, /--emulator|--serial|system-images;|"emulator"/u);
   assert.doesNotMatch(commands, /google_apis|google_apis_playstore|--licenses|\byes\s*\||\bsudo\b|\|\|\s*true|continue-on-error/u);
 }
 
-test("exact-model inference and full native compile are mandatory in the required native chain", () => {
+test("source controls and full native compile remain mandatory without emulator execution", () => {
   const source = readWorkflow("required-validation.yml");
   const reusable = readWorkflow("local-camera-inference.yml");
   assertRequiredLane(source, reusable);
-  for (const mode of ["skip-job", "skip-inference", "ignore-failure", "remove-inference", "remove-compile",
-    "duplicate", "break-dependency", "remove-summary", "replace-with-source-only"]) {
+  for (const mode of ["skip-job", "skip-compile", "ignore-compile-failure", "remove-compile",
+    "skip-controls", "ignore-control-failure", "remove-controls", "duplicate-compile", "duplicate-controls",
+    "break-dependency", "remove-summary", "replace-with-source-only", "restore-emulator", "restore-image"]) {
     const changed = structuredClone(source);
     const lane = structuredClone(reusable);
     const job = lane.jobs["offline-inference"];
-    const inference = job.steps.find(step => step.run?.endsWith("--emulator"));
+    const compile = job.steps.find(step => step.run?.includes("compile-native-camera-effects"));
+    const controls = job.steps.find(step => step.run?.includes("--source-check"));
     if (mode === "skip-job") job.if = "false";
-    if (mode === "skip-inference") inference.if = "false";
-    if (mode === "ignore-failure") inference["continue-on-error"] = true;
-    if (mode === "remove-inference") job.steps = job.steps.filter(step => step !== inference);
-    if (mode === "remove-compile") job.steps = job.steps.filter(step => !step.run?.includes("compile-native-camera-effects"));
-    if (mode === "duplicate") job.steps.push(structuredClone(inference));
+    if (mode === "skip-compile") compile.if = "false";
+    if (mode === "ignore-compile-failure") compile["continue-on-error"] = true;
+    if (mode === "remove-compile") job.steps = job.steps.filter(step => step !== compile);
+    if (mode === "skip-controls") controls.if = "false";
+    if (mode === "ignore-control-failure") controls["continue-on-error"] = true;
+    if (mode === "remove-controls") job.steps = job.steps.filter(step => step !== controls);
+    if (mode === "duplicate-compile") job.steps.push(structuredClone(compile));
+    if (mode === "duplicate-controls") job.steps.push(structuredClone(controls));
     if (mode === "break-dependency") changed.jobs["native-sdk"].needs = ["plan"];
     if (mode === "remove-summary") changed.jobs.result.needs = changed.jobs.result.needs.filter(name => name !== "native-inference");
-    if (mode === "replace-with-source-only") inference.run = inference.run.replace("--emulator", "--source-check");
+    if (mode === "replace-with-source-only") compile.run = "node scripts/test-local-camera-inference-offline.mjs --source-check";
+    if (mode === "restore-emulator") job.steps.push({ run: "node scripts/test-local-camera-inference-offline.mjs --emulator" });
+    if (mode === "restore-image") job.steps.push({ run: 'sdkmanager --install "system-images;android-35;default;x86_64"' });
     assert.throws(() => assertRequiredLane(changed, lane), assert.AssertionError, mode);
   }
 });

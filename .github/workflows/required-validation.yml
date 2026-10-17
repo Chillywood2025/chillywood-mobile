@@ -169,7 +169,7 @@ jobs:
           npm run test:cognitive-runtime-login-integration
 
   native-inference:
-    name: Validation / Local Android Inference
+    name: Validation / Android Camera Compilation
     if: needs.plan.outputs.nativeRelease == 'true'
     needs: plan
     uses: ./.github/workflows/local-camera-inference.yml
@@ -208,8 +208,9 @@ jobs:
     name: Validation / Native and Release
     if: needs.plan.outputs.nativeRelease == 'true'
     # The existing required lane must not succeed unless the actual SDK
-    # Java/Objective-C contracts and offline Android inference succeeded on
-    # this same source run (native-sdk also requires native-inference).
+    # Java/Objective-C contracts, camera compilation and dependency/artifact
+    # checks succeeded on this same source run. Emulator execution is excluded;
+    # native-sdk still requires the preceding camera compilation lane.
     needs: [plan, native-sdk]
     # This lane compiles the actual deadline policy with the bundled Swift
     # toolchain; keep its platform explicit across ubuntu-latest migrations.
