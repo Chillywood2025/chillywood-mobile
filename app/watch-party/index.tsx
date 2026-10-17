@@ -222,6 +222,7 @@ export default function WatchPartyIndexScreen() {
   const joinRoomLatchRef = useRef(createActionSingleFlightLatch());
   const [joinActionBusy, setJoinActionBusy] = useState(false);
   const [refreshingCode, setRefreshingCode] = useState(false);
+  const generateCodeOperationRef = useRef<object | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [preview, setPreview] = useState<RoomPreview | null>(null);
   const [incomingHandoff, setIncomingHandoff] = useState<IncomingHandoff | null>(() =>
@@ -254,11 +255,18 @@ export default function WatchPartyIndexScreen() {
   const createOperationRef = useRef<object | null>(null);
   const discoverySaveRef = useRef<object | null>(null);
   const pendingPremiumCreateRef = useRef<{ owner: string; focusGeneration: number } | null>(null);
+  const retireCodeGeneration = useCallback(() => {
+    generateCodeOperationRef.current = null;
+    setRefreshingCode(false);
+  }, []);
   useEffect(() => subscribeToAccountSessionAuthority(next => {
     // Retire in-flight Start even if authority changes away and back before a
     // React render. Returning to the same account cannot revive an old intent.
-    if (!sameAccountSessionAuthority(authority, next)) waitingLifetimeRef.current += 1;
-  }), [authority]);
+    if (!sameAccountSessionAuthority(authority, next)) {
+      waitingLifetimeRef.current += 1;
+      retireCodeGeneration();
+    }
+  }), [authority, retireCodeGeneration]);
   const captureWaitingOwner = useCallback(() => {
     const lifetime = waitingLifetimeRef.current;
     return () => waitingOwnerRef.current === waitingOwnerKey
@@ -276,22 +284,27 @@ export default function WatchPartyIndexScreen() {
       waitingControlsActiveRef.current = !embeddedLiveStageEntry;
       waitingLifetimeRef.current += 1;
       waitingFocusGenerationRef.current += 1;
+      retireCodeGeneration();
       setWaitingResumeGeneration(value => value + 1);
       createRoomLatchRef.current.release();
       joinRoomLatchRef.current.release();
       if (!createOperationRef.current) setCreating(false);
       setJoinActionBusy(false);
       const subscription = AppState.addEventListener("change", (state) => {
-        if (state !== "active") waitingLifetimeRef.current += 1;
+        if (state !== "active") {
+          waitingLifetimeRef.current += 1;
+          retireCodeGeneration();
+        }
         else setWaitingResumeGeneration(value => value + 1);
       });
       return () => {
         waitingFocusedRef.current = false;
         waitingLifetimeRef.current += 1;
         waitingFocusGenerationRef.current += 1;
+        retireCodeGeneration();
         subscription.remove();
       };
-    }, [embeddedLiveStageEntry, waitingOwnerKey]),
+    }, [embeddedLiveStageEntry, retireCodeGeneration, waitingOwnerKey]),
   );
   const [initialCodeStatus, setInitialCodeStatus] = useState<"idle" | "preparing" | "failed">(() =>
     isLiveEntryMode && !isPlayerWatchPartyLiveFlow && !initialRouteRoomCode ? "preparing" : "idle",
@@ -567,10 +580,13 @@ export default function WatchPartyIndexScreen() {
     titleId: string | null,
     roomType: WatchPartyRoomType,
     sourceOptions?: { sourceType?: WatchPartyContentSourceType | null; sourceId?: string | null },
+    isCurrent = captureWaitingOwner(),
   ): Promise<RoomPreview | null> => {
-    if (!canUseBetaRooms) return null;
+    if (!canUseBetaRooms || !isCurrent()) return null;
     if (!(await requirePremiumRoomEntry(roomType, sourceOptions?.sourceId ?? titleId))) return null;
+    if (!isCurrent()) return null;
     const hostUserId = await getSafePartyUserId();
+    if (!isCurrent() || hostUserId !== authority?.userId) return null;
     const room = await createPartyRoom(titleId, hostUserId, 0, "paused", {
       roomType,
       sourceType: sourceOptions?.sourceType,
@@ -578,9 +594,14 @@ export default function WatchPartyIndexScreen() {
       discoveryVisibility: roomType === "live" ? liveDiscoveryVisibility : "private",
       discoveryTitle: roomType === "live" ? liveDiscoveryTitle : null,
     });
-    if (!room || "error" in room) return null;
+    if (!isCurrent() || !room || "error" in room) return null;
 
     const nextPreparedRoom = await buildRoomPreview(room);
+    return isCurrent() ? nextPreparedRoom : null;
+  }, [authority?.userId, buildRoomPreview, canUseBetaRooms, captureWaitingOwner, liveDiscoveryTitle, liveDiscoveryVisibility, requirePremiumRoomEntry]);
+
+  const applyPreparedWaitingRoom = useCallback((nextPreparedRoom: RoomPreview) => {
+    const { room } = nextPreparedRoom;
     setPreparedRoom(nextPreparedRoom);
     setIncomingHandoff({
       roomCode: room.roomCode,
@@ -590,8 +611,7 @@ export default function WatchPartyIndexScreen() {
       sourceId: room.sourceId,
     });
     setHostLabel("You are hosting");
-    return nextPreparedRoom;
-  }, [buildRoomPreview, canUseBetaRooms, liveDiscoveryTitle, liveDiscoveryVisibility, requirePremiumRoomEntry]);
+  }, []);
 
   useEffect(() => {
     const liveRoom = preparedRoom?.room;
@@ -751,16 +771,18 @@ export default function WatchPartyIndexScreen() {
 
     liveWaitingRoomLoadedRef.current = true;
     let cancelled = false;
+    const isCurrent = captureWaitingOwner();
 
     const createLiveWaitingRoom = async () => {
       try {
         setInitialCodeStatus("preparing");
-        const nextPreparedRoom = await createPreparedWaitingRoom(null, "live");
+        const nextPreparedRoom = await createPreparedWaitingRoom(null, "live", undefined, isCurrent);
         if (cancelled) return;
-        if (!nextPreparedRoom) {
+        if (!isCurrent() || !nextPreparedRoom) {
           setInitialCodeStatus("failed");
           return;
         }
+        applyPreparedWaitingRoom(nextPreparedRoom);
         setInitialCodeStatus("idle");
       } catch {
         if (!cancelled) setInitialCodeStatus("failed");
@@ -772,7 +794,7 @@ export default function WatchPartyIndexScreen() {
     return () => {
       cancelled = true;
     };
-  }, [canUseBetaRooms, configReady, createPreparedWaitingRoom, features.watchPartyEnabled, isLiveEntryMode, isPlayerWatchPartyLiveFlow, params.partyId, params.roomCode, params.roomId]);
+  }, [applyPreparedWaitingRoom, canUseBetaRooms, captureWaitingOwner, configReady, createPreparedWaitingRoom, features.watchPartyEnabled, isLiveEntryMode, isPlayerWatchPartyLiveFlow, params.partyId, params.roomCode, params.roomId]);
 
   const onLookup = async () => {
     debugLog("watch-party", "watch_party_find_room_pressed", {
@@ -1440,7 +1462,7 @@ export default function WatchPartyIndexScreen() {
 
   const onCreateRoom = async () => {
     const isCurrent = captureWaitingOwner();
-    if (!isCurrent() || discoverySaveRef.current || createOperationRef.current) return;
+    if (!isCurrent() || discoverySaveRef.current || createOperationRef.current || generateCodeOperationRef.current) return;
     debugLog("watch-party", "watch_party_create_room_pressed", {
       roomType: inferredWaitingRoomType,
       hasPreparedRoom: Boolean(preparedRoom?.room.partyId),
@@ -1804,7 +1826,10 @@ export default function WatchPartyIndexScreen() {
   }
 
   const onGenerateNewCode = async () => {
-    if (refreshingCode) return;
+    const isCurrent = captureWaitingOwner();
+    if (!isCurrent() || generateCodeOperationRef.current || createOperationRef.current || discoverySaveRef.current) return;
+    const operation = {};
+    generateCodeOperationRef.current = operation;
 
     setRefreshingCode(true);
     setCreateError(null);
@@ -1823,19 +1848,24 @@ export default function WatchPartyIndexScreen() {
       const nextPreparedRoom = await createPreparedWaitingRoom(requestedTitleId, roomType, {
         sourceType: requestedSourceType,
         sourceId: requestedSourceId,
-      });
+      }, isCurrent);
+      if (!isCurrent()) return;
       if (!nextPreparedRoom) {
         setCreateError("Unable to generate a new room code right now.");
         return;
       }
 
+      applyPreparedWaitingRoom(nextPreparedRoom);
       setPreview(null);
       setJoinCode("");
       setJoinError(null);
     } catch {
-      setCreateError("Unable to generate a new room code right now.");
+      if (isCurrent()) setCreateError("Unable to generate a new room code right now.");
     } finally {
-      setRefreshingCode(false);
+      if (generateCodeOperationRef.current === operation) {
+        generateCodeOperationRef.current = null;
+        setRefreshingCode(false);
+      }
     }
   };
 
@@ -1874,7 +1904,7 @@ export default function WatchPartyIndexScreen() {
   const preparedTargetPartyId = String(preparedRoom?.room.partyId ?? incomingHandoff?.partyId ?? initialRoutePartyId ?? "").trim();
   const shouldGuardCreateDuringInitialPrep = !trimmedCreateTitleId && isPreparingInitialCode && !preparedTargetPartyId;
   const isMissingWatchPartyContent = !isLiveWaitingRoom && !partyTitleLocked && !preparedTargetPartyId;
-  const createActionBusy = creating || shouldGuardCreateDuringInitialPrep;
+  const createActionBusy = creating || refreshingCode || shouldGuardCreateDuringInitialPrep;
   const createActionDisabled = createActionBusy || discoverySaveStatus === "saving" || isMissingWatchPartyContent || !features.watchPartyEnabled;
   const liveCreateActionLabel = preparedTargetPartyId ? "Continue to Live Room" : "Create Live Room";
   const createActionLabel = isMissingWatchPartyContent

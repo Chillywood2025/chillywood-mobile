@@ -66,11 +66,12 @@ const walk = (tree, predicate) => {
 };
 const settle = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
 
-async function mount(t, { normal = false, prepared = true, viewer = false, roomReader = null, age = 0, offers = [], checkoutAvailable = false, offerSave = null, offerRead = null, setupSave = null } = {}) {
+async function mount(t, { normal = false, prepared = true, viewer = false, initialLive = false, create = null, roomReader = null, age = 0, offers = [], checkoutAvailable = false, offerSave = null, offerRead = null, setupSave = null } = {}) {
   let tree;
   const runtime = { authority: owner(), focused: true, room: room(), params: { mode: 'live', partyId: 'ROOM01' }, premiumAllowed: true,
     reads: [], preparedReads: [], refreshes: [], writes: [], premium: [], navigations: [], alerts: [], policy: null, gate: null, userReader: null,
-    offers, paidWrites: [], setupWrites: [], checkoutCalls: 0 };
+    offers, paidWrites: [], setupWrites: [], checkoutCalls: 0, create };
+  if (initialLive) runtime.params = { mode: 'live' };
   if (normal) {
     runtime.room = { ...room(), roomType: 'title', titleId: 'title-a', sourceType: 'platform_title', sourceId: 'title-a' };
     runtime.params = { source: 'player', titleId: 'title-a', sourceType: 'platform_title', sourceId: 'title-a', ...(prepared ? { partyId: 'ROOM01' } : {}) };
@@ -118,7 +119,7 @@ async function mount(t, { normal = false, prepared = true, viewer = false, roomR
         runtime.room = { ...runtime.room, lastActivityAt: new Date().toISOString() }; return { ...runtime.room };
       }, getSafePartyUserId: async () => runtime.userReader ? runtime.userReader() : runtime.authority.userId,
       setPartyRoomPolicies: save, setPartyRoomDiscoverySettings: save, paidWatchPartyResolutionIsExactFreeRoom: value => value?.reason === 'free_room',
-      createPartyRoom: async () => { assert.ok(!prepared, 'prepared-room tests must not create another room'); runtime.created += 1; return { ...runtime.room }; }, touchOwnedPartyRoomActivity: noop },
+      createPartyRoom: async () => { assert.ok(!prepared, 'prepared-room tests must not create another room'); runtime.created += 1; return runtime.create ? runtime.create() : { ...runtime.room }; }, touchOwnedPartyRoomActivity: noop },
     '../../_lib/partyRoomStartIntent': intent.exports,
     '../../_lib/accountSessionAuthority': { getCurrentAccountSessionAuthoritySnapshot: () => runtime.authority,
       subscribeToAccountSessionAuthority: listener => { authorityListeners.add(listener); return () => authorityListeners.delete(listener); },
@@ -158,6 +159,8 @@ async function mount(t, { normal = false, prepared = true, viewer = false, roomR
     audience: value => find(n => n.props?.accessibilityLabel === `Set ${normal ? 'Party audience' : 'Live discovery'} to ${value}`),
     title: () => find(n => n.props?.accessibilityLabel === (normal ? 'Party discovery title' : 'Live discovery title')),
     continue: () => find(n => n.props?.testID === 'watch-party-create-room'),
+    generate: () => find(n => typeof n.props?.onPress === 'function' && n.props.onPress.name === 'onGenerateNewCode'),
+    roomCodes: () => walk(tree, n => n.type === 'RoomCodeInviteCard').map(n => n.props.roomCode),
     sheet: () => find(n => n.type === 'AccessSheet' && n.props.visible),
     entered: () => walk(tree, n => n.type === 'LiveStage').length,
     act: async fn => React.act(async () => { await fn(); await settle(); }),
@@ -169,6 +172,102 @@ async function mount(t, { normal = false, prepared = true, viewer = false, roomR
     async state(value) { await React.act(async () => { AppState.currentState = value; for (const fn of appListeners) fn(value); await settle(); }); },
   };
 }
+
+for (const transition of ['room', 'focus', 'background', 'session']) test(`code generation cannot replace the waiting room after ${transition} retirement`, async t => {
+  const h = await mount(t, { prepared: false }), pending = deferred();
+  const generated = { ...h.runtime.room, partyId: 'OLDGEN', roomCode: 'OLDGEN' };
+  h.runtime.create = () => pending.promise;
+  await h.act(() => { void h.generate().onPress(); });
+  assert.equal(h.runtime.created, 1);
+  if (transition === 'room') await h.replaceRoom('NEWROOM');
+  if (transition === 'focus') { await h.focus(false); await h.focus(true); }
+  if (transition === 'background') { await h.state('background'); await h.state('active'); }
+  if (transition === 'session') await h.generation('replacement');
+  const currentCodes = h.roomCodes();
+  await h.act(() => pending.resolve(generated));
+  assert.deepEqual(h.roomCodes(), currentCodes);
+  assert.equal(h.roomCodes().includes('OLDGEN'), false);
+  h.runtime.create = async () => ({ ...h.runtime.room, partyId: 'FRESHGEN', roomCode: 'FRESHGEN' });
+  await h.act(() => h.generate().onPress());
+  assert.deepEqual(h.roomCodes(), ['FRESHGEN'], 'a fresh explicit retry still owns the new room');
+});
+
+test('code generation drops a retired Premium read before creating and permits failure retry', async t => {
+  const h = await mount(t, { prepared: false }), premium = deferred();
+  h.runtime.gate = () => premium.promise;
+  await h.act(() => { void h.generate().onPress(); });
+  await h.focus(false); await h.focus(true);
+  await h.act(() => premium.resolve({ allowed: true, reason: 'allowed' }));
+  assert.equal(h.runtime.created, 0);
+  h.runtime.gate = null;
+  h.runtime.create = async () => null;
+  await h.act(() => h.generate().onPress());
+  assert.match(h.text(), /Unable to generate a new room code/);
+  h.runtime.create = async () => ({ ...h.runtime.room, partyId: 'RETRYOK', roomCode: 'RETRYOK' });
+  await h.act(() => h.generate().onPress());
+  assert.deepEqual(h.roomCodes(), ['RETRYOK']);
+});
+
+test('code generation shares same-frame presses and accepts the current result once', async t => {
+  const h = await mount(t, { prepared: false }), pending = deferred();
+  h.runtime.create = () => pending.promise;
+  const press = h.generate().onPress;
+  await h.act(() => { void press(); void press(); });
+  assert.equal(h.runtime.created, 1);
+  assert.equal(h.continue().disabled, true);
+  assert.equal(h.continue().accessibilityState.busy, true);
+  await h.act(() => pending.resolve({ ...h.runtime.room, partyId: 'CURRENTGEN', roomCode: 'CURRENTGEN' }));
+  assert.deepEqual(h.roomCodes(), ['CURRENTGEN']);
+});
+
+test('code generation retirement permits successor Continue before the old response settles', async t => {
+  const h = await mount(t, { prepared: false }), old = deferred();
+  h.runtime.create = () => old.promise;
+  await h.act(() => { void h.generate().onPress(); });
+  await h.replaceRoom('NEWROOM');
+  assert.equal(h.continue().disabled, false);
+  await h.act(() => h.continue().onPress());
+  assert.equal(h.entered(), 1, 'the new room can enter while unrelated retired creation is pending');
+  await h.act(() => old.resolve(room('OLDGEN')));
+  assert.equal(h.entered(), 1);
+  assert.equal(h.text().includes('OLDGEN'), false);
+});
+
+for (const transition of ['room', 'focus', 'background', 'session']) test(`code generation ${transition} retirement frees the successor latch without old cleanup releasing it`, async t => {
+  const h = await mount(t, { prepared: false }), old = deferred(), current = deferred();
+  h.runtime.create = () => old.promise;
+  await h.act(() => { void h.generate().onPress(); });
+  if (transition === 'room') await h.replaceRoom('NEWROOM');
+  if (transition === 'focus') { await h.focus(false); await h.focus(true); }
+  if (transition === 'background') { await h.state('background'); await h.state('active'); }
+  if (transition === 'session') await h.generation('replacement');
+  assert.equal(h.generate().disabled, false);
+  h.runtime.create = () => current.promise;
+  await h.act(() => { void h.generate().onPress(); });
+  assert.equal(h.runtime.created, 2);
+  await h.act(() => old.resolve(room('OLDGEN')));
+  assert.equal(h.generate().disabled, true, 'old finally cannot release the current busy state');
+  await h.act(() => { void h.generate().onPress(); });
+  assert.equal(h.runtime.created, 2, 'current generation remains single-flight');
+  await h.act(() => current.resolve(room('CURRENTGEN')));
+  assert.deepEqual(h.roomCodes(), ['CURRENTGEN']);
+});
+
+test('initial code generation cannot overwrite a subsequently loaded route', async t => {
+  const pending = deferred();
+  const h = await mount(t, { prepared: false, initialLive: true, create: () => pending.promise });
+  assert.equal(h.runtime.created, 1);
+  await h.replaceRoom('NEWROOM');
+  await h.act(() => pending.resolve({ ...room('OLDGEN') }));
+  assert.deepEqual(h.roomCodes(), ['NEWROOM']);
+});
+
+test('initial code generation accepts its current room without repeated creation', async t => {
+  const h = await mount(t, { prepared: false, initialLive: true });
+  assert.deepEqual(h.roomCodes(), ['ROOM01']);
+  await h.render();
+  assert.equal(h.runtime.created, 1);
+});
 
 test('a rejected audience save is visibly unsaved and retry preserves the requested draft', async t => {
   const h = await mount(t); h.runtime.policy = async () => null;
