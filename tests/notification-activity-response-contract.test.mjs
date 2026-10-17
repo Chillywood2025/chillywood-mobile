@@ -101,6 +101,107 @@ async function client(data, mode = 'listener') {
   return { observed, repeat: () => listener(response) };
 }
 
+const deferred = () => {
+  let resolve, reject;
+  const promise = new Promise((accept, fail) => { resolve = accept; reject = fail; });
+  return { promise, resolve, reject };
+};
+const settleResponses = async () => { await Promise.resolve(); await Promise.resolve(); };
+
+// Execute the same production handler across subscription replacement. Native
+// removal cannot cancel the already-returned initial-read promise, and a native
+// callback may already be queued when its listener is removed.
+function responseLifecycle({ callbackDuringRemove = false } = {}) {
+  const observed = { paths: [], badgeClears: 0, responseClears: 0 };
+  const pendingInitialReads = [], nativeListeners = [], handled = new Set();
+  const response = { actionIdentifier: 'expo.modules.notifications.actions.DEFAULT',
+    notification: { request: { identifier: 'notification-lifetime', content: { data: { deepLink: route } } } } };
+  const sandbox = run(responseSource, {
+    resolveApplicationRoute: links.resolveApplicationRoute,
+    resolveNotificationMessagePath: messageTargets.resolveNotificationMessagePath,
+    handledNotificationResponseKeys: handled,
+    clearApplicationNotificationBadge: async () => { observed.badgeClears++; },
+    Notifications: {
+      getLastNotificationResponseAsync() {
+        const read = deferred(); pendingInitialReads.push(read); return read.promise;
+      },
+      addNotificationResponseReceivedListener(callback) {
+        const listener = { callback, removes: 0 }; nativeListeners.push(listener);
+        return { remove() {
+          listener.removes++;
+          if (callbackDuringRemove) callback(response);
+        } };
+      },
+      clearLastNotificationResponseAsync: async () => { observed.responseClears++; },
+    },
+  });
+  return { observed, pendingInitialReads, nativeListeners, handled, response,
+    subscribe: label => sandbox.subscribe(path => observed.paths.push({ label, path })) };
+}
+
+test('removal retires the pending initial notification before navigation, deduplication or receipt clearing', async () => {
+  const h = responseLifecycle(), subscription = h.subscribe('removed');
+  subscription.remove();
+  h.pendingInitialReads[0].resolve(h.response);
+  await settleResponses();
+  assert.deepEqual(h.observed, { paths: [], badgeClears: 0, responseClears: 0 });
+  assert.equal(h.handled.size, 0);
+  assert.equal(h.nativeListeners[0].removes, 1);
+});
+
+for (const oldReadFirst of [true, false]) {
+  test(`replacement receives the same initial notification exactly once, removed read first=${oldReadFirst}`, async () => {
+    const h = responseLifecycle(), old = h.subscribe('removed');
+    old.remove();
+    const successor = h.subscribe('current');
+    for (const index of oldReadFirst ? [0, 1] : [1, 0]) {
+      h.pendingInitialReads[index].resolve(h.response);
+      await settleResponses();
+    }
+    h.nativeListeners[0].callback(h.response);
+    h.nativeListeners[1].callback(h.response);
+    assert.deepEqual(h.observed, { paths: [{ label: 'current', path: route }], badgeClears: 1, responseClears: 1 });
+    assert.equal(h.handled.size, 1);
+    successor.remove();
+  });
+}
+
+for (const initialFirst of [true, false]) {
+  test(`active initial and live notification responses retain shared deduplication, initial first=${initialFirst}`, async () => {
+    const h = responseLifecycle(), subscription = h.subscribe('current');
+    if (!initialFirst) h.nativeListeners[0].callback(h.response);
+    h.pendingInitialReads[0].resolve(h.response);
+    await settleResponses();
+    h.nativeListeners[0].callback(h.response);
+    assert.deepEqual(h.observed, { paths: [{ label: 'current', path: route }], badgeClears: 1, responseClears: 1 });
+    subscription.remove();
+  });
+}
+
+for (const callbackDuringRemove of [true, false]) {
+  test(`repeated teardown retires callbacks before native removal, callback during remove=${callbackDuringRemove}`, async () => {
+    const h = responseLifecycle({ callbackDuringRemove }), subscription = h.subscribe('removed');
+    subscription.remove(); subscription.remove();
+    h.nativeListeners[0].callback(h.response);
+    h.pendingInitialReads[0].resolve(h.response);
+    await settleResponses();
+    subscription.remove();
+    assert.deepEqual(h.observed, { paths: [], badgeClears: 0, responseClears: 0 });
+    assert.equal(h.handled.size, 0);
+    assert.equal(h.nativeListeners[0].removes, 1);
+  });
+}
+
+test('an initial response read failure preserves current live delivery and teardown', async () => {
+  const h = responseLifecycle(), subscription = h.subscribe('current');
+  h.pendingInitialReads[0].reject(new Error('modeled native initial-read failure'));
+  await settleResponses();
+  h.nativeListeners[0].callback(h.response);
+  assert.deepEqual(h.observed, { paths: [{ label: 'current', path: route }], badgeClears: 1, responseClears: 1 });
+  subscription.remove(); subscription.remove();
+  assert.equal(h.nativeListeners[0].removes, 1);
+});
+
 for (const platform of ['android', 'ios']) {
   for (const mode of ['listener', 'last-response']) {
     test(`${platform} ${mode}: route-only activity opens the exact conversation once`, async () => {

@@ -2,7 +2,10 @@ import { ConversationTimestamp } from "../../components/social/conversation-time
 import { conversationCreatedAt } from "../../_lib/conversationTimestamp";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useIsFocused } from "@react-navigation/native";
+import { useSession } from "../../_lib/session";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../../_lib/accountSessionAuthority";
 import {
   resolveChannelAccess,
   type ChannelAccessResolution,
@@ -123,6 +126,7 @@ import {
 import {
     ActivityIndicator,
     Alert,
+    AppState,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -155,7 +159,6 @@ import {
   ProfileMediaReviewSheet,
 } from "../../components/profile/profile-media-sheets";
 import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
-import { getWritablePartyUserId } from "../../_lib/watchParty";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { AccessSheet } from "../../components/monetization/access-sheet";
 import { StableImage } from "../../components/ui/StableImage";
@@ -528,16 +531,142 @@ const resolveProfileImageResizeMode = (fitMode?: ProfileAppearanceFitMode) => {
   return "cover" as const;
 };
 
+type ProfileCircleAction = "request" | "accept" | "decline" | "cancel" | "remove";
+
+// The retained Profile route must re-resolve both relationship presentation and
+// canonical access. A Circle result is never itself permission to view content.
+function useProfileAudienceState(input: {
+  userId: string;
+  isOfficialProfile: boolean;
+  isSelfProfile: boolean;
+  channelAccessReady: boolean;
+  profileVisibility?: UserProfile["profileVisibility"];
+}) {
+  const { authority, authorityStatus } = useSession();
+  const focused = useIsFocused();
+  const { userId, isOfficialProfile, isSelfProfile, channelAccessReady, profileVisibility } = input;
+  const lifetime = useMemo(() => ({ authority, authorityStatus, userId, isOfficialProfile, isSelfProfile, channelAccessReady, profileVisibility }),
+    [authority, authorityStatus, userId, isOfficialProfile, isSelfProfile, channelAccessReady, profileVisibility]);
+  const latest = useRef(lifetime);
+  latest.current = lifetime;
+  const reloadRef = useRef<{ lifetime: object; run: () => Promise<void>; current: () => boolean; version: () => number } | null>(null);
+  const mutationRef = useRef<{ lifetime: object; action: ProfileCircleAction } | null>(null);
+  const [mutation, setMutation] = useState<typeof mutationRef.current>(null);
+  const empty = { friendState: null as FriendRelationshipState | null, profilePrivacyAccess: null as ProfilePrivacyAccess | null,
+    friendError: false, privacyError: false, profilePrivacyReady: false, chillyCircleLoading: false };
+  const [state, setState] = useState(() => ({ ...empty, lifetime }));
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  useEffect(() => {
+    const { authority, authorityStatus, userId, isOfficialProfile, isSelfProfile, channelAccessReady, profileVisibility } = lifetime;
+    let disposed = false, sequence = 0;
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    const guest = authorityStatus === "signed_out" && authority === null;
+    const admitted = guest || (authorityStatus === "active" && !!authority && !authority.restoreOnly);
+    const current = () => !disposed && latest.current === lifetime && focused && AppState.currentState === "active"
+      && admitted && (guest ? getCurrentAccountSessionAuthoritySnapshot() === null
+        : sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot()));
+    const publish = (next: typeof state) => { stateRef.current = next; setState(next); };
+    const clear = () => publish({ friendState: null, profilePrivacyAccess: null, friendError: false,
+      privacyError: false, profilePrivacyReady: false, chillyCircleLoading: false, lifetime });
+    const run = async () => {
+      if (!current() || !userId || (!isOfficialProfile && !isSelfProfile && !channelAccessReady)
+        || mutationRef.current?.lifetime === lifetime) return;
+      const request = ++sequence;
+      const viewerUserId = authority?.userId ?? null;
+      const readCircle = !guest && !isOfficialProfile && !isSelfProfile;
+      publish({ friendState: null, profilePrivacyAccess: null, friendError: false,
+        privacyError: false, profilePrivacyReady: false, chillyCircleLoading: readCircle, lifetime });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const [privacy, friend] = await Promise.race([
+          Promise.all([
+            resolveProfilePrivacyAccess({ ownerUserId: userId, viewerUserId, visibility: isOfficialProfile || isSelfProfile ? "everyone" : profileVisibility })
+              .then(value => ({ value, error: false })).catch(() => ({ value: null, error: true })),
+            readCircle ? readFriendRelationshipState(userId)
+              .then(value => ({ value, error: false })).catch(() => ({ value: null, error: true }))
+              : Promise.resolve({ value: null, error: false }),
+          ]),
+          new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Profile access timed out.")), 12_000); timers.add(timer); }),
+        ]);
+        if (!current() || request !== sequence) return;
+        const privacyError = privacy.error || !privacy.value || privacy.value.reason === "unavailable"
+          || privacy.value.ownerUserId !== userId || privacy.value.viewerUserId !== viewerUserId;
+        const friendError = friend.error || (readCircle && (!friend.value
+          || friend.value.otherUserId !== userId || friend.value.viewerUserId !== viewerUserId));
+        publish({ lifetime, friendState: friendError ? null : friend.value,
+          profilePrivacyAccess: privacyError ? null : privacy.value, friendError, privacyError,
+          profilePrivacyReady: true, chillyCircleLoading: false });
+      } catch {
+        if (current() && request === sequence) publish({ lifetime, friendState: null, profilePrivacyAccess: null,
+          friendError: readCircle, privacyError: true, profilePrivacyReady: true, chillyCircleLoading: false });
+      } finally {
+        if (timer !== undefined) { clearTimeout(timer); timers.delete(timer); }
+      }
+    };
+    const owned = { lifetime, run, current, version: () => sequence };
+    reloadRef.current = owned;
+    clear();
+    void run();
+    const subscription = AppState.addEventListener("change", next => {
+      if (next === "active") void run();
+      else { ++sequence; clear(); for (const timer of timers) clearTimeout(timer); timers.clear(); }
+    });
+    return () => {
+      disposed = true; ++sequence;
+      subscription.remove();
+      for (const timer of timers) clearTimeout(timer);
+      if (reloadRef.current === owned) reloadRef.current = null;
+    };
+  }, [lifetime, focused]);
+
+  const refreshProfileAudience = useCallback(async () => {
+    if (reloadRef.current?.lifetime === lifetime) await reloadRef.current.run();
+  }, [lifetime]);
+  const performCircleAction = useCallback(async (action: ProfileCircleAction) => {
+    const owned = reloadRef.current;
+    const allowed = { request: state.friendState?.canRequest, accept: state.friendState?.canAccept,
+      decline: state.friendState?.canDecline, cancel: state.friendState?.canCancel, remove: state.friendState?.canRemove };
+    if (!owned?.current() || owned.lifetime !== lifetime || stateRef.current !== state || state.lifetime !== lifetime
+      || state.chillyCircleLoading || state.friendError || !allowed[action] || mutationRef.current?.lifetime === lifetime) return null;
+    const pending = { lifetime, action };
+    const version = owned.version();
+    mutationRef.current = pending;
+    setMutation(pending);
+    try {
+      const actions = { request: sendChillyCircleRequest, accept: acceptChillyCircleRequest,
+        decline: declineChillyCircleRequest, cancel: cancelChillyCircleRequest, remove: removeFromChillyCircle };
+      const next = await actions[action](lifetime.userId);
+      if (reloadRef.current !== owned || !owned.current() || owned.version() !== version) return null;
+      if (next.otherUserId !== lifetime.userId || next.viewerUserId !== lifetime.authority?.userId) throw new Error("Chi'lly Circle status is unavailable right now.");
+      return next;
+    } catch (error) {
+      if (reloadRef.current === owned && owned.current() && owned.version() === version) throw error;
+      return null;
+    } finally {
+      if (mutationRef.current === pending) {
+        mutationRef.current = null;
+        setMutation(null);
+        if (reloadRef.current?.lifetime === lifetime) void reloadRef.current.run();
+      }
+    }
+  }, [lifetime, state]);
+  const visible = state.lifetime === lifetime && focused && AppState.currentState === "active"
+    && ((authorityStatus === "signed_out" && authority === null && getCurrentAccountSessionAuthoritySnapshot() === null)
+      || (authorityStatus === "active" && !authority?.restoreOnly && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot())));
+  return { ...(visible ? state : empty), refreshProfileAudience, performCircleAction,
+    chillyCircleActionBusy: mutation?.lifetime === lifetime ? mutation.action : null };
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
+  const { authority, authorityStatus } = useSession();
   const scrollViewRef = useRef<ScrollView | null>(null);
   const profilePostComposerYRef = useRef(0);
   const profilePostInputRef = useRef<TextInput | null>(null);
   const followActionLatchRef = useRef(createActionSingleFlightLatch());
-  const [currentUserId, setCurrentUserId] = useState("");
-  const [friendState, setFriendState] = useState<FriendRelationshipState | null>(null);
-  const [chillyCircleLoading, setChillyCircleLoading] = useState(false);
-  const [chillyCircleActionBusy, setChillyCircleActionBusy] = useState<"request" | "accept" | "decline" | "cancel" | "remove" | null>(null);
+  const currentUserId = authorityStatus === "active" && !authority?.restoreOnly ? authority?.userId ?? "" : "";
   const [chillyCircleCount, setChillyCircleCount] = useState<number | null>(null);
   const [viewerFollowState, setViewerFollowState] = useState<ProfileViewerFollowState>("unavailable");
   const [followActionBusy, setFollowActionBusy] = useState(false);
@@ -583,8 +712,6 @@ export default function ProfileScreen() {
   const [channelAccessPermissions, setChannelAccessPermissions] = useState<CreatorPermissionSet | null>(null);
   const [channelAccessReady, setChannelAccessReady] = useState(false);
   const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
-  const [profilePrivacyAccess, setProfilePrivacyAccess] = useState<ProfilePrivacyAccess | null>(null);
-  const [profilePrivacyReady, setProfilePrivacyReady] = useState(false);
   const [publicEvents, setPublicEvents] = useState<CreatorEventSummary[]>([]);
   const [publicReminderSummaries, setPublicReminderSummaries] = useState<PublicEventReminderSummary[]>([]);
   const [publicEventsReady, setPublicEventsReady] = useState(false);
@@ -635,20 +762,16 @@ export default function ProfileScreen() {
   });
   const branding = resolveBrandingConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
+  const requestedSelfProfile = selfParam === "1" || selfParam === "true";
+  const isOfficialProfile = profile.identityKind === "official_platform";
+  const hasVerifiedSelfIdentity = !!userId && !!currentUserId && userId === currentUserId;
+  const isSelfProfile = !profile.isProtectedFromClaim
+    && hasVerifiedSelfIdentity
+    && (!requestedSelfProfile || hasVerifiedSelfIdentity);
+  const profileAudience = useProfileAudienceState({ userId, isOfficialProfile, isSelfProfile,
+    channelAccessReady, profileVisibility: channelAccessProfile?.profileVisibility });
+  const { friendState, chillyCircleLoading, chillyCircleActionBusy, profilePrivacyAccess, profilePrivacyReady } = profileAudience;
   const canViewFullProfile = profilePrivacyAccess?.canViewFullProfile ?? false;
-  useEffect(() => {
-    let active = true;
-    getWritablePartyUserId()
-      .then((resolvedUserId) => {
-        if (active) setCurrentUserId(String(resolvedUserId ?? "").trim());
-      })
-      .catch(() => {
-        if (active) setCurrentUserId("");
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -712,12 +835,6 @@ export default function ProfileScreen() {
     };
   }, []);
 
-  const requestedSelfProfile = selfParam === "1" || selfParam === "true";
-  const isOfficialProfile = profile.identityKind === "official_platform";
-  const hasVerifiedSelfIdentity = !!userId && !!currentUserId && userId === currentUserId;
-  const isSelfProfile = !profile.isProtectedFromClaim
-    && hasVerifiedSelfIdentity
-    && (!requestedSelfProfile || hasVerifiedSelfIdentity);
   const profileDiscovery = useLiveDiscoveryFeed({
     surface: "profile",
     creatorUserIds: Array.from(new Set([userId, ...(isSelfProfile ? [
@@ -729,9 +846,7 @@ export default function ProfileScreen() {
   });
   const profileLive = useProfileLiveState(userId, !!userId && profilePrivacyReady && canViewFullProfile && !isOfficialProfile);
   const shouldShowLockedShell = profilePrivacyReady
-    && !!profilePrivacyAccess?.isLocked
-    && !isOfficialProfile
-    && !isSelfProfile;
+    && (profileAudience.privacyError || (!!profilePrivacyAccess?.isLocked && !isOfficialProfile && !isSelfProfile));
   const shouldShowUnavailableProfile = channelAccessReady
     && profilePrivacyReady
     && !isOfficialProfile
@@ -1212,102 +1327,6 @@ export default function ProfileScreen() {
       active = false;
     };
   }, [channelAccessPermissions, channelAccessProfile, channelAccessReady, isOfficialProfile, userId]);
-  useEffect(() => {
-    let active = true;
-
-    setProfilePrivacyReady(false);
-
-    if (!userId) {
-      setProfilePrivacyAccess(null);
-      setProfilePrivacyReady(true);
-      return () => {
-        active = false;
-      };
-    }
-
-    if (isOfficialProfile || isSelfProfile) {
-      void resolveProfilePrivacyAccess({
-        ownerUserId: userId,
-        viewerUserId: currentUserId || null,
-        visibility: "everyone",
-      })
-        .then((access) => {
-          if (!active) return;
-          setProfilePrivacyAccess(access);
-          setProfilePrivacyReady(true);
-        })
-        .catch(() => {
-          if (!active) return;
-          setProfilePrivacyAccess(null);
-          setProfilePrivacyReady(true);
-        });
-      return () => {
-        active = false;
-      };
-    }
-
-    if (!channelAccessReady) {
-      return () => {
-        active = false;
-      };
-    }
-
-    void resolveProfilePrivacyAccess({
-      ownerUserId: userId,
-      viewerUserId: currentUserId || null,
-      visibility: channelAccessProfile?.profileVisibility,
-      relationshipState: friendState,
-    })
-      .then((access) => {
-        if (!active) return;
-        setProfilePrivacyAccess(access);
-        setProfilePrivacyReady(true);
-      })
-      .catch(() => {
-        if (!active) return;
-        setProfilePrivacyAccess(null);
-        setProfilePrivacyReady(true);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [
-    channelAccessProfile?.profileVisibility,
-    channelAccessReady,
-    currentUserId,
-    friendState,
-    isOfficialProfile,
-    isSelfProfile,
-    userId,
-  ]);
-  useEffect(() => {
-    let active = true;
-
-    if (!userId || isOfficialProfile || isSelfProfile) {
-      setFriendState(null);
-      setChillyCircleLoading(false);
-      return () => {
-        active = false;
-      };
-    }
-
-    setChillyCircleLoading(true);
-    readFriendRelationshipState(userId)
-      .then((nextState) => {
-        if (active) setFriendState(nextState);
-      })
-      .catch(() => {
-        if (active) setFriendState(null);
-      })
-      .finally(() => {
-        if (active) setChillyCircleLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [currentUserId, isOfficialProfile, isSelfProfile, userId]);
   useEffect(() => {
     let active = true;
 
@@ -1925,8 +1944,7 @@ export default function ProfileScreen() {
                   return;
                 }
 
-                const nextFriendState = await readFriendRelationshipState(userId).catch(() => null);
-                if (nextFriendState) setFriendState(nextFriendState);
+                await profileAudience.refreshProfileAudience();
                 Alert.alert("Block User", "User blocked.");
               } catch (error) {
                 Alert.alert(
@@ -1953,7 +1971,7 @@ export default function ProfileScreen() {
   const onPressChillyCircleAction = async (action: "request" | "accept" | "decline" | "cancel" | "remove") => {
     if (!userId || isSelfProfile || isOfficialProfile || chillyCircleActionBusy) return;
 
-    if (friendState?.availability === "signed_out") {
+    if (!currentUserId || friendState?.availability === "signed_out") {
       Alert.alert("Chi'lly Circle", "Sign in to send or manage Chi'lly Circle requests.");
       return;
     }
@@ -1962,18 +1980,9 @@ export default function ProfileScreen() {
       return;
     }
 
-    setChillyCircleActionBusy(action);
     try {
-      const nextState = action === "request"
-        ? await sendChillyCircleRequest(userId)
-        : action === "accept"
-          ? await acceptChillyCircleRequest(userId)
-          : action === "decline"
-            ? await declineChillyCircleRequest(userId)
-            : action === "cancel"
-              ? await cancelChillyCircleRequest(userId)
-              : await removeFromChillyCircle(userId);
-      setFriendState(nextState);
+      const nextState = await profileAudience.performCircleAction(action);
+      if (!nextState) return;
       if (action === "request" && nextState.isFriend) {
         Alert.alert("Chi'lly Circle", "Added to your Chi'lly Circle.");
       } else if (action === "request" && nextState.status === "pending") {
@@ -1981,8 +1990,6 @@ export default function ProfileScreen() {
       }
     } catch (error) {
       Alert.alert("Chi'lly Circle", normalizeChillyCircleActionError(error));
-    } finally {
-      setChillyCircleActionBusy(null);
     }
   };
   const onShareProfile = async () => {
@@ -2472,6 +2479,16 @@ export default function ProfileScreen() {
         <View style={[styles.actionChip, styles.actionChipPlaceholder]}>
           <Text style={[styles.actionChipText, styles.actionChipTextPlaceholder]}>Checking</Text>
         </View>
+      );
+    }
+
+    if (profileAudience.friendError) {
+      return (
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry Chi'lly Circle status"
+          style={[styles.actionChip, styles.actionChipPlaceholder]}
+          onPress={() => { void profileAudience.refreshProfileAudience(); }}>
+          <Text style={[styles.actionChipText, styles.actionChipTextPlaceholder]}>Circle unavailable · Try again</Text>
+        </TouchableOpacity>
       );
     }
 
@@ -4286,9 +4303,15 @@ export default function ProfileScreen() {
         {shouldShowLockedShell ? (
           <View style={styles.sectionCard}>
             <AppText scale="caption" style={styles.sectionKicker}>PROFILE PRIVACY</AppText>
-            <AppText scale="title3" style={styles.sectionTitle}>{getProfilePrivacyLockedTitle(profilePrivacyAccess)}</AppText>
-            <AppText scale="body" style={styles.sectionBody}>{getProfilePrivacyLockedBody(profilePrivacyAccess)}</AppText>
+            <AppText scale="title3" style={styles.sectionTitle}>{profileAudience.privacyError ? "Profile access is unavailable." : getProfilePrivacyLockedTitle(profilePrivacyAccess)}</AppText>
+            <AppText scale="body" style={styles.sectionBody}>{profileAudience.privacyError ? "Profile access could not be checked. Try again." : getProfilePrivacyLockedBody(profilePrivacyAccess)}</AppText>
             <View style={styles.secondaryActionRow}>
+              {profileAudience.privacyError ? (
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry Profile access"
+                  style={styles.actionChip} onPress={() => { void profileAudience.refreshProfileAudience(); }}>
+                  <Text style={styles.actionChipText}>Try again</Text>
+                </TouchableOpacity>
+              ) : null}
               {renderChillyCircleActions()}
             </View>
           </View>

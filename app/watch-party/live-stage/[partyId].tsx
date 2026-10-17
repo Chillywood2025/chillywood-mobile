@@ -1125,11 +1125,13 @@ export default function WatchPartyLiveStageScreen({
   const liveKitStageAuthorityRetryCountRef = useRef<Record<string, number>>({});
   const liveKitStageAuthorityRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const liveKitStageMountedRef = useRef(true);
+  const stageSnapshotRequestRef = useRef(0);
   const stripOrderRef = useRef<string>("");
   const branding = resolveBrandingConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
 
   const handleAuthoritativeLiveRoomEnded = useCallback(() => {
+    stageSnapshotRequestRef.current += 1;
     stageEntryOwnerRef.current.invalidate();
     liveSurfaceRef.current = "room";
     setStageEntryBusy(false);
@@ -1298,8 +1300,12 @@ export default function WatchPartyLiveStageScreen({
 
   const refreshStageSnapshot = useCallback(async (trackedUserId?: string) => {
     const ownerKey = stageOperationOwnerKeyRef.current;
+    const request = ++stageSnapshotRequestRef.current;
     const snapshot = await getPartyRoomSnapshot(partyId).catch(() => null);
-    if (!liveKitStageMountedRef.current || stageOperationOwnerKeyRef.current !== ownerKey) return null;
+    // A newer refresh (including an unavailable result) supersedes this read.
+    // Otherwise an older response can restore a seat/mute state just revoked.
+    if (!liveKitStageMountedRef.current || stageOperationOwnerKeyRef.current !== ownerKey
+      || stageSnapshotRequestRef.current !== request) return null;
     if (!snapshot) return null;
     if (snapshot.room.roomType !== "live") return null;
     syncStageSnapshot(snapshot, String(trackedUserId ?? myUserId ?? "").trim());

@@ -56,7 +56,7 @@ const controls = [
   {
     name: 'missing authority ABA retirement', screen: true,
     scenario: 'held refresh cannot navigate after authority-aba retires waiting Start',
-    source: () => replace(current('app/watch-party/index.tsx'), 'if (!sameAccountSessionAuthority(authority, next)) waitingLifetimeRef.current += 1;', ''),
+    source: () => replace(current('app/watch-party/index.tsx'), 'if (!sameAccountSessionAuthority(authority, next)) {\n      waitingLifetimeRef.current += 1;', 'if (!sameAccountSessionAuthority(authority, next)) {'),
   },
 ];
 

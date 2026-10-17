@@ -3896,7 +3896,8 @@ export function ChannelStudioScreen() {
       if (assetType === "logo") assetPatch.logoAssetId = uploadedAsset.id;
       if (assetType === "watermark") assetPatch.watermarkAssetId = uploadedAsset.id;
 
-      await saveBrandDraftPatch(assetPatch);
+      const savedProfile = await saveBrandDraftPatch(assetPatch);
+      if (!savedProfile) return;
       setBrandNotice("Platform media saved as draft. Use Preview Brand Draft now; Publish Changes applies eligible safe media publicly.");
     } catch {
       setBrandNotice("Unable to choose or save that Platform media right now.");
@@ -4335,28 +4336,13 @@ export function ChannelStudioScreen() {
             return;
           }
 
+          // A failed settings write can read back the previous metadata. Keep
+          // the user's intended settings for retry, alongside the durable video.
           setClipEditor((current) => ({
             ...current,
             editingVideoId: confirmedPartialVideo.id,
-            title: confirmedPartialVideo.title,
-            description: confirmedPartialVideo.description,
             visibility: confirmedPartialVideo.visibility,
             videoPreviewUrl: confirmedPartialPlayerVideo?.playbackUrl || current.videoPreviewUrl,
-            clipFormat: confirmedPartialEdit?.clipFormat ?? current.clipFormat,
-            fitMode: confirmedPartialEdit?.fitMode ?? current.fitMode,
-            trimStartMs: confirmedPartialEdit?.trimStartMs == null ? current.trimStartMs : String(confirmedPartialEdit.trimStartMs),
-            trimEndMs: confirmedPartialEdit?.trimEndMs == null ? current.trimEndMs : String(confirmedPartialEdit.trimEndMs),
-            coverStoragePath: confirmedPartialEdit?.coverStoragePath ?? confirmedPartialVideo.thumbStoragePath ?? current.coverStoragePath,
-            coverMimeType: confirmedPartialEdit?.coverMimeType ?? current.coverMimeType,
-            coverFileSizeBytes: confirmedPartialEdit?.coverFileSizeBytes ?? current.coverFileSizeBytes,
-            coverPreviewUrl: confirmedPartialPlayerVideo?.thumbnailUrl || confirmedPartialVideo.thumbnailUrl || current.coverPreviewUrl,
-            titleOverlayText: confirmedPartialEdit?.titleOverlayText ?? current.titleOverlayText,
-            titleOverlaySubtitle: confirmedPartialEdit?.titleOverlaySubtitle ?? current.titleOverlaySubtitle,
-            titleOverlayPosition: confirmedPartialEdit?.titleOverlayPosition ?? current.titleOverlayPosition,
-            titleOverlayStyle: confirmedPartialEdit?.titleOverlayStyle ?? current.titleOverlayStyle,
-            templatePreset: confirmedPartialEdit?.templatePreset ?? current.templatePreset,
-            brandMarkEnabled: confirmedPartialEdit?.brandMarkEnabled ?? current.brandMarkEnabled,
-            brandAssetId: confirmedPartialEdit?.brandAssetId ?? current.brandAssetId,
           }));
           setClipSavedVideoId(null);
           setClipSaveState("save_failed");

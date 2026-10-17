@@ -2841,8 +2841,9 @@ const normalizeNotificationPath = (value: unknown) => resolveApplicationRoute(va
 export const resolveNotificationPath = (value: unknown, target?: NotificationMessageTarget) => resolveNotificationMessagePath(value, target);
 
 export function subscribeToNotificationResponses(onPath: (path: string) => void) {
+  let active = true;
   const handleResponse = (response: Notifications.NotificationResponse | null) => {
-    if (!response) return;
+    if (!active || !response) return;
     const requestIdentifier = normalizeText(response.notification.request.identifier);
     const actionIdentifier = normalizeText(response.actionIdentifier);
     const responseKey = `${requestIdentifier}:${actionIdentifier || "default"}`;
@@ -2863,7 +2864,16 @@ export function subscribeToNotificationResponses(onPath: (path: string) => void)
     .then(handleResponse)
     .catch(() => null);
 
-  return Notifications.addNotificationResponseReceivedListener(handleResponse);
+  const subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
+  return {
+    remove() {
+      if (!active) return;
+      // Native removal cannot cancel the pending initial read or callbacks
+      // already queued. Retire them before they can consume a successor's response.
+      active = false;
+      subscription.remove();
+    },
+  };
 }
 
 export async function dismissPresentedChillyChatCallNotifications(input: {

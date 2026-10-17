@@ -168,10 +168,13 @@ async function mountStageBootstrap(t, { mutation } = {}) {
     "liveMoneyNotice", "liveMoneyHostOfferState", "liveSeatPassStateByUserId", "participants", "isSpeakingById", "seatRequestState",
     "accessRetryToken", "myCameraPreviewUrlRef", "channelRef", "roomRealtimeChannelRef", "heartbeatRef", "stageLocalMediaIntentRef",
     "stageEntryOwnerRef", "stageOperationOwnerKey", "stageOperationOwnerKeyRef", "liveKitStageMountedRef", "mediaAppState",
-    "liveKitPendingRecoveryRef", "liveKitRecoveryTimeoutRef", "liveKitStageAuthorityRetryTimeoutRef", "refreshStageSnapshot"])
+    "liveKitPendingRecoveryRef", "liveKitRecoveryTimeoutRef", "liveKitStageAuthorityRetryTimeoutRef", "stageSnapshotRequestRef", "refreshStageSnapshot",
+    "room", "communicationRoomId", "liveKitJoinContract", "liveKitRenderableJoinContract", "liveSurface", "liveSurfaceRef", "stageEntryBusy",
+    "handleAuthoritativeLiveRoomEnded"])
     source.declaration(name);
   source.assignment("stageEntryOwnerRef.current.bind(");
   source.assignment("stageOperationOwnerKeyRef.current =");
+  source.assignment("liveSurfaceRef.current =");
   source.constant("canStageMembershipPublishMedia");
   source.constant("DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT");
   source.constant("STAGE_HEARTBEAT_INTERVAL_MILLIS");
@@ -179,12 +182,12 @@ async function mountStageBootstrap(t, { mutation } = {}) {
   source.effect("const init = async () =>");
   const values = { canUseBetaStage: true, partyId: "ROOM", partyIdParam: "ROOM",
     isFocused: true, authority: { userId: "user", sessionGeneration: "session" },
-    buildStageParticipantsFromPresence: () => [], handleAuthoritativeLiveRoomEnded: noop,
+    buildStageParticipantsFromPresence: () => [],
     // Observe snapshot application; participant presentation is outside this
     // initialization composition. The refresh callback and its dependencies
     // remain production code, including the myUserId-driven effect restart.
     syncStageSnapshot: (value, user) => { appliedSnapshots.push({ value, user }); } };
-  const Component = source.compile({ inputs: Object.keys(values), outputs: ["loading", "roomEntryError", "myUserId", "refreshStageSnapshot"], globals: {
+  const Component = source.compile({ inputs: Object.keys(values), outputs: ["loading", "roomMissing", "roomEntryError", "myUserId", "refreshStageSnapshot", "handleAuthoritativeLiveRoomEnded"], globals: {
     ...time, ...stagePresentation, ...stageLifecycle, ...roomShared, ...performance,
     Platform: { OS: "ios" }, AppState: { currentState: "active" }, debugLiveStage: noop, debugLog: noop,
     reportRuntimeError: (name, error) => errors.push([name, error]), getWritablePartyUserId: async () => "user",
@@ -210,6 +213,51 @@ async function mountStageBootstrap(t, { mutation } = {}) {
   assert.equal(snapshots.length, 4, "replacement initialization reaches its own final snapshot await");
   return { ...mounted, get current() { return mounted.current; }, time, channels, removed, errors, snapshots, heartbeats, appliedSnapshots,
     snapshot, retiredPending: snapshots[1], pending: snapshots[3] };
+}
+
+for (const resolution of ["newer-first", "older-first", "newer-unavailable"]) {
+  test(`Stage snapshot ordering retains the latest request and fresh retry: ${resolution}`, async t => {
+    const h = await mountStageBootstrap(t);
+    await settle(() => { h.retiredPending.resolve(null); h.pending.resolve(h.snapshot("ROOM")); });
+    let older, newer;
+    await settle(() => { older = h.current.refreshStageSnapshot("user"); });
+    const oldRead = h.snapshots.at(-1);
+    await settle(() => { newer = h.current.refreshStageSnapshot("user"); });
+    const newRead = h.snapshots.at(-1);
+    const before = h.appliedSnapshots.length;
+    const oldState = h.snapshot("ROOM"), current = h.snapshot("ROOM");
+    oldState.memberships[0] = { ...oldState.memberships[0], stageRole: "speaker", canSpeak: true, isMuted: false };
+    current.memberships[0] = { ...current.memberships[0], stageRole: "listener", canSpeak: false, isMuted: true };
+    if (resolution === "older-first") await settle(() => oldRead.resolve(oldState));
+    await settle(() => newRead.resolve(resolution === "newer-unavailable" ? null : current));
+    await newer;
+    if (resolution !== "older-first") await settle(() => oldRead.resolve(oldState));
+    assert.equal(await older, null, "a superseded caller cannot consume stale authority either");
+    assert.equal(h.appliedSnapshots.length, before + (resolution === "newer-unavailable" ? 0 : 1));
+    if (resolution !== "newer-unavailable") assert.equal(h.appliedSnapshots.at(-1).value.memberships[0].isMuted, true);
+    let retry;
+    await settle(() => { retry = h.current.refreshStageSnapshot("user"); });
+    await settle(() => h.snapshots.at(-1).resolve(current));
+    assert.equal((await retry).memberships[0].isMuted, true, "unavailability or retirement does not poison a fresh read");
+    assert.equal(h.appliedSnapshots.at(-1).value.memberships[0].isMuted, true);
+  });
+}
+
+for (const removeRetirement of [false, true]) {
+  test(`Stage room-ended callback retires an outstanding snapshot, negative control=${removeRetirement}`, async t => {
+    const h = await mountStageBootstrap(t, { mutation: source => removeRetirement
+      ? source.replace('const handleAuthoritativeLiveRoomEnded = useCallback(() => {\n    stageSnapshotRequestRef.current += 1;',
+        'const handleAuthoritativeLiveRoomEnded = useCallback(() => {') : source });
+    await settle(() => { h.retiredPending.resolve(null); h.pending.resolve(h.snapshot("ROOM")); });
+    let pending;
+    await settle(() => { pending = h.current.refreshStageSnapshot("user"); });
+    const read = h.snapshots.at(-1), applied = h.appliedSnapshots.length;
+    await settle(h.current.handleAuthoritativeLiveRoomEnded);
+    assert.equal(h.current.roomMissing, true);
+    await settle(() => read.resolve(h.snapshot("ROOM")));
+    assert.equal((await pending) === null, !removeRetirement);
+    assert.equal(h.appliedSnapshots.length, applied + (removeRetirement ? 1 : 0));
+  });
 }
 
 for (const boundary of ["unmount", "room", "access revocation"]) {
