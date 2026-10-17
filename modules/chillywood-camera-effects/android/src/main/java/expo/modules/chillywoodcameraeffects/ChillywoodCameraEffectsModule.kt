@@ -39,7 +39,8 @@ class ChillywoodCameraEffectsModule : Module() {
           mapOf("processorName" to null)
         } else {
           val name = "chillywood-camera-${UUID.randomUUID()}"
-          val processor = CameraEffectProcessor(effect, intensity.coerceIn(0.0, 1.0).toFloat())
+          val assets = requireNotNull(appContext.reactContext) { "Application context is unavailable" }.assets
+          val processor = CameraEffectProcessor(assets, effect, intensity.coerceIn(0.0, 1.0).toFloat())
           // Enqueue before returning: JS's subsequent _setVideoEffects uses this
           // exact executor, so registration always precedes provider lookup.
           ChillywoodProcessorRegistry.register(name, processor)

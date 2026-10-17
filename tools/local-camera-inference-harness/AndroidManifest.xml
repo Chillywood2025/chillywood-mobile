@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="expo.modules.chillywoodcameraeffects.offlinetest">
+  <!-- Deliberately no permissions, including INTERNET or CAMERA. -->
+  <application android:label="Offline inference acceptance"
+      android:allowBackup="false" android:debuggable="true"
+      android:testOnly="true" android:usesCleartextTraffic="false"
+      android:extractNativeLibs="true" />
+  <instrumentation
+      android:name="expo.modules.chillywoodcameraeffects.OfflineInferenceInstrumentation"
+      android:targetPackage="expo.modules.chillywoodcameraeffects.offlinetest"
+      android:functionalTest="true" android:handleProfiling="false" />
+</manifest>

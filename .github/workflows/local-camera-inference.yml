@@ -1,0 +1,39 @@
+name: Local Android Camera Validation
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-inference:
+    name: Source contracts and native compilation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash --noprofile --norc -eo pipefail {0}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 20, cache: npm }
+      - run: npm ci --ignore-scripts
+      - name: Verify immutable assets and fail-closed harness contracts
+        run: |
+          node scripts/test-local-camera-inference-offline.mjs --source-check
+          node --test tests/ci/local-camera-inference-validation.test.mjs
+      - name: Provision Android compile tools using the runner's existing SDK licenses
+        # Do not pipe yes, accept licenses, enable SDK metrics, or alter host
+        # virtualization/security permissions. Missing license/access fails CI.
+        run: |
+          export JAVA_HOME="${JAVA_HOME_17_X64:?JDK 17 is required}"
+          sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:?Android SDK is required}}"
+          "$sdk/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-35" "build-tools;35.0.0" </dev/null
+      - name: Compile actual camera modules and verify resolved app dependency/manifest closure
+        run: JAVA_HOME="$JAVA_HOME_17_X64" node scripts/compile-native-camera-effects.mjs --android
+      # Emulator execution was removed by user direction on 2026-10-17.
+      # A passing job proves source contracts and compilation, not native model
+      # inference execution or physical-device qualification.

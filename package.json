@@ -669,6 +669,13 @@
     "typescript": "~5.9.2"
   },
   "expo": {
+    "autolinking": {
+      "android": {
+        "buildFromSource": [
+          "^expo-camera$"
+        ]
+      }
+    },
     "doctor": {
       "reactNativeDirectoryCheck": {
         "exclude": [

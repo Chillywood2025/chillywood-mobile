@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "sourceCommitAtRun": "984c7b22cdfab0992bdd8e1ceec5e27a2896110a",
+  "nativeGeneration": "internal-native-v15",
+  "iosNativeSourceDigest": "693976738e67c9eb1109ef7942e45984827b61c00adfb9d41f461f8b7aeac558",
+  "scope": "Unsigned Debug x86_64 iOS Simulator camera-module compilation and native dependencies",
+  "environment": {
+    "macOS": "26.6.2",
+    "xcode": "26.5",
+    "xcodeBuild": "17F42",
+    "EAS_BUILD_PROFILE": "ios-internal-v2"
+  },
+  "appExecuted": false,
+  "signedAppArtifact": false,
+  "physicalEvidence": false,
+  "releaseVariantClosure": false,
+  "backendExercised": false,
+  "rawReceiptSha256": "5010ea4d0018d446f4c5b94ba7c42887636764809e0714f4a490ed52d08e766c",
+  "compiledFramework": {
+    "name": "ChillywoodCameraEffects.framework/ChillywoodCameraEffects",
+    "sha256": "bea46d1eac68f292650673c46828b7fec486cef5f2c133352f5df5ed58bd601d"
+  },
+  "receipt": {
+    "scope": "camera-module-native-compile",
+    "status": "passed",
+    "generatedOnly": false,
+    "runnerSourceSha256": "98dcb8eb9b64d0cf42faeeb68dc0ac83736e357d38ac536eff549484e2ef4960",
+    "receipts": {
+      "ios": {
+        "generatedSourceSha256": "046dd0264fa667822d9593ee4109ec7925347f46c8000dd3367644bef489c813",
+        "compiled": true,
+        "cocoaPodsRuntime": {
+          "rubyVersion": "4.0.6",
+          "xcodeprojVersion": "1.28.1"
+        }
+      }
+    },
+    "physicalEvidence": false,
+    "inferenceExecuted": false,
+    "commands": [
+      {
+        "command": "node",
+        "args": [
+          "node_modules/expo-modules-autolinking/bin/expo-modules-autolinking.js",
+          "resolve",
+          "--platform",
+          "apple",
+          "--json"
+        ],
+        "passed": true,
+        "exitCode": 0,
+        "outputSha256": "3dcc26b44e1c1c8c8cb9b66f7d8c6bab05f9f1374973b657506ff5987d1fb887"
+      },
+      {
+        "command": "node",
+        "args": [
+          "node_modules/expo/bin/cli",
+          "prebuild",
+          "--platform",
+          "ios",
+          "--no-install"
+        ],
+        "passed": true,
+        "exitCode": 0,
+        "outputSha256": "451d868d8747a35e12642cafed73ed4ff373d5e31e7b0680034f454c168e635e"
+      },
+      {
+        "command": "xcrun",
+        "args": [
+          "--sdk",
+          "iphonesimulator",
+          "--show-sdk-path"
+        ],
+        "passed": true,
+        "exitCode": 0,
+        "outputSha256": "f793107d8d64388dc464f9783818477500aaf2bfe72c7c3ea24cb39ad633dc41"
+      },
+      {
+        "command": "pod",
+        "args": [
+          "install"
+        ],
+        "passed": true,
+        "exitCode": 0,
+        "outputSha256": "b1c6e78962afd8d2b13ede380036f917d61cd3a8ddd3a2dffb43a05a3b5d508e"
+      },
+      {
+        "command": "pod",
+        "args": [
+          "--version"
+        ],
+        "passed": true,
+        "exitCode": 0,
+        "outputSha256": "be924a2002d16b643187f3f19aa8d9c3c5714f0604c067e996633557165955d2"
+      },
+      {
+        "command": "ruby",
+        "args": [
+          "<local-path>/scripts/verify-livekit-ios-compatibility.rb",
+          "<local-path>/project/ios/Podfile",
+          "<local-path>/project/ios/Pods/Pods.xcodeproj"
+        ],
+        "passed": true,
+        "exitCode": 0,
+        "outputSha256": "d7d26d23a46db56999623d119aa686a57edb4c0d88bb3a3868086e028af862d6"
+      },
+      {
+        "command": "xcodebuild",
+        "args": [
+          "-project",
+          "Pods/Pods.xcodeproj",
+          "-target",
+          "ChillywoodCameraEffects",
+          "-configuration",
+          "Debug",
+          "-sdk",
+          "iphonesimulator",
+          "-showBuildSettings",
+          "-json"
+        ],
+        "passed": true,
+        "exitCode": 0,
+        "outputSha256": "ac88be5c1c79dd58b52039a013d677b925c9af4e5ed1451c6010412bcca9d51d"
+      },
+      {
+        "command": "xcodebuild",
+        "args": [
+          "-project",
+          "Pods/Pods.xcodeproj",
+          "-target",
+          "ChillywoodCameraEffects",
+          "-configuration",
+          "Debug",
+          "-sdk",
+          "iphonesimulator",
+          "-arch",
+          "x86_64",
+          "ONLY_ACTIVE_ARCH=YES",
+          "CODE_SIGNING_ALLOWED=NO",
+          "CODE_SIGNING_REQUIRED=NO",
+          "SYMROOT=<local-path>/ios-build",
+          "build"
+        ],
+        "passed": true,
+        "exitCode": 0,
+        "outputSha256": "e06aea42e499584fa3af48bea075e29e2994aea939ae048b5f11e95a80ceebf0"
+      }
+    ],
+    "cameraModuleSourceSha256": "2a604936a4cde5a2c13c50adb2b186983f3a873c872535c2b24c4374f29734f2"
+  }
+}
