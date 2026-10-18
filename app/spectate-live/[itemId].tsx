@@ -51,9 +51,11 @@ import { useRefreshOnForeground } from "../../hooks/useRefreshOnForeground";
 
 type AccessLane = "public" | "circle";
 type PagePlayback = {
-  state: "loading" | "ready" | "unavailable";
+  state: "loading" | "ready" | "unavailable" | "error";
   playback: SpectatorPlaybackReadout | null;
 };
+const PLAYBACK_RESOLVE_TIMEOUT_MS = 12_000;
+const PLAYBACK_FIRST_FRAME_TIMEOUT_MS = 20_000;
 
 const normalizeParam = (value: string | string[] | undefined) =>
   String(Array.isArray(value) ? value[0] : value ?? "").trim();
@@ -63,6 +65,17 @@ const isCircleItem = (item: DiscoveryFeedItem) =>
 
 const getPrimaryActorId = (item: DiscoveryFeedItem) =>
   String(item.channel_user_id ?? item.owner_user_id ?? item.host_user_id ?? "").trim();
+
+// A refreshed row may be a new object without representing a new broadcast.
+// Source/access changes must instead discard the old player and its callbacks.
+const playbackIdentity = (item: DiscoveryFeedItem, lane: AccessLane) => JSON.stringify([
+  lane, item.id, item.item_type, item.source_type, item.source_id, item.room_id,
+  item.owner_user_id, item.channel_user_id, item.host_user_id, item.visibility,
+  item.access_type, item.rights_status, item.moderation_status, item.live_state,
+  item.ended_at, item.is_publicly_discoverable, item.is_spectator_enabled,
+  item.is_spectator_playback_enabled, item.requires_premium_to_join,
+  item.requires_ticket_to_watch, item.requires_subscription_to_watch,
+]);
 
 const uniqueLiveItems = (initial: DiscoveryFeedItem, ranked: DiscoveryFeedItem[]) => {
   const seen = new Set<string>();
@@ -90,35 +103,88 @@ function ImmersiveLivePage({
   onLongPress: (item: DiscoveryFeedItem) => void;
 }) {
   const [pagePlayback, setPagePlayback] = useState<PagePlayback>({ state: "loading", playback: null });
+  const [retry, setRetry] = useState(0);
+  const [failedPoster, setFailedPoster] = useState<string | null>(null);
+  const [posterAccessBlocked, setPosterAccessBlocked] = useState(false);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+  const decision = resolveSpectatorAccess(item, {
+    circleAccess: lane === "circle" ? "allowed" : undefined,
+  });
 
   useEffect(() => {
     let mounted = true;
-    setPagePlayback({ state: "loading", playback: null });
-
+    let settled = false;
     const decision = resolveSpectatorAccess(item, {
       circleAccess: lane === "circle" ? "allowed" : undefined,
     });
     const fallback = resolveSpectatorPlaybackState(item, decision);
+    const timeout = setTimeout(() => {
+      if (!mounted || settled) return;
+      settled = true;
+      // A delayed metadata refresh must not tear down an already valid player.
+      setPagePlayback((current) => current.state === "ready" ? current : { state: "error", playback: fallback });
+    }, PLAYBACK_RESOLVE_TIMEOUT_MS);
 
     void readSpectatorPlaybackReadout(item, decision)
-      .catch(() => fallback)
+      .catch(() => null)
       .then((nextPlayback) => {
-        if (!mounted) return;
+        if (!mounted || settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        if (nextPlayback?.state.startsWith("blocked_")) setPosterAccessBlocked(true);
+        else if (nextPlayback?.canRenderPlayback) setPosterAccessBlocked(false);
         setPagePlayback({
-          state: nextPlayback.canRenderPlayback && !!nextPlayback.playbackUrl ? "ready" : "unavailable",
-          playback: nextPlayback,
+          state: !nextPlayback ? "error" : nextPlayback.canRenderPlayback && !!nextPlayback.playbackUrl ? "ready" : "unavailable",
+          playback: nextPlayback ?? fallback,
         });
       });
 
     return () => {
       mounted = false;
+      clearTimeout(timeout);
     };
-  }, [item, lane]);
+  }, [item, lane, retry]);
 
   const title = String(item.title ?? "").trim() || "Live now";
   const subtitle = String(item.subtitle ?? "").trim();
   const playbackUrl = pagePlayback.playback?.playbackUrl ?? null;
   const reportViewProgress = useNotificationViewTracking("spectator", notificationPlaybackRecordId(playbackUrl, SUPABASE_URL), active);
+  const nativeAttempt = useMemo(() => ({ playbackUrl, retry, failed: false }), [playbackUrl, retry]);
+  const currentAttemptRef = useRef(nativeAttempt);
+  currentAttemptRef.current = nativeAttempt;
+  const [displayedAttempt, setDisplayedAttempt] = useState<typeof nativeAttempt | null>(null);
+  const [failedAttempt, setFailedAttempt] = useState<typeof nativeAttempt | null>(null);
+  const currentAttempt = () => mountedRef.current && currentAttemptRef.current === nativeAttempt && !nativeAttempt.failed;
+  const failPlayback = useCallback(() => {
+    if (!mountedRef.current || currentAttemptRef.current !== nativeAttempt || nativeAttempt.failed) return;
+    nativeAttempt.failed = true;
+    setFailedAttempt(nativeAttempt);
+  }, [nativeAttempt]);
+  const playbackFailed = failedAttempt === nativeAttempt || pagePlayback.state === "error";
+  const frameReady = displayedAttempt === nativeAttempt && !playbackFailed;
+  const opening = !playbackFailed && (pagePlayback.state === "loading" || (pagePlayback.state === "ready" && !frameReady));
+  useEffect(() => {
+    if (!active || pagePlayback.state !== "ready" || !playbackUrl || frameReady || playbackFailed) return;
+    const timeout = setTimeout(failPlayback, PLAYBACK_FIRST_FRAME_TIMEOUT_MS);
+    return () => clearTimeout(timeout);
+  }, [active, pagePlayback.state, playbackUrl, frameReady, playbackFailed, failPlayback]);
+  const posterUrl = decision.canShowMetadata && !posterAccessBlocked
+    && !pagePlayback.playback?.state.startsWith("blocked_")
+    ? item.thumbnail_url : null;
+  const posterAttempt = useMemo(() => ({ posterUrl, retry }), [posterUrl, retry]);
+  const currentPosterRef = useRef(posterAttempt);
+  currentPosterRef.current = posterAttempt;
+  const retryPlayback = () => {
+    // Re-read authorization and the current URL rather than looping a failed URL.
+    nativeAttempt.failed = true;
+    setPagePlayback({ state: "loading", playback: null });
+    setFailedPoster(null);
+    setRetry((value) => value + 1);
+  };
 
   return (
     <Pressable
@@ -128,30 +194,58 @@ function ImmersiveLivePage({
       accessibilityRole="button"
       accessibilityLabel={`${title}. Hold for live options.`}
     >
-      {pagePlayback.state === "ready" && playbackUrl ? (
+      {pagePlayback.state === "ready" && playbackUrl && !playbackFailed ? (
         <Video
+          key={JSON.stringify([playbackUrl, retry])}
           source={{ uri: playbackUrl }}
           style={StyleSheet.absoluteFill}
           resizeMode={ResizeMode.CONTAIN}
           shouldPlay={active}
-          onPlaybackStatusUpdate={reportViewProgress}
+          onReadyForDisplay={() => {
+            if (currentAttempt()) setDisplayedAttempt(nativeAttempt);
+          }}
+          onError={failPlayback}
+          onPlaybackStatusUpdate={(status) => {
+            if (!currentAttempt()) return;
+            reportViewProgress(status);
+            if (!status.isLoaded && status.error) failPlayback();
+          }}
           useNativeControls={false}
         />
-      ) : item.thumbnail_url ? (
-        <Image source={{ uri: item.thumbnail_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-      ) : (
-        <View style={styles.fallback}>
+      ) : null}
+      {!frameReady && posterUrl && failedPoster !== posterUrl ? (
+        <Image
+          key={JSON.stringify([posterUrl, retry])}
+          source={{ uri: posterUrl }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+          onError={() => {
+            if (mountedRef.current && currentPosterRef.current === posterAttempt) setFailedPoster(posterUrl);
+          }}
+        />
+      ) : !frameReady ? (
+        <View pointerEvents="none" style={styles.fallback}>
           <Text style={styles.fallbackInitial}>{title.slice(0, 1).toUpperCase()}</Text>
         </View>
-      )}
+      ) : null}
 
       <View pointerEvents="none" style={styles.topScrim} />
       <View pointerEvents="none" style={styles.bottomScrim} />
 
-      {pagePlayback.state === "loading" ? (
+      {opening ? (
         <View pointerEvents="none" style={styles.loadingBadge}>
           <ActivityIndicator color="#FFFFFF" size="small" />
           <Text style={styles.loadingText}>Opening live…</Text>
+        </View>
+      ) : null}
+      {playbackFailed || pagePlayback.state === "unavailable" ? (
+        <View style={styles.playbackNotice}>
+          <Text accessibilityRole="alert" style={styles.loadingText}>
+            {playbackFailed ? "Live playback couldn’t load." : pagePlayback.playback?.title || "This live isn’t available."}
+          </Text>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry live playback" style={styles.centerButton} onPress={retryPlayback}>
+            <Text style={styles.centerButtonText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       ) : null}
 
@@ -170,6 +264,15 @@ function ImmersiveLivePage({
 }
 
 export default function ImmersiveLiveSpectatorScreen() {
+  const { authority, authorityStatus } = useSession();
+  const params = useLocalSearchParams<{ itemId?: string | string[]; lane?: string | string[] }>();
+  // Clear retained Circle images before effects run for a different viewer/route.
+  const owner = JSON.stringify([normalizeParam(params.itemId), normalizeParam(params.lane), authorityStatus,
+    authority?.userId, authority?.accountId, authority?.sessionGeneration, authority?.restoreOnly]);
+  return <ImmersiveLiveSpectatorContent key={owner} />;
+}
+
+function ImmersiveLiveSpectatorContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -195,6 +298,7 @@ export default function ImmersiveLiveSpectatorScreen() {
   const [reportBusy, setReportBusy] = useState(false);
   const liveLoadGenerationRef = useRef(0);
   const screenFocusedRef = useRef(false);
+  const hasItemsRef = useRef(false);
 
   const pageHeight = Math.max(1, height);
 
@@ -204,12 +308,13 @@ export default function ImmersiveLiveSpectatorScreen() {
       && currentOwnerRef.current.initialItemId === initialItemId && currentOwnerRef.current.lane === lane
       && currentOwnerRef.current.authorityStatus === authorityStatus
       && (authority ? sameAccountSessionAuthority(authority, currentOwnerRef.current.authority) : !currentOwnerRef.current.authority);
-    if (showLoading) setLoading(true);
+    if (showLoading && !hasItemsRef.current) setLoading(true);
     setUnavailable(false);
 
     try {
       if (!initialItemId) {
         if (!current()) return;
+        hasItemsRef.current = false;
         setItems([]);
         setActiveIndex(0);
         setSheetItem(null);
@@ -224,6 +329,7 @@ export default function ImmersiveLiveSpectatorScreen() {
       if (!current()) return;
 
       if (!initial || initial.id !== initialItemId || initial.live_state !== "live" || (lane === "circle") !== isCircleItem(initial)) {
+        hasItemsRef.current = false;
         setItems([]);
         setActiveIndex(0);
         setSheetItem(null);
@@ -235,6 +341,7 @@ export default function ImmersiveLiveSpectatorScreen() {
       if (initial.source_type === "live_stage_room") {
         // Old direct links must take the same fresh session/projection checks
         // as discovery cards; this HLS screen never grants a stage role.
+        hasItemsRef.current = false;
         setItems([]);
         router.replace({ pathname: "/spectate/[itemId]", params: { itemId: initialItemId } });
         return;
@@ -246,6 +353,7 @@ export default function ImmersiveLiveSpectatorScreen() {
       if (!current()) return;
 
       const nextItems = uniqueLiveItems(initial, ranked.items);
+      hasItemsRef.current = nextItems.length > 0;
       setItems(nextItems);
       setActiveIndex((current) => Math.min(current, Math.max(0, nextItems.length - 1)));
       setSheetItem((current) => current ? nextItems.find((item) => item.id === current.id) ?? null : null);
@@ -439,6 +547,7 @@ export default function ImmersiveLiveSpectatorScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => (
           <ImmersiveLivePage
+            key={playbackIdentity(item, lane)}
             item={item}
             lane={lane}
             active={index === activeIndex}
@@ -561,6 +670,7 @@ const styles = StyleSheet.create({
   gestureHint: { marginTop: 3, color: "rgba(255,255,255,0.62)", fontSize: 11.5, fontWeight: "800" },
   loadingBadge: { position: "absolute", alignSelf: "center", top: "47%", flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 9, backgroundColor: "rgba(0,0,0,0.58)" },
   loadingText: { color: "#FFF", fontSize: 12, fontWeight: "800" },
+  playbackNotice: { position: "absolute", alignSelf: "center", top: "40%", maxWidth: "90%", alignItems: "center", padding: 16, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.58)" },
   backButton: { position: "absolute", left: 16, width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(5,7,12,0.72)", borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
   backText: { color: "#FFF", fontSize: 34, lineHeight: 36, fontWeight: "500", marginTop: -3 },
   positionPill: { position: "absolute", right: 16, minWidth: 48, height: 34, paddingHorizontal: 10, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(5,7,12,0.68)", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)" },

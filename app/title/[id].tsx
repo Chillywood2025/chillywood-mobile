@@ -691,6 +691,9 @@ export default function TitleDetails() {
       })
     : "Review access";
   const canMarkTitleShared = !accessLoading && !!titleAccess?.isAllowed;
+  const posterUrl = String(title.poster_url ?? "").trim();
+  const posterSource = localMatch?.poster
+    ?? (/^https?:\/\//i.test(posterUrl) ? { uri: posterUrl } : null);
 
   return (
     <>
@@ -699,7 +702,7 @@ export default function TitleDetails() {
           <StableImage
             expectedWidth="100%"
             expectedHeight={420}
-            source={localMatch?.poster ?? null}
+            source={posterSource}
             containerStyle={styles.hero}
             borderRadius={0}
             resizeMode="cover"

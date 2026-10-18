@@ -48,7 +48,7 @@ export const useProfileMediaImageSource = (source?: ImageSourcePropType) => (
   useProfileMediaImageBinding(source).source
 );
 
-export const ProfileMediaImage = ({ source, ...props }: ImageProps) => {
+export const ProfileMediaImage = ({ source, fadeDuration = 0, ...props }: ImageProps) => {
   const binding = useProfileMediaImageBinding(source);
-  return <Image {...props} key={binding.renderEpoch} source={binding.source} />;
+  return <Image {...props} fadeDuration={fadeDuration} key={binding.renderEpoch} source={binding.source} />;
 };

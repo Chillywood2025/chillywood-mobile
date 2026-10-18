@@ -37,6 +37,9 @@ type CreatorVideoCardProps = {
   onDelete?: () => void;
   onShare?: () => void;
   onOpenActions?: () => void;
+  imageAuthorityKey?: string;
+  imageRetryKey?: string | number;
+  onImageRetry?: () => void;
 };
 
 const formatVisibilityLabel = (video: CreatorVideo, ownerMode: boolean) => (
@@ -149,7 +152,17 @@ export function CreatorVideoCard({
   onDelete,
   onShare,
   onOpenActions,
+  imageAuthorityKey,
+  imageRetryKey,
+  onImageRetry,
 }: CreatorVideoCardProps) {
+  const thumbnailIdentity = imageAuthorityKey && video.id && video.ownerId && video.updatedAt && video.thumbStoragePath
+    ? JSON.stringify([
+      imageAuthorityKey, mode, video.id, video.ownerId, video.storageProvider,
+      video.storageBucket, video.thumbStoragePath, video.updatedAt,
+      video.visibility, video.moderationStatus,
+    ])
+    : undefined;
   const moderationLabel = formatModerationLabel(video);
   const fileSize = formatFileSize(video.fileSizeBytes);
   const updatedDate = formatDate(video.updatedAt || video.createdAt);
@@ -208,6 +221,9 @@ export function CreatorVideoCard({
             expectedWidth="100%"
             expectedHeight="100%"
             source={video.thumbnailUrl ? { uri: video.thumbnailUrl } : null}
+            identityKey={thumbnailIdentity}
+            retryKey={imageRetryKey}
+            onRetry={onImageRetry}
             containerStyle={styles.thumbnailFrame}
             borderRadius={0}
             resizeMode="cover"
@@ -264,6 +280,9 @@ export function CreatorVideoCard({
           expectedWidth="100%"
           expectedHeight="100%"
           source={video.thumbnailUrl ? { uri: video.thumbnailUrl } : null}
+          identityKey={thumbnailIdentity}
+          retryKey={imageRetryKey}
+          onRetry={onImageRetry}
           containerStyle={styles.thumbnailFrame}
           borderRadius={0}
           resizeMode="cover"

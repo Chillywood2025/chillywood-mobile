@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,9 +32,12 @@ import {
 } from "../_lib/peopleSearchNormalization";
 import { searchPublicPeople, type PublicPeopleSearchResult } from "../_lib/publicPeopleSearch";
 import { useSession } from "../_lib/session";
-import { buildUserChannelProfile, readUserProfileByUserId } from "../_lib/userData";
+import { buildUserChannelProfile } from "../_lib/userData";
 import { getUserFacingErrorMessage } from "../_lib/userFacingErrors";
 import { ProfileMediaImage as Image } from "../components/ui/ProfileMediaImage";
+import { useProfilePresentation } from "../components/profile/use-profile-presentation";
+import { StableImage } from "../components/ui/StableImage";
+import { Skeleton } from "../components/ui/Skeleton";
 import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
 
 type CircleAction = "accept" | "decline" | "cancel" | "remove";
@@ -104,7 +108,18 @@ export default function ChillyCircleScreen() {
   const [peopleLoading, setPeopleLoading] = useState(false);
   const [peopleError, setPeopleError] = useState<string | null>(null);
   const [peopleResults, setPeopleResults] = useState<PublicPeopleSearchResult[]>([]);
-  const [rachiAvatarUrl, setRachiAvatarUrl] = useState<string | null>(RACHI_OFFICIAL_ACCOUNT.avatarUrl ?? null);
+  const {
+    profile: rachiProfile, ready: rachiProfileReady, error: rachiProfileError, refresh: refreshRachiProfile,
+  } = useProfilePresentation(RACHI_OFFICIAL_ACCOUNT.userId, false);
+  const rachiAvatarUrl = useMemo(() => {
+    if (!rachiProfileReady || rachiProfileError) return null;
+    const officialProfile = buildUserChannelProfile({
+      id: RACHI_OFFICIAL_ACCOUNT.userId,
+      profile: rachiProfile,
+      fallbackDisplayName: RACHI_OFFICIAL_ACCOUNT.displayName,
+    });
+    return String(officialProfile.avatarUrl ?? RACHI_OFFICIAL_ACCOUNT.avatarUrl ?? "").trim() || null;
+  }, [rachiProfile, rachiProfileError, rachiProfileReady]);
   const [collapsedSections, setCollapsedSections] = useState<Partial<Record<CircleSectionKey, boolean>>>({});
 
   const normalizedNeedle = normalizeCircleSearchNeedle(debouncedSearchQuery);
@@ -141,21 +156,14 @@ export default function ChillyCircleScreen() {
     setLoading(true);
     setNotice(null);
     try {
-      const [nextCircle, nextIncoming, nextOutgoing, rachiProfile] = await Promise.all([
+      const [nextCircle, nextIncoming, nextOutgoing] = await Promise.all([
         listMyChillyCircle({ limit: 100 }),
         listIncomingChillyCircleRequests({ limit: 100 }),
         listOutgoingChillyCircleRequests({ limit: 100 }),
-        readUserProfileByUserId(RACHI_OFFICIAL_ACCOUNT.userId).catch(() => null),
       ]);
       setCircle(nextCircle);
       setIncoming(nextIncoming);
       setOutgoing(nextOutgoing);
-      const officialProfile = buildUserChannelProfile({
-        id: RACHI_OFFICIAL_ACCOUNT.userId,
-        profile: rachiProfile,
-        fallbackDisplayName: RACHI_OFFICIAL_ACCOUNT.displayName,
-      });
-      setRachiAvatarUrl(String(officialProfile.avatarUrl ?? RACHI_OFFICIAL_ACCOUNT.avatarUrl ?? "").trim() || null);
     } catch (error) {
       setCircle([]);
       setIncoming([]);
@@ -368,6 +376,33 @@ export default function ChillyCircleScreen() {
     </View>
   );
 
+  const renderRachiAvatar = () => (
+    <View style={[styles.avatar, styles.officialAvatar]}>
+      {!rachiProfileReady ? (
+        <View style={styles.avatarImage} testID="circle-rachi-avatar-loading">
+          <Skeleton width="100%" height="100%" borderRadius={17} />
+        </View>
+      ) : rachiProfileError ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Retry Rachi photo"
+          testID="circle-rachi-avatar-retry"
+          onPress={(event) => { event.stopPropagation(); refreshRachiProfile(); }}
+        >
+          <Text style={styles.avatarInitial}>↻</Text>
+        </Pressable>
+      ) : rachiAvatarUrl ? (
+        <StableImage
+          source={{ uri: rachiAvatarUrl }} expectedWidth="100%" expectedHeight="100%"
+          borderRadius={17} resizeMode="cover" style={styles.avatarImage}
+          onRetry={refreshRachiProfile}
+        />
+      ) : (
+        <Text style={[styles.avatarInitial, styles.officialAvatarInitial]}>R</Text>
+      )}
+    </View>
+  );
+
   const renderActionButton = (label: string, action: CircleAction, item: ChillyCircleListItem, accent = false) => {
     const key = `${action}:${item.id}`;
     const busy = busyKey === key;
@@ -427,7 +462,7 @@ export default function ChillyCircleScreen() {
             style={styles.suggestionRow}
             onPress={suggestion.onPress}
           >
-            {renderAvatar(suggestion.avatarUrl, suggestion.title)}
+            {suggestion.kind === "official" ? renderRachiAvatar() : renderAvatar(suggestion.avatarUrl, suggestion.title)}
             <View style={styles.personCopy}>
               <View style={styles.searchResultMetaRow}>
                 <Text style={styles.personName} numberOfLines={1}>{suggestion.title}</Text>
@@ -542,13 +577,7 @@ export default function ChillyCircleScreen() {
         activeOpacity={0.86}
         onPress={() => openProfile(RACHI_OFFICIAL_ACCOUNT.userId)}
       >
-        <View style={[styles.avatar, styles.officialAvatar]}>
-          {rachiAvatarUrl ? (
-            <Image source={{ uri: rachiAvatarUrl }} style={styles.avatarImage} />
-          ) : (
-            <Text style={[styles.avatarInitial, styles.officialAvatarInitial]}>R</Text>
-          )}
-        </View>
+        {renderRachiAvatar()}
         <View style={styles.personCopy}>
           <View style={styles.officialTitleRow}>
             <Text style={styles.officialName} numberOfLines={1}>{RACHI_OFFICIAL_ACCOUNT.displayName}</Text>
@@ -599,7 +628,7 @@ export default function ChillyCircleScreen() {
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
         <Text style={styles.kicker}>CHI&apos;LLY CIRCLE</Text>
-        <TouchableOpacity activeOpacity={0.82} onPress={() => { void loadCircle(); }}>
+        <TouchableOpacity activeOpacity={0.82} onPress={() => { void loadCircle(); refreshRachiProfile(); }}>
           <Text style={styles.refreshText}>Refresh</Text>
         </TouchableOpacity>
       </View>

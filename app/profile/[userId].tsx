@@ -42,6 +42,8 @@ import {
 import { useLiveDiscoveryFeed } from "../../_lib/useLiveDiscoveryFeed";
 import { useProfileLiveState } from "../../_lib/useProfileLiveState";
 import { ProfileLiveNow } from "../../components/live/profile-live-now";
+import { useProfilePresentation } from "../../components/profile/use-profile-presentation";
+import { Skeleton } from "../../components/ui/Skeleton";
 import type { DiscoveryFeedItem } from "../../_lib/discoveryFeed";
 import {
   type CreatorEventSummary,
@@ -59,9 +61,7 @@ import {
 import { reportRuntimeError } from "../../_lib/logger";
 import { createForegroundAuthenticatedUiCallIntent } from "../../_lib/nativeCallTransitionProvenance.mjs";
 import {
-  readCreatorPermissions,
   getMonetizationAccessSheetPresentation,
-  type CreatorPermissionSet,
 } from "../../_lib/monetization";
 import {
   getRuntimeControlBlockedCopy,
@@ -141,7 +141,6 @@ import {
 import {
   buildUserChannelProfile,
   isProfileMediaActive,
-  readUserProfile,
   readUserProfileByUserId,
   saveUserProfile,
   type ProfileAppearanceFitMode,
@@ -708,9 +707,6 @@ export default function ProfileScreen() {
   } | null>(null);
   const [creatorVideos, setCreatorVideos] = useState<CreatorVideo[]>([]);
   const [creatorVideosReady, setCreatorVideosReady] = useState(false);
-  const [channelAccessProfile, setChannelAccessProfile] = useState<UserProfile | null>(null);
-  const [channelAccessPermissions, setChannelAccessPermissions] = useState<CreatorPermissionSet | null>(null);
-  const [channelAccessReady, setChannelAccessReady] = useState(false);
   const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
   const [publicEvents, setPublicEvents] = useState<CreatorEventSummary[]>([]);
   const [publicReminderSummaries, setPublicReminderSummaries] = useState<PublicEventReminderSummary[]>([]);
@@ -749,8 +745,12 @@ export default function ProfileScreen() {
   const partyIdParam = String(Array.isArray(params.partyId) ? params.partyId[0] : params.partyId ?? "").trim();
   const modeParam = String(Array.isArray(params.mode) ? params.mode[0] : params.mode ?? "").trim();
   const sourceParam = String(Array.isArray(params.source) ? params.source[0] : params.source ?? "").trim();
-  const hasBackedProfileIdentity = !!channelAccessProfile;
   const officialAccount = getOfficialPlatformAccount(userId);
+  const {
+    profile: channelAccessProfile, permissions: channelAccessPermissions, ready: channelAccessReady,
+    error: profilePresentationError, refresh: refreshProfilePresentation, setProfile: setChannelAccessProfile,
+  } = useProfilePresentation(userId, !officialAccount && !!userId && userId === currentUserId);
+  const hasBackedProfileIdentity = !!channelAccessProfile;
   const profile = buildUserChannelProfile({
     id: userId,
     profile: channelAccessProfile,
@@ -852,10 +852,12 @@ export default function ProfileScreen() {
     && !isOfficialProfile
     && !isSelfProfile
     && !channelAccessProfile;
-  const visibleProfileAvatarUrl = shouldShowLockedShell || !isProfileMediaActive(profile.profileAvatarMediaStatus)
+  const profileMediaLoading = !shouldShowLockedShell && (!channelAccessReady || (!isOfficialProfile && !profilePrivacyReady));
+  const canShowProfileMedia = !shouldShowLockedShell && (isOfficialProfile || (channelAccessReady && profilePrivacyReady && canViewFullProfile));
+  const visibleProfileAvatarUrl = !canShowProfileMedia || !isProfileMediaActive(profile.profileAvatarMediaStatus)
     ? undefined
     : profile.avatarUrl;
-  const visibleProfileBackgroundUrl = shouldShowLockedShell || !isProfileMediaActive(profile.profileBackgroundMediaStatus)
+  const visibleProfileBackgroundUrl = !canShowProfileMedia || !isProfileMediaActive(profile.profileBackgroundMediaStatus)
     ? undefined
     : profile.profileBackgroundUrl;
   const visibleProfileBackgroundOverlay = profile.profileBackgroundOverlayStrength;
@@ -1230,63 +1232,6 @@ export default function ProfileScreen() {
     }
   };
 
-  useEffect(() => {
-    let active = true;
-
-    if (!userId) {
-      setChannelAccessProfile(null);
-      setChannelAccessPermissions(null);
-      setChannelAccessReady(true);
-      return () => {
-        active = false;
-      };
-    }
-
-    setChannelAccessReady(false);
-
-    if (isOfficialProfile) {
-      void readUserProfileByUserId(userId)
-        .then((resolvedProfile) => {
-          if (!active) return;
-          setChannelAccessProfile(resolvedProfile);
-          setChannelAccessPermissions(null);
-          setChannelAccessReady(true);
-        })
-        .catch(() => {
-          if (!active) return;
-          setChannelAccessProfile(null);
-          setChannelAccessPermissions(null);
-          setChannelAccessReady(true);
-        });
-
-      return () => {
-        active = false;
-      };
-    }
-
-    Promise.all([
-      isSelfProfile
-        ? readUserProfile().catch(() => null)
-        : readUserProfileByUserId(userId).catch(() => null),
-      readCreatorPermissions(userId).catch(() => null),
-    ])
-      .then(([resolvedProfile, resolvedPermissions]) => {
-        if (!active) return;
-        setChannelAccessProfile(resolvedProfile);
-        setChannelAccessPermissions(resolvedPermissions);
-        setChannelAccessReady(true);
-      })
-      .catch(() => {
-        if (!active) return;
-        setChannelAccessProfile(null);
-        setChannelAccessPermissions(null);
-        setChannelAccessReady(true);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [isOfficialProfile, isSelfProfile, userId]);
   useEffect(() => {
     let active = true;
 
@@ -3961,6 +3906,7 @@ export default function ProfileScreen() {
             expectedWidth="100%"
             expectedHeight="100%"
             source={{ uri: visibleProfileBackgroundUrl }}
+            onRetry={refreshProfilePresentation}
             containerStyle={styles.fullBackgroundImage}
             borderRadius={0}
             resizeMode={resolveProfileImageResizeMode(profile.profileBackgroundFitMode)}
@@ -4014,6 +3960,7 @@ export default function ProfileScreen() {
                 expectedWidth="100%"
                 expectedHeight="100%"
                 source={{ uri: visibleProfileBackgroundUrl }}
+                onRetry={refreshProfilePresentation}
                 containerStyle={styles.profileCoverImage}
                 borderRadius={0}
                 resizeMode={resolveProfileImageResizeMode(profile.profileBackgroundFitMode)}
@@ -4066,9 +4013,21 @@ export default function ProfileScreen() {
                       expectedWidth="100%"
                       expectedHeight="100%"
                       source={{ uri: visibleProfileAvatarUrl }}
+                      onRetry={refreshProfilePresentation}
                       borderRadius={43}
                       resizeMode={resolveProfileImageResizeMode(profile.profileAvatarFitMode)}
                     />
+                  ) : profileMediaLoading ? (
+                    <View testID="profile-avatar-loading" accessibilityLabel="Loading Profile Photo" style={styles.avatarImage}>
+                      <Skeleton height="100%" width="100%" borderRadius={43} />
+                    </View>
+                  ) : profilePresentationError ? (
+                    <Pressable testID="profile-avatar-retry" accessibilityRole="button" accessibilityLabel="Retry Profile Photo" onPress={(event) => {
+                      event.stopPropagation();
+                      refreshProfilePresentation();
+                    }}>
+                      <AppText scale="caption">Retry photo</AppText>
+                    </Pressable>
                   ) : (
                     <AppText scale="title1" style={styles.avatarInitial}>{profile.displayName.slice(0, 1).toUpperCase()}</AppText>
                   )}
