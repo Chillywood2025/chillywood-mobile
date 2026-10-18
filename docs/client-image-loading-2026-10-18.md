@@ -14,7 +14,7 @@ run `39060315266`, publisher `39061083345`. Live main rules require the protecte
 reviews are required. The previously recorded Android107/iOS40 builds used
 `f600bba0`, a different source. No installed build was inspected or changed here.
 
-This ordinary client task covers Profile, public Platform, creator thumbnails,
+This ordinary client task covers Profile, Chi'lly Circle, public Platform, creator thumbnails,
 Title artwork and the HLS spectator poster transition on Android and iOS. It
 changes no dependencies, native capabilities, backend authorization, migrations,
 playback format, publication/deployment tooling or release policy. The paused
@@ -26,6 +26,7 @@ revert of this client PR, with no data or native rollback operation.
 | Surface / files | Cause and resulting behavior |
 | --- | --- |
 | `app/profile/[userId].tsx`, `components/profile/use-profile-presentation.ts` | Rachi's built-in identity has no avatar URL, and the route previously rendered an initial before its profile request completed. Initial loading now has a dedicated skeleton. Only the public official identity has a bounded, session-scoped in-memory metadata snapshot for warm remount; private profiles are not cached across mounts. Fresh null/removal/error results clear prior presentation. Scope changes, unmounts, retries and local replacement retire old responses. Private photo/background display waits for the current privacy result. |
+| `app/chilly-circle.tsx` | The always-visible Rachi row and its search suggestion had the same premature initial. Both now use the shared official Profile presentation, with loading, confirmed-missing and retry states. Circle-to-Profile navigation reuses known metadata while refreshing it. Relationship list failures do not erase the separately loaded official photo. |
 | `components/ui/StableImage.tsx` | The old component hid even native-cache-ready pixels with opacity zero, overlaid a skeleton, and treated `onLoadEnd` as success. The native image is now visible immediately with loading behind it; only `onLoad` marks success. Missing/error states are static, with an accessible retry for failure. Source/identity changes reset synchronously and stale events cannot affect a replacement. Retry does not activate an enclosing media card. |
 | `components/ui/ProfileMediaImage.tsx` | Raw image callers default to zero Android fade duration. Exact profile-media URL binding, bearer replacement, authority epoch and `cache: reload` are preserved. Callers can still request a fade explicitly. |
 | `app/channel/[userId].tsx`, `components/creator-media/creator-video-card.tsx` | Refocus previously cleared all artwork and content. The completed presentation now remains while the same viewer/session/route/preview scope refreshes; access denial, errors and scope changes hide it. Branding and thumbnail retention keys bind exact owner, asset/storage identity, version and authority. A renewed signed URL is still requested; its predecessor stays visible only until the replacement succeeds or fails. Retry rereads current URLs. No signing parameters are stripped or treated as authorization. |
@@ -55,16 +56,24 @@ New production-source suites:
   expressions, delayed first frame, warm refresh, stale/error/denial/retry and
   active versus inactive timeouts.
 - `tests/catalog-image-loading.test.mjs`: actual Title hero JSX/source selection.
+- `tests/rachi-circle-image-loading-mounted.test.mjs`: full Circle screen with
+  the real presentation hook, delayed/warm loads, Circle-to-Profile reuse,
+  missing/error/retry, session changes, stale responses and relationship failure.
 
 Existing Profile audience, profile-media authority, Platform, spectator-entry and
-customer-experience checks are retained. The Rachi source-wiring assertion follows
+customer-experience checks are retained. Rachi source-wiring assertions follow
 the extracted production hook; the behavior is additionally mounted and tested.
+The existing Platform production-closure harness supplies the new presentation
+scope/refresher bindings while preserving its access-order assertions.
 
 At base `54b36c32`, the initial Profile suite failed 11/12, shared image suite
 24/25, Platform suite 11/21, and Title suite 3/4. The spectator pre-fix control
 failed the exact poster-retention assertion. These were behavioral assertions,
 not accepted setup failures. Later added TTL/concurrency/inactive-page controls
-extend the positive suites. Local TAP, baseline snapshots and command results
+extend the positive suites. The final Circle suite fails 9/10 against unchanged
+Circle source at `da7a4b26` (the existing Refresh case passes), and all 10 pass
+after the fix. All six new suites pass together: 96 tests, zero failures.
+Local TAP, baseline snapshots and command results
 are retained under the checkout's unstaged `.evidence/` directory.
 
 The inherited shared node_modules lacked the current lockfile's reviewed braces
@@ -92,7 +101,9 @@ work.
 
 Raw social-attachment, Explore/My List and spectator-metadata thumbnails still use
 their existing native error presentation. No artificial loading-reset defect was
-verified there, and they were not broadly rewritten. Home's unused `renderHomeHero`
+verified there, and they were not broadly rewritten. Home's active Rachi cards
+receive posts and avatar metadata together, with no analogous premature initial.
+Home's unused `renderHomeHero`
 helper also ignores remote posters; that dormant path is unchanged. No emulator,
 simulator, cloud security review, app binary build, OTA, deployment, purchase or
 provider/security-setting change was performed. Merge remains with the established

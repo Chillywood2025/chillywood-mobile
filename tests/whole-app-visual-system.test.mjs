@@ -167,8 +167,8 @@ test("physically observed half-migrated surfaces use the Sign In-derived surface
 });
 
 test("official Rachi media stays consistent across Circle and Chi'lly Chat consumers", () => {
-  assert.match(sources.circle, /readUserProfileByUserId\(RACHI_OFFICIAL_ACCOUNT\.userId\)/);
-  assert.match(sources.circle, /setRachiAvatarUrl\(String\(officialProfile\.avatarUrl/);
+  assert.match(sources.circle, /useProfilePresentation\(RACHI_OFFICIAL_ACCOUNT\.userId, false\)/);
+  assert.match(sources.circle, /return String\(officialProfile\.avatarUrl/);
   assert.match(sources.circle, /rachiAvatarUrl \? \(/);
   assert.doesNotMatch(sources.chatInbox, /officialAccount \? undefined : (?:otherMember|person|other\?)\.avatarUrl/);
   assert.doesNotMatch(sources.thread, /officialAccount \? undefined : otherMember\?\.avatarUrl/);
