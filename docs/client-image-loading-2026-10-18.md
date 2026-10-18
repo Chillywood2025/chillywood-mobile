@@ -72,7 +72,10 @@ failed the exact poster-retention assertion. These were behavioral assertions,
 not accepted setup failures. Later added TTL/concurrency/inactive-page controls
 extend the positive suites. The final Circle suite fails 9/10 against unchanged
 Circle source at `da7a4b26` (the existing Refresh case passes), and all 10 pass
-after the fix. All six new suites pass together: 96 tests, zero failures.
+after the fix. A final Profile native-retry regression fails against `eec30f94`
+because the actual avatar lacked metadata refresh on retry; avatar and background
+retry now reread Profile metadata so expired URLs can be replaced. All six new
+suites pass together: 97 tests, zero failures.
 Local TAP, baseline snapshots and command results
 are retained under the checkout's unstaged `.evidence/` directory.
 

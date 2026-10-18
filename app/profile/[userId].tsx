@@ -3906,6 +3906,7 @@ export default function ProfileScreen() {
             expectedWidth="100%"
             expectedHeight="100%"
             source={{ uri: visibleProfileBackgroundUrl }}
+            onRetry={refreshProfilePresentation}
             containerStyle={styles.fullBackgroundImage}
             borderRadius={0}
             resizeMode={resolveProfileImageResizeMode(profile.profileBackgroundFitMode)}
@@ -3959,6 +3960,7 @@ export default function ProfileScreen() {
                 expectedWidth="100%"
                 expectedHeight="100%"
                 source={{ uri: visibleProfileBackgroundUrl }}
+                onRetry={refreshProfilePresentation}
                 containerStyle={styles.profileCoverImage}
                 borderRadius={0}
                 resizeMode={resolveProfileImageResizeMode(profile.profileBackgroundFitMode)}
@@ -4011,6 +4013,7 @@ export default function ProfileScreen() {
                       expectedWidth="100%"
                       expectedHeight="100%"
                       source={{ uri: visibleProfileAvatarUrl }}
+                      onRetry={refreshProfilePresentation}
                       borderRadius={43}
                       resizeMode={resolveProfileImageResizeMode(profile.profileAvatarFitMode)}
                     />

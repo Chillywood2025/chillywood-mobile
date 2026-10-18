@@ -127,6 +127,15 @@ test('error clears the prior photo, exposes retry and recovers',async t=>{
   await React.act(async()=>find(h.tree(),n=>n.props?.testID==='profile-avatar-retry').props.onPress({stopPropagation:()=>{stopped=true;}}));
   assert.equal(stopped,true);assert.equal(h.image().props.source.uri,'image:recovered');
 });
+test('native image retry refreshes Profile metadata and uses the renewed URL',async t=>{
+  const e=environment(),h=await e.mount(t),wait=deferred();e.queue.push(wait.promise);
+  assert.equal(typeof h.image().props.onRetry,'function','the actual Profile avatar must refresh its metadata on image retry');
+  await React.act(async()=>h.image().props.onRetry());
+  assert.equal(e.calls.length,2);assert.equal(h.image().props.source.uri,'image:rachi');
+  await h.resolve(wait,profile('image:renewed'));assert.equal(h.image().props.source.uri,'image:renewed');
+  e.queue.push(profile(undefined));await React.act(async()=>h.image().props.onRetry());
+  assert.equal(h.image(),null);assert.equal(h.loading(),null);
+});
 test('timeout settles loading and late completion cannot replace successful retry',async t=>{
   const e=environment(),wait=deferred();e.queue.push(wait.promise);const h=await e.mount(t);await h.timeout();
   assert.equal(h.state().error,true);e.queue.push(profile('image:retry'));await h.retry();await h.resolve(wait,profile('image:late'));
