@@ -82,7 +82,7 @@ import { CreatorVideoCard } from "../../components/creator-media/creator-video-c
 import { AppActionButton, AppEmptyState, AppSection, AppStatusPill } from "../../components/ui/app-surface";
 import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
 import { PlatformLiveNow } from "../../components/live/platform-live-now";
-import { ProfileMediaImage as Image } from "../../components/ui/ProfileMediaImage";
+import { StableImage } from "../../components/ui/StableImage";
 
 type ChannelLoadState = "loading" | "ready" | "not_found" | "blocked" | "locked" | "error";
 
@@ -176,14 +176,25 @@ export default function PublicChannelScreen() {
   const routeUserId = normalizeRouteParam(params.userId);
   const publicPreviewMode = normalizeRouteParam(params.preview) === "public";
   const brandDraftPreviewMode = normalizeRouteParam(params.preview) === "brand-draft";
-  const { isLoading: sessionLoading, user } = useSession();
+  const { isLoading: sessionLoading, user, authority, authorityStatus } = useSession();
   const viewerUserId = String(user?.id ?? "").trim();
   const isOwner = !!routeUserId && !!viewerUserId && routeUserId === viewerUserId;
   const showDraftBranding = isOwner && brandDraftPreviewMode;
   const showOwnerControls = isOwner && !publicPreviewMode && !brandDraftPreviewMode;
+  // Keep a completed presentation only inside the exact viewing authority.
+  // A route/account/access transition hides it during render, before effects run.
+  const channelScopeKey = JSON.stringify([
+    routeUserId, viewerUserId, authorityStatus, authority?.userId, authority?.accountId,
+    authority?.sessionGeneration, authority?.state, authority?.restoreOnly,
+    publicPreviewMode, brandDraftPreviewMode,
+  ]);
 
   const [loadState, setLoadState] = useState<ChannelLoadState>("loading");
+  const [dataScopeKey, setDataScopeKey] = useState<string | null>(null);
+  const readyScopeRef = useRef<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const retryImages = useCallback(() => setReloadKey((value) => value + 1), []);
   const [platformAccessResolution, setPlatformAccessResolution] = useState<VisibilityAccessResolution | null>(null);
   const [channel, setChannel] = useState<UserChannelProfile | null>(null);
   const [channelProfile, setChannelProfile] = useState<UserProfile | null>(null);
@@ -218,30 +229,42 @@ export default function PublicChannelScreen() {
   useFocusEffect(useCallback(() => {
     let active = true;
 
-    if (sessionLoading) return () => {
-      active = false;
-    };
+    if (sessionLoading) {
+      readyScopeRef.current = null;
+      setDataScopeKey(null);
+      setLoadState("loading");
+      return () => {
+        active = false;
+      };
+    }
 
     const loadChannel = async () => {
-      setLoadState("loading");
-      setChannel(null);
-      setChannelProfile(null);
-      setPlatformAccessResolution(null);
-      setAudienceState(null);
-      setVideos([]);
-      setEvents([]);
-      setCommerceSurface(null);
-      setTipStatus(null);
-      setSandboxTesterActive(false);
-      setSubscriptionAccess(null);
-      setSubscriptionNotice(null);
-      setVipAccess(null);
-      setVipNotice(null);
-      setPaidVideoAccessById({});
-      setWatchPartyTicketOffer(null);
-      setPlatformBranding(null);
+      const preserveReadyPresentation = readyScopeRef.current === channelScopeKey;
+      setRefreshing(preserveReadyPresentation);
+      setDataScopeKey(channelScopeKey);
+      if (!preserveReadyPresentation) {
+        setLoadState("loading");
+        setChannel(null);
+        setChannelProfile(null);
+        setPlatformAccessResolution(null);
+        setAudienceState(null);
+        setVideos([]);
+        setEvents([]);
+        setCommerceSurface(null);
+        setTipStatus(null);
+        setSandboxTesterActive(false);
+        setSubscriptionAccess(null);
+        setSubscriptionNotice(null);
+        setVipAccess(null);
+        setVipNotice(null);
+        setPaidVideoAccessById({});
+        setWatchPartyTicketOffer(null);
+        setPlatformBranding(null);
+      }
 
       if (!routeUserId) {
+        readyScopeRef.current = null;
+        setRefreshing(false);
         setLoadState("not_found");
         return;
       }
@@ -265,6 +288,8 @@ export default function PublicChannelScreen() {
       setPlatformAccessResolution(nextPlatformAccess);
 
       if (nextPlatformAccess?.allowed !== true) {
+        readyScopeRef.current = null;
+        setRefreshing(false);
         setLoadState(nextPlatformAccess?.isBlocked ? "blocked" : nextPlatformAccess?.reason === "not_found" ? "not_found" : "locked");
         return;
       }
@@ -272,16 +297,17 @@ export default function PublicChannelScreen() {
       const profile = officialAccount ? null : await readPublicPlatformIdentity(routeUserId);
       if (!active) return;
       if (!profile && !officialAccount) {
+        readyScopeRef.current = null;
+        setRefreshing(false);
         setLoadState("not_found");
         return;
       }
       const nextChannel = buildUserChannelProfile({ id: routeUserId, profile, fallbackDisplayName: "Untitled Platform" });
       const nextAudienceState = await readPublicChannelAudienceState(routeUserId);
       if (!active) return;
-      setChannel(nextChannel);
-      setChannelProfile(profile);
-      setAudienceState(nextAudienceState);
       if (nextAudienceState.isViewerBlocked) {
+        readyScopeRef.current = null;
+        setRefreshing(false);
         setLoadState("blocked");
         return;
       }
@@ -306,15 +332,23 @@ export default function PublicChannelScreen() {
 
       if (!active) return;
 
+      setChannel(nextChannel);
+      setChannelProfile(profile);
+      setAudienceState(nextAudienceState);
       setVideos(publicVideos);
       setEvents(publicEvents.filter((event) => event.isLiveNow || event.isUpcoming));
       setCommerceSurface(nextCommerceSurface);
       setTipStatus(nextTipStatus);
       setSandboxTesterActive(nextSandboxTesterActive === true);
       setSubscriptionAccess(nextSubscriptionAccess);
+      setSubscriptionNotice(null);
       setVipAccess(nextVipAccess);
+      setVipNotice(null);
+      setPaidVideoAccessById({});
       setWatchPartyTicketOffer(nextWatchPartyTicketOffer);
       setPlatformBranding(nextPlatformBranding);
+      readyScopeRef.current = channelScopeKey;
+      setRefreshing(false);
       setLoadState("ready");
 
       if (!showOwnerControls) {
@@ -326,14 +360,18 @@ export default function PublicChannelScreen() {
     };
 
     void loadChannel().catch(() => {
-      if (active) setLoadState("error");
+      if (active) {
+        readyScopeRef.current = null;
+        setRefreshing(false);
+        setLoadState("error");
+      }
     });
 
     return () => {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Retry intentionally restarts the focused read even when the route and account are unchanged.
-  }, [reloadKey, routeUserId, sessionLoading, showDraftBranding, showOwnerControls, user?.email, viewerUserId]));
+  }, [channelScopeKey, reloadKey, routeUserId, sessionLoading, showDraftBranding, showOwnerControls, user?.email, viewerUserId]));
 
   const spotlightVideoId = platformBranding?.profile.spotlightVideoId ?? null;
   const featuredVideo = useMemo(() => (
@@ -390,6 +428,16 @@ export default function PublicChannelScreen() {
   const brandBackgroundSource = visibleBrandBackground?.signedUrl || "";
   const brandAvatarSource = visibleBrandAvatar?.signedUrl || channel?.avatarUrl || "";
   const brandLogoSource = visibleBrandLogo?.signedUrl || "";
+  // Signed URLs rotate on every read. Only an exact asset/version under the
+  // same viewer authority may keep its displayed bitmap during that renewal.
+  const brandImageIdentity = (asset?: PlatformBrandAsset | null) => asset?.id && asset.ownerUserId
+    && asset.updatedAt && (asset.storageObjectKey || asset.storagePath)
+    ? JSON.stringify([
+      channelScopeKey, asset.id, asset.ownerUserId, asset.assetType, asset.assetState,
+      asset.storageProvider, asset.storageBucket, asset.storageObjectKey, asset.storagePath,
+      asset.updatedAt, asset.moderationStatus, asset.scanStatus, asset.deletedAt,
+    ])
+    : undefined;
   const heroResizeMode = resolveBrandResizeMode(platformBranding?.profile.heroFitMode);
   const backgroundResizeMode = resolveBrandResizeMode(platformBranding?.profile.backgroundFitMode);
   const heroOverlayColor = buildBrandOverlayColor(platformBranding?.profile.overlayStrength);
@@ -850,16 +898,31 @@ export default function PublicChannelScreen() {
       <View style={[styles.hero, { backgroundColor: brandPresentation.heroBackgroundColor }]}>
         <View style={styles.heroBackdrop}>
           {brandHeroSource ? (
-            <Image source={{ uri: brandHeroSource }} resizeMode={heroResizeMode} style={styles.heroImage} />
+            <StableImage
+              source={{ uri: brandHeroSource }}
+              identityKey={brandImageIdentity(visibleBrandHeroImage?.signedUrl ? visibleBrandHeroImage : visibleBrandHeroPoster)}
+              expectedWidth="100%" expectedHeight="100%" borderRadius={0}
+              resizeMode={heroResizeMode} containerStyle={styles.heroImage}
+              retryKey={reloadKey} onRetry={retryImages}
+            />
           ) : null}
           <View style={[styles.heroOverlay, { backgroundColor: heroOverlayColor }]} />
           <View style={styles.heroContent}>
             {brandLogoSource ? (
-              <Image source={{ uri: brandLogoSource }} style={styles.heroLogoMark} resizeMode="contain" />
+              <StableImage
+                source={{ uri: brandLogoSource }} identityKey={brandImageIdentity(visibleBrandLogo)}
+                expectedWidth={64} expectedHeight={64} borderRadius={14}
+                containerStyle={styles.heroLogoMark} resizeMode="contain"
+                retryKey={reloadKey} onRetry={retryImages}
+              />
             ) : null}
             <View style={[styles.avatarWrap, platformBranding ? { borderColor: brandPresentation.accentColor } : null]}>
               {brandAvatarSource ? (
-                <Image source={{ uri: brandAvatarSource }} style={styles.avatarImage} />
+                <StableImage
+                  source={{ uri: brandAvatarSource }} identityKey={brandImageIdentity(visibleBrandAvatar)}
+                  expectedWidth="100%" expectedHeight="100%" borderRadius={47}
+                  containerStyle={styles.avatarImage} retryKey={reloadKey} onRetry={retryImages}
+                />
               ) : (
                 <Text style={styles.avatarInitial}>
                   {(platformDisplayName || "U").slice(0, 1).toUpperCase()}
@@ -1017,6 +1080,9 @@ export default function PublicChannelScreen() {
     <View key={video.id} style={styles.platformContentTile} testID="platform-content-card">
       <CreatorVideoCard
         video={video}
+        imageAuthorityKey={channelScopeKey}
+        imageRetryKey={reloadKey}
+        onImageRetry={retryImages}
         mode={showOwnerControls ? "owner" : "public"}
         accessLabel={resolveVideoAccessLabel(video)}
         testID="platform-content-open-button"
@@ -1032,6 +1098,9 @@ export default function PublicChannelScreen() {
     <View key={video.id} style={styles.platformContentTile} testID="platform-content-card">
       <CreatorVideoCard
         video={video}
+        imageAuthorityKey={channelScopeKey}
+        imageRetryKey={reloadKey}
+        onImageRetry={retryImages}
         mode={showOwnerControls ? "owner" : "public"}
         accessLabel={resolveVideoAccessLabel(video)}
         testID="platform-content-open-button"
@@ -1559,7 +1628,7 @@ export default function PublicChannelScreen() {
     </AppSection>
   );
 
-  if (loadState === "loading") {
+  if (sessionLoading || dataScopeKey !== channelScopeKey || loadState === "loading") {
     return (
       <View style={styles.screen} testID="screen-platform" collapsable={false}>
         {renderBackHeader()}
@@ -1604,11 +1673,14 @@ export default function PublicChannelScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: brandPresentation.backgroundColor }]} testID="screen-platform" collapsable={false}>
       {brandBackgroundSource ? (
-        <Image
+        <StableImage
           source={{ uri: brandBackgroundSource }}
+          identityKey={brandImageIdentity(visibleBrandBackground)}
+          expectedWidth="100%" expectedHeight="100%" borderRadius={0}
           resizeMode={backgroundResizeMode}
           blurRadius={brandPresentation.blurRadius}
-          style={styles.platformBackgroundImage}
+          containerStyle={styles.platformBackgroundImage}
+          retryKey={reloadKey} onRetry={retryImages}
         />
       ) : null}
       {brandBackgroundSource ? <View style={styles.platformBackgroundScrim} /> : null}
@@ -1617,6 +1689,12 @@ export default function PublicChannelScreen() {
         showsVerticalScrollIndicator={false}
       >
         {renderBackHeader()}
+        {refreshing ? (
+          <View style={styles.refreshingRow} testID="platform-refreshing-state" accessibilityLiveRegion="polite">
+            <ActivityIndicator color="#DC143C" size="small" />
+            <Text style={styles.loadingText}>Refreshing Platform…</Text>
+          </View>
+        ) : null}
         {renderHero()}
         {renderFeatured()}
         {renderLatestUploads()}
@@ -1816,6 +1894,13 @@ const styles = StyleSheet.create({
   avatarImage: {
     width: "100%",
     height: "100%",
+  },
+  refreshingRow: {
+    marginHorizontal: 18,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   avatarInitial: {
     color: "#F8FAFF",

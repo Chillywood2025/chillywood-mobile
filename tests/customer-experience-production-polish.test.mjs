@@ -163,10 +163,13 @@ test("Settings uses customer language for profile controls and support diagnosti
 
 test("Official Rachi profile reads clean backed media without weakening protected identity", () => {
   const profile = read("app/profile/[userId].tsx");
+  const presentation = read("components/profile/use-profile-presentation.ts");
   assert.match(
     profile,
-    /if \(isOfficialProfile\) \{\s+void readUserProfileByUserId\(userId\)/u,
+    /useProfilePresentation\(userId, !officialAccount && !!userId && userId === currentUserId\)/u,
   );
+  assert.match(presentation, /isSelf \? readUserProfile\(\) : readUserProfileByUserId\(userId\)/u);
+  assert.match(presentation, /official \? Promise\.resolve\(null\) : readCreatorPermissions\(userId\)/u);
   assert.doesNotMatch(
     profile,
     /if \(isOfficialProfile \|\| !userId\) \{\s+setChannelAccessProfile\(null\)/u,
