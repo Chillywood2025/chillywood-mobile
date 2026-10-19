@@ -385,7 +385,7 @@ test("Public route resolves Platform access before minimal identity and never re
   const writes = [];
   const context = {
     active: true, routeUserId: "creator", viewerUserId: "viewer", user: { email: "" }, showDraftBranding: false, showOwnerControls: false,
-    readyScopeRef: { current: null }, channelScopeKey: "creator:viewer:published",
+    readyScopeRef: { current: null }, channelScopeKey: "creator:viewer:published", supportsCreatorLiveContent: true,
     getOfficialPlatformAccount: () => null,
     resolvePlatformVisibilityAccess: async () => access,
     readUserProfileByUserId: () => assert.fail("Private Profile must not gate Platform identity"),

@@ -174,6 +174,9 @@ export default function PublicChannelScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ userId?: string | string[]; preview?: string | string[] }>();
   const routeUserId = normalizeRouteParam(params.userId);
+  // Built-in official identities publish public videos but are not UUID-backed
+  // creator event/live hosts. Do not send their synthetic IDs to those readers.
+  const supportsCreatorLiveContent = !getOfficialPlatformAccount(routeUserId);
   const publicPreviewMode = normalizeRouteParam(params.preview) === "public";
   const brandDraftPreviewMode = normalizeRouteParam(params.preview) === "brand-draft";
   const { isLoading: sessionLoading, user, authority, authorityStatus } = useSession();
@@ -320,7 +323,9 @@ export default function PublicChannelScreen() {
         : readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50, throwOnUnavailable: true });
       const [publicVideos, publicEvents, nextCommerceSurface, nextTipStatus, nextSubscriptionAccess, nextVipAccess, nextWatchPartyTicketOffer, nextSandboxTesterActive, nextPlatformBranding] = await Promise.all([
         videosPromise,
-        readPublicEventSummaries(routeUserId, { throwOnUnavailable: true }),
+        supportsCreatorLiveContent
+          ? readPublicEventSummaries(routeUserId, { throwOnUnavailable: true })
+          : Promise.resolve([]),
         readCreatorMiniPlatformCommerceSurface(routeUserId).catch(() => null),
         readCreatorTipPublicStatus(routeUserId).catch(() => null),
         resolveChannelSubscriptionAccess(routeUserId).catch(() => null),
@@ -371,7 +376,7 @@ export default function PublicChannelScreen() {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Retry intentionally restarts the focused read even when the route and account are unchanged.
-  }, [channelScopeKey, reloadKey, routeUserId, sessionLoading, showDraftBranding, showOwnerControls, user?.email, viewerUserId]));
+  }, [channelScopeKey, reloadKey, routeUserId, sessionLoading, showDraftBranding, showOwnerControls, supportsCreatorLiveContent, user?.email, viewerUserId]));
 
   const spotlightVideoId = platformBranding?.profile.spotlightVideoId ?? null;
   const featuredVideo = useMemo(() => (
@@ -1699,8 +1704,8 @@ export default function PublicChannelScreen() {
         {renderFeatured()}
         {renderLatestUploads()}
         {renderVipVideos()}
-        {renderLiveNow()}
-        {renderUpcomingEvents()}
+        {supportsCreatorLiveContent ? renderLiveNow() : null}
+        {supportsCreatorLiveContent ? renderUpcomingEvents() : null}
         {renderPlatformMonetization()}
         {renderAbout()}
       </ScrollView>
