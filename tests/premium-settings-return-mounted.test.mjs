@@ -116,7 +116,7 @@ async function mount(t, { active = false, providerActive = false } = {}) {
   const approveProjection = () => { h.state.reconcile = async (name, options) => {
     assert.equal(name, 'revenuecat-premium-reconcile');
     assert.equal(options.body.action, 'reconcile_current_customer');
-    h.state.active = true; return { data: { entitlementActive: true }, error: null };
+    h.state.active = true; return { data: { status: 'reconciled', entitlementActive: true }, error: null };
   }; };
   return { h, state, act, button, refresh, approveProjection, section,
     text: () => textOf(trees.subscribe), cache: () => h.monetary.getCachedMonetizationSnapshot(),
@@ -155,7 +155,7 @@ for (const action of ['purchase', 'restore']) test(`iOS ${action} returns to Set
   assert.equal(m.cache().configuration.mode, 'ios-release');
   assert.equal(m.h.monetary.isPremiumPurchaseShellAvailable(), false, 'public hold stays intact');
   const held = deferred(), entered = deferred();
-  m.h.state.reconcile = async () => { entered.resolve(); await held.promise; m.h.state.active = true; return { data: { entitlementActive: true }, error: null }; };
+  m.h.state.reconcile = async () => { entered.resolve(); await held.promise; m.h.state.active = true; return { data: { status: 'reconciled', entitlementActive: true }, error: null }; };
   const { pending } = await m.start(action); await entered.promise;
   assert.equal(m.h.state.active, false, 'SDK purchase/restore has no DB authority');
   assert.doesNotMatch(m.text(), /Premium is active\.|purchase completed|Purchases restored/);
@@ -184,10 +184,12 @@ test('iOS already-owned purchase restores once and returns verified Settings tru
 
 for (const action of ['purchase', 'restore']) test(`iOS ${action} failed reconciliation stays inactive on Settings return`, async t => {
   const m = await mount(t, { providerActive: action === 'restore' }); await m.open();
-  m.h.state.reconcile = async () => ({ data: null, error: { message: 'modeled reconciliation failure' } });
+  m.h.state.reconcile = async () => ({ data: null, error: { context: { status: 409 }, message: 'modeled private reconciliation detail' } });
   await m.press(action);
   assert.equal(m.h.state.active, false);
   assert.match(m.text(), /verification is pending/);
+  assert.match(m.text(), /Premium verification failed/);
+  assert.doesNotMatch(m.text(), /still reconciling|Waiting for verified access|modeled private reconciliation detail/);
   assert.doesNotMatch(m.text(), /purchase completed|Purchases restored|Premium is active\./);
   assert.equal(m.h.state.pollDelays.length, 11, 'all 12 production authority attempts run');
   assert.ok(m.h.state.pollDelays.every(delay => delay === 1250));
@@ -199,10 +201,12 @@ for (const action of ['purchase', 'restore']) test(`iOS ${action} failed reconci
 
 for (const action of ['purchase', 'restore']) test(`iOS ${action} reconciliation response alone cannot grant Settings access`, async t => {
   const m = await mount(t, { providerActive: action === 'restore' }); await m.open();
-  m.h.state.reconcile = async () => ({ data: { entitlementActive: true }, error: null });
+  m.h.state.reconcile = async () => ({ data: { status: 'reconciled', entitlementActive: true }, error: null });
   await m.press(action);
   assert.equal(m.h.state.active, false, 'response acknowledgment is separate from authoritative projection');
   assert.match(m.text(), /verification is pending/);
+  assert.match(m.text(), /still reconciling|Waiting for verified access/);
+  assert.doesNotMatch(m.text(), /Premium verification failed/);
   assert.doesNotMatch(m.text(), /purchase completed|Purchases restored|Premium is active\./);
   await m.back(); assertInactive(m);
 });

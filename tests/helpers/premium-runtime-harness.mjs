@@ -48,7 +48,7 @@ export function premiumRuntime(platform = 'android', { independentProjection = f
       readRevenueCatCustomerInfo: async () => { state.providerReads++; if (state.providerReader) return state.providerReader();
         if (state.providerReads === 1 && state.held) { state.entered.resolve(); await state.held.promise; }
         if (state.providerError) throw Error('provider read unavailable'); return customer(); },
-      readRevenueCatOfferings: async () => ({ current: offering, all: { premium: offering } }),
+      readRevenueCatOfferings: async () => state.offeringsReader ? state.offeringsReader() : ({ current: offering, all: { premium: offering } }),
       purchaseRevenueCatPackage: async (...args) => { state.purchases++; state.purchaseRequests.push(args); if (state.purchase) return state.purchase(...args);
         if (!independentProjection) state.active = true; state.providerActive = true; return { customerInfo: customer(), productIdentifier: product }; },
       restoreRevenueCatPurchases: async (...args) => { state.restores++; state.restoreRequests.push(args); if (state.restore) return state.restore(...args);
@@ -62,7 +62,7 @@ export function premiumRuntime(platform = 'android', { independentProjection = f
       setTimeout: (callback, delay) => { state.pollDelays.push(delay); return setTimeout(callback, 0); },
     } } : {}),
     './supabase': { supabase: { functions: { invoke: async (...args) => { state.reconciles++; state.reconcileRequests.push(args);
-      return state.reconcile ? state.reconcile(...args) : { data: { entitlementActive: false }, error: null }; } } } },
+      return state.reconcile ? state.reconcile(...args) : { data: { status: 'inactive', entitlementActive: false, liveMoneyAction: false }, error: null }; } } } },
   }, { source: process.env.PREMIUM_RETURN_MONETIZATION_SOURCE });
   return { state, monetary, customer, product, subscribeAuthority, read: () => monetary.readMonetizationSnapshot({ forceRefresh: true, purchaseMode: 'internal_tester_sandbox', userId: state.authority?.userId }),
     replace(authority) { state.authority = authority; for (const listener of listeners) listener(authority); } };

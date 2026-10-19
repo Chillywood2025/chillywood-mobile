@@ -34,6 +34,7 @@ const PREMIUM_BODY =
   "Watch-Party Live, Live Watch-Party, creator tools, and ad-free viewing.";
 const PREMIUM_PURCHASE_PREVIEW_NOTICE =
   "Purchase preview is active. Your store will not charge a payment method.";
+const PREMIUM_STATUS_READ_FAILED_NOTICE = "Unable to check Premium status. Try again or restore purchases.";
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../assets/images/chillywood-branded-background.png");
 const STORE_PROVIDER_NAME = Platform.OS === "ios" ? "App Store" : "Google Play";
 const STORE_PROVIDER_PAIR = `${STORE_PROVIDER_NAME} / RevenueCat`;
@@ -48,6 +49,7 @@ const buildPurchaseReadiness = (
     isSignedIn,
     hasPremium: target.hasEntitlement,
     storePremiumActive: hasCurrentStorePremiumSubscription(snapshot),
+    customerInfoLoaded: snapshot.customerInfoLoaded === true,
     purchaseMode,
     purchaseShellAvailable: isPremiumPurchaseShellAvailableForMode(purchaseMode),
     sandboxModeReason: sandboxMode.reason,
@@ -141,8 +143,10 @@ export default function SubscribeScreen() {
   const ownerKey = !sessionLoading && isSignedIn && authorityStatus === "active" && authority && !authority.restoreOnly
     && authority.userId === user?.id
     ? JSON.stringify([authority.userId, authority.accountId, authority.sessionGeneration]) : "unavailable";
-  const scopeRef = useRef({ key: ownerKey, readGeneration: 0 });
-  if (scopeRef.current.key !== ownerKey) scopeRef.current = { key: ownerKey, readGeneration: 0 };
+  const scopeRef = useRef({ key: ownerKey, readGeneration: 0, snapshotRevision: 0, snapshot: getCachedMonetizationSnapshot() });
+  if (scopeRef.current.key !== ownerKey) {
+    scopeRef.current = { key: ownerKey, readGeneration: 0, snapshotRevision: 0, snapshot: getCachedMonetizationSnapshot() };
+  }
   const scope = scopeRef.current;
   const actionRef = useRef<typeof scope | null>(null);
   const mountedRef = useRef(true);
@@ -150,9 +154,19 @@ export default function SubscribeScreen() {
     && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot()), [authority, ownerKey, scope]);
   const [snapshotState, setSnapshotState] = useState(() => ({ key: ownerKey, value: getCachedMonetizationSnapshot() }));
   const snapshot = snapshotState.key === ownerKey ? snapshotState.value : getCachedMonetizationSnapshot();
+  const [snapshotReadFailed, setSnapshotReadFailed] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const setSnapshot = useCallback((value: MonetizationSnapshot) => {
-    if (currentOwner() && value.userId === authority?.userId) setSnapshotState({ key: ownerKey, value });
-  }, [authority?.userId, currentOwner, ownerKey]);
+    if (currentOwner() && value.userId === authority?.userId) {
+      if (value !== scope.snapshot) {
+        scope.snapshot = value;
+        scope.snapshotRevision += 1;
+        setSnapshotReadFailed(false);
+        setNotice((current) => current === PREMIUM_STATUS_READ_FAILED_NOTICE ? null : current);
+      }
+      setSnapshotState({ key: ownerKey, value });
+    }
+  }, [authority?.userId, currentOwner, ownerKey, scope]);
   const [sandboxMode, setSandboxMode] = useState<InternalTesterSandboxPurchaseModeState>({
     enabled: false,
     mode: "public",
@@ -167,11 +181,9 @@ export default function SubscribeScreen() {
     storePurchaseRailReadbackComplete: false,
   });
   const [loading, setLoading] = useState(false);
-  const [snapshotReadFailed, setSnapshotReadFailed] = useState(false);
   const [purchaseBusy, setPurchaseBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [manageBusy, setManageBusy] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -195,6 +207,7 @@ export default function SubscribeScreen() {
   const refreshSnapshot = useCallback(async (forceRefresh = true, mode: MonetizationPurchaseMode = activePurchaseMode) => {
     if (!currentOwner()) return null;
     const generation = ++scope.readGeneration;
+    const snapshotRevision = scope.snapshotRevision;
     const current = () => currentOwner() && generation === scope.readGeneration;
     setLoading(true);
     try {
@@ -205,13 +218,18 @@ export default function SubscribeScreen() {
         expectedAuthority: authority,
       });
       if (!current()) return null;
+      // Restore and other current-account readers can publish while this read is held.
+      // Keep their newer snapshot instead of replaying this read's result or error.
+      const currentSnapshot = snapshotRevision === scope.snapshotRevision ? nextSnapshot : scope.snapshot;
+      if (currentSnapshot.userId !== authority?.userId) throw new Error("Premium status belongs to a different account.");
       setSnapshotReadFailed(false);
-      setSnapshot(nextSnapshot);
-      return nextSnapshot;
+      setNotice((notice) => notice === PREMIUM_STATUS_READ_FAILED_NOTICE ? null : notice);
+      setSnapshot(currentSnapshot);
+      return currentSnapshot;
     } catch {
-      if (current()) {
+      if (current() && snapshotRevision === scope.snapshotRevision) {
         setSnapshotReadFailed(true);
-        setNotice("Unable to check Premium status. Try again or restore purchases.");
+        setNotice(PREMIUM_STATUS_READ_FAILED_NOTICE);
       }
       return null;
     } finally {

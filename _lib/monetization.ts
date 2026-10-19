@@ -1082,7 +1082,7 @@ export function subscribeToMonetizationSnapshot(listener: () => void) {
 }
 
 export const PREMIUM_VERIFICATION_PENDING_MESSAGE =
-  "Your store reports an active Premium subscription. Account access is still being verified. Recheck status or restore purchases; do not purchase again.";
+  "Your store reports an active Premium subscription. Verified account access is not available yet. Recheck status or restore purchases; do not purchase again.";
 
 // This provider signal prevents a duplicate purchase; it never grants access.
 export function hasCurrentStorePremiumSubscription(snapshot: MonetizationSnapshot) {
@@ -1238,19 +1238,31 @@ export async function bootstrapMonetizationFoundation(userId?: string | null) {
   return readMonetizationSnapshot({ userId });
 }
 
+type PremiumReconciliationOutcome = "confirmed" | "inactive" | "failed" | "stale";
+const PREMIUM_VERIFICATION_FAILED_MESSAGE =
+  "Premium verification failed. Recheck status or restore purchases; do not purchase again.";
+
 async function reconcileActivePremiumProviderSnapshot(
   authority: AccountSessionAuthorityBinding,
   customerInfo: CustomerInfo,
-) {
-  if (!customerInfo.entitlements.active.premium) return false;
-  if (!sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())) return false;
+): Promise<PremiumReconciliationOutcome> {
+  if (!customerInfo.entitlements.active.premium) return "inactive";
+  if (!sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())) return "stale";
 
-  const { data, error } = await supabase.functions.invoke(PREMIUM_RECONCILIATION_FUNCTION, {
-    body: { action: "reconcile_current_customer" },
-  });
-  if (error || !data || typeof data !== "object" || Array.isArray(data)) return false;
-  if (!sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())) return false;
-  return (data as Record<string, unknown>).entitlementActive === true;
+  try {
+    const { data, error } = await supabase.functions.invoke(PREMIUM_RECONCILIATION_FUNCTION, {
+      body: { action: "reconcile_current_customer" },
+    });
+    if (error || !data || typeof data !== "object" || Array.isArray(data)) return "failed";
+    if (!sameAccountSessionAuthority(authority, await readCurrentAccountSessionAuthority())) return "stale";
+    const response = data as Record<string, unknown>;
+    if ((response.status === "reconciled" || response.status === "already_reconciled")
+      && response.entitlementActive === true) return "confirmed";
+    if (response.status === "inactive" && response.entitlementActive === false) return "inactive";
+    return "failed";
+  } catch {
+    return "failed";
+  }
 }
 
 export async function purchaseMonetizationTarget(
@@ -1336,6 +1348,11 @@ export async function purchaseMonetizationTarget(
     return { ok: false, target: targetId, snapshot, customerInfo: null, message: PREMIUM_VERIFICATION_PENDING_MESSAGE };
   }
 
+  if (targetId === "premium_subscription" && !snapshot.customerInfoLoaded) {
+    return { ok: false, target: targetId, snapshot, customerInfo: null,
+      message: "Your store subscription status could not be checked. Recheck status or restore purchases before starting Premium." };
+  }
+
   const offerings = await readRevenueCatOfferings();
   const offering = getOfferingForTarget(offerings, target);
   const selectedPackage = offering?.availablePackages.find((entry) => {
@@ -1389,21 +1406,33 @@ export async function purchaseMonetizationTarget(
       return { ok: false, target: targetId, snapshot: getCachedMonetizationSnapshot(), customerInfo: null,
         message: "Account changed before the purchase result returned. Recheck the current account." };
     }
-    if (targetId === "premium_subscription" && result.customerInfo.entitlements.active.premium) {
-      await reconcileActivePremiumProviderSnapshot(operationAuthority, result.customerInfo).catch(() => false);
-    }
+    const verificationOutcome = targetId === "premium_subscription" && result.customerInfo.entitlements.active.premium
+      ? await reconcileActivePremiumProviderSnapshot(operationAuthority, result.customerInfo)
+      : "inactive";
     notifyPhase("verifying_authority");
-    const refreshedSnapshot = await waitForPremiumAuthority();
+    let refreshedSnapshot = await waitForPremiumAuthority();
     if (!refreshedSnapshot) {
-      return {
-        ok: false,
-        target: targetId,
-        snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId, expectedAuthority: operationAuthority }),
-        customerInfo: result.customerInfo,
-        message: `${target.label} purchase was received. Waiting for verified access to finish.`,
-        packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
-        productId: String(result.productIdentifier ?? "").trim() || undefined,
-      };
+      const finalSnapshot = await readMonetizationSnapshot({ purchaseMode, userId: options?.userId, expectedAuthority: operationAuthority });
+      const stale = verificationOutcome === "stale"
+        || !sameAccountSessionAuthority(operationAuthority, getCurrentAccountSessionAuthoritySnapshot());
+      if (targetId === "premium_subscription" && !stale
+        && finalSnapshot.targets.premium_subscription.entitlementAuthoritative
+        && finalSnapshot.targets.premium_subscription.hasEntitlement) {
+        refreshedSnapshot = finalSnapshot;
+      } else {
+        return {
+          ok: false,
+          target: targetId,
+          snapshot: finalSnapshot,
+          customerInfo: stale ? null : result.customerInfo,
+          message: stale
+            ? "Account changed before the purchase result returned. Recheck the current account."
+            : verificationOutcome === "failed" ? PREMIUM_VERIFICATION_FAILED_MESSAGE
+            : `${target.label} purchase was received. Waiting for verified access to finish.`,
+          packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
+          productId: String(result.productIdentifier ?? "").trim() || undefined,
+        };
+      }
     }
 
     return {
@@ -1422,11 +1451,12 @@ export async function purchaseMonetizationTarget(
 
     if (isRevenueCatExistingPurchase(error)) {
       notifyPhase("restoring_existing");
+      const verification = { outcome: "inactive" as PremiumReconciliationOutcome };
       const reconciliation = await reconcileRevenueCatExistingPurchase<CustomerInfo, MonetizationSnapshot>({
         restore: async () => {
           const customerInfo = await restoreRevenueCatPurchases({ authority: operationAuthority });
           if (customerInfo.entitlements.active.premium) {
-            await reconcileActivePremiumProviderSnapshot(operationAuthority, customerInfo).catch(() => false);
+            verification.outcome = await reconcileActivePremiumProviderSnapshot(operationAuthority, customerInfo);
           }
           return customerInfo;
         },
@@ -1464,12 +1494,23 @@ export async function purchaseMonetizationTarget(
         };
       }
       const providerPremiumActive = !!reconciliation.customerInfo.entitlements.active.premium;
+      const finalSnapshot = await readMonetizationSnapshot({ purchaseMode, userId: options?.userId, expectedAuthority: operationAuthority });
+      if (verification.outcome === "stale"
+        || !sameAccountSessionAuthority(operationAuthority, getCurrentAccountSessionAuthoritySnapshot())) {
+        return { ok: false, target: targetId, snapshot: finalSnapshot, customerInfo: null,
+          message: "Account changed while the existing subscription was being restored. Recheck the current account." };
+      }
+      if (targetId === "premium_subscription" && finalSnapshot.targets.premium_subscription.entitlementAuthoritative
+        && finalSnapshot.targets.premium_subscription.hasEntitlement) {
+        return { ok: true, target: targetId, snapshot: finalSnapshot, customerInfo: reconciliation.customerInfo,
+          message: `${target.label} is active.`, packageId: String(selectedPackage.identifier ?? "").trim() || undefined };
+      }
       return {
         ok: false,
         target: targetId,
-        snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId, expectedAuthority: operationAuthority }),
+        snapshot: finalSnapshot,
         customerInfo: reconciliation.customerInfo,
-        message: providerPremiumActive
+        message: targetId === "premium_subscription" && verification.outcome === "failed" ? PREMIUM_VERIFICATION_FAILED_MESSAGE : providerPremiumActive
           ? "The store restored Premium, but verified app access is still reconciling. Recheck or Restore purchases shortly."
           : "The store subscription is not verified for this Chi'llywood account. Check the signed-in store account, then use Restore purchases.",
         packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
@@ -1551,9 +1592,9 @@ export async function restoreMonetizationAccess(options?: {
         message: "Account changed before the restore result returned. Recheck the current account." };
     }
     const providerPremiumActive = !!customerInfo.entitlements.active.premium;
-    if (providerPremiumActive) {
-      await reconcileActivePremiumProviderSnapshot(operationAuthority, customerInfo).catch(() => false);
-    }
+    const verificationOutcome = providerPremiumActive
+      ? await reconcileActivePremiumProviderSnapshot(operationAuthority, customerInfo)
+      : "inactive";
     const readRefreshedSnapshot = () => readMonetizationSnapshot({
       forceRefresh: true,
       purchaseMode,
@@ -1561,7 +1602,7 @@ export async function restoreMonetizationAccess(options?: {
       expectedAuthority: operationAuthority,
     });
     notifyPhase("verifying_authority");
-    const refreshedSnapshot = providerPremiumActive
+    let refreshedSnapshot = providerPremiumActive
       ? await pollProviderAuthority({
           attempts: PREMIUM_PURCHASE_AUTHORITY_POLL_ATTEMPTS,
           delayMs: PREMIUM_PURCHASE_AUTHORITY_POLL_DELAY_MS,
@@ -1575,12 +1616,24 @@ export async function restoreMonetizationAccess(options?: {
         })
       : await readRefreshedSnapshot();
     if (!refreshedSnapshot) {
-      return {
-        ok: false,
-        snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId, expectedAuthority: operationAuthority }),
-        customerInfo,
-        message: "The store restored Premium, but verified app access is still reconciling. Recheck shortly.",
-      };
+      const finalSnapshot = await readMonetizationSnapshot({ purchaseMode, userId: options?.userId, expectedAuthority: operationAuthority });
+      if (verificationOutcome === "stale"
+        || !sameAccountSessionAuthority(operationAuthority, getCurrentAccountSessionAuthoritySnapshot())) {
+        return { ok: false, snapshot: finalSnapshot, customerInfo: null,
+          message: "Account changed while Premium was being verified. Recheck the current account." };
+      }
+      if (finalSnapshot.targets.premium_subscription.entitlementAuthoritative
+        && finalSnapshot.targets.premium_subscription.hasEntitlement) {
+        refreshedSnapshot = finalSnapshot;
+      } else {
+        return {
+          ok: false,
+          snapshot: finalSnapshot,
+          customerInfo,
+          message: verificationOutcome === "failed" ? PREMIUM_VERIFICATION_FAILED_MESSAGE
+            : "The store restored Premium, but verified app access is still reconciling. Recheck shortly.",
+        };
+      }
     }
     if (!refreshedSnapshot.targets.premium_subscription.entitlementAuthoritative) {
       return { ok: false, snapshot: refreshedSnapshot, customerInfo: null,

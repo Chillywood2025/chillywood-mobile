@@ -6,6 +6,7 @@ export type PremiumPurchaseReadinessCode =
   | "store_rail_readback_unavailable"
   | "store_rail_not_sandbox"
   | "revenuecat_not_configured"
+  | "provider_status_unavailable"
   | "store_payments_unavailable"
   | "premium_offering_missing"
   | "premium_packages_missing"
@@ -21,6 +22,7 @@ export function resolvePremiumPurchaseReadiness(input: {
   isSignedIn: boolean;
   hasPremium: boolean;
   storePremiumActive?: boolean;
+  customerInfoLoaded: boolean;
   purchaseMode: "public" | "internal_tester_sandbox";
   purchaseShellAvailable: boolean;
   sandboxModeReason?: string | null;

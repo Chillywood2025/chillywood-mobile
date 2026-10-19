@@ -7,6 +7,7 @@ import { resolvePremiumPurchaseReadiness } from "../_lib/premiumPurchaseReadines
 const base = {
   isSignedIn: true,
   hasPremium: false,
+  customerInfoLoaded: true,
   purchaseMode: "internal_tester_sandbox",
   purchaseShellAvailable: true,
   sandboxModeReason: "Sandbox mode is available.",
@@ -28,6 +29,8 @@ const cases = [
   ["server rail off", { storePurchaseRailState: "off" }, "store_rail_not_sandbox"],
   ["server rail on is not bounded sandbox", { storePurchaseRailState: "on" }, "store_rail_not_sandbox"],
   ["RevenueCat missing", { revenueCatConfigured: false, configurationReason: "Public SDK key missing." }, "revenuecat_not_configured"],
+  ["customer info unavailable", { customerInfoLoaded: false }, "provider_status_unavailable"],
+  ["customer info omitted", { customerInfoLoaded: undefined }, "provider_status_unavailable"],
   ["StoreKit unavailable", { canMakePayments: false }, "store_payments_unavailable"],
   ["offering missing", { offeringAvailable: false }, "premium_offering_missing"],
   ["packages missing", { packageCount: 0 }, "premium_packages_missing"],

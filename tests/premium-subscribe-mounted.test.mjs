@@ -64,6 +64,19 @@ async function mount(t, { active = false, providerActive = true } = {}) {
   const button = id => { const found = walk(tree, n => n.props?.testID === id); assert.equal(found.length, 1); return found[0].props; };
   return { state, act, render, button, text: () => walk(tree, n => n.type === 'Text').flatMap(n => typeof n.props.children === 'string' ? [n.props.children] : []).join('\n'),
     cache: () => cache, async snapshot(activeValue, provider = true) { h.state.active = activeValue; h.state.providerActive = provider; return h.read(); },
+    async snapshotWithEntitlement(entitlementState, { providerActive = true, customerInfoLoaded = true } = {}) {
+      h.state.providerActive = providerActive;
+      h.state.providerReader = customerInfoLoaded ? null : () => null;
+      h.state.entitlementReader = async keys => {
+        if (entitlementState === 'ERROR') throw Error('modeled authority read failure');
+        return keys.map(entitlementKey => {
+          const state = entitlementKey === 'premium' ? entitlementState : 'EXPIRED';
+          const grants = state === 'ACTIVE' || state === 'GRACE';
+          return { entitlementKey, state, authoritative: state !== 'UNKNOWN', isActive: grants, grantsProtectedAccess: grants };
+        });
+      };
+      return h.read();
+    },
     emit: value => { cache = value; for (const listener of snapshotListeners) listener(); },
     foreground: () => { for (const listener of appListeners) listener('active'); },
     replace: async authority => { state.authority = authority; h.replace(authority); cache = h.monetary.getCachedMonetizationSnapshot(); await render(); },
@@ -151,4 +164,112 @@ test('pending Recheck can reveal a ready new purchase but never opens the store 
   assert.match(h.text(), /Start Premium/);
   await h.act(() => h.button('premium-purchase-button').onPress());
   assert.equal(h.state.purchases, 1, 'a separate explicit Start action remains available');
+});
+
+test('successful current Restore clears an earlier screen refresh failure', async t => {
+  const h = await mount(t);
+  h.state.reader = () => Promise.reject(Error('read unavailable')); await h.act(h.foreground);
+  assert.match(h.text(), /Unable to check Premium/);
+  const active = await h.snapshot(true);
+  h.state.restore = async () => { h.emit(active); return { ok: true, snapshot: active, message: 'Purchases restored.' }; };
+  await h.act(() => h.button('premium-restore-button').onPress());
+  assert.match(h.text(), /Purchases restored\. Premium is active\./);
+  assert.equal(h.button('premium-purchase-button').accessibilityLabel, "Manage Chi'llywood Premium subscription in Google Play");
+  assert.equal(h.state.purchases, 0);
+});
+
+test('a fresh same-account active snapshot clears an earlier screen read failure', async t => {
+  const h = await mount(t);
+  h.state.reader = () => Promise.reject(Error('read unavailable')); await h.act(h.foreground);
+  const active = await h.snapshot(true); await h.act(() => h.emit(active));
+  assert.equal(h.button('premium-purchase-button').accessibilityLabel, "Manage Chi'llywood Premium subscription in Google Play");
+  assert.doesNotMatch(h.text(), /Unable to check Premium/);
+  assert.equal(h.state.purchases, 0);
+});
+
+test('replaying unchanged cached active data cannot clear a failed screen read', async t => {
+  const h = await mount(t, { active: true }), cached = h.cache();
+  h.state.reader = () => Promise.reject(Error('read unavailable')); await h.act(h.foreground);
+  await h.act(() => h.emit(cached));
+  assert.doesNotMatch(h.text(), /Premium is active\./);
+  assert.equal(h.button('premium-purchase-button').accessibilityLabel, 'Recheck Premium status');
+});
+
+test('a failed Restore cannot reauthorize cached active data after a screen read failure', async t => {
+  const h = await mount(t, { active: true });
+  h.state.reader = () => Promise.reject(Error('read unavailable')); await h.act(h.foreground);
+  h.state.restore = () => Promise.reject(Error('restore unavailable'));
+  await h.act(() => h.button('premium-restore-button').onPress());
+  assert.match(h.text(), /Unable to restore purchases/);
+  assert.doesNotMatch(h.text(), /Premium is active\./);
+  assert.equal(h.state.purchases, 0);
+});
+
+test('a wrong-account read cannot clear the current account failure or return a success notice', async t => {
+  const h = await mount(t, { active: true });
+  h.state.reader = () => Promise.reject(Error('read unavailable')); await h.act(h.foreground);
+  const wrongAccount = { ...h.cache(), userId: 'other-user' };
+  h.state.reader = () => wrongAccount;
+  await h.act(() => h.button('premium-purchase-button').onPress());
+  assert.match(h.text(), /Unable to check Premium/); assert.doesNotMatch(h.text(), /Premium is active\.|Premium is already active/);
+  assert.equal(h.button('premium-purchase-button').accessibilityLabel, 'Recheck Premium status');
+  assert.equal(h.state.purchases, 0);
+});
+
+test('a fresh shared snapshot does not erase an unrelated Restore error notice', async t => {
+  const h = await mount(t);
+  h.state.restore = () => Promise.reject(Error('restore unavailable'));
+  await h.act(() => h.button('premium-restore-button').onPress());
+  const active = await h.snapshot(true); await h.act(() => h.emit(active));
+  assert.match(h.text(), /Unable to restore purchases/);
+  assert.equal(h.button('premium-purchase-button').accessibilityLabel, "Manage Chi'llywood Premium subscription in Google Play");
+});
+
+test('a held read failure cannot invalidate a newer shared active snapshot', async t => {
+  const h = await mount(t), held = deferred(), active = await h.snapshot(true);
+  h.state.reader = () => held.promise; await h.act(h.foreground);
+  await h.act(() => h.emit(active)); await h.act(() => held.reject(Error('older read unavailable')));
+  assert.match(h.text(), /Premium is active\./); assert.doesNotMatch(h.text(), /Unable to check Premium/);
+  assert.equal(h.button('premium-purchase-button').disabled, false);
+});
+
+test('Recheck uses its own published fresh snapshot and completes its loading state', async t => {
+  const h = await mount(t), active = await h.snapshot(true);
+  h.state.reader = async () => { h.emit(active); return active; };
+  await h.act(() => h.button('premium-purchase-button').onPress());
+  assert.equal(h.button('premium-purchase-button').accessibilityLabel, "Manage Chi'llywood Premium subscription in Google Play");
+  assert.equal(h.button('premium-purchase-button').disabled, false);
+  assert.doesNotMatch(h.text(), /Checking Premium status/); assert.equal(h.state.purchases, 0);
+});
+
+for (const entitlementState of ['EXPIRED', 'REVOKED', 'UNKNOWN', 'ERROR']) {
+  test(`a fresh ${entitlementState} snapshot after a read failure cannot grant Premium`, async t => {
+    const h = await mount(t, { active: true });
+    h.state.reader = () => Promise.reject(Error('read unavailable')); await h.act(h.foreground);
+    const denied = await h.snapshotWithEntitlement(entitlementState); await h.act(() => h.emit(denied));
+    assert.equal(denied.targets.premium_subscription.hasEntitlement, false);
+    assert.doesNotMatch(h.text(), /Premium is active\./);
+    assert.notEqual(h.button('premium-purchase-button').accessibilityLabel, "Manage Chi'llywood Premium subscription in Google Play");
+    assert.equal(h.state.purchases, 0);
+  });
+  test(`a held active read cannot overwrite a newer shared ${entitlementState} snapshot`, async t => {
+    const h = await mount(t, { active: true }), held = deferred(), active = h.cache();
+    h.state.reader = () => held.promise; await h.act(h.foreground);
+    const denied = await h.snapshotWithEntitlement(entitlementState); await h.act(() => h.emit(denied));
+    await h.act(() => held.resolve(active));
+    assert.doesNotMatch(h.text(), /Premium is active\./);
+    assert.notEqual(h.button('premium-purchase-button').accessibilityLabel, "Manage Chi'llywood Premium subscription in Google Play");
+    assert.equal(h.state.purchases, 0);
+  });
+}
+
+test('unknown store customer info remains a status check and never starts another purchase', async t => {
+  const h = await mount(t), unavailable = await h.snapshotWithEntitlement('EXPIRED', { customerInfoLoaded: false });
+  await h.act(() => h.emit(unavailable));
+  assert.doesNotMatch(h.text(), /Start Premium/);
+  h.state.reader = () => unavailable;
+  await h.act(() => h.button('premium-purchase-button').onPress());
+  assert.equal(h.state.purchases, 0);
+  assert.match(h.text(), /store subscription status could not be checked/);
+  assert.doesNotMatch(h.text(), /Premium is active\./);
 });
