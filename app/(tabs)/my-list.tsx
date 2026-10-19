@@ -34,8 +34,9 @@ import { useSession } from "../../_lib/session";
 import { filterPubliclyReleasedTitles } from "../../_lib/publicTitles";
 import {
   buildUserChannelProfile,
-  readMergedWatchProgress,
-  readMyListIds,
+  readWatchProgressState,
+  readMyListState,
+  setMyListTitleSaved,
   readUserProfileByUserId,
   type UserChannelProfile,
   type WatchProgressEntry,
@@ -88,7 +89,7 @@ async function readTitlesByIds(ids: string[]): Promise<TitleRow[]> {
     // Preserve only rows already present on-device when the backed title read is unavailable.
   }
 
-  return normalizedIds
+  const fallback = normalizedIds
     .map((id): TitleRow | null => {
       const localMatch = localTitles.find((item: any) => String(item.id) === String(id));
       if (!localMatch) return null;
@@ -107,6 +108,8 @@ async function readTitlesByIds(ids: string[]): Promise<TitleRow[]> {
       };
     })
     .filter((item): item is TitleRow => !!item);
+  if (fallback.length !== normalizedIds.length) throw new Error("Title details unavailable");
+  return fallback;
 }
 
 const formatProgressLabel = (entry: WatchProgressEntry) => {
@@ -122,12 +125,13 @@ export default function MyListScreen() {
   const bottomTabBarHeight = useBottomTabBarHeight();
   const { height: viewportHeight } = useWindowDimensions();
   const brandRevealHeight = resolveMainTabBrandRevealHeight(viewportHeight);
-  const { isLoading: sessionLoading, user } = useSession();
+  const { isLoading: sessionLoading, user, authority } = useSession();
   const viewerUserId = String(user?.id ?? "").trim();
+  const viewerAuthorityKey = `${viewerUserId}:${authority?.sessionGeneration ?? ""}`;
   const hasLoadedRef = useRef(false);
   const loadGenerationRef = useRef(0);
-  const currentViewerUserIdRef = useRef(viewerUserId);
-  currentViewerUserIdRef.current = viewerUserId;
+  const currentViewerUserIdRef = useRef(viewerAuthorityKey);
+  currentViewerUserIdRef.current = viewerAuthorityKey;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [savedTitles, setSavedTitles] = useState<TitleRow[]>([]);
@@ -137,8 +141,15 @@ export default function MyListScreen() {
   const [unlockedVideos, setUnlockedVideos] = useState<UnlockedPaidVideoLibraryItem[]>([]);
   const [librarySubjectUserId, setLibrarySubjectUserId] = useState("__unresolved__");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const removingIdsRef = useRef(new Set<string>());
+  const [removingIds, setRemovingIds] = useState<string[]>([]);
+  const [hasUnknownSync, setHasUnknownSync] = useState(false);
+  const [syncRetryBusy, setSyncRetryBusy] = useState(false);
+  const syncRetryOwnerRef = useRef({ key: viewerAuthorityKey, busy: false });
+  if (syncRetryOwnerRef.current.key !== viewerAuthorityKey) syncRetryOwnerRef.current = { key: viewerAuthorityKey, busy: false };
+  const syncRetryOwner = syncRetryOwnerRef.current;
 
-  const libraryIdentityPending = librarySubjectUserId !== viewerUserId;
+  const libraryIdentityPending = librarySubjectUserId !== viewerAuthorityKey;
   const visibleSavedTitles = libraryIdentityPending ? [] : savedTitles;
   const visibleContinueWatching = libraryIdentityPending ? [] : continueWatching;
   const visibleFollowedPlatforms = libraryIdentityPending ? [] : followedPlatforms;
@@ -160,31 +171,33 @@ export default function MyListScreen() {
     return (localMatch as any)?.image || localMatch?.poster || remoteImageSource(item.poster_url);
   }, []);
 
-  const loadLibrary = useCallback(async () => {
+  const loadLibrary = useCallback(async (retryUnknown = false) => {
     const requestedViewerUserId = viewerUserId;
     const generation = ++loadGenerationRef.current;
     setErrorMsg(null);
     try {
-      const [{ data: authData }, savedIds, progressMap, followedIds, unlockedResult] = await Promise.all([
+      const [{ data: authData }, savedState, progressState, followedIds, unlockedResult] = await Promise.all([
         supabase.auth.getUser(),
-        readMyListIds().catch(() => [] as string[]),
-        readMergedWatchProgress().catch(() => ({})),
-        readFollowedChannelUserIds({ limit: 24 }).catch(() => [] as string[]),
+        readMyListState(retryUnknown ? { retryUnknown: true } : undefined).catch(() => null),
+        readWatchProgressState(retryUnknown ? { retryUnknown: true } : undefined).catch(() => null),
+        readFollowedChannelUserIds({ limit: 24 }).catch(() => null),
         readMyUnlockedPaidVideoLibraryItems(24).catch(() => ({ status: "unavailable" as const, subjectUserId: null, items: [] })),
       ]);
       const userId = String(authData.user?.id ?? "").trim();
+      const savedIds = savedState?.ids ?? null;
+      const progressMap = progressState?.progress ?? null;
       if (!isCurrentAuthorityRequest({
         generation,
         currentGeneration: loadGenerationRef.current,
-        requestedAuthorityKey: requestedViewerUserId,
+        requestedAuthorityKey: viewerAuthorityKey,
         currentAuthorityKey: currentViewerUserIdRef.current,
       })
         || userId !== requestedViewerUserId
-        || String(unlockedResult.subjectUserId ?? "").trim() !== requestedViewerUserId
+        || (unlockedResult.status === "resolved" && String(unlockedResult.subjectUserId ?? "").trim() !== requestedViewerUserId)
       ) {
         return false;
       }
-      const progressEntries = Object.entries(progressMap)
+      const progressEntries = Object.entries(progressMap ?? {})
         .filter(([, entry]) => Number(entry?.positionMillis ?? 0) > 0)
         .sort(([, left], [, right]) => Number(right?.updatedAt ?? 0) - Number(left?.updatedAt ?? 0))
         .slice(0, 12);
@@ -192,56 +205,61 @@ export default function MyListScreen() {
       const progressById = new Map(progressEntries);
 
       const [nextSavedTitles, nextContinueTitles, nextPlatformProfiles, nextReplays] = await Promise.all([
-        readTitlesByIds(savedIds),
-        readTitlesByIds(progressIds),
-        Promise.all(followedIds.map(async (platformUserId) => {
-          const profile = await readUserProfileByUserId(platformUserId).catch(() => null);
-          return profile ? buildUserChannelProfile({ id: platformUserId, profile }) : null;
-        })),
-        userId ? readCreatorReplayLibraryItems(userId).catch(() => [] as CreatorReplayLibraryItem[]) : Promise.resolve([]),
+        savedIds && (savedState?.readStatus !== "offline" || savedIds.length > 0) ? readTitlesByIds(savedIds).catch(() => null) : null,
+        progressMap && (progressState?.readStatus !== "offline" || progressIds.length > 0) ? readTitlesByIds(progressIds).catch(() => null) : null,
+        followedIds ? Promise.all(followedIds.map(async (platformUserId) => {
+          const profile = await readUserProfileByUserId(platformUserId);
+          if (!profile) throw new Error("Platform profile unavailable");
+          return buildUserChannelProfile({ id: platformUserId, profile });
+        })).catch(() => null) : null,
+        userId ? readCreatorReplayLibraryItems(userId).catch(() => null) : Promise.resolve([]),
       ]);
       if (!isCurrentAuthorityRequest({
         generation,
         currentGeneration: loadGenerationRef.current,
-        requestedAuthorityKey: requestedViewerUserId,
+        requestedAuthorityKey: viewerAuthorityKey,
         currentAuthorityKey: currentViewerUserIdRef.current,
       })) {
         return false;
       }
 
-      setSavedTitles(nextSavedTitles);
-      setContinueWatching(nextContinueTitles
+      if (nextSavedTitles) setSavedTitles(nextSavedTitles);
+      if (nextContinueTitles) setContinueWatching(nextContinueTitles
         .map((title): ContinueWatchingTitle | null => {
           const progress = progressById.get(String(title.id));
           return progress ? { ...title, progress } : null;
         })
         .filter((item): item is ContinueWatchingTitle => !!item));
-      setFollowedPlatforms(nextPlatformProfiles.filter((item): item is UserChannelProfile => !!item));
-      setSavedReplays(nextReplays);
+      if (nextPlatformProfiles) setFollowedPlatforms(nextPlatformProfiles);
+      if (nextReplays) setSavedReplays(nextReplays);
       if (unlockedResult.status === "resolved") {
         setUnlockedVideos(unlockedResult.items);
       }
-      setLibrarySubjectUserId(requestedViewerUserId);
+      setLibrarySubjectUserId(viewerAuthorityKey);
+      if (savedState && progressState) setHasUnknownSync(savedState.syncStatus === "unknown" || progressState.syncStatus === "unknown");
 
-      const expectedRows = savedIds.length + progressIds.length + followedIds.length + nextReplays.length + unlockedResult.items.length;
-      const resolvedRows = nextSavedTitles.length + nextContinueTitles.length + nextPlatformProfiles.filter(Boolean).length + nextReplays.length + unlockedResult.items.length;
       setErrorMsg(unlockedResult.status === "unavailable"
         ? "Unlocked content could not be verified. Your current Library is preserved; try again before purchasing anything again."
-        : expectedRows > 0 && resolvedRows === 0 ? "Some Library items could not be shown right now." : null);
+        : savedState?.syncStatus === "unknown" || progressState?.syncStatus === "unknown"
+          ? "Showing this device’s Library. An account update could not be confirmed; check again before retrying."
+        : savedState?.readStatus === "offline" || progressState?.readStatus === "offline" || [nextSavedTitles, nextContinueTitles, nextPlatformProfiles, nextReplays].some((section) => section === null)
+          ? "Some Library sections could not refresh. Current items remain visible; please retry."
+          : savedState?.syncStatus === "pending" || progressState?.syncStatus === "pending" ? "Showing this device’s Library. Account sync is pending." : null);
       return true;
     } catch {
       if (!isCurrentAuthorityRequest({
         generation,
         currentGeneration: loadGenerationRef.current,
-        requestedAuthorityKey: requestedViewerUserId,
+        requestedAuthorityKey: viewerAuthorityKey,
         currentAuthorityKey: currentViewerUserIdRef.current,
       })) {
         return false;
       }
       setErrorMsg("Unable to refresh Library right now. Current items remain visible; check your connection and try again.");
+      setLibrarySubjectUserId(viewerAuthorityKey);
       return true;
     }
-  }, [viewerUserId]);
+  }, [viewerUserId, viewerAuthorityKey]);
 
   const bootstrap = useCallback(async () => {
     if (sessionLoading) return;
@@ -263,7 +281,17 @@ export default function MyListScreen() {
     setLibrarySubjectUserId("__unresolved__");
     setErrorMsg(null);
     setLoading(true);
-  }, [viewerUserId]);
+    removingIdsRef.current = new Set();
+    setRemovingIds([]);
+    setHasUnknownSync(false);
+    setSyncRetryBusy(false);
+  }, [viewerAuthorityKey]);
+
+  useEffect(() => () => {
+    loadGenerationRef.current += 1;
+    removingIdsRef.current = new Set();
+    syncRetryOwnerRef.current = { key: "__unmounted__", busy: false };
+  }, []);
 
   useFocusEffect(useCallback(() => {
     void bootstrap();
@@ -275,9 +303,47 @@ export default function MyListScreen() {
     setRefreshing(false);
   }, [loadLibrary]);
 
+  const retryAccountSync = async () => {
+    if (syncRetryOwnerRef.current !== syncRetryOwner || syncRetryOwner.busy) return;
+    syncRetryOwner.busy = true;
+    setSyncRetryBusy(true);
+    try {
+      await loadLibrary(true);
+    } finally {
+      if (syncRetryOwnerRef.current === syncRetryOwner) {
+        syncRetryOwner.busy = false;
+        setSyncRetryBusy(false);
+      }
+    }
+  };
+
   const openTitleDetails = (item: TitleRow) => {
     const id = String(item.id).trim();
     if (id) router.push(`/title/${id}`);
+  };
+  const removeSavedTitle = async (id: string) => {
+    if (removingIdsRef.current.has(id) || currentViewerUserIdRef.current !== viewerAuthorityKey) return;
+    const authority = viewerAuthorityKey;
+    const removals = removingIdsRef.current;
+    removals.add(id);
+    setRemovingIds([...removals]);
+    // A pre-removal Library read must not resurrect this card.
+    loadGenerationRef.current += 1;
+    try {
+      const result = await setMyListTitleSaved(id, false);
+      if (currentViewerUserIdRef.current !== authority || removingIdsRef.current !== removals) return;
+      loadGenerationRef.current += 1;
+      setSavedTitles((items) => items.filter((item) => result.ids.includes(String(item.id))));
+      if (result.syncStatus === "unknown") setHasUnknownSync(true);
+      setErrorMsg(result.syncStatus === "unknown" ? "Removed on this device. The account update could not be confirmed; check again before retrying." : result.syncStatus === "pending" ? "Removed on this device. Account sync is pending." : null);
+    } catch {
+      if (currentViewerUserIdRef.current === authority && removingIdsRef.current === removals) {
+        setErrorMsg("Unable to remove this title from Saved. Please try again.");
+      }
+    } finally {
+      removals.delete(id);
+      if (removingIdsRef.current === removals) setRemovingIds([...removals]);
+    }
   };
   const openPlayer = (item: TitleRow) => {
     const id = String(item.id).trim();
@@ -310,25 +376,38 @@ export default function MyListScreen() {
       </View>
       {hasRows ? children : (
         <View style={styles.emptyInline}>
-          <Text style={styles.emptyInlineTitle}>{emptyTitle}</Text>
-          <Text style={styles.emptyInlineText}>{emptyText}</Text>
+          <Text style={styles.emptyInlineTitle}>{errorMsg ? "Unable to verify this section" : emptyTitle}</Text>
+          <Text style={styles.emptyInlineText}>{errorMsg ? "Retry to check your Library." : emptyText}</Text>
         </View>
       )}
     </View>
   );
 
-  const renderTitleRail = <T extends TitleRow,>(items: T[], openItem: (item: T) => void, metaForItem: (item: T) => string) => (
+  const renderTitleRail = <T extends TitleRow,>(items: T[], openItem: (item: T) => void, metaForItem: (item: T) => string, removable = false) => (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
       {items.map((item) => {
         const source = getImageSource(item);
         return (
-          <TouchableOpacity key={item.id} style={styles.titleCard} activeOpacity={0.9} onPress={() => openItem(item)} accessibilityRole="button" accessibilityLabel={`Open ${item.title}`}>
-            <View style={styles.posterWrap}>
-              {source ? <Image source={source} style={styles.poster} /> : <Text style={styles.posterInitial}>{String(item.title ?? "U").slice(0, 1).toUpperCase()}</Text>}
-            </View>
-            <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
-            <Text style={styles.meta} numberOfLines={1}>{metaForItem(item)}</Text>
-          </TouchableOpacity>
+          <View key={item.id} style={styles.titleCard}>
+            <TouchableOpacity style={styles.titleOpenContent} activeOpacity={0.9} onPress={() => openItem(item)} accessibilityRole="button" accessibilityLabel={`Open ${item.title}`}>
+              <View style={styles.posterWrap}>
+                {source ? <Image source={source} style={styles.poster} /> : <Text style={styles.posterInitial}>{String(item.title ?? "U").slice(0, 1).toUpperCase()}</Text>}
+              </View>
+              <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
+              <Text style={styles.meta} numberOfLines={1}>{metaForItem(item)}</Text>
+            </TouchableOpacity>
+            {removable ? (
+              <TouchableOpacity
+                style={styles.removeSavedButton}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${item.title} from Saved`}
+                disabled={removingIds.includes(String(item.id))}
+                onPress={() => { void removeSavedTitle(String(item.id)); }}
+              >
+                <Text style={styles.meta}>{removingIds.includes(String(item.id)) ? "Removing…" : "Remove from Saved"}</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         );
       })}
     </ScrollView>
@@ -380,8 +459,14 @@ export default function MyListScreen() {
                 <TouchableOpacity style={styles.emptyButton} activeOpacity={0.86} onPress={onRefresh}><ChillywoodPrimaryActionFill radius={12} /><Text style={styles.emptyButtonText}>Retry</Text></TouchableOpacity>
               </View>
             ) : null}
+            {hasUnknownSync ? (
+              <TouchableOpacity style={styles.emptyButton} accessibilityRole="button" accessibilityLabel="Retry account sync" disabled={syncRetryBusy} onPress={retryAccountSync}>
+                <ChillywoodPrimaryActionFill radius={12} />
+                <Text style={styles.emptyButtonText}>{syncRetryBusy ? "Syncing…" : "Retry account sync"}</Text>
+              </TouchableOpacity>
+            ) : null}
 
-            {renderSection("Saved", `${savedTitleCount} saved`, savedTitleCount > 0, "No saved titles yet", "Save a title from Home or Explore and it will appear here.", renderTitleRail(visibleSavedTitles, openTitleDetails, (item) => item.runtime || item.category || "Saved"))}
+            {renderSection("Saved", `${savedTitleCount} saved`, savedTitleCount > 0, "No saved titles yet", "Save a title from Home or Explore and it will appear here.", renderTitleRail(visibleSavedTitles, openTitleDetails, (item) => item.runtime || item.category || "Saved", true))}
             {renderSection(
               "Unlocked Creator Videos",
               `${unlockedVideoCount} unlocked`,
@@ -451,7 +536,7 @@ export default function MyListScreen() {
               </ScrollView>,
             )}
 
-            {!hasLibraryRows ? (
+            {!hasLibraryRows && !errorMsg ? (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyTitle}>Nothing saved yet</Text>
                 <Text style={styles.emptyText}>Saved titles, unlocked creator videos, progress, replays, and followed Platforms will appear here.</Text>
@@ -487,6 +572,8 @@ const styles = StyleSheet.create({
   sectionMeta: { color: "#9DA7BB", fontSize: 10, fontWeight: "900", letterSpacing: 0.5, textTransform: "uppercase" },
   rail: { gap: 10, paddingRight: 4 },
   titleCard: { width: 132, borderRadius: 12, borderWidth: 1, borderColor: CHILLYWOOD_VISUAL.controlBorder, backgroundColor: CHILLYWOOD_VISUAL.controlBackground, padding: 9, gap: 7 },
+  titleOpenContent: { gap: 7 },
+  removeSavedButton: { minHeight: 44, justifyContent: "center" },
   posterWrap: { width: "100%", height: 150, borderRadius: 8, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: "#171A22" },
   poster: { width: "100%", height: "100%" },
   posterInitial: { color: "#FFFFFF", fontSize: 30, fontWeight: "900" },

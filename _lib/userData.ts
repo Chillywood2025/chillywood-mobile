@@ -1,6 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { Tables, TablesInsert } from "../supabase/database.types";
-import { readAccountScopedJsonValue, writeAccountScopedJsonValue } from "./accountScopedStorage";
+import type { Database, Tables, TablesInsert } from "../supabase/database.types";
+import { createClient } from "@supabase/supabase-js";
+import { captureAccountBoundSupabaseMutationSubject, assertAccountBoundSupabaseMutationSubjectCurrent } from "./accountBoundSupabaseMutation";
+import { getAccountScopedStorageKey, readAccountScopedJsonValue, writeAccountScopedJsonValue } from "./accountScopedStorage";
+import { createUserCollectionSync, DefinitiveCollectionWriteError, type CollectionSyncStatus } from "./userCollectionSync";
 import {
   getCurrentAccountSessionAuthoritySnapshot,
   sameAccountSessionAuthority,
@@ -22,7 +25,7 @@ import {
   normalizeProfileVisibility,
   type ProfileVisibility,
 } from "./profileVisibility";
-import { supabase } from "./supabase";
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase";
 import { formatUsernameHandle, normalizeUsernameHandle } from "./usernameHandles";
 
 export const WATCH_PROGRESS_KEY = "@chillywood/watch-progress";
@@ -670,9 +673,16 @@ async function refreshSignedInIdentitySnapshots(profile: UserProfile, binding: U
   assertUserDataAccountBindingIsCurrent(binding);
 }
 
-const readAccountValue = async <T>(key: string, binding: UserDataAccountBinding, fallback: T) => {
+const readAccountValue = async <T>(key: string, binding: UserDataAccountBinding, fallback: T, strict = false) => {
   assertUserDataAccountBindingIsCurrent(binding);
-  const value = await readAccountScopedJsonValue(AsyncStorage, key, getBoundUserId(binding), fallback);
+  let value: T;
+  if (strict) {
+    // Collection read/modify/write must not mistake a disk failure for an empty cache.
+    const raw = await AsyncStorage.getItem(getAccountScopedStorageKey(key, getBoundUserId(binding)));
+    value = raw === null ? fallback : JSON.parse(raw) as T;
+  } else {
+    value = await readAccountScopedJsonValue(AsyncStorage, key, getBoundUserId(binding), fallback);
+  }
   assertUserDataAccountBindingIsCurrent(binding);
   return value;
 };
@@ -684,465 +694,359 @@ const writeAccountValue = async (key: string, binding: UserDataAccountBinding, v
   return written;
 };
 
-async function readLocalMyListEntriesForBinding(binding: UserDataAccountBinding): Promise<MyListEntry[]> {
-  const parsed = await readAccountValue<unknown>(MY_LIST_KEY, binding, []);
+type MyListMetadata = Omit<Partial<MyListEntry>, "id">;
+type StoredWatchProgressEntry = WatchProgressEntry & { completed?: boolean; incrementPlayCount?: boolean };
 
+function throwCollectionWriteError(error: { message?: string; code?: string }, status?: number): never {
+  // Supabase can resolve a fetch/timeout failure as { error, status: 0 }.
+  // Only an explicit server rejection permits automatic retry of the intent.
+  if (status !== undefined && status >= 400 && status < 500 && ![408, 499].includes(status)
+    && !["08007", "40003"].includes(error.code ?? "")
+    && /^(?:[0-9A-Z]{5}|PGRST[0-9]{3})$/.test(error.code ?? "")) {
+    throw new DefinitiveCollectionWriteError(error.message ?? "The change was rejected.");
+  }
+  throw new Error(error.message ?? "Synchronization could not be confirmed.");
+}
+
+function boundCollectionClient(binding: UserDataAccountBinding) {
+  let captured: Promise<typeof supabase> | undefined;
+  return () => captured ??= (async () => {
+    assertUserDataAccountBindingIsCurrent(binding);
+    if (!binding) throw new Error("Sign in before synchronizing this collection.");
+    let subject;
+    try {
+      subject = await captureAccountBoundSupabaseMutationSubject(binding.userId);
+    } catch {
+      assertUserDataAccountBindingIsCurrent(binding);
+      // Capture/readback did not dispatch a collection mutation, so retry is safe.
+      throw new DefinitiveCollectionWriteError("The account could not be verified for synchronization.");
+    }
+    assertUserDataAccountBindingIsCurrent(binding);
+    if (!sameAccountSessionAuthority(binding, subject.authority)) throw new Error("Account changed before synchronization.");
+    return createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      accessToken: async () => {
+        assertUserDataAccountBindingIsCurrent(binding);
+        assertAccountBoundSupabaseMutationSubjectCurrent(subject);
+        return subject.accessToken;
+      },
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+  })();
+}
+
+function collectionStorage(key: string, binding: UserDataAccountBinding) {
+  return {
+    key: getAccountScopedStorageKey(key, getBoundUserId(binding)),
+    remote: !!getBoundUserId(binding),
+    assertCurrent: () => assertUserDataAccountBindingIsCurrent(binding),
+    write: (value: unknown) => writeAccountValue(key, binding, value),
+  };
+}
+
+function parseLocalMyListEntries(parsed: unknown): Record<string, MyListEntry> {
   if (Array.isArray(parsed)) {
     const now = Date.now();
-    return dedupeIds(parsed.map((item) => String(item))).map((id, index) => ({
-      id,
-      savedAt: now - index,
-    }));
+    return toMyListEntryMap(dedupeIds(parsed.map((item) => String(item)))
+      .map((id, index) => ({ id, savedAt: now - index })));
   }
-
+  const entries: MyListEntry[] = [];
   if (isPlainObject(parsed)) {
-    const entries: MyListEntry[] = [];
     for (const [rawId, rawValue] of Object.entries(parsed)) {
       const id = toIdString(rawId);
       if (!id) continue;
-
-      if (rawValue === true) {
-        entries.push({ id, savedAt: 0 });
-        continue;
-      }
-
-      if (isPlainObject(rawValue)) {
-        entries.push({
-          id,
-          title: typeof rawValue.title === "string" ? rawValue.title : undefined,
-          posterUrl: typeof rawValue.posterUrl === "string" ? rawValue.posterUrl : undefined,
-          thumbnailUrl: typeof rawValue.thumbnailUrl === "string" ? rawValue.thumbnailUrl : undefined,
-          savedAt: toEpoch(rawValue.savedAt),
-        });
-      }
+      if (rawValue === true) entries.push({ id, savedAt: 0 });
+      else if (isPlainObject(rawValue)) entries.push({
+        id,
+        title: typeof rawValue.title === "string" ? rawValue.title : undefined,
+        posterUrl: typeof rawValue.posterUrl === "string" ? rawValue.posterUrl : undefined,
+        thumbnailUrl: typeof rawValue.thumbnailUrl === "string" ? rawValue.thumbnailUrl : undefined,
+        savedAt: toEpoch(rawValue.savedAt),
+      });
     }
-
-    return sortMyListEntries(entries);
   }
-
-  return [];
+  return toMyListEntryMap(entries);
 }
+
+function myListCollection(binding: UserDataAccountBinding) {
+  const userId = getBoundUserId(binding);
+  const getClient = boundCollectionClient(binding);
+  return createUserCollectionSync<MyListEntry>({
+    ...collectionStorage(MY_LIST_KEY, binding),
+    read: () => readAccountValue(MY_LIST_KEY, binding, null, true),
+    legacy: parseLocalMyListEntries,
+    validValue: value => isPlainObject(value) && typeof value.id === "string"
+      && Number.isFinite(value.savedAt),
+    readRemote: async () => {
+      const client = await getClient();
+      const remoteRowsByTitleId = new Map<string, UserListRow>();
+      let titleIdCursor = "";
+      for (;;) {
+        assertUserDataAccountBindingIsCurrent(binding);
+        let query = client
+          .from(USER_MY_LIST_TABLE)
+          .select("title_id,updated_at")
+          .eq("user_id", userId!)
+          .order("title_id", { ascending: true })
+          .limit(USER_MY_LIST_PAGE_SIZE);
+        if (titleIdCursor) query = query.gt("title_id", titleIdCursor);
+        const { data, error } = await query.returns<UserListRow[]>();
+        assertUserDataAccountBindingIsCurrent(binding);
+        if (error || !data) throw error ?? new Error("Saved titles are unavailable.");
+        for (const row of data) {
+          const titleId = toIdString(row.title_id);
+          if (titleId) remoteRowsByTitleId.set(titleId, row);
+        }
+        if (data.length < USER_MY_LIST_PAGE_SIZE) break;
+        const nextCursor = toIdString(data[data.length - 1]?.title_id);
+        if (!nextCursor || nextCursor === titleIdCursor) throw new Error("Saved title pagination did not advance.");
+        titleIdCursor = nextCursor;
+      }
+      return toMyListEntryMap(Array.from(remoteRowsByTitleId.values()).map(row => ({
+        id: toIdString(row.title_id), savedAt: Date.parse(row.updated_at) || 0,
+      })));
+    },
+    writeRemote: async (id, value) => {
+      const client = await getClient();
+      assertUserDataAccountBindingIsCurrent(binding);
+      const { error, status } = value === null
+        ? await client.from(USER_MY_LIST_TABLE).delete().eq("user_id", userId!).eq("title_id", id)
+        : await client.from(USER_MY_LIST_TABLE).upsert({
+          user_id: userId!, title_id: id, updated_at: toIsoString(value.savedAt),
+        } satisfies UserListInsert, { onConflict: "user_id,title_id" });
+      assertUserDataAccountBindingIsCurrent(binding);
+      if (error) throwCollectionWriteError(error, status);
+    },
+  });
+}
+
+const myListIds = (values: Record<string, MyListEntry>) => (
+  sortMyListEntries(Object.values(values)).map(entry => entry.id)
+);
 
 export async function readLocalMyListIds(): Promise<string[]> {
   const binding = captureUserDataAccountBinding();
-  const entries = await readLocalMyListEntriesForBinding(binding);
-  assertUserDataAccountBindingIsCurrent(binding);
-  return entries.map((entry) => entry.id);
+  return myListIds((await myListCollection(binding).snapshot()).values);
 }
 
 export async function saveLocalMyListIds(ids: string[]) {
   const binding = captureUserDataAccountBinding();
-  const now = Date.now();
-  const normalized = dedupeIds(ids).map((id, index) => ({
-    id,
-    savedAt: now - index,
-  }));
-  await writeAccountValue(MY_LIST_KEY, binding, toMyListEntryMap(normalized));
+  await myListCollection(binding).replaceLocal(parseLocalMyListEntries(ids));
 }
 
 export async function readLocalMyListEntries(): Promise<MyListEntry[]> {
   const binding = captureUserDataAccountBinding();
-  return readLocalMyListEntriesForBinding(binding);
+  return sortMyListEntries(Object.values((await myListCollection(binding).snapshot()).values));
+}
+
+export async function readMyListState(options?: { retryUnknown?: boolean }) {
+  const binding = captureUserDataAccountBinding();
+  const result = await myListCollection(binding).refresh(options);
+  return { ids: myListIds(result.values), syncStatus: result.syncStatus, readStatus: result.readStatus };
 }
 
 export async function readMyListIds(): Promise<string[]> {
   const binding = captureUserDataAccountBinding();
-  const userId = getBoundUserId(binding);
-  const localEntries = await readLocalMyListEntriesForBinding(binding);
-  const localIds = localEntries.map((entry) => entry.id);
-  if (!userId) {
-    assertUserDataAccountBindingIsCurrent(binding);
-    return localIds;
-  }
+  return myListIds((await myListCollection(binding).refresh()).values);
+}
 
-  try {
-    const remoteRowsByTitleId = new Map<string, UserListRow>();
-    let titleIdCursor = "";
-    for (;;) {
-      let query = supabase
-        .from(USER_MY_LIST_TABLE)
-        .select("title_id,updated_at")
-        .eq("user_id", userId)
-        .order("title_id", { ascending: true })
-        .limit(USER_MY_LIST_PAGE_SIZE);
-      if (titleIdCursor) query = query.gt("title_id", titleIdCursor);
-      const { data, error } = await query.returns<UserListRow[]>();
-      assertUserDataAccountBindingIsCurrent(binding);
-      if (error || !data) throw error ?? new Error("Saved titles are unavailable.");
-      for (const row of data) {
-        const titleId = toIdString(row.title_id);
-        if (titleId) remoteRowsByTitleId.set(titleId, row);
-      }
-      if (data.length < USER_MY_LIST_PAGE_SIZE) break;
-      const nextCursor = toIdString(data[data.length - 1]?.title_id);
-      if (!nextCursor || nextCursor === titleIdCursor) {
-        throw new Error("Saved title pagination did not advance.");
-      }
-      titleIdCursor = nextCursor;
-    }
-    const remoteRows = Array.from(remoteRowsByTitleId.values());
-
-    const remoteEntries = remoteRows
-      .map((row) => {
-        const id = toIdString(row.title_id);
-        if (!id) return null;
-        const updatedAtRaw = Date.parse(row.updated_at);
-        return {
-          id,
-          savedAt: Number.isFinite(updatedAtRaw) ? updatedAtRaw : 0,
-        };
-      })
-      .filter((entry): entry is { id: string; savedAt: number } => !!entry);
-
-    const remoteIds = dedupeIds(remoteEntries.map((entry) => entry.id));
-
-    const mergedEntriesMap = toMyListEntryMap(localEntries);
-    for (const remoteEntry of remoteEntries) {
-      const existing = mergedEntriesMap[remoteEntry.id];
-      const existingSavedAt = existing?.savedAt ?? 0;
-      if (!existing || remoteEntry.savedAt >= existingSavedAt) {
-        mergedEntriesMap[remoteEntry.id] = {
-          id: remoteEntry.id,
-          title: existing?.title,
-          posterUrl: existing?.posterUrl,
-          thumbnailUrl: existing?.thumbnailUrl,
-          savedAt: remoteEntry.savedAt,
-        };
-      }
-    }
-
-    const mergedIds = sortMyListEntries(Object.values(mergedEntriesMap)).map((entry) => entry.id);
-    const missingRemoteIds = mergedIds.filter((id) => !remoteIds.includes(id));
-
-    for (let offset = 0; offset < missingRemoteIds.length; offset += USER_MY_LIST_PAGE_SIZE) {
-      const titleIds = missingRemoteIds.slice(offset, offset + USER_MY_LIST_PAGE_SIZE);
-      await supabase.from(USER_MY_LIST_TABLE).upsert(
-        titleIds.map((titleId) => ({
-          user_id: userId,
-          title_id: titleId,
-          updated_at: new Date().toISOString(),
-        }) satisfies UserListInsert),
-        { onConflict: "user_id,title_id" },
-      );
-      assertUserDataAccountBindingIsCurrent(binding);
-    }
-
-    await writeAccountValue(MY_LIST_KEY, binding, mergedEntriesMap);
-    assertUserDataAccountBindingIsCurrent(binding);
-    return mergedIds;
-  } catch {
-    assertUserDataAccountBindingIsCurrent(binding);
-    return localIds;
-  }
+/** Desired state avoids accidental retry toggles; pending/unknown are local, not remote acknowledgements. */
+export async function setMyListTitleSaved(
+  titleId: string | number,
+  saved: boolean,
+  metadata?: MyListMetadata,
+): Promise<{ ids: string[]; syncStatus: CollectionSyncStatus }> {
+  const binding = captureUserDataAccountBinding();
+  const id = toIdString(titleId);
+  if (!id) throw new Error("A title is required.");
+  const result = await myListCollection(binding).change(id, saved ? {
+    id, ...metadata, savedAt: toEpoch(metadata?.savedAt, Date.now()),
+  } : null);
+  return { ids: myListIds(result.values), syncStatus: result.syncStatus };
 }
 
 export async function toggleMyListTitle(
   titleId: string | number,
-  metadata?: {
-    title?: string;
-    posterUrl?: string;
-    thumbnailUrl?: string;
-    savedAt?: number;
-  },
+  metadata?: MyListMetadata,
 ): Promise<string[]> {
+  const binding = captureUserDataAccountBinding();
   const id = toIdString(titleId);
-  if (!id) return readLocalMyListIds();
-
-  const binding = captureUserDataAccountBinding();
-  const userId = getBoundUserId(binding);
-  const currentEntries = await readLocalMyListEntriesForBinding(binding);
-  const currentEntryMap = toMyListEntryMap(currentEntries);
-  const exists = !!currentEntryMap[id];
-
-  if (exists) {
-    delete currentEntryMap[id];
-  } else {
-    currentEntryMap[id] = {
-      id,
-      title: metadata?.title,
-      posterUrl: metadata?.posterUrl,
-      thumbnailUrl: metadata?.thumbnailUrl,
-      savedAt: toEpoch(metadata?.savedAt, Date.now()),
-    };
-  }
-
-  await writeAccountValue(MY_LIST_KEY, binding, currentEntryMap);
-  const nextIds = sortMyListEntries(Object.values(currentEntryMap)).map((entry) => entry.id);
-
-  if (!userId) {
-    assertUserDataAccountBindingIsCurrent(binding);
-    return nextIds;
-  }
-
-  try {
-    if (exists) {
-      await supabase.from(USER_MY_LIST_TABLE).delete().eq("user_id", userId).eq("title_id", id);
-    } else {
-      await supabase.from(USER_MY_LIST_TABLE).upsert(
-        {
-          user_id: userId,
-          title_id: id,
-          updated_at: new Date().toISOString(),
-        } satisfies UserListInsert,
-        { onConflict: "user_id,title_id" },
-      );
-    }
-    assertUserDataAccountBindingIsCurrent(binding);
-  } catch {
-    assertUserDataAccountBindingIsCurrent(binding);
-    // keep local source available even if remote write fails
-  }
-
-  assertUserDataAccountBindingIsCurrent(binding);
-  return nextIds;
+  const collection = myListCollection(binding);
+  if (!id) return myListIds((await collection.snapshot()).values);
+  const result = await collection.change(id, current => current ? null : ({
+    id, ...metadata, savedAt: toEpoch(metadata?.savedAt, Date.now()),
+  }));
+  return myListIds(result.values);
 }
 
-export async function readLocalWatchProgress(): Promise<WatchProgressMap> {
-  const binding = captureUserDataAccountBinding();
-  const parsed = await readAccountValue<unknown>(WATCH_PROGRESS_KEY, binding, {});
-  return parsed && typeof parsed === "object" ? (parsed as WatchProgressMap) : {};
-}
-
-export async function saveLocalWatchProgress(progressMap: WatchProgressMap) {
-  const binding = captureUserDataAccountBinding();
-  await writeAccountValue(WATCH_PROGRESS_KEY, binding, progressMap);
-}
-
-async function readLocalWatchProgressForBinding(binding: UserDataAccountBinding): Promise<WatchProgressMap> {
-  const parsed = await readAccountValue<unknown>(WATCH_PROGRESS_KEY, binding, {});
-  return parsed && typeof parsed === "object" ? (parsed as WatchProgressMap) : {};
-}
-
-const saveLocalWatchProgressForBinding = (binding: UserDataAccountBinding, progressMap: WatchProgressMap) => (
-  writeAccountValue(WATCH_PROGRESS_KEY, binding, progressMap)
+const visibleWatchProgress = (values: Record<string, StoredWatchProgressEntry>): WatchProgressMap => (
+  Object.fromEntries(Object.entries(values).filter(([, entry]) => !entry.completed)
+    .map(([id, entry]) => [id, {
+      positionMillis: entry.positionMillis, durationMillis: entry.durationMillis, updatedAt: entry.updatedAt,
+    }]))
 );
 
-const toProgressEntry = (row: WatchHistoryRow): WatchProgressEntry | null => {
-  const id = toIdString(row.title_id);
-  if (!id) return null;
-  if (row.completed === true) return null;
-
+const toProgressEntry = (row: WatchHistoryRow): StoredWatchProgressEntry | null => {
+  if (!toIdString(row.title_id)) return null;
   const updatedAtSource = row.updated_at ?? row.last_watched_at ?? null;
   return {
     positionMillis: Math.max(0, Number(row.last_position_millis ?? 0)),
     durationMillis: row.duration_millis != null ? Number(row.duration_millis) : undefined,
     updatedAt: updatedAtSource ? new Date(String(updatedAtSource)).getTime() : 0,
+    completed: row.completed === true,
   };
 };
 
-async function upsertWatchHistoryProgress(
-  userId: string,
-  titleId: string,
-  entry: WatchProgressEntry,
-  options?: { completed?: boolean; playCount?: number },
-) {
-  const payload: WatchHistoryInsert = {
-    user_id: userId,
-    title_id: titleId,
-    last_position_millis: Math.max(0, Math.floor(entry.positionMillis)),
-    duration_millis: entry.durationMillis ?? null,
-    completed: options?.completed === true,
-    last_watched_at: toIsoString(entry.updatedAt),
-    updated_at: toIsoString(entry.updatedAt),
-  };
+function validStoredWatchProgress(value: unknown) {
+  return isPlainObject(value) && Number.isFinite(value.positionMillis) && Number(value.positionMillis) >= 0
+    && Number.isFinite(value.updatedAt)
+    && (value.completed === undefined || typeof value.completed === "boolean")
+    && (value.durationMillis === undefined || Number.isFinite(value.durationMillis));
+}
 
-  if (typeof options?.playCount === "number" && Number.isFinite(options.playCount)) {
-    payload.play_count = Math.max(1, Math.floor(options.playCount));
-  }
+function watchProgressCollection(binding: UserDataAccountBinding) {
+  const userId = getBoundUserId(binding);
+  const getClient = boundCollectionClient(binding);
+  return createUserCollectionSync<StoredWatchProgressEntry>({
+    ...collectionStorage(WATCH_PROGRESS_KEY, binding),
+    read: () => readAccountValue(WATCH_PROGRESS_KEY, binding, null, true),
+    legacy: value => isPlainObject(value) ? Object.fromEntries(Object.entries(value)
+      .filter(([, entry]) => validStoredWatchProgress(entry))) as Record<string, StoredWatchProgressEntry> : {},
+    validValue: validStoredWatchProgress,
+    retryUnknownValue: value => {
+      if (!value) return value;
+      // Retrying an uncertain playback start must not increment play_count twice.
+      const { incrementPlayCount: _incrementPlayCount, ...progress } = value;
+      return progress;
+    },
+    readRemote: async () => {
+      const client = await getClient();
+      const result: Record<string, StoredWatchProgressEntry> = {};
+      let titleIdCursor = "";
+      for (;;) {
+        assertUserDataAccountBindingIsCurrent(binding);
+        let query = client.from(USER_WATCH_HISTORY_TABLE)
+          .select("title_id,last_position_millis,duration_millis,last_watched_at,updated_at,completed,play_count")
+          .eq("user_id", userId!).order("title_id", { ascending: true }).limit(USER_MY_LIST_PAGE_SIZE);
+        if (titleIdCursor) query = query.gt("title_id", titleIdCursor);
+        const { data, error } = await query;
+        assertUserDataAccountBindingIsCurrent(binding);
+        if (error || !data) throw error ?? new Error("Watch progress is unavailable.");
+        for (const row of data) {
+          const entry = toProgressEntry(row);
+          if (entry) result[toIdString(row.title_id)] = entry;
+        }
+        if (data.length < USER_MY_LIST_PAGE_SIZE) break;
+        const nextCursor = toIdString(data[data.length - 1]?.title_id);
+        if (!nextCursor || nextCursor === titleIdCursor) throw new Error("Watch progress pagination did not advance.");
+        titleIdCursor = nextCursor;
+      }
+      return result;
+    },
+    writeRemote: async (id, entry) => {
+      const client = await getClient();
+      assertUserDataAccountBindingIsCurrent(binding);
+      const value = entry ?? { positionMillis: 0, completed: true, updatedAt: Date.now() };
+      const payload: WatchHistoryInsert = {
+        user_id: userId!, title_id: id,
+        last_position_millis: Math.max(0, Math.floor(value.positionMillis)),
+        duration_millis: value.durationMillis ?? null,
+        completed: value.completed === true,
+        last_watched_at: toIsoString(value.updatedAt),
+        updated_at: toIsoString(value.updatedAt),
+      };
+      if (value.incrementPlayCount) {
+        const existing = await client.from(USER_WATCH_HISTORY_TABLE).select("play_count")
+          .eq("user_id", userId!).eq("title_id", id).maybeSingle();
+        assertUserDataAccountBindingIsCurrent(binding);
+        if (existing.error) throw new DefinitiveCollectionWriteError(existing.error.message);
+        payload.play_count = Math.max(1, Number(existing.data?.play_count ?? 0) + 1);
+      }
+      assertUserDataAccountBindingIsCurrent(binding);
+      const { error, status } = await client.from(USER_WATCH_HISTORY_TABLE)
+        .upsert(payload, { onConflict: "user_id,title_id" });
+      assertUserDataAccountBindingIsCurrent(binding);
+      if (error) throwCollectionWriteError(error, status);
+    },
+  });
+}
 
-  await supabase.from(USER_WATCH_HISTORY_TABLE).upsert(payload, { onConflict: "user_id,title_id" });
+export async function readLocalWatchProgress(): Promise<WatchProgressMap> {
+  const binding = captureUserDataAccountBinding();
+  return visibleWatchProgress((await watchProgressCollection(binding).snapshot()).values);
+}
+
+export async function saveLocalWatchProgress(progressMap: WatchProgressMap) {
+  const binding = captureUserDataAccountBinding();
+  await watchProgressCollection(binding).replaceLocal(progressMap);
 }
 
 export async function readMergedWatchProgress(): Promise<WatchProgressMap> {
   const binding = captureUserDataAccountBinding();
-  const userId = getBoundUserId(binding);
-  const local = await readLocalWatchProgressForBinding(binding);
-  if (!userId) {
-    assertUserDataAccountBindingIsCurrent(binding);
-    return local;
-  }
+  return visibleWatchProgress((await watchProgressCollection(binding).refresh()).values);
+}
 
-  try {
-    const { data, error } = await supabase
-      .from(USER_WATCH_HISTORY_TABLE)
-      .select("title_id,last_position_millis,duration_millis,last_watched_at,updated_at,completed,play_count")
-      .eq("user_id", userId);
+export async function readWatchProgressState(options?: { retryUnknown?: boolean }) {
+  const binding = captureUserDataAccountBinding();
+  const result = await watchProgressCollection(binding).refresh(options);
+  return { progress: visibleWatchProgress(result.values), syncStatus: result.syncStatus, readStatus: result.readStatus };
+}
 
-    assertUserDataAccountBindingIsCurrent(binding);
-    if (error || !data) return local;
-
-    const remoteMap: WatchProgressMap = {};
-    for (const row of data ?? []) {
-      const id = toIdString(row.title_id);
-      const remoteEntry = toProgressEntry(row);
-      if (!id || !remoteEntry) continue;
-      remoteMap[id] = remoteEntry;
-    }
-
-    const merged: WatchProgressMap = { ...remoteMap };
-    for (const [id, localEntry] of Object.entries(local)) {
-      const remoteEntry = remoteMap[id];
-      if (!remoteEntry || (localEntry.updatedAt ?? 0) > (remoteEntry.updatedAt ?? 0)) {
-        merged[id] = localEntry;
-      }
-    }
-
-    for (const [id, entry] of Object.entries(merged)) {
-      const remoteEntry = remoteMap[id];
-      if (!remoteEntry || (entry.updatedAt ?? 0) > (remoteEntry.updatedAt ?? 0)) {
-        await upsertWatchHistoryProgress(userId, id, entry, { completed: false });
-        assertUserDataAccountBindingIsCurrent(binding);
-      }
-    }
-
-    await saveLocalWatchProgressForBinding(binding, merged);
-    assertUserDataAccountBindingIsCurrent(binding);
-    return merged;
-  } catch {
-    assertUserDataAccountBindingIsCurrent(binding);
-    return local;
+function assertExpectedProgressBinding(
+  binding: UserDataAccountBinding,
+  expectedBinding: UserDataAccountBinding | undefined,
+) {
+  if (expectedBinding === undefined) return;
+  if (expectedBinding === null ? binding !== null : !sameAccountSessionAuthority(expectedBinding, binding)) {
+    throw new Error("Account changed before watch progress could be saved.");
   }
 }
 
-export async function writeProgressForTitle(titleId: string | number, position: number, duration?: number) {
+export async function writeProgressForTitle(
+  titleId: string | number, position: number, duration?: number,
+  expectedBinding?: UserDataAccountBinding,
+) {
   const binding = captureUserDataAccountBinding();
+  assertExpectedProgressBinding(binding, expectedBinding);
   const id = toIdString(titleId);
   if (!id) return;
-
-  const nextEntry: WatchProgressEntry = {
-    positionMillis: Math.max(0, Math.floor(position)),
-    updatedAt: Date.now(),
-    durationMillis: duration,
-  };
-
-  const userId = getBoundUserId(binding);
-  const map = await readLocalWatchProgressForBinding(binding);
-  map[id] = nextEntry;
-  await saveLocalWatchProgressForBinding(binding, map);
-
-  if (!userId) return;
-
-  try {
-    await upsertWatchHistoryProgress(userId, id, nextEntry, { completed: false });
-    assertUserDataAccountBindingIsCurrent(binding);
-  } catch {
-    assertUserDataAccountBindingIsCurrent(binding);
-    // local progress remains authoritative fallback
-  }
+  await watchProgressCollection(binding).change(id, {
+    positionMillis: Math.max(0, Math.floor(position)), durationMillis: duration,
+    updatedAt: Date.now(), completed: false,
+  });
 }
 
-export async function clearProgressForTitle(titleId: string | number) {
+export async function clearProgressForTitle(titleId: string | number, expectedBinding?: UserDataAccountBinding) {
   const binding = captureUserDataAccountBinding();
+  assertExpectedProgressBinding(binding, expectedBinding);
   const id = toIdString(titleId);
   if (!id) return;
-
-  const userId = getBoundUserId(binding);
-  const map = await readLocalWatchProgressForBinding(binding);
-  delete map[id];
-  await saveLocalWatchProgressForBinding(binding, map);
-
-  if (!userId) return;
-
-  try {
-    await supabase.from(USER_WATCH_HISTORY_TABLE).upsert(
-      {
-        user_id: userId,
-        title_id: id,
-        last_position_millis: 0,
-        completed: true,
-        last_watched_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      } satisfies WatchHistoryInsert,
-      { onConflict: "user_id,title_id" },
-    );
-    assertUserDataAccountBindingIsCurrent(binding);
-  } catch {
-    assertUserDataAccountBindingIsCurrent(binding);
-    // ignore remote cleanup failures
-  }
+  await watchProgressCollection(binding).change(id, {
+    positionMillis: 0, updatedAt: Date.now(), completed: true,
+  });
 }
 
 export async function recordPlaybackStart(titleId: string | number) {
   const binding = captureUserDataAccountBinding();
   const id = toIdString(titleId);
   if (!id) return;
-
-  const userId = getBoundUserId(binding);
-  if (userId) {
-    try {
-      const existing = await supabase
-        .from(USER_WATCH_HISTORY_TABLE)
-        .select("play_count")
-        .eq("user_id", userId)
-        .eq("title_id", id)
-        .maybeSingle();
-
-      const nextPlayCount = Math.max(1, Number(existing.data?.play_count ?? 0) + 1);
-      await supabase.from(USER_WATCH_HISTORY_TABLE).upsert(
-        {
-          user_id: userId,
-          title_id: id,
-          play_count: nextPlayCount,
-          last_position_millis: 0,
-          completed: false,
-          last_watched_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        } satisfies WatchHistoryInsert,
-        { onConflict: "user_id,title_id" },
-      );
-      assertUserDataAccountBindingIsCurrent(binding);
-    } catch {
-      assertUserDataAccountBindingIsCurrent(binding);
-      // watch history is optional foundation data
-    }
-  }
+  await watchProgressCollection(binding).change(id, {
+    positionMillis: 0, updatedAt: Date.now(), completed: false, incrementPlayCount: true,
+  });
 }
 
 export async function recordWatchHistoryProgress(
   titleId: string | number,
-  {
-    positionMillis,
-    durationMillis,
-    completed,
-  }: {
-    positionMillis: number;
-    durationMillis?: number;
-    completed?: boolean;
+  { positionMillis, durationMillis, completed }: {
+    positionMillis: number; durationMillis?: number; completed?: boolean;
   },
 ) {
   const binding = captureUserDataAccountBinding();
   const id = toIdString(titleId);
   if (!id) return;
-
-  const userId = getBoundUserId(binding);
-  if (!userId) return;
-
-  try {
-    const existing = await supabase
-      .from(USER_WATCH_HISTORY_TABLE)
-      .select("play_count")
-      .eq("user_id", userId)
-      .eq("title_id", id)
-      .maybeSingle();
-
-    await supabase.from(USER_WATCH_HISTORY_TABLE).upsert(
-      {
-        user_id: userId,
-        title_id: id,
-        play_count: Math.max(1, Number(existing.data?.play_count ?? 0) || 1),
-        last_position_millis: Math.max(0, Math.floor(positionMillis)),
-        duration_millis: durationMillis ?? null,
-        completed: completed === true,
-        last_watched_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      } satisfies WatchHistoryInsert,
-      { onConflict: "user_id,title_id" },
-    );
-    assertUserDataAccountBindingIsCurrent(binding);
-  } catch {
-    assertUserDataAccountBindingIsCurrent(binding);
-    // foundation table is optional
-  }
+  await watchProgressCollection(binding).change(id, {
+    positionMillis: Math.max(0, Math.floor(positionMillis)), durationMillis,
+    updatedAt: Date.now(), completed: completed === true,
+  });
 }
 
 // ── User Profile (for chat identity) ──────────────────────────────────────────

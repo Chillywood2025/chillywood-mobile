@@ -218,7 +218,8 @@ async function readFollowerRow(
     .returns<ChannelFollowerRow>()
     .maybeSingle();
 
-  if (error || !data) return null;
+  if (error) throw error;
+  if (!data) return null;
   return data;
 }
 

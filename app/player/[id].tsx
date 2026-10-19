@@ -105,6 +105,12 @@ import {
     resolveWatchPartySourceType,
 } from "../../_lib/watchPartyContentSources";
 import { useSession } from "../../_lib/session";
+import {
+    getCurrentAccountSessionAuthoritySnapshot,
+    sameAccountSessionAuthority,
+    subscribeToAccountSessionAuthority,
+    type AccountSessionAuthorityBinding,
+} from "../../_lib/accountSessionAuthority";
 import { useNotificationViewTracking } from "../../_lib/useNotificationViewTracking";
 import { notificationPlaybackRecordId } from "../../_lib/notificationViewProgress.mjs";
 import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
@@ -1060,6 +1066,97 @@ const clampZoomTranslation = (translation: ZoomTranslation, scale: number, layou
     y: clamp(translation.y, -maxY, maxY),
   };
 };
+
+// Every callback owns one title/account/playback lifetime. In particular, cleanup
+// must not read the next title's shared position refs or acquire a new account.
+function usePlayerProgressLifetime(titleId: string, authority: AccountSessionAuthorityBinding | null) {
+  const [generation, setGeneration] = useState(0);
+  const { userId, accountId, sessionGeneration, state, restoreOnly } = authority ?? {};
+  const lifetime = useMemo(() => {
+    const binding: AccountSessionAuthorityBinding | null = userId && accountId && sessionGeneration
+      && state === "ACTIVE" && typeof restoreOnly === "boolean"
+      ? { userId, accountId, sessionGeneration, state, restoreOnly } : null;
+    let retired = false;
+    let completionRequested = false;
+    let completionPersisted = false;
+    let completionInFlight = false;
+    let observed: { position: number; duration: number } | null = null;
+    const ownsCurrentSession = () => {
+      const current = getCurrentAccountSessionAuthoritySnapshot();
+      return binding ? sameAccountSessionAuthority(binding, current) : current === null;
+    };
+    const complete = () => {
+      if (retired || completionPersisted || completionInFlight || !titleId) return false;
+      completionRequested = true;
+      completionInFlight = true;
+      clearProgressForTitle(titleId, binding)
+        .then(() => { completionPersisted = true; })
+        .catch(() => {
+          // Keep the completion intent closed to ordinary progress. A later
+          // status, finish, or cleanup can retry a failed local persistence.
+          debugLog("player", "progress completion persistence failed");
+        })
+        .finally(() => { completionInFlight = false; });
+      return true;
+    };
+    const observe = (position: number, duration: number) => {
+      if (retired) return;
+      if (completionRequested) { complete(); return; }
+      observed = { position, duration };
+    };
+    const persist = (position: number, duration: number) => {
+      if (retired || !titleId) return false;
+      if (completionRequested) { complete(); return false; }
+      observe(position, duration);
+      if (duration > 0 && position / duration >= 0.95) {
+        return complete();
+      } else {
+        writeProgressForTitle(titleId, position, duration || undefined, binding).catch(() => {});
+        return true;
+      }
+    };
+    const restartAt = (position: number, duration: number) => {
+      if (retired || !titleId) return false;
+      // Retire synchronously: queued callbacks from before rewatch stay closed.
+      retired = true;
+      writeProgressForTitle(titleId, position, duration || undefined, binding).catch(() => {});
+      setGeneration(generation + 1);
+      return true;
+    };
+    return {
+      observe, persist, complete,
+      restart(duration: number) { restartAt(0, duration); },
+      prepareSeek() {
+        // Capture intent before awaiting the seek. A seek already pending when
+        // playback completes cannot later undo that completion.
+        const beganAfterCompletion = completionRequested;
+        return (position: number, duration: number) => {
+          if (retired) return false;
+          if (completionRequested) {
+            if (beganAfterCompletion && duration > 0 && position >= 0 && position / duration < 0.95) {
+              return restartAt(position, duration);
+            }
+            return false;
+          }
+          return persist(position, duration);
+        };
+      },
+      activate() { retired = !ownsCurrentSession(); },
+      retireIfSessionChanged() { if (!ownsCurrentSession()) retired = true; },
+      dispose() {
+        if (completionRequested) complete();
+        else if (observed) persist(observed.position, observed.duration);
+        retired = true;
+      },
+    };
+  }, [titleId, userId, accountId, sessionGeneration, state, restoreOnly, generation]);
+  useEffect(() => {
+    lifetime.activate();
+    const unsubscribe = subscribeToAccountSessionAuthority(lifetime.retireIfSessionChanged);
+    return () => { unsubscribe(); lifetime.dispose(); };
+  }, [lifetime]);
+  return lifetime;
+}
 
 export default function PlayerScreen() {
   const { isSignedIn, user: sessionUser, authority: sessionAuthority } = useSession();
@@ -3457,35 +3554,21 @@ export default function PlayerScreen() {
     ]).start();
   }, [compactControlsOpacity, compactControlsTranslateY, controlsVisible]);
 
-  useEffect(() => {
-    return () => {
-      if (!titleId) return;
-      const duration = durationRef.current;
-      const position = currentPositionRef.current;
-
-      if (duration > 0 && position / duration >= 0.95) {
-        clearProgressForTitle(titleId).catch(() => {});
-      } else {
-        writeProgressForTitle(titleId, position, duration || undefined).catch(() => {});
-      }
-    };
-  }, [titleId]);
-
+  const progressLifetime = usePlayerProgressLifetime(titleId, sessionAuthority);
   const persistProgress = useCallback(
     (position: number, duration: number) => {
-      if (!titleId) return;
-
-      if (duration > 0 && position / duration >= 0.95) {
-        clearProgressForTitle(titleId).catch(() => {});
-        lastPersistedPositionRef.current = 0;
-        return;
+      if (progressLifetime.persist(position, duration)) {
+        lastPersistedPositionRef.current = duration > 0 && position / duration >= 0.95 ? 0 : position;
       }
-
-      writeProgressForTitle(titleId, position, duration || undefined).catch(() => {});
-      lastPersistedPositionRef.current = position;
     },
-    [titleId],
+    [progressLifetime],
   );
+  const prepareSeekProgress = useCallback(() => {
+    const commit = progressLifetime.prepareSeek();
+    return (position: number, duration: number) => {
+      if (commit(position, duration)) lastPersistedPositionRef.current = position;
+    };
+  }, [progressLifetime]);
 
   const showSeekFeedback = useCallback(
     (deltaMillis: number) => {
@@ -3541,6 +3624,7 @@ export default function PlayerScreen() {
       const current = currentPositionRef.current;
       const max = duration > 0 ? duration : current + Math.abs(deltaMillis) + STEP_MILLIS;
       const next = clamp(current + deltaMillis, 0, Math.max(0, max));
+      const commitProgress = prepareSeekProgress();
 
       try {
         await videoRef.current?.setPositionAsync(next);
@@ -3551,13 +3635,13 @@ export default function PlayerScreen() {
       currentPositionRef.current = next;
       setPositionMillis(next);
       showSeekFeedback(deltaMillis);
-      persistProgress(next, duration);
+      commitProgress(next, duration);
       if (isSharedPartyPlayback) {
         const nextState = isPlaying ? "playing" : "paused";
         syncHostSharedPlayback(next, nextState, "seek");
       }
     },
-    [blockViewerSharedPlaybackControl, isPlaying, isSharedPartyPlayback, persistProgress, showSeekFeedback, syncHostSharedPlayback],
+    [blockViewerSharedPlaybackControl, isPlaying, isSharedPartyPlayback, prepareSeekProgress, showSeekFeedback, syncHostSharedPlayback],
   );
 
   const setZoomTransform = useCallback(
@@ -3914,7 +3998,7 @@ export default function PlayerScreen() {
           await videoRef.current?.playAsync();
         }
         setIsPlaying(true);
-        if (titleId) writeProgressForTitle(titleId, 0, duration || undefined).catch(() => {});
+        progressLifetime.restart(duration);
         syncHostSharedPlayback(0, "playing", "play");
         return;
       }
@@ -3932,7 +4016,7 @@ export default function PlayerScreen() {
     } catch {
       // ignore transient player errors
     }
-  }, [blockViewerSharedPlaybackControl, isPlaying, isVideoReady, nextTitleId, showControlsAndResetAutoHideTimer, syncHostSharedPlayback, titleId]);
+  }, [blockViewerSharedPlaybackControl, isPlaying, isVideoReady, nextTitleId, progressLifetime, showControlsAndResetAutoHideTimer, syncHostSharedPlayback]);
 
   const isStandalonePlayer = !inWatchParty && !isLiveModeFlag;
   const standalonePlaybackBlocked = isStandalonePlayer && !!standaloneAccess && !standaloneAccess.isAllowed;
@@ -3971,11 +4055,11 @@ export default function PlayerScreen() {
       lastPersistedPositionRef.current = 0;
       setPositionMillis(0);
       setIsPlaying(true);
-      if (titleId) writeProgressForTitle(titleId, 0, durationRef.current || undefined).catch(() => {});
+      progressLifetime.restart(durationRef.current);
     } catch {
       // ignore transient player errors
     }
-  }, [retryStandaloneAccessCheck, standalonePlaybackBlocked, standalonePlaybackUnknown, titleId]);
+  }, [progressLifetime, retryStandaloneAccessCheck, standalonePlaybackBlocked, standalonePlaybackUnknown]);
 
   // Keep the existing per-render tap closure so the responder reads the current
   // entitlement and playback gates without moving authority across lifecycles.
@@ -4157,10 +4241,12 @@ export default function PlayerScreen() {
           resetAutoHideTimer();
           if (panIsScrubbingRef.current) {
             const finalPosition = currentPositionRef.current;
+            const duration = durationRef.current;
+            const commitProgress = prepareSeekProgress();
             videoRef.current
               ?.setPositionAsync(finalPosition)
               .then(() => {
-                persistProgress(finalPosition, durationRef.current);
+                commitProgress(finalPosition, duration);
                 if (panWasPlayingBeforeScrubRef.current) {
                   if (isSharedPartyPlayback) syncHostSharedPlayback(finalPosition, "playing", "seek");
                   return videoRef.current?.playAsync();
@@ -4226,10 +4312,12 @@ export default function PlayerScreen() {
           resetAutoHideTimer();
           if (panIsScrubbingRef.current) {
             const finalPosition = currentPositionRef.current;
+            const duration = durationRef.current;
+            const commitProgress = prepareSeekProgress();
             videoRef.current
               ?.setPositionAsync(finalPosition)
               .then(() => {
-                persistProgress(finalPosition, durationRef.current);
+                commitProgress(finalPosition, duration);
                 if (panWasPlayingBeforeScrubRef.current) {
                   if (isSharedPartyPlayback) syncHostSharedPlayback(finalPosition, "playing", "seek");
                   return videoRef.current?.playAsync();
@@ -4262,7 +4350,7 @@ export default function PlayerScreen() {
       isPlaying,
       isSharedPartyPlayback,
       isVideoReady,
-      persistProgress,
+      prepareSeekProgress,
       resetAutoHideTimer,
       resetGestureState,
       resetZoom,
@@ -4305,8 +4393,10 @@ export default function PlayerScreen() {
           if (blockViewerSharedPlaybackControl("progress-scrub")) return;
           try {
             const finalPosition = currentPositionRef.current;
+            const duration = durationRef.current;
+            const commitProgress = prepareSeekProgress();
             await videoRef.current?.setPositionAsync(finalPosition);
-            persistProgress(finalPosition, durationRef.current);
+            commitProgress(finalPosition, duration);
             if (wasPlayingBeforeScrubRef.current) {
               if (isSharedPartyPlayback) syncHostSharedPlayback(finalPosition, "playing", "seek");
               await videoRef.current?.playAsync();
@@ -4322,8 +4412,10 @@ export default function PlayerScreen() {
           if (blockViewerSharedPlaybackControl("progress-scrub")) return;
           try {
             const finalPosition = currentPositionRef.current;
+            const duration = durationRef.current;
+            const commitProgress = prepareSeekProgress();
             await videoRef.current?.setPositionAsync(finalPosition);
-            persistProgress(finalPosition, durationRef.current);
+            commitProgress(finalPosition, duration);
             if (wasPlayingBeforeScrubRef.current) {
               if (isSharedPartyPlayback) syncHostSharedPlayback(finalPosition, "playing", "seek");
               await videoRef.current?.playAsync();
@@ -4335,7 +4427,7 @@ export default function PlayerScreen() {
           }
         },
       }),
-    [blockViewerSharedPlaybackControl, isPlaying, isSharedPartyPlayback, persistProgress, resetAutoHideTimer, syncHostSharedPlayback],
+    [blockViewerSharedPlaybackControl, isPlaying, isSharedPartyPlayback, prepareSeekProgress, resetAutoHideTimer, syncHostSharedPlayback],
   );
 
   const navigateToNext = useCallback(() => {
@@ -4508,6 +4600,7 @@ export default function PlayerScreen() {
         shouldAutoplayNextRef.current = false;
       }
 
+      progressLifetime.observe(position, duration);
       if (titleId && duration > 0) {
         const now = Date.now();
         const positionDelta = Math.abs(position - lastPersistedPositionRef.current);
@@ -4528,7 +4621,7 @@ export default function PlayerScreen() {
         didJustFinishRef.current = true;
         setIsPlaying(false);
         videoRef.current?.pauseAsync().catch(() => {});
-        if (titleId) clearProgressForTitle(titleId).catch(() => {});
+        progressLifetime.complete();
 
         if (canControlSharedPlayback && nextTitleId) {
           if (!upNextCanceled && !hasNavigatedToNextRef.current) {
@@ -4553,6 +4646,7 @@ export default function PlayerScreen() {
       partyId,
       partySyncRole,
       persistProgress,
+      progressLifetime,
       sharedAndroidVideoFallbackMode,
       startUpNextCountdown,
       titleId,
