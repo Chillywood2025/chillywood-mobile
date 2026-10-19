@@ -120,7 +120,13 @@ select ok(
   ) ilike '%whole_app_exact_current_session_authority_internal%'
   and pg_get_functiondef(
     'public.platform_brand_storage_access_allowed(text,text)'::regprocedure
+  ) ilike '%platform_brand_publication_asset_safe_internal%'
+  and pg_get_functiondef(
+    'public.platform_brand_publication_asset_safe_internal(uuid,text)'::regprocedure
   ) ilike '%media_scan_public_safe%'
+  and pg_get_functiondef(
+    'public.platform_brand_storage_access_allowed(text,text)'::regprocedure
+  ) ilike '%platform_brand_published_object_visible_internal%'
   and pg_get_functiondef(
     'public.platform_brand_storage_access_allowed(text,text)'::regprocedure
   ) ilike '%quarantined_at%is null%'

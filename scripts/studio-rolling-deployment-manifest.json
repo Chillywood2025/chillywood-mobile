@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "project": "bmkkhihfbmsnnmcqkoly",
+  "migrations": [
+    {
+      "version": "20261015073423",
+      "name": "platform_studio_publication_and_audience_authority",
+      "sha256": "51f4bb3324e0dedb3691b4d961d00fcd14a0619ea7c056a041b6564eb3dd2a10"
+    },
+    {
+      "version": "20261019020049",
+      "name": "platform_studio_rolling_brand_compatibility",
+      "sha256": "d117363ab661e82facad2acfc3f86bba07508fda9bfe22560a9f31a7b91239d8"
+    },
+    {
+      "version": "20261019020052",
+      "name": "platform_studio_rolling_audience_compatibility",
+      "sha256": "7d93292b9d549e10831ea8e8c145c86fcf1c542a963645b2cd537a24af7ccad7"
+    }
+  ],
+  "prerequisites": [
+    {
+      "version": "20260615142151",
+      "name": "platform_brand_owner_publish_assets_rpc",
+      "statementsSha256": "a0369520fecb488984a3c3cf769f889673252564b63ee05152dc0125c97e965a"
+    },
+    {
+      "version": "20260824034109",
+      "name": "creator_money_authority_integrity_closeout",
+      "statementsSha256": "dbfb2bc042dc983ef3983c4550c79a1c0ff0e69d86edafae21f0dc30b07142dd"
+    },
+    {
+      "version": "202608250002",
+      "name": "whole_app_media_authority_closure",
+      "statementsSha256": "823dd8e2e1e64f9128bc14753c4d25908fe1104866441677047a0d1584454d21"
+    },
+    {
+      "version": "202608250004",
+      "name": "platform_role_exact_subject_closure",
+      "statementsSha256": "7f952064a964a538e6e7cc8a883e6d09ed96e83f4a6eadf1b87c0a1dc02e346b"
+    },
+    {
+      "version": "20260826055737",
+      "name": "exact_current_session_not_after_authority",
+      "statementsSha256": "f42e4d538cc08e10e51bc1fb02a3242e849f8272869566e39f3e42978e326f06"
+    },
+    {
+      "version": "20260827233000",
+      "name": "social_attachment_storage_policy_composition_closure",
+      "statementsSha256": "d7634b3879c911adb9c2703f827827a7d61c1295104c4611695b0f4ea97356ae"
+    },
+    {
+      "version": "20261010224815",
+      "name": "social_notification_activity_producers",
+      "statementsSha256": "1c0e2f0fa8c45529908f0bfbf62d92c132ee850c0df305c9b31f4a18d0aa2425"
+    }
+  ],
+  "policies": [
+    {
+      "table": "channel_audience_requests",
+      "name": "channel_audience_requests_update_owner_or_operator",
+      "sha256": "88643f151d1dcfad4d4ab9f8b3bb8a38fbd039a3cb8b00c4db315649b7ccb875"
+    },
+    {
+      "table": "platform_brand_publication_metadata",
+      "name": "platform_brand_publication_metadata_read_own",
+      "sha256": "14b7ec7234e8d47db36d7a616269dddcd3b6ccc37b9e823412526c4ee69698f0"
+    }
+  ]
+}
