@@ -1,4 +1,108 @@
-# Studio / Audience held-migration preparation
+# Studio / Audience atomic rolling deployment
+
+The supported rolling path applies these three migrations **in one transaction**:
+
+1. `20261015073423_platform_studio_publication_and_audience_authority` — unchanged held bytes.
+2. `20261019020049_platform_studio_rolling_brand_compatibility`.
+3. `20261019020052_platform_studio_rolling_audience_compatibility`.
+
+Use `scripts/studio-rolling-deploy.mjs`, with the reviewed hashes in
+`scripts/studio-rolling-deployment-manifest.json`. Do not run `db push`, a
+standalone `apply_migration`, or three separate requests for this bundle:
+committing the held migration before its compatibility successors creates an
+unsupported intermediate state. Deployed history remains immutable.
+
+Source approval does not authorize production application. An operator needs
+separate, explicit authorization for this exact database deployment. The command
+uses an existing `SUPABASE_ACCESS_TOKEN` against the fixed project
+`bmkkhihfbmsnnmcqkoly`; it does not create credentials, change provider settings,
+publish an OTA, build an app, or retire accounts/installations.
+
+## Behavior during a rolling update
+
+- Current Studio clients publish the full profile and selected media atomically.
+  Draft changes cannot replace the public snapshot. Public asset rows and Storage
+  reads require a safe, visible committed snapshot reference, while owner/staff
+  private access retains its existing authority checks.
+- Historical Studio draft upserts may retain a publication timestamp recorded
+  at cutover or by a later atomic Publish. The server preserves its current
+  timestamp. An older pre-cutover cached timestamp that was never recorded
+  requires reloading Studio before saving.
+- **Historical Publish requires updating the app.** Unknown publication
+  timestamps and standalone asset publication reject with
+  `brand_publish_rpc_required`. Old UI can still display an incorrect success
+  notice after that rejection, including its zero-asset path. The backend
+  cannot repair already-installed UI; verify the public snapshot rather than
+  trusting that notice. Do not describe old Publish as working.
+- Historical Audience approval first performs a validated follower-insert
+  preflight that creates no relationship. Its final exact-request-ID update
+  commits the follower and reviewed request together and returns the persisted
+  row. Current RPC approval uses the same transition guard. Subscriber approval
+  remains unsupported; cancellation and ordinary requester self-follow retain
+  their existing paths.
+- The atomic guarantee begins at the deployment boundary. A relationship may
+  already exist beside a pending request because of legitimate self-follow or
+  a pre-cutover partial operation. The tool reports the aggregate count for
+  operator context and does not delete or reinterpret those relationships.
+  An in-flight historical final update can complete through the new guard.
+
+These verified compatibility behaviors replace the complete-client-retirement
+prerequisite **only for the exact atomic rolling path**. They do not establish
+an installed-version inventory, make all historical actions compatible, revoke
+previously downloaded media, or authorize removal of other protections.
+
+## Rolling operator workflow
+
+1. Review and merge the focused source PR after its exact-head Required
+   Validation passes. Run the focused rolling legacy, database, native
+   concurrency and deployment tests, including rollback after an intermediate
+   migration failure. Run the required full database suite at the frozen head.
+   Review migration parity and the precise client limitations above.
+2. Use a clean committed checkout at the reviewed full commit SHA. Refresh
+   `scripts/release-review-gate.mjs` with the existing authenticated GitHub
+   context. The deployment manifest pins migration bytes, historical prerequisite
+   statement hashes and final policy fingerprints; it intentionally contains no
+   self-referential commit hash. Changes to those pins require source review.
+3. Run the default read-only plan:
+
+   `node scripts/studio-rolling-deploy.mjs --source FULL_COMMIT_SHA`
+
+   `plan_ready` means all targets are absent, the prerequisite history and
+   retained asset helper match, and the baseline was captured. The command emits
+   hashes and aggregate status only. It sends no mutation. Mixed history,
+   partial catalog, unexpected source bytes or prerequisite drift blocks.
+4. After explicit deployment authorization, run:
+
+   `node scripts/studio-rolling-deploy.mjs --source FULL_COMMIT_SHA --apply`
+
+   The command rereads live state, rechecks immutable committed source and sends
+   exactly one transaction. A transaction-scoped advisory lock serializes
+   cooperating deployments; write-blocking table locks cover migration history,
+   Audience requests/followers, Studio profiles/assets and Storage during seed
+   and schema changes. Lock waits are bounded to five seconds and individual
+   statements to 45 seconds. Existing writes finish before seeding or the apply
+   aborts. Avoid concurrent privileged schema maintenance; an advisory lock
+   cannot constrain an operator who ignores it.
+5. Inside the transaction, baseline catalog/history are compared again, exact
+   migration bodies and their individual history rows are applied, and function
+   bodies/signatures, triggers, RLS/grants and policy fingerprints are checked
+   before commit. PostgREST schema reload is notified at commit. Any SQL error
+   rolls back the complete bundle and its history rows; no intermediate held-only
+   state is published. Do not edit deployed versions or use a permissive fallback.
+6. Every apply attempt is followed by read-only verification, including after a
+   lost response. `applied_verified` confirms complete exact history and final
+   catalog. `already_applied_verified` is an idempotent readback and sends no
+   write. `apply_unconfirmed` or `not_applied_readback` is not success and does not
+   authorize a retry: a timed-out request may still be running. Inspect the
+   provider state and repeat only the default read-only command until the
+   outcome is known. Never blindly retry a mutation.
+7. Retain the command's safe receipt privately. Perform separately authorized
+   production canaries for current draft/publication isolation, legacy draft
+   handling and Publish rejection, public asset visibility, and both Audience
+   review paths. Publication and schema verification are not installed-device
+   proof. If behavior fails, investigate and use a reviewed forward correction.
+
+## Standalone held-only preparation (not the rolling path)
 
 This is a **manual operator evidence gate**, not a deployment mechanism. It
 prepares only the unchanged bytes of
@@ -7,7 +111,7 @@ It never applies SQL, changes provider settings, creates credentials, pauses a
 service, distributes a build, or authorizes production action. Source/PR approval
 does not authorize any of those actions.
 
-## Why the migration remains held
+## Why the standalone migration remains held
 
 Historical Brand clients cannot distinguish draft saves from intended publish
 writes reliably, and some old UI paths report success after a rejected write.

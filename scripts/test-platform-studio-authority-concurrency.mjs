@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { runStudioRollingHttp } from "./studio-rolling-http-fixture.mjs";
 
 if (process.argv.includes("--help")) {
   console.log("Run against a local, fully migrated Supabase Docker container. Optional SUPABASE_DB_CONTAINER must name a running supabase_db_* CLI container. The script clones postgres, tests actual lock waits, and drops only its generated clone. No remote endpoints accepted.");
@@ -81,6 +82,25 @@ const publish = (person, patch) => `${claims(person)}
   select public.publish_platform_brand_profile(${literal(JSON.stringify(full(person, patch)))}::jsonb);`;
 const review = (id, status) => `${claims(owner)}
   select public.review_channel_audience_request(${id},${literal(status)});`;
+// These are the two separate writes made by the historical Audience helper.
+// The first request must never create a relationship before the exact-id review.
+const legacyFollowerPreflight = (person) => `${claims(owner)}
+  insert into public.channel_followers(channel_user_id,follower_user_id,updated_at)
+    values(${literal(owner.user)},${literal(person.user)},clock_timestamp());`;
+const legacyReview = (id, status, person = owner) => `${claims(person)}
+  update public.channel_audience_requests set status=${literal(status)},
+    reviewed_at=clock_timestamp(),reviewed_by=${literal(person.user)},updated_at=clock_timestamp()
+    where id=${id} returning id,status;`;
+const legacyDraft = (person, patch, publishedAt) => {
+  const payload = { ...full(person, patch), published_at: publishedAt };
+  const columns = Object.keys(payload);
+  return `${claims(person)}
+    insert into public.platform_brand_profiles(${columns.join(",")})
+      select ${columns.join(",")} from jsonb_populate_record(null::public.platform_brand_profiles,
+        ${literal(JSON.stringify(payload))}::jsonb)
+    on conflict(owner_user_id) do update set ${columns.filter(column => column !== "owner_user_id")
+      .map(column => `${column}=excluded.${column}`).join(",")};`;
+};
 let checks = 0;
 const pass = (label) => { checks++; console.log(`PASS ${label}`); };
 async function serializedRace(label, firstSql, secondSql, { secondError = null, inspectHeld = null, whileBlocked = null } = {}) {
@@ -167,6 +187,8 @@ try {
       query(`begin; ${publish(person, {})} commit;`);
     }
   }
+  await runStudioRollingHttp({ container, database, owner, requester, query, full, pass });
+  query(`begin; ${publish(owner, {})} commit;`);
   const newRequest = (person) => query(`insert into public.channel_audience_requests(channel_user_id,requester_user_id)
     values(${literal(owner.user)},${literal(person.user)}) returning id;`);
   const requestId = newRequest(requester);
@@ -187,6 +209,101 @@ try {
   await serializedRace("decline-approve", review(thirdId, "declined"), review(thirdId, "approved"), { secondError: /audience_request_not_pending/u });
   assert.equal(query(`select count(*) from public.channel_followers where channel_user_id=${literal(owner.user)} and follower_user_id=${literal(follower.user)};`), "0");
 
+  const resetAudience = (person) => {
+    query(`delete from public.channel_audience_requests where channel_user_id=${literal(owner.user)}
+      and requester_user_id=${literal(person.user)};
+      delete from public.channel_followers where channel_user_id=${literal(owner.user)}
+      and follower_user_id=${literal(person.user)};`);
+    return newRequest(person);
+  };
+  const audienceState = (id, person) => JSON.parse(query(`select jsonb_build_object(
+    'status',(select status from public.channel_audience_requests where id=${id}),
+    'followers',(select count(*) from public.channel_followers where channel_user_id=${literal(owner.user)}
+      and follower_user_id=${literal(person.user)}))::text;`));
+  let legacyId = resetAudience(requester);
+  query(`begin; ${legacyFollowerPreflight(requester)} commit;`);
+  assert.deepEqual(audienceState(legacyId, requester), { status: "pending", followers: 0 },
+    "interrupted old first request cannot commit a follower or review");
+  query(`begin; ${review(legacyId, "approved")} commit;`);
+  query(`begin; ${legacyReview(legacyId, "approved")} commit;`);
+  assert.deepEqual(audienceState(legacyId, requester), { status: "approved", followers: 1 },
+    "a lost final response followed by an old/new retry remains idempotent");
+  pass("legacy preflight interruption and mixed-version retry preserve one atomic approval");
+
+  for (const [label, firstLegacy, firstStatus, secondStatus] of [
+    ["legacy-approve-rpc-decline", true, "approved", "declined"],
+    ["rpc-decline-legacy-approve", false, "declined", "approved"],
+    ["legacy-approve-rpc-approve", true, "approved", "approved"],
+    ["rpc-approve-legacy-approve", false, "approved", "approved"],
+  ]) {
+    legacyId = resetAudience(requester);
+    query(`begin; ${legacyFollowerPreflight(requester)} commit;`);
+    const first = firstLegacy ? legacyReview(legacyId, firstStatus) : review(legacyId, firstStatus);
+    const second = firstLegacy ? review(legacyId, secondStatus) : legacyReview(legacyId, secondStatus);
+    await serializedRace(label, first, second, {
+      secondError: firstStatus === secondStatus ? null : /audience_request_not_pending/u,
+      inspectHeld: () => assert.deepEqual(audienceState(legacyId, requester), { status: "pending", followers: 0 },
+        "neither request state nor follower leaks before the winning transaction commits"),
+    });
+    assert.deepEqual(audienceState(legacyId, requester), {
+      status: firstStatus, followers: firstStatus === "approved" ? 1 : 0,
+    });
+  }
+
+  legacyId = resetAudience(requester);
+  query(`begin; ${legacyFollowerPreflight(requester)} commit;
+    begin; ${claims(requester)} delete from public.channel_audience_requests where id=${legacyId}; commit;`);
+  const replacementId = newRequest(requester);
+  assert.notEqual(replacementId, legacyId);
+  query(`begin; ${legacyReview(legacyId, "approved")} commit;`);
+  assert.deepEqual(audienceState(replacementId, requester), { status: "pending", followers: 0 },
+    "old exact-id review cannot approve a canceled request's replacement");
+  query(`begin; ${review(replacementId, "approved")} commit;`);
+  assert.deepEqual(audienceState(replacementId, requester), { status: "approved", followers: 1 });
+  pass("cancellation and recreation cannot retarget an interrupted old approval");
+
+  legacyId = resetAudience(requester);
+  const legacyLock = `select id from public.channel_audience_requests where id=${legacyId} for update;`;
+  for (const [label, operation] of [
+    ["queued-legacy-review-session-cutoff", legacyReview(legacyId, "approved")],
+  ]) {
+    await serializedRace(label, legacyLock, operation, {
+      secondError: /audience_review_current_session_required/u,
+      whileBlocked: () => query(`update auth.sessions set not_after=clock_timestamp()
+        where id=${literal(owner.session)};`),
+    });
+    assert.deepEqual(audienceState(legacyId, requester), { status: "pending", followers: 0 });
+    query(`update auth.sessions set not_after=now()+interval '1 day' where id=${literal(owner.session)};`);
+  }
+  await serializedRace("legacy-review-follower-wait-session-cutoff",
+    `${claims(requester)} insert into public.channel_followers(channel_user_id,follower_user_id)
+      values(${literal(owner.user)},${literal(requester.user)});`, legacyReview(legacyId, "approved"), {
+      secondError: /audience_review_current_session_required/u,
+      whileBlocked: () => query(`update auth.sessions set not_after=clock_timestamp()
+        where id=${literal(owner.session)};`),
+    });
+  assert.deepEqual(audienceState(legacyId, requester), { status: "pending", followers: 1 },
+    "legitimate self-follow commits, but expired queued legacy review must stay pending");
+  query(`update auth.sessions set not_after=now()+interval '1 day' where id=${literal(owner.session)};
+    delete from public.channel_followers where channel_user_id=${literal(owner.user)}
+      and follower_user_id=${literal(requester.user)};
+    insert into public.platform_role_memberships(user_id,role,status,expires_at)
+      values(${literal(otherOwner.user)},'operator','active',clock_timestamp()+interval '1 day');`);
+  await serializedRace("queued-legacy-review-role-cutoff", legacyLock, legacyReview(legacyId, "approved", otherOwner), {
+    secondError: /audience_review_forbidden/u,
+    whileBlocked: async () => {
+      query(`update public.platform_role_memberships set expires_at=clock_timestamp()+interval '250 milliseconds'
+        where user_id=${literal(otherOwner.user)} and role='operator';`);
+      await waitUntil(() => query(`select clock_timestamp()>=expires_at from public.platform_role_memberships
+        where user_id=${literal(otherOwner.user)} and role='operator';`) === "t", "legacy review role expiry reached");
+    },
+  });
+  assert.deepEqual(audienceState(legacyId, requester), { status: "pending", followers: 0 });
+  query(`delete from public.platform_role_memberships where user_id=${literal(otherOwner.user)} and role='operator';`);
+  query(`delete from public.channel_audience_requests where id=${legacyId};`);
+
+  const oldCachedPublicationAt = query(`select published_at from public.platform_brand_profiles
+    where owner_user_id=${literal(owner.user)};`);
   const a = { accent_color: "#112233", hero_fit_mode: "fit", overlay_strength: 0.2 };
   const b = { accent_color: "#445566", hero_fit_mode: "center", overlay_strength: 0.8 };
   await serializedRace("two-publishes", publish(owner, a), publish(owner, b), {
@@ -207,6 +324,19 @@ try {
   assert.equal(query(`select accent_color from public.platform_brand_profiles where owner_user_id=${literal(owner.user)};`), "#778899");
   await serializedRace("draft-then-publish", draft, publish(owner, b));
   assert.equal(query(`select accent_color||':'||hero_fit_mode from public.platform_brand_publications where owner_user_id=${literal(owner.user)};`), "#445566:center");
+
+  const cachedDraft = legacyDraft(owner, { accent_color: "#AABBCC", hero_fit_mode: "fill" }, oldCachedPublicationAt);
+  await serializedRace("rpc-publish-then-old-cached-draft", publish(owner, a), cachedDraft);
+  assert.equal(query(`select accent_color from public.platform_brand_publications where owner_user_id=${literal(owner.user)};`), "#112233",
+    "old cached publication metadata cannot publish the delayed draft");
+  assert.equal(query(`select accent_color from public.platform_brand_profiles where owner_user_id=${literal(owner.user)};`), "#AABBCC");
+  assert.equal(query(`select draft.published_at=live.published_at from public.platform_brand_profiles draft
+    join public.platform_brand_publications live using(owner_user_id) where owner_user_id=${literal(owner.user)};`), "t",
+    "accepted cached draft cannot roll back canonical publication metadata");
+  await serializedRace("old-cached-draft-then-rpc-publish", cachedDraft, publish(owner, b));
+  assert.equal(query(`select accent_color||':'||hero_fit_mode from public.platform_brand_publications
+    where owner_user_id=${literal(owner.user)};`), "#445566:center",
+    "new complete publication wins without mixing the prior legacy draft");
 
   // Independence is positive evidence: another owner's publish must finish
   // while the first owner's transaction deliberately continues holding locks.

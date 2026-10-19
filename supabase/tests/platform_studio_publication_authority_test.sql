@@ -190,9 +190,12 @@ select is((select hero_image_asset_id from public.read_public_platform_brand_pro
 select throws_ok($$update public.platform_brand_profiles set published_at=now()+interval '10 years'
   where owner_user_id=pg_temp.studio_user(1)::text$$,
   '42501','brand_publish_rpc_required','direct forged publication timestamp is denied');
-select throws_ok($$update public.platform_brand_profiles set published_at=null
+select lives_ok($$update public.platform_brand_profiles set published_at=null
   where owner_user_id=pg_temp.studio_user(1)::text$$,
-  '42501','brand_publish_rpc_required','direct clearing of publication metadata is denied');
+  'cached null publication metadata is accepted only as a draft write');
+select is((select published_at from public.platform_brand_profiles where owner_user_id=pg_temp.studio_user(1)::text),
+  (select published_at from public.read_public_platform_brand_profile(pg_temp.studio_user(1)::text)),
+  'cached null cannot clear the canonical publication timestamp');
 select lives_ok($$insert into public.platform_brand_profiles(owner_user_id,published_at,accent_color)
   select owner_user_id,published_at,'#234567' from public.platform_brand_profiles
   where owner_user_id=pg_temp.studio_user(1)::text
@@ -340,9 +343,11 @@ select pg_temp.studio_login(1);
 set local role authenticated;
 select throws_ok($$update public.channel_audience_requests set requester_user_id=pg_temp.studio_user(3)::text where id=91501$$,
   '42501',null,'creator cannot swap requester identity');
-select throws_ok($$insert into public.channel_followers(channel_user_id,follower_user_id)
+select lives_ok($$insert into public.channel_followers(channel_user_id,follower_user_id)
   values(pg_temp.studio_user(1)::text,pg_temp.studio_user(4)::text)$$,
-  '42501',null,'general follower INSERT remains self-only');
+  'legacy reviewer follower INSERT permits only a read-only preflight');
+select is((select count(*)::integer from public.channel_followers where channel_user_id=pg_temp.studio_user(1)::text
+  and follower_user_id=pg_temp.studio_user(4)::text),0,'legacy preflight cannot create a follower before atomic review');
 select is(public.review_channel_audience_request(91501,'approved')->>'status','approved','owner atomically approves pending follow');
 select is(public.review_channel_audience_request(91501,'approved')->>'status','approved','same-status retry is idempotent');
 select throws_ok($$select public.review_channel_audience_request(91501,'declined')$$,

@@ -12,6 +12,11 @@ const repairName = fs.readdirSync(migrationDirectory).find(name => name.endsWith
 export const repairMigrationPath = repairName ? path.join(migrationDirectory, repairName) : null;
 export const liveSnapshotPath = path.join(root, 'tests/fixtures/database-runtime-production-20261015.sql');
 export const heldStudioVersion = '20261015073423';
+// The rolling migrations depend on the held publication/Audience schema and
+// are deployed with it. Replay either the entire bundle or the pre-Studio state.
+export const heldStudioBundleVersions = Object.freeze([
+  heldStudioVersion, '20261019020049', '20261019020052',
+]);
 
 // PostgreSQL-aware statement boundaries: strings, quoted identifiers, tagged
 // dollar bodies, nested block comments and line comments are kept intact.
@@ -94,7 +99,8 @@ export async function createDatabase({overlayLiveDrift = false, applyRepair = fa
       create view vault.decrypted_secrets as select *,secret as decrypted_secret from vault.secrets;
       create function vault.create_secret(text,text,text) returns uuid language sql as $$insert into vault.secrets(secret,name,description) values($1,$2,$3) returning id$$;
     `);
-    const files = fs.readdirSync(migrationDirectory).filter(name => name.endsWith('.sql') && name !== repairName && (includeHeldStudio || !name.startsWith(heldStudioVersion))).sort();
+    const files = fs.readdirSync(migrationDirectory).filter(name => name.endsWith('.sql') && name !== repairName
+      && (includeHeldStudio || !heldStudioBundleVersions.some(version => name.startsWith(`${version}_`)))).sort();
     for (const file of files) {
       const statements = splitSQL(fs.readFileSync(path.join(migrationDirectory, file), 'utf8'));
       for (let index = 0; index < statements.length; index++) {

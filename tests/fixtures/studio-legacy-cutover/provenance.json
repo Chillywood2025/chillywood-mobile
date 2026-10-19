@@ -149,6 +149,269 @@
           "sha256": "889370ea5c06eb1f29cddc0838633aa49256849fa2b33fd58d7e6f758262ec5b"
         }
       ]
+    },
+    {
+      "path": "_lib/channelAudience.ts",
+      "sourceBlob": "4d1885ef110a46a4e075c75e9422dd8b458ab758",
+      "sourceSha256": "44d0371e6d839926f3fcf1e8197a8f4ff104e947b41d3226ecaff4988a0ffaaf",
+      "fixtureSha256": "7664f3e996e4f685db8f5a7d92988cc5706c4d2300044144670c6d2c2a073ad0",
+      "declarations": [
+        {
+          "name": "CHANNEL_FOLLOWERS_TABLE",
+          "start": 244,
+          "end": 303,
+          "sha256": "0c41a624519c63bafae6f6f37ae16f93690dd6474cca6dafca5816c048d4cdba"
+        },
+        {
+          "name": "CHANNEL_AUDIENCE_REQUESTS_TABLE",
+          "start": 368,
+          "end": 443,
+          "sha256": "f08bf53ea70094984412ee8a09d1704d482fbb3e226809a5bcaee017b7974de4"
+        },
+        {
+          "name": "normalizeText",
+          "start": 4086,
+          "end": 4155,
+          "sha256": "20f7c76416e22bee5869cd17cd06ab3c61e5d1c2d74b22745179cc3c64eb4aa8"
+        },
+        {
+          "name": "normalizeRequestKind",
+          "start": 4157,
+          "end": 4435,
+          "sha256": "a3a39cdecdcbbbdfc084a2c0737d592290879ec841036e6b656440ef615ef692"
+        },
+        {
+          "name": "normalizeRequestStatus",
+          "start": 4437,
+          "end": 4769,
+          "sha256": "d1b5abb3d486ee69c8c1cb7197b23e48a4cfa0b490a926cb89f574be826a74a2"
+        },
+        {
+          "name": "buildActionResult",
+          "start": 4771,
+          "end": 5848,
+          "sha256": "20c882118a2beec4ee7f62fa697bb76ea0658eea8662d7e55c628d45ca546a36"
+        },
+        {
+          "name": "readAudienceActorContext",
+          "start": 5850,
+          "end": 7013,
+          "sha256": "be8eb90aa75266d9834c7fd8796dfca6b620b68559553e08762b97dddc7b677b"
+        },
+        {
+          "name": "readFollowerRow",
+          "start": 7015,
+          "end": 7649,
+          "sha256": "3bc1673a31793d59220177fb5f47b478b89a005878f0a766e97fc51eaa851871"
+        },
+        {
+          "name": "readRequestRowById",
+          "start": 8774,
+          "end": 9250,
+          "sha256": "b948419bac118b62df40899e102221f9d3e131efa518b617958c91bdc8e30ccd"
+        },
+        {
+          "name": "reviewChannelAudienceRequest",
+          "start": 37676,
+          "end": 43572,
+          "sha256": "bea8c295ea17574a6e343076c5e4e806e2a9e8fb4262d27a09ef0d427099af75"
+        },
+        {
+          "name": "approveChannelAudienceRequest",
+          "start": 43574,
+          "end": 43729,
+          "sha256": "bc4f8c68da00fcd6099916d58c1a966f97a0f1cab9d880c25decfa78f79e3da5"
+        },
+        {
+          "name": "declineChannelAudienceRequest",
+          "start": 43731,
+          "end": 43886,
+          "sha256": "a15e798ade6b8d114fc8b6408d98e19f02e5a59f906d47362facd4f47217a6b4"
+        }
+      ]
+    },
+    {
+      "path": "_lib/platformBranding-rolling.ts",
+      "sourceBlob": "40f67cd8bc62e331124a126913713a0d164518b3",
+      "sourceSha256": "6f367d42d5b6e143acd20c99af7b1bb84d3c8f9b3b99fe2afdb11a244f83d8d4",
+      "fixtureSha256": "7ed438b8d5b9680174da533f00de0a571318648255f029a094b5d8aa3378da5f",
+      "declarations": [
+        {
+          "name": "PLATFORM_BRAND_BUCKET",
+          "start": 348,
+          "end": 409,
+          "sha256": "49e629a681093ae4b975656d74effa8ba40cb1a0065ff22dbc5bb7ceeeb9964b"
+        },
+        {
+          "name": "PLATFORM_BRAND_SIGNED_URL_SECONDS",
+          "start": 410,
+          "end": 467,
+          "sha256": "ade70359d054f1081faf186e85d78f757402a80717595d2d12ed107628a5afbe"
+        },
+        {
+          "name": "PLATFORM_BRAND_IMAGE_MAX_BYTES",
+          "start": 468,
+          "end": 531,
+          "sha256": "eff8a5b199e0e930b574a5cc7633be3f4b625565ae1ff35e890d478f5a859b72"
+        },
+        {
+          "name": "PLATFORM_BRAND_VIDEO_MAX_BYTES",
+          "start": 532,
+          "end": 596,
+          "sha256": "a0110cc68cb453cc86d8110eab65c242c577f4f13a6686212cb98eaf71fb266a"
+        },
+        {
+          "name": "PLATFORM_BRAND_ASSET_SELECT",
+          "start": 4469,
+          "end": 4842,
+          "sha256": "605d9b5afa2e19a5f3d270a2aa933ec9a9af419aea24f90618d0b844d7f69b50"
+        },
+        {
+          "name": "IMAGE_MIME_TYPES",
+          "start": 5263,
+          "end": 5339,
+          "sha256": "5b5f0160b55f42647adc0d997db300997c8685c9a361dfd085cbd11f0c623aad"
+        },
+        {
+          "name": "VIDEO_MIME_TYPES",
+          "start": 5340,
+          "end": 5421,
+          "sha256": "913dec7b9a9ea68beed4f83475f6e6079d932d954cde7b4fb2cd58992ff5c52f"
+        },
+        {
+          "name": "PLATFORM_BRAND_UPLOAD_TIMEOUT_MS",
+          "start": 5422,
+          "end": 5470,
+          "sha256": "7e680ade35389f0e76791f4815a7134053cd3fbe3a4d1a81d86d429414ebc84e"
+        },
+        {
+          "name": "createClientId",
+          "start": 5967,
+          "end": 6209,
+          "sha256": "d684336fce11873b839d15dc0e3c03f263fe4fb42765c0a492b5afbadfc5a252"
+        },
+        {
+          "name": "getExtensionFromName",
+          "start": 6211,
+          "end": 6434,
+          "sha256": "ef5e3dae1d5ec819b824f537d5e63890d6ad841d56cb130c70fdaae966b9d274"
+        },
+        {
+          "name": "encodeStoragePath",
+          "start": 6436,
+          "end": 6530,
+          "sha256": "73eba666bf3b38258eb9f7a292abed5b87b5ccd7f705c9617af62e0487ad3ed6"
+        },
+        {
+          "name": "inferMimeType",
+          "start": 6532,
+          "end": 7145,
+          "sha256": "0c1d88b87cc18dde0dda0111fbcf0921b7aa8cc6a03e25663d2fa00be8fd967f"
+        },
+        {
+          "name": "getFileExtension",
+          "start": 7147,
+          "end": 7671,
+          "sha256": "0f0396c1aac94bbc2846ad953b9fff941004e707360b3845c3471f745f21be50"
+        },
+        {
+          "name": "normalizeAssetType",
+          "start": 7673,
+          "end": 8064,
+          "sha256": "8ff23505b7bcbfb299c2637117bffe04d3892f94f449623d600621f8b2940dc5"
+        },
+        {
+          "name": "formatPlatformBrandFileSize",
+          "start": 9677,
+          "end": 9991,
+          "sha256": "84b990e8c65288750c32f7c3d15f714d7855991c67b9a5c6bcc681a52aeb3772"
+        },
+        {
+          "name": "getPlatformBrandAssetLimitLabel",
+          "start": 9993,
+          "end": 10203,
+          "sha256": "90147094235cf292662f36dc0be7d82b9ed855db3249cc6aed334a822615f57e"
+        },
+        {
+          "name": "getPlatformBrandAssetValidationMessage",
+          "start": 10205,
+          "end": 11105,
+          "sha256": "5e0d9c881035a353dca58e660a3401fdce8b642de04b251c5a034a41f14b76fc"
+        },
+        {
+          "name": "createPlatformBrandSignedUrl",
+          "start": 14823,
+          "end": 15279,
+          "sha256": "ac1ee189e6d4567d2415703af43a1bc7b924a091f673c790c7f3b7a5ca71fd93"
+        },
+        {
+          "name": "parseAsset",
+          "start": 15281,
+          "end": 17150,
+          "sha256": "ea70c75d6769857ac2a74e1dcb30b4298a21c3ad0e5fa521868be546847f9be8"
+        },
+        {
+          "name": "getSignedInAccessToken",
+          "start": 17152,
+          "end": 17422,
+          "sha256": "96418856c4614495b52353c4706e46b2bcaf7d50d17060e902b57df5e402c8f9"
+        },
+        {
+          "name": "preparePlatformBrandUploadUri",
+          "start": 17844,
+          "end": 18648,
+          "sha256": "13fdeb8bf74da02c967b1974bb325c5caffb428f4698c53d1b7481df8f50af4e"
+        },
+        {
+          "name": "getPreparedPlatformBrandFileSize",
+          "start": 18650,
+          "end": 19022,
+          "sha256": "df94332ba02e0fce22da017e3c2fe27b3354e51996fae6a5d86a758a2f2bab44"
+        },
+        {
+          "name": "uploadPlatformBrandFileToStorage",
+          "start": 19024,
+          "end": 20305,
+          "sha256": "3a9badc5e3b32b5ee82ac0f45efd654e1fff6215cc14a5809cd79ab576ab9b98"
+        },
+        {
+          "name": "assertPlatformBrandUploadReadable",
+          "start": 20307,
+          "end": 21075,
+          "sha256": "d442d467e8bbaa04b5fa23c1821b5855592f7daf4cf5bd24d105a2f5be846fd5"
+        },
+        {
+          "name": "createBundle",
+          "start": 21077,
+          "end": 21986,
+          "sha256": "3287c6cfd744092f1ffcc2973c73acc9e7889176d1be4571051f4615d24b478c"
+        },
+        {
+          "name": "readPlatformBrandStudio",
+          "start": 22352,
+          "end": 23454,
+          "sha256": "f8207dc29fffe5194b362e247ca851b38990d40564fb8413bda43bd17ed8fd28"
+        },
+        {
+          "name": "readPublicPlatformBranding",
+          "start": 24053,
+          "end": 25436,
+          "sha256": "b3fc79fda6294d2f7089ca57c83a4c825aecf84b96893838357baf6a5a23e4cd"
+        },
+        {
+          "name": "uploadPlatformBrandAsset",
+          "start": 34115,
+          "end": 36233,
+          "sha256": "998c38aae39ea5e042bb68ed120bf35cc1852636fc99b97180454a2ac660e02a"
+        },
+        {
+          "name": "removePlatformBrandAsset",
+          "start": 36235,
+          "end": 36692,
+          "sha256": "1ab85242dbace949531f97490a84d265a218a4bff23ac39a51caee35e217c7d2"
+        }
+      ],
+      "sourcePath": "_lib/platformBranding.ts"
     }
   ]
 }
