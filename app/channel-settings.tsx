@@ -224,6 +224,7 @@ import {
   buildCreatorVideoDeepLink,
   isCreatorVideoPubliclyShareable,
 } from "../_lib/creatorVideoLinks";
+import { hasCreatorVideoPreviewSource } from "../_lib/creatorVideoPreview";
 import {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Studio source contract; the current render path intentionally does not call it.
   formatCreatorReplaySourceLabel,
@@ -6758,7 +6759,7 @@ export function ChannelStudioScreen() {
       );
     }
 
-    const playable = hasPlayableCreatorVideoSource(latestCreatorVideo);
+    const playable = hasCreatorVideoPreviewSource(latestCreatorVideo);
     const statusLabel = !playable
       ? "Unavailable"
       : latestCreatorVideo.visibility === "public"
@@ -6933,7 +6934,7 @@ export function ChannelStudioScreen() {
                 value: latestCreatorVideo?.visibility === "public" ? "Player" : "Setup required",
                 tone: latestCreatorVideo?.visibility === "public" ? "default" : "warning",
                 onPress: () => {
-                  if (latestCreatorVideo?.visibility === "public" && hasPlayableCreatorVideoSource(latestCreatorVideo)) {
+                  if (latestCreatorVideo?.visibility === "public" && hasCreatorVideoPreviewSource(latestCreatorVideo)) {
                     router.push({ pathname: "/player/[id]", params: { id: latestCreatorVideo.id, source: "creator-video" } });
                     return;
                   }
@@ -9901,7 +9902,7 @@ export function ChannelStudioScreen() {
           title: "Watch-Party Tools",
           body: "Open a public video, then start Watch-Party Live from Player.",
           onPress: () => {
-            if (latestCreatorVideo?.visibility === "public" && hasPlayableCreatorVideoSource(latestCreatorVideo)) {
+            if (latestCreatorVideo?.visibility === "public" && hasCreatorVideoPreviewSource(latestCreatorVideo)) {
               router.push({ pathname: "/player/[id]", params: { id: latestCreatorVideo.id, source: "creator-video" } });
               return;
             }

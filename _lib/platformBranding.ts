@@ -692,6 +692,9 @@ export async function readPublicPlatformBranding(ownerUserId: string, options?: 
   const assets = assetError || !assetRows
     ? []
     : await Promise.all(assetRows.map((row) => parseAsset(row)));
+  if (options?.throwOnUnavailable && assets.some((asset) => !toText(asset.signedUrl))) {
+    throw new Error("Platform media could not be loaded. Please try again.");
+  }
   return createBundle(profile, assets);
 }
 

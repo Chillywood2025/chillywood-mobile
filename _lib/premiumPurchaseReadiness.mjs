@@ -28,7 +28,7 @@ export function resolvePremiumPurchaseReadiness(input) {
     return {
       ready: false,
       code: "premium_verification_pending",
-      message: "Your store reports an active Premium subscription. Account access is still being verified. Recheck status or restore purchases; do not purchase again.",
+      message: "Your store reports an active Premium subscription. Verified account access is not available yet. Recheck status or restore purchases; do not purchase again.",
     };
   }
 
@@ -63,6 +63,14 @@ export function resolvePremiumPurchaseReadiness(input) {
       ready: false,
       code: "revenuecat_not_configured",
       message: `Premium purchases are not available through ${storeName} right now.`,
+    };
+  }
+
+  if (input.customerInfoLoaded !== true) {
+    return {
+      ready: false,
+      code: "provider_status_unavailable",
+      message: "Your store subscription status could not be checked. Recheck status or restore purchases before starting Premium.",
     };
   }
 

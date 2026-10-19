@@ -89,6 +89,7 @@ export async function mount(t,{route={tab:'content'},videos=[video('A'),video('B
       if(name==='expo-av')return {Video:native.Video,ResizeMode:{CONTAIN:'contain',COVER:'cover'}};
       if(name.endsWith('.jpg'))return 1;
       if(name.endsWith('/creator-video-card'))return evaluate('components/creator-media/creator-video-card.tsx');
+      if(name.endsWith('/creatorVideoPreview'))return evaluate('_lib/creatorVideoPreview.ts');
       if(name.endsWith('/CreatorContentActionSheet'))return evaluate('components/creator-media/CreatorContentActionSheet.tsx');
       if(name.endsWith('/creatorMonetizationFeatures'))return evaluate('_lib/creatorMonetizationFeatures.ts');
       if(name.endsWith('/creatorMonetizationRouteTargets'))return evaluate('_lib/creatorMonetizationRouteTargets.ts');

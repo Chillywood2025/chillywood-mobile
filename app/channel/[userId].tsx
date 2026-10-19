@@ -1130,7 +1130,7 @@ export default function PublicChannelScreen() {
       ) : (
         <AppEmptyState
           actionLabel={showOwnerControls ? "Open Platform Studio" : undefined}
-          body="This Platform has not published videos yet."
+          body="No public videos are available yet."
           onAction={showOwnerControls ? openStudio : undefined}
           title="No featured video"
         />

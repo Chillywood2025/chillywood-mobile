@@ -7,6 +7,7 @@ import {
 
 import type { CreatorVideo } from "../../_lib/creatorVideos";
 import { isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
+import { hasCreatorVideoPreviewSource } from "../../_lib/creatorVideoPreview";
 import { RACHI_OFFICIAL_USER_ID } from "../../_lib/officialAccounts";
 import {
   formatClipStudioTemplateLabel,
@@ -79,8 +80,6 @@ const formatDate = (value: string) => {
   if (!Number.isFinite(timestamp)) return null;
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(timestamp));
 };
-
-const hasPlayableSource = (video: CreatorVideo) => !!(video.playbackUrl || video.storagePath);
 
 const formatOwnerPlaybackStatus = (video: CreatorVideo) => {
   if (!video.renditionStatuses.length) {
@@ -168,7 +167,7 @@ export function CreatorVideoCard({
   const updatedDate = formatDate(video.updatedAt || video.createdAt);
   const shareable = isCreatorVideoPubliclyShareable(video);
   const ownerMode = mode === "owner";
-  const playable = ownerMode ? hasPlayableSource(video) : shareable;
+  const playable = ownerMode ? hasCreatorVideoPreviewSource(video) : shareable;
   const ownerClipEdit = ownerMode ? clipEdit ?? null : null;
   const publicClipMetadata = !ownerMode && video.publicClipMetadata?.isPublic ? video.publicClipMetadata : null;
   const { displayTitle, rawTitleDetected } = formatCreatorVideoDisplayTitle(video.title);
