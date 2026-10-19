@@ -7,6 +7,12 @@ import crypto from 'node:crypto';
 import test from 'node:test';
 import {createDatabase,repairMigrationPath} from './helpers/database-runtime-authority-fixture.mjs';
 
+const studioBundleFiles = [
+  '20261015073423_platform_studio_publication_and_audience_authority.sql',
+  '20261019020049_platform_studio_rolling_brand_compatibility.sql',
+  '20261019020052_platform_studio_rolling_audience_compatibility.sql',
+];
+
 for(const includeHeldStudio of [false,true]) test(`staff mutation repair with Studio ${includeHeldStudio?'included':'held'}`,{timeout:120_000},async t=>{
   const sql=fs.readFileSync(repairMigrationPath,'utf8');
   const {db,replayReport}=await createDatabase({overlayLiveDrift:true,includeHeldStudio});
@@ -178,8 +184,13 @@ for(const includeHeldStudio of [false,true]) test(`staff mutation repair with St
         check(`${table} post-write deletion denied`,outcome.error?.message,'platform_staff_auth_required');check(`${table} all effects rolled back`,await snapshot(),before);check(`${table} injected deletion rolled back`,(await one('select count(*)::int n from auth.sessions where id=$1',[session])).n,1);
       }finally{await db.exec('rollback')}
     }
-    check('expected migration chain',replayReport.files.length,includeHeldStudio?426:425);
+    // Circle's ACL-only closure adds one predecessor; the complete Studio
+    // bundle adds the held migration and its two rolling successors.
+    check('expected migration chain',replayReport.files.length,includeHeldStudio?429:426);
+    check('Circle closure remains in both runtime scenarios',replayReport.files.includes('20261019000210_circle_request_rpc_anon_execute_closure.sql'),true);
+    check('Studio migration scope is the complete bundle',replayReport.files.filter(file=>studioBundleFiles.includes(file)),includeHeldStudio?studioBundleFiles:[]);
     check('Studio presence is isolated',!(await one("select to_regclass('public.platform_brand_publications') is null absent")).absent,includeHeldStudio);
+    check('rolling metadata presence is isolated',!(await one("select to_regclass('public.platform_brand_publication_metadata') is null absent")).absent,includeHeldStudio);
     t.diagnostic(`${assertions} real-SQL assertions; SHA256 ${crypto.createHash('sha256').update(sql).digest('hex')}`);
   }finally{await db.close()}
 });

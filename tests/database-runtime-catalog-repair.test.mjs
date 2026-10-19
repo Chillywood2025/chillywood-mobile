@@ -4,6 +4,31 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 
+const studioBundleFiles = [
+  '20261015073423_platform_studio_publication_and_audience_authority.sql',
+  '20261019020049_platform_studio_rolling_brand_compatibility.sql',
+  '20261019020052_platform_studio_rolling_audience_compatibility.sql',
+];
+// The held migration adds eight functions; Brand adds five (including the
+// retained asset-publish implementation's new identity), and Audience four.
+const studioFunctionKeys = new Set([
+  'guard_platform_brand_profile_publication_metadata/0',
+  'platform_brand_publication_asset_safe_internal/2',
+  'platform_studio_current_staff_access_internal/0',
+  'platform_studio_current_creator_tool_access_internal/0',
+  'publish_platform_brand_profile/1', 'read_public_platform_identity/1',
+  'read_public_channel_follower_count/1', 'review_channel_audience_request/2',
+  'platform_brand_publication_metadata_read_allowed/1',
+  'record_platform_brand_publication_metadata/0',
+  'publish_platform_brand_profile_assets_internal/2',
+  'platform_brand_published_object_visible_internal/3',
+  'guard_platform_brand_asset_archive_transition/0',
+  'assert_channel_audience_review_authority_internal/3',
+  'preflight_legacy_channel_audience_follow/2',
+  'guard_legacy_channel_audience_follow_insert/0',
+  'guard_channel_audience_review_transition/0',
+].map(name => `public.${name}`));
+
 const targets=new Set([
   'has_platform_role/1','has_platform_permission/1','is_platform_owner_user/1','has_active_beta_access/0',
   'resolve_sandbox_monetization_tester/2','grant_sandbox_monetization_tester/4',
@@ -43,7 +68,9 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,includeHeldStudio?1113:1105);
+    assert.equal(before.functions.length,includeHeldStudio?1122:1105);
+    assert.deepEqual(before.functions.filter(fn=>studioFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(),
+      includeHeldStudio?[...studioFunctionKeys].sort():[], 'the entire Studio bundle has the expected catalog scope');
     assert.deepEqual(after.functions.map(x=>[x.oid,x.identity]),before.functions.map(x=>[x.oid,x.identity]),'stable function OIDs and signatures');
     const changed=after.functions.filter((f,i)=>f.definition!==before.functions[i].definition).map(f=>f.key).sort();
     const expected=[...targets].filter(x=>!includeHeldStudio||x!=='public.is_platform_owner_user/1').sort();
@@ -65,7 +92,12 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718211432_harden_media_scan_retry_recovery.sql',index:6,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
-    assert.equal(replayReport.files.length,includeHeldStudio?426:425);
+    // The prior 425-file predecessor now includes the ACL-only Circle closure;
+    // including Studio adds exactly its held migration and two successors.
+    assert.equal(replayReport.files.length,includeHeldStudio?429:426);
+    assert.ok(replayReport.files.includes('20261019000210_circle_request_rpc_anon_execute_closure.sql'));
+    assert.deepEqual(replayReport.files.filter(file=>studioBundleFiles.includes(file)),
+      includeHeldStudio?studioBundleFiles:[], 'Studio migrations are replayed as one complete bundle or omitted together');
     await db.exec(repairSql);assert.deepEqual(await snapshot(db),after,'repeat application is catalog-idempotent');
   }finally{await db.close()}
 });
