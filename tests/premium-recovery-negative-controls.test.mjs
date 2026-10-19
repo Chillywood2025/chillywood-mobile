@@ -40,8 +40,13 @@ for (const [name, before, after, failingTest] of controls) test(`negative contro
     });
     assert.equal(result.error, undefined);
     assert.equal(result.status, 1, result.stdout + result.stderr);
-    assert.ok(result.stdout.includes(`not ok 1 - ${failingTest}`), result.stdout);
-    assert.match(result.stdout, /ERR_ASSERTION/);
-    assert.doesNotMatch(result.stdout + result.stderr, /SyntaxError|ReferenceError|TypeError|Cannot find module|unmodeled import/);
+    const failedTests = [...result.stdout.matchAll(/^not ok \d+ - (.+)$/gm)].map((match) => match[1]);
+    assert.deepEqual(failedTests, [failingTest], result.stdout);
+    assert.match(result.stdout, /^# fail 1$/m);
+    assert.match(result.stdout, /^# cancelled 0$/m);
+    assert.match(result.stdout, /failureType: 'testCodeFailure'/);
+    assert.match(result.stdout, /code: 'ERR_ASSERTION'/);
+    assert.doesNotMatch(result.stdout + result.stderr,
+      /SyntaxError|ReferenceError|TypeError|Cannot find module|unmodeled import|ETIMEDOUT|testTimeoutFailure|cancelledByParent|hookFailed|timed out/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
