@@ -160,15 +160,23 @@ export async function runStudioRollingHttp({ container, database, owner, request
     pass('HTTP modern atomic Publish and anonymous committed public read agree');
 
     const publishedSnapshot = snapshot();
+    assert.equal(query(`select count(*) from public.platform_brand_profiles where owner_user_id=${literal(owner.user)};`), '1');
     for (const cached of [JSON.parse(before).published_at, null]) {
+      const accent = cached ? '#456789' : '#567890';
       const saved = request('POST', '/platform_brand_profiles?on_conflict=owner_user_id&select=*', {
-        ...full(owner, { accent_color: cached ? '#456789' : '#567890' }),
+        ...full(owner, { accent_color: accent }),
         published_at: cached, updated_at: new Date().toISOString(),
       }, owner, { Prefer: 'resolution=merge-duplicates,return=representation', Accept: 'application/vnd.pgrst.object+json' });
-      expect(saved, 201, 'historical cached-metadata draft upsert');
+      // This upsert updates the known existing owner row. PostgREST returns
+      // 200 for that update, rather than 201 for creation of a new row.
+      expect(saved, 200, 'historical cached-metadata existing draft upsert');
       assert.equal(json(saved).owner_user_id, owner.user);
-      assert.equal(json(saved).accent_color, cached ? '#456789' : '#567890');
+      assert.equal(json(saved).accent_color, accent);
       assert.equal(Date.parse(json(saved).published_at), Date.parse(json(modern).published_at));
+      assert.equal(query(`select count(*) from public.platform_brand_profiles
+        where owner_user_id=${literal(owner.user)} and accent_color=${literal(accent)}
+          and published_at=${literal(json(modern).published_at)}::timestamptz;`), '1',
+        'the returned draft and normalized publication metadata must be persisted');
       assert.equal(snapshot(), publishedSnapshot, 'cached-metadata draft must not change the public snapshot');
     }
     pass('HTTP legacy known-stale and NULL draft metadata return normalized rows without publishing');
