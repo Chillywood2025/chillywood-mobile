@@ -554,12 +554,12 @@ begin
  end loop;
  -- Foreign authority is neither adopted nor revoked. The run lock held here
  -- fences every future active write until this transaction closes or aborts.
- if exists(select 1 from public.platform_role_memberships m join private.admin_canary_fixture_users f
-   on f.user_id::text=m.user_id where f.run_id=p_run_id and m.status='active'
-   and not exists(select 1 from private.admin_canary_fixture_roles x where x.run_id=p_run_id and x.role_id=m.id))
-  or exists(select 1 from public.platform_staff_permission_grants g join private.admin_canary_fixture_users f
-   on f.user_id::text=g.target_user_id where f.run_id=p_run_id and g.status='active'
-   and not exists(select 1 from private.admin_canary_fixture_grants x where x.run_id=p_run_id and x.grant_id=g.id)) then
+ if exists(select 1 from public.platform_role_memberships membership join private.admin_canary_fixture_users fixture
+   on fixture.user_id::text=membership.user_id where fixture.run_id=p_run_id and membership.status='active'
+   and not exists(select 1 from private.admin_canary_fixture_roles x where x.run_id=p_run_id and x.role_id=membership.id))
+  or exists(select 1 from public.platform_staff_permission_grants permission_grant join private.admin_canary_fixture_users fixture
+   on fixture.user_id::text=permission_grant.target_user_id where fixture.run_id=p_run_id and permission_grant.status='active'
+   and not exists(select 1 from private.admin_canary_fixture_grants x where x.run_id=p_run_id and x.grant_id=permission_grant.id)) then
   raise exception 'admin_canary_unregistered_authority';
  end if;
  metadata:=jsonb_build_object('canary_proof',true,'canary_proof_run_id',p_run_id,'cleanup_required',false,
@@ -596,10 +596,10 @@ begin
    grant_count:=grant_count+1;
   end if;
  end loop;
- if exists(select 1 from public.platform_role_memberships m join private.admin_canary_fixture_roles x on x.role_id=m.id
-   where x.run_id=p_run_id and m.status='active')
-  or exists(select 1 from public.platform_staff_permission_grants g join private.admin_canary_fixture_grants x on x.grant_id=g.id
-   where x.run_id=p_run_id and g.status='active') then raise exception 'admin_canary_cleanup_unverified'; end if;
+ if exists(select 1 from public.platform_role_memberships membership join private.admin_canary_fixture_roles x on x.role_id=membership.id
+   where x.run_id=p_run_id and membership.status='active')
+  or exists(select 1 from public.platform_staff_permission_grants permission_grant join private.admin_canary_fixture_grants x on x.grant_id=permission_grant.id
+   where x.run_id=p_run_id and permission_grant.status='active') then raise exception 'admin_canary_cleanup_unverified'; end if;
  if r.status='closed' then return r.cleanup_receipt||private.admin_canary_manifest(p_run_id); end if;
  insert into public.security_audit_events(actor_role,event_type,severity,target_type,target_id,reason,metadata)
  values('system','admin_canary_fixture_cleanup','high','admin_canary_run',p_run_id::text,p_reason,
