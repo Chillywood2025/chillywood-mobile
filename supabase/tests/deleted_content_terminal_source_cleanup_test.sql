@@ -1,4 +1,4 @@
--- Full migrated disposable PostgreSQL, rollback-only aged lifecycle fixtures.
+-- Full migrated disposable PostgreSQL, rollback-only current and aged lifecycles.
 -- No production predicate/trigger is mocked and no provider request is issued.
 begin;
 create extension if not exists pgtap with schema extensions;
@@ -24,6 +24,89 @@ insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous)
 create table public.retention_terminal_alias(id uuid primary key default gen_random_uuid(),object_path text);
 create trigger zzz_deleted_media_reference_guard before insert or update on public.retention_terminal_alias
  for each row execute function private.guard_deleted_media_references();
+
+-- Exercise a current parent deletion through the real capture/stage/revoke
+-- chain before introducing aged expiry fixtures. No archive or stage is seeded.
+do $$
+declare author uuid:='d3400000-0000-4000-8000-000000000001';
+ parent uuid:='d3500000-0000-4000-8000-000000000001';
+ attachment uuid:='d3600000-0000-4000-8000-000000000001';
+ original text:=author||'/profile_post/'||parent||'/'||attachment||'.jpg';
+ scan_result jsonb;
+begin
+ insert into public.profile_posts(id,user_id,body,visibility)
+ values(parent,author::text,'Current parent lifecycle','public');
+ insert into public.media_upload_reservations(id,owner_user_id,surface_type,storage_provider,storage_bucket,
+  storage_object_key,expected_mime_type,expected_size_bytes,status,expires_at,
+  observed_mime_type,observed_size_bytes,verified_at)
+ values('d3700000-0000-4000-8000-000000000001',author,'social_attachment','cloudflare_r2','chillywood-media-origin',
+  original,'image/jpeg',1024,'verified',clock_timestamp()+interval '1 hour','image/jpeg',1024,clock_timestamp());
+ -- This privileged source fixture must consume the reservation through the
+ -- same real owner-binding API used by the authenticated producer trigger.
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',author,'role','authenticated')::text,true);
+ if not public.consume_verified_media_upload('social_attachment','cloudflare_r2','chillywood-media-origin',
+   original,'image/jpeg',1024,attachment::text) then
+  raise exception 'current_attachment_reservation_consume_failed';
+ end if;
+ perform set_config('request.jwt.claims','{}',true);
+ insert into public.social_attachments(id,owner_user_id,surface_type,surface_id,storage_provider,storage_bucket,
+  storage_object_key,storage_path,mime_type,size_bytes)
+ values(attachment,author::text,'profile_post',parent,'cloudflare_r2','chillywood-media-origin',
+  original,original,'image/jpeg',1024);
+ perform set_config('request.jwt.claims','{"role":"service_role"}',true);
+ select public.complete_media_scan_job(j.id,'clean','clamav','synthetic','synthetic-signatures',null,null,5)
+ into strict scan_result from public.media_scan_jobs j
+ where j.target_table='social_attachments' and j.target_column='attachment' and j.target_id=attachment::text
+  and j.storage_provider='cloudflare_r2' and j.storage_bucket='chillywood-media-origin' and j.storage_object_key=original;
+ if scan_result->>'targetPropagationComplete' is distinct from 'true'
+  or (select scan_status from public.social_attachments where id=attachment) is distinct from 'clean' then
+  raise exception 'current_attachment_scan_projection_failed';
+ end if;
+ perform set_config('request.jwt.claims','{}',true);
+end $$;
+select is((select count(*) from private.deleted_content_media_stages
+ where target_id='d3600000-0000-4000-8000-000000000001'),0::bigint,
+ 'current attachment has no retention stage before actual parent deletion');
+delete from public.profile_posts where id='d3500000-0000-4000-8000-000000000001';
+select ok(exists(select 1 from private.deleted_content_records d
+ where d.target_type='profile_post' and d.target_id='d3500000-0000-4000-8000-000000000001'
+ and d.deletion_kind='hard' and d.content->>'body'='Current parent lifecycle'),
+ 'actual parent deletion captures its own hard-deletion evidence');
+select is((select count(*) from public.social_attachments a
+ join private.deleted_content_media_stages s on s.target_id=a.id::text and s.target_type='social_attachment'
+ join private.deleted_media_key_retirements r on r.stage_id=s.id
+ join private.deleted_content_records d on d.id=s.deletion_id and d.id=r.deletion_id
+ join public.media_upload_reservations u on u.id=s.reservation_id and u.id=r.reservation_id
+ where a.id='d3600000-0000-4000-8000-000000000001' and a.deleted_at is null
+  and r.status='retained' and r.target_type=s.target_type and r.target_id=s.target_id
+  and r.author=a.owner_user_id and d.author=a.owner_user_id
+  and r.provider=a.storage_provider and r.bucket=a.storage_bucket and r.object_key=a.storage_object_key
+  and s.provider=r.provider and s.bucket=r.bucket and s.object_key=r.object_key
+  and r.source_created_at=(to_jsonb(a)->>'created_at') and d.source_created_at=a.created_at
+  and d.target_type=s.target_type and d.target_id=s.target_id and d.deletion_kind='soft'
+  and d.parent_type=a.surface_type and d.parent_id=a.surface_id::text and d.media_disposition='retained_original'
+  and u.status='deleted' and u.attached_record_id=a.id::text
+  and u.storage_provider=r.provider and u.storage_bucket=r.bucket and u.storage_object_key=r.object_key
+  and r.verified_at=u.verified_at and r.attached_at=u.attached_at
+  and r.deleted_at=d.deleted_at and r.expires_at=d.expires_at
+  and d.expires_at=d.deleted_at+interval '720 hours' and d.expires_at>clock_timestamp()),1::bigint,
+ 'real parent deletion retains the child incarnation, exact original and revoked reservation in one fixed window');
+select is(public.deleted_content_expiry_readiness()->>'ready','true',
+ 'actual parent-delete capture leaves retained child coverage ready');
+select set_config('test.terminal.current_expiry',expires_at::text,true)
+ from private.deleted_content_records where target_id='d3600000-0000-4000-8000-000000000001';
+update private.deleted_content_retention_settings
+ set activation_ready=false,capture_enabled=false,media_staging_enabled=false,media_expiry_enabled=false,text_expiry_enabled=false;
+select public.record_deleted_content_worker_heartbeat();
+select lives_ok($$update private.deleted_content_retention_settings
+ set activation_ready=true,capture_enabled=true,media_staging_enabled=true,media_expiry_enabled=true,text_expiry_enabled=true$$,
+ 'actual parent-delete provenance permits a qualified restart after every runtime flag stops');
+select is((select public.claim_deleted_content_media_expiry(id)->>'status'
+ from private.deleted_content_media_stages where target_id='d3600000-0000-4000-8000-000000000001'),'not_due',
+ 'restarted worker preserves the new original until its real retention deadline');
+select is((select expires_at from private.deleted_content_records
+ where target_id='d3600000-0000-4000-8000-000000000001'),current_setting('test.terminal.current_expiry')::timestamptz,
+ 'stop and restart do not renew the actual captured retention window');
 
 create function pg_temp.terminal_attachment(n integer,shared boolean default false,parent_proof boolean default true)
 returns uuid language plpgsql as $$

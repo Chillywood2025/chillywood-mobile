@@ -123,6 +123,32 @@ select throws_ok($$insert into public.videos(id,owner_id,title,visibility,modera
  '55000','retention_source_coverage_required: unsupported_provider','active admission cannot reopen direct legacy storage coverage gap');
 select is(private.deleted_content_source_coverage('creator_video',jsonb_build_object('created_at',now())),
  'metadata_only','coverage does not invent a media object for an empty historic source');
+-- The actual video INSERT policy requires finite Premium authority. Exercise
+-- its trusted event producer with a synthetic sandbox event; do not replace
+-- the entitlement predicate or grant a staff bypass. This all rolls back.
+update public.platform_money_kill_switches set state='sandbox_only'
+where key in ('revenuecat_app_store_enabled','provider_webhooks_enabled');
+do $premium_fixture$
+declare result jsonb;
+begin
+ select public.process_revenuecat_premium_event_atomic(
+  'revenuecat_app_store','retention-readiness-premium','INITIAL_PURCHASE',
+  'c3000000-0000-4000-8000-000000000001',mapping.provider_product_id,
+  mapping.provider_base_plan_id,'sandbox','active',now()-interval '1 day',
+  now()+interval '30 days',now(),mapping.reference_price_minor,
+  mapping.reference_currency,repeat('c',64),'NORMAL','app_store','ios',
+  mapping.id,mapping.product_id,'retention-readiness-premium-original'
+ ) into result
+ from public.monetization_product_store_mappings mapping
+ where mapping.provider='revenuecat_app_store'
+   and mapping.provider_product_id='com.chillywood.premium.monthly'
+   and mapping.environment='sandbox'
+ limit 1;
+ if coalesce(result->>'status','') not in ('processed','applied','idempotent') then
+  raise exception 'retention_readiness_premium_fixture_failed: %',result;
+ end if;
+end;
+$premium_fixture$;
 insert into public.media_upload_reservations(id,owner_user_id,surface_type,storage_provider,storage_bucket,storage_object_key,
  expected_mime_type,expected_size_bytes,status,expires_at,observed_mime_type,observed_size_bytes,verified_at)
 values('c7000000-0000-4000-8000-000000000002','c3000000-0000-4000-8000-000000000001','creator_video',
@@ -130,6 +156,8 @@ values('c7000000-0000-4000-8000-000000000002','c3000000-0000-4000-8000-000000000
  'video/mp4',1024,'verified',now()+interval '1 hour','video/mp4',1024,now());
 set local request.jwt.claims='{"sub":"c3000000-0000-4000-8000-000000000001","role":"authenticated","email":"retention-readiness@example.test","session_id":"c4000000-0000-4000-8000-000000000001"}';
 set local role authenticated;
+select ok(public.has_active_premium_creator_tool_access('c3000000-0000-4000-8000-000000000001'),
+ 'actual current session and producer-backed Premium authority permit creator upload');
 select lives_ok($$insert into public.videos(id,owner_id,title,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,file_size_bytes)
  values('c5000000-0000-4000-8000-000000000005','c3000000-0000-4000-8000-000000000001',
  'Synthetic consumer upload','draft','clean','cloudflare_r2','chillywood-media-origin',

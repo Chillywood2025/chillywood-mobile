@@ -85,6 +85,31 @@ try{
    r=>{assert.equal(r.code,0,r.stderr);assert.equal(query('select not armed from private.deleted_media_reference_fence;'),'t');},{rollback:true});
  }
  const author=randomUUID();query(`insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous) values(${lit(author)},${lit(`retention-${author}@example.test`)},now(),false,false);`);
+ // Provider verification rows are synthetic setup; their binding and scan
+ // projection use the real database functions before any activation/restart.
+ const consume=(target,key,mime='video/mp4')=>`do $fixture$ begin
+  perform set_config('request.jwt.claims',${lit(JSON.stringify({sub:author,role:'authenticated'}))},true);
+  if not public.consume_verified_media_upload('creator_video','cloudflare_r2','chillywood-media-origin',${lit(key)},${lit(mime)},1024,${lit(target)}) then
+   raise exception 'synthetic_reservation_consume_failed';
+  end if;
+  perform set_config('request.jwt.claims','{}',true);
+ end $fixture$;`;
+ const completeScan=(target,key)=>`do $fixture$ declare result jsonb; begin
+  perform set_config('request.jwt.claims','{"role":"service_role"}',true);
+  select public.complete_media_scan_job(j.id,'clean','clamav','synthetic','synthetic-signatures',null,null,5)
+   into strict result from public.media_scan_jobs j
+   where j.target_table='videos' and j.target_column='source' and j.target_id=${lit(target)}
+    and j.storage_provider='cloudflare_r2' and j.storage_bucket='chillywood-media-origin' and j.storage_object_key=${lit(key)};
+  if result->>'targetPropagationComplete' is distinct from 'true'
+   or (select scan_status from public.videos where id=${lit(target)}) is distinct from 'clean' then
+   raise exception 'synthetic_scan_projection_failed';
+  end if;
+  perform set_config('request.jwt.claims','{}',true);
+ end $fixture$;`;
+ const revoke=(target,key)=>`do $fixture$ declare result jsonb; begin
+  result:=public.revoke_media_object_delivery('creator_video','cloudflare_r2','chillywood-media-origin',${lit(key)},${lit(author)},${lit(target)},null,null);
+  if result->>'revoked' is distinct from 'true' then raise exception 'synthetic_delivery_revocation_failed'; end if;
+ end $fixture$;`;
  const textOnlyTarget=randomUUID(),textOnlyDeletion=randomUUID();
  query(`insert into private.deleted_content_records(id,target_type,target_id,author,content,deletion_kind,deleted_at,expires_at)
  values(${lit(textOnlyDeletion)},'room_message',${lit(textOnlyTarget)},${lit(author)},'{"body":"synthetic text-only"}','hard',now()-interval '31 days',now()-interval '1 day');`);
@@ -96,10 +121,12 @@ try{
    assert.equal(query(`select count(*) from private.deleted_content_records where id=${lit(textOnlyDeletion)};`),'1');
   },{rollback:true});
  const firstTarget=randomUUID(),firstReservation=randomUUID(),firstStage=randomUUID(),firstDeletion=randomUUID(),firstKey=`${author}/${firstTarget}/source.mp4`;
- query(`insert into media_upload_reservations(id,owner_user_id,surface_type,storage_provider,storage_bucket,storage_object_key,expected_mime_type,expected_size_bytes,status,expires_at,verified_at,attached_record_id,attached_at)
-  values(${lit(firstReservation)},${lit(author)},'creator_video','cloudflare_r2','chillywood-media-origin',${lit(firstKey)},'video/mp4',1024,'verified',now()-interval '30 days',now()-interval '31 days',${lit(firstTarget)},now()-interval '31 days');
-  insert into videos(id,owner_id,title,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,file_size_bytes)
-  values(${lit(firstTarget)},${lit(author)},'Synthetic first registry','draft','clean','cloudflare_r2','chillywood-media-origin',${lit(firstKey)},${lit(firstKey)},'video/mp4',1024);`);
+ query(`insert into media_upload_reservations(id,owner_user_id,surface_type,storage_provider,storage_bucket,storage_object_key,expected_mime_type,expected_size_bytes,status,expires_at,verified_at,observed_mime_type,observed_size_bytes,attached_record_id,attached_at)
+  values(${lit(firstReservation)},${lit(author)},'creator_video','cloudflare_r2','chillywood-media-origin',${lit(firstKey)},'video/mp4',1024,'verified',now()-interval '30 days',now()-interval '31 days 2 hours','video/mp4',1024,${lit(firstTarget)},now()-interval '31 days 1 hour');
+  ${consume(firstTarget,firstKey)}
+  insert into videos(id,owner_id,title,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,file_size_bytes,created_at)
+  values(${lit(firstTarget)},${lit(author)},'Synthetic first registry','draft','clean','cloudflare_r2','chillywood-media-origin',${lit(firstKey)},${lit(firstKey)},'video/mp4',1024,now()-interval '32 days');
+  ${completeScan(firstTarget,firstKey)}`);
  const enable='update private.deleted_content_retention_settings set activation_ready=true,capture_enabled=true,media_staging_enabled=true';
  const firstStageSql=`insert into private.deleted_content_media_stages(id,target_type,target_id,author,provider,bucket,object_key,reservation_id)
   values(${lit(firstStage)},'creator_video',${lit(firstTarget)},${lit(author)},'cloudflare_r2','chillywood-media-origin',${lit(firstKey)},${lit(firstReservation)})`;
@@ -120,12 +147,13 @@ try{
   // The first armer must wait for every pre-arm writer before taking source or
   // global locks. The holder can still update the source while arming waits.
   await ordered(alias,`${enable};${firstStageSql};
-   insert into private.deleted_content_records(id,target_type,target_id,author,content,deletion_kind,deleted_at,expires_at)
-   values(${lit(firstDeletion)},'creator_video',${lit(firstTarget)},${lit(author)},'{}','hard',now()-interval '31 days',now()-interval '1 day');
+   ${revoke(firstTarget,firstKey)}
+   insert into private.deleted_content_records(id,target_type,target_id,author,content,deletion_kind,deleted_at,expires_at,source_created_at,media_disposition)
+   select ${lit(firstDeletion)},'creator_video',${lit(firstTarget)},${lit(author)},'{}','hard',now()-interval '31 days',now()-interval '1 day',created_at,'retained_original'
+    from videos where id=${lit(firstTarget)};
    update private.deleted_content_media_stages set deletion_id=${lit(firstDeletion)} where id=${lit(firstStage)};
    update private.deleted_content_retention_settings set capture_enabled=false,media_staging_enabled=false;
    delete from videos where id=${lit(firstTarget)};
-   update media_scan_jobs set status='clean' where target_table='videos' and target_id=${lit(firstTarget)};
    select private.claim_deleted_media_retirement(${lit(firstStage)});`,r=>{
     assert.equal(r.code,0,r.stderr);assert.match(r.stdout,/(^|\n)f(\n|$)/);
     assert.equal(query('select armed from private.deleted_media_reference_fence;'),'t');
@@ -157,18 +185,21 @@ try{
  query('update private.deleted_content_retention_settings set media_staging_enabled=true;');
  for(const holdFirst of [true,false]){
   const target=randomUUID(),reservation=randomUUID(),stage=randomUUID(),deletion=randomUUID(),key=`${author}/${target}/source.mp4`;
-  query(`insert into media_upload_reservations(id,owner_user_id,surface_type,storage_provider,storage_bucket,storage_object_key,expected_mime_type,expected_size_bytes,status,expires_at,verified_at,attached_record_id,attached_at)
-   values(${lit(reservation)},${lit(author)},'creator_video','cloudflare_r2','chillywood-media-origin',${lit(key)},'video/mp4',1024,'verified',now()-interval '30 days',now()-interval '31 days',${lit(target)},now()-interval '31 days');
-   insert into videos(id,owner_id,title,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,file_size_bytes)
-   values(${lit(target)},${lit(author)},'Synthetic media','draft','clean','cloudflare_r2','chillywood-media-origin',${lit(key)},${lit(key)},'video/mp4',1024);
+  query(`insert into media_upload_reservations(id,owner_user_id,surface_type,storage_provider,storage_bucket,storage_object_key,expected_mime_type,expected_size_bytes,status,expires_at,verified_at,observed_mime_type,observed_size_bytes,attached_record_id,attached_at)
+   values(${lit(reservation)},${lit(author)},'creator_video','cloudflare_r2','chillywood-media-origin',${lit(key)},'video/mp4',1024,'verified',now()-interval '30 days',now()-interval '31 days 2 hours','video/mp4',1024,${lit(target)},now()-interval '31 days 1 hour');
+   ${consume(target,key)}
+   insert into videos(id,owner_id,title,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,file_size_bytes,created_at)
+   values(${lit(target)},${lit(author)},'Synthetic media','draft','clean','cloudflare_r2','chillywood-media-origin',${lit(key)},${lit(key)},'video/mp4',1024,now()-interval '32 days');
+   ${completeScan(target,key)}
    insert into private.deleted_content_media_stages(id,target_type,target_id,author,provider,bucket,object_key,reservation_id)
    values(${lit(stage)},'creator_video',${lit(target)},${lit(author)},'cloudflare_r2','chillywood-media-origin',${lit(key)},${lit(reservation)});
-   insert into private.deleted_content_records(id,target_type,target_id,author,content,deletion_kind,deleted_at,expires_at)
-   values(${lit(deletion)},'creator_video',${lit(target)},${lit(author)},'{"title":"synthetic expired"}','hard',now()-interval '31 days',now()-interval '1 day');
+   ${revoke(target,key)}
+   insert into private.deleted_content_records(id,target_type,target_id,author,content,deletion_kind,deleted_at,expires_at,source_created_at,media_disposition)
+   select ${lit(deletion)},'creator_video',${lit(target)},${lit(author)},'{"title":"synthetic expired"}','hard',now()-interval '31 days',now()-interval '1 day',created_at,'retained_original'
+    from videos where id=${lit(target)};
    update private.deleted_content_media_stages set deletion_id=${lit(deletion)} where id=${lit(stage)};
    update private.deleted_content_retention_settings set capture_enabled=false,media_staging_enabled=false,text_expiry_enabled=false,media_expiry_enabled=false;
    delete from videos where id=${lit(target)};
-   update media_scan_jobs set status='clean' where target_table='videos' and target_id=${lit(target)};
    update private.deleted_content_retention_settings set capture_enabled=true,media_staging_enabled=true,text_expiry_enabled=true,media_expiry_enabled=true;`);
   const hold=`insert into public.legal_holds(target_type,target_id,reason,status) values('creator_video',${lit(target)},'Synthetic media preservation','active')`;
   const claim=`select public.claim_deleted_content_media_expiry(${lit(stage)})::text`;
@@ -183,17 +214,19 @@ try{
  const recoveryFixture=()=>{
   const target=randomUUID(),reservation=randomUUID(),stage=randomUUID(),replacementReservation=randomUUID();
   const key=`${author}/${target}/source.mp4`,replacement=`${author}/${target}/source.mov`;
-  query(`insert into media_upload_reservations(id,owner_user_id,surface_type,storage_provider,storage_bucket,storage_object_key,expected_mime_type,expected_size_bytes,status,expires_at,verified_at,attached_record_id,attached_at)
-   values(${lit(reservation)},${lit(author)},'creator_video','cloudflare_r2','chillywood-media-origin',${lit(key)},'video/mp4',1024,'verified',now()+interval '1 hour',now(),${lit(target)},now()),
-    (${lit(replacementReservation)},${lit(author)},'creator_video','cloudflare_r2','chillywood-media-origin',${lit(replacement)},'video/quicktime',1024,'verified',now()+interval '1 hour',now(),${lit(target)},now());
+  query(`insert into media_upload_reservations(id,owner_user_id,surface_type,storage_provider,storage_bucket,storage_object_key,expected_mime_type,expected_size_bytes,status,expires_at,verified_at,observed_mime_type,observed_size_bytes)
+   values(${lit(reservation)},${lit(author)},'creator_video','cloudflare_r2','chillywood-media-origin',${lit(key)},'video/mp4',1024,'verified',now()+interval '1 hour',now(),'video/mp4',1024),
+    (${lit(replacementReservation)},${lit(author)},'creator_video','cloudflare_r2','chillywood-media-origin',${lit(replacement)},'video/quicktime',1024,'verified',now()+interval '1 hour',now(),'video/quicktime',1024);
+   ${consume(target,key)}
    insert into videos(id,owner_id,title,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,file_size_bytes)
    values(${lit(target)},${lit(author)},'Synthetic recovery','draft','clean','cloudflare_r2','chillywood-media-origin',${lit(key)},${lit(key)},'video/mp4',1024);
-   update media_scan_jobs set status='clean' where target_table='videos' and target_id=${lit(target)};
+   ${completeScan(target,key)}
    insert into private.deleted_content_media_stages(id,target_type,target_id,author,provider,bucket,object_key,reservation_id,staged_at,reconcile_after)
    values(${lit(stage)},'creator_video',${lit(target)},${lit(author)},'cloudflare_r2','chillywood-media-origin',${lit(key)},${lit(reservation)},clock_timestamp()-interval '2 hours',clock_timestamp()-interval '1 hour');`);
   return {target,stage,key,replacement,
-   replace:`update videos set storage_object_key=${lit(replacement)},storage_path=${lit(replacement)},mime_type='video/quicktime' where id=${lit(target)};
-    update media_scan_jobs set status='clean' where target_table='videos' and target_id=${lit(target)}`,
+   replace:`${consume(target,replacement,'video/quicktime')}
+    update videos set storage_object_key=${lit(replacement)},storage_path=${lit(replacement)},mime_type='video/quicktime' where id=${lit(target)};
+    ${completeScan(target,replacement)}`,
    reconcile:`select public.reconcile_deleted_content_stage(${lit(stage)})::text`,
    hold:`insert into public.legal_holds(target_type,target_id,reason,status) values('creator_video',${lit(target)},'Synthetic orphan preservation','active')`,
    alias:`insert into public.retirement_inactive_consumer(metadata) values(jsonb_build_object('key',${lit(key)}))`};
