@@ -293,7 +293,28 @@ assertIncludes(admin, "HIGH_RISK_MONEY_SWITCHES", "high-risk Money switch confir
 assertIncludes(admin, "setPlatformMoneyKillSwitchState", "backend Money switch write");
 assertIncludes(admin, "Backend RPC writes the switch and immutable audit", "Money switch confirmation audit copy");
 assertIncludes(admin, "No provider secrets, checkout, transfer, withdrawal, payout, balance, or live-money movement is created.", "Money switch no-money-movement copy");
-assertIncludes(admin, "Launch review state: sandbox digital access evidence is complete, live money and payouts are off, sandbox/setup rows are not payable, and no cash-out or withdrawal action exists.", "Owner/Admin launch review summary");
+// Inspect rendered safety reasons, not comments or a frozen historical claim of current readiness.
+const adminAst = ts.createSourceFile("admin.tsx", admin, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const adminSafetyReasons = [];
+const collectAdminSafetyReasons = (node) => {
+  if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && node.tagName.getText(adminAst) === "OwnerDisabledReason") {
+    const reason = node.attributes.properties.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(adminAst) === "reason");
+    if (reason?.initializer && ts.isStringLiteral(reason.initializer)) adminSafetyReasons.push(reason.initializer.text);
+  }
+  ts.forEachChild(node, collectAdminSafetyReasons);
+};
+collectAdminSafetyReasons(adminAst);
+const launchReview = adminSafetyReasons.find(reason => /historical source review/iu.test(reason)) ?? "";
+for (const [pattern, label] of [
+  [/live money and payouts off/iu, "money-off boundary"],
+  [/not current production verification/iu, "historical evidence boundary"],
+  [/no cash-out or withdrawal action exists/iu, "no withdrawal boundary"],
+]) {
+  if (!pattern.test(launchReview)) fail(`Owner/Admin launch review summary is missing ${label}`);
+}
+if (!adminSafetyReasons.some(reason => /sandbox and setup rows[\s\S]*not payable[\s\S]*never become creator balances or withdrawals/iu.test(reason))) {
+  fail("Owner/Admin launch review summary is missing sandbox/setup nonpayable boundary");
+}
 assertIncludes(admin, "Product Catalog", "Owner/Admin Product Catalog launch metric");
 assertIncludes(admin, "Provider Events", "Owner/Admin Provider Events launch metric");
 assertIncludes(admin, "Purchase Intents", "Owner/Admin Purchase Intents launch metric");

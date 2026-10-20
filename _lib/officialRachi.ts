@@ -348,7 +348,8 @@ export async function readOfficialRachiOriginals(options?: { limit?: number }): 
 }
 
 export async function readOfficialRachiProfileImage(): Promise<OfficialRachiProfileImage> {
-  const profile = await readUserProfileByUserId(RACHI_OFFICIAL_ACCOUNT.userId).catch(() => null);
+  const profile = await readUserProfileByUserId(RACHI_OFFICIAL_ACCOUNT.userId);
+  if (!profile) throw new Error("Rachi's saved profile photo is unavailable. Refresh before changing it.");
   return {
     avatarUrl: toText(profile?.avatarUrl) || null,
   };

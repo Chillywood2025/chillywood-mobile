@@ -29,28 +29,35 @@ const SOURCE_STATUS_ROWS = [
 export const CognitiveControlCenterFoundation = () => {
   const [liveStatus, setLiveStatus] = useState<LiveCognitiveStatus | null>(null);
   const [readbackState, setReadbackState] = useState<"loading" | "live" | "source_only">("loading");
+  const [readbackAttempt, setReadbackAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     const read = async () => {
-      const { data, error } = await supabase.functions.invoke(
-        "cognitive-governance-control",
-        { body: { action: "status" } },
-      );
-      if (cancelled) return;
-      const status = error ? null : parseLiveCognitiveStatusResponse(data);
-      if (!status) {
-        setReadbackState("source_only");
-        return;
+      setReadbackState("loading");
+      setLiveStatus(null);
+      try {
+        const { data, error } = await supabase.functions.invoke(
+          "cognitive-governance-control",
+          { body: { action: "status" } },
+        );
+        if (cancelled) return;
+        const status = error ? null : parseLiveCognitiveStatusResponse(data);
+        if (!status) {
+          setReadbackState("source_only");
+          return;
+        }
+        setLiveStatus(status);
+        setReadbackState("live");
+      } catch {
+        if (!cancelled) setReadbackState("source_only");
       }
-      setLiveStatus(status);
-      setReadbackState("live");
     };
     void read();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [readbackAttempt]);
 
   const statusRows = useMemo(() => {
     if (!liveStatus) return SOURCE_STATUS_ROWS;
@@ -115,6 +122,19 @@ export const CognitiveControlCenterFoundation = () => {
         {readbackState === "live" ? "LIVE BACKEND READBACK · READ ONLY" : "SOURCE MANIFEST · READ ONLY"}
       </Text>
       <Text style={styles.title}>Cognitive Intelligence Foundation</Text>
+      <Text style={styles.muted}>
+        {readbackState === "loading" ? "Checking backend status…" : readbackState === "source_only" ? "Backend status unavailable. Source records below are not current deployment verification." : "Backend status loaded."}
+      </Text>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Refresh Cognitive status"
+        accessibilityState={{ disabled: readbackState === "loading" }}
+        disabled={readbackState === "loading"}
+        onPress={() => setReadbackAttempt((attempt) => attempt + 1)}
+        style={styles.readChip}
+      >
+        <Text style={styles.readChipText}>{readbackState === "loading" ? "Checking status" : "Refresh status"}</Text>
+      </TouchableOpacity>
       <Text style={styles.body}>
         {readbackState === "live"
           ? "Backend-authoritative status. No execution authority is granted by this control center. Owner-assisted inspection and draft work may be active while the isolated autonomous runtime remains pending."
@@ -133,7 +153,7 @@ export const CognitiveControlCenterFoundation = () => {
           <Text style={styles.pillText}>
             {readbackState === "live"
               ? liveStatus?.deploymentState.toUpperCase()
-              : "NOT DEPLOYED"}
+              : "LIVE STATUS UNVERIFIED"}
           </Text>
         </View>
         <View style={styles.pill}>

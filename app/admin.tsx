@@ -1,11 +1,16 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAdminReadLifecycle } from "../hooks/use-admin-read-lifecycle";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { buildAdminNavigation, getAdminContentInsets } from "../_lib/adminNavigation";
+import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
 import {
   ActivityIndicator,
   Alert,
   ImageBackground,
   Keyboard,
+  KeyboardAvoidingView,
   Platform,
   Linking,
   Modal,
@@ -142,6 +147,7 @@ import {
   canUserReviewAutonomousApproval,
 } from "../_lib/platformOwnerAuthority";
 import { useSession } from "../_lib/session";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../_lib/accountSessionAuthority";
 import { ProfileMediaImage as Image } from "../components/ui/ProfileMediaImage";
 import {
   readAdminAuditLog,
@@ -738,6 +744,7 @@ const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "dmca", label: "DMCA" },
   { key: "content", label: "Content" },
   { key: "roles", label: "Roles" },
+  { key: "owners", label: "Owners" },
   { key: "audit", label: "Audit" },
   { key: "audit-explorer", label: "Audit Explorer" },
   { key: "permission-templates", label: "Permission Templates" },
@@ -774,6 +781,7 @@ const ADMIN_MAIN_TAB_LABELS: Partial<Record<OperatorTabKey, string>> = {
   "live-ops-fix-center": "Live Ops",
 };
 const ADMIN_TAB_MAIN_GROUP: Partial<Record<OperatorTabKey, OperatorTabKey>> = {
+  owners: "owner-security",
   ads: "money-center",
   audit: "system",
   "audit-explorer": "system",
@@ -2336,7 +2344,7 @@ const resolveCanarySection = (input: unknown) => {
 const summarizeCanaryRun = (run: OwnerControlCanaryRun | null | undefined) => {
   const results = Array.isArray(run?.results) ? run.results : [];
   const rawSummary = run?.summary && typeof run.summary === "object" && !Array.isArray(run.summary) ? run.summary : null;
-  const summary = { fail: 0, manualRequired: 0, pass: 0 };
+  const summary = { fail: 0, manualRequired: 0, pass: 0, hasResults: results.length > 0 };
   if (rawSummary) {
     summary.fail = Number(rawSummary.fail ?? rawSummary.failed ?? rawSummary.failCount ?? 0) || 0;
     summary.pass = Number(rawSummary.pass ?? rawSummary.passed ?? rawSummary.passCount ?? 0) || 0;
@@ -3410,6 +3418,7 @@ const listAdminContentAuditEventsRpc = async (limit = 10) => {
 };
 
 export default function AdminStudioScreen() {
+  const safeAreaInsets = useSafeAreaInsets();
   const storeProviderName = Platform.OS === "ios" ? "App Store" : "Google Play";
   const storeProviderPair = `${storeProviderName} / RevenueCat`;
   const router = useRouter();
@@ -3420,8 +3429,7 @@ export default function AdminStudioScreen() {
   }>();
   const consumedAdminRouteRef = useRef<string | null>(null);
   const lastAdminSearchAuditKeyRef = useRef<string | null>(null);
-  const lastAdminSearchUsersReadKeyRef = useRef<string | null>(null);
-  const { isLoading: authLoading, isSignedIn, user } = useSession();
+  const { isLoading: authLoading, isSignedIn, user, authority, authorityStatus } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const [titles, setTitles] = useState<TitleRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -3500,6 +3508,8 @@ export default function AdminStudioScreen() {
   const [safetyReportsLoading, setSafetyReportsLoading] = useState(false);
   const [safetyReportsLastLoadedAt, setSafetyReportsLastLoadedAt] = useState<string | null>(null);
   const [safetyReportFilter, setSafetyReportFilter] = useState<ReportTriageFilterKey>("needs_review");
+  const [safetyReportWindow, setSafetyReportWindow] = useState<{ limit: number; full: boolean; overviewAvailable: boolean } | null>(null);
+  const safetyReportRequestRef = useRef(0);
   const [selectedSafetyReportId, setSelectedSafetyReportId] = useState<number | null>(null);
   const [safetyReportDetailVisible, setSafetyReportDetailVisible] = useState(false);
   const [selectedReportAuditRows, setSelectedReportAuditRows] = useState<PlatformAdminAuditLogRow[]>([]);
@@ -3511,6 +3521,7 @@ export default function AdminStudioScreen() {
   const [dmcaCasesLoading, setDmcaCasesLoading] = useState(false);
   const [dmcaCaseSummary, setDmcaCaseSummary] = useState<DmcaCaseSummary | null>(null);
   const [dmcaCaseDetail, setDmcaCaseDetail] = useState<DmcaCaseDetail | null>(null);
+  const dmcaDetailRequestRef = useRef({ caseId: null as string | null, loaded: false });
   const [dmcaDetailVisible, setDmcaDetailVisible] = useState(false);
   const [dmcaSelectedCaseId, setDmcaSelectedCaseId] = useState<string | null>(null);
   const [dmcaStatusFilter, setDmcaStatusFilter] = useState<DmcaCaseStatus | "all">("all");
@@ -3616,6 +3627,8 @@ export default function AdminStudioScreen() {
   const [breakGlassDuration, setBreakGlassDuration] = useState("1h");
   const [breakGlassBusy, setBreakGlassBusy] = useState<"activate" | "end" | null>(null);
   const [firstOwnerStatus, setFirstOwnerStatus] = useState<FirstOwnerAuthorityStatus | null>(null);
+  const [firstOwnerLoadedAuthorityKey, setFirstOwnerLoadedAuthorityKey] = useState<string | null>(null);
+  const firstOwnerReadRef = useRef({ authorityKey: null as string | null, generation: 0 });
   const [firstOwnerRows, setFirstOwnerRows] = useState<FirstOwnerRow[]>([]);
   const [firstOwnerTargetEmail, setFirstOwnerTargetEmail] = useState("");
   const [firstOwnerReason, setFirstOwnerReason] = useState("");
@@ -3629,6 +3642,8 @@ export default function AdminStudioScreen() {
   const [legalRequests, setLegalRequests] = useState<OwnerControlLegalRequest[]>([]);
   const [selectedLegalRequestId, setSelectedLegalRequestId] = useState<string | null>(null);
   const [selectedLegalRequestDetail, setSelectedLegalRequestDetail] = useState<OwnerControlLegalRequestDetail | null>(null);
+  const legalDetailRequestRef = useRef({ generation: 0, requestId: null as string | null, loaded: false });
+  const legalNoteBusyRef = useRef(false);
   const [legalRequestStatusFilter, setLegalRequestStatusFilter] = useState<LegalRequestStatusFilter>("all");
   const [legalRequestSearch, setLegalRequestSearch] = useState("");
   const [legalRequestStatusUpdate, setLegalRequestStatusUpdate] = useState<LegalRequestStatusFilter>("under_review");
@@ -3703,6 +3718,8 @@ export default function AdminStudioScreen() {
   const [adminV1ReadModel, setAdminV1ReadModel] = useState<AdminV1ReadModel>(EMPTY_ADMIN_V1_READ_MODEL);
   const [adminUsersReadModel, setAdminUsersReadModel] =
     useState<AdminUsersReadModelWithLoading>(EMPTY_ADMIN_USERS_READ_MODEL);
+  const [adminSearchUsersReadModel, setAdminSearchUsersReadModel] =
+    useState<AdminUsersReadModelWithLoading>(EMPTY_ADMIN_USERS_READ_MODEL);
   const [adminUsageDetailReadModel, setAdminUsageDetailReadModel] =
     useState<AdminUsageDetailReadModelWithLoading>(EMPTY_ADMIN_USAGE_DETAIL_READ_MODEL);
   const [adminSystemHistoryReadModel, setAdminSystemHistoryReadModel] =
@@ -3767,6 +3784,15 @@ export default function AdminStudioScreen() {
   const resolvedActorRole = resolvePlatformActorRole(moderationAccess, platformRoles);
   const platformRoleCheckPending = isSignedIn && isActive && (!platformRolesChecked || platformRolesLoading);
   const canAccessAdmin = isSignedIn && isActive && platformRolesChecked && canAccessAdminConsole(moderationAccess, platformRoles);
+  const adminReadAuthorityKey = canAccessAdmin && !authLoading && !platformRolesLoading
+    && authorityStatus === "active" && authority && authority.userId === user?.id && !authority.restoreOnly
+    ? JSON.stringify([authority.userId, authority.accountId, authority.sessionGeneration, platformRoles])
+    : null;
+  const runAdminUsageRead = useAdminReadLifecycle(adminReadAuthorityKey, setAdminV1ReadModel, EMPTY_ADMIN_V1_READ_MODEL);
+  const runAdminUsersRead = useAdminReadLifecycle(adminReadAuthorityKey, setAdminUsersReadModel, EMPTY_ADMIN_USERS_READ_MODEL);
+  const runAdminUsageDetailRead = useAdminReadLifecycle(adminReadAuthorityKey, setAdminUsageDetailReadModel, EMPTY_ADMIN_USAGE_DETAIL_READ_MODEL);
+  const runAdminSystemHistoryRead = useAdminReadLifecycle(adminReadAuthorityKey, setAdminSystemHistoryReadModel, EMPTY_ADMIN_SYSTEM_HISTORY_READ_MODEL);
+  const runAdminMediaScanRead = useAdminReadLifecycle(adminReadAuthorityKey, setAdminMediaScanReadModel, EMPTY_ADMIN_MEDIA_SCAN_READ_MODEL);
   const canReviewSafetyReports = isSignedIn && isActive && platformRolesChecked && canReviewSafetyQueue(moderationAccess, platformRoles);
   const canManagePrivilegedWrites = isSignedIn && isActive && platformRolesChecked && canManagePrivilegedAdminWrites(moderationAccess, platformRoles);
   const canReviewAutonomousApprovals = isSignedIn
@@ -3789,6 +3815,17 @@ export default function AdminStudioScreen() {
       )
     );
   const canAccessDmca = isSignedIn && isActive && platformRolesChecked && canAccessDmcaTools(platformRoles);
+  const dmcaDetailAuthorityKey = adminReadAuthorityKey && canAccessDmca ? `${adminReadAuthorityKey}:dmca` : null;
+  const dmcaDetailAuthorityRef = useRef(dmcaDetailAuthorityKey);
+  dmcaDetailAuthorityRef.current = dmcaDetailAuthorityKey;
+  useEffect(() => {
+    dmcaDetailRequestRef.current = { caseId: null, loaded: false };
+    setDmcaCaseDetail(null);
+    setDmcaSelectedCaseId(null);
+    setDmcaDetailVisible(false);
+    setDmcaActionBusy(null);
+    return () => { dmcaDetailRequestRef.current = { caseId: null, loaded: false }; };
+  }, [dmcaDetailAuthorityKey]);
   const canManageAdminStaff = isSignedIn && isActive && platformRolesChecked && canManageAdminRoleAssignments(platformRoles);
   const canManageModeratorStaff = isSignedIn && isActive && platformRolesChecked && canManageModeratorRoleAssignments(platformRoles);
   const canViewStaffRoles = canManageAdminStaff || canManageModeratorStaff;
@@ -3804,10 +3841,51 @@ export default function AdminStudioScreen() {
   const canAccessLegalEvidence = isSignedIn && isActive && platformRolesChecked && canAccessLegalEvidenceTools(platformRoles);
   const canAccessAuditExplorer = isSignedIn && isActive && platformRolesChecked && canAccessAuditExplorerTools(platformRoles);
   const canManagePermissionTemplates = isSignedIn && isActive && platformRolesChecked && canManageStaffPermissionTemplates(platformRoles);
-  const canAccessBreakGlass = isOwnerStaff;
   const canAccessFirstOwnerTools = isOwnerStaff;
-  const firstOwnerControlsEnabled = firstOwnerStatus?.controlsEnabled === true && firstOwnerStatus?.actorIsFirstOwner === true;
+  const firstOwnerReadAuthorityKey = canAccessFirstOwnerTools ? adminReadAuthorityKey : null;
+  if (firstOwnerReadRef.current.authorityKey !== firstOwnerReadAuthorityKey) {
+    firstOwnerReadRef.current = { authorityKey: firstOwnerReadAuthorityKey, generation: firstOwnerReadRef.current.generation + 1 };
+  }
+  const firstOwnerControlsEnabled = !!firstOwnerReadAuthorityKey
+    && firstOwnerLoadedAuthorityKey === firstOwnerReadAuthorityKey
+    && firstOwnerStatus?.controlsEnabled === true && firstOwnerStatus?.actorIsFirstOwner === true;
+  const canAccessBreakGlass = isOwnerStaff && firstOwnerControlsEnabled;
+  useEffect(() => {
+    setFirstOwnerStatus(null);
+    setFirstOwnerLoadedAuthorityKey(null);
+    setFirstOwnerRows([]);
+    setFirstOwnerBusy(null);
+    setFirstOwnerTargetEmail("");
+    setFirstOwnerReason("");
+    setFirstOwnerSuccessorEmail("");
+    setFirstOwnerPassword("");
+    setFirstOwnerChallenge(null);
+    setFirstOwnerPasscode("");
+    setFirstOwnerTypedConfirmation("");
+    setFirstOwnerDisplayedPasscode("");
+    setBreakGlassSessions([]);
+    setBreakGlassActiveSessionId(null);
+    setBreakGlassBusy(null);
+    return () => { firstOwnerReadRef.current.generation += 1; };
+  }, [firstOwnerReadAuthorityKey]);
   const canAccessLegalIntake = isSignedIn && isActive && platformRolesChecked && canAccessLegalRequestIntakeTools(platformRoles);
+  const safetyReportAuthorityKey = `${user?.id ?? ""}:${authority?.sessionGeneration ?? ""}:${authority?.restoreOnly}:${authorityStatus}:${canAccessAdmin}:${canReviewSafetyReports}:${safetyReportFilter}`;
+  const safetyReportAuthorityRef = useRef(safetyReportAuthorityKey);
+  safetyReportAuthorityRef.current = safetyReportAuthorityKey;
+  const legalDetailAuthorityKey = adminReadAuthorityKey && (canAccessLegalIntake || canAccessLegalEvidence)
+    ? `${adminReadAuthorityKey}:${canAccessLegalIntake}:${canAccessLegalEvidence}` : null;
+  const legalDetailAuthorityRef = useRef(legalDetailAuthorityKey);
+  legalDetailAuthorityRef.current = legalDetailAuthorityKey;
+  useEffect(() => {
+    legalDetailRequestRef.current = { generation: legalDetailRequestRef.current.generation + 1, requestId: null, loaded: false };
+    setSelectedLegalRequestId(null);
+    setSelectedLegalRequestDetail(null);
+    setLegalRequestNote("");
+    setLegalRequestDetailBusy(false);
+    return () => {
+      legalDetailRequestRef.current = { generation: legalDetailRequestRef.current.generation + 1, requestId: null, loaded: false };
+    };
+  }, [legalDetailAuthorityKey]);
   const canApplyReportTargetActions = canManagePrivilegedWrites
     || (
       isSignedIn
@@ -3824,7 +3902,10 @@ export default function AdminStudioScreen() {
   const canAccessCanaryChecks = canAccessAuditExplorer;
   const visibleOperatorTabs = useMemo(
     () => {
-      if (canManagePrivilegedWrites) return operatorTabs;
+      if (canManagePrivilegedWrites) return operatorTabs.filter((tab) =>
+        (tab.key !== "owners" || canAccessFirstOwnerTools)
+        && (tab.key !== "break-glass" || canAccessBreakGlass)
+      );
       const scopedTabs: OperatorTabKey[] = ["home"];
       if (canReviewSafetyReports) {
         scopedTabs.push("reports", "audit");
@@ -3861,19 +3942,15 @@ export default function AdminStudioScreen() {
       canViewStaffRoles,
     ],
   );
-  const adminMainTabs = useMemo(
-    () => {
-      const visibleKeys = new Set(visibleOperatorTabs.map((tab) => tab.key));
-      return ADMIN_MAIN_TAB_KEYS
-        .filter((key) => visibleKeys.has(key))
-        .map((key) => ({
-          key,
-          label: ADMIN_MAIN_TAB_LABELS[key] ?? operatorTabs.find((tab) => tab.key === key)?.label ?? formatModerationToken(key),
-        }));
-    },
-    [visibleOperatorTabs],
+  const adminNavigation = useMemo(
+    () => buildAdminNavigation(visibleOperatorTabs, ADMIN_MAIN_TAB_KEYS, {
+      ...Object.fromEntries(operatorTabs.map((tab) => [tab.key, tab.label])),
+      ...ADMIN_MAIN_TAB_LABELS,
+    }, ADMIN_TAB_MAIN_GROUP, operatorTab),
+    [visibleOperatorTabs, operatorTab],
   );
-  const activeAdminMainTabKey = ADMIN_TAB_MAIN_GROUP[operatorTab] ?? operatorTab;
+  const adminMainTabs = adminNavigation.mainTabs;
+  const activeAdminMainTabKey = adminNavigation.activeMainKey;
   const staffRoleOptions = useMemo<readonly { key: PlatformStaffManagementRole; label: string }[]>(
     () => {
       if (canManageAdminStaff) {
@@ -3957,7 +4034,7 @@ export default function AdminStudioScreen() {
       let result = (data ?? {}) as Record<string, any>;
       const commandId = String(result.command?.id ?? "");
       const plan = result.plan as Record<string, any> | undefined;
-      if (action === "create_command" && commandId && plan?.approvalRequired !== true && Array.isArray(plan?.blockers) && plan.blockers.length === 0) {
+      if (action === "create_command" && result.ok === true && commandId && plan?.approvalRequired !== true && Array.isArray(plan?.blockers) && plan.blockers.length === 0) {
         const executed = await supabase.functions.invoke("owner-command-operator", {
           body: {
             action: "execute_approved_command",
@@ -3971,12 +4048,19 @@ export default function AdminStudioScreen() {
         };
       }
 
-      setOwnerCommandResult(result);
-      if (result.approvalRequest?.id) {
+      const blockers = result.execution?.blockers ?? result.classification?.blockers ?? result.plan?.blockers ?? [];
+      setOwnerCommandResult({ ...result, classification: { ...result.classification, blockers } });
+      if (result.ok !== true || result.execution?.ok === false || blockers.length > 0) {
+        setOwnerCommandNotice(blockers.length > 0
+          ? `Owner command blocked: ${blockers.join("; ")}`
+          : "Owner command outcome was not confirmed by the server. Check command history before retrying.");
+      } else if (result.approvalRequest?.id) {
         setOwnerCommandNotice("Approval request created. High-risk owner command stopped before execution.");
         await loadAutonomousApprovalRequests();
-      } else if (result.execution?.ok) {
+      } else if (result.execution?.ok === true && result.execution?.result === "safe_command_executed") {
         setOwnerCommandNotice("Safe owner command executed as scoped audit/report work.");
+      } else if (result.execution) {
+        setOwnerCommandNotice("Owner command execution was not confirmed. Check command history for the required next step.");
       } else {
         setOwnerCommandNotice(action === "create_command" ? "Owner command created and planned." : "Owner command classified/planned.");
       }
@@ -4139,8 +4223,8 @@ export default function AdminStudioScreen() {
         ? "Add an audit reason of at least 6 characters before this action writes to the backend."
         : !selectedStaffRoleManageAllowed
           ? staffRoleTarget === "admin"
-            ? "This account can review Admin state but cannot grant or remove Admins without admin_grants."
-            : "This account can review Moderator state but cannot grant or remove Moderators without manage_moderators."
+            ? "Granting or removing Admins requires an active Owner role."
+            : "Granting or removing Moderators requires Owner, or Admin with manage_moderators or admin.lower_role.manage."
           : staffRoleBusy !== null
             ? "A staff role action is already running."
             : "Ready for backed staff role confirmation.";
@@ -4405,7 +4489,7 @@ export default function AdminStudioScreen() {
       : safetyReportsLoading
         ? "Loading"
         : safetyReportQueueConnected
-          ? String(safetyReportQueueSummary?.needsReviewCount ?? safetyReportQueueCount)
+          ? safetyReportQueueSummary?.needsReviewCount == null ? "Unknown" : String(safetyReportQueueSummary.needsReviewCount)
           : "Not Connected";
     const queueTone: OwnerControlTone = !canReviewSafetyReports
       ? "locked"
@@ -4834,13 +4918,14 @@ export default function AdminStudioScreen() {
     loadTitles();
     loadExperienceConfig();
     void loadContentAuditEvents();
-    void loadAdminV1ReadModel();
     void loadAdminFinanceReadModel();
     void loadAdminImmutableAuditReadModel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canAccessAdmin, canAccessContentProgramming]);
 
   useEffect(() => {
+    safetyReportRequestRef.current += 1;
+    setSafetyReportWindow(null);
     if (!canAccessAdmin || !canReviewSafetyReports) {
       setSafetyReports([]);
       setSafetyReportQueueSummary(null);
@@ -4852,8 +4937,9 @@ export default function AdminStudioScreen() {
       return;
     }
     void loadSafetyReports();
+    return () => { safetyReportRequestRef.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canAccessAdmin, canReviewSafetyReports]);
+  }, [canAccessAdmin, canReviewSafetyReports, safetyReportAuthorityKey]);
 
   useEffect(() => {
     if (selectedSafetyReportId !== null && !safetyReports.some((report) => report.id === selectedSafetyReportId)) {
@@ -6718,24 +6804,41 @@ export default function AdminStudioScreen() {
     user?.id,
   ]);
 
-  const loadSafetyReports = useCallback(async () => {
+  const loadSafetyReports = useCallback(async (limit = 25) => {
+    const request = ++safetyReportRequestRef.current;
+    const scope = safetyReportAuthorityKey;
+    const session = getCurrentAccountSessionAuthoritySnapshot();
+    setSafetyReports([]);
+    setSafetyReportQueueSummary(null);
+    setSafetyReportWindow(null);
+    setSafetyReportsLastLoadedAt(null);
+    if (!canAccessAdmin || !canReviewSafetyReports || !session || session.restoreOnly || session.userId !== user?.id) {
+      setSafetyReportsLoading(false);
+      return;
+    }
+    const isCurrent = () => request === safetyReportRequestRef.current
+      && scope === safetyReportAuthorityRef.current
+      && sameAccountSessionAuthority(session, getCurrentAccountSessionAuthoritySnapshot());
     try {
       setSafetyReportsLoading(true);
       setModerationNotice(null);
-      const queue = await readSafetyReportQueue({ filter: "all", limit: 25 });
+      const queue = await readSafetyReportQueue({ filter: safetyReportFilter, limit });
+      if (!isCurrent()) return;
       setSafetyReports(queue.items);
       setSafetyReportQueueSummary(queue.summary);
+      setSafetyReportWindow({ limit: queue.windowLimit, full: queue.windowFull, overviewAvailable: queue.overviewAvailable });
       setSafetyReportsLastLoadedAt(queue.generatedAt);
     } catch (err: any) {
+      if (!isCurrent()) return;
       setSafetyReports([]);
       setSafetyReportQueueSummary(null);
       setSafetyReportsLastLoadedAt(null);
       setSelectedReportAuditRows([]);
       setModerationNotice(formatAdminOperationFailure(err, "Failed to load the safety review queue."));
     } finally {
-      setSafetyReportsLoading(false);
+      if (isCurrent()) setSafetyReportsLoading(false);
     }
-  }, []);
+  }, [canAccessAdmin, canReviewSafetyReports, safetyReportAuthorityKey, safetyReportFilter, user?.id]);
 
   const resetCounterNoticeForm = useCallback(() => {
     setCounterSubmitterName("");
@@ -6820,27 +6923,39 @@ export default function AdminStudioScreen() {
   }, [canAccessDmca, dmcaSearchQuery, dmcaStatusFilter]);
 
   const loadDmcaCaseDetail = useCallback(async (caseId: string) => {
-    if (!canAccessDmca) {
+    if (!canAccessDmca || !dmcaDetailAuthorityKey) {
       setDmcaNotice("DMCA case details require Owner, Admin, or scoped Moderator copyright access.");
       return;
     }
-
+    const selection = { caseId, loaded: false };
+    const authority = dmcaDetailAuthorityKey;
+    dmcaDetailRequestRef.current = selection;
+    const isCurrent = () => dmcaDetailRequestRef.current === selection && dmcaDetailAuthorityRef.current === authority;
+    setDmcaCaseDetail(null);
+    setDmcaDetailVisible(false);
+    setDmcaActionReason("");
+    setDmcaAdminNotes("");
+    resetCounterNoticeForm();
     try {
       setDmcaActionBusy(`detail-${caseId}`);
       setDmcaNotice(null);
       setDmcaSelectedCaseId(caseId);
       const detail = await readAdminDmcaCaseDetail(caseId);
+      if (!isCurrent()) return;
+      if (detail.case.id !== caseId) throw new Error("DMCA detail did not match the selected case.");
+      selection.loaded = true;
       setDmcaCaseDetail(detail);
       setDmcaDetailVisible(true);
       applyDmcaDetailDefaults(detail);
     } catch (err: any) {
+      if (!isCurrent()) return;
       setDmcaCaseDetail(null);
       setDmcaDetailVisible(false);
       setDmcaNotice(formatDmcaOperationFailure(err, "Failed to load DMCA case detail."));
     } finally {
-      setDmcaActionBusy(null);
+      if (isCurrent()) setDmcaActionBusy(null);
     }
-  }, [applyDmcaDetailDefaults, canAccessDmca]);
+  }, [applyDmcaDetailDefaults, canAccessDmca, dmcaDetailAuthorityKey, resetCounterNoticeForm]);
 
   const submitAdminDmcaIntake = useCallback(async () => {
     if (dmcaIntakeBusy) return;
@@ -6900,12 +7015,18 @@ export default function AdminStudioScreen() {
   }, [canAccessAdmin, canAccessDmca, loadDmcaCases]);
 
   const refreshDmcaAfterAction = useCallback(async (caseId: string) => {
+    const selection = dmcaDetailRequestRef.current;
+    const authority = dmcaDetailAuthorityKey;
     await loadDmcaCases();
+    if (dmcaDetailRequestRef.current !== selection || selection.caseId !== caseId || dmcaDetailAuthorityRef.current !== authority) return;
     await loadDmcaCaseDetail(caseId);
-  }, [loadDmcaCaseDetail, loadDmcaCases]);
+  }, [loadDmcaCaseDetail, loadDmcaCases, dmcaDetailAuthorityKey]);
 
   const runDmcaStatusUpdate = useCallback(async (status: DmcaCaseStatus) => {
-    const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
+    const selectedCaseId = dmcaDetailAuthorityRef.current === dmcaDetailAuthorityKey
+      && dmcaDetailRequestRef.current.loaded
+      && dmcaDetailRequestRef.current.caseId === dmcaSelectedCaseId
+      && dmcaCaseDetail?.case.id === dmcaSelectedCaseId ? dmcaSelectedCaseId : null;
     if (!selectedCaseId || dmcaActionBusy) return;
     if (!canAccessDmca) {
       setDmcaNotice("DMCA admin actions require Owner, Admin, or scoped Moderator copyright access.");
@@ -6936,11 +7057,15 @@ export default function AdminStudioScreen() {
     dmcaAdminNotes,
     dmcaCaseDetail?.case.id,
     dmcaSelectedCaseId,
+    dmcaDetailAuthorityKey,
     refreshDmcaAfterAction,
   ]);
 
   const runDmcaContentAction = useCallback(async () => {
-    const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
+    const selectedCaseId = dmcaDetailAuthorityRef.current === dmcaDetailAuthorityKey
+      && dmcaDetailRequestRef.current.loaded
+      && dmcaDetailRequestRef.current.caseId === dmcaSelectedCaseId
+      && dmcaCaseDetail?.case.id === dmcaSelectedCaseId ? dmcaSelectedCaseId : null;
     const contentId = dmcaContentId.trim();
     const reason = dmcaActionReason.trim();
     if (!selectedCaseId || dmcaActionBusy) return;
@@ -6990,11 +7115,15 @@ export default function AdminStudioScreen() {
     dmcaContentId,
     dmcaContentType,
     dmcaSelectedCaseId,
+    dmcaDetailAuthorityKey,
     refreshDmcaAfterAction,
   ]);
 
   const runDmcaAddStrike = useCallback(async () => {
-    const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
+    const selectedCaseId = dmcaDetailAuthorityRef.current === dmcaDetailAuthorityKey
+      && dmcaDetailRequestRef.current.loaded
+      && dmcaDetailRequestRef.current.caseId === dmcaSelectedCaseId
+      && dmcaCaseDetail?.case.id === dmcaSelectedCaseId ? dmcaSelectedCaseId : null;
     const userId = dmcaStrikeUserId.trim();
     const contentId = dmcaContentId.trim();
     const reason = dmcaActionReason.trim();
@@ -7070,6 +7199,7 @@ export default function AdminStudioScreen() {
     dmcaContentId,
     dmcaContentType,
     dmcaSelectedCaseId,
+    dmcaDetailAuthorityKey,
     dmcaStrikeSeverity,
     dmcaStrikeUserId,
     refreshDmcaAfterAction,
@@ -7077,7 +7207,10 @@ export default function AdminStudioScreen() {
   ]);
 
   const runDmcaUpdateStrike = useCallback(async (strikeId: string, status: "removed" | "disputed" | "resolved") => {
-    const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
+    const selectedCaseId = dmcaDetailAuthorityRef.current === dmcaDetailAuthorityKey
+      && dmcaDetailRequestRef.current.loaded
+      && dmcaDetailRequestRef.current.caseId === dmcaSelectedCaseId
+      && dmcaCaseDetail?.case.id === dmcaSelectedCaseId ? dmcaSelectedCaseId : null;
     const reason = dmcaActionReason.trim();
     if (!selectedCaseId || dmcaActionBusy) return;
     if (!canAccessDmca) {
@@ -7106,11 +7239,15 @@ export default function AdminStudioScreen() {
     dmcaActionReason,
     dmcaCaseDetail?.case.id,
     dmcaSelectedCaseId,
+    dmcaDetailAuthorityKey,
     refreshDmcaAfterAction,
   ]);
 
   const runDmcaRecordCounterNotice = useCallback(async () => {
-    const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
+    const selectedCaseId = dmcaDetailAuthorityRef.current === dmcaDetailAuthorityKey
+      && dmcaDetailRequestRef.current.loaded
+      && dmcaDetailRequestRef.current.caseId === dmcaSelectedCaseId
+      && dmcaCaseDetail?.case.id === dmcaSelectedCaseId ? dmcaSelectedCaseId : null;
     if (!selectedCaseId || dmcaActionBusy) return;
     if (!canAccessDmca) {
       setDmcaNotice("Counter-notice recording requires Owner, Admin, or scoped Moderator copyright access.");
@@ -7170,12 +7307,16 @@ export default function AdminStudioScreen() {
     dmcaCaseDetail?.case.id,
     dmcaCaseDetail?.case.uploaderUserId,
     dmcaSelectedCaseId,
+    dmcaDetailAuthorityKey,
     refreshDmcaAfterAction,
     resetCounterNoticeForm,
   ]);
 
   const runDmcaForwardCounterNotice = useCallback(async (counterNoticeId: string) => {
-    const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
+    const selectedCaseId = dmcaDetailAuthorityRef.current === dmcaDetailAuthorityKey
+      && dmcaDetailRequestRef.current.loaded
+      && dmcaDetailRequestRef.current.caseId === dmcaSelectedCaseId
+      && dmcaCaseDetail?.case.id === dmcaSelectedCaseId ? dmcaSelectedCaseId : null;
     const reason = dmcaActionReason.trim() || "Counter-notice forwarding to claimant recorded.";
     if (!selectedCaseId || dmcaActionBusy) return;
     if (!canAccessDmca) {
@@ -7199,11 +7340,15 @@ export default function AdminStudioScreen() {
     dmcaActionReason,
     dmcaCaseDetail?.case.id,
     dmcaSelectedCaseId,
+    dmcaDetailAuthorityKey,
     refreshDmcaAfterAction,
   ]);
 
   const runDmcaRecordCourtAction = useCallback(async (counterNoticeId: string) => {
-    const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
+    const selectedCaseId = dmcaDetailAuthorityRef.current === dmcaDetailAuthorityKey
+      && dmcaDetailRequestRef.current.loaded
+      && dmcaDetailRequestRef.current.caseId === dmcaSelectedCaseId
+      && dmcaCaseDetail?.case.id === dmcaSelectedCaseId ? dmcaSelectedCaseId : null;
     const reason = dmcaActionReason.trim() || "Court action notice received from claimant.";
     if (!selectedCaseId || dmcaActionBusy) return;
     if (!canAccessDmca) {
@@ -7227,11 +7372,15 @@ export default function AdminStudioScreen() {
     dmcaActionReason,
     dmcaCaseDetail?.case.id,
     dmcaSelectedCaseId,
+    dmcaDetailAuthorityKey,
     refreshDmcaAfterAction,
   ]);
 
   const runDmcaMarkRestoreEligible = useCallback(async (counterNoticeId: string) => {
-    const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
+    const selectedCaseId = dmcaDetailAuthorityRef.current === dmcaDetailAuthorityKey
+      && dmcaDetailRequestRef.current.loaded
+      && dmcaDetailRequestRef.current.caseId === dmcaSelectedCaseId
+      && dmcaCaseDetail?.case.id === dmcaSelectedCaseId ? dmcaSelectedCaseId : null;
     const reason = dmcaActionReason.trim() || "No court action notice recorded within the review window.";
     if (!selectedCaseId || dmcaActionBusy) return;
     if (!canAccessDmca) {
@@ -7255,6 +7404,7 @@ export default function AdminStudioScreen() {
     dmcaActionReason,
     dmcaCaseDetail?.case.id,
     dmcaSelectedCaseId,
+    dmcaDetailAuthorityKey,
     refreshDmcaAfterAction,
   ]);
 
@@ -7330,51 +7480,40 @@ export default function AdminStudioScreen() {
   }, [dmcaActionReason, dmcaContentId, dmcaStrikeUserId, selectedDmcaCase]);
 
   const loadAdminV1ReadModel = useCallback(async () => {
-    setAdminV1ReadModel((current) => ({ ...current, loading: true }));
+    await runAdminUsageRead(readAdminUsageReadModel);
+  }, [runAdminUsageRead]);
 
-    const usageReadModel = await readAdminUsageReadModel();
-    setAdminV1ReadModel({ ...usageReadModel, loading: false });
-  }, []);
+  useEffect(() => {
+    if (adminReadAuthorityKey) void loadAdminV1ReadModel();
+  }, [adminReadAuthorityKey, loadAdminV1ReadModel]);
 
   const loadAdminUsersReadModel = useCallback(async (queryOverride?: string) => {
-    setAdminUsersReadModel((current) => ({ ...current, loading: true }));
-
-    const usersReadModel = await readAdminUsersReadModel({
+    await runAdminUsersRead(() => readAdminUsersReadModel({
       query: queryOverride ?? adminUsersQuery,
       limit: 50,
-    });
-    setAdminUsersReadModel({ ...usersReadModel, loading: false });
-  }, [adminUsersQuery]);
+    }));
+  }, [adminUsersQuery, runAdminUsersRead]);
 
   const loadAdminUsageDetailReadModel = useCallback(async (section = "all") => {
-    setAdminUsageDetailReadModel((current) => ({ ...current, loading: true, section }));
-
-    const usageDetailReadModel = await readAdminUsageDetailReadModel({
+    await runAdminUsageDetailRead(() => readAdminUsageDetailReadModel({
       section,
       limit: 50,
-    });
-    setAdminUsageDetailReadModel({ ...usageDetailReadModel, loading: false });
-  }, []);
+    }), { section });
+  }, [runAdminUsageDetailRead]);
 
   const loadAdminSystemHistoryReadModel = useCallback(async (source = "all") => {
-    setAdminSystemHistoryReadModel((current) => ({ ...current, loading: true, source }));
-
-    const systemHistoryReadModel = await readAdminSystemHistoryReadModel({
+    await runAdminSystemHistoryRead(() => readAdminSystemHistoryReadModel({
       source,
       limit: 50,
-    });
-    setAdminSystemHistoryReadModel({ ...systemHistoryReadModel, loading: false });
-  }, []);
+    }), { source });
+  }, [runAdminSystemHistoryRead]);
 
   const loadAdminMediaScanReadModel = useCallback(async (status: AdminMediaScanStatusFilter = "all") => {
-    setAdminMediaScanReadModel((current) => ({ ...current, loading: true, status }));
-
-    const mediaScanReadModel = await readAdminMediaScanReadModel({
+    await runAdminMediaScanRead(() => readAdminMediaScanReadModel({
       status,
       limit: 50,
-    });
-    setAdminMediaScanReadModel({ ...mediaScanReadModel, loading: false });
-  }, []);
+    }), { status });
+  }, [runAdminMediaScanRead]);
 
   useEffect(() => {
     if (!canAccessAdmin) {
@@ -7620,13 +7759,19 @@ export default function AdminStudioScreen() {
 
   const refreshLegalRequestAfterEvidence = useCallback(async (requestId: string) => {
     if (!requestId || (!canAccessLegalIntake && !canAccessLegalEvidence)) return;
+    const selection = legalDetailRequestRef.current;
+    const authority = legalDetailAuthorityKey;
     const [requests, detail] = await Promise.all([
       listLegalRequests({ limit: 100 }),
       readLegalRequestDetail({ id: requestId }),
     ]);
+    if (legalDetailAuthorityRef.current !== authority) return;
     setLegalRequests(requests);
-    setSelectedLegalRequestDetail(detail);
-  }, [canAccessLegalEvidence, canAccessLegalIntake]);
+    if (legalDetailRequestRef.current === selection && selection.requestId === requestId && detail.request?.id === requestId) {
+      selection.loaded = true;
+      setSelectedLegalRequestDetail(detail);
+    }
+  }, [canAccessLegalEvidence, canAccessLegalIntake, legalDetailAuthorityKey]);
 
   const runLegalEvidenceAction = useCallback(async (action: "preview" | "export" | "hold") => {
     if (!canAccessLegalEvidence || legalBusy) {
@@ -7837,19 +7982,31 @@ export default function AdminStudioScreen() {
   }, [breakGlassActiveSessionId, breakGlassBusy, canAccessBreakGlass, loadBreakGlass, loadPlatformRoles]);
 
   const loadFirstOwnerAuthority = useCallback(async () => {
-    if (!canAccessFirstOwnerTools) return;
+    if (!canAccessFirstOwnerTools || !firstOwnerReadAuthorityKey) return;
+    const generation = ++firstOwnerReadRef.current.generation;
+    const isCurrent = () => firstOwnerReadRef.current.authorityKey === firstOwnerReadAuthorityKey
+      && firstOwnerReadRef.current.generation === generation;
+    setFirstOwnerStatus(null);
+    setFirstOwnerLoadedAuthorityKey(null);
+    setFirstOwnerRows([]);
     try {
       setFirstOwnerBusy("load");
       setOwnerControlNotice(null);
       const result = await readFirstOwnerAuthorityStatus();
+      if (!isCurrent()) return;
       setFirstOwnerStatus(result.status);
       setFirstOwnerRows(result.owners);
+      setFirstOwnerLoadedAuthorityKey(firstOwnerReadAuthorityKey);
     } catch (err: any) {
+      if (!isCurrent()) return;
+      setFirstOwnerStatus(null);
+      setFirstOwnerLoadedAuthorityKey(null);
+      setFirstOwnerRows([]);
       setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to load First Owner authority."));
     } finally {
-      setFirstOwnerBusy(null);
+      if (isCurrent()) setFirstOwnerBusy(null);
     }
-  }, [canAccessFirstOwnerTools]);
+  }, [canAccessFirstOwnerTools, firstOwnerReadAuthorityKey]);
 
   const runFirstOwnerGrantOwner = useCallback(async () => {
     if (!firstOwnerControlsEnabled || firstOwnerBusy) return;
@@ -7977,21 +8134,32 @@ export default function AdminStudioScreen() {
   }, [canAccessLegalEvidence, canAccessLegalIntake]);
 
   const openLegalRequestDetail = useCallback(async (requestId: string) => {
-    if (!requestId || (!canAccessLegalIntake && !canAccessLegalEvidence)) return;
+    if (!requestId || !legalDetailAuthorityKey || (!canAccessLegalIntake && !canAccessLegalEvidence)) return;
+    const selection = { generation: legalDetailRequestRef.current.generation + 1, requestId, loaded: false };
+    const authority = legalDetailAuthorityKey;
+    legalDetailRequestRef.current = selection;
+    const isCurrent = () => legalDetailRequestRef.current === selection && legalDetailAuthorityRef.current === authority;
+    setSelectedLegalRequestDetail(null);
+    setLegalRequestNote("");
     try {
       setLegalRequestDetailBusy(true);
       setOwnerControlNotice(null);
       setSelectedLegalRequestId(requestId);
       const detail = await readLegalRequestDetail({ id: requestId });
+      if (!isCurrent()) return;
+      if (detail.request?.id !== requestId) throw new Error("Legal request detail did not match the selected request.");
+      selection.loaded = true;
       setSelectedLegalRequestDetail(detail);
       setLegalRequestStatusUpdate((detail.request?.status as LegalRequestStatusFilter) || "under_review");
       setLegalRequestNote("");
     } catch (err: any) {
+      if (!isCurrent()) return;
+      setSelectedLegalRequestDetail(null);
       setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to open legal request detail."));
     } finally {
-      setLegalRequestDetailBusy(false);
+      if (isCurrent()) setLegalRequestDetailBusy(false);
     }
-  }, [canAccessLegalEvidence, canAccessLegalIntake]);
+  }, [canAccessLegalEvidence, canAccessLegalIntake, legalDetailAuthorityKey]);
 
   const runLegalIntakeCreate = useCallback(async () => {
     if (!canAccessLegalIntake || legalRequestBusy) return;
@@ -8061,7 +8229,11 @@ export default function AdminStudioScreen() {
   ]);
 
   const updateSelectedLegalRequestStatus = useCallback(async (requestId: string, status: LegalRequestStatusFilter) => {
-    if (!canAccessLegalIntake) return;
+    const selection = legalDetailRequestRef.current;
+    const authority = legalDetailAuthorityKey;
+    if (!canAccessLegalIntake || legalRequestDetailBusy || !selection.loaded
+      || selection.requestId !== requestId || selectedLegalRequestDetail?.request?.id !== requestId
+      || legalDetailAuthorityRef.current !== authority) return;
     if (!requestId || status === "all") {
       setOwnerControlNotice("Choose a legal request and status first.");
       return;
@@ -8073,37 +8245,55 @@ export default function AdminStudioScreen() {
         reason: isOwnerStaff ? null : `Admin marked legal request ${formatLegalStatus(status)}.`,
         status,
       });
+      if (legalDetailRequestRef.current !== selection || legalDetailAuthorityRef.current !== authority) return;
       await loadLegalIntake();
+      if (legalDetailRequestRef.current !== selection || legalDetailAuthorityRef.current !== authority) return;
       await openLegalRequestDetail(requestId);
     } catch (err: any) {
-      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to update legal request intake."));
+      if (legalDetailRequestRef.current === selection && legalDetailAuthorityRef.current === authority) {
+        setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to update legal request intake."));
+      }
     }
-  }, [canAccessLegalIntake, isOwnerStaff, loadLegalIntake, openLegalRequestDetail]);
+  }, [canAccessLegalIntake, isOwnerStaff, loadLegalIntake, openLegalRequestDetail, legalDetailAuthorityKey, legalRequestDetailBusy, selectedLegalRequestDetail]);
 
   const addLegalRequestNote = useCallback(async () => {
-    const requestId = selectedLegalRequestId;
-    if (!canAccessLegalIntake || !requestId) return;
+    const selection = legalDetailRequestRef.current;
+    const authority = legalDetailAuthorityKey;
+    const requestId = selectedLegalRequestDetail?.request?.id;
+    if (!canAccessLegalIntake || !requestId || legalNoteBusyRef.current || legalRequestDetailBusy
+      || !selection.loaded || selection.requestId !== requestId || selectedLegalRequestId !== requestId
+      || legalDetailAuthorityRef.current !== authority) return;
     if (legalRequestNote.trim().length < 3) {
       setOwnerControlNotice("Add a note before recording it.");
       return;
     }
     try {
+      legalNoteBusyRef.current = true;
       setOwnerControlNotice(null);
       await updateLegalRequest({
         id: requestId,
         notes: legalRequestNote.trim(),
         reason: isOwnerStaff ? null : "Admin added Legal Intake note.",
       });
+      if (legalDetailRequestRef.current !== selection || legalDetailAuthorityRef.current !== authority) return;
       setLegalRequestNote("");
       await loadLegalIntake();
+      if (legalDetailRequestRef.current !== selection || legalDetailAuthorityRef.current !== authority) return;
       await openLegalRequestDetail(requestId);
     } catch (err: any) {
-      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to add legal request note."));
+      if (legalDetailRequestRef.current === selection && legalDetailAuthorityRef.current === authority) {
+        setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to add legal request note."));
+      }
+    } finally {
+      legalNoteBusyRef.current = false;
     }
-  }, [canAccessLegalIntake, isOwnerStaff, legalRequestNote, loadLegalIntake, openLegalRequestDetail, selectedLegalRequestId]);
+  }, [canAccessLegalIntake, isOwnerStaff, legalRequestNote, loadLegalIntake, openLegalRequestDetail, selectedLegalRequestId, selectedLegalRequestDetail, legalRequestDetailBusy, legalDetailAuthorityKey]);
 
   const linkLegalRequestToEvidence = useCallback((request: OwnerControlLegalRequest) => {
     const target = legalRequestPrimaryTarget(request);
+    legalDetailRequestRef.current = { generation: legalDetailRequestRef.current.generation + 1, requestId: String(request.id ?? ""), loaded: false };
+    setLegalRequestNote("");
+    setLegalRequestDetailBusy(false);
     setSelectedLegalRequestId(String(request.id ?? ""));
     setSelectedLegalRequestDetail((prev) => prev?.request?.id === request.id ? prev : null);
     setLegalSubsection("evidence");
@@ -8360,21 +8550,39 @@ export default function AdminStudioScreen() {
     [adminSearchCanUseScope],
   );
 
+  const adminSearchUsersAuthorityKey = adminReadAuthorityKey && canUseAdminSearch
+    && adminSearchCanUseScope("users")
+    && (adminSearchScope === "all" || adminSearchScope === "users")
+    && adminSearchDebouncedQuery.trim().length >= ADMIN_SEARCH_MIN_LENGTH
+    ? JSON.stringify([adminReadAuthorityKey, adminSearchScope, adminSearchDebouncedQuery.trim()])
+    : null;
+  const runAdminSearchUsersRead = useAdminReadLifecycle(adminSearchUsersAuthorityKey, setAdminSearchUsersReadModel, EMPTY_ADMIN_USERS_READ_MODEL);
+
+  const submitAdminSearch = useCallback(() => {
+    if (!adminReadAuthorityKey || !canUseAdminSearch) return;
+    const queryText = adminSearchQuery.trim();
+    setAdminSearchDebouncedQuery(adminSearchQuery);
+    // A changed query is loaded by the effect with its new ownership key.
+    // Re-submitting the current query must refresh the search lane, not Users.
+    if (queryText.length < ADMIN_SEARCH_MIN_LENGTH
+      || queryText !== adminSearchDebouncedQuery.trim()
+      || (adminSearchScope !== "users" && adminSearchScope !== "all")
+      || !adminSearchCanUseScope("users")) return;
+    void runAdminSearchUsersRead(() => readAdminUsersReadModel({ query: queryText, limit: 50 }));
+  }, [adminReadAuthorityKey, adminSearchCanUseScope, adminSearchDebouncedQuery, adminSearchQuery, adminSearchScope, canUseAdminSearch, runAdminSearchUsersRead]);
+
   useEffect(() => {
     const queryText = adminSearchDebouncedQuery.trim();
     const wantsUserSearch = adminSearchScope === "all" || adminSearchScope === "users";
     if (!canUseAdminSearch || queryText.length < ADMIN_SEARCH_MIN_LENGTH || !wantsUserSearch || !adminSearchCanUseScope("users")) return;
 
-    const loadKey = `${adminSearchScope}:${queryText.toLowerCase()}`;
-    if (lastAdminSearchUsersReadKeyRef.current === loadKey) return;
-    lastAdminSearchUsersReadKeyRef.current = loadKey;
-    void loadAdminUsersReadModel(queryText);
+    void runAdminSearchUsersRead(() => readAdminUsersReadModel({ query: queryText, limit: 50 }));
   }, [
     adminSearchCanUseScope,
     adminSearchDebouncedQuery,
     adminSearchScope,
     canUseAdminSearch,
-    loadAdminUsersReadModel,
+    runAdminSearchUsersRead,
   ]);
 
   const rememberAdminSearch = useCallback((query: string, scope: AdminSearchScope, resultCount: number | null) => {
@@ -8404,7 +8612,7 @@ export default function AdminStudioScreen() {
     const results: AdminSearchResult[] = [];
 
     if (includeScope("users")) {
-      adminUsersReadModel.items.forEach((entry) => {
+      adminSearchUsersReadModel.items.forEach((entry) => {
         if (!adminSearchMatches(queryText, [
           entry.userId,
           entry.email,
@@ -8844,7 +9052,7 @@ export default function AdminStudioScreen() {
     adminSearchCanUseScope,
     adminSearchDebouncedQuery,
     adminSearchScope,
-    adminUsersReadModel.items,
+    adminSearchUsersReadModel.items,
     canUseAdminSearch,
     canOpenOperatorTab,
     dmcaCases,
@@ -8869,34 +9077,39 @@ export default function AdminStudioScreen() {
     }, {} as Record<AdminSearchScope, number>);
   }, [adminSearchResults]);
 
+  const adminSearchResultCountRef = useRef(adminSearchResults.length);
+  adminSearchResultCountRef.current = adminSearchResults.length;
+
   useEffect(() => {
     const queryText = adminSearchDebouncedQuery.trim();
-    if (!canUseAdminSearch || queryText.length < ADMIN_SEARCH_MIN_LENGTH) {
+    if (!adminReadAuthorityKey || !canUseAdminSearch || queryText.length < ADMIN_SEARCH_MIN_LENGTH
+      || (adminSearchScope !== "all" && !adminSearchCanUseScope(adminSearchScope))) {
       lastAdminSearchAuditKeyRef.current = null;
+      setAdminSearchAuditReceipt(null);
       setAdminSearchAuditLoading(false);
       return;
     }
 
-    if (adminSearchScope !== "all" && !adminSearchCanUseScope(adminSearchScope)) return;
-
-    const auditKey = `${adminSearchScope}:${queryText.toLowerCase()}`;
+    const auditKey = `${adminReadAuthorityKey}:${adminSearchScope}:${queryText.toLowerCase()}`;
     if (lastAdminSearchAuditKeyRef.current === auditKey) return;
     lastAdminSearchAuditKeyRef.current = auditKey;
 
     let cancelled = false;
+    const resultCount = adminSearchResultCountRef.current;
+    setAdminSearchAuditReceipt(null);
     setAdminSearchAuditLoading(true);
 
     writeAdminSearchAudit({
       searchScope: adminSearchScope,
       query: queryText,
-      resultCount: adminSearchResults.length,
+      resultCount,
       status: "searched",
     })
       .then((receipt) => {
         if (cancelled) return;
         setAdminSearchAuditReceipt(receipt);
         if (receipt.ok) {
-          rememberAdminSearch(queryText, adminSearchScope, receipt.resultCount ?? adminSearchResults.length);
+          rememberAdminSearch(queryText, adminSearchScope, receipt.resultCount ?? resultCount);
           void loadAdminImmutableAuditReadModel();
         }
       })
@@ -8910,7 +9123,7 @@ export default function AdminStudioScreen() {
           searchScope: adminSearchScope,
           queryType: "text",
           queryPreview: null,
-          resultCount: adminSearchResults.length,
+          resultCount,
           createdAt: new Date().toISOString(),
           error: "admin_search_audit_failed",
         });
@@ -8921,11 +9134,13 @@ export default function AdminStudioScreen() {
 
     return () => {
       cancelled = true;
+      // A dependency change cancels this receipt, so allow the current search to retry.
+      if (lastAdminSearchAuditKeyRef.current === auditKey) lastAdminSearchAuditKeyRef.current = null;
     };
   }, [
     adminSearchCanUseScope,
     adminSearchDebouncedQuery,
-    adminSearchResults.length,
+    adminReadAuthorityKey,
     adminSearchScope,
     canUseAdminSearch,
     loadAdminImmutableAuditReadModel,
@@ -9084,10 +9299,13 @@ export default function AdminStudioScreen() {
   const ownerSecurityBackendStatus = ownerSecurityOverview?.securityBackendStatus ?? (ownerSecurityLoaded ? "partial" : "not_connected");
 
   useEffect(() => {
+    if (canAccessFirstOwnerTools) void loadFirstOwnerAuthority();
+  }, [canAccessFirstOwnerTools, loadFirstOwnerAuthority]);
+
+  useEffect(() => {
     if (!canAccessAdmin) return;
     if (operatorTab === "audit-explorer" && canAccessAuditExplorer) void loadAuditExplorer();
     if (operatorTab === "permission-templates" && canManagePermissionTemplates) void loadPermissionTemplates();
-    if (operatorTab === "owners" && canAccessFirstOwnerTools) void loadFirstOwnerAuthority();
     if (operatorTab === "break-glass" && canAccessBreakGlass) void loadBreakGlass();
     if (operatorTab === "legal" && (canAccessLegalIntake || canAccessLegalEvidence)) void loadLegalIntake();
     if ((operatorTab === "owner-security" || operatorTab === "safety-dashboard") && canAccessOwnerSecurity) void loadOwnerSecurity();
@@ -9106,7 +9324,6 @@ export default function AdminStudioScreen() {
     canManagePermissionTemplates,
     loadAuditExplorer,
     loadBreakGlass,
-    loadFirstOwnerAuthority,
     loadCanaries,
     loadLegalIntake,
     loadOwnerSecurity,
@@ -9180,11 +9397,16 @@ export default function AdminStudioScreen() {
       return;
     }
 
-    const mode = liveCostGuardSettingsForm.mode;
-    const enabled = liveCostGuardSettingsForm.enabled;
-    const observeOnlyCopy = mode === "observe_only"
-      ? "Observe-only mode will only record what would have happened. No LiveKit or room behavior will change."
-      : "This request is server-side, audited, and gated by the saved Live Cost Guard mode.";
+    if (liveCostGuardLoading || liveCostGuardSaving || !liveCostGuardSettingsReadModel?.connected) {
+      setLiveCostGuardNotice("Refresh saved Live Cost Guard settings before requesting an action.");
+      return;
+    }
+    const savedSettings = liveCostGuardSettingsReadModel.settings;
+    if (JSON.stringify(liveCostGuardSettingsForm) !== JSON.stringify(savedSettings)) {
+      setLiveCostGuardNotice("Save or refresh to discard unsaved Live Cost Guard settings before requesting an action.");
+      return;
+    }
+    const observeOnlyCopy = `Last loaded saved mode: ${formatModerationToken(savedSettings.mode)}; ${savedSettings.enabled ? "enabled" : "disabled"}. The server rechecks current saved settings when executing. Enabled enforcement modes may change LiveKit or room behavior; disabled or observe-only settings record without applying enforcement.`;
 
     Alert.alert(
       "Confirm Live Cost Guard action",
@@ -9199,16 +9421,20 @@ export default function AdminStudioScreen() {
               try {
                 setLiveCostGuardActionBusy(actionType);
                 setLiveCostGuardNotice(null);
-                await requestLiveCostGuardAction({
+                const result = await requestLiveCostGuardAction({
                   actionType,
                   participantIdentity: participantIdentity || null,
                   reason,
                   roomName: roomName || null,
                 });
-                setLiveCostGuardNotice(enabled || mode === "observe_only"
-                  ? "Live Cost Guard action recorded."
-                  : "Live Cost Guard action recorded as disabled because the guard is not enabled.");
                 await loadLiveCostGuard();
+                setLiveCostGuardNotice(!result?.id
+                  ? "The server did not return an action receipt. Check action history before retrying."
+                  : !result.success
+                    ? `Live Cost Guard action recorded but not applied. ${result.errorMessage || "The server did not confirm enforcement."}`
+                    : result.after.livekitApiCalled === true
+                      ? "Live Cost Guard action applied by LiveKit and recorded."
+                      : "Live Cost Guard request recorded. This receipt does not confirm a LiveKit change.");
               } catch (err: any) {
                 setLiveCostGuardNotice(formatAdminOperationFailure(err, "Failed to request Live Cost Guard action."));
               } finally {
@@ -9225,8 +9451,10 @@ export default function AdminStudioScreen() {
     liveCostGuardActionReason,
     liveCostGuardParticipantIdentity,
     liveCostGuardRoomName,
-    liveCostGuardSettingsForm.enabled,
-    liveCostGuardSettingsForm.mode,
+    liveCostGuardLoading,
+    liveCostGuardSaving,
+    liveCostGuardSettingsReadModel,
+    liveCostGuardSettingsForm,
     loadLiveCostGuard,
   ]);
 
@@ -9466,11 +9694,11 @@ export default function AdminStudioScreen() {
       return;
     }
     if (role === "admin" && !canManageAdminStaff) {
-      setAdminOpsNotice("Only Owner or an Admin with admin_grants can add Admins.");
+      setAdminOpsNotice("Only Owner can add Admins.");
       return;
     }
     if (role === "moderator" && !canManageModeratorStaff) {
-      setAdminOpsNotice("Only Owner or an Admin with manage_moderators can add Moderators.");
+      setAdminOpsNotice("Only Owner or an Admin with manage_moderators or admin.lower_role.manage can add Moderators.");
       return;
     }
     if (!staffRoleGrantLatchRef.current.tryAcquire()) return;
@@ -9524,11 +9752,11 @@ export default function AdminStudioScreen() {
       return;
     }
     if (role === "admin" && !canManageAdminStaff) {
-      setAdminOpsNotice("Only Owner or an Admin with admin_grants can remove Admins.");
+      setAdminOpsNotice("Only Owner can remove Admins.");
       return;
     }
     if (role === "moderator" && !canManageModeratorStaff) {
-      setAdminOpsNotice("Only Owner or an Admin with manage_moderators can remove Moderators.");
+      setAdminOpsNotice("Only Owner or an Admin with manage_moderators or admin.lower_role.manage can remove Moderators.");
       return;
     }
 
@@ -9571,11 +9799,11 @@ export default function AdminStudioScreen() {
       return;
     }
     if (role === "admin" && !canManageAdminStaff) {
-      setAdminOpsNotice("Only Owner or an Admin with admin_grants can remove Admins.");
+      setAdminOpsNotice("Only Owner can remove Admins.");
       return;
     }
     if (role === "moderator" && !canManageModeratorStaff) {
-      setAdminOpsNotice("Only Owner or an Admin with manage_moderators can remove Moderators.");
+      setAdminOpsNotice("Only Owner or an Admin with manage_moderators or admin.lower_role.manage can remove Moderators.");
       return;
     }
 
@@ -9601,11 +9829,11 @@ export default function AdminStudioScreen() {
       return;
     }
     if (role === "admin" && !canManageAdminStaff) {
-      setAdminOpsNotice("Only Owner or an Admin with admin_grants can add Admins.");
+      setAdminOpsNotice("Only Owner can add Admins.");
       return;
     }
     if (role === "moderator" && !canManageModeratorStaff) {
-      setAdminOpsNotice("Only Owner or an Admin with manage_moderators can add Moderators.");
+      setAdminOpsNotice("Only Owner or an Admin with manage_moderators or admin.lower_role.manage can add Moderators.");
       return;
     }
 
@@ -11334,7 +11562,7 @@ export default function AdminStudioScreen() {
               <OwnerMetricTile label="Provider Rows" value={providerReadinessLoading ? "Loading" : providerReadinessRows.length} tone={providerReadinessRows.length ? "info" : "locked"} />
               <OwnerMetricTile label="High Risk On" value={highRiskOnCount} tone={highRiskOnCount ? "danger" : "success"} />
             </View>
-            <OwnerDisabledReason reason="Launch review state: sandbox digital access evidence is complete, live money and payouts are off, sandbox/setup rows are not payable, and no cash-out or withdrawal action exists." />
+            <OwnerDisabledReason reason="Historical source review recorded sandbox digital access evidence with live money and payouts off. This is not current production verification; inspect the backed status rows for current settings. No cash-out or withdrawal action exists here." />
             <OwnerDetailGrid
               rows={[
                 { label: "Digital rail", value: `${storeProviderPair} for digital purchases` },
@@ -11346,6 +11574,7 @@ export default function AdminStudioScreen() {
               ]}
             />
             <OwnerDetailGrid rows={adminLaunchReadinessRows} />
+            <OwnerDisabledReason reason="Historical source evidence summary below. These recorded proof claims are not rerun or verified by opening this page." />
             <OwnerDetailGrid rows={adminFailureProofRows} />
           </View>
         ),
@@ -12076,11 +12305,7 @@ export default function AdminStudioScreen() {
           <OwnerAdminActionButton
             label={adminSearchAuditLoading ? "Searching..." : "Search"}
             loading={adminSearchAuditLoading}
-            onPress={() => {
-              if (!canUseAdminSearch) return;
-              setAdminSearchDebouncedQuery(adminSearchQuery);
-              if (adminSearchScope === "users" || adminSearchScope === "all") void loadAdminUsersReadModel(adminSearchQuery.trim());
-            }}
+            onPress={submitAdminSearch}
             testID="admin-user-search-submit-button"
             variant="secondary"
           />
@@ -12298,14 +12523,14 @@ export default function AdminStudioScreen() {
 
   return (
     <ImageBackground
-      source={require("../assets/images/chicago-skyline.jpg")}
+      source={require("../assets/images/chillywood-branded-background.png")}
       resizeMode="cover"
       style={styles.background}
     >
       <View style={[styles.overlay, { backgroundColor: themePalette.screenOverlay }]} />
 
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, getAdminContentInsets(safeAreaInsets)]}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
       >
@@ -12349,13 +12574,36 @@ export default function AdminStudioScreen() {
                 accessibilityState={{ selected: active }}
                 testID={`admin-main-tab-${normalizeAdminTestId(tab.key)}`}
                 style={[styles.tabButton, active && styles.tabButtonActive]}
-                onPress={() => setOperatorTab(tab.key)}
+                onPress={() => setOperatorTab(tab.destination)}
               >
+                {active ? <ChillywoodPrimaryActionFill radius={12} /> : null}
                 <Text style={[styles.tabButtonText, active && styles.tabButtonTextActive]}>{tab.label}</Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
+
+        {adminNavigation.secondaryTabs.length > 1 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.tabBar} style={styles.tabBarScroller}>
+            {adminNavigation.secondaryTabs.map((tab) => {
+              const active = operatorTab === tab.key;
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  accessibilityLabel={`${tab.label} Admin section`}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  testID={`admin-section-tab-${normalizeAdminTestId(tab.key)}`}
+                  style={[styles.tabButton, active && styles.tabButtonActive]}
+                  onPress={() => setOperatorTab(tab.key)}
+                >
+                  {active ? <ChillywoodPrimaryActionFill radius={12} /> : null}
+                  <Text style={[styles.tabButtonText, active && styles.tabButtonTextActive]}>{tab.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        ) : null}
 
         {operatorTab === "home" ? (
         <View style={styles.adminHomeSurface}>
@@ -12647,7 +12895,7 @@ export default function AdminStudioScreen() {
 
             <View style={styles.badgesRow}>
               <OwnerStatusPill label={`Role ${formatModerationToken(resolvedActorRole)}`} tone={canAccessAdmin ? "info" : "locked"} />
-              <OwnerStatusPill label={canReviewSafetyReports ? "Queue Connected" : "Queue Locked"} tone={canReviewSafetyReports ? "success" : "locked"} />
+              <OwnerStatusPill label={safetyReportQueueConnected ? "Queue Connected" : canReviewSafetyReports ? "Queue Unavailable" : "Queue Locked"} tone={safetyReportQueueConnected ? "success" : "locked"} />
               <OwnerStatusPill
                 label={safetyReportsLastLoadedAt ? `Last ${formatModerationTimestamp(safetyReportsLastLoadedAt)}` : "Last Not Connected"}
                 tone={safetyReportsLastLoadedAt ? "info" : "locked"}
@@ -12718,7 +12966,7 @@ export default function AdminStudioScreen() {
                   <Text style={styles.ownerSectionTitle}>Report Queue</Text>
                   <Text style={styles.ownerPanelMeta}>
                     {safetyReportQueueConnected
-                      ? `${filteredSafetyReports.length} visible from ${safetyReportQueueCount} loaded`
+                      ? `${filteredSafetyReports.length} matching reports loaded · ${safetyReportWindow?.overviewAvailable ? `${safetyReportQueueCount} total across all filters` : "Global totals unavailable; metrics reflect loaded rows"}`
                       : "Queue source not connected"}
                   </Text>
                 </View>
@@ -12807,9 +13055,23 @@ export default function AdminStudioScreen() {
                 </View>
               ) : canReviewSafetyReports ? (
                 <OwnerEmptyState
-                  title="No reports need review"
-                  body="The backed recent report queue returned zero rows. This is a proven empty state from the successful query."
+                  title={safetyReportQueueConnected ? "No matching reports" : "Report queue unavailable"}
+                  body={safetyReportQueueConnected ? "The server returned no reports for this filter." : "Refresh to retry the report query. An unsuccessful query does not prove the queue is empty."}
                 />
+              ) : null}
+              {safetyReportQueueConnected && safetyReportWindow?.full ? (
+                <View>
+                  <Text style={styles.ownerPanelMeta}>
+                    {safetyReportWindow.limit < 50
+                      ? "Showing the most recent 25 matching reports. More may be available."
+                      : "Showing only the most recent 50 matching reports. Older results are unavailable here; this is not the complete queue. Safe pagination requires backend support for timestamp ties."}
+                  </Text>
+                  {safetyReportWindow.limit < 50 ? (
+                    <TouchableOpacity accessibilityRole="button" disabled={safetyReportsLoading} onPress={() => void loadSafetyReports(50)} style={styles.ownerSecondaryButton}>
+                      <Text style={styles.ownerSecondaryButtonText}>Show up to 50 matching reports</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
               ) : null}
             </View>
 
@@ -12828,7 +13090,7 @@ export default function AdminStudioScreen() {
                   { label: "Sources", value: safetyReportSourceSummary },
                   {
                     label: "Loaded Count",
-                    value: safetyReportQueueConnected ? String(safetyReportQueueCount) : "not connected",
+                    value: safetyReportQueueConnected ? String(safetyReports.length) : "not connected",
                   },
                   {
                     label: "Platform Targets",
@@ -13194,7 +13456,7 @@ export default function AdminStudioScreen() {
                   title="Active Role Roster"
                 >
                   {!canViewStaffRoles ? (
-                    <OwnerDisabledReason reason="Staff-role roster visibility requires Owner, admin_grants, or manage_moderators truth. Normal users cannot load roster rows or staff emails." />
+                    <OwnerDisabledReason reason="This staff-management view requires Owner, or Admin with manage_moderators or admin.lower_role.manage. Normal users cannot load roster rows or staff emails." />
                   ) : platformRoleRosterLoading ? (
                     <View style={styles.configLoadingRow}>
                       <ActivityIndicator color="#fff" />
@@ -13243,7 +13505,7 @@ export default function AdminStudioScreen() {
                                     <Text style={styles.orderBtnText}>{entry.role === "operator" ? "Remove Admin" : "Remove Moderator"}</Text>
                                   </TouchableOpacity>
                                 ) : (
-                                  <OwnerDisabledReason reason={entry.role === "operator" ? "Admin removal requires Owner or admin_grants." : "Moderator removal requires Owner or manage_moderators."} />
+                                  <OwnerDisabledReason reason={entry.role === "operator" ? "Admin removal requires Owner." : "Moderator removal requires Owner, or Admin with manage_moderators or admin.lower_role.manage."} />
                                 )}
                               </View>
                             ) : null}
@@ -13374,7 +13636,7 @@ export default function AdminStudioScreen() {
                       ) : null}
                     </>
                   ) : (
-                    <OwnerDisabledReason reason="Staff management actions require active Owner, admin_grants, or manage_moderators. Moderators cannot add or remove staff." />
+                    <OwnerDisabledReason reason="Admin changes require Owner. Moderator changes require Owner, or Admin with manage_moderators or admin.lower_role.manage. Moderators cannot add or remove staff." />
                   )}
                 </OwnerAdminSection>
 
@@ -13558,7 +13820,7 @@ export default function AdminStudioScreen() {
                       </OwnerStickyActionBar>
                     </>
                   ) : (
-                    <OwnerDisabledReason reason="Scoped permission editing is Owner-only in the current backend. Admins can manage roles only when separately granted admin_grants or manage_moderators." />
+                    <OwnerDisabledReason reason="Scoped permission editing is Owner-only in the current backend. Admins can manage Moderators only when separately granted manage_moderators or admin.lower_role.manage." />
                   )}
                 </OwnerAdminSection>
 
@@ -13584,8 +13846,8 @@ export default function AdminStudioScreen() {
                       rows={[
                         { label: "Owner Records", status: "Protected", value: "At least one active Owner must remain." },
                         { label: "Owner Grants", status: "Protected", value: "Dedicated bootstrap/protected flow only." },
-                        { label: "Admin Grants", status: "Guarded", value: "Owner or admin_grants; never self-grant." },
-                        { label: "Moderator Grants", status: "Guarded", value: "Owner or manage_moderators." },
+                        { label: "Admin Grants", status: "Guarded", value: "Owner only." },
+                        { label: "Moderator Grants", status: "Guarded", value: "Owner, or Admin with manage_moderators or admin.lower_role.manage." },
                         { label: "Self-grant", status: "Blocked", value: "Users cannot grant privileged roles to themselves." },
                         { label: "Final Owner removal", status: "Blocked", value: "The last active Owner cannot be removed." },
                       ]}
@@ -16266,10 +16528,10 @@ export default function AdminStudioScreen() {
               </Text>
             </View>
             <View style={styles.dashboardMetricCard}>
-              <Text style={styles.dashboardMetricLabel}>Events / Actions 24h</Text>
+              <Text style={styles.dashboardMetricLabel}>Loaded Events / Actions in 24h</Text>
               <Text style={styles.dashboardMetricValue}>{`${liveCostGuardSnapshot.eventsLast24h} / ${liveCostGuardSnapshot.actionsLast24h}`}</Text>
               <Text style={styles.dashboardMetricBody}>
-                Backed rows from the Live Cost Guard tables only.
+                Counts within the latest 25 loaded events and 25 loaded actions, not complete 24-hour totals.
               </Text>
             </View>
             <View style={[styles.dashboardMetricCard, styles.dashboardMetricCardUnavailable]}>
@@ -16980,7 +17242,7 @@ export default function AdminStudioScreen() {
             </View>
             ) : null}
 
-            {selectedLegalRequestDetail && (legalSubsection === "intake" || legalSubsection === "requests" || legalSubsection === "timeline") ? (
+            {!legalRequestDetailBusy && selectedLegalRequestDetail?.request?.id === selectedLegalRequestId && selectedLegalRequestDetail && (legalSubsection === "intake" || legalSubsection === "requests" || legalSubsection === "timeline") ? (
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Request detail</Text>
@@ -17141,7 +17403,7 @@ export default function AdminStudioScreen() {
                 </TouchableOpacity>
               </View>
               {!canAccessAuditExplorer ? (
-                <OwnerDisabledReason reason="Audit Explorer requires Owner, audit_explorer, legal_ops, or admin_audit_review permission and is enforced server-side." />
+                <OwnerDisabledReason reason="Audit Explorer requires Owner, or staff with audit_review or security_review, and is enforced server-side." />
               ) : null}
             </View>
           </View>
@@ -17472,7 +17734,7 @@ export default function AdminStudioScreen() {
         {operatorTab === "break-glass" ? (
         <View style={styles.configCard}>
           <OwnerControlPanelHeader
-            badgeLabel={breakGlassActiveSessionId ? "Active" : "Off"}
+            badgeLabel={firstOwnerBusy === "load" ? "Checking First Owner" : !canAccessBreakGlass ? "Locked" : breakGlassActiveSessionId ? "Active" : "Off"}
             badgeTone={breakGlassActiveSessionId ? "manual" : "locked"}
             kicker="BREAK GLASS"
             subtitle="Emergency audit mode for First Owner only. Normal Owner dashboard viewing is not Break Glass."
@@ -17552,7 +17814,7 @@ export default function AdminStudioScreen() {
                 </TouchableOpacity>
               </View>
               {!canAccessBreakGlass ? (
-                <OwnerDisabledReason reason="Break Glass actions require authenticated First Owner. Normal owner work elsewhere does not require Break Glass." />
+                <OwnerDisabledReason reason={firstOwnerBusy === "load" ? "Checking First Owner authority. Break Glass stays locked until verification completes." : "Break Glass requires verified First Owner authority for this session. Normal Owner work elsewhere does not require Break Glass."} />
               ) : breakGlassActiveSessionId ? (
                 <OwnerDisabledReason reason="A Break Glass session is already active. End the active session before starting another one." />
               ) : (
@@ -18108,13 +18370,15 @@ export default function AdminStudioScreen() {
             <View style={styles.ownerSectionHeaderRow}>
               <Text style={styles.ownerRunBannerTitle}>Latest Run Snapshot</Text>
               <OwnerStatusPill
-                label={latestCanaryRun?.status ? formatModerationToken(String(latestCanaryRun.status)) : "Not Run"}
-                tone={latestCanarySummary.fail > 0 ? "danger" : latestCanarySummary.manualRequired > 0 ? "manual" : latestCanaryRun ? "success" : "locked"}
+                label={latestCanaryRun && !latestCanarySummary.hasResults ? "No check evidence" : latestCanaryRun?.status ? formatModerationToken(String(latestCanaryRun.status)) : "Not Run"}
+                tone={latestCanarySummary.fail > 0 ? "danger" : latestCanaryRun && !latestCanarySummary.hasResults ? "manual" : latestCanarySummary.manualRequired > 0 ? "manual" : latestCanaryRun ? "success" : "locked"}
               />
             </View>
             <Text style={styles.ownerRunBannerBody}>
               {latestCanaryRun
-                ? latestCanarySummary.fail > 0
+                ? !latestCanarySummary.hasResults
+                  ? "No individual check evidence was returned. Refresh or rerun before treating this run as verified."
+                  : latestCanarySummary.fail > 0
                   ? "Failed checks need review before launch. The UI keeps them visible and actionable."
                   : latestCanarySummary.manualRequired > 0
                     ? "Manual Required checks are surfaced as warnings, never green evidence."
@@ -18232,8 +18496,8 @@ export default function AdminStudioScreen() {
         </View>
         ) : null}
 
-        {operatorTab === "cognitive" && canAccessCognitiveSourceManifest ? (
-          <CognitiveControlCenterFoundation />
+        {operatorTab === "cognitive" && canAccessCognitiveSourceManifest && adminReadAuthorityKey ? (
+          <CognitiveControlCenterFoundation key={adminReadAuthorityKey} />
         ) : null}
 
         {operatorTab === "ops-alerts" ? (
@@ -18519,7 +18783,7 @@ export default function AdminStudioScreen() {
               </Text>
               <Text testID="owner-command-proof-report" style={styles.ownerDetailText}>
                 {ownerCommandResult
-                  ? `Last result: ${String(ownerCommandResult.command?.status ?? ownerCommandResult.result ?? ownerCommandResult.action ?? "planned")} · approval ${String(ownerCommandResult.approvalRequest?.id ? "created" : "not required or not created")}`
+                  ? `Last result: ${String(ownerCommandResult.execution?.result ?? ownerCommandResult.command?.status ?? ownerCommandResult.result ?? ownerCommandResult.action ?? "unconfirmed")} · approval ${String(ownerCommandResult.approvalRequest?.id ? "created" : "not required or not created")}`
                   : "Proof report includes owner_command_requests, owner_command_events, execution steps, approval request id for Level 3/4, and target operator proof where execution is allowed."}
               </Text>
               <Text testID="owner-command-event-history" style={styles.ownerDetailText}>
@@ -20312,7 +20576,17 @@ export default function AdminStudioScreen() {
           }
         }}
       >
-        <View style={styles.confirmBackdrop}>
+        <KeyboardAvoidingView
+          style={[styles.confirmBackdrop, { paddingTop: safeAreaInsets.top, paddingBottom: safeAreaInsets.bottom }]}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <ScrollView
+            style={styles.confirmScroller}
+            contentContainerStyle={styles.confirmScrollContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            accessibilityViewIsModal
+          >
           <View style={styles.confirmSheet}>
             <Text style={styles.confirmKicker}>Money Controls</Text>
             <Text style={styles.confirmTitle}>{moneySwitchConfirm?.label ?? "Confirm Money Switch"}</Text>
@@ -20375,7 +20649,8 @@ export default function AdminStudioScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -20386,7 +20661,17 @@ export default function AdminStudioScreen() {
           if (!staffRoleBusy && !staffPermissionBusy) setRoleConfirm(null);
         }}
       >
-        <View style={styles.confirmBackdrop}>
+        <KeyboardAvoidingView
+          style={[styles.confirmBackdrop, { paddingTop: safeAreaInsets.top, paddingBottom: safeAreaInsets.bottom }]}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <ScrollView
+            style={styles.confirmScroller}
+            contentContainerStyle={styles.confirmScrollContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            accessibilityViewIsModal
+          >
           <View
             style={styles.confirmSheet}
             testID={roleConfirm?.kind === "grant_role" ? "admin-staff-grant-confirm-modal" : roleConfirm?.kind === "revoke_role" ? "admin-staff-revoke-confirm-modal" : "admin-role-confirm-modal"}
@@ -20445,7 +20730,8 @@ export default function AdminStudioScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -20459,7 +20745,17 @@ export default function AdminStudioScreen() {
           }
         }}
       >
-        <View style={styles.confirmBackdrop}>
+        <KeyboardAvoidingView
+          style={[styles.confirmBackdrop, { paddingTop: safeAreaInsets.top, paddingBottom: safeAreaInsets.bottom }]}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <ScrollView
+            style={styles.confirmScroller}
+            contentContainerStyle={styles.confirmScrollContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            accessibilityViewIsModal
+          >
           <View style={styles.confirmSheet}>
             <Text style={styles.confirmKicker}>Content Programming</Text>
             <Text style={styles.confirmTitle}>{contentConfirm?.title ?? "Confirm Content Action"}</Text>
@@ -20515,7 +20811,8 @@ export default function AdminStudioScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -20531,7 +20828,17 @@ export default function AdminStudioScreen() {
           }
         }}
       >
-        <View style={styles.confirmBackdrop}>
+        <KeyboardAvoidingView
+          style={[styles.confirmBackdrop, { paddingTop: safeAreaInsets.top, paddingBottom: safeAreaInsets.bottom }]}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <ScrollView
+            style={styles.confirmScroller}
+            contentContainerStyle={styles.confirmScrollContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            accessibilityViewIsModal
+          >
           <View style={styles.confirmSheet}>
             <Text style={styles.confirmKicker}>Owner Security</Text>
             <Text style={styles.confirmTitle}>{ownerSecurityDangerAction?.title ?? "Confirm security action"}</Text>
@@ -20591,7 +20898,8 @@ export default function AdminStudioScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -21390,7 +21698,17 @@ export default function AdminStudioScreen() {
         transparent
         onRequestClose={() => setPendingCreatorVideoModeration(null)}
       >
-        <View style={styles.confirmBackdrop}>
+        <KeyboardAvoidingView
+          style={[styles.confirmBackdrop, { paddingTop: safeAreaInsets.top, paddingBottom: safeAreaInsets.bottom }]}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <ScrollView
+            style={styles.confirmScroller}
+            contentContainerStyle={styles.confirmScrollContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            accessibilityViewIsModal
+          >
           <View style={styles.confirmSheet}>
             <Text style={styles.confirmKicker}>Report Target Safety</Text>
             <Text style={styles.confirmTitle}>
@@ -21446,7 +21764,8 @@ export default function AdminStudioScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={editorVisible} animationType="slide" transparent onRequestClose={() => setEditorVisible(false)}>
@@ -21758,9 +22077,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.78)",
   },
   content: {
-    paddingTop: 54,
-    paddingBottom: 44,
-    paddingHorizontal: 18,
     gap: 16,
   },
   center: {
@@ -23537,25 +23853,27 @@ const styles = StyleSheet.create({
     gap: 8,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(5,8,12,0.8)",
+    borderColor: CHILLYWOOD_VISUAL.controlBorder,
+    backgroundColor: CHILLYWOOD_VISUAL.controlBackground,
     padding: 6,
   },
   tabBarScroller: {
     marginHorizontal: -2,
   },
   tabButton: {
-    minHeight: 42,
+    minHeight: 44,
     minWidth: 104,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 12,
+    paddingVertical: 8,
+    overflow: "hidden",
   },
   tabButtonActive: {
-    backgroundColor: "rgba(220,20,60,0.24)",
+    backgroundColor: CHILLYWOOD_VISUAL.accentPurple,
     borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.46)",
+    borderColor: CHILLYWOOD_VISUAL.primaryBorder,
   },
   tabButtonText: {
     color: "#B7C1D4",
@@ -24192,6 +24510,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#10131A",
     padding: 16,
     gap: 10,
+  },
+  confirmScroller: {
+    width: "100%",
+    maxHeight: "100%",
+    flexGrow: 0,
+  },
+  confirmScrollContent: {
+    alignItems: "center",
+    paddingVertical: 18,
   },
   confirmKicker: {
     color: "#9AA4B9",

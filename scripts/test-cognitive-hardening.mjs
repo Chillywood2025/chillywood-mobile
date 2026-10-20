@@ -419,14 +419,55 @@ test("D-34", "admin", () => {
   assert.match(component, /admin\.cognitive\.read/u);
   assert.match(component, /source manifest/iu);
 });
-test("D-35", "admin", () => {
-  const component = read("components/admin/cognitive-control-center.tsx");
-  assert.doesNotMatch(component, /\bonPress\s*=/u);
+const assertReadOnlyCognitiveControls = (component) => {
+  const ast = ts.createSourceFile("cognitive-control-center.tsx", component, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let refreshControls = 0;
+  let statusReads = 0;
+  const visit = (node) => {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const attributes = node.attributes.properties;
+      assert.ok(!attributes.some(ts.isJsxSpreadAttribute), "Cognitive controls cannot hide handlers in spread props");
+      const press = attributes.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(ast) === "onPress");
+      if (press) {
+        assert.equal(node.tagName.getText(ast), "TouchableOpacity");
+        const label = attributes.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(ast) === "accessibilityLabel");
+        assert.equal(label?.initializer?.text, "Refresh Cognitive status");
+        assert.equal(press.initializer?.getText(ast).replace(/\s+/gu, ""), "{()=>setReadbackAttempt((attempt)=>attempt+1)}", "Only the readback retry counter may be changed by a Cognitive tap");
+        refreshControls += 1;
+      } else if (node.tagName.getText(ast) === "TouchableOpacity") {
+        assert.ok(attributes.some(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(ast) === "disabled" && !attribute.initializer), "Future Cognitive controls must remain disabled");
+      }
+    }
+    if (ts.isCallExpression(node) && node.expression.getText(ast).endsWith(".invoke")) {
+      assert.equal(node.expression.getText(ast), "supabase.functions.invoke");
+      assert.equal(node.arguments[0]?.text, "cognitive-governance-control");
+      assert.equal(node.arguments[1]?.getText(ast).replace(/\s+/gu, ""), '{body:{action:"status"}}', "Cognitive reads cannot invoke mutating actions");
+      statusReads += 1;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  assert.equal(refreshControls, 1);
+  assert.equal(statusReads, 1);
   assert.match(
     component,
     /functions\.invoke\(\s*["']cognitive-governance-control["'][\s\S]{0,160}action:\s*["']status["']/u,
   );
   assert.doesNotMatch(component, /\.rpc\(|set_switch|record_public_research|record_collective_deliberation/iu);
+};
+test("D-35", "admin", () => {
+  const component = read("components/admin/cognitive-control-center.tsx");
+  assertReadOnlyCognitiveControls(component);
+  const mutants = [
+    component.replace('action: "status"', 'action: "activate"'),
+    component.replace('onPress={() => setReadbackAttempt((attempt) => attempt + 1)}', 'onPress={() => executeMutation()}'),
+    component.replace('key={label}', 'key={label} onPress={() => executeMutation()}'),
+    component.replace(/\n\s+disabled\n/u, '\n            disabled={false}\n'),
+  ];
+  for (const mutant of mutants) {
+    assert.notEqual(mutant, component, "negative control must modify production source");
+    assert.throws(() => assertReadOnlyCognitiveControls(mutant));
+  }
 });
 test("D-36", "research", async () => {
   const controller = new AbortController();
