@@ -147,6 +147,9 @@ drop trigger fixture_owner_security_failure on public.security_audit_events;
 -- Complete scope exceeds the old panel's 200-row display limit.
 insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous)
 select pg_temp.mutation_id('08',n),'owner-bulk-'||n||'@example.test',now(),false,false from generate_series(1,205) n;
+insert into public.platform_role_memberships(role,user_id,email,status,notes,granted_by)
+select 'operator',pg_temp.mutation_id('08',n)::text,'owner-bulk-'||n||'@example.test',
+ 'active','Synthetic exact bulk target','pgtap' from generate_series(1,205) n;
 insert into public.platform_staff_permission_grants(target_user_id,target_email,permission_key,status,reason,expires_at)
 select pg_temp.mutation_id('08',n)::text,'owner-bulk-'||n||'@example.test','legal_review','active','Synthetic bulk scope',
  now()+interval '1 hour' from generate_series(1,205) n;
