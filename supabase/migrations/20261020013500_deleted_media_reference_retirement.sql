@@ -29,6 +29,7 @@ alter table private.deleted_media_key_retirements enable row level security;
 alter table private.deleted_media_key_retirements force row level security;
 revoke all on private.deleted_media_key_retirements from public,anon,authenticated,service_role;
 
+
 create function private.deleted_media_preserve_identity() returns trigger
 language plpgsql set search_path='' as $$
 begin
@@ -53,9 +54,10 @@ language plpgsql security definer set search_path='' as $$
 declare r public.media_upload_reservations%rowtype; v jsonb; d private.deleted_content_records%rowtype;
  k text; prefix text; proof jsonb; staged_proof jsonb;
 begin
+ if new.provider<>'cloudflare_r2' or new.bucket<>'chillywood-media-origin' then return new; end if;
+ if not private.deleted_media_reference_fence_armed() then raise exception 'retirement_fence_not_armed'; end if;
  perform pg_catalog.pg_advisory_xact_lock(176214,30);
  if current_setting('transaction_isolation')<>'read committed' then raise exception 'retirement_read_committed_required' using errcode='25000'; end if;
- if new.provider<>'cloudflare_r2' or new.bucket<>'chillywood-media-origin' then return new; end if;
  if tg_op='INSERT' then
    if new.target_type='creator_video' then select to_jsonb(t) into v from public.videos t where id::text=new.target_id;
    elsif new.target_type='social_attachment' then select to_jsonb(t) into v from public.social_attachments t where id::text=new.target_id;
@@ -170,6 +172,7 @@ create function private.guard_deleted_media_references() returns trigger
 language plpgsql security definer set search_path='' as $$
 declare r private.deleted_media_key_retirements%rowtype; doc jsonb; old_doc jsonb;
 begin
+ if not private.deleted_media_reference_fence_armed() then return new; end if;
  perform pg_catalog.pg_advisory_xact_lock(176214,30);
  if current_setting('transaction_isolation')<>'read committed' then raise exception 'retirement_read_committed_required' using errcode='25000'; end if;
  doc:=private.deleted_media_locator_document(to_jsonb(new),tg_relid);
@@ -217,6 +220,7 @@ create function private.deleted_media_has_live_reference(p_stage_id uuid) return
 language plpgsql security definer set search_path='' as $$
 declare r private.deleted_media_key_retirements%rowtype; t record; found_ref boolean; predicate text;
 begin
+ if not private.deleted_media_reference_fence_armed() then return true; end if;
  perform pg_catalog.pg_advisory_xact_lock(176214,30);
  select * into r from private.deleted_media_key_retirements where stage_id=p_stage_id;
  if r.id is null or not private.deleted_media_reference_coverage_ready() then return true; end if;
@@ -238,6 +242,7 @@ create function private.claim_deleted_media_retirement(p_stage_id uuid) returns 
 language plpgsql security definer set search_path='' as $$
 declare r private.deleted_media_key_retirements%rowtype;
 begin
+ if not private.deleted_media_reference_fence_armed() then return false; end if;
  perform pg_catalog.pg_advisory_xact_lock(176214,30);
  if current_setting('transaction_isolation')<>'read committed' then raise exception 'retirement_read_committed_required' using errcode='25000'; end if;
  select * into r from private.deleted_media_key_retirements where stage_id=p_stage_id for update;
@@ -256,6 +261,11 @@ create function public.check_deleted_media_retirement(p_provider text,p_bucket t
 returns jsonb language plpgsql security definer set search_path='' as $$
 declare r private.deleted_media_key_retirements%rowtype;
 begin
+ -- The unarmed state guarantees no retirement was admitted. Still validate
+ -- purpose, and retain the shared latch through this transaction.
+ if not private.deleted_media_reference_fence_armed() then
+   return jsonb_build_object('allowed',coalesce(p_purpose in ('upload','read','inspection','publish'),false));
+ end if;
  perform pg_catalog.pg_advisory_xact_lock(176214,30);
  if current_setting('transaction_isolation')<>'read committed' then return jsonb_build_object('allowed',false); end if;
  if p_purpose not in ('upload','read','inspection','publish') then return jsonb_build_object('allowed',false); end if;

@@ -94,6 +94,7 @@ begin
   if not exists(select 1 from private.deleted_content_retention_settings where capture_enabled) then return null; end if;
   if current_setting('transaction_isolation')<>'read committed' then
     raise exception 'content_inspection_retention_requires_read_committed' using errcode='25001'; end if;
+  perform private.deleted_media_reference_fence_armed();
   perform pg_catalog.pg_advisory_xact_lock(176214,30);
   select * into d from private.deleted_content_records where target_type=p_type and target_id=p_target::text
     order by deleted_at desc,id limit 1;

@@ -36,8 +36,43 @@ create table public.json_consumers(id uuid default gen_random_uuid(),metadata js
 create table public.url_consumers(id uuid default gen_random_uuid(),media_url text);
 `);
 await db.exec(readFileSync('supabase/migrations/20261020011840_deleted_content_retention.sql','utf8'));
+for(const isolation of ['repeatable read','serializable']) {
+ await db.exec(`begin isolation level ${isolation};
+   insert into public.legal_holds(target_type,target_id,status) values('user','partial-migration-fixture','active');
+   rollback;`);
+ check(true,`inactive legal holds remain compatible before the later reference migration: ${isolation}`);
+}
+check(await scalar(`select not has_function_privilege('authenticated','private.deleted_media_reference_fence_armed()','execute') v`),
+ 'private latch execution is closed immediately in the first migration');
 await db.exec(readFileSync('supabase/migrations/20261020013500_deleted_media_reference_retirement.sql','utf8'));
 check(await scalar('select private.deleted_media_reference_coverage_ready() v'),'catalog locator coverage initially complete');
+check(await scalar('select not armed v from private.deleted_media_reference_fence'),'disabled installation starts unarmed');
+for(const isolation of ['read committed','repeatable read','serializable']) {
+ await db.exec(`begin isolation level ${isolation};insert into json_consumers(metadata) values('{"unrelated":true}');update json_consumers set metadata='{"unrelated":"updated"}';
+ insert into legal_holds(target_type,target_id,status) values('room_message',gen_random_uuid()::text,'active');update legal_holds set target_type='room_message';`);
+ check(await scalar(`select not exists(select 1 from pg_locks where pid=pg_backend_pid() and locktype='advisory' and classid=176214 and objid=30) v`),`${isolation} inactive writes do not take global exclusive lock`);
+ await db.exec('commit;');
+}
+await db.exec('begin;update private.deleted_content_retention_settings set activation_ready=true,capture_enabled=true;');
+check(await scalar('select armed v from private.deleted_media_reference_fence'),'text-only capture enable arms the joint retention barrier');
+await db.exec('rollback;');
+check(await scalar('select not armed v from private.deleted_media_reference_fence'),'rolled-back enable leaves the barrier unarmed');
+await denied(`insert into private.deleted_content_media_stages(id,target_type,target_id,author,provider,bucket,object_key,reservation_id)
+ values('${stage}','creator_video','${target}','${owner}','cloudflare_r2','chillywood-media-origin','${key}','${reservation}')`,/retirement_fence_not_armed/);
+await db.exec(`update private.deleted_content_retention_settings set activation_ready=true,capture_enabled=true,text_expiry_enabled=true;
+ insert into private.deleted_content_records(target_type,target_id,author,content,deletion_kind,deleted_at,expires_at)
+ values('room_message','text-only-retirement','${owner}','{"text":"expired"}','hard',now()-interval '31 days',now()-interval '1 day');`);
+check(await scalar(`select public.expire_deleted_content_text((select id from private.deleted_content_records where target_id='text-only-retirement'))->>'status'='purged' v`),'text-only capture arms before irreversible text claim');
+await db.exec('update private.deleted_content_retention_settings set capture_enabled=false,text_expiry_enabled=false;');
+await denied(`insert into legal_holds(target_type,target_id,status) values('room_message','text-only-retirement','active')`,/retention_preservation_unavailable_deletion_already_claimed/);
+check(await scalar('select armed v from private.deleted_media_reference_fence'),'disabling flags never disarms the fence');
+await denied('update private.deleted_media_reference_fence set armed=false',/retirement_fence_monotonic/);
+await denied('delete from private.deleted_media_reference_fence',/retirement_fence_permanent/);
+await denied('truncate private.deleted_media_reference_fence',/retirement_fence_permanent/);
+for(const role of ['anon','authenticated','service_role']) {
+ check(await scalar(`select not has_table_privilege('${role}','private.deleted_media_reference_fence','SELECT,INSERT,UPDATE,DELETE,TRUNCATE') v`),`${role} has no direct fence access`);
+ check(await scalar(`select not has_function_privilege('${role}','private.deleted_media_reference_fence_armed()','EXECUTE') v`),`${role} cannot call fence helper`);
+}
 await db.exec(`insert into auth.users values('${owner}');
 insert into videos values('${target}','${owner}','original','', 'cloudflare_r2','chillywood-media-origin','${key}','${key}',null,now(),null);
 insert into media_upload_reservations values('${reservation}','creator_video','cloudflare_r2','chillywood-media-origin','${key}','${target}','${owner}','verified',now(),now());

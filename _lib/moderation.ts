@@ -13,6 +13,7 @@ import {
   selectExactActivePlatformRoleRows,
 } from "./platformRoleAuthority";
 import { supabase } from "./supabase";
+import { adminPageLimit, parseAdminCursor, parseAdminCursorPage } from "./adminCursorPagination";
 import { formatUsernameHandle } from "./usernameHandles";
 import {
   createAccountBoundMutationOperationKey,
@@ -259,6 +260,8 @@ export type SafetyReportQueueReadModel = {
   windowLimit: number;
   windowFull: boolean;
   overviewAvailable: boolean;
+  nextCursor: string | null;
+  hasMore: boolean;
 };
 
 export type AdminAuditLogEntry = {
@@ -851,19 +854,41 @@ export function canAccessDmcaTools(memberships: PlatformRoleMembership[]) {
 }
 
 export function canAccessAuditExplorerTools(memberships: PlatformRoleMembership[]) {
-  return hasPlatformStaffPermission(memberships, ["audit_review", "security_review"]);
+  return hasOwnerControlsPermission(memberships, ["audit_review", "security_review", "admin.audit.view"]);
+}
+
+// This endpoint resolves these exact roles. Super Admin remains supported by
+// other endpoints, but must not inherit Owner authority here from a UI alias.
+function hasOwnerControlsPermission(
+  memberships: PlatformRoleMembership[],
+  permissions: readonly PlatformStaffPermissionKey[],
+) {
+  return hasPlatformStaffPermission(
+    memberships.filter((membership) => ["owner", "operator", "moderator"].includes(membership.role)),
+    permissions,
+  );
+}
+
+export function canRunAdminCanaryChecks(memberships: PlatformRoleMembership[]) {
+  return hasOwnerControlsPermission(memberships, ["audit_review", "security_review"]);
 }
 
 export function canManageStaffPermissionTemplates(memberships: PlatformRoleMembership[]) {
-  return hasPlatformStaffPermission(memberships, ["staff_permission_templates", "admin_grants"]);
+  return hasOwnerControlsPermission(memberships, ["staff_permission_templates", "admin_grants"]);
 }
 
 export function canAccessBreakGlassTools(memberships: PlatformRoleMembership[]) {
-  return hasPlatformStaffPermission(memberships, ["emergency_break_glass"]);
+  return hasOwnerControlsPermission(memberships, ["emergency_break_glass"]);
 }
 
 export function canAccessLegalRequestIntakeTools(memberships: PlatformRoleMembership[]) {
-  return hasPlatformStaffPermission(memberships, ["legal_request_intake", "legal_review", "legal_ops"]);
+  return hasOwnerControlsPermission(memberships, ["legal_request_intake", "legal_review", "legal_ops"]);
+}
+
+export function canReadOwnerControlLegalHistory(memberships: PlatformRoleMembership[]) {
+  return hasOwnerControlsPermission(memberships, [
+    "legal_request_intake", "legal_review", "legal_ops", "evidence_preview", "evidence_export", "legal_hold",
+  ]);
 }
 
 async function readMyPlatformStaffPermissionKeys(): Promise<PlatformStaffPermissionKey[]> {
@@ -1401,7 +1426,7 @@ export async function readSafetyReports(options?: {
   requireReviewBackend?: boolean;
 }) {
   const limit = Number.isFinite(options?.limit) ? Math.max(1, Math.min(50, Math.floor(Number(options?.limit)))) : 8;
-  const filter = normalizeText(options?.filter) || "all";
+  const filter = normalizeText(options?.filter).toLowerCase() || "all";
 
   const rpcResult = await reportsRpcClient.rpc("list_admin_reports", {
     p_cursor: null,
@@ -1484,23 +1509,31 @@ export async function readAdminReportsOverview(): Promise<AdminReportsOverview> 
 export async function readSafetyReportQueue(options?: {
   limit?: number;
   filter?: string;
+  cursor?: string | null;
 }): Promise<SafetyReportQueueReadModel> {
-  const windowLimit = Number.isFinite(options?.limit)
-    ? Math.max(1, Math.min(50, Math.floor(Number(options?.limit)))) : 25;
-  const [reports, overview] = await Promise.all([
-    readSafetyReports({ ...options, limit: windowLimit, requireReviewBackend: true }),
+  const windowLimit = adminPageLimit(options?.limit, 25, 50);
+  const filter = normalizeText(options?.filter).toLowerCase() || "all";
+  const scope = { source: "reports", filter };
+  parseAdminCursor(options?.cursor, scope);
+  const [result, overview] = await Promise.all([
+    reportsRpcClient.rpc("list_admin_reports_page", {
+      p_filter: filter, p_limit: windowLimit, p_cursor: options?.cursor ?? null,
+    }),
     readAdminReportsOverview().catch(() => null),
   ]);
-  // Expanding the window replaces the prefix; do not append timestamp pages.
-  // The current RPC uses created_at < cursor and would skip boundary ties.
-  const items = Array.from(new Map(reports.map((report) => [report.id, toSafetyReportQueueItem(report)])).values());
+  if (result.error) throw result.error;
+  const page = parseAdminCursorPage(result.data, scope, windowLimit, options?.cursor);
+  const reports = parseReportRows(page.items);
+  const items = reports.map(toSafetyReportQueueItem);
   const fallbackSummary = summarizeSafetyReportQueue(items);
   const overviewAvailable = overview?.connected === true && overview.totalReports !== null;
   return {
     generatedAt: overview?.generatedAt ?? new Date().toISOString(),
     items,
     windowLimit,
-    windowFull: reports.length >= windowLimit,
+    windowFull: page.hasMore,
+    nextCursor: page.nextCursor,
+    hasMore: page.hasMore,
     overviewAvailable,
     summary: overviewAvailable && overview
       ? {
@@ -1512,7 +1545,7 @@ export async function readSafetyReportQueue(options?: {
         platformOwnedTargetCount: fallbackSummary.platformOwnedTargetCount,
         sourceSurfaces: overview.sourceSurfaces.length ? overview.sourceSurfaces : fallbackSummary.sourceSurfaces,
       }
-      : fallbackSummary,
+      : { ...fallbackSummary, needsReviewCount: null, criticalHighRiskCount: null },
   };
 }
 
@@ -1576,16 +1609,24 @@ export async function applyAdminReportTargetAction(input: {
 
 export async function listAdminReportAuditEvents(reportId: number): Promise<PlatformAdminAuditLogRow[]> {
   if (!Number.isFinite(reportId) || reportId <= 0) return [];
-  const { data, error } = await reportsRpcClient.rpc("list_admin_report_audit_events", {
-    p_report_id: reportId,
-  });
-  if (error) throw error;
-
-  const rows = Array.isArray(data) ? data : [];
-  return rows
-    .filter(isPlainObject)
-    .map((row) => toAdminAuditLogRow(row))
-    .filter((row): row is PlatformAdminAuditLogRow => !!row);
+  const scope = { source: "report-audit", reportId: String(reportId) };
+  const rows: PlatformAdminAuditLogRow[] = [];
+  const seen = new Set<string>();
+  let cursor: string | null = null;
+  do {
+    const { data, error } = await reportsRpcClient.rpc("list_admin_report_audit_events_page", {
+      p_report_id: reportId, p_cursor: cursor, p_limit: 100,
+    });
+    if (error) throw error;
+    const page = parseAdminCursorPage(data, scope, 100, cursor);
+    for (const raw of page.items) {
+      const row = toAdminAuditLogRow(raw);
+      if (!row || seen.has(row.id)) throw new Error("Report audit history is incomplete. Refresh to retry.");
+      seen.add(row.id); rows.push(row);
+    }
+    cursor = page.nextCursor;
+  } while (cursor);
+  return rows;
 }
 
 const toAuditTimestamp = (value: string | null) => {

@@ -14,6 +14,62 @@ create table private.deleted_content_retention_settings (
   check(not text_expiry_enabled or (activation_ready and capture_enabled))
 );
 insert into private.deleted_content_retention_settings default values;
+-- Inactive installations must not serialize every unrelated JSON/locator write
+-- or forbid existing repeatable-read/serializable consumers. A locked, permanent
+-- latch is safe where an unlocked "registry is empty" snapshot check is not.
+-- This joint retention/reference latch arms at explicit capture enable (the
+-- prerequisite for text expiry and media staging), before any source locks.
+-- Never upgrade this lock from the stage/source trigger: concurrent pre-arm
+-- writers may already hold a source row and the shared latch in either order.
+create table private.deleted_media_reference_fence (
+ singleton boolean primary key default true check(singleton),
+ armed boolean not null default false
+);
+insert into private.deleted_media_reference_fence(singleton,armed)
+select true,capture_enabled from private.deleted_content_retention_settings;
+alter table private.deleted_media_reference_fence enable row level security;
+alter table private.deleted_media_reference_fence force row level security;
+revoke all on private.deleted_media_reference_fence from public,anon,authenticated,service_role;
+
+create function private.deleted_media_preserve_reference_fence() returns trigger
+language plpgsql set search_path='' as $$
+begin
+ if tg_op in ('DELETE','TRUNCATE') then raise exception 'retirement_fence_permanent'; end if;
+ if old.singleton is distinct from new.singleton or (old.armed and not new.armed) then
+   raise exception 'retirement_fence_monotonic'; end if;
+ return new;
+end $$;
+create trigger deleted_media_preserve_reference_fence before update or delete on private.deleted_media_reference_fence
+for each row execute function private.deleted_media_preserve_reference_fence();
+create trigger deleted_media_preserve_reference_fence_truncate before truncate on private.deleted_media_reference_fence
+for each statement execute function private.deleted_media_preserve_reference_fence();
+
+create function private.deleted_media_reference_fence_armed() returns boolean
+language plpgsql security definer set search_path='' as $$
+declare armed_now boolean;
+begin
+ -- READ COMMITTED observes the current row after a waiting armer commits.
+ -- A stale repeatable-read/serializable snapshot raises 40001 instead of
+ -- returning the obsolete false value. Hold SHARE until transaction end.
+ select armed into armed_now from private.deleted_media_reference_fence where singleton for share;
+ if not found then raise exception 'retirement_fence_missing'; end if;
+ return armed_now;
+end $$;
+create function private.deleted_media_arm_reference_fence() returns trigger
+language plpgsql security definer set search_path='' as $$
+begin
+ if new.capture_enabled then
+   update private.deleted_media_reference_fence set armed=true where singleton and not armed;
+   if not private.deleted_media_reference_fence_armed() then raise exception 'retirement_fence_not_armed'; end if;
+ end if;
+ return new;
+end $$;
+create trigger deleted_media_arm_reference_fence before insert or update on private.deleted_content_retention_settings
+for each row execute function private.deleted_media_arm_reference_fence();
+revoke all on function private.deleted_media_preserve_reference_fence(),
+ private.deleted_media_reference_fence_armed(),private.deleted_media_arm_reference_fence()
+ from public,anon,authenticated,service_role;
+
 create table private.deleted_content_records (
   id uuid primary key default gen_random_uuid(),
   target_type text not null,
@@ -272,6 +328,9 @@ $$;
 create function private.deleted_content_legal_hold_guard() returns trigger
 language plpgsql security definer set search_path='' as $$
 begin
+  -- The latch exists before this trigger is installed, including during a
+  -- sequential migration rollout. No unlocked empty-registry shortcut.
+  if not private.deleted_media_reference_fence_armed() then return new; end if;
   if current_setting('transaction_isolation')<>'read committed' then
     raise exception 'retention_requires_read_committed' using errcode='25000';
   end if;
@@ -301,6 +360,9 @@ begin
   end if;
   if current_setting('transaction_isolation')<>'read committed' then
     raise exception 'retention_requires_read_committed' using errcode='25000';
+  end if;
+  if to_regprocedure('private.deleted_media_reference_fence_armed()') is not null then
+    execute 'select private.deleted_media_reference_fence_armed()';
   end if;
   perform pg_advisory_xact_lock(176214,30);
   select * into r from private.deleted_content_records where id=p_deletion_id for update;

@@ -26,6 +26,11 @@ const studioBundleFiles = [
   '20261019020052_platform_studio_rolling_audience_compatibility.sql',
 ];
 
+const adminBackendFiles = [
+  '20261020023827_transactional_staff_permission_templates.sql',
+  '20261020024058_admin_reports_dmca_complete_history.sql',
+];
+
 for(const includeHeldStudio of [false,true]) test(`staff mutation repair with Studio ${includeHeldStudio?'included':'held'}`,{timeout:120_000},async t=>{
   const sql=fs.readFileSync(repairMigrationPath,'utf8');
   const {db,replayReport}=await createDatabase({overlayLiveDrift:true,includeHeldStudio});
@@ -198,7 +203,8 @@ for(const includeHeldStudio of [false,true]) test(`staff mutation repair with St
       }finally{await db.exec('rollback')}
     }
     // This remains a full-current-chain repair test, including reviewed successors.
-    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length);
+    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length);
+    check('complete admin backend successors',replayReport.files.filter(file=>adminBackendFiles.includes(file)),adminBackendFiles);
     check('complete disabled inspection/retention successors',replayReport.files.filter(file=>inspectionBundleFiles.includes(file)),inspectionBundleFiles);
     check('Circle closure remains in both runtime scenarios',replayReport.files.includes('20261019000210_circle_request_rpc_anon_execute_closure.sql'),true);
     check('Studio migration scope is the complete bundle',replayReport.files.filter(file=>studioBundleFiles.includes(file)),includeHeldStudio?studioBundleFiles:[]);

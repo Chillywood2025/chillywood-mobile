@@ -5,6 +5,9 @@ select no_plan();
 select ok(not (select media_expiry_enabled from private.deleted_content_retention_settings),'media expiry starts disabled');
 select ok(not has_table_privilege('service_role','private.deleted_content_media_expiry_claims','INSERT'),'service cannot forge claims directly');
 select ok(not has_function_privilege('authenticated','public.read_deleted_content_media_expiry_claim(uuid)','EXECUTE'),'consumer cannot resolve private deletion bindings');
+-- Explicit capture enable arms the permanent retention fence before fixtures.
+update private.deleted_content_retention_settings set activation_ready=true,capture_enabled=true,media_staging_enabled=true;
+update private.deleted_content_retention_settings set capture_enabled=false,media_staging_enabled=false;
 insert into auth.users(id,email,email_confirmed_at,is_sso_user,is_anonymous)
 values('c3100000-0000-4000-8000-000000000001','retention-media@example.test',now(),false,false);
 insert into public.media_upload_reservations(id,owner_user_id,surface_type,storage_provider,storage_bucket,storage_object_key,

@@ -23,6 +23,7 @@ revoke all on private.deleted_content_media_expiry_claims from public,anon,authe
 create or replace function private.deleted_content_legal_hold_guard() returns trigger
 language plpgsql security definer set search_path='' as $$
 begin
+ if not private.deleted_media_reference_fence_armed() then return new; end if;
  if current_setting('transaction_isolation')<>'read committed' then
    raise exception 'retention_requires_read_committed' using errcode='25000';
  end if;
@@ -66,6 +67,7 @@ begin
  if current_setting('transaction_isolation')<>'read committed' then
    raise exception 'retention_requires_read_committed' using errcode='25000';
  end if;
+ perform private.deleted_media_reference_fence_armed();
  perform pg_advisory_xact_lock(176214,30);
  select * into s from private.deleted_content_media_stages where id=p_stage_id for update;
  if s.id is null or s.deletion_id is null then return jsonb_build_object('status','not_finalized'); end if;
@@ -112,6 +114,7 @@ begin
  if current_setting('transaction_isolation')<>'read committed' then
    raise exception 'retention_requires_read_committed' using errcode='25000';
  end if;
+ perform private.deleted_media_reference_fence_armed();
  perform pg_advisory_xact_lock(176214,30);
  select * into c from private.deleted_content_media_expiry_claims where id=p_claim_id for update;
  if c.id is null then return jsonb_build_object('status','absent'); end if;
@@ -134,6 +137,7 @@ begin
    raise exception 'retention_requires_read_committed' using errcode='25000';
  end if;
  if p_result not in ('observed_absent','delete_acknowledged','failed') then raise exception 'invalid_cleanup_result'; end if;
+ perform private.deleted_media_reference_fence_armed();
  perform pg_advisory_xact_lock(176214,30);
  select * into c from private.deleted_content_media_expiry_claims where id=p_claim_id for update;
  if c.id is null then raise exception 'cleanup_claim_required'; end if;

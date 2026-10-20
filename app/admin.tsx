@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAdminReadLifecycle } from "../hooks/use-admin-read-lifecycle";
+import { useAdminHistoryRead } from "../hooks/use-admin-history-read";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { buildAdminNavigation, getAdminContentInsets } from "../_lib/adminNavigation";
 import { CHILLYWOOD_VISUAL, ChillywoodPrimaryActionFill } from "../components/ui/chillywood-visual-system";
@@ -44,7 +45,7 @@ import {
   firstOwnerGrantOwner,
   firstOwnerRevokeOwner,
   firstOwnerStartStepDown,
-  listLegalRequests,
+  listLegalRequestsPage,
   listOwnerControlAudit,
   listOwnerControlCanaries,
   listPermissionTemplates,
@@ -68,6 +69,7 @@ import {
   type OwnerControlCanaryResult,
   type OwnerControlCanaryRun,
   type OwnerControlLegalRequestDetail,
+  type OwnerControlLegalHistoryKind,
   type OwnerControlLegalRequestEvent,
   type OwnerControlLegalRequest,
   type OwnerControlPermissionTemplate,
@@ -153,9 +155,11 @@ import {
   readAdminAuditLog,
   applyAdminReportTargetAction,
   canAccessAuditExplorerTools,
+  canRunAdminCanaryChecks,
   canAccessDmcaTools,
   canAccessLegalEvidenceTools,
   canAccessLegalRequestIntakeTools,
+  canReadOwnerControlLegalHistory,
   canAccessLiveOpsTools,
   canAccessAdminConsole,
   canManageStaffPermissionTemplates,
@@ -294,7 +298,7 @@ import {
   getDmcaNoticeCompleteness,
   readAdminDmcaCaseDetail,
   readAdminDmcaCaseSummary,
-  readAdminDmcaCases,
+  readAdminDmcaCasesPage,
   type AdminDmcaCreateCaseInput,
   type DmcaCase,
   type DmcaCaseDetail,
@@ -558,6 +562,7 @@ type AdminDashboardCard = {
 
 type AdminHomeTone = "default" | "success" | "danger" | "manual" | "locked" | "info";
 type AdminHomeTruthQualifier =
+  | "Partial"
   | "Backed"
   | "Connected"
   | "Foundation Only"
@@ -642,7 +647,7 @@ const REPORT_TRIAGE_FILTERS: readonly {
 ];
 
 const REPORT_AUDIT_UNAVAILABLE_REASON =
-  "Recent report-specific audit rows are shown when immutable admin audit rows are connected for this target.";
+  "Complete report audit history is unavailable. Any recent fallback rows shown are incomplete; close and reopen the report to retry.";
 
 type AdminV1ReadModel = AdminUsageReadModel & {
   loading: boolean;
@@ -730,6 +735,8 @@ const auditOverviewCategoryLabels: Record<AuditOverviewCategoryFilter, string> =
 
 type AuditExplorerNetworkFilter = "all" | "with" | "missing";
 
+const legalHistoryRowKey = (row: OwnerControlLegalRequest) => String(row.id);
+const auditHistoryRowKey = (row: OwnerControlAuditRow) => `${row.source}:${row.id}`;
 const auditExplorerNetworkFilterOptions: readonly {
   key: AuditExplorerNetworkFilter;
   label: string;
@@ -2811,6 +2818,10 @@ const formatAdminOperationFailure = (error: any, fallback: string) => {
   const code = String(error?.code ?? "");
   const searchable = `${code} ${message}`.toLowerCase();
 
+  if (code === "owner_control_outcome_unverified") {
+    return "The backend did not verify this action’s outcome. Refresh the affected data before deciding whether to retry.";
+  }
+
   if (
     searchable.includes("permission")
     || searchable.includes("row-level security")
@@ -3517,18 +3528,24 @@ export default function AdminStudioScreen() {
   const [safetyReportsLoading, setSafetyReportsLoading] = useState(false);
   const [safetyReportsLastLoadedAt, setSafetyReportsLastLoadedAt] = useState<string | null>(null);
   const [safetyReportFilter, setSafetyReportFilter] = useState<ReportTriageFilterKey>("needs_review");
-  const [safetyReportWindow, setSafetyReportWindow] = useState<{ limit: number; full: boolean; overviewAvailable: boolean } | null>(null);
+  const [safetyReportWindow, setSafetyReportWindow] = useState<{ limit: number; full: boolean; overviewAvailable: boolean; nextCursor: string | null } | null>(null);
   const safetyReportRequestRef = useRef(0);
+  const safetyReportPageRef = useRef<{ scope: string | null; cursor: string | null; loading: boolean; ids: Set<number> }>({ scope: null, cursor: null, loading: false, ids: new Set() });
   const [selectedSafetyReportId, setSelectedSafetyReportId] = useState<number | null>(null);
   const [safetyReportDetailVisible, setSafetyReportDetailVisible] = useState(false);
   const [selectedReportAuditRows, setSelectedReportAuditRows] = useState<PlatformAdminAuditLogRow[]>([]);
   const [selectedReportAuditLoading, setSelectedReportAuditLoading] = useState(false);
+  const [selectedReportAuditComplete, setSelectedReportAuditComplete] = useState(false);
+  const [selectedReportAuditScope, setSelectedReportAuditScope] = useState<string | null>(null);
   const [reportStatusActionBusy, setReportStatusActionBusy] = useState<string | null>(null);
   const [manualReportActionOpen, setManualReportActionOpen] = useState(false);
   const [moderationNotice, setModerationNotice] = useState<string | null>(null);
   const [dmcaCases, setDmcaCases] = useState<DmcaCase[]>([]);
   const [dmcaCasesLoading, setDmcaCasesLoading] = useState(false);
   const [dmcaCaseSummary, setDmcaCaseSummary] = useState<DmcaCaseSummary | null>(null);
+  const [dmcaPage, setDmcaPage] = useState<{ hasMore: boolean; nextCursor: string | null } | null>(null);
+  const dmcaListRequestRef = useRef(0);
+  const dmcaPageRef = useRef<{ scope: string | null; cursor: string | null; loading: boolean; ids: Set<string> }>({ scope: null, cursor: null, loading: false, ids: new Set() });
   const [dmcaCaseDetail, setDmcaCaseDetail] = useState<DmcaCaseDetail | null>(null);
   const dmcaDetailRequestRef = useRef({ caseId: null as string | null, loaded: false });
   const [dmcaDetailVisible, setDmcaDetailVisible] = useState(false);
@@ -3616,7 +3633,7 @@ export default function AdminStudioScreen() {
   const [legalSubsection, setLegalSubsection] = useState<LegalSubsection>("intake");
   const [ownerControlNotice, setOwnerControlNotice] = useState<string | null>(null);
   const [ownerControlLoading, setOwnerControlLoading] = useState(false);
-  const [auditExplorerRows, setAuditExplorerRows] = useState<OwnerControlAuditRow[]>([]);
+  const [storedAuditExplorerRows, setAuditExplorerRows] = useState<OwnerControlAuditRow[]>([]);
   const [auditExplorerActionFilter, setAuditExplorerActionFilter] = useState("");
   const [auditExplorerTargetFilter, setAuditExplorerTargetFilter] = useState("");
   const [auditExplorerBreakGlassOnly, setAuditExplorerBreakGlassOnly] = useState(false);
@@ -3648,7 +3665,7 @@ export default function AdminStudioScreen() {
   const [firstOwnerPasscode, setFirstOwnerPasscode] = useState("");
   const [firstOwnerTypedConfirmation, setFirstOwnerTypedConfirmation] = useState("");
   const [firstOwnerDisplayedPasscode, setFirstOwnerDisplayedPasscode] = useState("");
-  const [legalRequests, setLegalRequests] = useState<OwnerControlLegalRequest[]>([]);
+  const [storedLegalRequests, setLegalRequests] = useState<OwnerControlLegalRequest[]>([]);
   const [selectedLegalRequestId, setSelectedLegalRequestId] = useState<string | null>(null);
   const [selectedLegalRequestDetail, setSelectedLegalRequestDetail] = useState<OwnerControlLegalRequestDetail | null>(null);
   const legalDetailRequestRef = useRef({ generation: 0, requestId: null as string | null, loaded: false });
@@ -3658,6 +3675,8 @@ export default function AdminStudioScreen() {
   const [legalRequestStatusUpdate, setLegalRequestStatusUpdate] = useState<LegalRequestStatusFilter>("under_review");
   const [legalRequestNote, setLegalRequestNote] = useState("");
   const [legalRequestDetailBusy, setLegalRequestDetailBusy] = useState(false);
+  const [legalHistoryBusy, setLegalHistoryBusy] = useState<OwnerControlLegalHistoryKind | null>(null);
+  const legalHistoryRequestRef = useRef<object | null>(null);
   const [legalRequestAgency, setLegalRequestAgency] = useState("");
   const [legalRequestContact, setLegalRequestContact] = useState("");
   const [legalRequestContactEmail, setLegalRequestContactEmail] = useState("");
@@ -3838,6 +3857,9 @@ export default function AdminStudioScreen() {
   const dmcaDetailAuthorityKey = adminReadAuthorityKey && canAccessDmca ? `${adminReadAuthorityKey}:dmca` : null;
   const dmcaDetailAuthorityRef = useRef(dmcaDetailAuthorityKey);
   dmcaDetailAuthorityRef.current = dmcaDetailAuthorityKey;
+  const dmcaListAuthorityKey = dmcaDetailAuthorityKey ? JSON.stringify([dmcaDetailAuthorityKey, dmcaStatusFilter, dmcaSearchQuery.trim().toLowerCase()]) : null;
+  const dmcaListAuthorityRef = useRef(dmcaListAuthorityKey);
+  dmcaListAuthorityRef.current = dmcaListAuthorityKey;
   useEffect(() => {
     dmcaDetailRequestRef.current = { caseId: null, loaded: false };
     setDmcaCaseDetail(null);
@@ -3889,19 +3911,30 @@ export default function AdminStudioScreen() {
     return () => { firstOwnerReadRef.current.generation += 1; };
   }, [firstOwnerReadAuthorityKey]);
   const canAccessLegalIntake = isSignedIn && isActive && platformRolesChecked && canAccessLegalRequestIntakeTools(platformRoles);
+  const canReadLegalHistory = isSignedIn && isActive && platformRolesChecked && canReadOwnerControlLegalHistory(platformRoles);
   const safetyReportAuthorityKey = `${user?.id ?? ""}:${authority?.sessionGeneration ?? ""}:${authority?.restoreOnly}:${authorityStatus}:${canAccessAdmin}:${canReviewSafetyReports}:${safetyReportFilter}`;
   const safetyReportAuthorityRef = useRef(safetyReportAuthorityKey);
   safetyReportAuthorityRef.current = safetyReportAuthorityKey;
-  const legalDetailAuthorityKey = adminReadAuthorityKey && (canAccessLegalIntake || canAccessLegalEvidence)
+  const legalDetailAuthorityKey = adminReadAuthorityKey && canReadLegalHistory
     ? `${adminReadAuthorityKey}:${canAccessLegalIntake}:${canAccessLegalEvidence}` : null;
   const legalDetailAuthorityRef = useRef(legalDetailAuthorityKey);
   legalDetailAuthorityRef.current = legalDetailAuthorityKey;
+  const legalListAuthorityKey = legalDetailAuthorityKey
+    ? JSON.stringify([legalDetailAuthorityKey, legalRequestStatusFilter, legalRequestSearch.trim().toLowerCase()]) : null;
+  const legalHistory = useAdminHistoryRead(legalListAuthorityKey, storedLegalRequests, setLegalRequests, legalHistoryRowKey, authority);
+  const { items: legalRequests, page: legalRequestPage, loading: legalListLoading, error: legalListError, load: loadLegalHistoryPage } = legalHistory;
+  const auditListAuthorityKey = adminReadAuthorityKey && canAccessAuditExplorer
+    ? JSON.stringify([adminReadAuthorityKey, auditExplorerActionFilter.trim(), auditExplorerTargetFilter.trim(), auditExplorerBreakGlassOnly, auditExplorerNetworkFilter]) : null;
+  const auditHistory = useAdminHistoryRead(auditListAuthorityKey, storedAuditExplorerRows, setAuditExplorerRows, auditHistoryRowKey, authority);
+  const { items: auditExplorerRows, page: auditExplorerPage, loading: auditExplorerLoading, error: auditExplorerError, load: loadAuditHistoryPage } = auditHistory;
   useEffect(() => {
     legalDetailRequestRef.current = { generation: legalDetailRequestRef.current.generation + 1, requestId: null, loaded: false };
     setSelectedLegalRequestId(null);
     setSelectedLegalRequestDetail(null);
     setLegalRequestNote("");
     setLegalRequestDetailBusy(false);
+    setLegalHistoryBusy(null);
+    legalHistoryRequestRef.current = null;
     return () => {
       legalDetailRequestRef.current = { generation: legalDetailRequestRef.current.generation + 1, requestId: null, loaded: false };
     };
@@ -3919,7 +3952,7 @@ export default function AdminStudioScreen() {
       ])
     );
   const canAccessOwnerSecurity = isOwnerStaff;
-  const canAccessCanaryChecks = canAccessAuditExplorer;
+  const canAccessCanaryChecks = isSignedIn && isActive && platformRolesChecked && canRunAdminCanaryChecks(platformRoles);
   const visibleOperatorTabs = useMemo(
     () => {
       if (canManagePrivilegedWrites) return operatorTabs.filter((tab) =>
@@ -4494,7 +4527,9 @@ export default function AdminStudioScreen() {
       })
       .slice(0, 5);
   }, [adminImmutableAuditReadModel.connected, adminImmutableAuditReadModel.latestRows, selectedSafetyReport]);
-  const visibleSelectedReportAuditRows = selectedReportAuditRows.length
+  const selectedReportAuditIsCurrent = selectedReportAuditComplete
+    && selectedReportAuditScope === `${safetyReportAuthorityKey}:${selectedSafetyReport?.id}`;
+  const visibleSelectedReportAuditRows = selectedReportAuditIsCurrent
     ? selectedReportAuditRows
     : fallbackSelectedReportAuditRows;
   const selectedReportTargetActionDisabledReason = getReportTargetActionDisabledReason(
@@ -4516,7 +4551,7 @@ export default function AdminStudioScreen() {
       : safetyReportsLoading
         ? "info"
         : safetyReportQueueConnected
-          ? safetyReportQueueCount > 0 ? "manual" : "success"
+          ? safetyReportQueueSummary?.needsReviewCount == null ? "manual" : safetyReportQueueSummary.needsReviewCount > 0 ? "manual" : "success"
           : "locked";
     const healthValue = !canReviewSafetyReports
       ? "Locked"
@@ -4568,7 +4603,6 @@ export default function AdminStudioScreen() {
   }, [
     canReviewSafetyReports,
     safetyReportQueueConnected,
-    safetyReportQueueCount,
     safetyReportQueueSummary,
     safetyReportSourceSummary,
     safetyReportsLoading,
@@ -4584,26 +4618,8 @@ export default function AdminStudioScreen() {
     };
   }, [legalRequests]);
   const filteredLegalRequests = useMemo(() => {
-    const query = legalRequestSearch.trim().toLowerCase();
-    return legalRequests.filter((request) => {
-      const status = String(request.status ?? "received").toLowerCase();
-      if (legalRequestStatusFilter !== "all" && status !== legalRequestStatusFilter) return false;
-      if (!query) return true;
-      return [
-        request.id,
-        request.case_number,
-        request.requesting_agency,
-        request.contact_name,
-        request.contact_email,
-        request.target_user_id,
-        request.target_content_id,
-        request.target_thread_id,
-        request.target_room_id,
-        request.target_report_id,
-        status,
-      ].some((value) => String(value ?? "").toLowerCase().includes(query));
-    });
-  }, [legalRequestSearch, legalRequestStatusFilter, legalRequests]);
+    return legalRequests;
+  }, [legalRequests]);
   const selectedLegalRequest = selectedLegalRequestDetail?.request ?? legalRequests.find((request) => request.id === selectedLegalRequestId) ?? null;
   const selectedLegalTarget = legalRequestPrimaryTarget(selectedLegalRequest);
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Admin Command Center");
@@ -4970,29 +4986,37 @@ export default function AdminStudioScreen() {
   }, [safetyReports, selectedSafetyReportId]);
 
   useEffect(() => {
-    if (!safetyReportDetailVisible || !selectedSafetyReport || !canReviewSafetyReports) {
+    setSelectedReportAuditComplete(false);
+    setSelectedReportAuditScope(null);
+    setSelectedReportAuditRows([]);
+    const authority = safetyReportAuthorityKey;
+    const session = getCurrentAccountSessionAuthoritySnapshot();
+    if (!safetyReportDetailVisible || !selectedSafetyReport || !canReviewSafetyReports
+      || !session || session.restoreOnly || session.userId !== user?.id) {
       setSelectedReportAuditRows([]);
       setSelectedReportAuditLoading(false);
       return;
     }
 
     let cancelled = false;
+    const isCurrent = () => !cancelled && authority === safetyReportAuthorityRef.current
+      && sameAccountSessionAuthority(session, getCurrentAccountSessionAuthoritySnapshot());
     setSelectedReportAuditLoading(true);
     listAdminReportAuditEvents(selectedSafetyReport.id)
       .then((rows) => {
-        if (!cancelled) setSelectedReportAuditRows(rows);
+        if (isCurrent()) { setSelectedReportAuditRows(rows); setSelectedReportAuditScope(`${authority}:${selectedSafetyReport.id}`); setSelectedReportAuditComplete(true); }
       })
       .catch(() => {
-        if (!cancelled) setSelectedReportAuditRows([]);
+        if (isCurrent()) setSelectedReportAuditRows([]);
       })
       .finally(() => {
-        if (!cancelled) setSelectedReportAuditLoading(false);
+        if (isCurrent()) setSelectedReportAuditLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [canReviewSafetyReports, safetyReportDetailVisible, selectedSafetyReport]);
+  }, [canReviewSafetyReports, safetyReportDetailVisible, selectedSafetyReport, safetyReportAuthorityKey, user?.id]);
 
   useEffect(() => {
     if (!canAccessAdmin) {
@@ -5404,7 +5428,7 @@ export default function AdminStudioScreen() {
     || liveOpsLoading;
 
   const recentReportsNeedsReview = safetyReportQueueConnected
-    ? safetyReportQueueSummary?.needsReviewCount ?? 0
+    ? safetyReportQueueSummary?.needsReviewCount ?? null
     : null;
   const recentReportsCriticalHigh = safetyReportQueueConnected
     ? safetyReportQueueSummary?.criticalHighRiskCount ?? null
@@ -5417,6 +5441,8 @@ export default function AdminStudioScreen() {
   const appConfigNotConnected = !configLoading && !appConfigConnected;
   const immutableAuditNotConnected = !adminImmutableAuditReadModel.loading && !adminImmutableAuditReadModel.connected;
   const reportQueueNotConnected = canReviewSafetyReports && !safetyReportsLoading && !safetyReportQueueConnected;
+  const reportOverviewUnavailable = canReviewSafetyReports && !safetyReportsLoading && safetyReportQueueConnected
+    && (recentReportsNeedsReview === null || recentReportsCriticalHigh === null);
   const dmcaNotConnected = canAccessDmca && !dmcaCasesLoading && !dmcaCaseSummary;
   const liveOpsNotConnected = canAccessLiveOps && !liveOpsLoading && !liveOpsConnected;
 
@@ -5436,6 +5462,7 @@ export default function AdminStudioScreen() {
     const partialVisibility = appConfigNotConnected
       || immutableAuditNotConnected
       || reportQueueNotConnected
+      || reportOverviewUnavailable
       || dmcaNotConnected
       || liveOpsNotConnected
       || adminV1ReadModel.premiumActiveCount === null
@@ -5498,12 +5525,15 @@ export default function AdminStudioScreen() {
     recentReportsCriticalHigh,
     recentReportsNeedsReview,
     reportQueueNotConnected,
+    reportOverviewUnavailable,
   ]);
 
   const homeSnapshotMetrics = useMemo<readonly AdminHomeSignalTile[]>(() => {
     const reportValue = !canReviewSafetyReports
       ? "Locked"
-      : formatHomeCount(recentReportsNeedsReview, safetyReportsLoading);
+      : reportOverviewUnavailable && recentReportsNeedsReview === null
+        ? "Unknown"
+        : formatHomeCount(recentReportsNeedsReview, safetyReportsLoading);
     const dmcaValue = !canAccessDmca
       ? "Locked"
       : formatHomeCount(dmcaOpenHomeCount, dmcaCasesLoading);
@@ -5524,12 +5554,14 @@ export default function AdminStudioScreen() {
       {
         label: "Recent Reports",
         value: reportValue,
-        body: safetyReportQueueConnected
+        body: reportOverviewUnavailable
+          ? "The report queue is readable, but its overview counts are unavailable."
+          : safetyReportQueueConnected
           ? "Backed needs-review count from safety_reports."
           : canReviewSafetyReports
             ? "Queue count appears only after the report query succeeds."
             : "Report review is hidden without backed staff permission.",
-        qualifier: safetyReportQueueConnected ? "Backed" : canReviewSafetyReports ? "Not Connected" : "Read Only",
+        qualifier: reportOverviewUnavailable ? "Partial" : safetyReportQueueConnected ? "Backed" : canReviewSafetyReports ? "Not Connected" : "Read Only",
         tone: !canReviewSafetyReports
           ? "locked"
           : safetyReportsLoading
@@ -5539,7 +5571,7 @@ export default function AdminStudioScreen() {
               : recentReportsNeedsReview !== null && recentReportsNeedsReview > 0
                 ? "manual"
                 : safetyReportQueueConnected
-                  ? "success"
+                  ? reportOverviewUnavailable ? "manual" : "success"
                   : "locked",
         destination: canReviewSafetyReports ? "reports" : undefined,
       },
@@ -5613,6 +5645,7 @@ export default function AdminStudioScreen() {
     liveOpsOpenCount,
     recentReportsCriticalHigh,
     recentReportsNeedsReview,
+    reportOverviewUnavailable,
     safetyReportQueueConnected,
     safetyReportsLoading,
   ]);
@@ -6824,15 +6857,26 @@ export default function AdminStudioScreen() {
     user?.id,
   ]);
 
-  const loadSafetyReports = useCallback(async (limit = 25) => {
-    const request = ++safetyReportRequestRef.current;
+  const loadSafetyReports = useCallback(async (append = false) => {
     const scope = safetyReportAuthorityKey;
+    const priorPage = safetyReportPageRef.current;
+    if (append && (priorPage.loading || priorPage.scope !== scope || !priorPage.cursor)) return;
+    const cursor = append ? priorPage.cursor : null;
+    const request = ++safetyReportRequestRef.current;
     const session = getCurrentAccountSessionAuthoritySnapshot();
-    setSafetyReports([]);
-    setSafetyReportQueueSummary(null);
-    setSafetyReportWindow(null);
-    setSafetyReportsLastLoadedAt(null);
+    if (!append) {
+      setSafetyReports([]);
+      setSafetyReportQueueSummary(null);
+      setSafetyReportWindow(null);
+      setSafetyReportsLastLoadedAt(null);
+    }
+    const pageState = { scope, cursor, loading: true, ids: append ? new Set(priorPage.ids) : new Set<number>() };
+    safetyReportPageRef.current = pageState;
     if (!canAccessAdmin || !canReviewSafetyReports || !session || session.restoreOnly || session.userId !== user?.id) {
+      safetyReportPageRef.current = { scope: null, cursor: null, loading: false, ids: new Set() };
+      setSafetyReports([]);
+      setSafetyReportQueueSummary(null);
+      setSafetyReportWindow(null);
       setSafetyReportsLoading(false);
       return;
     }
@@ -6842,21 +6886,26 @@ export default function AdminStudioScreen() {
     try {
       setSafetyReportsLoading(true);
       setModerationNotice(null);
-      const queue = await readSafetyReportQueue({ filter: safetyReportFilter, limit });
+      const queue = await readSafetyReportQueue({ filter: safetyReportFilter, limit: 25, cursor });
       if (!isCurrent()) return;
-      setSafetyReports(queue.items);
+      if (append && queue.items.length && queue.items.every((item) => pageState.ids.has(item.id))) throw new Error("Report pagination did not advance. Refresh the queue.");
+      queue.items.forEach((item) => pageState.ids.add(item.id));
+      pageState.cursor = queue.nextCursor;
+      setSafetyReports((current) => append ? Array.from(new Map([...current, ...queue.items].map((item) => [item.id, item])).values()) : queue.items);
       setSafetyReportQueueSummary(queue.summary);
-      setSafetyReportWindow({ limit: queue.windowLimit, full: queue.windowFull, overviewAvailable: queue.overviewAvailable });
+      setSafetyReportWindow({ limit: queue.windowLimit, full: queue.hasMore, nextCursor: queue.nextCursor, overviewAvailable: queue.overviewAvailable });
       setSafetyReportsLastLoadedAt(queue.generatedAt);
     } catch (err: any) {
       if (!isCurrent()) return;
-      setSafetyReports([]);
-      setSafetyReportQueueSummary(null);
-      setSafetyReportsLastLoadedAt(null);
+      if (!append) {
+        setSafetyReports([]);
+        setSafetyReportQueueSummary(null);
+        setSafetyReportsLastLoadedAt(null);
+      }
       setSelectedReportAuditRows([]);
       setModerationNotice(formatAdminOperationFailure(err, "Failed to load the safety review queue."));
     } finally {
-      if (isCurrent()) setSafetyReportsLoading(false);
+      if (isCurrent()) { pageState.loading = false; setSafetyReportsLoading(false); }
     }
   }, [canAccessAdmin, canReviewSafetyReports, safetyReportAuthorityKey, safetyReportFilter, user?.id]);
 
@@ -6916,41 +6965,65 @@ export default function AdminStudioScreen() {
     setCounterRemovedLocation(detail.case.contentUrl ?? detail.case.contentId ?? "");
   }, []);
 
-  const loadDmcaCases = useCallback(async () => {
-    if (!canAccessDmca) {
+  const loadDmcaCases = useCallback(async (append = false) => {
+    const scope = dmcaListAuthorityKey;
+    const priorPage = dmcaPageRef.current;
+    if (append && (priorPage.loading || priorPage.scope !== scope || !priorPage.cursor)) return;
+    const cursor = append ? priorPage.cursor : null;
+    const request = ++dmcaListRequestRef.current;
+    const session = getCurrentAccountSessionAuthoritySnapshot();
+    const pageState = { scope, cursor, loading: true, ids: append ? new Set(priorPage.ids) : new Set<string>() };
+    dmcaPageRef.current = pageState;
+    if (!append) { setDmcaCases([]); setDmcaPage(null); setDmcaCaseSummary(null); }
+    if (!canAccessDmca || !scope || !session || session.restoreOnly || session.userId !== user?.id) {
       setDmcaCases([]);
+      setDmcaPage(null);
+      dmcaPageRef.current = { scope: null, cursor: null, loading: false, ids: new Set() };
       setDmcaCasesLoading(false);
       setDmcaCaseSummary(null);
       return;
     }
 
+    const isCurrent = () => request === dmcaListRequestRef.current && scope === dmcaListAuthorityRef.current
+      && sameAccountSessionAuthority(session, getCurrentAccountSessionAuthoritySnapshot());
     try {
       setDmcaCasesLoading(true);
       setDmcaNotice(null);
-      const [cases, summary] = await Promise.all([
-        readAdminDmcaCases({ limit: 50, search: dmcaSearchQuery, status: dmcaStatusFilter }),
-        readAdminDmcaCaseSummary(),
+      const [page, summary] = await Promise.all([
+        readAdminDmcaCasesPage({ limit: 50, search: dmcaSearchQuery, status: dmcaStatusFilter, cursor }),
+        readAdminDmcaCaseSummary().catch(() => null),
       ]);
-      setDmcaCases(cases);
+      if (!isCurrent()) return;
+      if (append && page.items.length && page.items.every((item) => pageState.ids.has(item.id))) throw new Error("DMCA pagination did not advance. Refresh the cases.");
+      page.items.forEach((item) => pageState.ids.add(item.id));
+      pageState.cursor = page.nextCursor;
+      setDmcaCases((current) => append ? Array.from(new Map([...current, ...page.items].map((item) => [item.id, item])).values()) : page.items);
+      setDmcaPage({ hasMore: page.hasMore, nextCursor: page.nextCursor });
       setDmcaCaseSummary(summary);
+      if (!summary) setDmcaNotice("Cases loaded. Global DMCA totals are unavailable; refresh to retry.");
     } catch (err: any) {
-      setDmcaCases([]);
-      setDmcaCaseSummary(null);
+      if (!isCurrent()) return;
+      if (!append) { setDmcaCases([]); setDmcaPage(null); setDmcaCaseSummary(null); }
       setDmcaNotice(formatDmcaOperationFailure(err, "Failed to load DMCA cases."));
     } finally {
-      setDmcaCasesLoading(false);
+      if (isCurrent()) { pageState.loading = false; setDmcaCasesLoading(false); }
     }
-  }, [canAccessDmca, dmcaSearchQuery, dmcaStatusFilter]);
+  }, [canAccessDmca, dmcaListAuthorityKey, dmcaSearchQuery, dmcaStatusFilter, user?.id]);
 
   const loadDmcaCaseDetail = useCallback(async (caseId: string) => {
-    if (!canAccessDmca || !dmcaDetailAuthorityKey) {
+    const session = getCurrentAccountSessionAuthoritySnapshot();
+    if (!canAccessDmca || !dmcaDetailAuthorityKey || !session || session.restoreOnly || session.userId !== user?.id) {
+      dmcaDetailRequestRef.current = { caseId: null, loaded: false };
+      setDmcaCaseDetail(null);
+      setDmcaDetailVisible(false);
       setDmcaNotice("DMCA case details require Owner, Admin, or scoped Moderator copyright access.");
       return;
     }
     const selection = { caseId, loaded: false };
     const authority = dmcaDetailAuthorityKey;
     dmcaDetailRequestRef.current = selection;
-    const isCurrent = () => dmcaDetailRequestRef.current === selection && dmcaDetailAuthorityRef.current === authority;
+    const isCurrent = () => dmcaDetailRequestRef.current === selection && dmcaDetailAuthorityRef.current === authority
+      && sameAccountSessionAuthority(session, getCurrentAccountSessionAuthoritySnapshot());
     setDmcaCaseDetail(null);
     setDmcaDetailVisible(false);
     setDmcaActionReason("");
@@ -6975,7 +7048,7 @@ export default function AdminStudioScreen() {
     } finally {
       if (isCurrent()) setDmcaActionBusy(null);
     }
-  }, [applyDmcaDetailDefaults, canAccessDmca, dmcaDetailAuthorityKey, resetCounterNoticeForm]);
+  }, [applyDmcaDetailDefaults, canAccessDmca, dmcaDetailAuthorityKey, resetCounterNoticeForm, user?.id]);
 
   const submitAdminDmcaIntake = useCallback(async () => {
     if (dmcaIntakeBusy) return;
@@ -7021,6 +7094,8 @@ export default function AdminStudioScreen() {
 
   useEffect(() => {
     if (!canAccessAdmin || !canAccessDmca) {
+      dmcaListRequestRef.current += 1;
+      setDmcaPage(null);
       setDmcaCases([]);
       setDmcaCasesLoading(false);
       setDmcaCaseSummary(null);
@@ -7032,6 +7107,7 @@ export default function AdminStudioScreen() {
       return;
     }
     void loadDmcaCases();
+    return () => { dmcaListRequestRef.current += 1; };
   }, [canAccessAdmin, canAccessDmca, loadDmcaCases]);
 
   const refreshDmcaAfterAction = useCallback(async (caseId: string) => {
@@ -7778,20 +7854,22 @@ export default function AdminStudioScreen() {
   }, []);
 
   const refreshLegalRequestAfterEvidence = useCallback(async (requestId: string) => {
-    if (!requestId || (!canAccessLegalIntake && !canAccessLegalEvidence)) return;
+    if (!requestId || !canReadLegalHistory) return;
     const selection = legalDetailRequestRef.current;
     const authority = legalDetailAuthorityKey;
-    const [requests, detail] = await Promise.all([
-      listLegalRequests({ limit: 100 }),
+    const session = getCurrentAccountSessionAuthoritySnapshot();
+    if (!authority || !session || session.restoreOnly || session.userId !== user?.id) return;
+    const [, detail] = await Promise.all([
+      loadLegalHistoryPage((cursor) => listLegalRequestsPage({ limit: 50, cursor, status: legalRequestStatusFilter, search: legalRequestSearch.trim() })),
       readLegalRequestDetail({ id: requestId }),
     ]);
-    if (legalDetailAuthorityRef.current !== authority) return;
-    setLegalRequests(requests);
+    if (legalDetailAuthorityRef.current !== authority
+      || !sameAccountSessionAuthority(session, getCurrentAccountSessionAuthoritySnapshot())) return;
     if (legalDetailRequestRef.current === selection && selection.requestId === requestId && detail.request?.id === requestId) {
       selection.loaded = true;
       setSelectedLegalRequestDetail(detail);
     }
-  }, [canAccessLegalEvidence, canAccessLegalIntake, legalDetailAuthorityKey]);
+  }, [canReadLegalHistory, legalDetailAuthorityKey, loadLegalHistoryPage, legalRequestStatusFilter, legalRequestSearch, user?.id]);
 
   const runLegalEvidenceAction = useCallback(async (action: "preview" | "export" | "hold") => {
     if (!canAccessLegalEvidence || legalBusy) {
@@ -7857,26 +7935,19 @@ export default function AdminStudioScreen() {
     isOwnerStaff,
   ]);
 
-  const loadAuditExplorer = useCallback(async () => {
-    if (!canAccessAuditExplorer) return;
-    try {
-      setOwnerControlLoading(true);
-      setOwnerControlNotice(null);
+  const loadAuditExplorer = useCallback(async (append = false) => {
+    await loadAuditHistoryPage(async (cursor) => {
       const result = await listOwnerControlAudit({
         actionType: auditExplorerActionFilter.trim() || undefined,
         breakGlassOnly: auditExplorerBreakGlassOnly,
         limit: 80,
         securityContextFilter: auditExplorerNetworkFilter,
         targetId: auditExplorerTargetFilter.trim() || undefined,
+        cursor,
       });
-      setAuditExplorerRows(result.rows);
-    } catch (err: any) {
-      setAuditExplorerRows([]);
-      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to load Audit Explorer."));
-    } finally {
-      setOwnerControlLoading(false);
-    }
-  }, [auditExplorerActionFilter, auditExplorerBreakGlassOnly, auditExplorerNetworkFilter, auditExplorerTargetFilter, canAccessAuditExplorer]);
+      return { ...result, items: result.rows };
+    }, append);
+  }, [auditExplorerActionFilter, auditExplorerBreakGlassOnly, auditExplorerNetworkFilter, auditExplorerTargetFilter, loadAuditHistoryPage]);
 
   const loadPermissionTemplates = useCallback(async () => {
     if (!canManagePermissionTemplates) return;
@@ -8139,26 +8210,23 @@ export default function AdminStudioScreen() {
     }
   }, [firstOwnerBusy, firstOwnerChallenge, firstOwnerControlsEnabled, firstOwnerPasscode, firstOwnerReason, firstOwnerTypedConfirmation, loadFirstOwnerAuthority, loadPlatformRoles]);
 
-  const loadLegalIntake = useCallback(async () => {
-    if (!canAccessLegalIntake && !canAccessLegalEvidence) return;
-    try {
-      setOwnerControlLoading(true);
-      setOwnerControlNotice(null);
-      setLegalRequests(await listLegalRequests({ limit: 100 }));
-    } catch (err: any) {
-      setLegalRequests([]);
-      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to load legal request intake."));
-    } finally {
-      setOwnerControlLoading(false);
-    }
-  }, [canAccessLegalEvidence, canAccessLegalIntake]);
+  const loadLegalIntake = useCallback(async (append = false) => {
+    await loadLegalHistoryPage((cursor) => listLegalRequestsPage({
+      limit: 50, cursor, status: legalRequestStatusFilter, search: legalRequestSearch.trim(),
+    }), append);
+  }, [loadLegalHistoryPage, legalRequestStatusFilter, legalRequestSearch]);
 
   const openLegalRequestDetail = useCallback(async (requestId: string) => {
-    if (!requestId || !legalDetailAuthorityKey || (!canAccessLegalIntake && !canAccessLegalEvidence)) return;
+    if (!requestId || !legalDetailAuthorityKey || !canReadLegalHistory) return;
+    const session = getCurrentAccountSessionAuthoritySnapshot();
+    if (!session || session.restoreOnly || session.userId !== user?.id) return;
     const selection = { generation: legalDetailRequestRef.current.generation + 1, requestId, loaded: false };
     const authority = legalDetailAuthorityKey;
     legalDetailRequestRef.current = selection;
-    const isCurrent = () => legalDetailRequestRef.current === selection && legalDetailAuthorityRef.current === authority;
+    legalHistoryRequestRef.current = null;
+    setLegalHistoryBusy(null);
+    const isCurrent = () => legalDetailRequestRef.current === selection && legalDetailAuthorityRef.current === authority
+      && sameAccountSessionAuthority(session, getCurrentAccountSessionAuthoritySnapshot());
     setSelectedLegalRequestDetail(null);
     setLegalRequestNote("");
     try {
@@ -8179,7 +8247,39 @@ export default function AdminStudioScreen() {
     } finally {
       if (isCurrent()) setLegalRequestDetailBusy(false);
     }
-  }, [canAccessLegalEvidence, canAccessLegalIntake, legalDetailAuthorityKey]);
+  }, [canReadLegalHistory, legalDetailAuthorityKey, user?.id]);
+
+  const loadMoreLegalHistory = useCallback(async (historyKind: OwnerControlLegalHistoryKind) => {
+    const selection = legalDetailRequestRef.current;
+    const detail = selectedLegalRequestDetail;
+    const cursor = detail?.historyPages[historyKind]?.nextCursor;
+    const session = getCurrentAccountSessionAuthoritySnapshot();
+    if (!legalDetailAuthorityKey || !selection.loaded || !selection.requestId || detail?.request?.id !== selection.requestId
+      || !cursor || legalHistoryRequestRef.current || !session || session.restoreOnly || session.userId !== user?.id) return;
+    const operation = {};
+    legalHistoryRequestRef.current = operation;
+    const isCurrent = () => legalHistoryRequestRef.current === operation && legalDetailRequestRef.current === selection
+      && legalDetailAuthorityRef.current === legalDetailAuthorityKey
+      && sameAccountSessionAuthority(session, getCurrentAccountSessionAuthoritySnapshot());
+    setLegalHistoryBusy(historyKind);
+    try {
+      const result = await readLegalRequestDetail({ id: selection.requestId, historyKind, cursor });
+      if (!isCurrent()) return;
+      const page = result.historyPages[historyKind];
+      if (result.request?.id !== selection.requestId || !page || (page.hasMore && page.nextCursor === cursor)) {
+        throw new Error("Legal history did not advance. Reopen the request before continuing.");
+      }
+      setSelectedLegalRequestDetail((current) => {
+        if (current?.request?.id !== selection.requestId || current.historyPages[historyKind]?.nextCursor !== cursor) return current;
+        const rows = Array.from(new Map([...current[historyKind], ...result[historyKind]].map((row) => [String(row.id), row])).values());
+        return { ...current, [historyKind]: rows, historyPages: { ...current.historyPages, [historyKind]: page } };
+      });
+    } catch (error) {
+      if (isCurrent()) setOwnerControlNotice(formatAdminOperationFailure(error, "Failed to load older legal history."));
+    } finally {
+      if (isCurrent()) { legalHistoryRequestRef.current = null; setLegalHistoryBusy(null); }
+    }
+  }, [legalDetailAuthorityKey, selectedLegalRequestDetail, user?.id]);
 
   const runLegalIntakeCreate = useCallback(async () => {
     if (!canAccessLegalIntake || legalRequestBusy) return;
@@ -8435,6 +8535,7 @@ export default function AdminStudioScreen() {
           : "bulk-revoke-grants";
       setOwnerSecurityActionBusy(busyKey);
       setOwnerControlNotice(null);
+      let revokedCount: number | null = null;
       if (ownerSecurityDangerAction.kind === "revoke-device") {
         await revokeOwnerDevice({
           confirmation,
@@ -8448,7 +8549,8 @@ export default function AdminStudioScreen() {
           reason,
         });
       } else {
-        await revokeAllTemporaryOwnerGrants({ confirmation, reason });
+        const result = await revokeAllTemporaryOwnerGrants({ confirmation, reason });
+        revokedCount = Number(result.revokedCount);
       }
       await loadOwnerSecurity();
       setOwnerSecurityConfirmVisible(false);
@@ -8460,7 +8562,7 @@ export default function AdminStudioScreen() {
           ? ownerSecurityDangerAction.isCurrentDevice ? "Current device marked untrusted and recorded." : "Device trust revoked and recorded."
           : ownerSecurityDangerAction.kind === "revoke-grant"
             ? "Temporary grant revoked and recorded."
-            : "Temporary grant bulk revoke completed and recorded.",
+            : `Revoked ${revokedCount} temporary grants present when this action started. Refresh to check current access.`,
       );
     } catch (err: any) {
       setOwnerControlNotice(formatAdminOperationFailure(err, "Owner Security action failed."));
@@ -9327,7 +9429,7 @@ export default function AdminStudioScreen() {
     if (operatorTab === "audit-explorer" && canAccessAuditExplorer) void loadAuditExplorer();
     if (operatorTab === "permission-templates" && canManagePermissionTemplates) void loadPermissionTemplates();
     if (operatorTab === "break-glass" && canAccessBreakGlass) void loadBreakGlass();
-    if (operatorTab === "legal" && (canAccessLegalIntake || canAccessLegalEvidence)) void loadLegalIntake();
+    if (operatorTab === "legal" && canReadLegalHistory) void loadLegalIntake();
     if ((operatorTab === "owner-security" || operatorTab === "safety-dashboard") && canAccessOwnerSecurity) void loadOwnerSecurity();
     if (operatorTab === "canary" && canAccessCanaryChecks) void loadCanaries();
     if (operatorTab === "rachi" && canAccessContentProgramming) void loadRachiOfficialSurfaces();
@@ -9340,6 +9442,7 @@ export default function AdminStudioScreen() {
     canAccessContentProgramming,
     canAccessLegalEvidence,
     canAccessLegalIntake,
+    canReadLegalHistory,
     canAccessOwnerSecurity,
     canManagePermissionTemplates,
     loadAuditExplorer,
@@ -12997,7 +13100,7 @@ export default function AdminStudioScreen() {
                   <Text style={styles.ownerSectionTitle}>Report Queue</Text>
                   <Text style={styles.ownerPanelMeta}>
                     {safetyReportQueueConnected
-                      ? `${filteredSafetyReports.length} matching reports loaded · ${safetyReportWindow?.overviewAvailable ? `${safetyReportQueueCount} total across all filters` : "Global totals unavailable; metrics reflect loaded rows"}`
+                      ? `${filteredSafetyReports.length} matching reports loaded · ${safetyReportWindow?.overviewAvailable ? `${safetyReportQueueCount} total across all filters` : "Global totals unavailable; loaded count only"}`
                       : "Queue source not connected"}
                   </Text>
                 </View>
@@ -13099,16 +13202,14 @@ export default function AdminStudioScreen() {
                   body={safetyReportQueueConnected ? "The server returned no reports for this filter." : "Refresh to retry the report query. An unsuccessful query does not prove the queue is empty."}
                 />
               ) : null}
-              {safetyReportQueueConnected && safetyReportWindow?.full ? (
+              {safetyReportQueueConnected && safetyReportWindow ? (
                 <View>
                   <Text style={styles.ownerPanelMeta}>
-                    {safetyReportWindow.limit < 50
-                      ? "Showing the most recent 25 matching reports. More may be available."
-                      : "Showing only the most recent 50 matching reports. Older results are unavailable here; this is not the complete queue. Safe pagination requires backend support for timestamp ties."}
+                    {safetyReportWindow.full ? `${safetyReports.length} matching reports loaded. Older reports are available.` : `${safetyReports.length} matching reports loaded. End of matching history.`}
                   </Text>
-                  {safetyReportWindow.limit < 50 ? (
-                    <TouchableOpacity accessibilityRole="button" disabled={safetyReportsLoading} onPress={() => void loadSafetyReports(50)} style={styles.ownerSecondaryButton}>
-                      <Text style={styles.ownerSecondaryButtonText}>Show up to 50 matching reports</Text>
+                  {safetyReportWindow.full ? (
+                    <TouchableOpacity accessibilityRole="button" disabled={safetyReportsLoading} onPress={() => void loadSafetyReports(true)} style={styles.ownerSecondaryButton}>
+                      <Text style={styles.ownerSecondaryButtonText}>{safetyReportsLoading ? "Loading" : "Load more reports"}</Text>
                     </TouchableOpacity>
                   ) : null}
                 </View>
@@ -13134,7 +13235,7 @@ export default function AdminStudioScreen() {
                   },
                   {
                     label: "Platform Targets",
-                    value: safetyReportQueueConnected ? String(safetyReportQueueSummary?.platformOwnedTargetCount ?? 0) : "not connected",
+                    value: safetyReportQueueConnected ? String(safetyReports.filter((report) => report.platformOwnedTarget).length) : "not connected",
                   },
                   {
                     label: "Resolution Status",
@@ -13217,10 +13318,10 @@ export default function AdminStudioScreen() {
           ) : (
             <>
               <View style={styles.dashboardGrid}>
-                <OwnerMetricTile label="All Cases" value={dmcaCaseSummary?.total ?? dmcaCases.length} />
-                <OwnerMetricTile label="Open" tone={ownerAttentionCountTone(dmcaOpenCount)} value={dmcaOpenCount} />
-                <OwnerMetricTile label="Priority" tone={ownerAttentionCountTone(dmcaPriorityCount)} value={dmcaPriorityCount} />
-                <OwnerMetricTile label="Repeat Review" tone={ownerAttentionCountTone(dmcaRepeatReviewCount)} value={dmcaRepeatReviewCount} />
+                <OwnerMetricTile label="All Cases" value={dmcaCaseSummary?.total ?? "Unknown"} />
+                <OwnerMetricTile label="Open" tone={ownerAttentionCountTone(dmcaOpenCount)} value={dmcaCaseSummary ? dmcaOpenCount : "Unknown"} />
+                <OwnerMetricTile label="Priority" tone={ownerAttentionCountTone(dmcaPriorityCount)} value={dmcaCaseSummary ? dmcaPriorityCount : "Unknown"} />
+                <OwnerMetricTile label="Repeat Review" tone={ownerAttentionCountTone(dmcaRepeatReviewCount)} value={dmcaCaseSummary ? dmcaRepeatReviewCount : "Unknown"} />
               </View>
 
               <View style={styles.ownerToolbarPanel}>
@@ -13238,7 +13339,7 @@ export default function AdminStudioScreen() {
 
               <View style={styles.ownerToolbarPanel}>
                 <Text style={styles.ownerSectionTitle}>Find Cases</Text>
-                <Text style={styles.configListBody}>Search and filters are backed by the loaded case list; no demo cases are shown in production mode.</Text>
+                <Text style={styles.configListBody}>Search and filters apply to the full case source before pagination. Cases are ordered by submission time; no demo cases are shown in production mode.</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="Search case id, content id, reporter email, uploader id, URL, or status"
@@ -13272,7 +13373,7 @@ export default function AdminStudioScreen() {
                 </View>
               ) : null}
 
-              {dmcaCasesLoading ? (
+              {dmcaCasesLoading && !dmcaPage ? (
                 <View style={styles.configLoadingRow}>
                   <ActivityIndicator color="#fff" />
                   <Text style={styles.configLoadingText}>Loading DMCA cases...</Text>
@@ -13330,12 +13431,22 @@ export default function AdminStudioScreen() {
                 </View>
               ) : (
                 <OwnerEmptyState
-                  body={dmcaSearchQuery.trim() || dmcaStatusFilter !== "all"
+                  body={!dmcaPage ? "Refresh to retry. An unsuccessful query does not prove there are no cases." : dmcaSearchQuery.trim() || dmcaStatusFilter !== "all"
                     ? "Adjust search or filters to find a case."
                     : "Formal notices from the public form, Support, email, or admin manual intake will appear here."}
-                  title={dmcaSearchQuery.trim() || dmcaStatusFilter !== "all" ? "No Matching DMCA Cases" : "No DMCA Cases Yet"}
+                  title={!dmcaPage ? "DMCA cases unavailable" : dmcaSearchQuery.trim() || dmcaStatusFilter !== "all" ? "No Matching DMCA Cases" : "No DMCA Cases Yet"}
                 />
               )}
+              {dmcaPage ? (
+                <View>
+                  <Text style={styles.configListBody}>{dmcaPage.hasMore ? `${dmcaCases.length} matching cases loaded. Older cases are available.` : `${dmcaCases.length} matching cases loaded. End of matching history.`}</Text>
+                  {dmcaPage.hasMore ? (
+                    <TouchableOpacity accessibilityRole="button" style={styles.ownerSecondaryButton} disabled={dmcaCasesLoading} onPress={() => void loadDmcaCases(true)}>
+                      <Text style={styles.ownerSecondaryButtonText}>{dmcaCasesLoading ? "Loading" : "Load more cases"}</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              ) : null}
             </>
           )}
         </View>
@@ -17052,12 +17163,15 @@ export default function AdminStudioScreen() {
           ) : null}
 
           <View style={styles.ownerMetricGrid}>
-            <OwnerMetricTile label="Open Requests" value={legalRequestSummary.open} tone={legalRequestSummary.open ? "manual" : "success"} />
-            <OwnerMetricTile label="Under Review" value={legalRequestSummary.underReview} tone={legalRequestSummary.underReview ? "info" : "default"} />
-            <OwnerMetricTile label="Evidence Prepared" value={legalRequestSummary.evidencePrepared} tone={legalRequestSummary.evidencePrepared ? "success" : "default"} />
-            <OwnerMetricTile label="Legal Holds Active" value={legalRequestSummary.holds} tone={legalRequestSummary.holds ? "manual" : "success"} />
-            <OwnerMetricTile label="Closed Requests" value={legalRequestSummary.closed} tone="locked" />
+            <OwnerMetricTile label="Loaded Open Requests" value={legalRequestPage ? legalRequestSummary.open : "Unknown"} tone="manual" />
+            <OwnerMetricTile label="Loaded Under Review" value={legalRequestPage ? legalRequestSummary.underReview : "Unknown"} tone="info" />
+            <OwnerMetricTile label="Loaded Evidence Prepared" value={legalRequestPage ? legalRequestSummary.evidencePrepared : "Unknown"} tone="default" />
+            <OwnerMetricTile label="Loaded Active Holds" value={legalRequestPage ? legalRequestSummary.holds : "Unknown"} tone="manual" />
+            <OwnerMetricTile label="Loaded Closed Requests" value={legalRequestPage ? legalRequestSummary.closed : "Unknown"} tone="locked" />
           </View>
+          <Text style={styles.ownerPanelMeta}>Counts cover loaded requests matching the current filters. They are not global totals.</Text>
+          {!canReadLegalHistory ? <OwnerDisabledReason reason="Legal request history requires scoped legal intake, review, operations, evidence, or hold permission on this endpoint." /> : null}
+          {legalListError ? <Text accessibilityRole="alert" style={styles.noticeText}>{legalListError}</Text> : null}
 
           <View style={styles.toggleRowWrap}>
             {legalSubsectionOptions.map((option) => (
@@ -17242,7 +17356,7 @@ export default function AdminStudioScreen() {
             </View>
             ) : null}
 
-            {["intake", "requests"].includes(legalSubsection) ? (
+            {canReadLegalHistory && ["intake", "requests"].includes(legalSubsection) ? (
             <View style={styles.ownerToolbarPanel}>
               <Text style={styles.ownerSectionTitle}>Requests</Text>
               <TextInput value={legalRequestSearch} onChangeText={setLegalRequestSearch} placeholder="Search id, case number, agency, officer, target, status" placeholderTextColor="#788196" style={styles.input} autoCapitalize="none" />
@@ -17257,7 +17371,7 @@ export default function AdminStudioScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-              {ownerControlLoading ? (
+              {legalListLoading && !legalRequests.length ? (
                 <View style={styles.configLoadingRow}>
                   <ActivityIndicator color="#fff" />
                   <Text style={styles.configLoadingText}>Loading legal requests...</Text>
@@ -17283,10 +17397,14 @@ export default function AdminStudioScreen() {
                 </OwnerControlRow>
               )) : (
                 <OwnerEmptyState
-                  body={legalRequestSearch.trim() || legalRequestStatusFilter !== "all" ? "No legal requests match the current search/filter." : "No legal requests have been created yet."}
-                  title={legalRequestSearch.trim() || legalRequestStatusFilter !== "all" ? "No Matching Requests" : "No Legal Requests"}
+                  body={legalListError || (legalRequestPage ? "No legal requests match the current search/filter." : "Refresh to read legal requests.")}
+                  title={legalListError ? "Legal requests unavailable" : legalRequestPage ? "No Matching Requests" : "Legal requests not loaded"}
                 />
               )}
+              <Text style={styles.configListBody}>{legalRequestPage?.hasMore ? "Older matching requests are available." : legalRequestPage ? "All matching requests in this read have been loaded." : "History completeness is unknown."}</Text>
+              <TouchableOpacity accessibilityRole="button" style={styles.actionBtn} disabled={legalListLoading} onPress={() => void loadLegalIntake(legalRequestPage?.hasMore === true)}>
+                <Text style={styles.actionText}>{legalListLoading ? "Loading..." : legalRequestPage?.hasMore ? "Load more requests" : "Refresh requests"}</Text>
+              </TouchableOpacity>
             </View>
             ) : null}
 
@@ -17382,8 +17500,18 @@ export default function AdminStudioScreen() {
                   ) : (
                     selectedLegalRequestDetail.evidenceRequests.filter((row) => String(row.request_kind) === "export").length ? selectedLegalRequestDetail.evidenceRequests.filter((row) => String(row.request_kind) === "export").map((row) => (
                       <Text key={String(row.id)} style={styles.configListBody}>{`Export ${formatCompactIdentifier(row.id)} · ${formatAuditDisplayText(row.export_hash) || "hash pending"} · ${formatModerationTimestamp(String(row.created_at ?? ""))}`}</Text>
-                    )) : <Text style={styles.configListBody}>No exports linked to this request.</Text>
+                    )) : <Text style={styles.configListBody}>{selectedLegalRequestDetail.historyPages.evidenceRequests?.hasMore ? "No exports in the loaded history. Continue to check older records." : "No exports linked to this request."}</Text>
                   )}
+                  {([legalSubsection === "timeline" ? "events" : legalSubsection === "holds" ? "holds" : "evidenceRequests"] as OwnerControlLegalHistoryKind[]).map((kind) => (
+                    <View key={kind}>
+                      <Text style={styles.configListBody}>{selectedLegalRequestDetail.historyPages[kind]?.hasMore ? "Older linked records are available." : "All linked records in this read have been loaded."}</Text>
+                      {selectedLegalRequestDetail.historyPages[kind]?.hasMore ? (
+                        <TouchableOpacity accessibilityRole="button" style={styles.actionBtn} disabled={legalHistoryBusy !== null} onPress={() => void loadMoreLegalHistory(kind)}>
+                          <Text style={styles.actionText}>{legalHistoryBusy === kind ? "Loading..." : "Load older linked records"}</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  ))}
                 </View>
               ) : (
                 <OwnerEmptyState body="Open a Legal Intake request to view this section." title="No Request Open" />
@@ -17403,6 +17531,7 @@ export default function AdminStudioScreen() {
             subtitle="Staff, legal, Live Ops, Break Glass, intake, canary, and system/security rows. Normal owner actions stay hidden unless Break Glass was active."
             title="Search Admin Audit"
           />
+          {auditExplorerError ? <Text accessibilityRole="alert" style={styles.noticeText}>{auditExplorerError}</Text> : null}
 
           {ownerControlNotice ? (
             <View style={[styles.notice, styles.noticeWarn]}>
@@ -17452,15 +17581,15 @@ export default function AdminStudioScreen() {
                   </TouchableOpacity>
                 ))}
                 <TouchableOpacity
-                  style={[styles.actionBtn, (ownerControlLoading || !canAccessAuditExplorer) && styles.configSaveBtnDisabled]}
+                  style={[styles.actionBtn, (auditExplorerLoading || !canAccessAuditExplorer) && styles.configSaveBtnDisabled]}
                   onPress={() => void loadAuditExplorer()}
-                  disabled={ownerControlLoading || !canAccessAuditExplorer}
+                  disabled={auditExplorerLoading || !canAccessAuditExplorer}
                 >
-                  <Text style={styles.actionText}>{ownerControlLoading ? "Searching..." : canAccessAuditExplorer ? "Search" : "Locked"}</Text>
+                  <Text style={styles.actionText}>{auditExplorerLoading ? "Searching..." : canAccessAuditExplorer ? "Search" : "Locked"}</Text>
                 </TouchableOpacity>
               </View>
               {!canAccessAuditExplorer ? (
-                <OwnerDisabledReason reason="Audit Explorer requires Owner, or staff with audit_review or security_review, and is enforced server-side." />
+                <OwnerDisabledReason reason="Audit Explorer requires Owner, or staff with audit_review, security_review, or admin.audit.view, and is enforced server-side." />
               ) : null}
             </View>
           </View>
@@ -17496,10 +17625,16 @@ export default function AdminStudioScreen() {
               );
             }) : (
               <OwnerEmptyState
-                body={ownerControlLoading ? "Audit rows are loading." : "Try changing filters or run a search after privileged activity exists."}
-                title={ownerControlLoading ? "Loading Audit Explorer" : "No audit rows matched"}
+                body={auditExplorerError || (auditExplorerLoading ? "Audit rows are loading." : auditExplorerPage?.hasMore ? "No matches in the scanned history yet. Continue to check older records." : auditExplorerPage ? "No matching audit rows were found." : "Search to read audit history.")}
+                title={auditExplorerLoading ? "Loading Audit Explorer" : auditExplorerError ? "Audit history unavailable" : auditExplorerPage?.hasMore ? "More history to search" : "Audit history"}
               />
             )}
+            <Text style={styles.ownerPanelMeta}>{auditExplorerPage?.hasMore ? "Older history remains. Loaded rows are not a complete audit result." : auditExplorerPage ? "All matching history in this read has been loaded." : "Audit completeness is unknown."}</Text>
+            {auditExplorerPage?.hasMore ? (
+              <TouchableOpacity accessibilityRole="button" style={styles.actionBtn} disabled={auditExplorerLoading} onPress={() => void loadAuditExplorer(true)}>
+                <Text style={styles.actionText}>{auditExplorerLoading ? "Searching..." : "Search older audit history"}</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
         ) : null}
@@ -21380,6 +21515,7 @@ export default function AdminStudioScreen() {
                   <View style={styles.configListRow}>
                     <View style={styles.configListCopy}>
                       <Text style={styles.configListTitle}>Timeline / History</Text>
+                      <Text style={styles.configListBody}>{selectedDmcaDetail.historiesComplete ? "Complete case history loaded for this read." : "Case history completeness is unknown."}</Text>
                       {selectedDmcaDetail.auditLog.length ? selectedDmcaDetail.auditLog.map((entry) => (
                         <View key={entry.id} style={styles.configListRowSubtle}>
                           <Text style={styles.configListTitle}>{formatModerationToken(entry.eventType)}</Text>
@@ -21714,7 +21850,7 @@ export default function AdminStudioScreen() {
                   <View style={styles.ownerSectionHeaderRow}>
                     <Text style={styles.ownerSectionTitle}>Audit Timeline</Text>
                     <OwnerStatusPill
-                      label={selectedReportAuditLoading ? "Loading" : visibleSelectedReportAuditRows.length ? `${visibleSelectedReportAuditRows.length} rows` : "Recent Only"}
+                      label={selectedReportAuditLoading ? "Loading" : selectedReportAuditIsCurrent ? `${visibleSelectedReportAuditRows.length} rows · complete` : "Recent Only · incomplete"}
                       tone={visibleSelectedReportAuditRows.length ? "info" : "locked"}
                     />
                   </View>
@@ -21741,7 +21877,7 @@ export default function AdminStudioScreen() {
                       </View>
                     ))}
                   </View>
-                  {!visibleSelectedReportAuditRows.length && !selectedReportAuditLoading ? <OwnerDisabledReason reason={REPORT_AUDIT_UNAVAILABLE_REASON} /> : null}
+                  {!selectedReportAuditIsCurrent && !selectedReportAuditLoading ? <OwnerDisabledReason reason={REPORT_AUDIT_UNAVAILABLE_REASON} /> : null}
                 </View>
               </ScrollView>
             ) : null}

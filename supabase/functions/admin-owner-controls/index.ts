@@ -1,5 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
+  PERMISSION_TEMPLATES,
+  readPermissionTemplateTarget,
+  mutatePermissionTemplate,
+} from "../_shared/staff-permission-templates.ts";
+import { readHistoryPage, readMergedHistoryPage } from "../_shared/admin-history-pagination.ts";
+import {
   attachDeviceHashToSecurityContext,
   captureSecurityRequestContext,
   securityContextAuditMetadata,
@@ -52,19 +58,6 @@ const JSON_HEADERS = {
   ...CORS_HEADERS,
   "Content-Type": "application/json",
 } as const;
-
-const PERMISSION_TEMPLATES: Record<string, { label: string; permissions: string[] }> = {
-  creator_support: { label: "Creator Support", permissions: ["creator_support", "support_inbox", "user_lookup", "admin.support.view", "admin.user.view"] },
-  evidence_exporter: { label: "Evidence Exporter", permissions: ["evidence_preview", "evidence_export", "legal_request_intake"] },
-  dmca_reviewer: { label: "DMCA Reviewer", permissions: ["dmca_review", "copyright_review", "legal_review", "admin.dmca.view", "admin.dmca.manage"] },
-  legal_operator: { label: "Legal Admin Workflow", permissions: ["legal_ops", "legal_request_intake", "evidence_preview", "evidence_export", "legal_hold", "legal_review", "admin.chat_evidence.view"] },
-  legal_reviewer: { label: "Legal Reviewer", permissions: ["legal_review", "evidence_preview", "dmca_review", "copyright_review", "legal_request_intake", "admin.dmca.view"] },
-  live_ops_operator: { label: "Live Ops Admin Workflow", permissions: ["live_ops", "admin.room.moderate", "admin.live.force_end"] },
-  moderator: { label: "Moderator", permissions: ["reports_review", "content_moderation", "admin.content.hide", "admin.content.restore", "admin.comment.moderate"] },
-  moderator_support: { label: "Moderator Support Workflow", permissions: ["support_inbox", "creator_support", "billing_support_read", "admin.support.view", "admin.support.manage", "admin.payment_status.view", "admin.refund_status.record", "admin.user.view"] },
-  senior_moderator: { label: "Senior Moderator", permissions: ["reports_review", "content_moderation", "user_lookup", "admin.user.search", "admin.content.hide", "admin.content.restore", "admin.content.remove", "admin.comment.moderate", "admin.room.moderate"] },
-  support_agent: { label: "Support Workflow", permissions: ["support_inbox", "user_lookup", "admin.support.view", "admin.user.search", "admin.user.view"] },
-};
 
 const TEMPLATE_KEYS = Object.keys(PERMISSION_TEMPLATES);
 const CONTROL_PERMISSION_KEYS = [
@@ -167,6 +160,21 @@ const sanitizeValue = (value: unknown): unknown => {
 
 const sanitizeObject = (value: unknown): JsonObject =>
   isRecord(value) ? sanitizeValue(value) as JsonObject : {};
+
+const hasMutationReceiptId = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
+const hasMutationReceiptDate = (value: unknown) => hasMutationReceiptId(value) && Number.isFinite(Date.parse(value));
+const mutationOutcomeUnverified = () => Object.assign(
+  new Error("The backend did not verify this action's outcome. Refresh the affected data before deciding whether to retry."),
+  { code: "owner_control_outcome_unverified" },
+);
+
+// Inspect the database result before sanitization/normalization can turn a missing
+// row into an empty object or manufacture a seemingly valid default status.
+const requireMutationReceipt = (value: unknown, validate: (row: JsonObject) => boolean): JsonObject => {
+  if (!isRecord(value) || value.error != null || ("ok" in value && value.ok !== true)
+    || ("success" in value && value.success !== true) || !validate(value)) throw mutationOutcomeUnverified();
+  return value;
+};
 
 const parseLimit = (value: unknown, fallback = 50, max = 200) => {
   const parsed = Number(value);
@@ -467,6 +475,9 @@ const firstOwnerGrantOwner = async (adminClient: SupabaseClientLike, actorClient
     p_target_email: targetEmail,
   });
   if (result.error) throw new Error(`First Owner grant failed: ${result.error.message}`);
+  requireMutationReceipt(result.data, (row) => row.ok === true && hasMutationReceiptId(row.membershipId)
+    && (row.targetUserId === undefined || hasMutationReceiptId(row.targetUserId))
+    && row.role === "owner" && row.status === "active");
   return json(200, { result: sanitizeObject(result.data) });
 };
 
@@ -482,6 +493,9 @@ const firstOwnerRevokeOwner = async (adminClient: SupabaseClientLike, actorClien
     p_target_email: targetEmail,
   });
   if (result.error) throw new Error(`First Owner revoke failed: ${result.error.message}`);
+  requireMutationReceipt(result.data, (row) => row.ok === true && hasMutationReceiptId(row.membershipId)
+    && (row.targetUserId === undefined || hasMutationReceiptId(row.targetUserId))
+    && row.role === "owner" && row.status === "revoked");
   return json(200, { result: sanitizeObject(result.data) });
 };
 
@@ -559,6 +573,10 @@ const firstOwnerStartStepDown = async (
     p_successor_owner_email: successorEmail,
   });
   if (result.error) throw new Error(`First Owner challenge failed: ${result.error.message}`);
+  requireMutationReceipt(result.data, (row) => row.ok === true && hasMutationReceiptId(row.challengeId)
+    && hasMutationReceiptDate(row.expiresAt) && Date.parse(row.expiresAt as string) === Date.parse(expiresAt)
+    && (row.successorUserId === undefined || row.successorUserId === successorSubject.userId)
+    && row.typedConfirmationRequired === "STEP DOWN FIRST OWNER");
   return json(200, {
     challenge: {
       ...sanitizeObject(result.data),
@@ -592,13 +610,10 @@ const firstOwnerCompleteStepDown = async (adminClient: SupabaseClientLike, actor
     p_typed_confirmation: typedConfirmation,
   });
   if (result.error) throw new Error(`First Owner succession failed: ${result.error.message}`);
+  requireMutationReceipt(result.data, (row) => row.ok === true && hasMutationReceiptId(row.newFirstOwnerMarkerId)
+    && row.successorMembershipId === successorMembershipId && row.previousOwnerStatus === "revoked");
   return json(200, { result: sanitizeObject(result.data) });
 };
-
-const resolveTargetAdminSubject = async (
-  adminClient: SupabaseClientLike,
-  email: string,
-) => readExactTargetStaffSubject(adminClient, email, "operator");
 
 const templateList = async () => json(200, {
   templates: TEMPLATE_KEYS.map((key) => ({
@@ -619,7 +634,7 @@ const resolveExpiresAt = (value: unknown) => {
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 };
 
-const templateApply = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
+const templateApply = async (adminClient: SupabaseClientLike, actorClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
   if (!hasAnyPermission(user, ["staff_permission_templates", "admin_grants"])) {
     return json(403, { error: "staff_permission_templates_required" });
   }
@@ -629,7 +644,7 @@ const templateApply = async (adminClient: SupabaseClientLike, user: Authenticate
 
   const targetEmail = normalizeEmail(payload.targetEmail ?? payload.target_email);
   if (!targetEmail) return json(400, { error: "target_email_required" });
-  const target = await resolveTargetAdminSubject(adminClient, targetEmail);
+  const target = await readPermissionTemplateTarget(adminClient, targetEmail, templateKey);
   if (!target) return json(409, { error: "target_admin_required" });
   if (user.role !== "owner" && target.userId === user.id) {
     await writePlatformAudit(adminClient, user, {
@@ -644,103 +659,20 @@ const templateApply = async (adminClient: SupabaseClientLike, user: Authenticate
   }
 
   const reason = resolveAdminReason(user, payload.reason, `Owner applied ${template.label} permission template.`);
-  const expiresAt = resolveExpiresAt(payload.expiresAt ?? payload.expires_at ?? payload.duration);
-  const now = new Date().toISOString();
-  const results: JsonObject[] = [];
-
-  for (const permissionKey of template.permissions) {
-    const existing = await adminClient
-      .from("platform_staff_permission_grants")
-      .select("id,target_user_id,permission_key,status,expires_at")
-      .eq("target_user_id", target.userId)
-      .eq("permission_key", permissionKey)
-      .eq("status", "active")
-      .order("granted_at", { ascending: false })
-      .limit(2);
-    if (existing.error) {
-      throw new Error(`Template permission lookup failed: ${existing.error.message}`);
-    }
-    if ((existing.data ?? []).length > 1) {
-      throw new Error("Template permission lookup failed: target_permission_ambiguous");
-    }
-
-    if (existing.data?.[0]) {
-      const update = await adminClient
-        .from("platform_staff_permission_grants")
-        .update({
-          expires_at: expiresAt,
-          granted_at: now,
-          granted_by: user.id,
-          metadata: {
-            audit_required: shouldWriteAppAudit(user),
-            break_glass_active: !!user.activeBreakGlassSessionId,
-            break_glass_session_id: user.activeBreakGlassSessionId,
-            granted_actor_role: user.role,
-            template_key: templateKey,
-          },
-          reason,
-          revoked_at: null,
-          revoked_by: null,
-          status: "active",
-          target_email: target.email,
-          target_user_id: target.userId,
-          updated_at: now,
-        })
-        .eq("id", toText((existing.data[0] as JsonObject).id))
-        .eq("target_user_id", target.userId)
-        .select("id,target_user_id,permission_key,status,expires_at")
-        .single();
-      if (update.error) throw new Error(`Template permission update failed: ${update.error.message}`);
-      results.push(sanitizeObject(update.data));
-      continue;
-    }
-
-    const insert = await adminClient
-      .from("platform_staff_permission_grants")
-      .insert({
-        expires_at: expiresAt,
-        granted_by: user.id,
-        metadata: {
-          audit_required: shouldWriteAppAudit(user),
-          break_glass_active: !!user.activeBreakGlassSessionId,
-          break_glass_session_id: user.activeBreakGlassSessionId,
-          granted_actor_role: user.role,
-          template_key: templateKey,
-        },
-        permission_key: permissionKey,
-        reason,
-        status: "active",
-        target_email: target.email,
-        target_user_id: target.userId,
-      })
-      .select("id,target_user_id,permission_key,status,expires_at")
-      .single();
-    if (insert.error) throw new Error(`Template permission insert failed: ${insert.error.message}`);
-    results.push(sanitizeObject(insert.data));
+  const requestedExpiry = toText(payload.expiresAt ?? payload.expires_at ?? payload.duration).toLowerCase();
+  const expiresAt = resolveExpiresAt(requestedExpiry);
+  if ((requestedExpiry && requestedExpiry !== "until_revoked" && !expiresAt) ||
+    (expiresAt && Date.parse(expiresAt) <= Date.now())) {
+    return json(400, { error: "platform_staff_permission_expiry_invalid" });
   }
-
-  await writePlatformAudit(adminClient, user, {
-    action: "staff_permission_template_apply",
-    category: "role",
-    metadata: { expires_at: expiresAt, permissions: template.permissions, template_key: templateKey },
-    reason,
-    targetId: target.userId,
-    targetType: "staff_permission_template",
+  const result = await mutatePermissionTemplate(actorClient, {
+    operation: "apply", targetEmail: target.email, targetUserId: target.userId,
+    templateKey, reason, expiresAt, securityContextId: user.securityContext?.id ?? null,
   });
-  if (user.activeBreakGlassSessionId) {
-    await writeBreakGlassAudit(adminClient, user, {
-      action: user.role === "owner" ? "owner_action" : "admin_action",
-      metadata: { permissions: template.permissions, template_key: templateKey },
-      reason,
-      targetId: target.userId,
-      targetType: "staff_permission_template",
-    });
-  }
-
-  return json(200, { ok: true, permissions: results, template: { key: templateKey, label: template.label, permissions: template.permissions } });
+  return json(200, result);
 };
 
-const templateRevoke = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
+const templateRevoke = async (adminClient: SupabaseClientLike, actorClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
   if (!hasAnyPermission(user, ["staff_permission_templates", "admin_grants"])) {
     return json(403, { error: "staff_permission_templates_required" });
   }
@@ -750,45 +682,16 @@ const templateRevoke = async (adminClient: SupabaseClientLike, user: Authenticat
 
   const targetEmail = normalizeEmail(payload.targetEmail ?? payload.target_email);
   if (!targetEmail) return json(400, { error: "target_email_required" });
-  const target = await resolveTargetAdminSubject(adminClient, targetEmail);
+  const target = await readPermissionTemplateTarget(adminClient, targetEmail, templateKey);
   if (!target) return json(409, { error: "target_admin_required" });
   if (user.role !== "owner" && target.userId === user.id) return json(403, { error: "self_revoke_denied" });
 
   const reason = resolveAdminReason(user, payload.reason, `Owner revoked ${template.label} permission template.`);
-  const { data, error } = await adminClient
-    .from("platform_staff_permission_grants")
-    .update({
-      reason,
-      revoked_at: new Date().toISOString(),
-      revoked_by: user.id,
-      status: "revoked",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("status", "active")
-    .eq("target_user_id", target.userId)
-    .in("permission_key", template.permissions)
-    .select("id,target_user_id,permission_key,status");
-  if (error) throw new Error(`Template revoke failed: ${error.message}`);
-
-  await writePlatformAudit(adminClient, user, {
-    action: "staff_permission_template_revoke",
-    category: "role",
-    metadata: { permissions: template.permissions, template_key: templateKey, revoked_count: (data ?? []).length },
-    reason,
-    targetId: target.userId,
-    targetType: "staff_permission_template",
+  const result = await mutatePermissionTemplate(actorClient, {
+    operation: "revoke", targetEmail: target.email, targetUserId: target.userId,
+    templateKey, reason, securityContextId: user.securityContext?.id ?? null,
   });
-  if (user.activeBreakGlassSessionId) {
-    await writeBreakGlassAudit(adminClient, user, {
-      action: user.role === "owner" ? "owner_action" : "admin_action",
-      metadata: { permissions: template.permissions, template_key: templateKey },
-      reason,
-      targetId: target.userId,
-      targetType: "staff_permission_template",
-    });
-  }
-
-  return json(200, { ok: true, revoked: ((data ?? []) as JsonObject[]).map(sanitizeObject) });
+  return json(200, result);
 };
 
 const breakGlassStatus = async (adminClient: SupabaseClientLike, user: AuthenticatedUser) => {
@@ -831,6 +734,9 @@ const breakGlassActivate = async (adminClient: SupabaseClientLike, user: Authent
     status: "active",
   }).select("*").single();
   if (error) throw new Error(`Break Glass activate failed: ${error.message}`);
+  requireMutationReceipt(data, (row) => hasMutationReceiptId(row.id) && row.status === "active"
+    && row.actor_user_id === user.id && hasMutationReceiptDate(row.expires_at)
+    && Date.parse(row.expires_at as string) === Date.parse(expiresAt));
   const sessionId = toText((data as JsonObject).id);
   await writeBreakGlassAudit(adminClient, { ...user, activeBreakGlassSessionId: sessionId }, {
     action: "activate",
@@ -873,6 +779,7 @@ const breakGlassEnd = async (adminClient: SupabaseClientLike, user: Authenticate
   const { data, error } = await query.select("*").maybeSingle();
   if (error) throw new Error(`Break Glass end failed: ${error.message}`);
   if (!data) return json(404, { error: "break_glass_not_found" });
+  requireMutationReceipt(data, (row) => row.id === sessionId && row.status === "ended");
   await writeBreakGlassAudit(adminClient, user, { action: "end", reason, sessionId });
   await adminClient.rpc("platform_first_owner_write_audit", {
     p_action: "break_glass_end",
@@ -920,14 +827,28 @@ const writeLegalRequestEvent = async (
 const legalRequestList = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
   if (!hasAnyPermission(user, ["legal_request_intake", "legal_review", "legal_ops", "evidence_preview", "evidence_export", "legal_hold"])) return json(403, { error: "legal_permission_required" });
   const limit = parseLimit(payload.limit, 25, 100);
-  let query = adminClient.from("legal_request_intake").select("*");
   const status = toText(payload.status);
-  if (status && status !== "all") query = query.eq("status", status);
-  const { data, error } = await query.order("created_at", { ascending: false }).limit(limit);
-  if (error) throw new Error(`Legal intake list failed: ${error.message}`);
-  const rows = ((data ?? []) as JsonObject[])
-    .filter((row) => !isRecord(row.metadata) || row.metadata.canary_proof !== true);
-  return json(200, { requests: rows.map(sanitizeObject) });
+  const search = toText(payload.search).toLowerCase();
+  const page = await readHistoryPage({
+    cursor: payload.cursor, limit, scope: JSON.stringify(["legal", user.id, status, search]),
+    query: () => {
+      let query = adminClient.from("legal_request_intake").select("*", { count: "exact" })
+        .or("metadata->>canary_proof.is.null,metadata->>canary_proof.neq.true");
+      if (status && status !== "all") query = query.eq("status", status);
+      if (search) {
+        // imatch preserves literal '*' (PostgREST ilike rewrites it to '%').
+        // Escape regex syntax, then escape the quoted PostgREST transport layer.
+        const literalPattern = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const pattern = `"${literalPattern.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+        const fields = ["case_number", "requesting_agency", "contact_name", "contact_email", "target_user_id", "target_content_id", "target_thread_id", "target_room_id", "target_report_id", "status"];
+        const clauses = fields.map((field) => `${field}.imatch.${pattern}`);
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(search)) clauses.push(`id.eq.${search}`);
+        query = query.or(clauses.join(","));
+      }
+      return query;
+    },
+  });
+  return json(200, { requests: page.items.map(sanitizeObject), nextCursor: page.nextCursor, hasMore: page.hasMore });
 };
 
 const legalRequestDetail = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
@@ -937,17 +858,28 @@ const legalRequestDetail = async (adminClient: SupabaseClientLike, user: Authent
   const request = await adminClient.from("legal_request_intake").select("*").eq("id", requestId).maybeSingle();
   if (request.error) throw new Error(`Legal intake detail failed: ${request.error.message}`);
   if (!request.data) return json(404, { error: "legal_request_not_found" });
+  const historyKind = toText(payload.historyKind);
+  if (historyKind && !["events", "evidenceRequests", "holds"].includes(historyKind)) return json(400, { error: "invalid_legal_history_kind" });
+  if (payload.cursor && !historyKind) return json(400, { error: "legal_history_kind_required" });
+  const limit = parseLimit(payload.limit, 50, 100);
+  const read = async (kind: string, table: string, columns = "*", column = "created_at") => {
+    if (historyKind && historyKind !== kind) return null;
+    return readHistoryPage({ cursor: payload.cursor, limit, column,
+      scope: JSON.stringify(["legal-detail", user.id, requestId, kind]),
+      query: () => adminClient.from(table).select(columns, { count: "exact" }).eq("legal_request_id", requestId),
+    });
+  };
   const [events, evidenceRequests, holds] = await Promise.all([
-    adminClient.from("legal_request_events").select("*").eq("legal_request_id", requestId).order("created_at", { ascending: true }).limit(100),
-    adminClient.from("legal_evidence_requests").select("id,request_kind,status,target_type,target_id,export_hash,created_at,completed_at,requested_by_user_id,requested_by_email,search_scope,preview").eq("legal_request_id", requestId).order("created_at", { ascending: false }).limit(50),
-    adminClient.from("legal_holds").select("*").eq("legal_request_id", requestId).order("placed_at", { ascending: false }).limit(50),
+    read("events", "legal_request_events"),
+    read("evidenceRequests", "legal_evidence_requests", "id,request_kind,status,target_type,target_id,export_hash,created_at,completed_at,requested_by_user_id,requested_by_email,search_scope,preview"),
+    read("holds", "legal_holds", "*", "placed_at"),
   ]);
-  const firstError = events.error || evidenceRequests.error || holds.error;
-  if (firstError) throw new Error(`Legal intake detail child read failed: ${firstError.message}`);
+  const metadata = (page: typeof events) => page ? { nextCursor: page.nextCursor, hasMore: page.hasMore } : null;
   return json(200, {
-    events: ((events.data ?? []) as JsonObject[]).map(sanitizeObject),
-    evidenceRequests: ((evidenceRequests.data ?? []) as JsonObject[]).map(sanitizeObject),
-    holds: ((holds.data ?? []) as JsonObject[]).map(sanitizeObject),
+    events: (events?.items ?? []).map(sanitizeObject),
+    evidenceRequests: (evidenceRequests?.items ?? []).map(sanitizeObject),
+    holds: (holds?.items ?? []).map(sanitizeObject),
+    historyPages: { events: metadata(events), evidenceRequests: metadata(evidenceRequests), holds: metadata(holds) },
     request: sanitizeObject(request.data),
   });
 };
@@ -990,6 +922,7 @@ const legalRequestCreate = async (adminClient: SupabaseClientLike, user: Authent
     target_user_id: redactText(payload.targetUserId ?? payload.target_user_id, 180) || null,
   }).select("*").single();
   if (error) throw new Error(`Legal intake create failed: ${error.message}`);
+  requireMutationReceipt(data, (row) => hasMutationReceiptId(row.id) && row.status === status);
   const legalRequestId = toText((data as JsonObject).id);
   await writeLegalRequestEvent(adminClient, user, {
     eventType: "request_created",
@@ -1084,6 +1017,8 @@ const legalRequestUpdate = async (adminClient: SupabaseClientLike, user: Authent
     .select("*")
     .single();
   if (error) throw new Error(`Legal intake update failed: ${error.message}`);
+  requireMutationReceipt(data, (row) => row.id === requestId && LEGAL_REQUEST_STATUSES.has(row.status as string)
+    && (patch.status === undefined || row.status === patch.status));
   const nextStatus = toText((data as JsonObject).status);
   const previousStatus = toText((before.data as JsonObject).status);
   if (payload.status !== undefined && nextStatus !== previousStatus) {
@@ -1168,7 +1103,7 @@ const normalizeAuditRow = (source: string, row: JsonObject) => {
 };
 
 const auditList = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
-  if (!hasAnyPermission(user, ["audit_review", "security_review"])) return json(403, { error: "audit_review_required" });
+  if (!hasAnyPermission(user, ["audit_review", "security_review", "admin.audit.view"])) return json(403, { error: "audit_review_required" });
   const limit = parseLimit(payload.limit, 60, 200);
   const sources: Array<{ table: string; source: string; order: string }> = [
     { order: "created_at", source: "staff_permission", table: "platform_staff_permission_audit" },
@@ -1181,12 +1116,6 @@ const auditList = async (adminClient: SupabaseClientLike, user: AuthenticatedUse
     { order: "created_at", source: "canary", table: "admin_canary_runs" },
     { order: "created_at", source: "break_glass", table: "platform_break_glass_audit" },
   ];
-  const rows: JsonObject[] = [];
-  for (const source of sources) {
-    const { data, error } = await adminClient.from(source.table).select("*").order(source.order, { ascending: false }).limit(limit);
-    if (!error) rows.push(...((data ?? []) as JsonObject[]).map((row) => normalizeAuditRow(source.source, row)));
-  }
-
   const actorUserId = toText(payload.actorUserId ?? payload.actor_user_id);
   const targetUserId = toText(payload.targetUserId ?? payload.target_user_id);
   const targetId = toText(payload.targetId ?? payload.target_id);
@@ -1199,24 +1128,33 @@ const auditList = async (adminClient: SupabaseClientLike, user: AuthenticatedUse
   const dateFrom = Date.parse(toText(payload.dateFrom ?? payload.date_from));
   const dateTo = Date.parse(toText(payload.dateTo ?? payload.date_to));
 
-  const filtered = rows
-    .filter((row) => !(row.actorRole === "owner" && row.breakGlassActive !== true && row.source !== "break_glass"))
-    .filter((row) => !actorUserId || row.actorUserId === actorUserId)
-    .filter((row) => !targetUserId || row.targetId === targetUserId || toText((row.metadata as JsonObject | undefined)?.target_user_id) === targetUserId)
-    .filter((row) => !targetId || row.targetId === targetId || Object.values(row.metadata ?? {}).some((value) => toText(value) === targetId))
-    .filter((row) => !actionType || toText(row.action).toLowerCase().includes(actionType))
-    .filter((row) => !permissionKey || row.permissionKey === permissionKey || toText((row.metadata as JsonObject | undefined)?.permission_key) === permissionKey)
-    .filter((row) => !sourceFilter || row.source === sourceFilter)
-    .filter((row) => securityContextFilter !== "with" || !!row.securityContextId)
-    .filter((row) => securityContextFilter !== "missing" || !row.securityContextId)
-    .filter((row) => !breakGlassOnly || row.breakGlassActive === true)
-    .filter((row) => dryRunFilter === null || row.dryRun === dryRunFilter)
-    .filter((row) => !Number.isFinite(dateFrom) || Date.parse(toText(row.occurredAt)) >= dateFrom)
-    .filter((row) => !Number.isFinite(dateTo) || Date.parse(toText(row.occurredAt)) <= dateTo)
-    .sort((left, right) => toText(right.occurredAt).localeCompare(toText(left.occurredAt)))
-    .slice(0, limit);
+  if (sourceFilter && !sources.some((source) => source.source === sourceFilter)) return json(400, { error: "invalid_audit_source" });
+  const page = await readMergedHistoryPage({
+    cursor: payload.cursor, limit,
+    scope: JSON.stringify(["audit", user.id, actorUserId, targetUserId, targetId, actionType, permissionKey, sourceFilter, securityContextFilter, breakGlassOnly, dryRunFilter, Number.isFinite(dateFrom) ? dateFrom : null, Number.isFinite(dateTo) ? dateTo : null]),
+    sources: sources.filter((source) => !sourceFilter || source.source === sourceFilter).map((source) => ({
+      key: source.source, column: source.order,
+      query: () => {
+        let query = adminClient.from(source.table).select("*", { count: "exact" });
+        if (Number.isFinite(dateFrom)) query = query.gte(source.order, new Date(dateFrom).toISOString());
+        if (Number.isFinite(dateTo)) query = query.lte(source.order, new Date(dateTo).toISOString());
+        return query;
+      },
+    })),
+    normalize: normalizeAuditRow,
+    matches: (row) => !(row.actorRole === "owner" && row.breakGlassActive !== true && row.source !== "break_glass")
+      && (!actorUserId || row.actorUserId === actorUserId)
+      && (!targetUserId || row.targetId === targetUserId || toText(row.metadata.target_user_id) === targetUserId)
+      && (!targetId || row.targetId === targetId || Object.values(row.metadata).some((value) => toText(value) === targetId))
+      && (!actionType || toText(row.action).toLowerCase().includes(actionType))
+      && (!permissionKey || row.permissionKey === permissionKey || toText(row.metadata.permission_key) === permissionKey)
+      && (securityContextFilter !== "with" || !!row.securityContextId)
+      && (securityContextFilter !== "missing" || !row.securityContextId)
+      && (!breakGlassOnly || row.breakGlassActive === true)
+      && (dryRunFilter === null || row.dryRun === dryRunFilter),
+  });
 
-  const enriched = await Promise.all(filtered.map(async (row) => {
+  const enriched = await Promise.all(page.items.map(async (row) => {
     if (!row.securityContextId) return row;
     const securityContext = await readSecurityContextSummary(adminClient, row.securityContextId);
     return {
@@ -1226,7 +1164,10 @@ const auditList = async (adminClient: SupabaseClientLike, user: AuthenticatedUse
     };
   }));
 
-  return json(200, { rows: enriched, summary: { returned: enriched.length, scanned: rows.length } });
+  return json(200, {
+    rows: enriched, nextCursor: page.nextCursor, hasMore: page.hasMore, completeness: page.completeness,
+    summary: { returned: enriched.length, scanned: page.scanned, scanLimitReached: page.scanLimitReached },
+  });
 };
 
 const readCount = async (adminClient: SupabaseClientLike, table: string, filters: Record<string, unknown> = {}) => {
@@ -2210,6 +2151,8 @@ const trustCurrentOwnerDevice = async (adminClient: SupabaseClientLike, user: Au
     .select("*")
     .single();
   if (error) throw new Error(`Trust device failed: ${error.message}`);
+  requireMutationReceipt(data, (row) => hasMutationReceiptId(row.id) && row.id === currentDevice.id
+    && row.owner_user_id === user.id && hasMutationReceiptDate(row.trusted_at) && row.revoked_at == null);
   await writeSecurityAudit(adminClient, user, {
     eventType: "owner_device_trusted",
     metadata: { device_label: currentDevice.deviceLabel, platform: currentDevice.platform },
@@ -2248,6 +2191,7 @@ const revokeOwnerDevice = async (adminClient: SupabaseClientLike, user: Authenti
     .maybeSingle();
   if (error) throw new Error(`Revoke device failed: ${error.message}`);
   if (!data) return json(404, { error: "device_not_found" });
+  requireMutationReceipt(data, (row) => row.id === deviceId && row.owner_user_id === user.id && hasMutationReceiptDate(row.revoked_at));
   await writeSecurityAudit(adminClient, user, {
     eventType: "owner_device_revoked",
     metadata: { device_label: toText((data as JsonObject).device_label), platform: toText((data as JsonObject).platform) },
@@ -2286,6 +2230,7 @@ const revokeTemporaryOwnerGrant = async (adminClient: SupabaseClientLike, user: 
     .maybeSingle();
   if (error) throw new Error(`Temporary grant revoke failed: ${error.message}`);
   if (!data) return json(404, { error: "temporary_grant_not_found" });
+  requireMutationReceipt(data, (row) => row.id === grantId && row.status === "revoked" && hasMutationReceiptDate(row.revoked_at));
   await adminClient.from("platform_staff_permission_audit").insert({
     action: "revoke",
     actor_email: user.email,
@@ -2326,21 +2271,71 @@ const revokeAllTemporaryOwnerGrants = async (adminClient: SupabaseClientLike, us
   if (toText(payload.confirmation) !== "REVOKE GRANTS") return json(400, { error: "typed_confirmation_required" });
   const reason = redactText(payload.reason, 1000);
   if (reason.length < 6) return json(400, { error: "reason_required" });
-  const grants = await listTemporaryGrants(adminClient);
-  const activeIds = grants.filter((grant) => grant.state === "active").map((grant) => grant.id).filter(Boolean);
+  const scopeAsOf = new Date().toISOString();
+  const scopeTime = Date.parse(scopeAsOf);
+  const batchSize = 200;
+  // The panel's 200-row list is only a display window. A bulk mutation must
+  // enumerate its entire start-time scope and prove no eligible rows remain.
+  const readActiveIds = async () => {
+    const ids: string[] = [];
+    let afterId: string | null = null;
+    while (true) {
+      let query = adminClient.from("platform_staff_permission_grants")
+        .select("id,status,granted_at,updated_at,expires_at,target_email,metadata")
+        .eq("status", "active")
+        .lte("granted_at", scopeAsOf)
+        .or(`expires_at.is.null,expires_at.gt.${scopeAsOf}`)
+        .order("id", { ascending: true })
+        .limit(batchSize);
+      if (afterId) query = query.gt("id", afterId);
+      const page = await Promise.resolve(query).catch(() => { throw mutationOutcomeUnverified(); });
+      if (page.error || !Array.isArray(page.data) || page.data.length > batchSize) throw mutationOutcomeUnverified();
+      for (const value of page.data) {
+        const row = requireMutationReceipt(value, (receipt) => hasMutationReceiptId(receipt.id)
+          && (!afterId || receipt.id > afterId) && receipt.status === "active"
+          && hasMutationReceiptDate(receipt.granted_at) && Date.parse(receipt.granted_at as string) <= scopeTime
+          && (receipt.expires_at == null || (hasMutationReceiptDate(receipt.expires_at)
+            && Date.parse(receipt.expires_at as string) > scopeTime)));
+        afterId = row.id as string;
+        if (isTemporaryGrantRow(row)) ids.push(afterId);
+      }
+      // Require an empty terminal page: a server-side response cap smaller than
+      // the requested batch must not make a short page look exhaustive.
+      if (page.data.length === 0) return ids;
+    }
+  };
+  const activeIds = await readActiveIds();
   if (!activeIds.length) return json(200, { ok: true, revokedCount: 0 });
-  const { data, error } = await adminClient
-    .from("platform_staff_permission_grants")
-    .update({
-      reason,
-      revoked_at: new Date().toISOString(),
-      revoked_by: user.id,
-      status: "revoked",
-      updated_at: new Date().toISOString(),
-    })
-    .in("id", activeIds)
-    .select("*");
-  if (error) throw new Error(`Temporary grant bulk revoke failed: ${error.message}`);
+  const data: JsonObject[] = [];
+  for (let offset = 0; offset < activeIds.length; offset += batchSize) {
+    const selectedIds = activeIds.slice(offset, offset + batchSize);
+    const result = await Promise.resolve(adminClient
+      .from("platform_staff_permission_grants")
+      .update({
+        reason,
+        revoked_at: new Date().toISOString(),
+        revoked_by: user.id,
+        status: "revoked",
+        updated_at: new Date().toISOString(),
+      })
+      .in("id", selectedIds)
+      .eq("status", "active")
+      .lte("granted_at", scopeAsOf)
+      .lte("updated_at", scopeAsOf)
+      .select("*")).catch(() => { throw mutationOutcomeUnverified(); });
+    if (result.error || !Array.isArray(result.data)) throw mutationOutcomeUnverified();
+    const expectedIds = new Set(selectedIds);
+    const revokedIds = new Set<string>();
+    for (const row of result.data) {
+      const receipt = requireMutationReceipt(row, (receipt) => hasMutationReceiptId(receipt.id) && expectedIds.has(receipt.id)
+        && !revokedIds.has(receipt.id)
+        && receipt.status === "revoked" && hasMutationReceiptDate(receipt.revoked_at));
+      revokedIds.add(receipt.id as string);
+      data.push(receipt);
+    }
+    if (revokedIds.size !== expectedIds.size) throw mutationOutcomeUnverified();
+  }
+  if ((await readActiveIds()).length) throw mutationOutcomeUnverified();
   for (const grant of ((data ?? []) as JsonObject[])) {
     await adminClient.from("platform_staff_permission_audit").insert({
       action: "revoke",
@@ -4180,6 +4175,10 @@ const canaryRun = async (
     summary,
   }).select("*").single();
   if (error) throw new Error(`Canary run insert failed: ${error.message}`);
+  requireMutationReceipt(data, (row) => hasMutationReceiptId(row.id) && row.status === status
+    && Array.isArray(row.results) && row.results.length === results.length
+    && isRecord(row.summary) && row.summary.passCount === passCount
+    && row.summary.failCount === failCount && row.summary.manualRequiredCount === manualRequiredCount);
   return json(200, { run: sanitizeObject(data), summary });
 };
 
@@ -4224,8 +4223,8 @@ Deno.serve(async (req) => {
 
     if (action === "audit_list") return await auditList(adminClient, auth.user, payload);
     if (action === "template_list") return await templateList();
-    if (action === "template_apply") return await templateApply(adminClient, auth.user, payload);
-    if (action === "template_revoke") return await templateRevoke(adminClient, auth.user, payload);
+    if (action === "template_apply") return await templateApply(adminClient, actorClient, auth.user, payload);
+    if (action === "template_revoke") return await templateRevoke(adminClient, actorClient, auth.user, payload);
     if (action === "first_owner_status") return await firstOwnerStatus(adminClient, actorClient, auth.user);
     if (action === "first_owner_grant_owner") return await firstOwnerGrantOwner(adminClient, actorClient, auth.user, payload);
     if (action === "first_owner_revoke_owner") return await firstOwnerRevokeOwner(adminClient, actorClient, auth.user, payload);
@@ -4264,6 +4263,10 @@ Deno.serve(async (req) => {
   } catch (error) {
     const message = redactText(error instanceof Error ? error.message : "owner_controls_failed");
     console.error("admin-owner-controls failure", message);
+    if (isRecord(error) && error.code === "owner_control_outcome_unverified") {
+      return json(503, { error: "owner_control_outcome_unverified", message });
+    }
+    if (isRecord(error) && error.code === "invalid_history_cursor") return json(400, { error: "invalid_history_cursor", message });
     return json(500, { error: "owner_controls_failed", message });
   }
 });

@@ -45,6 +45,32 @@ test('staff assignment helpers follow owner/operator/moderator RPC hierarchy', (
   }
 });
 
+test('owner-controls read scope does not confer Canary or template authority', () => {
+  const api = harness();
+  for (const role of ['owner', 'super_admin', 'operator', 'moderator']) {
+    const rows = [membership(role, ['admin.audit.view'])];
+    assert.equal(api.canAccessAuditExplorerTools(rows), role !== 'super_admin');
+    assert.equal(api.canRunAdminCanaryChecks(rows), role === 'owner');
+    assert.equal(api.canManageStaffPermissionTemplates(rows), role === 'owner');
+    assert.equal(api.canAccessLegalRequestIntakeTools(rows), role === 'owner');
+    assert.equal(api.canReadOwnerControlLegalHistory(rows), role === 'owner');
+  }
+  for (const key of ['audit_review', 'security_review']) {
+    assert.equal(api.canRunAdminCanaryChecks([membership('operator', [key])]), true);
+  }
+  const mixed = [membership('super_admin'), membership('operator', ['admin.audit.view'])];
+  assert.equal(api.canAccessAuditExplorerTools(mixed), true);
+  assert.equal(api.canRunAdminCanaryChecks(mixed), false);
+  assert.equal(api.canReadOwnerControlLegalHistory([membership('operator', ['evidence_preview'])]), true);
+  assert.equal(api.canAccessLegalRequestIntakeTools([membership('operator', ['evidence_preview'])]), false);
+  assert.equal(api.canReadOwnerControlLegalHistory([membership('moderator', ['admin.chat_evidence.view'])]), false);
+  assert.equal(api.canReadOwnerControlLegalHistory([membership('super_admin')]), false);
+  for (const overrides of [{ status: 'revoked' }, { expiresAt: '2000-01-01T00:00:00Z' }, { expiresAt: 'invalid' }]) {
+    assert.equal(api.canAccessAuditExplorerTools([membership('operator', ['admin.audit.view'], overrides)]), false);
+    assert.equal(api.canRunAdminCanaryChecks([membership('owner', [], overrides)]), false);
+  }
+});
+
 test('inactive, expired, malformed expiry and absent roles cannot manage staff', () => {
   const api = harness();
   for (const overrides of [{ status: 'revoked' }, { status: '' },

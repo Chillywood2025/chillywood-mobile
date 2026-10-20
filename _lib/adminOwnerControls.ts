@@ -130,11 +130,14 @@ export type OwnerControlLegalRequestEvent = Record<string, unknown> & {
   created_at?: string;
 };
 
+export type OwnerControlHistoryPage = { nextCursor: string | null; hasMore: boolean };
+export type OwnerControlLegalHistoryKind = "events" | "evidenceRequests" | "holds";
 export type OwnerControlLegalRequestDetail = {
   events: OwnerControlLegalRequestEvent[];
   evidenceRequests: Record<string, unknown>[];
   holds: Record<string, unknown>[];
   request: OwnerControlLegalRequest | null;
+  historyPages: Record<OwnerControlLegalHistoryKind, OwnerControlHistoryPage | null>;
 };
 
 export type OwnerControlCanaryResult = {
@@ -286,11 +289,179 @@ const toObject = (value: unknown): Record<string, unknown> =>
 const toArray = (value: unknown): Record<string, unknown>[] =>
   Array.isArray(value) ? value.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)) as Record<string, unknown>[] : [];
 
+const isReceiptRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === "object" && !Array.isArray(value)
+  && (!Object.hasOwn(value, "error") || (value as Record<string, unknown>).error == null)
+  && (!Object.hasOwn(value, "ok") || (value as Record<string, unknown>).ok === true)
+  && (!Object.hasOwn(value, "success") || (value as Record<string, unknown>).success === true);
+
+const hasReceiptId = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
+const isReceiptCount = (value: unknown) => Number.isSafeInteger(value) && (value as number) >= 0;
+const isReceiptDate = (value: unknown) => hasReceiptId(value) && Number.isFinite(Date.parse(value));
+const matchesReceiptId = (value: unknown, expected: unknown) =>
+  hasReceiptId(value) && hasReceiptId(expected) && value === expected.trim();
+
+const ownerControlOutcomeUnverified = () => Object.assign(
+  new Error("The backend did not verify this action's outcome. Refresh the affected data before deciding whether to retry."),
+  { code: "owner_control_outcome_unverified" },
+);
+
+const LEGAL_RECEIPT_STATUSES = new Set([
+  "received", "needs_more_info", "under_review", "preserved_legal_hold",
+  "evidence_prepared", "exported", "closed", "rejected_no_action",
+]);
+
+const normalizedLegalReceiptStatus = (value: unknown) => {
+  const status = typeof value === "string" ? value.trim().toLowerCase() : "";
+  const aliases: Record<string, string> = { open: "received", reviewing: "under_review", fulfilled: "exported", rejected: "rejected_no_action" };
+  const normalized = aliases[status] ?? status;
+  return LEGAL_RECEIPT_STATUSES.has(normalized) ? normalized : null;
+};
+
+// A successful transport is not evidence that a mutation succeeded. These contracts
+// follow each endpoint's actual receipt, including endpoints without a top-level ok.
+const hasOwnerControlMutationReceipt = (action: string, value: unknown, input: Record<string, unknown>): boolean => {
+  if (!isReceiptRecord(value)) return false;
+  switch (action) {
+    case "first_owner_grant_owner":
+    case "first_owner_revoke_owner": {
+      const result = value.result;
+      return isReceiptRecord(result) && result.ok === true && hasReceiptId(result.membershipId)
+        && (result.targetUserId === undefined || hasReceiptId(result.targetUserId))
+        && result.role === "owner" && result.status === (action === "first_owner_grant_owner" ? "active" : "revoked");
+    }
+    case "first_owner_complete_step_down": {
+      const result = value.result;
+      return isReceiptRecord(result) && result.ok === true && hasReceiptId(result.newFirstOwnerMarkerId)
+        && matchesReceiptId(result.successorMembershipId, input.successorOwnerMembershipId)
+        && result.previousOwnerStatus === "revoked";
+    }
+    case "first_owner_start_step_down": {
+      const challenge = value.challenge;
+      return isReceiptRecord(challenge) && challenge.ok === true && hasReceiptId(challenge.challengeId)
+        && isReceiptDate(challenge.expiresAt) && hasReceiptId(challenge.passcodeSalt)
+        && hasReceiptId(challenge.successorOwnerMembershipId) && hasReceiptId(challenge.targetOwnerMembershipId)
+        && challenge.successorOwnerMembershipId !== challenge.targetOwnerMembershipId
+        && challenge.typedConfirmationRequired === "STEP DOWN FIRST OWNER"
+        && typeof value.passcode === "string" && /^\d{6}$/.test(value.passcode)
+        && value.passcodePlaintextStored === false;
+    }
+    case "template_apply": {
+      const template = value.template;
+      if (value.ok !== true || !isReceiptRecord(template) || !hasReceiptId(template.key)
+        || template.key !== String(input.templateKey ?? "").trim().toLowerCase()
+        || !Array.isArray(template.permissions) || !template.permissions.length
+        || !template.permissions.every(hasReceiptId) || new Set(template.permissions).size !== template.permissions.length
+        || !Array.isArray(value.permissions) || value.permissions.length !== template.permissions.length) return false;
+      const permissions = value.permissions;
+      const expectedPermissions = template.permissions;
+      return permissions.every((row) => isReceiptRecord(row) && hasReceiptId(row.id)
+        && hasReceiptId(row.target_user_id) && row.status === "active"
+        && hasReceiptId(row.permission_key) && expectedPermissions.includes(row.permission_key))
+        && new Set(permissions.map((row) => row.permission_key)).size === permissions.length
+        && new Set(permissions.map((row) => row.target_user_id)).size === 1;
+    }
+    case "template_revoke":
+      return value.ok === true && Array.isArray(value.revoked)
+        && value.revoked.every((row) => isReceiptRecord(row) && hasReceiptId(row.id)
+          && hasReceiptId(row.target_user_id) && hasReceiptId(row.permission_key) && row.status === "revoked");
+    case "break_glass_activate":
+    case "break_glass_end": {
+      const session = value.session;
+      return value.ok === true && isReceiptRecord(session) && hasReceiptId(session.id)
+        && session.status === (action === "break_glass_activate" ? "active" : "ended")
+        && (action !== "break_glass_activate" || isReceiptDate(session.expires_at))
+        && (!input.sessionId || matchesReceiptId(session.id, input.sessionId));
+    }
+    case "legal_request_create":
+    case "legal_request_update": {
+      const request = value.request;
+      const expectedStatus = normalizedLegalReceiptStatus(input.status);
+      return value.ok === true && isReceiptRecord(request) && hasReceiptId(request.id)
+        && typeof request.status === "string" && LEGAL_RECEIPT_STATUSES.has(request.status)
+        && (!expectedStatus || request.status === expectedStatus)
+        && (action !== "legal_request_create" || expectedStatus !== null || request.status === "received")
+        && (action !== "legal_request_update" || matchesReceiptId(request.id, input.id ?? input.requestId ?? input.request_id));
+    }
+    case "trust_current_owner_device":
+    case "revoke_owner_device": {
+      const device = value.device;
+      return value.ok === true && isReceiptRecord(device) && hasReceiptId(device.id)
+        && (action === "trust_current_owner_device"
+          ? device.trustStatus === "trusted" && isReceiptDate(device.trustedAt) && device.revokedAt == null
+          : device.trustStatus === "revoked" && isReceiptDate(device.revokedAt) && matchesReceiptId(device.id, input.deviceId));
+    }
+    case "revoke_temporary_owner_grant": {
+      const grant = value.grant;
+      return value.ok === true && isReceiptRecord(grant) && matchesReceiptId(grant.id, input.grantId)
+        && grant.state === "revoked" && isReceiptDate(grant.revokedAt);
+    }
+    case "revoke_all_temporary_owner_grants":
+      return value.ok === true && isReceiptCount(value.revokedCount);
+    case "canary_run": {
+      const run = value.run;
+      const summary = value.summary;
+      if (!isReceiptRecord(run) || !hasReceiptId(run.id) || !isReceiptRecord(summary)
+        || ![summary.passCount, summary.failCount, summary.manualRequiredCount].every(isReceiptCount)
+        || !Array.isArray(run.results) || !run.results.length) return false;
+      const keys = new Set<string>();
+      let passCount = 0;
+      let failCount = 0;
+      let manualRequiredCount = 0;
+      for (const row of run.results) {
+        if (!isReceiptRecord(row) || !hasReceiptId(row.key) || !hasReceiptId(row.label) || !hasReceiptId(row.message)
+          || !["pass", "fail", "manual_required", "unknown"].includes(row.status as string)
+          || keys.has(row.key.trim())) return false;
+        keys.add(row.key.trim());
+        if (row.status === "pass") passCount += 1;
+        else if (row.status === "fail") failCount += 1;
+        else manualRequiredCount += 1;
+      }
+      // The UI also reads aliases in run.summary. Check those against the same
+      // individual evidence so a contradictory embedded summary cannot look green.
+      const matchesSummary = (candidate: unknown) => isReceiptRecord(candidate)
+        && candidate.passCount === passCount && candidate.failCount === failCount
+        && candidate.manualRequiredCount === manualRequiredCount
+        && Object.entries({ pass: passCount, passed: passCount, fail: failCount, failed: failCount,
+          manualRequired: manualRequiredCount, manual_required: manualRequiredCount,
+          unknown: manualRequiredCount, unknownCount: manualRequiredCount,
+        }).every(([key, count]) => candidate[key] === undefined || candidate[key] === count);
+      const expectedStatus = failCount > 0 ? "failed" : manualRequiredCount > 0 ? "partial" : "completed";
+      return run.status === expectedStatus && matchesSummary(summary)
+        && (run.summary === undefined || matchesSummary(run.summary));
+    }
+    default:
+      return false;
+  }
+};
+
+const OWNER_CONTROL_MUTATIONS = new Set([
+  "first_owner_grant_owner", "first_owner_revoke_owner", "first_owner_start_step_down", "first_owner_complete_step_down",
+  "template_apply", "template_revoke", "break_glass_activate", "break_glass_end",
+  "legal_request_create", "legal_request_update", "trust_current_owner_device", "revoke_owner_device",
+  "revoke_temporary_owner_grant", "revoke_all_temporary_owner_grants", "canary_run",
+]);
+
 async function requestOwnerControls(action: string, body: Record<string, unknown> = {}) {
   const { data, error } = await supabase.functions.invoke("admin-owner-controls", {
     body: { ...body, action },
   });
-  if (error) throw error;
+  if (error) {
+    // Preserve the backend's unverified-outcome code through FunctionsHttpError.
+    // Reading the error response never retries the mutation.
+    const context = error.context;
+    if (OWNER_CONTROL_MUTATIONS.has(action) && context && typeof context.clone === "function") {
+      let payload: unknown;
+      try { payload = await context.clone().json(); } catch { /* Keep the original invocation error. */ }
+      if (payload && typeof payload === "object" && "error" in payload && payload.error === "owner_control_outcome_unverified") {
+        throw ownerControlOutcomeUnverified();
+      }
+    }
+    throw error;
+  }
+  if (OWNER_CONTROL_MUTATIONS.has(action) && !hasOwnerControlMutationReceipt(action, data, body)) {
+    throw ownerControlOutcomeUnverified();
+  }
   return toObject(data);
 }
 
@@ -318,9 +489,14 @@ export function getOwnerSecurityDeviceContext() {
 
 export async function listOwnerControlAudit(input: Record<string, unknown> = {}) {
   const payload = await requestOwnerControls("audit_list", input);
+  const page = readHistoryPageReceipt(payload);
+  if (!Array.isArray(payload.rows) || !["complete", "more_history"].includes(String(payload.completeness))
+    || (payload.completeness === "complete") !== !page.hasMore) throw new Error("Audit history completeness is unavailable. Refresh after the backend is updated.");
   return {
     rows: toArray(payload.rows) as OwnerControlAuditRow[],
     summary: toObject(payload.summary),
+    ...page,
+    completeness: payload.completeness as "complete" | "more_history",
   };
 }
 
@@ -408,18 +584,39 @@ export async function endBreakGlass(input: { reason?: string | null; sessionId?:
   return requestOwnerControls("break_glass_end", input);
 }
 
-export async function listLegalRequests(input: Record<string, unknown> = {}) {
+const readHistoryPageReceipt = (value: Record<string, unknown>): OwnerControlHistoryPage => {
+  if (value.error != null || value.ok === false || value.success === false || typeof value.hasMore !== "boolean" || (value.hasMore
+    ? typeof value.nextCursor !== "string" || !value.nextCursor.trim()
+    : value.nextCursor !== null)) throw new Error("History pagination is unavailable. Refresh after the backend is updated.");
+  return { hasMore: value.hasMore, nextCursor: value.nextCursor as string | null };
+};
+
+export async function listLegalRequestsPage(input: Record<string, unknown> = {}) {
   const payload = await requestOwnerControls("legal_request_list", input);
-  return toArray(payload.requests) as OwnerControlLegalRequest[];
+  if (!Array.isArray(payload.requests)) throw new Error("Legal request history is unavailable.");
+  return { items: payload.requests as OwnerControlLegalRequest[], ...readHistoryPageReceipt(payload) };
 }
 
-export async function readLegalRequestDetail(input: { id: string }) {
+export async function listLegalRequests(input: Record<string, unknown> = {}) {
+  return (await listLegalRequestsPage(input)).items;
+}
+
+export async function readLegalRequestDetail(input: { id: string; historyKind?: OwnerControlLegalHistoryKind; cursor?: string | null; limit?: number }) {
   const payload = await requestOwnerControls("legal_request_detail", input);
+  if (payload.error != null || payload.ok === false || payload.success === false
+    || toObject(payload.request).id !== input.id) throw new Error("Legal request detail did not match the selected request.");
+  const pages = toObject(payload.historyPages);
+  const historyPages = Object.fromEntries((["events", "evidenceRequests", "holds"] as const).map((kind) => {
+    if (input.historyKind && input.historyKind !== kind) return [kind, null];
+    if (!Array.isArray(payload[kind])) throw new Error("Legal request detail history is unavailable.");
+    return [kind, readHistoryPageReceipt(toObject(pages[kind]))];
+  })) as OwnerControlLegalRequestDetail["historyPages"];
   return {
     events: toArray(payload.events) as OwnerControlLegalRequestEvent[],
     evidenceRequests: toArray(payload.evidenceRequests),
     holds: toArray(payload.holds),
     request: toObject(payload.request) as OwnerControlLegalRequest,
+    historyPages,
   } satisfies OwnerControlLegalRequestDetail;
 }
 

@@ -1,0 +1,16 @@
+-- Disabled feature compatibility on native PostgreSQL; rollback-only fixture.
+begin isolation level serializable;
+create extension if not exists pgtap with schema extensions;
+select no_plan();
+select ok(not (select armed from private.deleted_media_reference_fence),'never-enabled reference fence is unarmed');
+select is((select count(*) from private.deleted_media_key_retirements),0::bigint,'no retirement keys exist');
+create table public.retirement_inactive_serializable_fixture(id integer primary key,metadata jsonb);
+create trigger zzz_deleted_media_reference_guard before insert or update on public.retirement_inactive_serializable_fixture
+for each row execute function private.guard_deleted_media_references();
+select lives_ok($$insert into public.retirement_inactive_serializable_fixture values(1,'{"unrelated":true}')$$,'disabled serializable insert succeeds');
+select lives_ok($$update public.retirement_inactive_serializable_fixture set metadata='{"unrelated":"updated"}' where id=1$$,'disabled serializable update succeeds');
+select lives_ok($$insert into public.legal_holds(target_type,target_id,reason,status) values('room_message',gen_random_uuid()::text,'Synthetic inactive preservation','active')$$,'disabled serializable legal hold succeeds');
+select lives_ok($$update public.legal_holds set reason='Synthetic inactive preservation updated' where reason='Synthetic inactive preservation'$$,'disabled serializable legal hold update succeeds');
+select ok(not exists(select 1 from pg_locks where pid=pg_backend_pid() and locktype='advisory' and classid=176214 and objid=30),'inactive writes acquire no global retirement lock');
+select * from finish();
+rollback;

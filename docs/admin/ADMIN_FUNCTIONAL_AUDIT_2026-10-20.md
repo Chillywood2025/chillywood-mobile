@@ -45,7 +45,7 @@ revenue and sponsors) must retain their existing section routing and authority.
 The 38-entry admin action registry is useful but is not exhaustive proof that
 every screen handler works.
 
-## Confirmed defects being repaired
+## Initial client repairs merged in PR #574
 
 1. Several permitted sections had no normal navigation entry. Scoped child
    sections could have a hidden parent group and no selected main tab.
@@ -89,32 +89,45 @@ history/manual-required states, not physical-device evidence.
 
 These are source-path inspections, not live execution of every action.
 
-- Complete report pagination is not supported by the current timestamp-only
-  cursor: equal timestamps can be skipped. A capped source-filtered recent
-  window must disclose its limit; it is not complete queue traversal.
-  DMCA (50), Legal (100), and Audit Explorer (80) also retain bounded list reads;
-  full historical traversal is not established by this audit.
-- Permission-template endpoints resolve an Admin/operator target even for
-  templates labelled Moderator/Moderator Support. Template writes are
-  sequential, not atomic; a partial failure can leave earlier writes applied.
-  No claim of transactional template correctness is made here.
-- `admin.audit.view` is not treated as an Audit Explorer permission by both
-  the current frontend helper and Edge endpoint. Widening only the UI would
-  not fix the contract.
 - Support-related static status text is not evidence of a working support
   inbox or ticket workflow.
-- Live Cost Guard cooldown zero is accepted by the form/database but positive-
-  integer parsing replaces it with 300. A coordinated client/backend contract
-  correction remains necessary; this patch does not change deployed settings.
-- Owner-control mutation transport normalizes malformed successful responses
-  to an empty object. Per-action response validation remains a gap; response
-  envelopes differ, so globally requiring `ok: true` would reject valid paths.
 - Super Admin support differs by endpoint; the staff assignment RPC currently
   resolves Owner/Admin/Moderator, so a Super Admin-only membership must not
   falsely enable an operation that RPC rejects.
 - Historical role-hierarchy source proof has a preexisting missing package
   script marker (`proof:role-terminology-lock`). This audit does not weaken
   the guard to make that historical check appear successful.
+
+## Backend follow-up source repairs (not deployed)
+
+- Reports and report audit, DMCA, Legal requests and linked histories now use
+  deterministic composite cursors. Filters apply before page limits. Exact
+  remaining counts or exhaustive traversal prevent a lower server row cap from
+  silently becoming end-of-history. Audit Explorer merges nine sources and
+  retains continuation across bounded scans, including empty filtered pages.
+  Source failures are errors rather than a complete empty result. Traversal is
+  live keyset history, not a transaction snapshot; refresh discovers new rows.
+- Existing Moderator memberships are eligible for the three Moderator-labelled
+  templates. An actor-authenticated transactional RPC performs additive grants
+  or template-key revocation together with required audit receipts. Unrelated
+  permissions, exact subject binding, self-denial and Owner audit rules remain.
+- `admin.audit.view` enables only the matching Audit Explorer read contract.
+  Canary execution retains its separate scope. Owner-controls helpers use that
+  endpoint's exact roles; other endpoints' Super Admin support is unchanged.
+- Cooldown zero survives client/backend parsing and means no continuing token
+  cooldown window. Immediate participant actions and positive TTL defaults are
+  unchanged; no stored settings or provider effects were changed.
+- Mutation receipts are action-specific and validated before success notices.
+  Canary counts agree with individual check results. Bulk temporary-grant
+  revocation traverses the entire start-time scope, validates exact batch IDs,
+  checks for a remaining active grant, and reports the verified count/as-of
+  scope. Unknown outcomes require refresh before deciding whether to retry.
+- History reads and detail continuations retire on account/session, permission,
+  selection or filter changes, including a session change before React rerenders.
+  Literal Legal search punctuation is not interpreted as wildcard syntax.
+
+These are source implementations awaiting exact-head validation and merge.
+They do not establish deployed backend behavior or installed-device proof.
 
 ## Validation status
 
@@ -125,7 +138,9 @@ screen or native/provider test. Baseline runs reproduce stale-read and
 Legal/DMCA/Live Guard/Owner Command failures. Old-source harness incompatibility
 is excluded from behavioral failure evidence.
 
-Full-product testing, final diff review and exact-head CI remain pending at
-this checkpoint. Lint, TypeScript, runtime and route/critical-UX source guards
-have passed intermediate snapshots and must remain green on the final head.
+PR #574 subsequently passed its full product suite and protected exact-head CI
+and merged as `7f2cce19745f70404bac965ef51bc65d485a3ea8`.
+The separate backend follow-up has focused production-module, mounted lifecycle,
+actual SQL replay, rollback and canonical concurrency tests. Its full frozen
+product run, final diff review and exact-head CI remain required before merge.
 No physical or production completion is established by this document.
