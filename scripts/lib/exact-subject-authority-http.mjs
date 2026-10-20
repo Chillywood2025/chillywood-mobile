@@ -34,7 +34,7 @@ function syntax(file) {
 // Production declarations and all their local dependencies execute unchanged.
 // Every used import must be supplied with the actual module/SDK; no fallback
 // empty module or substitute permission/authentication outcome is permitted.
-function declarations(file, names, imports = {}, {entryGuards = []} = {}) {
+export function declarations(file, names, imports = {}, {entryGuards = []} = {}) {
   const ast = syntax(file), available = new Map(), imported = new Map();
   for (const statement of ast.statements) {
     if (ts.isFunctionDeclaration(statement) && statement.name) available.set(statement.name.text, statement);
@@ -158,7 +158,7 @@ export function loadExactSubjectAuthorityCallers() {
 
 // Launch only generated HTTP sidecars. Their DB URI is rebuilt to name the
 // generated clone explicitly, never the source database or an environment URL.
-async function withCloneHttp({container, database}, run) {
+export async function withCloneHttp({container, database}, run) {
   assert.match(database, /^runtime_authority_[0-9]+_[a-f0-9]{12}$/u, 'canonical generated clone name required');
   const project = readFileSync(path.join(root, 'supabase/config.toml'), 'utf8')
     .match(/^project_id\s*=\s*"([A-Za-z0-9_.-]{1,200})"\s*(?:#.*)?$/mu)?.[1];
@@ -351,14 +351,14 @@ export async function runExactSubjectAuthorityHttpQualification({container, data
       check((await source.authority.readExactCurrentSessionAuthority(client, value.id))?.userId === value.id, `${label}: actual current session`);
       return value;
     }
-    async function qualifyOwner(client, label) {
-      const session = await source.authority.readExactCurrentSessionAuthority(client, owner.id);
-      assert.ok(session, `${label}: exact live Owner session`);
+    async function qualifyAccountSession(client, subject, label) {
+      const session = await source.authority.readExactCurrentSessionAuthority(client, subject.id);
+      assert.ok(session, `${label}: exact live session`);
       const requirements = data(await client.rpc('wave1_legal_requirements_readback', {p_capability: 'account'}),
         `${label}: canonical account legal requirements`);
       const binding = value => {
         assert.equal(value.state, 'ACTIVE'); assert.equal(value.restoreOnly, false);
-        assert.equal(value.userId, owner.id); assert.equal(value.accountId, owner.id);
+        assert.equal(value.userId, subject.id); assert.equal(value.accountId, subject.id);
         assert.equal(value.sessionGeneration, session.sessionGeneration);
         assert.equal(value.market, 'UNITED_STATES'); assert.equal(value.capability, 'account');
       };
@@ -373,11 +373,14 @@ export async function runExactSubjectAuthorityHttpQualification({container, data
       }
       const accepted = data(await client.rpc('wave1_accept_legal_documents', {
         p_acceptances: acceptances, p_market: 'UNITED_STATES', p_capability: 'account',
-        p_expected_user_id: owner.id, p_expected_account_id: owner.id, p_session_generation: session.sessionGeneration,
+        p_expected_user_id: subject.id, p_expected_account_id: subject.id, p_session_generation: session.sessionGeneration,
       }), `${label}: authenticated exact-session legal acceptance`);
       binding(accepted); check(accepted.allAccepted === true, `${label}: current account legal authority`);
-      assert.deepEqual(await source.authority.readExactCurrentSessionAuthority(client, owner.id), session,
+      assert.deepEqual(await source.authority.readExactCurrentSessionAuthority(client, subject.id), session,
         `${label}: session unchanged after legal acceptance`);
+    }
+    async function qualifyOwner(client, label) {
+      await qualifyAccountSession(client, owner, label);
       check(data(await client.rpc('has_platform_role', {required_roles: ['owner']}), `${label}: real SQL Owner predicate`) === true,
         `${label}: actual SQL Owner authority`);
       check(data(await client.rpc('platform_staff_actor_role'), `${label}: real SQL actor role`) === 'owner',
@@ -399,6 +402,7 @@ export async function runExactSubjectAuthorityHttpQualification({container, data
         'independent Owner has actual current session');
       await qualifyOwner(owner.client, 'issuing Owner');
       await qualifyOwner(independentOwner, 'revoking Owner');
+      await qualifyAccountSession(sa.client, sa, 'scoped operator');
       check(await source.authority.readExactPlatformRole(admin, sa.id, ['owner', 'operator', 'moderator']) === null, 'SA cannot synthesize operator');
       check(await source.authority.readExactPlatformRole(admin, sa.id, ['owner', 'super_admin']) === 'super_admin', 'explicit SA role preserved');
       assert.deepEqual(sorted(await source.authority.readExactPermissionKeys(admin, sa.id, keys)), [], 'SA cannot fabricate requested scopes'); checks++;
@@ -445,7 +449,7 @@ export async function runExactSubjectAuthorityHttpQualification({container, data
       assert.deepEqual(sorted(scoped.user.permissions), ['audit_review', 'content_moderation', 'legal_request_intake', 'legal_review', 'live_ops']); checks++;
       await scopes(sa, true, 'SA+operator+exact grant');
       await response(await source.controls.legalRequestList(admin, scoped.user, {search: sa.id}), 200, 'actual scoped legal read');
-      await response(await source.controls.canaryList(admin, scoped.user), 200, 'actual scoped Canary read');
+      await response(await source.controls.canaryList(admin, scoped.user, sa.client), 200, 'actual scoped Canary read');
       check(await source.controls.legalRequestCreate(admin, scoped.user, {}) === true, 'actual legal intake entry permits exact grant');
       check(await source.controls.canaryRun(admin, null, scoped.user, connection.apiUrl, connection.anonKey) === true, 'actual Canary entry permits exact grant');
       check(Boolean((await authenticate(source.legal, sa)).user), 'actual scoped legal authentication');

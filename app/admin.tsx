@@ -2356,6 +2356,13 @@ const resolveCanarySection = (input: unknown) => {
   return "Public Web / Support";
 };
 
+const canaryRecoveryRunId = (run: OwnerControlCanaryRun) => {
+  const id = typeof run.resumeRunId === "string" ? run.resumeRunId : "";
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+    && run.id === id && run.status === "partial" && run.cleanupVerified === false
+    && typeof run.deadline === "string" && Number.isFinite(Date.parse(run.deadline)) ? id : null;
+};
+
 const summarizeCanaryRun = (run: OwnerControlCanaryRun | null | undefined) => {
   const results = Array.isArray(run?.results) ? run.results : [];
   const rawSummary = run?.summary && typeof run.summary === "object" && !Array.isArray(run.summary) ? run.summary : null;
@@ -3701,6 +3708,9 @@ export default function AdminStudioScreen() {
   const [ownerSecurityReason, setOwnerSecurityReason] = useState("");
   const [canaryRuns, setCanaryRuns] = useState<OwnerControlCanaryRun[]>([]);
   const [canaryBusy, setCanaryBusy] = useState(false);
+  const [canaryLoadedAuthorityKey, setCanaryLoadedAuthorityKey] = useState<string | null>(null);
+  const [canaryHistoryVerified, setCanaryHistoryVerified] = useState(false);
+  const [canaryHistoryLoading, setCanaryHistoryLoading] = useState(false);
   const [canaryStatusFilter, setCanaryStatusFilter] = useState<CanaryStatusFilter>("all");
   const [expandedCanaryRows, setExpandedCanaryRows] = useState<Record<string, boolean>>({});
   const [expandedOwnerControlRows, setExpandedOwnerControlRows] = useState<Record<string, boolean>>({});
@@ -3953,6 +3963,27 @@ export default function AdminStudioScreen() {
     );
   const canAccessOwnerSecurity = isOwnerStaff;
   const canAccessCanaryChecks = isSignedIn && isActive && platformRolesChecked && canRunAdminCanaryChecks(platformRoles);
+  const canaryReadAuthorityKey = canAccessCanaryChecks ? adminReadAuthorityKey : null;
+  const canaryAuthorityRef = useRef({ authorityKey: canaryReadAuthorityKey, readGeneration: 0, actionPending: false });
+  if (canaryAuthorityRef.current.authorityKey !== canaryReadAuthorityKey) {
+    canaryAuthorityRef.current = { authorityKey: canaryReadAuthorityKey, readGeneration: 0, actionPending: false };
+  }
+  useEffect(() => {
+    if (canaryAuthorityRef.current.authorityKey !== canaryReadAuthorityKey) {
+      canaryAuthorityRef.current = { authorityKey: canaryReadAuthorityKey, readGeneration: 0, actionPending: false };
+    }
+    const scope = canaryAuthorityRef.current;
+    setCanaryRuns([]);
+    setCanaryLoadedAuthorityKey(null);
+    setCanaryHistoryVerified(false);
+    setCanaryHistoryLoading(false);
+    setCanaryBusy(false);
+    return () => {
+      if (canaryAuthorityRef.current === scope) {
+        canaryAuthorityRef.current = { authorityKey: null, readGeneration: 0, actionPending: false };
+      }
+    };
+  }, [canaryReadAuthorityKey]);
   const visibleOperatorTabs = useMemo(
     () => {
       if (canManagePrivilegedWrites) return operatorTabs.filter((tab) =>
@@ -8488,6 +8519,7 @@ export default function AdminStudioScreen() {
   }, [canAccessOwnerSecurity, loadOwnerSecurity, ownerSecurityActionBusy]);
 
   const openOwnerSecurityDangerAction = useCallback((action: OwnerSecurityDangerAction) => {
+    setOwnerControlNotice(null);
     setOwnerSecurityDangerAction(action);
     setOwnerSecurityConfirmText("");
     setOwnerSecurityReason("");
@@ -8511,7 +8543,7 @@ export default function AdminStudioScreen() {
       confirmation: "REVOKE GRANT",
       grantId,
       kind: "revoke-grant",
-      title: "Revoke temporary grant?",
+      title: "Revoke selected grant?",
     });
   }, [canAccessOwnerSecurity, openOwnerSecurityDangerAction, ownerSecurityActionBusy]);
 
@@ -8561,8 +8593,8 @@ export default function AdminStudioScreen() {
         ownerSecurityDangerAction.kind === "revoke-device"
           ? ownerSecurityDangerAction.isCurrentDevice ? "Current device marked untrusted and recorded." : "Device trust revoked and recorded."
           : ownerSecurityDangerAction.kind === "revoke-grant"
-            ? "Temporary grant revoked and recorded."
-            : `Revoked ${revokedCount} temporary grants present when this action started. Refresh to check current access.`,
+            ? "Selected grant revoked and recorded."
+            : `Revoked ${revokedCount} temporary or test grants present when this action started. Refresh to check current access.`,
       );
     } catch (err: any) {
       setOwnerControlNotice(formatAdminOperationFailure(err, "Owner Security action failed."));
@@ -8594,33 +8626,72 @@ export default function AdminStudioScreen() {
   }, [canAccessOwnerSecurity, ownerSecurityActionBusy]);
 
   const loadCanaries = useCallback(async () => {
-    if (!canAccessCanaryChecks) return;
+    if (!canAccessCanaryChecks || !canaryReadAuthorityKey) return null;
+    const scope = canaryAuthorityRef.current;
+    const session = getCurrentAccountSessionAuthoritySnapshot();
+    if (scope.authorityKey !== canaryReadAuthorityKey || !sameAccountSessionAuthority(authority, session)) return null;
+    const generation = ++scope.readGeneration;
+    const current = () => canaryAuthorityRef.current === scope && scope.readGeneration === generation
+      && sameAccountSessionAuthority(session, getCurrentAccountSessionAuthoritySnapshot());
     try {
-      setOwnerControlLoading(true);
+      setCanaryHistoryLoading(true);
+      setCanaryHistoryVerified(false);
       setOwnerControlNotice(null);
-      setCanaryRuns(await listOwnerControlCanaries());
+      const runs = await listOwnerControlCanaries();
+      if (!current()) return null;
+      setCanaryRuns(runs);
+      setCanaryLoadedAuthorityKey(canaryReadAuthorityKey);
+      setCanaryHistoryVerified(true);
+      return runs;
     } catch (err: any) {
-      setCanaryRuns([]);
-      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to load canary checks."));
+      if (current()) setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to load canary checks. Refresh before starting or recovering a run."));
+      return null;
     } finally {
-      setOwnerControlLoading(false);
+      if (current()) setCanaryHistoryLoading(false);
     }
-  }, [canAccessCanaryChecks]);
+  }, [authority, canAccessCanaryChecks, canaryReadAuthorityKey]);
 
-  const runCanaryChecks = useCallback(async () => {
-    if (!canAccessCanaryChecks || canaryBusy) return;
+  const runCanaryChecks = useCallback(async (resumeRunId?: string) => {
+    if (!canAccessCanaryChecks || !canaryReadAuthorityKey || !canaryHistoryVerified
+      || canaryLoadedAuthorityKey !== canaryReadAuthorityKey || canaryBusy) return;
+    const scope = canaryAuthorityRef.current;
+    const session = getCurrentAccountSessionAuthoritySnapshot();
+    if (scope.authorityKey !== canaryReadAuthorityKey || scope.actionPending || !sameAccountSessionAuthority(authority, session)) return;
+    const pendingIds = canaryRuns.map(canaryRecoveryRunId).filter(Boolean);
+    if (resumeRunId ? !pendingIds.includes(resumeRunId) : pendingIds.length > 0) {
+      setOwnerControlNotice("Recover the pending Canary run before starting another run. Refresh to verify its current state.");
+      return;
+    }
+    const current = () => canaryAuthorityRef.current === scope
+      && sameAccountSessionAuthority(session, getCurrentAccountSessionAuthoritySnapshot());
+    scope.actionPending = true;
+    ++scope.readGeneration;
     try {
       setCanaryBusy(true);
       setOwnerControlNotice(null);
-      const run = await runOwnerControlCanary();
-      setCanaryRuns((prev) => [run, ...prev].slice(0, 10));
-      setOwnerControlNotice("Canary checks completed. Unknown means manual verification is required, not pass.");
+      const run = await runOwnerControlCanary(resumeRunId);
+      if (!current()) return;
+      const refreshed = await loadCanaries();
+      if (!current()) return;
+      if (!refreshed) {
+        setOwnerControlNotice("The request returned, but current Canary state could not be verified. Refresh before retrying; cleanup is not confirmed here.");
+      } else if (refreshed.some((row) => canaryRecoveryRunId(row))) {
+        setOwnerControlNotice("Canary cleanup is still incomplete. The pending run remains available for recovery.");
+      } else if (resumeRunId) {
+        setOwnerControlNotice("Cleanup recovery finished. Interrupted or failed checks remain failed; start a new Canary run for fresh results.");
+      } else {
+        setOwnerControlNotice(run.status === "completed" ? "Canary checks completed with recorded results."
+          : "Canary results recorded. Review failed or manual-required checks before treating this run as ready.");
+      }
     } catch (err: any) {
-      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to run canary checks."));
+      if (!current()) return;
+      await loadCanaries();
+      if (current()) setOwnerControlNotice(formatAdminOperationFailure(err, "Canary request failed. Refresh and recover any pending run."));
     } finally {
-      setCanaryBusy(false);
+      if (current()) { scope.actionPending = false; setCanaryBusy(false); }
     }
-  }, [canAccessCanaryChecks, canaryBusy]);
+  }, [authority, canAccessCanaryChecks, canaryBusy, canaryHistoryVerified, canaryLoadedAuthorityKey,
+    canaryReadAuthorityKey, canaryRuns, loadCanaries]);
 
   const toggleOwnerControlRow = useCallback((key: string) => {
     setExpandedOwnerControlRows((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -9366,7 +9437,10 @@ export default function AdminStudioScreen() {
     setExpandedCanaryRows((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  const latestCanaryRun = canaryRuns[0] ?? null;
+  const canaryHistoryCurrent = canaryHistoryVerified && !!canaryReadAuthorityKey && canaryLoadedAuthorityKey === canaryReadAuthorityKey;
+  const currentCanaryRuns = canaryLoadedAuthorityKey === canaryReadAuthorityKey ? canaryRuns : [];
+  const pendingCanaryRuns = currentCanaryRuns.filter((run) => canaryRecoveryRunId(run));
+  const latestCanaryRun = currentCanaryRuns[0] ?? null;
   const latestCanarySummary = useMemo(() => summarizeCanaryRun(latestCanaryRun), [latestCanaryRun]);
   const latestCanaryResults = useMemo(
     () => (Array.isArray(latestCanaryRun?.results) ? latestCanaryRun.results.map(normalizeAdminCanaryDisplayCopy) : []),
@@ -17716,12 +17790,14 @@ export default function AdminStudioScreen() {
                   loading={permissionTemplateBusy === "apply"}
                   onPress={() => void runPermissionTemplateAction("apply")}
                   variant="primary"
+                  disabled={!canManagePermissionTemplates || permissionTemplateBusy !== null}
                 />
                 <OwnerAdminActionButton
                   label={canManagePermissionTemplates ? "Revoke Template" : "Locked"}
                   loading={permissionTemplateBusy === "revoke"}
                   onPress={() => void runPermissionTemplateAction("revoke")}
                   variant="warning"
+                  disabled={!canManagePermissionTemplates || permissionTemplateBusy !== null}
                 />
               </OwnerStickyActionBar>
               {!canManagePermissionTemplates ? (
@@ -18483,12 +18559,12 @@ export default function AdminStudioScreen() {
                   openOwnerSecurityDangerAction({
                     confirmation: "REVOKE GRANTS",
                     kind: "bulk-revoke-grants",
-                    title: "Revoke all temporary grants?",
+                    title: "Revoke temporary and test grants?",
                   });
                 }}
                 disabled={!ownerSecurityDangerActionsAvailable || !Number(ownerSecurityActiveGrantsCount ?? 0) || ownerSecurityActionBusy === "bulk-revoke-grants"}
               >
-                <Text style={styles.ownerPrimaryButtonText}>{Number(ownerSecurityActiveGrantsCount ?? 0) ? "Revoke all grants" : "No grants to revoke"}</Text>
+                <Text style={styles.ownerPrimaryButtonText}>{Number(ownerSecurityActiveGrantsCount ?? 0) ? "Revoke temporary and test grants" : "No eligible grants to revoke"}</Text>
               </TouchableOpacity>
               {ownerSecurityCurrentDevice?.id && ownerSecurityCurrentDevice.trustStatus === "trusted" ? (
                 <TouchableOpacity
@@ -18529,9 +18605,9 @@ export default function AdminStudioScreen() {
             actions={(
               <>
                 <TouchableOpacity
-                  style={[styles.ownerPrimaryButton, (canaryBusy || !canAccessCanaryChecks) && styles.configSaveBtnDisabled]}
+                  style={[styles.ownerPrimaryButton, (canaryBusy || !canaryHistoryCurrent || pendingCanaryRuns.length > 0 || !canAccessCanaryChecks) && styles.configSaveBtnDisabled]}
                   onPress={() => void runCanaryChecks()}
-                  disabled={canaryBusy || !canAccessCanaryChecks}
+                  disabled={canaryBusy || !canaryHistoryCurrent || pendingCanaryRuns.length > 0 || !canAccessCanaryChecks}
                 >
                   <Text style={styles.ownerPrimaryButtonText}>{canaryBusy ? "Running..." : canAccessCanaryChecks ? "Run Canary Checks" : "Locked"}</Text>
                 </TouchableOpacity>
@@ -18555,19 +18631,48 @@ export default function AdminStudioScreen() {
           ) : null}
 
           {!canAccessCanaryChecks ? (
-            <OwnerDisabledReason reason="Canary run is disabled because this account lacks Owner, canary_run, or launch_safety permission. Refresh remains read-only." />
+            <OwnerDisabledReason reason="Canary checks require an active Owner session, or an active Admin or Moderator session with audit_review or security_review permission." />
+          ) : null}
+
+          {pendingCanaryRuns.map((run) => {
+            const resumeRunId = canaryRecoveryRunId(run)!;
+            const disabled = canaryBusy || !canaryHistoryCurrent || !canAccessCanaryChecks;
+            return (
+              <View key={resumeRunId} style={styles.ownerRunBanner}>
+                <Text style={styles.ownerRunBannerTitle}>Canary cleanup pending</Text>
+                <Text selectable style={styles.ownerRunBannerBody}>Run {resumeRunId}</Text>
+                <Text style={styles.ownerRunBannerBody}>
+                  Recover cleanup for this recorded run. Interrupted checks remain failed. An active run cannot be recovered before its deadline: {formatModerationTimestamp(String(run.deadline))}.
+                </Text>
+                <TouchableOpacity
+                  testID="admin-canary-recover-cleanup"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Recover cleanup for Canary run ${resumeRunId}`}
+                  accessibilityState={{ disabled }}
+                  style={[styles.ownerSecondaryButton, disabled && styles.configSaveBtnDisabled]}
+                  disabled={disabled}
+                  onPress={() => void runCanaryChecks(resumeRunId)}
+                >
+                  <Text style={styles.ownerSecondaryButtonText}>{canaryBusy ? "Working..." : "Recover cleanup"}</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+          {!canaryHistoryCurrent && canAccessCanaryChecks ? (
+            <OwnerDisabledReason reason="Refresh Canary history to verify the current session and any pending cleanup before starting or recovering a run." />
           ) : null}
 
           <View style={styles.ownerRunBanner}>
             <View style={styles.ownerSectionHeaderRow}>
               <Text style={styles.ownerRunBannerTitle}>Latest Run Snapshot</Text>
               <OwnerStatusPill
-                label={latestCanaryRun && !latestCanarySummary.hasResults ? "No check evidence" : latestCanaryRun?.status ? formatModerationToken(String(latestCanaryRun.status)) : "Not Run"}
-                tone={latestCanarySummary.fail > 0 ? "danger" : latestCanaryRun && !latestCanarySummary.hasResults ? "manual" : latestCanarySummary.manualRequired > 0 ? "manual" : latestCanaryRun ? "success" : "locked"}
+                label={!canaryHistoryCurrent ? "History unverified" : latestCanaryRun && !latestCanarySummary.hasResults ? "No check evidence" : latestCanaryRun?.status ? formatModerationToken(String(latestCanaryRun.status)) : "Not Run"}
+                tone={!canaryHistoryCurrent ? "manual" : latestCanarySummary.fail > 0 ? "danger" : latestCanaryRun && !latestCanarySummary.hasResults ? "manual" : latestCanarySummary.manualRequired > 0 ? "manual" : latestCanaryRun ? "success" : "locked"}
               />
             </View>
             <Text style={styles.ownerRunBannerBody}>
-              {latestCanaryRun
+              {!canaryHistoryCurrent ? "Current Canary history is not verified. Refresh before acting on these results."
+                : latestCanaryRun
                 ? !latestCanarySummary.hasResults
                   ? "No individual check evidence was returned. Refresh or rerun before treating this run as verified."
                   : latestCanarySummary.fail > 0
@@ -18598,8 +18703,8 @@ export default function AdminStudioScreen() {
             <OwnerEmptyState body="The check run is using real backend verification paths and will refresh the grouped evidence panels when it finishes." title="Running checks" />
           ) : !latestCanaryRun ? (
             <OwnerEmptyState
-              body={ownerControlLoading ? "Canary history is loading from the backend." : "Run the first production canary when ready; no simulated evidence is shown."}
-              title={ownerControlLoading ? "Loading Canary" : "No canary run yet"}
+              body={canaryHistoryLoading ? "Canary history is loading from the backend." : "Run the first production canary when ready; no simulated evidence is shown."}
+              title={canaryHistoryLoading ? "Loading Canary" : "No canary run yet"}
             />
           ) : filteredCanaryResults.length === 0 ? (
             <OwnerEmptyState body="Choose another filter to see available checks." title="No checks in this filter" />
@@ -21031,40 +21136,55 @@ export default function AdminStudioScreen() {
             keyboardDismissMode="on-drag"
             accessibilityViewIsModal
           >
-          <View style={styles.confirmSheet}>
+          <View style={styles.confirmSheet} testID="owner-security-confirmation">
             <Text style={styles.confirmKicker}>Owner Security</Text>
             <Text style={styles.confirmTitle}>{ownerSecurityDangerAction?.title ?? "Confirm security action"}</Text>
             <Text style={styles.confirmBody}>
               {ownerSecurityDangerAction?.kind === "bulk-revoke-grants"
-                ? "This revokes every active temporary grant returned by the backed staff-permission table and writes security audit events."
+                ? "This ends active temporary staff permissions and grants identified as test or cleanup grants that are present when the action starts. Ordinary permanent permissions and grants added afterward are unchanged. The action is recorded in the security log."
                 : ownerSecurityDangerAction?.kind === "revoke-grant"
-                  ? "This revokes one backed temporary grant and writes security audit events."
-                  : "This marks the selected owner device as untrusted and writes a security audit event. It does not simulate a Supabase Auth logout."}
+                  ? "This ends the selected staff permission and records the change in the security log."
+                  : "This marks the selected Owner device as untrusted and records the change in the security log. It does not sign the device out."}
             </Text>
             <View style={styles.confirmMetaBox}>
               <Text style={styles.confirmMetaText}>
-                {`Requires a reason and exact phrase: ${ownerSecurityDangerAction?.confirmation ?? "CONFIRM"}`}
+                {`Enter a reason with at least 6 characters, then type ${ownerSecurityDangerAction?.confirmation ?? "CONFIRM"} exactly.`}
               </Text>
             </View>
+            {ownerControlNotice ? (
+              <View style={[styles.notice, styles.noticeWarn]} testID="owner-security-confirmation-notice">
+                <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.noticeText}>{ownerControlNotice}</Text>
+                <Text style={styles.confirmBody}>Cancel, then refresh Owner Security to check the current state before trying the action again.</Text>
+              </View>
+            ) : null}
+            <Text style={styles.confirmMetaText}>Reason (at least 6 characters)</Text>
             <TextInput
               style={[styles.input, styles.multilineInput]}
-              placeholder="Reason required"
+              accessibilityLabel="Reason, at least 6 characters"
+              placeholder="Explain why this change is needed"
               placeholderTextColor="#8d8d8d"
               multiline
+              editable={!ownerSecurityActionBusy}
               value={ownerSecurityReason}
               onChangeText={setOwnerSecurityReason}
             />
+            <Text style={styles.confirmMetaText}>{`Type ${ownerSecurityDangerAction?.confirmation ?? "CONFIRM"} to confirm`}</Text>
             <TextInput
               style={styles.input}
+              accessibilityLabel={`Type ${ownerSecurityDangerAction?.confirmation ?? "CONFIRM"} to confirm`}
               placeholder={ownerSecurityDangerAction?.confirmation ?? "CONFIRM"}
               placeholderTextColor="#8d8d8d"
               autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!ownerSecurityActionBusy}
               value={ownerSecurityConfirmText}
               onChangeText={setOwnerSecurityConfirmText}
             />
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.cancelBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel security action"
                 onPress={() => {
                   setOwnerSecurityConfirmVisible(false);
                   setOwnerSecurityConfirmText("");
@@ -21076,6 +21196,8 @@ export default function AdminStudioScreen() {
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={ownerSecurityDangerAction?.kind === "bulk-revoke-grants" ? "Revoke temporary and test grants" : ownerSecurityDangerAction?.kind === "revoke-grant" ? "Revoke selected grant" : "Mark device untrusted"}
                 style={[
                   styles.dangerConfirmBtn,
                   (!ownerSecurityDangerAction
@@ -21086,7 +21208,7 @@ export default function AdminStudioScreen() {
                 onPress={() => void runOwnerSecurityDangerConfirm()}
                 disabled={!ownerSecurityDangerAction || ownerSecurityConfirmText.trim() !== ownerSecurityDangerAction.confirmation || ownerSecurityReason.trim().length < 6 || !!ownerSecurityActionBusy}
               >
-                {ownerSecurityActionBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Confirm</Text>}
+                {ownerSecurityActionBusy ? <><ActivityIndicator color="#fff" /><Text accessibilityLiveRegion="polite" style={styles.saveText}>Applying security change…</Text></> : <Text style={styles.saveText}>{ownerSecurityDangerAction?.kind === "bulk-revoke-grants" ? "Revoke temporary and test grants" : ownerSecurityDangerAction?.kind === "revoke-grant" ? "Revoke selected grant" : "Mark device untrusted"}</Text>}
               </TouchableOpacity>
             </View>
           </View>

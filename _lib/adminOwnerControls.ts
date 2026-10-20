@@ -1,8 +1,13 @@
+import "react-native-get-random-values";
 import * as Application from "expo-application";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import { Platform } from "react-native";
 import { supabase } from "./supabase";
+import {
+  assertAccountBoundSupabaseMutationSubjectCurrent,
+  captureAccountBoundSupabaseMutationSubject,
+} from "./accountBoundSupabaseMutation";
 
 export type OwnerControlPermissionTemplate = {
   key: string;
@@ -393,15 +398,17 @@ const hasOwnerControlMutationReceipt = (action: string, value: unknown, input: R
     }
     case "revoke_temporary_owner_grant": {
       const grant = value.grant;
-      return value.ok === true && isReceiptRecord(grant) && matchesReceiptId(grant.id, input.grantId)
+      return hasOwnerGrantTransactionReceipt(value, input, "single") && isReceiptRecord(grant)
+        && matchesReceiptId(grant.id, input.grantId) && value.revokedCount === 1
+        && (value.grantIds as unknown[])[0] === input.grantId
         && grant.state === "revoked" && isReceiptDate(grant.revokedAt);
     }
     case "revoke_all_temporary_owner_grants":
-      return value.ok === true && isReceiptCount(value.revokedCount);
+      return hasOwnerGrantTransactionReceipt(value, input, "bulk") && value.grant === null;
     case "canary_run": {
       const run = value.run;
       const summary = value.summary;
-      if (!isReceiptRecord(run) || !hasReceiptId(run.id) || !isReceiptRecord(summary)
+      if (!isReceiptRecord(run) || !matchesReceiptId(run.id, input.requestId) || !isReceiptRecord(summary)
         || ![summary.passCount, summary.failCount, summary.manualRequiredCount].every(isReceiptCount)
         || !Array.isArray(run.results) || !run.results.length) return false;
       const keys = new Set<string>();
@@ -435,6 +442,26 @@ const hasOwnerControlMutationReceipt = (action: string, value: unknown, input: R
   }
 };
 
+const hasOwnerGrantTransactionReceipt = (value: Record<string, unknown>, input: Record<string, unknown>, mode: "single" | "bulk") =>
+  value.ok === true && matchesReceiptId(value.requestId, input.requestId) && value.mode === mode
+  && isReceiptDate(value.scopeAsOf) && isReceiptDate(value.revokedAt) && isReceiptCount(value.revokedCount)
+  && Array.isArray(value.grantIds) && value.grantIds.length === value.revokedCount
+  && value.grantIds.every(hasReceiptId) && new Set(value.grantIds).size === value.grantIds.length;
+
+// Only ambiguous operations remain here. Retrying identical input in the same
+// exact account/session reuses its database receipt; a confirmed new action gets
+// a new scope. The ID is an idempotency key, never an authority credential.
+const pendingOwnerControlOperations = new Map<string, string>();
+const DURABLE_OWNER_CONTROL_ACTIONS = new Set(["revoke_temporary_owner_grant", "revoke_all_temporary_owner_grants", "canary_run"]);
+const createOwnerControlRequestId = () => {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
 const OWNER_CONTROL_MUTATIONS = new Set([
   "first_owner_grant_owner", "first_owner_revoke_owner", "first_owner_start_step_down", "first_owner_complete_step_down",
   "template_apply", "template_revoke", "break_glass_activate", "break_glass_end",
@@ -443,9 +470,19 @@ const OWNER_CONTROL_MUTATIONS = new Set([
 ]);
 
 async function requestOwnerControls(action: string, body: Record<string, unknown> = {}) {
+  const subject = DURABLE_OWNER_CONTROL_ACTIONS.has(action) ? await captureAccountBoundSupabaseMutationSubject() : null;
+  const operationKey = subject ? JSON.stringify([subject.authority, action, body]) : null;
+  if (operationKey) {
+    const requestId = typeof body.resumeRunId === "string" ? body.resumeRunId : pendingOwnerControlOperations.get(operationKey) ?? createOwnerControlRequestId();
+    pendingOwnerControlOperations.set(operationKey, requestId);
+    body = { ...body, requestId };
+  }
+  if (subject) assertAccountBoundSupabaseMutationSubjectCurrent(subject);
   const { data, error } = await supabase.functions.invoke("admin-owner-controls", {
     body: { ...body, action },
+    ...(subject ? { headers: { Authorization: `Bearer ${subject.accessToken}` } } : {}),
   });
+  if (subject) assertAccountBoundSupabaseMutationSubjectCurrent(subject);
   if (error) {
     // Preserve the backend's unverified-outcome code through FunctionsHttpError.
     // Reading the error response never retries the mutation.
@@ -456,12 +493,24 @@ async function requestOwnerControls(action: string, body: Record<string, unknown
       if (payload && typeof payload === "object" && "error" in payload && payload.error === "owner_control_outcome_unverified") {
         throw ownerControlOutcomeUnverified();
       }
+      const failure = toObject(payload);
+      if (action === "canary_run" && ["canary_run_in_progress", "admin_canary_pending_run"].includes(failure.error as string)
+        && hasReceiptId(failure.runId) && isReceiptDate(failure.deadline)) {
+        throw Object.assign(new Error(failure.error === "canary_run_in_progress"
+          ? `Canary run ${failure.runId} is still in progress until ${failure.deadline}. Refresh Canary history before retrying.`
+          : `Canary run ${failure.runId} needs recovery. Refresh Canary history and resume this exact run ID.`),
+        { code: failure.error, runId: failure.runId, deadline: failure.deadline });
+      }
+      if (operationKey && context.status >= 400 && context.status < 500 && context.status !== 409) {
+        pendingOwnerControlOperations.delete(operationKey);
+      }
     }
     throw error;
   }
   if (OWNER_CONTROL_MUTATIONS.has(action) && !hasOwnerControlMutationReceipt(action, data, body)) {
     throw ownerControlOutcomeUnverified();
   }
+  if (operationKey) pendingOwnerControlOperations.delete(operationKey);
   return toObject(data);
 }
 
@@ -691,8 +740,8 @@ export async function runOwnerSecurityChecklist() {
   return toArray(payload.checklist) as OwnerSecurityChecklistItem[];
 }
 
-export async function runOwnerControlCanary() {
-  const payload = await requestOwnerControls("canary_run");
+export async function runOwnerControlCanary(resumeRunId?: string) {
+  const payload = await requestOwnerControls("canary_run", resumeRunId ? { resumeRunId } : {});
   return toObject(payload.run) as OwnerControlCanaryRun;
 }
 

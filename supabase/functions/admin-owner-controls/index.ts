@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { ACCOUNT_LEGAL_DOCUMENT_KEYS, LEGAL_DOCUMENTS } from "../../../_lib/legalPolicies.ts";
 import {
   PERMISSION_TEMPLATES,
   readPermissionTemplateTarget,
@@ -20,6 +21,7 @@ import {
   normalizeExactSubjectId,
 } from "../_shared/exact-subject-authority.ts";
 import {
+  CANARY_PROOF_LABELS,
   createCanaryProofScope,
   recordCanaryProofGrant,
   recordCanaryProofRole,
@@ -40,6 +42,7 @@ type SupabaseClientLike = any;
 type StaffRole = "owner" | "operator" | "moderator";
 type AuthenticatedUser = {
   activeBreakGlassSessionId: string | null;
+  authenticatedSessionId: string;
   email: string | null;
   id: string;
   isFirstOwner: boolean;
@@ -293,10 +296,13 @@ const authenticate = async (
   });
   const { data, error } = await authClient.auth.getUser();
   const userId = toText(data.user?.id);
-  if (error || !userId || !(await readExactCurrentSessionAuthority(authClient, userId))) {
+  const authority = !error && userId ? await readExactCurrentSessionAuthority(authClient, userId) : null;
+  if (!authority) {
     return { error: json(401, { error: "invalid_session" }) };
   }
 
+  const authenticatedSessionId = normalizeExactSubjectId(authority.sessionGeneration);
+  if (!authenticatedSessionId) return { error: json(401, { error: "invalid_session" }) };
   const email = data.user?.email ?? null;
   const role = await readExactPlatformRole(
     adminClient,
@@ -318,37 +324,9 @@ const authenticate = async (
     });
     if (!firstOwner.error) isFirstOwner = firstOwner.data === true;
   }
-  return { user: { activeBreakGlassSessionId, email, id: userId, isFirstOwner, permissions, role: role as StaffRole } };
+  return { user: { activeBreakGlassSessionId, authenticatedSessionId, email, id: userId, isFirstOwner, permissions, role: role as StaffRole } };
 };
 
-const expireStaleGrants = async (adminClient: SupabaseClientLike) => {
-  const now = new Date().toISOString();
-  const { data, error } = await adminClient
-    .from("platform_staff_permission_grants")
-    .update({ status: "expired", updated_at: now })
-    .eq("status", "active")
-    .not("expires_at", "is", null)
-    .lte("expires_at", now)
-    .select("*")
-    .limit(100);
-  if (error) throw new Error(`Permission expiry failed: ${error.message}`);
-
-  for (const grant of ((data ?? []) as JsonObject[])) {
-    const metadata = sanitizeObject(grant.metadata);
-    if (metadata.audit_required !== true && toText(metadata.granted_actor_role) === "owner") continue;
-    await adminClient.from("platform_staff_permission_audit").insert({
-      action: "expire",
-      actor_email: "system",
-      actor_role: "system",
-      actor_user_id: null,
-      metadata: { expired_at: now, grant_id: toText(grant.id), system_expiry: true },
-      permission_key: toText(grant.permission_key),
-      reason: "Temporary permission grant expired server-side.",
-      target_email: toText(grant.target_email) || null,
-      target_user_id: toText(grant.target_user_id) || null,
-    });
-  }
-};
 
 const writePlatformAudit = async (
   adminClient: SupabaseClientLike,
@@ -2203,167 +2181,82 @@ const revokeOwnerDevice = async (adminClient: SupabaseClientLike, user: Authenti
   return json(200, { device: normalizeOwnerDevice(data as JsonObject), ok: true });
 };
 
-const revokeTemporaryOwnerGrant = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
-  if (user.role !== "owner") {
-    await writeOwnerSecurityDeniedEvent(adminClient, user, "revoke_temporary_owner_grant");
-    return json(403, { error: "owner_required" });
-  }
-  const trusted = await requireTrustedCurrentOwnerDevice(adminClient, user, payload, "revoke_temporary_owner_grant");
-  if (trusted.error) return trusted.error;
-  if (toText(payload.confirmation) !== "REVOKE GRANT") return json(400, { error: "typed_confirmation_required" });
-  const grantId = toText(payload.grantId ?? payload.grant_id);
-  if (!grantId) return json(400, { error: "grant_id_required" });
-  const reason = redactText(payload.reason, 1000);
-  if (reason.length < 6) return json(400, { error: "reason_required" });
-  const { data, error } = await adminClient
-    .from("platform_staff_permission_grants")
-    .update({
-      reason,
-      revoked_at: new Date().toISOString(),
-      revoked_by: user.id,
-      status: "revoked",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", grantId)
-    .eq("status", "active")
-    .select("*")
-    .maybeSingle();
-  if (error) throw new Error(`Temporary grant revoke failed: ${error.message}`);
-  if (!data) return json(404, { error: "temporary_grant_not_found" });
-  requireMutationReceipt(data, (row) => row.id === grantId && row.status === "revoked" && hasMutationReceiptDate(row.revoked_at));
-  await adminClient.from("platform_staff_permission_audit").insert({
-    action: "revoke",
-    actor_email: user.email,
-    actor_role: user.role,
-    actor_user_id: user.id,
-    metadata: {
-      source: "owner_security_center",
-      ...securityContextAuditMetadata(user.securityContext),
-    },
-    permission_key: toText((data as JsonObject).permission_key),
-    reason,
-    security_context_id: user.securityContext?.id ?? null,
-    target_email: toText((data as JsonObject).target_email) || null,
-    target_user_id: toText((data as JsonObject).target_user_id) || null,
-  });
-  await writeSecurityAudit(adminClient, user, {
-    eventType: "temporary_grant_revoked",
-    metadata: {
-      grant_type: toText((data as JsonObject).permission_key),
-      target_email: normalizeEmail((data as JsonObject).target_email),
-      target_user_id: toText((data as JsonObject).target_user_id) || null,
-    },
-    reason,
-    severity: "high",
-    targetId: grantId,
-    targetType: "platform_staff_permission_grant",
-  });
-  return json(200, { grant: normalizeTemporaryGrant(data as JsonObject), ok: true });
+const bindOwnerSecurityMutationContext = async (
+  adminClient: SupabaseClientLike,
+  user: AuthenticatedUser,
+  action: string,
+) => {
+  const contextId = normalizeExactSubjectId(user.securityContext?.id);
+  if (!contextId || !normalizeExactSubjectId(user.authenticatedSessionId)) throw mutationOutcomeUnverified();
+  const existing = await adminClient.from("security_request_context")
+    .select("metadata").eq("id", contextId).eq("user_id", user.id).maybeSingle();
+  if (existing.error || !isRecord(existing.data) || !isRecord(existing.data.metadata)) throw mutationOutcomeUnverified();
+  const updated = await adminClient.from("security_request_context").update({ metadata: {
+    ...existing.data.metadata,
+    auth_session_id: user.authenticatedSessionId,
+    owner_security_action: action,
+  } }).eq("id", contextId).eq("user_id", user.id).select("id").maybeSingle();
+  if (updated.error || updated.data?.id !== contextId) throw mutationOutcomeUnverified();
+  return contextId;
 };
 
-const revokeAllTemporaryOwnerGrants = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
+const revokeOwnerSecurityGrants = async (
+  adminClient: SupabaseClientLike,
+  actorClient: SupabaseClientLike,
+  user: AuthenticatedUser,
+  payload: JsonObject,
+  mode: "single" | "bulk",
+) => {
+  const action = mode === "single" ? "revoke_temporary_owner_grant" : "revoke_all_temporary_owner_grants";
   if (user.role !== "owner") {
-    await writeOwnerSecurityDeniedEvent(adminClient, user, "revoke_all_temporary_owner_grants");
+    await writeOwnerSecurityDeniedEvent(adminClient, user, action);
     return json(403, { error: "owner_required" });
   }
-  const trusted = await requireTrustedCurrentOwnerDevice(adminClient, user, payload, "revoke_all_temporary_owner_grants");
+  const trusted = await requireTrustedCurrentOwnerDevice(adminClient, user, payload, action);
   if (trusted.error) return trusted.error;
-  if (toText(payload.confirmation) !== "REVOKE GRANTS") return json(400, { error: "typed_confirmation_required" });
+  if (toText(payload.confirmation) !== (mode === "single" ? "REVOKE GRANT" : "REVOKE GRANTS")) {
+    return json(400, { error: "typed_confirmation_required" });
+  }
+  const requestId = normalizeExactSubjectId(payload.requestId);
+  if (!requestId) return json(400, { error: "request_id_required" });
+  const grantId = mode === "single" ? normalizeExactSubjectId(payload.grantId ?? payload.grant_id) : null;
+  if (mode === "single" && !grantId) return json(400, { error: "grant_id_required" });
   const reason = redactText(payload.reason, 1000);
   if (reason.length < 6) return json(400, { error: "reason_required" });
-  const scopeAsOf = new Date().toISOString();
-  const scopeTime = Date.parse(scopeAsOf);
-  const batchSize = 200;
-  // The panel's 200-row list is only a display window. A bulk mutation must
-  // enumerate its entire start-time scope and prove no eligible rows remain.
-  const readActiveIds = async () => {
-    const ids: string[] = [];
-    let afterId: string | null = null;
-    while (true) {
-      let query = adminClient.from("platform_staff_permission_grants")
-        .select("id,status,granted_at,updated_at,expires_at,target_email,metadata")
-        .eq("status", "active")
-        .lte("granted_at", scopeAsOf)
-        .or(`expires_at.is.null,expires_at.gt.${scopeAsOf}`)
-        .order("id", { ascending: true })
-        .limit(batchSize);
-      if (afterId) query = query.gt("id", afterId);
-      const page = await Promise.resolve(query).catch(() => { throw mutationOutcomeUnverified(); });
-      if (page.error || !Array.isArray(page.data) || page.data.length > batchSize) throw mutationOutcomeUnverified();
-      for (const value of page.data) {
-        const row = requireMutationReceipt(value, (receipt) => hasMutationReceiptId(receipt.id)
-          && (!afterId || receipt.id > afterId) && receipt.status === "active"
-          && hasMutationReceiptDate(receipt.granted_at) && Date.parse(receipt.granted_at as string) <= scopeTime
-          && (receipt.expires_at == null || (hasMutationReceiptDate(receipt.expires_at)
-            && Date.parse(receipt.expires_at as string) > scopeTime)));
-        afterId = row.id as string;
-        if (isTemporaryGrantRow(row)) ids.push(afterId);
-      }
-      // Require an empty terminal page: a server-side response cap smaller than
-      // the requested batch must not make a short page look exhaustive.
-      if (page.data.length === 0) return ids;
-    }
-  };
-  const activeIds = await readActiveIds();
-  if (!activeIds.length) return json(200, { ok: true, revokedCount: 0 });
-  const data: JsonObject[] = [];
-  for (let offset = 0; offset < activeIds.length; offset += batchSize) {
-    const selectedIds = activeIds.slice(offset, offset + batchSize);
-    const result = await Promise.resolve(adminClient
-      .from("platform_staff_permission_grants")
-      .update({
-        reason,
-        revoked_at: new Date().toISOString(),
-        revoked_by: user.id,
-        status: "revoked",
-        updated_at: new Date().toISOString(),
-      })
-      .in("id", selectedIds)
-      .eq("status", "active")
-      .lte("granted_at", scopeAsOf)
-      .lte("updated_at", scopeAsOf)
-      .select("*")).catch(() => { throw mutationOutcomeUnverified(); });
-    if (result.error || !Array.isArray(result.data)) throw mutationOutcomeUnverified();
-    const expectedIds = new Set(selectedIds);
-    const revokedIds = new Set<string>();
-    for (const row of result.data) {
-      const receipt = requireMutationReceipt(row, (receipt) => hasMutationReceiptId(receipt.id) && expectedIds.has(receipt.id)
-        && !revokedIds.has(receipt.id)
-        && receipt.status === "revoked" && hasMutationReceiptDate(receipt.revoked_at));
-      revokedIds.add(receipt.id as string);
-      data.push(receipt);
-    }
-    if (revokedIds.size !== expectedIds.size) throw mutationOutcomeUnverified();
+  const contextId = await bindOwnerSecurityMutationContext(adminClient, user, action);
+  // The caller's bearer authorizes one database transaction, including both
+  // audits. A lost response is retried with this same request ID and scope.
+  const result = await Promise.resolve(actorClient.rpc("owner_security_revoke_grants", {
+    p_request_id: requestId,
+    p_mode: mode,
+    p_grant_id: grantId,
+    p_reason: reason,
+    p_security_context_id: contextId,
+    p_device_id: trusted.currentDevice.id,
+  })).catch(() => { throw mutationOutcomeUnverified(); });
+  if (result.error) {
+    if (result.error.code === "42501") return json(403, { error: "owner_security_authority_required" });
+    if (result.error.code === "22023") return json(400, { error: "owner_security_request_invalid" });
+    if (result.error.code === "P0002") return json(404, { error: "temporary_grant_not_found" });
+    throw mutationOutcomeUnverified();
   }
-  if ((await readActiveIds()).length) throw mutationOutcomeUnverified();
-  for (const grant of ((data ?? []) as JsonObject[])) {
-    await adminClient.from("platform_staff_permission_audit").insert({
-      action: "revoke",
-      actor_email: user.email,
-      actor_role: user.role,
-      actor_user_id: user.id,
-      metadata: {
-        bulk_revoke: true,
-        source: "owner_security_center",
-        ...securityContextAuditMetadata(user.securityContext),
-      },
-      permission_key: toText(grant.permission_key),
-      reason,
-      security_context_id: user.securityContext?.id ?? null,
-      target_email: toText(grant.target_email) || null,
-      target_user_id: toText(grant.target_user_id) || null,
-    });
-  }
-  await writeSecurityAudit(adminClient, user, {
-    eventType: "temporary_grants_bulk_revoked",
-    metadata: { revoked_count: (data ?? []).length },
-    reason,
-    severity: "critical",
-    targetId: "temporary_owner_grants",
-    targetType: "platform_staff_permission_grants",
-  });
-  return json(200, { ok: true, revokedCount: (data ?? []).length });
+  const receipt = requireMutationReceipt(result.data, (row) => row.ok === true && row.requestId === requestId
+    && row.mode === mode && hasMutationReceiptDate(row.scopeAsOf) && hasMutationReceiptDate(row.revokedAt)
+    && Number.isSafeInteger(row.revokedCount) && (row.revokedCount as number) >= 0
+    && Array.isArray(row.grantIds) && row.grantIds.length === row.revokedCount
+    && row.grantIds.every((id) => !!normalizeExactSubjectId(id))
+    && new Set(row.grantIds).size === row.grantIds.length
+    && (mode === "single" ? row.revokedCount === 1 && row.grantIds[0] === grantId
+      && isRecord(row.grant) && row.grant.id === grantId && row.grant.status === "revoked"
+      && row.grant.revoked_by === user.id && hasMutationReceiptDate(row.grant.revoked_at) : row.grant === null));
+  return json(200, { ...receipt, grant: mode === "single" ? normalizeTemporaryGrant(receipt.grant as JsonObject) : null });
 };
+
+const revokeTemporaryOwnerGrant = async (adminClient: SupabaseClientLike, actorClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) =>
+  revokeOwnerSecurityGrants(adminClient, actorClient, user, payload, "single");
+
+const revokeAllTemporaryOwnerGrants = async (adminClient: SupabaseClientLike, actorClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) =>
+  revokeOwnerSecurityGrants(adminClient, actorClient, user, payload, "bulk");
 
 type CanaryStatus = "pass" | "fail" | "manual_required";
 type CanaryResultInput = {
@@ -2415,32 +2308,87 @@ const randomProofPassword = () => {
   return `Canary!${Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("")}aA1`;
 };
 
+type DurableCanaryProofScope = CanaryProofScope & {
+  deadline: string;
+  plannedUsers: { label: CanaryProofLabel; userId: string; email: string }[];
+};
+
+const readCanaryProofScope = (value: unknown, runId: string): DurableCanaryProofScope => {
+  const scope = createCanaryProofScope(runId);
+  const receipt = requireMutationReceipt(value, (row) => row.runId === runId && hasMutationReceiptDate(row.deadline)
+    && Array.isArray(row.users) && row.users.length === CANARY_PROOF_LABELS.length
+    && CANARY_PROOF_LABELS.every((label) => (row.users as unknown[]).filter((entry: unknown) => isRecord(entry)
+      && entry.label === label && entry.email === scope.emails[label] && !!normalizeExactSubjectId(entry.userId)).length === 1)
+    && new Set(row.users.map((entry: JsonObject) => entry.userId)).size === CANARY_PROOF_LABELS.length);
+  return { ...scope, deadline: receipt.deadline as string,
+    plannedUsers: receipt.users as DurableCanaryProofScope["plannedUsers"] };
+};
+
+const establishProofSession = async (client: SupabaseClientLike, userId: string) => {
+  const authority = await readExactCurrentSessionAuthority(client, userId);
+  if (!authority) throw new Error("Proof session authority unavailable");
+  const required = await client.rpc("wave1_legal_requirements_readback", { p_capability: "account" });
+  if (required.error) throw new Error("Proof legal requirements unavailable");
+  const requirements = requireMutationReceipt(required.data, (row) => row.authoritative === true
+    && row.userId === userId && row.accountId === userId && row.sessionGeneration === authority.sessionGeneration
+    && row.state === "ACTIVE" && row.restoreOnly === false && row.capability === "account" && row.market === "UNITED_STATES"
+    && Array.isArray(row.requirements) && row.requirements.length === ACCOUNT_LEGAL_DOCUMENT_KEYS.length
+    && ACCOUNT_LEGAL_DOCUMENT_KEYS.every((key) => (row.requirements as unknown[]).filter((item: unknown) => isRecord(item)
+      && item.documentKey === key && LEGAL_DOCUMENTS.some((document) => document.documentKey === key
+        && document.version === item.version)).length === 1));
+  const accepted = await client.rpc("wave1_accept_legal_documents", {
+    p_acceptances: Object.fromEntries((requirements.requirements as JsonObject[]).map((item) => [item.documentKey, item.version])),
+    p_market: "UNITED_STATES", p_capability: "account", p_expected_user_id: userId, p_expected_account_id: userId,
+    p_session_generation: authority.sessionGeneration,
+  });
+  if (accepted.error) throw new Error("Proof legal acceptance failed");
+  requireMutationReceipt(accepted.data, (row) => row.authoritative === true && row.userId === userId
+    && row.accountId === userId && row.sessionGeneration === authority.sessionGeneration
+    && row.state === "ACTIVE" && row.restoreOnly === false && row.capability === "account"
+    && Array.isArray(row.requirements) && row.requirements.length === ACCOUNT_LEGAL_DOCUMENT_KEYS.length
+    && ACCOUNT_LEGAL_DOCUMENT_KEYS.every((key) => (row.requirements as unknown[]).filter((item: unknown) => isRecord(item)
+      && item.documentKey === key && item.accepted === true && item.state === "CURRENT_ACCEPTED"
+      && hasMutationReceiptDate(item.acceptedAt) && LEGAL_DOCUMENTS.some((document) => document.documentKey === key
+        && document.version === item.version)).length === 1));
+};
+
 const ensureProofUser = async (
   adminClient: SupabaseClientLike,
   anonClient: SupabaseClientLike,
-  scope: CanaryProofScope,
+  scope: DurableCanaryProofScope,
   emailLabel: CanaryProofLabel,
   label: string = emailLabel,
 ) => {
-  const email = scope.emails[emailLabel];
+  const planned = scope.plannedUsers.find((entry) => entry.label === emailLabel);
+  if (!planned) throw mutationOutcomeUnverified();
+  const { email, userId } = planned;
   const password = randomProofPassword();
+  // The UUID is persisted before Auth starts. Even a lost create response can
+  // be recovered by exact manifest identity; user-editable metadata is not proof.
   const created = await adminClient.auth.admin.createUser({
+    id: userId,
     email,
     email_confirm: true,
     password,
-    user_metadata: {
+    app_metadata: {
       canary_proof: true,
       canary_proof_run_id: scope.runId,
-      proof_label: label,
+      proof_label: emailLabel,
     },
   });
   if (created.error) throw new Error(`Proof auth create failed for ${label}: ${created.error.message}`);
-  const userId = normalizeExactSubjectId(created.data?.user?.id);
-  if (!userId) throw new Error(`Proof auth exact user id missing for ${label}`);
+  if (normalizeExactSubjectId(created.data?.user?.id) !== userId) throw mutationOutcomeUnverified();
+  const registered = await adminClient.rpc("register_admin_canary_user", {
+    p_run_id: scope.runId, p_label: emailLabel, p_user_id: userId,
+  });
+  if (registered.error) throw new Error("Proof Auth identity registration failed");
+  requireMutationReceipt(registered.data, (row) => row.runId === scope.runId && row.label === emailLabel
+    && row.userId === userId && row.email === email);
   recordCanaryProofUser(scope, userId);
   const signedIn = await anonClient.auth.signInWithPassword({ email, password });
   const accessToken = toText(signedIn.data?.session?.access_token);
   if (signedIn.error || !accessToken) throw new Error(`Proof auth sign-in failed for ${label}: ${signedIn.error?.message ?? "missing session"}`);
+  await establishProofSession(anonClient, userId);
   return { accessToken, email, label, userId };
 };
 
@@ -2451,120 +2399,88 @@ const proofClientForToken = (supabaseUrl: string, anonKey: string, accessToken: 
 
 const cleanupProofAccess = async (
   adminClient: SupabaseClientLike,
-  scope: CanaryProofScope,
+  scope: DurableCanaryProofScope,
   reason: string,
 ) => {
-  const now = new Date().toISOString();
-  const exactRoleIds = [...scope.roleIds];
-  const exactGrantIds = [...scope.grantIds];
-  const emptyResult = { count: 0, data: [] as JsonObject[], error: null };
-  const roles = exactRoleIds.length
-    ? await adminClient
-      .from("platform_role_memberships")
-      .update({ notes: reason, revoked_at: now, revoked_by: "admin-owner-controls-canary", status: "revoked", updated_at: now })
-      .eq("status", "active")
-      .in("id", exactRoleIds)
-      .select("id,role,user_id")
-    : emptyResult;
-  const grants = exactGrantIds.length
-    ? await adminClient
-      .from("platform_staff_permission_grants")
-      .update({ reason, revoked_at: now, revoked_by: "admin-owner-controls-canary", status: "revoked", updated_at: now })
-      .eq("status", "active")
-      .in("id", exactGrantIds)
-      .select("id,permission_key,target_user_id")
-    : emptyResult;
-  const activeRoles = exactRoleIds.length
-    ? await adminClient
-      .from("platform_role_memberships")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "active")
-      .in("id", exactRoleIds)
-    : emptyResult;
-  const activeGrants = exactGrantIds.length
-    ? await adminClient
-      .from("platform_staff_permission_grants")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "active")
-      .in("id", exactGrantIds)
-    : emptyResult;
-
-  const authDeleteErrors: string[] = [];
+  const errors: string[] = [];
+  let activeCount: number | null = null;
   let deletedUsers = 0;
-  for (const userId of scope.userIds) {
-    const deleted = await adminClient.auth.admin.deleteUser(userId);
-    if (deleted.error) authDeleteErrors.push(redactText(deleted.error.message, 220));
-    else deletedUsers += 1;
+  try {
+    const result = await adminClient.rpc("cleanup_admin_canary_run", { p_run_id: scope.runId, p_reason: reason });
+    if (result.error) throw new Error("Exact canary authority cleanup did not commit");
+    const receipt = requireMutationReceipt(result.data, (row) => row.ok === true && row.runId === scope.runId
+      && row.status === "closed" && row.activeCount === 0
+      && Array.isArray(row.roleIds) && row.roleIds.every((id) => Number.isSafeInteger(id) && id > 0)
+      && new Set(row.roleIds).size === row.roleIds.length
+      && Array.isArray(row.grantIds) && row.grantIds.every((id) => !!normalizeExactSubjectId(id))
+      && new Set(row.grantIds).size === row.grantIds.length
+      && Array.isArray(row.users) && row.users.length === scope.plannedUsers.length
+      && scope.plannedUsers.every((planned) => (row.users as unknown[]).filter((entry: unknown) => isRecord(entry)
+        && entry.label === planned.label && entry.userId === planned.userId && entry.email === planned.email
+        && typeof entry.authPresent === "boolean").length === 1));
+    activeCount = 0;
+    // Only the durable cleanup receipt permits Auth deletion, including actors
+    // created before a process stopped or before registration was acknowledged.
+    for (const entry of receipt.users as JsonObject[]) {
+      if (entry.authPresent !== true) continue;
+      const userId = entry.userId as string;
+      const deleted = await adminClient.auth.admin.deleteUser(userId);
+      if (deleted.error) errors.push(redactText(deleted.error.message, 220));
+      else deletedUsers += 1;
+    }
+    const final = await adminClient.rpc("read_admin_canary_manifest", { p_run_id: scope.runId });
+    if (final.error) throw new Error("Canary cleanup final manifest unavailable");
+    requireMutationReceipt(final.data, (row) => row.runId === scope.runId && row.status === "closed"
+      && row.cleanupVerified === true && row.registeredActiveCount === 0
+      && Array.isArray(row.users) && row.users.length === scope.plannedUsers.length
+      && scope.plannedUsers.every((planned) => (row.users as unknown[]).filter((entry: unknown) => isRecord(entry)
+        && entry.label === planned.label && entry.userId === planned.userId && entry.email === planned.email
+        && entry.authPresent === false).length === 1));
+  } catch (error) {
+    errors.push(redactText(error instanceof Error ? error.message : error, 220));
   }
+  return { activeCount, errors, ok: errors.length === 0 && activeCount === 0,
+    summary: errors.length ? `cleanup incomplete for run ${scope.runId}: ${errors.join("; ")}`
+      : `cleanup passed for run ${scope.runId}; durable exact authority revocation confirmed; deleted ${deletedUsers} exact proof users` };
+};
 
-  const errors = [roles.error, grants.error, activeRoles.error, activeGrants.error]
-    .filter(Boolean)
-    .map((error: { message?: string }) => redactText(error.message, 220))
-    .concat(authDeleteErrors);
-  const activeCount = (activeRoles.count ?? 0) + (activeGrants.count ?? 0);
-  return {
-    activeCount,
-    errors,
-    ok: errors.length === 0 && activeCount === 0,
-    summary: errors.length
-      ? `cleanup failed: ${errors.join("; ")}`
-      : activeCount === 0
-        ? `cleanup passed for run ${scope.runId}; revoked ${(roles.data ?? []).length} proof roles and ${(grants.data ?? []).length} proof grants; deleted ${deletedUsers} exact proof users`
-        : `cleanup incomplete; ${activeCount} active proof role/grant rows remain`,
-  };
+const provisionProofFixture = async (
+  actorClient: SupabaseClientLike,
+  scope: CanaryProofScope,
+  proofUser: { email: string; userId: string },
+  role: "operator" | "moderator" | null,
+  permissionKey: string | null,
+) => {
+  const label = CANARY_PROOF_LABELS.find((candidate) => scope.emails[candidate] === proofUser.email);
+  if (!label) throw mutationOutcomeUnverified();
+  const result = await actorClient.rpc("provision_admin_canary_fixture", {
+    p_run_id: scope.runId, p_label: label, p_role: role, p_permission_key: permissionKey,
+  });
+  if (result.error) throw new Error("Canary fixture authority transaction denied");
+  return requireMutationReceipt(result.data, (row) => row.runId === scope.runId && row.label === label
+    && hasMutationReceiptDate(row.deadline)
+    && (role !== null ? Number.isSafeInteger(row.roleId) && (row.roleId as number) > 0 && row.grantId === null
+      : !!normalizeExactSubjectId(row.grantId) && row.roleId === null));
 };
 
 const ensureProofRole = async (
-  adminClient: SupabaseClientLike,
+  actorClient: SupabaseClientLike,
   scope: CanaryProofScope,
   proofUser: { email: string; userId: string },
   role: "operator" | "moderator",
 ) => {
-  const insert = await adminClient.from("platform_role_memberships").insert({
-    email: proofUser.email,
-    expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-    granted_by: "admin-owner-controls-canary",
-    notes: `CANARY PROOF run ${scope.runId}; temporary role; revoke during exact canary cleanup.`,
-    role,
-    status: "active",
-    user_id: proofUser.userId,
-  }).select("id,user_id").single();
-  if (insert.error) throw new Error(`Proof role insert failed: ${insert.error.message}`);
-  const roleId = Number(insert.data?.id);
-  if (!Number.isSafeInteger(roleId) || roleId <= 0 || normalizeExactSubjectId(insert.data?.user_id) !== proofUser.userId) {
-    throw new Error("Proof role exact insert readback failed");
-  }
-  recordCanaryProofRole(scope, roleId);
+  const receipt = await provisionProofFixture(actorClient, scope, proofUser, role, null);
+  recordCanaryProofRole(scope, receipt.roleId as number);
 };
 
 const ensureProofPermission = async (
-  adminClient: SupabaseClientLike,
+  actorClient: SupabaseClientLike,
   scope: CanaryProofScope,
   proofUser: { email: string; userId: string },
   permissionKey: string,
 ) => {
-  const grantId = crypto.randomUUID();
-  recordCanaryProofGrant(scope, grantId);
-  const insert = await adminClient.from("platform_staff_permission_grants").insert({
-    expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-    granted_by: "admin-owner-controls-canary",
-    id: grantId,
-    metadata: {
-      canary_proof: true,
-      canary_proof_run_id: scope.runId,
-      cleanup_required: true,
-      granted_actor_role: "system",
-    },
-    permission_key: permissionKey,
-    reason: "CANARY PROOF temporary scoped permission; revoke during canary cleanup.",
-    status: "active",
-    target_email: proofUser.email,
-    target_user_id: proofUser.userId,
-  }).select("id,target_user_id").single();
-  if (insert.error) throw new Error(`Proof permission insert failed: ${insert.error.message}`);
-  if (toText(insert.data?.id) !== grantId || normalizeExactSubjectId(insert.data?.target_user_id) !== proofUser.userId) {
-    throw new Error("Proof permission exact insert readback failed");
-  }
+  const receipt = await provisionProofFixture(actorClient, scope, proofUser, null, permissionKey);
+  recordCanaryProofGrant(scope, receipt.grantId as string);
 };
 
 const countOwnerNormalAuditRows = async (adminClient: SupabaseClientLike) => {
@@ -2904,6 +2820,7 @@ const cleanupDmcaCanaryCase = async (adminClient: SupabaseClientLike, caseId: st
 
 const dmcaAdminCanaryResults = async (
   adminClient: SupabaseClientLike,
+  actorClient: SupabaseClientLike,
   anonClient: SupabaseClientLike,
   grantedDmcaClient: SupabaseClientLike,
   viewerClient: SupabaseClientLike,
@@ -3049,7 +2966,7 @@ const dmcaAdminCanaryResults = async (
   }));
 
   const dmcaScopedGrant = await safeSupabaseCall(async () => {
-    await ensureProofPermission(adminClient, scope, grantedProof, "dmca_review");
+    await ensureProofPermission(actorClient, scope, grantedProof, "dmca_review");
     return { data: { ok: true }, error: null };
   });
   results.push(canaryResult({
@@ -3483,10 +3400,66 @@ const canaryRun = async (
   user: AuthenticatedUser,
   supabaseUrl: string,
   anonKey: string,
+  actorClient: SupabaseClientLike,
+  payload: JsonObject,
 ) => {
   if (!hasAnyPermission(user, ["audit_review", "security_review"])) return json(403, { error: "audit_review_required" });
+  const runId = normalizeExactSubjectId(payload.requestId);
+  if (!runId) return json(400, { error: "request_id_required" });
+  let begun: { data: any; error?: any };
+  if (payload.resumeRunId != null) {
+    if (normalizeExactSubjectId(payload.resumeRunId) !== runId) return json(400, { error: "canary_resume_id_mismatch" });
+    const pending = await actorClient.rpc("list_admin_canary_pending_runs");
+    if (pending.error || !Array.isArray(pending.data?.runs)) throw mutationOutcomeUnverified();
+    const manifest = pending.data.runs.find((row: JsonObject) => row.runId === runId);
+    if (!manifest) {
+      const previous = await adminClient.from("admin_canary_runs").select("*").eq("id", runId)
+        .eq("requested_by_user_id", user.id).maybeSingle();
+      if (previous.error) throw mutationOutcomeUnverified();
+      if (previous.data) return json(200, { run: sanitizeObject(previous.data), summary: previous.data.summary });
+      return json(404, { error: "canary_resume_run_not_found" });
+    }
+    begun = { data: { ...manifest, created: false } };
+  } else {
+    begun = await actorClient.rpc("begin_admin_canary_run", { p_run_id: runId });
+    if (begun.error?.code === "55000") {
+      let pending: unknown;
+      try { pending = JSON.parse(begun.error.details); } catch { /* No invented recovery ID. */ }
+      if (!isRecord(pending) || !normalizeExactSubjectId(pending.runId) || !hasMutationReceiptDate(pending.deadline)) throw mutationOutcomeUnverified();
+      return json(409, { error: "admin_canary_pending_run", runId: pending.runId, deadline: pending.deadline,
+        message: "An earlier canary run requires completion or exact-run recovery. Refresh canary history and resume that run ID." });
+    }
+    if (begun.error) throw mutationOutcomeUnverified();
+  }
+  const proofScope = readCanaryProofScope(begun.data, runId);
+  if (typeof begun.data.created !== "boolean") throw mutationOutcomeUnverified();
+  if (!begun.data.created) {
+    const previous = await adminClient.from("admin_canary_runs").select("*").eq("id", runId)
+      .eq("requested_by_user_id", user.id).maybeSingle();
+    if (previous.error) throw mutationOutcomeUnverified();
+    if (begun.data.status !== "closed" && Date.parse(proofScope.deadline) > Date.now()) {
+      return json(409, { error: "canary_run_in_progress", runId, deadline: proofScope.deadline });
+    }
+    const cleanup = await cleanupProofAccess(adminClient, proofScope, "CANARY PROOF interrupted run recovery.");
+    if (previous.data) {
+      if (!cleanup.ok) return json(503, { error: "owner_control_outcome_unverified", runId, cleanupStatus: cleanup.summary });
+      return json(200, { run: sanitizeObject(previous.data), summary: previous.data.summary, cleanupStatus: cleanup.summary });
+    }
+    const results = [canaryResult({ actor: "system", actual: `Interrupted run; checks were not rerun. ${cleanup.summary}`,
+      cleanupStatus: cleanup.summary, expected: "A complete canary result and durable exact cleanup receipt.",
+      key: "interrupted_canary_run", label: "Interrupted canary run", section: "Cleanup / Proof Hygiene", status: "fail",
+      testedSurface: "exact persisted canary run manifest" })];
+    const summary = { pass: 0, passCount: 0, fail: 1, failCount: 1, manualRequired: 0, manualRequiredCount: 0, unknownCount: 0 };
+    const saved = await adminClient.from("admin_canary_runs").insert({ id: runId, requested_by_user_id: user.id,
+      requested_by_email: user.email, requested_by_role: user.role, results, status: "failed", summary }).select("*").single();
+    if (saved.error) throw mutationOutcomeUnverified();
+    requireMutationReceipt(saved.data, (row) => row.id === runId && row.requested_by_user_id === user.id
+      && row.status === "failed" && Array.isArray(row.results) && row.results.length === 1
+      && isRecord(row.summary) && row.summary.passCount === 0 && row.summary.failCount === 1
+      && row.summary.manualRequiredCount === 0);
+    return json(200, { run: sanitizeObject(saved.data), summary });
+  }
   const results: JsonObject[] = [];
-  const proofScope = createCanaryProofScope();
   const ownerAuditBefore = await countOwnerNormalAuditRows(adminClient);
   let cleanupStatus = "not needed";
 
@@ -3588,19 +3561,24 @@ const canaryRun = async (
   }
 
   try {
-    const [viewer, adminProof, grantedAdmin, moderatorProof] = await Promise.all([
-      ensureProofUser(adminClient, anonClient, proofScope, "viewer"),
-      ensureProofUser(adminClient, anonClient, proofScope, "admin", "admin_without_grants"),
-      ensureProofUser(adminClient, anonClient, proofScope, "granted-admin", "admin_with_legal_review"),
-      ensureProofUser(adminClient, anonClient, proofScope, "moderator"),
+    // Await every Auth attempt before cleanup, even when another create fails.
+    const createProof = (emailLabel: CanaryProofLabel, label: string = emailLabel) => ensureProofUser(adminClient,
+      createClient(supabaseUrl, anonKey, { auth: { autoRefreshToken: false, persistSession: false } }), proofScope, emailLabel, label);
+    const created = await Promise.allSettled([
+      createProof("viewer"), createProof("admin", "admin_without_grants"),
+      createProof("granted-admin", "admin_with_legal_review"), createProof("moderator"),
+      createProof("target-moderator", "moderator_target"),
     ]);
-    const [targetModerator] = await Promise.all([
-      ensureProofUser(adminClient, anonClient, proofScope, "target-moderator", "moderator_target"),
-      ensureProofRole(adminClient, proofScope, adminProof, "operator"),
-      ensureProofRole(adminClient, proofScope, grantedAdmin, "operator"),
-      ensureProofRole(adminClient, proofScope, moderatorProof, "moderator"),
-    ]);
-    await ensureProofPermission(adminClient, proofScope, grantedAdmin, "legal_review");
+    const failed = created.find((result) => result.status === "rejected");
+    if (failed?.status === "rejected") throw failed.reason;
+    const [viewer, adminProof, grantedAdmin, moderatorProof, targetModerator] = created.map((result) => {
+      if (result.status !== "fulfilled") throw mutationOutcomeUnverified();
+      return result.value;
+    });
+    await ensureProofRole(actorClient, proofScope, adminProof, "operator");
+    await ensureProofRole(actorClient, proofScope, grantedAdmin, "operator");
+    await ensureProofRole(actorClient, proofScope, moderatorProof, "moderator");
+    await ensureProofPermission(actorClient, proofScope, grantedAdmin, "legal_review");
     await adminClient.from("user_entitlements").delete().eq("user_id", viewer.userId).in("entitlement_key", [...PREMIUM_ENTITLEMENT_KEYS]);
 
     const viewerClient = createTimedClient(supabaseUrl, anonKey, viewer.accessToken);
@@ -3679,9 +3657,9 @@ const canaryRun = async (
     const grantedPreview = await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "preview");
     const exportBeforeGrant = await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "export");
     const holdBeforeGrant = await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "hold", { targetId: viewer.userId, targetType: "user_id" });
-    await ensureProofPermission(adminClient, proofScope, grantedAdmin, "evidence_export");
+    await ensureProofPermission(actorClient, proofScope, grantedAdmin, "evidence_export");
     const grantedExport = await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "export");
-    await ensureProofPermission(adminClient, proofScope, grantedAdmin, "legal_hold");
+    await ensureProofPermission(actorClient, proofScope, grantedAdmin, "legal_hold");
     const grantedHold = await callLegalEvidence(supabaseUrl, anonKey, grantedAdmin.accessToken, "hold", { targetId: viewer.userId, targetType: "user_id" });
     const deniedOk = deniedCalls.every((call) => call.status === 401 || call.status === 403);
     const scopedOk = grantedPreview.ok
@@ -3711,7 +3689,7 @@ const canaryRun = async (
       testedSurface: "function: admin-legal-evidence preview/export/hold",
     }));
 
-    await ensureProofPermission(adminClient, proofScope, grantedAdmin, "legal_request_intake");
+    await ensureProofPermission(actorClient, proofScope, grantedAdmin, "legal_request_intake");
     const legalList = await callOwnerControls(supabaseUrl, anonKey, grantedAdmin.accessToken, "legal_request_list", { limit: 10 });
     const legalCreate = await callOwnerControls(supabaseUrl, anonKey, grantedAdmin.accessToken, "legal_request_create", {
       canaryProof: true,
@@ -3902,6 +3880,7 @@ const canaryRun = async (
     const grantedDmcaClient = createTimedClient(supabaseUrl, anonKey, grantedAdmin.accessToken);
     results.push(...await dmcaAdminCanaryResults(
       adminClient,
+      actorClient,
       anonClient,
       grantedDmcaClient,
       viewerClient,
@@ -4118,24 +4097,17 @@ const canaryRun = async (
     if (isRecord(row) && toText(row.cleanupStatus).includes("pending proof cleanup")) row.cleanupStatus = cleanupStatus;
   }
 
-  const activeProofRoles = proofScope.roleIds.length
-    ? await adminClient.from("platform_role_memberships").select("id", { count: "exact", head: true }).eq("status", "active").in("id", proofScope.roleIds)
-    : { count: 0, error: null };
-  const activeProofGrants = proofScope.grantIds.length
-    ? await adminClient.from("platform_staff_permission_grants").select("id", { count: "exact", head: true }).eq("status", "active").in("id", proofScope.grantIds)
-    : { count: 0, error: null };
-  const proofCount = (activeProofRoles.count ?? 0) + (activeProofGrants.count ?? 0);
   results.push(canaryResult({
     actor: "system",
-    actual: activeProofRoles.error || activeProofGrants.error ? "Exact proof role/grant cleanup query failed." : proofCount === 0 ? `No active authority rows created by canary run ${proofScope.runId} remain.` : `${proofCount} active role/grant rows created by canary run ${proofScope.runId} remain.`,
+    actual: cleanup.summary,
     cleanupStatus,
-    details: { active_proof_grants: activeProofGrants.count ?? null, active_proof_roles: activeProofRoles.count ?? null },
-    expected: "No active elevated role/grant rows created by this exact canary run remain; unrelated and historical rows are untouched.",
+    details: { active_proof_authority_count: cleanup.activeCount, cleanup_errors: cleanup.errors },
+    expected: "Durable exact role/grant revocation precedes deletion of every created synthetic Auth user.",
     key: "proof_roles_cleaned",
     label: "Proof roles/grants cleaned up",
     section: "Cleanup / Proof Hygiene",
-    status: activeProofRoles.error || activeProofGrants.error ? "manual_required" : proofCount === 0 ? "pass" : "fail",
-    testedSurface: "tables: platform_role_memberships + platform_staff_permission_grants",
+    status: cleanup.ok ? "pass" : "fail",
+    testedSurface: "rpc: cleanup_admin_canary_run; exact Auth user deletion",
   }));
 
   const ownerAuditAfter = await countOwnerNormalAuditRows(adminClient);
@@ -4167,6 +4139,7 @@ const canaryRun = async (
     unknownCount: manualRequiredCount,
   };
   const { data, error } = await adminClient.from("admin_canary_runs").insert({
+    id: runId,
     requested_by_email: user.email,
     requested_by_role: user.role,
     requested_by_user_id: user.id,
@@ -4175,18 +4148,33 @@ const canaryRun = async (
     summary,
   }).select("*").single();
   if (error) throw new Error(`Canary run insert failed: ${error.message}`);
-  requireMutationReceipt(data, (row) => hasMutationReceiptId(row.id) && row.status === status
+  requireMutationReceipt(data, (row) => row.id === runId && row.requested_by_user_id === user.id && row.status === status
     && Array.isArray(row.results) && row.results.length === results.length
     && isRecord(row.summary) && row.summary.passCount === passCount
     && row.summary.failCount === failCount && row.summary.manualRequiredCount === manualRequiredCount);
   return json(200, { run: sanitizeObject(data), summary });
 };
 
-const canaryList = async (adminClient: SupabaseClientLike, user: AuthenticatedUser) => {
+const canaryList = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, actorClient: SupabaseClientLike) => {
   if (!hasAnyPermission(user, ["audit_review", "security_review"])) return json(403, { error: "audit_review_required" });
   const { data, error } = await adminClient.from("admin_canary_runs").select("*").order("created_at", { ascending: false }).limit(10);
   if (error) throw new Error(`Canary list failed: ${error.message}`);
-  return json(200, { runs: ((data ?? []) as JsonObject[]).map(sanitizeObject) });
+  const pending = await actorClient.rpc("list_admin_canary_pending_runs");
+  if (pending.error || !Array.isArray(pending.data?.runs)) throw mutationOutcomeUnverified();
+  const pendingRows = pending.data.runs.map((value: unknown) => {
+    const manifest = requireMutationReceipt(value, (row) => !!normalizeExactSubjectId(row.runId)
+      && hasMutationReceiptDate(row.startedAt) && hasMutationReceiptDate(row.deadline)
+      && ["open", "closed"].includes(row.status as string));
+    const message = `Canary run ${manifest.runId} is incomplete. State: ${manifest.status}; deadline: ${manifest.deadline}. Resume this exact run ID to recover cleanup; no completed result is implied.`;
+    return { id: manifest.runId, created_at: manifest.startedAt, status: "partial", resumeRunId: manifest.runId,
+      deadline: manifest.deadline, cleanupVerified: false,
+      summary: { passCount: 0, failCount: 0, manualRequiredCount: 1 },
+      results: [canaryResult({ actor: "system", actual: message, expected: "Completed canary result and confirmed exact cleanup.",
+        key: "canary_run_pending", label: "Canary recovery pending", section: "Cleanup / Proof Hygiene", status: "manual_required",
+        testedSurface: "rpc: list_admin_canary_pending_runs" })] };
+  });
+  const pendingIds = new Set(pendingRows.map((row: JsonObject) => row.id));
+  return json(200, { runs: [...pendingRows, ...((data ?? []) as JsonObject[]).filter((row) => !pendingIds.has(row.id)).map(sanitizeObject)] });
 };
 
 Deno.serve(async (req) => {
@@ -4210,8 +4198,6 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
       global: { headers: { Authorization: toText(req.headers.get("authorization")) } },
     });
-
-    await expireStaleGrants(adminClient);
 
     const payload = await req.json().catch(() => null) as JsonObject | null;
     if (!isRecord(payload)) return json(400, { error: "invalid_body" });
@@ -4240,8 +4226,8 @@ Deno.serve(async (req) => {
     if (action === "security_status") return await securityStatus(adminClient, auth.user, payload);
     if (action === "trust_current_owner_device") return await trustCurrentOwnerDevice(adminClient, auth.user, payload);
     if (action === "revoke_owner_device") return await revokeOwnerDevice(adminClient, auth.user, payload);
-    if (action === "revoke_temporary_owner_grant") return await revokeTemporaryOwnerGrant(adminClient, auth.user, payload);
-    if (action === "revoke_all_temporary_owner_grants") return await revokeAllTemporaryOwnerGrants(adminClient, auth.user, payload);
+    if (action === "revoke_temporary_owner_grant") return await revokeTemporaryOwnerGrant(adminClient, actorClient, auth.user, payload);
+    if (action === "revoke_all_temporary_owner_grants") return await revokeAllTemporaryOwnerGrants(adminClient, actorClient, auth.user, payload);
     if (action === "list_security_audit_events") {
       if (auth.user.role !== "owner") {
         await writeOwnerSecurityDeniedEvent(adminClient, auth.user, "list_security_audit_events");
@@ -4256,8 +4242,8 @@ Deno.serve(async (req) => {
       }
       return json(200, { checklist: await buildOwnerSecurityChecklist(adminClient) });
     }
-    if (action === "canary_run") return await canaryRun(adminClient, anonClient, auth.user, supabaseUrl, anonKey);
-    if (action === "canary_list") return await canaryList(adminClient, auth.user);
+    if (action === "canary_run") return await canaryRun(adminClient, anonClient, auth.user, supabaseUrl, anonKey, actorClient, payload);
+    if (action === "canary_list") return await canaryList(adminClient, auth.user, actorClient);
 
     return json(400, { error: "invalid_action" });
   } catch (error) {

@@ -28,6 +28,7 @@ const appConfig = read("_lib/appConfig.ts");
 const adminMoneySandbox = read("app/admin-money-sandbox-purchases.tsx");
 const channelSettings = read("app/channel-settings.tsx");
 const edge = read("supabase/functions/admin-owner-controls/index.ts");
+const permissionTemplates = read("supabase/functions/_shared/staff-permission-templates.ts");
 const staffMigration = read("supabase/migrations/202605140008_platform_staff_role_management.sql");
 const adminMigration = read("supabase/migrations/20260625184725_admin_role_scope_permissions.sql");
 
@@ -41,7 +42,7 @@ const currentDocs = [
   readiness,
   roadmap,
 ].join("\n");
-const uiText = [adminUi, appConfig, adminMoneySandbox, channelSettings, edge].join("\n");
+const uiText = [adminUi, appConfig, adminMoneySandbox, channelSettings, edge, permissionTemplates].join("\n");
 const roleNormalizer = staffMigration.match(/create or replace function public\."platform_staff_normalize_role"[\s\S]+?\$\$;/)?.[0] ?? staffMigration;
 
 assertIncludes(lock, "Product-Facing Hierarchy", "product hierarchy section");
@@ -102,12 +103,14 @@ for (const phrase of [
 }
 
 assertIncludes(uiText, "Admin Command Center", "Admin product-facing UI label");
-assertIncludes(edge, "Legal Admin Workflow", "legal template Admin display label");
-assertIncludes(edge, "Live Ops Admin Workflow", "live ops template Admin display label");
-assertIncludes(edge, "Support Workflow", "support workflow display label");
-assertNotIncludes(edge, "Legal Operator", "legal Operator template label");
-assertNotIncludes(edge, "Live Ops Operator", "live ops Operator template label");
-assertNotIncludes(edge, "Support Agent", "Support Agent role-like template label");
+assertIncludes(edge, 'from "../_shared/staff-permission-templates.ts"', "shared permission template catalog import");
+assertIncludes(edge, "const TEMPLATE_KEYS = Object.keys(PERMISSION_TEMPLATES)", "shared permission template catalog use");
+assertIncludes(permissionTemplates, "Legal Admin Workflow", "legal template Admin display label");
+assertIncludes(permissionTemplates, "Live Ops Admin Workflow", "live ops template Admin display label");
+assertIncludes(permissionTemplates, "Support Workflow", "support workflow display label");
+assertNotIncludes(edge + permissionTemplates, "Legal Operator", "legal Operator template label");
+assertNotIncludes(edge + permissionTemplates, "Live Ops Operator", "live ops Operator template label");
+assertNotIncludes(edge + permissionTemplates, "Support Agent", "Support Agent role-like template label");
 
 assertNotIncludes(lock, "Moderator equals Admin", "Moderator/Admin merge");
 assertNotIncludes(lock, "Moderator cannot have support duties", "Moderator support-duty denial");
