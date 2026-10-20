@@ -114,8 +114,8 @@ const adminBackendFunctionKeys = new Set([
 ]);
 
 const ownerSecurityFiles = [
-  '20261020151834_transactional_owner_security_canary.sql',
-  '20261020152030_staff_permission_null_actor_closure.sql',
+  '20261020222318_transactional_owner_security_canary.sql',
+  '20261020222325_staff_permission_null_actor_closure.sql',
 ];
 // The transactional repair adds eight private and seven public functions.
 // The null-actor closure replaces three existing signatures, adding none.

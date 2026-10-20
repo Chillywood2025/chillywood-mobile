@@ -22,7 +22,7 @@ null-actor path in the canonical grant, revoke, and permission-set replacement A
 current nonstaff session, or an Owner session without accepted legal terms, can
 have no effective actor role. The old `NOT session_ok OR actor_role <> 'owner'`
 predicate then evaluates to NULL and skips the PL/pgSQL denial. Forward migration
-`20261020152030_staff_permission_null_actor_closure.sql` changes only those three
+`20261020222325_staff_permission_null_actor_closure.sql` changes only those three
 guards to `session_ok IS NOT TRUE OR actor_role IS DISTINCT FROM 'owner'`.
 Signatures, execute ACLs, exact-target checks, audit behavior and the rest of
 those API bodies remain unchanged. This narrow denial repair does not establish
@@ -139,15 +139,23 @@ This is source repair, not a production cleanup receipt. Do not deploy the old
 `admin-owner-controls` implementation while the CHECK-helper ACL remains closed.
 Do not reopen that ACL to make its direct writes work.
 
-After exact-head review and Required Validation, qualify the matching newer
-app artifact and obtain its separate installation/app/OTA/release authorization.
-Hold the three affected admin mutations unused/unavailable during the mixed
-window. Install the matching newer client and verify its running update,
-runtime/channel and source without invoking these mutations against the old
-Edge. Then, with separate database/Edge authorization, apply the forward
-migrations, verify their function/ACL/receipt contract, and switch to the
-matching repaired Edge handler. Verify the updated test clients and matching complete
-contract before resuming the three actions. Legacy mutation payload support is
+On 2026-10-20 the owner explicitly authorized server-first deployment, without
+waiting for phone uptake or an OTA. The two migrations were deployed as
+`20261020222318_transactional_owner_security_canary` and
+`20261020222325_staff_permission_null_actor_closure`, preserving reviewed SQL
+bytes. `admin-owner-controls` version 65 is ACTIVE; all eight bundle files match
+the validated source and its existing JWT configuration is unchanged. RPC
+execute privileges were read back. No live grants, revocations, canaries or
+cleanup were invoked as deployment probes.
+
+The separate inspection endpoint was installed disabled as version 1, with JWT
+verification enabled and all six deployed files matching source. Inspection
+and all retention flags remain off. Endpoint installation is not activation
+or evidence of native playback.
+
+The server deployment is complete. Separately authorize and qualify the newer
+app artifact before claiming installed-client behavior. Keep the three affected
+admin mutations unused during a mixed-client window. Legacy mutation payload support is
 not a rollout requirement; safe rejection remains intentional. Once the intended
 updated test clients are verified, old payload incompatibility is not an outstanding
 product defect. Inventory interrupted legacy runs separately;
@@ -168,4 +176,4 @@ single/bulk rollback, audit failure, concurrent authority changes, idempotent
 retry, stopped-run recovery and exact cleanup. Verify the manifest and Auth
 deletion outcomes separately. Existing production rows, grants and stopped
 runs have not been modified by this source change. Prior device or canary
-reports are historical evidence, not proof that this repair is deployed.
+reports are historical evidence, not proof of current installed-client behavior.

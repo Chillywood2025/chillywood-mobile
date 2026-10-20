@@ -41,8 +41,8 @@ const adminBackendFiles = [
 // Both reviewed successors are part of the current replay: new transactional
 // Owner Security/Canary functions and replacement null-safe staff RPC bodies.
 const ownerSecurityFiles = [
-  '20261020151834_transactional_owner_security_canary.sql',
-  '20261020152030_staff_permission_null_actor_closure.sql',
+  '20261020222318_transactional_owner_security_canary.sql',
+  '20261020222325_staff_permission_null_actor_closure.sql',
 ];
 
 for(const includeHeldStudio of [false,true]) test(`staff mutation repair with Studio ${includeHeldStudio?'included':'held'}`,{timeout:120_000},async t=>{
