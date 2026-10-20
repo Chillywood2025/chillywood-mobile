@@ -23,11 +23,38 @@ failed write; an unavailable read must not be presented as an empty collection.
 - Replay read errors and zero-row mutation results must not become success.
 - Engagement operations and UI settlements must retain account/target identity.
 
-## Limits and separately required work
+## Server ordering follow-through (2026-10-20)
 
-Client serialization and durable pending intent are not a distributed ordering
-protocol. Conflicting edits on different devices, including older app versions,
-need server-enforced revisions and idempotency to provide stronger guarantees.
+The current candidate closes the separately recorded server-ordering gap for
+Saved and Continue Watching. A private per-account/title revision survives
+removal as a null tombstone. Mutation RPCs require the caller's exact current
+session, an immutable operation UUID and the observed revision. Accepted
+projection/state/receipt changes commit atomically using server time. Stale
+requests return an explicit conflict instead of overwriting a newer device.
+An exact retry returns its original receipt without replaying side effects.
+Playback counts increment once for an accepted start; a stale competing start
+is reported as a conflict, not silently counted as an acknowledged update.
+
+The client persists the full in-flight request separately from newer desired
+state. Explicit Retry first reconciles that exact request; only its receipt can
+release a successor. A conflict remains blocked through refresh, process restart
+and automatic progress ticks. Title and Library expose an explicit Use account
+version action; only a successful current-account read can discard conflicted
+local intent. The user can then make a new choice against the fresh revision.
+Legacy pending envelopes without a server operation identity are preserved
+locally but quarantined as conflicts, never manufactured into new remote edits.
+
+Old direct client INSERT/UPDATE/DELETE privileges are revoked by the candidate
+migration; existing SELECT policies remain. Deploying it is an explicit backend
+cutover: older installed clients can read but their mutations fail closed until
+updated. Source merge is not deployment or installed-client proof. No migration
+is automatically applied by these tests or this document.
+
+## Historical client-only limits and other required work
+
+Before the server-ordering follow-through, client serialization and durable pending intent were not a distributed ordering
+protocol. Conflicting edits on different devices required server revisions and
+idempotency; the candidate protocol above supersedes that best-effort behavior.
 An ambiguous transport outcome is not proof that a write failed to commit.
 Unknown outcomes retain the latest local desired state and must remain visible.
 Ordinary reads, foreground refresh and restart must not silently retry them.

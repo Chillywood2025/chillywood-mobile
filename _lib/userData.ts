@@ -1,9 +1,10 @@
+import "react-native-get-random-values";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Database, Tables, TablesInsert } from "../supabase/database.types";
 import { createClient } from "@supabase/supabase-js";
 import { captureAccountBoundSupabaseMutationSubject, assertAccountBoundSupabaseMutationSubjectCurrent } from "./accountBoundSupabaseMutation";
 import { getAccountScopedStorageKey, readAccountScopedJsonValue, writeAccountScopedJsonValue } from "./accountScopedStorage";
-import { createUserCollectionSync, DefinitiveCollectionWriteError, type CollectionSyncStatus } from "./userCollectionSync";
+import { createUserCollectionSync, DefinitiveCollectionWriteError, type CollectionSyncStatus, type VersionedIntent } from "./userCollectionSync";
 import {
   getCurrentAccountSessionAuthoritySnapshot,
   sameAccountSessionAuthority,
@@ -126,14 +127,7 @@ export type UserChannelProfile = {
   auditOwnerKey?: string;
 };
 
-type UserListInsert = TablesInsert<"user_list">;
-type UserListRow = Pick<Tables<"user_list">, "title_id" | "updated_at">;
 const USER_MY_LIST_PAGE_SIZE = 200;
-type WatchHistoryRow = Pick<
-  Tables<"watch_history">,
-  "title_id" | "last_position_millis" | "duration_millis" | "last_watched_at" | "updated_at" | "completed" | "play_count"
->;
-type WatchHistoryInsert = TablesInsert<"watch_history">;
 type UserProfileRow = Pick<
   Tables<"user_profiles">,
   | "user_id"
@@ -313,7 +307,6 @@ const toMyListEntryMap = (entries: MyListEntry[]) => {
   return next;
 };
 
-const toIsoString = (value?: number) => new Date(value ?? Date.now()).toISOString();
 
 const normalizeChannelRole = (value: unknown): UserChannelRole => {
   const normalized = String(value ?? "").trim().toLowerCase();
@@ -767,55 +760,79 @@ function parseLocalMyListEntries(parsed: unknown): Record<string, MyListEntry> {
   return toMyListEntryMap(entries);
 }
 
-function myListCollection(binding: UserDataAccountBinding) {
-  const userId = getBoundUserId(binding);
+function collectionOperationId() {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128;
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+function versionedCollectionProtocol<T>(binding: UserDataAccountBinding, collection: "saved" | "watch") {
   const getClient = boundCollectionClient(binding);
+  const invoke = async (name: string, args: Record<string, unknown>) => {
+    const client = await getClient();
+    assertUserDataAccountBindingIsCurrent(binding);
+    const rpc = client.rpc.bind(client) as unknown as (name: string, args: Record<string, unknown>) =>
+      Promise<{ data: unknown; error: { message?: string; code?: string } | null; status?: number }>;
+    const result = await rpc(name, args);
+    assertUserDataAccountBindingIsCurrent(binding);
+    if (result.error) throwCollectionWriteError(result.error, result.status);
+    return result.data;
+  };
+  return {
+    operationId: collectionOperationId,
+    read: async () => {
+      const values: Record<string, T> = {}, revisions: Record<string, string> = {};
+      let cursor = "";
+      for (;;) {
+        const data = await invoke("read_my_collection_state", { p_collection: collection, p_after_title_id: cursor, p_limit: USER_MY_LIST_PAGE_SIZE });
+        if (!Array.isArray(data)) throw new Error("Account collection is unavailable.");
+        for (const row of data) {
+          if (!isPlainObject(row) || typeof row.title_id !== "string" || !row.title_id
+            || ["__proto__", "prototype", "constructor"].includes(row.title_id)
+            || typeof row.revision !== "string" || !/^(0|[1-9][0-9]{0,18})$/.test(row.revision)
+            || !Object.hasOwn(row, "value")) throw new Error("Invalid account collection response.");
+          if (collection === "saved" && row.value !== null && (!isPlainObject(row.value) || row.value.id !== row.title_id)) {
+            throw new Error("Invalid Saved title binding.");
+          }
+          revisions[row.title_id] = row.revision;
+          if (row.value !== null) values[row.title_id] = row.value as T;
+        }
+        if (data.length < USER_MY_LIST_PAGE_SIZE) break;
+        const next = String(data[data.length - 1].title_id);
+        if (next <= cursor) throw new Error("Account collection pagination did not advance.");
+        cursor = next;
+      }
+      return { values, revisions };
+    },
+    write: async (id: string, request: VersionedIntent<T>) => {
+      const input = request.value as Record<string, unknown> | null;
+      const value = input === null ? null : collection === "saved" ? { id } : {
+        positionMillis: input.positionMillis,
+        ...(input.durationMillis === undefined ? {} : { durationMillis: input.durationMillis }),
+        completed: input.completed === true,
+        ...(input.incrementPlayCount === true ? { incrementPlayCount: true } : {}),
+      };
+      const data = await invoke("mutate_my_collection_state", {
+        p_collection: collection, p_title_id: id, p_operation_id: request.operationId,
+        p_expected_revision: request.expectedRevision, p_value: value,
+      });
+      if (!isPlainObject(data) || !["applied", "conflict"].includes(String(data.status))
+        || typeof data.revision !== "string" || !Object.hasOwn(data, "value")) throw new Error("Invalid account collection receipt.");
+      if (collection === "saved" && data.value !== null && (!isPlainObject(data.value) || data.value.id !== id)) {
+        throw new Error("Invalid Saved receipt binding.");
+      }
+      return { status: data.status as "applied" | "conflict", revision: data.revision, value: data.value as T | null };
+    },
+  };
+}
+function myListCollection(binding: UserDataAccountBinding) {
   return createUserCollectionSync<MyListEntry>({
     ...collectionStorage(MY_LIST_KEY, binding),
     read: () => readAccountValue(MY_LIST_KEY, binding, null, true),
     legacy: parseLocalMyListEntries,
-    validValue: value => isPlainObject(value) && typeof value.id === "string"
-      && Number.isFinite(value.savedAt),
-    readRemote: async () => {
-      const client = await getClient();
-      const remoteRowsByTitleId = new Map<string, UserListRow>();
-      let titleIdCursor = "";
-      for (;;) {
-        assertUserDataAccountBindingIsCurrent(binding);
-        let query = client
-          .from(USER_MY_LIST_TABLE)
-          .select("title_id,updated_at")
-          .eq("user_id", userId!)
-          .order("title_id", { ascending: true })
-          .limit(USER_MY_LIST_PAGE_SIZE);
-        if (titleIdCursor) query = query.gt("title_id", titleIdCursor);
-        const { data, error } = await query.returns<UserListRow[]>();
-        assertUserDataAccountBindingIsCurrent(binding);
-        if (error || !data) throw error ?? new Error("Saved titles are unavailable.");
-        for (const row of data) {
-          const titleId = toIdString(row.title_id);
-          if (titleId) remoteRowsByTitleId.set(titleId, row);
-        }
-        if (data.length < USER_MY_LIST_PAGE_SIZE) break;
-        const nextCursor = toIdString(data[data.length - 1]?.title_id);
-        if (!nextCursor || nextCursor === titleIdCursor) throw new Error("Saved title pagination did not advance.");
-        titleIdCursor = nextCursor;
-      }
-      return toMyListEntryMap(Array.from(remoteRowsByTitleId.values()).map(row => ({
-        id: toIdString(row.title_id), savedAt: Date.parse(row.updated_at) || 0,
-      })));
-    },
-    writeRemote: async (id, value) => {
-      const client = await getClient();
-      assertUserDataAccountBindingIsCurrent(binding);
-      const { error, status } = value === null
-        ? await client.from(USER_MY_LIST_TABLE).delete().eq("user_id", userId!).eq("title_id", id)
-        : await client.from(USER_MY_LIST_TABLE).upsert({
-          user_id: userId!, title_id: id, updated_at: toIsoString(value.savedAt),
-        } satisfies UserListInsert, { onConflict: "user_id,title_id" });
-      assertUserDataAccountBindingIsCurrent(binding);
-      if (error) throwCollectionWriteError(error, status);
-    },
+    validValue: value => isPlainObject(value) && typeof value.id === "string" && Number.isFinite(value.savedAt),
+    versioned: versionedCollectionProtocol<MyListEntry>(binding, "saved"),
   });
 }
 
@@ -838,7 +855,7 @@ export async function readLocalMyListEntries(): Promise<MyListEntry[]> {
   return sortMyListEntries(Object.values((await myListCollection(binding).snapshot()).values));
 }
 
-export async function readMyListState(options?: { retryUnknown?: boolean }) {
+export async function readMyListState(options?: { retryUnknown?: boolean; useAccountVersion?: boolean }) {
   const binding = captureUserDataAccountBinding();
   const result = await myListCollection(binding).refresh(options);
   return { ids: myListIds(result.values), syncStatus: result.syncStatus, readStatus: result.readStatus };
@@ -885,16 +902,6 @@ const visibleWatchProgress = (values: Record<string, StoredWatchProgressEntry>):
     }]))
 );
 
-const toProgressEntry = (row: WatchHistoryRow): StoredWatchProgressEntry | null => {
-  if (!toIdString(row.title_id)) return null;
-  const updatedAtSource = row.updated_at ?? row.last_watched_at ?? null;
-  return {
-    positionMillis: Math.max(0, Number(row.last_position_millis ?? 0)),
-    durationMillis: row.duration_millis != null ? Number(row.duration_millis) : undefined,
-    updatedAt: updatedAtSource ? new Date(String(updatedAtSource)).getTime() : 0,
-    completed: row.completed === true,
-  };
-};
 
 function validStoredWatchProgress(value: unknown) {
   return isPlainObject(value) && Number.isFinite(value.positionMillis) && Number(value.positionMillis) >= 0
@@ -904,69 +911,13 @@ function validStoredWatchProgress(value: unknown) {
 }
 
 function watchProgressCollection(binding: UserDataAccountBinding) {
-  const userId = getBoundUserId(binding);
-  const getClient = boundCollectionClient(binding);
   return createUserCollectionSync<StoredWatchProgressEntry>({
     ...collectionStorage(WATCH_PROGRESS_KEY, binding),
     read: () => readAccountValue(WATCH_PROGRESS_KEY, binding, null, true),
     legacy: value => isPlainObject(value) ? Object.fromEntries(Object.entries(value)
       .filter(([, entry]) => validStoredWatchProgress(entry))) as Record<string, StoredWatchProgressEntry> : {},
     validValue: validStoredWatchProgress,
-    retryUnknownValue: value => {
-      if (!value) return value;
-      // Retrying an uncertain playback start must not increment play_count twice.
-      const { incrementPlayCount: _incrementPlayCount, ...progress } = value;
-      return progress;
-    },
-    readRemote: async () => {
-      const client = await getClient();
-      const result: Record<string, StoredWatchProgressEntry> = {};
-      let titleIdCursor = "";
-      for (;;) {
-        assertUserDataAccountBindingIsCurrent(binding);
-        let query = client.from(USER_WATCH_HISTORY_TABLE)
-          .select("title_id,last_position_millis,duration_millis,last_watched_at,updated_at,completed,play_count")
-          .eq("user_id", userId!).order("title_id", { ascending: true }).limit(USER_MY_LIST_PAGE_SIZE);
-        if (titleIdCursor) query = query.gt("title_id", titleIdCursor);
-        const { data, error } = await query;
-        assertUserDataAccountBindingIsCurrent(binding);
-        if (error || !data) throw error ?? new Error("Watch progress is unavailable.");
-        for (const row of data) {
-          const entry = toProgressEntry(row);
-          if (entry) result[toIdString(row.title_id)] = entry;
-        }
-        if (data.length < USER_MY_LIST_PAGE_SIZE) break;
-        const nextCursor = toIdString(data[data.length - 1]?.title_id);
-        if (!nextCursor || nextCursor === titleIdCursor) throw new Error("Watch progress pagination did not advance.");
-        titleIdCursor = nextCursor;
-      }
-      return result;
-    },
-    writeRemote: async (id, entry) => {
-      const client = await getClient();
-      assertUserDataAccountBindingIsCurrent(binding);
-      const value = entry ?? { positionMillis: 0, completed: true, updatedAt: Date.now() };
-      const payload: WatchHistoryInsert = {
-        user_id: userId!, title_id: id,
-        last_position_millis: Math.max(0, Math.floor(value.positionMillis)),
-        duration_millis: value.durationMillis ?? null,
-        completed: value.completed === true,
-        last_watched_at: toIsoString(value.updatedAt),
-        updated_at: toIsoString(value.updatedAt),
-      };
-      if (value.incrementPlayCount) {
-        const existing = await client.from(USER_WATCH_HISTORY_TABLE).select("play_count")
-          .eq("user_id", userId!).eq("title_id", id).maybeSingle();
-        assertUserDataAccountBindingIsCurrent(binding);
-        if (existing.error) throw new DefinitiveCollectionWriteError(existing.error.message);
-        payload.play_count = Math.max(1, Number(existing.data?.play_count ?? 0) + 1);
-      }
-      assertUserDataAccountBindingIsCurrent(binding);
-      const { error, status } = await client.from(USER_WATCH_HISTORY_TABLE)
-        .upsert(payload, { onConflict: "user_id,title_id" });
-      assertUserDataAccountBindingIsCurrent(binding);
-      if (error) throwCollectionWriteError(error, status);
-    },
+    versioned: versionedCollectionProtocol<StoredWatchProgressEntry>(binding, "watch"),
   });
 }
 
@@ -985,7 +936,7 @@ export async function readMergedWatchProgress(): Promise<WatchProgressMap> {
   return visibleWatchProgress((await watchProgressCollection(binding).refresh()).values);
 }
 
-export async function readWatchProgressState(options?: { retryUnknown?: boolean }) {
+export async function readWatchProgressState(options?: { retryUnknown?: boolean; useAccountVersion?: boolean }) {
   const binding = captureUserDataAccountBinding();
   const result = await watchProgressCollection(binding).refresh(options);
   return { progress: visibleWatchProgress(result.values), syncStatus: result.syncStatus, readStatus: result.readStatus };

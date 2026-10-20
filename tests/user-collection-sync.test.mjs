@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
 import ts from 'typescript';
+import { webcrypto } from 'node:crypto';
 
 const deferred = () => {
   let resolve;
@@ -10,15 +11,66 @@ const deferred = () => {
   return { promise, resolve };
 };
 
-function harness() {
+function harness(shared) {
   let account = { userId: 'a', accountId: 'a', sessionGeneration: 'one', state: 'ACTIVE', restoreOnly: false };
   const storage = new Map();
-  const remote = { user_list: new Map(), watch_history: new Map() };
+  const remote = shared?.remote ?? { user_list: new Map(), watch_history: new Map() };
   const writes = [];
   const controls = { failWrite: false, failStorage: false, failRead: false, loseResponse: false, resolvedUnknown: false,
     errorCode: '42501', readGate: null, writeGate: null, authGate: null };
   const tokens = [];
-  const client = { from(table, accessToken) {
+  const versions = shared?.versions ?? { user_list: new Map(), watch_history: new Map() }, receipts = shared?.receipts ?? new Map();
+  const canonical = (table, id) => {
+    const row = remote[table].get(id);
+    if (!row) return null;
+    if (table === 'user_list') return { id, savedAt: Date.parse(row.updated_at) || 0 };
+    return { positionMillis: row.last_position_millis ?? 0, updatedAt: Date.parse(row.updated_at) || 0,
+      completed: row.completed === true, ...(row.duration_millis == null ? {} : { durationMillis: row.duration_millis }), playCount: row.play_count ?? 1 };
+  };
+  const client = { async rpc(name, args, accessToken) {
+    const table = args.p_collection === 'saved' ? 'user_list' : 'watch_history';
+    const authGate = controls.authGate; controls.authGate = null;
+    if (authGate) { authGate.reached.resolve(); await authGate.release.promise; }
+    if (accessToken) tokens.push(await accessToken());
+    if (name === 'read_my_collection_state') {
+      if (controls.failRead) return { data: null, error: new Error('unavailable') };
+      const data = [...new Set([...remote[table].keys(), ...versions[table].keys()])]
+        .filter(id => id > args.p_after_title_id).sort().slice(0, args.p_limit)
+        .map(id => ({ title_id: id, revision: String(versions[table].get(id) ?? 0), value: canonical(table, id) }));
+      const gate = controls.readGate; controls.readGate = null;
+      if (gate) { gate.reached.resolve(); await gate.release.promise; }
+      return { data, error: null };
+    }
+    assert.equal(name, 'mutate_my_collection_state');
+    const id = args.p_title_id, value = args.p_value;
+    writes.push({ table, action: value === null ? 'delete' : 'write', payload: value, id, request: structuredClone(args) });
+    const gate = controls.writeGate; controls.writeGate = null;
+    if (gate) { gate.reached.resolve(); await gate.release.promise; }
+    if (controls.failWrite) return { data: null, error: { message: 'rejected', code: controls.errorCode }, status: 403 };
+    if (controls.resolvedUnknown) return { data: null, error: { message: 'fetch failed', code: '' }, status: 0 };
+    const old = receipts.get(args.p_operation_id);
+    if (old) {
+      assert.equal(JSON.stringify(args), old.request, 'retry must preserve exact UUID, revision and payload');
+      return { data: structuredClone(old.receipt), error: null };
+    }
+    const revision = versions[table].get(id) ?? 0;
+    if (args.p_expected_revision !== String(revision)) return { data: { status: 'conflict', revision: String(revision), value: canonical(table, id) }, error: null };
+    if (table === 'user_list') {
+      if (value === null) remote[table].delete(id);
+      else remote[table].set(id, { title_id: id, updated_at: new Date().toISOString() });
+    } else {
+      const v = value ?? { positionMillis: 0, completed: true };
+      const prior = remote[table].get(id);
+      remote[table].set(id, { title_id: id, last_position_millis: v.positionMillis, duration_millis: v.durationMillis ?? null,
+        completed: v.completed === true, updated_at: new Date().toISOString(),
+        play_count: (prior?.play_count ?? 0) + (v.incrementPlayCount ? 1 : 0) });
+    }
+    versions[table].set(id, revision + 1);
+    const receipt = { status: 'applied', revision: String(revision + 1), value: canonical(table, id) };
+    receipts.set(args.p_operation_id, { request: JSON.stringify(args), receipt: structuredClone(receipt) });
+    if (controls.loseResponse) throw new Error('response lost after commit');
+    return { data: receipt, error: null };
+  }, from(table, accessToken) {
     let action = 'read', payload, id, cursor = '', limit = Infinity;
     const query = {
       select() { return query; }, eq(key, value) { if (key === 'title_id') id = value; return query; },
@@ -61,20 +113,22 @@ function harness() {
     let source = readFileSync(`_lib/${name}.ts`, 'utf8');
     const mutation = process.env.USER_COLLECTION_MUTATION;
     if (name === 'userCollectionSync') {
-      if (mutation === 'revision') source = source.replace('state.revision !== revision || ', '');
+      if (mutation === 'revision') source = source.replaceAll('state.revision !== revision || ', '');
       if (mutation === 'persistence') source = source.replace(
-        /if \(!await options\.write\(state\)\) throw new Error\([^;]+;/,
+        /if \(!await options\.write\(state\)\) throw new Error\([^;]+;/g,
         'await options.write(state);',
       );
       if (mutation === 'unknown') source = source.replace('(state.unsettled[id] && !retryUnknown) || !state.pending[id]', '!state.pending[id]');
+      if (mutation === 'unknown') source = source.replace('(state.unsettled[id] && !retryUnknown)', 'false');
+      if (mutation === 'stickyconflict') source = source.replace('state.conflicts[id] || ', '');
     }
     if (name === 'userData' && mutation === 'completion') {
-      source = source.replace('completed: row.completed === true', 'completed: false');
+      source = source.replace('values[row.title_id] = row.value as T', 'values[row.title_id] = (collection === "watch" ? {...row.value as object, completed: false} : row.value) as T');
     }
     const code = ts.transpileModule(source, {
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
     }).outputText;
-    vm.runInNewContext(code, { exports, console, Date, Map, Set, Promise, require(path) {
+    vm.runInNewContext(code, { exports, console, Date, Map, Set, Promise, crypto: webcrypto, require(path) {
       if (path === '@react-native-async-storage/async-storage') return { default: {
         async getItem(key) { return storage.get(key) ?? null; },
         async setItem(key, value) { if (controls.failStorage) throw new Error('disk full'); storage.set(key, value); },
@@ -82,6 +136,7 @@ function harness() {
       if (path === './supabase') return { supabase: client };
       if (path === '@supabase/supabase-js') return { createClient: (_url, _key, options) => ({
         from: table => client.from(table, options.accessToken),
+        rpc: (name, args) => client.rpc(name, args, options.accessToken),
       }) };
       if (path === './accountBoundSupabaseMutation') return {
         captureAccountBoundSupabaseMutationSubject: async () => ({ authority: account, accessToken: `token:${account?.sessionGeneration}` }),
@@ -102,10 +157,75 @@ function harness() {
   }
   const api = load('userData');
   const key = base => `${base}:account-v1:${account?.userId ?? 'anonymous'}`;
-  return { api, remote, writes, controls, storage, tokens, key, setAccount: value => { account = value; },
+  return { api, remote, writes, controls, storage, tokens, key, shared: { remote, versions, receipts }, setAccount: value => { account = value; },
     restart() { for (const key of Object.keys(modules)) delete modules[key]; return load('userData'); },
     gate() { return { reached: deferred(), release: deferred() }; } };
 }
+
+test('cross-device conflict stays blocked through refresh, restart and newer local actions', async () => {
+  const a = harness(), b = harness(a.shared);
+  a.controls.failWrite = true;
+  await a.api.setMyListTitleSaved('film', true);
+  a.controls.failWrite = false;
+  assert.equal((await b.api.setMyListTitleSaved('film', true)).syncStatus, 'synced');
+  assert.equal((await b.api.setMyListTitleSaved('film', false)).syncStatus, 'synced');
+  assert.equal((await a.api.readMyListState()).syncStatus, 'conflict');
+  assert.equal(a.remote.user_list.has('film'), false);
+  const count = a.writes.length;
+  const restarted = a.restart();
+  await restarted.readMyListState();
+  await restarted.setMyListTitleSaved('film', true);
+  assert.equal(a.writes.length, count, 'new local intent must not silently rebase a conflict');
+  assert.equal(a.remote.user_list.has('film'), false);
+  const resolved = await restarted.readMyListState({ useAccountVersion: true });
+  assert.equal(resolved.syncStatus, 'synced');
+  assert.deepEqual(Array.from(resolved.ids), []);
+  assert.equal((await restarted.setMyListTitleSaved('film', true)).syncStatus, 'synced');
+  assert.equal(a.writes.at(-1).request.p_expected_revision, '2');
+});
+
+test('late acknowledged predecessor cannot rebase a successor over another device', async () => {
+  const a = harness(), b = harness(a.shared);
+  a.controls.loseResponse = true;
+  await a.api.setMyListTitleSaved('film', true);
+  a.controls.loseResponse = false;
+  await a.api.setMyListTitleSaved('film', false);
+  await b.api.readMyListState();
+  await b.api.setMyListTitleSaved('film', false);
+  const result = await a.restart().readMyListState({ retryUnknown: true });
+  assert.equal(result.syncStatus, 'conflict');
+  assert.deepEqual(a.writes[1].request, a.writes[0].request);
+  assert.equal(a.writes[2].request.p_expected_revision, '1');
+  assert.equal(a.shared.versions.user_list.get('film'), 2);
+  assert.equal(a.remote.user_list.has('film'), false);
+});
+
+test('account-version resolution does not discard local intent when its read fails', async () => {
+  const a = harness(), b = harness(a.shared);
+  await b.api.setMyListTitleSaved('film', true);
+  assert.equal((await a.api.setMyListTitleSaved('film', false)).syncStatus, 'conflict');
+  a.controls.failRead = true;
+  const state = await a.api.readMyListState({ useAccountVersion: true });
+  assert.equal(state.readStatus, 'offline');
+  assert.equal(state.syncStatus, 'conflict');
+  assert.deepEqual(Array.from(state.ids), []);
+});
+
+test('versioned pending operation survives process loss and exact retry without duplicate count', async () => {
+  const a = harness(); a.controls.loseResponse = true;
+  await a.api.recordPlaybackStart('film');
+  const raw = JSON.parse(a.storage.get(a.key(a.api.WATCH_PROGRESS_KEY)));
+  assert.equal(raw.collectionVersion, 2);
+  assert.equal(raw.unsettled.film.value.incrementPlayCount, true);
+  assert.equal(raw.unsettled.film.expectedRevision, '0');
+  a.controls.loseResponse = false;
+  const restarted = a.restart();
+  assert.equal((await restarted.readWatchProgressState()).syncStatus, 'unknown');
+  assert.equal(a.writes.length, 1);
+  assert.equal((await restarted.readWatchProgressState({ retryUnknown: true })).syncStatus, 'synced');
+  assert.deepEqual(a.writes[1].request, a.writes[0].request);
+  assert.equal(a.remote.watch_history.get('film').play_count, 1);
+});
 
 test('successful Saved read replaces clean legacy cache without uploading deleted titles', async () => {
   const h = harness();
@@ -229,12 +349,12 @@ test('unknown committed write blocks a conflicting successor and survives restar
   assert.equal(h.writes.length, 1, 'no implicit retry or conflicting remote delete');
 });
 
-test('persisted in-flight marker from process exit is not retried', async () => {
+test('legacy in-flight marker without server identity is quarantined, not retried', async () => {
   const h = harness();
   h.storage.set(h.key(h.api.MY_LIST_KEY), JSON.stringify({ collectionVersion: 1, revision: 2, base: {},
     pending: { film: { sequence: 1, value: { id: 'film', savedAt: 10 } } }, unsettled: { film: 1 } }));
   const result = await h.api.readMyListState();
-  assert.equal(result.syncStatus, 'unknown');
+  assert.equal(result.syncStatus, 'conflict');
   assert.deepEqual(Array.from(result.ids), ['film']);
   assert.equal(h.writes.length, 0);
 });
@@ -316,14 +436,17 @@ test('airplane-mode unknown failure can recover only through explicit account sy
   assert.equal(h.remote.user_list.has('film'), true);
 });
 
-test('explicit retry sends latest opposite intent and remains unknown on another lost response', async () => {
+test('explicit retry reconciles the immutable predecessor before sending the opposite successor', async () => {
   const h = harness(); h.controls.loseResponse = true;
   await h.api.setMyListTitleSaved('film', true);
   await h.api.setMyListTitleSaved('film', false);
   assert.equal(h.writes.length, 1);
   assert.equal((await h.api.readMyListState({ retryUnknown: true })).syncStatus, 'unknown');
   assert.equal(h.remote.user_list.has('film'), false);
-  assert.equal(h.writes[1].action, 'delete');
+  assert.equal(h.writes[1].action, 'write');
+  assert.deepEqual(h.writes[1].request, h.writes[0].request);
+  assert.equal(h.writes[2].action, 'delete');
+  assert.equal(h.writes[2].request.p_expected_revision, '1');
   h.controls.loseResponse = false;
   assert.equal((await h.api.readMyListState({ retryUnknown: true })).syncStatus, 'synced');
   assert.equal(h.remote.user_list.has('film'), false);
@@ -342,14 +465,15 @@ test('explicit retry never dispatches concurrently with an actually unsettled re
   assert.equal(h.writes.length, 1, 'successful predecessor needs no duplicate retry');
 });
 
-test('explicit retry of an unknown playback-start intent strips the increment marker', async () => {
+test('explicit retry of an unknown playback start keeps its immutable identity and counts only once', async () => {
   const h = harness(); h.controls.loseResponse = true;
   await h.api.recordPlaybackStart('film');
   assert.equal(h.remote.watch_history.get('film').play_count, 1);
   h.controls.loseResponse = false;
   await h.restart().readWatchProgressState({ retryUnknown: true });
   assert.equal(h.remote.watch_history.get('film').play_count, 1);
-  assert.equal(h.writes[1].payload.play_count, undefined);
+  assert.equal(h.writes[1].payload.incrementPlayCount, true);
+  assert.deepEqual(h.writes[1].request, h.writes[0].request);
 });
 
 test('read unavailability is explicit even without cache and legacy offline cache remains usable', async () => {

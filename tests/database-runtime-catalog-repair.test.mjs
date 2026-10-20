@@ -113,6 +113,11 @@ const adminBackendFunctionKeys = new Set([
   'public.list_admin_report_audit_events_page/3',
 ]);
 
+const collectionOrderingFiles = ['20261020223000_user_collection_revision_authority.sql'];
+const collectionOrderingFunctionKeys = new Set([
+  'private.assert_user_collection_session/0', 'private.user_collection_projection_value/3',
+  'public.read_my_collection_state/3', 'public.mutate_my_collection_state/5',
+]);
 const ownerSecurityFiles = [
   '20261020222318_transactional_owner_security_canary.sql',
   '20261020222325_staff_permission_null_actor_closure.sql',
@@ -201,7 +206,8 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size+collectionOrderingFunctionKeys.size);
+    assert.deepEqual(before.functions.filter(fn=>collectionOrderingFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(), [...collectionOrderingFunctionKeys].sort());
     assert.deepEqual(before.functions.filter(fn=>ownerSecurityFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(),
       [...ownerSecurityFunctionKeys].sort(),'exact Owner Security successor function inventory is present');
     assert.deepEqual(before.functions.filter(fn=>retentionRecoveryFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(),
@@ -234,7 +240,8 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length+collectionOrderingFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>collectionOrderingFiles.includes(file)),collectionOrderingFiles);
     assert.deepEqual(replayReport.files.filter(file=>ownerSecurityFiles.includes(file)),ownerSecurityFiles,
       'entire Owner Security and null-actor successor bundle is replayed');
     assert.deepEqual(replayReport.files.filter(file=>retentionRecoveryFiles.includes(file)),retentionRecoveryFiles,

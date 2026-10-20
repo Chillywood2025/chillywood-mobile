@@ -228,6 +228,15 @@ test("large Saved history and Chi'lly Chat collections cross every backend read 
   });
   const savedSupabase = {
     from() { return makeSavedQuery(); },
+    async rpc(name, args) {
+      assert.equal(name, "read_my_collection_state");
+      assert.equal(args.p_collection, "saved");
+      const query = makeSavedQuery().limit(args.p_limit);
+      if (args.p_after_title_id) query.gt("title_id", args.p_after_title_id);
+      const { data, error } = await query.returns();
+      return { error, data: data.map(row => ({ title_id: row.title_id, revision: "0",
+        value: { id: row.title_id, savedAt: Date.parse(row.updated_at) } })) };
+    },
   };
   const savedStorage = createMemoryStorage();
   const savedApi = loadStubbed("_lib/userData.ts", {
@@ -359,7 +368,8 @@ test("large Saved history and Chi'lly Chat collections cross every backend read 
 
   const userDataSource = read("_lib/userData.ts");
   const chatSource = read("_lib/chat.ts");
-  assert.match(userDataSource, /\.gt\("title_id", titleIdCursor\)/u);
+  assert.match(userDataSource, /p_after_title_id: cursor, p_limit: USER_MY_LIST_PAGE_SIZE/u);
+  assert.match(userDataSource, /next <= cursor/u);
   assert.match(chatSource, /\.gt\("id", threadIdCursor\)/u);
   assert.match(chatSource, /\.gt\("id", messageIdCursor\)/u);
 

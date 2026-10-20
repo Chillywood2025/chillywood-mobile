@@ -30,7 +30,7 @@ function textOf(tree) {
   return textOf(tree.props?.children);
 }
 async function mountScreen(file, overrides={}) {
-  const state = {user:{id:"a"},authority:{sessionGeneration:"1"}, tree:null, pushes:[], writes:[], syncRetries:[], saved:["film"], failSaved:false, failTitles:false, ...overrides};
+  const state = {user:{id:"a"},authority:{sessionGeneration:"1"}, tree:null, pushes:[], writes:[], syncRetries:[], resolutions:[], saved:["film"], failSaved:false, failTitles:false, ...overrides};
   const title = {id:"film",title:"Film",is_published:true,status:"published",content_access_rule:"open"};
   const query = (table) => {
     const result = () => ({data: table === "titles" ? [title] : [],error:state.failTitles ? Error("offline") : null});
@@ -42,6 +42,7 @@ async function mountScreen(file, overrides={}) {
     readMergedWatchProgress: async () => state.readProgress ? (await state.readProgress()).progress : ({}),
     readMyListState: async options => {
       if(options?.retryUnknown) {state.syncRetries.push(options);if(state.retrySync)return state.retrySync();}
+      if(options?.useAccountVersion) {state.resolutions.push(options);if(state.resolveConflict)return state.resolveConflict();}
       return {ids:await userData.readMyListIds(),syncStatus:state.syncStatus??"synced",readStatus:state.offline ? "offline" : "fresh"};
     },
     readWatchProgressState: async () => state.readProgress ? state.readProgress() : ({progress:{},syncStatus:"synced",readStatus:"fresh"}),
@@ -242,6 +243,25 @@ test("Unconfirmed account writes remain visibly unconfirmed after a screen remou
 });
 
 for (const file of ["app/(tabs)/my-list.tsx","app/title/[id].tsx"]) {
+  test(`${file}: conflict resolution is explicit, single-flight and does not claim success on failed read`,async()=>{
+    const h=await mountScreen(file,{syncStatus:"conflict"});
+    try {
+      const button=()=>h.nodes().find(x=>/^Use account .* version$/.test(x.props?.accessibilityLabel??""));
+      assert.ok(button());assert.match(h.text(),/another device/);
+      assert.equal(h.state.resolutions.length,0);
+      const pending=deferred();h.state.resolveConflict=()=>pending.promise;
+      let task;const original=button();
+      await h.run(()=>{task=original.props.onPress();original.props.onPress();});
+      assert.equal(h.state.resolutions.length,1);
+      await h.run(()=>pending.resolve({ids:["film"],syncStatus:"conflict",readStatus:"offline"}));await task;
+      assert.ok(button(),"unavailable account read cannot discard the conflict");
+      h.state.resolveConflict=async()=>({ids:[],syncStatus:"synced",readStatus:"fresh"});
+      await h.run(()=>button().props.onPress());
+      assert.equal(button(),undefined);
+      assert.equal(h.state.writes.length,0,"use account version must not send a new save/remove");
+    } finally {await h.unmount();}
+  });
+
   test(`${file}: explicit account-sync retry is single-flight and retains unknown state on failure`,async()=>{
     const h=await mountScreen(file,{syncStatus:"unknown"});
     try {

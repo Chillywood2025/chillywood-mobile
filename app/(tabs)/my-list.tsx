@@ -144,6 +144,7 @@ export default function MyListScreen() {
   const removingIdsRef = useRef(new Set<string>());
   const [removingIds, setRemovingIds] = useState<string[]>([]);
   const [hasUnknownSync, setHasUnknownSync] = useState(false);
+  const [hasSyncConflict, setHasSyncConflict] = useState(false);
   const [syncRetryBusy, setSyncRetryBusy] = useState(false);
   const syncRetryOwnerRef = useRef({ key: viewerAuthorityKey, busy: false });
   if (syncRetryOwnerRef.current.key !== viewerAuthorityKey) syncRetryOwnerRef.current = { key: viewerAuthorityKey, busy: false };
@@ -171,15 +172,15 @@ export default function MyListScreen() {
     return (localMatch as any)?.image || localMatch?.poster || remoteImageSource(item.poster_url);
   }, []);
 
-  const loadLibrary = useCallback(async (retryUnknown = false) => {
+  const loadLibrary = useCallback(async (retryUnknown = false, useAccountVersion = false) => {
     const requestedViewerUserId = viewerUserId;
     const generation = ++loadGenerationRef.current;
     setErrorMsg(null);
     try {
       const [{ data: authData }, savedState, progressState, followedIds, unlockedResult] = await Promise.all([
         supabase.auth.getUser(),
-        readMyListState(retryUnknown ? { retryUnknown: true } : undefined).catch(() => null),
-        readWatchProgressState(retryUnknown ? { retryUnknown: true } : undefined).catch(() => null),
+        readMyListState(useAccountVersion ? { useAccountVersion: true } : retryUnknown ? { retryUnknown: true } : undefined).catch(() => null),
+        readWatchProgressState(useAccountVersion ? { useAccountVersion: true } : retryUnknown ? { retryUnknown: true } : undefined).catch(() => null),
         readFollowedChannelUserIds({ limit: 24 }).catch(() => null),
         readMyUnlockedPaidVideoLibraryItems(24).catch(() => ({ status: "unavailable" as const, subjectUserId: null, items: [] })),
       ]);
@@ -237,9 +238,12 @@ export default function MyListScreen() {
       }
       setLibrarySubjectUserId(viewerAuthorityKey);
       if (savedState && progressState) setHasUnknownSync(savedState.syncStatus === "unknown" || progressState.syncStatus === "unknown");
+      if (savedState && progressState) setHasSyncConflict(savedState.syncStatus === "conflict" || progressState.syncStatus === "conflict");
 
       setErrorMsg(unlockedResult.status === "unavailable"
         ? "Unlocked content could not be verified. Your current Library is preserved; try again before purchasing anything again."
+        : savedState?.syncStatus === "conflict" || progressState?.syncStatus === "conflict"
+          ? "Library changed on another device. Your local changes have not overwritten it. Use the account version before making a new choice."
         : savedState?.syncStatus === "unknown" || progressState?.syncStatus === "unknown"
           ? "Showing this device’s Library. An account update could not be confirmed; check again before retrying."
         : savedState?.readStatus === "offline" || progressState?.readStatus === "offline" || [nextSavedTitles, nextContinueTitles, nextPlatformProfiles, nextReplays].some((section) => section === null)
@@ -284,6 +288,7 @@ export default function MyListScreen() {
     removingIdsRef.current = new Set();
     setRemovingIds([]);
     setHasUnknownSync(false);
+    setHasSyncConflict(false);
     setSyncRetryBusy(false);
   }, [viewerAuthorityKey]);
 
@@ -303,12 +308,12 @@ export default function MyListScreen() {
     setRefreshing(false);
   }, [loadLibrary]);
 
-  const retryAccountSync = async () => {
+  const retryAccountSync = async (useAccountVersion = false) => {
     if (syncRetryOwnerRef.current !== syncRetryOwner || syncRetryOwner.busy) return;
     syncRetryOwner.busy = true;
     setSyncRetryBusy(true);
     try {
-      await loadLibrary(true);
+      await loadLibrary(!useAccountVersion, useAccountVersion);
     } finally {
       if (syncRetryOwnerRef.current === syncRetryOwner) {
         syncRetryOwner.busy = false;
@@ -335,7 +340,8 @@ export default function MyListScreen() {
       loadGenerationRef.current += 1;
       setSavedTitles((items) => items.filter((item) => result.ids.includes(String(item.id))));
       if (result.syncStatus === "unknown") setHasUnknownSync(true);
-      setErrorMsg(result.syncStatus === "unknown" ? "Removed on this device. The account update could not be confirmed; check again before retrying." : result.syncStatus === "pending" ? "Removed on this device. Account sync is pending." : null);
+      if (result.syncStatus === "conflict") setHasSyncConflict(true);
+      setErrorMsg(result.syncStatus === "conflict" ? "Saved changed on another device. Use the account version before making a new choice." : result.syncStatus === "unknown" ? "Removed on this device. The account update could not be confirmed; check again before retrying." : result.syncStatus === "pending" ? "Removed on this device. Account sync is pending." : null);
     } catch {
       if (currentViewerUserIdRef.current === authority && removingIdsRef.current === removals) {
         setErrorMsg("Unable to remove this title from Saved. Please try again.");
@@ -460,12 +466,18 @@ export default function MyListScreen() {
               </View>
             ) : null}
             {hasUnknownSync ? (
-              <TouchableOpacity style={styles.emptyButton} accessibilityRole="button" accessibilityLabel="Retry account sync" disabled={syncRetryBusy} onPress={retryAccountSync}>
+              <TouchableOpacity style={styles.emptyButton} accessibilityRole="button" accessibilityLabel="Retry account sync" disabled={syncRetryBusy} onPress={() => retryAccountSync()}>
                 <ChillywoodPrimaryActionFill radius={12} />
                 <Text style={styles.emptyButtonText}>{syncRetryBusy ? "Syncing…" : "Retry account sync"}</Text>
               </TouchableOpacity>
             ) : null}
 
+            {hasSyncConflict ? (
+              <TouchableOpacity style={styles.emptyButton} accessibilityRole="button" accessibilityLabel="Use account Library version" disabled={syncRetryBusy} onPress={() => retryAccountSync(true)}>
+                <ChillywoodPrimaryActionFill radius={12} />
+                <Text style={styles.emptyButtonText}>{syncRetryBusy ? "Syncing…" : "Use account Library version"}</Text>
+              </TouchableOpacity>
+            ) : null}
             {renderSection("Saved", `${savedTitleCount} saved`, savedTitleCount > 0, "No saved titles yet", "Save a title from Home or Explore and it will appear here.", renderTitleRail(visibleSavedTitles, openTitleDetails, (item) => item.runtime || item.category || "Saved", true))}
             {renderSection(
               "Unlocked Creator Videos",
