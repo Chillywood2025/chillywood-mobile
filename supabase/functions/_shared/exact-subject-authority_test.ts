@@ -2,6 +2,8 @@ import {
   normalizeExactSubjectId,
   parseExactCurrentSessionAuthority,
   readExactCurrentSessionAuthority,
+  readExactPermissionKeys,
+  readExactPlatformRole,
   resolveExactBetaAccess,
   resolveExactBreakGlassSessionId,
   resolveExactPermissionKeys,
@@ -113,6 +115,64 @@ Deno.test("recycled email and email-only rows cannot grant platform role or perm
   ];
   assertEquals(resolveExactPlatformRole(roleRows, EXACT_USER, ["owner", "operator"], NOW), null, "recycled role");
   assertEquals(resolveExactPermissionKeys(permissionRows, EXACT_USER, ["security_review", "audit_review"], NOW), new Set(), "recycled permission");
+});
+
+Deno.test("Super Admin is accepted only when requested and never substitutes for operator", () => {
+  const superAdmin = { role: "super_admin", status: "active", user_id: EXACT_USER, expires_at: null };
+  const operator = { role: "operator", status: "active", user_id: EXACT_USER, expires_at: null };
+  assertEquals(resolveExactPlatformRole([superAdmin], EXACT_USER, ["owner", "operator"], NOW), null, "Super Admin-only caller");
+  assertEquals(resolveExactPlatformRole([superAdmin], EXACT_USER, ["owner", "super_admin", "operator"], NOW), "super_admin", "explicitly supported Super Admin");
+  assertEquals(resolveExactPlatformRole([superAdmin, operator], EXACT_USER, ["owner", "operator"], NOW), "operator", "real additional operator membership");
+  for (const [label, invalidOperator] of [
+    ["wrong subject", { ...operator, user_id: WRONG_USER }],
+    ["email-only", { ...operator, user_id: null, email: "audit@example.test" }],
+    ["revoked", { ...operator, status: "revoked" }],
+    ["expired at boundary", { ...operator, expires_at: new Date(NOW).toISOString() }],
+    ["malformed expiry", { ...operator, expires_at: "invalid" }],
+  ] as const) {
+    assertEquals(resolveExactPlatformRole([superAdmin, invalidOperator], EXACT_USER, ["operator"], NOW), null, label);
+  }
+});
+
+Deno.test("scoped legal and Live Ops permissions require their own exact active grants", () => {
+  const grant = { permission_key: "legal_hold", status: "active", target_user_id: EXACT_USER, expires_at: null };
+  const requested = ["legal_hold", "legal_ops", "evidence_export", "live_ops"];
+  assertEquals(resolveExactPermissionKeys([grant], EXACT_USER, requested, NOW), new Set(["legal_hold"]), "one grant does not expand to every requested scope");
+  for (const [label, invalidGrant] of [
+    ["wrong subject", { ...grant, target_user_id: WRONG_USER }],
+    ["email-only", { ...grant, target_user_id: null, target_email: "audit@example.test" }],
+    ["revoked", { ...grant, status: "revoked" }],
+    ["expired at boundary", { ...grant, expires_at: new Date(NOW).toISOString() }],
+    ["malformed expiry", { ...grant, expires_at: "invalid" }],
+    ["different permission", { ...grant, permission_key: "audit_review" }],
+  ] as const) {
+    assertEquals(resolveExactPermissionKeys([invalidGrant], EXACT_USER, requested, NOW), new Set(), label);
+  }
+});
+
+// Query-construction unit contract only; the real-client PostgreSQL suite owns
+// session, RLS and persisted-grant authority proof.
+Deno.test("shared readers request exact roles and grants without role-derived permission shortcuts", async () => {
+  const calls: unknown[] = [];
+  let rows: unknown = [{ role: "super_admin", status: "active", user_id: EXACT_USER, expires_at: null }];
+  const client = {
+    from(relation: string) {
+      calls.push(["from", relation]);
+      return {
+        select(columns: string) { calls.push(["select", columns]); return this; },
+        eq(column: string, value: unknown) { calls.push(["eq", column, value]); return this; },
+        in(column: string, values: string[]) { calls.push(["in", column, values]); return this; },
+        async limit(value: number) { calls.push(["limit", value]); return { data: rows, error: null }; },
+      };
+    },
+  };
+  assertEquals(await readExactPlatformRole(client, EXACT_USER, ["owner", "operator"], NOW), null, "reader cannot alias returned Super Admin");
+  assertEquals(calls.find((call) => Array.isArray(call) && call[0] === "in"), ["in", "role", ["owner", "operator"]], "query does not silently add roles");
+  calls.length = 0;
+  rows = [{ permission_key: "legal_hold", status: "active", target_user_id: EXACT_USER, expires_at: null }];
+  assertEquals(await readExactPermissionKeys(client, EXACT_USER, ["legal_hold", "legal_ops", "live_ops"], NOW), new Set(["legal_hold"]), "reader returns only persisted grant rows");
+  assertEquals(calls.filter((call) => Array.isArray(call) && call[0] === "from"), [["from", "platform_staff_permission_grants"]], "permission reader never turns membership into grants");
+  assertEquals(calls.filter((call) => Array.isArray(call) && call[0] === "eq"), [["eq", "target_user_id", EXACT_USER], ["eq", "status", "active"]], "grant lookup is bound to exact active subject");
 });
 
 Deno.test("email-only and wrong-subject Break Glass rows cannot bind the caller", () => {

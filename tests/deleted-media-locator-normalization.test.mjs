@@ -8,8 +8,8 @@ test('batched locator normalization preserves the original PostgreSQL four-pass 
   try {
     await db.exec('create schema private');
     for(const [file,name] of [
-      ['20261020013500_deleted_media_reference_retirement.sql','original_normalize'],
-      ['20261020124805_deleted_content_stage_recovery.sql','batched_normalize'],
+      ['20261020141554_deleted_media_reference_retirement.sql','original_normalize'],
+      ['20261020142315_deleted_content_stage_recovery.sql','batched_normalize'],
     ]) {
       const sql=readFileSync(new URL(`../supabase/migrations/${file}`,import.meta.url),'utf8');
       const definition=sql.match(/create (?:or replace )?function private\.deleted_media_normalize_locator\(p_text text\)[\s\S]*?end \$\$;/)?.[0];

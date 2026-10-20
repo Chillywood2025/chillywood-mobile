@@ -227,13 +227,6 @@ export const resolveExactPlatformRole = (
     if (hasExactActiveRole(rows, subjectId, role, nowMs)) return role;
   }
 
-  // Super Admin is owner-equivalent for permission-scoped operator work, but not
-  // for true-owner-only boundaries. Mapping it to operator only when a caller
-  // explicitly allows operator preserves first-owner/break-glass separation.
-  if (!roles.includes("super_admin") && roles.includes("operator") &&
-      hasExactActiveRole(rows, subjectId, "super_admin", nowMs)) {
-    return "operator";
-  }
   return null;
 };
 
@@ -247,16 +240,12 @@ export const readExactPlatformRole = async (
   const roles = allowedRoles.map((role) => toText(role).toLowerCase()).filter(Boolean);
   if (!subjectId || roles.length === 0) return null;
 
-  const queryRoles = Array.from(new Set([
-    ...roles,
-    ...(!roles.includes("super_admin") && roles.includes("operator") ? ["super_admin"] : []),
-  ]));
   const result = await adminClient
     .from("platform_role_memberships")
     .select("user_id,role,status,expires_at")
     .eq("user_id", subjectId)
     .eq("status", "active")
-    .in("role", queryRoles)
+    .in("role", roles)
     .limit(50);
   if (result.error) throw new Error(`Exact platform role lookup failed: ${toText(result.error.message)}`);
   return resolveExactPlatformRole(result.data, subjectId, roles, nowMs);
@@ -298,20 +287,6 @@ export const readExactPermissionKeys = async (
     allowedPermissionKeys.map((key) => toText(key).toLowerCase()).filter(Boolean),
   ));
   if (!subjectId || keys.length === 0) return new Set();
-
-  // Super Admin receives the same permission-scoped authority as Owner, while
-  // true-owner-only call sites continue to require an exact owner role.
-  const roleResult = await adminClient
-    .from("platform_role_memberships")
-    .select("user_id,role,status,expires_at")
-    .eq("user_id", subjectId)
-    .eq("status", "active")
-    .eq("role", "super_admin")
-    .limit(10);
-  if (roleResult.error) throw new Error(`Exact Super Admin lookup failed: ${toText(roleResult.error.message)}`);
-  if (hasExactActiveRole(roleResult.data, subjectId, "super_admin", nowMs)) {
-    return new Set(keys);
-  }
 
   const result = await adminClient
     .from("platform_staff_permission_grants")

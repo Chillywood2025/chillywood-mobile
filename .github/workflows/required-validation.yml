@@ -134,6 +134,8 @@ jobs:
         run: |
           deno test --node-modules-dir=none --no-lock supabase/functions/_shared/livekit-seat-session-enforcement_test.ts supabase/functions/_shared/watch-party-livekit-authority_test.ts
           deno check --node-modules-dir=none --no-lock supabase/functions/livekit-token/index.ts supabase/functions/livekit-heartbeat-monitor/index.ts
+      - name: Run exact role and explicit permission checks
+        run: deno test --node-modules-dir=none --no-lock supabase/functions/_shared/exact-subject-authority_test.ts supabase/functions/_shared/platform-role-authority_test.ts
 
   database:
     name: Validation / Database

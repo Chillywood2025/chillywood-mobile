@@ -123,7 +123,7 @@ const authenticate = async (
 
   const userRole = await readExactPlatformRole(adminClient, userId, ["owner", "super_admin", "operator"]);
   if (userRole === "owner" || userRole === "super_admin" || userRole === "operator") {
-    if (userRole === "operator" && !(await hasActiveStaffPermission(adminClient, userId, "live_ops"))) {
+    if (userRole !== "owner" && !(await hasActiveStaffPermission(adminClient, userId, "live_ops"))) {
       return { error: json(403, { error: "live_ops_permission_required" }) };
     }
     const activeBreakGlassSessionId = await readActiveBreakGlassSessionId(adminClient, userId);

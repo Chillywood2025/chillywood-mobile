@@ -16,7 +16,7 @@ const container = () => ({ addEventListener: noop, removeEventListener: noop, na
 doc.documentElement = container(); globalThis.document = doc; globalThis.window = globalThis; globalThis.HTMLIFrameElement = class {};
 function compile(file, mocks) {
   const module = { exports: {} };
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText, { module, exports: module.exports, require: name => name === "react" ? React : name === "react-native-safe-area-context" ? { SafeAreaView: props => React.createElement(React.Fragment, null, props.children) } : name === "./content-inspection-media-viewer" ? { ContentInspectionMediaViewer: () => null } : mocks[name], crypto: webcrypto, Uint8Array, Date, setTimeout, clearTimeout, AbortController });
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText, { module, exports: module.exports, require: name => name === "react" ? React : name === "react-native-safe-area-context" ? mocks[name] ?? { SafeAreaView: props => React.createElement(React.Fragment, null, props.children) } : name === "./content-inspection-media-viewer" ? { ContentInspectionMediaViewer: () => null } : mocks[name], crypto: webcrypto, Uint8Array, Date, setTimeout, clearTimeout, AbortController });
   return module.exports;
 }
 const a = { userId: "00000000-0000-4000-8000-000000000001", accountId: "00000000-0000-4000-8000-000000000001", sessionGeneration: "session-a", state: "ACTIVE", restoreOnly: false };
@@ -66,6 +66,21 @@ test("browse result selection prefills exact target; wrong-subject and denied re
   assert.equal(h.current.subjectTargets, null); assert.match(h.current.message, /could not be verified/);
   await h.act(() => { void h.current.browse(); }); await h.act(() => h.calls.at(-1).reject(new apiModule.ContentInspectionError("denied")));
   assert.equal(h.current.contexts, null); assert.equal(h.current.subjectTargets, null); assert.equal(h.current.reason, "");
+});
+test("selection changes clear sensitive state and explain the new reason requirement", async t => {
+  for (const change of [
+    state => state.changeTarget({ ...target, targetId: a.userId }),
+    state => state.changeContext(a.userId),
+    state => state.changeSubject(a.userId),
+  ]) {
+    const h = await mount(t); await prepare(h);
+    await h.act(() => { void h.current.read(); }); await h.act(() => h.calls.at(-1).resolve(data));
+    await h.act(() => { h.current.setGrantee(a.userId); h.current.setExpiry("2026-10-20T12:00:00Z"); });
+    await h.act(() => change(h.current));
+    assert.equal(h.current.result, null); assert.equal(h.current.subjectTargets, null);
+    assert.equal(h.current.reason, ""); assert.equal(h.current.grantee, ""); assert.equal(h.current.expiry, "");
+    assert.match(h.current.message, /reason/i);
+  }
 });
 test("browse API binds exact subject and type and sends composite pagination", async () => {
   let response = { ...subjectPage }, args;
@@ -176,8 +191,10 @@ test("late success and late failure cannot cross account/session or selection bo
   const h = await mount(t); await prepare(h); await h.act(() => { void h.current.read(); }); const held = h.calls.at(-1);
   await h.switchAccount(); await h.act(() => held.resolve(data)); assert.equal(h.current.result, null); assert.equal(h.current.reason, "");
   await prepare(h); await h.act(() => { void h.current.read(); }); const rejected = h.calls.at(-1);
-  await h.act(() => h.current.changeTarget({ ...target, targetId: a.userId })); await h.act(() => rejected.reject(new apiModule.ContentInspectionError("denied")));
-  assert.equal(h.current.message, ""); assert.equal(h.current.busy, false);
+  await h.act(() => h.current.changeTarget({ ...target, targetId: a.userId }));
+  const selectionMessage = h.current.message;
+  await h.act(() => rejected.reject(new apiModule.ContentInspectionError("denied")));
+  assert.equal(h.current.message, selectionMessage); assert.equal(h.current.busy, false);
 });
 test("grant denial clears scope, content and drafts; disabled backend prevents another operation", async t => {
   const h = await mount(t); await prepare(h);
@@ -255,7 +272,7 @@ test("production client decodes actual final SQL RPC envelopes for current/delet
       create function private.content_inspection_audit(text,uuid,text,uuid,text,uuid,uuid,bigint,text,text,text) returns void language sql as $$select$$;`);
     await db.query("insert into private.content_inspection_contexts values($1,'open')", [contextId]);
     await db.query("insert into private.content_inspection_context_targets values($1,$2,$3)", [contextId, target.targetType, target.targetId]);
-    const migration = fs.readFileSync("supabase/migrations/20261020014747_content_inspection_retained_originals.sql", "utf8");
+    const migration = fs.readFileSync("supabase/migrations/20261020141653_content_inspection_retained_originals.sql", "utf8");
     const start = migration.indexOf("create or replace function public.admin_read_content_inspection(");
     assert.ok(start >= 0); await db.exec(migration.slice(start, migration.indexOf("$$;", start) + 3));
     let lastEnvelope;
@@ -327,8 +344,137 @@ test("actual panel exposes scoped delegation only after exact server Owner capab
   assert.equal(buttons.has("Browse user content"), true);
   canDelegate = true; await act(() => buttons.get("Load review contexts").onPress());
   assert.equal(buttons.has("Grant exact target access"), true); assert.equal(buttons.get("Grant exact target access").disabled, true);
-  assert.equal(buttons.get("Inspect current stored text").disabled, true);
+  assert.equal(buttons.get("Inspect selected content").disabled, true);
 });
+
+// Capture the real mounted JSX tree, not pixels: native text, inputs and
+// buttons remain inert while their actual props and callbacks are inspected.
+async function mountPanelTree(t, initialTarget = target) {
+  let tree, closes = 0;
+  const calls = [];
+  const children = props => React.createElement(React.Fragment, null, props.children);
+  const native = {
+    AppState: { currentState: "active", addEventListener: () => ({ remove: noop }) },
+    Modal: children, ScrollView: props => children(props), View: props => children(props),
+    Text: () => null, TouchableOpacity: () => null, TextInput: () => null,
+    StyleSheet: { create: value => value },
+  };
+  const api = Object.fromEntries(["listContexts", "listSubjectTargets", "scope", "createContext", "read", "grant", "revoke", "closeContext"].map(name => [name, (...args) => {
+    const pending = deferred(); calls.push({ name, args, ...pending }); return pending.promise;
+  }]));
+  const { ContentInspectionPanel } = compile("components/admin/content-inspection-panel.tsx", {
+    "react-native": native,
+    "react-native-safe-area-context": { SafeAreaView: props => { tree = props.children; return children(props); } },
+    "../../_lib/accountSessionAuthority": { ...authorityModule, subscribeToAccountSessionAuthority: () => noop },
+    "../../_lib/contentInspection": { ...apiModule, contentInspection: api },
+  });
+  const root = createRoot(container());
+  const act = fn => React.act(async () => { await fn(); for (let i = 0; i < 8; i++) await Promise.resolve(); });
+  await act(() => root.render(React.createElement(ContentInspectionPanel, { visible: true, authority: a, initialTarget, initialSubjectUserId: a.userId, onClose: () => { closes++; } })));
+  t.after(() => act(() => root.unmount()));
+  const walk = (value, ancestors = []) => Array.isArray(value) ? value.flatMap(item => walk(item, ancestors)) : React.isValidElement(value) ? [{ node: value, ancestors }, ...walk(value.props.children, [...ancestors, value])] : [];
+  const textValue = value => Array.isArray(value) ? value.map(textValue).join("") : typeof value === "string" || typeof value === "number" ? String(value) : React.isValidElement(value) ? textValue(value.props.children) : "";
+  const nodes = () => walk(tree);
+  const find = predicate => nodes().find(({ node }) => predicate(node));
+  const button = label => find(node => node.type === native.TouchableOpacity && node.props.accessibilityLabel === label)?.node.props;
+  return {
+    calls, native, find, button, get closes() { return closes; },
+    text: () => nodes().filter(({ node }) => node.type === native.Text).map(({ node }) => textValue(node.props.children)).join("\n"),
+    status: () => {
+      const entry = find(node => node.type === native.Text && node.props.accessibilityLiveRegion === "polite");
+      assert.ok(entry, "inspection exposes a live status");
+      assert.equal(entry.ancestors.some(node => node.type === native.ScrollView), false, "status stays outside the scrolling form");
+      return textValue(entry.node.props.children);
+    },
+    async press(label) { const props = button(label); assert.ok(props, label); assert.equal(props.disabled, false, `${label} is enabled`); await act(() => props.onPress()); },
+    async edit(label, value) {
+      const entry = find(node => node.type === native.TextInput && node.props.accessibilityLabel === label);
+      assert.ok(entry, label); await act(() => entry.node.props.onChangeText(value));
+    },
+    async settle(name, value, reject = false) {
+      const request = calls.at(-1); assert.equal(request.name, name);
+      await act(() => reject ? request.reject(value) : request.resolve(value));
+    },
+  };
+}
+const reviewContexts = { contexts: [{ contextId, status: "open", purpose: "Synthetic review" }], hasMore: false, nextCursor: null, canCreateContext: true, canDelegate: false, canBrowseUsers: true, accessAuditMode: "owner_view_exempt" };
+const reasonLabel = "Reason or new context purpose (6–500 characters)";
+
+test("mounted form explains empty context and scope results, and keeps pending or denied status outside scroll", async t => {
+  const h = await mountPanelTree(t);
+  assert.equal(h.button("Inspect selected content").disabled, true);
+  const close = h.find(node => node.props.accessibilityLabel === "Close inspection");
+  assert.ok(close); assert.equal(close.ancestors.some(node => node.type === h.native.ScrollView), false);
+  assert.match(h.text(), /reason/i);
+  await h.edit(reasonLabel, "Inspect synthetic fixture"); await h.press("Load review contexts");
+  assert.match(h.status(), /Checking/); assert.equal(h.button("Load review contexts").disabled, true);
+  await h.settle("listContexts", { ...reviewContexts, contexts: [] });
+  assert.match(h.text(), /No .*contexts/i);
+  assert.match(h.text(), /current[^.\n]*only|only[^.\n]*current/i);
+  assert.match(h.text(), /deleted/i);
+  await h.press("Load review contexts"); await h.settle("listContexts", reviewContexts);
+  await h.press("Select context " + contextId);
+  assert.match(h.status(), /reason/i);
+  assert.equal(h.button("Load scoped targets and grants").disabled, true);
+  await h.edit(reasonLabel, "Inspect selected fixture"); await h.press("Load scoped targets and grants");
+  await h.settle("scope", { targets: [], grants: [], grantsHasMore: false });
+  assert.match(h.text(), /No .*targets/i); assert.equal(h.button("Inspect selected content").disabled, true);
+  await h.press("Load scoped targets and grants"); await h.settle("scope", { targets: [target], grants: [], grantsHasMore: false });
+  await h.press("Inspect selected content");
+  assert.match(h.status(), /Checking/); assert.equal(h.button("Inspect selected content").disabled, true);
+  await h.settle("read", new apiModule.ContentInspectionError("denied"), true);
+  assert.match(h.status(), /Access denied/); assert.equal(h.button("Inspect selected content").disabled, true);
+});
+
+test("ending a selected context uses its server action while Close inspection only dismisses", async t => {
+  const h = await mountPanelTree(t);
+  await h.edit(reasonLabel, "Inspect synthetic fixture"); await h.press("Load review contexts");
+  await h.settle("listContexts", reviewContexts); await h.press("Select context " + contextId);
+  await h.edit(reasonLabel, "End synthetic review");
+  await h.press("End access to selected review context");
+  assert.equal(h.calls.at(-1).name, "closeContext"); assert.equal(h.calls.at(-1).args[1], contextId);
+  assert.equal(h.closes, 0);
+  await h.settle("closeContext", {});
+  assert.equal(h.closes, 0); assert.equal(h.button("End access to selected review context"), undefined);
+  const beforeClose = h.calls.length;
+  await h.press("Close inspection");
+  assert.equal(h.closes, 1); assert.equal(h.calls.length, beforeClose);
+});
+
+test("refresh after inspection requests the current subject and type afresh and clears content before denial", async t => {
+  const mediaTarget = { ...target, targetType: "creator_video" };
+  const h = await mountPanelTree(t, mediaTarget);
+  await h.edit(reasonLabel, "Inspect synthetic fixture"); await h.press("Load review contexts");
+  await h.settle("listContexts", reviewContexts); await h.press("Select context " + contextId);
+  const reason = "Inspect selected original";
+  await h.edit(reasonLabel, reason); await h.press("Load scoped targets and grants");
+  await h.settle("scope", { targets: [mediaTarget], grants: [], grantsHasMore: false });
+  await h.press("Browse user content");
+  await h.settle("listSubjectTargets", { ...subjectPage, targetType: mediaTarget.targetType, targets: [{ ...subjectPage.targets[0], ...mediaTarget }], hasMore: true, nextCursor: { createdAt: "2026-10-20T00:00:00Z", id: mediaTarget.targetId } });
+  await h.press("Inspect selected content");
+  await h.settle("read", { ...data, ...mediaTarget, content: { title: "Original fixture", description: "Synthetic original" } });
+  assert.ok(h.find(node => node.props.testID === "content-inspection-result"));
+  await h.press("Open original media inspection");
+  assert.ok(h.button("Close original media inspection"));
+  const beforeRefresh = h.calls.length;
+  await h.press("Refresh user content list");
+  assert.equal(h.calls.length, beforeRefresh + 1);
+  const request = h.calls.at(-1);
+  assert.equal(request.name, "listSubjectTargets");
+  assert.equal(request.args[0], a); assert.equal(request.args[1], a.userId);
+  assert.equal(request.args[2], mediaTarget.targetType); assert.equal(request.args[3], reason);
+  assert.equal(request.args[4], null, "refresh must start a new page, not reuse the old cursor");
+  assert.equal(h.find(node => node.props.testID === "content-inspection-result"), undefined);
+  assert.equal(h.button("Close original media inspection"), undefined);
+  assert.match(h.status(), /Checking/);
+  await h.settle("listSubjectTargets", new apiModule.ContentInspectionError("denied"), true);
+  assert.match(h.status(), /Access denied/);
+  assert.equal(h.button("Select stored item " + mediaTarget.targetId), undefined);
+  assert.equal(h.button("Select context " + contextId), undefined);
+  assert.equal(h.button("Refresh user content list"), undefined);
+  assert.equal(h.button("Inspect selected content").disabled, true);
+});
+
 test("actual outer panel closes on background/session invalidation and destroys keyed content", async t => {
   let listener, authorityListener, modalProps, closes = 0;
   const native = { AppState: { currentState: "active", addEventListener: (_name, fn) => { listener = fn; return { remove: noop }; } }, Modal: props => { modalProps = props; return null; }, StyleSheet: { create: x => x } };

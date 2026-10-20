@@ -35,7 +35,7 @@ create table public.reference_resolutions(id uuid default gen_random_uuid(),reso
 create table public.json_consumers(id uuid default gen_random_uuid(),metadata jsonb);
 create table public.url_consumers(id uuid default gen_random_uuid(),media_url text);
 `);
-await db.exec(readFileSync('supabase/migrations/20261020011840_deleted_content_retention.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/20261020141458_deleted_content_retention.sql','utf8'));
 for(const isolation of ['repeatable read','serializable']) {
  await db.exec(`begin isolation level ${isolation};
    insert into public.legal_holds(target_type,target_id,status) values('user','partial-migration-fixture','active');
@@ -44,7 +44,7 @@ for(const isolation of ['repeatable read','serializable']) {
 }
 check(await scalar(`select not has_function_privilege('authenticated','private.deleted_media_reference_fence_armed()','execute') v`),
  'private latch execution is closed immediately in the first migration');
-await db.exec(readFileSync('supabase/migrations/20261020013500_deleted_media_reference_retirement.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/20261020141554_deleted_media_reference_retirement.sql','utf8'));
 check(await scalar('select private.deleted_media_reference_coverage_ready() v'),'catalog locator coverage initially complete');
 check(await scalar('select not armed v from private.deleted_media_reference_fence'),'disabled installation starts unarmed');
 for(const isolation of ['read committed','repeatable read','serializable']) {
