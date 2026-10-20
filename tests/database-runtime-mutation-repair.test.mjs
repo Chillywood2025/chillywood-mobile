@@ -21,10 +21,10 @@ const inspectionBundleFiles = [
 ];
 
 const retentionRecoveryFiles = [
-  '20261020142315_deleted_content_stage_recovery.sql',
-  '20261020142317_deleted_content_activation_readiness.sql',
-  '20261020142318_deleted_content_delete_intent.sql',
-  '20261020142319_deleted_content_terminal_source_cleanup.sql',
+  '20261020201310_deleted_content_stage_recovery.sql',
+  '20261020201322_deleted_content_activation_readiness.sql',
+  '20261020201336_deleted_content_delete_intent.sql',
+  '20261020201937_deleted_content_terminal_source_cleanup.sql',
 ];
 
 const studioBundleFiles = [

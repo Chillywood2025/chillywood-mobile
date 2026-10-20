@@ -137,11 +137,14 @@ liveness evidence only, including when all queues were disabled.
    filenames now match the ten confirmed deployed receipts, from
    `20261020124645_owner_content_inspection_disabled` through
    `20261020141850_admin_reports_dmca_complete_history`, with SQL bytes preserved.
-   The four undeployed repairs were allocated later versions by the Supabase CLI:
-   `20261020142315`, `20261020142317`, `20261020142318`, and `20261020142319`.
+   The four dormant repairs were deployed through the approved Supabase migration
+   API on 2026-10-20, which assigned these receipt versions:
+   `20261020201310`, `20261020201322`, `20261020201336`, and `20261020201937`.
    This source reconciliation does not write remote history or deploy anything.
-   Recheck exact version, name and body parity before separately authorized
-   deployment; do not reapply deployed bodies or edit historical deployed SQL.
+   All four deployed SQL bodies match the reviewed source byte-for-byte. All
+   inspection/retention flags remain off, the reference fence is unarmed, and
+   no worker qualification or heartbeat was recorded. Recheck exact version,
+   name and body parity; do not reapply these bodies or edit deployed SQL.
 2. Decide and authorize legacy-object coverage. Inventory every current original,
    secondary locator and producer path; resolve uncovered classes without
    deleting/moving originals merely to clear a gate.
