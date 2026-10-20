@@ -51,7 +51,11 @@ select ok(not has_function_privilege('anon','public.get_admin_dmca_case_summary(
 select ok(not has_function_privilege('anon','public.list_admin_report_audit_events_page(bigint,text,integer)','execute'),'anonymous report detail history denied');
 select is((public.list_admin_reports_page('needs_review',null,50)->'items'->0->>'id')::bigint,970000125::bigint,'source status filter excludes 35 newer resolved reports');
 select is((public.list_admin_dmca_cases_page('all','history-fixture-2',null,50,false)->'items'->0->>'active_strike_count')::integer,601,'all 601 active uploader strikes are counted');
-select is(public.list_admin_dmca_cases_page('all','history-fixture-2',null,50,false)->'items'->-1->>'last_action','admin_note_added','per-case latest action survives 601 other-case events');
+-- A prefix search also matches cases 20..29 and 200..251, so case 2 is not
+-- necessarily on its first page. Bind this aggregate assertion to its UUID.
+select is(jsonb_array_length(public.list_admin_dmca_cases_page('all','97200000-0000-4000-8000-000000000002',null,50,false)->'items'),1,'latest-action lookup selects exactly one case');
+select is(public.list_admin_dmca_cases_page('all','97200000-0000-4000-8000-000000000002',null,50,false)->'items'->0->>'id','97200000-0000-4000-8000-000000000002','latest-action lookup binds the intended case');
+select is(public.list_admin_dmca_cases_page('all','97200000-0000-4000-8000-000000000002',null,50,false)->'items'->0->>'last_action','admin_note_added','per-case latest action survives 601 other-case events');
 select throws_ok($$select public.list_admin_reports_page('all','bad',25)$$,'22023','invalid_history_cursor','malformed cursor rejected');
 select throws_ok($$select public.list_admin_reports_page('all','{"v":1,"scope":{"source":"reports","filter":"all"},"createdAt":"yesterday","id":"1"}',25)$$,'22023','invalid_history_cursor','relative timestamp cursor rejected');
 select throws_ok($$select public.list_admin_reports_page('all',public.list_admin_reports_page('needs_review',null,50)->>'nextCursor',50)$$,'22023','invalid_history_cursor','cursor cannot cross filters');

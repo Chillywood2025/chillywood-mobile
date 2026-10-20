@@ -39,6 +39,18 @@ test('real PostgreSQL history contracts preserve tied boundaries, exact aggregat
     assert.equal(cases.find(c=>c.case_number==='history-fixture-150').admin_notes,'Interleaved update');
     assert.ok(cases.every(c => c.active_strike_count === 601));
     assert.equal(cases.find(c => c.case_number === 'history-fixture-2').last_action, 'admin_note_added');
+    // The former pgTAP assertion used the last row of a broad prefix page.
+    // Prove why that row is not case 2, then run the exact-case hosted lookup.
+    const prefixPage = await rpc('list_admin_dmca_cases_page', '$1,$2,$3,$4,$5', ['all', 'history-fixture-2', null, 50, false]);
+    assert.equal(prefixPage.items.length, 50);
+    assert.equal(prefixPage.hasMore, true);
+    assert.ok(!prefixPage.items.some(c => c.case_number === 'history-fixture-2'));
+    assert.equal(prefixPage.items.at(-1).last_action, null);
+    const exactCasePage = await rpc('list_admin_dmca_cases_page', '$1,$2,$3,$4,$5', ['all', '97200000-0000-4000-8000-000000000002', null, 50, false]);
+    assert.equal(exactCasePage.items.length, 1);
+    assert.equal(exactCasePage.items[0].id, '97200000-0000-4000-8000-000000000002');
+    assert.equal(exactCasePage.items[0].last_action, 'admin_note_added');
+    assert.equal(exactCasePage.items[0].active_strike_count, 601);
     const summary = await rpc('get_admin_dmca_case_summary', '$1', [false]);
     assert.equal(summary.total, 251); assert.equal(summary.open, 250); assert.equal(summary.priority, 251);
     assert.equal(summary.byStatus.received, 250); assert.equal(summary.byStatus.closed, 1);
