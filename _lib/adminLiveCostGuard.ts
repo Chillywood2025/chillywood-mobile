@@ -136,6 +136,14 @@ const toPositiveInteger = (value: unknown, fallback: number) => {
   return Math.trunc(parsed);
 };
 
+const toNonnegativeInteger = (value: unknown, fallback: number) => {
+  if (typeof value !== "number" && typeof value !== "string") return fallback;
+  if (typeof value === "string" && value.trim() === "") return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return Math.trunc(parsed);
+};
+
 const normalizeMode = (value: unknown): LiveCostGuardMode => {
   const normalized = toText(value).toLowerCase();
   return LIVE_COST_GUARD_MODES.includes(normalized as LiveCostGuardMode)
@@ -170,7 +178,7 @@ const parseSettings = (row: any): LiveCostGuardSettings => ({
   maxEstimatedUsdPerHour: toNumberOrNull(row?.max_estimated_usd_per_hour),
   tokenTtlWarningSeconds: toPositiveInteger(row?.token_ttl_warning_seconds, DEFAULT_LIVE_COST_GUARD_SETTINGS.tokenTtlWarningSeconds),
   tokenTtlCriticalSeconds: toPositiveInteger(row?.token_ttl_critical_seconds, DEFAULT_LIVE_COST_GUARD_SETTINGS.tokenTtlCriticalSeconds),
-  cooldownSeconds: Math.max(0, toPositiveInteger(row?.cooldown_seconds, DEFAULT_LIVE_COST_GUARD_SETTINGS.cooldownSeconds)),
+  cooldownSeconds: toNonnegativeInteger(row?.cooldown_seconds, DEFAULT_LIVE_COST_GUARD_SETTINGS.cooldownSeconds),
   enabled: row?.enabled === true,
   updatedBy: toText(row?.updated_by) || null,
   createdAt: toText(row?.created_at) || null,
