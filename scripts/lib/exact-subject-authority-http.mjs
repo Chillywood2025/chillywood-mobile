@@ -297,6 +297,8 @@ export async function runExactSubjectAuthorityHttpQualification({container, data
     const admin = createClient(connection.apiUrl, connection.serviceKey, options);
     const independentAdmin = createClient(connection.apiUrl, connection.serviceKey, options);
     const users = [], roles = [], grants = [], clients = [];
+    const grantSubjects = new Map();
+    let owner, independentOwner;
     let checks = 0, primaryFailure;
     const check = (value, description) => { assert.ok(value, description); checks++; };
     const data = (result, description) => {
@@ -310,13 +312,26 @@ export async function runExactSubjectAuthorityHttpQualification({container, data
       roles.push(row.id); return row.id;
     };
     const grant = async (person, key, expiresAt = null) => {
-      const row = data(await admin.from('platform_staff_permission_grants').insert({target_user_id: person.id, target_email: person.email,
-        permission_key: key, status: 'active', reason: 'Synthetic local authority qualification', expires_at: expiresAt}).select('id').single(), 'real grant insert');
-      grants.push(row.id); return row.id;
+      const row = data(await owner.client.rpc('admin_grant_platform_staff_permission_by_email', {
+        p_target_email: person.email, p_permission_key: key,
+        p_reason: 'Synthetic local authority qualification', p_expires_at: expiresAt,
+      }), 'canonical authenticated Owner grant');
+      grants.push(row.id);
+      assert.equal(row.userId, person.id); assert.equal(row.email, person.email);
+      assert.equal(row.permissionKey, key); assert.equal(row.status, 'active');
+      grantSubjects.set(row.id, {person, key});
+      const stored = data(await independentAdmin.from('platform_staff_permission_grants')
+        .select('target_user_id,target_email,permission_key,status,granted_by').eq('id', row.id).single(), 'committed exact grant readback');
+      assert.deepEqual(stored, {target_user_id: person.id, target_email: person.email, permission_key: key, status: 'active', granted_by: owner.id});
+      return row.id;
     };
     const revoke = async id => {
-      const rows = data(await independentAdmin.from('platform_staff_permission_grants').update({status: 'revoked'}).eq('id', id).select('id'), 'independent committed revoke');
-      assert.equal(rows.length, 1);
+      const {person, key} = grantSubjects.get(id);
+      const row = data(await independentOwner.rpc('admin_revoke_platform_staff_permission_by_email', {
+        p_target_email: person.email, p_permission_key: key, p_reason: 'Synthetic local authority qualification revoke',
+      }), 'independent authenticated Owner revoke');
+      assert.equal(row.id, id); assert.equal(row.userId, person.id);
+      assert.equal(row.permissionKey, key); assert.equal(row.status, 'revoked');
     };
     const authenticate = (module, person) => module.authenticate(request(person), admin, connection.apiUrl, connection.anonKey);
     const denied = async (result, status, error, description) => {
@@ -332,7 +347,7 @@ export async function runExactSubjectAuthorityHttpQualification({container, data
       users.push(created.user.id);
       const client = createClient(connection.apiUrl, connection.anonKey, options); clients.push(client);
       const signed = data(await client.auth.signInWithPassword({email, password}), 'real sign in');
-      const value = {id: created.user.id, email, client, token: signed.session.access_token};
+      const value = {id: created.user.id, email, password, client, token: signed.session.access_token};
       check((await source.authority.readExactCurrentSessionAuthority(client, value.id))?.userId === value.id, `${label}: actual current session`);
       return value;
     }
@@ -343,8 +358,13 @@ export async function runExactSubjectAuthorityHttpQualification({container, data
       }
     }
     try {
-      const sa = await person('sa'), operator = await person('operator'), stranger = await person('stranger'), owner = await person('owner');
+      const sa = await person('sa'), operator = await person('operator'), stranger = await person('stranger');
+      owner = await person('owner');
       await role(sa, 'super_admin'); await role(operator, 'operator'); await role(stranger, 'operator'); await role(owner, 'owner');
+      independentOwner = createClient(connection.apiUrl, connection.anonKey, options); clients.push(independentOwner);
+      data(await independentOwner.auth.signInWithPassword({email: owner.email, password: owner.password}), 'independent real Owner sign in');
+      check((await source.authority.readExactCurrentSessionAuthority(independentOwner, owner.id))?.userId === owner.id,
+        'independent Owner has actual current session');
       check(await source.authority.readExactPlatformRole(admin, sa.id, ['owner', 'operator', 'moderator']) === null, 'SA cannot synthesize operator');
       check(await source.authority.readExactPlatformRole(admin, sa.id, ['owner', 'super_admin']) === 'super_admin', 'explicit SA role preserved');
       assert.deepEqual(sorted(await source.authority.readExactPermissionKeys(admin, sa.id, keys)), [], 'SA cannot fabricate requested scopes'); checks++;
@@ -355,9 +375,14 @@ export async function runExactSubjectAuthorityHttpQualification({container, data
       assert.equal(data(await sa.client.rpc('monetization_has_active_premium', {p_user_id: sa.id}), 'real Premium readback'), false);
       check(!await source.media.userCanUsePremiumCreatorTools(admin, sa.client, sa), 'SA-only Premium setup denied');
       await scopes(sa, false, 'SA-only'); check(await source.media.ownerMediaBlockedForStaff(admin, sa, owner.id), 'true Owner media remains protected');
-      const forbidden = await admin.from('platform_staff_permission_grants').insert({target_user_id: sa.id, target_email: sa.email,
-        permission_key: 'audit_review', status: 'active', reason: 'Synthetic prohibited grant'});
-      check(forbidden.error?.message === 'platform_staff_permission_exact_confirmed_subject_required', 'real trigger forbids SA-only grant issuance');
+      const forbidden = await owner.client.rpc('admin_grant_platform_staff_permission_by_email', {
+        p_target_email: sa.email, p_permission_key: 'audit_review', p_reason: 'Synthetic prohibited grant', p_expires_at: null,
+      });
+      if (forbidden.data?.id) grants.push(forbidden.data.id);
+      check(forbidden.error?.code === 'P0001' && forbidden.error?.message === 'platform_staff_permission_target_role_required',
+        'canonical Owner producer rejects confirmed SA-only target without an actual operator/moderator role');
+      assert.deepEqual(data(await admin.from('platform_staff_permission_grants').select('id').eq('target_user_id', sa.id),
+        'rejected canonical grant leaves no subject grant'), []);
       const operatorRole = await role(sa, 'operator');
       check(await source.authority.readExactPlatformRole(admin, sa.id, ['owner', 'operator']) === 'operator', 'real additional operator role works');
       check(await source.media.userCanUsePremiumCreatorTools(admin, sa.client, sa), 'actual operator Premium setup preserved');
