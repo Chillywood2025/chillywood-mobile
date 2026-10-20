@@ -91,7 +91,10 @@ set local role authenticated;
 select throws_ok($$select public.admin_read_content_inspection(current_setting('test.inspection.context')::uuid,'profile_post','a5000000-0000-4000-8000-000000000001','Synthetic review',gen_random_uuid())$$,'42501','content_inspection_denied','spoofed role claim and cross-user session fail');
 reset role;
 select pg_temp.inspection_claim(3);
-update public.platform_role_memberships set expires_at=clock_timestamp()-interval '1 second' where user_id='a3000000-0000-4000-8000-000000000003';
+-- Keep the canonical admission trigger enabled: admit a future expiry, then
+-- let wall-clock time pass it instead of forging an already-expired active row.
+update public.platform_role_memberships set expires_at=clock_timestamp()+interval '100 milliseconds' where user_id='a3000000-0000-4000-8000-000000000003';
+select pg_sleep(0.15);
 set local role authenticated;
 select throws_ok($$select public.admin_read_content_inspection(current_setting('test.inspection.context')::uuid,'profile_post','a5000000-0000-4000-8000-000000000001','Synthetic review',gen_random_uuid())$$,'42501','content_inspection_denied','expired role denied despite active grant');
 reset role;

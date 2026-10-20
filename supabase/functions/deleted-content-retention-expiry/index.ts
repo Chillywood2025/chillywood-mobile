@@ -14,10 +14,10 @@ Deno.serve(async (req) => {
   if(!key || !url || req.headers.get("Authorization")!==`Bearer ${key}`) return reply(403,{error:"not_allowed"});
   try {
     const client=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
-    const result=await runDeletedContentExpiryBatch((name,args)=>client.rpc(name,args));
+    const result=await runDeletedContentExpiryBatch(async (name,args)=>await client.rpc(name,args));
     // Lazy origin construction: disabled media does not require provider setup.
     let cleanup:ReturnType<typeof createRetiredMediaOriginCleanup>|undefined;
-    const media=await runDeletedMediaExpiryBatch((name,args)=>client.rpc(name,args),(binding,method)=>{
+    const media=await runDeletedMediaExpiryBatch(async (name,args)=>await client.rpc(name,args),(binding,method)=>{
       cleanup??=createRetiredMediaOriginCleanup(name=>Deno.env.get(name));
       return cleanup(binding,method);
     });
