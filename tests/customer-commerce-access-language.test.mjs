@@ -191,10 +191,12 @@ test("current usable purchased content has a Library return path without using r
   assert.match(library, /Current items remain visible/u);
   assert.match(library, /if \(unlockedResult\.status === "resolved"\)/u);
   assert.match(library, /\[loadLibrary, sessionLoading\]/u);
-  assert.match(library, /requestedAuthorityKey: requestedViewerUserId/u);
+  assert.match(library, /viewerAuthorityKey = `\$\{viewerUserId\}:\$\{authority\?\.sessionGeneration \?\? ""\}`/u);
+  assert.match(library, /requestedAuthorityKey: viewerAuthorityKey/u);
+  assert.match(library, /userId !== requestedViewerUserId/u);
   assert.match(library, /currentAuthorityKey: currentViewerUserIdRef\.current/u);
   assert.match(library, /unlockedResult\.subjectUserId/u);
-  assert.match(library, /librarySubjectUserId !== viewerUserId/u);
+  assert.match(library, /librarySubjectUserId !== viewerAuthorityKey/u);
   assert.match(library, /libraryIdentityPending \? \[\] : unlockedVideos/u);
   assert.doesNotMatch(library, /provider_event_id|original_transaction_id|purchase_intent_id/u);
 });

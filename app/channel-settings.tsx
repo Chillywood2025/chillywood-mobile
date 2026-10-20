@@ -31,6 +31,7 @@ import {
   resolveFeatureConfig,
 } from "../_lib/appConfig";
 import { trackEvent } from "../_lib/analytics";
+import { getCurrentAccountSessionAuthoritySnapshot, sameAccountSessionAuthority } from "../_lib/accountSessionAuthority";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import {
   readChannelAudienceSummary,
@@ -1441,6 +1442,11 @@ export function ChannelStudioScreen() {
   const [creatorEvents, setCreatorEvents] = useState<CreatorEventSummary[]>([]);
   const [creatorVideos, setCreatorVideos] = useState<CreatorVideo[]>([]);
   const [creatorReplays, setCreatorReplays] = useState<CreatorReplayLibraryItem[]>([]);
+  const replayActionsMountedRef = useRef(true);
+  useEffect(() => {
+    replayActionsMountedRef.current = true;
+    return () => { replayActionsMountedRef.current = false; };
+  }, []);
   const [creatorVideoClipEdits, setCreatorVideoClipEdits] = useState<Record<string, ClipStudioEdit>>({});
   const [creatorReminderSummaries, setCreatorReminderSummaries] = useState<CreatorEventReminderSummary[]>([]);
   const [audienceMembers, setAudienceMembers] = useState<ChannelAudienceMemberSummary[]>([]);
@@ -2693,7 +2699,7 @@ export function ChannelStudioScreen() {
       })
       .catch(() => {
         if (!active) return;
-        setVideosLoadError("Unable to load creator videos right now. Check your connection and retry.");
+        setVideosLoadError("Unable to refresh videos and saved replays. Your previous library is still shown. Retry to check current content.");
         setVideosLoading(false);
       });
 
@@ -4513,6 +4519,9 @@ export function ChannelStudioScreen() {
   };
 
   const updateReplayVisibility = async (replay: CreatorReplayLibraryItem, visibility: CreatorReplayVisibility) => {
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isCurrent() || authority?.userId !== replay.ownerUserId) return;
     try {
       setVideoSaving(true);
       setVideoNotice(
@@ -4523,7 +4532,18 @@ export function ChannelStudioScreen() {
             : "Moving replay to Draft...",
       );
       await updateCreatorReplayLibraryItem(replay.id, { visibility });
-      if (user?.id) setCreatorReplays(await readCreatorReplayLibraryItems(String(user.id)));
+      if (!isCurrent()) return;
+      setCreatorReplays(items => items.map(item => item.id === replay.id ? { ...item, visibility } : item));
+      try {
+        const items = await readCreatorReplayLibraryItems(replay.ownerUserId);
+        if (!isCurrent()) return;
+        setCreatorReplays(items);
+      } catch {
+        if (!isCurrent()) return;
+        setVideosLoadError("Replay visibility was saved, but the library could not refresh. Retry to check current content.");
+        setVideoNotice("Replay visibility saved. Library refresh is unavailable.");
+        return;
+      }
       setVideoNotice(
         visibility === "public"
           ? "Public on your Platform. Eligible for Home and Explore only when ready, clean, and rights-safe."
@@ -4532,13 +4552,17 @@ export function ChannelStudioScreen() {
             : "Saved as Draft. Only you can see it in Platform Studio.",
       );
     } catch (error) {
+      if (!isCurrent()) return;
       setVideoNotice(error instanceof Error ? error.message : "Unable to update replay visibility right now.");
     } finally {
-      setVideoSaving(false);
+      if (isCurrent()) setVideoSaving(false);
     }
   };
 
   const deleteReplay = (replay: CreatorReplayLibraryItem) => {
+    const authority = getCurrentAccountSessionAuthoritySnapshot();
+    const isCurrent = () => replayActionsMountedRef.current && sameAccountSessionAuthority(authority, getCurrentAccountSessionAuthoritySnapshot());
+    if (!isCurrent() || authority?.userId !== replay.ownerUserId) return;
     Alert.alert(
       "Delete Replay",
       `Remove "${replay.title}" from Content Library?`,
@@ -4549,15 +4573,28 @@ export function ChannelStudioScreen() {
           style: "destructive",
           onPress: () => {
             void (async () => {
+              if (!isCurrent()) return;
               try {
                 setVideoSaving(true);
                 await updateCreatorReplayLibraryItem(replay.id, { saveStatus: "deleted" });
-                if (user?.id) setCreatorReplays(await readCreatorReplayLibraryItems(String(user.id)));
+                if (!isCurrent()) return;
+                setCreatorReplays(items => items.filter(item => item.id !== replay.id));
+                try {
+                  const items = await readCreatorReplayLibraryItems(replay.ownerUserId);
+                  if (!isCurrent()) return;
+                  setCreatorReplays(items);
+                } catch {
+                  if (!isCurrent()) return;
+                  setVideosLoadError("Replay was deleted, but the library could not refresh. Retry to check current content.");
+                  setVideoNotice("Replay deleted. Library refresh is unavailable.");
+                  return;
+                }
                 setVideoNotice("Replay deleted from Content Library.");
               } catch (error) {
+                if (!isCurrent()) return;
                 setVideoNotice(error instanceof Error ? error.message : "Unable to delete replay right now.");
               } finally {
-                setVideoSaving(false);
+                if (isCurrent()) setVideoSaving(false);
               }
             })();
           },

@@ -39,7 +39,7 @@ import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
 import { isPubliclyReleasedTitle } from "../../_lib/publicTitles";
 import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
-import { readMyListIds, toggleMyListTitle } from "../../_lib/userData";
+import { readMyListState, setMyListTitleSaved } from "../../_lib/userData";
 import { AccessSheet, getAccessSheetEntryLabel } from "../../components/monetization/access-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { StableImage } from "../../components/ui/StableImage";
@@ -131,13 +131,25 @@ const buildTitleInfoLine = (item: TitleRow) => {
 export default function TitleDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { isSignedIn } = useSession();
+  const { isSignedIn, user, authority } = useSession();
+  const viewerUserId = `${user?.id ?? ""}:${authority?.sessionGeneration ?? ""}`;
+  const savedAuthorityRef = useRef(viewerUserId);
+  const savedGenerationRef = useRef(0);
+  const savedBusyRef = useRef(false);
+  if (savedAuthorityRef.current !== viewerUserId) {
+    savedAuthorityRef.current = viewerUserId;
+    savedGenerationRef.current += 1;
+    savedBusyRef.current = false;
+  }
   const cleanId = String(id ?? "").trim();
   const [item, setItem] = useState<TitleRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [myListIds, setMyListIds] = useState<string[]>([]);
+  const [myListSubject, setMyListSubject] = useState(viewerUserId);
   const [myListBusy, setMyListBusy] = useState(false);
+  const [myListMessage, setMyListMessage] = useState<string | null>(null);
+  const [myListSyncUnknown, setMyListSyncUnknown] = useState(false);
   const [titleAccess, setTitleAccess] = useState<ContentAccessResolution | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
@@ -167,7 +179,13 @@ export default function TitleDetails() {
   const localFallbackTitle = useMemo(() => (localMatch ? buildLocalFallbackTitle(localMatch) : null), [localMatch]);
 
   const titleId = String(item?.id ?? localMatch?.id ?? cleanId).trim();
-  const inMyList = titleId ? myListIds.includes(titleId) : false;
+  const engagementKey = `${viewerUserId}:${cleanId}:${titleId}`;
+  const engagementOwnerRef = useRef({ key: engagementKey, generation: 0, busy: false });
+  if (engagementOwnerRef.current.key !== engagementKey) {
+    engagementOwnerRef.current = { key: engagementKey, generation: 0, busy: false };
+  }
+  const engagementOwner = engagementOwnerRef.current;
+  const inMyList = titleId && myListSubject === viewerUserId ? myListIds.includes(titleId) : false;
   const branding = resolveBrandingConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
 
@@ -235,21 +253,37 @@ export default function TitleDetails() {
 
   useEffect(() => {
     let active = true;
-    readMyListIds()
-      .then((ids) => {
-        if (active) setMyListIds(ids);
+    const generation = ++savedGenerationRef.current;
+    setMyListIds([]);
+    setMyListBusy(false);
+    setMyListMessage(null);
+    setMyListSyncUnknown(false);
+    readMyListState()
+      .then((state) => {
+        if (active && generation === savedGenerationRef.current) {
+          setMyListIds(state.ids);
+          setMyListSubject(viewerUserId);
+          setMyListSyncUnknown(state.syncStatus === "unknown");
+          if (state.syncStatus === "unknown") setMyListMessage("Showing Saved on this device. An account update could not be confirmed; check again before retrying.");
+          else if (state.readStatus === "offline") setMyListMessage("Showing Saved on this device. Account status could not be checked; try again.");
+          else if (state.syncStatus === "pending") setMyListMessage("Showing Saved on this device. Account sync is pending.");
+        }
       })
       .catch(() => {
-        if (active) setMyListIds([]);
+        if (active && generation === savedGenerationRef.current) setMyListMessage("Saved titles could not be loaded. Try again.");
       });
     return () => {
       active = false;
+      savedGenerationRef.current += 1;
     };
-  }, []);
+  }, [viewerUserId]);
 
   useEffect(() => {
     let active = true;
+    const generation = ++engagementOwner.generation;
     const safeTitleId = String(item?.id ?? localMatch?.id ?? cleanId).trim();
+    setEngagementState(null);
+    setEngagementBusy(null);
 
     if (!safeTitleId) {
       setEngagementState(null);
@@ -262,19 +296,20 @@ export default function TitleDetails() {
     setEngagementLoading(true);
     readTitleEngagementState(safeTitleId)
       .then((nextState) => {
-        if (active) setEngagementState(nextState);
+        if (active && engagementOwnerRef.current === engagementOwner && generation === engagementOwner.generation) setEngagementState(nextState);
       })
       .catch(() => {
-        if (active) setEngagementState(null);
+        if (active && engagementOwnerRef.current === engagementOwner && generation === engagementOwner.generation) setEngagementState(null);
       })
       .finally(() => {
-        if (active) setEngagementLoading(false);
+        if (active && engagementOwnerRef.current === engagementOwner && generation === engagementOwner.generation) setEngagementLoading(false);
       });
 
     return () => {
       active = false;
+      engagementOwner.generation += 1;
     };
-  }, [cleanId, item?.id, localMatch?.id]);
+  }, [cleanId, item?.id, localMatch?.id, engagementOwner]);
 
   const title = useMemo(() => item ?? localFallbackTitle, [item, localFallbackTitle]);
 
@@ -379,53 +414,106 @@ export default function TitleDetails() {
   }, [title]);
 
   const onToggleMyList = async () => {
-    if (!titleId || myListBusy) return;
+    if (!titleId || savedBusyRef.current || savedAuthorityRef.current !== viewerUserId) return;
+    savedBusyRef.current = true;
+    const generation = ++savedGenerationRef.current;
     setMyListBusy(true);
+    setMyListMessage(null);
     try {
-      const ids = await toggleMyListTitle(titleId, {
+      const result = await setMyListTitleSaved(titleId, !inMyList, {
         title: item?.title ?? (localMatch as any)?.title,
       });
-      setMyListIds(ids);
+      if (generation !== savedGenerationRef.current) return;
+      setMyListIds(result.ids);
+      setMyListSubject(viewerUserId);
+      setMyListSyncUnknown(result.syncStatus === "unknown");
+      if (result.syncStatus === "pending") setMyListMessage("Updated on this device. Account sync is pending.");
+      if (result.syncStatus === "unknown") setMyListMessage("Updated on this device. The account update could not be confirmed; check again before retrying.");
+    } catch {
+      if (generation === savedGenerationRef.current) setMyListMessage("Unable to update Saved. Please try again.");
     } finally {
-      setMyListBusy(false);
+      if (generation === savedGenerationRef.current) {
+        savedBusyRef.current = false;
+        setMyListBusy(false);
+      }
+    }
+  };
+
+  const retrySavedAccountSync = async () => {
+    if (savedBusyRef.current || savedAuthorityRef.current !== viewerUserId) return;
+    savedBusyRef.current = true;
+    const generation = ++savedGenerationRef.current;
+    setMyListBusy(true);
+    try {
+      const state = await readMyListState({ retryUnknown: true });
+      if (generation !== savedGenerationRef.current) return;
+      setMyListIds(state.ids);
+      setMyListSubject(viewerUserId);
+      setMyListSyncUnknown(state.syncStatus === "unknown");
+      setMyListMessage(state.syncStatus === "unknown"
+        ? "The account update still could not be confirmed. Saved on this device is preserved."
+        : state.syncStatus === "pending" || state.readStatus === "offline"
+          ? "Saved on this device is preserved. Account sync is still pending."
+          : "Account sync request confirmed.");
+    } catch {
+      if (generation === savedGenerationRef.current) setMyListMessage("Unable to retry account sync. Saved on this device is preserved.");
+    } finally {
+      if (generation === savedGenerationRef.current) {
+        savedBusyRef.current = false;
+        setMyListBusy(false);
+      }
     }
   };
 
   const onToggleLike = async () => {
-    if (!titleId || engagementBusy) return;
+    if (!titleId || engagementOwnerRef.current !== engagementOwner || engagementOwner.busy) return;
     if (!isSignedIn) {
       Alert.alert("Sign in required", "Sign in to like titles on Chi'llywood.");
       return;
     }
 
+    engagementOwner.busy = true;
+    const generation = ++engagementOwner.generation;
+    const current = () => engagementOwnerRef.current === engagementOwner && generation === engagementOwner.generation;
     setEngagementBusy("like");
     try {
       const nextState = await toggleTitleLike(titleId);
-      setEngagementState(nextState);
+      if (current()) setEngagementState(nextState);
     } catch {
-      Alert.alert("Like unavailable", "Unable to update this title like right now.");
+      if (current()) Alert.alert("Like unavailable", "Unable to update this title like right now.");
     } finally {
-      setEngagementBusy(null);
+      if (current()) {
+        engagementOwner.busy = false;
+        setEngagementBusy(null);
+        setEngagementLoading(false);
+      }
     }
   };
 
   const onToggleShare = async () => {
-    if (!titleId || engagementBusy) return;
+    if (!titleId || engagementOwnerRef.current !== engagementOwner || engagementOwner.busy) return;
     if (!isSignedIn) {
       Alert.alert("Sign in required", "Sign in to mark titles as shared on Chi'llywood.");
       return;
     }
 
+    engagementOwner.busy = true;
+    const generation = ++engagementOwner.generation;
+    const current = () => engagementOwnerRef.current === engagementOwner && generation === engagementOwner.generation;
     setEngagementBusy("share");
     try {
       const nextState = engagementState?.shared
         ? await clearTitleShare(titleId)
         : await markTitleShared(titleId);
-      setEngagementState(nextState);
+      if (current()) setEngagementState(nextState);
     } catch {
-      Alert.alert("Share unavailable", "Unable to update this shared-title state right now.");
+      if (current()) Alert.alert("Share unavailable", "Unable to update this shared-title state right now.");
     } finally {
-      setEngagementBusy(null);
+      if (current()) {
+        engagementOwner.busy = false;
+        setEngagementBusy(null);
+        setEngagementLoading(false);
+      }
     }
   };
 
@@ -659,7 +747,7 @@ export default function TitleDetails() {
       tone: "default" as const,
     }] : []),
     ...(inMyList ? [{
-      label: "In Favorites",
+      label: "In Saved",
       tone: "default" as const,
     }] : []),
     ...(liveMetadata?.liveRoomCount ? [{
@@ -806,9 +894,15 @@ export default function TitleDetails() {
               </AppText>
             </Pressable>
 
-            <Pressable style={styles.btnGhost} onPress={onToggleMyList} disabled={myListBusy}>
-              <AppText scale="title2" weight="900" style={styles.btnText}>{inMyList ? "✓ Favorites" : "+ Favorites"}</AppText>
+            <Pressable style={styles.btnGhost} onPress={onToggleMyList} disabled={myListBusy} accessibilityRole="button" accessibilityLabel={inMyList ? "Remove from Saved" : "Save title"}>
+              <AppText scale="title2" weight="900" style={styles.btnText}>{inMyList ? "Remove from Saved" : "+ Save"}</AppText>
             </Pressable>
+            {myListMessage ? <AppText accessibilityRole="alert">{myListMessage}</AppText> : null}
+            {myListSyncUnknown ? (
+              <Pressable style={styles.btnGhost} accessibilityRole="button" accessibilityLabel="Retry account sync" disabled={myListBusy} onPress={retrySavedAccountSync}>
+                <AppText style={styles.btnText}>{myListBusy ? "Syncing…" : "Retry account sync"}</AppText>
+              </Pressable>
+            ) : null}
 
             <Pressable
               style={[styles.btnGhost, engagementState?.liked && styles.btnGhostActive]}

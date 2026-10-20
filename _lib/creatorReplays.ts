@@ -223,7 +223,8 @@ export async function readCreatorReplayLibraryItems(ownerUserId: string): Promis
     .neq("save_status", "deleted")
     .order("created_at", { ascending: false });
 
-  if (error || !Array.isArray(data)) return [];
+  if (error) throw new Error(error.message || "Unable to load saved replays.");
+  if (!Array.isArray(data)) throw new Error("Saved replays returned an invalid result.");
   return data
     .map((row) => parseReplayItem(row as Record<string, unknown>))
     .filter((item) => item.id && item.ownerUserId === ownerId);
@@ -241,11 +242,18 @@ export async function updateCreatorReplayLibraryItem(
   if (updates.visibility) payload.visibility = updates.visibility;
   if (updates.saveStatus) payload.save_status = updates.saveStatus;
 
-  const { error } = await (supabase as any)
+  const { data, error } = await (supabase as any)
     .from(CREATOR_REPLAY_LIBRARY_ITEMS_TABLE)
     .update(payload)
-    .eq("id", replayItemId);
+    .eq("id", replayItemId)
+    .select("id,visibility,save_status")
+    .maybeSingle();
   if (error) throw new Error(error.message || "Unable to update replay.");
+  if (!data || data.id !== replayItemId
+    || (updates.visibility && data.visibility !== updates.visibility)
+    || (updates.saveStatus && data.save_status !== updates.saveStatus)) {
+    throw new Error("Replay update could not be confirmed. Refresh and retry.");
+  }
 }
 
 export async function resolveCreatorReplayPlayback(replayId: string): Promise<CreatorReplayPlaybackReadout> {

@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
     buildUserChannelProfile,
     readCachedUserProfile,
-    readMergedWatchProgress,
+    readWatchProgressState,
     readUserProfile,
     readUserProfileByUserId,
     type WatchProgressMap,
@@ -17,6 +17,7 @@ import {
     resolveHomeConfig,
 } from "../../_lib/appConfig";
 import { getCurrentAccountSessionAuthoritySnapshot } from "../../_lib/accountSessionAuthority";
+import { useSession } from "../../_lib/session";
 
 import {
     ActivityIndicator,
@@ -215,6 +216,14 @@ const formatCreatorEventMode = (event: CreatorEventSummary) => {
 };
 
 export default function HomeScreen() {
+  const { user, authority } = useSession();
+  const progressViewerId = `${user?.id ?? ""}:${authority?.sessionGeneration ?? ""}`;
+  const progressViewerRef = useRef(progressViewerId);
+  const progressGenerationRef = useRef(0);
+  if (progressViewerRef.current !== progressViewerId) {
+    progressViewerRef.current = progressViewerId;
+    progressGenerationRef.current += 1;
+  }
   const discovery = useLiveDiscoveryFeed({ surface: "home", includeCircle: true, limit: 24 });
   const liveDiscovery = useLiveDiscoveryFeed({ surface: "home", includeCircle: true, liveOnly: true, limit: 8 });
   const safeAreaInsets = useSafeAreaInsets();
@@ -229,6 +238,9 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [currentChannel, setCurrentChannel] = useState<UserChannelProfile | null>(null);
   const [watchProgress, setWatchProgress] = useState<WatchProgressMap>({});
+  const [progressError, setProgressError] = useState<string | null>(null);
+  const [progressSubjectId, setProgressSubjectId] = useState(progressViewerId);
+  const visibleWatchProgress = useMemo(() => progressSubjectId === progressViewerId ? watchProgress : {}, [progressSubjectId, progressViewerId, watchProgress]);
   const [, setHomeActiveTitleRoomCount] = useState(0);
   const [homeUpcomingEvents, setHomeUpcomingEvents] = useState<CreatorEventSummary[]>([]);
   const [followedFeedVideos, setFollowedFeedVideos] = useState<CreatorVideo[]>([]);
@@ -310,9 +322,32 @@ export default function HomeScreen() {
   }
 
   async function fetchWatchProgress() {
-    const nextProgress = await readMergedWatchProgress().catch(() => ({} as WatchProgressMap));
-    setWatchProgress(nextProgress);
+    const generation = ++progressGenerationRef.current;
+    const viewer = progressViewerRef.current;
+    try {
+      const nextState = await readWatchProgressState();
+      if (generation !== progressGenerationRef.current || viewer !== progressViewerRef.current) return;
+      if (nextState.readStatus === "offline") {
+        setProgressError("Watch progress could not refresh. Showing progress saved on this device.");
+        if (!Object.keys(nextState.progress).length) return;
+      } else if (nextState.syncStatus === "unknown") {
+        setProgressError("Showing this device’s progress. An account update could not be confirmed.");
+      } else {
+        setProgressError(null);
+      }
+      setWatchProgress(nextState.progress);
+      setProgressSubjectId(viewer);
+    } catch {
+      // Keep the last verified progress for this account on a transient read failure.
+      if (generation === progressGenerationRef.current && viewer === progressViewerRef.current) setProgressError("Watch progress could not refresh. Please try again.");
+    }
   }
+
+  useEffect(() => {
+    setProgressError(null);
+    void fetchWatchProgress();
+    return () => { progressGenerationRef.current += 1; };
+  }, [progressViewerId]);
 
   async function fetchCurrentChannelProfile() {
     const expectedAuthority = getCurrentAccountSessionAuthoritySnapshot();
@@ -542,15 +577,15 @@ export default function HomeScreen() {
     return titles
       .filter((item) => {
         if (!isAvailableContinueWatchingTitle(item)) return false;
-        const progressEntry = watchProgress[String(item.id)];
+        const progressEntry = visibleWatchProgress[String(item.id)];
         return isEligibleContinueWatchingProgress(progressEntry);
       })
       .sort((a, b) => {
-        const aLastWatchedAt = getContinueLastWatchedAt(watchProgress[String(a.id)]);
-        const bLastWatchedAt = getContinueLastWatchedAt(watchProgress[String(b.id)]);
+        const aLastWatchedAt = getContinueLastWatchedAt(visibleWatchProgress[String(a.id)]);
+        const bLastWatchedAt = getContinueLastWatchedAt(visibleWatchProgress[String(b.id)]);
         return bLastWatchedAt - aLastWatchedAt;
       });
-  }, [titles, watchProgress]);
+  }, [titles, visibleWatchProgress]);
 
   const continueWatchingHeroItem = canShowContinueWatching ? continueCandidates[0] ?? null : null;
 
@@ -584,7 +619,7 @@ export default function HomeScreen() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained Home source contract; the current render path intentionally does not call it.
   function renderHomeHero() {
     const heroItem = continueWatchingHeroItem;
-    const progress = heroItem ? watchProgress[String(heroItem.id)] : undefined;
+    const progress = heroItem ? visibleWatchProgress[String(heroItem.id)] : undefined;
     const progressPercent = heroItem ? getContinueWatchingProgressPercent(progress) : 0;
     const heroImageSource = (heroItem ? getImageUri(heroItem) : null) ?? CHILLYWOOD_BACKGROUND_SOURCE;
 
@@ -950,6 +985,7 @@ export default function HomeScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#E50914" />}
           showsVerticalScrollIndicator={false}
         >
+          {progressError ? <AppText accessibilityRole="alert" style={styles.muted}>{progressError}</AppText> : null}
           <View style={[styles.utilityRow, { marginTop: Math.max(safeAreaInsets.top, 8) }]}>
             <View style={styles.utilityLabelGroup}>
               <TouchableOpacity

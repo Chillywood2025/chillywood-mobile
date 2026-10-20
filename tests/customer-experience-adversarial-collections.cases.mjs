@@ -229,17 +229,20 @@ test("large Saved history and Chi'lly Chat collections cross every backend read 
   const savedSupabase = {
     from() { return makeSavedQuery(); },
   };
+  const savedStorage = createMemoryStorage();
   const savedApi = loadStubbed("_lib/userData.ts", {
-    "@react-native-async-storage/async-storage": {},
-    "./accountScopedStorage": {
-      readAccountScopedJsonValue: async () => ({}),
-      writeAccountScopedJsonValue: async () => {},
-    },
+    "@react-native-async-storage/async-storage": { default: savedStorage },
+    "./accountScopedStorage": accountStorage,
     "./accountSessionAuthority": {
       getCurrentAccountSessionAuthoritySnapshot: () => account,
       sameAccountSessionAuthority: sameBinding,
     },
     "./supabase": { supabase: savedSupabase },
+    "@supabase/supabase-js": { createClient: () => savedSupabase },
+    "./accountBoundSupabaseMutation": {
+      captureAccountBoundSupabaseMutationSubject: async () => ({ authority: account, accessToken: "test-only" }),
+      assertAccountBoundSupabaseMutationSubjectCurrent: () => {},
+    },
   });
   const savedIds = await savedApi.readMyListIds();
   assert.equal(savedIds.length, 405);
@@ -247,6 +250,11 @@ test("large Saved history and Chi'lly Chat collections cross every backend read 
   assert.equal(savedIds.includes("saved-0404"), true);
   assert.deepEqual(savedCursors, ["saved-0199", "saved-0399"]);
   assert.deepEqual(savedLimits, [200, 200, 200]);
+  const savedEnvelope = JSON.parse(savedStorage.values.get(
+    accountStorage.getAccountScopedStorageKey(savedApi.MY_LIST_KEY, account.userId),
+  ));
+  assert.equal(Object.keys(savedEnvelope.base).length, 405);
+  assert.deepEqual(savedEnvelope.pending, {});
 
   const threadId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const otherUserId = "22222222-2222-4222-8222-222222222222";
