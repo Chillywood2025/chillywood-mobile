@@ -44,9 +44,17 @@ from generate_series(1,3) n;
 insert into public.platform_staff_permission_grants(id,target_user_id,target_email,permission_key,status,reason,expires_at,metadata)
 select pg_temp.mutation_id('03',n),pg_temp.mutation_id('01',5)::text,'owner-mutation-5@example.test',
  (array['legal_review','evidence_export','legal_hold','dmca_review','legal_request_intake'])[n],
- 'active','Synthetic exact grant',case when n=2 then now()+interval '1 hour' when n=4 then now()-interval '1 hour' else null end,
+ 'active','Synthetic exact grant',case when n=2 then now()+interval '1 hour'
+  when n=4 then clock_timestamp()+interval '1 second' else null end,
  case when n=5 then '{"cleanup_required":true}'::jsonb else '{}'::jsonb end
 from generate_series(1,5) n;
+
+-- The real exact-subject trigger forbids inserting active, already-expired
+-- grants. Admit a valid short grant, then wait only until its actual cutoff.
+select pg_sleep(greatest(0,extract(epoch from expires_at-clock_timestamp())))
+from public.platform_staff_permission_grants where id=pg_temp.mutation_id('03',4);
+select ok((select expires_at<=clock_timestamp() from public.platform_staff_permission_grants
+ where id=pg_temp.mutation_id('03',4)),'expired exclusion fixture crossed its actual wall-clock cutoff');
 
 select ok(not has_function_privilege('service_role','public.platform_staff_normalize_permission_key(text)','EXECUTE'),
  'normalizer ACL remains closed to direct service table mutation');

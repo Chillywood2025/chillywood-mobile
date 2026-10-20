@@ -104,13 +104,16 @@ Device trust/revoke, First Owner, Break Glass, legal actions and other read
 panels are outside the new UUID requirement; their existing checks still apply.
 
 Every client bundle containing the pre-repair request helper, including the
-PR578 source, sends the older request shapes. No current installed-version
-inventory was established during this source repair. Repository release/config
-records are historical or planned, and a native version number alone cannot
-identify the running JavaScript after an OTA update. Before rollout, record the
-affected admin devices' binary/build, running update ID, runtime/channel and
-source binding. Do not infer that a historical v80 or runtime record is what
-is installed now.
+PR578 source, sends the older request shapes. Read-only package inspection on
+2026-10-20 verified one attached Android installation at version 1.0.0, build
+109, last updated 2026-10-18. Its running OTA update ID, runtime/channel and
+source revision were not established; iOS and the wider installed fleet remain
+unverified. The latest server-reported Owner device record (build 91, last seen
+2026-09-02) is stale and is not current installation proof. A native version
+alone cannot identify running JavaScript after an OTA update. Before rollout,
+bind every affected admin client's binary, running update, runtime/channel and
+source to the qualified contract. Do not infer compatibility from historical
+release/config records or the build 109 package readback alone.
 
 Grant revocation IDs are currently cached only in the app process and exact
 account/session. Identical ambiguous retries in that process reuse the receipt;
