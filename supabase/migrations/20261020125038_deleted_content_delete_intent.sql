@@ -163,6 +163,14 @@ create function public.delete_retained_content(
 ) returns jsonb language plpgsql security definer set search_path='' as $$
 declare v jsonb; actor uuid:=auth.uid(); removed integer;
 begin
+ -- Before first activation there is no new deletion behavior or stronger row
+ -- identity requirement for existing clients. A retired-key retry must instead
+ -- keep its exact binding checks even while capture is stopped.
+ if not exists(select 1 from private.deleted_content_retention_settings where capture_enabled and media_staging_enabled)
+  and not exists(select 1 from private.deleted_media_key_retirements
+   where provider=p_provider and bucket=p_bucket and object_key=p_object_key) then
+  return jsonb_build_object('status','disabled','retentionHandled',false);
+ end if;
  if actor is null or not public.whole_app_exact_current_session_authority_internal() then
   raise exception 'deleted_content_current_session_required' using errcode='42501';
  end if;

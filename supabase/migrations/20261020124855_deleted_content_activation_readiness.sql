@@ -290,7 +290,16 @@ begin
    'public.social_attachments'::regclass,'public.platform_brand_assets'::regclass]) rel
    where not exists(select 1 from pg_catalog.pg_trigger t where t.tgrelid=rel
      and t.tgfoid='private.capture_deleted_content_trigger()'::regprocedure
-     and t.tgenabled in ('O','A') and (t.tgtype::integer & 11)=11 and t.tgqual is null));
+     and t.tgenabled in ('O','A') and (t.tgtype::integer & 11)=11 and t.tgqual is null))
+   and not exists(select 1 from pg_catalog.pg_attribute a
+     where a.attrelid=any(array['public.profile_posts'::regclass,'public.profile_post_comments'::regclass,
+       'public.creator_video_comments'::regclass,'public.chat_messages'::regclass,'public.watch_party_room_messages'::regclass,
+       'public.videos'::regclass,'public.social_attachments'::regclass,'public.platform_brand_assets'::regclass])
+       and a.attname='deleted_at' and not a.attisdropped
+       and not exists(select 1 from pg_catalog.pg_trigger t where t.tgrelid=a.attrelid
+         and t.tgfoid='private.capture_deleted_content_trigger()'::regprocedure
+         and t.tgenabled in ('O','A') and (t.tgtype::integer & 19)=19 and t.tgqual is null
+         and (cardinality(t.tgattr::smallint[])=0 or a.attnum=any(t.tgattr::smallint[]))));
  if uncovered>0 then blockers:=array_append(blockers,'current_media_inventory_not_fully_covered'); end if;
  if secondary_count>0 then blockers:=array_append(blockers,'secondary_media_cleanup_not_covered'); end if;
  if brand_count>0 then blockers:=array_append(blockers,'platform_brand_media_not_covered'); end if;

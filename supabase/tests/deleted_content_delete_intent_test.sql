@@ -66,6 +66,7 @@ select pg_temp.intent_video(1);
 select set_config('test.intent.created',created_at::text,true) from public.videos where id=pg_temp.intent_id(1);
 set local role authenticated;
 select is(pg_temp.intent_delete(1,current_setting('test.intent.created')::timestamptz)->>'status','disabled','inactive endpoint explicitly preserves legacy client flow');
+select is(pg_temp.intent_delete(1,null)->>'status','disabled','inactive unretired source adds no new incarnation requirement');
 reset role;
 select ok(exists(select 1 from public.videos where id=pg_temp.intent_id(1)),'disabled endpoint does not remove source');
 select is((select count(*) from private.deleted_content_media_stages where target_id=pg_temp.intent_id(1)::text),0::bigint,'disabled endpoint creates no stage');
@@ -143,10 +144,15 @@ select ok((select s.deletion_id is null and r.status='staged' from private.delet
  'replacement old stage is not falsely adopted as a finalized deleted original');
 select is((select count(*) from private.deleted_media_key_retirements where target_id=pg_temp.intent_id(2)::text and status='retained'),1::bigint,'current replacement alone enters deletion retention');
 
-insert into public.videos(id,owner_id,title,visibility,moderation_status)
-values(pg_temp.intent_id(3),'e3300000-0000-4000-8000-000000000001','Empty draft','draft','clean');
-delete from public.videos where id=pg_temp.intent_id(3);
-select is((select media_disposition from private.deleted_content_records where target_id=pg_temp.intent_id(3)::text),'metadata_only','empty draft deletion remains supported without a provider stage');
+-- Exercise the real archive routine's no-media branch directly. The existing
+-- creator producer guard forbids inserting an empty video, so this assertion
+-- deliberately makes no claim that an empty draft is a permitted producer row.
+select lives_ok($$select private.capture_deleted_content_row('creator_video',
+ jsonb_build_object('id',pg_temp.intent_id(3),'owner_id','e3300000-0000-4000-8000-000000000001',
+  'title','Metadata-only archive payload','created_at',clock_timestamp()),false)$$,
+ 'real capture routine accepts a metadata-only payload without provider authority');
+select is((select media_disposition from private.deleted_content_records where target_id=pg_temp.intent_id(3)::text),'metadata_only','metadata-only archive records explicit no-media disposition');
+select is((select count(*) from private.deleted_content_media_stages where target_id=pg_temp.intent_id(3)::text),0::bigint,'metadata-only archive creates no provider stage');
 
 select pg_temp.intent_video(4);
 insert into private.deleted_content_records(target_type,target_id,author,content,source_created_at,deletion_kind,deleted_at,expires_at)

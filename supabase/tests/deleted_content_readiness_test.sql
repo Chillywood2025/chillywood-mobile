@@ -91,6 +91,9 @@ where (target_table='videos' and target_id='c5000000-0000-4000-8000-000000000002
 alter table public.videos disable trigger zzz_deleted_content_source_coverage;
 select is(public.deleted_content_expiry_readiness()->>'sourceAdmissionGuardCoverage','false','disabled admission trigger is a real readiness blocker');
 alter table public.videos enable trigger zzz_deleted_content_source_coverage;
+alter table public.profile_posts disable trigger capture_soft_deleted_content;
+select is(public.deleted_content_expiry_readiness()->>'contentCaptureGuardCoverage','false','disabled soft-delete trigger blocks activation too');
+alter table public.profile_posts enable trigger capture_soft_deleted_content;
 update private.deleted_content_retention_settings set activation_ready=true,capture_enabled=true,
  media_staging_enabled=true,text_expiry_enabled=true,media_expiry_enabled=true;
 set local request.jwt.claims='{"sub":"c3000000-0000-4000-8000-000000000001","role":"authenticated"}';

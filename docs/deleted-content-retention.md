@@ -99,9 +99,12 @@ liveness evidence only, including when all queues were disabled.
    shared references block the claim; shared-reference failure rolls back source
    removal. Empty media metadata has a capture-time disposition and bounded text
    expiry. Historical unknown media does not acquire that proof retroactively.
-   Secondary media (covers, playback locators, renditions and producer jobs) and
-   brand media remain outside this original-only cleanup contract and block
-   readiness where present. Their cleanup/retention needs further reviewed scope.
+   Distinct secondary media (covers, playback locators, renditions and producer
+   jobs) and brand media remain outside this original-only cleanup contract and
+   block readiness where present. A rendition metadata row is covered only when
+   its exact object, owner, source incarnation and verified reservation prove it
+   aliases the same original; a quality label alone is not proof. Other cleanup
+   and retention paths need further reviewed scope.
 5. Account purge remains its existing restore-window-controlled deidentification
    workflow. It does not silently become content erasure or create new copies of
    identity fields, push tokens, notifications or other scrubbed personal data.
@@ -154,12 +157,15 @@ liveness evidence only, including when all queues were disabled.
 - `node --experimental-transform-types --test supabase/functions/_shared/deleted-content-retention.test.mjs supabase/functions/_shared/deleted-content-media-expiry.test.mjs`
 - `supabase/tests/deleted_content_retention_test.sql`: canonical rollback-only
   pgTAP tests on the full migrated disposable database, plus
-  `supabase/tests/deleted_content_media_expiry_test.sql` for media claims.
-- `node scripts/test-deleted-content-retention-concurrency.mjs`: six observed
-  two-backend PostgreSQL lock orderings on a generated disposable local clone:
-  edit/delete in both orders and legal hold/text expiry and hold/media claim in
-  both orders. Never points
-  at a remote URL or modifies the local source database.
+  `supabase/tests/deleted_content_media_expiry_test.sql` for media claims and the
+  readiness, delete-intent, stage-recovery and terminal-source-cleanup suites.
+- `node scripts/test-deleted-content-retention-concurrency.mjs`: observed
+  two-backend PostgreSQL lock orderings on a generated disposable local clone,
+  including edit/delete, legal holds, activation/admission, abandoned stages and
+  exact-session revocation. The runner also exercises the production worker
+  against a real local TLS/SigV4 endpoint with provider failures and restarts.
+  Synthetic local transport qualification does not establish live R2 behavior.
+  The runner never points at a remote URL or modifies the local source database.
 
 Official provider capability references reviewed 2026-10-20:
 
