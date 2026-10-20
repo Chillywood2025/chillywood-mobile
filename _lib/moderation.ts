@@ -256,6 +256,9 @@ export type SafetyReportQueueReadModel = {
   generatedAt: string;
   items: SafetyReportQueueItem[];
   summary: SafetyReportQueueSummary;
+  windowLimit: number;
+  windowFull: boolean;
+  overviewAvailable: boolean;
 };
 
 export type AdminAuditLogEntry = {
@@ -786,13 +789,21 @@ export function canManagePrivilegedAdminWrites(
 }
 
 export function canManageAdminRoleAssignments(memberships: PlatformRoleMembership[]) {
-  return hasPlatformRoleMembership(memberships, ["owner", "super_admin"])
-    || hasPlatformStaffPermission(memberships, ["admin_grants"]);
+  // The staff-role RPC resolves owner/operator/moderator, not the broader
+  // owner-command hierarchy. admin_grants does not permit peer Admin changes.
+  return hasPlatformRoleMembership(memberships, ["owner"]);
 }
 
 export function canManageModeratorRoleAssignments(memberships: PlatformRoleMembership[]) {
-  return hasPlatformRoleMembership(memberships, ["owner", "super_admin"])
-    || hasPlatformStaffPermission(memberships, ["manage_moderators"]);
+  if (hasPlatformRoleMembership(memberships, ["owner"])) return true;
+  if (!hasPlatformRoleMembership(memberships, ["operator"])) return false;
+  // Match has_platform_permission('manage_moderators') without borrowing the
+  // unrelated super_admin shortcut in hasPlatformStaffPermission.
+  const required = new Set(["manage_moderators", "admin.lower_role.manage"]);
+  const now = Date.now();
+  return memberships.some((membership) =>
+    activePlatformRoleHasAnyPermission(membership, required, now)
+  );
 }
 
 export function hasPlatformStaffPermission(
@@ -1344,13 +1355,15 @@ const parseReportRows = (value: unknown): SafetyReportRecord[] => {
 const parseAdminReportsOverview = (value: unknown): AdminReportsOverview | null => {
   if (!isPlainObject(value)) return null;
   const sourceValues = Array.isArray(value.sourceSurfaces) ? value.sourceSurfaces : [];
+  const count = (value: unknown): number | null => value !== null && value !== undefined && value !== ""
+    && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
   return {
     connected: value.connected === true,
     generatedAt: normalizeText(value.generatedAt) || normalizeText(value.generated_at) || null,
-    totalReports: Number.isFinite(Number(value.totalReports)) ? Number(value.totalReports) : null,
-    needsReviewCount: Number.isFinite(Number(value.needsReviewCount)) ? Number(value.needsReviewCount) : null,
-    criticalHighRiskCount: Number.isFinite(Number(value.criticalHighRiskCount)) ? Number(value.criticalHighRiskCount) : null,
-    actionedTodayCount: Number.isFinite(Number(value.actionedTodayCount)) ? Number(value.actionedTodayCount) : null,
+    totalReports: count(value.totalReports),
+    needsReviewCount: count(value.needsReviewCount),
+    criticalHighRiskCount: count(value.criticalHighRiskCount),
+    actionedTodayCount: count(value.actionedTodayCount),
     queueHealth: value.queueHealth === "connected" ? "connected" : "not_connected",
     sourceSurfaces: sourceValues.map(normalizeSafetyReportQueueSourceSurface),
   };
@@ -1385,6 +1398,7 @@ const toAdminAuditLogRow = (row: Record<string, unknown>): PlatformAdminAuditLog
 export async function readSafetyReports(options?: {
   limit?: number;
   filter?: string;
+  requireReviewBackend?: boolean;
 }) {
   const limit = Number.isFinite(options?.limit) ? Math.max(1, Math.min(50, Math.floor(Number(options?.limit)))) : 8;
   const filter = normalizeText(options?.filter) || "all";
@@ -1402,7 +1416,9 @@ export async function readSafetyReports(options?: {
     return parseReportRows(rpcResult.data);
   }
 
-  if (!isMissingReportsRpcError(rpcResult.error)) {
+  // The legacy table projection cannot implement status/severity filters. Never
+  // present that unfiltered slice as a successful reviewer queue.
+  if (options?.requireReviewBackend || !isMissingReportsRpcError(rpcResult.error)) {
     throw rpcResult.error;
   }
 
@@ -1469,20 +1485,28 @@ export async function readSafetyReportQueue(options?: {
   limit?: number;
   filter?: string;
 }): Promise<SafetyReportQueueReadModel> {
+  const windowLimit = Number.isFinite(options?.limit)
+    ? Math.max(1, Math.min(50, Math.floor(Number(options?.limit)))) : 25;
   const [reports, overview] = await Promise.all([
-    readSafetyReports(options),
+    readSafetyReports({ ...options, limit: windowLimit, requireReviewBackend: true }),
     readAdminReportsOverview().catch(() => null),
   ]);
-  const items = reports.map(toSafetyReportQueueItem);
+  // Expanding the window replaces the prefix; do not append timestamp pages.
+  // The current RPC uses created_at < cursor and would skip boundary ties.
+  const items = Array.from(new Map(reports.map((report) => [report.id, toSafetyReportQueueItem(report)])).values());
   const fallbackSummary = summarizeSafetyReportQueue(items);
+  const overviewAvailable = overview?.connected === true && overview.totalReports !== null;
   return {
     generatedAt: overview?.generatedAt ?? new Date().toISOString(),
     items,
-    summary: overview
+    windowLimit,
+    windowFull: reports.length >= windowLimit,
+    overviewAvailable,
+    summary: overviewAvailable && overview
       ? {
         totalReports: overview.totalReports ?? fallbackSummary.totalReports,
-        needsReviewCount: overview.needsReviewCount ?? fallbackSummary.needsReviewCount,
-        criticalHighRiskCount: overview.criticalHighRiskCount ?? fallbackSummary.criticalHighRiskCount,
+        needsReviewCount: overview.needsReviewCount,
+        criticalHighRiskCount: overview.criticalHighRiskCount,
         actionedTodayCount: overview.actionedTodayCount,
         queueHealth: overview.queueHealth,
         platformOwnedTargetCount: fallbackSummary.platformOwnedTargetCount,
