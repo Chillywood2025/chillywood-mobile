@@ -267,7 +267,7 @@ test('real Admin bulk callback reports verified count and cutoff scope, never an
     await scope.exports.run();
     assert.equal(h.calls.length, 1);
     if (data.ok === true && data.revokedCount >= 0) {
-      assert.equal(notices.at(-1), `Revoked ${data.revokedCount} temporary grants present when this action started. Refresh to check current access.`);
+      assert.equal(notices.at(-1), `Revoked ${data.revokedCount} temporary or test grants present when this action started. Refresh to check current access.`);
       assert.equal(changes.visible, false);
     } else {
       assert.ok(notices.every(message => !message?.startsWith('Revoked ')));
