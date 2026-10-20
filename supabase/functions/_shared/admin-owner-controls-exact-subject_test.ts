@@ -151,7 +151,7 @@ Deno.test("canary proof authority is run-scoped and cleanup cannot sweep collisi
   assertIncludes(canaryRun, 'status: cleanup.ok ? "pass" : "fail"', "cleanup failures cannot pass canary");
 
   const migration = await Deno.readTextFile(new URL(
-    "../../migrations/20261020151834_transactional_owner_security_canary.sql", import.meta.url,
+    "../../migrations/20261020222318_transactional_owner_security_canary.sql", import.meta.url,
   ));
   const cleanupSql = migration.slice(migration.indexOf("create function public.cleanup_admin_canary_run"));
   assertIncludes(cleanupSql, "private.admin_canary_fixture_roles where run_id=p_run_id", "database role scope is this manifest");
