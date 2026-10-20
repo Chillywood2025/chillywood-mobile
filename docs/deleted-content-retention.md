@@ -104,5 +104,16 @@ leases never change deleted_at, expires_at, or the abandoned-stage deadline.
 Synthetic SQL tests cover twenty held entries followed by a usable twenty-first
 entry for both text and media, preservation of all holds, and subsequent retry.
 
+Inactive compatibility: a private monotonic latch is installed with the first
+retention migration, before any legal-hold trigger. Until capture is explicitly
+enabled, existing writes take only a shared latch lock and do not acquire the
+global retirement lock or impose READ COMMITTED on unrelated transactions.
+Capture enablement waits for pre-enable writers. After it commits the latch
+stays armed, even if runtime flags are disabled, to preserve existing claims and
+retired-key fences. Rollback of enablement leaves the latch unarmed. Stale
+repeatable-read snapshots fail on a changed locked row rather than bypassing the
+fence. Activation still requires checking the enabled protocol's isolation and
+provider assumptions; source merge does not enable it.
+
 The fixed 30-day window is exactly 720 elapsed hours, including DST crossings;
 server capture and both archive/retirement constraints use that same duration.
