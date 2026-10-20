@@ -4,6 +4,72 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createDatabase} from './helpers/database-runtime-authority-fixture.mjs';
 
+// Reviewed disabled inspection/deleted-retention successor bundle. Keep this
+// inventory explicit so a missing or unexpected replay file still fails.
+const inspectionBundleFiles = [
+  '20261020010608_owner_content_inspection_disabled.sql',
+  '20261020011354_content_inspection_verified_media.sql',
+  '20261020011409_content_inspection_subject_browse.sql',
+  '20261020011840_deleted_content_retention.sql',
+  '20261020012144_content_inspection_deleted_fallback.sql',
+  '20261020013500_deleted_media_reference_retirement.sql',
+  '20261020013556_deleted_content_media_expiry.sql',
+  '20261020014747_content_inspection_retained_originals.sql',
+];
+const inspectionFunctionKeys = new Set([
+  'private.capture_deleted_content_row/3',
+  'private.capture_deleted_content_trigger/0',
+  'private.claim_deleted_media_retirement/1',
+  'private.content_inspection_actor/3',
+  'private.content_inspection_audit/11',
+  'private.content_inspection_context_owned/2',
+  'private.content_inspection_current_source/2',
+  'private.content_inspection_grant_valid/1',
+  'private.content_inspection_immutable_event/0',
+  'private.content_inspection_live_media_binding/3',
+  'private.content_inspection_media_binding/2',
+  'private.content_inspection_media_receipt_valid/1',
+  'private.content_inspection_owner_target/2',
+  'private.content_inspection_source/2',
+  'private.deleted_content_hold_matches/7',
+  'private.deleted_content_immutable/0',
+  'private.deleted_content_legal_hold_guard/0',
+  'private.deleted_media_has_live_reference/1',
+  'private.deleted_media_locator_columns/1',
+  'private.deleted_media_locator_document/2',
+  'private.deleted_media_mentions/2',
+  'private.deleted_media_normalize_locator/1',
+  'private.deleted_media_preserve_identity/0',
+  'private.deleted_media_reference_coverage_ready/0',
+  'private.deleted_media_reference_identity/1',
+  'private.deleted_media_retirement_binding/1',
+  'private.finalize_deleted_media_inspection_proof/2',
+  'private.guard_deleted_media_references/0',
+  'private.read_deleted_content_inspection/2',
+  'private.register_deleted_media_retirement/0',
+  'public.admin_authorize_content_inspection_media/3',
+  'public.admin_close_content_inspection_context/3',
+  'public.admin_create_content_inspection_context/3',
+  'public.admin_grant_content_inspection_access/7',
+  'public.admin_list_content_inspection_contexts/4',
+  'public.admin_list_content_inspection_scope/3',
+  'public.admin_list_content_inspection_subject_targets/6',
+  'public.admin_prepare_content_inspection_media/5',
+  'public.admin_read_content_inspection/5',
+  'public.admin_resolve_content_inspection_media/3',
+  'public.admin_revoke_content_inspection_access/3',
+  'public.check_deleted_media_retirement/4',
+  'public.claim_deleted_content_media_expiry/1',
+  'public.deleted_content_expiry_readiness/0',
+  'public.expire_deleted_content_text/1',
+  'public.list_deleted_content_expiry_work/0',
+  'public.list_deleted_content_media_expiry_work/0',
+  'public.read_deleted_content_media_expiry_claim/1',
+  'public.reconcile_deleted_content_stage/1',
+  'public.record_deleted_content_media_expiry_result/2',
+  'public.stage_deleted_content_media/6',
+]);
+
 const studioBundleFiles = [
   '20261015073423_platform_studio_publication_and_audience_authority.sql',
   '20261019020049_platform_studio_rolling_brand_compatibility.sql',
@@ -68,7 +134,9 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,includeHeldStudio?1122:1105);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size);
+    assert.deepEqual(before.functions.filter(fn=>inspectionFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(),
+      [...inspectionFunctionKeys].sort(),'exact disabled inspection/retention function inventory is present');
     assert.deepEqual(before.functions.filter(fn=>studioFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(),
       includeHeldStudio?[...studioFunctionKeys].sort():[], 'the entire Studio bundle has the expected catalog scope');
     assert.deepEqual(after.functions.map(x=>[x.oid,x.identity]),before.functions.map(x=>[x.oid,x.identity]),'stable function OIDs and signatures');
@@ -92,9 +160,10 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718211432_harden_media_scan_retry_recovery.sql',index:6,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
-    // The prior 425-file predecessor now includes the ACL-only Circle closure;
-    // including Studio adds exactly its held migration and two successors.
-    assert.equal(replayReport.files.length,includeHeldStudio?429:426);
+    // Preserve the historical baseline, then account for every reviewed successor.
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>inspectionBundleFiles.includes(file)),inspectionBundleFiles,
+      'entire disabled inspection/retention successor bundle is replayed');
     assert.ok(replayReport.files.includes('20261019000210_circle_request_rpc_anon_execute_closure.sql'));
     assert.deepEqual(replayReport.files.filter(file=>studioBundleFiles.includes(file)),
       includeHeldStudio?studioBundleFiles:[], 'Studio migrations are replayed as one complete bundle or omitted together');

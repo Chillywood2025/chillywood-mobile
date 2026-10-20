@@ -94,7 +94,7 @@ test('every range authenticates and reauthorizes after bytes, before delivery', 
   assert.equal((await response.arrayBuffer()).byteLength, 7);
   assert.deepEqual(calls, ['authenticate', 'admin_authorize_content_inspection_media', 'admin_resolve_content_inspection_media',
     'check_deleted_media_retirement', 'HEAD', 'check_deleted_media_retirement', 'GET', 'check_deleted_media_retirement', 'GET',
-    'admin_authorize_content_inspection_media', 'check_deleted_media_retirement']);
+    'check_deleted_media_retirement', 'admin_authorize_content_inspection_media']);
   assert.equal(new Set(ids).size, 2);
 });
 
@@ -157,4 +157,32 @@ test('late retirement or expiry after origin fetch blocks all response bytes', a
     assert.equal(calls.at(-1), 'check_deleted_media_retirement');
     assert.deepEqual(await response.json(), { error: 'media_retired_or_expired' });
   }
+});
+
+
+test('revocation while final retirement fence waits prevents buffered-byte delivery', async () => {
+  const options = {};
+  const { dependencies, calls } = fixture(options);
+  const originalResolve = dependencies.resolve;
+  let releaseFence;
+  let enterFence;
+  const blocked = new Promise(resolve => { enterFence = resolve; });
+  const released = new Promise(resolve => { releaseFence = resolve; });
+  let fences = 0;
+  dependencies.resolve = async (name, args) => {
+    if (name === 'check_deleted_media_retirement' && ++fences === 4) {
+      enterFence();
+      await released;
+    }
+    return originalResolve(name, args);
+  };
+  const pending = createContentInspectionHandler(dependencies)(get());
+  await blocked;
+  options.revoke = true;
+  releaseFence();
+  const response = await pending;
+  assert.equal(response.status, 403);
+  assert.equal(response.headers.get('Content-Type'), 'application/json');
+  assert.equal(calls.at(-1), 'admin_authorize_content_inspection_media');
+  assert.equal((await response.text()).includes('synthetic/source'), false);
 });

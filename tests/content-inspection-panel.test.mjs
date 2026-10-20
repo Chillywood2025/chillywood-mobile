@@ -16,7 +16,7 @@ const container = () => ({ addEventListener: noop, removeEventListener: noop, na
 doc.documentElement = container(); globalThis.document = doc; globalThis.window = globalThis; globalThis.HTMLIFrameElement = class {};
 function compile(file, mocks) {
   const module = { exports: {} };
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText, { module, exports: module.exports, require: name => name === "react" ? React : name === "react-native-safe-area-context" ? { SafeAreaView: props => React.createElement(React.Fragment, null, props.children) } : name === "./content-inspection-media-viewer" ? { ContentInspectionMediaViewer: () => null } : mocks[name], crypto: webcrypto, Uint8Array, Date, setTimeout, clearTimeout });
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText, { module, exports: module.exports, require: name => name === "react" ? React : name === "react-native-safe-area-context" ? { SafeAreaView: props => React.createElement(React.Fragment, null, props.children) } : name === "./content-inspection-media-viewer" ? { ContentInspectionMediaViewer: () => null } : mocks[name], crypto: webcrypto, Uint8Array, Date, setTimeout, clearTimeout, AbortController });
   return module.exports;
 }
 const a = { userId: "00000000-0000-4000-8000-000000000001", accountId: "00000000-0000-4000-8000-000000000001", sessionGeneration: "session-a", state: "ACTIVE", restoreOnly: false };
@@ -113,6 +113,65 @@ test("retained deleted body expires from mounted state and cannot open retained 
   assert.equal(h.current.result, null); assert.match(h.current.message, /expired/);
   await h.act(() => h.current.changeReason("Another retained fixture reason")); await h.act(() => h.current.openMedia()); assert.equal(h.current.mediaOpen, false);
 });
+test("proved retained media opens explicitly and unmounts at the exact retention deadline", async t => {
+  const h = await mount(t); await prepare(h);
+  const mediaTarget = { ...target, targetType: "creator_video" };
+  await h.act(() => h.current.changeTarget(mediaTarget)); await h.act(() => h.current.changeReason("Inspect retained fixture"));
+  await h.act(() => { void h.current.loadScope(); }); await h.act(() => h.calls.at(-1).resolve({ targets: [mediaTarget], grants: [], grantsHasMore: false }));
+  const expires = Date.now() + 300;
+  const retained = { ...data, ...mediaTarget, availability: "available_deleted", deletedRetentionAvailability: "available", content: { title: "Deleted fixture", description: null }, deletedAt: new Date(expires-30*86400000).toISOString(), retentionExpiresAt: new Date(expires).toISOString(), mediaAvailability: "prepare_required", retainedMediaAvailability: "prepare_required" };
+  await h.act(() => { void h.current.read(); }); await h.act(() => h.calls.at(-1).resolve(retained));
+  assert.equal(h.current.retainedMediaEligible, true); assert.equal(h.current.mediaOpen, false);
+  await h.act(() => h.current.openMedia()); assert.equal(h.current.mediaOpen, true);
+  await h.act(() => new Promise(resolve => setTimeout(resolve, 350)));
+  assert.equal(h.current.result, null); assert.equal(h.current.mediaOpen, false);
+  await h.act(() => h.current.openMedia()); assert.equal(h.current.mediaOpen, false);
+});
+test("known delegated grant expiry clears current body and retires a late read", async t => {
+  const h = await mount(t); await allowBrowse(h, false); await h.act(() => h.current.changeTarget(target)); await prepare(h);
+  const grant = { ...target, grantId: contextId, granteeUserId: a.userId, expiresAt: new Date(Date.now()+300).toISOString(), revokedAt: null, revision: 1 };
+  await h.act(() => { void h.current.loadScope(); }); await h.act(() => h.calls.at(-1).resolve({ targets: [target], grants: [grant], grantsHasMore: false }));
+  await h.act(() => { void h.current.read(); }); await h.act(() => h.calls.at(-1).resolve(data)); assert.equal(h.current.result.content.body, data.content.body);
+  await h.act(() => new Promise(resolve => setTimeout(resolve, 350)));
+  assert.equal(h.current.result, null); assert.equal(h.current.scope, null); assert.match(h.current.message, /grant has expired/);
+  assert.equal(h.current.reason, ""); await h.act(() => h.current.changeReason("Recheck scoped fixture access"));
+  grant.expiresAt = new Date(Date.now()+300).toISOString();
+  await h.act(() => { void h.current.loadScope(); }); await h.act(() => h.calls.at(-1).resolve({ targets: [target], grants: [{ ...grant }], grantsHasMore: false }));
+  await h.act(() => { void h.current.read(); }); const pending = h.calls.at(-1);
+  await h.act(() => new Promise(resolve => setTimeout(resolve, 350))); await h.act(() => pending.resolve(data));
+  assert.equal(h.current.result, null); assert.equal(h.current.busy, false);
+});
+test("root role display does not inherit an unrelated delegated grant deadline", async t => {
+  const h = await mount(t); await allowBrowse(h, true); await h.act(() => h.current.changeTarget(target)); await prepare(h);
+  await h.act(() => { void h.current.loadScope(); }); await h.act(() => h.calls.at(-1).resolve({ targets: [target], grants: [{ ...target, grantId: contextId, granteeUserId: a.userId, expiresAt: new Date(Date.now()-1000).toISOString(), revokedAt: null, revision: 1 }], grantsHasMore: false }));
+  await h.act(() => { void h.current.read(); }); await h.act(() => h.calls.at(-1).resolve(data)); assert.equal(h.current.result.content.body, data.content.body);
+});
+test("actual native video lease and player are released by retained-panel deadline", async t => {
+  const mediaTarget = { ...target, targetType: "creator_video" };
+  let current, player, retained, active = true;
+  const callbacks = new Set();
+  const lease = { availability: "ready", mediaKind: "video", mimeType: "video/mp4", source: { uri: "fixture://retained-original", headers: {} }, active: () => active,
+    dispose() { if (!active) return; active = false; lease.source.uri = ""; callbacks.forEach(fn => fn()); callbacks.clear(); }, onDispose(fn) { callbacks.add(fn); return () => callbacks.delete(fn); } };
+  const children = props => React.createElement(React.Fragment, null, props.children);
+  const native = { Platform: { OS: "ios" }, AppState: { currentState: "active", addEventListener: () => ({ remove: noop }) }, StyleSheet: { create: x => x }, View: children, Text: () => null, TouchableOpacity: () => null };
+  const authorityMocks = { sameAccountSessionAuthority: same, getCurrentAccountSessionAuthoritySnapshot: () => a, subscribeToAccountSessionAuthority: () => noop };
+  const viewer = compile("components/admin/content-inspection-media-viewer.tsx", {
+    "react-native": native, "../../_lib/contentInspection": apiModule, "../../_lib/accountSessionAuthority": authorityMocks,
+    "../../_lib/contentInspectionMedia": { prepareInspectionMedia: async () => lease },
+    "expo-image": { Image: () => null }, "expo-av": { Audio: {} },
+    "expo-video": { VideoView: () => null, createVideoPlayer: () => { player = { released: 0, pause: noop, release() { this.released++; }, replace: noop, addListener: () => ({ remove: noop }) }; return player; } },
+  });
+  const panel = compile("components/admin/content-inspection-panel.tsx", { "react-native": native, "../../_lib/accountSessionAuthority": authorityMocks, "../../_lib/contentInspection": { ...apiModule, contentInspection: { scope: async () => ({ targets: [mediaTarget], grants: [], grantsHasMore: false }), read: async () => retained } } });
+  function Probe() { current = panel.useContentInspectionPanel(a, mediaTarget); return current.mediaOpen ? React.createElement(viewer.ContentInspectionMediaViewer, { authority: a, contextId, target: mediaTarget, reason: current.reason }) : null; }
+  const root = createRoot(container()); const act = fn => React.act(async () => { await fn(); for (let i=0;i<12;i++) await Promise.resolve(); });
+  await act(() => root.render(React.createElement(Probe))); t.after(() => act(() => root.unmount()));
+  await act(() => current.changeContext(contextId)); await act(() => current.changeReason("Inspect retained native fixture")); await act(() => current.loadScope());
+  const expires = Date.now()+400;
+  retained = { ...data, ...mediaTarget, availability: "available_deleted", deletedRetentionAvailability: "available", content: { title: "Retained video", description: null }, deletedAt: new Date(expires-30*86400000).toISOString(), retentionExpiresAt: new Date(expires).toISOString(), mediaAvailability: "prepare_required", retainedMediaAvailability: "prepare_required" };
+  await act(() => current.read()); await act(() => current.openMedia()); assert.ok(player); assert.equal(player.released, 0);
+  await act(() => new Promise(resolve => setTimeout(resolve, 450)));
+  assert.equal(current.mediaOpen, false); assert.equal(active, false); assert.equal(lease.source.uri, ""); assert.equal(player.released, 1);
+});
 test("late success and late failure cannot cross account/session or selection boundaries", async t => {
   const h = await mount(t); await prepare(h); await h.act(() => { void h.current.read(); }); const held = h.calls.at(-1);
   await h.switchAccount(); await h.act(() => held.resolve(data)); assert.equal(h.current.result, null); assert.equal(h.current.reason, "");
@@ -186,15 +245,17 @@ test("production client decodes actual final SQL RPC envelopes for current/delet
       create table private.content_inspection_context_targets(context_id uuid,target_type text,target_id uuid);
       create table private.content_inspection_grants(id uuid,context_id uuid,target_type text,target_id uuid,revision bigint);
       create table private.fixture_source(value jsonb);
+      create table private.fixture_media_binding(value jsonb);
       create function private.content_inspection_actor(text,uuid,boolean default true) returns text language sql as $$select 'owner'::text$$;
       create function private.content_inspection_context_owned(uuid,text) returns boolean language sql as $$select true$$;
       create function private.content_inspection_grant_valid(private.content_inspection_grants) returns boolean language sql as $$select true$$;
       create function private.content_inspection_source(text,uuid) returns jsonb language sql as $$select value from private.fixture_source$$;
+      create function private.content_inspection_media_binding(text,uuid) returns jsonb language sql as $$select value from private.fixture_media_binding$$;
       create function private.content_inspection_owner_target(text,uuid) returns boolean language sql as $$select false$$;
       create function private.content_inspection_audit(text,uuid,text,uuid,text,uuid,uuid,bigint,text,text,text) returns void language sql as $$select$$;`);
     await db.query("insert into private.content_inspection_contexts values($1,'open')", [contextId]);
     await db.query("insert into private.content_inspection_context_targets values($1,$2,$3)", [contextId, target.targetType, target.targetId]);
-    const migration = fs.readFileSync("supabase/migrations/20261020012144_content_inspection_deleted_fallback.sql", "utf8");
+    const migration = fs.readFileSync("supabase/migrations/20261020014747_content_inspection_retained_originals.sql", "utf8");
     const start = migration.indexOf("create or replace function public.admin_read_content_inspection(");
     assert.ok(start >= 0); await db.exec(migration.slice(start, migration.indexOf("$$;", start) + 3));
     let lastEnvelope;
@@ -221,6 +282,25 @@ test("production client decodes actual final SQL RPC envelopes for current/delet
       const malformed = loadApi(undefined, async () => ({ data: bad, error: null }));
       await assert.rejects(() => malformed.contentInspection.read(a, contextId, target, "Inspect SQL fixture"), error => error.code === "unavailable");
     }
+    const mediaTarget = { ...target, targetType: "creator_video" };
+    await db.query("insert into private.content_inspection_context_targets values($1,$2,$3)", [contextId, mediaTarget.targetType, mediaTarget.targetId]);
+    await db.exec("update private.fixture_source set value=value || jsonb_build_object('content',jsonb_build_object('title','Retained SQL video','description','Exact stored description')); insert into private.fixture_media_binding values ('{\"storedVersion\":\"verified-fixture\"}')");
+    const retainedMedia = await api.read(a, contextId, mediaTarget, "Inspect SQL retained original");
+    assert.equal(retainedMedia.mediaAvailability, "prepare_required"); assert.equal(retainedMedia.retainedMediaAvailability, "prepare_required");
+    assert.equal(retainedMedia.availability, "available_deleted");
+    for (const bad of [
+      { ...retainedMedia, mediaAvailability: "unsupported_media_inspection" },
+      { ...retainedMedia, retainedMediaAvailability: "unsupported" },
+      { ...retainedMedia, availability: "available", deletedRetentionAvailability: "unavailable", deletedAt: null, retentionExpiresAt: null },
+      { ...retainedMedia, targetType: target.targetType, content: { body: "wrong surface" } },
+      { ...retainedMedia, retentionExpiresAt: new Date(Date.now()-1).toISOString() },
+    ]) {
+      const malformed = loadApi(undefined, async () => ({ data: bad, error: null }));
+      await assert.rejects(() => malformed.contentInspection.read(a, contextId, mediaTarget, "Inspect SQL retained original"), error => error.code === "unavailable");
+    }
+    await db.exec("delete from private.fixture_media_binding");
+    const unsupportedMedia = await api.read(a, contextId, mediaTarget, "Inspect SQL retained original");
+    assert.equal(unsupportedMedia.mediaAvailability, "unsupported_media_inspection"); assert.equal(unsupportedMedia.retainedMediaAvailability, "unsupported");
     await db.exec("delete from private.fixture_source");
     const missing = await api.read(a, contextId, target, "Inspect SQL fixture");
     assert.equal(missing.availability, "unavailable_current"); assert.equal(missing.content, null); assert.equal(missing.deletedRetentionAvailability, "unavailable");

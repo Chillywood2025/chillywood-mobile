@@ -28,7 +28,7 @@ create table private.deleted_content_records (
   deletion_kind text not null check(deletion_kind in ('hard','soft')),
   deleted_at timestamptz not null,
   expires_at timestamptz not null,
-  check(expires_at=deleted_at+interval '30 days'),
+  check(expires_at=deleted_at+interval '720 hours'),
   check(target_type in ('profile_post','profile_post_comment','creator_video_comment',
     'chat_message','room_message','creator_video','social_attachment','platform_brand_asset','platform_brand_profile'))
 );
@@ -84,6 +84,9 @@ begin
   if not exists(select 1 from private.deleted_content_retention_settings where media_staging_enabled) then
     return jsonb_build_object('decision','delete_now','retention','disabled');
   end if;
+  if current_setting('transaction_isolation')<>'read committed' then
+    raise exception 'retention_requires_read_committed' using errcode='25000';
+  end if;
   if p_provider<>'cloudflare_r2' or p_bucket<>'chillywood-media-origin'
     or to_regclass('private.deleted_media_key_retirements') is null then
     return jsonb_build_object('decision','delete_now','retention','unsupported_provider');
@@ -136,6 +139,9 @@ language plpgsql security definer set search_path='' as $$
 declare d uuid; a text; b jsonb; k text; t timestamptz:=clock_timestamp();
 begin
   if not exists(select 1 from private.deleted_content_retention_settings where capture_enabled) then return null; end if;
+  if current_setting('transaction_isolation')<>'read committed' then
+    raise exception 'retention_requires_read_committed' using errcode='25000';
+  end if;
   k:=coalesce(v->>'id',v->>'owner_user_id');
   a:=coalesce(v->>'user_id',v->>'sender_user_id',v->>'owner_id',v->>'owner_user_id');
   if k is null or a is null then raise exception 'deleted_content_missing_identity'; end if;
@@ -157,7 +163,7 @@ begin
   end case;
   insert into private.deleted_content_records(target_type,target_id,author,owner_protected,content,source_updated_at,source_created_at,parent_type,parent_id,deletion_kind,deleted_at,expires_at)
     values(p_type,k,a,exists(select 1 from public.platform_role_memberships where user_id=a and role='owner'),b,nullif(v->>'updated_at','')::timestamptz,
-      nullif(v->>'created_at','')::timestamptz,v->>'surface_type',v->>'surface_id',case when p_soft then 'soft' else 'hard' end,t,t+interval '30 days') returning id into d;
+      nullif(v->>'created_at','')::timestamptz,v->>'surface_type',v->>'surface_id',case when p_soft then 'soft' else 'hard' end,t,t+interval '720 hours') returning id into d;
   update private.deleted_content_media_stages set deletion_id=d where target_type=p_type and target_id=k and deletion_id is null;
   insert into private.deleted_content_retention_events(operation,target_type,target_id,deletion_id,actor)
     values('capture',p_type,k,d,auth.uid()::text);
@@ -258,13 +264,17 @@ create function private.deleted_content_hold_matches(
      'watch_party_room_message','creator_video','video','social_attachment','platform_brand_asset') then
       (replace(replace(h_type,'watch_party_room_message','room_message'),'creator_video','video')=
        replace(replace(t_type,'watch_party_room_message','room_message'),'creator_video','video') and h_id=t_id)
-      or (h_type=parent_type and h_id=parent_id)
+      or (replace(replace(h_type,'watch_party_room_message','room_message'),'creator_video','video')=
+          replace(replace(parent_type,'watch_party_room_message','room_message'),'creator_video','video') and h_id=parent_id)
    -- An unrecognized legal scope cannot safely be declared irrelevant.
    else true end
 $$;
 create function private.deleted_content_legal_hold_guard() returns trigger
 language plpgsql security definer set search_path='' as $$
 begin
+  if current_setting('transaction_isolation')<>'read committed' then
+    raise exception 'retention_requires_read_committed' using errcode='25000';
+  end if;
   perform pg_advisory_xact_lock(176214,30);
   if new.status='active' and exists(select 1 from private.deleted_content_expiry_claims c
     where private.deleted_content_hold_matches(new.target_type,new.target_id,c.target_type,c.target_id,c.author,c.parent_type,c.parent_id)) then
@@ -289,6 +299,9 @@ begin
   if not exists(select 1 from private.deleted_content_retention_settings where text_expiry_enabled) then
     return jsonb_build_object('status','disabled');
   end if;
+  if current_setting('transaction_isolation')<>'read committed' then
+    raise exception 'retention_requires_read_committed' using errcode='25000';
+  end if;
   perform pg_advisory_xact_lock(176214,30);
   select * into r from private.deleted_content_records where id=p_deletion_id for update;
   if r.id is null then return jsonb_build_object('status','already_absent'); end if;
@@ -310,8 +323,14 @@ begin
       when 'profile_post_comment' then 'profile_post_comments'
       when 'creator_video_comment' then 'creator_video_comments' end;
     if source_table is null then return jsonb_build_object('status','soft_source_cleanup_required'); end if;
-    execute format('select to_jsonb(x) from public.%I x where id::text=$1 for update',source_table)
-      into source_row using r.target_id;
+    -- Locator admission triggers may own a source row before requesting the
+    -- shared retirement lock. Do not wait in the inverse lock order.
+    begin
+      execute format('select to_jsonb(x) from public.%I x where id::text=$1 for update nowait',source_table)
+        into source_row using r.target_id;
+    exception when lock_not_available then
+      return jsonb_build_object('status','source_busy');
+    end;
     -- Never remove a restored source or a new incarnation sharing its old ID.
     if source_row is not null and source_row->>'deleted_at' is not null
       and nullif(source_row->>'created_at','')::timestamptz is not distinct from r.source_created_at then
@@ -359,17 +378,46 @@ grant execute on function public.reconcile_deleted_content_stage(uuid) to servic
 revoke all on function private.deleted_content_hold_matches(text,text,text,text,text,text,text),
   private.deleted_content_legal_hold_guard() from public,anon,authenticated,service_role;
 
+-- Dispatch leases advance past held/unsupported work without changing retention
+-- clocks. Crashed or blocked batches become eligible again after one minute.
+create table private.deleted_content_work_dispatch (
+ kind text not null check(kind in ('text','stage','media')), work_id uuid not null,
+ next_attempt_at timestamptz not null, primary key(kind,work_id)
+);
+alter table private.deleted_content_work_dispatch enable row level security;
+alter table private.deleted_content_work_dispatch force row level security;
+revoke all on private.deleted_content_work_dispatch from public,anon,authenticated,service_role;
 create function public.list_deleted_content_expiry_work() returns jsonb
-language sql volatile security definer set search_path='' as $$
- select jsonb_build_object(
-   'enabled',exists(select 1 from private.deleted_content_retention_settings where text_expiry_enabled),
-   'deletionIds',coalesce((select jsonb_agg(id) from (select id from private.deleted_content_records
-      where expires_at<=clock_timestamp() and exists(select 1 from private.deleted_content_retention_settings where text_expiry_enabled)
-      order by expires_at,id limit 20) x),'[]'::jsonb),
-   'stageIds',coalesce((select jsonb_agg(id) from (select id from private.deleted_content_media_stages
-      where deletion_id is null and reconcile_after<=clock_timestamp()
-        and exists(select 1 from private.deleted_content_retention_settings where media_staging_enabled)
-      order by reconcile_after,id limit 20) x),'[]'::jsonb))
-$$;
+language plpgsql volatile security definer set search_path='' as $$
+declare ids uuid[]; stages uuid[]; enabled boolean;
+begin
+ select text_expiry_enabled into enabled from private.deleted_content_retention_settings;
+ if not enabled then return jsonb_build_object('enabled',false,'deletionIds','[]'::jsonb,'stageIds','[]'::jsonb); end if;
+ if current_setting('transaction_isolation')<>'read committed' then
+   raise exception 'retention_requires_read_committed' using errcode='25000';
+ end if;
+ perform pg_advisory_xact_lock(176214,31);
+ select array_agg(id) into ids from (
+   select r.id from private.deleted_content_records r
+   left join private.deleted_content_work_dispatch q on q.kind='text' and q.work_id=r.id
+   where r.expires_at<=clock_timestamp() and (q.work_id is null or q.next_attempt_at<=clock_timestamp())
+   order by coalesce(q.next_attempt_at,r.expires_at),r.id limit 20
+ ) x;
+ select array_agg(id) into stages from (
+   select s.id from private.deleted_content_media_stages s
+   left join private.deleted_content_work_dispatch q on q.kind='stage' and q.work_id=s.id
+   where s.deletion_id is null and s.reconcile_after<=clock_timestamp()
+     and (q.work_id is null or q.next_attempt_at<=clock_timestamp())
+     and exists(select 1 from private.deleted_content_retention_settings where media_staging_enabled)
+   order by coalesce(q.next_attempt_at,s.reconcile_after),s.id limit 20
+ ) x;
+ insert into private.deleted_content_work_dispatch(kind,work_id,next_attempt_at)
+ select 'text',unnest(ids),clock_timestamp()+interval '1 minute'
+ on conflict(kind,work_id) do update set next_attempt_at=excluded.next_attempt_at;
+ insert into private.deleted_content_work_dispatch(kind,work_id,next_attempt_at)
+ select 'stage',unnest(stages),clock_timestamp()+interval '1 minute'
+ on conflict(kind,work_id) do update set next_attempt_at=excluded.next_attempt_at;
+ return jsonb_build_object('enabled',true,'deletionIds',coalesce(to_jsonb(ids),'[]'::jsonb),'stageIds',coalesce(to_jsonb(stages),'[]'::jsonb));
+end $$;
 revoke all on function public.list_deleted_content_expiry_work() from public,anon,authenticated;
 grant execute on function public.list_deleted_content_expiry_work() to service_role;

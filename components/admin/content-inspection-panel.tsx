@@ -35,6 +35,8 @@ export function useContentInspectionPanel(authority: AccountSessionAuthorityBind
   const generation = useRef(0);
   const pending = useRef(false);
   const mounted = useRef(true);
+  const retainedMediaEligible = result?.availability === "available_deleted" && result.mediaAvailability === "prepare_required"
+    && result.retainedMediaAvailability === "prepare_required" && !!result.retentionExpiresAt && Date.parse(result.retentionExpiresAt) > Date.now();
   const clear = () => { generation.current++; pending.current = false; setBusy(false); setResult(null); setMediaOpen(false); setRetainedSelection(false); setSubjectTargets(null); setReason(""); setGrantee(""); setExpiry(""); setMessage(""); };
   useEffect(() => {
     const lifetime = generation;
@@ -42,17 +44,24 @@ export function useContentInspectionPanel(authority: AccountSessionAuthorityBind
     return () => { mounted.current = false; lifetime.current++; };
   }, []);
   useEffect(() => {
-    if (result?.availability !== "available_deleted" || !result.retentionExpiresAt) return;
+    const retentionDeadline = result?.availability === "available_deleted" && result.retentionExpiresAt ? Date.parse(result.retentionExpiresAt) : Infinity;
+    const matchingGrants = contexts?.canCreateContext === false ? scope?.grants.filter(grant => !grant.revokedAt && grant.granteeUserId === authority.userId && grant.targetType === target.targetType && grant.targetId === target.targetId) ?? [] : [];
+    const grantDeadline = matchingGrants.length ? Math.max(...matchingGrants.map(grant => Date.parse(grant.expiresAt))) : Infinity;
+    const expiresAt = Math.min(retentionDeadline, grantDeadline);
+    if (!Number.isFinite(expiresAt)) return;
     let timer: ReturnType<typeof setTimeout>;
-    const expiresAt = Date.parse(result.retentionExpiresAt);
     const checkExpiry = () => {
       const remaining = expiresAt - Date.now();
-      if (remaining <= 0) { setResult(null); setMediaOpen(false); setMessage("The retained deletion has expired. Its content is no longer available."); }
+      if (remaining <= 0) {
+        generation.current++; pending.current = false; setBusy(false); setResult(null); setMediaOpen(false);
+        if (grantDeadline <= Date.now()) { setScope(null); setReason(""); setGrantee(""); setExpiry(""); setSubjectTargets(null); setMessage("Your scoped grant has expired. Enter a reason and reload scope to check current access."); }
+        else setMessage("The retained deletion has expired. Its content is no longer available.");
+      }
       else timer = setTimeout(checkExpiry, Math.min(remaining, 3600000));
     };
     checkExpiry();
     return () => clearTimeout(timer);
-  }, [result]);
+  }, [result, contexts, scope, authority.userId, target.targetType, target.targetId]);
   const run = async <T,>(operation: () => Promise<T>, accept: (value: T) => void) => {
     if (pending.current || disabled) return;
     const token = ++generation.current;
@@ -73,11 +82,11 @@ export function useContentInspectionPanel(authority: AccountSessionAuthorityBind
     }
   };
   return {
-    reason, target, contextId, contexts, scope, result, grantee, expiry, busy, message, disabled, subjectUserId, subjectTargets, mediaOpen, retainedSelection,
+    reason, target, contextId, contexts, scope, result, grantee, expiry, busy, message, disabled, subjectUserId, subjectTargets, mediaOpen, retainedSelection, retainedMediaEligible,
     clear,
     changeReason(value: string) { generation.current++; pending.current = false; setBusy(false); setResult(null); setMediaOpen(false); setReason(value); setMessage(""); },
     openMedia() {
-      if (!pending.current && !disabled && !retainedSelection && isInspectionReason(reason) && isInspectionUuid(contextId)
+      if (!pending.current && !disabled && (!retainedSelection || retainedMediaEligible) && isInspectionReason(reason) && isInspectionUuid(contextId)
         && ["creator_video", "social_attachment"].includes(target.targetType)
         && scope?.targets.some(item => item.targetId === target.targetId && item.targetType === target.targetType)) setMediaOpen(true);
     },
@@ -120,7 +129,7 @@ function InspectionBody({ authority, initialTarget, initialSubjectUserId, onClos
     <View style={styles.row}><Text accessibilityRole="header" style={styles.heading}>Stored content inspection</Text>{button("Close inspection", close)}</View>
     <Text style={styles.muted}>Current stored text and supported original media. Access requires an active context and an explicit reason. Eligible deleted text is shown only when the server returns a retained record. No edited-version history is retained by this feature.</Text>
     <Text style={styles.muted}>{state.contexts?.accessAuditMode === "owner_view_exempt" ? "Your exact Owner views are excluded from the app inspection-access log." : state.contexts?.accessAuditMode === "staff_view_logged" ? "Your staff inspection access is logged." : "Inspection access follows the server audit policy."} Grant, revoke, context and security actions remain logged.</Text>
-    <Text style={styles.muted}>Deletion-only retention is limited to 30 days and is disabled by default; this screen does not activate capture. Missing originals cannot be recovered by granting access. Retained media inspection is not available.</Text>
+    <Text style={styles.muted}>Deletion-only retention is limited to 30 days and is disabled by default; this screen does not activate capture. Missing originals cannot be recovered by granting access. Retained original media can be inspected only when the server verifies its availability.</Text>
     {input("Reason or new context purpose (6–500 characters)", state.reason, state.changeReason)}
     {button("Load review contexts", () => { void state.list(); }, canReason)}
     {state.contexts?.contexts.map(context => <View key={context.contextId} style={styles.card}><Text style={styles.text}>{context.purpose}</Text><Text selectable style={styles.muted}>{context.contextId} · {context.status}</Text>{button("Select context " + context.contextId, () => state.changeContext(context.contextId), context.status === "open")}</View>)}
@@ -133,8 +142,8 @@ function InspectionBody({ authority, initialTarget, initialSubjectUserId, onClos
     {state.contextId !== "" && <><Text selectable style={styles.text}>Selected context: {state.contextId}</Text>{button("Load scoped targets and grants", () => { void state.loadScope(); }, canScope)}</>}
     {state.scope?.targets.map(t => <View key={`${t.targetType}:${t.targetId}`} style={styles.card}><Text selectable style={styles.muted}>{t.targetType} · {t.targetId}</Text>{button("Select target " + t.targetId, () => state.changeTarget(t))}</View>)}
     {button("Inspect current stored text", () => { void state.read(); }, canScope && validTarget && !!exactScopedTarget)}
-    {state.result && <View style={styles.card} testID="content-inspection-result"><Text style={styles.text}>{state.result.availability === "available" ? "Current stored content" : state.result.availability === "available_deleted" ? "Retained deleted content (not restored)" : state.result.availability === "media_only" ? "Media-only target. Open original media inspection below when supported." : "No current or eligible retained content is available"}</Text>{state.result.availability === "available_deleted" && <Text style={styles.muted}>Deleted: {state.result.deletedAt} · Retention expires: {state.result.retentionExpiresAt} · 30 days from deletion. Retained media is unsupported.</Text>}<Text style={styles.muted}>Version: {state.result.storedVersion ?? "unavailable"} · Updated: {state.result.sourceUpdatedAt ?? "unknown"}</Text><Text style={styles.muted}>{state.result.restrictionLabels.join(" · ")}</Text>{["available", "available_deleted"].includes(state.result.availability) && state.result.content && ("body" in state.result.content ? <Text selectable style={styles.text}>{state.result.content.body}</Text> : <><Text selectable style={styles.text}>{state.result.content.title}</Text><Text selectable style={styles.text}>{state.result.content.description}</Text></>)}</View>}
-    {["creator_video", "social_attachment"].includes(state.target.targetType) && !state.retainedSelection && button("Open original media inspection", state.openMedia, canScope && !!exactScopedTarget)}
+    {state.result && <View style={styles.card} testID="content-inspection-result"><Text style={styles.text}>{state.result.availability === "available" ? "Current stored content" : state.result.availability === "available_deleted" ? "Retained deleted content (not restored)" : state.result.availability === "media_only" ? "Media-only target. Open original media inspection below when supported." : "No current or eligible retained content is available"}</Text>{state.result.availability === "available_deleted" && <Text style={styles.muted}>Deleted: {state.result.deletedAt} · Retention expires: {state.result.retentionExpiresAt} · 30 days from deletion. {state.retainedMediaEligible ? "A verified retained original may be prepared below; access ends no later than retention expiry." : "Retained media is unsupported or unavailable."}</Text>}<Text style={styles.muted}>Version: {state.result.storedVersion ?? "unavailable"} · Updated: {state.result.sourceUpdatedAt ?? "unknown"}</Text><Text style={styles.muted}>{state.result.restrictionLabels.join(" · ")}</Text>{["available", "available_deleted"].includes(state.result.availability) && state.result.content && ("body" in state.result.content ? <Text selectable style={styles.text}>{state.result.content.body}</Text> : <><Text selectable style={styles.text}>{state.result.content.title}</Text><Text selectable style={styles.text}>{state.result.content.description}</Text></>)}</View>}
+    {["creator_video", "social_attachment"].includes(state.target.targetType) && (!state.retainedSelection || state.retainedMediaEligible) && button("Open original media inspection", state.openMedia, canScope && !!exactScopedTarget)}
     {state.mediaOpen && <View style={styles.card}>{button("Close original media inspection", state.closeMedia)}<ContentInspectionMediaViewer key={`${state.contextId}:${state.target.targetType}:${state.target.targetId}:${state.reason}`} authority={authority} contextId={state.contextId} target={state.target} reason={state.reason} /></View>}
     {state.scope?.grantsHasMore && <Text accessibilityRole="alert" style={styles.muted}>Only the 200 newest grants are shown. Older grant history is not loaded.</Text>}
     {state.contexts?.canDelegate && <View style={styles.card}><Text accessibilityRole="header" style={styles.heading}>Owner: scoped Admin access</Text><Text style={styles.muted}>Existing Admin only. Exact context and target. Expiry is mandatory and at most 24 hours. The server verifies all authority; a form does not grant permission.</Text>{input("Existing Admin user UUID", state.grantee, state.setGrantee, 36)}{input("Expiry ISO timestamp, including timezone", state.expiry, state.setExpiry, 40)}{button("Grant exact target access", () => { void state.grant(); }, canScope && !!exactScopedTarget && isInspectionUuid(state.grantee) && Date.parse(state.expiry) > Date.now() && Date.parse(state.expiry) <= Date.now() + 86400000)}{state.scope?.grants.map(grant => <View key={grant.grantId} style={styles.card}><Text selectable style={styles.muted}>{grant.granteeUserId} · {grant.targetType} · {grant.targetId} · expires {grant.expiresAt} · {grant.revokedAt ? "revoked" : "not revoked"}</Text>{button("Revoke grant " + grant.grantId, () => { void state.revoke(grant.grantId); }, canScope && !grant.revokedAt)}</View>)}</View>}

@@ -20,8 +20,8 @@ export type InspectionContent = InspectionTarget & {
   storedVersion: string | null; sourceUpdatedAt: string | null;
   content: { body: string } | { title: string | null; description: string | null } | null;
   deletedRetentionAvailability: "not_implemented" | "available" | "unavailable";
-  deletedAt?: string | null; retentionExpiresAt?: string | null; retainedMediaAvailability?: "unsupported";
-  mediaAvailability: "unsupported_media_inspection"; restrictionLabels: string[];
+  deletedAt?: string | null; retentionExpiresAt?: string | null; retainedMediaAvailability?: "unsupported" | "prepare_required";
+  mediaAvailability: "unsupported_media_inspection" | "prepare_required"; restrictionLabels: string[];
 };
 export type InspectionErrorCode = "disabled" | "denied" | "invalid" | "account_changed" | "unavailable";
 export class ContentInspectionError extends Error {
@@ -61,16 +61,20 @@ export function isInspectionContentResponse(value: unknown): value is Inspection
     || !["available", "available_deleted", "unavailable_current", "media_only"].includes(String(value.availability))
     || !nullableText(value.storedVersion) || !nullableText(value.sourceUpdatedAt)
     || !["not_implemented", "available", "unavailable"].includes(String(value.deletedRetentionAvailability))
-    || value.mediaAvailability !== "unsupported_media_inspection"
-    || (value.retainedMediaAvailability !== undefined && value.retainedMediaAvailability !== "unsupported")
+    || !["unsupported_media_inspection", "prepare_required"].includes(String(value.mediaAvailability))
+    || (value.retainedMediaAvailability !== undefined && !["unsupported", "prepare_required"].includes(String(value.retainedMediaAvailability)))
     || !Array.isArray(value.restrictionLabels) || !value.restrictionLabels.every(label => typeof label === "string")) return false;
   if (value.availability === "available_deleted") {
+    const mediaPrepared = value.mediaAvailability === "prepare_required";
+    if (mediaPrepared !== (value.retainedMediaAvailability === "prepare_required")
+      || (mediaPrepared && !["creator_video", "social_attachment"].includes(String(value.targetType)))) return false;
     const deleted = typeof value.deletedAt === "string" ? Date.parse(value.deletedAt) : NaN;
     const expires = typeof value.retentionExpiresAt === "string" ? Date.parse(value.retentionExpiresAt) : NaN;
     return value.deletedRetentionAvailability === "available" && Number.isFinite(deleted) && Number.isFinite(expires)
       && deleted <= Date.now() && expires > Date.now() && expires - deleted === 30 * 86400000 && contentBodyMatches(value);
   }
-  if (value.deletedRetentionAvailability === "available" || value.deletedAt != null || value.retentionExpiresAt != null) return false;
+  if (value.deletedRetentionAvailability === "available" || value.deletedAt != null || value.retentionExpiresAt != null
+    || value.mediaAvailability === "prepare_required" || value.retainedMediaAvailability === "prepare_required") return false;
   if (value.availability === "available") return value.targetType !== "social_attachment" && contentBodyMatches(value);
   return value.content === null && (value.availability !== "media_only" || value.targetType === "social_attachment");
 }
@@ -83,7 +87,7 @@ function responseIsValid(name: string, value: unknown): boolean {
     && ["owner_view_exempt", "staff_view_logged"].includes(String(value.accessAuditMode))
     && (value.nextCursor === null ? !value.hasMore : record(value.nextCursor) && typeof value.nextCursor.createdAt === "string" && uuid(value.nextCursor.id));
   if (name === "admin_list_content_inspection_scope") return Array.isArray(value.targets) && value.targets.length <= 50 && value.targets.every(targetShape)
-    && typeof value.grantsHasMore === "boolean" && Array.isArray(value.grants) && value.grants.every(row => targetShape(row) && record(row) && uuid(row.grantId) && uuid(row.granteeUserId) && typeof row.expiresAt === "string" && nullableText(row.revokedAt) && typeof row.revision === "number");
+    && typeof value.grantsHasMore === "boolean" && Array.isArray(value.grants) && value.grants.every(row => targetShape(row) && record(row) && uuid(row.grantId) && uuid(row.granteeUserId) && typeof row.expiresAt === "string" && Number.isFinite(Date.parse(row.expiresAt)) && nullableText(row.revokedAt) && typeof row.revision === "number");
   if (name === "admin_list_content_inspection_subject_targets") return uuid(value.subjectUserId)
     && Array.isArray(value.targets) && value.targets.length <= 50 && value.targets.every(row => targetShape(row) && record(row) && typeof row.createdAt === "string" && typeof row.label === "string")
     && typeof value.hasMore === "boolean"

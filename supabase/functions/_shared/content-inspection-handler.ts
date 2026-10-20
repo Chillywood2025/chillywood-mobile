@@ -276,9 +276,10 @@ export function createContentInspectionHandler(
           );
         },
         finalize: async () => {
-          await authorize();
-          // Authority alone does not override retirement or retention expiry.
+          // The retirement RPC may wait on a database lock. Actor/source
+          // authority must be checked after that wait, immediately before bytes.
           await checkRetirement();
+          await authorize();
         },
       });
     } catch (error) {

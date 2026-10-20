@@ -42,5 +42,22 @@ select throws_ok($$insert into public.legal_holds(target_type,target_id,reason,s
  '55000','retention_preservation_unavailable_deletion_already_claimed','claim before hold cannot promise preservation');
 select is(public.read_deleted_content_media_expiry_claim((select id from private.deleted_content_media_expiry_claims))->>'status','authorized','worker rechecks proof before provider IO');
 select is(public.record_deleted_content_media_expiry_result((select id from private.deleted_content_media_expiry_claims),'observed_absent')->>'permanentlyAbsent','false','404 is observation, not permanent physical absence');
+-- Parent aliases are the same legal scope, including room attachments.
+insert into private.deleted_content_records(id,target_type,target_id,author,parent_type,parent_id,content,deletion_kind,deleted_at,expires_at)
+values('c8100000-0000-4000-8000-000000000001','social_attachment','c8100000-0000-4000-8000-000000000001','c3100000-0000-4000-8000-000000000001',
+ 'watch_party_room_message','c9100000-0000-4000-8000-000000000001',null,'hard',now()-interval '31 days',now()-interval '1 day');
+insert into private.deleted_content_media_stages(id,target_type,target_id,author,provider,bucket,object_key,reservation_id,deletion_id)
+values('c8100000-0000-4000-8000-000000000001','social_attachment','c8100000-0000-4000-8000-000000000001','c3100000-0000-4000-8000-000000000001',
+ 'cloudflare_r2','chillywood-media-origin','synthetic-room-key','c4100000-0000-4000-8000-000000000001','c8100000-0000-4000-8000-000000000001');
+insert into public.legal_holds(target_type,target_id,reason,status)
+values('room_message','c9100000-0000-4000-8000-000000000001','Synthetic parent preservation','active');
+select is(public.claim_deleted_content_media_expiry('c8100000-0000-4000-8000-000000000001')->>'status','held','canonical room parent hold protects hard-deleted attachment');
+update public.legal_holds set status='released',released_at=clock_timestamp(),release_reason='Synthetic release' where target_id='c9100000-0000-4000-8000-000000000001';
+-- Synthetic durable claim tests the opposite serialization order without provider IO.
+insert into private.deleted_content_media_expiry_claims(stage_id,deletion_id,target_type,target_id,author,parent_type,parent_id,provider,bucket,object_key)
+values('c8100000-0000-4000-8000-000000000001','c8100000-0000-4000-8000-000000000001','social_attachment','c8100000-0000-4000-8000-000000000001','c3100000-0000-4000-8000-000000000001',
+ 'watch_party_room_message','c9100000-0000-4000-8000-000000000001','cloudflare_r2','chillywood-media-origin','synthetic-room-key');
+select throws_ok($$insert into public.legal_holds(target_type,target_id,reason,status) values('room_message','c9100000-0000-4000-8000-000000000001','Synthetic late parent preservation','active')$$,
+ '55000','retention_preservation_unavailable_deletion_already_claimed','late canonical parent hold cannot falsely promise preservation');
 select * from finish();
 rollback;

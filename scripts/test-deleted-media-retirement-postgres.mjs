@@ -128,5 +128,16 @@ check(await scalar(`select not (public.check_deleted_media_retirement('cloudflar
 check(await scalar(`select private.claim_deleted_media_retirement('${scan.stage}') v`),'repeated cleanup retains identical irreversible claim');
 physicalObjects.delete(scan.key);check(!physicalObjects.has(scan.key),'model repeated cleanup targets retired logical key only');
 
+
+for(const isolation of ['repeatable read','serializable']) {
+ await db.exec(`begin isolation level ${isolation};`);
+ check(await scalar(`select not (public.check_deleted_media_retirement('cloudflare_r2','chillywood-media-origin','${key}','read')->>'allowed')::boolean v`),'non-read-committed delivery fails closed');
+ check(await scalar(`select not (private.deleted_media_retirement_binding('${stage}')->>'supported')::boolean v`),'non-read-committed binding fails closed');
+ await denied(`insert into reference_resolutions(resolved_object_key) values('unrelated/key')`,/retirement_read_committed_required/);
+ await db.exec('rollback;');
+ await db.exec(`begin isolation level ${isolation};`);
+ await denied(`select private.claim_deleted_media_retirement('${stage}')`,/retirement_read_committed_required/);
+ await db.exec('rollback;');
+}
 console.log(`Deleted-media retirement SQL: ${checks} checks passed; no provider calls, no concurrency/production claim.`);
 }finally{await db.close();}

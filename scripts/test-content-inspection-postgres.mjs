@@ -188,5 +188,53 @@ try {
   check((await db.query('select private.content_inspection_source($1,$2) as source',['profile_post',target])).rows[0].source===null,'expired archive never falls through to soft-deleted row');
   await db.query('update public.profile_posts set deleted_at=null,body=$1 where id=$2',['Live edited current text',target]);
   check((await db.query('select private.content_inspection_source($1,$2) as source',['profile_post',target])).rows[0].source.content.body==='Live edited current text','live current text wins, no edit history');
+  // Replace the earlier isolated archive fixture with the actual retention,
+  // retirement, expiry and retained-original migration graph for this lifecycle.
+  await db.exec(`drop function private.read_deleted_content_inspection(text,uuid);
+    drop table private.deleted_content_records; drop table private.deleted_content_retention_settings;
+    create table public.legal_holds(id uuid primary key default gen_random_uuid(),target_type text,target_id text,status text,placed_by_user_id text,released_by_user_id text);
+    create table public.platform_brand_assets(id uuid primary key,owner_user_id text,deleted_at timestamptz);`);
+  for(const migration of ['20261020011840_deleted_content_retention','20261020013500_deleted_media_reference_retirement','20261020013556_deleted_content_media_expiry','20261020014747_content_inspection_retained_originals']) {
+    await db.exec(readFileSync(`supabase/migrations/${migration}.sql`,'utf8'));
+  }
+  await db.exec('update private.deleted_content_retention_settings set activation_ready=true,capture_enabled=true,media_staging_enabled=true');
+  const retainedVideo=uid(70), retainedScan=uid(71), retainedReservation=uid(72);
+  const retainedKey=`${uid(5)}/${retainedVideo}/source.mp4`;
+  await db.query("insert into public.videos(id,owner_id,title,description,storage_provider,storage_bucket,storage_object_key,mime_type,file_size_bytes,scan_status,updated_at) values($1,$2,'Deleted original','Exact stored text','cloudflare_r2','chillywood-media-origin',$3,'video/mp4',4096,'clean',now())",[retainedVideo,uid(5),retainedKey]);
+  await db.query("insert into public.media_scan_jobs values($1,'videos','source',$2,$3,'cloudflare_r2','chillywood-media-origin',$4,'video/mp4',4096,'clean',now(),now())",[retainedScan,retainedVideo,uid(5),retainedKey]);
+  await db.query("insert into public.media_upload_reservations values($1,$2,'creator_video','cloudflare_r2','chillywood-media-origin',$3,'video/mp4',4096,'verified',now()+interval '1 hour','video/mp4',4096,now(),$4,now(),null,now())",[retainedReservation,uid(5),retainedKey,retainedVideo]);
+  const retainedContext=(await call(1,'select public.admin_create_content_inspection_context($1,$2,$3) as result',['Synthetic retained review',JSON.stringify([{targetType:'creator_video',targetId:retainedVideo}]),randomUUID()]))[0].result.contextId;
+  const retainedPrep=()=>call(1,'select public.admin_prepare_content_inspection_media($1,$2,$3,$4,$5) as result',[retainedContext,'creator_video',retainedVideo,'Synthetic retained review',randomUUID()]);
+  check((await db.query('select public.stage_deleted_content_media($1,$2,$3,$4,$5) as result',['creator_video',retainedVideo,'cloudflare_r2','chillywood-media-origin',retainedKey])).rows[0].result.decision==='defer','actual retention stage accepted');
+  check((await db.query('select inspection_proof is null and staged_inspection_proof is not null as ok from private.deleted_media_key_retirements')).rows[0].ok,'staged proof is not finalized inspection proof');
+  // Actual gateway revocation function, copied from its canonical migration.
+  const revocation=readFileSync('supabase/migrations/202608250002_whole_app_media_authority_closure.sql','utf8');
+  const revokeStart=revocation.indexOf('create or replace function public.revoke_media_object_delivery(');
+  await db.exec(revocation.slice(revokeStart,revocation.indexOf('$$;',revokeStart)+3));
+  await db.query('select public.revoke_media_object_delivery($1,$2,$3,$4,$5,$6,null,null)',['creator_video','cloudflare_r2','chillywood-media-origin',retainedKey,uid(5),retainedVideo]);
+  check((await retainedPrep())[0].result.availability==='unsupported_media_inspection','revoked but still live source cannot use staged proof');
+  await db.query('delete from public.videos where id=$1',[retainedVideo]);
+  check((await db.query('select inspection_proof is not null and inspection_proof_fingerprint=md5(inspection_proof::text) as ok from private.deleted_media_key_retirements')).rows[0].ok,'hard DELETE finalizes unchanged exact proof despite intentional reservation revoke');
+  const retainedReceipt=(await retainedPrep())[0].result;
+  check(retainedReceipt.availability==='ready','finalized deleted original prepares with actual SQL');
+  const archive=(await db.query('select expires_at from private.deleted_content_records where target_id=$1',[retainedVideo])).rows[0];
+  check(Date.parse(retainedReceipt.expiresAt)<=Date.parse(archive.expires_at),'receipt deadline never exceeds fixed deletion deadline');
+  const retainedRead=(await call(1,'select public.admin_read_content_inspection($1,$2,$3,$4,$5) as result',[retainedContext,'creator_video',retainedVideo,'Synthetic retained review',randomUUID()]))[0].result;
+  check(retainedRead.availability==='available_deleted'&&retainedRead.retainedMediaAvailability==='prepare_required','read envelope advertises only verified retained original preparation');
+  const shortGrant=(await call(1,"select public.admin_grant_content_inspection_access($1,'creator_video',$2,$3,clock_timestamp()+interval '45 seconds',$4,$5) as result",[retainedContext,retainedVideo,uid(3),'Synthetic short grant',randomUUID()]))[0].result.grantId;
+  const operatorRetained=(await call(3,'select public.admin_prepare_content_inspection_media($1,$2,$3,$4,$5) as result',[retainedContext,'creator_video',retainedVideo,'Synthetic retained review',randomUUID()]))[0].result;
+  const exactGrantExpiry=(await db.query('select expires_at from private.content_inspection_grants where id=$1',[shortGrant])).rows[0].expires_at;
+  check(operatorRetained.availability==='ready'&&Date.parse(operatorRetained.expiresAt)<=new Date(exactGrantExpiry).getTime(),'retained receipt is capped at exact delegated grant deadline');
+  await call(1,'select public.admin_revoke_content_inspection_access($1,$2,$3)',[shortGrant,'Synthetic retained revoke',randomUUID()]);
+  await reject(()=>call(3,'select public.admin_authorize_content_inspection_media($1,$2,$3)',[operatorRetained.receiptId,randomUUID(),operatorRetained.storedVersion]),/content_inspection_denied/,'retained receipt rechecks revoked exact grant');
+  await db.query("update public.media_scan_jobs set status='quarantined',updated_at=clock_timestamp() where id=$1",[retainedScan]);
+  check((await retainedPrep())[0].result.availability==='unsupported_media_inspection','later scan quarantine invalidates retained proof');
+  await reject(()=>call(1,'select public.admin_authorize_content_inspection_media($1,$2,$3)',[retainedReceipt.receiptId,randomUUID(),retainedReceipt.storedVersion]),/content_inspection_stale_version/,'old retained receipt cannot bypass changed scanner state');
+  await reject(()=>db.query("insert into public.videos(id,owner_id,storage_provider,storage_bucket,storage_object_key) values($1,$2,'cloudflare_r2','chillywood-media-origin',$3)",[retainedVideo,uid(5),retainedKey]),/retired/,'retired original cannot be restored into live delivery by key reuse');
+  await db.query("insert into public.videos(id,owner_id,title,storage_provider,storage_bucket,storage_object_key,scan_status) values($1,$2,'Recreated current row','cloudflare_r2','chillywood-media-origin',$3,'manual_review')",[retainedVideo,uid(5),`${uid(5)}/${retainedVideo}/source.webm`]);
+  check((await retainedPrep())[0].result.availability==='unsupported_media_inspection','recreated current target never falls back to retained prior original');
+  await db.exec('begin isolation level repeatable read');
+  await reject(()=>db.query('select private.content_inspection_media_binding($1,$2)',['creator_video',uid(99)]),/requires_read_committed/,'retained lookup rejects stale transaction isolation');
+  await db.exec('rollback');
   console.log(`Content inspection SQL smoke: ${checks} checks passed. Full canonical pgTAP and two-backend concurrency remain separate requirements.`);
 } finally { await db.close(); }

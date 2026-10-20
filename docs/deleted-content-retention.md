@@ -95,3 +95,14 @@ Official provider capability references reviewed 2026-10-20:
 - https://docs.hetzner.com/storage/object-storage/supported-actions/
 - https://developers.cloudflare.com/r2/api/s3/api/
 - https://developers.cloudflare.com/r2/reference/consistency/
+
+Expiry dispatch fairness: each bounded list call atomically leases selected IDs for
+one minute in a private dispatch ledger. Text, media, and abandoned-stage queues
+advance past held/unsupported items; those items automatically become eligible
+again after the lease. A worker crash delays retry rather than losing work. Dispatch
+leases never change deleted_at, expires_at, or the abandoned-stage deadline.
+Synthetic SQL tests cover twenty held entries followed by a usable twenty-first
+entry for both text and media, preservation of all holds, and subsequent retry.
+
+The fixed 30-day window is exactly 720 elapsed hours, including DST crossings;
+server capture and both archive/retirement constraints use that same duration.

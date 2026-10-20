@@ -7,6 +7,19 @@ import crypto from 'node:crypto';
 import test from 'node:test';
 import {createDatabase,repairMigrationPath} from './helpers/database-runtime-authority-fixture.mjs';
 
+// Reviewed disabled inspection/deleted-retention successor bundle. Keep this
+// inventory explicit so a missing or unexpected replay file still fails.
+const inspectionBundleFiles = [
+  '20261020010608_owner_content_inspection_disabled.sql',
+  '20261020011354_content_inspection_verified_media.sql',
+  '20261020011409_content_inspection_subject_browse.sql',
+  '20261020011840_deleted_content_retention.sql',
+  '20261020012144_content_inspection_deleted_fallback.sql',
+  '20261020013500_deleted_media_reference_retirement.sql',
+  '20261020013556_deleted_content_media_expiry.sql',
+  '20261020014747_content_inspection_retained_originals.sql',
+];
+
 const studioBundleFiles = [
   '20261015073423_platform_studio_publication_and_audience_authority.sql',
   '20261019020049_platform_studio_rolling_brand_compatibility.sql',
@@ -184,9 +197,9 @@ for(const includeHeldStudio of [false,true]) test(`staff mutation repair with St
         check(`${table} post-write deletion denied`,outcome.error?.message,'platform_staff_auth_required');check(`${table} all effects rolled back`,await snapshot(),before);check(`${table} injected deletion rolled back`,(await one('select count(*)::int n from auth.sessions where id=$1',[session])).n,1);
       }finally{await db.exec('rollback')}
     }
-    // Circle's ACL-only closure adds one predecessor; the complete Studio
-    // bundle adds the held migration and its two rolling successors.
-    check('expected migration chain',replayReport.files.length,includeHeldStudio?429:426);
+    // This remains a full-current-chain repair test, including reviewed successors.
+    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length);
+    check('complete disabled inspection/retention successors',replayReport.files.filter(file=>inspectionBundleFiles.includes(file)),inspectionBundleFiles);
     check('Circle closure remains in both runtime scenarios',replayReport.files.includes('20261019000210_circle_request_rpc_anon_execute_closure.sql'),true);
     check('Studio migration scope is the complete bundle',replayReport.files.filter(file=>studioBundleFiles.includes(file)),includeHeldStudio?studioBundleFiles:[]);
     check('Studio presence is isolated',!(await one("select to_regclass('public.platform_brand_publications') is null absent")).absent,includeHeldStudio);

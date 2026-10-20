@@ -87,7 +87,7 @@ function seedFixture() {
   const owner = seedPerson('owner'), operator = seedPerson('operator'), author = seedPerson();
   const target = randomUUID(), body = `Exact synthetic stored body ${target}\n`;
   query(`insert into public.profile_posts(id,user_id,body,visibility,moderation_status,deleted_at)
-    values(${literal(target)},${literal(author.user)},${literal(body)},'draft','removed',clock_timestamp());`);
+    values(${literal(target)},${literal(author.user)},${literal(body)},'draft','removed',null);`);
   const context = invoke(owner, `select public.admin_create_content_inspection_context(${literal(reason)},${literal(JSON.stringify([{targetType: 'profile_post', targetId: target}]))}::jsonb,${literal(randomUUID())})::text;`).contextId;
   const grant = invoke(owner, `select public.admin_grant_content_inspection_access(${literal(context)},'profile_post',${literal(target)},${literal(operator.user)},clock_timestamp()+interval '1 hour',${literal(reason)},${literal(randomUUID())})::text;`).grantId;
   assert.ok(context && grant, 'real public RPCs create context and delegated grant');

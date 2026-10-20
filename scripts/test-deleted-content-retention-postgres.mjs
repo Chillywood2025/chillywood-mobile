@@ -28,6 +28,7 @@ create table public.media_upload_reservations(id uuid primary key,surface_type t
 await db.exec(readFileSync('supabase/migrations/20261020011840_deleted_content_retention.sql','utf8'));
 await db.exec(readFileSync('supabase/migrations/20261020013500_deleted_media_reference_retirement.sql','utf8'));
 await db.exec(readFileSync('supabase/migrations/20261020013556_deleted_content_media_expiry.sql','utf8'));
+await db.exec("set timezone='America/Denver'");
 await db.exec(`insert into profile_posts values('${vid}','${uid}','disabled',null,now());update profile_posts set body='still updates';delete from profile_posts;`);
 check(await scalar('select count(*)=0 v from private.deleted_content_records'),'default disabled creates nothing');
 await assert.rejects(db.exec('update private.deleted_content_retention_settings set capture_enabled=true'),/check constraint/); checks++;
@@ -38,7 +39,9 @@ await db.exec('begin;delete from profile_posts;rollback;');
 check(await scalar('select count(*)=0 v from private.deleted_content_records'),'rollback leaves no record');
 await db.exec(`insert into public.platform_role_memberships values('${uid}','owner');delete from profile_posts;`);
 check(await scalar("select content->>'body'='final exact <text>' v from private.deleted_content_records"),'actual deletion captures final exact text');
-check(await scalar("select expires_at=deleted_at+interval '30 days' v from private.deleted_content_records"),'fixed server thirty-day expiry');
+check(await scalar("select extract(epoch from expires_at-deleted_at)=2592000 v from private.deleted_content_records"),'server capture fixed at 720 hours across Denver DST boundary');
+check(await scalar("select extract(epoch from (timestamptz '2026-10-20 12:00:00 America/Denver'+interval '720 hours')-timestamptz '2026-10-20 12:00:00 America/Denver')=2592000 v"),'known fall DST crossing remains exactly 720 hours');
+await db.exec("set timezone='UTC'");
 await db.exec('delete from public.platform_role_memberships');
 check(await scalar('select owner_protected v from private.deleted_content_records'),'Owner protection survives role change');
 await assert.rejects(db.exec("update private.deleted_content_records set content='{}'"),/deleted_content_immutable/);checks++;
@@ -114,5 +117,66 @@ check((await scalar(`select public.read_deleted_content_media_expiry_claim('${cl
 await assert.rejects(db.exec(`insert into public.legal_holds(target_type,target_id,status) values('creator_video','${mediaId}','active')`),/deletion_already_claimed/);checks++;
 await assert.rejects(db.exec(`insert into videos values('${mediaId}','${uid}','resurrect','bad','cloudflare_r2','chillywood-media-origin','${key}','${key}',null)`),/media_key_retired_reference_forbidden/);checks++;
 check((await scalar(`select public.record_deleted_content_media_expiry_result('${claimed.claimId}','observed_absent') v`)).permanentlyAbsent===false,'404 receipt never claims impossible future bytes');
+// Canonical legal-hold aliases must protect retained attachment parents too.
+const roomParent='70000000-0000-4000-8000-000000000001', roomAttachment='70000000-0000-4000-8000-000000000002';
+await db.exec(`insert into private.deleted_content_records(id,target_type,target_id,author,parent_type,parent_id,content,deletion_kind,deleted_at,expires_at)
+values('${roomAttachment}','social_attachment','${roomAttachment}','${uid}','watch_party_room_message','${roomParent}',null,'hard',now()-interval '31 days',now()-interval '1 day');
+insert into private.deleted_content_media_stages(id,target_type,target_id,author,provider,bucket,object_key,deletion_id,reservation_id)
+values('${roomAttachment}','social_attachment','${roomAttachment}','${uid}','cloudflare_r2','chillywood-media-origin','synthetic-room-key','${roomAttachment}','${roomAttachment}');
+insert into public.legal_holds(target_type,target_id,status) values('room_message','${roomParent}','active');`);
+check((await scalar(`select public.claim_deleted_content_media_expiry('${roomAttachment}') v`)).status==='held','canonical room parent hold protects aged hard-deleted attachment before provider eligibility');
+await db.exec(`update public.legal_holds set status='released' where target_id='${roomParent}';
+insert into private.deleted_content_media_expiry_claims(stage_id,deletion_id,target_type,target_id,author,parent_type,parent_id,provider,bucket,object_key)
+values('${roomAttachment}','${roomAttachment}','social_attachment','${roomAttachment}','${uid}','watch_party_room_message','${roomParent}','cloudflare_r2','chillywood-media-origin','synthetic-room-key');`);
+await assert.rejects(db.exec(`insert into public.legal_holds(target_type,target_id,status) values('room_message','${roomParent}','active')`),/deletion_already_claimed/);checks++;
+for(const [hold,parent] of [['room_message','watch_party_room_message'],['watch_party_room_message','room_message'],['video','creator_video'],['creator_video','video']]) {
+ check(await scalar(`select private.deleted_content_hold_matches('${hold}','parent','social_attachment','attachment','author','${parent}','parent') v`),'hold aliases normalized symmetrically for parent');
+}
+// Bounded dispatch must advance past twenty blockers, and later retry them.
+await db.exec('begin');
+await db.exec(`insert into private.deleted_content_work_dispatch(kind,work_id,next_attempt_at)
+ select 'text',id,now()+interval '1 day' from private.deleted_content_records;
+ insert into private.deleted_content_work_dispatch(kind,work_id,next_attempt_at)
+ select 'media',id,now()+interval '1 day' from private.deleted_content_media_stages;
+ update private.deleted_content_media_expiry_claims set next_check_at=now()-interval '1 day' where id='${claimed.claimId}';
+ delete from private.deleted_content_work_dispatch where kind='media' and work_id='${stageId}';`);
+const blockedIds=[];
+for(let i=1;i<=21;i++) {
+ const id=`80000000-0000-4000-8000-${String(i).padStart(12,'0')}`;blockedIds.push(id);
+ await db.exec(`insert into private.deleted_content_records(id,target_type,target_id,author,content,deletion_kind,deleted_at,expires_at)
+ values('${id}','${i<=20?'social_attachment':'room_message'}','${id}','synthetic','{}','hard',now()-interval '${i<=20?40:31} days',now()-interval '${i<=20?10:1} days');`);
+ if(i<=20) await db.exec(`insert into public.legal_holds(target_type,target_id,status) values('social_attachment','${id}','active');
+ insert into private.deleted_content_media_stages(id,target_type,target_id,author,provider,bucket,object_key,reservation_id,deletion_id)
+ values('${id}','social_attachment','${id}','synthetic','cloudflare_r2','chillywood-media-origin','synthetic-blocker-${i}','${id}','${id}');`);
+}
+const firstText=(await scalar('select public.list_deleted_content_expiry_work() v')).deletionIds;
+check(firstText.length===20,'text batch bounded at twenty held records');
+for(const id of firstText) assert.equal((await scalar(`select public.expire_deleted_content_text('${id}') v`)).status,'held');
+const nextText=(await scalar('select public.list_deleted_content_expiry_work() v')).deletionIds;
+check(nextText.includes(blockedIds[20]),'second text batch reaches twenty-first unheld record');
+check((await scalar(`select public.expire_deleted_content_text('${blockedIds[20]}') v`)).status==='purged','twenty-first unheld text processed while blockers preserved');
+const firstMedia=(await scalar('select public.list_deleted_content_media_expiry_work() v')).stageIds;
+check(firstMedia.length===20,'media batch bounded at twenty held records');
+for(const id of firstMedia) assert.equal((await scalar(`select public.claim_deleted_content_media_expiry('${id}') v`)).status,'held');
+const nextMedia=(await scalar('select public.list_deleted_content_media_expiry_work() v')).stageIds;
+check(nextMedia.includes(stageId),'second media batch reaches supported twenty-first original');
+check((await scalar(`select public.claim_deleted_content_media_expiry('${stageId}') v`)).status==='claimed','supported twenty-first original processed without provider IO');
+check(await scalar(`select count(*)=20 v from private.deleted_content_records where id=any(array[${blockedIds.slice(0,20).map(id=>`'${id}'::uuid`).join(',')}])`),'all held records remain intact');
+await db.exec("update private.deleted_content_work_dispatch set next_attempt_at=now()-interval '1 minute' where kind in ('text','media')");
+check((await scalar('select public.list_deleted_content_expiry_work() v')).deletionIds.length>0,'blocked text automatically eligible again after dispatch lease');
+check((await scalar('select public.list_deleted_content_media_expiry_work() v')).stageIds.length>0,'blocked media automatically eligible again after dispatch lease');
+await db.exec('rollback');
+for(const isolation of ['repeatable read','serializable']) {
+ for(const sql of [
+   "insert into public.legal_holds(target_type,target_id,status) values('room_message','synthetic-unclaimed','active')",
+   `select public.expire_deleted_content_text('${stageId}')`,
+   `select public.claim_deleted_content_media_expiry('${stageId}')`,
+   `select public.read_deleted_content_media_expiry_claim('${claimed.claimId}')`,
+ ]){
+   await db.exec(`begin isolation level ${isolation}`);
+   await assert.rejects(db.exec(sql),/requires_read_committed/);checks++;
+   await db.exec('rollback');
+ }
+}
 console.log(`Deleted-content PGlite: ${checks} checks passed (synthetic SQL, not multi-session concurrency).`);
 } finally {await db.close();}

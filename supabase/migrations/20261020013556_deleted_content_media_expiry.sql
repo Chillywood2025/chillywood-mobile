@@ -23,6 +23,9 @@ revoke all on private.deleted_content_media_expiry_claims from public,anon,authe
 create or replace function private.deleted_content_legal_hold_guard() returns trigger
 language plpgsql security definer set search_path='' as $$
 begin
+ if current_setting('transaction_isolation')<>'read committed' then
+   raise exception 'retention_requires_read_committed' using errcode='25000';
+ end if;
  perform pg_advisory_xact_lock(176214,30);
  if new.status='active' and (
    exists(select 1 from private.deleted_content_expiry_claims c where
@@ -60,6 +63,9 @@ declare s private.deleted_content_media_stages%rowtype; r private.deleted_conten
  c private.deleted_content_media_expiry_claims%rowtype; binding jsonb;
 begin
  if not exists(select 1 from private.deleted_content_retention_settings where media_expiry_enabled) then return jsonb_build_object('status','disabled'); end if;
+ if current_setting('transaction_isolation')<>'read committed' then
+   raise exception 'retention_requires_read_committed' using errcode='25000';
+ end if;
  perform pg_advisory_xact_lock(176214,30);
  select * into s from private.deleted_content_media_stages where id=p_stage_id for update;
  if s.id is null or s.deletion_id is null then return jsonb_build_object('status','not_finalized'); end if;
@@ -103,6 +109,9 @@ language plpgsql security definer set search_path='' as $$
 declare c private.deleted_content_media_expiry_claims%rowtype; binding jsonb;
 begin
  if not exists(select 1 from private.deleted_content_retention_settings where media_expiry_enabled) then return jsonb_build_object('status','disabled'); end if;
+ if current_setting('transaction_isolation')<>'read committed' then
+   raise exception 'retention_requires_read_committed' using errcode='25000';
+ end if;
  perform pg_advisory_xact_lock(176214,30);
  select * into c from private.deleted_content_media_expiry_claims where id=p_claim_id for update;
  if c.id is null then return jsonb_build_object('status','absent'); end if;
@@ -121,6 +130,9 @@ create function public.record_deleted_content_media_expiry_result(p_claim_id uui
 language plpgsql security definer set search_path='' as $$
 declare c private.deleted_content_media_expiry_claims%rowtype;
 begin
+ if current_setting('transaction_isolation')<>'read committed' then
+   raise exception 'retention_requires_read_committed' using errcode='25000';
+ end if;
  if p_result not in ('observed_absent','delete_acknowledged','failed') then raise exception 'invalid_cleanup_result'; end if;
  perform pg_advisory_xact_lock(176214,30);
  select * into c from private.deleted_content_media_expiry_claims where id=p_claim_id for update;
@@ -137,15 +149,29 @@ begin
 end $$;
 
 create function public.list_deleted_content_media_expiry_work() returns jsonb
-language sql volatile security definer set search_path='' as $$
- select jsonb_build_object('enabled',exists(select 1 from private.deleted_content_retention_settings where media_expiry_enabled),
- 'stageIds',coalesce((select jsonb_agg(id) from (
+language plpgsql volatile security definer set search_path='' as $$
+declare ids uuid[];
+begin
+ if not exists(select 1 from private.deleted_content_retention_settings where media_expiry_enabled) then
+   return jsonb_build_object('enabled',false,'stageIds','[]'::jsonb);
+ end if;
+ if current_setting('transaction_isolation')<>'read committed' then
+   raise exception 'retention_requires_read_committed' using errcode='25000';
+ end if;
+ perform pg_advisory_xact_lock(176214,31);
+ select array_agg(id) into ids from (
   select s.id from private.deleted_content_media_stages s join private.deleted_content_records r on r.id=s.deletion_id
   left join private.deleted_content_media_expiry_claims c on c.stage_id=s.id
+  left join private.deleted_content_work_dispatch q on q.kind='media' and q.work_id=s.id
   where r.expires_at<=clock_timestamp() and (c.id is null or c.next_check_at<=clock_timestamp())
-   and exists(select 1 from private.deleted_content_retention_settings where media_expiry_enabled)
-  order by coalesce(c.next_check_at,r.expires_at),s.id limit 20) x),'[]'::jsonb))
-$$;
+    and (q.work_id is null or q.next_attempt_at<=clock_timestamp())
+  order by greatest(coalesce(q.next_attempt_at,r.expires_at),coalesce(c.next_check_at,r.expires_at)),s.id limit 20
+ ) x;
+ insert into private.deleted_content_work_dispatch(kind,work_id,next_attempt_at)
+ select 'media',unnest(ids),clock_timestamp()+interval '1 minute'
+ on conflict(kind,work_id) do update set next_attempt_at=excluded.next_attempt_at;
+ return jsonb_build_object('enabled',true,'stageIds',coalesce(to_jsonb(ids),'[]'::jsonb));
+end $$;
 revoke all on function public.claim_deleted_content_media_expiry(uuid),public.read_deleted_content_media_expiry_claim(uuid),
  public.record_deleted_content_media_expiry_result(uuid,text),public.list_deleted_content_media_expiry_work() from public,anon,authenticated;
 grant execute on function public.claim_deleted_content_media_expiry(uuid),public.read_deleted_content_media_expiry_claim(uuid),

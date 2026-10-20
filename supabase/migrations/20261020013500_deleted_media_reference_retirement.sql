@@ -13,11 +13,14 @@ create table private.deleted_media_key_retirements (
  target_id text not null, author text not null,
  reservation_id uuid not null, verified_at timestamptz not null, attached_at timestamptz not null,
  source_created_at text,
+ staged_inspection_proof jsonb, inspection_proof jsonb, inspection_proof_fingerprint text,
+ check((inspection_proof is null and inspection_proof_fingerprint is null) or
+   (inspection_proof is not null and inspection_proof_fingerprint is not null and inspection_proof_fingerprint=md5(inspection_proof::text))),
  status text not null default 'staged' check(status in ('staged','retained','claimed')),
  deletion_id uuid, deleted_at timestamptz, expires_at timestamptz, claimed_at timestamptz,
  unique(provider,bucket,object_key),
  check((status='staged' and deletion_id is null) or
-   (status in ('retained','claimed') and deletion_id is not null and expires_at=deleted_at+interval '30 days')),
+   (status in ('retained','claimed') and deletion_id is not null and expires_at=deleted_at+interval '720 hours')),
  check((status='claimed')=(claimed_at is not null))
 );
 -- Deliberately no foreign keys: account/source/archive cleanup must not remove
@@ -30,10 +33,12 @@ create function private.deleted_media_preserve_identity() returns trigger
 language plpgsql set search_path='' as $$
 begin
  if tg_op='DELETE' then raise exception 'retirement_tombstone_permanent'; end if;
- if (to_jsonb(new)-array['status','deletion_id','deleted_at','expires_at','claimed_at'])
-     is distinct from (to_jsonb(old)-array['status','deletion_id','deleted_at','expires_at','claimed_at'])
+ if (to_jsonb(new)-array['status','deletion_id','deleted_at','expires_at','claimed_at','inspection_proof','inspection_proof_fingerprint'])
+     is distinct from (to_jsonb(old)-array['status','deletion_id','deleted_at','expires_at','claimed_at','inspection_proof','inspection_proof_fingerprint'])
     or (old.status='claimed' and to_jsonb(new) is distinct from to_jsonb(old))
     or (old.status='retained' and new.status='staged')
+    or ((new.inspection_proof,new.inspection_proof_fingerprint) is distinct from (old.inspection_proof,old.inspection_proof_fingerprint)
+      and not (old.status='staged' and new.status='retained'))
     or (old.deletion_id is not null and (new.deletion_id,new.deleted_at,new.expires_at)
       is distinct from (old.deletion_id,old.deleted_at,old.expires_at)) then
    raise exception 'retirement_identity_immutable';
@@ -46,9 +51,10 @@ for each row execute function private.deleted_media_preserve_identity();
 create function private.register_deleted_media_retirement() returns trigger
 language plpgsql security definer set search_path='' as $$
 declare r public.media_upload_reservations%rowtype; v jsonb; d private.deleted_content_records%rowtype;
- k text; prefix text;
+ k text; prefix text; proof jsonb; staged_proof jsonb;
 begin
  perform pg_catalog.pg_advisory_xact_lock(176214,30);
+ if current_setting('transaction_isolation')<>'read committed' then raise exception 'retirement_read_committed_required' using errcode='25000'; end if;
  if new.provider<>'cloudflare_r2' or new.bucket<>'chillywood-media-origin' then return new; end if;
  if tg_op='INSERT' then
    if new.target_type='creator_video' then select to_jsonb(t) into v from public.videos t where id::text=new.target_id;
@@ -74,9 +80,17 @@ begin
     and owner_user_id::text=new.author and surface_type=new.target_type and attached_record_id=new.target_id
     and status='verified' and verified_at is not null and attached_at is not null for update;
    if r.id is null then return new; end if;
+   -- Capture only while the exact reservation is still verified. Gateway
+   -- revocation happens after staging; its intentional transition is validated
+   -- at finalization rather than relaxing ordinary inspection authority.
+   if to_regprocedure('private.content_inspection_media_binding(text,uuid)') is not null then
+     execute 'select private.content_inspection_media_binding($1,$2)' into staged_proof using new.target_type,new.target_id::uuid;
+     if staged_proof->>'provider' is distinct from new.provider or staged_proof->>'bucket' is distinct from new.bucket
+       or staged_proof->>'objectKey' is distinct from k or staged_proof->>'reservationId' is distinct from r.id::text then staged_proof:=null; end if;
+   end if;
    insert into private.deleted_media_key_retirements(stage_id,provider,bucket,object_key,target_type,target_id,author,
-      reservation_id,verified_at,attached_at,source_created_at)
-   values(new.id,new.provider,new.bucket,k,new.target_type,new.target_id,new.author,r.id,r.verified_at,r.attached_at,v->>'created_at');
+      reservation_id,verified_at,attached_at,source_created_at,staged_inspection_proof)
+   values(new.id,new.provider,new.bucket,k,new.target_type,new.target_id,new.author,r.id,r.verified_at,r.attached_at,v->>'created_at',staged_proof);
  elsif new.deletion_id is not null and old.deletion_id is null then
    -- Capture runs BEFORE source deletion. A staged key that was replaced in
    -- between is edit history, not this content's deleted original. Do not adopt
@@ -91,7 +105,15 @@ begin
    select * into d from private.deleted_content_records where id=new.deletion_id
     and target_type=new.target_type and target_id=new.target_id and author=new.author;
    if d.id is null then raise exception 'retirement_deletion_binding_mismatch'; end if;
-   update private.deleted_media_key_retirements set status='retained',deletion_id=d.id,deleted_at=d.deleted_at,expires_at=d.expires_at
+   -- The later inspection contract owns full fresh source/scan/parent proof
+   -- validation. Missing validator/proof means unavailable, never fabrication.
+   select registry.staged_inspection_proof into staged_proof from private.deleted_media_key_retirements registry where registry.stage_id=new.id;
+   if d.deletion_kind='hard' and staged_proof is not null
+      and to_regprocedure('private.finalize_deleted_media_inspection_proof(uuid,jsonb)') is not null then
+     execute 'select private.finalize_deleted_media_inspection_proof($1,$2)' into proof using new.id,staged_proof;
+   end if;
+   update private.deleted_media_key_retirements set inspection_proof=proof,
+     inspection_proof_fingerprint=case when proof is not null then md5(proof::text) end,status='retained',deletion_id=d.id,deleted_at=d.deleted_at,expires_at=d.expires_at
     where stage_id=new.id and status='staged';
  end if;
  return new;
@@ -149,6 +171,7 @@ language plpgsql security definer set search_path='' as $$
 declare r private.deleted_media_key_retirements%rowtype; doc jsonb; old_doc jsonb;
 begin
  perform pg_catalog.pg_advisory_xact_lock(176214,30);
+ if current_setting('transaction_isolation')<>'read committed' then raise exception 'retirement_read_committed_required' using errcode='25000'; end if;
  doc:=private.deleted_media_locator_document(to_jsonb(new),tg_relid);
  if tg_op='UPDATE' then old_doc:=private.deleted_media_locator_document(to_jsonb(old),tg_relid); end if;
  for r in select * from private.deleted_media_key_retirements where status in ('retained','claimed') loop
@@ -184,7 +207,7 @@ language plpgsql security definer set search_path='' as $$
 declare r private.deleted_media_key_retirements%rowtype;
 begin
  select * into r from private.deleted_media_key_retirements where stage_id=p_stage_id;
- if r.id is null or r.status='staged' or not private.deleted_media_reference_coverage_ready() then
+ if current_setting('transaction_isolation')<>'read committed' or r.id is null or r.status='staged' or not private.deleted_media_reference_coverage_ready() then
    return jsonb_build_object('supported',false,'reason','unfinalized_or_uncovered_key_class'); end if;
  return jsonb_build_object('supported',true,'provider',r.provider,'bucket',r.bucket,'objectKey',r.object_key,
   'targetType',r.target_type,'targetId',r.target_id,'author',r.author,'retirementId',r.id,'status',r.status,
@@ -216,6 +239,7 @@ language plpgsql security definer set search_path='' as $$
 declare r private.deleted_media_key_retirements%rowtype;
 begin
  perform pg_catalog.pg_advisory_xact_lock(176214,30);
+ if current_setting('transaction_isolation')<>'read committed' then raise exception 'retirement_read_committed_required' using errcode='25000'; end if;
  select * into r from private.deleted_media_key_retirements where stage_id=p_stage_id for update;
  if r.id is null or not coalesce((private.deleted_media_retirement_binding(p_stage_id)->>'supported')::boolean,false) then return false; end if;
  if r.status='claimed' then return true; end if;
@@ -233,6 +257,7 @@ returns jsonb language plpgsql security definer set search_path='' as $$
 declare r private.deleted_media_key_retirements%rowtype;
 begin
  perform pg_catalog.pg_advisory_xact_lock(176214,30);
+ if current_setting('transaction_isolation')<>'read committed' then return jsonb_build_object('allowed',false); end if;
  if p_purpose not in ('upload','read','inspection','publish') then return jsonb_build_object('allowed',false); end if;
  select * into r from private.deleted_media_key_retirements where object_key=p_object_key and status in ('retained','claimed') limit 1;
  if r.id is null then return jsonb_build_object('allowed',true); end if;
