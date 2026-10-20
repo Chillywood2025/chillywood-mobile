@@ -25,6 +25,7 @@ type Options<T> = {
   validValue(value: unknown): boolean;
   versioned: {
     operationId(): string;
+    isEvent?(value: T | null): boolean;
     read(): Promise<{ values: Record<string, T>; revisions: Record<string, string> }>;
     write(id: string, request: VersionedIntent<T>): Promise<{ status: "applied" | "conflict"; revision: string; value: T | null }>;
   };
@@ -65,6 +66,7 @@ type VersionedState<T> = {
   pending: Record<string, VersionedIntent<T>>;
   unsettled: Record<string, VersionedIntent<T>>;
   conflicts: Record<string, boolean>;
+  events: Record<string, VersionedIntent<T>[]>;
 };
 const serverRevision = (value: unknown): value is string => typeof value === "string" && /^(0|[1-9][0-9]{0,18})$/.test(value);
 const operationUuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -91,13 +93,17 @@ function createVersionedUserCollectionSync<T>(options: Options<T>) {
         || Object.keys(raw.pending).some(id => ["__proto__", "prototype", "constructor"].includes(id))
         || Object.keys(raw.unsettled).some(id => !Object.hasOwn(raw.pending as object, id))
         || Object.keys(raw.conflicts).some(id => !Object.hasOwn(raw.pending as object, id))
+        || (raw.events !== undefined && (!object(raw.events) || !Object.entries(raw.events).every(([id, events]) =>
+          !["__proto__", "prototype", "constructor"].includes(id) && Array.isArray(events)
+          && events.every((event, index) => validIntent(event) && event.sequence <= Number(raw.revision)
+            && (index === 0 || event.sequence > events[index - 1].sequence)))))
         || !Object.values(raw.pending).every(intent => Number((intent as VersionedIntent<T>).sequence) <= Number(raw.revision))
         || !Object.values(raw.unsettled).every(intent => Number((intent as VersionedIntent<T>).sequence) <= Number(raw.revision))) {
         throw new Error("Saved collection data could not be read safely.");
       }
-      return raw as unknown as VersionedState<T>;
+      return { ...raw, events: raw.events ?? {} } as unknown as VersionedState<T>;
     }
-    const state: VersionedState<T> = { collectionVersion: 2, revision: 0, base: {}, versions: {}, pending: {}, unsettled: {}, conflicts: {} };
+    const state: VersionedState<T> = { collectionVersion: 2, revision: 0, base: {}, versions: {}, pending: {}, unsettled: {}, conflicts: {}, events: {} };
     if (object(raw) && "collectionVersion" in raw) {
       if (raw.collectionVersion !== 1 || !object(raw.base) || !object(raw.pending)
         || !Number.isSafeInteger(raw.revision) || Number(raw.revision) < 0
@@ -128,7 +134,7 @@ function createVersionedUserCollectionSync<T>(options: Options<T>) {
   }
   const status = (state: VersionedState<T>): CollectionSyncStatus => !options.remote ? "local"
     : Object.keys(state.unsettled).length ? "unknown" : Object.keys(state.conflicts).length ? "conflict"
-      : Object.keys(state.pending).length ? "pending" : "synced";
+      : Object.keys(state.pending).length || Object.keys(state.events).length ? "pending" : "synced";
   async function snapshot() {
     return local(async () => { const state = await load(); return { values: visible(state), syncStatus: status(state) }; });
   }
@@ -139,7 +145,7 @@ function createVersionedUserCollectionSync<T>(options: Options<T>) {
         const request = await local(async () => {
           const state = await load();
           if (state.conflicts[id] || (state.unsettled[id] && !retryUnknown)) return undefined;
-          const next = state.unsettled[id] ?? state.pending[id];
+          const next = state.unsettled[id] ?? state.events[id]?.[0] ?? state.pending[id];
           if (!next) return undefined;
           state.unsettled[id] = { ...next };
           state.revision++;
@@ -173,8 +179,13 @@ function createVersionedUserCollectionSync<T>(options: Options<T>) {
           state.versions[id] = receipt.revision;
           if (receipt.value === null) delete state.base[id]; else state.base[id] = receipt.value;
           if (receipt.status === "conflict") state.conflicts[id] = true;
-          else if (state.pending[id]?.sequence === request.sequence) delete state.pending[id];
-          else if (state.pending[id]) state.pending[id].expectedRevision = receipt.revision;
+          else {
+            if (state.events[id]?.[0]?.operationId === request.operationId) state.events[id].shift();
+            if (state.events[id]?.length) state.events[id][0].expectedRevision = receipt.revision;
+            else delete state.events[id];
+            if (state.pending[id]?.sequence === request.sequence) delete state.pending[id];
+            else if (state.pending[id]) state.pending[id].expectedRevision = receipt.revision;
+          }
           state.revision++; await save(state);
         });
         if (receipt.status === "conflict") return;
@@ -190,7 +201,13 @@ function createVersionedUserCollectionSync<T>(options: Options<T>) {
       const value = typeof desired === "function" ? (desired as (current: T | undefined) => T | null)(visible(state)[id]) : desired;
       if (value !== null && !options.validValue(value)) throw new Error("The collection change is invalid.");
       state.revision++;
-      if (options.remote) state.pending[id] = { sequence: state.revision, value, operationId: protocol.operationId(), expectedRevision: state.pending[id]?.expectedRevision ?? state.versions[id] ?? "0" };
+      if (options.remote) {
+        const intent = { sequence: state.revision, value, operationId: protocol.operationId(), expectedRevision: state.pending[id]?.expectedRevision ?? state.versions[id] ?? "0" };
+        state.pending[id] = intent;
+        // Playback starts are events, not replaceable progress snapshots. Keep
+        // every unsent start even when a later tick replaces the visible value.
+        if (protocol.isEvent?.(value)) (state.events[id] ??= []).push({ ...intent });
+      }
       else if (value === null) delete state.base[id]; else state.base[id] = value;
       await save(state);
     });
@@ -200,7 +217,7 @@ function createVersionedUserCollectionSync<T>(options: Options<T>) {
   async function refresh(request?: { retryUnknown?: boolean; useAccountVersion?: boolean }) {
     if (!options.remote) return { ...await snapshot(), readStatus: "local" as const };
     const ticket = (reads.get(options.key) ?? 0) + 1; reads.set(options.key, ticket);
-    const ids = await local(async () => { const s = await load(); return [...new Set([...Object.keys(s.pending), ...Object.keys(s.unsettled)])]; });
+    const ids = await local(async () => { const s = await load(); return [...new Set([...Object.keys(s.pending), ...Object.keys(s.unsettled), ...Object.keys(s.events)])]; });
     await Promise.all(ids.map(id => flush(id, request?.retryUnknown === true)));
     const revision = await local(async () => (await load()).revision);
     let remote: Awaited<ReturnType<typeof protocol.read>>;
@@ -218,7 +235,7 @@ function createVersionedUserCollectionSync<T>(options: Options<T>) {
       state.base = remote.values; state.versions = remote.revisions;
       if (request?.useAccountVersion) for (const id of Object.keys(state.conflicts)) {
         if (state.unsettled[id]) continue;
-        delete state.pending[id]; delete state.conflicts[id];
+        delete state.pending[id]; delete state.conflicts[id]; delete state.events[id];
       }
       state.revision++; await save(state);
     });

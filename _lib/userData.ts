@@ -781,6 +781,7 @@ function versionedCollectionProtocol<T>(binding: UserDataAccountBinding, collect
   };
   return {
     operationId: collectionOperationId,
+    isEvent: (value: T | null) => collection === "watch" && isPlainObject(value) && value.incrementPlayCount === true,
     read: async () => {
       const values: Record<string, T> = {}, revisions: Record<string, string> = {};
       let cursor = "";

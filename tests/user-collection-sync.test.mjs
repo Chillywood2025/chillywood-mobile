@@ -121,6 +121,7 @@ function harness(shared) {
       if (mutation === 'unknown') source = source.replace('(state.unsettled[id] && !retryUnknown) || !state.pending[id]', '!state.pending[id]');
       if (mutation === 'unknown') source = source.replace('(state.unsettled[id] && !retryUnknown)', 'false');
       if (mutation === 'stickyconflict') source = source.replace('state.conflicts[id] || ', '');
+      if (mutation === 'events') source = source.replace('state.events[id]?.[0] ?? ', '');
     }
     if (name === 'userData' && mutation === 'completion') {
       source = source.replace('values[row.title_id] = row.value as T', 'values[row.title_id] = (collection === "watch" ? {...row.value as object, completed: false} : row.value) as T');
@@ -225,6 +226,35 @@ test('versioned pending operation survives process loss and exact retry without 
   assert.equal((await restarted.readWatchProgressState({ retryUnknown: true })).syncStatus, 'synced');
   assert.deepEqual(a.writes[1].request, a.writes[0].request);
   assert.equal(a.remote.watch_history.get('film').play_count, 1);
+});
+
+test('unsent playback starts are durable events, not coalesced into later progress', async () => {
+  const h = harness();
+  h.remote.watch_history.set('film', { title_id: 'film', play_count: 4, completed: false });
+  await Promise.all([h.api.recordPlaybackStart('film'), h.api.recordPlaybackStart('film'), h.api.writeProgressForTitle('film', 10)]);
+  assert.equal(h.remote.watch_history.get('film').play_count, 6);
+  assert.equal(h.remote.watch_history.get('film').last_position_millis, 10);
+  assert.equal(h.writes.length, 3);
+  assert.equal(h.writes.filter(w => w.payload.incrementPlayCount).length, 2);
+  assert.equal((await h.api.readWatchProgressState()).syncStatus, 'synced');
+});
+
+test('unknown start followed by another start and progress retains both events across restart', async () => {
+  const h = harness(); h.controls.loseResponse = true;
+  await h.api.recordPlaybackStart('film');
+  await h.api.recordPlaybackStart('film');
+  await h.api.writeProgressForTitle('film', 10);
+  assert.equal(h.writes.length, 1);
+  const persisted = JSON.parse(h.storage.get(h.key(h.api.WATCH_PROGRESS_KEY)));
+  assert.equal(persisted.events.film.length, 2);
+  h.controls.loseResponse = false;
+  const state = await h.restart().readWatchProgressState({ retryUnknown: true });
+  assert.equal(state.syncStatus, 'synced');
+  assert.equal(h.remote.watch_history.get('film').play_count, 2);
+  assert.equal(h.remote.watch_history.get('film').last_position_millis, 10);
+  assert.deepEqual(h.writes[1].request, h.writes[0].request);
+  assert.equal(h.writes[2].request.p_expected_revision, '1');
+  assert.equal(h.writes[3].request.p_expected_revision, '2');
 });
 
 test('successful Saved read replaces clean legacy cache without uploading deleted titles', async () => {

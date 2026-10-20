@@ -237,8 +237,10 @@ export default function MyListScreen() {
         setUnlockedVideos(unlockedResult.items);
       }
       setLibrarySubjectUserId(viewerAuthorityKey);
-      if (savedState && progressState) setHasUnknownSync(savedState.syncStatus === "unknown" || progressState.syncStatus === "unknown");
-      if (savedState && progressState) setHasSyncConflict(savedState.syncStatus === "conflict" || progressState.syncStatus === "conflict");
+      setHasUnknownSync(previous => savedState?.syncStatus === "unknown" || progressState?.syncStatus === "unknown"
+        || (!(savedState && progressState) && previous));
+      setHasSyncConflict(previous => savedState?.syncStatus === "conflict" || progressState?.syncStatus === "conflict"
+        || (!(savedState && progressState) && previous));
 
       setErrorMsg(unlockedResult.status === "unavailable"
         ? "Unlocked content could not be verified. Your current Library is preserved; try again before purchasing anything again."

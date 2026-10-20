@@ -235,6 +235,14 @@ test("Library removal completion cannot change the next account or revive old ha
   } finally {await h.unmount();}
 });
 
+test("Library exposes a known conflict even when the other collection read fails",async()=>{
+  const h=await mountScreen("app/(tabs)/my-list.tsx",{syncStatus:"conflict",readProgress:async()=>{throw Error("offline");}});
+  try {
+    assert.match(h.text(),/another device/);
+    assert.ok(h.nodes().some(x=>x.props?.accessibilityLabel==="Use account Library version"));
+  } finally {await h.unmount();}
+});
+
 test("Unconfirmed account writes remain visibly unconfirmed after a screen remount",async()=>{
   for(const file of ["app/(tabs)/my-list.tsx","app/title/[id].tsx"]) {
     const h=await mountScreen(file,{syncStatus:"unknown"});

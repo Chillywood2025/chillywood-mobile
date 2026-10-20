@@ -36,7 +36,9 @@ Playback counts increment once for an accepted start; a stale competing start
 is reported as a conflict, not silently counted as an acknowledged update.
 
 The client persists the full in-flight request separately from newer desired
-state. Explicit Retry first reconciles that exact request; only its receipt can
+state. Playback starts also have a durable event queue so later progress ticks
+cannot coalesce away unsubmitted increments, including across process restart.
+Explicit Retry first reconciles that exact request; only its receipt can
 release a successor. A conflict remains blocked through refresh, process restart
 and automatic progress ticks. Title and Library expose an explicit Use account
 version action; only a successful current-account read can discard conflicted
