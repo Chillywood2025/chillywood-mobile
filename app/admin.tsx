@@ -8519,6 +8519,7 @@ export default function AdminStudioScreen() {
   }, [canAccessOwnerSecurity, loadOwnerSecurity, ownerSecurityActionBusy]);
 
   const openOwnerSecurityDangerAction = useCallback((action: OwnerSecurityDangerAction) => {
+    setOwnerControlNotice(null);
     setOwnerSecurityDangerAction(action);
     setOwnerSecurityConfirmText("");
     setOwnerSecurityReason("");
@@ -8542,7 +8543,7 @@ export default function AdminStudioScreen() {
       confirmation: "REVOKE GRANT",
       grantId,
       kind: "revoke-grant",
-      title: "Revoke temporary grant?",
+      title: "Revoke selected grant?",
     });
   }, [canAccessOwnerSecurity, openOwnerSecurityDangerAction, ownerSecurityActionBusy]);
 
@@ -8592,8 +8593,8 @@ export default function AdminStudioScreen() {
         ownerSecurityDangerAction.kind === "revoke-device"
           ? ownerSecurityDangerAction.isCurrentDevice ? "Current device marked untrusted and recorded." : "Device trust revoked and recorded."
           : ownerSecurityDangerAction.kind === "revoke-grant"
-            ? "Temporary grant revoked and recorded."
-            : `Revoked ${revokedCount} temporary grants present when this action started. Refresh to check current access.`,
+            ? "Selected grant revoked and recorded."
+            : `Revoked ${revokedCount} temporary or test grants present when this action started. Refresh to check current access.`,
       );
     } catch (err: any) {
       setOwnerControlNotice(formatAdminOperationFailure(err, "Owner Security action failed."));
@@ -17789,12 +17790,14 @@ export default function AdminStudioScreen() {
                   loading={permissionTemplateBusy === "apply"}
                   onPress={() => void runPermissionTemplateAction("apply")}
                   variant="primary"
+                  disabled={!canManagePermissionTemplates || permissionTemplateBusy !== null}
                 />
                 <OwnerAdminActionButton
                   label={canManagePermissionTemplates ? "Revoke Template" : "Locked"}
                   loading={permissionTemplateBusy === "revoke"}
                   onPress={() => void runPermissionTemplateAction("revoke")}
                   variant="warning"
+                  disabled={!canManagePermissionTemplates || permissionTemplateBusy !== null}
                 />
               </OwnerStickyActionBar>
               {!canManagePermissionTemplates ? (
@@ -18556,12 +18559,12 @@ export default function AdminStudioScreen() {
                   openOwnerSecurityDangerAction({
                     confirmation: "REVOKE GRANTS",
                     kind: "bulk-revoke-grants",
-                    title: "Revoke all temporary grants?",
+                    title: "Revoke temporary and test grants?",
                   });
                 }}
                 disabled={!ownerSecurityDangerActionsAvailable || !Number(ownerSecurityActiveGrantsCount ?? 0) || ownerSecurityActionBusy === "bulk-revoke-grants"}
               >
-                <Text style={styles.ownerPrimaryButtonText}>{Number(ownerSecurityActiveGrantsCount ?? 0) ? "Revoke all grants" : "No grants to revoke"}</Text>
+                <Text style={styles.ownerPrimaryButtonText}>{Number(ownerSecurityActiveGrantsCount ?? 0) ? "Revoke temporary and test grants" : "No eligible grants to revoke"}</Text>
               </TouchableOpacity>
               {ownerSecurityCurrentDevice?.id && ownerSecurityCurrentDevice.trustStatus === "trusted" ? (
                 <TouchableOpacity
@@ -21133,40 +21136,55 @@ export default function AdminStudioScreen() {
             keyboardDismissMode="on-drag"
             accessibilityViewIsModal
           >
-          <View style={styles.confirmSheet}>
+          <View style={styles.confirmSheet} testID="owner-security-confirmation">
             <Text style={styles.confirmKicker}>Owner Security</Text>
             <Text style={styles.confirmTitle}>{ownerSecurityDangerAction?.title ?? "Confirm security action"}</Text>
             <Text style={styles.confirmBody}>
               {ownerSecurityDangerAction?.kind === "bulk-revoke-grants"
-                ? "This revokes every active temporary grant returned by the backed staff-permission table and writes security audit events."
+                ? "This ends active temporary staff permissions and grants identified as test or cleanup grants that are present when the action starts. Ordinary permanent permissions and grants added afterward are unchanged. The action is recorded in the security log."
                 : ownerSecurityDangerAction?.kind === "revoke-grant"
-                  ? "This revokes one backed temporary grant and writes security audit events."
-                  : "This marks the selected owner device as untrusted and writes a security audit event. It does not simulate a Supabase Auth logout."}
+                  ? "This ends the selected staff permission and records the change in the security log."
+                  : "This marks the selected Owner device as untrusted and records the change in the security log. It does not sign the device out."}
             </Text>
             <View style={styles.confirmMetaBox}>
               <Text style={styles.confirmMetaText}>
-                {`Requires a reason and exact phrase: ${ownerSecurityDangerAction?.confirmation ?? "CONFIRM"}`}
+                {`Enter a reason with at least 6 characters, then type ${ownerSecurityDangerAction?.confirmation ?? "CONFIRM"} exactly.`}
               </Text>
             </View>
+            {ownerControlNotice ? (
+              <View style={[styles.notice, styles.noticeWarn]} testID="owner-security-confirmation-notice">
+                <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.noticeText}>{ownerControlNotice}</Text>
+                <Text style={styles.confirmBody}>Cancel, then refresh Owner Security to check the current state before trying the action again.</Text>
+              </View>
+            ) : null}
+            <Text style={styles.confirmMetaText}>Reason (at least 6 characters)</Text>
             <TextInput
               style={[styles.input, styles.multilineInput]}
-              placeholder="Reason required"
+              accessibilityLabel="Reason, at least 6 characters"
+              placeholder="Explain why this change is needed"
               placeholderTextColor="#8d8d8d"
               multiline
+              editable={!ownerSecurityActionBusy}
               value={ownerSecurityReason}
               onChangeText={setOwnerSecurityReason}
             />
+            <Text style={styles.confirmMetaText}>{`Type ${ownerSecurityDangerAction?.confirmation ?? "CONFIRM"} to confirm`}</Text>
             <TextInput
               style={styles.input}
+              accessibilityLabel={`Type ${ownerSecurityDangerAction?.confirmation ?? "CONFIRM"} to confirm`}
               placeholder={ownerSecurityDangerAction?.confirmation ?? "CONFIRM"}
               placeholderTextColor="#8d8d8d"
               autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!ownerSecurityActionBusy}
               value={ownerSecurityConfirmText}
               onChangeText={setOwnerSecurityConfirmText}
             />
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.cancelBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel security action"
                 onPress={() => {
                   setOwnerSecurityConfirmVisible(false);
                   setOwnerSecurityConfirmText("");
@@ -21178,6 +21196,8 @@ export default function AdminStudioScreen() {
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={ownerSecurityDangerAction?.kind === "bulk-revoke-grants" ? "Revoke temporary and test grants" : ownerSecurityDangerAction?.kind === "revoke-grant" ? "Revoke selected grant" : "Mark device untrusted"}
                 style={[
                   styles.dangerConfirmBtn,
                   (!ownerSecurityDangerAction
@@ -21188,7 +21208,7 @@ export default function AdminStudioScreen() {
                 onPress={() => void runOwnerSecurityDangerConfirm()}
                 disabled={!ownerSecurityDangerAction || ownerSecurityConfirmText.trim() !== ownerSecurityDangerAction.confirmation || ownerSecurityReason.trim().length < 6 || !!ownerSecurityActionBusy}
               >
-                {ownerSecurityActionBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Confirm</Text>}
+                {ownerSecurityActionBusy ? <><ActivityIndicator color="#fff" /><Text accessibilityLiveRegion="polite" style={styles.saveText}>Applying security change…</Text></> : <Text style={styles.saveText}>{ownerSecurityDangerAction?.kind === "bulk-revoke-grants" ? "Revoke temporary and test grants" : ownerSecurityDangerAction?.kind === "revoke-grant" ? "Revoke selected grant" : "Mark device untrusted"}</Text>}
               </TouchableOpacity>
             </View>
           </View>

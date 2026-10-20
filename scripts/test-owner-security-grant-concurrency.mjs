@@ -61,9 +61,17 @@ function actualCanaryAdapters() {
 }
 
 export async function runOwnerSecurityGrantConcurrency(harness) {
-  const {container, database, query, literal, openSession, waitUntil, terminate} = harness;
+  const {container, database, query, literal, openSession: rawOpenSession, waitUntil, terminate} = harness;
   assert.match(database, /^runtime_authority_[0-9]+_[a-f0-9]{12}$/u);
   assert.equal(query('select current_database();'), database, 'all test SQL targets generated clone');
+  const maxSessionNameBytes = Number(query('show max_identifier_length;'));
+  assert.ok(Number.isSafeInteger(maxSessionNameBytes) && maxSessionNameBytes > 0);
+  const openSession = (name, sql) => {
+    assert.match(name, /^[\x20-\x7e]+$/u, 'observer session name uses printable ASCII');
+    assert.ok(Buffer.byteLength(name) <= maxSessionNameBytes,
+      'observer session name must survive PostgreSQL application_name without truncation');
+    return rawOpenSession(name, sql);
+  };
   const adapters = actualCanaryAdapters();
   let checks = 0;
   await withCloneHttp({container, database}, async connection => {
@@ -534,7 +542,7 @@ async function runMutationCases(t) {
     const lateTarget = await person('older-transaction-target', 'operator');
     const sentinel = await grant(owner, target, 'legal_review'), late = randomUUID();
     const binding = await deviceContext(owner, 'bulk'), args = argumentsFor(binding, null, randomUUID(), 'bulk');
-    const holderName = `owner-security-older-holder-${randomUUID()}`, waiterName = `owner-security-older-waiter-${randomUUID()}`;
+    const holderName = `owner-sec-older-holder-${randomUUID()}`, waiterName = `owner-sec-older-waiter-${randomUUID()}`;
     let holder, waiter;
     try {
       holder = openSession(holderName, `begin;set local statement_timeout='35s';
@@ -718,6 +726,13 @@ async function runCanaryCases(t) {
       assert.equal(result.status, 'closed');
       assert.equal(result.users.find(u => u.userId === planned.userId).authPresent, true);
       assert.equal(result.users.find(u => u.userId === planned.userId).registered, true);
+      denied(await owner.client.rpc('begin_admin_canary_run', {p_run_id: randomUUID()}), 'admin_canary_pending_run');
+      const completed = await adapters.cleanupProofAccess(admin, adapters.readCanaryProofScope(result, run.runId), reason);
+      assert.equal(completed.ok, true, 'exact production cleanup must retire the race-created Auth identity');
+      assert.equal(query(`select count(*) from auth.users where id=${literal(planned.userId)};`), '0');
+      const final = await manifest(run);
+      assert.equal(final.cleanupVerified, true);
+      assert.ok(final.users.every(user => user.authPresent === false));
       pass('cleanup queued behind real Auth create recovers its exact committed identity');
     } finally {
       await terminate(name, holder);

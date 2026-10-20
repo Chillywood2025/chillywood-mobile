@@ -113,6 +113,30 @@ const adminBackendFunctionKeys = new Set([
   'public.list_admin_report_audit_events_page/3',
 ]);
 
+const ownerSecurityFiles = [
+  '20261020151834_transactional_owner_security_canary.sql',
+  '20261020152030_staff_permission_null_actor_closure.sql',
+];
+// The transactional repair adds eight private and seven public functions.
+// The null-actor closure replaces three existing signatures, adding none.
+const ownerSecurityFunctionKeys = new Set([
+  'private.preserve_admin_mutation_identity/0',
+  'private.guard_admin_canary_authority/0',
+  'private.guard_admin_canary_auth_insert/0',
+  'private.assert_admin_mutation_actor/1',
+  'private.lock_admin_mutation_actor/0',
+  'private.assert_owner_security_context/3',
+  'private.assert_admin_canary_user/3',
+  'private.admin_canary_manifest/1',
+  'public.owner_security_revoke_grants/6',
+  'public.begin_admin_canary_run/1',
+  'public.register_admin_canary_user/3',
+  'public.provision_admin_canary_fixture/4',
+  'public.read_admin_canary_manifest/1',
+  'public.list_admin_canary_pending_runs/0',
+  'public.cleanup_admin_canary_run/2',
+]);
+
 const studioBundleFiles = [
   '20261015073423_platform_studio_publication_and_audience_authority.sql',
   '20261019020049_platform_studio_rolling_brand_compatibility.sql',
@@ -177,7 +201,9 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
   const {db,repairSql,replayReport}=await createDatabase({overlayLiveDrift:!includeHeldStudio,includeHeldStudio});
   try{
     const before=await snapshot(db);await db.exec(repairSql);const after=await snapshot(db);
-    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size);
+    assert.equal(before.functions.length,(includeHeldStudio?1122:1105)+inspectionFunctionKeys.size+adminBackendFunctionKeys.size+retentionRecoveryFunctionKeys.size+ownerSecurityFunctionKeys.size);
+    assert.deepEqual(before.functions.filter(fn=>ownerSecurityFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(),
+      [...ownerSecurityFunctionKeys].sort(),'exact Owner Security successor function inventory is present');
     assert.deepEqual(before.functions.filter(fn=>retentionRecoveryFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(),
       [...retentionRecoveryFunctionKeys].sort(),'exact retention recovery successor function inventory is present');
     assert.deepEqual(before.functions.filter(fn=>adminBackendFunctionKeys.has(fn.key)).map(fn=>fn.key).sort(),
@@ -208,7 +234,9 @@ for(const includeHeldStudio of [false,true])test(`runtime catalog scope and idem
       {file:'20260718214102_decouple_media_scan_audit_completion.sql',index:10,reason:'Data-only recovery call, irrelevant to empty isolated schema'},
     ],'only exact documented infrastructure/data skips');
     // Preserve the historical baseline, then account for every reviewed successor.
-    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length);
+    assert.equal(replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length);
+    assert.deepEqual(replayReport.files.filter(file=>ownerSecurityFiles.includes(file)),ownerSecurityFiles,
+      'entire Owner Security and null-actor successor bundle is replayed');
     assert.deepEqual(replayReport.files.filter(file=>retentionRecoveryFiles.includes(file)),retentionRecoveryFiles,
       'entire retention recovery successor bundle is replayed');
     assert.deepEqual(replayReport.files.filter(file=>adminBackendFiles.includes(file)),adminBackendFiles,

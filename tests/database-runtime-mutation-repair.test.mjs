@@ -38,6 +38,13 @@ const adminBackendFiles = [
   '20261020141850_admin_reports_dmca_complete_history.sql',
 ];
 
+// Both reviewed successors are part of the current replay: new transactional
+// Owner Security/Canary functions and replacement null-safe staff RPC bodies.
+const ownerSecurityFiles = [
+  '20261020151834_transactional_owner_security_canary.sql',
+  '20261020152030_staff_permission_null_actor_closure.sql',
+];
+
 for(const includeHeldStudio of [false,true]) test(`staff mutation repair with Studio ${includeHeldStudio?'included':'held'}`,{timeout:120_000},async t=>{
   const sql=fs.readFileSync(repairMigrationPath,'utf8');
   const {db,replayReport}=await createDatabase({overlayLiveDrift:true,includeHeldStudio});
@@ -210,7 +217,8 @@ for(const includeHeldStudio of [false,true]) test(`staff mutation repair with St
       }finally{await db.exec('rollback')}
     }
     // This remains a full-current-chain repair test, including reviewed successors.
-    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length);
+    check('expected migration chain',replayReport.files.length,(includeHeldStudio?429:426)+inspectionBundleFiles.length+adminBackendFiles.length+retentionRecoveryFiles.length+ownerSecurityFiles.length);
+    check('complete Owner Security and null-actor successors',replayReport.files.filter(file=>ownerSecurityFiles.includes(file)),ownerSecurityFiles);
     check('complete retention recovery successors',replayReport.files.filter(file=>retentionRecoveryFiles.includes(file)),retentionRecoveryFiles);
     check('complete admin backend successors',replayReport.files.filter(file=>adminBackendFiles.includes(file)),adminBackendFiles);
     check('complete disabled inspection/retention successors',replayReport.files.filter(file=>inspectionBundleFiles.includes(file)),inspectionBundleFiles);
